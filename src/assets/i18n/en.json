@@ -2648,8 +2648,9 @@
       "ZH_TW": "中文(繁體)"
     },
     "MISC": {
-      "DARK_MODE": "Dark Mode",
-      "DARK_MODE_ARIA_LABEL": "Dark mode selection",
+      "APPEARANCE": "Appearance",
+      "DARK_MODE": "Color mode",
+      "DARK_MODE_ARIA_LABEL": "Color mode selection",
       "DARK_MODE_DARK": "Dark",
       "DARK_MODE_LIGHT": "Light",
       "DARK_MODE_SYSTEM": "System",
@@ -2680,7 +2681,7 @@
       "START_OF_NEXT_DAY_HINT": "The time when your day starts (Format: HH:mm, e.g. 02:30)",
       "THEME": "Theme",
       "THEME_EXPERIMENTAL": "Theme (experimental)",
-      "THEME_INSTALL_BUTTON": "Install theme…",
+      "THEME_INSTALL_BUTTON": "Install theme",
       "THEME_INSTALL_TOOLTIP": "Upload a CSS theme file. Themes only change visuals — never run code — but they can still affect how your data is rendered. Only install themes from sources you trust.",
       "THEME_INSTALLED_WITH_WARNINGS": "Theme installed. Missing tokens: {{tokens}}",
       "THEME_INVALID_CSS_FILE": "Could not install theme: invalid or unsafe CSS file.",
@@ -2689,7 +2690,7 @@
       "THEME_SELECT_LABEL": "Select Theme",
       "TITLE": "Misc Settings",
       "WALLPAPER": "Wallpaper",
-      "WALLPAPER_BUTTON": "Set wallpaper…",
+      "WALLPAPER_BUTTON": "Set wallpaper",
       "WALLPAPER_DIALOG_TITLE": "Global wallpaper",
       "WALLPAPER_HINT": "Shown on pages without their own background (Planner, Schedule, Boards, Settings…). Tags and projects with their own image override it."
     },

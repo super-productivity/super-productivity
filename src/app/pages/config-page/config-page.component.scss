@@ -16,13 +16,17 @@
 
   .settings-search {
     display: block;
-    max-width: var(--component-max-width);
+    width: 100%;
+    max-width: 480px;
     margin: 0 auto var(--s2);
+    --mat-form-field-container-height: var(--bar-height-small);
+    --mat-form-field-container-vertical-padding: var(--s);
+    --mat-form-field-outlined-container-shape: var(--input-border-radius);
 
     // Sit back until reached for, so the tab strip below keeps its role as the
     // page's headings — at full strength this box outweighs them.
     //
-    // Deliberate tradeoff: the label ships at 4.52:1, i.e. 0.02 above WCAG AA,
+    // Deliberate tradeoff: the placeholder ships at 4.52:1, i.e. 0.02 above WCAG AA,
     // so dimming at all drops it below (2.87:1 here). Full contrast returns on
     // hover/focus. Raise to 0.8 to stay above the 3:1 large-text/UI floor, or
     // darken the label itself to buy headroom for a deeper dim.
@@ -138,6 +142,10 @@
       font-weight: var(--font-weight-semibold);
       border-color: var(--extra-border-color);
     }
+  }
+
+  .appearance-section {
+    overflow: hidden;
   }
 
   .settings-col {
