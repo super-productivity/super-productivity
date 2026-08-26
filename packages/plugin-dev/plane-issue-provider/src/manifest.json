@@ -1,0 +1,35 @@
+{
+  "id": "plane-issue-provider",
+  "name": "Plane Issues",
+  "version": "1.0.0",
+  "manifestVersion": 1,
+  "minSupVersion": "18.0.0",
+  "description": "Plane.so issue provider plugin",
+  "author": "Super Productivity",
+  "type": "issueProvider",
+  "icon": "icon.svg",
+  "iFrame": false,
+  "permissions": ["http"],
+  "hooks": [],
+  "dataSharing": [
+    {
+      "recipient": "Plane",
+      "hosts": ["api.plane.so"],
+      "userServer": true,
+      "data": ["credentials", "userText"]
+    }
+  ],
+  "i18n": {
+    "languages": ["en"]
+  },
+  "issueProvider": {
+    "pollIntervalMs": 300000,
+    "icon": "plane",
+    "humanReadableName": "Plane",
+    "allowPrivateNetwork": true,
+    "issueStrings": {
+      "singular": "Work item",
+      "plural": "Work items"
+    }
+  }
+}
