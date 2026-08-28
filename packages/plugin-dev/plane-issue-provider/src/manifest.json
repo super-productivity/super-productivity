@@ -9,7 +9,7 @@
   "type": "issueProvider",
   "icon": "icon.svg",
   "iFrame": false,
-  "permissions": ["http"],
+  "permissions": [],
   "hooks": [],
   "dataSharing": [
     {

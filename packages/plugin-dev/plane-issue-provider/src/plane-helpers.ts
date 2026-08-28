@@ -154,16 +154,30 @@ const HTML_ENTITIES: Record<string, string> = {
 };
 
 /**
+ * Strip repeatedly until the result stops changing. One pass is not enough: removing the
+ * inner match of `<scr<script>ipt>` re-forms a tag out of what surrounded it.
+ */
+const stripUntilStable = (input: string, pattern: RegExp): string => {
+  let out = input;
+  for (let prev = ''; out !== prev; ) {
+    prev = out;
+    out = out.replace(pattern, '');
+  }
+  return out;
+};
+
+/**
  * Plain text from a work item's HTML description. Self-hosted Plane never sends
  * `description_stripped` (`IssueSerializer.Meta` excludes it), so without this the
  * description is blank on every open-source instance.
  */
 export const htmlToText = (html: string): string =>
-  html
-    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|li|h[1-6]|tr|blockquote)>/gi, '\n')
-    .replace(/<[^>]*>/g, '')
+  stripUntilStable(
+    stripUntilStable(html, /<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi)
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|li|h[1-6]|tr|blockquote)>/gi, '\n'),
+    /<[^>]*>/g,
+  )
     .replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, (match, entity: string) => {
       const key = entity.toLowerCase();
       if (key.startsWith('#x')) {
@@ -312,6 +326,10 @@ export const mapListRow = (
     url: buildBrowseUrl(cfg, projectIdentifier, item.sequence_id),
     // Only the expanded object carries a name; a bare UUID is worse than nothing.
     status: stateOf(item)?.name || '',
+    // Without this the task is stored with issueLastUpdated 0, so the first poll sees
+    // every imported item as changed: a spurious "N updated" snack, and every title
+    // rewritten from `KEY Title` to the bare name mapWorkItem produces.
+    lastUpdated: item.updated_at ? new Date(item.updated_at).getTime() : 0,
     summary: `${key} ${item.name}`,
     identifier: key,
     stateGroup: stateGroupOf(item),

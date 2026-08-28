@@ -474,6 +474,27 @@ describe('Plane backlog listing', () => {
     expect(result.status).toBe('');
   });
 
+  // Stored as issueLastUpdated, which the poll compares against. Leaving it unset stores
+  // 0, so the first poll treats every imported item as changed: a spurious "N updated"
+  // snack, and every title rewritten from `KEY Title` to the bare name.
+  it('carries updated_at so the first poll does not see every item as changed', async () => {
+    const api = fakePlaneApi({
+      items: [{ ...row(0, 'backlog'), updated_at: '2026-08-20T03:17:12.158733Z' }],
+    });
+
+    const [result] = await definition.getNewIssuesForBacklog!(BACKLOG_CFG, api.http);
+
+    expect(result.lastUpdated).toBe(new Date('2026-08-20T03:17:12.158733Z').getTime());
+  });
+
+  it('falls back to 0 when a row has no updated_at', async () => {
+    const api = fakePlaneApi({ items: [row(0, 'backlog')] });
+
+    const [result] = await definition.getNewIssuesForBacklog!(BACKLOG_CFG, api.http);
+
+    expect(result.lastUpdated).toBe(0);
+  });
+
   it('builds browse urls from the project identifier', async () => {
     const api = fakePlaneApi({
       items: [row(0, 'backlog')],
@@ -549,6 +570,26 @@ describe('htmlToText()', () => {
 
   it('drops script and style content entirely', () => {
     expect(htmlToText('<p>hi</p><script>alert(1)</script><style>p{}</style>')).toBe('hi');
+  });
+
+  // CodeQL flags single-pass tag stripping because removing an inner match can re-form a
+  // tag out of what surrounded it. Stripping now loops until stable. These pin the
+  // invariant — no complete tag survives — rather than claiming to catch the re-form:
+  // the trailing catch-all already handled every re-forming input I could construct, so
+  // no case here fails without the loop. It is defence in depth, not a fixed bug.
+  it.each([
+    '<scr<script>ipt>alert(1)</scr</script>ipt>',
+    '<<script>script>alert(1)<</script>/script>',
+    '<sty<style>le>x</sty</style>le>',
+    '<div><p>ok</p></div>',
+    '<a href="#"><b>text</b></a>',
+  ])('leaves no complete tag in the output for %p', (input) => {
+    expect(htmlToText(input)).not.toMatch(/<[^>]*>/);
+  });
+
+  it('drops script and style bodies rather than surfacing their source', () => {
+    expect(htmlToText('<scr<script>ipt>alert(1)</scr</script>ipt>')).toBe('');
+    expect(htmlToText('<p>keep</p><script>alert(1)</script>')).toBe('keep');
   });
 
   it('returns an empty string for empty or tag-only html', () => {
