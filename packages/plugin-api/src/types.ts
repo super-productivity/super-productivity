@@ -665,6 +665,20 @@ export interface PluginAPI {
 
   updateTag(tagId: string, updates: Partial<Tag>): Promise<void>;
 
+  // recurring tasks
+  /**
+   * Make an existing task repeat. Returns the id of the created config.
+   *
+   * The config inherits the task's project, and its title defaults to the
+   * task's title. Reading configs back is done via `getAppState().taskRepeatCfgs`.
+   */
+  addTaskRepeatCfg(taskId: string, cfg?: PluginTaskRepeatCfgData): Promise<string>;
+
+  updateTaskRepeatCfg(
+    taskRepeatCfgId: string,
+    updates: PluginTaskRepeatCfgData,
+  ): Promise<void>;
+
   // task ordering
   reorderTasks(
     taskIds: string[],
@@ -794,6 +808,52 @@ export interface PluginCreateTaskData {
   isDone?: boolean;
   /** Due date as ISO date string (YYYY-MM-DD) */
   dueDay?: string | null;
+}
+
+/**
+ * Schedule fields a plugin may set on a recurring task config.
+ *
+ * Deliberately narrower than {@link PluginTaskRepeatCfg}: `id` and `projectId`
+ * are owned by the app (the id is generated, the project is inherited from the
+ * task the config is attached to), and the literal unions make the payload
+ * checkable at runtime rather than only at compile time.
+ */
+export interface PluginTaskRepeatCfgData {
+  /** Title for the generated tasks. Defaults to the source task's title. */
+  title?: string | null;
+  notes?: string;
+  tagIds?: string[];
+  defaultEstimate?: number;
+  isPaused?: boolean;
+  quickSetting?:
+    | 'DAILY'
+    | 'WEEKLY_CURRENT_WEEKDAY'
+    | 'MONTHLY_CURRENT_DATE'
+    | 'MONTHLY_FIRST_DAY'
+    | 'MONTHLY_LAST_DAY'
+    | 'MONTHLY_NTH_WEEKDAY'
+    | 'MONDAY_TO_FRIDAY'
+    | 'YEARLY_CURRENT_DATE'
+    | 'CUSTOM';
+  repeatCycle?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+  repeatEvery?: number;
+  /** ISO date string (YYYY-MM-DD) */
+  startDate?: string;
+  /** Time of day as HH:mm */
+  startTime?: string;
+  monday?: boolean;
+  tuesday?: boolean;
+  wednesday?: boolean;
+  thursday?: boolean;
+  friday?: boolean;
+  saturday?: boolean;
+  sunday?: boolean;
+  /** MONTHLY only: 1..4 = first through fourth occurrence, -1 = last */
+  monthlyWeekOfMonth?: 1 | 2 | 3 | 4 | -1;
+  /** MONTHLY only: 0 = Sunday … 6 = Saturday */
+  monthlyWeekday?: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  /** MONTHLY only: anchor to the last calendar day of every month */
+  monthlyLastDay?: boolean;
 }
 
 export interface PluginShortcutCfg {

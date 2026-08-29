@@ -39,6 +39,7 @@ import {
   PluginRequestOptions,
   PluginSimpleCounterFull,
   PluginTaskRepeatCfg,
+  PluginTaskRepeatCfgData,
   SnackCfg,
 } from '@super-productivity/plugin-api';
 import { snackCfgToSnackParams } from './plugin-api-mapper';
@@ -56,6 +57,12 @@ import { nanoid } from 'nanoid';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { ProjectService } from '../features/project/project.service';
 import { TagService } from '../features/tag/tag.service';
+import { TaskRepeatCfgService } from '../features/task-repeat-cfg/task-repeat-cfg.service';
+import {
+  DEFAULT_TASK_REPEAT_CFG,
+  TaskRepeatCfgCopy,
+} from '../features/task-repeat-cfg/task-repeat-cfg.model';
+import { getDefaultSkipOverdue } from '../features/task-repeat-cfg/dialog-edit-task-repeat-cfg/get-default-skip-overdue';
 import typia from 'typia';
 import { distinctUntilChanged, first, map, take, timeout } from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
@@ -152,6 +159,7 @@ export class PluginBridgeService implements OnDestroy {
   private _workContextService = inject(WorkContextService);
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
+  private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _pluginUserPersistenceService = inject(PluginUserPersistenceService);
   private _pluginConfigService = inject(PluginConfigService);
   private _taskArchiveService = inject(TaskArchiveService);
@@ -1081,6 +1089,91 @@ export class PluginBridgeService implements OnDestroy {
     // Update the tag using TagService (TagCopy is compatible with Tag)
     this._tagService.updateTag(tagId, updates);
     PluginLog.log('PluginBridge: Tag updated successfully', { tagId });
+  }
+
+  /**
+   * Make an existing task repeat
+   */
+  async addTaskRepeatCfg(
+    taskId: string,
+    cfg: PluginTaskRepeatCfgData = {},
+  ): Promise<string> {
+    typia.assert<string>(taskId);
+    typia.assert<PluginTaskRepeatCfgData>(cfg);
+
+    const task = await firstValueFrom(this._taskService.getByIdOnce$(taskId));
+    if (!task?.id) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.TASK_NOT_FOUND, { taskId }),
+      );
+    }
+    // Same gating as the schedule dialog's `canRepeat`: a repeating subtask or
+    // issue task is a state the UI cannot produce, and nothing downstream
+    // handles it.
+    if (task.parentId || task.issueId) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.TASK_CANNOT_REPEAT, { taskId }),
+      );
+    }
+    // A second config on the same task would orphan the first one: the task
+    // holds a single repeatCfgId, so the previous config keeps generating
+    // tasks with nothing pointing back at it. The UI reaches edit instead of
+    // add for this case.
+    if (task.repeatCfgId) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.TASK_ALREADY_REPEATING, { taskId }),
+      );
+    }
+
+    const newCfg: Omit<TaskRepeatCfgCopy, 'id'> = {
+      ...DEFAULT_TASK_REPEAT_CFG,
+      ...cfg,
+      title: cfg.title ?? task.title,
+    };
+
+    const repeatCfgId = this._taskRepeatCfgService.addTaskRepeatCfgToTask(
+      taskId,
+      task.projectId || null,
+      // Same schedule-aware seed the dialog applies to new configs, so a config
+      // created through the API behaves like one created by hand.
+      { ...newCfg, skipOverdue: getDefaultSkipOverdue(newCfg) },
+    );
+
+    PluginLog.log('PluginBridge: Task repeat cfg added successfully', {
+      taskId,
+      repeatCfgId,
+    });
+    return repeatCfgId;
+  }
+
+  /**
+   * Update a recurring task config
+   */
+  async updateTaskRepeatCfg(
+    taskRepeatCfgId: string,
+    updates: PluginTaskRepeatCfgData,
+  ): Promise<void> {
+    typia.assert<string>(taskRepeatCfgId);
+    typia.assert<PluginTaskRepeatCfgData>(updates);
+
+    const existing = await firstValueFrom(
+      this._taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$(taskRepeatCfgId),
+    );
+    if (!existing) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.TASK_REPEAT_CFG_NOT_FOUND, {
+          taskRepeatCfgId,
+        }),
+      );
+    }
+
+    // isAskToUpdateAllTaskInstances stays false: the dialog it opens is a UI
+    // side effect a plugin call must not trigger.
+    this._taskRepeatCfgService.updateTaskRepeatCfg(taskRepeatCfgId, updates, false);
+
+    PluginLog.log('PluginBridge: Task repeat cfg updated successfully', {
+      taskRepeatCfgId,
+    });
   }
 
   /**

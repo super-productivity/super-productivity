@@ -313,6 +313,17 @@ Iframe plugins automatically receive:
 - `addTag(tag)` - Create new tag
 - `updateTag(tagId, updates)` - Update tag
 
+#### Recurring tasks
+
+- `addTaskRepeatCfg(taskId, cfg?)` - Make an existing task repeat; returns the new config id
+- `updateTaskRepeatCfg(taskRepeatCfgId, updates)` - Change an existing repeat config
+
+Read configs back via `getAppState().taskRepeatCfgs`. Only top-level, non-issue tasks
+can repeat, and a task that already has a config must be updated rather than given a
+second one. `cfg` accepts the schedule fields of `PluginTaskRepeatCfgData`; anything
+left out falls back to the same defaults the repeat dialog applies, and the config
+inherits the task's project and title.
+
 #### Simple Counters
 
 Simple counters let you track lightweight metrics (e.g., daily clicks or habits) that persist and sync with your data. There are two levels: **basic** (key-value pairs for today's count) and **full model** (full CRUD on `SimpleCounter` entities with date-specific values).

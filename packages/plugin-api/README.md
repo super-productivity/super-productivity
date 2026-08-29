@@ -137,6 +137,7 @@ Add these to your manifest.json based on what your plugin needs:
 - `addProject` - Create projects
 - `getAllTags` - Read tags
 - `addTag` - Create tags
+- `addTaskRepeatCfg` - Make a task repeat
 - `persistDataSynced` - Persist plugin data
 - `getAppState` - Read-only snapshot of application state
 

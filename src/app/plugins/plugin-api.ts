@@ -22,6 +22,7 @@ import {
   PluginRequestOptions,
   PluginShortcutCfg,
   PluginSidePanelBtnCfg,
+  PluginTaskRepeatCfgData,
   PluginWorkContextHeaderBtnCfg,
   ActiveWorkContext,
   Project,
@@ -279,6 +280,24 @@ export class PluginAPI implements PluginAPIInterface {
     PluginLog.log(`Plugin ${this.#pluginId} requested to update tag ${tagId}`);
     const tagCopyUpdates = tagDataToPartialTagCopy(updates);
     return this.#pluginBridge.updateTag(tagId, tagCopyUpdates);
+  }
+
+  async addTaskRepeatCfg(
+    taskId: string,
+    cfg: PluginTaskRepeatCfgData = {},
+  ): Promise<string> {
+    PluginLog.log(`Plugin ${this.#pluginId} requested to make task ${taskId} repeat`);
+    return this.#pluginBridge.addTaskRepeatCfg(taskId, cfg);
+  }
+
+  async updateTaskRepeatCfg(
+    taskRepeatCfgId: string,
+    updates: PluginTaskRepeatCfgData,
+  ): Promise<void> {
+    PluginLog.log(
+      `Plugin ${this.#pluginId} requested to update repeat cfg ${taskRepeatCfgId}`,
+    );
+    return this.#pluginBridge.updateTaskRepeatCfg(taskRepeatCfgId, updates);
   }
 
   async reorderTasks(
