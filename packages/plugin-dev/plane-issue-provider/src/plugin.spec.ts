@@ -475,8 +475,8 @@ describe('Plane backlog listing', () => {
   });
 
   // Stored as issueLastUpdated, which the poll compares against. Leaving it unset stores
-  // 0, so the first poll treats every imported item as changed: a spurious "N updated"
-  // snack, and every title rewritten from `KEY Title` to the bare name.
+  // 0, so the first poll treats every imported item as changed and shows a spurious
+  // "N updated" snack.
   it('carries updated_at so the first poll does not see every item as changed', async () => {
     const api = fakePlaneApi({
       items: [{ ...row(0, 'backlog'), updated_at: '2026-08-20T03:17:12.158733Z' }],
@@ -566,6 +566,47 @@ describe('htmlToText()', () => {
 
   it('leaves an unknown entity alone rather than mangling it', () => {
     expect(htmlToText('<p>&notarealentity;</p>')).toBe('&notarealentity;');
+  });
+
+  // String.fromCodePoint throws a RangeError past 0x10FFFF and on non-integers (an
+  // overflowing decimal becomes Infinity); the throw rides mapWorkItem() → getById()
+  // and the host swallows it, so that one task silently stops refreshing. Invalid
+  // code points keep their literal entity text, like an unknown named entity.
+  it.each([
+    '&#x110000;',
+    '&#1114112;',
+    '&#99999999999;',
+    '&#xFFFFFFFF;',
+    '&#X110000;',
+    `&#${'9'.repeat(400)};`,
+  ])('leaves the out-of-range numeric entity %s as literal text', (entity) => {
+    expect(htmlToText(`<p>${entity}</p>`)).toBe(entity);
+  });
+
+  it('decodes numeric entities up to the Unicode maximum', () => {
+    expect(htmlToText('<p>&#x10FFFF;</p>')).toBe('\u{10FFFF}');
+    expect(htmlToText('<p>&#1114111;</p>')).toBe('\u{10FFFF}');
+    expect(htmlToText('<p>&#x1F600;</p>')).toBe('\u{1F600}');
+    expect(htmlToText('<p>&#X2713;</p>')).toBe('✓');
+  });
+
+  // fromCodePoint accepts a lone surrogate without throwing, but it is ill-formed
+  // UTF-16 that would flow into task bodies, persistence and sync.
+  it.each(['&#xD800;', '&#xDFFF;', '&#55296;'])(
+    'leaves the surrogate entity %s as literal text',
+    (entity) => {
+      expect(htmlToText(`<p>${entity}</p>`)).toBe(entity);
+    },
+  );
+
+  it('decodes the neighbours of an invalid entity normally', () => {
+    expect(htmlToText('<p>&lt;&#x110000;&gt; &#x2713;</p>')).toBe('<&#x110000;> ✓');
+  });
+
+  // The output of decoding &amp; must never be re-scanned as a new entity.
+  it('decodes entities in a single pass', () => {
+    expect(htmlToText('<p>&amp;#39;</p>')).toBe('&#39;');
+    expect(htmlToText('<p>&amp;#x110000;</p>')).toBe('&#x110000;');
   });
 
   it('drops script and style content entirely', () => {
@@ -658,6 +699,29 @@ describe('getById()', () => {
     const issue = await definition.getById('uuid-9', ISSUE_CFG, http);
 
     expect(issue.body).toBe('Needs a rewrite');
+  });
+
+  // A RangeError here would reject the promise, the host would swallow it, and the
+  // task would silently stop refreshing.
+  it('resolves with an invalid numeric entity left literal instead of rejecting', async () => {
+    const { http } = fakeIssue({
+      description_html: '<p>&#x110000; but &#x2713;</p>',
+    });
+
+    const issue = await definition.getById('uuid-9', ISSUE_CFG, http);
+
+    expect(issue.body).toBe('&#x110000; but ✓');
+  });
+
+  // The host rewrites the task title from issue.title on every refresh, so it must
+  // match the `KEY Name` format the import-time listing and search produce — a bare
+  // name here strips the key from the task on its first real update.
+  it('prefixes the title with the display key, matching the import-time format', async () => {
+    const { http } = fakeIssue({});
+
+    const issue = await definition.getById('uuid-9', ISSUE_CFG, http);
+
+    expect(issue.title).toBe('ENG-7 Ship it');
   });
 
   it('prefers the stripped description when Plane sends one', async () => {
@@ -982,6 +1046,7 @@ describe('done-state field mapping', () => {
         id: 'u',
         name: 'n',
         sequence_id: 1,
+        project: { identifier: 'ENG' },
         state: { id: 's', name: 'Done', group: 'completed' },
         description_stripped: 'b',
       },
@@ -989,7 +1054,9 @@ describe('done-state field mapping', () => {
     );
     expect(definition.extractSyncValues?.(issue)).toEqual({
       stateGroup: 'completed',
-      title: 'n',
+      // The prefixed title, not the bare name: the diff value must equal what refresh
+      // writes into the task, or every poll reports the title as changed.
+      title: 'ENG-1 n',
       body: 'b',
     });
   });

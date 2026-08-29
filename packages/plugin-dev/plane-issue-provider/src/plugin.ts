@@ -131,7 +131,7 @@ PluginAPI.registerIssueProvider({
     {
       key: 'projectId',
       type: 'input',
-      // Plane labels the short identifier (e.g. `CYBER`) "Project ID" in its own
+      // Plane labels the short identifier (e.g. `ACME`) "Project ID" in its own
       // settings, so reusing that name here sends people to the wrong value.
       label: t('CFG.PROJECT_ID', 'Project UUID'),
       required: true,

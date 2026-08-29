@@ -148,7 +148,6 @@ const HTML_ENTITIES: Record<string, string> = {
   lt: '<',
   gt: '>',
   quot: '"',
-  '#39': "'",
   apos: "'",
   nbsp: ' ',
 };
@@ -180,11 +179,20 @@ export const htmlToText = (html: string): string =>
   )
     .replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, (match, entity: string) => {
       const key = entity.toLowerCase();
-      if (key.startsWith('#x')) {
-        return String.fromCodePoint(parseInt(key.slice(2), 16));
-      }
       if (key.startsWith('#')) {
-        return String.fromCodePoint(Number(key.slice(1)));
+        const cp = key.startsWith('#x')
+          ? parseInt(key.slice(2), 16)
+          : Number(key.slice(1));
+        // fromCodePoint throws past 0x10FFFF and on non-integers (an overflowing
+        // decimal becomes Infinity), and it accepts lone surrogates that are
+        // ill-formed UTF-16. All of those keep their literal entity text — the
+        // same policy as an unknown named entity.
+        return Number.isInteger(cp) &&
+          cp >= 0 &&
+          cp <= 0x10ffff &&
+          !(cp >= 0xd800 && cp <= 0xdfff)
+          ? String.fromCodePoint(cp)
+          : match;
       }
       return HTML_ENTITIES[key] ?? match;
     })
@@ -291,7 +299,10 @@ export const mapWorkItem = (
   const dueMs = targetDateToLocalMs(item.target_date);
   return {
     id: item.id,
-    title: item.name,
+    // The host rewrites the task title from issue.title on every refresh, so this
+    // must match the `KEY Name` format the listing and search mappings import with —
+    // a bare name here strips the key from the task on its first real update.
+    title: `${key} ${item.name}`,
     body: item.description_stripped || htmlToText(item.description_html || ''),
     url: buildBrowseUrl(cfg, ident, item.sequence_id),
     // Only the expanded object carries a name; an unexpanded `state` is a bare UUID
@@ -327,8 +338,7 @@ export const mapListRow = (
     // Only the expanded object carries a name; a bare UUID is worse than nothing.
     status: stateOf(item)?.name || '',
     // Without this the task is stored with issueLastUpdated 0, so the first poll sees
-    // every imported item as changed: a spurious "N updated" snack, and every title
-    // rewritten from `KEY Title` to the bare name mapWorkItem produces.
+    // every imported item as changed and shows a spurious "N updated" snack.
     lastUpdated: item.updated_at ? new Date(item.updated_at).getTime() : 0,
     summary: `${key} ${item.name}`,
     identifier: key,
