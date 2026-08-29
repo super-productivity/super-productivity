@@ -817,6 +817,11 @@ export interface PluginCreateTaskData {
  * are owned by the app (the id is generated, the project is inherited from the
  * task the config is attached to), and the literal unions make the payload
  * checkable at runtime rather than only at compile time.
+ *
+ * There is no `quickSetting` here. Those presets are defined against the day
+ * the user opens the dialog ("weekly on the current weekday"), a reference the
+ * app has and a plugin does not, so a config is described by its cycle and
+ * pattern fields instead and is stored as `CUSTOM`.
  */
 export interface PluginTaskRepeatCfgData {
   /** Title for the generated tasks. Defaults to the source task's title. */
@@ -825,22 +830,17 @@ export interface PluginTaskRepeatCfgData {
   tagIds?: string[];
   defaultEstimate?: number;
   isPaused?: boolean;
-  quickSetting?:
-    | 'DAILY'
-    | 'WEEKLY_CURRENT_WEEKDAY'
-    | 'MONTHLY_CURRENT_DATE'
-    | 'MONTHLY_FIRST_DAY'
-    | 'MONTHLY_LAST_DAY'
-    | 'MONTHLY_NTH_WEEKDAY'
-    | 'MONDAY_TO_FRIDAY'
-    | 'YEARLY_CURRENT_DATE'
-    | 'CUSTOM';
   repeatCycle?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+  /** 1..1000. Every nth day/week/month/year. */
   repeatEvery?: number;
-  /** ISO date string (YYYY-MM-DD) */
+  /** ISO date string (YYYY-MM-DD). Defaults to the task's due day, or today. */
   startDate?: string;
-  /** Time of day as HH:mm */
+  /**
+   * Time of day as HH:mm. Instances are then scheduled with a reminder, using
+   * the reminder offset from global config.
+   */
   startTime?: string;
+  /** WEEKLY: at least one weekday is required, the rest default to false. */
   monday?: boolean;
   tuesday?: boolean;
   wednesday?: boolean;
