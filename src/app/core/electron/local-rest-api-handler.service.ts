@@ -156,6 +156,61 @@ const validateDeadlineFields = (
   return undefined;
 };
 
+/**
+ * Resolves which deadline day/time the request results in, before reminders
+ * are considered. An omitted field carries the task's current value over; a
+ * newly supplied deadline type replaces the other type, matching the
+ * mutual-exclusivity behavior of the deadline meta-reducer.
+ */
+const resolveDeadlineValue = (
+  fields: Partial<WritableTaskFields>,
+  existingTask?: Task,
+): { deadlineDay?: string; deadlineWithTime?: number } => {
+  const hasDay = hasOwn(fields, 'deadlineDay');
+  const hasTime = hasOwn(fields, 'deadlineWithTime');
+  const requestedDay = fields.deadlineDay ?? undefined;
+  const requestedTime = fields.deadlineWithTime ?? undefined;
+  let deadlineDay = hasDay ? requestedDay : (existingTask?.deadlineDay ?? undefined);
+  let deadlineWithTime = hasTime
+    ? requestedTime
+    : (existingTask?.deadlineWithTime ?? undefined);
+  if (requestedDay !== undefined) deadlineWithTime = undefined;
+  if (requestedTime !== undefined) deadlineDay = undefined;
+  return { deadlineDay, deadlineWithTime };
+};
+
+/**
+ * Resolves what happens to the reminder once the resulting deadline is known.
+ * A supplied value wins; a changed deadline without one clears the old
+ * reminder, just like the UI's setDeadline action; an otherwise unchanged
+ * deadline keeps its reminder. An explicit null that would otherwise keep an
+ * existing reminder becomes 'clear' so only the reminder is touched, without
+ * re-planning the deadline.
+ */
+const resolveReminderChange = (
+  fields: Partial<WritableTaskFields>,
+  existingTask: Task | undefined,
+  isDeadlineValueChanged: boolean,
+): { type: 'clear' } | { type: 'value'; remindAt: number | undefined } => {
+  if (!hasOwn(fields, 'deadlineRemindAt')) {
+    return {
+      type: 'value',
+      remindAt: isDeadlineValueChanged
+        ? undefined
+        : (existingTask?.deadlineRemindAt ?? undefined),
+    };
+  }
+  const requested = fields.deadlineRemindAt ?? undefined;
+  if (
+    requested === undefined &&
+    !isDeadlineValueChanged &&
+    existingTask?.deadlineRemindAt !== undefined
+  ) {
+    return { type: 'clear' };
+  }
+  return { type: 'value', remindAt: requested };
+};
+
 const resolveDeadlineChange = (
   fields: Partial<WritableTaskFields>,
   existingTask?: Task,
@@ -167,17 +222,7 @@ const resolveDeadlineChange = (
     return { ok: true };
   }
 
-  const requestedDay = fields.deadlineDay ?? undefined;
-  const requestedTime = fields.deadlineWithTime ?? undefined;
-  let deadlineDay = hasDay ? requestedDay : (existingTask?.deadlineDay ?? undefined);
-  let deadlineWithTime = hasTime
-    ? requestedTime
-    : (existingTask?.deadlineWithTime ?? undefined);
-
-  // A newly supplied deadline type replaces the other type, matching the
-  // mutual-exclusivity behavior of the deadline meta-reducer.
-  if (requestedDay !== undefined) deadlineWithTime = undefined;
-  if (requestedTime !== undefined) deadlineDay = undefined;
+  const { deadlineDay, deadlineWithTime } = resolveDeadlineValue(fields, existingTask);
 
   if (deadlineDay === undefined && deadlineWithTime === undefined) {
     if (fields.deadlineRemindAt != null) {
@@ -200,24 +245,11 @@ const resolveDeadlineChange = (
   const isDeadlineValueChanged =
     deadlineDay !== existingDeadlineDay || deadlineWithTime !== existingDeadlineWithTime;
 
-  if (
-    existingTask &&
-    hasReminder &&
-    fields.deadlineRemindAt == null &&
-    !isDeadlineValueChanged &&
-    existingDeadlineRemindAt !== undefined
-  ) {
+  const reminder = resolveReminderChange(fields, existingTask, isDeadlineValueChanged);
+  if (reminder.type === 'clear') {
     return { ok: true, change: { type: 'clearReminder' } };
   }
-
-  // Updating the deadline without explicitly supplying a reminder clears the
-  // old reminder, just like the UI's setDeadline action. A reminder-only PATCH
-  // preserves the existing deadline and supplies its explicit new value.
-  const deadlineRemindAt = hasReminder
-    ? (fields.deadlineRemindAt ?? undefined)
-    : isDeadlineValueChanged
-      ? undefined
-      : existingDeadlineRemindAt;
+  const deadlineRemindAt = reminder.remindAt;
 
   if (
     existingTask &&
