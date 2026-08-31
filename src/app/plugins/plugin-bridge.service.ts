@@ -34,6 +34,7 @@ import {
   OAuthFlowConfig,
   OAuthTokenResult,
   PluginAppState,
+  PluginCreateTaskRepeatCfgData,
   PluginManifest,
   PluginNote,
   PluginRequestOptions,
@@ -74,7 +75,13 @@ import { TranslateService } from '@ngx-translate/core';
 import { T } from '../t.const';
 import { SyncWrapperService } from '../imex/sync/sync-wrapper.service';
 import { Log, PluginLog } from '../core/log';
-import { TaskCopy } from '../features/tasks/task.model';
+import { TaskCopy, TaskReminderOptionId } from '../features/tasks/task.model';
+import { TaskRepeatCfgService } from '../features/task-repeat-cfg/task-repeat-cfg.service';
+import {
+  DEFAULT_TASK_REPEAT_CFG,
+  TaskRepeatCfgCopy,
+} from '../features/task-repeat-cfg/task-repeat-cfg.model';
+import { getDefaultSkipOverdue } from '../features/task-repeat-cfg/dialog-edit-task-repeat-cfg/get-default-skip-overdue';
 import { ProjectCopy } from '../features/project/project.model';
 import { TagCopy } from '../features/tag/tag.model';
 import { MAX_BATCH_OPERATIONS_SIZE } from '../op-log/core/operation-log.const';
@@ -149,6 +156,7 @@ export class PluginBridgeService implements OnDestroy {
   private _pluginHooksService = inject(PluginHooksService);
   private _taskService = inject(TaskService);
   private _taskFocusService = inject(TaskFocusService);
+  private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _workContextService = inject(WorkContextService);
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
@@ -1018,6 +1026,124 @@ export class PluginBridgeService implements OnDestroy {
       PluginLog.err('PluginBridge: Failed to delete task:', error);
       throw error;
     }
+  }
+
+  /**
+   * Make a task repeatable by creating a repeat config for it.
+   *
+   * Thin wrapper over TaskRepeatCfgService.addTaskRepeatCfgToTask() — the same
+   * single persistent action the "Repeat" dialog dispatches, so persistence
+   * metadata, first-occurrence calculation, lastTaskCreationDay and the
+   * task↔config link all stay with the existing service/effects (#5594).
+   */
+  async addTaskRepeatCfg(
+    taskId: string,
+    cfgData?: PluginCreateTaskRepeatCfgData,
+  ): Promise<string> {
+    typia.assert<string>(taskId);
+    typia.assert<PluginCreateTaskRepeatCfgData | undefined>(cfgData);
+
+    const task = await firstValueFrom(
+      this._store.select((state) => selectTaskByIdWithSubTaskData(state, { id: taskId })),
+    );
+    if (!task?.id) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.TASK_NOT_FOUND, { taskId }),
+      );
+    }
+    // Mirrors the UI, which offers the repeat dialog for main tasks only:
+    // repeat instances are always created as main tasks, so a repeat config on
+    // a sub task could never re-create its own shape.
+    if (task.parentId) {
+      throw new Error(
+        'Sub tasks cannot be made repeatable. Use the parent task instead.',
+      );
+    }
+    // A task holds at most one repeat config; silently replacing the link would
+    // orphan the previous config without cleaning up its instances.
+    if (task.repeatCfgId) {
+      throw new Error(
+        `Task already has a repeat config (${task.repeatCfgId}). Use updateTaskRepeatCfg() instead.`,
+      );
+    }
+
+    await this._validateTaskReferences(undefined, cfgData?.tagIds);
+
+    const { remindAt, skipOverdue, title, ...rest } = cfgData ?? {};
+    const cfgBase: Omit<TaskRepeatCfgCopy, 'id'> = {
+      ...DEFAULT_TASK_REPEAT_CFG,
+      // Dialog parity for NEW configs: anchor the recurrence today unless the
+      // caller provides an explicit startDate (in `rest`) — the DEFAULT leaves
+      // it undefined, which is only meant for legacy configs.
+      startDate: getDbDateStr(),
+      title: title !== undefined ? title : task.title,
+      ...rest,
+      ...(remindAt !== undefined ? { remindAt: remindAt as TaskReminderOptionId } : {}),
+      // The config always belongs to the task's project; a caller-provided
+      // projectId could silently split the config from its task.
+      projectId: task.projectId ?? null,
+    };
+    const cfg: Omit<TaskRepeatCfgCopy, 'id'> = {
+      ...cfgBase,
+      // Dialog parity: schedule-aware default (see get-default-skip-overdue.ts)
+      skipOverdue: skipOverdue ?? getDefaultSkipOverdue(cfgBase),
+    };
+
+    const cfgId = this._taskRepeatCfgService.addTaskRepeatCfgToTask(
+      task.id,
+      task.projectId ?? null,
+      cfg,
+    );
+    PluginLog.log('PluginBridge: Task repeat config added successfully', {
+      taskId,
+      cfgId,
+    });
+    return cfgId;
+  }
+
+  /**
+   * Update an existing task repeat config.
+   */
+  async updateTaskRepeatCfg(
+    cfgId: string,
+    changes: PluginCreateTaskRepeatCfgData,
+  ): Promise<void> {
+    typia.assert<string>(cfgId);
+    typia.assert<PluginCreateTaskRepeatCfgData>(changes);
+
+    const existing = await firstValueFrom(
+      this._taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$(cfgId),
+    );
+    if (!existing) {
+      throw new Error(`No task repeat config found for id ${cfgId}`);
+    }
+
+    await this._validateTaskReferences(undefined, changes.tagIds);
+
+    const { remindAt, ...rest } = changes;
+    this._taskRepeatCfgService.updateTaskRepeatCfg(cfgId, {
+      ...rest,
+      ...(remindAt !== undefined ? { remindAt: remindAt as TaskReminderOptionId } : {}),
+    });
+    PluginLog.log('PluginBridge: Task repeat config updated successfully', { cfgId });
+  }
+
+  /**
+   * Delete a task repeat config. Task instances are cleaned up by the shared
+   * delete action, exactly like a delete from the dialog.
+   */
+  async deleteTaskRepeatCfg(cfgId: string): Promise<void> {
+    typia.assert<string>(cfgId);
+
+    const existing = await firstValueFrom(
+      this._taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$(cfgId),
+    );
+    if (!existing) {
+      throw new Error(`No task repeat config found for id ${cfgId}`);
+    }
+
+    this._taskRepeatCfgService.deleteTaskRepeatCfg(cfgId);
+    PluginLog.log('PluginBridge: Task repeat config deleted successfully', { cfgId });
   }
 
   /**

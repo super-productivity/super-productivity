@@ -12,6 +12,7 @@ import {
   PluginAppState,
   PluginBaseCfg,
   PluginCreateTaskData,
+  PluginCreateTaskRepeatCfgData,
   PluginHeaderBtnCfg,
   PluginHookHandler,
   PluginHooks,
@@ -243,6 +244,29 @@ export class PluginAPI implements PluginAPIInterface {
   async deleteTask(taskId: string): Promise<void> {
     PluginLog.log(`Plugin ${this.#pluginId} requested to delete task ${taskId}`);
     return this.#pluginBridge.deleteTask(taskId);
+  }
+
+  async addTaskRepeatCfg(
+    taskId: string,
+    cfgData?: PluginCreateTaskRepeatCfgData,
+  ): Promise<string> {
+    PluginLog.log(
+      `Plugin ${this.#pluginId} requested to add repeat config to task ${taskId}`,
+    );
+    return this.#pluginBridge.addTaskRepeatCfg(taskId, cfgData);
+  }
+
+  async updateTaskRepeatCfg(
+    cfgId: string,
+    changes: PluginCreateTaskRepeatCfgData,
+  ): Promise<void> {
+    PluginLog.log(`Plugin ${this.#pluginId} requested to update repeat config ${cfgId}`);
+    return this.#pluginBridge.updateTaskRepeatCfg(cfgId, changes);
+  }
+
+  async deleteTaskRepeatCfg(cfgId: string): Promise<void> {
+    PluginLog.log(`Plugin ${this.#pluginId} requested to delete repeat config ${cfgId}`);
+    return this.#pluginBridge.deleteTaskRepeatCfg(cfgId);
   }
 
   async getAllProjects(): Promise<Project[]> {

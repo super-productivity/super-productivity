@@ -484,6 +484,10 @@ export interface PluginTaskRepeatCfg {
   lastTaskCreationDay?: string;
   quickSetting?: string;
   remindAt?: string;
+  notes?: string;
+  repeatFromCompletionDate?: boolean;
+  waitForCompletion?: boolean;
+  skipOverdue?: boolean;
 }
 
 export interface PluginSimpleCounterFull {
@@ -649,6 +653,26 @@ export interface PluginAPI {
 
   deleteTask(taskId: string): Promise<void>;
 
+  /**
+   * Make a task repeatable by creating a repeat config for it, mirroring the
+   * "Repeat" dialog. Unset fields fall back to the dialog's defaults. Rejected
+   * for sub tasks and for tasks that already have a repeat config.
+   * @returns the id of the created repeat config
+   */
+  addTaskRepeatCfg(
+    taskId: string,
+    cfgData?: PluginCreateTaskRepeatCfgData,
+  ): Promise<string>;
+
+  /** Update an existing task repeat config */
+  updateTaskRepeatCfg(
+    cfgId: string,
+    changes: PluginCreateTaskRepeatCfgData,
+  ): Promise<void>;
+
+  /** Delete a task repeat config; its task instances are cleaned up like a dialog delete */
+  deleteTaskRepeatCfg(cfgId: string): Promise<void>;
+
   batchUpdateForProject(request: BatchUpdateRequest): Promise<BatchUpdateResult>;
 
   // projects
@@ -794,6 +818,63 @@ export interface PluginCreateTaskData {
   isDone?: boolean;
   /** Due date as ISO date string (YYYY-MM-DD) */
   dueDay?: string | null;
+}
+
+/**
+ * Data for creating or updating a task repeat config via the plugin API.
+ * All fields are optional — on create, unset fields fall back to the same
+ * defaults the "Repeat" dialog uses.
+ *
+ * The recurrence itself is governed by `repeatCycle`, `repeatEvery` and the
+ * per-weekday flags; `quickSetting` is only the grouping label shown in the
+ * dialog form and has no direct effect (matches the internal model).
+ */
+export interface PluginCreateTaskRepeatCfgData {
+  /** Title used for created task instances; defaults to the task's current title */
+  title?: string | null;
+  tagIds?: string[];
+  isPaused?: boolean;
+  repeatCycle?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+  /** Repeat every N cycles (default 1) */
+  repeatEvery?: number;
+  /** ISO date string (YYYY-MM-DD) the recurrence is anchored to; defaults to today */
+  startDate?: string;
+  /** HH:mm — when set, created instances are scheduled at this time of day */
+  startTime?: string;
+  /** Default time estimate for created instances in milliseconds */
+  defaultEstimate?: number;
+  monday?: boolean;
+  tuesday?: boolean;
+  wednesday?: boolean;
+  thursday?: boolean;
+  friday?: boolean;
+  saturday?: boolean;
+  sunday?: boolean;
+  /** Dialog grouping label only — set the explicit recurrence fields as well */
+  quickSetting?:
+    | 'DAILY'
+    | 'WEEKLY_CURRENT_WEEKDAY'
+    | 'MONTHLY_CURRENT_DATE'
+    | 'MONTHLY_FIRST_DAY'
+    | 'MONTHLY_LAST_DAY'
+    | 'MONTHLY_NTH_WEEKDAY'
+    | 'MONDAY_TO_FRIDAY'
+    | 'YEARLY_CURRENT_DATE'
+    | 'CUSTOM';
+  /** Reminder for scheduled instances; only has an effect together with startTime */
+  remindAt?: 'DoNotRemind' | 'AtStart' | 'm5' | 'm10' | 'm15' | 'm30' | 'h1';
+  /** Notes template for created task instances */
+  notes?: string;
+  /** Base the next occurrence on the completion date instead of the schedule */
+  repeatFromCompletionDate?: boolean;
+  /** Only create the next instance after the current one is completed */
+  waitForCompletion?: boolean;
+  /**
+   * Silently skip missed/overdue instances instead of creating them.
+   * Defaults to the dialog's schedule-aware default (ON only for a plain
+   * everyday schedule).
+   */
+  skipOverdue?: boolean;
 }
 
 export interface PluginShortcutCfg {

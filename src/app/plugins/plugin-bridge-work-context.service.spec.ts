@@ -6,6 +6,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { PluginBridgeService } from './plugin-bridge.service';
+import { TaskRepeatCfgService } from '../features/task-repeat-cfg/task-repeat-cfg.service';
 import { TaskService } from '../features/tasks/task.service';
 import { ProjectService } from '../features/project/project.service';
 import { TagService } from '../features/tag/tag.service';
@@ -93,6 +94,7 @@ describe('PluginBridgeService.workContext — header buttons + embed slot', () =
     TestBed.configureTestingModule({
       providers: [
         PluginBridgeService,
+        { provide: TaskRepeatCfgService, useValue: {} },
         {
           provide: Store,
           useValue: jasmine.createSpyObj('Store', ['select', 'dispatch']),

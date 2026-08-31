@@ -133,6 +133,9 @@ Add these to your manifest.json based on what your plugin needs:
 - `getSelectedTask` - Read the task selected in the task detail panel
 - `getFocusedTask` - Read the currently focused task row, if any
 - `addTask` - Create tasks
+- `addTaskRepeatCfg` - Make a task repeatable (create a repeat config for it)
+- `updateTaskRepeatCfg` - Update a task repeat config
+- `deleteTaskRepeatCfg` - Delete a task repeat config
 - `getAllProjects` - Read projects
 - `addProject` - Create projects
 - `getAllTags` - Read tags

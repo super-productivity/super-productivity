@@ -5,6 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { of } from 'rxjs';
 import { PluginBridgeService } from './plugin-bridge.service';
+import { TaskRepeatCfgService } from '../features/task-repeat-cfg/task-repeat-cfg.service';
 import { selectAllSimpleCounters } from '../features/simple-counter/store/simple-counter.reducer';
 import {
   updateSimpleCounter,
@@ -64,6 +65,7 @@ describe('PluginBridgeService - Counter Methods', () => {
     TestBed.configureTestingModule({
       providers: [
         PluginBridgeService,
+        { provide: TaskRepeatCfgService, useValue: {} },
         provideMockStore({
           selectors: [
             { selector: selectAllSimpleCounters, value: [mockExistingCounter] },
@@ -301,6 +303,7 @@ describe('PluginBridgeService - dispatchAction privacy (#7619)', () => {
     TestBed.configureTestingModule({
       providers: [
         PluginBridgeService,
+        { provide: TaskRepeatCfgService, useValue: {} },
         provideMockStore(),
         { provide: SnackService, useValue: {} },
         { provide: NotifyService, useValue: {} },
@@ -400,6 +403,7 @@ describe('PluginBridgeService - iframe task selection methods', () => {
     TestBed.configureTestingModule({
       providers: [
         PluginBridgeService,
+        { provide: TaskRepeatCfgService, useValue: {} },
         provideMockStore(),
         { provide: SnackService, useValue: {} },
         { provide: NotifyService, useValue: {} },
@@ -473,6 +477,7 @@ describe('PluginBridgeService - request()', () => {
     TestBed.configureTestingModule({
       providers: [
         PluginBridgeService,
+        { provide: TaskRepeatCfgService, useValue: {} },
         provideMockStore(),
         { provide: SnackService, useValue: {} },
         { provide: NotifyService, useValue: {} },
@@ -600,6 +605,7 @@ describe('PluginBridgeService - openDialog', () => {
     TestBed.configureTestingModule({
       providers: [
         PluginBridgeService,
+        { provide: TaskRepeatCfgService, useValue: {} },
         provideMockStore(),
         { provide: SnackService, useValue: {} },
         { provide: NotifyService, useValue: {} },
@@ -691,6 +697,7 @@ describe('PluginBridgeService - nodeExecution grant tokens', () => {
     TestBed.configureTestingModule({
       providers: [
         PluginBridgeService,
+        { provide: TaskRepeatCfgService, useValue: {} },
         provideMockStore(),
         { provide: SnackService, useValue: {} },
         { provide: NotifyService, useValue: {} },
@@ -800,6 +807,7 @@ describe('PluginBridgeService - getAppState credential redaction', () => {
     TestBed.configureTestingModule({
       providers: [
         PluginBridgeService,
+        { provide: TaskRepeatCfgService, useValue: {} },
         provideMockStore(),
         { provide: SnackService, useValue: {} },
         { provide: NotifyService, useValue: {} },

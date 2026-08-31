@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { Store } from '@ngrx/store';
 import { of } from 'rxjs';
 import { PluginBridgeService } from './plugin-bridge.service';
+import { TaskRepeatCfgService } from '../features/task-repeat-cfg/task-repeat-cfg.service';
 import {
   SimpleCounter,
   SimpleCounterType,
@@ -65,6 +66,7 @@ describe('PluginBridgeService.setCounter()', () => {
     TestBed.configureTestingModule({
       providers: [
         PluginBridgeService,
+        { provide: TaskRepeatCfgService, useValue: {} },
         { provide: Store, useValue: storeSpy },
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: ProjectService, useValue: projectServiceSpy },
