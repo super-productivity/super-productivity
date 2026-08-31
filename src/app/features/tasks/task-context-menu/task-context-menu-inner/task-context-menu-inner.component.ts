@@ -9,6 +9,7 @@ import {
   Input,
   OnDestroy,
   output,
+  signal,
   viewChild,
   ViewEncapsulation,
 } from '@angular/core';
@@ -83,6 +84,11 @@ import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-co
 import { MenuTreeService } from '../../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../../ui/select-option-row/select-option-row.component';
 import { AddSubtaskInputService } from '../../add-subtask-input/add-subtask-input.service';
+import {
+  PluginTaskContextMenuEntryView,
+  PluginTaskContextMenuRegistryService,
+} from '../../../../plugins/plugin-task-context-menu-registry.service';
+import { PluginTaskContextMenuTarget } from '@super-productivity/plugin-api';
 
 @Component({
   selector: 'task-context-menu-inner',
@@ -125,6 +131,11 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _dateService = inject(DateService);
   private readonly _menuTreeService = inject(MenuTreeService);
   private readonly _addSubtaskInputService = inject(AddSubtaskInputService);
+  private readonly _pluginTaskContextMenuRegistry = inject(
+    PluginTaskContextMenuRegistryService,
+  );
+  private readonly _pluginTaskContextMenuTarget =
+    signal<PluginTaskContextMenuTarget>('TASK');
 
   protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
@@ -139,6 +150,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   );
   readonly isFocusModeEnabled = computed(
     () => this._globalConfigService.appFeatures().isFocusModeEnabled,
+  );
+  readonly pluginTaskContextMenuEntries = computed(() =>
+    this._pluginTaskContextMenuRegistry.entriesFor(this._pluginTaskContextMenuTarget()),
   );
 
   // eslint-disable-next-line @angular-eslint/no-output-native
@@ -198,6 +212,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   //  Accessor inputs cannot be migrated as they are too complex.
   @Input('task') set taskSet(v: TaskWithSubTasks | Task) {
     this.task = v;
+    this._pluginTaskContextMenuTarget.set(v.parentId ? 'SUBTASK' : 'TASK');
     this.isCurrent = this._taskService.currentTaskId() === v.id;
     this._task$.next(v);
   }
@@ -387,6 +402,14 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   focusFirstSubmenuItem(menu: MatMenu): void {
     menu.focusFirstItem('program');
+  }
+
+  runPluginTaskContextMenuEntry(entry: PluginTaskContextMenuEntryView): Promise<void> {
+    return this._pluginTaskContextMenuRegistry.execute(
+      entry.pluginId,
+      entry.entryId,
+      this.task.id,
+    );
   }
 
   goToFocusMode(): void {

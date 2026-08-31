@@ -17,6 +17,7 @@ import {
   PluginHooks,
   PluginManifest,
   PluginMenuEntryCfg,
+  PluginTaskContextMenuEntryCfg,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
   PluginRequestOptions,
@@ -126,6 +127,10 @@ export class PluginAPI implements PluginAPIInterface {
   registerMenuEntry(menuEntryCfg: Omit<PluginMenuEntryCfg, 'pluginId'>): void {
     PluginLog.log(`Plugin ${this.#pluginId} registered menu entry`);
     this.#boundMethods.registerMenuEntry(menuEntryCfg);
+  }
+
+  registerTaskContextMenuEntry(cfg: PluginTaskContextMenuEntryCfg): void {
+    this.#boundMethods.registerTaskContextMenuEntry(cfg);
   }
 
   registerConfigHandler(handler: () => void): void {

@@ -7,6 +7,7 @@ import {
   DialogCfg,
   DialogResult,
   NotifyCfg,
+  PluginManifest,
 } from '@super-productivity/plugin-api';
 
 describe('PluginAPI', () => {
@@ -17,6 +18,7 @@ describe('PluginAPI', () => {
   let requestSpy: jasmine.Spy;
   let getSelectedTaskSpy: jasmine.Spy;
   let getFocusedTaskSpy: jasmine.Spy;
+  let registerTaskContextMenuEntrySpy: jasmine.Spy;
   let mockBridge: jasmine.SpyObj<{
     createBoundMethods: () => Record<string, unknown>;
     getAppState: () => Promise<unknown>;
@@ -44,6 +46,7 @@ describe('PluginAPI', () => {
     getFocusedTaskSpy = jasmine
       .createSpy('getFocusedTask')
       .and.resolveTo({ id: 'focused-task', title: 'Focused Task' });
+    registerTaskContextMenuEntrySpy = jasmine.createSpy('registerTaskContextMenuEntry');
 
     mockBridge = jasmine.createSpyObj('PluginBridgeService', [
       'createBoundMethods',
@@ -61,6 +64,7 @@ describe('PluginAPI', () => {
       getSelectedTask: getSelectedTaskSpy,
       getFocusedTask: getFocusedTaskSpy,
       persistDataSynced: jasmine.createSpy('persistDataSynced'),
+      registerTaskContextMenuEntry: registerTaskContextMenuEntrySpy,
       log: {
         critical: jasmine.createSpy(),
         err: jasmine.createSpy(),
@@ -93,6 +97,16 @@ describe('PluginAPI', () => {
       'test-plugin',
       mockBridge as unknown as PluginBridgeService,
       mockI18nService,
+      {
+        id: 'test-plugin',
+        name: 'Test Plugin',
+        manifestVersion: 1,
+        version: '1.0.0',
+        minSupVersion: '1.0.0',
+        hooks: [],
+        permissions: [],
+      } as PluginManifest,
+      undefined,
     );
   });
 
@@ -100,6 +114,17 @@ describe('PluginAPI', () => {
     it('should delegate to the bridge method', () => {
       pluginAPI.showIndexHtmlAsView();
       expect(showIndexHtmlAsViewSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('registerTaskContextMenuEntry()', () => {
+    it('delegates the entry registration to the bound bridge method', () => {
+      const onClick = jasmine.createSpy('onClick');
+      const cfg = { id: 'set-color', label: 'Set color', onClick };
+
+      pluginAPI.registerTaskContextMenuEntry(cfg);
+
+      expect(registerTaskContextMenuEntrySpy).toHaveBeenCalledOnceWith(cfg);
     });
   });
 
