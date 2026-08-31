@@ -239,6 +239,25 @@ describe('PluginOAuthService', () => {
       service.clearTokens('plugin-1');
       expect(service.hasTokens('plugin-1')).toBe(false);
     });
+
+    it('should clear tokens by prefix', () => {
+      const tokens = {
+        accessToken: 'access',
+        refreshToken: 'refresh',
+        expiresAt: Date.now() + 3600000,
+        tokenUrl: 'https://token.url',
+        clientId: 'cid',
+      };
+      service.storeTokens('plugin-1__oauth__a', tokens);
+      service.storeTokens('plugin-1__oauth__b', tokens);
+      service.storeTokens('plugin-2__oauth__a', tokens);
+
+      service.clearTokensByPrefix('plugin-1__oauth__');
+
+      expect(service.hasTokens('plugin-1__oauth__a')).toBe(false);
+      expect(service.hasTokens('plugin-1__oauth__b')).toBe(false);
+      expect(service.hasTokens('plugin-2__oauth__a')).toBe(true);
+    });
   });
 
   describe('getValidToken', () => {

@@ -62,6 +62,21 @@ export const loadOAuthTokens = async (key: string): Promise<string | null> => {
   }
 };
 
+export const deleteOAuthTokensByPrefix = async (prefix: string): Promise<void> => {
+  try {
+    const store = await ensureDb();
+    const keys = await store.getAllKeys(DB_STORE_NAME);
+    await Promise.all(
+      keys
+        .filter((key): key is string => typeof key === 'string' && key.startsWith(prefix))
+        .map((key) => store.delete(DB_STORE_NAME, key)),
+    );
+  } catch (error) {
+    PluginLog.err('PluginOAuthTokenStore: Failed to delete tokens by prefix:', error);
+    throw error;
+  }
+};
+
 export const deleteOAuthTokens = async (key: string): Promise<void> => {
   try {
     const store = await ensureDb();

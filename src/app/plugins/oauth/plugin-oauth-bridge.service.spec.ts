@@ -2,7 +2,11 @@ import { TestBed } from '@angular/core/testing';
 import { Subject } from 'rxjs';
 import type { OAuthFlowConfig } from '@super-productivity/plugin-api';
 import { PluginOAuthBridgeService } from './plugin-oauth-bridge.service';
-import { deleteOAuthTokens, loadOAuthTokens } from './plugin-oauth-token-store';
+import {
+  deleteOAuthTokens,
+  loadOAuthTokens,
+  saveOAuthTokens,
+} from './plugin-oauth-token-store';
 import { PluginOAuthService } from './plugin-oauth.service';
 import { PluginLog } from '../../core/log';
 
@@ -19,8 +23,19 @@ describe('PluginOAuthBridgeService', () => {
   };
 
   beforeEach(async () => {
-    await deleteOAuthTokens('test-plugin__oauth').catch(() => undefined);
-
+    await Promise.all([
+      deleteOAuthTokens('test-plugin__oauth').catch(() => undefined),
+      deleteOAuthTokens('test-plugin__oauth__account-a').catch(() => undefined),
+      deleteOAuthTokens('test-plugin__oauth__account-a__initialized').catch(
+        () => undefined,
+      ),
+      deleteOAuthTokens('test-plugin__oauth__account-b').catch(() => undefined),
+      deleteOAuthTokens('test-plugin__oauth__account-b__initialized').catch(
+        () => undefined,
+      ),
+      deleteOAuthTokens('test-plugin__oauth-extra').catch(() => undefined),
+      deleteOAuthTokens('test-plugin__oauth-extra__account-a').catch(() => undefined),
+    ]);
     oauthService = jasmine.createSpyObj<PluginOAuthService>(
       'PluginOAuthService',
       [
@@ -32,6 +47,7 @@ describe('PluginOAuthBridgeService', () => {
         'storeTokens',
         'serializeTokens',
         'clearTokens',
+        'clearTokensByPrefix',
         'hasTokens',
         'restoreTokens',
         'getValidToken',
@@ -129,6 +145,98 @@ describe('PluginOAuthBridgeService', () => {
     await deleteOAuthTokens('test-plugin__oauth');
   });
 
+  it('persists oauth tokens under a provider-specific key', async () => {
+    spyOn(window, 'open').and.returnValue({} as Window);
+    oauthService.prepareRedirectUri.and.resolveTo(
+      'https://app.super-productivity.com/assets/oauth-callback.html',
+    );
+    oauthService.buildAuthUrl.and.resolveTo({
+      url: 'https://accounts.google.com/o/oauth2/v2/auth',
+      codeVerifier: 'verifier',
+      state: 'state',
+    });
+    oauthService.waitForRedirectCode.and.resolveTo('auth-code');
+    oauthService.exchangeCodeForTokens.and.resolveTo({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresAt: Date.now() + 3600000,
+    });
+    oauthService.serializeTokens.and.returnValue('scoped-serialized-tokens');
+
+    await service.startOAuthFlow(
+      'test-plugin',
+      {
+        ...baseConfig,
+        webClientId: 'web-client-id',
+      },
+      'account-a',
+    );
+
+    expect(oauthService.storeTokens).toHaveBeenCalledWith(
+      'test-plugin__oauth__account-a',
+      jasmine.any(Object),
+    );
+    expect(await loadOAuthTokens('test-plugin__oauth__account-a')).toBe(
+      'scoped-serialized-tokens',
+    );
+  });
+
+  it('clears the legacy key and only scoped oauth tokens for a plugin', async () => {
+    await saveOAuthTokens('test-plugin__oauth', 'legacy');
+    await saveOAuthTokens('test-plugin__oauth__account-a', 'a');
+    await saveOAuthTokens('test-plugin__oauth__account-b', 'b');
+    await saveOAuthTokens('test-plugin__oauth-extra', 'other-legacy');
+    await saveOAuthTokens('test-plugin__oauth-extra__account-a', 'other-scoped');
+
+    await service.clearOAuthTokens('test-plugin');
+
+    expect(oauthService.clearTokens).toHaveBeenCalledWith('test-plugin__oauth');
+    expect(oauthService.clearTokensByPrefix).toHaveBeenCalledWith('test-plugin__oauth__');
+    expect(await loadOAuthTokens('test-plugin__oauth')).toBeNull();
+    expect(await loadOAuthTokens('test-plugin__oauth__account-a')).toBeNull();
+    expect(await loadOAuthTokens('test-plugin__oauth__account-b')).toBeNull();
+    expect(await loadOAuthTokens('test-plugin__oauth-extra')).toBe('other-legacy');
+    expect(await loadOAuthTokens('test-plugin__oauth-extra__account-a')).toBe(
+      'other-scoped',
+    );
+  });
+
+  it('migrates an existing legacy token to a provider scoped key once', async () => {
+    oauthService.hasTokens.and.callFake((key: string) => key === 'test-plugin__oauth');
+    oauthService.serializeTokens.and.returnValue('legacy-serialized-tokens');
+
+    const migrated = await service.migrateLegacyOAuthTokenToScopedKey(
+      'test-plugin',
+      'account-a',
+    );
+
+    expect(migrated).toBeTrue();
+    expect(oauthService.restoreTokens).toHaveBeenCalledWith(
+      'test-plugin__oauth__account-a',
+      'legacy-serialized-tokens',
+    );
+    expect(await loadOAuthTokens('test-plugin__oauth__account-a')).toBe(
+      'legacy-serialized-tokens',
+    );
+    expect(await loadOAuthTokens('test-plugin__oauth__account-a__initialized')).toBe('1');
+  });
+
+  it('does not re-migrate a scoped key after it was initialized and cleared', async () => {
+    await saveOAuthTokens('test-plugin__oauth__account-a__initialized', '1');
+    oauthService.hasTokens.and.callFake((key: string) => key === 'test-plugin__oauth');
+    oauthService.serializeTokens.and.returnValue('legacy-serialized-tokens');
+
+    await expectAsync(
+      service.migrateLegacyOAuthTokenToScopedKey('test-plugin', 'account-a'),
+    ).toBeResolvedTo(false);
+
+    expect(oauthService.restoreTokens).not.toHaveBeenCalledWith(
+      'test-plugin__oauth__account-a',
+      jasmine.any(String),
+    );
+    expect(await loadOAuthTokens('test-plugin__oauth__account-a')).toBeNull();
+  });
+
   it('uses a public web client id without carrying the desktop client secret', async () => {
     spyOn(window, 'open').and.returnValue({} as Window);
     oauthService.prepareRedirectUri.and.resolveTo(
@@ -203,7 +311,7 @@ describe('PluginOAuthBridgeService', () => {
     );
 
     expect(hasTokens).toBeFalse();
-    expect(oauthService.clearTokens).toHaveBeenCalledWith('google-calendar');
+    expect(oauthService.clearTokens).toHaveBeenCalledWith('google-calendar__oauth');
     expect(oauthService.getValidToken).not.toHaveBeenCalled();
   });
 
@@ -213,7 +321,7 @@ describe('PluginOAuthBridgeService', () => {
     const token = await service.getOAuthToken('google-calendar', baseConfig);
 
     expect(token).toBeNull();
-    expect(oauthService.clearTokens).toHaveBeenCalledWith('google-calendar');
+    expect(oauthService.clearTokens).toHaveBeenCalledWith('google-calendar__oauth');
     expect(oauthService.getValidToken).not.toHaveBeenCalled();
   });
 });

@@ -215,6 +215,14 @@ export class PluginOAuthService {
     this._tokenStore.delete(pluginId);
   }
 
+  clearTokensByPrefix(prefix: string): void {
+    for (const key of this._tokenStore.keys()) {
+      if (key.startsWith(prefix)) {
+        this._tokenStore.delete(key);
+      }
+    }
+  }
+
   serializeTokens(pluginId: string): string | null {
     const tokens = this._tokenStore.get(pluginId);
     return tokens ? JSON.stringify(tokens) : null;

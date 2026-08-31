@@ -23,6 +23,7 @@ import { sortTagLabels } from './plugin-tag-utils';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { T } from '../../t.const';
 import { PluginLog } from '../../core/log';
+import { withPluginOAuthTokenKey } from '../oauth/plugin-oauth-token-key.util';
 
 @Injectable({ providedIn: 'root' })
 export class PluginIssueProviderAdapterService implements IssueServiceInterface {
@@ -337,8 +338,13 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     if (!provider) {
       return undefined;
     }
+    const pluginConfig = withPluginOAuthTokenKey(
+      provider.pluginId,
+      cfg.pluginConfig,
+      cfg.id,
+    );
     const http = this._pluginHttp.createHttpHelper(
-      () => provider.definition.getHeaders(cfg.pluginConfig),
+      () => provider.definition.getHeaders(pluginConfig),
       { allowPrivateNetwork: provider.allowPrivateNetwork },
     );
     return { provider, http };
