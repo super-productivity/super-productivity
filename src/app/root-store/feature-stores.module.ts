@@ -40,6 +40,7 @@ import {
   simpleCounterReducer,
 } from '../features/simple-counter/store/simple-counter.reducer';
 import { SimpleCounterEffects } from '../features/simple-counter/store/simple-counter.effects';
+import { SimpleCounterAudioEffects } from '../features/simple-counter/store/simple-counter-audio.effects';
 import {
   SECTION_FEATURE_NAME,
   sectionReducer,
@@ -141,6 +142,7 @@ import {
     StoreModule.forFeature(menuTreeFeatureKey, menuTreeReducer),
 
     StoreModule.forFeature(SIMPLE_COUNTER_FEATURE_NAME, simpleCounterReducer),
+    EffectsModule.forFeature([SimpleCounterEffects, SimpleCounterAudioEffects]),
     EffectsModule.forFeature([SimpleCounterEffects]),
 
     StoreModule.forFeature(SECTION_FEATURE_NAME, sectionReducer),

@@ -11,6 +11,77 @@
       [options]="formOptions"
     >
     </formly-form>
+
+    @if (model.isAudioEnabled) {
+      <div style="margin-top: 8px">
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="previewSound()"
+        >
+          <mat-icon>volume_up</mat-icon>
+          Preview Sound
+        </button>
+      </div>
+
+      <div style="margin-top: 16px">
+        <p>
+          <strong>{{ T.F.SIMPLE_COUNTER.FORM.L_CUSTOM_SOUNDS | translate }}</strong>
+        </p>
+
+        <input
+          #fileInput
+          type="file"
+          accept="audio/*"
+          hidden
+          (change)="onFileInputChange($event)"
+        />
+        <div style="display: flex; align-items: center; gap: 8px">
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="fileInput.click()"
+          >
+            <mat-icon>upload</mat-icon>
+            {{ T.F.SIMPLE_COUNTER.FORM.BTN_UPLOAD_SOUND | translate }}
+          </button>
+          <small style="opacity: 0.6">{{
+            T.F.SIMPLE_COUNTER.FORM.UPLOAD_SOUND_HINT | translate
+          }}</small>
+        </div>
+
+        @for (sound of customSounds(); track sound.id) {
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px">
+            <span style="flex: 1">{{ sound.name }}</span>
+            <button
+              mat-icon-button
+              type="button"
+              title="Preview"
+              (click)="previewCustomSound(sound)"
+            >
+              <mat-icon>play_arrow</mat-icon>
+            </button>
+            <button
+              mat-stroked-button
+              type="button"
+              [disabled]="model.soundType === CUSTOM_PREFIX + sound.id"
+              (click)="selectCustomSound(sound.id)"
+            >
+              {{ T.F.SIMPLE_COUNTER.FORM.BTN_USE_SOUND | translate }}
+            </button>
+            <button
+              mat-icon-button
+              type="button"
+              color="warn"
+              title="Delete"
+              (click)="removeCustomSound(sound.id)"
+            >
+              <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+        }
+      </div>
+    }
   </mat-dialog-content>
 
   <mat-dialog-actions>
