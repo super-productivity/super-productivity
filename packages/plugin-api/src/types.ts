@@ -665,6 +665,20 @@ export interface PluginAPI {
 
   updateTag(tagId: string, updates: Partial<Tag>): Promise<void>;
 
+  // recurring tasks
+  /**
+   * Make an existing task repeat. Returns the id of the created config.
+   *
+   * The config inherits the task's project, and its title defaults to the
+   * task's title. Reading configs back is done via `getAppState().taskRepeatCfgs`.
+   */
+  addTaskRepeatCfg(taskId: string, cfg?: PluginTaskRepeatCfgData): Promise<string>;
+
+  updateTaskRepeatCfg(
+    taskRepeatCfgId: string,
+    updates: PluginTaskRepeatCfgData,
+  ): Promise<void>;
+
   // task ordering
   reorderTasks(
     taskIds: string[],
@@ -794,6 +808,52 @@ export interface PluginCreateTaskData {
   isDone?: boolean;
   /** Due date as ISO date string (YYYY-MM-DD) */
   dueDay?: string | null;
+}
+
+/**
+ * Schedule fields a plugin may set on a recurring task config.
+ *
+ * Deliberately narrower than {@link PluginTaskRepeatCfg}: `id` and `projectId`
+ * are owned by the app (the id is generated, the project is inherited from the
+ * task the config is attached to), and the literal unions make the payload
+ * checkable at runtime rather than only at compile time.
+ *
+ * There is no `quickSetting` here. Those presets are defined against the day
+ * the user opens the dialog ("weekly on the current weekday"), a reference the
+ * app has and a plugin does not, so a config is described by its cycle and
+ * pattern fields instead and is stored as `CUSTOM`.
+ */
+export interface PluginTaskRepeatCfgData {
+  /** Title for the generated tasks. Defaults to the source task's title. */
+  title?: string | null;
+  notes?: string;
+  tagIds?: string[];
+  defaultEstimate?: number;
+  isPaused?: boolean;
+  repeatCycle?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+  /** 1..1000. Every nth day/week/month/year. */
+  repeatEvery?: number;
+  /** ISO date string (YYYY-MM-DD). Defaults to the task's due day, or today. */
+  startDate?: string;
+  /**
+   * Time of day as HH:mm. Instances are then scheduled with a reminder, using
+   * the reminder offset from global config.
+   */
+  startTime?: string;
+  /** WEEKLY: at least one weekday is required, the rest default to false. */
+  monday?: boolean;
+  tuesday?: boolean;
+  wednesday?: boolean;
+  thursday?: boolean;
+  friday?: boolean;
+  saturday?: boolean;
+  sunday?: boolean;
+  /** MONTHLY only: 1..4 = first through fourth occurrence, -1 = last */
+  monthlyWeekOfMonth?: 1 | 2 | 3 | 4 | -1;
+  /** MONTHLY only: 0 = Sunday … 6 = Saturday */
+  monthlyWeekday?: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  /** MONTHLY only: anchor to the last calendar day of every month */
+  monthlyLastDay?: boolean;
 }
 
 export interface PluginShortcutCfg {

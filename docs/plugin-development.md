@@ -313,6 +313,30 @@ Iframe plugins automatically receive:
 - `addTag(tag)` - Create new tag
 - `updateTag(tagId, updates)` - Update tag
 
+#### Recurring tasks
+
+- `addTaskRepeatCfg(taskId, cfg?)` - Make an existing task repeat; returns the new config id
+- `updateTaskRepeatCfg(taskRepeatCfgId, updates)` - Change an existing repeat config
+
+Read configs back via `getAppState().taskRepeatCfgs`. Only top-level, non-issue tasks
+can repeat, and a task that already has a config must be updated rather than given a
+second one.
+
+Describe the schedule with the pattern fields of `PluginTaskRepeatCfgData`
+(`repeatCycle`, `repeatEvery`, the weekday flags, the monthly anchors). The dialog's
+presets are not part of the payload: they are defined against the day the user opens
+the dialog, so a config created here is stored as `CUSTOM`. A `WEEKLY` cycle needs at
+least one weekday, and the flags you leave out are false rather than inherited.
+
+New configs take `projectId`, `title`, `notes`, `tagIds` and `defaultEstimate` from
+the source task unless you pass your own, `startDate` from the task's due day, and
+`shouldInheritSubtasks` from whether the task has subtasks. Pass `startTime` and the
+instances get scheduled with the reminder offset from global config.
+
+Updates apply to future instances only. Today's already-created instance keeps its
+old title and estimate, since propagating those is what the dialog's "update all
+instances" prompt does, and a plugin call does not open prompts.
+
 #### Simple Counters
 
 Simple counters let you track lightweight metrics (e.g., daily clicks or habits) that persist and sync with your data. There are two levels: **basic** (key-value pairs for today's count) and **full model** (full CRUD on `SimpleCounter` entities with date-specific values).

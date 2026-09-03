@@ -25,6 +25,11 @@ import { DEFAULT_TASK, TaskWithSubTasks } from '../features/tasks/task.model';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { ProjectService } from '../features/project/project.service';
 import { TagService } from '../features/tag/tag.service';
+import { TaskRepeatCfgService } from '../features/task-repeat-cfg/task-repeat-cfg.service';
+import {
+  TaskRepeatCfg,
+  TaskRepeatCfgCopy,
+} from '../features/task-repeat-cfg/task-repeat-cfg.model';
 import { PluginUserPersistenceService } from './plugin-user-persistence.service';
 import { PluginConfigService } from './plugin-config.service';
 import { TaskArchiveService } from '../features/archive/task-archive.service';
@@ -37,6 +42,8 @@ import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/
 import { PluginHttpService } from './issue-provider/plugin-http.service';
 import { getDbDateStr } from '../util/get-db-date-str';
 import { DataInitService } from '../core/data-init/data-init.service';
+import { GlobalConfigService } from '../features/config/global-config.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
 import { Log } from '../core/log';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
 import { PluginDialogComponent } from './ui/plugin-dialog/plugin-dialog.component';
@@ -82,6 +89,7 @@ describe('PluginBridgeService - Counter Methods', () => {
         { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
         { provide: ProjectService, useValue: {} },
         { provide: TagService, useValue: {} },
+        { provide: TaskRepeatCfgService, useValue: {} },
         { provide: PluginUserPersistenceService, useValue: {} },
         { provide: PluginConfigService, useValue: {} },
         { provide: TaskArchiveService, useValue: {} },
@@ -310,6 +318,7 @@ describe('PluginBridgeService - dispatchAction privacy (#7619)', () => {
         { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
         { provide: ProjectService, useValue: {} },
         { provide: TagService, useValue: {} },
+        { provide: TaskRepeatCfgService, useValue: {} },
         { provide: PluginUserPersistenceService, useValue: {} },
         { provide: PluginConfigService, useValue: {} },
         { provide: TaskArchiveService, useValue: {} },
@@ -415,6 +424,7 @@ describe('PluginBridgeService - iframe task selection methods', () => {
         { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
         { provide: ProjectService, useValue: {} },
         { provide: TagService, useValue: {} },
+        { provide: TaskRepeatCfgService, useValue: {} },
         { provide: PluginUserPersistenceService, useValue: {} },
         { provide: PluginConfigService, useValue: {} },
         { provide: TaskArchiveService, useValue: {} },
@@ -482,6 +492,7 @@ describe('PluginBridgeService - request()', () => {
         { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
         { provide: ProjectService, useValue: {} },
         { provide: TagService, useValue: {} },
+        { provide: TaskRepeatCfgService, useValue: {} },
         { provide: PluginUserPersistenceService, useValue: {} },
         { provide: PluginConfigService, useValue: {} },
         { provide: TaskArchiveService, useValue: {} },
@@ -609,6 +620,7 @@ describe('PluginBridgeService - openDialog', () => {
         { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
         { provide: ProjectService, useValue: {} },
         { provide: TagService, useValue: {} },
+        { provide: TaskRepeatCfgService, useValue: {} },
         { provide: PluginUserPersistenceService, useValue: {} },
         { provide: PluginConfigService, useValue: {} },
         { provide: TaskArchiveService, useValue: {} },
@@ -700,6 +712,7 @@ describe('PluginBridgeService - nodeExecution grant tokens', () => {
         { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
         { provide: ProjectService, useValue: {} },
         { provide: TagService, useValue: {} },
+        { provide: TaskRepeatCfgService, useValue: {} },
         { provide: PluginUserPersistenceService, useValue: {} },
         { provide: PluginConfigService, useValue: {} },
         { provide: TaskArchiveService, useValue: {} },
@@ -809,6 +822,7 @@ describe('PluginBridgeService - getAppState credential redaction', () => {
         { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
         { provide: ProjectService, useValue: {} },
         { provide: TagService, useValue: {} },
+        { provide: TaskRepeatCfgService, useValue: {} },
         { provide: PluginUserPersistenceService, useValue: {} },
         { provide: PluginConfigService, useValue: {} },
         { provide: TaskArchiveService, useValue: {} },
@@ -879,5 +893,254 @@ describe('PluginBridgeService - getAppState credential redaction', () => {
     expect((snapshot.globalConfig.misc as Record<string, unknown>).isDarkMode).toBe(
       false,
     );
+  });
+});
+
+describe('PluginBridgeService - Task Repeat Cfg Methods', () => {
+  let service: PluginBridgeService;
+  let taskRepeatCfgServiceSpy: jasmine.SpyObj<TaskRepeatCfgService>;
+  let taskServiceMock: { getByIdOnce$: jasmine.Spy };
+
+  const TASK = {
+    ...DEFAULT_TASK,
+    id: 'task-1',
+    title: 'Water the plants',
+    projectId: 'project-1',
+    tagIds: ['tag-1'],
+    timeEstimate: 900000,
+    notes: 'the big one on the balcony',
+    dueDay: '2026-03-02',
+  };
+
+  const lastCfg = (): TaskRepeatCfgCopy =>
+    taskRepeatCfgServiceSpy.addTaskRepeatCfgToTask.calls.mostRecent()
+      .args[2] as TaskRepeatCfgCopy;
+
+  beforeEach(() => {
+    taskRepeatCfgServiceSpy = jasmine.createSpyObj('TaskRepeatCfgService', [
+      'addTaskRepeatCfgToTask',
+      'updateTaskRepeatCfg',
+      'getTaskRepeatCfgByIdAllowUndefined$',
+    ]);
+    taskRepeatCfgServiceSpy.addTaskRepeatCfgToTask.and.returnValue('repeat-cfg-1');
+    taskServiceMock = { getByIdOnce$: jasmine.createSpy('getByIdOnce$') };
+    taskServiceMock.getByIdOnce$.and.returnValue(of(TASK));
+
+    TestBed.configureTestingModule({
+      providers: [
+        PluginBridgeService,
+        provideMockStore(),
+        { provide: SnackService, useValue: {} },
+        { provide: NotifyService, useValue: {} },
+        { provide: MatDialog, useValue: {} },
+        { provide: PluginHooksService, useValue: {} },
+        { provide: TaskService, useValue: taskServiceMock },
+        { provide: TaskFocusService, useValue: {} },
+        { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
+        { provide: ProjectService, useValue: {} },
+        { provide: TagService, useValue: {} },
+        { provide: TaskRepeatCfgService, useValue: taskRepeatCfgServiceSpy },
+        {
+          provide: GlobalConfigService,
+          useValue: { cfg: () => DEFAULT_GLOBAL_CONFIG },
+        },
+        { provide: PluginUserPersistenceService, useValue: {} },
+        { provide: PluginConfigService, useValue: {} },
+        { provide: TaskArchiveService, useValue: {} },
+        { provide: Router, useValue: {} },
+        { provide: TranslateService, useValue: { instant: (key: string) => key } },
+        { provide: SyncWrapperService, useValue: {} },
+        { provide: GlobalThemeService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: {} },
+        { provide: DataInitService, useValue: {} },
+      ],
+    });
+
+    service = TestBed.inject(PluginBridgeService);
+  });
+
+  describe('addTaskRepeatCfg', () => {
+    it('inherits project, title, tags, notes and estimate from the task', async () => {
+      const id = await service.addTaskRepeatCfg('task-1', {
+        repeatCycle: 'WEEKLY',
+        monday: true,
+      });
+
+      expect(id).toBe('repeat-cfg-1');
+      const [taskId, projectId] =
+        taskRepeatCfgServiceSpy.addTaskRepeatCfgToTask.calls.mostRecent().args;
+      expect(taskId).toBe('task-1');
+      expect(projectId).toBe('project-1');
+      expect(lastCfg().title).toBe('Water the plants');
+      expect(lastCfg().tagIds).toEqual(['tag-1']);
+      expect(lastCfg().notes).toBe('the big one on the balcony');
+      expect(lastCfg().defaultEstimate).toBe(900000);
+    });
+
+    it('stores CUSTOM and does not inherit the Mon-Fri default mask', async () => {
+      await service.addTaskRepeatCfg('task-1', {
+        repeatCycle: 'WEEKLY',
+        saturday: true,
+      });
+
+      const cfg = lastCfg();
+      expect(cfg.quickSetting).toBe('CUSTOM');
+      expect(cfg.saturday).toBeTrue();
+      expect(cfg.monday).toBeFalse();
+      expect(cfg.tuesday).toBeFalse();
+      expect(cfg.wednesday).toBeFalse();
+      expect(cfg.thursday).toBeFalse();
+      expect(cfg.friday).toBeFalse();
+      expect(cfg.sunday).toBeFalse();
+    });
+
+    it('seeds startDate from the task, so nothing anchors to 1970', async () => {
+      await service.addTaskRepeatCfg('task-1', {
+        repeatCycle: 'MONTHLY',
+      });
+      expect(lastCfg().startDate).toBe('2026-03-02');
+
+      await service.addTaskRepeatCfg('task-1', {
+        repeatCycle: 'MONTHLY',
+        startDate: '2026-04-15',
+      });
+      expect(lastCfg().startDate).toBe('2026-04-15');
+    });
+
+    it('seeds remindAt when a startTime is given, otherwise leaves it unset', async () => {
+      await service.addTaskRepeatCfg('task-1', {
+        repeatCycle: 'DAILY',
+        startTime: '09:00',
+      });
+      expect(lastCfg().remindAt).toBe(
+        DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption,
+      );
+
+      await service.addTaskRepeatCfg('task-1', { repeatCycle: 'DAILY' });
+      expect(lastCfg().remindAt).toBeUndefined();
+    });
+
+    it('turns skipOverdue on for every-day only', async () => {
+      await service.addTaskRepeatCfg('task-1', {
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+      });
+      expect(lastCfg().skipOverdue).toBeTrue();
+
+      await service.addTaskRepeatCfg('task-1', {
+        repeatCycle: 'WEEKLY',
+        monday: true,
+      });
+      expect(lastCfg().skipOverdue).toBeFalse();
+
+      await service.addTaskRepeatCfg('task-1', {
+        repeatCycle: 'DAILY',
+        repeatEvery: 3,
+      });
+      expect(lastCfg().skipOverdue).toBeFalse();
+    });
+
+    it('rejects a weekly config with no weekday, which would never fire', async () => {
+      await expectAsync(
+        service.addTaskRepeatCfg('task-1', { repeatCycle: 'WEEKLY' }),
+      ).toBeRejectedWithError(T.PLUGINS.TASK_REPEAT_CFG_INVALID);
+      expect(taskRepeatCfgServiceSpy.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+    });
+
+    it('rejects a repeatEvery the dialog form would not accept', async () => {
+      await expectAsync(
+        service.addTaskRepeatCfg('task-1', { repeatCycle: 'DAILY', repeatEvery: 0 }),
+      ).toBeRejectedWithError(T.PLUGINS.TASK_REPEAT_CFG_INVALID);
+      await expectAsync(
+        service.addTaskRepeatCfg('task-1', { repeatCycle: 'DAILY', repeatEvery: 1001 }),
+      ).toBeRejectedWithError(T.PLUGINS.TASK_REPEAT_CFG_INVALID);
+      expect(taskRepeatCfgServiceSpy.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown task', async () => {
+      taskServiceMock.getByIdOnce$.and.returnValue(of(undefined));
+      await expectAsync(service.addTaskRepeatCfg('nope')).toBeRejectedWithError(
+        T.PLUGINS.TASK_NOT_FOUND,
+      );
+      expect(taskRepeatCfgServiceSpy.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+    });
+
+    it('rejects a subtask, which the UI cannot make repeat either', async () => {
+      taskServiceMock.getByIdOnce$.and.returnValue(of({ ...TASK, parentId: 'parent-1' }));
+      await expectAsync(service.addTaskRepeatCfg('task-1')).toBeRejectedWithError(
+        T.PLUGINS.TASK_CANNOT_REPEAT,
+      );
+      expect(taskRepeatCfgServiceSpy.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+    });
+
+    it('rejects an issue task', async () => {
+      taskServiceMock.getByIdOnce$.and.returnValue(of({ ...TASK, issueId: 'JIRA-1' }));
+      await expectAsync(service.addTaskRepeatCfg('task-1')).toBeRejectedWithError(
+        T.PLUGINS.TASK_CANNOT_REPEAT,
+      );
+    });
+
+    it('rejects a task that already repeats, rather than orphaning its config', async () => {
+      taskServiceMock.getByIdOnce$.and.returnValue(
+        of({ ...TASK, repeatCfgId: 'repeat-cfg-0' }),
+      );
+      await expectAsync(service.addTaskRepeatCfg('task-1')).toBeRejectedWithError(
+        T.PLUGINS.TASK_ALREADY_REPEATING,
+      );
+      expect(taskRepeatCfgServiceSpy.addTaskRepeatCfgToTask).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateTaskRepeatCfg', () => {
+    beforeEach(() => {
+      taskRepeatCfgServiceSpy.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+        of({ id: 'repeat-cfg-1' } as unknown as TaskRepeatCfg),
+      );
+    });
+
+    it('updates without asking to update existing task instances', async () => {
+      await service.updateTaskRepeatCfg('repeat-cfg-1', { isPaused: true });
+
+      expect(taskRepeatCfgServiceSpy.updateTaskRepeatCfg).toHaveBeenCalledOnceWith(
+        'repeat-cfg-1',
+        { isPaused: true },
+        false,
+      );
+    });
+
+    it('drops app-owned fields instead of letting them re-key the entity', async () => {
+      await service.updateTaskRepeatCfg('repeat-cfg-1', {
+        isPaused: true,
+        id: 'other-id',
+        projectId: 'other-project',
+        quickSetting: 'MONTHLY_LAST_DAY',
+      } as never);
+
+      expect(taskRepeatCfgServiceSpy.updateTaskRepeatCfg).toHaveBeenCalledOnceWith(
+        'repeat-cfg-1',
+        { isPaused: true },
+        false,
+      );
+    });
+
+    it('rejects a repeatEvery out of range', async () => {
+      await expectAsync(
+        service.updateTaskRepeatCfg('repeat-cfg-1', { repeatEvery: 0 }),
+      ).toBeRejectedWithError(T.PLUGINS.TASK_REPEAT_CFG_INVALID);
+      expect(taskRepeatCfgServiceSpy.updateTaskRepeatCfg).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown config', async () => {
+      taskRepeatCfgServiceSpy.getTaskRepeatCfgByIdAllowUndefined$.and.returnValue(
+        of(undefined),
+      );
+
+      await expectAsync(
+        service.updateTaskRepeatCfg('nope', { isPaused: true }),
+      ).toBeRejectedWithError(T.PLUGINS.TASK_REPEAT_CFG_NOT_FOUND);
+      expect(taskRepeatCfgServiceSpy.updateTaskRepeatCfg).not.toHaveBeenCalled();
+    });
   });
 });

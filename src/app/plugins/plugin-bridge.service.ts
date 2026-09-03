@@ -39,6 +39,7 @@ import {
   PluginRequestOptions,
   PluginSimpleCounterFull,
   PluginTaskRepeatCfg,
+  PluginTaskRepeatCfgData,
   SnackCfg,
 } from '@super-productivity/plugin-api';
 import { snackCfgToSnackParams } from './plugin-api-mapper';
@@ -56,6 +57,13 @@ import { nanoid } from 'nanoid';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { ProjectService } from '../features/project/project.service';
 import { TagService } from '../features/tag/tag.service';
+import { TaskRepeatCfgService } from '../features/task-repeat-cfg/task-repeat-cfg.service';
+import {
+  DEFAULT_TASK_REPEAT_CFG,
+  TaskRepeatCfgCopy,
+} from '../features/task-repeat-cfg/task-repeat-cfg.model';
+import { getDefaultSkipOverdue } from '../features/task-repeat-cfg/dialog-edit-task-repeat-cfg/get-default-skip-overdue';
+import { unique } from '../util/unique';
 import typia from 'typia';
 import { distinctUntilChanged, first, map, take, timeout } from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
@@ -138,6 +146,37 @@ type PluginDateFormat = 'short' | 'medium' | 'long' | 'time' | 'datetime';
  * - Easy testing and mocking
  * - Centralized plugin-to-app communication
  */
+// Mirrors the dialog form's own bound (task-repeat-cfg-form.const.ts).
+const MAX_PLUGIN_REPEAT_EVERY = 1000;
+
+const PLUGIN_REPEAT_WEEKDAYS = [
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
+] as const;
+
+// Fields a plugin may change on an existing config. Everything outside this
+// list, id and projectId included, is app-owned.
+const PLUGIN_REPEAT_CFG_FIELDS = [
+  'title',
+  'notes',
+  'tagIds',
+  'defaultEstimate',
+  'isPaused',
+  'repeatCycle',
+  'repeatEvery',
+  'startDate',
+  'startTime',
+  ...PLUGIN_REPEAT_WEEKDAYS,
+  'monthlyWeekOfMonth',
+  'monthlyWeekday',
+  'monthlyLastDay',
+] as const;
+
 @Injectable({
   providedIn: 'root',
 })
@@ -152,6 +191,7 @@ export class PluginBridgeService implements OnDestroy {
   private _workContextService = inject(WorkContextService);
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
+  private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _pluginUserPersistenceService = inject(PluginUserPersistenceService);
   private _pluginConfigService = inject(PluginConfigService);
   private _taskArchiveService = inject(TaskArchiveService);
@@ -1081,6 +1121,170 @@ export class PluginBridgeService implements OnDestroy {
     // Update the tag using TagService (TagCopy is compatible with Tag)
     this._tagService.updateTag(tagId, updates);
     PluginLog.log('PluginBridge: Tag updated successfully', { tagId });
+  }
+
+  /**
+   * Make an existing task repeat
+   *
+   * The schedule is described by the pattern fields; presets (`quickSetting`)
+   * are a dialog concept anchored to the current day and are not part of the
+   * plugin payload.
+   */
+  async addTaskRepeatCfg(
+    taskId: string,
+    cfg: PluginTaskRepeatCfgData = {},
+  ): Promise<string> {
+    typia.assert<string>(taskId);
+    typia.assert<PluginTaskRepeatCfgData>(cfg);
+
+    const task = await firstValueFrom(this._taskService.getByIdOnce$(taskId));
+    if (!task?.id) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.TASK_NOT_FOUND, { taskId }),
+      );
+    }
+    // Same gating as the schedule dialog's `canRepeat`: a repeating subtask or
+    // issue task is a state the UI cannot produce, and nothing downstream
+    // handles it.
+    if (task.parentId || task.issueId) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.TASK_CANNOT_REPEAT, { taskId }),
+      );
+    }
+    // A second config on the same task would orphan the first one: the task
+    // holds a single repeatCfgId, so the previous config keeps generating
+    // tasks with nothing pointing back at it. The UI reaches edit instead of
+    // add for this case.
+    if (task.repeatCfgId) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.TASK_ALREADY_REPEATING, { taskId }),
+      );
+    }
+
+    const repeatCycle = cfg.repeatCycle ?? DEFAULT_TASK_REPEAT_CFG.repeatCycle;
+    if (
+      (cfg.repeatEvery !== undefined && cfg.repeatEvery < 1) ||
+      (cfg.repeatEvery ?? 1) > MAX_PLUGIN_REPEAT_EVERY
+    ) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.TASK_REPEAT_CFG_INVALID, {
+          reason: 'repeatEvery',
+        }),
+      );
+    }
+    // The default weekday mask is Mon-Fri, which belongs to the dialog's Daily
+    // preset, not to a caller who names its own days. Inheriting it turns
+    // `{ saturday: true }` into a six-day-a-week config.
+    const weekdays = PLUGIN_REPEAT_WEEKDAYS.reduce(
+      (acc, day) => ({ ...acc, [day]: cfg[day] ?? false }),
+      {} as Record<(typeof PLUGIN_REPEAT_WEEKDAYS)[number], boolean>,
+    );
+    // A weekly config with no day selected is accepted by the store and then
+    // never produces an occurrence. The dialog refuses it outright.
+    if (repeatCycle === 'WEEKLY' && !Object.values(weekdays).some(Boolean)) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.TASK_REPEAT_CFG_INVALID, {
+          reason: 'weekday',
+        }),
+      );
+    }
+
+    const startTime = cfg.startTime;
+    const newCfg: Omit<TaskRepeatCfgCopy, 'id'> = {
+      ...DEFAULT_TASK_REPEAT_CFG,
+      ...cfg,
+      ...weekdays,
+      repeatCycle,
+      // Presets are anchored to the day the dialog is opened, which no plugin
+      // call has. The schedule here is fully described by the pattern fields,
+      // and CUSTOM is how the app labels exactly that.
+      quickSetting: 'CUSTOM',
+      // Without a start date getEffectiveRepeatStartDate falls back to
+      // 1970-01-01, which anchors monthly configs to the 1st and computes
+      // every-nth periods from an epoch nobody asked for.
+      startDate:
+        cfg.startDate ?? task.dueDay ?? getDbDateStr(task.dueWithTime || undefined),
+      startTime,
+      // addRepeatCfgToTaskUpdateTask$ only schedules an instance when both
+      // startTime and remindAt are set, so a startTime alone is inert while the
+      // detail panel still renders the time.
+      remindAt: startTime
+        ? (this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
+          DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption)
+        : undefined,
+      // Same inheritance as the dialog, so instances carry the task's tags and
+      // estimate instead of arriving bare.
+      title: cfg.title ?? task.title,
+      notes: cfg.notes ?? task.notes ?? undefined,
+      tagIds: cfg.tagIds ?? unique(task.tagIds),
+      defaultEstimate: cfg.defaultEstimate ?? task.timeEstimate,
+      shouldInheritSubtasks: task.subTaskIds.length > 0,
+    };
+
+    const repeatCfgId = this._taskRepeatCfgService.addTaskRepeatCfgToTask(
+      taskId,
+      task.projectId || null,
+      // Same schedule-aware seed the dialog applies to new configs, so a config
+      // created through the API behaves like one created by hand.
+      { ...newCfg, skipOverdue: getDefaultSkipOverdue(newCfg) },
+    );
+
+    PluginLog.log('PluginBridge: Task repeat cfg added successfully', {
+      taskId,
+      repeatCfgId,
+    });
+    return repeatCfgId;
+  }
+
+  /**
+   * Update a recurring task config
+   */
+  async updateTaskRepeatCfg(
+    taskRepeatCfgId: string,
+    updates: PluginTaskRepeatCfgData,
+  ): Promise<void> {
+    typia.assert<string>(taskRepeatCfgId);
+    typia.assert<PluginTaskRepeatCfgData>(updates);
+
+    const existing = await firstValueFrom(
+      this._taskRepeatCfgService.getTaskRepeatCfgByIdAllowUndefined$(taskRepeatCfgId),
+    );
+    if (!existing) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.TASK_REPEAT_CFG_NOT_FOUND, {
+          taskRepeatCfgId,
+        }),
+      );
+    }
+
+    if (
+      (updates.repeatEvery !== undefined && updates.repeatEvery < 1) ||
+      (updates.repeatEvery ?? 1) > MAX_PLUGIN_REPEAT_EVERY
+    ) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.TASK_REPEAT_CFG_INVALID, {
+          reason: 'repeatEvery',
+        }),
+      );
+    }
+
+    // typia.assert permits superfluous properties, so an `id` smuggled in here
+    // would reach adapter.updateOne and re-key the entity, leaving the task's
+    // repeatCfgId dangling. Pick the fields instead of forwarding the object.
+    const changes: Partial<TaskRepeatCfgCopy> = {};
+    for (const field of PLUGIN_REPEAT_CFG_FIELDS) {
+      if (field in updates) {
+        Object.assign(changes, { [field]: updates[field] });
+      }
+    }
+
+    // isAskToUpdateAllTaskInstances stays false: the dialog it opens is a UI
+    // side effect a plugin call must not trigger.
+    this._taskRepeatCfgService.updateTaskRepeatCfg(taskRepeatCfgId, changes, false);
+
+    PluginLog.log('PluginBridge: Task repeat cfg updated successfully', {
+      taskRepeatCfgId,
+    });
   }
 
   /**
