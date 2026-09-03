@@ -19,7 +19,7 @@ export const processDurationInput = (
       // Allow fractional hours with or without h specifier
       /^\d*[.,]\d+h?$/i,
 
-      // Allow integer numbers without specifier (treated as hours if <= 8 or fractional, else as minutes)
+      // Allow integer numbers without specifier (treated as minutes; fractional treated as hours)
       /^\d+$/,
 
       // Allow full duration as hh:mm or h:mm
