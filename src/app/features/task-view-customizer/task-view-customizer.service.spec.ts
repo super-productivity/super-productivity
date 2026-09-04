@@ -35,6 +35,8 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { LanguageService } from 'src/app/core/language/language.service';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
+import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-string';
+import { parseDbDateStr } from '../../util/parse-db-date-str';
 
 describe('TaskViewCustomizerService', () => {
   let service: TaskViewCustomizerService;
@@ -271,6 +273,77 @@ describe('TaskViewCustomizerService', () => {
     expect(sorted.asc[1].title).toBe('Beta');
     expect(sorted.desc[0].title).toBe('Zebra');
     expect(sorted.desc[1].title).toBe('Third Task');
+  });
+
+  it('should place date-only tasks after timed tasks on the same scheduled day', () => {
+    const scheduledAt = (day: string, time: string): number =>
+      getDateTimeFromClockString(time, parseDbDateStr(day));
+    const tasks: TaskWithSubTasks[] = [
+      { ...mockTasks[1], id: 'today-date-only', dueDay: todayStr },
+      {
+        ...mockTasks[0],
+        id: 'tomorrow-timed',
+        dueDay: undefined,
+        dueWithTime: scheduledAt(tomorrowStr, '08:00'),
+      },
+      {
+        ...mockTasks[2],
+        id: 'today-late',
+        dueDay: undefined,
+        dueWithTime: scheduledAt(todayStr, '23:00'),
+      },
+      {
+        ...mockTasks[3],
+        id: 'today-early',
+        dueDay: undefined,
+        dueWithTime: scheduledAt(todayStr, '09:00'),
+      },
+    ];
+
+    const asc = service['applySort'](
+      tasks,
+      SORT_OPTION_TYPE.scheduledDate,
+      SORT_ORDER.ASC,
+    );
+    const desc = service['applySort'](
+      tasks,
+      SORT_OPTION_TYPE.scheduledDate,
+      SORT_ORDER.DESC,
+    );
+
+    expect(asc.map((task) => task.id)).toEqual([
+      'today-early',
+      'today-late',
+      'today-date-only',
+      'tomorrow-timed',
+    ]);
+    expect(desc.map((task) => task.id)).toEqual([
+      'tomorrow-timed',
+      'today-date-only',
+      'today-late',
+      'today-early',
+    ]);
+  });
+
+  it('should keep date-only deadlines before timed deadlines on the same day', () => {
+    const tasks: TaskWithSubTasks[] = [
+      {
+        ...mockTasks[0],
+        id: 'timed-deadline',
+        deadlineWithTime: getDateTimeFromClockString('09:00', parseDbDateStr(todayStr)),
+      },
+      {
+        ...mockTasks[1],
+        id: 'date-only-deadline',
+        deadlineDay: todayStr,
+      },
+    ];
+
+    const asc = service['applySort'](tasks, SORT_OPTION_TYPE.deadline, SORT_ORDER.ASC);
+    const desc = service['applySort'](tasks, SORT_OPTION_TYPE.deadline, SORT_ORDER.DESC);
+
+    expect(asc.map((task) => task.id)).toEqual(['date-only-deadline', 'timed-deadline']);
+    expect(desc.map((task) => task.id)).toEqual(['timed-deadline', 'date-only-deadline']);
   });
 
   it('should sort numeric prefixes in title correctly', () => {
