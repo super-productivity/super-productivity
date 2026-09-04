@@ -158,5 +158,13 @@
     "author": "BigWebstas",
     "authorUrl": "https://github.com/BigWebstas",
     "stars": 0
+  },
+  {
+    "name": "Local REST API MCP",
+    "shortDescription": "Talks to Super Productivity's official Local REST API — no plugin to upload and no Node-execution consent required. Covers tasks (create, update, delete), archive/restore, current-task control, projects and tags. Ships stdio for Claude Code plus a Streamable HTTP transport for Claude Cowork and Claude Desktop.",
+    "url": "https://github.com/mrswer/super-productivity-rest-mcp",
+    "author": "mrswer",
+    "authorUrl": "https://github.com/mrswer",
+    "stars": 2
   }
 ]
