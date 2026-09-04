@@ -41,6 +41,7 @@ const ALLOWED_TASK_FIELDS = new Set<string>([
   'dueDay',
   'dueWithTime',
   'plannedAt',
+  'remindAt',
 ]);
 
 /**
@@ -88,6 +89,7 @@ interface WritableTaskFields {
   dueDay?: string | null;
   dueWithTime?: number | null;
   plannedAt?: number;
+  remindAt?: number | null;
 }
 
 type FieldTypeError = { path: string; expected: string };

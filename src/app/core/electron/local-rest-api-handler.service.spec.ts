@@ -945,10 +945,48 @@ describe('LocalRestApiHandlerService', () => {
         });
       });
 
+      it('should allow creating a task with remindAt timestamp', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('new-task-id')),
+        });
+
+        const remindTimestamp = 1787550900000;
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: {
+              title: 'Task With Reminder',
+              dueWithTime: 1787551200000,
+              remindAt: remindTimestamp,
+            },
+          }),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(response.status).toBe(201);
+        expect(taskServiceMock.add).toHaveBeenCalledWith('Task With Reminder', false, {
+          title: 'Task With Reminder',
+          dueWithTime: 1787551200000,
+          remindAt: remindTimestamp,
+        });
+      });
+
       it('should return 400 when an allowed field has an invalid type', async () => {
         const response = await sendRequestAndWait(
           createRequest('POST', '/tasks', {
             body: { title: 'New Task', timeEstimate: 'not-a-number' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect(taskServiceMock.add).not.toHaveBeenCalled();
+      });
+
+      it('should return 400 when remindAt is not a number or null', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: { title: 'New Task', remindAt: 'invalid-string' },
           }),
         );
 
@@ -1163,6 +1201,25 @@ describe('LocalRestApiHandlerService', () => {
 
         expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
           title: 'Updated',
+        });
+      });
+
+      it('should allow updating remindAt via PATCH', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const remindTimestamp = 1787550900000;
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { remindAt: remindTimestamp },
+          }),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+          remindAt: remindTimestamp,
         });
       });
 
