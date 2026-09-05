@@ -14,9 +14,19 @@ export interface AndroidWidgetTask {
   id: string;
   title: string;
   isDone: boolean;
+  // completion time supplied by Angular so native can retire completed project
+  // tasks after their short grace period without owning completion state
+  doneOn?: number;
   // omitted (not null) when the task has no project — org.json's optString maps
   // JSON null to the literal string "null"
   projectId?: string;
+}
+
+/** A project that can be selected by an individual Android home-screen widget. */
+export interface AndroidWidgetProject {
+  id: string;
+  title: string;
+  tasks: AndroidWidgetTask[];
 }
 
 export interface AndroidWidgetData {
@@ -53,4 +63,9 @@ export interface AndroidWidgetData {
   validUntil: number;
   tasks: AndroidWidgetTask[];
   projectColors: { [projectId: string]: string };
+  /**
+   * An old persisted v:1 snapshot may lack this additive field. Native treats a
+   * missing project selection or unavailable project as the `tasks` list.
+   */
+  projects: AndroidWidgetProject[];
 }

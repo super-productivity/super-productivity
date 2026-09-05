@@ -66,6 +66,7 @@ class CapacitorMainActivity : BridgeActivity() {
     private var isTimerCompleteReceiverRegistered = false
     private var isForegroundServiceFailureReceiverRegistered = false
     private var isWidgetDoneDrainReceiverRegistered = false
+    private var isWidgetProjectOpenDrainReceiverRegistered = false
 
     private val storageHelper =
         SimpleStorageHelper(this) // for scoped storage permission management on Android 10+
@@ -87,6 +88,16 @@ class CapacitorMainActivity : BridgeActivity() {
                 // getWidgetDoneQueue(), so there is a single delivery path and no
                 // task data crosses the string-interpolated JS bridge.
                 callJSInterfaceFunctionIfExists("next", "onWidgetDoneDrainRequest$")
+            }
+        }
+    }
+
+    private val widgetProjectOpenDrainReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == TaskListWidgetProvider.ACTION_WIDGET_PROJECT_OPEN_DRAIN) {
+                // The project ID remains in the native queue so cold and warm starts
+                // use the same pull-based Angular delivery path.
+                callJSInterfaceFunctionIfExists("next", "onWidgetProjectOpenDrainRequest$")
             }
         }
     }
@@ -252,6 +263,11 @@ class CapacitorMainActivity : BridgeActivity() {
             IntentFilter(TaskListWidgetProvider.ACTION_WIDGET_DONE_DRAIN)
         )
         isWidgetDoneDrainReceiverRegistered = true
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            widgetProjectOpenDrainReceiver,
+            IntentFilter(TaskListWidgetProvider.ACTION_WIDGET_PROJECT_OPEN_DRAIN)
+        )
+        isWidgetProjectOpenDrainReceiverRegistered = true
 
         // Show startup overlay for quick task entry while Angular loads.
         // Only on fresh cold start — not on config-change recreation.
@@ -657,6 +673,12 @@ class CapacitorMainActivity : BridgeActivity() {
         if (isWidgetDoneDrainReceiverRegistered) {
             LocalBroadcastManager.getInstance(this).unregisterReceiver(widgetDoneDrainReceiver)
             isWidgetDoneDrainReceiverRegistered = false
+        }
+        if (isWidgetProjectOpenDrainReceiverRegistered) {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(
+                widgetProjectOpenDrainReceiver
+            )
+            isWidgetProjectOpenDrainReceiverRegistered = false
         }
         super.onDestroy()
     }

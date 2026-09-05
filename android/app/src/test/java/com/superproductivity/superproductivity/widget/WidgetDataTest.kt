@@ -30,7 +30,23 @@ class WidgetDataTest {
             {"id": "t2", "title": "Task two", "isDone": true},
             {"id": "t3", "title": "Task three", "isDone": false, "projectId": null}
           ],
-          "projectColors": {"p1": "#ff0000"}
+          "projectColors": {"p1": "#ff0000"},
+          "projects": [
+            {
+              "id": "p1",
+              "title": "Work",
+              "tasks": [
+                {"id": "t1", "title": "Task one", "isDone": false, "projectId": "p1"}
+              ]
+            },
+            {
+              "id": "p2",
+              "title": "Personal",
+              "tasks": [
+                {"id": "t2", "title": "Task two", "isDone": true, "doneOn": 1000}
+              ]
+            }
+          ]
         }
         """.trimIndent()
 
@@ -62,6 +78,95 @@ class WidgetDataTest {
         // t2 is done in the blob but has a pending "mark undone" tap
         val tasks = WidgetData.parse(blob, pendingDoneTargets = mapOf("t2" to false))
         assertEquals(false, tasks[1].isDone)
+    }
+
+    @Test
+    fun selectsTasksForEachProjectIndependently() {
+        assertEquals(
+            listOf(WidgetTask("t1", "Task one", false, "#ff0000")),
+            WidgetData.parse(blob, selectedProjectId = "p1")
+        )
+        assertEquals(
+            listOf(WidgetTask("t2", "Task two", true, null, 1000)),
+            WidgetData.parse(blob, selectedProjectId = "p2", nowMs = 1001L)
+        )
+    }
+
+    @Test
+    fun overlaysPendingDoneTargetsForSelectedProject() {
+        assertTrue(
+            WidgetData.parse(
+                blob,
+                pendingDoneTargets = mapOf("t1" to true),
+                pendingDoneTimestamps = mapOf("t1" to 1000L),
+                selectedProjectId = "p1",
+                nowMs = 1001L
+            )[0].isDone
+        )
+    }
+
+    @Test
+    fun missingSelectedProjectFallsBackToToday() {
+        assertEquals(
+            WidgetData.parse(blob),
+            WidgetData.parse(blob, selectedProjectId = "deleted-project")
+        )
+    }
+
+    @Test
+    fun projectWithoutTasksFallsBackToTodayForHeaderAndTasks() {
+        val json =
+            """{"v":1,"tasks":[{"id":"t1","title":"Today","isDone":false}],"projects":[{"id":"deleted","title":"Deleted"}]}"""
+
+        assertEquals(
+            WidgetData.parse(json),
+            WidgetData.parse(json, selectedProjectId = "deleted")
+        )
+        assertNull(WidgetData.projectTitle(json, "deleted"))
+    }
+
+    @Test
+    fun completedProjectTaskDisappearsAfterFiveSecondGracePeriod() {
+        assertEquals(
+            emptyList<WidgetTask>(),
+            WidgetData.parse(blob, selectedProjectId = "p2", nowMs = 6000L)
+        )
+        // Today retains its existing completed-task display.
+        assertEquals(3, WidgetData.parse(blob, nowMs = 6000L).size)
+    }
+
+    @Test
+    fun pendingProjectCompletionUsesOriginalTapTimeForGracePeriod() {
+        val pendingTargets = mapOf("t1" to true)
+        val pendingTimestamps = mapOf("t1" to 1000L)
+
+        assertEquals(
+            listOf(WidgetTask("t1", "Task one", true, "#ff0000", 1000L)),
+            WidgetData.parse(
+                blob,
+                pendingDoneTargets = pendingTargets,
+                pendingDoneTimestamps = pendingTimestamps,
+                selectedProjectId = "p1",
+                nowMs = 1001L
+            )
+        )
+        assertTrue(
+            WidgetData.parse(
+                blob,
+                pendingDoneTargets = pendingTargets,
+                pendingDoneTimestamps = pendingTimestamps,
+                selectedProjectId = "p1",
+                nowMs = 6000L
+            ).isEmpty()
+        )
+    }
+
+    @Test
+    fun exposesOnlySnapshotProjectsToThePicker() {
+        assertEquals(
+            listOf(WidgetProject("p1", "Work"), WidgetProject("p2", "Personal")),
+            WidgetData.parseProjects(blob)
+        )
     }
 
     @Test

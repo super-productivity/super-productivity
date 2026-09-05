@@ -1,5 +1,6 @@
 package com.superproductivity.superproductivity.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -11,15 +12,23 @@ import com.superproductivity.superproductivity.R
 
 class TaskListWidgetService : RemoteViewsService() {
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
-        return TaskListRemoteViewsFactory(applicationContext)
+        return TaskListRemoteViewsFactory(
+            applicationContext,
+            intent.getIntExtra(
+                AppWidgetManager.EXTRA_APPWIDGET_ID,
+                AppWidgetManager.INVALID_APPWIDGET_ID
+            )
+        )
     }
 }
 
 private class TaskListRemoteViewsFactory(
-    private val context: Context
+    private val context: Context,
+    private val appWidgetId: Int
 ) : RemoteViewsService.RemoteViewsFactory {
 
     private var tasks: List<WidgetTask> = emptyList()
+    private var projectIdToOpen: String? = null
 
     override fun onCreate() {}
 
@@ -27,7 +36,28 @@ private class TaskListRemoteViewsFactory(
         tasks = try {
             val json = (context.applicationContext as App).keyValStore
                 .get(WidgetData.KEYVAL_KEY, "{}")
-            WidgetData.parse(json, WidgetDoneQueue.peek(context)).take(MAX_TASKS)
+            val selectedProjectId = TaskListWidgetProvider.selectedProjectId(context, appWidgetId)
+            projectIdToOpen = selectedProjectId?.takeIf { projectId ->
+                WidgetData.projectTitle(json, projectId) != null
+            }
+            val parsedTasks = WidgetData.parse(
+                json,
+                WidgetDoneQueue.peek(context),
+                WidgetDoneQueue.peekDoneTimestamps(context),
+                selectedProjectId
+            )
+            if (projectIdToOpen != null) {
+                parsedTasks
+                    .mapNotNull { task ->
+                        task.doneOn?.takeIf { task.isDone }
+                            ?.plus(WidgetData.PROJECT_DONE_TASK_GRACE_MS)
+                    }
+                    .minOrNull()
+                    ?.let { refreshAt ->
+                        TaskListWidgetProvider.scheduleProjectTaskExpiryRefresh(context, refreshAt)
+                    }
+            }
+            parsedTasks.take(MAX_TASKS)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse widget data", e)
             emptyList()
@@ -84,7 +114,12 @@ private class TaskListRemoteViewsFactory(
         )
         rv.setOnClickFillInIntent(
             R.id.widget_task_row,
-            Intent().putExtra(TaskListWidgetProvider.EXTRA_OPEN_APP, true)
+            Intent().apply {
+                putExtra(TaskListWidgetProvider.EXTRA_OPEN_APP, true)
+                projectIdToOpen?.let { projectId ->
+                    putExtra(TaskListWidgetProvider.EXTRA_OPEN_PROJECT_ID, projectId)
+                }
+            }
         )
 
         return rv
