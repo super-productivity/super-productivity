@@ -41,6 +41,19 @@ export interface ElectronAPI {
 
   loadBackupData(backupPath: string): Promise<string>;
 
+  /**
+   * Opens the native folder picker for the automatic backup folder and, unless
+   * cancelled, persists the pick main-side right away (there is nothing to
+   * commit — the next backup simply lands in the new folder). Resolves to:
+   * - `string`: the new backup folder; equal to the default one when the user
+   *   picked that folder back
+   * - `undefined`: the user cancelled the picker
+   * Rejects when the folder cannot be used: it is inside the app's private dir,
+   * or a probe write into it fails (permissions, sandbox confinement, read-only
+   * or disconnected location). Existing backups are not moved.
+   */
+  pickBackupFolder(): Promise<string | undefined>;
+
   fileSyncSave(args: {
     relativePath: string;
     localRev: string | null;

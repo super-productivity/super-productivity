@@ -20,7 +20,11 @@ export const getAutomaticBackUpFormCfg = (
 ): ConfigFormSection<LocalBackupConfig> => ({
   title: T.GCF.AUTO_BACKUPS.TITLE,
   key: 'localBackup',
-  help: T.GCF.AUTO_BACKUPS.HELP,
+  // The location caveats only apply where the folder can be changed at all,
+  // which is the same platform that gets a backupPath (Electron). Carried in
+  // the section help rather than as a body line, so the overwhelming majority
+  // who never change the folder do not read a permanent caveat about it.
+  help: backupPath ? T.GCF.AUTO_BACKUPS.HELP_DESKTOP : T.GCF.AUTO_BACKUPS.HELP,
   actions,
   items: [
     ...(lastBackupInfo
