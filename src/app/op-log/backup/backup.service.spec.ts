@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Store } from '@ngrx/store';
 import { BackupService } from './backup.service';
+import { OpLog } from '../../core/log';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { StateSnapshotService } from './state-snapshot.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
@@ -149,6 +150,48 @@ describe('BackupService', () => {
     });
 
     service = TestBed.inject(BackupService);
+  });
+
+  it('should refuse a truncated legacy backup with the repair-not-possible message', async () => {
+    const truncated = createMinimalValidBackup() as any;
+    delete truncated.task;
+    delete truncated.project;
+    truncated.taskArchive = { ids: [], entities: {} };
+
+    await expectAsync(
+      service.importCompleteBackup(truncated, true, true),
+    ).toBeRejectedWithError('Data validation failed and repair not possible');
+
+    expect(mockOpLogStore.runDestructiveStateReplacement).not.toHaveBeenCalled();
+    expect(mockStore.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('should refuse a legacy backup missing only the task slice', async () => {
+    const truncated = createMinimalValidBackup() as any;
+    delete truncated.task;
+    truncated.taskArchive = { ids: [], entities: {} };
+
+    await expectAsync(
+      service.importCompleteBackup(truncated, true, true),
+    ).toBeRejectedWithError('Data validation failed and repair not possible');
+
+    expect(mockOpLogStore.runDestructiveStateReplacement).not.toHaveBeenCalled();
+    expect(mockStore.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('should log that a refused backup was legacy, since the migration line never runs', async () => {
+    // The refusal returns the same message on the legacy and modern paths, so
+    // the exported log is the only place the two can be told apart.
+    const errSpy = spyOn(OpLog, 'err');
+    const truncated = createMinimalValidBackup() as any;
+    delete truncated.task;
+    truncated.taskArchive = { ids: [], entities: {} };
+
+    await expectAsync(service.importCompleteBackup(truncated, true, true)).toBeRejected();
+
+    expect(errSpy).toHaveBeenCalledWith(
+      'BackupService: legacy backup refused, core slice missing',
+    );
   });
 
   it('should discard task-time accumulated against the replaced pre-import state', async () => {
