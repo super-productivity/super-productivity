@@ -883,7 +883,10 @@ async function testAPI() {
 If you create a useful plugin, consider:
 
 1. Posting on reddit or GitHub discussions about it
-2. Submitting a PR to add it to the community plugins list (coming soon)
+2. Submitting a PR adding it to [community-plugins.json](../src/assets/community-plugins.json)
+
+   Document installation as: download the release ZIP, then Settings → Plugins → Choose Plugin File.
+   Uploading a ZIP is the only install path — there is no "load from folder" option.
 
 Happy plugin development! 🚀
 

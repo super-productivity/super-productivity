@@ -122,7 +122,10 @@
 .route-wrapper {
   flex-grow: 1;
   position: relative;
-  overflow: hidden;
+  // `clip` rather than `hidden`: `hidden` makes this a scroll container, so a route's
+  // scaled enter animation paints outside the box and the browser corrects by scrolling
+  // the wrapper — a transient nudge on route enter. See #9873, #9837.
+  overflow: clip;
   -webkit-app-region: no-drag !important;
   height: 100%;
   container-type: inline-size;
