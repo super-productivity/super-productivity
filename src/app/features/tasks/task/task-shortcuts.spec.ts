@@ -182,9 +182,14 @@ describe('TaskComponent shortcut handling', () => {
           provide: DateService,
           useValue: jasmine.createSpyObj(
             'DateService',
-            ['isToday', 'getLogicalTodayDate'],
+            ['isToday', 'getLogicalTodayDate', 'getStartOfNextDayDiffMs'],
             {
               isToday: () => false,
+              // isScheduledToday() calls this and is template-bound
+              // (task.component.html:166, :192), so the first test in this file
+              // that calls detectChanges() renders those @if blocks against this
+              // mock. Stubbed here rather than only in the Shift+T beforeEach.
+              getStartOfNextDayDiffMs: () => 0,
             },
           ),
         },
@@ -739,13 +744,14 @@ describe('TaskComponent shortcut handling', () => {
     it('keeps the reminder of a task due at a time today', () => {
       // planTasksForToday clears remindAt unconditionally, so re-planning a task
       // that is already on Today would silently drop its reminder.
-      // isToday is installed as a property on the DateService mock, so it has
-      // to be redefined rather than assigned.
-      Object.defineProperty(dateService, 'isToday', {
-        value: () => true,
-        configurable: true,
+      // The timestamp is a real TODAY-local one: isScheduledToday() now derives
+      // the day from todayDateStr + the start-of-next-day offset (isTaskOnToday),
+      // so it no longer needs DateService.isToday to be stubbed true over a
+      // fixture that fell on a different day.
+      setTask({
+        dueWithTime: new Date(2026, 4, 5, 16, 0).getTime(),
+        remindAt: new Date(2026, 4, 5, 15, 30).getTime(),
       });
-      setTask({ dueWithTime: 1746453600000, remindAt: 1746452000000 });
 
       component.scheduleForToday();
 
