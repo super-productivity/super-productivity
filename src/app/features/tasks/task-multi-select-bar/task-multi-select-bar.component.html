@@ -1,4 +1,4 @@
-@if (multiSelect.isActive()) {
+@if (multiSelect.isSelecting()) {
   <div
     class="bar mat-elevation-z4"
     role="toolbar"
@@ -23,6 +23,8 @@
     <button
       #actionsTrigger="matMenuTrigger"
       [matMenuTriggerFor]="bulkMenu"
+      (menuOpened)="onMenuOpened()"
+      [disabled]="!count()"
       class="actions-btn"
       mat-flat-button
     >
@@ -36,6 +38,7 @@
 <div
   #positionedTrigger="matMenuTrigger"
   [matMenuTriggerFor]="bulkMenu"
+  (menuOpened)="onMenuOpened()"
   [style.left.px]="menuPosition().x"
   [style.top.px]="menuPosition().y"
   class="positioned-trigger"

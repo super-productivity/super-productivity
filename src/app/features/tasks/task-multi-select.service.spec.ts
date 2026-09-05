@@ -1,14 +1,8 @@
 import { TestBed } from '@angular/core/testing';
-import { NavigationEnd, Router } from '@angular/router';
-import { Subject } from 'rxjs';
 import { TaskMultiSelectService } from './task-multi-select.service';
-import { WorkContextService } from '../work-context/work-context.service';
-import { WorkContextType } from '../work-context/work-context.model';
 
 describe('TaskMultiSelectService', () => {
   let service: TaskMultiSelectService;
-  let routerEvents$: Subject<unknown>;
-  let workContext$: Subject<{ activeId: string; activeType: WorkContextType }>;
   let root: HTMLElement;
 
   const buildDom = (): void => {
@@ -65,18 +59,7 @@ describe('TaskMultiSelectService', () => {
   const selected = (): string[] => Array.from(service.selectedIds()).sort();
 
   beforeEach(() => {
-    routerEvents$ = new Subject();
-    workContext$ = new Subject();
-    TestBed.configureTestingModule({
-      providers: [
-        TaskMultiSelectService,
-        { provide: Router, useValue: { events: routerEvents$.asObservable() } },
-        {
-          provide: WorkContextService,
-          useValue: { activeWorkContextTypeAndId$: workContext$.asObservable() },
-        },
-      ],
-    });
+    TestBed.configureTestingModule({ providers: [TaskMultiSelectService] });
     service = TestBed.inject(TaskMultiSelectService);
     buildDom();
   });
@@ -188,6 +171,28 @@ describe('TaskMultiSelectService', () => {
     });
   });
 
+  describe('selectAllInListOfFocused', () => {
+    it('selects the direct rows of the focused list only', () => {
+      focusRow('c');
+      service.selectAllInListOfFocused();
+      expect(selected()).toEqual(['a', 'b', 'c', 'd']);
+      expect(service.anchorId()).toBe('c');
+    });
+
+    it('ignores a focused row inside the detail panel', () => {
+      stubActiveElement(root.querySelector('task-detail-panel task'));
+      service.selectAllInListOfFocused();
+      expect(service.extendFromFocused('down')).toBeNull();
+      expect(service.count()).toBe(0);
+    });
+
+    it('selects sibling subtasks when a subtask is focused', () => {
+      focusRow('b2');
+      service.selectAllInListOfFocused();
+      expect(selected()).toEqual(['b1', 'b2']);
+    });
+  });
+
   describe('selectedIdsInDomOrder', () => {
     it('returns visual order, ignoring detail-panel copies', () => {
       service.toggle('d');
@@ -200,6 +205,25 @@ describe('TaskMultiSelectService', () => {
       service.toggle('c');
       service.toggle('gone');
       expect(service.selectedIdsInDomOrder()).toEqual(['c', 'gone']);
+    });
+  });
+
+  describe('touch selection mode', () => {
+    it('enters with an initial task and shows the bar even when empty', () => {
+      service.enterTouchSelectionMode('a');
+      expect(service.isTouchSelectionMode()).toBeTrue();
+      expect(selected()).toEqual(['a']);
+      service.toggle('a');
+      expect(service.isActive()).toBeFalse();
+      expect(service.isTouchSelectionMode()).toBeTrue();
+      expect(service.isSelecting()).toBeTrue();
+    });
+
+    it('clear leaves the mode', () => {
+      service.enterTouchSelectionMode();
+      service.clear();
+      expect(service.isTouchSelectionMode()).toBeFalse();
+      expect(service.isSelecting()).toBeFalse();
     });
   });
 
@@ -248,18 +272,6 @@ describe('TaskMultiSelectService', () => {
       service.clear();
       expect(service.count()).toBe(0);
       expect(service.menuOpenRequest()).toBeNull();
-    });
-
-    it('clears on navigation', () => {
-      service.toggle('a');
-      routerEvents$.next(new NavigationEnd(1, '/x', '/x'));
-      expect(service.count()).toBe(0);
-    });
-
-    it('clears on work context change', () => {
-      service.toggle('a');
-      workContext$.next({ activeId: 'p2', activeType: WorkContextType.PROJECT });
-      expect(service.count()).toBe(0);
     });
   });
 });

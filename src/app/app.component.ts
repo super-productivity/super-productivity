@@ -85,6 +85,7 @@ import { KeyboardLayoutService } from './core/keyboard-layout/keyboard-layout.se
 import { setKeyboardLayoutService } from './util/check-key-combo';
 import { OnboardingPresetSelectionComponent } from './features/onboarding/onboarding-preset-selection.component';
 import { TaskMultiSelectBarComponent } from './features/tasks/task-multi-select-bar/task-multi-select-bar.component';
+import { TaskMultiSelectService } from './features/tasks/task-multi-select.service';
 import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.component';
 import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
 import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
@@ -182,6 +183,8 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   readonly T = T;
   readonly TODAY_TAG_ID = TODAY_TAG.id;
   readonly isShowMobileButtonNav = this.layoutService.isShowMobileBottomNav;
+  private readonly _taskMultiSelectService = inject(TaskMultiSelectService);
+  readonly isMultiSelecting = this._taskMultiSelectService.isSelecting;
 
   @ViewChild('routeWrapper', { read: ElementRef }) routeWrapper?: ElementRef<HTMLElement>;
   @ViewChild(RouterOutlet) private _routerOutlet?: RouterOutlet;

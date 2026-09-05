@@ -2040,6 +2040,7 @@
           }
         },
         "SELECTED_COUNT": "{{count}} selected",
+        "SELECT_ENTRY": "Select several tasks…",
         "TASKS_TITLE": {
           "ONE": "{{count}} task",
           "OTHER": "{{count}} tasks"
@@ -2641,6 +2642,7 @@
       "TASK_OPEN_NOTES_PANEL": "Open note/checklist in task panel",
       "TASK_OPEN_NOTES_FULLSCREEN": "Open note/checklist in fullscreen",
       "TASK_TOGGLE_DONE": "Toggle task completed status",
+      "TASK_TOGGLE_SELECT": "Toggle task in multi-selection",
       "TASK_UNSCHEDULE": "Unschedule task",
       "TITLE": "Keyboard Shortcuts",
       "TOGGLE_BACKLOG": "Show/hide project backlog",

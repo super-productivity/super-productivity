@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   effect,
   inject,
   signal,
@@ -19,14 +20,16 @@ import { MatDivider } from '@angular/material/divider';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 import { of } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
-import { toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { filter, switchMap } from 'rxjs/operators';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslateService, TranslateStore } from '@ngx-translate/core';
 import { getPluralKey } from '../../../util/get-plural-key';
 import { T } from '../../../t.const';
 import { TaskMultiSelectService } from '../task-multi-select.service';
 import { TaskBulkActionService } from '../task-bulk-action.service';
+import { TaskFocusService } from '../task-focus.service';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
@@ -77,6 +80,12 @@ export class TaskMultiSelectBarComponent {
   private readonly _matDialog = inject(MatDialog);
   private readonly _translateService = inject(TranslateService);
   private readonly _translateStore = inject(TranslateStore);
+  private readonly _router = inject(Router);
+  private readonly _taskFocusService = inject(TaskFocusService);
+  private readonly _closeBulkMenu = (): void => {
+    this.actionsTrigger()?.closeMenu();
+    this.positionedTrigger()?.closeMenu();
+  };
 
   readonly T = T;
   readonly ESTIMATE_OPTIONS = ESTIMATE_OPTIONS;
@@ -122,8 +131,24 @@ export class TaskMultiSelectBarComponent {
 
   readonly menuPosition = signal<{ x: number; y: number }>({ x: 0, y: 0 });
   readonly positionedTrigger = viewChild('positionedTrigger', { read: MatMenuTrigger });
+  readonly actionsTrigger = viewChild('actionsTrigger', { read: MatMenuTrigger });
 
   constructor() {
+    // Lifecycle of the selection: it belongs to one view, so it clears on
+    // navigation, on work-context change and when this app-shell instance is
+    // torn down (focus overlay). Wired here so the service itself stays a
+    // dependency-free state holder.
+    inject(DestroyRef).onDestroy(() => this.multiSelect.clear());
+    this._router.events
+      .pipe(
+        filter((ev) => ev instanceof NavigationEnd),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => this.multiSelect.clear());
+    this._workContextService.activeWorkContextTypeAndId$
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this.multiSelect.clear());
+
     effect(() => {
       const request = this.multiSelect.menuOpenRequest();
       if (!request) {
@@ -145,7 +170,21 @@ export class TaskMultiSelectBarComponent {
     this.multiSelect.clear();
   }
 
+  /**
+   * Register the open bulk menu the way the task context menu does, so the
+   * Android back button closes the menu first instead of clearing the
+   * selection underneath it.
+   */
+  onMenuOpened(): void {
+    this._taskFocusService.closeActiveTaskContextMenu.set(this._closeBulkMenu);
+    this._taskFocusService.isTaskContextMenuOpen.set(true);
+  }
+
   onMenuClosed(): void {
+    if (this._taskFocusService.closeActiveTaskContextMenu() === this._closeBulkMenu) {
+      this._taskFocusService.closeActiveTaskContextMenu.set(null);
+      this._taskFocusService.isTaskContextMenuOpen.set(false);
+    }
     // Return keyboard focus to the anchor row so shortcuts keep working.
     const anchorId = this.multiSelect.anchorId();
     // A menu item may have opened a dialog; leave focus inside it.

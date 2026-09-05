@@ -190,6 +190,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     collapseSubTasks: null,
     togglePlay: 'Y',
     taskEditTags: 'G',
+    taskToggleSelect: 'X',
   },
   localBackup: {
     isEnabled: true,

@@ -138,6 +138,8 @@ describe('TaskComponent shortcut handling', () => {
             clear: () => {},
             requestMenuOpen: () => {},
             isBulkFeedbackSuppressed: signal(false),
+            isSelecting: signal(false),
+            isTouchSelectionMode: signal(false),
           },
         },
 
@@ -245,6 +247,53 @@ describe('TaskComponent shortcut handling', () => {
     fixture.componentRef.setInput('task', createSubTask(''));
     fixture.componentRef.setInput('isInSubTaskList', true);
     fixture.componentRef.setInput('isBacklog', false);
+  });
+
+  describe('touch selection mode', () => {
+    let multiSelect: {
+      isTouchSelectionMode: WritableSignal<boolean>;
+      toggle: jasmine.Spy;
+    };
+
+    // TestBed mounts the component on a <div>, so make the target resolve
+    // `closest('task')` to that host; every other selector stays real.
+    const clickHost = (target: HTMLElement): MouseEvent => {
+      const host = fixture.nativeElement as HTMLElement;
+      host.appendChild(target);
+      const realClosest = target.closest.bind(target);
+      target.closest = ((selector: string) =>
+        selector === 'task' ? host : realClosest(selector)) as Element['closest'];
+      const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+      target.dispatchEvent(ev);
+      return ev;
+    };
+
+    beforeEach(() => {
+      multiSelect = TestBed.inject(
+        TaskMultiSelectService,
+      ) as unknown as typeof multiSelect;
+      multiSelect.toggle = jasmine.createSpy('toggle');
+      multiSelect.isTouchSelectionMode.set(true);
+      fixture.detectChanges();
+    });
+
+    it('a plain tap on the row toggles it in the selection', () => {
+      const ev = clickHost(document.createElement('span'));
+      expect(multiSelect.toggle).toHaveBeenCalledWith('sub-1');
+      expect(ev.defaultPrevented).toBeTrue();
+    });
+
+    it('a tap on a real control keeps its own behaviour', () => {
+      const ev = clickHost(document.createElement('button'));
+      expect(multiSelect.toggle).not.toHaveBeenCalled();
+      expect(ev.defaultPrevented).toBeFalse();
+    });
+
+    it('a plain tap does nothing outside the mode', () => {
+      multiSelect.isTouchSelectionMode.set(false);
+      clickHost(document.createElement('span'));
+      expect(multiSelect.toggle).not.toHaveBeenCalled();
+    });
   });
 
   it('delegates duplication of the current task', () => {

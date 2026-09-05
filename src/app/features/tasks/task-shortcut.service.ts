@@ -350,14 +350,18 @@ export class TaskShortcutService {
     keys: KeyboardConfig,
     focusedTaskId: TaskId | null,
   ): boolean {
-    if (ev.key === 'Escape' && this._multiSelect.isActive()) {
+    // Selection keys act on the focused main-list row only; detail-panel copies
+    // are never part of the selection (see TaskMultiSelectService.focusedRowId).
+    const selectableRowId = this._multiSelect.focusedRowId();
+
+    if (ev.key === 'Escape' && this._multiSelect.isSelecting()) {
       this._multiSelect.clear();
       ev.preventDefault();
       return true;
     }
 
     if (
-      focusedTaskId &&
+      selectableRowId &&
       ev.shiftKey &&
       !ev.ctrlKey &&
       !ev.metaKey &&
@@ -368,6 +372,34 @@ export class TaskShortcutService {
       !checkKeyCombo(ev, keys.moveTaskDown)
     ) {
       this._extendSelectionThrottled(ev.key === 'ArrowDown' ? 'down' : 'up');
+      ev.preventDefault();
+      return true;
+    }
+
+    // `X` toggles the focused row in the selection (Linear / Gmail convention).
+    // A user or plugin binding on the same combo keeps precedence.
+    if (
+      selectableRowId &&
+      !ev.repeat &&
+      checkKeyCombo(ev, keys.taskToggleSelect) &&
+      !this._isAnyConfiguredCombo(ev, { ...keys, taskToggleSelect: null })
+    ) {
+      this._multiSelect.toggle(selectableRowId);
+      ev.preventDefault();
+      return true;
+    }
+
+    // Ctrl/Cmd+A on a focused row selects every row of its list. Goes through
+    // checkKeyCombo so the user's keyboard-layout map applies. The global
+    // handler lets Cmd+key through from inputs, so guard against a title edit.
+    if (
+      selectableRowId &&
+      (checkKeyCombo(ev, 'Ctrl+A') || checkKeyCombo(ev, 'Meta+A')) &&
+      !(ev.target instanceof HTMLElement && isInputElement(ev.target)) &&
+      // A user who bound a shortcut to Ctrl/Cmd+A keeps it.
+      !this._isAnyConfiguredCombo(ev, keys)
+    ) {
+      this._multiSelect.selectAllInListOfFocused();
       ev.preventDefault();
       return true;
     }
@@ -413,6 +445,13 @@ export class TaskShortcutService {
       return true;
     }
     return false;
+  }
+
+  /** True when any configured combo (task, global or plugin) matches `ev`. */
+  private _isAnyConfiguredCombo(ev: KeyboardEvent, keys: KeyboardConfig): boolean {
+    return Object.values(keys).some(
+      (combo) => typeof combo === 'string' && !!combo && checkKeyCombo(ev, combo),
+    );
   }
 
   private _isBulkShortcut(ev: KeyboardEvent, keys: KeyboardConfig): boolean {

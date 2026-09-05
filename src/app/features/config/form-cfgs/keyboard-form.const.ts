@@ -109,5 +109,6 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
     kbField('collapseSubTasks', T.GCF.KEYBOARD.COLLAPSE_SUB_TASKS),
     kbField('togglePlay', T.GCF.KEYBOARD.TOGGLE_PLAY),
     kbField('taskEditTags', T.GCF.KEYBOARD.TASK_EDIT_TAGS),
+    kbField('taskToggleSelect', T.GCF.KEYBOARD.TASK_TOGGLE_SELECT),
   ],
 };

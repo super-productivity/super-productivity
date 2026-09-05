@@ -43,8 +43,8 @@ $check-len: 18;
   }
 
   .done-toggle-svg {
-    width: 22px;
-    height: 22px;
+    width: var(--done-toggle-glyph-size);
+    height: var(--done-toggle-glyph-size);
     transition: transform var(--transition-duration-s) ease;
   }
 

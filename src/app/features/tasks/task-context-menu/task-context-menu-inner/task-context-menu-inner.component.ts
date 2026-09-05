@@ -80,6 +80,7 @@ import { SelectOptionRowComponent } from '../../../../ui/select-option-row/selec
 import { AddSubtaskInputService } from '../../add-subtask-input/add-subtask-input.service';
 import { TaskDuplicateService } from '../../task-duplicate.service';
 import { TaskMoveToProjectService } from '../../task-move-to-project.service';
+import { TaskMultiSelectService } from '../../task-multi-select.service';
 
 @Component({
   selector: 'task-context-menu-inner',
@@ -123,6 +124,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _addSubtaskInputService = inject(AddSubtaskInputService);
   private readonly _taskDuplicateService = inject(TaskDuplicateService);
   private readonly _taskMoveToProjectService = inject(TaskMoveToProjectService);
+  private readonly _taskMultiSelectService = inject(TaskMultiSelectService);
 
   protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
@@ -155,6 +157,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   isCurrent: boolean = false;
   isBacklog: boolean = false;
   isInSubTaskList: boolean = false;
+  /** Multi-select needs a rendered `<task>` row outside the detail panel. */
+  isInTaskRow: boolean = false;
 
   private _task$: ReplaySubject<TaskWithSubTasks | Task> = new ReplaySubject(1);
   issueUrl$: Observable<string | null> = this._task$.pipe(
@@ -206,6 +210,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     // top/bottom is only offered where that order is on screen — a subtask
     // rendered flat in a tag or Today list would reorder invisibly.
     this.isInSubTaskList = !!this._elementRef.nativeElement.closest('.sub-tasks');
+    const host = this._elementRef.nativeElement as HTMLElement;
+    this.isInTaskRow = !!host.closest('task') && !host.closest('task-detail-panel');
 
     setTimeout(() => {
       if (!this._isOpenedFromKeyboard) {
@@ -385,6 +391,15 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   focusFirstSubmenuItem(menu: MatMenu): void {
     menu.focusFirstItem('program');
+  }
+
+  /** Touch entry point into multi-selection (there is no modifier key). */
+  enterSelectionMode(): void {
+    // The detail panel is single-task UI (a bottom sheet on touch); close it.
+    if (this._taskService.selectedTaskId()) {
+      this._taskService.setSelectedId(null);
+    }
+    this._taskMultiSelectService.enterTouchSelectionMode(this.task.id);
   }
 
   goToFocusMode(): void {

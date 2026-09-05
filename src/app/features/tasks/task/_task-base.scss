@@ -258,3 +258,40 @@
 :host.isMultiSelected.isDone .inner-wrapper > .box {
   background: color-mix(in srgb, var(--c-accent) 10%, var(--task-c-bg-done));
 }
+
+// Touch selection mode: the leading slot shows an empty ring that fills solid
+// with the accent when selected (no tick inside).
+.select-ring {
+  flex: 0 0 var(--task-icon-size);
+  width: var(--task-icon-size);
+  height: var(--task-icon-size);
+  // Same slot and margin as the done-toggle it replaces (_task-controls.scss)
+  // so the title does not shift when the mode toggles.
+  margin-left: var(--s);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &::before {
+    content: '';
+    width: var(--done-toggle-glyph-size);
+    height: var(--done-toggle-glyph-size);
+    border-radius: 50%;
+    border: var(--s-quarter) solid var(--c-accent);
+    box-sizing: border-box;
+    transition: var(--transition-fast);
+    transition-property: background-color;
+  }
+
+  &.isOn::before {
+    background: var(--c-accent);
+  }
+}
+
+// In touch selection mode a tap anywhere on the row toggles it: row controls
+// (schedule / deadline / attachment / checklist / panel buttons) let the tap
+// fall through to the host. The subtask toggle stays live so nested rows can
+// be reached.
+:host.isTouchSelectionMode .all-controls-wrapper .ico-btn {
+  pointer-events: none;
+}

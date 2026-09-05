@@ -93,6 +93,17 @@
     }
   </div>
 
+  @if (isTouchActive() && isInTaskRow) {
+    <button
+      (click)="enterSelectionMode()"
+      mat-menu-item
+    >
+      <span class="menuItemLeft">
+        <mat-icon>checklist_rtl</mat-icon>
+        {{ T.F.TASK.MULTI_SELECT.SELECT_ENTRY | translate }}
+      </span>
+    </button>
+  }
   @if (
     isTimeTrackingEnabled() &&
     ((isAdvancedControls() && isTouchActive()) || !isAdvancedControls()) &&

@@ -27,6 +27,7 @@ import { DEFAULT_TASK, Task, TaskWithSubTasks } from '../../task.model';
 import { By } from '@angular/platform-browser';
 import { MatMenu } from '@angular/material/menu';
 import { TaskDuplicateService } from '../../task-duplicate.service';
+import { TaskMultiSelectService } from '../../task-multi-select.service';
 
 const projectInTreeOrder = (id: string, title: string): Project =>
   ({
@@ -58,6 +59,8 @@ describe('TaskContextMenuInnerComponent', () => {
   beforeEach(async () => {
     taskService = jasmine.createSpyObj('TaskService', [
       'currentTaskId',
+      'selectedTaskId',
+      'setSelectedId',
       'moveToProject',
       'getTasksWithSubTasksByRepeatCfgId$',
       'getArchiveTasksForRepeatCfgId',
@@ -155,6 +158,26 @@ describe('TaskContextMenuInnerComponent', () => {
   afterEach(() => {
     selectTaskByIdWithSubTaskData.release();
     store.resetSelectors();
+  });
+
+  describe('enterSelectionMode()', () => {
+    it('enters touch selection mode with the task selected', () => {
+      const multiSelect = TestBed.inject(TaskMultiSelectService);
+      taskService.selectedTaskId.and.returnValue(null);
+      component.enterSelectionMode();
+      expect(multiSelect.isTouchSelectionMode()).toBeTrue();
+      expect(multiSelect.has('task-default')).toBeTrue();
+      expect(taskService.setSelectedId).not.toHaveBeenCalled();
+      multiSelect.clear();
+    });
+
+    it('closes an open detail panel first', () => {
+      const multiSelect = TestBed.inject(TaskMultiSelectService);
+      taskService.selectedTaskId.and.returnValue('other-task');
+      component.enterSelectionMode();
+      expect(taskService.setSelectedId).toHaveBeenCalledWith(null);
+      multiSelect.clear();
+    });
   });
 
   describe('tree ordered dropdown data', () => {
