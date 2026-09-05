@@ -702,3 +702,107 @@ describe('createScheduleDays - Task Filtering', () => {
     });
   });
 });
+
+describe('createScheduleDays - Off days (#9418)', () => {
+  const WORK_CFG = { startTime: '09:00', endTime: '17:00' };
+  const H = 60 * 60 * 1000;
+  // Fri Jan 23 2026 … Mon Jan 26 2026 (Saturday/Sunday weekend in the test locale)
+  const fri = new Date(2026, 0, 23, 10, 0, 0);
+  const sat = new Date(2026, 0, 24, 10, 0, 0);
+  const sun = new Date(2026, 0, 25, 10, 0, 0);
+  const mon = new Date(2026, 0, 26, 10, 0, 0);
+  const friStr = getDbDateStr(fri);
+  const satStr = getDbDateStr(sat);
+  const sunStr = getDbDateStr(sun);
+  const monStr = getDbDateStr(mon);
+
+  const dayHasTask = (day: { entries: { id: string }[] }, taskId: string): boolean =>
+    day.entries.some((e) => e.id === taskId || e.id.startsWith(`${taskId}_`));
+
+  it('should hold free-flowing tasks over the weekend until the next work day', () => {
+    const task = createTestTask('flow', 'Flowing Task', { timeEstimate: H });
+    const now = sat.getTime();
+
+    const result = createScheduleDays(
+      [task],
+      [],
+      [satStr, sunStr, monStr],
+      {},
+      {},
+      WORK_CFG,
+      now,
+      now,
+    );
+
+    expect(dayHasTask(result[0], 'flow')).toBe(false);
+    expect(dayHasTask(result[1], 'flow')).toBe(false);
+    expect(dayHasTask(result[2], 'flow')).toBe(true);
+  });
+
+  it('should keep the 7-day flow when no work hours are configured', () => {
+    const task = createTestTask('flow', 'Flowing Task', { timeEstimate: H });
+    const now = sat.getTime();
+
+    const result = createScheduleDays(
+      [task],
+      [],
+      [satStr, sunStr, monStr],
+      {},
+      {},
+      undefined,
+      now,
+      now,
+    );
+
+    expect(dayHasTask(result[0], 'flow')).toBe(true);
+  });
+
+  it('should leave a task explicitly due on a weekend day where the user put it', () => {
+    const task = createTestTask('due-sat', 'Due Saturday', {
+      dueDay: satStr,
+      timeEstimate: H,
+    });
+    const now = fri.getTime();
+
+    const result = createScheduleDays(
+      [task],
+      [],
+      [friStr, satStr, sunStr, monStr],
+      {},
+      {},
+      WORK_CFG,
+      now,
+      now,
+    );
+
+    expect(dayHasTask(result[0], 'due-sat')).toBe(false);
+    expect(dayHasTask(result[1], 'due-sat')).toBe(true);
+    expect(dayHasTask(result[3], 'due-sat')).toBe(false);
+  });
+
+  it('should continue a task split at Friday work end on Monday, not Saturday', () => {
+    const task = createTestTask('long', 'Eight Hour Task', { timeEstimate: 8 * H });
+    const now = fri.getTime();
+    const friWorkEnd = new Date(2026, 0, 23, 17, 0, 0).getTime();
+    const satStart = new Date(2026, 0, 24, 0, 0, 0).getTime();
+    const blockerBlocksDayMap: BlockedBlockByDayMap = {
+      [friStr]: [{ start: friWorkEnd, end: satStart, entries: [] }],
+    };
+
+    const result = createScheduleDays(
+      [task],
+      [],
+      [friStr, satStr, sunStr, monStr],
+      {},
+      blockerBlocksDayMap,
+      WORK_CFG,
+      now,
+      now,
+    );
+
+    expect(dayHasTask(result[0], 'long')).toBe(true);
+    expect(dayHasTask(result[1], 'long')).toBe(false);
+    expect(dayHasTask(result[2], 'long')).toBe(false);
+    expect(dayHasTask(result[3], 'long')).toBe(true);
+  });
+});

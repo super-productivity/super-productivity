@@ -22,6 +22,7 @@ import { getTasksWithinAndBeyondBudget } from './get-tasks-within-and-beyond-bud
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { selectTaskRepeatCfgsForExactDay } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { Log } from '../../../core/log';
+import { getWeekendDays, isWeekendDay } from '../../../util/get-weekend-days';
 
 type ScheduleFlowTask = TaskWithoutReminder | TaskWithPlannedForDayIndication;
 
@@ -35,7 +36,7 @@ export const createScheduleDays = (
   now: number,
   realNow?: number, // Actual current time for determining "current week"
 ): ScheduleDay[] => {
-  let viewEntriesPushedToNextDay: SVEEntryForNextDay[];
+  let viewEntriesPushedToNextDay: SVEEntryForNextDay[] = [];
   let flowTasksLeftAfterDay: ScheduleFlowTask[] = nonScheduledTasks.map((task) => {
     if (task.timeEstimate === 0 && task.timeSpent === 0) {
       return {
@@ -84,6 +85,11 @@ export const createScheduleDays = (
   const isWorkStartTimeUsable =
     !!workStartEndCfg && isValidSplitTime(workStartEndCfg.startTime);
 
+  // Free-flowing tasks skip the locale's weekend when work hours are configured
+  // (#9418): "non-work days" only exist once a work day exists, so a user
+  // without work hours keeps the 7-day flow. Explicitly dated tasks stay put.
+  const weekendDays = getWeekendDays();
+
   const v: ScheduleDay[] = dayDates.map((dayDate, i) => {
     const nextDayStartDate = dateStrToUtcDate(dayDate);
     nextDayStartDate.setHours(24, 0, 0, 0);
@@ -95,6 +101,7 @@ export const createScheduleDays = (
     // Check if this day is within the current week (today through next 6 days)
     const isInCurrentWeek =
       dayStartTime >= todayStart && dayStartTime < currentWeekEndTime;
+    const isOffDay = !!workStartEndCfg && isWeekendDay(dayStartDate, weekendDays);
 
     let startTime = i == 0 ? now : dayStartTime;
     if (workStartEndCfg && isWorkStartTimeUsable) {
@@ -135,11 +142,21 @@ export const createScheduleDays = (
           return isTaskOnOrAfterDay(task, dayStartTime);
         });
 
+    // On an off day only day-assigned tasks are placed; the rest wait for the
+    // next work day, as do split continuations pushed in from the day before.
+    const flowTasksHeldForNextWorkDay = isOffDay
+      ? filteredFlowTasks.filter((task) => !isDayAssignedTask(task))
+      : [];
+    const flowTasksEligibleForDay = isOffDay
+      ? filteredFlowTasks.filter(isDayAssignedTask)
+      : filteredFlowTasks;
+    const pushedEntriesHeldForNextWorkDay = isOffDay ? viewEntriesPushedToNextDay : [];
+
     const plannedForDayTasks = (plannerDayMap[dayDate] || []).map((t) =>
       asPlannedForDayTask(t, dayDate),
     );
     const flowTasksForDay = uniqueTasksById([
-      ...filteredFlowTasks.flatMap((task): ScheduleFlowTask[] => {
+      ...flowTasksEligibleForDay.flatMap((task): ScheduleFlowTask[] => {
         if (isPlannedForDayTask(task)) {
           return task.plannedForDay === dayDate ? [task] : [];
         }
@@ -189,7 +206,7 @@ export const createScheduleDays = (
       repeatCfgsToProjectForDay,
       within,
       blockerBlocksForDay,
-      viewEntriesPushedToNextDay,
+      isOffDay ? [] : viewEntriesPushedToNextDay,
     );
     beyondBudgetTasks = dayAssignedBeyondBudgetTasks;
     // For the current week (days within 7 days from today), include all tasks including unscheduled ones
@@ -198,6 +215,7 @@ export const createScheduleDays = (
       (task) => isDayAssignedTask(task) && isTaskOnOrAfterDay(task, nextDayStart),
     );
     flowTasksLeftAfterDay = uniqueTasksById([
+      ...flowTasksHeldForNextWorkDay,
       ...(isInCurrentWeek
         ? [...nonSplitBeyondTasks]
         : nonSplitBeyondTasks.filter((task) => {
@@ -207,7 +225,7 @@ export const createScheduleDays = (
     ]);
 
     const viewEntriesToRenderForDay: SVE[] = [];
-    viewEntriesPushedToNextDay = [];
+    viewEntriesPushedToNextDay = pushedEntriesHeldForNextWorkDay;
     viewEntries.forEach((entry) => {
       const taskId = getEntryTaskId(entry);
       if (taskId && overBudgetTaskIds.has(taskId)) {

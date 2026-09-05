@@ -599,13 +599,8 @@ describe('mapToScheduleDays()', () => {
           plannedForDay: '1970-01-03',
           sourceOccurrenceDate: '1970-01-03',
         },
-        {
-          data: jasmine.any(Object),
-          duration: h(2),
-          id: 'N1_1970-01-02_1',
-          start: dhTz(2, 11),
-          type: 'SplitTaskContinuedLast',
-        },
+        // 1970-01-03 is a Saturday: with work hours configured the last 2h of
+        // N1 are held for the next work day instead of flowing in here (#9418).
       ],
       isToday: false,
     } as any);
