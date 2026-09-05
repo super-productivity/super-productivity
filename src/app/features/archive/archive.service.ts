@@ -56,7 +56,6 @@ const mapTasksToArchiveFormat = (
       isDone: true,
       dueWithTime: undefined,
       dueDay: undefined,
-      _hideSubTasksMode: undefined,
       doneOn,
     };
   });
