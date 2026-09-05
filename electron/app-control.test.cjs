@@ -13,6 +13,7 @@ let nextIsLocked;
 let sharedState;
 let refreshIndicatorCalls;
 let localRestApiConfig;
+let alwaysOnTopCalls;
 
 const resetModule = () => {
   delete require.cache[appControlModulePath];
@@ -62,6 +63,9 @@ const installMocks = () => {
           setProgressBar: () => {},
           flashFrame: () => {},
           once: () => {},
+          setAlwaysOnTop: (value) => {
+            alwaysOnTopCalls.push(value);
+          },
         }),
       };
     }
@@ -84,6 +88,10 @@ const installMocks = () => {
         },
         setIsTrayShowCurrentCountdown: (value) => {
           sharedState.isTrayShowCurrentCountdown = value;
+        },
+        getIsAlwaysOnTop: () => !!sharedState.isAlwaysOnTop,
+        setIsAlwaysOnTop: (value) => {
+          sharedState.isAlwaysOnTop = value;
         },
       };
     }
@@ -150,9 +158,11 @@ test.beforeEach(() => {
     isMinimizeToTray: undefined,
     isTrayShowCurrentTask: undefined,
     isTrayShowCurrentCountdown: undefined,
+    isAlwaysOnTop: undefined,
   };
   refreshIndicatorCalls = 0;
   localRestApiConfig = undefined;
+  alwaysOnTopCalls = [];
 
   installMocks();
 });
@@ -210,4 +220,69 @@ test('settings update falls back to legacy misc tray task setting', async () => 
   assert.equal(sharedState.isTrayShowCurrentTask, true);
   assert.equal(sharedState.isTrayShowCurrentCountdown, true);
   assert.equal(refreshIndicatorCalls, 1);
+});
+
+test('settings update applies isAlwaysOnTop to the main window', async () => {
+  const { initAppControlIpc } = loadAppControlModule();
+  initAppControlIpc();
+
+  const updateSettings = ipcHandlers.get('TRANSFER_SETTINGS_TO_ELECTRON');
+
+  await updateSettings(
+    {},
+    {
+      tasks: {},
+      misc: {
+        isMinimizeToTray: false,
+        isAlwaysOnTop: true,
+      },
+    },
+  );
+
+  assert.equal(sharedState.isAlwaysOnTop, true);
+  assert.deepEqual(alwaysOnTopCalls, [true]);
+
+  await updateSettings(
+    {},
+    {
+      tasks: {},
+      misc: {
+        isMinimizeToTray: false,
+        isAlwaysOnTop: false,
+      },
+    },
+  );
+
+  assert.equal(sharedState.isAlwaysOnTop, false);
+  assert.deepEqual(alwaysOnTopCalls, [true, false]);
+});
+
+test('settings update leaves always-on-top untouched when the value has not changed', async () => {
+  const { initAppControlIpc } = loadAppControlModule();
+  initAppControlIpc();
+
+  const updateSettings = ipcHandlers.get('TRANSFER_SETTINGS_TO_ELECTRON');
+
+  // Default-off config on launch and on unrelated Misc edits must not call
+  // setAlwaysOnTop() — otherwise it clears an "always above" state the user
+  // set outside the app.
+  await updateSettings({}, { tasks: {}, misc: { isMinimizeToTray: false } });
+  await updateSettings(
+    {},
+    { tasks: {}, misc: { isMinimizeToTray: false, isAlwaysOnTop: false } },
+  );
+
+  assert.deepEqual(alwaysOnTopCalls, []);
+
+  // Enabling it applies once; a repeat transfer with the same value does not.
+  await updateSettings(
+    {},
+    { tasks: {}, misc: { isMinimizeToTray: false, isAlwaysOnTop: true } },
+  );
+  await updateSettings(
+    {},
+    { tasks: {}, misc: { isMinimizeToTray: false, isAlwaysOnTop: true } },
+  );
+
+  assert.deepEqual(alwaysOnTopCalls, [true]);
 });

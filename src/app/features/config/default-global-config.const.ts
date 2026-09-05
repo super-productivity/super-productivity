@@ -52,6 +52,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isConfirmBeforeExit: false,
     isConfirmBeforeExitWithoutFinishDay: true,
     isMinimizeToTray: false,
+    isAlwaysOnTop: false,
     isLocalRestApiEnabled: false,
     isCheckForUpdates: true,
     isTrayShowCurrentCountdown: true,

@@ -2690,6 +2690,8 @@
       "LOCAL_REST_API_TOKEN_REGENERATE": "Regenerate Access Token",
       "LOCAL_REST_API_TOKEN_ERROR": "Could not store the access token, so the API is not running. Check that Super Productivity can write to its data folder, then use Regenerate to retry.",
       "LOCAL_REST_API_TOKEN_REGENERATE_ERROR": "Could not save the new access token. The previous token is still valid.",
+      "IS_ALWAYS_ON_TOP": "Always on top (desktop only)",
+      "IS_ALWAYS_ON_TOP_HINT": "Keeps the app window above all other windows (also known as \"keep above others\" on KDE). Some Wayland compositors ignore this and manage window stacking themselves.",
       "IS_MINIMIZE_TO_TRAY": "Minimize to tray (desktop only)",
       "IS_SHOW_TIP_LONGER": "Show productivity tip on app start a little longer",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Show current countdown in the tray / status menu (macOS only)",
