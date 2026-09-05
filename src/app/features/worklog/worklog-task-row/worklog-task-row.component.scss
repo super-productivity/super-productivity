@@ -2,6 +2,20 @@
   display: table-row;
 }
 
+// Temporary attention highlight for a row revealed by a search jump into the
+// archive (LayoutService.highlightTaskBriefly, #5476). The task list draws an
+// outline, but these rows are `display: table-row` inside a `border-collapse`
+// table, where the History view already rings the focused row with a box-shadow
+// and explicitly turns the outline off (history.component.scss) — so match that
+// technique here rather than the task list's.
+:host.highlight-searched-task {
+  box-shadow: 0 0 0 2px var(--c-accent);
+  border-radius: var(--card-border-radius);
+  // above the neighbouring rows' collapsed borders, so the ring is not clipped
+  position: relative;
+  z-index: 1;
+}
+
 td {
   text-align: left;
   white-space: normal;

@@ -38,7 +38,6 @@ import { SyncTriggerService } from './imex/sync/sync-trigger.service';
 import { ActivatedRoute, RouterOutlet } from '@angular/router';
 import { concatMap, first, take } from 'rxjs/operators';
 
-import { IS_MOBILE } from './util/is-mobile';
 import { recordSearchNavDebug } from './util/search-nav-debug';
 import { warpAnimation, warpInAnimation } from './ui/animations/warp.ani';
 import {
@@ -270,7 +269,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
             focusItem: params.focusItem,
             url: window.location.pathname + window.location.search,
           });
-          this._focusElement(params.focusItem);
+          this._focusElement(params.focusItem, params.isFromSearch === 'true');
         }
       }),
     );
@@ -588,23 +587,24 @@ export class AppComponent implements OnDestroy, AfterViewInit {
    * since page load and animation time are not always equal
    * retrying until the rendered task row is available avoids missing focus targets
    */
-  private _focusElement(id: string): void {
+  private _focusElement(id: string, isFromSearch: boolean = false): void {
     recordSearchNavDebug('appComponent:focusElement', {
       taskId: id,
       url: window.location.pathname + window.location.search,
+      isFromSearch,
     });
     this.layoutService.focusTaskInViewWhenReady(id, (el) => {
+      // Only a search jump earns the attention highlight: `focusItem` is also set
+      // by reminder snacks, the tracked-task pill, issue creation and the calendar
+      // banner, where the user never asked "where is it". (#5476)
+      if (isFromSearch) {
+        this.layoutService.highlightTaskBriefly(el);
+      }
       recordSearchNavDebug('appComponent:focusElement:success', {
         taskId: id,
         url: window.location.pathname + window.location.search,
         matchedElementId: el.id,
       });
-      if (el && IS_MOBILE) {
-        el.classList.add('mobile-highlight-searched-item');
-        el.addEventListener('blur', () =>
-          el.classList.remove('mobile-highlight-searched-item'),
-        );
-      }
     });
   }
 }

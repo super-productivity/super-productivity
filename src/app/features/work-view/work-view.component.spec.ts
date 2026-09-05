@@ -131,6 +131,7 @@ const configureWorkViewTestBed = (
           isXs: signal(false),
           isWorkViewScrolled: { set: () => {} },
           showAddTaskBar: () => {},
+          highlightTaskBriefly: () => {},
         },
       },
       {
@@ -471,9 +472,12 @@ describe('WorkViewComponent', () => {
     // The focus retry loop keeps rescheduling for ~5s; without an explicit
     // destroy those timers outlive the spec and run against a reset MockStore.
     let fixture: ComponentFixture<WorkViewComponent> | undefined;
+    /** Containers appended to the document by the success-branch spec. */
+    const revealContainers: HTMLElement[] = [];
     afterEach(() => {
       fixture?.destroy();
       fixture = undefined;
+      revealContainers.splice(0).forEach((el) => el.remove());
       // The panel signals persist to localStorage, and the component seeds them
       // from it at construction — a spec that left one collapsed would decide
       // the starting state of every later one under randomized spec order.
@@ -484,6 +488,8 @@ describe('WorkViewComponent', () => {
 
     const setup = (opts: {
       focusItem?: string;
+      /** Marks the `focusItem` as search-originated, as `navigate()` does. */
+      isFromSearch?: boolean;
       queryParams$?: Observable<Record<string, string>>;
       doneTasks?: TaskWithSubTasks[];
       overdueTasks?: TaskWithSubTasks[];
@@ -526,7 +532,13 @@ describe('WorkViewComponent', () => {
         },
         queryParams$:
           opts.queryParams$ ??
-          (opts.focusItem ? of({ focusItem: opts.focusItem }) : undefined),
+          (opts.focusItem
+            ? of(
+                (opts.isFromSearch
+                  ? { focusItem: opts.focusItem, isFromSearch: 'true' }
+                  : { focusItem: opts.focusItem }) as Record<string, string>,
+              )
+            : undefined),
         isTodayList: opts.isTodayList,
         embedPluginId: opts.embedPluginId,
       });
@@ -864,6 +876,65 @@ describe('WorkViewComponent', () => {
       expect(toggleGroupExpansion.calls.count()).toBe(callsAfterGivingUp);
       discardPeriodicTasks();
     }));
+
+    /**
+     * The success branch of the reveal — the one that scrolls, focuses and (for
+     * a search jump) highlights. Every spec above stops in the retry/expansion
+     * path, which never reaches it, so this needs a container that actually
+     * holds a rendered row. (#5476)
+     */
+    const revealRenderedRow = (
+      cmp: WorkViewComponent,
+    ): { row: HTMLElement; highlightTaskBriefly: jasmine.Spy } => {
+      const highlightTaskBriefly = spyOn(
+        TestBed.inject(LayoutService),
+        'highlightTaskBriefly',
+      );
+
+      // A real element: the reveal only accepts a row that is in the document
+      // and has a non-zero height (_isTaskElementReady).
+      const container = document.createElement('div');
+      container.style.height = '100px';
+      container.style.overflow = 'auto';
+      const row = document.createElement('div');
+      row.id = 't-wanted';
+      row.style.height = '400px';
+      container.appendChild(row);
+      document.body.appendChild(container);
+      revealContainers.push(container);
+      spyOn(row, 'focus');
+
+      // Mirrors the split pane rendering: the setter replays the pending reveal.
+      cmp.splitTopElRef = new ElementRef(container);
+      return { row, highlightTaskBriefly };
+    };
+
+    it('scrolls to, focuses and highlights the row of a search jump', () => {
+      const { cmp } = setup({
+        focusItem: 'wanted',
+        isFromSearch: true,
+        undone: [buildTask('wanted')],
+      });
+
+      const { row, highlightTaskBriefly } = revealRenderedRow(cmp);
+
+      expect(row.focus).toHaveBeenCalledOnceWith({ preventScroll: true });
+      expect(highlightTaskBriefly).toHaveBeenCalledOnceWith(row);
+    });
+
+    it('focuses but does not highlight a focusItem from any other caller', () => {
+      // `focusItem` is also set by reminder snacks, the tracked-task pill, issue
+      // creation and the calendar banner — none of those asked for attention.
+      const { cmp } = setup({
+        focusItem: 'wanted',
+        undone: [buildTask('wanted')],
+      });
+
+      const { row, highlightTaskBriefly } = revealRenderedRow(cmp);
+
+      expect(row.focus).toHaveBeenCalledOnceWith({ preventScroll: true });
+      expect(highlightTaskBriefly).not.toHaveBeenCalled();
+    });
 
     it('does not touch any container without a focusItem', () => {
       const { toggleGroupExpansion, updateSection } = setup({

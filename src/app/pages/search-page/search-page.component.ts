@@ -328,7 +328,9 @@ export class SearchPageComponent implements OnInit {
         }
       });
     } else {
-      this._navigateToTaskService.navigate(item.id, item.isArchiveTask).then(() => {});
+      this._navigateToTaskService
+        .navigate(item.id, item.isArchiveTask, { isFromSearch: true })
+        .then(() => {});
     }
   }
 

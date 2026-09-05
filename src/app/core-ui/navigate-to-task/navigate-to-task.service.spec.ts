@@ -88,7 +88,10 @@ describe('NavigateToTaskService', () => {
     const dateService = jasmine.createSpyObj('DateService', ['isToday', 'todayStr']);
     dateService.todayStr.and.returnValue(TODAY_STR);
     dateService.isToday.and.returnValue(false);
-    layoutService = jasmine.createSpyObj('LayoutService', ['focusTaskInViewWhenReady']);
+    layoutService = jasmine.createSpyObj('LayoutService', [
+      'focusTaskInViewWhenReady',
+      'highlightTaskBriefly',
+    ]);
 
     const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
     routerSpy.navigate.and.resolveTo(true);
@@ -405,6 +408,72 @@ describe('NavigateToTaskService', () => {
       [`/project/${INBOX_PROJECT.id}/tasks`],
       jasmine.anything(),
     );
+  });
+
+  /**
+   * The attention highlight is scoped to navigations the user asked for, i.e.
+   * global search. Every other caller of `navigate()` — the tracked-task pill,
+   * the "go to task" snack actions, issue creation and the calendar banner —
+   * must keep the plain focus behavior. (#5476)
+   */
+  describe('search intent (#5476)', () => {
+    it('carries isFromSearch into the route-change query params when set', async () => {
+      const task = createTask({ id: 's1', projectId: 'p1', tagIds: [] });
+      setNavigatedTask(task, [createProject('p1', ['s1'])]);
+
+      await service.navigate('s1', false, { isFromSearch: true });
+
+      expect(router.navigate).toHaveBeenCalledWith(
+        ['/project/p1/tasks'],
+        jasmine.objectContaining({
+          queryParams: jasmine.objectContaining({ focusItem: 's1', isFromSearch: true }),
+        }),
+      );
+    });
+
+    it('omits isFromSearch for every other caller', async () => {
+      const task = createTask({ id: 's2', projectId: 'p1', tagIds: [] });
+      setNavigatedTask(task, [createProject('p1', ['s2'])]);
+
+      await service.navigate('s2');
+
+      const queryParams = (
+        router.navigate.calls.mostRecent().args[1] as {
+          queryParams: Record<string, unknown>;
+        }
+      ).queryParams;
+      expect(queryParams.focusItem).toBe('s2');
+      expect('isFromSearch' in queryParams).toBeFalse();
+    });
+
+    it('highlights the revealed row on a same-context search jump', async () => {
+      router.url = '/project/p1/tasks';
+      const task = createTask({ id: 's3', projectId: 'p1', tagIds: [] });
+      setNavigatedTask(task, [createProject('p1', ['s3'])]);
+      const el = document.createElement('div');
+      layoutService.focusTaskInViewWhenReady.and.callFake((_taskId, onSuccess) =>
+        onSuccess?.(el),
+      );
+
+      await service.navigate('s3', false, { isFromSearch: true });
+
+      expect(layoutService.highlightTaskBriefly).toHaveBeenCalledOnceWith(el);
+    });
+
+    it('does not highlight a same-context jump from any other caller', async () => {
+      router.url = '/project/p1/tasks';
+      const task = createTask({ id: 's4', projectId: 'p1', tagIds: [] });
+      setNavigatedTask(task, [createProject('p1', ['s4'])]);
+      const el = document.createElement('div');
+      layoutService.focusTaskInViewWhenReady.and.callFake((_taskId, onSuccess) =>
+        onSuccess?.(el),
+      );
+
+      await service.navigate('s4');
+
+      expect(layoutService.focusTaskInViewWhenReady).toHaveBeenCalled();
+      expect(layoutService.highlightTaskBriefly).not.toHaveBeenCalled();
+    });
   });
 
   describe('collapsed parent (#8780)', () => {
