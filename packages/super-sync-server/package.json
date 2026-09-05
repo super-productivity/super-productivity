@@ -42,7 +42,7 @@
     "@fastify/static": "^10.1.2",
     "@fastify/websocket": "^11.2.0",
     "@prisma/client": "5.22.0",
-    "@simplewebauthn/server": "^13.2.2",
+    "@simplewebauthn/server": "^13.3.2",
     "@simplewebauthn/types": "^12.0.0",
     "@sp/shared-schema": "*",
     "@sp/sync-core": "*",
