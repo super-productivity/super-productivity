@@ -158,5 +158,13 @@
     "author": "BigWebstas",
     "authorUrl": "https://github.com/BigWebstas",
     "stars": 0
+  },
+  {
+    "name": "Bulk Add Tasks",
+    "shortDescription": "Bulk-create Super Productivity tasks from pasted text, with project headings, subtasks, existing tags, notes and preview validation.",
+    "url": "https://github.com/InitialCrow/bulk-add-tasks-plugin",
+    "author": "InitialCrow",
+    "authorUrl": "https://github.com/InitialCrow",
+    "stars": 0
   }
 ]
