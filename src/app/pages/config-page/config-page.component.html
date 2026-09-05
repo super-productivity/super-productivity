@@ -21,9 +21,10 @@
         subscriptSizing="dynamic"
       >
         <mat-icon matPrefix>search</mat-icon>
-        <mat-label>{{ T.PS.SEARCH_PLACEHOLDER | translate }}</mat-label>
         <input
           matInput
+          [attr.aria-label]="T.PS.SEARCH_PLACEHOLDER | translate"
+          [placeholder]="T.PS.SEARCH_PLACEHOLDER | translate"
           [matAutocomplete]="settingsSearchAutoEl"
           [ngModel]="searchQuery"
           (ngModelChange)="onSearchChange($event)"
@@ -86,7 +87,9 @@
             <h2 class="mat-h2 section-title">
               {{ 'PS.TABS.GENERAL' | translate }}
             </h2>
-            <theme-selector></theme-selector>
+            <section class="config-section appearance-section">
+              <theme-selector></theme-selector>
+            </section>
             @for (section of generalFormCfg; track section.key) {
               <section class="config-section section-{{ section.key }}">
                 <config-section

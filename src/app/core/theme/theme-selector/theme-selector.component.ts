@@ -62,85 +62,108 @@ const valueToRef = (value: string): CustomThemeRef => {
   ],
   template: `
     <div class="theme-selector-container">
+      <h3 class="appearance-title">{{ T.GCF.MISC.APPEARANCE | translate }}</h3>
+
       <div class="dark-mode-select">
-        <h3>{{ T.GCF.MISC.DARK_MODE | translate }}</h3>
+        <span class="setting-label">{{ T.GCF.MISC.DARK_MODE | translate }}</span>
         <mat-button-toggle-group
+          class="dark-mode-toggle"
           name="darkMode"
           [attr.aria-label]="T.GCF.MISC.DARK_MODE_ARIA_LABEL | translate"
           [value]="globalThemeService.darkMode()"
           [disabled]="activeRequiredMode() !== undefined"
+          [hideSingleSelectionIndicator]="true"
           (change)="updateDarkMode($event)"
         >
           <mat-button-toggle value="system">
-            <mat-icon>computer</mat-icon>
-            {{ T.GCF.MISC.DARK_MODE_SYSTEM | translate }}
+            <span class="dark-mode-toggle__content">
+              <mat-icon>computer</mat-icon>
+              <span class="dark-mode-toggle__label">
+                {{ T.GCF.MISC.DARK_MODE_SYSTEM | translate }}
+              </span>
+            </span>
           </mat-button-toggle>
           <mat-button-toggle value="dark">
-            <mat-icon>dark_mode</mat-icon>
-            {{ T.GCF.MISC.DARK_MODE_DARK | translate }}
+            <span class="dark-mode-toggle__content">
+              <mat-icon>dark_mode</mat-icon>
+              <span class="dark-mode-toggle__label">
+                {{ T.GCF.MISC.DARK_MODE_DARK | translate }}
+              </span>
+            </span>
           </mat-button-toggle>
           <mat-button-toggle value="light">
-            <mat-icon>light_mode</mat-icon>
-            {{ T.GCF.MISC.DARK_MODE_LIGHT | translate }}
+            <span class="dark-mode-toggle__content">
+              <mat-icon>light_mode</mat-icon>
+              <span class="dark-mode-toggle__label">
+                {{ T.GCF.MISC.DARK_MODE_LIGHT | translate }}
+              </span>
+            </span>
           </mat-button-toggle>
         </mat-button-toggle-group>
       </div>
 
       <div class="theme-select">
-        <h3>{{ T.GCF.MISC.THEME_EXPERIMENTAL | translate }}</h3>
-        <mat-form-field appearance="outline">
-          <mat-label>{{ T.GCF.MISC.THEME_SELECT_LABEL | translate }}</mat-label>
-          <mat-select
-            [value]="activeValue()"
-            (selectionChange)="updateCustomTheme($event)"
+        <span class="setting-label">{{ T.GCF.MISC.THEME_EXPERIMENTAL | translate }}</span>
+        <div class="theme-select__controls">
+          <mat-form-field
+            appearance="outline"
+            subscriptSizing="dynamic"
           >
-            @for (theme of customThemeService.themes(); track optionValue(theme)) {
-              <mat-option [value]="optionValue(theme)">
-                <span class="theme-option-row">
-                  <span class="theme-option-label">{{ theme.name }}</span>
-                  @if (theme.requiredMode && theme.requiredMode !== 'system') {
-                    <span class="theme-mode-indicator">
-                      ({{ theme.requiredMode === 'dark' ? '🌙' : '☀️' }})
-                    </span>
-                  }
-                  @if (theme.kind === 'user') {
-                    <button
-                      mat-icon-button
-                      type="button"
-                      class="remove-theme-btn"
-                      [attr.aria-label]="T.GCF.MISC.THEME_REMOVE_BUTTON | translate"
-                      (click)="removeUserTheme($event, theme.id)"
-                    >
-                      <mat-icon color="warn">delete</mat-icon>
-                    </button>
-                  }
-                </span>
-              </mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
-        <button
-          mat-stroked-button
-          type="button"
-          [matTooltip]="T.GCF.MISC.THEME_INSTALL_TOOLTIP | translate"
-          matTooltipPosition="above"
-          (click)="openFilePicker()"
-        >
-          <mat-icon>upload</mat-icon>
-          {{ T.GCF.MISC.THEME_INSTALL_BUTTON | translate }}
-        </button>
-        <input
-          #fileInput
-          type="file"
-          accept=".css,text/css"
-          hidden
-          (change)="onFileSelected($event)"
-        />
+            <mat-label>{{ T.GCF.MISC.THEME_SELECT_LABEL | translate }}</mat-label>
+            <mat-select
+              [value]="activeValue()"
+              (selectionChange)="updateCustomTheme($event)"
+            >
+              @for (theme of customThemeService.themes(); track optionValue(theme)) {
+                <mat-option [value]="optionValue(theme)">
+                  <span class="theme-option-row">
+                    <span class="theme-option-label">{{ theme.name }}</span>
+                    @if (theme.requiredMode && theme.requiredMode !== 'system') {
+                      <span class="theme-mode-indicator">
+                        ({{ theme.requiredMode === 'dark' ? '🌙' : '☀️' }})
+                      </span>
+                    }
+                    @if (theme.kind === 'user') {
+                      <button
+                        mat-icon-button
+                        type="button"
+                        class="remove-theme-btn"
+                        [attr.aria-label]="T.GCF.MISC.THEME_REMOVE_BUTTON | translate"
+                        (click)="removeUserTheme($event, theme.id)"
+                      >
+                        <mat-icon color="warn">delete</mat-icon>
+                      </button>
+                    }
+                  </span>
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <button
+            class="install-theme-btn"
+            mat-stroked-button
+            type="button"
+            [matTooltip]="T.GCF.MISC.THEME_INSTALL_TOOLTIP | translate"
+            matTooltipPosition="above"
+            (click)="openFilePicker()"
+          >
+            <mat-icon>upload</mat-icon>
+            {{ T.GCF.MISC.THEME_INSTALL_BUTTON | translate }}
+          </button>
+          <input
+            #fileInput
+            type="file"
+            accept=".css,text/css"
+            hidden
+            (change)="onFileSelected($event)"
+          />
+        </div>
       </div>
 
       <div class="wallpaper-select">
-        <h3>{{ T.GCF.MISC.WALLPAPER | translate }}</h3>
+        <span class="setting-label">{{ T.GCF.MISC.WALLPAPER | translate }}</span>
         <button
+          class="wallpaper-btn"
           mat-stroked-button
           type="button"
           (click)="openWallpaperDialog()"
@@ -156,26 +179,127 @@ const valueToRef = (value: string): CustomThemeRef => {
       .theme-selector-container {
         display: flex;
         flex-direction: column;
-        gap: 24px;
-        margin: 20px 0;
+        gap: var(--s2);
+        padding: var(--s2);
+        container-type: inline-size;
       }
 
       .dark-mode-select,
       .theme-select,
       .wallpaper-select {
-        display: flex;
+        display: grid;
+        grid-template-columns: minmax(120px, 1fr) minmax(0, 3fr);
         align-items: center;
-        gap: 16px;
+        gap: var(--s2);
       }
 
-      h3 {
+      .appearance-title {
         margin: 0;
-        min-width: 100px;
+        font-size: var(--font-size-lg);
+        font-weight: var(--font-weight-semibold);
+      }
+
+      .setting-label {
+        font-size: var(--font-size-md);
       }
 
       mat-form-field {
-        flex: 1;
-        max-width: 300px;
+        width: 100%;
+        margin-bottom: 0;
+        --mat-form-field-container-height: var(--bar-height-small);
+        --mat-form-field-container-vertical-padding: var(--s);
+        --mat-form-field-outlined-container-shape: var(--input-border-radius);
+      }
+
+      .theme-select__controls {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: var(--s);
+        width: 100%;
+      }
+
+      .install-theme-btn {
+        --mat-button-outlined-container-height: var(--bar-height-small);
+      }
+
+      .dark-mode-toggle {
+        display: flex;
+        align-items: stretch;
+        width: 100%;
+        --mat-button-toggle-height: var(--bar-height-small);
+        --mat-button-toggle-label-text-size: var(--font-size-md);
+        --mat-button-toggle-shape: var(--input-border-radius);
+
+        /*
+         * Selection reads the same way the settings tab strip marks its active
+         * tab: the --state-selected fill plus the theme's primary on the icon.
+         * Unselected options sit transparent on the card so the tint actually
+         * shows — against Material's own group fill (#424242 dark, white light)
+         * the same 10% overlay is barely a shade apart.
+         *
+         * Both values come from the design system rather than Material's
+         * defaults for these tokens, which are hardcoded black/white alphas
+         * and so ignore the active theme. --state-selected is built from
+         * --ink-on-channel and --c-primary from the palette, so the control
+         * tracks every theme, custom ones included.
+         */
+        --mat-button-toggle-background-color: transparent;
+        --mat-button-toggle-selected-state-background-color: var(--state-selected);
+        --mat-button-toggle-selected-state-text-color: var(--text-color);
+
+        /*
+         * The disabled variants are a separate, more specific rule in Material,
+         * so they need the same treatment or the group flips to an opaque grey
+         * block whenever the active theme forces a mode.
+         */
+        --mat-button-toggle-disabled-state-background-color: transparent;
+        --mat-button-toggle-disabled-selected-state-background-color: var(
+          --state-selected
+        );
+      }
+
+      .dark-mode-toggle mat-button-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 1 1 0;
+        min-width: 0;
+      }
+
+      .dark-mode-toggle mat-icon {
+        margin-inline-end: var(--s-half);
+        font-size: 20px;
+        width: 20px;
+        height: 20px;
+        vertical-align: middle;
+      }
+
+      .dark-mode-toggle__content {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        max-width: 100%;
+        height: var(--bar-height-small);
+        vertical-align: top;
+      }
+
+      /*
+       * Only the icon takes the accent, not the label. The tab strip this
+       * mirrors is icon-only at the widths where it is the reference, so
+       * tinting its label was never part of the pattern — and the palette blue
+       * lands at 2.4:1 on the light card, well under the 4.5:1 a word like
+       * "Dark" needs to stay readable. The label keeps --text-color (11.2:1)
+       * and the icon reads as an accent on top of the fill, which is what
+       * actually carries the selection.
+       */
+      .dark-mode-toggle .mat-button-toggle-checked mat-icon {
+        color: var(--c-primary);
+      }
+
+      .dark-mode-toggle__label {
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       .theme-option-row {
@@ -192,26 +316,41 @@ const valueToRef = (value: string): CustomThemeRef => {
       }
 
       .theme-mode-indicator {
-        opacity: 0.7;
-        margin-left: 4px;
+        opacity: var(--muted-alpha);
+        margin-inline-start: var(--s-half);
       }
 
       .remove-theme-btn {
-        margin-left: 8px;
+        margin-inline-start: var(--s);
         flex: 0 0 auto;
       }
 
-      @media (max-width: 600px) {
+      /*
+       * The query measures this container's content box, not the viewport —
+       * roughly viewport minus sidebar minus the card and container padding.
+       * Measured floor is 388px: below that the label column sits at its 120px
+       * minimum and the toggle group can no longer fit three labelled options.
+       * Stack just above it, and give the controls the full width.
+       */
+      @container (max-width: 400px) {
         .dark-mode-select,
         .theme-select,
         .wallpaper-select {
+          display: flex;
           flex-direction: column;
           align-items: flex-start;
+          gap: var(--s);
         }
 
-        mat-form-field {
+        .theme-select__controls {
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
           width: 100%;
-          max-width: none;
+        }
+
+        .wallpaper-btn {
+          width: 100%;
         }
       }
     `,
