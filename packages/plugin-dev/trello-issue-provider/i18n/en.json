@@ -8,7 +8,12 @@
     "BOARD_DESC": "Select the board to search and import cards from. Enter your API key and token first, then the list loads.",
     "FILTER_USERNAME": "Filter by Trello username",
     "FILTER_USERNAME_DESC": "If provided, only imports cards assigned to this Trello username.",
+    "DEFAULT_LIST_ID": "Default Trello list ID",
+    "DEFAULT_LIST_ID_DESC": "List where automatically created Trello cards are added.",
     "HOW_TO_GET_TOKEN": "How to get a token?"
+  },
+  "ERRORS": {
+    "DEFAULT_LIST_ID_REQUIRED": "A default Trello list ID is required to create cards."
   },
   "DISPLAY": {
     "SUMMARY": "Summary",
