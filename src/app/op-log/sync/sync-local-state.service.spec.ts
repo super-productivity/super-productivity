@@ -17,6 +17,7 @@ type StateCache = NonNullable<
 describe('SyncLocalStateService', () => {
   let service: SyncLocalStateService;
   let opLogStoreSpy: jasmine.SpyObj<OperationLogStoreService>;
+  let stateSnapshotSpy: jasmine.SpyObj<StateSnapshotService>;
 
   const entry = (
     entityType: EntityType,
@@ -70,14 +71,16 @@ describe('SyncLocalStateService', () => {
     opLogStoreSpy.getLatestFullStateOpEntry.and.resolveTo(undefined);
     opLogStoreSpy.getFirstOpEntry.and.resolveTo(migrationGenesis);
 
+    stateSnapshotSpy = jasmine.createSpyObj('StateSnapshotService', [
+      'getStateSnapshot',
+      'getStateSnapshotAsync',
+    ]);
+
     TestBed.configureTestingModule({
       providers: [
         SyncLocalStateService,
         { provide: OperationLogStoreService, useValue: opLogStoreSpy },
-        {
-          provide: StateSnapshotService,
-          useValue: jasmine.createSpyObj('StateSnapshotService', ['getStateSnapshot']),
-        },
+        { provide: StateSnapshotService, useValue: stateSnapshotSpy },
         {
           provide: TranslateService,
           useValue: jasmine.createSpyObj('TranslateService', ['instant']),
@@ -155,6 +158,73 @@ describe('SyncLocalStateService', () => {
     it('is false for a client with ordinary history', async () => {
       opLogStoreSpy.getFirstOpEntry.and.resolveTo(regularOp);
       expect(await service.isFreshOrNeverSyncedGenesisClient([regularOp.op])).toBe(false);
+    });
+  });
+
+  describe('hasMeaningfulStoreData (#9932)', () => {
+    const emptyArchive = {
+      task: { ids: [], entities: {} },
+      timeTracking: { project: {}, tag: {} },
+      lastTimeTrackingFlush: 0,
+    };
+    const emptyNgRx = {
+      task: { ids: [], entities: {} },
+      project: { ids: ['INBOX_PROJECT'], entities: {} },
+      tag: { ids: ['TODAY'], entities: {} },
+      note: { ids: [], entities: {} },
+    };
+
+    beforeEach(() => {
+      // What getStateSnapshot() reports: NgRx plus placeholder archives.
+      stateSnapshotSpy.getStateSnapshot.and.returnValue({
+        ...emptyNgRx,
+        archiveYoung: emptyArchive,
+        archiveOld: emptyArchive,
+      } as any);
+      stateSnapshotSpy.getStateSnapshotAsync.and.resolveTo({
+        ...emptyNgRx,
+        archiveYoung: emptyArchive,
+        archiveOld: emptyArchive,
+      } as any);
+    });
+
+    it('answers from the store snapshot alone when it already holds user data', async () => {
+      stateSnapshotSpy.getStateSnapshot.and.returnValue({
+        ...emptyNgRx,
+        task: { ids: ['t1'], entities: {} },
+      } as any);
+
+      expect(await service.hasMeaningfulStoreData()).toBe(true);
+      expect(stateSnapshotSpy.getStateSnapshotAsync).not.toHaveBeenCalled();
+    });
+
+    it('reads the archives when the store holds nothing and counts an archived task', async () => {
+      stateSnapshotSpy.getStateSnapshotAsync.and.resolveTo({
+        ...emptyNgRx,
+        archiveYoung: {
+          ...emptyArchive,
+          task: { ids: ['archived-1'], entities: {} },
+        },
+        archiveOld: emptyArchive,
+      } as any);
+
+      expect(await service.hasMeaningfulStoreData()).toBe(true);
+      expect(stateSnapshotSpy.getStateSnapshotAsync).toHaveBeenCalledTimes(1);
+    });
+
+    it('is false when both the store and the archives are empty', async () => {
+      expect(await service.hasMeaningfulStoreData()).toBe(false);
+      expect(stateSnapshotSpy.getStateSnapshotAsync).toHaveBeenCalledTimes(1);
+    });
+
+    it('applies ignoreTaskIds to the store check but still reads the archives (#7985)', async () => {
+      stateSnapshotSpy.getStateSnapshot.and.returnValue({
+        ...emptyNgRx,
+        task: { ids: ['example-1'], entities: {} },
+      } as any);
+
+      expect(await service.hasMeaningfulStoreData(new Set(['example-1']))).toBe(false);
+      expect(stateSnapshotSpy.getStateSnapshotAsync).toHaveBeenCalledTimes(1);
     });
   });
 });

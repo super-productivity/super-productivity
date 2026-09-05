@@ -376,10 +376,81 @@ describe('ServerMigrationService', () => {
         } as any),
       );
 
-      const createdOpId = await service.handleServerMigration(defaultProvider);
+      const outcome = await service.handleServerMigration(defaultProvider);
 
       expect(opLogStoreSpy.append).toHaveBeenCalled();
-      expect(createdOpId).toBe(opLogStoreSpy.append.calls.mostRecent().args[0].id);
+      expect(outcome).toEqual({
+        kind: 'created',
+        opId: opLogStoreSpy.append.calls.mostRecent().args[0].id,
+      });
+    });
+
+    describe('outcome (#9932)', () => {
+      it('is reused_pending when an unsynced server-migration import is already queued', async () => {
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([createMigrationEntry()]);
+
+        const outcome = await service.handleServerMigration(defaultProvider);
+
+        expect(outcome).toEqual({ kind: 'reused_pending' });
+        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      });
+
+      it('is skipped/server_not_empty when the fresh check finds ops on the server', async () => {
+        const provider = createMockSyncProvider();
+        (provider.downloadOps as jasmine.Spy).and.returnValue(
+          Promise.resolve({ ops: [], latestSeq: 3, hasMore: false }),
+        );
+
+        const outcome = await service.handleServerMigration(provider);
+
+        expect(outcome).toEqual({ kind: 'skipped', reason: 'server_not_empty' });
+        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      });
+
+      it('is skipped/empty_state when there is nothing to ship', async () => {
+        stateSnapshotServiceSpy.getStateSnapshotAsync.and.resolveTo({
+          task: { ids: [], entities: {} },
+          project: { ids: [], entities: {} },
+          tag: { ids: [], entities: {} },
+        } as any);
+
+        const outcome = await service.handleServerMigration(defaultProvider);
+
+        expect(outcome).toEqual({ kind: 'skipped', reason: 'empty_state' });
+      });
+
+      it('is skipped/validation_failed when the state cannot be repaired', async () => {
+        validateStateServiceSpy.validateAndRepair.and.resolveTo({
+          isValid: false,
+          wasRepaired: false,
+          error: 'Validation failed',
+        } as any);
+
+        const outcome = await service.handleServerMigration(defaultProvider);
+
+        expect(outcome).toEqual({ kind: 'skipped', reason: 'validation_failed' });
+      });
+
+      it('is skipped/no_client_id without a client id', async () => {
+        clientIdProviderSpy.loadClientId.and.returnValue(Promise.resolve(null));
+
+        const outcome = await service.handleServerMigration(defaultProvider);
+
+        expect(outcome).toEqual({ kind: 'skipped', reason: 'no_client_id' });
+        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      });
+
+      it('never reports reused_pending for a FORCE_UPLOAD even when a migration import is pending', async () => {
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([createMigrationEntry()]);
+
+        const outcome = await service.handleServerMigration(defaultProvider, {
+          skipServerEmptyCheck: true,
+          syncImportReason: 'FORCE_UPLOAD',
+        });
+
+        expect(outcome.kind).toBe('created');
+        expect(opLogStoreSpy.append).toHaveBeenCalled();
+      });
     });
 
     it('should proceed if non-entity sync state differs from defaults', async () => {

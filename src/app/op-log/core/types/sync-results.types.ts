@@ -285,17 +285,23 @@ export type DownloadCallback = (options?: {
  */
 export type DownloadOutcome =
   | {
-      /** Server was empty/reset — a SYNC_IMPORT was created. Caller must upload. */
+      /**
+       * Server was empty/reset — a SYNC_IMPORT was created (or an unsynced
+       * SERVER_MIGRATION import was already pending). Caller must upload.
+       */
       kind: 'server_migration_handled';
     }
   | {
       /**
-       * Empty-server seeding of a fresh / never-synced genesis client ran but
-       * created no SYNC_IMPORT (server no longer empty, state judged empty,
-       * validation failed, no client id). Nothing shipped the local state, so
-       * the caller must skip this cycle's upload — accepting the client's
-       * ordinary ops would flip hasSyncedOps() and strand that state for good.
-       * The next cycle re-downloads and reaches the conflict branch. (#9921)
+       * Seeding ran but created no SYNC_IMPORT (server no longer empty, state
+       * judged empty, validation failed, no client id). Nothing shipped the
+       * local state, so the caller must skip this cycle's upload — accepting
+       * the client's ordinary ops would settle it onto a server that lacks the
+       * base state they reference: for a fresh / never-synced genesis client
+       * hasSyncedOps() would flip and strand its state for good (#9921); for a
+       * synced client on a reset server lastServerSeq would advance and the
+       * migration check would never fire again (#9932). The next cycle
+       * re-downloads and re-evaluates.
        */
       kind: 'server_migration_skipped';
     }

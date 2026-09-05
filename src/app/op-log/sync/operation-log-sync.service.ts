@@ -676,10 +676,28 @@ export class OperationLogSyncService {
         options?.fenceEpoch,
         'server migration',
       );
-      await this.serverMigrationService.handleServerMigration(syncProvider);
+      const outcome =
+        await this.serverMigrationService.handleServerMigration(syncProvider);
+      // #9932: only a created (or already pending) SYNC_IMPORT ships the state.
+      // An empty state has nothing to ship, so the ordinary upload may proceed.
+      // Any other skip must not report handled: the upload would settle this
+      // client onto the reset server (lastServerSeq advances, the migration
+      // check never fires again) without its base state. The next sync retries.
+      if (outcome.kind === 'skipped' && outcome.reason !== 'empty_state') {
+        OpLog.warn(
+          `OperationLogSyncService: Server-reset seeding created no SYNC_IMPORT (${outcome.reason}).`,
+        );
+        return { kind: 'server_migration_skipped' };
+      }
       // Persist lastServerSeq=0 for the migration case (server was reset)
       if (result.latestServerSeq !== undefined) {
         await syncProvider.setLastServerSeq(result.latestServerSeq);
+      }
+      if (outcome.kind === 'skipped') {
+        OpLog.normal(
+          'OperationLogSyncService: Server was reset but the local state is empty — nothing to seed.',
+        );
+        return { kind: 'no_new_ops' };
       }
       return { kind: 'server_migration_handled' };
     }
@@ -834,7 +852,7 @@ export class OperationLogSyncService {
           this.syncImportConflictGateService.hasMeaningfulPendingOps(
             unsyncedOps,
             pendingOpClassification,
-          ) || this.syncLocalStateService.hasMeaningfulStoreData(exampleTaskIds);
+          ) || (await this.syncLocalStateService.hasMeaningfulStoreData(exampleTaskIds));
 
         if (hasMeaningfulUserData) {
           // SPAP-9: before surfacing the binary USE_LOCAL/USE_REMOTE dialog, use
@@ -936,7 +954,10 @@ export class OperationLogSyncService {
 
         // CRITICAL FIX: Even if op-log is empty, check if NgRx store has meaningful data.
         // This catches data that existed before the operation-log feature was added.
-        if (isFreshClient && this.syncLocalStateService.hasMeaningfulStoreData()) {
+        if (
+          isFreshClient &&
+          (await this.syncLocalStateService.hasMeaningfulStoreData())
+        ) {
           OpLog.warn(
             'OperationLogSyncService: Fresh client detected with meaningful local data in store. ' +
               'Throwing LocalDataConflictError for conflict resolution dialog.',
@@ -1056,7 +1077,7 @@ export class OperationLogSyncService {
           await this.syncLocalStateService.isFreshOrNeverSyncedGenesisClient(
             result.newOps,
           );
-        if (isFresh && this.syncLocalStateService.hasMeaningfulStoreData()) {
+        if (isFresh && (await this.syncLocalStateService.hasMeaningfulStoreData())) {
           OpLog.warn(
             'OperationLogSyncService: Pre-op-log client with meaningful local data on empty server. ' +
               'Creating SYNC_IMPORT via server migration to seed the server.',
@@ -1065,15 +1086,18 @@ export class OperationLogSyncService {
             options?.fenceEpoch,
             'empty-server migration',
           );
-          const createdOpId = await this.serverMigrationService.handleServerMigration(
+          const outcome = await this.serverMigrationService.handleServerMigration(
             syncProvider,
             { syncImportReason: 'SERVER_MIGRATION' },
           );
           // No SYNC_IMPORT → nothing shipped the state → skip this cycle's upload
           // (see DownloadOutcome) so the next download re-evaluates. (#9921)
-          if (!createdOpId) {
+          // `empty_state` is unreachable here (the gate above is a subset of the
+          // seeding's own check) and would strand the genesis state, so it is
+          // not exempted like in the server-reset branch.
+          if (outcome.kind === 'skipped') {
             OpLog.warn(
-              'OperationLogSyncService: Empty-server seeding created no SYNC_IMPORT.',
+              `OperationLogSyncService: Empty-server seeding created no SYNC_IMPORT (${outcome.reason}).`,
             );
             return { kind: 'server_migration_skipped' };
           }
@@ -1103,7 +1127,7 @@ export class OperationLogSyncService {
     const isFreshClient =
       await this.syncLocalStateService.isFreshOrNeverSyncedGenesisClient(result.newOps);
     if (isFreshClient && result.newOps.length > 0) {
-      if (this.syncLocalStateService.hasMeaningfulStoreData()) {
+      if (await this.syncLocalStateService.hasMeaningfulStoreData()) {
         OpLog.warn(
           `OperationLogSyncService: Fresh client has local data and ${result.newOps.length} remote ops. Showing conflict dialog.`,
         );

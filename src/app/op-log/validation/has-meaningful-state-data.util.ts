@@ -7,32 +7,58 @@ const isEntityState = (obj: unknown): obj is { ids: string[] } =>
   'ids' in obj &&
   Array.isArray((obj as { ids: unknown }).ids);
 
+const isNonEmptyRecord = (obj: unknown): obj is Record<string, unknown> =>
+  typeof obj === 'object' && obj !== null && Object.keys(obj).length > 0;
+
+/** `{ project: { [ctxId]: { [date]: … } }, tag: { … } }` — any context with a tracked day. */
+const hasTimeTrackingEntries = (timeTracking: unknown): boolean => {
+  if (typeof timeTracking !== 'object' || timeTracking === null) {
+    return false;
+  }
+  const { project, tag } = timeTracking as { project?: unknown; tag?: unknown };
+  return [project, tag].some(
+    (byContext) =>
+      typeof byContext === 'object' &&
+      byContext !== null &&
+      Object.values(byContext).some(isNonEmptyRecord),
+  );
+};
+
+/** `archiveYoung` / `archiveOld`: archived tasks or flushed time tracking. */
+const hasArchiveData = (archive: unknown): boolean => {
+  if (typeof archive !== 'object' || archive === null) {
+    return false;
+  }
+  const a = archive as { task?: unknown; timeTracking?: unknown };
+  return (
+    (isEntityState(a.task) && a.task.ids.length > 0) ||
+    hasTimeTrackingEntries(a.timeTracking)
+  );
+};
+
 /**
  * Returns true if the given (partial) app state contains user-created data worth
- * protecting: at least one task, a non-INBOX project, a non-system tag, or a note.
+ * protecting: a task (active or archived), a non-INBOX project, a non-system tag,
+ * a note, a task repeat config, or tracked time (live or archived). The default
+ * app state returns false.
  *
- * The default/initial app state (empty task list, only the INBOX project and the
- * built-in system tags) returns false. This is the single source of truth for the
- * "does this state actually have user data?" question, reused by:
- * - SyncLocalStateService (first-time-sync conflict detection)
- * - the snapshot/compaction empty-overwrite guard (prevents a transient degraded
- *   NgRx state from being cached over a good snapshot — see issue #7892).
+ * Single source of truth for "does this state actually have user data?", used by:
+ * - SyncLocalStateService — the fresh-client / genesis-client gate. A false
+ *   negative here is NOT safe: the client adopts a peer's state over its own or
+ *   its genesis state is never seeded. Archive-only / worklog-only legacy data
+ *   was lost that way before archives and time tracking were counted (#9932).
+ *   Archives are only visible on an archive-inclusive snapshot; the synchronous
+ *   store snapshot substitutes an empty DEFAULT_ARCHIVE.
+ * - the snapshot/compaction empty-overwrite guard (#7892) and the local-backup
+ *   skip, where a false negative merely skips work.
  *
- * Scope is intentionally narrow (these four collections only) and is always consumed
- * in the "safe" direction: a false negative merely SKIPS work (a snapshot save, a
- * compaction, or a fresh-client sync prompt) — it can never cache empty-over-good or
- * delete data. Omitting models like simpleCounter / taskRepeatCfg / timeTracking
- * therefore cannot lose data; it would only forgo the snapshot/compaction optimization
- * for a data-less-but-active store, so it is left out of this safety fix by design.
+ * Everything counted must be strictly non-default so this stays a subset of
+ * `hasServerMigrationStateData` (server-migration.service.ts): when the gate says
+ * "meaningful", the seeding it triggers must find something to ship.
  *
- * Accepts an arbitrary object so callers can pass an NgRx snapshot, a loaded
- * state cache, or a remote payload without type juggling.
- *
- * `ignoreTaskIds` (optional) lets a caller exclude specific task ids from the "has a
- * task?" check — used by the file-based sync conflict gate to treat a store containing
- * only onboarding example tasks as non-meaningful (#7985). It only ever NARROWS the
- * result; omitting it preserves the original behavior for every other caller (the
- * #7892 empty-overwrite guard, snapshot/compaction, first-time-sync detection).
+ * `ignoreTaskIds` excludes specific active task ids from the "has a task?" check
+ * (onboarding example tasks on the file-based conflict gate, #7985). It only ever
+ * NARROWS the result.
  */
 export const hasMeaningfulStateData = (
   state: unknown,
@@ -64,5 +90,13 @@ export const hasMeaningfulStateData = (
     return true;
   }
 
-  return false;
+  if (isEntityState(s.taskRepeatCfg) && s.taskRepeatCfg.ids.length > 0) {
+    return true;
+  }
+
+  return (
+    hasTimeTrackingEntries(s.timeTracking) ||
+    hasArchiveData(s.archiveYoung) ||
+    hasArchiveData(s.archiveOld)
+  );
 };

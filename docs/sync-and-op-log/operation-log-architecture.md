@@ -349,6 +349,17 @@ providers keep uploading it: there the ops upload is what writes the state
 snapshot. Servers may still hold genesis ops uploaded by older clients;
 receivers apply them as no-ops as before.
 
+Both join-time decisions are gated on `SyncLocalStateService.hasMeaningfulStoreData`
+(`hasMeaningfulStateData`). Archived tasks and flushed time tracking live only
+in IndexedDB and the synchronous store snapshot substitutes an empty archive, so
+the gate falls back to the archive-inclusive snapshot when the NgRx slices hold
+nothing (#9932). Everything it counts is strictly non-default, keeping it a
+subset of the seeding's own check (`hasServerMigrationStateData`).
+`ServerMigrationService.handleServerMigration` reports `created` /
+`reused_pending` / `skipped` (with a reason); a skip other than "empty state"
+answers `server_migration_skipped`, so the upload waits for the next cycle
+instead of settling the client onto a server without its base state.
+
 ## A.4 Compaction
 
 ### Purpose

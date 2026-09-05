@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/naming-convention */
 import { hasMeaningfulStateData } from './has-meaningful-state-data.util';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 
@@ -10,11 +11,24 @@ const SYSTEM_TAG_IDS_FIXTURE = [
   'KANBAN_IN_PROGRESS',
 ];
 
+const emptyTimeTracking = (): Record<string, unknown> => ({ project: {}, tag: {} });
+
+// Mirrors StateSnapshotService's DEFAULT_ARCHIVE / the legacy `pf` archive shape.
+const emptyArchive = (): Record<string, unknown> => ({
+  task: { ids: [], entities: {} },
+  timeTracking: emptyTimeTracking(),
+  lastTimeTrackingFlush: 0,
+});
+
 const initialState = (): Record<string, unknown> => ({
   task: { ids: [], entities: {} },
   project: { ids: [INBOX_PROJECT.id], entities: {} },
   tag: { ids: [...SYSTEM_TAG_IDS_FIXTURE], entities: {} },
   note: { ids: [], entities: {} },
+  taskRepeatCfg: { ids: [], entities: {} },
+  timeTracking: emptyTimeTracking(),
+  archiveYoung: emptyArchive(),
+  archiveOld: emptyArchive(),
 });
 
 describe('hasMeaningfulStateData', () => {
@@ -62,9 +76,59 @@ describe('hasMeaningfulStateData', () => {
   });
 
   it('ignores malformed (non-entity) collections without throwing', () => {
-    expect(hasMeaningfulStateData({ task: 'broken', project: null, tag: 123 })).toBe(
-      false,
-    );
+    expect(
+      hasMeaningfulStateData({
+        task: 'broken',
+        project: null,
+        tag: 123,
+        taskRepeatCfg: [],
+        timeTracking: { project: 'x', tag: null },
+        archiveYoung: 'broken',
+        archiveOld: { task: null, timeTracking: 7 },
+      }),
+    ).toBe(false);
+  });
+
+  // #9932: a legacy client whose data is only archived tasks or tracked time
+  // must read as meaningful, or the sync gate never seeds it and later adopts a
+  // peer's import over it.
+  describe('archive-only / worklog-only legacy data (#9932)', () => {
+    it('returns true for an archived task in archiveYoung or archiveOld', () => {
+      const young = initialState();
+      young.archiveYoung = { ...emptyArchive(), task: { ids: ['a1'], entities: {} } };
+      expect(hasMeaningfulStateData(young)).toBe(true);
+
+      const old = initialState();
+      old.archiveOld = { ...emptyArchive(), task: { ids: ['a1'], entities: {} } };
+      expect(hasMeaningfulStateData(old)).toBe(true);
+    });
+
+    it('returns true for time tracking, live or flushed into an archive', () => {
+      const tracked = {
+        project: { [INBOX_PROJECT.id]: { '2024-11-16': { s: 1 } } },
+        tag: {},
+      };
+
+      const live = initialState();
+      live.timeTracking = tracked;
+      expect(hasMeaningfulStateData(live)).toBe(true);
+
+      const archived = initialState();
+      archived.archiveOld = { ...emptyArchive(), timeTracking: tracked };
+      expect(hasMeaningfulStateData(archived)).toBe(true);
+    });
+
+    it('returns false for time tracking contexts without any tracked day', () => {
+      const s = initialState();
+      s.timeTracking = { project: { [INBOX_PROJECT.id]: {} }, tag: {} };
+      expect(hasMeaningfulStateData(s)).toBe(false);
+    });
+
+    it('returns true for a task repeat config', () => {
+      const s = initialState();
+      s.taskRepeatCfg = { ids: ['rc1'], entities: {} };
+      expect(hasMeaningfulStateData(s)).toBe(true);
+    });
   });
 
   describe('with ignoreTaskIds (#7985)', () => {

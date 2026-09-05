@@ -70,7 +70,7 @@ export class SyncImportConflictCoordinatorService {
       'SyncImportConflictCoordinatorService: Force uploading local state - creating SYNC_IMPORT to override remote.',
     );
 
-    const forceUploadOpId = await this.serverMigrationService.handleServerMigration(
+    const migrationOutcome = await this.serverMigrationService.handleServerMigration(
       syncProvider,
       {
         skipServerEmptyCheck: true,
@@ -78,11 +78,14 @@ export class SyncImportConflictCoordinatorService {
       },
     );
 
-    if (!forceUploadOpId) {
+    // FORCE_UPLOAD never reuses a pending SERVER_MIGRATION import, so anything
+    // but `created` means no SYNC_IMPORT exists to force-upload.
+    if (migrationOutcome.kind !== 'created') {
       throw new ForceUploadFailedError(
         'Force upload failed because no SYNC_IMPORT was created.',
       );
     }
+    const forceUploadOpId = migrationOutcome.opId;
 
     const uploadResult = await this.uploadService.uploadPendingOps(syncProvider, {
       skipPiggybackProcessing: true,

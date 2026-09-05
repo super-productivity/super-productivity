@@ -7,6 +7,7 @@ import {
   closeClient,
   createSimulatedClient,
   createTestUser,
+  getArchiveYoungTaskIds,
   getLocalOpLogSummary,
   getSuperSyncConfig,
   isFullStateOpType,
@@ -16,6 +17,7 @@ import {
 import {
   createLegacyMigratedClient,
   closeLegacyClient,
+  toArchiveOnlyLegacyData,
 } from '../../utils/legacy-migration-helpers';
 
 // Import fixtures
@@ -605,6 +607,98 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
   });
 
   /**
+   * Test: archive-only legacy client joins a server that holds ordinary ops (#9932)
+   *
+   * Same setup as the genesis-only test above, but Client B's legacy data holds
+   * only an archived task: its NgRx store reads as the default state and the
+   * archive lives only in IndexedDB. Before #9932 the fresh-client gate judged
+   * B as having nothing to protect and applied A's ops silently, stranding the
+   * archive on B. Expected now: the conflict dialog, and "Keep local" ships the
+   * archive as a SYNC_IMPORT that A adopts.
+   */
+  test('archive-only legacy client joining a server with ordinary ops gets the conflict dialog', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.slow();
+    const url = baseURL || 'http://localhost:4242';
+
+    const user = await createTestUser(testRunId);
+    const syncConfig = getSuperSyncConfig(user);
+    const seedCredentials = (page: Page): Promise<void> =>
+      seedSuperSyncCredentials(page, {
+        baseUrl: syncConfig.baseUrl,
+        accessToken: syncConfig.accessToken,
+        encryptKey: syncConfig.password!,
+      });
+    const isFullStateOp = (op: { opType: string }): boolean =>
+      isFullStateOpType(op.opType);
+    const legacyData = toArchiveOnlyLegacyData(legacyDataClientB.data);
+    const ARCHIVED_TASK_ID = legacyDataClientB.data.archiveYoung.task.ids[0];
+
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: {
+      context: Awaited<ReturnType<typeof browser.newContext>>;
+      page: Awaited<ReturnType<typeof browser.newPage>>;
+    } | null = null;
+
+    try {
+      // === Client A: fresh client, key pre-seeded, uploads ordinary ops only ===
+      clientA = await createSimulatedClient(browser, url, 'A', testRunId, {
+        seedBeforeBoot: seedCredentials,
+      });
+      await clientA.workView.waitForTaskList();
+      await clientA.workView.addTask('Task A1 - Fresh');
+      await waitForStatePersistence(clientA.page);
+      await clientA.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
+      await clientA.sync.syncAndWait();
+      const opsA = await getLocalOpLogSummary(clientA.page);
+      expect(opsA.some((op) => op.entityType === 'TASK' && op.isSynced)).toBe(true);
+      expect(opsA.filter(isFullStateOp)).toEqual([]);
+
+      // === Client B: legacy migration, archived task only ===
+      clientB = await createLegacyMigratedClient(browser, url, legacyData, 'B', {
+        seedBeforeBoot: seedCredentials,
+      });
+      const syncPageB = new SuperSyncPage(clientB.page);
+      await new WorkViewPage(clientB.page).waitForTaskList();
+      await expect(clientB.page.locator('task')).toHaveCount(0);
+      expect(await getArchiveYoungTaskIds(clientB.page)).toContain(ARCHIVED_TASK_ID);
+      const opsB = await getLocalOpLogSummary(clientB.page);
+      expect(opsB[0]?.entityType).toBe('MIGRATION');
+      expect(opsB.filter(isFullStateOp)).toEqual([]);
+
+      await syncPageB.setupSuperSync({
+        baseUrl: syncConfig.baseUrl,
+        accessToken: syncConfig.accessToken,
+        waitForInitialSync: false,
+      });
+
+      // The regression pin: an archive-only store prompts like one with active tasks.
+      await expect(syncPageB.conflictDialog).toBeVisible({ timeout: 30000 });
+      await syncPageB.resolveConflictDialog('local');
+      await syncPageB.syncAndWait({ useLocal: true });
+      const opsBAfter = await getLocalOpLogSummary(clientB.page);
+      expect(opsBAfter.some(isFullStateOp)).toBe(true);
+      expect(opsBAfter.find((op) => op.entityType === 'MIGRATION')?.isSynced).toBe(true);
+
+      // === Client A adopts B's full state, archive included ===
+      await clientA.sync.syncAndWait();
+      await expect
+        .poll(() => getArchiveYoungTaskIds(clientA!.page), { timeout: 15000 })
+        .toContain(ARCHIVED_TASK_ID);
+      await clientA.workView.waitForTaskList();
+      await expect(
+        clientA.page.locator('task', { hasText: 'Task A1 - Fresh' }),
+      ).not.toBeVisible();
+    } finally {
+      if (clientA) await closeClient(clientA).catch(() => {});
+      if (clientB) await closeLegacyClient(clientB).catch(() => {});
+    }
+  });
+
+  /**
    * Test: Archive data is preserved after migration + sync
    *
    * Verifies that archived tasks from legacy data survive the migration
@@ -693,32 +787,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       console.log('[Test] Client B: Active tasks verified');
 
       // Verify archive data via IndexedDB (archived tasks aren't visible in UI by default)
-      const archiveData = await pageB.evaluate(async () => {
-        return new Promise((resolve, reject) => {
-          const dbRequest = indexedDB.open('SUP_OPS');
-          dbRequest.onsuccess = (event) => {
-            const db = (event.target as IDBOpenDBRequest).result;
-            const tx = db.transaction('archive_young', 'readonly');
-            const store = tx.objectStore('archive_young');
-            const getReq = store.get('current');
-            getReq.onsuccess = () => {
-              db.close();
-              resolve(getReq.result?.data || null);
-            };
-            getReq.onerror = () => {
-              db.close();
-              reject(getReq.error);
-            };
-          };
-          dbRequest.onerror = () => reject(dbRequest.error);
-        });
-      });
-
-      // Verify archive contains the archived task from Client A
-      expect(archiveData).not.toBeNull();
-      const archiveTaskIds = (archiveData as { task?: { ids?: string[] } })?.task?.ids;
-      expect(archiveTaskIds).toBeDefined();
-      expect(archiveTaskIds).toContain('archived-a');
+      expect(await getArchiveYoungTaskIds(pageB)).toContain('archived-a');
       console.log('[Test] SUCCESS: Archive data preserved after migration + sync');
     } finally {
       if (clientA) await closeLegacyClient(clientA).catch(() => {});

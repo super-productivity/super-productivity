@@ -345,7 +345,9 @@ describe('Service Logic Integration', () => {
       'handleServerMigration',
     ]);
     serverMigrationSpy.checkAndHandleMigration.and.returnValue(Promise.resolve());
-    serverMigrationSpy.handleServerMigration.and.returnValue(Promise.resolve());
+    serverMigrationSpy.handleServerMigration.and.returnValue(
+      Promise.resolve({ kind: 'created', opId: 'sync-import' }),
+    );
 
     // Mock OperationWriteFlushService
     const writeFlushSpy = jasmine.createSpyObj('OperationWriteFlushService', [

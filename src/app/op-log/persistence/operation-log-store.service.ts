@@ -2079,13 +2079,17 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     return lastSeq;
   }
 
-  /** First (lowest-seq) entry, or undefined when empty. Decodes one row (#9921). */
+  /**
+   * First (lowest-seq) entry, or undefined when empty. Decodes one row (#9921);
+   * `limit: 1` pushes the bound into the adapter so SQLite emits `LIMIT 1`
+   * instead of materializing the table before the visitor stops (#9932).
+   */
   async getFirstOpEntry(): Promise<OperationLogEntry | undefined> {
     await this._ensureInit();
     let firstEntry: OperationLogEntry | undefined;
     await this._adapter.iterate<StoredOperationLogEntry>(
       STORE_NAMES.OPS,
-      { mode: 'readonly' },
+      { mode: 'readonly', limit: 1 },
       (value) => {
         firstEntry = decodeStoredEntry(value);
         return 'stop';

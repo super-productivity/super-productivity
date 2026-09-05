@@ -87,12 +87,18 @@ export class SyncLocalStateService {
   }
 
   /**
+   * The fresh-client / genesis-client gate: does this client hold user data?
+   * Archives live only in IndexedDB and the synchronous snapshot substitutes an
+   * empty DEFAULT_ARCHIVE, so an archive-only legacy client read as empty here
+   * and lost its archive (#9932); when the NgRx slices hold nothing, the
+   * archive-inclusive snapshot is consulted before answering "no".
+   *
    * @param ignoreTaskIds Optional task ids to exclude from the "has a task?" check.
    *   The file-based conflict gate passes the ids of pending onboarding example tasks so
    *   an example-only store is not treated as meaningful (#7985). Omitting it preserves
    *   the original behavior for every other caller.
    */
-  hasMeaningfulStoreData(ignoreTaskIds?: ReadonlySet<string>): boolean {
+  async hasMeaningfulStoreData(ignoreTaskIds?: ReadonlySet<string>): Promise<boolean> {
     const snapshot = this.stateSnapshotService.getStateSnapshot();
 
     if (!snapshot) {
@@ -102,7 +108,12 @@ export class SyncLocalStateService {
       return false;
     }
 
-    return hasMeaningfulStateData(snapshot, ignoreTaskIds);
+    if (hasMeaningfulStateData(snapshot, ignoreTaskIds)) {
+      return true;
+    }
+
+    const withArchives = await this.stateSnapshotService.getStateSnapshotAsync();
+    return hasMeaningfulStateData(withArchives, ignoreTaskIds);
   }
 
   confirmFreshClientSync(opCount: number): boolean {

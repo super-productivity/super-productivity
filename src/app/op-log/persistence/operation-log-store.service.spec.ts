@@ -778,6 +778,20 @@ describe('OperationLogStoreService', () => {
       expect(entry?.op.entityId).toBe('task1');
       expect(entry?.source).toBe('local');
     });
+
+    it('pushes a limit of 1 into the adapter scan so SQLite reads a single row (#9932)', async () => {
+      await service.append(createTestOperation({ entityId: 'task1' }), 'local');
+      const adapter = (service as unknown as { _adapter: OpLogDbAdapter })._adapter;
+      const iterateSpy = spyOn(adapter, 'iterate').and.callThrough();
+
+      await service.getFirstOpEntry();
+
+      expect(iterateSpy).toHaveBeenCalledOnceWith(
+        STORE_NAMES.OPS,
+        jasmine.objectContaining({ mode: 'readonly', limit: 1 }),
+        jasmine.any(Function),
+      );
+    });
   });
 
   describe('getLatestFullStateOpEntry', () => {
