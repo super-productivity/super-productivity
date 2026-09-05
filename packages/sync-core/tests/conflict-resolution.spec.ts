@@ -89,6 +89,54 @@ describe('deepEqual', () => {
     );
   });
 
+  /**
+   * DOCUMENTS CURRENT BEHAVIOUR — passes on master.
+   *
+   * `seen` is one WeakSet shared across the whole traversal, never unwound,
+   * and every visited object is added from BOTH sides. A DAG — the same object
+   * referenced twice, which is not a cycle — therefore trips the
+   * circular-reference bail on its second visit, and two structurally
+   * identical values compare unequal.
+   *
+   * Because `seen` is fed from both sides, aliasing on EITHER side is enough:
+   * a value with no sharing at all still compares unequal to an aliased one
+   * of the same shape. See `hasServerMigrationStateData` in
+   * src/app/op-log/sync/server-migration.service.ts, which compares live state
+   * against aliased module-level defaults.
+   *
+   * A true cycle must keep returning false — that contract is pinned by the
+   * spec above, and any fix here has to preserve it.
+   */
+  it('returns false for a shared (non-circular) sub-object referenced twice', () => {
+    const logger = createLogger();
+    const shared = { weekDays: { mon: true, sat: false } };
+    const a = { first: { cfg: shared }, second: { cfg: shared } };
+    const b = structuredClone(a);
+
+    // structuredClone preserves the aliasing, so both sides are identical in
+    // shape AND in sharing.
+    expect(b.first.cfg).toBe(b.second.cfg);
+
+    expect(deepEqual(a, b, { logger })).toBe(false);
+    // Pin the mechanism, not just the outcome: this is the circular-reference
+    // bail firing on a DAG, not a depth or key-count mismatch.
+    expect(logger.warn).toHaveBeenCalledWith(
+      'sync-core.deepEqual detected circular reference, returning false',
+    );
+
+    // Breaking the aliasing on both sides makes the same values compare equal.
+    const unaliased = {
+      first: { cfg: { weekDays: { mon: true, sat: false } } },
+      second: { cfg: { weekDays: { mon: true, sat: false } } },
+    };
+    expect(deepEqual(unaliased, structuredClone(unaliased))).toBe(true);
+
+    // ...but breaking it on ONE side only is not enough, because `seen` takes
+    // objects from both. This is why a JSON-sourced state (no aliasing) still
+    // compares unequal to an aliased default.
+    expect(deepEqual(unaliased, a)).toBe(false);
+  });
+
   it('returns false and logs when max depth is exceeded', () => {
     const logger = createLogger();
     expect(deepEqual({ a: { b: 1 } }, { a: { b: 1 } }, { logger, maxDepth: 1 })).toBe(
