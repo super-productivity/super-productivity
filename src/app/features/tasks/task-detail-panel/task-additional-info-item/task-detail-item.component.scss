@@ -49,7 +49,10 @@
 .input-item,
 .mat-expansion-panel {
   border: 1px solid var(--divider-color);
-  margin: var(--s);
+  // Tighter vertical rhythm to match the main task list (#9266), but the
+  // horizontal inset stays at --s: the panel header keeps it, so halving all
+  // four sides would leave these rows overhanging it by 4px per side.
+  margin: var(--s-half) var(--s);
   border-radius: var(--card-border-radius);
   background: var(--task-detail-bg);
   font-size: 14px;

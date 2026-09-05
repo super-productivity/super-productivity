@@ -4,7 +4,6 @@ import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { of } from 'rxjs';
 import { BeforeFinishDayAction } from '../../../before-finish-day/before-finish-day.model';
 import { BeforeFinishDayService } from '../../../before-finish-day/before-finish-day.service';
-import { DateService } from '../../../../core/date/date.service';
 import { DEFAULT_TASK, Task } from '../../../tasks/task.model';
 import { selectAllTasksInActiveProjects } from '../../../tasks/store/task.selectors';
 import { IssueProviderService } from '../../issue-provider.service';
@@ -19,7 +18,6 @@ describe('GitlabIssueEffects', () => {
   let store: MockStore;
   let beforeFinishDayAction: BeforeFinishDayAction;
   let matDialog: jasmine.SpyObj<MatDialog>;
-  let dateService: jasmine.SpyObj<DateService>;
 
   const createTask = (id: string, partial: Partial<Task> = {}): Task => ({
     ...DEFAULT_TASK,
@@ -35,8 +33,6 @@ describe('GitlabIssueEffects', () => {
     matDialog.open.and.returnValue({
       afterClosed: () => of(undefined),
     } as ReturnType<MatDialog['open']>);
-    dateService = jasmine.createSpyObj<DateService>('DateService', ['todayStr']);
-    dateService.todayStr.and.returnValue(DAY);
 
     const beforeFinishDayService = jasmine.createSpyObj<BeforeFinishDayService>(
       'BeforeFinishDayService',
@@ -69,7 +65,6 @@ describe('GitlabIssueEffects', () => {
         { provide: MatDialog, useValue: matDialog },
         { provide: BeforeFinishDayService, useValue: beforeFinishDayService },
         { provide: IssueProviderService, useValue: issueProviderService },
-        { provide: DateService, useValue: dateService },
       ],
     });
 
@@ -91,7 +86,7 @@ describe('GitlabIssueEffects', () => {
     store.overrideSelector(selectAllTasksInActiveProjects, [gitlabTask]);
     store.refreshState();
 
-    await beforeFinishDayAction();
+    await beforeFinishDayAction(DAY);
 
     expect(matDialog.open).toHaveBeenCalledWith(
       jasmine.any(Function),
@@ -104,7 +99,7 @@ describe('GitlabIssueEffects', () => {
     );
   });
 
-  it('excludes GitLab tasks without time tracked today', async () => {
+  it('excludes GitLab tasks without time tracked on the day being finished', async () => {
     const oldGitlabTask = createTask('old-gitlab-task', {
       issueType: GITLAB_TYPE,
       issueId: '43',
@@ -114,8 +109,34 @@ describe('GitlabIssueEffects', () => {
     store.overrideSelector(selectAllTasksInActiveProjects, [oldGitlabTask]);
     store.refreshState();
 
-    await beforeFinishDayAction();
+    await beforeFinishDayAction(DAY);
 
     expect(matDialog.open).not.toHaveBeenCalled();
+  });
+
+  // The daily summary has a Finish Day button for past days too, so the worklog
+  // must report the hours booked on the day being finished — not on today.
+  it('reports the past day being finished, not today', async () => {
+    const yesterdaysTask = createTask('yesterdays-gitlab-task', {
+      issueType: GITLAB_TYPE,
+      issueId: '44',
+      issueProviderId: 'gitlab-provider',
+      timeSpentOnDay: { [PREVIOUS_DAY]: 60000 },
+    });
+    store.overrideSelector(selectAllTasksInActiveProjects, [yesterdaysTask]);
+    store.refreshState();
+
+    await beforeFinishDayAction(PREVIOUS_DAY);
+
+    expect(matDialog.open).toHaveBeenCalledWith(
+      jasmine.any(Function),
+      jasmine.objectContaining({
+        data: jasmine.objectContaining({
+          tasksForIssueProvider: [yesterdaysTask],
+          // the dialog flags "past" tracked data relative to this
+          day: PREVIOUS_DAY,
+        }),
+      }),
+    );
   });
 });

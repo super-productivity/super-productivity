@@ -392,13 +392,7 @@ export class CalendarIntegrationService {
           ...CORS_SKIP_EXTRA_HEADERS,
         },
       })
-      .pipe(
-        map((v) => !!v),
-        catchError((err) => {
-          Log.err(err);
-          return of(false);
-        }),
-      )
+      .pipe(map((v) => !!v))
       .toPromise()
       .then((result) => result ?? false);
   }

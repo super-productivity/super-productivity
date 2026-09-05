@@ -3,7 +3,7 @@ import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Location } from '@angular/common';
 import { MatDialog, MatDialogState } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { DialogFullscreenMarkdownComponent } from '../../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { DateAdapter } from '@angular/material/core';
 import { PlannerActions } from '../../planner/store/planner.actions';
@@ -39,6 +39,7 @@ describe('TaskComponent shortcut handling', () => {
   let taskDuplicateServiceSpy: jasmine.SpyObj<TaskDuplicateService>;
   let addSubtaskInputServiceSpy: jasmine.SpyObj<AddSubtaskInputService>;
   let storeSpy: jasmine.SpyObj<Store>;
+  let activeWorkContext$: BehaviorSubject<{ isEnableBacklog: boolean }>;
 
   const createSubTask = (title: string): TaskWithSubTasks =>
     ({
@@ -65,6 +66,11 @@ describe('TaskComponent shortcut handling', () => {
     }) as TaskWithSubTasks;
 
   beforeEach(async () => {
+    // Default to a project context that has a backlog; the move-to-backlog specs
+    // flip this to cover Today and tag views.
+    activeWorkContext$ = new BehaviorSubject<{ isEnableBacklog: boolean }>({
+      isEnableBacklog: true,
+    });
     taskServiceSpy = jasmine.createSpyObj<TaskService>(
       'TaskService',
       [
@@ -204,6 +210,7 @@ describe('TaskComponent shortcut handling', () => {
           provide: WorkContextService,
           useValue: {
             isTodayList: signal(false),
+            activeWorkContext$,
           },
         },
         {
@@ -792,6 +799,32 @@ describe('TaskComponent shortcut handling', () => {
 
         expectScheduledForToday();
       }));
+    });
+  });
+
+  describe('moveToBacklogWithFocus — Shift+B (#9374)', () => {
+    let projectService: jasmine.SpyObj<ProjectService>;
+
+    beforeEach(() => {
+      projectService = TestBed.inject(ProjectService) as jasmine.SpyObj<ProjectService>;
+      fixture.componentRef.setInput('task', createTopLevelTask('Move me'));
+      fixture.componentRef.setInput('isInSubTaskList', false);
+    });
+
+    it('moves the task when the active context has a backlog', () => {
+      activeWorkContext$.next({ isEnableBacklog: true });
+
+      component.moveToBacklogWithFocus();
+
+      expect(projectService.moveTaskToBacklog).toHaveBeenCalledWith('top-1', 'project-1');
+    });
+
+    it('does nothing in a context without a backlog, like the context menu', () => {
+      activeWorkContext$.next({ isEnableBacklog: false });
+
+      component.moveToBacklogWithFocus();
+
+      expect(projectService.moveTaskToBacklog).not.toHaveBeenCalled();
     });
   });
 

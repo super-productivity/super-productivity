@@ -170,19 +170,22 @@ describe('PluginIssueProviderAdapterService', () => {
       expect(result).toBe(false);
     });
 
-    it('should return false when testConnection rejects', async () => {
+    // Rethrows rather than collapsing to `false`: the dialog can only show a
+    // reason if it gets one, and swallowing it left every plugin provider with a
+    // bare "Connection failed" (#9635).
+    it('should surface the reason when testConnection rejects', async () => {
       const testConnectionSpy = jasmine
         .createSpy('testConnection')
-        .and.rejectWith(new Error('Connection failed'));
+        .and.rejectWith(new Error('401 Unauthorized'));
       const provider = createMockProvider({ testConnection: testConnectionSpy });
       registrySpy.getProvider.and.returnValue(provider);
       spyOn(console, 'error');
 
-      const result = await service.testConnection(
-        mockPluginCfg as unknown as Parameters<typeof service.testConnection>[0],
-      );
-
-      expect(result).toBe(false);
+      await expectAsync(
+        service.testConnection(
+          mockPluginCfg as unknown as Parameters<typeof service.testConnection>[0],
+        ),
+      ).toBeRejectedWithError('401 Unauthorized');
       expect(console.error).toHaveBeenCalled();
     });
   });
@@ -662,11 +665,9 @@ describe('PluginIssueProviderAdapterService', () => {
         const provider = createMockProvider({
           getById: jasmine.createSpy('getById').and.resolveTo(freshIssue),
           fieldMappings: FIELD_MAPPINGS,
-          // First call (from _extractTaskFieldsFromIssue) returns empty,
-          // second call (for _applyFieldMappingPull) returns actual values.
           extractSyncValues: jasmine
             .createSpy('extractSyncValues')
-            .and.returnValues({}, syncValues),
+            .and.returnValue(syncValues),
         });
         registrySpy.getProvider.and.returnValue(provider);
 
@@ -709,7 +710,7 @@ describe('PluginIssueProviderAdapterService', () => {
           fieldMappings: FIELD_MAPPINGS,
           extractSyncValues: jasmine
             .createSpy('extractSyncValues')
-            .and.returnValues({}, syncValues),
+            .and.returnValue(syncValues),
         });
         registrySpy.getProvider.and.returnValue(provider);
 
@@ -739,6 +740,182 @@ describe('PluginIssueProviderAdapterService', () => {
         expect(result!.taskChanges['dueWithTime' as keyof Task]).toBeUndefined();
       });
 
+      // Regression: github-issue-provider ships notes <- body with
+      // defaultDirection 'off'. The refresh path applied every mapping regardless
+      // of direction, so the next poll after any remote activity replaced whatever
+      // the user had written in the task's notes with the issue body.
+      it('should not pull a field whose defaultDirection is off over local content', async () => {
+        const freshIssue = {
+          id: 'ISS-1',
+          title: 'Unchanged',
+          lastUpdated: 2000,
+          body: 'Remote description',
+        } as unknown as PluginIssue;
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo(freshIssue),
+          fieldMappings: [
+            {
+              taskField: 'notes',
+              issueField: 'body',
+              defaultDirection: 'off',
+              toIssueValue: (v: unknown) => v,
+              toTaskValue: (v: unknown) => v,
+            },
+          ] as PluginFieldMapping[],
+          extractSyncValues: jasmine
+            .createSpy('extractSyncValues')
+            .and.returnValue({ body: 'Remote description' }),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        storeSpy.select.and.returnValue(of(mockPluginCfg));
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          notes: 'My own notes',
+          issueLastSyncedValues: {},
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).not.toBeNull();
+        expect(result!.taskChanges['notes' as keyof Task]).toBeUndefined();
+      });
+
+      // Regression: gating the mappings was not enough. _buildBaseIssueTask
+      // emits title/isDone straight from the raw issue, and the refresh path
+      // spread it under the gated changes — so `off` still overwrote the local
+      // title, and with the RAW value, losing what toTaskValue would have added
+      // (github-issue-provider prefixes `#<number> `).
+      it('should not overwrite a local title when the title direction is off', async () => {
+        const freshIssue = {
+          id: 'ISS-1',
+          title: 'Raw remote title',
+          lastUpdated: 2000,
+        } as unknown as PluginIssue;
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo(freshIssue),
+          fieldMappings: [
+            {
+              taskField: 'title',
+              issueField: 'title',
+              defaultDirection: 'pullOnly',
+              toIssueValue: (v: unknown) => v,
+              toTaskValue: (v: unknown) => `#1 ${v as string}`,
+            },
+          ] as PluginFieldMapping[],
+          extractSyncValues: jasmine
+            .createSpy('extractSyncValues')
+            .and.returnValue({ title: 'Raw remote title' }),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        storeSpy.select.and.returnValue(
+          of({
+            ...mockPluginCfg,
+            pluginConfig: { ...mockPluginConfig, twoWaySync: { title: 'off' } },
+          } as IssueProviderPluginType),
+        );
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          title: 'My own title',
+          issueLastSyncedValues: {},
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).not.toBeNull();
+        expect(result!.taskChanges['title' as keyof Task]).toBeUndefined();
+      });
+
+      it('should not overwrite isDone when the status direction is off', async () => {
+        const freshIssue = {
+          id: 'ISS-1',
+          title: 'Unchanged',
+          state: 'closed',
+          lastUpdated: 2000,
+        } as unknown as PluginIssue;
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo(freshIssue),
+          fieldMappings: [
+            {
+              taskField: 'isDone',
+              issueField: 'state',
+              defaultDirection: 'pullOnly',
+              toIssueValue: (v: unknown) => v,
+              toTaskValue: (v: unknown) => v === 'closed',
+            },
+          ] as PluginFieldMapping[],
+          extractSyncValues: jasmine
+            .createSpy('extractSyncValues')
+            .and.returnValue({ state: 'closed' }),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        storeSpy.select.and.returnValue(
+          of({
+            ...mockPluginCfg,
+            pluginConfig: { ...mockPluginConfig, twoWaySync: { isDone: 'off' } },
+          } as IssueProviderPluginType),
+        );
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          isDone: false,
+          issueLastSyncedValues: {},
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).not.toBeNull();
+        expect(result!.taskChanges['isDone' as keyof Task]).toBeUndefined();
+      });
+
+      // _buildBaseIssueTask turns a numeric `start` into a dueDay with no
+      // mapping and no direction behind it, so a refresh must not reschedule
+      // a task the user has already planned.
+      it('should not set a due date from the raw issue on refresh', async () => {
+        const freshIssue = {
+          id: 'ISS-1',
+          title: 'Unchanged',
+          start: new Date('2026-03-20T10:00:00.000Z').getTime(),
+          lastUpdated: 2000,
+        } as unknown as PluginIssue;
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo(freshIssue),
+          fieldMappings: [] as PluginFieldMapping[],
+          extractSyncValues: jasmine.createSpy('extractSyncValues').and.returnValue({}),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        storeSpy.select.and.returnValue(of(mockPluginCfg));
+
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          issueLastSyncedValues: {},
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result).not.toBeNull();
+        expect(result!.taskChanges['dueDay' as keyof Task]).toBeUndefined();
+        expect(result!.taskChanges['dueWithTime' as keyof Task]).toBeUndefined();
+      });
+
+      // The direction is `both` here, so this is the local-edit guard rather
+      // than the direction one: the remote did not touch the field, so whatever
+      // the user changed locally must survive the refresh. Note the single
+      // `returnValue` — an earlier `returnValues({}, syncValues)` fed the first
+      // caller an empty object and hid a second, ungated pass over the mappings.
       it('should skip pull when fresh value equals last synced value', async () => {
         const freshIssue: PluginIssue = {
           id: 'ISS-1',
@@ -752,7 +929,7 @@ describe('PluginIssueProviderAdapterService', () => {
           fieldMappings: FIELD_MAPPINGS,
           extractSyncValues: jasmine
             .createSpy('extractSyncValues')
-            .and.returnValues({}, syncValues),
+            .and.returnValue(syncValues),
         });
         registrySpy.getProvider.and.returnValue(provider);
 

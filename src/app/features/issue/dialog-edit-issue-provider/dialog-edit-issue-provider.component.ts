@@ -6,6 +6,7 @@ import {
   signal,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   MAT_DIALOG_DATA,
   MatDialog,
@@ -72,6 +73,7 @@ import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../common-issue-form-stuff.co
 import { TagService } from '../../tag/tag.service';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
 import { unique } from '../../../util/unique';
+import { getErrorTxt } from '../../../util/get-error-text';
 import { mergeIssueProviderModelUpdates } from './issue-provider-model-merge.util';
 
 type OptionsLoadState = 'idle' | 'loading' | 'loaded' | 'empty' | 'failed';
@@ -304,11 +306,32 @@ export class DialogEditIssueProviderComponent {
       }
     } catch (error) {
       this.isConnectionWorks.set(false);
+      // Two keys, not one with an "Unknown error" placeholder: the else branch
+      // above genuinely has nothing to add, while here there is a real reason to
+      // show (#9635, #9636).
       this._snackService.open({
         type: 'ERROR',
-        msg: T.F.ISSUE.S.CONNECTION_FAILED,
+        msg: T.F.ISSUE.S.CONNECTION_FAILED_WITH_ERROR,
+        translateParams: { errorMsg: this._connectionErrorTxt(error) },
       });
     }
+  }
+
+  /**
+   * The status the user asked for in #9635, minus the request URL Angular bakes
+   * into `HttpErrorResponse.message`. iCal and CalDAV URLs regularly carry a
+   * secret token and are masked on export (`privacy-export.ts`), so they have no
+   * business in a toast that ends up in bug-report screenshots — and the URL is
+   * the one thing the user already knows, having just typed it in this dialog.
+   *
+   * Masked via the error's own `url` rather than by matching Angular's wording,
+   * so a reworded message still can't leak it.
+   */
+  private _connectionErrorTxt(error: unknown): string {
+    const txt = getErrorTxt(error);
+    return error instanceof HttpErrorResponse && error.url
+      ? txt.split(error.url).join('…')
+      : txt;
   }
 
   remove(): void {

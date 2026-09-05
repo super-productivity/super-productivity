@@ -813,10 +813,33 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   moveToBacklogWithFocus(): void {
     const t = this.task();
-    if (t.projectId && !t.parentId) {
-      this.focusPrevious(true);
-      this.moveToBacklog();
+    if (!t.projectId || t.parentId) {
+      return;
     }
+    // Gated on the ACTIVE context, like the context menu's move-to-backlog item
+    // (task-context-menu-inner.component.ts). Today and tag views have no backlog
+    // of their own, so the menu offers nothing there and the shortcut now matches.
+    //
+    // What this is NOT: the task does not vanish from Today when moved. Since
+    // #8592 the move is position-only and Today membership comes from
+    // dueDay/dueWithTime, so pressing the key from Today used to shuffle the
+    // task inside its project's lists with no visible effect in the view the
+    // user was looking at — plus a focus jump. That invisible half-action is
+    // what #9374 reported; making it a no-op is the answer, and reaching the
+    // backlog stays a project-view operation (#9563's position-vs-schedule rule).
+    //
+    // Subscribed on keypress rather than per instance: this component renders once
+    // per task in long lists. shareReplay(1) makes the emission synchronous, and
+    // first() completes it, so there is nothing to clean up.
+    this.workContextService.activeWorkContext$
+      .pipe(first())
+      .subscribe(({ isEnableBacklog }) => {
+        if (!isEnableBacklog) {
+          return;
+        }
+        this.focusPrevious(true);
+        this.moveToBacklog();
+      });
   }
 
   openProjectMenu(): void {
