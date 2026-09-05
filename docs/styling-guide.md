@@ -203,6 +203,7 @@ Quickest adoption — add the `.focus-ring` utility class from `util.scss`, whic
 | `--z-check-done`         | 11    | Task done checkbox       |
 | `--z-main-header`        | 12    | Main header              |
 | `--z-task-title-focus`   | 32    | Focused task title       |
+| `--z-multi-select-bar`   | 45    | Multi-select action bar  |
 | `--z-mobile-bottom-nav`  | 50    | Mobile bottom navigation |
 | `--z-side-nav`           | 60    | Side navigation          |
 | `--z-backdrop`           | 222   | Backdrop overlay         |

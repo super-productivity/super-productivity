@@ -4,6 +4,8 @@ import { TaskFocusService } from './task-focus.service';
 import { TaskService } from './task.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { signal } from '@angular/core';
+import { TaskMultiSelectService } from './task-multi-select.service';
+import { TaskBulkActionService } from './task-bulk-action.service';
 
 describe('TaskShortcutService', () => {
   let service: TaskShortcutService;
@@ -19,6 +21,15 @@ describe('TaskShortcutService', () => {
     cfg: ReturnType<typeof signal<any>>;
     appFeatures: ReturnType<typeof signal<any>>;
   };
+  let mockMultiSelect: {
+    isActive: ReturnType<typeof signal<boolean>>;
+    count: ReturnType<typeof signal<number>>;
+    has: jasmine.Spy;
+    clear: jasmine.Spy;
+    extendFromFocused: jasmine.Spy;
+    requestMenuOpen: jasmine.Spy;
+  };
+  let mockBulkActions: Record<string, jasmine.Spy>;
 
   const defaultKeyboardConfig = {
     togglePlay: 'Y',
@@ -78,6 +89,21 @@ describe('TaskShortcutService', () => {
       scheduleForTodayById: jasmine.createSpy('scheduleForTodayById'),
     } as any;
 
+    mockMultiSelect = {
+      isActive: signal(false),
+      count: signal(0),
+      has: jasmine.createSpy('has').and.returnValue(true),
+      clear: jasmine.createSpy('clear'),
+      extendFromFocused: jasmine.createSpy('extendFromFocused').and.returnValue(null),
+      requestMenuOpen: jasmine.createSpy('requestMenuOpen'),
+    };
+    mockBulkActions = {
+      toggleDone: jasmine.createSpy('toggleDone'),
+      deleteSelected: jasmine.createSpy('deleteSelected'),
+      openScheduleDialog: jasmine.createSpy('openScheduleDialog'),
+      addToToday: jasmine.createSpy('addToToday'),
+    };
+
     mockConfigService = {
       cfg: signal({
         keyboard: defaultKeyboardConfig,
@@ -96,6 +122,8 @@ describe('TaskShortcutService', () => {
         { provide: TaskFocusService, useValue: mockTaskFocusService },
         { provide: TaskService, useValue: mockTaskService },
         { provide: GlobalConfigService, useValue: mockConfigService },
+        { provide: TaskMultiSelectService, useValue: mockMultiSelect },
+        { provide: TaskBulkActionService, useValue: mockBulkActions },
       ],
     });
 
@@ -823,6 +851,82 @@ describe('TaskShortcutService', () => {
       );
       expect(mockTaskService.scheduleForTodayById).toHaveBeenCalledTimes(1);
       expect(staleComponent.scheduleForTodayWithFocus).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('multi-select shortcuts', () => {
+    it('Esc clears an active selection and is consumed', () => {
+      mockMultiSelect.isActive.set(true);
+      const ev = createKeyboardEvent('Escape', 'Escape');
+      expect(service.handleTaskShortcuts(ev)).toBeTrue();
+      expect(mockMultiSelect.clear).toHaveBeenCalled();
+      expect(ev.defaultPrevented).toBeTrue();
+    });
+
+    it('Esc without a selection is not handled', () => {
+      const ev = createKeyboardEvent('Escape', 'Escape');
+      expect(service.handleTaskShortcuts(ev)).toBeFalse();
+      expect(mockMultiSelect.clear).not.toHaveBeenCalled();
+    });
+
+    it('Shift+ArrowDown on a focused task extends the selection', () => {
+      setFocusedTask('task-1');
+      const ev = createKeyboardEvent('ArrowDown', 'ArrowDown', { shiftKey: true });
+      expect(service.handleTaskShortcuts(ev)).toBeTrue();
+      expect(mockMultiSelect.extendFromFocused).toHaveBeenCalledWith('down');
+    });
+
+    it('Shift+ArrowUp yields to a user binding on the same combo', () => {
+      mockConfigService.cfg.set({
+        keyboard: { ...defaultKeyboardConfig, moveTaskUp: 'Shift+ArrowUp' },
+        appFeatures: { isTimeTrackingEnabled: true },
+      });
+      setFocusedTask('task-1');
+      const ev = createKeyboardEvent('ArrowUp', 'ArrowUp', { shiftKey: true });
+      service.handleTaskShortcuts(ev);
+      expect(mockMultiSelect.extendFromFocused).not.toHaveBeenCalled();
+    });
+
+    it('routes an allowlisted shortcut to the bulk service while a selection exists', () => {
+      mockMultiSelect.isActive.set(true);
+      setFocusedTask('task-1');
+      const ev = createKeyboardEvent('d', 'KeyD');
+      expect(service.handleTaskShortcuts(ev)).toBeTrue();
+      expect(mockBulkActions['toggleDone']).toHaveBeenCalled();
+    });
+
+    it('routes bulk shortcuts even without a focused task', () => {
+      mockMultiSelect.isActive.set(true);
+      const ev = createKeyboardEvent('Backspace', 'Backspace');
+      expect(service.handleTaskShortcuts(ev)).toBeTrue();
+      expect(mockBulkActions['deleteSelected']).toHaveBeenCalled();
+    });
+
+    it('opens the bulk menu for menu keys', () => {
+      mockMultiSelect.isActive.set(true);
+      setFocusedTask('task-1');
+      const ev = createKeyboardEvent('g', 'KeyG');
+      expect(service.handleTaskShortcuts(ev)).toBeTrue();
+      expect(mockMultiSelect.requestMenuOpen).toHaveBeenCalled();
+    });
+
+    it('leaves non-bulk shortcuts to the focused task', () => {
+      mockMultiSelect.isActive.set(true);
+      setFocusedTask('task-1');
+      const ev = createKeyboardEvent('i', 'KeyI');
+      service.handleTaskShortcuts(ev);
+      expect(mockBulkActions['toggleDone']).not.toHaveBeenCalled();
+      expect(mockMultiSelect.requestMenuOpen).not.toHaveBeenCalled();
+    });
+
+    it('clears the selection when the focused task is not part of it', () => {
+      mockMultiSelect.isActive.set(true);
+      mockMultiSelect.has.and.returnValue(false);
+      setFocusedTask('task-1');
+      const ev = createKeyboardEvent('d', 'KeyD');
+      service.handleTaskShortcuts(ev);
+      expect(mockMultiSelect.clear).toHaveBeenCalled();
+      expect(mockBulkActions['toggleDone']).not.toHaveBeenCalled();
     });
   });
 });

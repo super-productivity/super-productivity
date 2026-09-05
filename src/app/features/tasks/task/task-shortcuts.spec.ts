@@ -31,6 +31,7 @@ import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
 import { PlannerService } from '../../planner/planner.service';
 import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 import { TaskDuplicateService } from '../task-duplicate.service';
+import { TaskMultiSelectService } from '../task-multi-select.service';
 
 describe('TaskComponent shortcut handling', () => {
   let fixture: import('@angular/core/testing').ComponentFixture<TaskComponent>;
@@ -121,6 +122,25 @@ describe('TaskComponent shortcut handling', () => {
     await TestBed.configureTestingModule({
       imports: [TaskComponent],
       providers: [
+        {
+          provide: TaskMultiSelectService,
+          useValue: {
+            selectedIds: signal(new Set<string>()),
+            anchorId: signal(null),
+            count: signal(0),
+            isActive: signal(false),
+            menuOpenRequest: signal(null),
+            has: () => false,
+            toggle: () => {},
+            selectRange: () => {},
+            remove: () => {},
+            removeWhenUnrendered: () => {},
+            clear: () => {},
+            requestMenuOpen: () => {},
+            isBulkFeedbackSuppressed: signal(false),
+          },
+        },
+
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: TaskDuplicateService, useValue: taskDuplicateServiceSpy },
         {

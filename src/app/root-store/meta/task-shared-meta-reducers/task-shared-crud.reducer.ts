@@ -463,10 +463,41 @@ const handleDeleteTasks = (
 
   // Remove tasks from task state
   let newTaskState = taskAdapter.removeMany(allIds, updatedState[TASK_FEATURE_NAME]);
+
+  // A deleted subtask whose parent survives must also leave the parent's
+  // subTaskIds (the singular deleteTask path does this via
+  // removeTaskFromParentSideEffects). Without it the parent keeps a dangling
+  // reference that replicates to every client through the bulk op.
+  const allIdsSet = new Set(allIds);
+  const parentUpdates: Update<Task>[] = [];
+  const parentIdsHandled = new Set<string>();
+  taskIds.forEach((id) => {
+    const task = state[TASK_FEATURE_NAME].entities[id] as Task | undefined;
+    const parentId = task?.parentId;
+    if (!parentId || allIdsSet.has(parentId) || parentIdsHandled.has(parentId)) {
+      return;
+    }
+    const parent = newTaskState.entities[parentId] as Task | undefined;
+    if (!parent) {
+      return;
+    }
+    parentIdsHandled.add(parentId);
+    parentUpdates.push({
+      id: parentId,
+      changes: {
+        subTaskIds: parent.subTaskIds.filter((subId) => !allIdsSet.has(subId)),
+      },
+    });
+  });
+  if (parentUpdates.length) {
+    newTaskState = taskAdapter.updateMany(parentUpdates, newTaskState);
+  }
+
   newTaskState = {
     ...newTaskState,
+    // Check the expanded id list: a tracked subtask disappears with its parent.
     currentTaskId:
-      newTaskState.currentTaskId && taskIds.includes(newTaskState.currentTaskId)
+      newTaskState.currentTaskId && allIdsSet.has(newTaskState.currentTaskId)
         ? null
         : newTaskState.currentTaskId,
   };

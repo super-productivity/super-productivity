@@ -24,6 +24,7 @@ import { DateService } from '../../../core/date/date.service';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { selectUnplannedDeadlineTasksForToday } from './task.selectors';
 import { Banner } from '../../../core/banner/banner.model';
+import { TaskMultiSelectService } from '../task-multi-select.service';
 
 describe('TaskUiEffects', () => {
   let effects: TaskUiEffects;
@@ -95,6 +96,10 @@ describe('TaskUiEffects', () => {
 
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskUiEffects,
           { provide: LOCAL_ACTIONS, useValue: actions$ },
           provideMockStore({
@@ -154,6 +159,10 @@ describe('TaskUiEffects', () => {
 
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskUiEffects,
           { provide: LOCAL_ACTIONS, useValue: actions$ },
           provideMockStore({
@@ -295,6 +304,10 @@ describe('TaskUiEffects', () => {
 
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskUiEffects,
           { provide: LOCAL_ACTIONS, useValue: actions$ },
           provideMockStore({
@@ -396,6 +409,10 @@ describe('TaskUiEffects', () => {
 
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskUiEffects,
           { provide: LOCAL_ACTIONS, useValue: actions$ },
           provideMockStore({
@@ -504,6 +521,10 @@ describe('TaskUiEffects', () => {
 
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskUiEffects,
           { provide: LOCAL_ACTIONS, useValue: actions$ },
           provideMockStore({

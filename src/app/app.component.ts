@@ -85,6 +85,7 @@ import { ExampleTasksService } from './core/example-tasks/example-tasks.service'
 import { KeyboardLayoutService } from './core/keyboard-layout/keyboard-layout.service';
 import { setKeyboardLayoutService } from './util/check-key-combo';
 import { OnboardingPresetSelectionComponent } from './features/onboarding/onboarding-preset-selection.component';
+import { TaskMultiSelectBarComponent } from './features/tasks/task-multi-select-bar/task-multi-select-bar.component';
 import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.component';
 import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
 import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
@@ -128,6 +129,7 @@ interface BeforeInstallPromptEvent extends Event {
     MobileBottomNavComponent,
     OnboardingPresetSelectionComponent,
     OnboardingHintComponent,
+    TaskMultiSelectBarComponent,
   ],
 })
 export class AppComponent implements OnDestroy, AfterViewInit {

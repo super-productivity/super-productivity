@@ -243,3 +243,18 @@
     }
   }
 }
+
+// MULTI-SELECT
+// ------------
+// Part of a multi-selection (see TaskMultiSelectService). Deliberately no
+// checkmark: a check means *done* in this app. The tint plus the leading accent
+// stripe carry the state and stay distinct from the focus ring (border) and
+// the detail-panel highlight (.isSelected shadow).
+:host.isMultiSelected .inner-wrapper > .box {
+  background: color-mix(in srgb, var(--c-accent) 14%, var(--task-c-bg));
+  border-left: 3px solid var(--c-accent);
+}
+
+:host.isMultiSelected.isDone .inner-wrapper > .box {
+  background: color-mix(in srgb, var(--c-accent) 10%, var(--task-c-bg-done));
+}

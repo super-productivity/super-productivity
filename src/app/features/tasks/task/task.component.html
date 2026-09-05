@@ -55,7 +55,7 @@
 
       <div class="all-controls-wrapper">
         <div
-          (click)="estimateTime()"
+          (click)="onTimeWrapperClick($event)"
           (keydown.enter)="estimateTime()"
           (keydown.space)="$event.preventDefault(); estimateTime()"
           [attr.role]="!t.subTasks?.length ? 'button' : null"
