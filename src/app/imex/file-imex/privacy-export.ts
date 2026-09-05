@@ -35,6 +35,7 @@ const KEY_TO_REPLACE = [
 
   // Issue #6020: Additional PII fields
   'resourceName',
+  'calName',
   'name',
   'description',
   'location',

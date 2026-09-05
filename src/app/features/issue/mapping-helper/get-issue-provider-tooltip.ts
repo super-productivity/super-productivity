@@ -56,9 +56,13 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
       case 'GITLAB':
         return issueProvider.project;
       case 'CALDAV':
-        return issueProvider.caldavUrl;
+        // Prefer the human-readable calendar name the user is required to
+        // configure; the URL is only the fallback (#9144).
+        return issueProvider.resourceName || issueProvider.caldavUrl;
       case 'ICAL':
-        return sanitizeIcalUrlForDisplay(issueProvider.icalUrl);
+        // Prefer the calendar's own display name (X-WR-CALNAME, captured on
+        // fetch) over the bare hostname (#9144).
+        return issueProvider.calName || sanitizeIcalUrlForDisplay(issueProvider.icalUrl);
       case 'REDMINE':
         return issueProvider.projectId;
       case 'OPEN_PROJECT':
@@ -115,12 +119,18 @@ export const getIssueProviderInitials = (
         ?.substring(0, 2)
         ?.toUpperCase();
     case 'CALDAV':
+      if (issueProvider.resourceName) {
+        return issueProvider.resourceName.substring(0, 2).toUpperCase();
+      }
       return issueProvider.caldavUrl
         ?.replace('https://', '')
         ?.replace('http://', '')
         ?.substring(0, 2)
         ?.toUpperCase();
     case 'ICAL':
+      if (issueProvider.calName) {
+        return issueProvider.calName.substring(0, 2).toUpperCase();
+      }
       if (issueProvider.icalUrl?.includes('google')) return 'G';
       if (issueProvider.icalUrl?.includes('office365')) return 'MS';
       // Route through the sanitizer so credentials embedded in user/path/query

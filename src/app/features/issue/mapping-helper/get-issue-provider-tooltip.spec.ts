@@ -1,4 +1,9 @@
-import { sanitizeIcalUrlForDisplay } from './get-issue-provider-tooltip';
+import {
+  getIssueProviderInitials,
+  getIssueProviderTooltip,
+  sanitizeIcalUrlForDisplay,
+} from './get-issue-provider-tooltip';
+import { IssueProvider } from '../issue.model';
 
 describe('sanitizeIcalUrlForDisplay', () => {
   it('returns hostname for https:// URLs', () => {
@@ -83,5 +88,89 @@ describe('sanitizeIcalUrlForDisplay', () => {
 
   it('returns iCal placeholder for undefined input', () => {
     expect(sanitizeIcalUrlForDisplay(undefined)).toBe('iCal');
+  });
+});
+
+describe('getIssueProviderTooltip', () => {
+  it('uses the configured calendar name for CALDAV providers (#9144)', () => {
+    const provider = {
+      issueProviderKey: 'CALDAV',
+      resourceName: 'Work Calendar',
+      caldavUrl: 'https://dav.example.com/calendars/work',
+    } as Partial<IssueProvider> as IssueProvider;
+    expect(getIssueProviderTooltip(provider)).toBe('Work Calendar');
+  });
+
+  it('falls back to the URL for CALDAV providers without a calendar name', () => {
+    const provider = {
+      issueProviderKey: 'CALDAV',
+      resourceName: null,
+      caldavUrl: 'https://dav.example.com/calendars/work',
+    } as Partial<IssueProvider> as IssueProvider;
+    expect(getIssueProviderTooltip(provider)).toBe(
+      'https://dav.example.com/calendars/work',
+    );
+  });
+
+  it('uses the feed calendar name for ICAL providers (#9144)', () => {
+    const provider = {
+      issueProviderKey: 'ICAL',
+      calName: 'Family',
+      icalUrl: 'https://calendar.example.com/family.ics',
+    } as Partial<IssueProvider> as IssueProvider;
+    expect(getIssueProviderTooltip(provider)).toBe('Family');
+  });
+
+  it('falls back to the sanitized hostname for ICAL providers without a name', () => {
+    const provider = {
+      issueProviderKey: 'ICAL',
+      icalUrl: 'https://calendar.example.com/family.ics?token=SECRET',
+    } as Partial<IssueProvider> as IssueProvider;
+    expect(getIssueProviderTooltip(provider)).toBe('calendar.example.com');
+  });
+});
+
+describe('getIssueProviderInitials', () => {
+  it('derives CALDAV initials from the configured calendar name (#9144)', () => {
+    const provider = {
+      issueProviderKey: 'CALDAV',
+      resourceName: 'Work Calendar',
+      caldavUrl: 'https://dav.example.com/calendars/work',
+    } as Partial<IssueProvider> as IssueProvider;
+    expect(getIssueProviderInitials(provider)).toBe('WO');
+  });
+
+  it('falls back to the URL for CALDAV providers without a calendar name', () => {
+    const provider = {
+      issueProviderKey: 'CALDAV',
+      resourceName: null,
+      caldavUrl: 'https://dav.example.com/calendars/work',
+    } as Partial<IssueProvider> as IssueProvider;
+    expect(getIssueProviderInitials(provider)).toBe('DA');
+  });
+
+  it('derives ICAL initials from the feed calendar name (#9144)', () => {
+    const provider = {
+      issueProviderKey: 'ICAL',
+      calName: 'Family',
+      icalUrl: 'https://calendar.google.com/family.ics',
+    } as Partial<IssueProvider> as IssueProvider;
+    expect(getIssueProviderInitials(provider)).toBe('FA');
+  });
+
+  it('keeps the Google shortcut for ICAL providers without a name', () => {
+    const provider = {
+      issueProviderKey: 'ICAL',
+      icalUrl: 'https://calendar.google.com/family.ics',
+    } as Partial<IssueProvider> as IssueProvider;
+    expect(getIssueProviderInitials(provider)).toBe('G');
+  });
+
+  it('falls back to sanitized hostname initials for other ICAL feeds', () => {
+    const provider = {
+      issueProviderKey: 'ICAL',
+      icalUrl: 'https://calendar.example.com/cal.ics',
+    } as Partial<IssueProvider> as IssueProvider;
+    expect(getIssueProviderInitials(provider)).toBe('CA');
   });
 });
