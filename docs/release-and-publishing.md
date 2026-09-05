@@ -122,6 +122,49 @@ Center.
   App Review. See [the TestFlight plan](plans/2026-07-14-ios-testflight-master-builds.md)
   for proposed additional branch behavior; it is not current behavior.
 
+## Reproducible Android builds
+
+The Angular service-worker builder emits `ngsw.json` (stamped with `Date.now()`,
+plus a `hashTable` of per-file content hashes) and its worker scripts, and
+`npx cap sync` copies them into the APK at `assets/public/`. That made the
+Android build unverifiable against
+[F-Droid's reproducible-build checks](https://verification.f-droid.org/) (#4155).
+
+None of it is used on Android. `src/main.ts` gates both service-worker
+registration paths on `!IS_NATIVE_PLATFORM && !IS_ELECTRON` and actively
+_unregisters_ any existing worker on those platforms, so the files are dead
+weight. `sync:android` therefore deletes them after `cap sync`, via
+`tools/strip-service-worker-assets.js`. That retires the service worker as a
+source of difference rather than pinning one field of it, and drops the bytes
+from the APK. The Lighthouse CI job uses the same script on `dist/browser`, so
+the file list lives in one place.
+
+The hook point matters: F-Droid's recipe runs `buildFrontend:prodWeb` and
+`sync:android` directly and never invokes `dist:android:prod`, so a step added
+to the latter would not reach their build.
+
+Nothing in the strip is fatal. Finding no files is legitimate — the service
+worker can simply be disabled for a build — and an unlink that fails is reported
+and skipped, because breaking the Android build (and with it F-Droid's prebuild)
+over a cleanup would be the worse trade. A warning is not a safety net, though,
+so the outcome is asserted where it can be checked: `build-android.yml` verifies
+on the packaged APK that no `assets/public/ngsw*` entry survived. That covers
+build, `cap sync`, strip and package together rather than any single step. It
+runs on master and tags only, since no other workflow produces a real APK, so it
+gates the publish rather than the merge.
+
+Two things this deliberately does not do:
+
+- **The web PWA and iOS are untouched.** The web app genuinely uses the service
+  worker. The iOS bundle carries the same dead files, but iOS is not a
+  reproducibility target, so there is no benefit to buy by changing App Store
+  bundle contents. If it is ever unified, `sync:ios` needs `ios/App/App/public`.
+- **It does not prove the APK reproduces.** The Gradle/AAPT layer and toolchain
+  pinning are untouched, so confirming byte-identity needs a diffoscope run
+  against an F-Droid build. This removes the one _reported_ blocker — the
+  diffoscope report in #4155 anchors on `assets-public-ngsw.json` — not
+  necessarily the last.
+
 ## Credentials and signing
 
 Never put secret values in documentation. The workflow reference is authoritative

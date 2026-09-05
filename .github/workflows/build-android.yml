@@ -179,6 +179,34 @@ jobs:
             "${zipalign}" -c -P 16 4 "${apk}"
           done
 
+      # `sync:android` deletes the service-worker files (nothing on Android
+      # registers a service worker, and ngsw.json carries a build timestamp that
+      # breaks F-Droid's reproducible-build verification, #4155). That strip
+      # never fails the build, so assert the outcome on the packaged artifact
+      # instead. Master/tag only — no PR runs this, because no other workflow
+      # builds a real APK.
+      - name: 'Verify no service worker shipped in the APK'
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(android/app/build/outputs/apk/*/release/*.apk)
+          if [ ${#apks[@]} -eq 0 ]; then
+            echo "::error::no release APK found to verify"
+            exit 1
+          fi
+          for apk in "${apks[@]}"; do
+            # Listing captured first: piping straight into `grep -q` makes grep
+            # exit on the first match, unzip die of SIGPIPE, and pipefail report
+            # that 141 as the pipeline status — so the `if` reads false and the
+            # check passes on exactly the APKs it should catch.
+            listing="$(unzip -l "${apk}")"
+            if printf '%s\n' "${listing}" \
+              | grep -E 'assets/public/(ngsw|safety-worker|worker-basic)'; then
+              echo "::error::${apk} ships service-worker assets; the strip in sync:android did not run (#4155)"
+              exit 1
+            fi
+          done
+
       # APK is now signed automatically by Gradle using signingConfig
 
       - name: 'Upload APK files'
