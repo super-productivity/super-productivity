@@ -20,6 +20,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
 import { By } from '@angular/platform-browser';
 import { BannerComponent } from '../../../core/banner/banner/banner.component';
+import { FocusModeMainComponent } from '../focus-mode-main/focus-mode-main.component';
 
 @Component({
   selector: 'banner',
@@ -27,6 +28,13 @@ import { BannerComponent } from '../../../core/banner/banner/banner.component';
   standalone: true,
 })
 class MockBannerComponent {}
+
+@Component({
+  selector: 'focus-mode-main',
+  template: '',
+  standalone: true,
+})
+class MockFocusModeMainComponent {}
 
 describe('FocusModeOverlayComponent', () => {
   let component: FocusModeOverlayComponent;
@@ -77,8 +85,8 @@ describe('FocusModeOverlayComponent', () => {
         { provide: MatDialog, useValue: mockMatDialog },
       ],
     }).overrideComponent(FocusModeOverlayComponent, {
-      remove: { imports: [BannerComponent] },
-      add: { imports: [MockBannerComponent] },
+      remove: { imports: [BannerComponent, FocusModeMainComponent] },
+      add: { imports: [MockBannerComponent, MockFocusModeMainComponent] },
     });
 
     environmentInjector = TestBed.inject(EnvironmentInjector);
@@ -113,7 +121,7 @@ describe('FocusModeOverlayComponent', () => {
     document.body.appendChild(originButton);
     document.body.classList.add('isMousePrimary');
     originButton.focus();
-    mockFocusModeService.currentScreen.set(FocusScreen.Preparation);
+    mockFocusModeService.currentScreen.set(FocusScreen.Main);
 
     const fixture = TestBed.createComponent(FocusModeOverlayComponent);
     fixture.detectChanges();

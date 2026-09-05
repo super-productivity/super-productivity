@@ -16,9 +16,6 @@ export enum FocusMainUIState {
 
 // UI screens enum
 export enum FocusScreen {
-  TaskSelection = 'TaskSelection',
-  DurationSelection = 'DurationSelection',
-  Preparation = 'Preparation',
   Main = 'Main',
   SessionDone = 'SessionDone',
   Break = 'Break',
@@ -61,10 +58,6 @@ export interface FocusModeStrategy {
   readonly shouldStartBreakAfterSession: boolean;
   readonly shouldAutoStartNextSession: boolean;
   getBreakDuration(cycle: number): { duration: number; isLong: boolean } | null;
-  getNextScreenAfterTaskSelection(skipPreparation: boolean): {
-    screen: FocusScreen;
-    duration?: number;
-  };
 }
 
 // Helper functions and type guards for timer
