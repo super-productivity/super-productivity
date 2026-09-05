@@ -1,10 +1,15 @@
 import {
   CalendarGestureHandler,
   CalendarGestureCallbacks,
+  MIN_ROW_HEIGHT,
   ROW_HEIGHT,
-  MAX_HEIGHT,
-  MIN_HEIGHT,
+  WEEKS_SHOWN,
 } from './planner-calendar-gesture-handler';
+
+// Geometry on a viewport tall enough for six full-size rows. Shrunken rows are
+// covered by the row-height cases below and in the component spec.
+const MAX_HEIGHT = ROW_HEIGHT * WEEKS_SHOWN;
+const MIN_HEIGHT = ROW_HEIGHT;
 
 // Snap/slide durations must match the source constants
 const SNAP_DURATION = 200;
@@ -50,6 +55,10 @@ const createMockCallbacks = (): jasmine.SpyObj<CalendarGestureCallbacks> =>
   jasmine.createSpyObj<CalendarGestureCallbacks>('callbacks', [
     'getActiveWeekIndex',
     'getIsExpanded',
+    'measure',
+    'getExpandedHeight',
+    'getRowHeight',
+    'canExpand',
     'onExpandChanged',
     'onVerticalSwipe',
     'onHorizontalSwipe',
@@ -78,6 +87,9 @@ describe('CalendarGestureHandler', () => {
     cb = createMockCallbacks();
     cb.getActiveWeekIndex.and.returnValue(0);
     cb.getIsExpanded.and.returnValue(false);
+    cb.getExpandedHeight.and.returnValue(MAX_HEIGHT);
+    cb.getRowHeight.and.returnValue(ROW_HEIGHT);
+    cb.canExpand.and.returnValue(true);
 
     handler = new CalendarGestureHandler(el, () => weeksEl, cb);
   });
@@ -526,17 +538,178 @@ describe('CalendarGestureHandler', () => {
       cb.getIsExpanded.and.returnValue(false);
       cb.getActiveWeekIndex.and.returnValue(0);
 
+      // Derived, not a literal: the midpoint sits halfway between MIN_HEIGHT
+      // and MAX_HEIGHT, so a fixed pixel delta silently stops clearing it when
+      // the expanded height changes (it did when the grid went to six rows).
+      const pastMidpoint = Math.ceil((MAX_HEIGHT - MIN_HEIGHT) * 0.75);
+
       handleEl.dispatchEvent(makeTouchEvent('touchstart', 100, 100));
       // Move more than 5px to trigger drag mode, then advance time to keep
       // velocity low so the midpoint check is used rather than velocity
-      handleEl.dispatchEvent(makeTouchEvent('touchmove', 100, 200));
+      handleEl.dispatchEvent(makeTouchEvent('touchmove', 100, 100 + pastMidpoint));
       jasmine.clock().tick(1000);
       // End drag with enough delta to be past midpoint
-      handleEl.dispatchEvent(makeTouchEvent('touchend', 100, 200));
+      handleEl.dispatchEvent(makeTouchEvent('touchend', 100, 100 + pastMidpoint));
 
       jasmine.clock().tick(SNAP_DURATION + 15);
 
       expect(cb.onExpandChanged).toHaveBeenCalledWith(true);
+    });
+
+    // Rows shrink instead of being dropped, so every geometry the handler sees
+    // still spans six rows. The collapsed height is always ROW_HEIGHT; only the
+    // expanded height moves, and it arrives already clamped (#9463 review).
+    describe('on a shrunken grid', () => {
+      it('should snap to six shrunken rows with no offset', () => {
+        cb.getExpandedHeight.and.returnValue(MIN_ROW_HEIGHT * WEEKS_SHOWN);
+        cb.getActiveWeekIndex.and.returnValue(4);
+
+        handler.snapTo(true);
+        jasmine.clock().tick(SNAP_DURATION + 20);
+
+        expect(cb.onExpandChanged).toHaveBeenCalledWith(true);
+        expect(weeksEl.style.maxHeight).toBe(`${MIN_ROW_HEIGHT * WEEKS_SHOWN}px`);
+        // Every row is on screen, so nothing has to slide into view. Under the
+        // dropped-rows clamp this was -4 rows and weeks 5 and 6 were unreachable.
+        const innerEl = weeksEl.firstElementChild as HTMLElement;
+        expect(innerEl.style.transform).toBe('translateY(0px)');
+      });
+
+      // The offset counts in whole rows, so the rows on screen have to be the
+      // height that offset assumes for the whole animation, not only after the
+      // flag flips at snapDur + 10. Collapsing from index 2 with 29px rows
+      // travelled to -80px and put week 3 in the window before jumping back.
+      it('should give the rows their post-snap height when the animation starts', () => {
+        cb.getExpandedHeight.and.returnValue(MIN_ROW_HEIGHT * WEEKS_SHOWN);
+        cb.getRowHeight.and.returnValue(MIN_ROW_HEIGHT);
+        cb.getIsExpanded.and.returnValue(true);
+
+        handler.snapTo(false, 2);
+
+        // Before the animation has finished, and before onExpandChanged fires.
+        expect(weeksEl.style.getPropertyValue('--row-height')).toBe(`${ROW_HEIGHT}px`);
+        const innerEl = weeksEl.firstElementChild as HTMLElement;
+        expect(innerEl.style.transform).toBe(`translateY(${-2 * ROW_HEIGHT}px)`);
+        expect(cb.onExpandChanged).not.toHaveBeenCalled();
+      });
+
+      it('should give the rows the shrunken height when expanding', () => {
+        cb.getExpandedHeight.and.returnValue(MIN_ROW_HEIGHT * WEEKS_SHOWN);
+        cb.getRowHeight.and.returnValue(MIN_ROW_HEIGHT);
+
+        handler.snapTo(true, 2);
+
+        expect(weeksEl.style.getPropertyValue('--row-height')).toBe(
+          `${MIN_ROW_HEIGHT}px`,
+        );
+      });
+
+      it('should collapse to a full-size row, never a shrunken one', () => {
+        cb.getExpandedHeight.and.returnValue(MIN_ROW_HEIGHT * WEEKS_SHOWN);
+
+        handler.snapTo(false);
+        jasmine.clock().tick(SNAP_DURATION + 20);
+
+        // The collapsed strip is one row in a viewport with room for one, so it
+        // does not shrink with the grid: shrinking it would give every user
+        // 25px tap targets whether or not they ever expand.
+        expect(weeksEl.style.maxHeight).toBe(`${ROW_HEIGHT}px`);
+      });
+
+      describe('too short to expand at all', () => {
+        beforeEach(() => {
+          // What the component reports once the room is gone: the clamped
+          // expanded height has collapsed onto the collapsed height.
+          cb.getExpandedHeight.and.returnValue(ROW_HEIGHT);
+          cb.canExpand.and.returnValue(false);
+        });
+
+        it('should stay collapsed rather than report an expansion it cannot render', () => {
+          handler.snapTo(true);
+          jasmine.clock().tick(SNAP_DURATION + 20);
+
+          expect(cb.onExpandChanged).toHaveBeenCalledWith(false);
+          expect(cb.onExpandChanged).not.toHaveBeenCalledWith(true);
+          expect(weeksEl.style.maxHeight).toBe(`${ROW_HEIGHT}px`);
+        });
+
+        // The drag ceiling is the clamped expanded height, so a rubber-band
+        // cannot open the grid into room that is not there. Previously a 100px
+        // drag opened it to 124px in a viewport with 42px to spare.
+        it('should not open past the room available while dragging', () => {
+          cb.getActiveWeekIndex.and.returnValue(2);
+
+          handleEl.dispatchEvent(makeTouchEvent('touchstart', 100, 100));
+          handleEl.dispatchEvent(makeTouchEvent('touchmove', 100, 200));
+
+          expect(weeksEl.style.maxHeight).toBe(`${ROW_HEIGHT}px`);
+          // Asserting the exact offset, not merely the absence of 'NaN': the
+          // browser rejects translateY(NaNpx) outright, so code that produced
+          // one would leave the transform empty and a not-toContain check would
+          // pass. The range is 0 here, which is what the guard is for.
+          const innerEl = weeksEl.firstElementChild as HTMLElement;
+          expect(innerEl.style.transform).toBe(`translateY(${-2 * ROW_HEIGHT}px)`);
+        });
+      });
+    });
+
+    // The component measures layout to answer this, so reading it per touchmove
+    // would interleave layout reads with the style writes below it.
+    it('should read the expanded height once per drag, not per touchmove', () => {
+      handleEl.dispatchEvent(makeTouchEvent('touchstart', 100, 100));
+      cb.getExpandedHeight.calls.reset();
+
+      handleEl.dispatchEvent(makeTouchEvent('touchmove', 100, 120));
+      handleEl.dispatchEvent(makeTouchEvent('touchmove', 100, 140));
+      handleEl.dispatchEvent(makeTouchEvent('touchmove', 100, 160));
+
+      // Once for _startDrag, on the first move that crosses the threshold.
+      expect(cb.getExpandedHeight).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // Review round 2 of #9463: the zero-duration branch cleared the inline styles
+  // and relied on Angular re-applying them, but onExpandChanged may write an
+  // unchanged signal value, in which case Angular skips the DOM write and the
+  // element is left with no max-height at all — dropping the responsive clamp.
+  describe('reduced motion', () => {
+    let reducedHandler: CalendarGestureHandler;
+    let reducedWeeksEl: HTMLElement;
+
+    beforeEach(() => {
+      (window.matchMedia as jasmine.Spy).and.returnValue({
+        matches: true,
+      } as MediaQueryList);
+      reducedWeeksEl = createMockWeeksEl();
+      reducedHandler = new CalendarGestureHandler(
+        document.createElement('div'),
+        () => reducedWeeksEl,
+        cb,
+      );
+    });
+
+    afterEach(() => reducedHandler.destroy());
+
+    it('should keep the clamped height when snapping to the state it is already in', () => {
+      cb.getIsExpanded.and.returnValue(true);
+
+      reducedHandler.snapTo(true);
+
+      expect(reducedWeeksEl.style.maxHeight).toBe(MAX_HEIGHT + 'px');
+      expect((reducedWeeksEl.firstElementChild as HTMLElement).style.transform).toBe(
+        'translateY(0px)',
+      );
+    });
+
+    it('should keep the collapsed geometry when a drag is cancelled', () => {
+      cb.getActiveWeekIndex.and.returnValue(2);
+
+      reducedHandler.snapTo(false, 2);
+
+      expect(reducedWeeksEl.style.maxHeight).toBe(MIN_HEIGHT + 'px');
+      expect((reducedWeeksEl.firstElementChild as HTMLElement).style.transform).toBe(
+        `translateY(${-2 * ROW_HEIGHT}px)`,
+      );
     });
   });
 });

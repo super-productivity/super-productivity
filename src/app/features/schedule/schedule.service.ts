@@ -188,6 +188,34 @@ export class ScheduleService {
     return daysToShow;
   }
 
+  /**
+   * Week rows the displayed month actually occupies, 4 to 6.
+   *
+   * A month needs `daysToGoBack` leading days from the previous month plus its
+   * own length, rounded up to whole weeks. `daysToGoBack` is 0-6 and a month is
+   * 28-31 days, so this is 4 (only a non-leap February starting exactly on the
+   * week's first day) to 6 (a 31-day month starting 5 or 6 days in, e.g. August
+   * 2026 under Monday-first). Most months are 5.
+   *
+   * Pinning it at 6 spans every month but leaves an empty row on most of them.
+   * Deriving it from *available height* is what #9449 was filed for: a day left
+   * out of `daysToShow` gets no events computed at all, so the task vanished
+   * rather than merely being clipped. The month is the right input; the viewport
+   * is not.
+   */
+  getMonthWeeksToShow(
+    firstDayOfWeek: number = 0,
+    referenceDate: Date | null = null,
+  ): number {
+    // Same logical-day anchoring as getMonthDaysToShow below.
+    const today = referenceDate || this._dateService.getLogicalTodayDate();
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const daysToGoBack = (firstDayOfMonth.getDay() - firstDayOfWeek + 7) % 7;
+    // Day 0 of the next month is the last day of this one.
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    return Math.ceil((daysToGoBack + daysInMonth) / 7);
+  }
+
   getMonthDaysToShow(
     numberOfWeeks: number,
     firstDayOfWeek: number = 0,
