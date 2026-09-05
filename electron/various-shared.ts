@@ -33,18 +33,15 @@ export function showOrFocus(passedWin: BrowserWindow): void {
     return;
   }
 
-  if (win.isVisible()) {
-    win.focus();
-  } else {
-    // restore explicitly - always call restore() before show()
-    // On Linux, event.preventDefault() on the minimize event has no effect, so the
-    // window may be minimized. On some desktop environments (e.g. GNOME/Wayland),
-    // isMinimized() returns false for a hidden+minimized window, so calling restore()
-    // only when isMinimized() is true would skip it and leave show() to fail alone.
-    win.restore();
-    win.show();
-    if (getWasMaximizedBeforeHide()) win.maximize();
-  }
+  // Always restore()+show() rather than gating on isVisible(): on some desktop
+  // environments (e.g. GNOME/Wayland) isVisible() can keep reporting true for a
+  // window that is actually still hidden/minimized on screen, which would make
+  // this fall through to a no-op focus() and leave "Show App" from the tray
+  // without effect (#8448). restore()/show() are no-ops on an already-shown
+  // window, so calling them unconditionally is safe.
+  win.restore();
+  win.show();
+  if (getWasMaximizedBeforeHide()) win.maximize();
 
   // Hide task widget when main window is shown, unless the user explicitly
   // pinned it visible via the global shortcut.

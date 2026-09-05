@@ -183,7 +183,7 @@ test('a visible-but-unfocused window is brought to front, never hidden', () => {
 
   toggleWindowVisibility(win);
 
-  assert.deepEqual(win.calls, ['focus'], 'should focus, not hide');
+  assert.deepEqual(win.calls, ['restore', 'show'], 'should bring to front, not hide');
 });
 
 test('macless minimize-to-tray hides to tray only when the indicator exists', () => {
@@ -195,6 +195,26 @@ test('macless minimize-to-tray hides to tray only when the indicator exists', ()
   toggleWindowVisibility(win);
 
   assert.deepEqual(win.calls, ['blur', 'hide']);
+});
+
+test('showOrFocus restores and shows even when isVisible() stays true for a hidden window (#8448)', () => {
+  const { showOrFocus } = loadModule();
+  // Simulates GNOME/Wayland occasionally reporting isVisible()=true for a window
+  // that is actually still hidden/minimized on screen.
+  const win = makeWin({ visible: true, minimized: true, focused: false });
+
+  showOrFocus(win);
+
+  assert.deepEqual(win.calls, ['restore', 'show']);
+});
+
+test('showOrFocus restores and shows a genuinely hidden window', () => {
+  const { showOrFocus } = loadModule();
+  const win = makeWin({ visible: false, minimized: true, focused: false });
+
+  showOrFocus(win);
+
+  assert.deepEqual(win.calls, ['restore', 'show']);
 });
 
 test('minimize-to-tray falls back to minimize when the tray is unavailable (#7282)', () => {
