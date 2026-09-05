@@ -27,6 +27,12 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
+    # A CMD-SHELL probe that exceeds `timeout` leaves its forked pg_isready
+    # orphaned; with postgres as PID 1 the postmaster reaps it, and an exit
+    # status of 2 is taken for a backend crash that restarts the whole
+    # cluster. docker-init adopts the orphan instead. See #9695 and the
+    # production compose in packages/super-sync-server.
+    init: true
 
   # SuperSync server for E2E testing
   # Start with: docker compose up -d supersync

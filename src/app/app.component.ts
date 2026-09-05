@@ -31,6 +31,7 @@ import { LS } from './core/persistence/storage-keys.const';
 import { BannerId } from './core/banner/banner.model';
 import { T } from './t.const';
 import { GlobalThemeService } from './core/theme/global-theme.service';
+import { IosKeyboardService } from './core/theme/ios-keyboard.service';
 import { resolveBgImageToDataUrl } from './core/theme/resolve-bg-image-to-data-url.util';
 import { LanguageService } from './core/language/language.service';
 import { WorkContextService } from './features/work-context/work-context.service';
@@ -135,8 +136,9 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _bannerService = inject(BannerService);
   private _snackService = inject(SnackService);
   private _globalThemeService = inject(GlobalThemeService);
-  /** Sized above the iOS keyboard; null everywhere else. See GlobalThemeService. */
-  readonly iosShellHeight = this._globalThemeService.iosShellHeight;
+  private _iosKeyboardService = inject(IosKeyboardService);
+  /** Sized above the iOS keyboard; null everywhere else. See IosKeyboardService. */
+  readonly iosShellHeight = this._iosKeyboardService.shellHeight;
   private _languageService = inject(LanguageService);
   private _activatedRoute = inject(ActivatedRoute);
   private _matDialog = inject(MatDialog);

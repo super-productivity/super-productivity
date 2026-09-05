@@ -32,6 +32,9 @@ capture_diagnostics() {
   adb pull /data/anr "$DIAG/anr" > /dev/null 2>&1 || true
 }
 
+# The emulator reports a hardware keyboard, which keeps the soft keyboard
+# hidden; ImeInsetShimInstrumentedTest needs it to open. See that test.
+adb shell settings put secure show_ime_with_hard_keyboard 1 || true
 adb logcat -c || true
 
 # Bounded so a hung instrumentation fails with a report instead of consuming the

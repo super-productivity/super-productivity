@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+import { takeInterpretableOpPrefix } from './remote-op-block.util';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import {
   ActionType,
@@ -122,7 +123,14 @@ export class SyncImportConflictGateService {
       preCapturedPendingOps?: OperationLogEntry[];
     } = {},
   ): Promise<IncomingFullStateConflictGateResult> {
-    const fullStateOp = incomingOps.find((op) => FULL_STATE_OP_TYPES.has(op.opType));
+    // Only the prefix this client can process may prompt: processRemoteOps
+    // blocks at the first op with unknown vocabulary (#8764), so a full-state
+    // op after it — or one whose own syncImportReason is unknown — must not
+    // open a conflict dialog the user cannot evaluate and this client will
+    // refuse anyway.
+    const fullStateOp = takeInterpretableOpPrefix(incomingOps).find((op) =>
+      FULL_STATE_OP_TYPES.has(op.opType),
+    );
 
     if (!fullStateOp) {
       return {

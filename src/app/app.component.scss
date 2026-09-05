@@ -48,7 +48,7 @@
 
 // iOS keeps 100vh tied to the layout viewport while the soft keyboard is open,
 // so the shell has to be sized from the visualViewport height. That height now
-// arrives as a plain `height` bound from GlobalThemeService.iosShellHeight
+// arrives as a plain `height` bound from IosKeyboardService.shellHeight
 // rather than a `--visual-viewport-height` rule here: this element wraps the
 // task list, and a custom property it inherits makes WebKit restyle the whole
 // list on every frame of the keyboard animation (#9779).

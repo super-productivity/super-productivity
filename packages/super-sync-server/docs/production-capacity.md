@@ -1,6 +1,7 @@
 # Production Capacity and the OpenVZ Constraint
 
-**Status:** current. **Numbers last verified:** 2026-08-28. Every figure below is
+**Status:** current. **Numbers last verified:** 2026-08-28; crash-restart figures
+2026-09-03. Every figure below is
 a point-in-time measurement — re-measure before relying on any of them.
 
 ## Scope
@@ -66,16 +67,17 @@ implemented and then retired as incompatible with the OpenVZ environment. See
 [`../archive/encryption-attempts-openvz-incompatible/`](../archive/encryption-attempts-openvz-incompatible/)
 and [`encryption-at-rest.md`](encryption-at-rest.md).
 
-**2. Undiagnosable database crashes.** A Postgres backend has been exiting with
-code 2 — the `quickdie` / `SIGQUIT` path — roughly every two weeks for months
-(~45 occurrences, #9695). Note this does **not** by itself mean an external
-sender: when any one backend dies unexpectedly, the postmaster itself `SIGQUIT`s
-every sibling connection and re-runs WAL recovery (`scripts/health-alert.sh`),
-so exit code 2 is the ordinary consequence for the siblings. What the platform
-prevents is identifying the sender for the _first_ victim: `auditd` cannot run in
-an OpenVZ guest, and guest processes are ordinary host-visible PIDs. The cause is
-therefore unattributable from inside the container — that is the finding, not
-that any particular party is responsible.
+**2. Database crash-restarts (fixed in #9917, platform-amplified).**
+For months a "server process" exited with code 2 roughly every two weeks, later
+hours apart (50 occurrences, #9695). This was long read as the `quickdie` /
+`SIGQUIT` path and therefore as unattributable from inside an OpenVZ guest. It was
+neither: the dying PID was the compose healthcheck's `pg_isready`, orphaned when
+dockerd killed a timed-out probe shell, adopted by the postmaster running as PID 1,
+and exiting 2 ("no response"). The postmaster treats any reaped status other than
+0/1 as a backend crash. Fixed with `init: true` on the postgres service (see the
+comment in `docker-compose.yml`); closure is tracked on #9695. What the platform
+contributes is the trigger: the 25–52 s I/O stalls that time the probe out come
+from the 150-IOPS budget described here.
 
 **3. A permanent tax on query design.** Every mitigation in the next section
 exists only because random reads cost ~9.5 ms here. That is recurring

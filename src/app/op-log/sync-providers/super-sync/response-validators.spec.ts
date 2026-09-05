@@ -106,6 +106,65 @@ describe('response-validators', () => {
       expect(validated.gapDetected).toBe(false);
     });
 
+    it('should tolerate an op whose opType / syncImportReason this client does not know (#8764)', () => {
+      const op = (overrides: Record<string, unknown>): Record<string, unknown> => ({
+        id: 'op-1',
+        clientId: 'client_1',
+        actionType: '[Task] Add',
+        opType: 'CRT',
+        entityType: 'TASK',
+        entityId: 't1',
+        payload: {},
+        vectorClock: { client_1: 1 },
+        timestamp: 1,
+        schemaVersion: 4,
+        ...overrides,
+      });
+      const validated = validateOpDownloadResponse({
+        ops: [
+          { serverSeq: 1, op: op({}), receivedAt: 1 },
+          { serverSeq: 2, op: op({ id: 'op-2', opType: 'FUTURE_OP' }), receivedAt: 1 },
+          {
+            serverSeq: 3,
+            op: op({
+              id: 'op-3',
+              opType: 'SYNC_IMPORT',
+              syncImportReason: 'FUTURE_REASON',
+            }),
+            receivedAt: 1,
+          },
+        ],
+        hasMore: false,
+        latestSeq: 3,
+      });
+
+      // The whole page survives; the unknown values reach the receiver verbatim
+      // so RemoteOpsProcessingService can block at that op instead of the
+      // transport wedging every not-yet-updated device.
+      expect(validated.ops.map((o) => o.op.opType)).toEqual([
+        'CRT',
+        'FUTURE_OP',
+        'SYNC_IMPORT',
+      ]);
+      expect(validated.ops[2].op.syncImportReason).toBe('FUTURE_REASON');
+    });
+
+    it('should accept a boolean capability flag either way', () => {
+      const base = { ops: [], hasMore: false, latestSeq: 0 };
+      expect(
+        validateOpDownloadResponse({
+          ...base,
+          capabilities: { causalRepairSnapshots: false },
+        }).capabilities?.causalRepairSnapshots,
+      ).toBeFalse();
+      expect(
+        validateOpDownloadResponse({
+          ...base,
+          capabilities: { causalRepairSnapshots: true },
+        }).capabilities?.causalRepairSnapshots,
+      ).toBeTrue();
+    });
+
     it('should strip file-based snapshotState from passthrough fields', () => {
       const validated = validateOpDownloadResponse({
         ops: [],
@@ -224,6 +283,17 @@ describe('response-validators', () => {
         ],
       };
       expect(() => validateRestorePointsResponse(response)).not.toThrow();
+    });
+
+    it('should keep restore points of an unknown type instead of failing the list (#8764)', () => {
+      const validated = validateRestorePointsResponse({
+        restorePoints: [
+          { serverSeq: 100, timestamp: 1, type: 'SYNC_IMPORT', clientId: 'client-1' },
+          { serverSeq: 200, timestamp: 2, type: 'FUTURE_SNAPSHOT', clientId: 'client-1' },
+        ],
+      });
+
+      expect(validated.restorePoints.map((point) => point.serverSeq)).toEqual([100, 200]);
     });
 
     it('should throw if not an object', () => {

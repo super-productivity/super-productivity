@@ -674,6 +674,32 @@ Therefore:
 2. A change that older clients would MISAPPLY must not ship behind a bump alone. No fleet percentage makes it safe while released v17–v18.14 clients still sync: one lagging device silently misapplies the ops for its whole account and writes the result back with dominating clocks. Treat such changes as blocked until the v17–v18.14 sync fleet is effectively extinct — or redesign them to degrade (option 1).
 3. **Precondition: any bump PR must address the downgrade relabel (#8770).** Local hydration has no future-version gate — `stateNeedsMigration()` is `version < target` — so a vN client reading a v(N+1) state cache (rollback, snap channel lag, old sideloaded APK) loads it unmigrated (Checkpoint B validation is non-fatal and never repairs), and the next snapshot/compaction write stamps it `CURRENT_SCHEMA_VERSION`. The cache is then v(N+1)-shaped under a vN label — additive residue survives because typia's `createValidate` does not strip excess properties — and on re-upgrade the N→N+1 migration runs a **second** time on already-migrated state. Until #8770 ships a guard (repro-first, per the sync-change rule), every migration MUST be a no-op on already-migrated state (v1→v2 guards via `hasMigratedFields`; barrier migrations are no-ops by construction), and the bump PR must state how downgraded clients are handled.
 
+#### Widening a wire vocabulary needs no bump — but the receiver must block
+
+`opType`, `syncImportReason`, and restore-point `type` are strict enums only on
+the REQUEST side of the SuperSync contract, where the server validates per op.
+On the RESPONSE side they are loose strings, and the receiver decides per op
+(`remote-op-block.util.ts`, the one block predicate shared by
+`remote-ops-processing.service.ts`, the full-state conflict gate's prefix cut,
+and the USE_REMOTE preflight): an unknown
+value blocks the batch at that op exactly like `VERSION_TOO_NEW` — prefix
+applied, cursor frozen, "update your app" snack — never a skip, which would
+advance the cursor past data the client never understood. (Restore points of
+an unknown type are simply kept in the list and rendered generically.) Before this the
+transport parser rejected the whole page with a generic error and wedged every
+not-yet-updated device (#8764). Two consequences:
+
+- Adding a value to one of these unions does not require a schema bump; per
+  rule 0 above, don't add one for it.
+- Clients released before this receiver change still wedge on any widening,
+  so a widening must wait for a release-lag window after it shipped. The
+  window covers servers too: `validation.service.ts` rejects unknown op types
+  on upload, so self-hosted servers must carry the new value first.
+
+A type-level assertion in `super-sync.ts` keeps the sync-core `OpType` enum
+and `SUPER_SYNC_OP_TYPES` identical, so a value added to one side fails the
+build instead of surfacing as a runtime block on other devices.
+
 #### Executable sources and release checks
 
 Follow the executable contracts instead of copying their shapes into this guide:

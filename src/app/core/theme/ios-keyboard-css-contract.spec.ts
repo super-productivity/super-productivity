@@ -9,11 +9,11 @@ import { BodyClass } from '../../app.constants';
 class KeyboardContractDialogComponent {}
 
 /**
- * The rendered half of #9779's split: GlobalThemeService writes
- * `--visual-viewport-height` on the CDK overlay container instead of `<html>`,
- * which only holds up if the rules that consume it sit inside that container
- * and inherit it. The service spec pins where the value is written; this pins
- * that writing it there still produces the layout the stylesheet promises.
+ * The rendered half of #9779's split: IosKeyboardService writes the keyboard
+ * variables on the CDK overlay container instead of `<html>`, which only holds
+ * up if the rules that consume them sit inside that container and inherit
+ * them. The service spec pins where the values are written; this pins that
+ * writing them there still produces the layout the stylesheet promises.
  *
  * Uses a real MatDialog and the real injected OverlayContainer — the same
  * element the service targets — against the real global stylesheet (karma
@@ -46,7 +46,6 @@ describe('iOS keyboard CSS contract', () => {
     TestBed.inject(MatDialog).closeAll();
     TestBed.tick();
     document.querySelectorAll('.cdk-overlay-container').forEach((el) => el.remove());
-    document.documentElement.style.removeProperty('--keyboard-overlay-offset');
     document.body.classList.remove(
       BodyClass.isNativeMobile,
       BodyClass.isIOS,
@@ -67,7 +66,7 @@ describe('iOS keyboard CSS contract', () => {
     return { pane, wrapper };
   };
 
-  /** What GlobalThemeService._updateIOSKeyboardViewportVars() writes. */
+  /** What IosKeyboardService writes on every viewport change. */
   const publishViewportHeight = (px: number): void =>
     overlayContainer.style.setProperty('--visual-viewport-height', `${px}px`);
 
@@ -85,10 +84,10 @@ describe('iOS keyboard CSS contract', () => {
     );
   });
 
-  // This one stays on <html>: it changes at most once per open/close, and the
-  // add-task bar reads it from outside the overlay layer.
-  it('reserves keyboard space in the overlay wrapper from the root variable', () => {
-    document.documentElement.style.setProperty(
+  // Also on the container: the add-task bar, the one consumer outside the
+  // overlay layer, binds its own copy on its host (see AddTaskBarComponent).
+  it('reserves keyboard space in the overlay wrapper from the container variable', () => {
+    overlayContainer.style.setProperty(
       '--keyboard-overlay-offset',
       `${KEYBOARD_OVERLAY_OFFSET_PX}px`,
     );
@@ -98,7 +97,7 @@ describe('iOS keyboard CSS contract', () => {
     );
   });
 
-  // Why app-shell code takes the height from GlobalThemeService.iosShellHeight
+  // Why app-shell code takes the height from IosKeyboardService.shellHeight
   // instead of this variable: outside the overlay layer it is still the 100vh
   // default from _css-variables.scss.
   it('does not reach elements outside the overlay container', () => {

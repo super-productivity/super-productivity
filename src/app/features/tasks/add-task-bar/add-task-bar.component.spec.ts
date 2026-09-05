@@ -28,6 +28,7 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { SS } from '../../../core/persistence/storage-keys.const';
 import { BodyClass } from '../../../app.constants';
+import { IosKeyboardService } from '../../../core/theme/ios-keyboard.service';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
 
 type ProjectServiceSignals = {
@@ -377,6 +378,34 @@ describe('AddTaskBarComponent', () => {
       fixture.nativeElement.style.setProperty('--keyboard-overlay-offset', '40px');
 
       expect(getComputedStyle(fixture.nativeElement).bottom).toBe('56px');
+    });
+
+    // The offset is bound on the host from IosKeyboardService rather than
+    // inherited from <html>, where writing it restyles the whole list (#9779).
+    it('takes the iOS keyboard offset from IosKeyboardService', () => {
+      document.body.classList.add(BodyClass.isIOS);
+      fixture.componentRef.setInput('isGlobalBarVariant', true);
+      const iosKeyboardService = TestBed.inject(IosKeyboardService);
+
+      iosKeyboardService.keyboardOverlayOffset.set('40px');
+      fixture.detectChanges();
+      expect(getComputedStyle(fixture.nativeElement).bottom).toBe('56px');
+
+      // Hidden again: the host binding goes away and the :root default applies.
+      iosKeyboardService.keyboardOverlayOffset.set(null);
+      fixture.detectChanges();
+      expect(getComputedStyle(fixture.nativeElement).bottom).toBe('16px');
+    });
+
+    // Inline bars (planner, plan-tomorrow) never read the offset, so they do
+    // not get the style write either: with the signal set, this host (not
+    // flagged as the global variant) keeps the :root default.
+    it('does not bind the keyboard offset on inline bars', () => {
+      document.body.classList.add(BodyClass.isIOS);
+      TestBed.inject(IosKeyboardService).keyboardOverlayOffset.set('40px');
+      fixture.detectChanges();
+
+      expect(getComputedStyle(fixture.nativeElement).bottom).toBe('16px');
     });
 
     it('does not add the safe area to the keyboard offset for non-iOS touch builds', () => {

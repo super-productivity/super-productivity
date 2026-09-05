@@ -39,15 +39,17 @@
 // add-task bar. Full rationale + device matrix in
 // docs/android-edge-to-edge-keyboard.md (#8508).
 // `:not(.isIOS)` makes this mutually exclusive with the iOS rule below — iOS
-// carries BOTH isNativeMobile and isIOS and sets --keyboard-height non-zero, so
-// without it the two equal-specificity rules would both match and iOS would
-// depend on source order. Excluding iOS here removes that fragility.
+// carries BOTH isNativeMobile and isIOS and sets --keyboard-height non-zero on
+// the overlay container this dialog lives in, so without it the two
+// equal-specificity rules would both match and iOS would depend on source
+// order. Excluding iOS here removes that fragility.
 :host-context(body.isNativeMobile:not(.isIOS).isKeyboardVisible) {
   height: calc(100% - var(--keyboard-height, 0px));
 }
 
-// iOS keeps its own override (different keyboard runtime: the WebView does not
-// resize, so it uses `--keyboard-overlay-offset`). Left as-is — the
+// iOS keeps its own override (different keyboard runtime: the WebView resizes
+// only after the keyboard animation, and `--keyboard-overlay-offset` covers a
+// keyboard it never resizes for — see IosKeyboardService). Left as-is — the
 // `- --safe-area-top` term here is unverified on an iOS device and out of scope
 // for the API 28 fix; check it separately if an iOS bottom gap shows up.
 :host-context(body.isIOS.isKeyboardVisible) {

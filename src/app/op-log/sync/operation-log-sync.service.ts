@@ -17,6 +17,7 @@ import { BackupService } from '../backup/backup.service';
 import { OpLog } from '../../core/log';
 import { OperationSyncCapable } from '../sync-providers/provider.interface';
 import { OperationLogUploadService } from './operation-log-upload.service';
+import { getUnknownOpVocabulary } from './remote-op-block.util';
 import { DownloadOutcome, UploadOutcome } from '../core/types/sync-results.types';
 import { OperationLogDownloadService } from './operation-log-download.service';
 import { SnackService } from '../../core/snack/snack.service';
@@ -2460,7 +2461,7 @@ export class OperationLogSyncService {
           'USE_REMOTE aborted: remote history contains an unsupported schema version.',
         );
       }
-      if (version > CURRENT_SCHEMA_VERSION) {
+      if (version > CURRENT_SCHEMA_VERSION || getUnknownOpVocabulary(op) !== null) {
         if (
           !this._hasWarnedRebuildVersionBlockThisSession &&
           !this.snackService.hasPendingPersistentAction()
@@ -2475,7 +2476,7 @@ export class OperationLogSyncService {
           });
         }
         throw new Error(
-          'USE_REMOTE aborted: remote history contains ops from a newer schema version — update the app first.',
+          'USE_REMOTE aborted: remote history contains ops from a newer schema version or with an unknown op type — update the app first.',
         );
       }
     }

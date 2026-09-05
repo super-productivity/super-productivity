@@ -109,6 +109,11 @@ export const validateSnapshotUploadResponse = (data: unknown): SnapshotUploadRes
 /**
  * Validates RestorePointsResponse from server.
  * Throws InvalidDataSPError if the response structure is invalid.
+ *
+ * `type` is a loose string on the wire (#8764): a restore point of a kind this
+ * client does not know is kept — the dialog renders unknown types with a
+ * generic icon/label and restoring works by serverSeq — so a newer client's
+ * snapshot never hides the list, and never fails it.
  */
 export const validateRestorePointsResponse = (data: unknown): RestorePointsResponse =>
   parseResponse(

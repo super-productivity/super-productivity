@@ -110,8 +110,8 @@ services:
     # per run — 1058 of them on the hosted server after 3.7 days of uptime,
     # reported by the hoster as PID pressure. docker-init (tini) reaps them and
     # still forwards SIGTERM, so graceful shutdown is unaffected.
-    # (caddy/postgres are exempt: nothing execs a forking command into them,
-    # and the postmaster reaps foreign children anyway.)
+    # (caddy is exempt: nothing execs a forking command into it. postgres is
+    # NOT — see the `init: true` on that service, #9695.)
     init: true
     security_opt:
       - no-new-privileges:true
@@ -197,6 +197,31 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    # Without an init, `postgres` is PID 1 and adopts every orphan in the
+    # container. The healthcheck above is CMD-SHELL: ash forks `pg_isready` and
+    # exec's `psql` in place, so when a probe exceeds `timeout` and dockerd
+    # SIGKILLs the exec process, a still-running `pg_isready` is orphaned,
+    # reparented to the postmaster, and exits 2 ("no response") once its own
+    # 3s connect timeout expires. The postmaster's CleanupBackend() (same in
+    # PG15-17) treats any reaped status other than 0/1 as a backend crash
+    # BEFORE checking whether the PID is one of its backends: "server process
+    # (PID n) exited with exit code 2 … terminating any other active server
+    # processes", a full in-place crash-restart that drops every client. It
+    # needs a stall that outlives both docker's 5s and the orphan's own 3s
+    # connect window, which is the signature of all 50 crash-restarts on the
+    # hosted server (#9695). docker-init adopts the orphan instead; the
+    # postmaster only ever reaps its own children again. The psql half of the
+    # healthcheck stays: it is what closes the first-run initdb race (see the
+    # root docker-compose).
+    init: true
+    # The image's STOPSIGNAL is SIGINT (fast shutdown): wait for every backend
+    # to exit, then write the shutdown checkpoint. The image itself recommends
+    # a longer stop timeout than docker's default 10s, after which PID 1 is
+    # SIGKILLed and the next start runs crash recovery. Note a recreate stops
+    # the OLD container with the OLD container's timeout, so this value only
+    # protects stops after the first one that applies it; for that first one
+    # run `docker compose stop -t 60 postgres` before `up -d`.
+    stop_grace_period: 60s
     security_opt:
       - no-new-privileges:true
     mem_limit: ${POSTGRES_MEM_LIMIT:-1536m}

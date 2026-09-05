@@ -138,7 +138,8 @@ export const SuperSyncOperationSchema = z.object({
 // structural types and fields that ValidationService does not handle strict,
 // but defer semantic operation validation to the server so one malformed op
 // cannot reject and stall every valid sibling in the batch. Download/response
-// schemas remain strict.
+// schemas stay structurally strict but keep their VOCABULARY fields loose —
+// see SuperSyncOperationResponseSchema.
 const SuperSyncUploadOperationSchema = SuperSyncOperationSchema.extend({
   id: z.string().max(SUPER_SYNC_MAX_INVALID_FIELD_TRANSPORT_LENGTH),
   clientId: z.string().max(SUPER_SYNC_MAX_INVALID_FIELD_TRANSPORT_LENGTH),
@@ -191,7 +192,22 @@ export const SuperSyncUploadSnapshotRequestSchema = z
     }
   });
 
-export const SuperSyncOperationResponseSchema = SuperSyncOperationSchema.passthrough();
+/**
+ * Vocabulary fields (`opType`, `syncImportReason`, restore-point `type`) are
+ * loose strings on the RESPONSE side, mirroring `errorCode`: a client must
+ * never reject a whole download page because a newer server relayed a value
+ * this client does not know yet. One unknown op would otherwise wedge every
+ * not-yet-updated device with a generic parse error, before the schema-version
+ * "update your app" path could run (#8764). Unknown values are handled per op
+ * after parsing (the receiver blocks at that op and keeps its cursor); the
+ * strict enums stay on the REQUEST side, where the server validates per op.
+ */
+const SUPER_SYNC_MAX_VOCABULARY_TRANSPORT_LENGTH = 255;
+
+export const SuperSyncOperationResponseSchema = SuperSyncOperationSchema.extend({
+  opType: z.string().min(1).max(SUPER_SYNC_MAX_VOCABULARY_TRANSPORT_LENGTH),
+  syncImportReason: z.string().max(SUPER_SYNC_MAX_VOCABULARY_TRANSPORT_LENGTH).optional(),
+}).passthrough();
 
 export const SuperSyncServerOperationSchema = z
   .object({
@@ -230,9 +246,11 @@ export const SuperSyncDownloadOpsResponseSchema = z
     gapDetected: z.boolean().optional(),
     snapshotVectorClock: SuperSyncVectorClockSchema.optional(),
     serverTime: z.number().optional(),
+    // Capability flags are plain booleans: a `literal(true)` would turn a
+    // server that ever reports `false` into a page-wide parse failure.
     capabilities: z
       .object({
-        causalRepairSnapshots: z.literal(true).optional(),
+        causalRepairSnapshots: z.boolean().optional(),
       })
       .optional(),
   })
@@ -296,7 +314,10 @@ export const SuperSyncRestorePointSchema = z
   .object({
     serverSeq: z.number(),
     timestamp: z.number(),
-    type: z.enum(SUPER_SYNC_SNAPSHOT_OP_TYPES),
+    // Loose on purpose (see SuperSyncOperationResponseSchema); the client
+    // keeps unknown types — the dialog renders them generically and restore
+    // works by serverSeq.
+    type: z.string().max(SUPER_SYNC_MAX_VOCABULARY_TRANSPORT_LENGTH),
     clientId: z.string(),
     description: z.string().optional(),
   })

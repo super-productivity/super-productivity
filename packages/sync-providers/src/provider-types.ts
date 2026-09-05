@@ -141,7 +141,7 @@ export interface OpDownloadResponseBase {
   snapshotVectorClock?: VectorClock;
   serverTime?: number;
   capabilities?: {
-    causalRepairSnapshots?: true;
+    causalRepairSnapshots?: boolean;
   };
 }
 

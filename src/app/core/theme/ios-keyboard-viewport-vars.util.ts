@@ -2,7 +2,7 @@
  * Pure computation behind the iOS keyboard layout CSS variables
  * (`--visual-viewport-height`, `--keyboard-overlay-offset`, `--keyboard-height`).
  *
- * Kept out of GlobalThemeService so the ordering rules below — which are the
+ * Kept out of IosKeyboardService so the ordering rules below — which are the
  * whole reason the add-task bar does or does not jump when the keyboard opens
  * (#9779) — are testable without a device.
  */
@@ -23,8 +23,10 @@ export interface IosKeyboardViewportInput {
   /** `window.visualViewport.height`, or undefined where unsupported. */
   visualViewportHeight?: number;
   /**
-   * True once `keyboardDidShow` fired, i.e. the show animation finished and the
-   * web view has had its chance to resize.
+   * True once the show animation finished (`keyboardDidShow`) AND the web view
+   * has either resized around the keyboard or had its grace period to do so —
+   * see IosKeyboardService. Under `resize: 'native'` the resize trails didShow
+   * by ~200ms, so didShow alone is not "settled" (#9779).
    */
   isKeyboardSettled: boolean;
   /** True when the plugin reported an implausible frame that had to be clamped (#8778). */
@@ -79,11 +81,11 @@ export const computeIosKeyboardViewportVars = ({
       // The web view already shrank around the keyboard, so a fixed element at
       // `bottom: 0` sits above it — offsetting again would move it twice (#8778).
       keyboardOverlayOffsetPx: 0,
-      // Settled only: the obscured area changes on every frame of the shrink, and
-      // `--keyboard-height` has to live on `:root` for its non-overlay consumers,
-      // so correcting mid-animation reintroduces the per-frame root write this
-      // all exists to avoid (#9779). The clamped frame from `keyboardWillShow`
-      // holds until then, which is the pre-#8778 behaviour and already safe.
+      // Settled only: the obscured area changes on every frame of the shrink, so
+      // correcting mid-animation would be a write (and a notification) per frame
+      // for a value nobody needs before the keyboard is up (#9779). The clamped
+      // frame from `keyboardWillShow` holds until then, which is the pre-#8778
+      // behaviour and already safe.
       correctedKeyboardHeightPx:
         isKeyboardFrameUnreliable && isKeyboardSettled
           ? sanitizeIosKeyboardHeight(baseHeight - visualViewportHeight, baseHeight)
@@ -97,8 +99,8 @@ export const computeIosKeyboardViewportVars = ({
   // by a whole keyboard height and shrinks the app shell, only for the measured
   // resize a few frames later to undo both. With `transition: bottom` on the bar
   // that prediction is what the user sees as the bar flying up and dropping back
-  // (#9779). So hold the measured values until the show animation is done; only
-  // a keyboard that has settled without resizing the web view (non-resizing iOS
+  // (#9779). So hold the measured values until the keyboard has settled; only a
+  // keyboard that has settled without resizing the web view (non-resizing iOS
   // modes) gets the frame-derived offset it needs.
   if (!isKeyboardSettled) {
     return {

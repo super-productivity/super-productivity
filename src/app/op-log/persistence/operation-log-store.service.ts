@@ -1040,7 +1040,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
           let preAppendLastSeq = 0;
           await tx.iterate<StoredOperationLogEntry>(
             STORE_NAMES.OPS,
-            { direction: 'prev' },
+            { direction: 'prev', limit: 1 },
             (_value, key) => {
               if (typeof key !== 'number') {
                 throw new Error('Operation sequence key is not numeric');
@@ -1186,7 +1186,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
           let preAppendLastSeq = 0;
           await tx.iterate<StoredOperationLogEntry>(
             STORE_NAMES.OPS,
-            { direction: 'prev' },
+            { direction: 'prev', limit: 1 },
             (_value, key) => {
               if (typeof key !== 'number') {
                 throw new Error('Operation sequence key is not numeric');
@@ -1526,11 +1526,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     await this._ensureInit();
     let storedEntries: StoredOperationLogEntry[];
     try {
-      // Exact compound-key match expressed as a degenerate [k, k] range.
       storedEntries = await this._adapter.getAllFromIndex<StoredOperationLogEntry>(
         STORE_NAMES.OPS,
         OPS_INDEXES.BY_SOURCE_AND_STATUS,
-        { lower: ['remote', 'pending'], upper: ['remote', 'pending'] },
+        ['remote', 'pending'],
       );
     } catch (e) {
       // Fallback for databases created before version 3 index migration
@@ -1996,15 +1995,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         this._adapter.getAllFromIndex<StoredOperationLogEntry>(
           STORE_NAMES.OPS,
           OPS_INDEXES.BY_SOURCE_AND_STATUS,
-          {
-            lower: ['remote', 'archive_pending'],
-            upper: ['remote', 'archive_pending'],
-          },
+          ['remote', 'archive_pending'],
         ),
         this._adapter.getAllFromIndex<StoredOperationLogEntry>(
           STORE_NAMES.OPS,
           OPS_INDEXES.BY_SOURCE_AND_STATUS,
-          { lower: ['remote', 'failed'], upper: ['remote', 'failed'] },
+          ['remote', 'failed'],
         ),
       ]);
       storedEntries = [...archivePendingEntries, ...failedEntries];
@@ -2073,8 +2069,8 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       // Pure read on the hottest path (getUnsynced/getAppliedOpIds); readonly
       // so it takes no exclusive write lock. On IndexedDB it runs concurrently
       // with appends; on the single-connection SQLite backend it queues in the
-      // shared serializer but holds it only for one SELECT (no BEGIN…COMMIT).
-      { direction: 'prev', mode: 'readonly' },
+      // shared serializer for one `SELECT … LIMIT 1` (no BEGIN…COMMIT).
+      { direction: 'prev', mode: 'readonly', limit: 1 },
       (_value, key) => {
         lastSeq = key as number;
         return 'stop';

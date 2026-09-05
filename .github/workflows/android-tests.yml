@@ -18,7 +18,7 @@ jobs:
   android-native-tests:
     name: Android Native Tests (JVM + Emulator)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Check out Git repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
@@ -142,6 +142,23 @@ jobs:
           # input one line per `sh -c`, so variables, `set -u` and multi-line
           # `if` do not survive between lines.
           script: ./run-android-checks.sh
+
+      # Second emulator, one API level below where SystemBars takes over: the
+      # API 34 google_apis image ships a bundled WebView below 140 that never
+      # auto-updates, which is the only way CI reaches the API 30-34 /
+      # WebView < 140 band of #9316 — the band the native IME shim exists for
+      # and that the API 35 run above cannot exercise (the shim is a no-op
+      # there by construction). Only the IME shim test runs here.
+      - name: Run IME inset shim check on API 34 (old bundled WebView)
+        if: steps.changes.outputs.android == 'true'
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          avd-name: test-api34
+          working-directory: ./android
+          script: ./run-android-ime-check.sh
 
       # cancelled(), not just failure(): a job that exceeds timeout-minutes
       # concludes as cancelled, which is exactly the run whose artifacts we

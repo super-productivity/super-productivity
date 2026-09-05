@@ -117,6 +117,40 @@ describe('OperationLogDownloadService', () => {
         expect(mockApiProvider.downloadOps).toHaveBeenCalled();
       });
 
+      it('should hand an op with an unknown opType to the receiver instead of failing the page (#8764)', async () => {
+        const op = (id: string, opType: string): SyncOperation => ({
+          id,
+          clientId: 'other-client',
+          actionType: '[Task] Add' as ActionType,
+          opType: opType as OpType,
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: {},
+          vectorClock: { otherClient: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        });
+        mockApiProvider.downloadOps.and.returnValue(
+          Promise.resolve({
+            ops: [
+              { serverSeq: 1, receivedAt: Date.now(), op: op('op-known', OpType.Create) },
+              { serverSeq: 2, receivedAt: Date.now(), op: op('op-future', 'FUTURE_OP') },
+            ],
+            hasMore: false,
+            latestSeq: 2,
+          }),
+        );
+
+        const result = await service.downloadRemoteOps(mockApiProvider);
+
+        expect(result.success).toBeTrue();
+        expect(result.newOps.map((o) => o.id)).toEqual(['op-known', 'op-future']);
+        expect(result.newOps[1].opType as string).toBe('FUTURE_OP');
+        // The download layer never advances the cursor; that decision belongs
+        // to the caller after RemoteOpsProcessingService reports the block.
+        expect(mockApiProvider.setLastServerSeq).not.toHaveBeenCalled();
+      });
+
       describe('encrypted ops with no key — log severity (Fix B)', () => {
         const NO_KEY_MSG = /no encryption key is configured/;
 

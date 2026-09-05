@@ -11,6 +11,11 @@ import {
   viewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import {
+  CSS_VAR_KEYBOARD_HEIGHT,
+  CSS_VAR_KEYBOARD_OVERLAY_OFFSET,
+  CSS_VAR_VISUAL_VIEWPORT_HEIGHT,
+} from '../../core/theme/keyboard-css-vars.const';
 import { MAT_BOTTOM_SHEET_DATA, MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { TaskDetailPanelComponent } from '../tasks/task-detail-panel/task-detail-panel.component';
 import { NotesComponent } from '../note/notes/notes.component';
@@ -80,9 +85,6 @@ const KEYBOARD_DETECT_THRESHOLD = 100;
 const KEYBOARD_SAFE_HEIGHT_MIN = 200;
 const KEYBOARD_SAFE_HEIGHT_RATIO = 0.85;
 const KEYBOARD_RESIZE_DEBOUNCE_MS = 100;
-const CSS_VAR_KEYBOARD_HEIGHT = '--keyboard-height';
-const CSS_VAR_KEYBOARD_OVERLAY_OFFSET = '--keyboard-overlay-offset';
-const CSS_VAR_VISUAL_VIEWPORT_HEIGHT = '--visual-viewport-height';
 
 @Component({
   selector: 'bottom-panel-container',
@@ -455,7 +457,7 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
       window.visualViewport.addEventListener('resize', this._boundOnViewportResize);
     }
     // Also the window event: on iOS the keyboard CSS variables can settle after
-    // the last visualViewport resize (GlobalThemeService only knows whether the
+    // the last visualViewport resize (IosKeyboardService only knows whether the
     // web view resized once `keyboardDidShow` fired, #9779) and it announces
     // that with a synthetic window resize. Without this the sheet would keep the
     // offset it computed mid-animation.
@@ -505,9 +507,9 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
     if (!container) return;
 
     // Read the keyboard variables off the sheet itself, not <html>: the sheet is
-    // a CDK overlay, and --visual-viewport-height is set on the overlay
-    // container so writing it does not restyle the whole document (#9779).
-    // Inheritance makes this equivalent wherever a variable is set above.
+    // a CDK overlay, and on iOS all of them are set on the overlay container so
+    // writing them does not restyle the whole document (#9779). Inheritance
+    // makes this equivalent wherever a variable is set above.
     const keyboardStyle = getComputedStyle(container);
     const cssVisualViewportHeight = this._parseCssPx(
       keyboardStyle.getPropertyValue(CSS_VAR_VISUAL_VIEWPORT_HEIGHT),

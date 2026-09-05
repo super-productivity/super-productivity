@@ -42,7 +42,18 @@ reduce the blast radius but do not replace durable app-private storage.
   contract pass, and a store-level integration pass.
 - Separate adapters that share one physical `SqliteDb` also share a FIFO queue
   keyed by that connection, preventing overlapping `BEGIN` statements and
-  statements leaking into another transaction.
+  statements leaking into another transaction (#8746). The store-level race —
+  op-log appends against lock-free archive flushes over one connection — is
+  covered on both backends by
+  `src/app/op-log/testing/integration/sqlite-shared-connection.integration.spec.ts`.
+- Index reads exclude rows whose index column is NULL (a local op in
+  `bySyncedAt` / `bySourceAndStatus`), matching IndexedDB, which does not index
+  a record lacking the keyPath value (#8312).
+- Ranges are scalar-only; a compound index is queried by an exact key tuple
+  (`DbIndexQuery`). A genuine compound range has no meaning both backends
+  agree on, so the port cannot express one.
+- `DbIterateOptions.limit` pushes "first / latest row" scans down to `LIMIT ?`
+  so `getLastSeq()` never transfers the whole ops table (#8313).
 - `migrateOpLogBackend()` copies all op-log stores into an empty destination
   transaction and verifies operation count, last sequence, and vector clock
   before commit. It is validated in CI for real IndexedDB to `sql.js`.
@@ -121,7 +132,10 @@ Complete these in order:
 2. Validate insert IDs, transaction/error mapping, app pause/resume, abrupt
    termination, and representative bulk writes on Android and iOS.
 3. Provide the two persistence services separate adapters over the same
-   physical connection.
+   physical connection, after dual-running the store-level integration specs
+   that compose multi-store transactions (`race-conditions`,
+   `clean-slate-interrupt`) against `SqliteOpLogAdapter`, as
+   `remote-apply-store-port` and `sqlite-shared-connection` already do.
 4. Add the native-only, default-off provider selection.
 5. Wire startup detection, quiescence, `migrateOpLogBackend()`, the completion
    marker, retained-source fallback, and interrupted-migration recovery.
@@ -149,6 +163,7 @@ Focused CI checks:
 npm run test:file src/app/op-log/persistence/sqlite-op-log-adapter.spec.ts
 npm run test:file src/app/op-log/persistence/op-log-backend-migration.spec.ts
 npm run test:file src/app/op-log/testing/integration/remote-apply-store-port.integration.spec.ts
+npm run test:file src/app/op-log/testing/integration/sqlite-shared-connection.integration.spec.ts
 ```
 
 CI proves adapter and SQLite-engine semantics, not the Capacitor bridge or

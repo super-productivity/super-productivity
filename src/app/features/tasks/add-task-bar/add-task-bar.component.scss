@@ -61,6 +61,9 @@
 // apply an additional offset when the keyboard still overlays that viewport;
 // using its full height here would move the fixed bar twice (#8778).
 //
+// `--keyboard-overlay-offset` is bound on this host by the component from
+// IosKeyboardService, not inherited from `:root` (#9779).
+//
 // Deliberately no `--safe-area-bottom` here, unlike the rule above: on iOS the
 // inset comes from capacitor-plugin-safe-area, which reads the window insets and
 // re-reads them on orientation change only — so it keeps reporting the home
