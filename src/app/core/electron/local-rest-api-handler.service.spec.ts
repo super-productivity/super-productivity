@@ -10,6 +10,7 @@ import { TagService } from '../../features/tag/tag.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
 import { Task, TaskWithSubTasks, TaskArchive } from '../../features/tasks/task.model';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
@@ -35,6 +36,7 @@ describe('LocalRestApiHandlerService', () => {
   let tagServiceMock: jasmine.SpyObj<TagService>;
   let dateServiceMock: jasmine.SpyObj<DateService>;
   let store: MockStore;
+  let dispatchSpy: jasmine.Spy;
   let activeProjects: Project[];
   let requestHandler: ((payload: LocalRestApiRequestPayload) => void) | null = null;
   let responsePromiseResolve: ((response: LocalRestApiResponsePayload) => void) | null =
@@ -224,6 +226,7 @@ describe('LocalRestApiHandlerService', () => {
 
     service = TestBed.inject(LocalRestApiHandlerService);
     store = TestBed.inject(MockStore);
+    dispatchSpy = spyOn(store, 'dispatch');
   });
 
   afterEach(() => {
@@ -905,6 +908,87 @@ describe('LocalRestApiHandlerService', () => {
         );
       });
 
+      it('should set a deadline after creating the task and then read the response', async () => {
+        const taskLookup = jasmine.createSpy('taskLookup').and.callFake(() => {
+          expect(dispatchSpy).toHaveBeenCalled();
+          return of(createMockTask('new-task-id', { deadlineDay: '2026-05-12' }));
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => taskLookup,
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: {
+              title: 'Deadline task',
+              notes: 'created through REST',
+              deadlineDay: '2026-05-12',
+            },
+          }),
+        );
+
+        expect(taskServiceMock.add).toHaveBeenCalledWith('Deadline task', false, {
+          title: 'Deadline task',
+          notes: 'created through REST',
+        });
+        expect(dispatchSpy).toHaveBeenCalledOnceWith(
+          TaskSharedActions.setDeadline({
+            taskId: 'new-task-id',
+            deadlineDay: '2026-05-12',
+            autoPlanToday: '2026-05-12',
+            autoPlanStartOfNextDayDiffMs: 0,
+            isSkipSnack: true,
+          }),
+        );
+        expect(response.body.ok).toBe(true);
+        if (!response.body.ok) {
+          throw new Error('Expected a success response');
+        }
+        expect(response.body.data).toEqual(
+          jasmine.objectContaining({ deadlineDay: '2026-05-12' }),
+        );
+      });
+
+      it('should not dispatch a deadline removal for all-null deadline fields', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('new-task-id')),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: {
+              title: 'Task without deadline',
+              deadlineDay: null,
+              deadlineWithTime: null,
+              deadlineRemindAt: null,
+            },
+          }),
+        );
+
+        expect(response.status).toBe(201);
+        expect(dispatchSpy).not.toHaveBeenCalled();
+      });
+
+      it('should reject conflicting deadline fields on create', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: {
+              title: 'Invalid deadline',
+              deadlineDay: '2026-05-12',
+              deadlineWithTime: 1_778_582_400_000,
+            },
+          }),
+        );
+
+        expect(response.status).toBe(400);
+        expect(response.body.ok).toBe(false);
+        if (response.body.ok) {
+          throw new Error('Expected an error response');
+        }
+        expect(response.body.error.code).toBe('INVALID_INPUT');
+        expect(taskServiceMock.add).not.toHaveBeenCalled();
+      });
+
       it('should return 400 for missing title', async () => {
         const response = await sendRequestAndWait(
           createRequest('POST', '/tasks', { body: { notes: 'some notes' } }),
@@ -996,6 +1080,43 @@ describe('LocalRestApiHandlerService', () => {
             notes: 'child notes',
           });
           expect(taskServiceMock.add).not.toHaveBeenCalled();
+        });
+
+        it('should set a deadline on a newly created subtask', async () => {
+          const parentTask = createMockTask('parent-1', { projectId: 'project-1' });
+          const newSubTask = createMockTask('new-subtask-id', {
+            parentId: 'parent-1',
+            projectId: 'project-1',
+            deadlineWithTime: 1_778_582_400_000,
+          });
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (id: string) =>
+              id === 'parent-1' ? of(parentTask) : of(newSubTask),
+          });
+
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: {
+                title: 'Child with deadline',
+                parentId: 'parent-1',
+                deadlineWithTime: 1_778_582_400_000,
+              },
+            }),
+          );
+
+          expect(taskServiceMock.addSubTaskTo).toHaveBeenCalledWith('parent-1', {
+            title: 'Child with deadline',
+          });
+          expect(dispatchSpy).toHaveBeenCalledOnceWith(
+            TaskSharedActions.setDeadline({
+              taskId: 'new-subtask-id',
+              deadlineWithTime: 1_778_582_400_000,
+              autoPlanToday: '2026-05-12',
+              autoPlanStartOfNextDayDiffMs: 0,
+              isSkipSnack: true,
+            }),
+          );
+          expect(response.status).toBe(201);
         });
 
         it('should return 404 when parentId does not exist', async () => {
@@ -1127,6 +1248,376 @@ describe('LocalRestApiHandlerService', () => {
         );
       });
 
+      it('should set a day deadline through the deadline action', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineDay: '2026-05-12' },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(dispatchSpy).toHaveBeenCalledOnceWith(
+          TaskSharedActions.setDeadline({
+            taskId: 'task-1',
+            deadlineDay: '2026-05-12',
+            autoPlanToday: '2026-05-12',
+            autoPlanStartOfNextDayDiffMs: 0,
+            isSkipSnack: true,
+          }),
+        );
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should set a timed deadline and clear the day deadline via the action', async () => {
+        const mockTask = createMockTask('task-1', { deadlineDay: '2026-05-11' });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineWithTime: 1_778_582_400_000 },
+          }),
+        );
+
+        expect(dispatchSpy).toHaveBeenCalledOnceWith(
+          TaskSharedActions.setDeadline({
+            taskId: 'task-1',
+            deadlineWithTime: 1_778_582_400_000,
+            autoPlanToday: '2026-05-12',
+            autoPlanStartOfNextDayDiffMs: 0,
+            isSkipSnack: true,
+          }),
+        );
+      });
+
+      it('should remove a deadline when both deadline fields are null', async () => {
+        const mockTask = createMockTask('task-1', {
+          deadlineDay: '2026-05-12',
+          deadlineRemindAt: 1_778_496_000_000,
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineDay: null, deadlineWithTime: null },
+          }),
+        );
+
+        expect(dispatchSpy).toHaveBeenCalledOnceWith(
+          TaskSharedActions.removeDeadline({ taskId: 'task-1', isSkipSnack: true }),
+        );
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should ignore nulling deadlineWithTime when the task has a day deadline', async () => {
+        const mockTask = createMockTask('task-1', {
+          deadlineDay: '2026-05-12',
+          deadlineRemindAt: 1_778_496_000_000,
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineWithTime: null },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(dispatchSpy).not.toHaveBeenCalled();
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should ignore nulling deadlineDay when the task has a timed deadline', async () => {
+        const mockTask = createMockTask('task-1', {
+          deadlineWithTime: 1_778_582_400_000,
+          deadlineRemindAt: 1_778_496_000_000,
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineDay: null },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(dispatchSpy).not.toHaveBeenCalled();
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should keep the reminder when re-sending the unchanged day deadline', async () => {
+        const mockTask = createMockTask('task-1', {
+          deadlineDay: '2026-05-12',
+          deadlineRemindAt: 1_778_496_000_000,
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineDay: '2026-05-12' },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(dispatchSpy).not.toHaveBeenCalled();
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should keep the reminder when re-sending the unchanged timed deadline', async () => {
+        const mockTask = createMockTask('task-1', {
+          deadlineWithTime: 1_778_582_400_000,
+          deadlineRemindAt: 1_778_496_000_000,
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineWithTime: 1_778_582_400_000 },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(dispatchSpy).not.toHaveBeenCalled();
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should clear only the reminder without re-planning a day deadline', async () => {
+        const mockTask = createMockTask('task-1', {
+          deadlineDay: '2026-05-12',
+          deadlineRemindAt: 1_778_496_000_000,
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineRemindAt: null },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(dispatchSpy).toHaveBeenCalledOnceWith(
+          TaskSharedActions.clearDeadlineReminder({ taskId: 'task-1' }),
+        );
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should clear only the reminder without re-planning a timed deadline', async () => {
+        const mockTask = createMockTask('task-1', {
+          deadlineWithTime: 1_778_582_400_000,
+          deadlineRemindAt: 1_778_496_000_000,
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineRemindAt: null },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(dispatchSpy).toHaveBeenCalledOnceWith(
+          TaskSharedActions.clearDeadlineReminder({ taskId: 'task-1' }),
+        );
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should set a deadline reminder alongside a deadline', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: {
+              deadlineDay: '2026-05-13',
+              deadlineRemindAt: 1_778_496_000_000,
+            },
+          }),
+        );
+
+        expect(dispatchSpy).toHaveBeenCalledOnceWith(
+          TaskSharedActions.setDeadline({
+            taskId: 'task-1',
+            deadlineDay: '2026-05-13',
+            deadlineRemindAt: 1_778_496_000_000,
+            isSkipSnack: true,
+          }),
+        );
+      });
+
+      it('should update a reminder while preserving the existing deadline', async () => {
+        const mockTask = createMockTask('task-1', {
+          deadlineDay: '2026-05-13',
+        });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineRemindAt: 1_778_496_000_000 },
+          }),
+        );
+
+        expect(dispatchSpy).toHaveBeenCalledOnceWith(
+          TaskSharedActions.setDeadline({
+            taskId: 'task-1',
+            deadlineDay: '2026-05-13',
+            deadlineRemindAt: 1_778_496_000_000,
+            isSkipSnack: true,
+          }),
+        );
+      });
+
+      it('should reject conflicting day and timed deadlines', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: {
+              deadlineDay: '2026-05-13',
+              deadlineWithTime: 1_778_582_400_000,
+            },
+          }),
+        );
+
+        expect(response.status).toBe(400);
+        expect(response.body.ok).toBe(false);
+        if (response.body.ok) {
+          throw new Error('Expected an error response');
+        }
+        expect(response.body.error.code).toBe('INVALID_INPUT');
+        expect(dispatchSpy).not.toHaveBeenCalled();
+        expect(taskServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      for (const invalidDeadlineDay of ['2026/05/13', '2026-02-30']) {
+        it(`should reject an invalid deadline day (${invalidDeadlineDay})`, async () => {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { deadlineDay: invalidDeadlineDay },
+            }),
+          );
+
+          expect(response.status).toBe(400);
+          expect(response.body.ok).toBe(false);
+          if (response.body.ok) {
+            throw new Error('Expected an error response');
+          }
+          expect(response.body.error.code).toBe('INVALID_INPUT');
+          expect(dispatchSpy).not.toHaveBeenCalled();
+        });
+      }
+
+      for (const invalidField of ['deadlineWithTime', 'deadlineRemindAt'] as const) {
+        it(`should reject a non-positive ${invalidField}`, async () => {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { [invalidField]: 0 },
+            }),
+          );
+
+          expect(response.status).toBe(400);
+          expect(response.body.ok).toBe(false);
+          if (response.body.ok) {
+            throw new Error('Expected an error response');
+          }
+          expect(response.body.error.code).toBe('INVALID_INPUT');
+          expect(dispatchSpy).not.toHaveBeenCalled();
+        });
+      }
+
+      it('should reject a deadline reminder without a deadline', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { deadlineRemindAt: 1_778_496_000_000 },
+          }),
+        );
+
+        expect(response.status).toBe(400);
+        expect(response.body.ok).toBe(false);
+        if (response.body.ok) {
+          throw new Error('Expected an error response');
+        }
+        expect(response.body.error.code).toBe('INVALID_INPUT');
+        expect(dispatchSpy).not.toHaveBeenCalled();
+      });
+
+      it('should combine a deadline with normal task fields', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: { title: 'Updated title', deadlineDay: '2026-05-13' },
+          }),
+        );
+
+        expect(taskServiceMock.update).toHaveBeenCalledOnceWith('task-1', {
+          title: 'Updated title',
+        });
+        expect(dispatchSpy).toHaveBeenCalledOnceWith(
+          TaskSharedActions.setDeadline({
+            taskId: 'task-1',
+            deadlineDay: '2026-05-13',
+            isSkipSnack: true,
+          }),
+        );
+      });
+
+      it('should set a deadline on an existing subtask', async () => {
+        const mockTask = createMockTask('subtask-1', { parentId: 'parent-1' });
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/subtask-1', {
+            body: { deadlineDay: '2026-05-13' },
+          }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(dispatchSpy).toHaveBeenCalledOnceWith(
+          TaskSharedActions.setDeadline({
+            taskId: 'subtask-1',
+            deadlineDay: '2026-05-13',
+            isSkipSnack: true,
+          }),
+        );
+      });
+
       it('should return 404 for non-existent task', async () => {
         Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
           get: () => (_id: string) => of(undefined),
@@ -1138,6 +1629,23 @@ describe('LocalRestApiHandlerService', () => {
 
         expect(response.body.ok).toBe(false);
         expect(response.status).toBe(404);
+      });
+
+      it('should return 404 when PATCH targets an unavailable task', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(undefined),
+        });
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/archived-task', {
+            body: { deadlineDay: '2026-05-13' },
+          }),
+        );
+
+        expect(response.status).toBe(404);
+        expect(response.body.ok).toBe(false);
+        expect(dispatchSpy).not.toHaveBeenCalled();
+        expect(taskArchiveServiceMock.hasTask).not.toHaveBeenCalled();
       });
 
       it('should return 400 for invalid body', async () => {
