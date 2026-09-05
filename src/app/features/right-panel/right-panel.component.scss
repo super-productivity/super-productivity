@@ -111,6 +111,13 @@
   height: 100%;
   position: relative;
   z-index: 2;
+  box-sizing: border-box;
+  // .edge-close-handle reaches 12px into this container (left: -8px, width:
+  // 20px) and is vertically centered on the whole panel height, not on the
+  // content's height, so it can land anywhere along the left edge and
+  // overlap short content. Reserve enough space that no row ever sits
+  // under it.
+  padding-left: var(--s2);
 }
 
 .right-panel {
