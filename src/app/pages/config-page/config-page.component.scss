@@ -61,7 +61,13 @@
     }
 
     ::ng-deep .mat-mdc-tab-labels {
-      justify-content: flex-start;
+      justify-content: center;
+
+      @include mq(md, max) {
+        width: 100%;
+        max-width: var(--component-max-width);
+        margin-inline: auto;
+      }
     }
 
     ::ng-deep .mat-mdc-tab {
@@ -75,6 +81,7 @@
       }
 
       @include mq(md, max) {
+        flex-grow: 1 !important;
         min-width: 48px;
         padding: 0 var(--s);
       }
