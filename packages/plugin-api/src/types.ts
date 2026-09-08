@@ -28,10 +28,11 @@ export interface PluginTaskContextMenuContext {
 export interface PluginTaskContextMenuEntryCfg {
   /** Unique within this plugin. */
   id: string;
+  /** A non-empty action label of at most 80 characters. */
   label: string;
-  /** Material icon name. */
+  /** Optional Material icon ligature name. Custom SVG assets are not supported. */
   icon?: string;
-  /** Defaults to both regular tasks and subtasks. */
+  /** Defaults to both regular tasks and subtasks when omitted; an empty array is invalid. */
   showFor?: readonly PluginTaskContextMenuTarget[];
   onClick: (context: PluginTaskContextMenuContext) => void | Promise<void>;
 }

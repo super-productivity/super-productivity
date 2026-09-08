@@ -464,17 +464,18 @@ update the task when needed.
 PluginAPI.registerTaskContextMenuEntry({
   id: 'copy-external-link', // Unique within this plugin
   label: 'Copy external link',
-  icon: 'link', // Optional Material icon name
-  showFor: ['TASK'], // Optional: TASK, SUBTASK, or both when omitted
+  icon: 'link', // Optional Material icon ligature name (custom SVGs are not supported)
+  showFor: ['TASK'], // Optional: TASK, SUBTASK, or both when omitted; [] is invalid
   onClick: ({ taskId }) => {
     console.log('Selected task:', taskId);
   },
 });
 ```
 
-Entries appear under **Plugin actions** in the task's context menu. Re-registering
-the same `id` replaces the previous entry, and all entries are removed when the
-plugin unloads.
+Entries appear under **Plugin actions** in the task's context menu. Labels contain at
+most 80 characters; add a short plugin-specific prefix yourself when disambiguation is
+needed. Re-registering the same `id` replaces the previous entry, and all entries are
+removed when the plugin unloads.
 
 #### Side Panel Button
 

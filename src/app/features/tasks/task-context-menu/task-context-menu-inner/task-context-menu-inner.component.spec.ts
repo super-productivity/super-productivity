@@ -214,7 +214,7 @@ describe('TaskContextMenuInnerComponent', () => {
 
     it('does not invoke plugin callbacks while rendering the menu', () => {
       const onClick = jasmine.createSpy('onClick');
-      registry.register('plugin-a', 'Plugin A', {
+      registry.register('plugin-a', {
         id: 'action',
         label: 'Run action',
         onClick,
@@ -232,7 +232,7 @@ describe('TaskContextMenuInnerComponent', () => {
 
     it('passes only the exact task id when the plugin action is selected', async () => {
       const onClick = jasmine.createSpy('onClick');
-      registry.register('plugin-a', 'Plugin A', {
+      registry.register('plugin-a', {
         id: 'action',
         label: 'Run action',
         onClick,
@@ -250,7 +250,7 @@ describe('TaskContextMenuInnerComponent', () => {
     });
 
     it('uses SUBTASK filtering for tasks with a parent', () => {
-      registry.register('plugin-a', 'Plugin A', {
+      registry.register('plugin-a', {
         id: 'subtask-action',
         label: 'Subtask action',
         showFor: ['SUBTASK'],

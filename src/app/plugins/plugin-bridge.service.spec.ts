@@ -356,14 +356,13 @@ describe('PluginBridgeService - Counter Methods', () => {
       onClick: () => undefined,
     };
 
-    it('binds the plugin identity and manifest name when registering an entry', () => {
+    it('binds the plugin identity when registering an entry', () => {
       service
         .createBoundMethods(manifest.id, manifest)
         .registerTaskContextMenuEntry(entry);
 
       expect(taskContextMenuRegistry.register).toHaveBeenCalledOnceWith(
         manifest.id,
-        manifest.name,
         entry,
       );
     });

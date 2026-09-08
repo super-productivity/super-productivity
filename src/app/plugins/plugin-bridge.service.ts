@@ -310,7 +310,7 @@ export class PluginBridgeService implements OnDestroy {
       registerMenuEntry: (cfg: Omit<PluginMenuEntryCfg, 'pluginId'>) =>
         this._registerMenuEntry(pluginId, cfg),
       registerTaskContextMenuEntry: (cfg: PluginTaskContextMenuEntryCfg) =>
-        this._taskContextMenuRegistry.register(pluginId, manifest?.name ?? pluginId, cfg),
+        this._taskContextMenuRegistry.register(pluginId, cfg),
       registerSidePanelButton: (cfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>) =>
         this._registerSidePanelButton(pluginId, cfg),
       registerWorkContextHeaderButton: (

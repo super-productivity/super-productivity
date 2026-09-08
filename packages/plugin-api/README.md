@@ -43,8 +43,8 @@ PluginAPI.registerHeaderButton({
 PluginAPI.registerTaskContextMenuEntry({
   id: 'copy-external-link',
   label: 'Copy external link',
-  icon: 'link',
-  showFor: ['TASK'],
+  icon: 'link', // Optional Material icon ligature name; custom SVGs are not supported
+  showFor: ['TASK'], // Omit for both targets; [] is invalid
   onClick: ({ taskId }) => {
     console.log('Selected task:', taskId);
   },

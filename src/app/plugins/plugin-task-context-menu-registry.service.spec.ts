@@ -14,7 +14,7 @@ describe('PluginTaskContextMenuRegistryService', () => {
     cfg: Partial<PluginTaskContextMenuEntryCfg> = {},
   ): jasmine.Spy => {
     const onClick = jasmine.createSpy(`${pluginId}OnClick`);
-    service.register(pluginId, `${pluginId} name`, {
+    service.register(pluginId, {
       id: 'action',
       label: 'Run action',
       onClick,
@@ -55,6 +55,9 @@ describe('PluginTaskContextMenuRegistryService', () => {
         showFor: ['UNKNOWN' as 'TASK'],
       }),
     ).toThrowError(T.PLUGINS.TASK_CONTEXT_MENU_ENTRY_TARGET_INVALID);
+    expect(() => register('plugin-a', { showFor: [] })).toThrowError(
+      T.PLUGINS.TASK_CONTEXT_MENU_ENTRY_TARGET_INVALID,
+    );
   });
 
   it('shows entries for tasks and subtasks by default', () => {
@@ -95,6 +98,27 @@ describe('PluginTaskContextMenuRegistryService', () => {
     ]);
   });
 
+  it('preserves registration order within the same plugin', () => {
+    register('plugin-a', { id: 'set-color' });
+    register('plugin-a', { id: 'clear-color' });
+
+    expect(service.entriesFor('TASK').map((entry) => entry.entryId)).toEqual([
+      'set-color',
+      'clear-color',
+    ]);
+  });
+
+  it('keeps an entry in place when re-registering it', () => {
+    register('plugin-a', { id: 'first' });
+    register('plugin-a', { id: 'second' });
+    register('plugin-a', { id: 'first', label: 'Replacement' });
+
+    expect(service.entriesFor('TASK').map((entry) => entry.entryId)).toEqual([
+      'first',
+      'second',
+    ]);
+  });
+
   it('removes only the unloaded plugin and cannot execute its stale callback', async () => {
     const removed = register('plugin-a');
     register('plugin-b');
@@ -111,7 +135,7 @@ describe('PluginTaskContextMenuRegistryService', () => {
   it('contains rejected callbacks instead of returning a rejection', async () => {
     const error = new Error('plugin failure');
     const logError = spyOn(PluginLog, 'err');
-    service.register('plugin-a', 'Plugin A', {
+    service.register('plugin-a', {
       id: 'action',
       label: 'Run action',
       onClick: () => Promise.reject(error),

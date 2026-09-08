@@ -16,7 +16,6 @@ const VALID_TARGETS = new Set<PluginTaskContextMenuTarget>(DEFAULT_TARGETS);
 
 interface RegisteredTaskContextMenuEntry {
   pluginId: string;
-  pluginName: string;
   id: string;
   label: string;
   icon?: string;
@@ -26,7 +25,6 @@ interface RegisteredTaskContextMenuEntry {
 
 export interface PluginTaskContextMenuEntryView {
   readonly pluginId: string;
-  readonly pluginName: string;
   readonly entryId: string;
   readonly label: string;
   readonly icon?: string;
@@ -37,11 +35,7 @@ export class PluginTaskContextMenuRegistryService {
   private readonly _entries = signal<RegisteredTaskContextMenuEntry[]>([]);
   private readonly _translateService = inject(TranslateService);
 
-  register(
-    pluginId: string,
-    pluginName: string,
-    cfg: PluginTaskContextMenuEntryCfg,
-  ): void {
+  register(pluginId: string, cfg: PluginTaskContextMenuEntryCfg): void {
     const id = typeof cfg.id === 'string' ? cfg.id.trim() : '';
     const label = typeof cfg.label === 'string' ? cfg.label.trim() : '';
     if (!ENTRY_ID_PATTERN.test(id)) {
@@ -72,8 +66,9 @@ export class PluginTaskContextMenuRegistryService {
       );
     }
 
-    const showFor = cfg.showFor?.length ? [...new Set(cfg.showFor)] : DEFAULT_TARGETS;
-    if (showFor.some((target) => !VALID_TARGETS.has(target))) {
+    const showFor =
+      cfg.showFor === undefined ? DEFAULT_TARGETS : [...new Set(cfg.showFor)];
+    if (!showFor.length || showFor.some((target) => !VALID_TARGETS.has(target))) {
       throw new Error(
         this._translateService.instant(T.PLUGINS.TASK_CONTEXT_MENU_ENTRY_TARGET_INVALID),
       );
@@ -81,27 +76,30 @@ export class PluginTaskContextMenuRegistryService {
 
     const newEntry: RegisteredTaskContextMenuEntry = {
       pluginId,
-      pluginName,
       id,
       label,
       icon: cfg.icon,
       showFor,
       onClick: cfg.onClick,
     };
-    const withoutPrevious = this._entries().filter(
-      (entry) => entry.pluginId !== pluginId || entry.id !== id,
+    const entries = this._entries();
+    const previousIndex = entries.findIndex(
+      (entry) => entry.pluginId === pluginId && entry.id === id,
     );
-    this._entries.set([...withoutPrevious, newEntry]);
+    this._entries.set(
+      previousIndex === -1
+        ? [...entries, newEntry]
+        : entries.map((entry, index) => (index === previousIndex ? newEntry : entry)),
+    );
     PluginLog.log('Plugin task context menu entry registered', { pluginId, entryId: id });
   }
 
   entriesFor(target: PluginTaskContextMenuTarget): PluginTaskContextMenuEntryView[] {
     return this._entries()
       .filter((entry) => entry.showFor.includes(target))
-      .sort((a, b) => a.pluginId.localeCompare(b.pluginId) || a.id.localeCompare(b.id))
+      .sort((a, b) => a.pluginId.localeCompare(b.pluginId))
       .map((entry) => ({
         pluginId: entry.pluginId,
-        pluginName: entry.pluginName,
         entryId: entry.id,
         label: entry.label,
         icon: entry.icon,

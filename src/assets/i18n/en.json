@@ -3237,7 +3237,7 @@
     "TASK_CONTEXT_MENU_ENTRY_LABEL_INVALID": "Task context menu entry label must be 1-{{maxLength}} characters",
     "TASK_CONTEXT_MENU_ENTRY_ICON_INVALID": "Task context menu entry icon must be a Material icon name",
     "TASK_CONTEXT_MENU_ENTRY_ONCLICK_REQUIRED": "Task context menu entry onClick handler is required",
-    "TASK_CONTEXT_MENU_ENTRY_TARGET_INVALID": "Task context menu entry showFor contains an unknown target",
+    "TASK_CONTEXT_MENU_ENTRY_TARGET_INVALID": "Task context menu entry showFor must contain TASK or SUBTASK",
     "MIN_VERSION": "Min. Version:",
     "NO_ADDITIONAL_INFO": "No additional information available",
     "NO_CONTENT_PROVIDED": "No content provided",

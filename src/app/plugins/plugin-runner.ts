@@ -134,7 +134,6 @@ export class PluginRunner {
       this._loadedPlugins.set(manifest.id, pluginInstance);
       return pluginInstance;
     } catch (error) {
-      this._pluginBridge.unregisterPluginHooks(manifest.id);
       PluginLog.err(`Failed to load plugin ${manifest.id}:`, error);
       throw error;
     }
