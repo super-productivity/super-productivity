@@ -14,7 +14,7 @@ import { pathToFileURL } from 'node:url';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { isExternalUrlSchemeAllowed } from './shared-with-frontend/is-external-url-allowed';
 import { isLocalFileUrl, openLocalPath } from './open-url';
-import { readFileSync, stat } from 'fs';
+import { readFileSync, watch } from 'fs';
 import { error, log } from 'electron-log/main';
 import { IS_MAC, IS_GNOME_WAYLAND } from './common.const';
 import {
@@ -355,22 +355,48 @@ export const createWindow = async ({
       mainWin.setTitle('Super Productivity D');
     }
 
-    // load custom stylesheet if any
-    const CSS_FILE_PATH = app.getPath('userData') + '/styles.css';
-    stat(app.getPath('userData') + '/styles.css', (err) => {
-      if (err) {
-        log('No custom styles detected at ' + CSS_FILE_PATH);
-      } else {
-        log('Loading custom styles from ' + CSS_FILE_PATH);
+    // load custom stylesheet if any, and re-apply it whenever the file changes
+    const CSS_FILE_PATH = path.join(app.getPath('userData'), 'styles.css');
+    let insertedCssKey: string | undefined;
+    const applyCustomCss = async (): Promise<void> => {
+      try {
         const styles = readFileSync(CSS_FILE_PATH, { encoding: 'utf8' });
-        try {
-          mainWin.webContents.insertCSS(styles);
-          log('Custom styles loaded successfully');
-        } catch (cssError) {
+        const prevKey = insertedCssKey;
+        insertedCssKey = await mainWin.webContents.insertCSS(styles);
+        if (prevKey) {
+          await mainWin.webContents.removeInsertedCSS(prevKey);
+        }
+        log('Custom styles loaded from ' + CSS_FILE_PATH);
+      } catch (cssError) {
+        if ((cssError as NodeJS.ErrnoException).code === 'ENOENT') {
+          log('No custom styles detected at ' + CSS_FILE_PATH);
+        } else {
           error('Failed to load custom styles:', cssError);
         }
       }
-    });
+    };
+    void applyCustomCss();
+
+    // Watch the folder rather than the file itself: the file may not exist
+    // yet, and editors often save atomically (write temp + rename), which
+    // detaches a watch bound to the original file. Debounced because a
+    // single save usually emits several events.
+    let cssReloadTimer: NodeJS.Timeout | undefined;
+    try {
+      const cssWatcher = watch(app.getPath('userData'), (_ev, fileName) => {
+        if (fileName && path.basename(fileName.toString()) !== 'styles.css') {
+          return;
+        }
+        clearTimeout(cssReloadTimer);
+        cssReloadTimer = setTimeout(() => void applyCustomCss(), 150);
+      });
+      mainWin.webContents.once('destroyed', () => {
+        clearTimeout(cssReloadTimer);
+        cssWatcher.close();
+      });
+    } catch (watchError) {
+      error('Could not watch for custom style changes:', watchError);
+    }
   });
 
   // show gracefully
