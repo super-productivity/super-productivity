@@ -1,6 +1,7 @@
 import { createFeatureSelector, createSelector } from '@ngrx/store';
 import { FOCUS_MODE_FEATURE_KEY } from './focus-mode.reducer';
 import { FocusModeState } from '../focus-mode.model';
+import { selectCurrentTask } from '../../tasks/store/task.selectors';
 
 // Base selectors
 export const selectFocusModeState =
@@ -95,28 +96,6 @@ export const selectIsRunning = createSelector(
   (timer) => timer.isRunning && timer.purpose !== null,
 );
 
-/**
- * Whether the running focus session owns the OS progress bar (taskbar/dock).
- * Exactly one writer may own that surface, so `task-electron.effects` stands
- * down on this same flag — when both wrote, the bar cycled between the two
- * values every second (#9944). An open-ended (Flowtime) session has no target
- * duration and therefore no progress of its own, so it leaves the bar to the
- * task writer rather than publishing a meaningless 0.
- */
-export const selectIsOsProgressBarOwnedBySession = createSelector(
-  selectIsRunning,
-  selectTimeDuration,
-  (isRunning, duration) => isRunning && duration > 0,
-);
-
-/** What the focus session should publish, or `null` when it owns nothing. */
-export const selectOsProgressBar = createSelector(
-  selectIsOsProgressBarOwnedBySession,
-  selectProgress,
-  (isOwnedBySession, progress): { progress: number; progressBarMode: 'normal' } | null =>
-    isOwnedBySession ? { progress: progress / 100, progressBarMode: 'normal' } : null,
-);
-
 // Session completed selector
 export const selectIsSessionCompleted = createSelector(
   selectCurrentScreen,
@@ -152,4 +131,19 @@ export const selectIsInOvertime = createSelector(
     timer.purpose === 'work' &&
     timer.duration > 0 &&
     timer.elapsed >= timer.duration,
+);
+
+// Flowtime has no fixed duration: use the task estimate for desktop progress.
+// A negative value hides the bar when neither timer nor task has a target.
+export const selectDesktopProgress = createSelector(
+  selectTimer,
+  selectCurrentTask,
+  (timer, task) => {
+    if (timer.purpose === null) return -1;
+    if (timer.duration > 0) return timer.elapsed / timer.duration;
+    if (timer.purpose === 'work' && task && task.timeEstimate > 0) {
+      return task.timeSpent / task.timeEstimate;
+    }
+    return -1;
+  },
 );

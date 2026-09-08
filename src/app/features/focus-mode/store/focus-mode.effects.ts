@@ -858,8 +858,6 @@ export class FocusModeEffects {
   // Follows action-based pattern (CLAUDE.md Section 8) instead of selector-based
   setTaskBarProgress$ = createEffect(
     () =>
-      // Gated inside the pipe, not by returning a shared EMPTY: createEffect
-      // tags the returned observable, and a singleton cannot be tagged twice.
       this.actions$.pipe(
         filter(() => this._isElectron),
         ofType(
@@ -874,25 +872,20 @@ export class FocusModeEffects {
           actions.cancelFocusSession,
           actions.selectFocusTask,
         ),
-        // Throttle to prevent excessive IPC calls (timer ticks every 1s)
-        // Use leading + trailing to ensure immediate feedback and final state
         throttleTime(500, undefined, { leading: true, trailing: true }),
-        withLatestFrom(this.store.select(selectors.selectOsProgressBar)),
-        map(([_action, osProgressBar]) => osProgressBar),
-        // null = the session owns nothing (open-ended Flowtime, or a timed
-        // session that was paused/cancelled) and task-electron.effects
-        // publishes the task's own progress instead. Clear the bar exactly
-        // once on the owned -> null handoff, else it stays frozen at the last
-        // session value; nothing else clears it since focus mode dispatches
-        // unsetCurrentTask, not the setCurrentTask that setTaskBarNoProgress$
-        // listens for. Consecutive nulls (Flowtime ticks) send nothing so we
-        // don't fight the task writer every 500ms.
-        startWith(null),
-        pairwise(),
-        filter(([prev, curr]) => curr !== null || prev !== null),
-        tap(([_prev, curr]) => {
-          window.ea.setProgressBar(curr ?? { progress: -1, progressBarMode: 'none' });
-        }),
+        withLatestFrom(
+          this.store.select(selectors.selectDesktopProgress),
+          this.store.select(selectors.selectIsRunning),
+        ),
+        map(([, progress, isRunning]) => ({
+          progress,
+          progressBarMode: progress < 0 ? 'none' as const : isRunning ? 'normal' as const : 'pause' as const,
+        })),
+        // A stray tick after cancellation must not clear ordinary task progress again.
+        distinctUntilChanged((prev, curr) =>
+          prev.progress === curr.progress && prev.progressBarMode === curr.progressBarMode,
+        ),
+        tap((progressBar) => window.ea.setProgressBar(progressBar)),
       ),
     { dispatch: false },
   );

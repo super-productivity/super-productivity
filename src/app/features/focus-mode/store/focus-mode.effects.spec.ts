@@ -3105,7 +3105,7 @@ describe('FocusModeEffects', () => {
       expect(setProgressBarSpy).toHaveBeenCalledOnceWith(NO_PROGRESS);
     }));
 
-    it('should clear the bar when a countdown session is paused', fakeAsync(() => {
+    it('should preserve progress when a countdown session is paused', fakeAsync(() => {
       setTimer(runningCountdown);
       const sub = effects.setTaskBarProgress$.subscribe();
       dispatch(actions.tick());
@@ -3115,12 +3115,11 @@ describe('FocusModeEffects', () => {
       dispatch(actions.pauseFocusSession({}));
       sub.unsubscribe();
 
-      expect(setProgressBarSpy).toHaveBeenCalledOnceWith(NO_PROGRESS);
+      expect(setProgressBarSpy).toHaveBeenCalledOnceWith({ progress: 0.2, progressBarMode: 'pause' });
     }));
 
-    // Flowtime owns nothing, so the task writer publishes instead; clearing on
-    // every tick would fight it and make the bar flicker.
-    it('should never write while a Flowtime session ticks', fakeAsync(() => {
+    // An open-ended timer without a task estimate hides the bar once.
+    it('should hide progress once for Flowtime without a task estimate', fakeAsync(() => {
       setTimer(runningFlowtime);
       const sub = effects.setTaskBarProgress$.subscribe();
 
@@ -3129,7 +3128,7 @@ describe('FocusModeEffects', () => {
       dispatch(actions.tick());
       sub.unsubscribe();
 
-      expect(setProgressBarSpy).not.toHaveBeenCalled();
+      expect(setProgressBarSpy).toHaveBeenCalledOnceWith(NO_PROGRESS);
     }));
   });
 });
