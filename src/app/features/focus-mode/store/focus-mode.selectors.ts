@@ -35,6 +35,12 @@ export const selectLastSessionDuration = createSelector(
   (state) => state.lastCompletedDuration,
 );
 
+// A paused work/break timer still owns the desktop timer display.
+export const selectIsTimerActive = createSelector(
+  selectTimer,
+  (timer) => timer.purpose !== null,
+);
+
 // Session selectors
 export const selectIsSessionRunning = createSelector(
   selectTimer,
