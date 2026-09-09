@@ -3095,6 +3095,8 @@
     "SHARE_SUCCESS": "Project shared on Plainspace. Tasks assigned to you will import automatically.",
     "SPACE_PICKER": {
       "CREATE_NEW": "Create new space",
+      "DISCONNECT": "Disconnect account",
+      "DISCONNECT_HINT": "Disconnecting removes the saved account from this device. Existing project integrations keep syncing. To stop them, open each relevant Plainspace integration in the issue provider panel and choose its gear icon → Delete.",
       "ERROR": "Couldn't reach Plainspace. Check your connection and that your token is still valid, then try again.",
       "INTRO": "Link an existing space to import the tasks assigned to you, or create a new one.",
       "LINK": "Link space",

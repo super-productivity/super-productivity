@@ -65,4 +65,57 @@ describe('PlainspaceAccountService', () => {
     expect(service.token()).toBeNull();
     expect(localStorage.getItem(LS.PLAINSPACE_ACCOUNT)).toBeNull();
   });
+
+  it('restores a saved account on reinitialization, but stays disconnected after logout', async () => {
+    const connected = service.connect('pat_x');
+    httpMock.expectOne(ME_URL).flush({ email: 'me@example.com', projects: [] });
+    await connected;
+
+    const restored = TestBed.runInInjectionContext(() => new PlainspaceAccountService());
+    expect(restored.account()).toEqual(service.account());
+    expect(restored.isLoggedIn()).toBe(true);
+
+    restored.logout();
+
+    const restarted = TestBed.runInInjectionContext(() => new PlainspaceAccountService());
+    expect(restarted.account()).toBeNull();
+    expect(restarted.isLoggedIn()).toBe(false);
+    expect(restarted.host()).toBeNull();
+    expect(restarted.token()).toBeNull();
+  });
+
+  it('stays disconnected when a pending reconnect succeeds after logout', async () => {
+    const connected = service.connect('pat_initial');
+    httpMock.expectOne(ME_URL).flush({ email: 'me@example.com', projects: [] });
+    await connected;
+
+    const reconnecting = service.connect('pat_pending');
+    const pendingRequest = httpMock.expectOne(ME_URL);
+    service.logout();
+    pendingRequest.flush({ email: 'me@example.com', projects: [] });
+
+    expect(await reconnecting).toBe(false);
+    expect(service.account()).toBeNull();
+    expect(service.isLoggedIn()).toBe(false);
+    expect(localStorage.getItem(LS.PLAINSPACE_ACCOUNT)).toBeNull();
+    const restarted = TestBed.runInInjectionContext(() => new PlainspaceAccountService());
+    expect(restarted.isLoggedIn()).toBe(false);
+  });
+
+  it('allows a new connection after logout without an older response overwriting it', async () => {
+    const pending = service.connect('pat_old');
+    const oldRequest = httpMock.expectOne(ME_URL);
+    service.logout();
+
+    const connecting = service.connect('pat_new');
+    httpMock.expectOne(ME_URL).flush({ email: 'new@example.com', projects: [] });
+    expect(await connecting).toBe(true);
+    oldRequest.flush({ email: 'old@example.com', projects: [] });
+
+    expect(await pending).toBe(false);
+    expect(service.token()).toBe('pat_new');
+    expect(service.account()?.email).toBe('new@example.com');
+    const restarted = TestBed.runInInjectionContext(() => new PlainspaceAccountService());
+    expect(restarted.account()).toEqual(service.account());
+  });
 });

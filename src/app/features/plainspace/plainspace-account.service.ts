@@ -20,6 +20,7 @@ const DEFAULT_HOST = 'https://plainspace.org';
 export class PlainspaceAccountService {
   private readonly _api = inject(PlainspaceApiService);
   private readonly _account = signal<PlainspaceAccount | null>(this._load());
+  private _logoutVersion = 0;
 
   readonly account = this._account.asReadonly();
   readonly isLoggedIn = computed(() => !!this._account());
@@ -28,13 +29,15 @@ export class PlainspaceAccountService {
 
   /**
    * Validates a PAT against the host (`GET /api/integration/me`) and, on
-   * success, stores it. Returns whether the token was accepted.
+   * success, stores it. Returns whether the account was connected.
    */
   async connect(token: string, host: string = DEFAULT_HOST): Promise<boolean> {
+    const logoutVersion = this._logoutVersion;
     const me = await firstValueFrom(
       this._api.getMe$({ ...DEFAULT_PLAINSPACE_CFG, host, token }),
     );
-    if (!me) {
+    // A late response must not restore an account after an explicit disconnect.
+    if (!me || logoutVersion !== this._logoutVersion) {
       return false;
     }
     const account: PlainspaceAccount = { host, token, email: me.email };
@@ -44,6 +47,7 @@ export class PlainspaceAccountService {
   }
 
   logout(): void {
+    this._logoutVersion++;
     this._account.set(null);
     localStorage.removeItem(LS.PLAINSPACE_ACCOUNT);
   }

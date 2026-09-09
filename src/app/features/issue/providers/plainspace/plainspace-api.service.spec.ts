@@ -218,14 +218,37 @@ describe('PlainspaceApiService', () => {
     // httpMock.verify() in afterEach asserts no /me call was made.
   });
 
-  it('createSpace$ returns the new project id', async () => {
+  it('creates a space, keeps its UUID for the provider, and resolves its slug for opening', async () => {
     const p = firstValueFrom(service.createSpace$('My Space', cfg));
     const req = httpMock.expectOne(`${BASE}/spaces`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ name: 'My Space' });
-    req.flush({ project: { id: 'proj-new' }, url: 'x', memberId: 'm' });
-    expect((await p).id).toBe('proj-new');
+    const project = { id: 'proj-new', name: 'My Space', slug: 'new-space-slug' };
+    const url = 'https://plainspace.org/new-space-slug';
+    req.flush({ project, url, memberId: 'm' });
+    const created = await p;
+    expect(created.id).toBe(project.id);
+
+    const openedUrl = firstValueFrom(
+      service.getSpaceUrl$({ ...cfg, spaceId: created.id }),
+    );
+    httpMock.expectOne(`${BASE}/me`).flush({
+      email: 'me@example.com',
+      projects: [{ ...project, memberDisplayName: 'Me', role: 'admin' }],
+    });
+    expect(await openedUrl).toBe(url);
   });
+
+  for (const status of [401, 429, 500]) {
+    it(`propagates space creation errors (${status}) so the share flow can report them`, async () => {
+      const created = firstValueFrom(service.createSpace$('My Space', cfg));
+      httpMock
+        .expectOne(`${BASE}/spaces`)
+        .flush({ error: 'Cannot create space' }, { status, statusText: 'API error' });
+
+      await expectAsync(created).toBeRejected();
+    });
+  }
 
   it('createTask$ POSTs { spaceId, title } and maps the created task', async () => {
     const p = firstValueFrom(service.createTask$('Buy milk', cfg));
