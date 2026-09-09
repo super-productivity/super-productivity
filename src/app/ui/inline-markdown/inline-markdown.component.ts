@@ -532,7 +532,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     if (textareaEl) {
       currentText = textareaEl.nativeElement.value;
       cursorPos = textareaEl.nativeElement.selectionStart;
-      selectionEnd = textareaEl.nativeElement.selectionEnd;
+      selectionEnd = textareaEl.nativeElement.selectionEnd ?? cursorPos;
     } else {
       currentText = this.modelCopy() || '';
     }
@@ -566,16 +566,15 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     let adjustedSelectionStart: number | undefined;
     let adjustedSelectionEnd: number | undefined;
 
-    if (
-      cursorPos !== undefined &&
-      selectionEnd !== undefined &&
-      cursorPos !== selectionEnd
-    ) {
+    let isChecklist = true;
+
+    if (cursorPos !== undefined && cursorPos !== selectionEnd) {
       // Convert selected text to checklist items
-      const result = applyTaskList(currentText, cursorPos, selectionEnd);
+      const result = applyTaskList(currentText, cursorPos, selectionEnd!);
       cleaned = result.text;
       adjustedSelectionStart = result.selectionStart;
       adjustedSelectionEnd = result.selectionEnd;
+      isChecklist = cleaned.includes('- [ ]') || cleaned.includes('- [x]');
     } else if (cursorPos !== undefined) {
       // Path A: Textarea visible — insert after cursor's current line
       let lineEnd = cursorPos;
@@ -602,7 +601,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     // Update model with FINAL value and emit to parent.
     // This ensures Angular CD won't reset modelCopy to a stale pre-insertion value.
     this.model = cleaned;
-    this.isChecklistMode.set(true);
+    this.isChecklistMode.set(isChecklist);
     this.changed.emit(cleaned);
 
     if (cursorPos !== undefined) {
