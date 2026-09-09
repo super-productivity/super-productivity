@@ -94,6 +94,10 @@ ruleTester.run('no-user-content-in-logs', rule, {
     { code: `Log.err('x', errorMsg);` },
     { code: `Log.err('x', errorMessage);` },
     { code: `Log.err('x', rollbackErrors);` },
+    // The observed Day/Date scalars, allowed by name rather than by suffix.
+    { code: `Log.log('x', { dueDay, deadlineDay, targetDate, dueDate });` },
+    // Delay/Duration as suffixes, not just whole words.
+    { code: `Log.log('x', { retryDelay, sessionDuration });` },
     // Not a logger.
     { code: `analytics.log(task);` },
     { code: `console.log(task);` },
@@ -252,6 +256,36 @@ ruleTester.run('no-user-content-in-logs', rule, {
       code: `Log.log({ duration: taskWithSubTasks });`,
       errors: [{ messageId: 'bareValue', data: { name: 'taskWithSubTasks' } }],
     },
+    // `*ForDay` / `*ByDay` is this repo's convention for a COLLECTION of tasks,
+    // so Day/Date must not be a blanket suffix — schedule/planner are
+    // error-scoped and these hold TaskCopy[].
+    {
+      code: `Log.log({ flowTasksForDay });`,
+      errors: [{ messageId: 'bareValue', data: { name: 'flowTasksForDay' } }],
+    },
+    {
+      code: `Log.log('x', tasksDueByDay);`,
+      errors: [{ messageId: 'bareValue', data: { name: 'tasksDueByDay' } }],
+    },
+    // `err*` needs a shape: `errorBody` is the raw HttpErrorResponse body the
+    // docstring warns is not narrowed by log.ts.
+    {
+      code: `Log.err('x', errorBody);`,
+      errors: [{ messageId: 'bareValue', data: { name: 'errorBody' } }],
+    },
+    {
+      code: `Log.err('x', errorPayload);`,
+      errors: [{ messageId: 'bareValue', data: { name: 'errorPayload' } }],
+    },
+    // An err* name must not vouch as a KEY, or the entity-label hole reopens.
+    {
+      code: `Log.log({ errorMsg: task });`,
+      errors: [{ messageId: 'bareValue', data: { name: 'task' } }],
+    },
+    {
+      code: `Log.log({ validationErrors: taskWithSubTasks });`,
+      errors: [{ messageId: 'bareValue', data: { name: 'taskWithSubTasks' } }],
+    },
     // Every context logger is covered, not just `Log`.
     {
       code: `PluginLog.warn('plugin cfg', cfg);`,
@@ -283,6 +317,15 @@ tsRuleTester.run('no-user-content-in-logs (typescript)', rule, {
     },
     {
       code: `Log.log('x', task as any);`,
+      errors: [{ messageId: 'bareValue', data: { name: 'task' } }],
+    },
+    // `satisfies` and `<T>x` carry the value through exactly as `!` and `as` do.
+    {
+      code: `Log.log('x', task satisfies Task);`,
+      errors: [{ messageId: 'bareValue', data: { name: 'task' } }],
+    },
+    {
+      code: `Log.log('x', <Task>task);`,
       errors: [{ messageId: 'bareValue', data: { name: 'task' } }],
     },
     // The spread path unwraps too, or `!` reopens the same evasion there.

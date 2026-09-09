@@ -110,16 +110,37 @@ const SAFE_SUFFIX_RE = suffixRe(SAFE_WORDS);
 // does. Whole-word and suffix are separate lists on purpose — a `Msg` suffix
 // would allow `snackMsg`, which routinely interpolates a task title.
 const SCALAR_WHOLE = new Set(['msg', 'seq', 'time', 'delay', 'duration']);
-const SCALAR_SUFFIX_RE = /(?:Seq|Time|Date|Day|At|Delay|Duration|Zoom|Factor)$/;
+// `Day`/`Date` are deliberately NOT suffixes: `*ForDay` / `*ByDay` is this
+// repo's convention for a collection of tasks (`flowTasksForDay`,
+// `deadlineTasksByDay`, `tasksDueByDay`), so a suffix match would wave whole
+// TaskCopy[] arrays through — and schedule/planner are error-scoped. The
+// observed scalar instances are listed by name instead.
+const SCALAR_SUFFIX_RE = /(?:Seq|Time|At|Delay|Duration|Zoom|Factor)$/;
+const SCALAR_DAY_DATE = new Set([
+  'dueday',
+  'deadlineday',
+  'plannedforday',
+  'targetdate',
+  'duedate',
+]);
 
 const ERROR_WHOLE = new Set(['e', 'ex', 'err', 'error', 'exception', 'reason']);
-const ERROR_SUFFIX_RE = /(?:Error|Errors|Err|Exception)$/;
+const ERROR_SUFFIX_RE = /(?:Error|Err|Exception)$/;
+// Value-only: ERROR_SUFFIX_RE is shared with isVouchingKey, and a plural
+// `*Errors` KEY must not vouch or `{ validationErrors: task }` reopens the
+// entity-label hole isVouchingKey exists to close.
+const ERROR_PLURAL_SUFFIX_RE = /Errors$/;
 // `errStr`, `errTxt`, `errorMsg`, `errorMessage` — the same allowance as the
 // conventional bare names, which `log.ts` narrows for a real `Error`. As with
 // ERROR_WHOLE this does not certify the value; see the HttpErrorResponse note
 // in the docstring. Value names only: an `err*` KEY must not vouch, or
 // `{ errorMsg: task }` reopens the entity-label hole isVouchingKey closes.
-const ERROR_PREFIX_RE = /^(?:err|error)[A-Z0-9]/;
+// A closed set of string-ish shapes, not a bare prefix. `/^err(or)?[A-Z]/`
+// also admitted `errorBody` — the raw provider response body in
+// handle-issue-provider-http-error.ts, which is exactly the un-narrowed
+// HttpErrorResponse payload the docstring above warns about — plus
+// `errorPayload`, `errorData`, `errTask`.
+const ERROR_PREFIX_RE = /^(?:err|error)(?:Str|Txt|Msg|Message|Text|Name|Code)$/;
 
 // A boolean says its own shape. `do`/`did`/`does` are absent — they would allow
 // `doNotDisturbList`. `use` is kept: it reads ambiguously in the abstract, but
@@ -158,6 +179,8 @@ const isSafeName = (name) => {
     SAFE_SUFFIX_RE.test(name) ||
     SCALAR_WHOLE.has(lower) ||
     SCALAR_SUFFIX_RE.test(name) ||
+    SCALAR_DAY_DATE.has(lower) ||
+    ERROR_PLURAL_SUFFIX_RE.test(name) ||
     ERROR_WHOLE.has(lower) ||
     ERROR_SUFFIX_RE.test(name) ||
     ERROR_PREFIX_RE.test(name) ||
@@ -168,7 +191,12 @@ const isSafeName = (name) => {
 
 // Wrappers that carry the value through unchanged. Without unwrapping, a `!` is
 // a one-keystroke way to silence this rule while still exporting the object.
-const UNWRAP = { TSNonNullExpression: 1, TSAsExpression: 1 };
+const UNWRAP = {
+  TSNonNullExpression: 1,
+  TSAsExpression: 1,
+  TSSatisfiesExpression: 1,
+  TSTypeAssertion: 1,
+};
 const unwrap = (node) => {
   let n = node;
   while (n && UNWRAP[n.type]) n = n.expression;
