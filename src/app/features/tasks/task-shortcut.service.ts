@@ -12,6 +12,7 @@ import { isInputElement } from '../../util/dom-element';
 import { getDomFocusedTaskId } from './get-dom-focused-task-id';
 import { TaskMultiSelectService } from './task-multi-select.service';
 import { TaskBulkActionService } from './task-bulk-action.service';
+import { taskToMarkdownChecklist } from './task-to-markdown-checklist';
 
 type TaskId = string;
 
@@ -119,9 +120,9 @@ export class TaskShortcutService {
       return false;
     }
 
-    // Ctrl+C / Cmd+C: copy focused task title. Match on `code` (physical
-    // position) so the shortcut still fires on non-Latin layouts, mirroring
-    // how the browser's native copy is bound.
+    // Ctrl+C / Cmd+C: copy the focused task and its sub tasks as a markdown
+    // checklist. Match on `code` (physical position) so the shortcut still
+    // fires on non-Latin layouts, mirroring how native copy is bound.
     if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && ev.code === 'KeyC') {
       const target = ev.target;
       const hasTextSelected = !!window.getSelection()?.toString();
@@ -129,17 +130,12 @@ export class TaskShortcutService {
         !(target instanceof HTMLElement && isInputElement(target)) &&
         !hasTextSelected
       ) {
-        const taskComponent = this._taskFocusService.lastFocusedTaskComponent();
-        // getDomFocusedTaskId() can derive focusedTaskId from the DOM before
-        // lastFocusedTaskComponent has caught up — fall through to native copy
-        // rather than copying a stale title.
-        if (taskComponent?.task().id === focusedTaskId) {
-          void navigator.clipboard?.writeText(taskComponent.task().title).catch((err) => {
-            Log.warn('Failed to copy task title to clipboard:', err);
-          });
-          ev.preventDefault();
-          return true;
-        }
+        // Read from the store rather than lastFocusedTaskComponent, which can
+        // lag behind the DOM-derived focusedTaskId — the task under the focus
+        // border must always be the one that lands on the clipboard.
+        this._copyTaskAsMarkdownChecklist(focusedTaskId);
+        ev.preventDefault();
+        return true;
       }
     }
 
@@ -530,6 +526,30 @@ export class TaskShortcutService {
   }
 
   /**
+   * Writes the task and its sub tasks to the clipboard as a markdown checklist.
+   */
+  private _copyTaskAsMarkdownChecklist(taskId: TaskId): void {
+    this._taskService
+      .getByIdWithSubTaskData$(taskId)
+      // getByIdWithSubTaskData$ is a `take(1)` store select, so this resolves
+      // synchronously — no cleanup needed.
+      .subscribe((task) => {
+        // For an unknown id the selector logs a devError and returns a
+        // `{ subTasks: [] }` stub with no id and no title — in a production
+        // build that stub really reaches us, so check for a real task.
+        if (!task?.id) {
+          Log.warn('No task data to copy for focused task');
+          return;
+        }
+        void navigator.clipboard
+          ?.writeText(taskToMarkdownChecklist(task))
+          .catch((err) => {
+            Log.warn('Failed to copy task to clipboard:', err);
+          });
+      });
+  }
+
+  /**
    * Resolves a task id from the focused element, matching `<planner-task>` as
    * well as `<task>`, so the id-based shortcut path can act on a task without a
    * live `<task>` component. (#8851)
@@ -572,7 +592,7 @@ export class TaskShortcutService {
       (taskComponent[method] as (...args: unknown[]) => unknown)(...args);
       return true;
     } else {
-      Log.warn(`Method ${method} not found on task component`, taskComponent);
+      Log.warn(`Method ${method} not found on task component`);
       return false;
     }
   }

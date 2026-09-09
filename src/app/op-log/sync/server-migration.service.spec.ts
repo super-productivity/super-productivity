@@ -3,7 +3,10 @@ import { TestBed } from '@angular/core/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { of } from 'rxjs';
-import { ServerMigrationService } from './server-migration.service';
+import {
+  ServerMigrationService,
+  ServerMigrationOutcome,
+} from './server-migration.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { VectorClockService } from './vector-clock.service';
 import { ValidateStateService } from '../validation/validate-state.service';
@@ -333,9 +336,10 @@ describe('ServerMigrationService', () => {
         } as any),
       );
 
-      await service.handleServerMigration(defaultProvider);
+      const outcome = await service.handleServerMigration(defaultProvider);
 
       expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(outcome).toEqual({ kind: 'skipped', reason: 'empty_state' });
     });
 
     it('should skip if state only has system tags', async () => {
@@ -384,10 +388,76 @@ describe('ServerMigrationService', () => {
         } as any),
       );
 
-      const createdOpId = await service.handleServerMigration(defaultProvider);
+      const outcome = await service.handleServerMigration(defaultProvider);
 
       expect(opLogStoreSpy.append).toHaveBeenCalled();
-      expect(createdOpId).toBe(opLogStoreSpy.append.calls.mostRecent().args[0].id);
+      expect(outcome).toEqual({
+        kind: 'created',
+        opId: opLogStoreSpy.append.calls.mostRecent().args[0].id,
+      });
+    });
+
+    describe('outcome (#9932)', () => {
+      it('is reused_pending when an unsynced server-migration import is already queued', async () => {
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([createMigrationEntry()]);
+
+        const outcome = await service.handleServerMigration(defaultProvider);
+
+        expect(outcome).toEqual({ kind: 'reused_pending' });
+        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      });
+
+      it('never reports reused_pending for a FORCE_UPLOAD even when a migration import is pending', async () => {
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([createMigrationEntry()]);
+
+        const outcome = await service.handleServerMigration(defaultProvider, {
+          skipServerEmptyCheck: true,
+          syncImportReason: 'FORCE_UPLOAD',
+        });
+
+        expect(outcome.kind).toBe('created');
+        expect(opLogStoreSpy.append).toHaveBeenCalled();
+      });
+
+      // The invariant the widened gate rests on: hasMeaningfulStateData must stay a
+      // SUBSET of this service's own hasServerMigrationStateData. If it ever went
+      // wider, the gate would trigger seeding that then skips as `empty_state`,
+      // and the client would re-run the whole decision on every sync forever.
+      // Archive-only state is the case #9932 widened the gate to cover, so it is
+      // the one that has to ship here.
+      it('creates a SYNC_IMPORT for archive-only state, so the widened gate can never seed nothing', async () => {
+        stateSnapshotServiceSpy.getStateSnapshotAsync.and.resolveTo({
+          task: { ids: [], entities: {} },
+          project: {
+            ids: [INBOX_PROJECT.id],
+            entities: { [INBOX_PROJECT.id]: INBOX_PROJECT },
+          },
+          tag: { ids: Array.from(SYSTEM_TAG_IDS), entities: {} },
+          note: { ids: [], entities: {} },
+          taskRepeatCfg: { ids: [], entities: {} },
+          timeTracking: { project: {}, tag: {} },
+          archiveYoung: {
+            task: {
+              ids: ['archived-1'],
+              entities: { 'archived-1': { id: 'archived-1' } },
+            },
+            timeTracking: { project: {}, tag: {} },
+            lastTimeTrackingFlush: 0,
+          },
+          archiveOld: {
+            task: { ids: [], entities: {} },
+            timeTracking: { project: {}, tag: {} },
+          },
+        } as unknown as AppStateSnapshot);
+
+        const outcome = await service.handleServerMigration(defaultProvider);
+
+        expect(outcome.kind).toBe('created');
+        expect(opLogStoreSpy.append).toHaveBeenCalled();
+        expect(opLogStoreSpy.append.calls.mostRecent().args[0].opType).toBe(
+          OpType.SyncImport,
+        );
+      });
     });
 
     it('should proceed if non-entity sync state differs from defaults', async () => {
@@ -419,12 +489,13 @@ describe('ServerMigrationService', () => {
         error: 'Validation failed',
       } as any);
 
-      await service.handleServerMigration(defaultProvider);
+      const outcome = await service.handleServerMigration(defaultProvider);
 
       expect(opLogStoreSpy.append).not.toHaveBeenCalled();
       expect(snackServiceSpy.open).toHaveBeenCalledWith(
         jasmine.objectContaining({ type: 'ERROR' }),
       );
+      expect(outcome).toEqual({ kind: 'skipped', reason: 'validation_failed' });
     });
 
     describe('validation-failed snack throttling (#9921)', () => {
@@ -558,9 +629,10 @@ describe('ServerMigrationService', () => {
     it('should abort if no client ID is available', async () => {
       clientIdProviderSpy.loadClientId.and.returnValue(Promise.resolve(null));
 
-      await service.handleServerMigration(defaultProvider);
+      const outcome = await service.handleServerMigration(defaultProvider);
 
       expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(outcome).toEqual({ kind: 'skipped', reason: 'no_client_id' });
     });
 
     it('should proceed if state has tasks', async () => {
@@ -825,10 +897,11 @@ describe('ServerMigrationService', () => {
         Promise.resolve({ ops: [], latestSeq: 5, hasMore: false }),
       );
 
-      await service.handleServerMigration(defaultProvider);
+      const outcome = await service.handleServerMigration(defaultProvider);
 
       // Should not create SYNC_IMPORT because server is no longer empty
       expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(outcome).toEqual({ kind: 'skipped', reason: 'server_not_empty' });
     });
 
     it('should proceed if server is still empty during double-check', async () => {
@@ -996,7 +1069,7 @@ describe('ServerMigrationService', () => {
       simpleCounter: MODEL_CONFIGS.simpleCounter.defaultData,
     };
 
-    const forceUpload = (): Promise<string | undefined> =>
+    const forceUpload = (): Promise<ServerMigrationOutcome> =>
       service.handleServerMigration(defaultProvider, {
         skipServerEmptyCheck: true,
         syncImportReason: 'FORCE_UPLOAD',
@@ -1046,10 +1119,9 @@ describe('ServerMigrationService', () => {
       await forceUpload();
 
       // Note the skip is not a good outcome either: handleServerMigration
-      // returns undefined, which forceUploadLocalState turns into
-      // ForceUploadFailedError (sync-import-conflict-coordinator.service.ts:81-85)
-      // and a FORCE_UPLOAD_FAILED snack — another dead end, just a
-      // non-destructive one.
+      // reports skipped/empty_state, which forceUploadLocalState turns into
+      // ForceUploadFailedError (it requires kind 'created') and a
+      // FORCE_UPLOAD_FAILED snack — another dead end, just a non-destructive one.
       expect(opLogStoreSpy.append).not.toHaveBeenCalled();
     });
 

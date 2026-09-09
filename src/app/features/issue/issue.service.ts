@@ -537,7 +537,7 @@ export class IssueService {
       ...additionalFromProviderIssueService
     } = this._getAddTaskData(issueProviderKey, issueDataReduced, providerCfg);
     IssueLog.log({
-      related_to,
+      hasRelatedTo: !!related_to,
       additionalKeys: Object.keys(additionalFromProviderIssueService),
     });
 

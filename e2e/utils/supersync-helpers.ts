@@ -277,6 +277,37 @@ export const isFullStateOpType = (opType: string): boolean =>
   ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'].includes(opType);
 
 /**
+ * Archived task ids in this client's young archive (`SUP_OPS`/`archive_young`,
+ * key `current`). Archived tasks are not rendered by default, so the archive is
+ * read straight from IndexedDB. Call it only after the app has booted (see
+ * getLocalOpLogSummary for why).
+ */
+export const getArchiveYoungTaskIds = async (page: Page): Promise<string[]> =>
+  page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('SUP_OPS');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      if (!db.objectStoreNames.contains('archive_young')) {
+        return [];
+      }
+      const archive = await new Promise<
+        { data?: { task?: { ids?: string[] } } } | undefined
+      >((resolve, reject) => {
+        const tx = db.transaction('archive_young', 'readonly');
+        const request = tx.objectStore('archive_young').get('current');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      return archive?.data?.task?.ids ?? [];
+    } finally {
+      db.close();
+    }
+  });
+
+/**
  * Summary of every entry in this client's local op log (`SUP_OPS`/`ops`).
  * Entries are stored in the compact format, where `o` is the opType and `e`
  * the entityType — the same string values as the full format. Call it only

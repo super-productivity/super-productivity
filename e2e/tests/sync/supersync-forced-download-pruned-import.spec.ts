@@ -12,6 +12,7 @@ import {
   SUPERSYNC_BASE_URL,
 } from '../../utils/supersync-helpers';
 import { waitForAppReady } from '../../utils/waits';
+import { readRecoveryRing } from '../../utils/recovery-ring-helpers';
 
 /**
  * Regression: a forced seq-0 download must not resurface an already-applied,
@@ -35,6 +36,8 @@ import { waitForAppReady } from '../../utils/waits';
  * Discriminators: the "Incoming SYNC_IMPORT ... Showing conflict dialog" log
  * line and the dialog itself must NOT appear on the client that hits the
  * forced download; the "Skipped N re-delivered op(s)" line MUST appear.
+ * The re-delivered import must not rotate the local recovery ring either
+ * (local-recovery-points.md): it never replaces state, so it never captures.
  * syncAndWait() auto-resolves the import dialog, so the dialog is watched
  * independently — otherwise a buggy run would pass vacuously.
  *
@@ -248,6 +251,9 @@ test.describe('@supersync Forced download re-delivering a pruned SYNC_IMPORT', (
       await renameTask(clientB, sharedTask, titleFromB);
       await clientB.sync.syncAndWait();
       await renameTask(clientA, sharedTask, titleFromA);
+      // Applying B's import in step 3 captured A's pre-import state once.
+      const ringBefore = await readRecoveryRing(clientA.page);
+      expect(ringBefore).toHaveLength(1);
 
       // 6. Steer A's sync into the forced seq-0 path (same technique as the
       //    #8331 spec): keep the pre-upload download empty so A uploads a
@@ -361,6 +367,7 @@ test.describe('@supersync Forced download re-delivering a pruned SYNC_IMPORT', (
         .find((match) => match !== null);
       expect(skippedMatch).toBeDefined();
       expect(Number(skippedMatch?.[1])).toBeGreaterThanOrEqual(1);
+      expect(await readRecoveryRing(clientA.page)).toEqual(ringBefore);
 
       // 7. Recovery proof: both clients converge on one title for the shared
       //    task and keep the post-import task.

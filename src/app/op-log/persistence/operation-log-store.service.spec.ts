@@ -2,7 +2,8 @@ import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
 import { IDBPDatabase, unwrap } from 'idb';
 import { forceCloseDatabase } from 'fake-indexeddb';
-import { OperationLogStoreService } from './operation-log-store.service';
+import { ImportBackupRef, OperationLogStoreService } from './operation-log-store.service';
+import { IMPORT_BACKUP_RING_SIZE } from './import-backup-ring.util';
 import { VectorClockService } from '../sync/vector-clock.service';
 import {
   ActionType,
@@ -777,6 +778,20 @@ describe('OperationLogStoreService', () => {
       expect(entry?.op.id).toBe(first.id);
       expect(entry?.op.entityId).toBe('task1');
       expect(entry?.source).toBe('local');
+    });
+
+    it('pushes a limit of 1 into the adapter scan so SQLite reads a single row (#9932)', async () => {
+      await service.append(createTestOperation({ entityId: 'task1' }), 'local');
+      const adapter = (service as unknown as { _adapter: OpLogDbAdapter })._adapter;
+      const iterateSpy = spyOn(adapter, 'iterate').and.callThrough();
+
+      await service.getFirstOpEntry();
+
+      expect(iterateSpy).toHaveBeenCalledOnceWith(
+        STORE_NAMES.OPS,
+        jasmine.objectContaining({ mode: 'readonly', limit: 1 }),
+        jasmine.any(Function),
+      );
     });
   });
 
@@ -2977,16 +2992,119 @@ describe('OperationLogStoreService', () => {
       expect(await service.loadImportBackup()).toBeNull();
     });
 
-    it('should check if backup exists with hasImportBackup', async () => {
-      expect(await service.hasImportBackup()).toBe(false);
+    describe('recovery ring (local-recovery-points.md)', () => {
+      it('should prune to the newest entries and keep the undo pointer when it survives', async () => {
+        await service.saveImportBackup(
+          { v: 1 },
+          { reason: 'LOCAL_IMPORT', taskCount: 1 },
+        );
+        await service.saveImportBackup(
+          { v: 2 },
+          { reason: 'LOCAL_IMPORT', taskCount: 2 },
+        );
+        const newest = await service.saveImportBackup(
+          { v: 3 },
+          { reason: 'REMOTE_IMPORT', taskCount: 3 },
+        );
 
-      await service.saveImportBackup({ test: true });
+        expect(await service.pruneImportBackups(1)).toBe(2);
 
-      expect(await service.hasImportBackup()).toBe(true);
+        expect((await service.listImportBackups()).map((e) => e.backupId)).toEqual([
+          newest.backupId,
+        ]);
+        expect((await service.loadImportBackup())?.backupId).toBe(newest.backupId);
+        expect(await service.pruneImportBackups(1)).toBe(0);
+      });
 
-      await service.clearImportBackup();
+      it('should retire the undo pointer when pruning evicts its snapshot', async () => {
+        await service.saveImportBackup(
+          { v: 1 },
+          { reason: 'LOCAL_IMPORT', taskCount: 1 },
+        );
 
-      expect(await service.hasImportBackup()).toBe(false);
+        expect(await service.pruneImportBackups(0)).toBe(1);
+
+        expect(await service.listImportBackups()).toEqual([]);
+        expect(await service.loadImportBackup()).toBeNull();
+      });
+
+      it('should list captures newest first with reason and task count', async () => {
+        await service.saveImportBackup(
+          { v: 1 },
+          { reason: 'LOCAL_IMPORT', taskCount: 5 },
+        );
+        const second = await service.saveImportBackup(
+          { v: 2 },
+          { reason: 'REMOTE_IMPORT', taskCount: 0 },
+        );
+
+        const list = await service.listImportBackups();
+        expect(list.length).toBe(2);
+        expect(list[0]).toEqual({
+          backupId: second.backupId,
+          savedAt: second.savedAt,
+          reason: 'REMOTE_IMPORT',
+          taskCount: 0,
+        });
+        expect(list[1].reason).toBe('LOCAL_IMPORT');
+        expect(list[1].taskCount).toBe(5);
+      });
+
+      it('should keep only the newest IMPORT_BACKUP_RING_SIZE snapshots', async () => {
+        const refs: ImportBackupRef[] = [];
+        for (let i = 0; i < IMPORT_BACKUP_RING_SIZE + 2; i++) {
+          refs.push(await service.saveImportBackup({ v: i }));
+        }
+
+        const list = await service.listImportBackups();
+        expect(list.length).toBe(IMPORT_BACKUP_RING_SIZE);
+        expect(list.map((e) => e.backupId)).toEqual(
+          refs
+            .slice(-IMPORT_BACKUP_RING_SIZE)
+            .reverse()
+            .map((r) => r.backupId),
+        );
+        // evicted snapshots are physically gone, kept ones still load
+        expect(await service.loadImportBackupById(refs[0].backupId)).toBeNull();
+        expect(await service.loadImportBackupById(refs[1].backupId)).toBeNull();
+        expect((await service.loadImportBackupById(refs[2].backupId))?.state).toEqual({
+          v: 2,
+        });
+      });
+
+      it('should keep an older snapshot browsable after the undo slot is cleared', async () => {
+        const first = await service.saveImportBackup({ v: 1 });
+        const second = await service.saveImportBackup({ v: 2 });
+
+        await service.clearImportBackup(second.backupId);
+
+        expect(await service.loadImportBackup()).toBeNull();
+        expect((await service.listImportBackups()).length).toBe(2);
+        expect((await service.loadImportBackupById(first.backupId))?.state).toEqual({
+          v: 1,
+        });
+      });
+
+      it('should still serve a legacy single-slot row for undo', async () => {
+        await service.init();
+        const raw = unwrap((service as any)._db as IDBPDatabase);
+        await new Promise<void>((resolve, reject) => {
+          const tx = raw.transaction(STORE_NAMES.IMPORT_BACKUP, 'readwrite');
+          tx.objectStore(STORE_NAMES.IMPORT_BACKUP).put({
+            id: SINGLETON_KEY,
+            state: { legacy: true },
+            savedAt: 42,
+          });
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+
+        const backup = await service.loadImportBackup();
+        expect(backup?.state).toEqual({ legacy: true });
+        expect(backup?.savedAt).toBe(42);
+        expect(backup?.backupId).toBeDefined();
+        expect(await service.listImportBackups()).toEqual([]);
+      });
     });
 
     it('should preserve complex nested data structures', async () => {

@@ -1,0 +1,102 @@
+<h1 mat-dialog-title>{{ T.GCF.AUTO_BACKUPS.D_LIST.TITLE | translate }}</h1>
+
+<div mat-dialog-content>
+  @if (isLoading()) {
+    <div class="loading">
+      <mat-spinner diameter="40"></mat-spinner>
+      <p>{{ T.GCF.AUTO_BACKUPS.D_LIST.LOADING | translate }}</p>
+    </div>
+  } @else if (error()) {
+    <div class="error">
+      <mat-icon>error</mat-icon>
+      <p>{{ error() | translate }}</p>
+    </div>
+  } @else if (entries().length === 0) {
+    <div class="empty">
+      <mat-icon>history</mat-icon>
+      <p>{{ T.GCF.AUTO_BACKUPS.D_LIST.EMPTY | translate }}</p>
+    </div>
+  } @else {
+    <p class="intro">{{ T.GCF.AUTO_BACKUPS.D_LIST.INTRO | translate }}</p>
+    @if (isPartial()) {
+      <div class="callout callout--warning">
+        <mat-icon aria-hidden="true">warning</mat-icon>
+        <p>{{ T.GCF.AUTO_BACKUPS.D_LIST.PARTIAL | translate }}</p>
+      </div>
+    }
+    @if (restoreError()) {
+      <div class="callout callout--danger">
+        <mat-icon aria-hidden="true">error</mat-icon>
+        <p>{{ restoreError() | translate }}</p>
+      </div>
+    }
+
+    <div class="backups">
+      @for (entry of entries(); track entry.id) {
+        <button
+          type="button"
+          class="backup"
+          [class.selected]="selected()?.id === entry.id"
+          [attr.aria-pressed]="selected()?.id === entry.id"
+          (click)="select(entry)"
+        >
+          <mat-icon class="kind-icon">{{ KIND_ICON[entry.kind] }}</mat-icon>
+          <span class="backup-info">
+            <span class="backup-date">
+              @if (entry.createdAt) {
+                {{ entry.createdAt | date: 'medium' }}
+              } @else {
+                {{ T.GCF.AUTO_BACKUPS.D_LIST.DATE_UNKNOWN | translate }}
+              }
+            </span>
+            <span class="backup-label">
+              {{ entry.label | translate }}
+              @if (entry.name) {
+                <span class="backup-name">{{ entry.name }}</span>
+              }
+            </span>
+            @if (entry.taskCount !== null) {
+              <span class="backup-tasks">
+                {{
+                  T.GCF.AUTO_BACKUPS.D_LIST.TASK_COUNT
+                    | translate: { tasks: entry.taskCount }
+                }}
+              </span>
+            }
+          </span>
+          @if (selected()?.id === entry.id) {
+            <mat-icon class="selected-icon">check_circle</mat-icon>
+          }
+        </button>
+      }
+    </div>
+  }
+</div>
+
+<div
+  mat-dialog-actions
+  align="end"
+>
+  <button
+    mat-button
+    [disabled]="isRestoring()"
+    (click)="cancel()"
+  >
+    {{ T.G.CANCEL | translate }}
+  </button>
+  <button
+    mat-flat-button
+    color="warn"
+    [disabled]="!selected() || isRestoring()"
+    (click)="restore()"
+  >
+    @if (isRestoring()) {
+      <mat-spinner
+        diameter="20"
+        color="accent"
+      ></mat-spinner>
+    } @else {
+      {{ T.GCF.AUTO_BACKUPS.D_LIST.BTN_RESTORE | translate }}
+    }
+  </button>
+</div>

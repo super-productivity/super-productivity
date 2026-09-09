@@ -345,7 +345,9 @@ describe('Service Logic Integration', () => {
       'handleServerMigration',
     ]);
     serverMigrationSpy.checkAndHandleMigration.and.returnValue(Promise.resolve());
-    serverMigrationSpy.handleServerMigration.and.returnValue(Promise.resolve());
+    serverMigrationSpy.handleServerMigration.and.returnValue(
+      Promise.resolve({ kind: 'created', opId: 'sync-import' }),
+    );
 
     // Mock OperationWriteFlushService
     const writeFlushSpy = jasmine.createSpyObj('OperationWriteFlushService', [
@@ -421,7 +423,11 @@ describe('Service Logic Integration', () => {
         },
         {
           provide: StateSnapshotService,
-          useValue: jasmine.createSpyObj('StateSnapshotService', ['getStateSnapshot']),
+          useValue: {
+            ...jasmine.createSpyObj('StateSnapshotService', ['getStateSnapshot']),
+            // Nothing meaningful locally → the pre-apply recovery point is skipped.
+            getStateSnapshotAsync: async () => ({}),
+          },
         },
         {
           provide: SnackService,

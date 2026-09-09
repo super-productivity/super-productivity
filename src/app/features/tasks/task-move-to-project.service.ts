@@ -54,9 +54,9 @@ export class TaskMoveToProjectService {
         ]),
       );
     TaskLog.log({
-      repeatCfgId: repeatCfg?.id,
-      nonArchiveInstances: nonArchiveInstancesWithSubTasks.length,
-      archiveInstances: archiveInstances.length,
+      hasReminderCfg: !!repeatCfg,
+      nonArchiveInstanceCount: nonArchiveInstancesWithSubTasks.length,
+      archiveInstanceCount: archiveInstances.length,
     });
 
     // Repeat config was deleted (e.g. via cross-client sync) but the task

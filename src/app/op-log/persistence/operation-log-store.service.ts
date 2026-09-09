@@ -40,6 +40,18 @@ import {
 import { runDbUpgrade } from './db-upgrade';
 import { OpLogDbAdapter, OpLogTx } from './op-log-db-adapter';
 import { OP_LOG_DB_ADAPTER_FACTORY } from './op-log-db-adapter.token';
+import {
+  clearImportBackupTx,
+  ImportBackupCaptureMeta,
+  ImportBackupEntry,
+  ImportBackupMeta,
+  ImportBackupRef,
+  listImportBackupsTx,
+  pruneImportBackupRingTx,
+  loadImportBackupByIdTx,
+  loadImportBackupTx,
+  saveImportBackupTx,
+} from './import-backup-ring.util';
 import { Log } from '../../core/log';
 import {
   IDB_OPEN_RETRIES,
@@ -58,7 +70,6 @@ import {
   decodeOperation,
   encodeOperation,
 } from './compact/operation-codec.service';
-import { uuidv7 } from '../../util/uuid-v7';
 import { LockService } from '../sync/lock.service';
 
 /**
@@ -82,14 +93,13 @@ export interface MixedSourceWrittenOperation {
   source: 'local' | 'remote';
 }
 
-export interface ImportBackupRef {
-  backupId: string;
-  savedAt: number;
-}
-
-export interface ImportBackupEntry extends ImportBackupRef {
-  state: unknown;
-}
+export type {
+  ImportBackupRef,
+  ImportBackupEntry,
+  ImportBackupMeta,
+  ImportBackupReason,
+  ImportBackupCaptureMeta,
+} from './import-backup-ring.util';
 
 /**
  * Shape stored in the `state_cache` store (keyPath `id`).
@@ -275,13 +285,15 @@ interface OpLogDB extends DBSchema {
       snapshotEntityKeys?: string[]; // Entity keys that existed at compaction time
     };
   };
+  /** Undo pointer + metadata ring + full snapshots; see import-backup-ring.util.ts */
   [STORE_NAMES.IMPORT_BACKUP]: {
     key: string;
     value: {
       id: string;
-      state: unknown;
-      savedAt: number;
+      state?: unknown;
+      savedAt?: number;
       backupId?: string;
+      entries?: ImportBackupMeta[];
     };
   };
   /**
@@ -2079,13 +2091,17 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     return lastSeq;
   }
 
-  /** First (lowest-seq) entry, or undefined when empty. Decodes one row (#9921). */
+  /**
+   * First (lowest-seq) entry, or undefined when empty. Decodes one row (#9921);
+   * `limit: 1` pushes the bound into the adapter so SQLite emits `LIMIT 1`
+   * instead of materializing the table before the visitor stops (#9932).
+   */
   async getFirstOpEntry(): Promise<OperationLogEntry | undefined> {
     await this._ensureInit();
     let firstEntry: OperationLogEntry | undefined;
     await this._adapter.iterate<StoredOperationLogEntry>(
       STORE_NAMES.OPS,
-      { mode: 'readonly' },
+      { mode: 'readonly', limit: 1 },
       (value) => {
         firstEntry = decodeStoredEntry(value);
         return 'stop';
@@ -2364,93 +2380,57 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   }
 
   // ============================================================
-  // Import Backup (pre-import state preservation)
+  // Import Backup (pre-replacement recovery ring)
   // ============================================================
 
-  /**
-   * Saves a backup of the current state before an import operation.
-   * This allows manual recovery if the import causes issues.
-   *
-   * Migrated to route through `_adapter` (Phase A). Behavior is identical:
-   * the adapter operates on the same connection adopted in `init()`.
-   */
-  async saveImportBackup(state: unknown): Promise<ImportBackupRef> {
-    await this._ensureInit();
-    const savedAt = Date.now();
-    const backupId = uuidv7();
-    await this._adapter.put(STORE_NAMES.IMPORT_BACKUP, {
-      id: SINGLETON_KEY,
-      state,
-      savedAt,
-      backupId,
-    });
-    return { backupId, savedAt };
+  private _importBackupTx<T>(
+    mode: 'readonly' | 'readwrite',
+    fn: (tx: OpLogTx) => Promise<T>,
+  ): Promise<T> {
+    return this._adapter.transaction([STORE_NAMES.IMPORT_BACKUP], mode, fn);
   }
 
   /**
-   * Loads the import backup, if one exists.
+   * Captures the current state before a destructive replacement (import, force
+   * download, remote full-state op) so the user can recover from it. Rotates the
+   * ring and points the Undo slot at the new snapshot.
    */
+  async saveImportBackup(
+    state: unknown,
+    meta?: ImportBackupCaptureMeta,
+  ): Promise<ImportBackupRef> {
+    await this._ensureInit();
+    return this._importBackupTx('readwrite', (tx) => saveImportBackupTx(tx, state, meta));
+  }
+
+  /** Loads the snapshot the Undo slot points at, if any. */
   async loadImportBackup(): Promise<ImportBackupEntry | null> {
     await this._ensureInit();
-    return this._adapter.transaction(
-      [STORE_NAMES.IMPORT_BACKUP],
-      'readwrite',
-      async (tx) => {
-        const backup = await tx.get<{
-          state: unknown;
-          savedAt: number;
-          backupId?: string;
-        }>(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
-        if (!backup) {
-          return null;
-        }
-
-        // Lazily give pre-token backup rows an opaque identity. From this read
-        // onward even a same-millisecond slot replacement cannot masquerade as
-        // the backup offered by a durable Undo marker.
-        const backupId = backup.backupId ?? uuidv7();
-        if (backup.backupId === undefined) {
-          await tx.put(STORE_NAMES.IMPORT_BACKUP, {
-            id: SINGLETON_KEY,
-            ...backup,
-            backupId,
-          });
-        }
-        return { state: backup.state, savedAt: backup.savedAt, backupId };
-      },
-    );
+    return this._importBackupTx('readwrite', loadImportBackupTx);
   }
 
-  /**
-   * Clears the import backup.
-   */
+  async loadImportBackupById(backupId: string): Promise<ImportBackupEntry | null> {
+    await this._ensureInit();
+    return this._importBackupTx('readonly', (tx) => loadImportBackupByIdTx(tx, backupId));
+  }
+
+  /** Ring metadata, newest first; never loads snapshot state. */
+  async listImportBackups(): Promise<ImportBackupMeta[]> {
+    await this._ensureInit();
+    return this._importBackupTx('readonly', listImportBackupsTx);
+  }
+
+  /** Evicts all but the newest `keep` snapshots; see `pruneImportBackupRingTx`. */
+  async pruneImportBackups(keep: number): Promise<number> {
+    return this._importBackupTx('readwrite', (tx) => pruneImportBackupRingTx(tx, keep));
+  }
+
+  /** Retires the Undo slot (only if it still matches `expectedBackupId`). */
   async clearImportBackup(expectedBackupId?: string): Promise<void> {
     await this._ensureInit();
-    await this._adapter.transaction(
-      [STORE_NAMES.IMPORT_BACKUP],
-      'readwrite',
-      async (tx) => {
-        if (expectedBackupId !== undefined) {
-          const current = await tx.get<{ backupId?: string }>(
-            STORE_NAMES.IMPORT_BACKUP,
-            SINGLETON_KEY,
-          );
-          if (current?.backupId !== expectedBackupId) {
-            return;
-          }
-        }
-        await tx.delete(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
-      },
+    await this._importBackupTx('readwrite', (tx) =>
+      clearImportBackupTx(tx, expectedBackupId),
     );
-  }
-
-  /**
-   * Checks if an import backup exists.
-   */
-  async hasImportBackup(): Promise<boolean> {
-    await this._ensureInit();
-    const backup = await this._adapter.get(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
-    return !!backup;
   }
 
   /**

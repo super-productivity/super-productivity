@@ -36,6 +36,11 @@ const DEFAULT_BACKUP_INTERVAL = 5 * 60 * 1000;
 // A2 (#7925): high enough that a flurry of UI actions settles into one backup;
 // low enough that a real change is captured before the user backgrounds the app.
 const DATA_CHANGE_BACKUP_DEBOUNCE = 30 * 1000;
+export interface MobileBackupSlot {
+  slot: 'latest' | 'previous';
+  data: string;
+}
+
 const ANDROID_DB_KEY = 'backup';
 // Previous-generation slot for the two-generation ring (#7901).
 const ANDROID_DB_KEY_PREV = 'backup_prev';
@@ -170,6 +175,41 @@ export class LocalBackupService {
     // fire-and-forget _initBackups() at startup, so a throw here would surface as
     // an unhandled rejection; '' instead flows to the existing import-error snack.
     return selectBestBackupStr(primary, prev) ?? '';
+  }
+
+  /**
+   * Both mobile ring slots that hold data, newest first (Settings → backups
+   * list). Blobs are returned as-is; the caller decides how to present them.
+   */
+  async listMobileBackupSlots(): Promise<MobileBackupSlot[]> {
+    if (!this._isAndroidWebView && !this._platformService.isIOS()) {
+      return [];
+    }
+    const [latest, previous] = await Promise.all(
+      this._isAndroidWebView
+        ? [
+            this._loadAndroidDbValueSafe(ANDROID_DB_KEY),
+            this._loadAndroidDbValueSafe(ANDROID_DB_KEY_PREV),
+          ]
+        : [
+            this._readIOSFileOrNull(IOS_BACKUP_FILENAME),
+            this._readIOSFileOrNull(IOS_BACKUP_PREV_FILENAME),
+          ],
+    );
+    // Same gate as the Settings restore: a corrupt slot is never offered.
+    const slots: MobileBackupSlot[] = [];
+    if (latest && isUsableBackupStr(latest)) {
+      slots.push({ slot: 'latest', data: latest });
+    }
+    if (previous && isUsableBackupStr(previous)) {
+      slots.push({ slot: 'previous', data: previous });
+    }
+    return slots;
+  }
+
+  /** Imports a raw backup blob (file or mobile slot); false + snack on failure. */
+  restoreBackupStr(backupData: string): Promise<boolean> {
+    return this._importBackup(backupData);
   }
 
   /** Newest usable backup blob for the current mobile platform ('' if none). */

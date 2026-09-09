@@ -50,6 +50,46 @@ export const readMigratedState = async <T extends Record<string, unknown>>(
   ) as Promise<T>;
 
 /**
+ * Strip a legacy fixture down to its archive: no active tasks, only the INBOX
+ * project and the TODAY tag, archived tasks re-homed to INBOX. Models a legacy
+ * user whose every task was archived before sync was set up (#9932).
+ */
+export const toArchiveOnlyLegacyData = (
+  data: Record<string, unknown>,
+): Record<string, unknown> => {
+  const entityIds = (slice: unknown): string[] =>
+    ((slice as { ids?: string[] })?.ids ?? []).slice();
+  const pick = (slice: unknown, keep: string[]): unknown => {
+    const entities = (slice as { entities: Record<string, unknown> }).entities;
+    return {
+      ids: keep,
+      entities: Object.fromEntries(keep.map((id) => [id, entities[id]])),
+    };
+  };
+  const archiveYoung = data.archiveYoung as {
+    task: { entities: Record<string, object> };
+  };
+  return {
+    ...data,
+    task: { ...(data.task as object), ids: [], entities: {} },
+    project: pick(data.project, ['INBOX_PROJECT']),
+    tag: pick(data.tag, ['TODAY']),
+    archiveYoung: {
+      ...archiveYoung,
+      task: {
+        ids: entityIds(archiveYoung.task),
+        entities: Object.fromEntries(
+          Object.entries(archiveYoung.task.entities).map(([id, task]) => [
+            id,
+            { ...task, projectId: 'INBOX_PROJECT', tagIds: [] },
+          ]),
+        ),
+      },
+    },
+  };
+};
+
+/**
  * Seed the legacy 'pf' IndexedDB database with data.
  * Must be called BEFORE the Angular app initializes.
  *

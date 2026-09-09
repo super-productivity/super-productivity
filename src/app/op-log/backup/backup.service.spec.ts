@@ -108,6 +108,7 @@ describe('BackupService', () => {
     ]);
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'saveImportBackup',
+      'pruneImportBackups',
       'loadImportBackup',
       'clearImportBackup',
       'runDestructiveStateReplacement',
@@ -157,22 +158,129 @@ describe('BackupService', () => {
     expect(mockTaskTimeSyncService.clear).toHaveBeenCalledBefore(mockStore.dispatch);
   });
 
+  describe('captureRecoveryPointIfMeaningful (local-recovery-points.md)', () => {
+    it('should skip a pristine device', async () => {
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
+        createMinimalValidBackup() as any,
+      );
+
+      const meta = await service.captureRecoveryPointIfMeaningful('REMOTE_IMPORT');
+
+      expect(meta).toBeNull();
+      expect(mockOpLogStore.saveImportBackup).not.toHaveBeenCalled();
+    });
+
+    it('should capture a device whose only data is a recurring-task config', async () => {
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo({
+        ...createMinimalValidBackup(),
+        taskRepeatCfg: { ids: ['r1'], entities: { r1: { id: 'r1' } } },
+      } as any);
+
+      const meta = await service.captureRecoveryPointIfMeaningful('REMOTE_IMPORT');
+
+      expect(meta?.taskCount).toBe(0);
+      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledTimes(1);
+    });
+
+    it('should capture with reason and task count when the device holds tasks', async () => {
+      const snapshot = {
+        ...createMinimalValidBackup(),
+        task: {
+          ids: ['t1', 't2'],
+          entities: { t1: { id: 't1' }, t2: { id: 't2' } },
+          currentTaskId: null,
+          selectedTaskId: null,
+        },
+      };
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(snapshot as any);
+      mockOpLogStore.saveImportBackup.and.resolveTo({ backupId: 'b1', savedAt: 5 });
+
+      const meta = await service.captureRecoveryPointIfMeaningful('REMOTE_IMPORT');
+
+      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledWith(snapshot, {
+        reason: 'REMOTE_IMPORT',
+        taskCount: 2,
+      });
+      expect(meta).toEqual({
+        backupId: 'b1',
+        savedAt: 5,
+        reason: 'REMOTE_IMPORT',
+        taskCount: 2,
+      });
+    });
+  });
+
+  describe('recovery point write fallback', () => {
+    const snapshotWithTask = (): unknown => ({
+      ...createMinimalValidBackup(),
+      task: { ids: ['t1'], entities: { t1: { id: 't1' } } },
+    });
+
+    it('should keep the newest snapshot, prune the rest and retry once on quota', async () => {
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
+        snapshotWithTask() as any,
+      );
+      mockOpLogStore.saveImportBackup.and.returnValues(
+        Promise.reject(new DOMException('full', 'QuotaExceededError')),
+        Promise.resolve({ backupId: 'b2', savedAt: 2 }),
+      );
+      mockOpLogStore.pruneImportBackups.and.resolveTo(2);
+
+      const meta = await service.captureRecoveryPointIfMeaningful('REMOTE_IMPORT');
+
+      expect(mockOpLogStore.pruneImportBackups).toHaveBeenCalledOnceWith(1);
+      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledTimes(2);
+      expect(meta?.backupId).toBe('b2');
+    });
+
+    it('should still fail when the retry after pruning fails too', async () => {
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
+        snapshotWithTask() as any,
+      );
+      mockOpLogStore.saveImportBackup.and.rejectWith(
+        new DOMException('full', 'QuotaExceededError'),
+      );
+      mockOpLogStore.pruneImportBackups.and.resolveTo(0);
+
+      await expectAsync(
+        service.captureRecoveryPointIfMeaningful('REMOTE_IMPORT'),
+      ).toBeRejected();
+      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledTimes(2);
+    });
+
+    it('should not touch the ring for a non-quota error', async () => {
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
+        snapshotWithTask() as any,
+      );
+      mockOpLogStore.saveImportBackup.and.rejectWith(new Error('db closed'));
+
+      await expectAsync(
+        service.captureRecoveryPointIfMeaningful('REMOTE_IMPORT'),
+      ).toBeRejectedWithError('db closed');
+      expect(mockOpLogStore.pruneImportBackups).not.toHaveBeenCalled();
+      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('captureImportBackup (#8107)', () => {
     it('should snapshot current state into the import backup store', async () => {
       const snapshot = createMinimalValidBackup();
       mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(snapshot as any);
 
-      await service.captureImportBackup();
+      await service.captureImportBackup('FORCE_DOWNLOAD');
 
       expect(mockStateSnapshotService.getStateSnapshotAsync).toHaveBeenCalled();
-      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledWith(snapshot);
+      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledWith(snapshot, {
+        reason: 'FORCE_DOWNLOAD',
+        taskCount: jasmine.any(Number),
+      });
     });
 
     it('should return the opaque backup reference from the store', async () => {
       const expectedRef = { backupId: 'backup-456', savedAt: 456 };
       mockOpLogStore.saveImportBackup.and.resolveTo(expectedRef);
 
-      const token = await service.captureImportBackup();
+      const token = await service.captureImportBackup('FORCE_DOWNLOAD');
 
       expect(token).toEqual(expectedRef);
     });
@@ -180,7 +288,7 @@ describe('BackupService', () => {
     it('should propagate errors so the caller can abort the destructive op', async () => {
       mockOpLogStore.saveImportBackup.and.rejectWith(new Error('IDB quota exceeded'));
 
-      await expectAsync(service.captureImportBackup()).toBeRejected();
+      await expectAsync(service.captureImportBackup('FORCE_DOWNLOAD')).toBeRejected();
     });
   });
 
@@ -562,7 +670,10 @@ describe('BackupService', () => {
       await service.importCompleteBackup(createMinimalValidBackup() as any, true, true);
 
       expect(mockStateSnapshotService.getStateSnapshotAsync).toHaveBeenCalled();
-      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledWith(currentState);
+      expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledWith(currentState, {
+        reason: 'LOCAL_IMPORT',
+        taskCount: jasmine.any(Number),
+      });
     });
 
     it('should keep the recovery slot unchanged while restoring that backup', async () => {

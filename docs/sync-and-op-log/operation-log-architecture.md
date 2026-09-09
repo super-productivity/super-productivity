@@ -349,6 +349,29 @@ providers keep uploading it: there the ops upload is what writes the state
 snapshot. Servers may still hold genesis ops uploaded by older clients;
 receivers apply them as no-ops as before.
 
+Both join-time decisions are gated on `SyncLocalStateService.hasMeaningfulStoreData`,
+which uses `hasAnyUserData` — `hasMeaningfulStateData` widened with archives, live
+time tracking and repeat configs, since a legacy client's work can be entirely
+archived. Archived tasks and flushed time tracking live only in IndexedDB and the
+synchronous store snapshot substitutes an empty archive, so the gate falls back to
+the archive-inclusive snapshot when the narrow check finds nothing (#9932).
+Everything it counts is strictly non-default, keeping it a subset of the seeding's
+own check (`hasServerMigrationStateData`).
+
+The wider notion is deliberately confined to that gate. `hasMeaningfulStateData`
+itself stays narrow because `hasNothingWorthUploading` consumes it in the refusing
+direction (#9256), where over-reporting "has data" would let a device holding
+nothing overwrite the server — time tracked against onboarding example tasks being
+exactly such a false positive.
+`ServerMigrationService.handleServerMigration` reports `created` /
+`reused_pending` / `skipped` (with a reason). On the server-reset branch only a
+genuine failure to ship existing state — validation failed, or no client id —
+answers `server_migration_skipped`, so the upload waits for the next cycle
+instead of settling the client onto a server without its base state. A state
+judged empty has nothing to ship, and a server that is no longer empty has been
+seeded by someone else; both continue with the ordinary upload, because blocking
+either would strand the cycle with the client's ops still pending.
+
 ## A.4 Compaction
 
 ### Purpose

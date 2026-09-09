@@ -359,8 +359,11 @@ describe('Forced seq-0 download after compaction pruned an applied SYNC_IMPORT (
     syncHydrationSpy.hydrateFromRemoteSync.and.resolveTo();
     const stateSnapshotSpy = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshot',
+      'getStateSnapshotAsync',
       'getStateSnapshotForOperationLog',
     ]);
+    // Read by the pre-apply recovery point (local-recovery-points.md).
+    stateSnapshotSpy.getStateSnapshotAsync.and.callFake(async () => createValidAppData());
     // Never consulted: the seeded client carries a state cache, so the
     // fresh-client guard does not run. Compaction snapshots this fixture; its
     // INBOX project counts as meaningful data, which the guard there requires.

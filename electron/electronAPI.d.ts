@@ -39,6 +39,9 @@ export interface ElectronAPI {
 
   checkBackupAvailable(): Promise<false | LocalBackupMeta>;
 
+  /** All automatic backup files, newest first. */
+  listBackups(): Promise<LocalBackupMeta[]>;
+
   loadBackupData(backupPath: string): Promise<string>;
 
   fileSyncSave(args: {

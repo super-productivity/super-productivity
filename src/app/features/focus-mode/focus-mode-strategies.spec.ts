@@ -6,7 +6,7 @@ import {
   CountdownStrategy,
   FocusModeStrategyFactory,
 } from './focus-mode-strategies';
-import { FocusModeMode, FocusScreen, FOCUS_MODE_DEFAULTS } from './focus-mode.model';
+import { FocusModeMode, FOCUS_MODE_DEFAULTS } from './focus-mode.model';
 import { FocusModeStorageService } from './focus-mode-storage.service';
 
 describe('FocusModeStrategies', () => {
@@ -117,26 +117,6 @@ describe('FocusModeStrategies', () => {
         expect(longBreak).toEqual({
           duration: FOCUS_MODE_DEFAULTS.LONG_BREAK_DURATION,
           isLong: true,
-        });
-      });
-    });
-
-    describe('getNextScreenAfterTaskSelection', () => {
-      it('should go to preparation when not skipping', () => {
-        const result = strategy.getNextScreenAfterTaskSelection(false);
-
-        expect(result).toEqual({
-          screen: FocusScreen.Preparation,
-          duration: 1500000,
-        });
-      });
-
-      it('should go to main screen when skipping preparation', () => {
-        const result = strategy.getNextScreenAfterTaskSelection(true);
-
-        expect(result).toEqual({
-          screen: FocusScreen.Main,
-          duration: 1500000,
         });
       });
     });
@@ -293,26 +273,6 @@ describe('FocusModeStrategies', () => {
         expect(strategy.getBreakDuration(90000)).toBeNull();
       });
     });
-
-    describe('getNextScreenAfterTaskSelection', () => {
-      it('should go to preparation when not skipping', () => {
-        const result = strategy.getNextScreenAfterTaskSelection(false);
-
-        expect(result).toEqual({
-          screen: FocusScreen.Preparation,
-          duration: 0,
-        });
-      });
-
-      it('should go to main screen when skipping preparation', () => {
-        const result = strategy.getNextScreenAfterTaskSelection(true);
-
-        expect(result).toEqual({
-          screen: FocusScreen.Main,
-          duration: 0,
-        });
-      });
-    });
   });
 
   describe('CountdownStrategy', () => {
@@ -357,20 +317,6 @@ describe('FocusModeStrategies', () => {
         const result1 = strategy.getBreakDuration();
 
         expect(result1).toBeNull();
-      });
-    });
-
-    describe('getNextScreenAfterTaskSelection', () => {
-      it('should always go to duration selection', () => {
-        const result1 = strategy.getNextScreenAfterTaskSelection(false);
-        const result2 = strategy.getNextScreenAfterTaskSelection(true);
-
-        expect(result1).toEqual({
-          screen: FocusScreen.DurationSelection,
-        });
-        expect(result2).toEqual({
-          screen: FocusScreen.DurationSelection,
-        });
       });
     });
   });

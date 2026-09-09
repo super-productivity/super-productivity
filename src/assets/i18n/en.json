@@ -12,6 +12,11 @@
       "LATER": "Later",
       "MSG": "SuperSync is end-to-end encrypted, but this account still syncs without a password. Set one to protect your data — it stays and is re-uploaded encrypted on the next sync."
     },
+    "B_RECOVERY_POINT": {
+      "BROWSE": "Browse backups",
+      "DISMISS": "Keep new data",
+      "MSG": "Sync just replaced the data on this device with a much smaller dataset (from {{before}} to {{after}} tasks). The previous data was kept as a recovery point."
+    },
     "B_SYNC_SAFETY": {
       "DISMISS": "Not now",
       "MSG": "You've been using Super Productivity for a while. Set up sync to back up your data and keep it safe across devices.",
@@ -2522,6 +2527,27 @@
       "TITLE": "App Features"
     },
     "AUTO_BACKUPS": {
+      "BROWSE": "Browse backups",
+      "D_LIST": {
+        "BTN_RESTORE": "Restore",
+        "CONFIRM_MSG": "Restore the backup from <strong>{{timestamp}}</strong> ({{tasks}} tasks)?<br><br>This <strong>replaces all your current data</strong> on this device and, if sync is enabled, on your other devices. The current data is kept as a recovery point first.",
+        "CONFIRM_TITLE": "Confirm Restore",
+        "DATE_UNKNOWN": "Date unknown",
+        "EMPTY": "No backups on this device yet. Recovery points are created automatically before sync or an import replaces your data.",
+        "ERROR_LOADING": "Failed to load backups",
+        "ERROR_RESTORE": "Failed to restore backup",
+        "INTRO": "Every backup stored on this device. Select one to see what it contains.",
+        "KIND_FILE": "Automatic backup file",
+        "LOADING": "Loading backups...",
+        "PARTIAL": "Some backups on this device could not be read. Only the ones listed below are available.",
+        "REASON_FORCE_DOWNLOAD": "Recovery point: before \"Use server data\"",
+        "REASON_LOCAL_IMPORT": "Recovery point: before import or restore",
+        "REASON_REMOTE_IMPORT": "Recovery point: before sync replaced local data",
+        "SLOT_LATEST": "Latest automatic backup",
+        "SLOT_PREVIOUS": "Previous automatic backup",
+        "TASK_COUNT": "{{tasks}} tasks",
+        "TITLE": "Backups on this device"
+      },
       "HELP": "Automatically save all data to your app folder to have it ready if something goes wrong.",
       "LABEL_IS_ENABLED": "Enable automatic backups",
       "LAST_BACKUP_INFO": "Last backup: {{date}}",

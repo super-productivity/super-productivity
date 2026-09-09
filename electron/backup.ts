@@ -67,32 +67,18 @@ export function initBackupAdapter(): void {
   // BACKUP
   ipcMain.handle(IPC.BACKUP, backupData);
 
-  // IS_BACKUP_AVAILABLE
+  // IS_BACKUP_AVAILABLE — newest file only (startup restore prompt)
   ipcMain.handle(IPC.BACKUP_IS_AVAILABLE, (): LocalBackupMeta | false => {
-    if (!existsSync(BACKUP_DIR)) {
-      return false;
-    }
-
-    const files = readdirSync(BACKUP_DIR);
-    if (!files.length) {
-      return false;
-    }
-    const filesWithMeta: LocalBackupMeta[] = files.map(
-      (fileName: string): LocalBackupMeta => ({
-        name: fileName,
-        path: path.join(BACKUP_DIR, fileName),
-        folder: BACKUP_DIR,
-        created: statSync(path.join(BACKUP_DIR, fileName)).mtime.getTime(),
-      }),
-    );
-
-    filesWithMeta.sort((a: LocalBackupMeta, b: LocalBackupMeta) => a.created - b.created);
+    const files = listBackupFiles();
     log(
       'Avilable Backup Files: ',
-      filesWithMeta?.map && filesWithMeta.map((f) => f.path),
+      files.map((f) => f.path),
     );
-    return filesWithMeta.reverse()[0];
+    return files[0] ?? false;
   });
+
+  // BACKUP_LIST — every file, newest first (Settings → backups list)
+  ipcMain.handle(IPC.BACKUP_LIST, (): LocalBackupMeta[] => listBackupFiles());
 
   // RESTORE_BACKUP
   ipcMain.handle(IPC.BACKUP_LOAD_DATA, (ev, backupPath: string): string => {
@@ -113,6 +99,32 @@ export function initBackupAdapter(): void {
     return readFileSync(resolved, { encoding: 'utf8' });
   });
 }
+
+/** All backup files in BACKUP_DIR, newest first; empty when the dir is missing. */
+const listBackupFiles = (): LocalBackupMeta[] => {
+  if (!existsSync(BACKUP_DIR)) {
+    return [];
+  }
+  const files: LocalBackupMeta[] = [];
+  for (const name of readdirSync(BACKUP_DIR)) {
+    if (!name.endsWith('.json')) {
+      continue;
+    }
+    const filePath = path.join(BACKUP_DIR, name);
+    try {
+      files.push({
+        name,
+        path: filePath,
+        folder: BACKUP_DIR,
+        created: statSync(filePath).mtime.getTime(),
+      });
+    } catch (e) {
+      // The retention cleanup may delete a file between readdir and stat.
+      log(`Skipping unreadable backup file ${name}`);
+    }
+  }
+  return files.sort((a, b) => b.created - a.created);
+};
 
 interface BackupDataArgs {
   data: AppDataCompleteLegacy | AppDataComplete;
@@ -156,11 +168,11 @@ function cleanupOldBackups(maxBackupFiles?: number | null): void {
   }
 
   try {
-    const files = readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.json'));
-    const filesWithMtime = files.map((fileName) => {
-      const filePath = path.join(BACKUP_DIR, fileName);
-      return { fileName, filePath, mtime: statSync(filePath).mtime.getTime() };
-    });
+    const filesWithMtime = listBackupFiles().map((file) => ({
+      fileName: file.name,
+      filePath: file.path,
+      mtime: file.created,
+    }));
 
     for (const file of selectBackupFilesToDelete(filesWithMtime, maxBackupFiles)) {
       try {

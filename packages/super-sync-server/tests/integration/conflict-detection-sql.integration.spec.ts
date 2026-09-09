@@ -22,6 +22,8 @@
  *   - PostgreSQL running (see docker-compose.yaml), schema applied (prisma db push)
  *   - DATABASE_URL set, e.g.
  *       postgresql://supersync:superpassword@localhost:55432/supersync_db
+ *   (the db has no fixed host port — `npm run supersync:db` publishes it on
+ *    55432 and applies the schema)
  *
  * Run with (uses vitest.integration.config.ts — no mocked-Prisma setupFiles):
  *   DATABASE_URL=postgresql://... npx vitest run --config vitest.integration.config.ts \

@@ -18,6 +18,10 @@
  *   - and the read-only pre-flight gate (`scripts/dry-run-old-ops-sweep.ts`)
  *     predicts, row for row, what the sweep then does.
  *
+ * Prerequisites:
+ *   `npm run supersync:db` — the db has no fixed host port, so this publishes
+ *   one on 55432 and applies the schema.
+ *
  * Run with:
  *   DATABASE_URL=postgresql://supersync:superpassword@localhost:55432/supersync_db \
  *     npx vitest run --config vitest.integration.config.ts \

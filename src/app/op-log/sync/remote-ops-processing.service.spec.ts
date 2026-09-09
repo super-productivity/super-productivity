@@ -40,6 +40,8 @@ import { IncompleteRemoteOperationsError } from '../core/errors/sync-errors';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import { RepairSyncContextService } from '../validation/repair-sync-context.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
+import { BackupService } from '../backup/backup.service';
+import { RecoveryPointBannerService } from '../../imex/local-backup/recovery-point-banner.service';
 
 describe('RemoteOpsProcessingService', () => {
   let service: RemoteOpsProcessingService;
@@ -56,6 +58,8 @@ describe('RemoteOpsProcessingService', () => {
   let syncImportFilterServiceSpy: jasmine.SpyObj<SyncImportFilterService>;
   let operationLogEffectsSpy: jasmine.SpyObj<OperationLogEffects>;
   let writeFlushServiceSpy: jasmine.SpyObj<OperationWriteFlushService>;
+  let backupServiceSpy: jasmine.SpyObj<BackupService>;
+  let recoveryPointBannerSpy: jasmine.SpyObj<RecoveryPointBannerService>;
 
   const applyAllWithReducerCommit = async (
     ops: Operation[],
@@ -120,6 +124,8 @@ describe('RemoteOpsProcessingService', () => {
     );
     // By default, no full-state ops in store
     opLogStoreSpy.getLatestFullStateOp.and.returnValue(Promise.resolve(undefined));
+    // By default, incoming ops are not yet in the log
+    opLogStoreSpy.hasOp.and.resolveTo(false);
     // By default, both durable clock transitions succeed
     opLogStoreSpy.mergeRemoteOpClocks.and.resolveTo();
     opLogStoreSpy.markReducersCommittedAndMergeClocks.and.resolveTo();
@@ -271,9 +277,19 @@ describe('RemoteOpsProcessingService', () => {
       },
     );
 
+    backupServiceSpy = jasmine.createSpyObj('BackupService', [
+      'captureRecoveryPointIfMeaningful',
+    ]);
+    backupServiceSpy.captureRecoveryPointIfMeaningful.and.resolveTo(null);
+    recoveryPointBannerSpy = jasmine.createSpyObj('RecoveryPointBannerService', [
+      'showIfShrunk',
+    ]);
+
     TestBed.configureTestingModule({
       providers: [
         RemoteOpsProcessingService,
+        { provide: BackupService, useValue: backupServiceSpy },
+        { provide: RecoveryPointBannerService, useValue: recoveryPointBannerSpy },
         { provide: Store, useValue: storeSpy },
         { provide: SchemaMigrationService, useValue: schemaMigrationServiceSpy },
         { provide: SnackService, useValue: snackServiceSpy },
@@ -1052,6 +1068,202 @@ describe('RemoteOpsProcessingService', () => {
       });
       expect(wasApplyingDuringDrain).toBeFalse();
       expect(result.fullStateApplyBlockedByLocalConflict).toBeTrue();
+    });
+
+    it('should capture a REMOTE_IMPORT recovery point before applying a full-state op', async () => {
+      const syncImportOp: Operation = {
+        id: 'sync-import-recovery-point',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {},
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+      const order: string[] = [];
+      backupServiceSpy.captureRecoveryPointIfMeaningful.and.callFake(async () => {
+        order.push('capture');
+        return { backupId: 'b1', savedAt: 1, reason: 'REMOTE_IMPORT', taskCount: 9 };
+      });
+      operationApplierServiceSpy.applyOperations.and.callFake(async (ops, options) => {
+        order.push('apply');
+        return applyAllWithReducerCommit(ops, options);
+      });
+
+      await service.processRemoteOps([syncImportOp]);
+
+      expect(backupServiceSpy.captureRecoveryPointIfMeaningful).toHaveBeenCalledOnceWith(
+        'REMOTE_IMPORT',
+      );
+      expect(order).toEqual(['capture', 'apply']);
+    });
+
+    it('should not capture a recovery point for a full-state op already in the log', async () => {
+      const duplicateImport: Operation = {
+        id: 'sync-import-duplicate',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {},
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+      opLogStoreSpy.hasOp.and.resolveTo(true);
+      opLogStoreSpy.appendBatchSkipDuplicates.and.resolveTo({
+        seqs: [],
+        writtenOps: [],
+        skippedCount: 1,
+      });
+
+      await service.processRemoteOps([duplicateImport]);
+
+      expect(backupServiceSpy.captureRecoveryPointIfMeaningful).not.toHaveBeenCalled();
+      expect(operationApplierServiceSpy.applyOperations).not.toHaveBeenCalled();
+    });
+
+    it('should hand the before/after task counts to the shrink banner after a full-state apply', async () => {
+      const syncImportOp: Operation = {
+        id: 'sync-import-shrink',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: { task: { ids: ['t1'], entities: {} } },
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+      backupServiceSpy.captureRecoveryPointIfMeaningful.and.resolveTo({
+        backupId: 'b1',
+        savedAt: 1,
+        reason: 'REMOTE_IMPORT',
+        taskCount: 9,
+      });
+
+      await service.processRemoteOps([syncImportOp]);
+
+      expect(recoveryPointBannerSpy.showIfShrunk).toHaveBeenCalledOnceWith(9, 1);
+    });
+
+    it('should unwrap a REPAIR payload before counting tasks for the shrink banner', async () => {
+      const repairOp: Operation = {
+        id: 'repair-wrapped',
+        opType: OpType.Repair,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {
+          appDataComplete: { task: { ids: ['t1', 't2', 't3'], entities: {} } },
+          repairSummary: {},
+        },
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+      backupServiceSpy.captureRecoveryPointIfMeaningful.and.resolveTo({
+        backupId: 'b1',
+        savedAt: 1,
+        reason: 'REMOTE_IMPORT',
+        taskCount: 3,
+      });
+
+      await service.processRemoteOps([repairOp]);
+
+      expect(recoveryPointBannerSpy.showIfShrunk).toHaveBeenCalledOnceWith(3, 3);
+    });
+
+    it('should skip the capture when the caller already holds a recovery point', async () => {
+      const syncImportOp: Operation = {
+        id: 'sync-import-rebuild',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: { task: { ids: ['t1'], entities: {} } },
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+
+      await service.processRemoteOps([syncImportOp], {
+        skipConflictDetection: true,
+        skipRecoveryPoint: true,
+      });
+
+      expect(backupServiceSpy.captureRecoveryPointIfMeaningful).not.toHaveBeenCalled();
+      expect(recoveryPointBannerSpy.showIfShrunk).not.toHaveBeenCalled();
+    });
+
+    it('should not consult the shrink banner when nothing was captured', async () => {
+      const syncImportOp: Operation = {
+        id: 'sync-import-fresh-device',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {},
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+
+      await service.processRemoteOps([syncImportOp]);
+
+      expect(recoveryPointBannerSpy.showIfShrunk).not.toHaveBeenCalled();
+    });
+
+    it('should abort the full-state apply when the recovery point cannot be captured', async () => {
+      const syncImportOp: Operation = {
+        id: 'sync-import-capture-failed',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {},
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+      backupServiceSpy.captureRecoveryPointIfMeaningful.and.rejectWith(
+        new Error('IDB quota exceeded'),
+      );
+
+      await expectAsync(service.processRemoteOps([syncImportOp])).toBeRejected();
+
+      expect(operationApplierServiceSpy.applyOperations).not.toHaveBeenCalled();
+      expect(
+        validateStateServiceSpy.validateAndRepairCurrentState,
+      ).not.toHaveBeenCalled();
+      // the deferred-action drain still runs so buffered local actions are not lost
+      expect(operationLogEffectsSpy.processDeferredActions).toHaveBeenCalledOnceWith({
+        callerHoldsOperationLogLock: true,
+      });
+    });
+
+    it('should not capture a recovery point for non-full-state remote ops', async () => {
+      await service.processRemoteOps(
+        [
+          {
+            id: 'plain-op',
+            opType: OpType.Update,
+            actionType: '[Task] Update' as ActionType,
+            entityType: 'TASK',
+            entityId: 't1',
+            payload: {},
+            clientId: 'client-1',
+            vectorClock: { client1: 1 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          } as Operation,
+        ],
+        { skipConflictDetection: true },
+      );
+
+      expect(backupServiceSpy.captureRecoveryPointIfMeaningful).not.toHaveBeenCalled();
     });
 
     it('should propagate an already-held operation-log lock through full-state apply and validation', async () => {

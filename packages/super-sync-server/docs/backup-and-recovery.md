@@ -133,6 +133,20 @@ user's account is wiped — usually because a bad `SYNC_IMPORT` propagated an
 empty or stale snapshot across their devices — and you need to roll _that one
 user_ back to a point in time.
 
+**Check the affected devices first.** Every client keeps local recovery
+points: right before it applies a remote full-state op (`SYNC_IMPORT`,
+`BACKUP_IMPORT`, `REPAIR`), before "Use server data", and before an import,
+it snapshots its complete state into a ring of three. The user opens
+**Settings → Sync & Backup → Import/Export → Browse backups** on the device
+that held the data when the wipe arrived, picks the entry labelled "before
+sync replaced local data", and restores it. That restore is a normal local
+import, so it uploads as a new full-state op and repairs the other devices
+on their next sync. This works for encrypted accounts and needs nothing from
+the server. See `docs/sync-and-op-log/local-recovery-points.md`.
+
+Only if no device has a usable recovery point, fall back to the server-side
+options below.
+
 The in-app **Restore from History** handles this for unencrypted accounts. It
 does **not** work for E2E-encrypted accounts: the server cannot decrypt the op
 payloads, so `generateSnapshotAtSeq` throws `EncryptedOpsNotSupportedError`.

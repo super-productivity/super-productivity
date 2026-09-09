@@ -505,6 +505,12 @@ read and nothing else, where `adm` also opens `/var/log` broadly. Running the
 cron as root works too but grants far more than this one read needs. The marker
 clears itself on the next run once the log is readable.
 
+If the group is already there and `journalctl -k` still prints nothing, the
+host is a container (OpenVZ/Virtuozzo, LXC) that does not expose a kernel log
+to guests at all — verified on the hosted server 2026-09-09, cron user in
+`systemd-journal`, journal empty. No group fixes that; the marker is permanent
+there and `docker inspect -f '{{.State.OOMKilled}}'` is the only OOM signal.
+
 ### "PostgreSQL canceled this query because it exceeded statement_timeout"
 
 The reports no longer inherit the deployment's `statement_timeout`. `monitoring-db.ts`

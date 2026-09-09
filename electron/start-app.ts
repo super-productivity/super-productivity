@@ -1,7 +1,15 @@
 import { initIpcInterfaces } from './ipc-handler';
 import { initPluginOAuth } from './plugin-oauth';
 import electronLog, { info, log, warn } from 'electron-log/main';
-import { App, app, BrowserWindow, globalShortcut, ipcMain, powerMonitor } from 'electron';
+import {
+  App,
+  app,
+  BrowserWindow,
+  globalShortcut,
+  ipcMain,
+  powerMonitor,
+  session,
+} from 'electron';
 import { join } from 'path';
 import { initDebug } from './debug';
 import electronDl from 'electron-dl';
@@ -298,6 +306,30 @@ export const startApp = (): void => {
     }
   });
 
+  // Chromium's spellchecker downloads dictionaries from Google
+  // (redirector.gvt1.com), which is what #5314 observed in a firewall log and
+  // what the "offline-first with zero data collection" promise rules out.
+  //
+  // Two layers, because they fail differently. This one covers every window on
+  // the default session — which is all of them — including any added later, so
+  // a new window is safe by default. Each window ALSO sets `spellcheck: false`,
+  // which is what still holds if this call is skipped, or if a future window
+  // opts into its own session. Must run before the first window is created.
+  appIN.on('ready', () => {
+    try {
+      // `?.` keeps the benign case quiet: a build without Electron's builtin
+      // spellchecker has no method and nothing to disable.
+      session.defaultSession.setSpellCheckerEnabled?.(false);
+    } catch (e) {
+      // Anything else reaching here means the call was available and failed, so
+      // this layer is off and only the per-window flags are holding — say so
+      // rather than swallowing it. Never rethrow: an exception escaping
+      // `emit('ready')` skips every window-creating listener registered after
+      // this one and `uncaughtException` exits 333, i.e. no app at all over a
+      // dictionary fetch.
+      warn('Could not disable the session spellchecker (#5314)', e);
+    }
+  });
   appIN.on('ready', () => createMainWin());
   appIN.on('ready', () => initBackupAdapter());
   appIN.on('ready', () => initLocalFileSyncAdapter());

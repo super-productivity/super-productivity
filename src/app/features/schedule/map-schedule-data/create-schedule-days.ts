@@ -270,8 +270,15 @@ export const createScheduleDays = (
         ) {
           viewEntriesPushedToNextDay.push(entry);
         } else {
-          Log.log('entry Start:', new Date(entry.start), { entry });
-          Log.err('Entry start time after next day start', entry);
+          // `entry.data` carries content for most SVE variants (a TaskCopy, a
+          // TaskRepeatCfg, a calendar event) — log ids and the timing fields
+          // this branch is actually about, never the entry itself.
+          Log.err('Entry start time after next day start', {
+            entryId: entry.id,
+            entryType: entry.type,
+            start: entry.start,
+            duration: entry.duration,
+          });
         }
       } else {
         viewEntriesToRenderForDay.push(normalizeDayAssignedEntry(entry));

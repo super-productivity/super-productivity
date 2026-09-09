@@ -153,7 +153,7 @@ export class IosKeyboardService {
 
     keyboard
       .addListener('keyboardWillShow', (info: KeyboardInfo) => {
-        Log.log('iOS keyboard will show', info);
+        Log.log('iOS keyboard will show', { keyboardHeight: info.keyboardHeight });
         // Switching to the emoji panel or a taller third-party keyboard re-fires
         // this while the keyboard is already up, and iOS then reports the already
         // shrunken window — keeping the first measurement is what stops the

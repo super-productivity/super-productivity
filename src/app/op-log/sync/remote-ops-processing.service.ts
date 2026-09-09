@@ -37,6 +37,13 @@ import {
 } from '../../features/config/local-only-sync-settings.util';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
+import { BackupService } from '../backup/backup.service';
+import { RecoveryPointBannerService } from '../../imex/local-backup/recovery-point-banner.service';
+import { countAllTasks } from '../../imex/local-backup/backup-ring.util';
+
+/** The state that ends up applied when a batch carries several full-state ops. */
+const lastFullStateOp = (ops: Operation[]): Operation | undefined =>
+  ops.filter((op) => FULL_STATE_OP_TYPES.has(op.opType)).at(-1);
 
 /**
  * Handles the core pipeline for processing remote operations.
@@ -71,6 +78,8 @@ export class RemoteOpsProcessingService {
   private writeFlushService = inject(OperationWriteFlushService);
   private hydrationStateService = inject(HydrationStateService);
   private providerManager = inject(SyncProviderManager);
+  private backupService = inject(BackupService);
+  private recoveryPointBanner = inject(RecoveryPointBannerService);
   private injector = inject(Injector);
 
   /** Flag to show version-incompatibility warnings only once per session */
@@ -100,6 +109,12 @@ export class RemoteOpsProcessingService {
     options?: {
       skipConflictDetection?: boolean;
       callerHoldsOperationLogLock?: boolean;
+      /**
+       * The caller already captured a pre-replacement recovery point (raw
+       * rebuild / "Use server data"). A second capture here would move the undo
+       * pointer and break that flow's Undo offer.
+       */
+      skipRecoveryPoint?: boolean;
       ignoredLocalFullStateOpIds?: readonly string[];
       /**
        * Final full-state conflict check. Runs with the operation-log lock held,
@@ -304,10 +319,28 @@ export class RemoteOpsProcessingService {
           ) {
             fullStateApplyResult.blockedByLocalConflict = true;
           } else {
+            // The apply below replaces this device's data wholesale, and under
+            // E2EE the server cannot hand it back — keep a local recovery point
+            // first (local-recovery-points.md). A failed capture throws and so
+            // aborts the apply; the ops stay undownloaded and retry next cycle.
+            const recoveryPoint =
+              options?.skipRecoveryPoint || !(await this._hasNewFullStateOp(validOps))
+                ? null
+                : await this.backupService.captureRecoveryPointIfMeaningful(
+                    'REMOTE_IMPORT',
+                  );
             fullStateApplyResult.committedFullStateOpIds =
               await this.applyNonConflictingOps(validOps, true, {
                 skipDeferredActionDrain: true,
               });
+            if (recoveryPoint) {
+              this.recoveryPointBanner.showIfShrunk(
+                recoveryPoint.taskCount,
+                countAllTasks(
+                  extractFullStateFromPayload(lastFullStateOp(validOps)?.payload),
+                ),
+              );
+            }
           }
         } catch (error) {
           hasPrimaryError = true;
@@ -555,6 +588,20 @@ export class RemoteOpsProcessingService {
    *        apply window and drains deferred actions after validation or abort.
    * @throws Re-throws if application fails (ops marked as failed first)
    */
+  /**
+   * A full-state op already in the log is skipped by `appendBatchSkipDuplicates`
+   * and never replaces state, so a re-delivered duplicate (forced download from
+   * seq 0, #9975) must not rotate a real recovery point out of the ring.
+   */
+  private async _hasNewFullStateOp(ops: Operation[]): Promise<boolean> {
+    for (const op of ops) {
+      if (this._isFullStateOperation(op) && !(await this.opLogStore.hasOp(op.id))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   async applyNonConflictingOps(
     ops: Operation[],
     callerHoldsLock: boolean = false,

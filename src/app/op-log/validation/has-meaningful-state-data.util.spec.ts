@@ -1,4 +1,5 @@
-import { hasMeaningfulStateData } from './has-meaningful-state-data.util';
+/* eslint-disable @typescript-eslint/naming-convention */
+import { hasAnyUserData, hasMeaningfulStateData } from './has-meaningful-state-data.util';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 
 // The default app ships with only the INBOX project and the built-in system
@@ -10,11 +11,24 @@ const SYSTEM_TAG_IDS_FIXTURE = [
   'KANBAN_IN_PROGRESS',
 ];
 
+const emptyTimeTracking = (): Record<string, unknown> => ({ project: {}, tag: {} });
+
+// Mirrors StateSnapshotService's DEFAULT_ARCHIVE / the legacy `pf` archive shape.
+const emptyArchive = (): Record<string, unknown> => ({
+  task: { ids: [], entities: {} },
+  timeTracking: emptyTimeTracking(),
+  lastTimeTrackingFlush: 0,
+});
+
 const initialState = (): Record<string, unknown> => ({
   task: { ids: [], entities: {} },
   project: { ids: [INBOX_PROJECT.id], entities: {} },
   tag: { ids: [...SYSTEM_TAG_IDS_FIXTURE], entities: {} },
   note: { ids: [], entities: {} },
+  taskRepeatCfg: { ids: [], entities: {} },
+  timeTracking: emptyTimeTracking(),
+  archiveYoung: emptyArchive(),
+  archiveOld: emptyArchive(),
 });
 
 describe('hasMeaningfulStateData', () => {
@@ -62,9 +76,34 @@ describe('hasMeaningfulStateData', () => {
   });
 
   it('ignores malformed (non-entity) collections without throwing', () => {
-    expect(hasMeaningfulStateData({ task: 'broken', project: null, tag: 123 })).toBe(
-      false,
-    );
+    expect(
+      hasMeaningfulStateData({
+        task: 'broken',
+        project: null,
+        tag: 123,
+        taskRepeatCfg: [],
+        timeTracking: { project: 'x', tag: null },
+        archiveYoung: 'broken',
+        archiveOld: { task: null, timeTracking: 7 },
+      }),
+    ).toBe(false);
+  });
+
+  // #9256 guard: hasNothingWorthUploading consumes hasMeaningfulStateData in the
+  // REFUSING direction, where over-reporting "has data" permits a destructive
+  // server overwrite. The wider signals must stay out of this predicate.
+  it('does NOT count archives, time tracking or repeat configs (stays narrow for #9256)', () => {
+    const s = initialState();
+    s.archiveYoung = { ...emptyArchive(), task: { ids: ['a1'], entities: {} } };
+    s.archiveOld = { ...emptyArchive(), task: { ids: ['a2'], entities: {} } };
+    s.timeTracking = {
+      project: { [INBOX_PROJECT.id]: { '2024-11-16': { s: 1 } } },
+      tag: {},
+    };
+    s.taskRepeatCfg = { ids: ['rc1'], entities: {} };
+
+    expect(hasMeaningfulStateData(s)).toBe(false);
+    expect(hasAnyUserData(s)).toBe(true);
   });
 
   describe('with ignoreTaskIds (#7985)', () => {
@@ -96,5 +135,44 @@ describe('hasMeaningfulStateData', () => {
       expect(hasMeaningfulStateData(s, undefined)).toBe(true);
       expect(hasMeaningfulStateData(s, new Set())).toBe(true);
     });
+  });
+});
+
+describe('hasAnyUserData (#9932)', () => {
+  it('returns true for an archived task in archiveYoung or archiveOld', () => {
+    const young = initialState();
+    young.archiveYoung = { ...emptyArchive(), task: { ids: ['a1'], entities: {} } };
+    expect(hasAnyUserData(young)).toBe(true);
+
+    const old = initialState();
+    old.archiveOld = { ...emptyArchive(), task: { ids: ['a1'], entities: {} } };
+    expect(hasAnyUserData(old)).toBe(true);
+  });
+
+  it('returns true for time tracking, live or flushed into an archive', () => {
+    const tracked = {
+      project: { [INBOX_PROJECT.id]: { '2024-11-16': { s: 1 } } },
+      tag: {},
+    };
+
+    const live = initialState();
+    live.timeTracking = tracked;
+    expect(hasAnyUserData(live)).toBe(true);
+
+    const archived = initialState();
+    archived.archiveOld = { ...emptyArchive(), timeTracking: tracked };
+    expect(hasAnyUserData(archived)).toBe(true);
+  });
+
+  it('returns false for time tracking contexts without any tracked day', () => {
+    const s = initialState();
+    s.timeTracking = { project: { [INBOX_PROJECT.id]: {} }, tag: {} };
+    expect(hasAnyUserData(s)).toBe(false);
+  });
+
+  it('returns true for a task repeat config', () => {
+    const s = initialState();
+    s.taskRepeatCfg = { ids: ['rc1'], entities: {} };
+    expect(hasAnyUserData(s)).toBe(true);
   });
 });

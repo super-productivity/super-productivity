@@ -270,6 +270,98 @@ module.exports = tseslint.config(
       'local-rules/require-text-locale': 'error',
     },
   },
+  // Log history is exportable (`Log.exportLogHistory()` backs the config-page
+  // download and the error overlay's "Logs" button) and exported logs are
+  // routinely attached to public bug reports, so user content must never reach
+  // a Log method (rule #9). This flags a whole value handed over instead of
+  // named fields — bare, as a property value, spread, or nested in a logged
+  // literal — which is what leaked in #7870 / #9112.
+  //
+  // 'error', so a NEW leak fails CI on the PR that introduces it. 'warn' would
+  // be inert here for the same reason spelled out under `max-lines` below:
+  // `ng lint` defaults to maxWarnings: -1 and never fails a build on warnings,
+  // and CI runs bare `npm run lint`.
+  //
+  // Specs are excluded: a test asserting on a payload is legitimate, and the
+  // invariant is about what a shipped build writes into the export.
+  {
+    files: ['src/app/**/*.ts'],
+    ignores: ['**/*.spec.ts'],
+    plugins: {
+      'local-rules': localRules,
+    },
+    rules: {
+      'local-rules/no-user-content-in-logs': 'error',
+    },
+  },
+  // Measured baseline: the call sites that already existed when the rule landed
+  // (80 hits across these 40 files, measured 2026-09), downgraded to a
+  // non-failing warning so the rule can be an error everywhere else.
+  //
+  // Not all of these are leaks. The rule judges shape, never content, so a
+  // scalar the naming heuristics cannot classify (`v`, `x`, `date1`, `evName`,
+  // `handlerMap`) sits here next to a real one. Treat an entry as "not yet
+  // triaged", not as "known privacy debt" — the count is a tripwire baseline,
+  // not a backlog estimate.
+  //
+  // This list may only ever SHRINK. A false positive in NEW code is not a
+  // reason to add a file here: fix the heuristics in the rule, or scope a
+  // `// eslint-disable-next-line local-rules/no-user-content-in-logs -- <why
+  // this value holds no user content>` to that one line. Adding the file
+  // silently exempts every future log call in it.
+  //
+  // Caveat, same as `max-lines`: a new violation inside an already-listed file
+  // only warns. Removing a file from the list is what locks its cleanup in.
+  {
+    files: [
+      'src/app/core/language/language.service.ts',
+      'src/app/core/share/share.service.ts',
+      'src/app/core/startup/startup.service.ts',
+      'src/app/core/util/vector-clock.ts',
+      'src/app/features/add-tasks-for-tomorrow/add-tasks-for-tomorrow.service.ts',
+      'src/app/features/android/android-interface.ts',
+      'src/app/features/android/store/android-focus-mode.effects.ts',
+      'src/app/features/android/store/android-foreground-tracking.effects.ts',
+      'src/app/features/android/store/android.effects.ts',
+      'src/app/features/archive/archive.service.ts',
+      'src/app/features/issue/handle-issue-provider-http-error.ts',
+      'src/app/features/mobile/store/mobile-notification.effects.ts',
+      'src/app/features/planner/planner.service.ts',
+      'src/app/features/right-panel/right-panel-content.component.ts',
+      'src/app/features/shepherd/shepherd-helper.ts',
+      'src/app/features/tasks/store/task-due.effects.ts',
+      'src/app/features/tasks/task.service.ts',
+      'src/app/features/tasks/util/play-done-sound.ts',
+      'src/app/features/ui-helper/ui-helper.service.ts',
+      'src/app/imex/sync/oauth-callback-handler.service.ts',
+      'src/app/imex/sync/sync-trigger.service.ts',
+      'src/app/imex/sync/sync-wrapper.service.ts',
+      'src/app/imex/sync/sync.effects.ts',
+      'src/app/op-log/clean-slate/clean-slate.service.ts',
+      'src/app/op-log/model/model-config.ts',
+      'src/app/op-log/persistence/operation-log-hydrator.service.ts',
+      'src/app/op-log/sync/remote-ops-processing.service.ts',
+      'src/app/op-log/validation/repair-operation.service.ts',
+      'src/app/op-log/validation/validate-state.service.ts',
+      'src/app/pages/config-page/config-page.component.ts',
+      'src/app/plugins/plugin-api.ts',
+      'src/app/plugins/plugin-bridge.service.ts',
+      'src/app/plugins/util/plugin-iframe.util.ts',
+      'src/app/root-store/meta/task-shared-meta-reducers/tag-shared.reducer.ts',
+      'src/app/ui/formly-button/formly-btn.component.ts',
+      'src/app/util/action-logger.ts',
+      'src/app/util/ipc-event.ts',
+      'src/app/util/is-same-day.ts',
+      'src/app/util/search-nav-debug.ts',
+      'src/app/util/skip-during-sync-window.operator.ts',
+    ],
+    plugins: {
+      'local-rules': localRules,
+    },
+    rules: {
+      'local-rules/no-user-content-in-logs': 'warn',
+    },
+  },
   // Op-log persistence: inside an adapter.transaction() callback only the tx
   // handle may be used — adapter methods enqueue behind the transaction's own
   // FIFO queue slot on the SQLite backend and deadlock (see

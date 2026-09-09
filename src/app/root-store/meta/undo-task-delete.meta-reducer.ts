@@ -128,7 +128,11 @@ const captureProjectContext = (
   }
 
   if (!project.taskIds || !project.backlogTaskIds) {
-    Log.err('Invalid project data:', { projectId, project });
+    Log.err('Invalid project data:', {
+      projectId,
+      hasTaskIds: !!project.taskIds,
+      hasBacklogTaskIds: !!project.backlogTaskIds,
+    });
     throw new Error('Invalid project data');
   }
 

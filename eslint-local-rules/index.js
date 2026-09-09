@@ -17,4 +17,5 @@ module.exports = {
   'no-adapter-in-tx': require('./rules/no-adapter-in-tx'),
   'require-frontier-report-on-ops-append': require('./rules/require-frontier-report-on-ops-append'),
   'require-text-locale': require('./rules/require-text-locale'),
+  'no-user-content-in-logs': require('./rules/no-user-content-in-logs'),
 };

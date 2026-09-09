@@ -25,6 +25,21 @@ import { OperationWriteFlushService } from './operation-write-flush.service';
 
 const MEANINGFUL_ENTITY_STATE_KEYS = new Set(['task', 'project', 'tag', 'note']);
 
+/**
+ * What {@link ServerMigrationService.handleServerMigration} did (#9932).
+ * `created` appended a SYNC_IMPORT; `reused_pending` found an unsynced
+ * SERVER_MIGRATION import already queued, which still ships the state;
+ * `skipped` shipped nothing. What a caller may safely do with each is the
+ * caller's policy — see `DownloadOutcome` in core/types/sync-results.types.ts.
+ */
+export type ServerMigrationOutcome =
+  | { kind: 'created'; opId: string }
+  | { kind: 'reused_pending' }
+  | {
+      kind: 'skipped';
+      reason: 'server_not_empty' | 'empty_state' | 'validation_failed' | 'no_client_id';
+    };
+
 const hasServerMigrationStateData = (state: unknown): boolean => {
   if (!state || typeof state !== 'object') {
     return false;
@@ -186,16 +201,16 @@ export class ServerMigrationService {
    * @param options - Optional configuration
    * @param options.skipServerEmptyCheck - If true, creates SYNC_IMPORT even if server has data.
    *   Used for "USE_LOCAL" conflict resolution to force overwrite remote with local state.
-   * @returns The created SYNC_IMPORT operation ID, or undefined when creation was skipped.
+   * @returns What happened — see {@link ServerMigrationOutcome}.
    */
   async handleServerMigration(
     syncProvider: OperationSyncCapable,
     options?: { skipServerEmptyCheck?: boolean; syncImportReason?: SyncImportReason },
-  ): Promise<string | undefined> {
+  ): Promise<ServerMigrationOutcome> {
     const isServerMigration =
       (options?.syncImportReason ?? 'SERVER_MIGRATION') === 'SERVER_MIGRATION';
     if (isServerMigration && (await this._skipOrThrowForOutstandingServerMigration())) {
-      return;
+      return { kind: 'reused_pending' };
     }
 
     // Double-check server is still empty (in case another client just uploaded).
@@ -208,7 +223,7 @@ export class ServerMigrationService {
           'ServerMigrationService: Server no longer empty, aborting SYNC_IMPORT. ' +
             'Another client may have just uploaded.',
         );
-        return;
+        return { kind: 'skipped', reason: 'server_not_empty' };
       }
     }
 
@@ -228,7 +243,7 @@ export class ServerMigrationService {
       // while this tab was probing the server or waiting for confirmation.
       // Re-check inside the cross-tab operation-log barrier before snapshotting.
       if (isServerMigration && (await this._skipOrThrowForOutstandingServerMigration())) {
-        return;
+        return { kind: 'reused_pending' };
       }
 
       // Get current full state from NgRx store (async to include archives from IndexedDB)
@@ -244,7 +259,7 @@ export class ServerMigrationService {
         OpLog.warn(
           'ServerMigrationService: Skipping SYNC_IMPORT - local state is empty.',
         );
-        return;
+        return { kind: 'skipped', reason: 'empty_state' };
       }
 
       // Validate and repair state before creating SYNC_IMPORT
@@ -272,7 +287,7 @@ export class ServerMigrationService {
         if (isServerMigration) {
           this._validationFailureNotified = true;
         }
-        return;
+        return { kind: 'skipped', reason: 'validation_failed' };
       }
 
       // If state was repaired, use the repaired version
@@ -297,7 +312,7 @@ export class ServerMigrationService {
         OpLog.err(
           'ServerMigrationService: Cannot create SYNC_IMPORT - no client ID available.',
         );
-        return;
+        return { kind: 'skipped', reason: 'no_client_id' };
       }
 
       // Build vector clock by merging ALL local operation clocks.
@@ -346,7 +361,7 @@ export class ServerMigrationService {
           'Will be uploaded immediately via follow-up upload.',
       );
       this._validationFailureNotified = false;
-      return op.id;
+      return { kind: 'created', opId: op.id };
     });
   }
 

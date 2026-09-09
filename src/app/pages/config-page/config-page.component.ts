@@ -67,6 +67,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { NgTemplateOutlet } from '@angular/common';
 import { LocalBackupService } from '../../imex/local-backup/local-backup.service';
+import { DialogBackupsListComponent } from '../../imex/local-backup/dialog-backups-list/dialog-backups-list.component';
 import { FormsModule } from '@angular/forms';
 import {
   MatFormField,
@@ -201,7 +202,27 @@ export class ConfigPageComponent implements OnInit {
     this.generalFormCfg = GLOBAL_GENERAL_FORM_CONFIG.slice();
     this.timeTrackingFormCfg = GLOBAL_TIME_TRACKING_FORM_CONFIG.slice();
     this.pluginsShortcutsFormCfg = GLOBAL_PLUGINS_FORM_CONFIG.slice();
-    this.globalImexFormCfg = GLOBAL_IMEX_FORM_CONFIG.slice();
+    // "Browse backups" lives on the Import/Export section so every platform
+    // (incl. web, which has no automatic backups) can reach the recovery ring.
+    this.globalImexFormCfg = GLOBAL_IMEX_FORM_CONFIG.map((section) =>
+      section.customSection === 'FILE_IMPORT_EXPORT'
+        ? {
+            ...section,
+            actions: [
+              ...(section.actions ?? []),
+              {
+                label: T.GCF.AUTO_BACKUPS.BROWSE,
+                icon: 'history',
+                onClick: () => {
+                  this._matDialog.open(DialogBackupsListComponent, {
+                    restoreFocus: true,
+                  });
+                },
+              },
+            ],
+          }
+        : section,
+    );
     this.globalProductivityConfigFormCfg = GLOBAL_PRODUCTIVITY_FORM_CONFIG.slice();
     this.globalTasksFormCfg = GLOBAL_TASKS_FORM_CONFIG.slice();
 

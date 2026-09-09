@@ -98,7 +98,6 @@ export class CalendarIntegrationEffects {
           return forkJoin(
             activatedProviders.map((calProvider) =>
               timer(0, getEffectiveCheckInterval(calProvider)).pipe(
-                // tap(() => Log.log('REQUEST CALENDAR', calProvider)),
                 switchMap(() =>
                   this._calendarIntegrationService.requestEvents$(calProvider),
                 ),
@@ -198,7 +197,6 @@ export class CalendarIntegrationEffects {
             ),
           );
         }),
-        tap((a) => Log.log('_____END___', a)),
       ),
     { dispatch: false },
   );
@@ -242,7 +240,7 @@ export class CalendarIntegrationEffects {
     calProvider: IssueProviderCalendar,
   ): void {
     const curVal = this._currentlyShownBanners$.getValue();
-    Log.log('addEvToShow', curVal, calEv);
+    Log.log('addEvToShow', { shownCount: curVal.length, calEvId: calEv.id });
     if (curVal.some((val) => shareCalendarEventId(val.calEv, calEv))) {
       return;
     }
@@ -288,7 +286,7 @@ export class CalendarIntegrationEffects {
     const isInPast = calEv.start < Date.now();
 
     const nrOfAllBanners = allEvsToShow.length;
-    Log.log({ taskForEvent, allEvsToShow });
+    Log.log({ taskForEventId: taskForEvent?.id, bannerCount: nrOfAllBanners });
 
     this._bannerService.open({
       id: BannerId.CalendarEvent,

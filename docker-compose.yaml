@@ -2,13 +2,28 @@ services:
   # PostgreSQL database for SuperSync
   db:
     image: postgres:15-alpine
-    restart: always
     environment:
       POSTGRES_USER: supersync
       POSTGRES_PASSWORD: superpassword
       POSTGRES_DB: supersync_db
+    # No restart policy on purpose: this is a throwaway E2E database. With
+    # `restart: always` a db container from a since-deleted checkout came back
+    # on every Docker daemon start and squatted the fixed host port forever —
+    # including after a Ctrl-C, where the teardown never runs.
+    #
+    # DB_PORT defaults to 0 = ephemeral host port, so a leftover db can never
+    # block the next run. (The supersync port is still fixed at 1901, so only
+    # one supersync suite runs at a time regardless.) Nothing on the host needs
+    # the db — only the supersync container does, over the compose network. For
+    # host access (the packages/super-sync-server integration tests) use
+    # `npm run supersync:db`, which pins DB_PORT=55432 and applies the schema.
+    # Flipping DB_PORT makes compose recreate the container, so a later
+    # `npm run e2e:supersync` takes the db back to an ephemeral port.
+    #
+    # Don't pin DB_PORT in an env file: every checkout sharing that file gets
+    # the same fixed port back, and with it the collision.
     ports:
-      - '55432:5432'
+      - '${DB_PORT:-0}:5432'
     volumes:
       - db_data:/var/lib/postgresql/data
     # Gate on supersync_db existing AND accepting queries from the app user.

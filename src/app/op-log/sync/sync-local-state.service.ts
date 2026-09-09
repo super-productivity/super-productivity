@@ -5,7 +5,10 @@ import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { OpLog } from '../../core/log';
 import { T } from '../../t.const';
 import { alertDialog, confirmDialog } from '../../util/native-dialogs';
-import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.util';
+import {
+  hasAnyUserData,
+  hasMeaningfulStateData,
+} from '../validation/has-meaningful-state-data.util';
 import { isExampleTaskCreateOp } from '../validation/is-example-task-op.util';
 import {
   isFullStateOpType,
@@ -100,12 +103,25 @@ export class SyncLocalStateService {
   }
 
   /**
+   * The fresh-client / genesis-client gate: does this client hold user data?
+   * Uses the wider `hasAnyUserData`, because a legacy-migrated client's work can
+   * be entirely archived, tracked time or repeat configs. Archives live only in
+   * IndexedDB and the synchronous snapshot substitutes an empty DEFAULT_ARCHIVE,
+   * so such a client read as empty here and lost its archive (#9932); when the
+   * narrow check finds nothing, the archive-inclusive snapshot is consulted
+   * before answering "no".
+   *
+   * The wider notion stops here on purpose. `hasNothingWorthUploading` below
+   * consumes the narrow `hasMeaningfulStateData` in the refusing direction
+   * (#9256), where over-reporting "has data" would permit a destructive server
+   * overwrite from a device holding nothing.
+   *
    * @param ignoreTaskIds Optional task ids to exclude from the "has a task?" check.
    *   The file-based conflict gate passes the ids of pending onboarding example tasks so
    *   an example-only store is not treated as meaningful (#7985). Omitting it preserves
    *   the original behavior for every other caller.
    */
-  hasMeaningfulStoreData(ignoreTaskIds?: ReadonlySet<string>): boolean {
+  async hasMeaningfulStoreData(ignoreTaskIds?: ReadonlySet<string>): Promise<boolean> {
     const snapshot = this.stateSnapshotService.getStateSnapshot();
 
     if (!snapshot) {
@@ -115,7 +131,12 @@ export class SyncLocalStateService {
       return false;
     }
 
-    return hasMeaningfulStateData(snapshot, ignoreTaskIds);
+    if (hasAnyUserData(snapshot, ignoreTaskIds)) {
+      return true;
+    }
+
+    const withArchives = await this.stateSnapshotService.getStateSnapshotAsync();
+    return hasAnyUserData(withArchives, ignoreTaskIds);
   }
 
   /**
