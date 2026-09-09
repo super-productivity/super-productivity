@@ -36,6 +36,7 @@ describe('TaskBulkActionService', () => {
     setBulkFeedbackSuppressed: (v: boolean) => void;
     isDestroyedHost: () => boolean;
     findLiveRowEl: () => HTMLElement | null;
+    isTouchSelectionMode: ReturnType<typeof signal<boolean>>;
   };
   let dialogResult: unknown;
   let isConfirmBeforeDelete: boolean;
@@ -106,6 +107,7 @@ describe('TaskBulkActionService', () => {
       setBulkFeedbackSuppressed: (v: boolean) => suppressed.set(v),
       isDestroyedHost: () => false,
       findLiveRowEl: () => null,
+      isTouchSelectionMode: signal(false),
     };
 
     TestBed.configureTestingModule({
@@ -337,6 +339,30 @@ describe('TaskBulkActionService', () => {
         jasmine.objectContaining({ id: 'b' }),
         [],
       );
+    });
+  });
+
+  describe('touch selection mode', () => {
+    it('ends after a completed action', async () => {
+      multiSelect.isTouchSelectionMode.set(true);
+      select([t('a'), t('b')]);
+      await service.setEstimate(1000);
+      expect(multiSelect.clear).toHaveBeenCalled();
+    });
+
+    it('stays when a dialog is cancelled or there is nothing to do', async () => {
+      multiSelect.isTouchSelectionMode.set(true);
+      dialogResult = undefined;
+      select([t('a')]);
+      await service.openScheduleDialog();
+      await service.removeDeadline();
+      expect(multiSelect.clear).not.toHaveBeenCalled();
+    });
+
+    it('is not ended on desktop, where the selection is a working set', async () => {
+      select([t('a'), t('b')]);
+      await service.setEstimate(1000);
+      expect(multiSelect.clear).not.toHaveBeenCalled();
     });
   });
 

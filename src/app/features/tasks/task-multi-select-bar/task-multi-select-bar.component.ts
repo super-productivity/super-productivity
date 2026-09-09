@@ -41,6 +41,7 @@ import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-o
 import { getCommonProjectId } from '../task-bulk-action.util';
 import { KeyboardConfig } from '@sp/keyboard-config';
 import { isTouchActive } from '../../../util/input-intent';
+import { MenuTouchFixDirective } from '../task-context-menu/menu-touch-fix.directive';
 
 const EMPTY_KB = {} as KeyboardConfig;
 
@@ -67,6 +68,7 @@ const EMPTY_KB = {} as KeyboardConfig;
     MatTooltip,
     TranslatePipe,
     SelectOptionRowComponent,
+    MenuTouchFixDirective,
   ],
 })
 export class TaskMultiSelectBarComponent {

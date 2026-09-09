@@ -134,7 +134,7 @@ export class TaskBulkActionService {
       msg: this._plural('F.TASK.MULTI_SELECT.S.DONE', tasks.length),
       translateParams: { count: tasks.length },
     });
-    this._restoreFocus(focusTargetId);
+    this._finish(focusTargetId);
   }
 
   async markUndone(): Promise<void> {
@@ -152,7 +152,7 @@ export class TaskBulkActionService {
       msg: this._plural('F.TASK.MULTI_SELECT.S.UNDONE', tasks.length),
       translateParams: { count: tasks.length },
     });
-    this._restoreFocus(focusTargetId);
+    this._finish(focusTargetId);
   }
 
   // ---- DELETE -----------------------------------------------------------
@@ -207,7 +207,7 @@ export class TaskBulkActionService {
       }
     });
     this._multiSelect.clear();
-    this._restoreFocus(focusTargetId);
+    this._finish(focusTargetId);
   }
 
   private async _deleteSingle(task: Task): Promise<void> {
@@ -233,7 +233,7 @@ export class TaskBulkActionService {
     this._taskService.remove(await this._withSubTasks(task));
     this._multiSelect.clear();
     await this._flush();
-    this._restoreFocus(focusTargetId);
+    this._finish(focusTargetId);
   }
 
   // ---- PROJECT ----------------------------------------------------------
@@ -287,7 +287,7 @@ export class TaskBulkActionService {
         translateParams: { count: movedCount, projectTitle: project?.title ?? '' },
       });
     }
-    this._restoreFocus(focusTargetId);
+    this._finish(focusTargetId);
   }
 
   // ---- TAGS -------------------------------------------------------------
@@ -310,6 +310,7 @@ export class TaskBulkActionService {
         ),
       ),
     );
+    this._finish();
   }
 
   isTagOnAllSelected(tagId: string): boolean {
@@ -397,12 +398,13 @@ export class TaskBulkActionService {
         applied += todayIds.length;
       }
     });
-    if (applied) {
-      this._snackApplied(applied);
-    } else {
+    if (!applied) {
       this._snackNothingToDo();
+      this._restoreFocus(focusTargetId);
+      return;
     }
-    this._restoreFocus(focusTargetId);
+    this._snackApplied(applied);
+    this._finish(focusTargetId);
   }
 
   async unschedule(): Promise<void> {
@@ -427,7 +429,7 @@ export class TaskBulkActionService {
       msg: this._plural('F.TASK.MULTI_SELECT.S.UNSCHEDULED', tasks.length),
       translateParams: { count: tasks.length },
     });
-    this._restoreFocus(focusTargetId);
+    this._finish(focusTargetId);
   }
 
   async addToToday(): Promise<void> {
@@ -453,7 +455,7 @@ export class TaskBulkActionService {
       }),
     );
     await this._flush();
-    this._restoreFocus(focusTargetId);
+    this._finish(focusTargetId);
   }
 
   // ---- DEADLINE ---------------------------------------------------------
@@ -517,6 +519,7 @@ export class TaskBulkActionService {
       });
     });
     this._snackApplied(tasks.length);
+    this._finish();
   }
 
   async removeDeadline(): Promise<void> {
@@ -533,6 +536,7 @@ export class TaskBulkActionService {
       ),
     );
     this._snackApplied(tasks.length);
+    this._finish();
   }
 
   // ---- ESTIMATE ---------------------------------------------------------
@@ -549,6 +553,7 @@ export class TaskBulkActionService {
       tasks.forEach((t) => this._taskService.update(t.id, { timeEstimate: ms })),
     );
     this._snackApplied(tasks.length);
+    this._finish();
   }
 
   // ---- BACKLOG ----------------------------------------------------------
@@ -579,7 +584,7 @@ export class TaskBulkActionService {
     if (skippedSubtasks.length) {
       this._snackPartial(tasks.length, tasks.length + skippedSubtasks.length);
     }
-    this._restoreFocus(focusTargetId);
+    this._finish(focusTargetId);
   }
 
   // ---- helpers ----------------------------------------------------------
@@ -700,6 +705,20 @@ export class TaskBulkActionService {
       rows.slice(lastSelectedIndex + 1).find(isCandidate) ??
       rows.slice(0, lastSelectedIndex).reverse().find(isCandidate);
     return target ? idOf(target) : null;
+  }
+
+  /**
+   * End of a completed action. Touch selection mode is transient, like an
+   * Android contextual action bar: the action ends it. On desktop the
+   * selection is a working set that survives, so only keyboard focus is
+   * restored. Cancelled dialogs and "nothing to do" never get here.
+   */
+  private _finish(focusTargetId: string | null = null): void {
+    if (this._multiSelect.isTouchSelectionMode()) {
+      this._multiSelect.clear();
+      return;
+    }
+    this._restoreFocus(focusTargetId);
   }
 
   /**

@@ -59,15 +59,33 @@ test.describe('Task multi-select (touch)', () => {
     await expect(bar).toContainText('2 selected');
     await expect(b.locator('.select-ring.isOn')).toHaveCount(1);
 
-    // Deselecting the last task keeps the mode (the bar stays).
+    // Deselecting the last task ends the mode.
     await a.tap();
+    await expect(bar).toContainText('1 selected');
     await b.tap();
-    await expect(bar).toContainText('0 selected');
-    await expect(bar.getByRole('button', { name: 'Actions' })).toBeDisabled();
-
-    await bar.getByRole('button', { name: 'Clear selection' }).tap();
     await expect(bar).toBeHidden();
     await expect(page.locator('task .select-ring')).toHaveCount(0);
     await expect(page.locator('task done-toggle')).toHaveCount(2);
+
+    // A completed action ends the mode as well.
+    await a.focus();
+    await page.keyboard.press('q');
+    await waitForMenuSettled(page);
+    await page
+      .locator('.mat-mdc-menu-content button', { hasText: 'Select several tasks' })
+      .tap();
+    await b.tap();
+    await expect(bar).toContainText('2 selected');
+    await bar.getByRole('button', { name: 'Actions' }).tap();
+    await waitForMenuSettled(page);
+    await page
+      .locator('.mat-mdc-menu-content button', { hasText: 'Mark as completed' })
+      .tap();
+    await expect(
+      page.locator('.task-list-inner[data-id="DONE"] > task.isDone'),
+    ).toHaveCount(2);
+    await expect(bar).toBeHidden();
+    await expect(page.locator('task .select-ring')).toHaveCount(0);
+    await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(0);
   });
 });

@@ -215,18 +215,35 @@ describe('TaskMultiSelectService', () => {
   });
 
   describe('touch selection mode', () => {
-    it('enters with an initial task and shows the bar even when empty', () => {
+    it('enters with the initial task selected', () => {
       service.enterTouchSelectionMode('a');
       expect(service.isTouchSelectionMode()).toBeTrue();
       expect(selected()).toEqual(['a']);
-      service.toggle('a');
-      expect(service.isActive()).toBeFalse();
-      expect(service.isTouchSelectionMode()).toBeTrue();
       expect(service.isSelecting()).toBeTrue();
     });
 
+    it('ends when the last task is deselected', () => {
+      service.enterTouchSelectionMode('a');
+      service.toggle('b');
+      service.toggle('a');
+      expect(service.isTouchSelectionMode()).toBeTrue();
+      service.toggle('b');
+      expect(service.isTouchSelectionMode()).toBeFalse();
+      expect(service.isSelecting()).toBeFalse();
+    });
+
+    it('ends when the last task is removed or pruned away', () => {
+      service.enterTouchSelectionMode('a');
+      service.remove('a');
+      expect(service.isTouchSelectionMode()).toBeFalse();
+
+      service.enterTouchSelectionMode('b');
+      service.prune(new Set(['x']));
+      expect(service.isTouchSelectionMode()).toBeFalse();
+    });
+
     it('clear leaves the mode', () => {
-      service.enterTouchSelectionMode();
+      service.enterTouchSelectionMode('a');
       service.clear();
       expect(service.isTouchSelectionMode()).toBeFalse();
       expect(service.isSelecting()).toBeFalse();

@@ -49,8 +49,10 @@ export class TaskMultiSelectService {
   /**
    * Explicit selection mode for touch, where there is no modifier key: rows
    * show a selection ring, a tap toggles, swipe / drag / title edit are
-   * suspended. Entered from the task context menu; left via the bar's ✕,
-   * Android back or Esc. Deselecting the last task keeps the mode.
+   * suspended. Entered from the task context menu with one task selected.
+   * Transient like an Android contextual action bar: it ends with the last
+   * deselection, a completed bulk action, the bar's ✕, Android back or Esc.
+   * Never on with an empty selection.
    */
   readonly isTouchSelectionMode = this._isTouchSelectionMode.asReadonly();
   /**
@@ -105,10 +107,10 @@ export class TaskMultiSelectService {
     } else {
       next.add(id);
     }
-    this._selectedIds.set(next);
+    this._setSelectedIds(next);
     if (next.has(id)) {
       this._anchorId.set(id);
-    } else if (!next.size || this._anchorId() === id) {
+    } else if (this._anchorId() === id) {
       // A deselected row must not stay the anchor of the next Shift+click.
       this._anchorId.set(null);
     }
@@ -159,11 +161,11 @@ export class TaskMultiSelectService {
     return nextEl;
   }
 
-  enterTouchSelectionMode(initialId?: string): void {
-    this._isTouchSelectionMode.set(true);
-    if (initialId && !this._selectedIds().has(initialId)) {
+  enterTouchSelectionMode(initialId: string): void {
+    if (!this._selectedIds().has(initialId)) {
       this.toggle(initialId);
     }
+    this._isTouchSelectionMode.set(true);
   }
 
   setBulkFeedbackSuppressed(isSuppressed: boolean): void {
@@ -223,7 +225,7 @@ export class TaskMultiSelectService {
     }
     const next = new Set(this._selectedIds());
     next.delete(id);
-    this._selectedIds.set(next);
+    this._setSelectedIds(next);
     if (this._anchorId() === id) {
       this._anchorId.set(null);
     }
@@ -239,7 +241,7 @@ export class TaskMultiSelectService {
       }
     });
     if (next.size !== current.size) {
-      this._selectedIds.set(next);
+      this._setSelectedIds(next);
     }
     const anchorId = this._anchorId();
     if (anchorId && !next.has(anchorId)) {
@@ -255,6 +257,15 @@ export class TaskMultiSelectService {
     this._anchorId.set(null);
     this._menuOpenRequest.set(null);
     this._isTouchSelectionMode.set(false);
+  }
+
+  /** Every shrinking write goes through here so an empty set also ends touch mode. */
+  private _setSelectedIds(next: Set<string>): void {
+    this._selectedIds.set(next);
+    if (!next.size) {
+      this._anchorId.set(null);
+      this._isTouchSelectionMode.set(false);
+    }
   }
 
   requestMenuOpen(pos: { x: number; y: number }): void {

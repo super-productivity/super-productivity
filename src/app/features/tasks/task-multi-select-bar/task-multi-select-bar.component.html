@@ -48,156 +48,160 @@
   #bulkMenu="matMenu"
   (closed)="onMenuClosed()"
 >
-  <ng-template matMenuContent>
-    <div class="menu-title">
-      {{ tasksTitleKey() | translate: { count: count() } }}
-    </div>
+  <div class="menu-title">
+    {{ tasksTitleKey() | translate: { count: count() } }}
+  </div>
 
+  <button
+    (click)="bulk.openScheduleDialog()"
+    mat-menu-item
+  >
+    <span class="menuItemLeft">
+      <mat-icon>today</mat-icon>
+      {{ T.F.TASK.CMP.SCHEDULE | translate }}
+    </span>
+    <span class="key-i">{{ kb().taskSchedule }}</span>
+  </button>
+  @if (bulk.hasScheduled()) {
     <button
-      (click)="bulk.openScheduleDialog()"
+      (click)="bulk.unschedule()"
       mat-menu-item
     >
       <span class="menuItemLeft">
-        <mat-icon>today</mat-icon>
-        {{ T.F.TASK.CMP.SCHEDULE | translate }}
+        <mat-icon>event_busy</mat-icon>
+        {{ T.F.TASK.CMP.UNSCHEDULE_TASK | translate }}
       </span>
-      <span class="key-i">{{ kb().taskSchedule }}</span>
+      <span class="key-i">{{ kb().taskUnschedule }}</span>
     </button>
-    @if (bulk.hasScheduled()) {
-      <button
-        (click)="bulk.unschedule()"
-        mat-menu-item
-      >
-        <span class="menuItemLeft">
-          <mat-icon>event_busy</mat-icon>
-          {{ T.F.TASK.CMP.UNSCHEDULE_TASK | translate }}
-        </span>
-        <span class="key-i">{{ kb().taskUnschedule }}</span>
-      </button>
-    }
+  }
+  <button
+    (click)="bulk.addToToday()"
+    mat-menu-item
+  >
+    <span class="menuItemLeft">
+      <mat-icon>wb_sunny</mat-icon>
+      {{ T.F.TASK.CMP.ADD_TO_MY_DAY | translate }}
+    </span>
+    <span class="key-i">{{ kb().taskScheduleToday }}</span>
+  </button>
+  <button
+    (click)="bulk.openDeadlineDialog()"
+    mat-menu-item
+  >
+    <span class="menuItemLeft">
+      <mat-icon>flag</mat-icon>
+      {{ T.F.TASK.ADDITIONAL_INFO.DEADLINE | translate }}
+    </span>
+    <span class="key-i">{{ kb().taskScheduleDeadline }}</span>
+  </button>
+  @if (bulk.hasDeadline()) {
     <button
-      (click)="bulk.addToToday()"
-      mat-menu-item
-    >
-      <span class="menuItemLeft">
-        <mat-icon>wb_sunny</mat-icon>
-        {{ T.F.TASK.CMP.ADD_TO_MY_DAY | translate }}
-      </span>
-      <span class="key-i">{{ kb().taskScheduleToday }}</span>
-    </button>
-    <button
-      (click)="bulk.openDeadlineDialog()"
+      (click)="bulk.removeDeadline()"
       mat-menu-item
     >
       <span class="menuItemLeft">
         <mat-icon>flag</mat-icon>
-        {{ T.F.TASK.ADDITIONAL_INFO.DEADLINE | translate }}
+        {{ T.F.TASK.CMP.REMOVE_DEADLINE | translate }}
       </span>
-      <span class="key-i">{{ kb().taskScheduleDeadline }}</span>
     </button>
-    @if (bulk.hasDeadline()) {
-      <button
-        (click)="bulk.removeDeadline()"
-        mat-menu-item
-      >
-        <span class="menuItemLeft">
-          <mat-icon>flag</mat-icon>
-          {{ T.F.TASK.CMP.REMOVE_DEADLINE | translate }}
-        </span>
-      </button>
-    }
+  }
 
-    <mat-divider></mat-divider>
+  <mat-divider></mat-divider>
 
+  <button
+    (click)="bulk.toggleDone()"
+    mat-menu-item
+  >
+    <span class="menuItemLeft">
+      @if (bulk.hasUndone()) {
+        <mat-icon>check</mat-icon>
+        {{ T.F.TASK.CMP.MARK_DONE | translate }}
+      } @else {
+        <mat-icon>undo</mat-icon>
+        {{ T.F.TASK.CMP.MARK_UNDONE | translate }}
+      }
+    </span>
+    <span class="key-i">{{ kb().taskToggleDone }}</span>
+  </button>
+
+  @if (isShowBacklogBtns() && bulk.hasParentTasks()) {
     <button
-      (click)="bulk.toggleDone()"
+      (click)="bulk.moveToBacklog()"
       mat-menu-item
     >
       <span class="menuItemLeft">
-        @if (bulk.hasUndone()) {
-          <mat-icon>check</mat-icon>
-          {{ T.F.TASK.CMP.MARK_DONE | translate }}
-        } @else {
-          <mat-icon>undo</mat-icon>
-          {{ T.F.TASK.CMP.MARK_UNDONE | translate }}
-        }
+        <mat-icon>move_down</mat-icon>
+        {{ T.F.TASK.CMP.MOVE_TO_BACKLOG | translate }}
       </span>
-      <span class="key-i">{{ kb().taskToggleDone }}</span>
+      <span class="key-i">{{ kb().moveToBacklog }}</span>
     </button>
-
-    @if (isShowBacklogBtns() && bulk.hasParentTasks()) {
-      <button
-        (click)="bulk.moveToBacklog()"
-        mat-menu-item
-      >
-        <span class="menuItemLeft">
-          <mat-icon>move_down</mat-icon>
-          {{ T.F.TASK.CMP.MOVE_TO_BACKLOG | translate }}
-        </span>
-        <span class="key-i">{{ kb().moveToBacklog }}</span>
-      </button>
-      <button
-        (click)="bulk.moveToRegularList()"
-        mat-menu-item
-      >
-        <span class="menuItemLeft">
-          <mat-icon>move_up</mat-icon>
-          {{ T.F.TASK.CMP.MOVE_TO_REGULAR | translate }}
-        </span>
-      </button>
-    }
-
-    @if (bulk.hasEstimatable()) {
-      <button
-        [matMenuTriggerFor]="estimateMenu"
-        mat-menu-item
-      >
-        <span class="menuItemLeft">
-          <mat-icon>hourglass_empty</mat-icon>
-          {{ T.F.TASK.CMP.ESTIMATE | translate }}
-        </span>
-        <span class="key-i">{{ kb().taskOpenEstimationDialog }}</span>
-      </button>
-    }
-
     <button
-      [matMenuTriggerFor]="tagMenu"
+      (click)="bulk.moveToRegularList()"
       mat-menu-item
     >
       <span class="menuItemLeft">
-        <mat-icon>label</mat-icon>
-        {{ T.F.TASK.CMP.TOGGLE_TAGS | translate }}
+        <mat-icon>move_up</mat-icon>
+        {{ T.F.TASK.CMP.MOVE_TO_REGULAR | translate }}
       </span>
-      <span class="key-i">{{ kb().taskEditTags }}</span>
     </button>
+  }
 
-    @if (bulk.hasParentTasks() && moveToProjectList().length) {
-      <button
-        [matMenuTriggerFor]="projectMenu"
-        mat-menu-item
-      >
-        <span class="menuItemLeft">
-          <mat-icon>forward</mat-icon>
-          {{ T.F.TASK.CMP.MOVE_TO_OTHER_PROJECT | translate }}
-        </span>
-        <span class="key-i">{{ kb().taskMoveToProject }}</span>
-      </button>
-    }
-
-    <mat-divider></mat-divider>
-
+  @if (bulk.hasEstimatable()) {
     <button
-      (click)="bulk.deleteSelected()"
-      class="color-warn"
+      #estimateTrigger="matMenuTrigger"
+      [menuTouchFix]="estimateTrigger"
+      [matMenuTriggerFor]="estimateMenu"
       mat-menu-item
     >
       <span class="menuItemLeft">
-        <mat-icon class="color-warn-i">delete_forever</mat-icon>
-        {{ T.F.TASK.CMP.DELETE | translate }}
+        <mat-icon>hourglass_empty</mat-icon>
+        {{ T.F.TASK.CMP.ESTIMATE | translate }}
       </span>
-      <span class="key-i">{{ kb().taskDelete }}</span>
+      <span class="key-i">{{ kb().taskOpenEstimationDialog }}</span>
     </button>
-  </ng-template>
+  }
+
+  <button
+    #tagTrigger="matMenuTrigger"
+    [menuTouchFix]="tagTrigger"
+    [matMenuTriggerFor]="tagMenu"
+    mat-menu-item
+  >
+    <span class="menuItemLeft">
+      <mat-icon>label</mat-icon>
+      {{ T.F.TASK.CMP.TOGGLE_TAGS | translate }}
+    </span>
+    <span class="key-i">{{ kb().taskEditTags }}</span>
+  </button>
+
+  @if (bulk.hasParentTasks() && moveToProjectList().length) {
+    <button
+      #projectTrigger="matMenuTrigger"
+      [menuTouchFix]="projectTrigger"
+      [matMenuTriggerFor]="projectMenu"
+      mat-menu-item
+    >
+      <span class="menuItemLeft">
+        <mat-icon>forward</mat-icon>
+        {{ T.F.TASK.CMP.MOVE_TO_OTHER_PROJECT | translate }}
+      </span>
+      <span class="key-i">{{ kb().taskMoveToProject }}</span>
+    </button>
+  }
+
+  <mat-divider></mat-divider>
+
+  <button
+    (click)="bulk.deleteSelected()"
+    class="color-warn"
+    mat-menu-item
+  >
+    <span class="menuItemLeft">
+      <mat-icon class="color-warn-i">delete_forever</mat-icon>
+      {{ T.F.TASK.CMP.DELETE | translate }}
+    </span>
+    <span class="key-i">{{ kb().taskDelete }}</span>
+  </button>
 </mat-menu>
 
 <mat-menu #estimateMenu="matMenu">
@@ -205,6 +209,7 @@
     @for (option of ESTIMATE_OPTIONS; track option.value) {
       <button
         (click)="bulk.setEstimate(option.ms)"
+        menuTouchFix
         mat-menu-item
       >
         {{ option.label }}
@@ -213,6 +218,7 @@
     <mat-divider></mat-divider>
     <button
       (click)="bulk.setEstimate(0)"
+      menuTouchFix
       mat-menu-item
     >
       <mat-icon>clear</mat-icon>
@@ -227,6 +233,7 @@
       @for (tag of toggleTagList(); track tag.id) {
         <button
           (click)="bulk.toggleTag(tag.id)"
+          menuTouchFix
           mat-menu-item
         >
           <select-option-row
@@ -250,6 +257,7 @@
       @for (project of list; track project.id) {
         <button
           (click)="bulk.moveToProject(project.id)"
+          menuTouchFix
           mat-menu-item
         >
           <select-option-row

@@ -88,7 +88,7 @@ describe('TaskMultiSelectBarComponent', () => {
     multiSelect.toggle('a');
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.bar')).toBeNull();
-    multiSelect.enterTouchSelectionMode();
+    multiSelect.enterTouchSelectionMode('b');
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.bar')).not.toBeNull();
   });
