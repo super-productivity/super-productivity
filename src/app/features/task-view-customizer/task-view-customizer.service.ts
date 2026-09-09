@@ -36,6 +36,7 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { LanguageService } from 'src/app/core/language/language.service';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
+import { parseDbDateStr } from '../../util/parse-db-date-str';
 
 const GROUP_OPTIONS_NO_PROJECT = OPTIONS.group.list.filter(
   (opt) => opt.type !== GROUP_OPTION_TYPE.project,
@@ -645,8 +646,8 @@ export class TaskViewCustomizerService {
     return tasks.sort((a, b) => {
       const [dayA, withTimeA] = getFields(a);
       const [dayB, withTimeB] = getFields(b);
-      const dateA = dayA ? new Date(dayA) : withTimeA ? new Date(withTimeA) : null;
-      const dateB = dayB ? new Date(dayB) : withTimeB ? new Date(withTimeB) : null;
+      const dateA = dayA ? parseDbDateStr(dayA) : withTimeA ? new Date(withTimeA) : null;
+      const dateB = dayB ? parseDbDateStr(dayB) : withTimeB ? new Date(withTimeB) : null;
 
       if (dateA === null && dateB === null) return 0;
       if (dateA === null) return 1 * factor;
