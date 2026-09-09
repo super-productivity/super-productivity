@@ -2420,7 +2420,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     return this._importBackupTx('readonly', listImportBackupsTx);
   }
 
-  /** Evicts all but the newest `keep` snapshots; see `pruneImportBackupRingTx`. */
+  /** Keeps `keep` snapshots, prioritizing the newest pre-replacement capture. */
   async pruneImportBackups(keep: number): Promise<number> {
     return this._importBackupTx('readwrite', (tx) => pruneImportBackupRingTx(tx, keep));
   }

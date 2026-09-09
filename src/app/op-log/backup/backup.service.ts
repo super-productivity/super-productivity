@@ -267,11 +267,11 @@ export class BackupService {
 
   /**
    * On storage quota the ring (up to three full snapshots) is the likeliest
-   * culprit: evict all but the newest existing snapshot and retry once, so a
-   * full device degrades to a ring of two instead of never applying another
-   * full-state op. The newest snapshot is always kept — a failed capture must
-   * never leave the device with fewer recovery points than it had. Any other
-   * error propagates untouched.
+   * culprit: keep the newest REMOTE_IMPORT / FORCE_DOWNLOAD snapshot (or the
+   * newest snapshot if neither exists) and retry once, so a full device degrades
+   * to a ring of two instead of never applying another full-state op. One
+   * snapshot is always kept (#10003) — a failed capture must never leave the
+   * device with no recovery point. Any other error propagates untouched.
    */
   private async _saveRecoveryPoint(
     state: unknown,

@@ -3016,17 +3016,20 @@ describe('OperationLogStoreService', () => {
         expect(await service.pruneImportBackups(1)).toBe(0);
       });
 
-      it('should retire the undo pointer when pruning evicts its snapshot', async () => {
-        await service.saveImportBackup(
-          { v: 1 },
-          { reason: 'LOCAL_IMPORT', taskCount: 1 },
-        );
+      for (const reason of ['LOCAL_IMPORT', 'REMOTE_IMPORT', 'FORCE_DOWNLOAD'] as const) {
+        it(`should clear the ${reason} snapshot and undo pointer when pruning to zero`, async () => {
+          const backup = await service.saveImportBackup(
+            { v: 1 },
+            { reason, taskCount: 1 },
+          );
 
-        expect(await service.pruneImportBackups(0)).toBe(1);
+          expect(await service.pruneImportBackups(0)).toBe(1);
 
-        expect(await service.listImportBackups()).toEqual([]);
-        expect(await service.loadImportBackup()).toBeNull();
-      });
+          expect(await service.listImportBackups()).toEqual([]);
+          expect(await service.loadImportBackup()).toBeNull();
+          expect(await service.loadImportBackupById(backup.backupId)).toBeNull();
+        });
+      }
 
       it('should list captures newest first with reason and task count', async () => {
         await service.saveImportBackup(
@@ -3070,6 +3073,45 @@ describe('OperationLogStoreService', () => {
         expect((await service.loadImportBackupById(refs[2].backupId))?.state).toEqual({
           v: 2,
         });
+      });
+
+      it('should never rotate the pre-loss capture out (#10003)', async () => {
+        const preLoss = await service.saveImportBackup(
+          { v: 'pre-loss' },
+          { reason: 'REMOTE_IMPORT', taskCount: 40 },
+        );
+        const restores: ImportBackupRef[] = [];
+        for (let i = 0; i < IMPORT_BACKUP_RING_SIZE; i++) {
+          restores.push(await service.saveImportBackup({ v: i }));
+        }
+
+        expect((await service.listImportBackups()).map((e) => e.backupId)).toEqual([
+          ...restores
+            .slice(1)
+            .reverse()
+            .map((r) => r.backupId),
+          preLoss.backupId,
+        ]);
+        expect((await service.loadImportBackupById(preLoss.backupId))?.state).toEqual({
+          v: 'pre-loss',
+        });
+        expect(await service.loadImportBackupById(restores[0].backupId)).toBeNull();
+      });
+
+      it('should keep the pre-loss capture over newer restores when pruning', async () => {
+        const preLoss = await service.saveImportBackup(
+          { v: 'pre-loss' },
+          { reason: 'REMOTE_IMPORT', taskCount: 40 },
+        );
+        await service.saveImportBackup({ v: 1 });
+        await service.saveImportBackup({ v: 2 });
+
+        expect(await service.pruneImportBackups(1)).toBe(2);
+
+        expect((await service.listImportBackups()).map((e) => e.backupId)).toEqual([
+          preLoss.backupId,
+        ]);
+        expect(await service.loadImportBackup()).toBeNull();
       });
 
       it('should keep an older snapshot browsable after the undo slot is cleared', async () => {

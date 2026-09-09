@@ -60,6 +60,23 @@ const readRingMeta = async (tx: OpLogTx): Promise<ImportBackupMeta[]> => {
 };
 
 /**
+ * Newest-first entries that survive a rotation to `size`. The newest
+ * pre-replacement capture (REMOTE_IMPORT / FORCE_DOWNLOAD) survives when size > 0 so
+ * restores cannot rotate the pre-loss snapshot out (#10003); the other slots go
+ * to the newest remaining entries.
+ */
+const keepNewest = (entries: ImportBackupMeta[], size: number): ImportBackupMeta[] => {
+  if (size === 0) {
+    return [];
+  }
+  const guarded = entries.find((e) => e.reason !== 'LOCAL_IMPORT');
+  const others = entries
+    .filter((e) => e !== guarded)
+    .slice(0, Math.max(0, guarded ? size - 1 : size));
+  return entries.filter((e) => e === guarded || others.includes(e));
+};
+
+/**
  * Writes a new snapshot, points the undo slot at it, and rotates the ring.
  * The evicted snapshots are deleted in this same transaction.
  */
@@ -77,8 +94,8 @@ export const saveImportBackupTx = async (
     taskCount: meta.taskCount ?? 0,
   };
   const entries = [entry, ...(await readRingMeta(tx))];
-  const kept = entries.slice(0, IMPORT_BACKUP_RING_SIZE);
-  for (const evicted of entries.slice(IMPORT_BACKUP_RING_SIZE)) {
+  const kept = keepNewest(entries, IMPORT_BACKUP_RING_SIZE);
+  for (const evicted of entries.filter((e) => !kept.includes(e))) {
     await tx.delete(STORE_NAMES.IMPORT_BACKUP, evicted.backupId);
   }
   await tx.put(STORE_NAMES.IMPORT_BACKUP, {
@@ -133,16 +150,18 @@ export const listImportBackupsTx = (tx: OpLogTx): Promise<ImportBackupMeta[]> =>
   readRingMeta(tx);
 
 /**
- * Drops all but the newest `keep` snapshots to make room when a capture fails
- * (typically storage quota). The undo pointer is retired if its snapshot goes.
- * Returns how many snapshots were evicted.
+ * Drops all but the newest `keep` snapshots (the protected capture first) to
+ * make room when a capture fails (typically storage quota). Zero clears all
+ * snapshots, including the protected capture. The undo pointer is
+ * retired if its snapshot goes. Returns how many snapshots were evicted.
  */
 export const pruneImportBackupRingTx = async (
   tx: OpLogTx,
   keep: number,
 ): Promise<number> => {
   const entries = await readRingMeta(tx);
-  const evicted = entries.slice(keep);
+  const kept = keepNewest(entries, keep);
+  const evicted = entries.filter((e) => !kept.includes(e));
   if (evicted.length === 0) {
     return 0;
   }
@@ -151,7 +170,7 @@ export const pruneImportBackupRingTx = async (
   }
   await tx.put(STORE_NAMES.IMPORT_BACKUP, {
     id: RING_META_KEY,
-    entries: entries.slice(0, keep),
+    entries: kept,
   } satisfies RingMetaRow);
   const pointer = await tx.get<PointerRow>(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
   if (pointer?.backupId && evicted.some((e) => e.backupId === pointer.backupId)) {
