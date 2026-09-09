@@ -42,6 +42,8 @@ import {
   splitParentOnly,
 } from './task-bulk-action.util';
 import { isTouchActive } from '../../util/input-intent';
+import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
+import { msToString } from '../../ui/duration/ms-to-string.pipe';
 
 interface DateTimePick {
   date: Date | null;
@@ -74,6 +76,7 @@ export class TaskBulkActionService {
   private readonly _workContextService = inject(WorkContextService);
   private readonly _translateService = inject(TranslateService);
   private readonly _translateStore = inject(TranslateStore);
+  private readonly _datePipe = inject(LocaleDatePipe);
 
   private readonly _taskEntities = this._store.selectSignal(selectTaskEntities);
 
@@ -128,12 +131,7 @@ export class TaskBulkActionService {
       tasks.forEach((t) => this._taskService.setDone(t.id)),
     );
     await this._playDoneSoundOnce();
-    this._snackService.open({
-      type: 'SUCCESS',
-      ico: 'check',
-      msg: this._plural('F.TASK.MULTI_SELECT.S.DONE', tasks.length),
-      translateParams: { count: tasks.length },
-    });
+    this._snack('DONE', tasks.length, {}, 'check');
     this._finish(focusTargetId);
   }
 
@@ -147,11 +145,7 @@ export class TaskBulkActionService {
     await this._runSuppressed(() =>
       tasks.forEach((t) => this._taskService.setUnDone(t.id)),
     );
-    this._snackService.open({
-      type: 'SUCCESS',
-      msg: this._plural('F.TASK.MULTI_SELECT.S.UNDONE', tasks.length),
-      translateParams: { count: tasks.length },
-    });
+    this._snack('UNDONE', tasks.length);
     this._finish(focusTargetId);
   }
 
@@ -276,16 +270,15 @@ export class TaskBulkActionService {
     } finally {
       this._multiSelect.setBulkFeedbackSuppressed(false);
     }
-    if (skippedSubtasks.length) {
-      this._snackPartial(movedCount, tasks.length + skippedSubtasks.length);
-    } else if (movedCount) {
+    if (movedCount || skippedSubtasks.length) {
       const project = await firstValueFrom(this._projectService.getByIdOnce$(projectId));
-      this._snackService.open({
-        type: 'SUCCESS',
-        ico: 'forward',
-        msg: this._plural('F.TASK.MULTI_SELECT.S.MOVED_TO_PROJECT', movedCount),
-        translateParams: { count: movedCount, projectTitle: project?.title ?? '' },
-      });
+      this._snackMoved(
+        'MOVED_TO_PROJECT',
+        movedCount,
+        skippedSubtasks.length,
+        { projectTitle: project?.title ?? '' },
+        'forward',
+      );
     }
     this._finish(focusTargetId);
   }
@@ -403,7 +396,13 @@ export class TaskBulkActionService {
       this._restoreFocus(focusTargetId);
       return;
     }
-    this._snackApplied(applied);
+    const date = hasTime
+      ? this._datePipe.transform(
+          getDateTimeFromClockString(pick.time as string, pick.date as Date),
+          'short',
+        )
+      : this._datePipe.transform(pick.date, 'shortDate');
+    this._snack('SCHEDULED', applied, { date: date || '' }, 'schedule');
     this._finish(focusTargetId);
   }
 
@@ -423,12 +422,7 @@ export class TaskBulkActionService {
         ),
       ),
     );
-    this._snackService.open({
-      type: 'SUCCESS',
-      ico: 'event_busy',
-      msg: this._plural('F.TASK.MULTI_SELECT.S.UNSCHEDULED', tasks.length),
-      translateParams: { count: tasks.length },
-    });
+    this._snack('UNSCHEDULED', tasks.length, {}, 'event_busy');
     this._finish(focusTargetId);
   }
 
@@ -518,7 +512,14 @@ export class TaskBulkActionService {
         }
       });
     });
-    this._snackApplied(tasks.length);
+    const date =
+      pick.time && isValidSplitTime(pick.time)
+        ? this._datePipe.transform(
+            getDateTimeFromClockString(pick.time, pick.date as Date),
+            'short',
+          )
+        : this._datePipe.transform(pick.date, 'shortDate');
+    this._snack('DEADLINE_SET', tasks.length, { date: date || '' }, 'flag');
     this._finish();
   }
 
@@ -535,7 +536,7 @@ export class TaskBulkActionService {
         this._store.dispatch(TaskSharedActions.removeDeadline({ taskId: t.id })),
       ),
     );
-    this._snackApplied(tasks.length);
+    this._snack('DEADLINE_REMOVED', tasks.length);
     this._finish();
   }
 
@@ -552,7 +553,11 @@ export class TaskBulkActionService {
     await this._runSuppressed(() =>
       tasks.forEach((t) => this._taskService.update(t.id, { timeEstimate: ms })),
     );
-    this._snackApplied(tasks.length);
+    if (ms) {
+      this._snack('ESTIMATE_SET', tasks.length, { estimate: msToString(ms) }, 'timer');
+    } else {
+      this._snack('ESTIMATE_CLEARED', tasks.length);
+    }
     this._finish();
   }
 
@@ -581,9 +586,11 @@ export class TaskBulkActionService {
           : this._projectService.moveTaskToTodayList(t.id, t.projectId as string),
       ),
     );
-    if (skippedSubtasks.length) {
-      this._snackPartial(tasks.length, tasks.length + skippedSubtasks.length);
-    }
+    this._snackMoved(
+      target === 'backlog' ? 'MOVED_TO_BACKLOG' : 'MOVED_TO_REGULAR',
+      tasks.length,
+      skippedSubtasks.length,
+    );
     this._finish(focusTargetId);
   }
 
@@ -632,20 +639,38 @@ export class TaskBulkActionService {
     return getPluralKey(this._translateService, this._translateStore, count, keyPrefix);
   }
 
-  private _snackApplied(count: number): void {
+  /** One summary snack per bulk action, worded for that action (`F.TASK.MULTI_SELECT.S.<key>`). */
+  private _snack(
+    key: string,
+    count: number,
+    params: Record<string, string | number> = {},
+    ico?: string,
+  ): void {
     this._snackService.open({
       type: 'SUCCESS',
-      msg: this._plural('F.TASK.MULTI_SELECT.S.APPLIED', count),
-      translateParams: { count },
+      ico,
+      msg: this._plural(`F.TASK.MULTI_SELECT.S.${key}`, count),
+      translateParams: { count, ...params },
     });
   }
 
-  private _snackPartial(count: number, total: number): void {
+  /** A move that skipped lone subtasks says so (they follow their parent). */
+  private _snackMoved(
+    key: 'MOVED_TO_PROJECT' | 'MOVED_TO_BACKLOG' | 'MOVED_TO_REGULAR',
+    count: number,
+    skipped: number,
+    params: Record<string, string | number> = {},
+    ico?: string,
+  ): void {
+    if (!skipped) {
+      this._snack(key, count, params, ico);
+      return;
+    }
     this._snackService.open({
       type: 'CUSTOM',
       ico: 'info',
-      msg: T.F.TASK.MULTI_SELECT.S.APPLIED_PARTIAL,
-      translateParams: { count, total },
+      msg: `F.TASK.MULTI_SELECT.S.${key}.PARTIAL`,
+      translateParams: { count, total: count + skipped, ...params },
     });
   }
 

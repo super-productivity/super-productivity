@@ -16,6 +16,7 @@ import { DEFAULT_TASK, Task, TaskReminderOptionId } from './task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from '../../t.const';
 import { TranslateService, TranslateStore } from '@ngx-translate/core';
+import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
 import { PlannerActions } from '../planner/store/planner.actions';
 
 describe('TaskBulkActionService', () => {
@@ -148,6 +149,7 @@ describe('TaskBulkActionService', () => {
         { provide: WorkContextService, useValue: { flatDoneTodayNr$: of(0) } },
         { provide: TranslateService, useValue: { currentLang: 'en', defaultLang: 'en' } },
         { provide: TranslateStore, useValue: { getTranslations: () => ({}) } },
+        { provide: LocaleDatePipe, useValue: { transform: () => 'DATE' } },
       ],
     });
     service = TestBed.inject(TaskBulkActionService);
@@ -309,8 +311,8 @@ describe('TaskBulkActionService', () => {
       expect(snackService.open).toHaveBeenCalledTimes(1);
       expect(snackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
-          msg: T.F.TASK.MULTI_SELECT.S.APPLIED_PARTIAL,
-          translateParams: { count: 2, total: 3 },
+          msg: T.F.TASK.MULTI_SELECT.S.MOVED_TO_PROJECT.PARTIAL,
+          translateParams: { count: 2, total: 3, projectTitle: 'Project 2' },
         }),
       );
       expect(service.isFeedbackSuppressed()).toBeFalse();
@@ -403,6 +405,33 @@ describe('TaskBulkActionService', () => {
       await service.setEstimate(5);
       expect(taskService.update).toHaveBeenCalledTimes(1);
       expect(taskService.update).toHaveBeenCalledWith('a', { timeEstimate: 5 });
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: 'F.TASK.MULTI_SELECT.S.ESTIMATE_SET.OTHER',
+          translateParams: jasmine.objectContaining({ count: 1 }),
+        }),
+      );
+    });
+
+    it('says cleared when the estimate is removed', async () => {
+      select([t('a', { timeEstimate: 5 })]);
+      await service.setEstimate(0);
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({ msg: 'F.TASK.MULTI_SELECT.S.ESTIMATE_CLEARED.OTHER' }),
+      );
+    });
+  });
+
+  describe('moveToBacklog', () => {
+    it('reports the move, and skipped lone subtasks', async () => {
+      select([t('a'), t('sub', { parentId: 'other' })]);
+      await service.moveToBacklog();
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.TASK.MULTI_SELECT.S.MOVED_TO_BACKLOG.PARTIAL,
+          translateParams: { count: 1, total: 2 },
+        }),
+      );
     });
   });
 
@@ -433,7 +462,10 @@ describe('TaskBulkActionService', () => {
         false,
       );
       expect(snackService.open).toHaveBeenCalledWith(
-        jasmine.objectContaining({ translateParams: { count: 2 } }),
+        jasmine.objectContaining({
+          msg: 'F.TASK.MULTI_SELECT.S.SCHEDULED.OTHER',
+          translateParams: { count: 2, date: 'DATE' },
+        }),
       );
     });
 

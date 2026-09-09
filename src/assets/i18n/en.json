@@ -2022,20 +2022,46 @@
           "OK": "Delete"
         },
         "S": {
-          "APPLIED": {
-            "ONE": "Applied to {{count}} task",
-            "OTHER": "Applied to {{count}} tasks"
+          "DEADLINE_REMOVED": {
+            "ONE": "Removed the deadline from {{count}} task",
+            "OTHER": "Removed the deadline from {{count}} tasks"
           },
-          "APPLIED_PARTIAL": "Applied to {{count}} of {{total}} tasks (subtasks follow their parent)",
+          "DEADLINE_SET": {
+            "ONE": "Set the deadline of {{count}} task to {{date}}",
+            "OTHER": "Set the deadline of {{count}} tasks to {{date}}"
+          },
           "DONE": {
             "ONE": "Marked {{count}} task as done",
             "OTHER": "Marked {{count}} tasks as done"
           },
+          "ESTIMATE_CLEARED": {
+            "ONE": "Cleared the estimate of {{count}} task",
+            "OTHER": "Cleared the estimate of {{count}} tasks"
+          },
+          "ESTIMATE_SET": {
+            "ONE": "Estimated {{count}} task at {{estimate}}",
+            "OTHER": "Estimated {{count}} tasks at {{estimate}}"
+          },
+          "MOVED_TO_BACKLOG": {
+            "ONE": "Moved {{count}} task to the backlog",
+            "OTHER": "Moved {{count}} tasks to the backlog",
+            "PARTIAL": "Moved {{count}} of {{total}} tasks to the backlog (subtasks follow their parent)"
+          },
           "MOVED_TO_PROJECT": {
             "ONE": "Moved {{count}} task to \"{{projectTitle}}\"",
-            "OTHER": "Moved {{count}} tasks to \"{{projectTitle}}\""
+            "OTHER": "Moved {{count}} tasks to \"{{projectTitle}}\"",
+            "PARTIAL": "Moved {{count}} of {{total}} tasks to \"{{projectTitle}}\" (subtasks follow their parent)"
+          },
+          "MOVED_TO_REGULAR": {
+            "ONE": "Moved {{count}} task to the regular list",
+            "OTHER": "Moved {{count}} tasks to the regular list",
+            "PARTIAL": "Moved {{count}} of {{total}} tasks to the regular list (subtasks follow their parent)"
           },
           "NOTHING_TO_DO": "Nothing to change for the selected tasks",
+          "SCHEDULED": {
+            "ONE": "Scheduled {{count}} task for {{date}}",
+            "OTHER": "Scheduled {{count}} tasks for {{date}}"
+          },
           "UNDONE": {
             "ONE": "Marked {{count}} task as not done",
             "OTHER": "Marked {{count}} tasks as not done"
