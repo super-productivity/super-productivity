@@ -70,6 +70,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Prisma, PrismaClient } from '@prisma/client';
+import { agedPrefixCausalFullStateSql } from '../../src/sync/sync.types';
 import {
   explainGeneric,
   type ExplainRunner,
@@ -429,6 +430,29 @@ describeWithDb('Old-ops fresh-prefix probe plan (PostgreSQL)', () => {
       'TRUNCATE "operations", "users" RESTART IDENTITY CASCADE',
     );
     await prisma.$disconnect();
+  });
+
+  it('finds an older checkpoint without scanning the aged prefix (#9962)', async () => {
+    const query = agedPrefixCausalFullStateSql(
+      deepUserId,
+      BOUNDARY_SEQ + WINDOW_OPS,
+      BigInt(CUTOFF),
+    );
+    const plan = await measureUnderDdl(
+      [
+        `UPDATE operations SET op_type = 'REPAIR', repair_base_server_seq = server_seq - 1
+         WHERE user_id = ${deepUserId} AND server_seq = ${BOUNDARY_SEQ}`,
+        `CREATE INDEX IF NOT EXISTS operations_user_id_causal_full_state_server_seq_idx
+         ON operations (user_id, server_seq)
+         WHERE op_type IN ('SYNC_IMPORT', 'BACKUP_IMPORT')
+           OR (op_type = 'REPAIR' AND repair_base_server_seq IS NOT NULL)`,
+      ],
+      query.text,
+      query.values,
+    );
+    expect(plan.nodes).toContain(COVERING_IDX);
+    expect(plan.nodes).toContain('operations_user_id_causal_full_state_server_seq_idx');
+    expect(plan.examined).toBeLessThan(WINDOW_OPS * 5);
   });
 
   it('CANARY: the prefix-bound candidate is catastrophic on this seed', async () => {
