@@ -4,9 +4,20 @@
 >
   @if (viewMode === 'TEXT_ONLY' || viewMode === 'SPLIT') {
     <div class="editor-section">
+      <!--
+        The toolbar is wider than a phone (~565px vs 393px on a Nothing Phone 1)
+        and relies on its own `overflow-x: auto` to reach the last controls.
+        `matTooltipTouchGestures="off"` is load-bearing for that: on a touch
+        platform MatTooltip writes an inline `touch-action: none` onto every
+        tooltip host to claim the long-press, and the buttons tile the whole
+        toolbar — so a swipe never becomes a pan and the overflowing controls
+        are unreachable (#10015). Long-press tooltips are a desktop affordance
+        anyway; hover tooltips are unaffected.
+      -->
       <div class="formatting-toolbar">
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="onApplyHeading(1)"
           [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.HEADING_1 | translate"
@@ -16,6 +27,7 @@
         </button>
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="onApplyHeading(2)"
           [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.HEADING_2 | translate"
@@ -25,6 +37,7 @@
         </button>
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="onApplyHeading(3)"
           [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.HEADING_3 | translate"
@@ -37,6 +50,7 @@
 
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="onApplyBold()"
           [matTooltip]="
@@ -49,6 +63,7 @@
         </button>
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="onApplyItalic()"
           [matTooltip]="
@@ -61,6 +76,7 @@
         </button>
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="onApplyStrikethrough()"
           [matTooltip]="
@@ -76,6 +92,7 @@
 
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="onApplyBulletList()"
           [matTooltip]="
@@ -88,6 +105,7 @@
         </button>
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="onApplyNumberedList()"
           [matTooltip]="
@@ -100,6 +118,7 @@
         </button>
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="onApplyTaskList()"
           [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.TASK_LIST | translate"
@@ -112,6 +131,7 @@
 
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="onApplyQuote()"
           [matTooltip]="
@@ -124,6 +144,7 @@
         </button>
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="onApplyInlineCode()"
           [matTooltip]="
@@ -136,6 +157,7 @@
         </button>
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="onApplyCodeBlock()"
           [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.CODE_BLOCK | translate"
@@ -148,6 +170,7 @@
 
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="onInsertLink()"
           [matTooltip]="
@@ -160,6 +183,7 @@
         </button>
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="onInsertImage()"
           [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.INSERT_IMAGE | translate"
@@ -169,6 +193,7 @@
         </button>
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="onInsertTable()"
           [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.INSERT_TABLE | translate"
@@ -181,6 +206,7 @@
 
         <button
           mat-icon-button
+          matTooltipTouchGestures="off"
           (mousedown)="$event.preventDefault()"
           (click)="openShortcutsHelp()"
           [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.KEYBOARD_SHORTCUTS | translate"
