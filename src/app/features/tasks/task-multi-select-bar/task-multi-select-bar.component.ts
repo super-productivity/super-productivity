@@ -19,7 +19,6 @@ import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatDivider } from '@angular/material/divider';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
-import { of } from 'rxjs';
 import { filter, switchMap } from 'rxjs/operators';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
@@ -121,11 +120,7 @@ export class TaskMultiSelectBarComponent {
   );
   readonly moveToProjectList = toSignal(
     toObservable(this._commonProjectId).pipe(
-      switchMap((pid) =>
-        this.multiSelect.isActive()
-          ? this._projectService.getProjectsWithoutIdInTreeOrder$(pid)
-          : of([]),
-      ),
+      switchMap((pid) => this._projectService.getProjectsWithoutIdInTreeOrder$(pid)),
     ),
     { initialValue: [] },
   );

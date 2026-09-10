@@ -15,6 +15,8 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { TaskFocusService } from '../task-focus.service';
 import { WorkContextType } from '../../work-context/work-context.model';
+import { DEFAULT_TASK, Task } from '../task.model';
+import { DEFAULT_PROJECT } from '../../project/project.const';
 
 describe('TaskMultiSelectBarComponent', () => {
   let fixture: ComponentFixture<TaskMultiSelectBarComponent>;
@@ -22,10 +24,12 @@ describe('TaskMultiSelectBarComponent', () => {
   let taskFocusService: TaskFocusService;
   let routerEvents$: Subject<unknown>;
   let workContext$: Subject<{ activeId: string; activeType: WorkContextType }>;
+  let selectedTasks: ReturnType<typeof signal<Task[]>>;
 
   beforeEach(async () => {
     routerEvents$ = new Subject();
     workContext$ = new Subject();
+    selectedTasks = signal<Task[]>([]);
     await TestBed.configureTestingModule({
       imports: [
         TaskMultiSelectBarComponent,
@@ -46,7 +50,7 @@ describe('TaskMultiSelectBarComponent', () => {
         {
           provide: TaskBulkActionService,
           useValue: {
-            selectedTasks: signal([]),
+            selectedTasks,
             hasUndone: signal(false),
             hasParentTasks: signal(false),
             hasScheduled: signal(false),
@@ -56,7 +60,14 @@ describe('TaskMultiSelectBarComponent', () => {
         },
         {
           provide: ProjectService,
-          useValue: { getProjectsWithoutIdInTreeOrder$: () => of([]) },
+          useValue: {
+            getProjectsWithoutIdInTreeOrder$: (id: string | null) =>
+              of(
+                ['p1', 'p2']
+                  .filter((projectId) => projectId !== id)
+                  .map((projectId) => ({ ...DEFAULT_PROJECT, id: projectId })),
+              ),
+          },
         },
         {
           provide: TagService,
@@ -97,6 +108,23 @@ describe('TaskMultiSelectBarComponent', () => {
     multiSelect.toggle('a');
     routerEvents$.next(new NavigationEnd(1, '/x', '/x'));
     expect(multiSelect.count()).toBe(0);
+  });
+
+  it('offers both projects when selecting a mixed-project list from empty', async () => {
+    expect(multiSelect.count()).toBe(0);
+    selectedTasks.set([
+      { ...DEFAULT_TASK, id: 'a', title: 'A', projectId: 'p1' },
+      { ...DEFAULT_TASK, id: 'b', title: 'B', projectId: 'p2' },
+    ]);
+    multiSelect.toggle('a');
+    multiSelect.toggle('b');
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(fixture.componentInstance.moveToProjectList().map((p) => p.id)).toEqual([
+      'p1',
+      'p2',
+    ]);
   });
 
   it('clears the selection on work-context change', () => {
