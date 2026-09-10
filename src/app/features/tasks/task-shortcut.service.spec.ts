@@ -494,9 +494,9 @@ describe('TaskShortcutService', () => {
     let originalClipboardDescriptor: PropertyDescriptor | undefined;
     let writeText: jasmine.Spy;
 
-    const stubFocusedTaskData = (task: Partial<TaskWithSubTasks> | null): void => {
+    const stubFocusedTaskData = (task: Partial<TaskWithSubTasks> | undefined): void => {
       mockTaskService.getByIdWithSubTaskData$.and.returnValue(
-        of(task as TaskWithSubTasks),
+        of(task as TaskWithSubTasks | undefined),
       );
     };
 
@@ -607,10 +607,8 @@ describe('TaskShortcutService', () => {
     });
 
     it('should swallow the key without copying when the task is missing from the store', () => {
-      // The exact stub selectTaskByIdWithSubTaskData returns for an unknown id:
-      // no title, no id. In a production build devError only logs, so this
-      // shape really does reach the caller.
-      stubFocusedTaskData({ subTasks: [] });
+      // selectTaskByIdWithSubTaskData returns undefined for an unknown id (#9946).
+      stubFocusedTaskData(undefined);
       const event = createKeyboardEvent('c', 'KeyC', { ctrlKey: true });
 
       const result = service.handleTaskShortcuts(event);

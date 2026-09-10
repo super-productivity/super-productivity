@@ -465,6 +465,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private async _performDelete(): Promise<void> {
     this._isTaskDeleteTriggered = true;
     const taskWithSubTasks = await this._getTaskWithSubtasks();
+    if (!taskWithSubTasks) {
+      return;
+    }
     this._taskService.remove(taskWithSubTasks);
   }
 
@@ -500,6 +503,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     const taskWithSubtasks = this.task.subTaskIds.length
       ? await this._getTaskWithSubtasks()
       : { ...this.task, subTasks: [] };
+    if (!taskWithSubtasks) {
+      return;
+    }
     this._taskDuplicateService.duplicate(taskWithSubtasks);
   }
 
@@ -586,10 +592,16 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
       return;
     } else if (!this.task.repeatCfgId) {
       const taskWithSubTasks = await this._getTaskWithSubtasks();
+      if (!taskWithSubTasks) {
+        return;
+      }
       this._taskService.moveToProject(taskWithSubTasks, projectId);
       this.onClose();
     } else {
       const taskWithSubTasks = await this._getTaskWithSubtasks();
+      if (!taskWithSubTasks) {
+        return;
+      }
 
       forkJoin([
         this._taskRepeatCfgService
@@ -719,7 +731,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
       });
   }
 
-  private async _getTaskWithSubtasks(): Promise<TaskWithSubTasks> {
+  private async _getTaskWithSubtasks(): Promise<TaskWithSubTasks | undefined> {
     return await this._store
       .select(selectTaskByIdWithSubTaskData, { id: this.task.id })
       .pipe(

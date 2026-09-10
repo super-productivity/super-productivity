@@ -829,6 +829,10 @@ export class IssueService {
         const taskWithTaskSubTasks = await this._taskService
           .getByIdWithSubTaskData$(res.task.id)
           .toPromise();
+        // Nothing to move if the task vanished between the lookup and here (#9946).
+        if (!taskWithTaskSubTasks) {
+          return false;
+        }
         this._taskService.moveToCurrentWorkContext(taskWithTaskSubTasks);
         this._snackService.open({
           ico: 'arrow_upward',

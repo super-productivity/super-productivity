@@ -848,13 +848,24 @@ export const selectTasksWithSubTasksByIdsFactory = (
   );
 };
 
+/**
+ * The task plus its subtasks, or `undefined` when the id is unknown.
+ *
+ * #9946: this used to return a truthy `{ subTasks: [] }` stub for a missing id,
+ * so callers guarding with `if (!task)` were not guarded at all — and an id-less
+ * task reaching a delete wiped every top-level task. Callers must handle
+ * `undefined`; a stale id is normal (a task can be deleted or synced away
+ * between lookup and use), so this is not by itself an error worth reporting.
+ */
 export const selectTaskByIdWithSubTaskData = createSelector(
   selectTaskFeatureState,
-  (state: TaskState, props: { id: string }): TaskWithSubTasks => {
+  (state: TaskState, props: { id: string }): TaskWithSubTasks | undefined => {
     const task = state.entities[props.id];
-    if (!task) {
-      devError('Task data not found for ' + props.id);
-      return { subTasks: [] } as unknown as TaskWithSubTasks;
+    // The id check rejects prototype-property names ('constructor', 'toString',
+    // …) that a plain-object entity map resolves to truthy non-tasks — same
+    // guard the Local REST API handler already applies (#9001).
+    if (!task || task.id !== props.id) {
+      return undefined;
     }
     return mapSubTasksToTask(task, state) as TaskWithSubTasks;
   },

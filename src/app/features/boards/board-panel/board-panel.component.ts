@@ -236,12 +236,14 @@ export class BoardPanelComponent {
         )
         .toPromise();
 
-      this.store.dispatch(
-        TaskSharedActions.moveToOtherProject({
-          task: taskWithSubTasks,
-          targetProjectId: firstProjectId,
-        }),
-      );
+      if (taskWithSubTasks) {
+        this.store.dispatch(
+          TaskSharedActions.moveToOtherProject({
+            task: taskWithSubTasks,
+            targetProjectId: firstProjectId,
+          }),
+        );
+      }
     }
 
     if (Object.keys(updates).length > 0) {

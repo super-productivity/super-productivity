@@ -368,10 +368,8 @@ export class TaskShortcutService {
       // getByIdWithSubTaskData$ is a `take(1)` store select, so this resolves
       // synchronously — no cleanup needed.
       .subscribe((task) => {
-        // For an unknown id the selector logs a devError and returns a
-        // `{ subTasks: [] }` stub with no id and no title — in a production
-        // build that stub really reaches us, so check for a real task.
-        if (!task?.id) {
+        // The selector returns undefined for an unknown id (#9946).
+        if (!task) {
           Log.warn('No task data to copy for focused task');
           return;
         }

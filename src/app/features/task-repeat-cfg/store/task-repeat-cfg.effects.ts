@@ -170,6 +170,9 @@ export class TaskRepeatCfgEffects {
       switchMap(({ taskRepeatCfg, taskId, startTime, remindAt }) => {
         return this._taskService.getByIdWithSubTaskData$(taskId).pipe(
           first(),
+          // The task may be gone by the time this runs (deleted or synced away);
+          // there is nothing to make repeatable then (#9946).
+          filter((taskWithSubTasks) => !!taskWithSubTasks),
           map((taskWithSubTasks) => {
             // Extract subtasks safely, ensuring we handle the type properly
             const subTasks = Array.isArray(taskWithSubTasks.subTasks)
