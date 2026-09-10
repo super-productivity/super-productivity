@@ -325,7 +325,7 @@ describe('TaskViewCustomizerService', () => {
     ]);
   });
 
-  it('should keep date-only deadlines before timed deadlines on the same day', () => {
+  it('should place date-only deadlines after timed deadlines on the same day', () => {
     const tasks: TaskWithSubTasks[] = [
       {
         ...mockTasks[0],
@@ -342,8 +342,8 @@ describe('TaskViewCustomizerService', () => {
     const asc = service['applySort'](tasks, SORT_OPTION_TYPE.deadline, SORT_ORDER.ASC);
     const desc = service['applySort'](tasks, SORT_OPTION_TYPE.deadline, SORT_ORDER.DESC);
 
-    expect(asc.map((task) => task.id)).toEqual(['date-only-deadline', 'timed-deadline']);
-    expect(desc.map((task) => task.id)).toEqual(['timed-deadline', 'date-only-deadline']);
+    expect(asc.map((task) => task.id)).toEqual(['timed-deadline', 'date-only-deadline']);
+    expect(desc.map((task) => task.id)).toEqual(['date-only-deadline', 'timed-deadline']);
   });
 
   it('should sort numeric prefixes in title correctly', () => {

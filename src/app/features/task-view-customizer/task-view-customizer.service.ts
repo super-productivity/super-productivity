@@ -368,12 +368,10 @@ export class TaskViewCustomizerService {
         return tasksCopy.sort((a, b) => (a.created - b.created) * factor);
 
       case SORT_OPTION_TYPE.scheduledDate:
-        return this._sortByDateFields(
-          tasksCopy,
-          factor,
-          (t) => [t.dueDay, t.dueWithTime],
-          true,
-        );
+        return this._sortByDateFields(tasksCopy, factor, (t) => [
+          t.dueDay,
+          t.dueWithTime,
+        ]);
 
       case SORT_OPTION_TYPE.deadline:
         return this._sortByDateFields(tasksCopy, factor, (t) => [
@@ -644,15 +642,15 @@ export class TaskViewCustomizerService {
     getFields: (
       t: TaskWithSubTasks,
     ) => [string | undefined | null, number | undefined | null],
-    dateOnlyAtEndOfDay = false,
   ): TaskWithSubTasks[] {
     const toDate = (
       day: string | undefined | null,
       withTime: number | undefined | null,
     ): Date | null => {
       if (day) {
-        const date = dateOnlyAtEndOfDay ? parseDbDateStr(day) : new Date(day);
-        if (dateOnlyAtEndOfDay) date.setHours(23, 59, 59, 999);
+        // A date-only value means "by the end of that day" for sorting (#9828).
+        const date = parseDbDateStr(day);
+        date.setHours(23, 59, 59, 999);
         return date;
       }
       return withTime ? new Date(withTime) : null;
