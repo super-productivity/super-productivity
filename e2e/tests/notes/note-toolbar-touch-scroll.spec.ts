@@ -24,6 +24,7 @@ test.describe('Fullscreen note editor toolbar on a phone', () => {
   test('keeps the overflowing formatting controls reachable by touch', async ({
     page,
     workViewPage,
+    testPrefix,
   }) => {
     await workViewPage.waitForTaskList();
 
@@ -31,7 +32,18 @@ test.describe('Fullscreen note editor toolbar on a phone', () => {
     // Project Notes is only reachable through the side panel menu.
     await page.locator('button[aria-label="Side Panel Menu"]').first().tap();
     await page.locator('.mat-mdc-menu-item', { hasText: 'Project Notes' }).first().tap();
+
+    const noteText = `${testPrefix}-toolbar-note`;
     await page.locator('#add-note-btn, button:has-text("Add new Note")').first().tap();
+    await page.locator('dialog-fullscreen-markdown textarea').fill(noteText);
+    await page.locator('#T-save-note').tap();
+    await expect(page.locator('dialog-fullscreen-markdown')).toBeHidden();
+
+    // Reopen the saved note. #10015 is about editing an existing Project Note,
+    // which is DialogFullscreenMarkdownComponent itself — the add-note flow
+    // above is the DialogAddNoteComponent subclass, and the two only share this
+    // template by path, so assert against the one the issue actually names.
+    await page.locator('note', { hasText: noteText }).locator('.markdown-preview').tap();
 
     const toolbar = page.locator('dialog-fullscreen-markdown .formatting-toolbar');
     await expect(toolbar).toBeVisible();
