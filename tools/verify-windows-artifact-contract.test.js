@@ -6,9 +6,10 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 
 const ROOT = join(__dirname, '..');
-// `.gitattributes` forces LF only for scss/html/js/ts, so YAML lands in the
-// working tree with CRLF on Windows checkouts. Normalize before parsing so the
-// line-exact section lookup below works on every runner.
+// `.gitattributes` now pins YAML to LF, so Windows checkouts match Linux ones.
+// Normalize anyway: the line-exact section lookup below must not silently depend
+// on how a given checkout resolved EOLs (a CRLF working tree is what broke the
+// v18.22.0 Windows release job).
 const readRoot = (...pathParts) =>
   readFileSync(join(ROOT, ...pathParts), 'utf8').replace(/\r\n/g, '\n');
 
