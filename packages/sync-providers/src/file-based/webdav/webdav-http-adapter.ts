@@ -5,6 +5,7 @@ import type { NativeHttpExecutor } from '../../http/native-http-retry';
 import {
   AuthFailSPError,
   HttpNotOkAPIError,
+  NetworkUnavailableSPError,
   PotentialCorsError,
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
@@ -132,6 +133,22 @@ export class WebDavHttpAdapter {
 
           response = await this._convertFetchResponse(fetchResponse);
         } catch (fetchError) {
+          if (fetchError instanceof TypeError && this._deps.platformInfo.isElectron) {
+            // #9985: the desktop shell injects `Access-Control-Allow-*: *` on
+            // every response and forces preflights to 200, so CORS cannot be
+            // the cause here. Reporting it sent a user chasing a dead end while
+            // the real failure was a truncated response from the WebDAV server.
+            // Structured meta only — some browsers embed the full URL in
+            // `error.message`, which must never reach an exportable log.
+            this._deps.logger.critical(
+              `${WebDavHttpAdapter.L}.request() network failure`,
+              errorMeta(fetchError, { url: scrubbedUrl, method: options.method }),
+            );
+            throw new NetworkUnavailableSPError(
+              `Network request to ${scrubbedUrl} failed. Check your connection ` +
+                `and whether the server is reachable.`,
+            );
+          }
           if (this._isLikelyCors(fetchError)) {
             // Privacy: PotentialCorsError carries only the scrubbed URL,
             // never the raw fetch error. The original-error meta below is
@@ -162,6 +179,7 @@ export class WebDavHttpAdapter {
       if (
         e instanceof AuthFailSPError ||
         e instanceof PotentialCorsError ||
+        e instanceof NetworkUnavailableSPError ||
         e instanceof HttpNotOkAPIError ||
         e instanceof RemoteFileNotFoundAPIError ||
         e instanceof TooManyRequestsAPIError
@@ -207,8 +225,8 @@ export class WebDavHttpAdapter {
    *
    * Bias is intentional: WebDAV's most common deployment failure mode
    * IS misconfigured CORS, so over-attributing offline / DNS to CORS
-   * still surfaces an actionable hint to the user. Native-platform
-   * paths never hit this branch.
+   * still surfaces an actionable hint to the user. Native-platform and
+   * Electron paths never hit this branch — Electron is handled above.
    */
   private _isLikelyCors(error: unknown): boolean {
     if (!(error instanceof TypeError)) return false;

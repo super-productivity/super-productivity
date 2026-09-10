@@ -4,6 +4,7 @@ import { WebDavHttpAdapter } from '../../../src/file-based/webdav/webdav-http-ad
 import {
   AuthFailSPError,
   HttpNotOkAPIError,
+  NetworkUnavailableSPError,
   PotentialCorsError,
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
@@ -14,6 +15,7 @@ import type { ProviderPlatformInfo, WebFetchFactory } from '../../../src/platfor
 
 const makeDeps = (overrides: {
   isNativePlatform?: boolean;
+  isElectron?: boolean;
   fetchImpl?: typeof fetch;
   nativeHttp?: NativeHttpExecutor;
   logger?: SyncLogger;
@@ -27,6 +29,7 @@ const makeDeps = (overrides: {
     isNativePlatform: overrides.isNativePlatform ?? false,
     isAndroidWebView: false,
     isIosNative: false,
+    isElectron: overrides.isElectron ?? false,
   },
   webFetch: () => overrides.fetchImpl ?? (globalThis.fetch as typeof fetch),
   nativeHttp: overrides.nativeHttp ?? vi.fn(),
@@ -209,6 +212,62 @@ describe('WebDavHttpAdapter', () => {
       await expect(
         adapter.request({ url: 'https://dav.example.com/x', method: 'GET' }),
       ).rejects.toBeInstanceOf(HttpNotOkAPIError);
+    });
+
+    /**
+     * #9985: the desktop app injects `Access-Control-Allow-{Origin,Headers,
+     * Methods}: *` on every response and forces preflights to 200 (see
+     * `electron/main-window.ts`), so CORS can never be the cause there. Blaming
+     * it sent a user chasing a dead end while the real failure was a truncated
+     * response (`net::ERR_CONTENT_LENGTH_MISMATCH`) from a misbehaving server.
+     */
+    it('never blames CORS on Electron, where CORS is disabled app-wide', async () => {
+      const fetchImpl = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isElectron: true, fetchImpl: fetchImpl as unknown as typeof fetch }),
+      );
+
+      const err = await adapter
+        .request({ url: 'https://dav.example.com/x', method: 'GET' })
+        .catch((e) => e);
+
+      expect(err).not.toBeInstanceOf(PotentialCorsError);
+      expect(err).toBeInstanceOf(NetworkUnavailableSPError);
+    });
+
+    it('keeps the CORS hint on the web build, where CORS is real', async () => {
+      const fetchImpl = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isElectron: false, fetchImpl: fetchImpl as unknown as typeof fetch }),
+      );
+
+      await expect(
+        adapter.request({ url: 'https://dav.example.com/x', method: 'GET' }),
+      ).rejects.toBeInstanceOf(PotentialCorsError);
+    });
+
+    it('leaks no credentials or path through the Electron network error', async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockRejectedValue(
+          new TypeError(
+            'NetworkError when attempting to fetch resource at https://user:pass@dav.example.com/x?token=secret',
+          ),
+        );
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isElectron: true, fetchImpl: fetchImpl as unknown as typeof fetch }),
+      );
+
+      const err = await adapter
+        .request({
+          url: 'https://user:pass@dav.example.com/x?token=secret',
+          method: 'GET',
+        })
+        .catch((e) => e);
+
+      const msg = (err as Error).message ?? '';
+      expect(msg).not.toContain('user:pass');
+      expect(msg).not.toContain('secret');
     });
 
     it('PotentialCorsError carries only the scrubbed URL, never the raw error', async () => {

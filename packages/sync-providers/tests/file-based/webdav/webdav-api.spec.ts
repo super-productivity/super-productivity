@@ -72,6 +72,8 @@ const makeApi = (
     getCfg: async () => overrideCfg,
     httpAdapter: adapter as unknown as WebDavHttpAdapter,
     useCanonicalOcEtag,
+    // Instant delay so verification retries do not slow the suite down.
+    delay: async () => {},
   });
 
 const makeNextcloudApi = (adapter: MockAdapter): WebdavApi =>
@@ -154,6 +156,16 @@ const putsOf = (adapter: MockAdapter): DavRequest[] =>
   adapter.request.mock.calls
     .map((call: unknown[]) => call[0] as DavRequest)
     .filter((req) => req.method === 'PUT');
+
+const getsOf = (adapter: MockAdapter): DavRequest[] =>
+  adapter.request.mock.calls
+    .map((call: unknown[]) => call[0] as DavRequest)
+    .filter((req) => req.method === 'GET');
+
+const headerValue = (req: DavRequest, name: string): string | undefined =>
+  Object.entries(req.headers ?? {}).find(
+    ([key]) => key.toLowerCase() === name.toLowerCase(),
+  )?.[1];
 
 describe('WebdavApi', () => {
   describe('listFiles', () => {
@@ -529,7 +541,8 @@ describe('WebdavApi', () => {
       const data = 'good';
       // skip conditional (no expectedRev)
       adapter.request.mockResolvedValueOnce(okResponse('', 201)); // PUT
-      adapter.request.mockResolvedValueOnce(okResponse('truncated')); // verify
+      // Every verification attempt sees the same truncated copy.
+      adapter.request.mockResolvedValue(okResponse('truncated'));
 
       await expect(
         makeApi(adapter).upload({ path: 'op-1.json', data }),
@@ -582,6 +595,142 @@ describe('WebdavApi', () => {
       expect(err.message).toContain('Base URL');
       expect(err.message).toContain('Sync Folder Path');
       expect(err.message).not.toContain('op-1.json');
+    });
+  });
+
+  /**
+   * #9985: STRATO HiDrive answers a GET that reuses the keep-alive connection of
+   * the PUT which just succeeded with the PREVIOUS version's body/ETag (and a
+   * Content-Length that then truncates, surfacing in Chromium as
+   * net::ERR_CONTENT_LENGTH_MISMATCH). The write itself landed, so the read-back
+   * is the only thing that is wrong — re-reading is safe and idempotent, and it
+   * must never re-issue the PUT.
+   */
+  describe('post-upload verification resilience (#9985)', () => {
+    const makeApiWithDelay = (
+      adapter: MockAdapter,
+      delay: (ms: number) => Promise<void>,
+    ): WebdavApi =>
+      new WebdavApi({
+        logger: NOOP_SYNC_LOGGER,
+        getCfg: async () => cfg,
+        httpAdapter: adapter as unknown as WebDavHttpAdapter,
+        delay,
+      });
+
+    it('re-reads when the verification GET serves the previous version', async () => {
+      const adapter = makeAdapter();
+      const data = 'the new body';
+      adapter.request.mockResolvedValueOnce(okResponse('', 204)); // PUT
+      adapter.request.mockResolvedValueOnce(
+        okResponse('the previous body', 200, { etag: '"old-rev"' }),
+      );
+      adapter.request.mockResolvedValueOnce(okResponse(data, 200, { etag: '"new-rev"' }));
+
+      const r = await makeApi(adapter).upload({ path: 'op-1.json', data });
+
+      expect(r.rev).toBe('"new-rev"');
+      expect(putsOf(adapter)).toHaveLength(1);
+      expect(getsOf(adapter)).toHaveLength(2);
+    });
+
+    it('re-reads when the verification GET fails at transport level', async () => {
+      const adapter = makeAdapter();
+      const data = 'the new body';
+      adapter.request.mockResolvedValueOnce(okResponse('', 204)); // PUT
+      adapter.request.mockRejectedValueOnce(
+        new HttpNotOkAPIError(new Response('', { status: 500 })),
+      );
+      adapter.request.mockResolvedValueOnce(okResponse(data));
+
+      const r = await makeApi(adapter).upload({ path: 'op-1.json', data });
+
+      expect(r.rev).toBe(await md5HashWasm(data));
+      expect(putsOf(adapter)).toHaveLength(1);
+    });
+
+    it('re-reads when the verification GET returns an empty body', async () => {
+      const adapter = makeAdapter();
+      const data = 'the new body';
+      adapter.request.mockResolvedValueOnce(okResponse('', 204)); // PUT
+      adapter.request.mockResolvedValueOnce(okResponse(''));
+      adapter.request.mockResolvedValueOnce(okResponse(data));
+
+      const r = await makeApi(adapter).upload({ path: 'op-1.json', data });
+
+      expect(r.rev).toBe(await md5HashWasm(data));
+      expect(putsOf(adapter)).toHaveLength(1);
+    });
+
+    it('re-reads when the verification GET 404s right after a successful PUT', async () => {
+      const adapter = makeAdapter();
+      const data = 'the new body';
+      adapter.request.mockResolvedValueOnce(okResponse('', 204)); // PUT
+      adapter.request.mockRejectedValueOnce(new RemoteFileNotFoundAPIError('op-1.json'));
+      adapter.request.mockResolvedValueOnce(okResponse(data));
+
+      const r = await makeApi(adapter).upload({ path: 'op-1.json', data });
+
+      expect(r.rev).toBe(await md5HashWasm(data));
+      expect(putsOf(adapter)).toHaveLength(1);
+    });
+
+    it('still reports a conflict when every attempt disagrees, without re-PUTting', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockResolvedValueOnce(okResponse('', 204)); // PUT
+      // A genuine concurrent write stays visible on every re-read.
+      adapter.request.mockResolvedValue(okResponse('another clients body'));
+
+      await expect(
+        makeApi(adapter).upload({ path: 'op-1.json', data: 'mine' }),
+      ).rejects.toBeInstanceOf(RemoteFileChangedUnexpectedly);
+
+      expect(putsOf(adapter)).toHaveLength(1);
+      expect(getsOf(adapter)).toHaveLength(3);
+    });
+
+    it('surfaces the transport error when every attempt fails to read', async () => {
+      const adapter = makeAdapter();
+      adapter.request.mockResolvedValueOnce(okResponse('', 204)); // PUT
+      adapter.request.mockRejectedValue(new AuthFailSPError('Authentication failed'));
+
+      await expect(
+        makeApi(adapter).upload({ path: 'op-1.json', data: 'mine' }),
+      ).rejects.toBeInstanceOf(AuthFailSPError);
+      expect(putsOf(adapter)).toHaveLength(1);
+    });
+
+    it('waits between verification attempts instead of hammering the server', async () => {
+      const waited: number[] = [];
+      const adapter = makeAdapter();
+      const data = 'the new body';
+      adapter.request.mockResolvedValueOnce(okResponse('', 204)); // PUT
+      adapter.request.mockResolvedValueOnce(okResponse('stale'));
+      adapter.request.mockResolvedValueOnce(okResponse(data));
+
+      await makeApiWithDelay(adapter, async (ms) => {
+        waited.push(ms);
+      }).upload({ path: 'op-1.json', data });
+
+      expect(waited).toHaveLength(1);
+      expect(waited[0]).toBeGreaterThan(0);
+    });
+
+    it('sends no Cache-Control request header on the verification GET', async () => {
+      // `Cache-Control` is not a CORS-safelisted request header, so on the web
+      // build it forces a preflight many WebDAV servers reject — turning every
+      // upload verification into a genuine CORS failure. The fetch path already
+      // passes `cache: 'no-store'` and the native path adds its own no-cache
+      // headers, so the API layer must not add one of its own.
+      const adapter = makeAdapter();
+      const data = 'body';
+      adapter.request.mockResolvedValueOnce(okResponse('', 204)); // PUT
+      adapter.request.mockResolvedValueOnce(okResponse(data));
+
+      await makeApi(adapter).upload({ path: 'op-1.json', data });
+
+      const verifyGet = getsOf(adapter).at(-1) as DavRequest;
+      expect(headerValue(verifyGet, WebDavHttpHeader.CACHE_CONTROL)).toBeUndefined();
     });
   });
 

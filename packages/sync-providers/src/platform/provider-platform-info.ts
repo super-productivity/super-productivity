@@ -17,4 +17,13 @@ export interface ProviderPlatformInfo {
   readonly isAndroidWebView: boolean;
   /** True when running on iOS via Capacitor. */
   readonly isIosNative: boolean;
+  /**
+   * True when running inside the Electron desktop shell.
+   *
+   * Optional so hosts that predate it keep today's behaviour: every consumer
+   * treats a missing value as `false`, and the flag only ever *disables* a
+   * heuristic. Electron neutralises CORS app-wide (see `electron/main-window.ts`),
+   * so a failed request there is never a cross-origin problem — #9985.
+   */
+  readonly isElectron?: boolean;
 }
