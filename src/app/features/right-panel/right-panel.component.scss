@@ -154,7 +154,9 @@
   touch-action: none; // allow pointer events to control without scrolling
   position: absolute;
   top: 50%;
-  left: -8px; // Position outside the panel
+  // -16px (width 20px, border-box) reaches only 4px into the panel, clear of
+  // the 8px margin on panel rows (was -8px, overlapping by 4px).
+  left: -16px;
   width: 20px;
   height: 48px;
   transform: translateY(-50%);

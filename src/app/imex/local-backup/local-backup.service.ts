@@ -242,21 +242,7 @@ export class LocalBackupService {
 
     // ELECTRON — has its own rotated meta (folder + date) in the prompt.
     if (IS_ELECTRON) {
-      const backupMeta = await this.checkBackupAvailable();
-      if (typeof backupMeta !== 'boolean') {
-        if (
-          confirmDialog(
-            this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP, {
-              dir: backupMeta.folder,
-              from: new Date(backupMeta.created).toLocaleString(),
-            }),
-          )
-        ) {
-          const backupData = await this.loadBackupElectron(backupMeta.path);
-          Log.log('backupData loaded from Electron backup');
-          await this._importBackup(backupData);
-        }
-      }
+      await this._askForElectronBackupRestore();
       return;
     }
 
@@ -346,6 +332,60 @@ export class LocalBackupService {
       return this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP_ANDROID);
     }
     return this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP_MOBILE, {
+      tasks: summary.taskCount,
+      projects: summary.projectCount,
+    });
+  }
+
+  /**
+   * Electron branch of the startup restore: offer the newest rotated backup.
+   * Split out from askForFileStoreBackupIfAvailable so it is reachable in tests
+   * without faking the module-level IS_ELECTRON.
+   */
+  private async _askForElectronBackupRestore(): Promise<void> {
+    const backupMeta = await this.checkBackupAvailable();
+    if (typeof backupMeta === 'boolean') {
+      return;
+    }
+    // Read before prompting so the prompt can name what would be restored
+    // (#9945). Without counts this is a blind choice, and it is shown exactly
+    // when the store is blank and the user has nothing to compare against —
+    // the rotation's newest slot is not by itself evidence of a good backup.
+    let backupData: string;
+    try {
+      backupData = await this.loadBackupElectron(backupMeta.path);
+    } catch (e) {
+      // An unreadable newest backup is nothing to offer; don't prompt for it.
+      Log.err('LocalBackupService: could not read newest backup', e);
+      return;
+    }
+    if (confirmDialog(this._restoreElectronPromptMsg(backupMeta, backupData))) {
+      Log.log('backupData loaded from Electron backup');
+      await this._importBackup(backupData);
+    }
+  }
+
+  /**
+   * Builds the Electron restore prompt. Mirrors the mobile prompt: when the
+   * backup parses, name the task and project counts so the user can judge what
+   * they would restore; otherwise fall back to the count-less prompt (#9945).
+   */
+  private _restoreElectronPromptMsg(
+    backupMeta: LocalBackupMeta,
+    backupData: string,
+  ): string {
+    const dir = backupMeta.folder;
+    const createdStr = new Date(backupMeta.created).toLocaleString();
+    const summary = summarizeBackupStr(backupData);
+    if (!summary) {
+      return this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP, {
+        dir,
+        from: createdStr,
+      });
+    }
+    return this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP_WITH_COUNTS, {
+      dir,
+      from: createdStr,
       tasks: summary.taskCount,
       projects: summary.projectCount,
     });

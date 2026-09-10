@@ -417,6 +417,18 @@ Repeat alerts for the same problem are suppressed by a content hash, so counts,
 durations and the probe's exit status are normalised out — you get one mail per
 distinct problem, plus a recovery mail when it clears.
 
+When the database probe fails, its **stderr** is appended to the mail body under
+`Database probe stderr (URLs redacted):` — body only, never `PROBLEMS`, because
+that string is the dedupe key and error text that shifts run to run would re-mail
+every five minutes. Each URL is stripped through the end of its line before sending:
+Compose can print malformed datasource URLs with whitespace inside credentials.
+An empty capture is reported as `no stderr captured`; it does not establish why
+the probe failed. This exists because `exit 1` — the one probe failure
+that _does_ carry a cause — used to send that cause to `/dev/null`, leaving a status
+code that cannot distinguish "Prisma threw" from "the exec never started". Measured
+2026-09: four such alerts in ten hours, and reaching "the database was healthy all
+along" needed five rounds of manual `ssh` forensics that the mail could have carried.
+
 On top of that, two rules bound how loud a single incident can get. They exist
 because one incident is routinely reported as several different problems: a long
 query saturates the pool, the health probe then times out behind it, and the
@@ -486,9 +498,30 @@ You can set up cron jobs for regular monitoring:
 ### `deploy.sh` warns "OOM detection is BLIND"
 
 The OOM check reads `journalctl -k`. A cron user outside `adm`/`systemd-journal`
-— or any host without systemd — gets no output and **exit 0**, so before
+can get no output and **exit 0**, so before
 2026-08-25 the check silently could never fire and the absence of an OOM alert
 was not evidence of no OOM. It now probes readability first.
+
+The marker's second line distinguishes these observations:
+
+| Reason          | Observation                                                       | Advice                                                 |
+| --------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
+| `no-journalctl` | journalctl is not installed                                       | The journal-based check is unavailable                 |
+| `journal-error` | journalctl failed or timed out, even if it printed partial output | Check `journalctl -k` and journal configuration        |
+| `unreadable`    | Successful empty read without root or a recognized journal group  | Check the cron user's journal permissions              |
+| `no-kernel-log` | Successful empty read as root or a member of a journal group      | Check journal configuration and host kernel-log access |
+
+Group names are matched exactly: `systemd-journal-remote` does not grant the
+access associated with `systemd-journal`. The check does not use journalctl's
+permissions hint, because `-q` suppresses it. Membership helps choose advice;
+it does not prove access or identify a container guest. Empty output can also
+reflect journal configuration such as `Storage=none` or `ReadKMsg=no`.
+
+Measured 2026-09 on the hosted OpenVZ VPS: the marker sat at `unreadable` for 16
+days while every alert advised joining a group the operator was already in. On
+that host the kernel log was unavailable; `docker inspect --format
+'{{.State.OOMKilled}}'` is the substitute, and checks 0–3 still catch the restart
+that follows.
 
 An unreadable kernel log is a broken capability, not an unhealthy service, so it
 is recorded in `.health-alert/oom-check-blind` and surfaced by `deploy.sh`
@@ -499,7 +532,7 @@ could never be sent again on a host that merely lacks a group. (Alerts
 themselves would keep arriving: the dedupe key is a content hash, so a new
 problem still changes the hash and still mails.)
 
-Fix it rather than ignoring it: `sudo usermod -aG systemd-journal "$USER"`
+For a missing journal group: `sudo usermod -aG systemd-journal "$USER"`
 (re-login required). Prefer `systemd-journal` over `adm` — it grants the journal
 read and nothing else, where `adm` also opens `/var/log` broadly. Running the
 cron as root works too but grants far more than this one read needs. The marker

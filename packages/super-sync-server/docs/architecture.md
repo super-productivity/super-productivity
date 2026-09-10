@@ -121,9 +121,18 @@ This serialization mechanism is a load-bearing decision; see
   snapshot BLOB exists, the boundary additionally never passes that row's
   cursor (protects the cached base's replay tail for restore); a cursor left
   behind without its blob does not cap. A user's aged prefix is pruned whole
-  or not at all, so the lowest surviving op stays a full-state op. Quota
+  or not at all, so the lowest surviving op stays a full-state op. When recent
+  operations block the newest boundary, cleanup falls back to the newest causal
+  boundary at or before the lowest recent sequence (#9962). This preserves every
+  operation inside retention without letting frequent checkpoints block an older
+  complete prefix. Quota
   recovery uses a
   separate bounded cleanup policy.
+- Routine incremental sync does not create periodic full-state boundaries.
+  Adding a client cadence requires a compatibility design (#9962): released
+  v18.14.0 clients accept schema-4 operations but treat `REPAIR` as a reset and
+  discard concurrent edits. Reusing current repair semantics alone cannot safely
+  enable automatic checkpoints for accounts with those clients.
 - Server-generated restore is unavailable when the required replay range
   contains encrypted operations.
 

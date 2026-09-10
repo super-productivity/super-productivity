@@ -29,11 +29,18 @@ export class PluginOAuthBridgeService {
   private _pluginOAuthService = inject(PluginOAuthService);
 
   constructor() {
-    // Clear persisted OAuth tokens when a refresh fails
+    // Clear persisted OAuth tokens once the authorization server rejects the grant
     this._pluginOAuthService.tokenInvalidated$
       .pipe(takeUntilDestroyed())
       .subscribe((pluginId) => {
         this._clearPersistedOAuthTokens(pluginId);
+      });
+
+    // Persist the rotated access token, so a restart does not immediately refresh again
+    this._pluginOAuthService.tokensRefreshed$
+      .pipe(takeUntilDestroyed())
+      .subscribe((pluginId) => {
+        this._persistOAuthTokens(pluginId);
       });
   }
 

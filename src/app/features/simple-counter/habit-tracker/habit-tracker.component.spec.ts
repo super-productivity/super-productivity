@@ -202,6 +202,81 @@ describe('HabitTrackerComponent', () => {
     expect(matDialog.open).toHaveBeenCalled();
   }));
 
+  describe('onCellClick', () => {
+    const mondayDow = 1;
+    const monday = '2026-05-18';
+
+    it('toggles a simple completion habit back off when it is already checked (#9970)', () => {
+      const checked = { ...mockCounter, countOnDay: { [monday]: 1 } };
+
+      component.onCellClick(checked, monday, mondayDow);
+
+      expect(simpleCounterService.setCounterForDate).toHaveBeenCalledWith(
+        'c1',
+        monday,
+        0,
+      );
+    });
+
+    it('checks a simple completion habit that is unchecked', () => {
+      component.onCellClick(mockCounter, monday, mondayDow);
+
+      expect(simpleCounterService.setCounterForDate).toHaveBeenCalledWith(
+        'c1',
+        monday,
+        1,
+      );
+    });
+
+    // The shipped "Coffee Counter" default is a plain tally: streaks off, and the
+    // settings dialog wipes streakMinValue to undefined whenever they are off.
+    it('keeps incrementing a plain tally with streaks off and no goal', () => {
+      const tally = {
+        ...mockCounter,
+        isTrackStreaks: false,
+        streakMinValue: undefined,
+        countOnDay: { [monday]: 3 },
+      };
+
+      component.onCellClick(tally, monday, mondayDow);
+
+      expect(simpleCounterService.setCounterForDate).toHaveBeenCalledWith(
+        'c1',
+        monday,
+        4,
+      );
+    });
+
+    it('keeps incrementing a goal based habit past its goal', () => {
+      const withGoal = {
+        ...mockCounter,
+        streakMinValue: 3,
+        countOnDay: { [monday]: 3 },
+      };
+
+      component.onCellClick(withGoal, monday, mondayDow);
+
+      expect(simpleCounterService.setCounterForDate).toHaveBeenCalledWith(
+        'c1',
+        monday,
+        4,
+      );
+    });
+  });
+
+  it('shows the count for a plain tally instead of a checkmark', () => {
+    const monday = '2026-05-18';
+    const tally = {
+      ...mockCounter,
+      isTrackStreaks: false,
+      streakMinValue: undefined,
+      countOnDay: { [monday]: 3 },
+    };
+
+    expect(component.isSimpleCompletion(tally)).toBe(false);
+    expect(component.getDisplayValue(tally, monday)).toBe('3');
+  });
+
   it('should prevent default and not open dialog on context menu if day is disabled', () => {
     const event = jasmine.createSpyObj('MouseEvent', ['preventDefault']);
     const disabledDate = '2026-05-19';

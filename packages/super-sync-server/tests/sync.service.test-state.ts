@@ -72,10 +72,15 @@ export function isEntityArrayBranchQuery(strings: unknown): boolean {
 
 /**
  * The download path's newest-causal-full-state lookup (`latestCausalFullStateSql`).
- * Discriminates on the REPAIR base-cursor clause, which no other statement carries.
+ * The selected columns distinguish this from the old-ops aged-prefix fallback,
+ * which uses the same causal predicate but binds a retention cutoff as well.
  */
 export function isLatestCausalFullStateQuery(strings: unknown): boolean {
-  return rawQueryText(strings).includes('repair_base_server_seq IS NOT NULL');
+  const sql = rawQueryText(strings);
+  return (
+    sql.includes('SELECT server_seq, client_id') &&
+    sql.includes('repair_base_server_seq IS NOT NULL')
+  );
 }
 
 /**

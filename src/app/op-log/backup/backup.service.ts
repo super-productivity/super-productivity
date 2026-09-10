@@ -119,6 +119,18 @@ export class BackupService {
       const { isLegacyBackupData, migrateLegacyBackup } =
         await import('./migrate-legacy-backup');
       if (isLegacyBackupData(backupData as unknown as Record<string, unknown>)) {
+        // migrateLegacyBackup() dereferences the slices it migrates, so a
+        // truncated legacy payload has to be refused here rather than inside a
+        // migration step, where it would surface as an opaque TypeError.
+        if (!isDataRepairPossible(backupData)) {
+          // The migration line below never runs on this path, so without this
+          // a refused legacy file leaves no trace in the exported log that it
+          // was legacy at all, and the thrown message is identical to the
+          // modern-path refusal. Fixed string: log history is exportable.
+          OpLog.err('BackupService: legacy backup refused, core slice missing');
+          recordCriticalErrorTime();
+          throw new Error('Data validation failed and repair not possible');
+        }
         OpLog.normal(
           'BackupService: Detected legacy backup format, running migration...',
         );
@@ -267,11 +279,11 @@ export class BackupService {
 
   /**
    * On storage quota the ring (up to three full snapshots) is the likeliest
-   * culprit: evict all but the newest existing snapshot and retry once, so a
-   * full device degrades to a ring of two instead of never applying another
-   * full-state op. The newest snapshot is always kept — a failed capture must
-   * never leave the device with fewer recovery points than it had. Any other
-   * error propagates untouched.
+   * culprit: keep the newest REMOTE_IMPORT / FORCE_DOWNLOAD snapshot (or the
+   * newest snapshot if neither exists) and retry once, so a full device degrades
+   * to a ring of two instead of never applying another full-state op. One
+   * snapshot is always kept (#10003) — a failed capture must never leave the
+   * device with no recovery point. Any other error propagates untouched.
    */
   private async _saveRecoveryPoint(
     state: unknown,

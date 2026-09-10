@@ -84,20 +84,35 @@ OOM_BLIND_FILE="$ALERT_STATE_DIR/oom-check-blind"
 # See the check itself for why.
 POOL_PENDING_FILE="$ALERT_STATE_DIR/pool-busy-pending"
 MAIL_ERR_MAX_BYTES=4096
+# The database probe's own stderr, carried into the alert BODY. Far shorter than the mail
+# limit above: this is diagnostic context appended to an alert, not the alert itself, and a
+# Prisma stack trace would otherwise bury the problem list it is attached to.
+DB_PROBE_ERR_MAX_BYTES=512
+
+# Strip terminal control sequences from text this script did not produce (a remote SMTP
+# relay, a Prisma error) and that is about to be echoed to a terminal or mailed. The sed
+# matches UTF-8-*encoded* C1 (\xc2 followed by \x80-\x9f, which encodes U+0080-U+009F and
+# nothing else) so CSI/OSC go but em-dash, NBSP and CJK survive; a plain 0x80-0x9F byte
+# range would instead eat UTF-8 continuation bytes and corrupt every non-ASCII message.
+# Both halves are pinned by the "strips UTF-8-encoded C1 controls" spec case. TAB (\011)
+# and newline (\012) are deliberately spared: a multi-line probe error stays readable. $1
+# caps the output length.
+# shortcut: `|| true` because `head -c` closing the pipe early makes the pipeline exit 141
+# under `set -o pipefail` on any input that truncates. Both call sites discard the status
+# today, so this only stops that from becoming a trap for a future `… || warn` caller.
+strip_control_chars() {
+  { LC_ALL=C tr -d '\000-\010\013-\037\177' |
+    LC_ALL=C sed 's/\xc2[\x80-\x9f]//g' | head -c "$1"; } || true
+}
 
 # Record why mail could not be delivered. Line 1 is always the timestamp, so readers that
 # want only that (deploy.sh) can take the first line; the reason follows. Reason text can
-# originate from a remote SMTP relay and deploy.sh echoes it to a terminal, so strip
-# control characters and cap the length at write time. The sed matches UTF-8-*encoded* C1
-# (\xc2 followed by \x80-\x9f, which encodes U+0080-U+009F and nothing else) so CSI/OSC go
-# but em-dash, NBSP and CJK survive; a plain 0x80-0x9F byte range would instead eat UTF-8
-# continuation bytes and corrupt every non-ASCII message. Both halves are pinned by the
-# "strips UTF-8-encoded C1 controls" spec case.
+# originate from a remote SMTP relay and deploy.sh echoes it to a terminal, so it is
+# sanitized and capped at write time.
 record_mail_failure() {
   {
     date -u +%Y-%m-%dT%H:%M:%SZ
-    printf '%s\n' "$1" | LC_ALL=C tr -d '\000-\010\013-\037\177' |
-      LC_ALL=C sed 's/\xc2[\x80-\x9f]//g' | head -c "$MAIL_ERR_MAX_BYTES"
+    printf '%s\n' "$1" | strip_control_chars "$MAIL_ERR_MAX_BYTES"
   } > "$MAIL_FAILED_FILE"
 }
 
@@ -132,6 +147,15 @@ if ! flock -n 9; then
   exit 0
 fi
 
+# The probe's stderr lands here UNREDACTED for the ~25s between the redirect and the read,
+# and a Prisma connection error can name the datasource URL. The normal path unlinks it,
+# but a SIGKILL or reboot inside that window would otherwise leave a credential on disk
+# until the next probe truncates the file. umask 077 keeps it 0600, which is the second
+# line of defence, not the first: the state dir is documented above as something an
+# operator may widen so a non-root deploy.sh can read the markers.
+DB_ERRFILE="$ALERT_STATE_DIR/.db-probe-err"
+trap 'rm -f "$DB_ERRFILE"' EXIT
+
 # A stock Debian/Ubuntu host has no `mail` binary, and without this check the first
 # discovery of that is the first real incident, months after setup. Record it in the marker
 # deploy.sh already surfaces — never in CONFIG_PROBLEMS, which is the alert body and the
@@ -165,6 +189,10 @@ fi
 
 PROBLEMS="$CONFIG_PROBLEMS"
 DOCKER_OK=true
+# Set only when the database probe fails, and only ever read into the mail body. Declared
+# here because the probe lives behind the Docker gate: under `set -u` a Docker-down run
+# would otherwise abort at the body-assembly line below.
+DB_PROBE_DETAIL=""
 
 # 0. Check Docker daemon is accessible
 if ! docker info >/dev/null 2>&1; then
@@ -400,9 +428,17 @@ NODE
     # SIGKILLs it and compose's buffered stdout dies with it — a healthy server then reports
     # every probe key missing. Measured live: 25s/exit 137 without it, 1s/exit 0 with.
     # Allow Prisma's 5s pool wait plus its 12s transaction bound to finish.
+    # stderr to a FILE, not 2>/dev/null and not a pipe. Discarding it is why an exit-1
+    # probe — the one failure mode where Prisma DID report a cause — arrived as a bare
+    # status with the only useful line already gone, and a database that was healthy every
+    # time anyone went and looked. A pipe would be worse than either: command substitution
+    # waits for EOF, so a child outliving `timeout` would hang the run while holding the
+    # flock, which is the same trap send_alert_mail documents above. $DB_ERRFILE is set
+    # next to the flock, with an EXIT trap; the redirect below truncates it every run, so a
+    # file left by a killed run can never be read as if it were this run's output.
     DB_OUTPUT=$(timeout -k 5 20 docker compose exec -T \
       -e "HEALTH_MAX_QUERY_SECONDS=$MAX_QUERY_SECONDS" \
-      supersync timeout 18 node -e "$DB_PROBE_JS" </dev/null 2>/dev/null)
+      supersync timeout 18 node -e "$DB_PROBE_JS" </dev/null 2>"$DB_ERRFILE")
     DB_STATUS=$?
 
     LONG_Q=""
@@ -439,8 +475,17 @@ NODE
       # The status separates a timeout or kill (124/137) from a broken exec (126/127), a
       # probe error (1) and incomplete output (0). Not the probe's stderr: PROBLEMS is the
       # dedupe hash input, so text that varies per run would re-alert every five minutes.
+      # The stderr goes into the mail BODY instead, below.
       PROBLEMS="${PROBLEMS}Database monitoring checks failed (exit ${DB_STATUS})\n"
+      # Read only on failure. Compose can print malformed datasource URLs containing
+      # whitespace in credentials, so redact from ANY scheme through the end of its line.
+      # Redact before truncating, so the byte limit cannot cut inside a credential.
+      DB_PROBE_DETAIL=$(LC_ALL=C sed -E 's#[a-zA-Z][a-zA-Z0-9+.-]*://.*#<redacted-url>#' \
+        "$DB_ERRFILE" 2>/dev/null | strip_control_chars "$DB_PROBE_ERR_MAX_BYTES")
+      # Empty stderr is possible after a timeout, silent failure or malformed output.
+      : "${DB_PROBE_DETAIL:=(no stderr captured)}"
     fi
+    rm -f "$DB_ERRFILE"
 
     if $DB_RESULTS_OK; then
       if [ "$LONG_Q" -gt 0 ]; then
@@ -513,8 +558,19 @@ fi
 OOM_BLIND_REASON=""
 if ! command -v "$JOURNAL_CMD" >/dev/null 2>&1; then
   OOM_BLIND_REASON="no-journalctl"
-elif [ -z "$(timeout 10 "$JOURNAL_CMD" -k -q -n 1 --no-pager 2>/dev/null)" ]; then
-  OOM_BLIND_REASON="unreadable"
+elif ! KERNEL_LOG=$(timeout 10 "$JOURNAL_CMD" -k -q -n 1 --no-pager 2>/dev/null); then
+  # A failed or timed-out read is inconclusive, even if it printed some entries.
+  OOM_BLIND_REASON="journal-error"
+elif [ -z "$KERNEL_LOG" ]; then
+  # -q suppresses journalctl's permissions hint. Check exact group names to avoid
+  # recommending membership the user already has, but do not infer the host type:
+  # empty output can also reflect journal configuration or host restrictions.
+  if [ "$(id -u 2>/dev/null)" = "0" ] ||
+    id -nG 2>/dev/null | grep -qE '(^|[[:space:]])(adm|systemd-journal|wheel)([[:space:]]|$)'; then
+    OOM_BLIND_REASON="no-kernel-log"
+  else
+    OOM_BLIND_REASON="unreadable"
+  fi
 fi
 if [ -n "$OOM_BLIND_REASON" ]; then
   PREVIOUS_REASON=""
@@ -524,6 +580,10 @@ if [ -n "$OOM_BLIND_REASON" ]; then
   if [ "$PREVIOUS_REASON" != "$OOM_BLIND_REASON" ]; then
     if [ "$OOM_BLIND_REASON" = "no-journalctl" ]; then
       echo "health-alert: no journalctl on this host — OOM detection is unavailable (not a misconfiguration)." >&2
+    elif [ "$OOM_BLIND_REASON" = "journal-error" ]; then
+      echo "health-alert: failed to read the kernel log — OOM detection is blind. Check journalctl -k and journal configuration." >&2
+    elif [ "$OOM_BLIND_REASON" = "no-kernel-log" ]; then
+      echo "health-alert: no kernel log entries are available — OOM detection is unavailable. Check journal configuration and host kernel-log access." >&2
     else
       echo "health-alert: cannot read the kernel log — OOM detection is blind. Add the cron user to group 'systemd-journal' (or 'adm')." >&2
     fi
@@ -623,8 +683,16 @@ if [ -n "$PROBLEMS" ]; then
     if [ -f "$OOM_BLIND_FILE" ]; then
       COVERAGE_NOTE=$'\nNote: the OOM check did not run (kernel log unavailable), so an OOM kill\nwould not appear above. See scripts/MONITORING-README.md.\n'
     fi
-    if printf 'SuperSync health check failed at %s\n\nProblems found:\n%b\n%sServer: %s\n' \
-        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$PROBLEMS" "$COVERAGE_NOTE" "$(hostname)" \
+    # Same reasoning as COVERAGE_NOTE: body only. It varies run to run by design — that is
+    # the point of it — and PROBLEMS is the dedupe key, so putting it there would re-mail
+    # the same incident on every flip of a Prisma error string.
+    PROBE_DETAIL_NOTE=""
+    if [ -n "$DB_PROBE_DETAIL" ]; then
+      PROBE_DETAIL_NOTE=$'\nDatabase probe stderr (URLs redacted):\n'"$DB_PROBE_DETAIL"$'\n'
+    fi
+    if printf 'SuperSync health check failed at %s\n\nProblems found:\n%b\n%s%sServer: %s\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$PROBLEMS" "$PROBE_DETAIL_NOTE" "$COVERAGE_NOTE" \
+        "$(hostname)" \
         | send_alert_mail "SuperSync Alert: Health Check Failed"; then
       # One line per distinct symptom, so growth is bounded by the check list, not by its
       # power set. Cleared on recovery and aged out above.

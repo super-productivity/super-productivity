@@ -394,10 +394,10 @@ export class IssueService {
 
     for (const pKey of Object.keys(tasksIssueIdsByIssueProviderKey)) {
       const providerKey = pKey as IssueProviderKey;
-      IssueLog.log(
-        'POLLING CHANGES FOR ' + providerKey,
-        tasksIssueIdsByIssueProviderKey[providerKey],
-      );
+      IssueLog.log('POLLING CHANGES FOR ' + providerKey, {
+        taskCount: tasksIssueIdsByIssueProviderKey[providerKey].length,
+        taskIds: tasksIssueIdsByIssueProviderKey[providerKey].map((t) => t.id),
+      });
       const pollingLabelParams = {
         issueProviderName: this._getProviderName(providerKey),
         issuesStr: this._translateService.instant(
@@ -829,6 +829,10 @@ export class IssueService {
         const taskWithTaskSubTasks = await this._taskService
           .getByIdWithSubTaskData$(res.task.id)
           .toPromise();
+        // Nothing to move if the task vanished between the lookup and here (#9946).
+        if (!taskWithTaskSubTasks) {
+          return false;
+        }
         this._taskService.moveToCurrentWorkContext(taskWithTaskSubTasks);
         this._snackService.open({
           ico: 'arrow_upward',

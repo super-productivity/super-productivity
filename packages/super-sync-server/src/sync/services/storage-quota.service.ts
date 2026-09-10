@@ -12,7 +12,10 @@ import { prisma } from '../../db';
 import { Logger } from '../../logger';
 import { parsePositiveIntegerEnv } from '../../util/env';
 import { APPROX_BYTES_PER_OP } from '../sync.const';
-import { CAUSAL_FULL_STATE_OPERATION_WHERE } from '../sync.types';
+import {
+  agedPrefixCausalFullStateSql,
+  CAUSAL_FULL_STATE_OPERATION_WHERE,
+} from '../sync.types';
 
 /**
  * Default storage quota per user in bytes (100MB).
@@ -482,9 +485,8 @@ export class StorageQuotaService {
     // Every reason the sweep declines a candidate is counted and reported.
     // #9688 was exactly a fleet-wide exemption from retention that nobody
     // could see; a silent skip re-creates that blind spot in narrower form.
-    // `skippedFreshPrefix` in particular can pin a user forever: anyone
-    // emitting a causal full-state op more often than once per retention
-    // window is skipped on every single run while their log grows unbounded.
+    // A fresh prefix is skipped only when no older causal checkpoint can
+    // protect a wholly aged prefix either.
     let skippedFreshPrefix = 0;
     let skippedBoundaryAtOne = 0;
     let drainFailures = 0;
@@ -555,8 +557,9 @@ export class StorageQuotaService {
         // `_resolveExpectedFirstSeq` (op-replay.ts) tolerates a leading gap ONLY
         // when the lowest surviving op is a causal full-state op that resets
         // state — otherwise it throws SNAPSHOT_REPLAY_INCOMPLETE, which the
-        // restore route surfaces as a 500. Skipping the user keeps the whole
-        // prefix intact until it ages out, so this sweep never NEWLY breaks the
+        // restore route surfaces as a 500. Try an older causal boundary before
+        // skipping the user (#9962), so frequent checkpoints cannot strand an
+        // older complete prefix. This sweep never NEWLY breaks the
         // invariant that path documents ("the surviving lowest-seq op is
         // guaranteed to be a full-state op"). Costs retention lag, never
         // over-deletion. Note the invariant is not globally true: quota
@@ -613,8 +616,18 @@ export class StorageQuotaService {
           select: { serverSeq: true },
         });
         if (freshOpBelowBoundary) {
-          skippedFreshPrefix++;
-          continue;
+          const [olderBoundary] = await prisma.$queryRaw<{ server_seq: number }[]>(
+            agedPrefixCausalFullStateSql(
+              candidate.userId,
+              protectedFromSeq,
+              BigInt(cutoffTime),
+            ),
+          );
+          if (!olderBoundary) {
+            skippedFreshPrefix++;
+            continue;
+          }
+          protectedFromSeq = olderBoundary.server_seq;
         }
 
         // Drain this user to completion. The budget gates which users we

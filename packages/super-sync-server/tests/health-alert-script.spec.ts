@@ -107,6 +107,9 @@ fi
 if [ "\${1:-}" = "exec" ]; then
   # Real \`docker compose exec -T\` keeps stdin attached and does not exit until EOF.
   cat > /dev/null
+  # The probe's stderr: what Prisma writes when it throws, and what the script used to
+  # send to /dev/null. Emitted before the exit so a failing probe can carry both.
+  [ -z "\${FAKE_DB_STDERR:-}" ] || printf '%b\n' "\$FAKE_DB_STDERR" >&2
   [ "\${FAKE_DB_EXIT:-0}" = "0" ] || exit "$FAKE_DB_EXIT"
   if [ "\${FAKE_DB_MALFORMED:-0}" = "1" ]; then
     printf 'not monitor data\n'
@@ -131,14 +134,31 @@ printf '%s' "\${FAKE_HTTP_CODE-200}"
 exit "\${FAKE_CURL_EXIT:-0}"
 `;
 
-// A readable kernel log. FAKE_JOURNAL_BLIND=1 reproduces a cron user outside 'adm' /
-// 'systemd-journal': systemd prints its hint on stderr, emits no kernel line and exits 0.
+// A readable kernel log. FAKE_JOURNAL_BLIND=1 makes `journalctl -k` emit no kernel line
+// and exit 0 — which is what BOTH blind cases look like on stdout, deliberately: a cron
+// user outside the journal groups and a host with no recorded kernel entries are
+// indistinguishable here. FAKE_ID_GROUPS helps choose advice without assuming a cause;
+// journalctl's own hint is suppressed by the -q the script passes.
 const FAKE_JOURNALCTL = `#!/bin/sh
+if [ "\${FAKE_JOURNAL_EXIT:-0}" != "0" ]; then
+  printf '%b' "\${FAKE_KERNEL_LOG:-}"
+  exit "$FAKE_JOURNAL_EXIT"
+fi
 if [ "\${FAKE_JOURNAL_BLIND:-0}" = "1" ]; then
-  printf '%s\n' 'Hint: You are currently not seeing messages from other users and the system.' >&2
   exit 0
 fi
 printf '%b\n' "\${FAKE_KERNEL_LOG:-Aug 25 09:00:00 host kernel: Linux version 6.0.0}"
+`;
+
+// The discriminator between "unreadable" and "no-kernel-log". Defaults to a user with no
+// journal access, so a test that does not opt in gets the branch carrying the actionable
+// advice — the safe direction if the script's default ever regresses.
+const FAKE_ID = `#!/bin/sh
+if [ "\${1:-}" = "-u" ]; then
+  printf '%s\n' "\${FAKE_ID_UID:-1000}"
+  exit 0
+fi
+printf '%s\n' "\${FAKE_ID_GROUPS:-nogroup users}"
 `;
 
 const FAKE_DF = `#!/bin/sh
@@ -286,6 +306,7 @@ beforeEach(() => {
   writeExecutable('df', FAKE_DF);
   writeExecutable('mail', FAKE_MAIL);
   writeExecutable('journalctl', FAKE_JOURNALCTL);
+  writeExecutable('id', FAKE_ID);
   writeExecutable('mountpoint', '#!/bin/sh\nexit 1\n');
 });
 
@@ -538,6 +559,115 @@ describe('health-alert.sh service and database monitoring', () => {
     expect(result.mailLog).toContain('Database monitoring checks failed');
   });
 
+  it('carries the probe stderr into the alert body', () => {
+    // Measured 2026-09: four "Database monitoring checks failed" mails, one of them exit 1
+    // — the single mode where the probe DID catch a cause and print it — and `2>/dev/null`
+    // discarded it. The status alone cannot distinguish a Prisma error from a docker exec
+    // that never started, so the alert cost a full manual investigation to reach a
+    // database that was healthy the whole time.
+    const result = run({
+      FAKE_DB_EXIT: '1',
+      FAKE_DB_STDERR: 'Database probe failed: Timed out fetching a new connection',
+    });
+
+    expect(result.mailLog).toContain('Database monitoring checks failed (exit 1)');
+    expect(result.mailLog).toContain('Timed out fetching a new connection');
+  });
+
+  it('redacts a datasource URL from the probe stderr before mailing it', () => {
+    // Prisma names the datasource in several connection errors, and this text is emailed.
+    const result = run({
+      FAKE_DB_EXIT: '1',
+      FAKE_DB_STDERR:
+        'P1001: cannot reach postgresql://supersync:hunter2@db:5432/supersync?schema=public',
+    });
+
+    expect(result.mailLog).toContain('P1001: cannot reach');
+    expect(result.mailLog).not.toContain('hunter2');
+    expect(result.mailLog).not.toContain('db:5432');
+  });
+
+  it('keeps the probe stderr out of the dedupe key', () => {
+    // The whole reason the status is normalized: a body that varies run to run must not
+    // reopen the incident, or a Prisma error whose text shifts would mail every 5 minutes.
+    run({ FAKE_DB_EXIT: '1', FAKE_DB_STDERR: 'first failure text' });
+    const result = run({ FAKE_DB_EXIT: '1', FAKE_DB_STDERR: 'entirely different text' });
+
+    expect(countAlerts(result.mailLog)).toBe(1);
+  });
+
+  it('redacts a malformed datasource URL through the end of its line', () => {
+    // Actual Docker Compose interpolation error: the invalid URL includes a space in
+    // the password, so treating whitespace as its end leaks the remaining credential.
+    const result = run({
+      FAKE_DB_EXIT: '1',
+      FAKE_DB_STDERR:
+        'invalid interpolation format for services.supersync.environment.DATABASE_URL.\n' +
+        'postgresql://demo:before SECRET_SUFFIX${BROKEN@db:5432/test\n' +
+        'Check the Compose configuration.',
+    });
+
+    expect(result.mailLog).toContain('invalid interpolation format');
+    expect(result.mailLog).toContain('<redacted-url>');
+    expect(result.mailLog).not.toContain('SECRET_SUFFIX');
+    expect(result.mailLog).not.toContain('db:5432');
+    expect(result.mailLog).toContain('Check the Compose configuration.');
+  });
+
+  it('omits the probe stderr section on a healthy run', () => {
+    // A probe that warns on stdout-clean success must not append noise to an unrelated
+    // alert, so the capture is read only on the failing path.
+    const result = run({ ...FAILING_PROBE, FAKE_DB_STDERR: 'a harmless warning' });
+
+    expect(result.mailLog).toContain('SuperSync health check failed');
+    expect(result.mailLog).not.toContain('Database probe stderr');
+    expect(result.mailLog).not.toContain('a harmless warning');
+  });
+
+  it('leaves no probe stderr scratch file behind', () => {
+    run({ FAKE_DB_EXIT: '1', FAKE_DB_STDERR: 'boom' });
+
+    expect(existsSync(stateFile('.db-probe-err'))).toBe(false);
+  });
+
+  it.each(['0', '1', '124'])(
+    'reports empty stderr without inventing a cause for probe exit %s',
+    (exit) => {
+      const result = run({ FAKE_DB_EXIT: exit, FAKE_DB_MALFORMED: '1' });
+
+      expect(result.mailLog).toContain(
+        `Database monitoring checks failed (exit ${exit})`,
+      );
+      expect(result.mailLog).toContain('(no stderr captured)');
+      expect(result.mailLog).not.toContain('killed before it could report');
+    },
+  );
+
+  it('redacts any URL scheme, not just the two Prisma spellings we expect', () => {
+    // An allowlist of postgres:// and postgresql:// silently passes prisma:// (Accelerate,
+    // whose api_key IS the credential) and any future scheme. Over-redacting an unrelated
+    // URL costs one line of diagnostic text; under-redacting costs a credential.
+    const result = run({
+      FAKE_DB_EXIT: '1',
+      FAKE_DB_STDERR: 'P6008 prisma://accelerate.example.net/?api_key=SECRETKEY123',
+    });
+
+    expect(result.mailLog).toContain('P6008');
+    expect(result.mailLog).not.toContain('SECRETKEY123');
+  });
+
+  it('strips control characters from the probe stderr too', () => {
+    // strip_control_chars is shared with record_mail_failure precisely so the two cannot
+    // drift; only the mail-failure caller was pinned, so this half was free to regress.
+    const result = run({
+      FAKE_DB_EXIT: '1',
+      FAKE_DB_STDERR: 'before\\033[2J\\033[1;31mafter',
+    });
+
+    expect(result.mailLog).toContain('after');
+    expect(result.mailLog).not.toMatch(/[ --]/);
+  });
+
   it.each(['', 'not-a-number', '0'])(
     'alerts when the running DATABASE_URL connection_limit is %j',
     (poolLimit) => {
@@ -763,6 +893,81 @@ describe('health-alert.sh kernel log OOM check', () => {
     expect(result.output).toContain('no journalctl on this host');
     expect(result.output).not.toContain("group 'systemd-journal'");
     expect(readStateFile('oom-check-blind')).toContain('no-journalctl');
+  });
+
+  it('does not read a hint that the -q it passes suppresses', () => {
+    // journalctl(1) on -q: "Suppresses all informational messages ..., any warning messages
+    // regarding inaccessible system journals when run as a normal user" — i.e. the exact
+    // "you are currently not seeing messages" hint. An earlier cut of this fix grepped for
+    // it, so `unreadable` was unreachable and EVERY permission-blind host was told its
+    // problem was unfixable. Verified against systemd 255. The discriminator must be
+    // something -q cannot erase, so no journalctl stderr may appear in the decision.
+    const script = readFileSync(HEALTH_ALERT_SCRIPT, 'utf8');
+
+    expect(script).not.toContain('not seeing messages');
+  });
+
+  it.each([
+    ['adm', 'nogroup adm users'],
+    ['systemd-journal', 'nogroup systemd-journal'],
+    ['wheel', 'wheel users'],
+  ])('does not blame permissions when the user is already in %s', (_group, groups) => {
+    // Empty output can reflect host restrictions or journal configuration. Group
+    // membership alone cannot establish the cause, so keep the diagnosis neutral.
+    const result = run({ FAKE_JOURNAL_BLIND: '1', FAKE_ID_GROUPS: groups });
+
+    expect(result.output).toContain('no kernel log entries are available');
+    expect(result.output).not.toContain('not a misconfiguration');
+    expect(result.output).not.toContain("group 'systemd-journal'");
+    expect(readStateFile('oom-check-blind')).toContain('no-kernel-log');
+  });
+
+  it('does not blame permissions when running as root', () => {
+    // root is in none of those groups and reads the journal regardless, so a group-only
+    // check would send the one user who cannot have a permission problem after one.
+    const result = run({
+      FAKE_JOURNAL_BLIND: '1',
+      FAKE_ID_UID: '0',
+      FAKE_ID_GROUPS: 'root',
+    });
+
+    expect(result.output).toContain('no kernel log entries are available');
+    expect(result.output).not.toContain('not a misconfiguration');
+    expect(readStateFile('oom-check-blind')).toContain('no-kernel-log');
+  });
+
+  it.each([
+    'admin adminx journal',
+    'users systemd-journal-remote',
+    'users adm-readonly',
+    'users wheel-backup',
+  ])('keeps the actionable advice for a user in unrelated groups: %s', (groups) => {
+    // The direction that matters: this is the only branch the operator can act on, and the
+    // -q defect made it unreachable. A near-miss group name must not count as access.
+    const result = run({
+      FAKE_JOURNAL_BLIND: '1',
+      FAKE_ID_GROUPS: groups,
+    });
+
+    expect(result.output).toContain('OOM detection is blind');
+    expect(result.output).toContain("group 'systemd-journal'");
+    expect(readStateFile('oom-check-blind')).toContain('unreadable');
+  });
+
+  it.each([
+    ['1', ''],
+    ['124', ''],
+    ['1', 'kernel: Linux version 6.0.0'],
+  ])('reports journal exit %s as a failed read, even with output %j', (exit, output) => {
+    const result = run({
+      FAKE_ID_UID: '0',
+      FAKE_JOURNAL_EXIT: exit,
+      FAKE_KERNEL_LOG: output,
+    });
+
+    expect(result.output).toContain('failed to read the kernel log');
+    expect(result.output).not.toContain('not a misconfiguration');
+    expect(readStateFile('oom-check-blind')).toContain('journal-error');
   });
 
   it('tells the operator in the alert body that OOM coverage was missing', () => {
@@ -1157,6 +1362,31 @@ describe('health-alert.sh state handling', () => {
     expect(output).toContain('usermod -aG systemd-journal');
   });
 
+  it('reports missing kernel entries without assuming a container limitation', () => {
+    writeStateFile('oom-check-blind', '2026-09-10T03:05:00Z\nno-kernel-log\n');
+
+    const output = runDeployMonitoringStatus();
+
+    expect(output).toContain('no kernel log entries are available');
+    expect(output).toContain('journal configuration');
+    expect(output).toContain('since 2026-09-10T03:05:00Z');
+    expect(output).not.toContain('usermod');
+    expect(output).not.toContain('OOM detection is BLIND');
+    expect(output).not.toContain('not a misconfiguration');
+  });
+
+  it('reports failed journal reads as a capability that needs investigation', () => {
+    writeStateFile('oom-check-blind', '2026-09-10T03:05:00Z\njournal-error\n');
+
+    const output = runDeployMonitoringStatus();
+
+    expect(output).toContain('OOM detection is BLIND');
+    expect(output).toContain('journal read failed');
+    expect(output).toContain('journalctl -k');
+    expect(output).not.toContain('usermod');
+    expect(output).not.toContain('not a misconfiguration');
+  });
+
   it('does not tell a non-systemd host to join a group that cannot exist', () => {
     // Dockerfile:60 ships scripts/ to self-hosters, Alpine among them. A permanent
     // WARNING with unfollowable remediation on every deploy is how an operator learns to
@@ -1340,6 +1570,10 @@ describe('health-alert.sh replaying the night of 2026-08-25', () => {
             `${entry.at} ${mail
               .replace(/\s+/g, ' ')
               .replace(/.*Problems found: /, '')
+              // Body-only sections, in the order they appear. This assertion is about
+              // WHICH problems were reported and when; the diagnostic context appended
+              // after them is covered by its own tests.
+              .replace(/ Database probe stderr.*/, '')
               .replace(/ (Note|Server):.*/, '')}`,
           );
         }

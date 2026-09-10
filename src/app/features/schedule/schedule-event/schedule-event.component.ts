@@ -480,7 +480,9 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
         delay(50),
       )
       .subscribe((task) => {
-        this._taskService.remove(task);
+        if (task) {
+          this._taskService.remove(task);
+        }
       });
   }
 

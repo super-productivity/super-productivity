@@ -32,15 +32,18 @@ lets the user browse and restore every backup the device has.
   `skipRecoveryPoint` so the post-snapshot replay cannot move the pointer they
   are about to verify
   (`testing/integration/force-download-recovery-point.integration.spec.ts`).
-- A `QuotaExceededError` on capture prunes the ring to its newest snapshot and
-  retries once, so a full device degrades to a ring of two instead of never
-  applying another full-state op. The newest snapshot is never evicted, and
-  any other error aborts the apply without touching the ring.
+- A `QuotaExceededError` on capture prunes the ring to its newest `REMOTE_IMPORT`
+  / `FORCE_DOWNLOAD` snapshot (or newest snapshot if neither exists) and retries
+  once, so a full device degrades to a ring of two instead of never
+  applying another full-state op. One snapshot always survives, and any other
+  error aborts the apply without touching the ring.
 - The pristine-device skip uses `hasRecoverableData` (tasks incl. archive,
   projects, tags, notes, recurring configs, counters, issue providers, metrics,
   plugin data). Settings alone never trigger a capture.
-- Shortcut: plain FIFO of 3 with no notion of value. Upgrade path if evictions
-  bite: pin the newest `REMOTE_IMPORT` entry.
+- The newest `REMOTE_IMPORT` / `FORCE_DOWNLOAD` entry is never rotated out by
+  restores, so three wrong restores in a row cannot evict the pre-loss snapshot
+  (#10003). Only the next pre-replacement capture replaces it — including a
+  "Use Server Data" done _after_ the wipe, which is the accepted limit.
 - Legacy single-slot rows (state stored under `current`) keep working for Undo
   and are replaced by the pointer on the next capture.
 

@@ -9,46 +9,40 @@ A privacy branch (#7870, #5314) removed user content — task titles, notes,
 calendar event titles — from the app's exportable log history, and disabled
 Chromium's spellchecker so the app stops contacting Google for dictionaries.
 
-The privacy fixes themselves were about 40 lines across five files. They were
-correct in the first commit and survived nine independent reviews, across four
-rounds, untouched.
+The privacy fixes ended up spanning 19 files (117 insertions, 45 deletions).
+They were _not_ right first time: the first commit covered five files, and
+review then found the iCal `SUMMARY` leak, nine more content-bearing sites and
+the Jira issue-picker response. Only one of the six files the first commit
+touched was still untouched at the end.
 
 Around them grew roughly 700 lines of enforcement machinery: a custom ESLint
 rule, a grandfathered exception list, a fail-closed Electron `webPreferences`
 assertion, and a source-scanning test. Every round of review found a way past
 the rule; every finding was closed by adding another branch; each addition was
-individually cheap and jointly unjustifiable.
+individually cheap and jointly unjustifiable. Note the past tense is not
+earned: the rule and its spec together are ~627 lines at the time of writing,
+larger than the pre-cut peak this paragraph describes.
 
 ## What the measurements showed
 
-Attributing every report the rule produced to the code path that produced it
-(measured 2026-09, over the 1,714 `*Log.<method>()` call sites in `src/app`
-outside specs):
+Seven additions to the rule had **zero instances** anywhere in the codebase.
+One (`ChainExpression` unwrapping) was provably dead code: its child node type
+can never be reportable, so unwrapping it could not change any verdict.
 
-| Code path                                                      | Reports produced |
-| -------------------------------------------------------------- | ---------------- |
-| The rule's first version (bare identifier, shorthand property) | 110 of 121 (91%) |
-| Everything added afterwards, in review                         | 11               |
-
-Four of those 11 were false positives. Two independent measurements disagreed
-on how to attribute the rest — the disagreement was over whether one shape
-counted as an "addition" — which is itself the point: a number nobody can
-reproduce is not evidence. The 110/121 split and the zero-instance count below
-were both reproduced independently.
-
-Seven of the additions had **zero instances** anywhere in the codebase. One
-(`ChainExpression` unwrapping) was provably dead code: its child node type can
-never be reportable, so unwrapping it could not change any verdict.
+An earlier version of this section attributed each report to the rule branch
+that produced it, and quoted that split as evidence. Two later measurements
+disagreed with it and with each other. The number is deliberately not restated
+here: coverage attribution measures the rule against itself, and it is the
+wrong metric — see below.
 
 ## What review found afterwards
 
 The measurement above attributes each report to the rule branch that produced
 it. It says nothing about whether a report is a _leak_, and that turned out to
-be the number that mattered: sampling the 121 showed roughly two thirds are
-scalars the naming heuristics could not classify (`dateStr`, `evName`,
-`handlerMap`, `initialSyncDone`, `date1`, `providerRaw`, `zoomFactor`). Framing
-that list as "debt to pay down" would have sent contributors renaming benign
-variables.
+be the number that mattered: roughly half the 121 were scalars the naming
+heuristics could not classify (`dateStr`, `evName`, `initialSyncDone`, `date1`,
+`providerRaw`, `zoomFactor`). Framing that list as "debt to pay down" would
+have sent contributors renaming benign variables.
 
 Two corrections followed. Widening the heuristics for the largest benign
 cluster — timestamps, durations and `err*` strings, each with an observed
@@ -57,26 +51,29 @@ instance — removed 27 reports. Fixing the sites that were _actually_ leaking
 `undo-task-delete.meta-reducer.ts`, a notification event, an issue search
 result, the Jira issue-picker response, and the `task-context-menu-inner`
 copy of the very block this branch had already fixed in `task.component.ts`)
-removed 14 more hits and 10 files. The baseline settled at 80 hits across 40
+removed 14 more hits and 9 files. The baseline settled at 80 hits across 40
 files.
 
 The general lesson: **a precision number is the only one that justifies an
-allowlist.** Coverage attribution measures the rule against itself.
+allowlist.** Coverage attribution measures the rule against itself. Stated
+plainly, because it is the honest state of this branch: no precision number was
+ever produced, so the 40-file allowlist still rests on the rough sample above.
 
-The rule would not have caught the branch's own most severe leak. The iCal
-`SUMMARY` calls that exported private calendar event titles are
-`CallExpression`s — a shape the rule documents as a known gap.
+Two of the three iCal `SUMMARY` sites that exported private calendar event
+titles were `CallExpression`s — a shape the rule documents as a known gap, and
+so invisible to it. The third passed the title as a bare identifier and the
+rule's first version does report it.
 
 ## The three failure modes worth remembering
 
 **Findings are hypotheses, not work orders.** "You missed X" was treated as an
-instruction to close X, without asking whether X occurs in this repo. Three
-regressions came from acting on a reviewer's aside: dropping `use` from a
-boolean-name allowlist (immediate false positive on `useAlarmStyle`, the only
-logged `use*` in `src/app` and a genuine boolean); narrowing a key allowlist to
-quantities only (turned `{ error: scrubbedMessage }`, the canonical safe idiom,
-into a CI-failing error); and removing `??`/`||`/`?:` traversal (opened a
-cheaper bypass than the `!` it had just closed).
+instruction to close X, without asking whether X occurs in this repo. Two
+regressions came from acting on a reviewer's aside: narrowing a key allowlist
+to quantities only (which turned `{ error: errorMessage }`, the canonical safe
+idiom, into a CI-failing error), and removing `??`/`||`/`?:` traversal (which
+opened a cheaper bypass than the `!` it had just closed). A third suggestion —
+dropping `use` from the boolean-name allowlist — was tried, immediately
+false-positived on `useAlarmStyle`, and reverted before it was ever committed.
 
 **Automation can launder a defect into recorded debt.** The grandfathered
 offender list was regenerated from lint output, so a false positive introduced
@@ -124,6 +121,5 @@ registered after it and exits 333 — no app at all, over a dictionary fetch.
 ## Related
 
 - [`feature-review-guide.md`](feature-review-guide.md) — does it earn its place
-- [`sync-and-op-log/contributor-sync-model.md`](sync-and-op-log/contributor-sync-model.md)
-  — the sync section's "start from a reproducible problem" rule, which this
-  generalises
+- [`../AGENTS.md`](../AGENTS.md) — the sync section's "start from a reproducible
+  problem" rule, which this generalises

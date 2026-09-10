@@ -332,8 +332,24 @@ describe('Task Selectors', () => {
       const result = fromSelectors.selectTaskByIdWithSubTaskData(mockState, {
         id: 'task1',
       });
-      expect(result.id).toBe('task1');
-      expect(result.subTasks.length).toBe(2);
+      expect(result?.id).toBe('task1');
+      expect(result?.subTasks.length).toBe(2);
+    });
+
+    // #9946: this used to return a truthy `{ subTasks: [] }` stub with no id,
+    // which defeated every `if (!task)` guard downstream.
+    it('should return undefined for an unknown task id', () => {
+      const result = fromSelectors.selectTaskByIdWithSubTaskData(mockState, {
+        id: 'NO_SUCH_TASK',
+      });
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined for a prototype property name', () => {
+      const result = fromSelectors.selectTaskByIdWithSubTaskData(mockState, {
+        id: 'constructor',
+      });
+      expect(result).toBeUndefined();
     });
   });
 
@@ -1032,8 +1048,8 @@ describe('Task Selectors', () => {
       const result = fromSelectors.selectTaskByIdWithSubTaskData(badState, {
         id: 'task1',
       });
-      expect(result.subTasks.length).toBe(2);
-      expect(result.subTasks.map((st) => st.id)).toEqual(['subtask1', 'subtask2']);
+      expect(result?.subTasks.length).toBe(2);
+      expect(result?.subTasks.map((st) => st.id)).toEqual(['subtask1', 'subtask2']);
       (window.confirm as jasmine.Spy).and.returnValue(true);
     });
   });

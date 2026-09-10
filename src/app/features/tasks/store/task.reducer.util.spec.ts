@@ -214,10 +214,11 @@ describe('task.reducer.util', () => {
   });
 
   describe('deleteTaskHelper', () => {
-    it('should remove state-discovered orphan subtasks when deleting a parent task', () => {
-      // `isShowAlert` latches off after the first devError of the whole Karma run,
-      // and test.ts creates the window.alert spy once and never resets its call
-      // history — so we must reset both before asserting devError fired.
+    // `isShowAlert` latches off after the first devError of the whole Karma run,
+    // and test.ts creates the window.alert spy once and never resets its call
+    // history — so we must reset both before asserting devError fired. The
+    // confirm stub answers "no" so devError alerts instead of throwing.
+    const armDevError = (): void => {
       _resetDevErrorState();
       if (jasmine.isSpy(window.alert)) {
         (window.alert as jasmine.Spy).and.stub();
@@ -230,6 +231,10 @@ describe('task.reducer.util', () => {
       } else {
         spyOn(window, 'confirm').and.returnValue(false);
       }
+    };
+
+    it('should remove state-discovered orphan subtasks when deleting a parent task', () => {
+      armDevError();
 
       const parent = createTask('parent', { subTaskIds: [] });
       const orphanSubTask = createTask('orphan-sub', { parentId: 'parent' });
@@ -240,6 +245,23 @@ describe('task.reducer.util', () => {
       expect(result.entities['parent']).toBeUndefined();
       expect(result.entities['orphan-sub']).toBeUndefined();
       expect(result.currentTaskId).toBeNull();
+      expect(window.alert).toHaveBeenCalled();
+    });
+
+    // #9946: an id-less task (the `{ subTasks: [] }` stub a missing-id lookup
+    // used to return) made `entities[id]?.parentId === taskToDelete.id` match
+    // every top-level task, wiping the whole list.
+    it('should not delete anything when the task to delete has no id', () => {
+      armDevError();
+      const state = createState([
+        createTask('root-1'),
+        createTask('root-2'),
+        createTask('sub-1', { parentId: 'root-1' }),
+      ]);
+
+      const result = deleteTaskHelper(state, { subTasks: [] } as unknown as Task);
+
+      expect(result.ids as string[]).toEqual(['root-1', 'root-2', 'sub-1']);
       expect(window.alert).toHaveBeenCalled();
     });
   });

@@ -87,6 +87,36 @@ export const latestCausalFullStateSql = (
 export type LatestCausalFullStateRow = { server_seq: number; client_id: string };
 
 /**
+ * Fall back from a recent checkpoint to one whose entire prefix has aged out.
+ * Materialize the receipt-time range before MIN: a direct MIN(server_seq) can
+ * walk the whole historical sequence index to find the first recent row.
+ * Literal op types keep the causal partial index usable with generic plans.
+ */
+export const agedPrefixCausalFullStateSql = (
+  userId: number,
+  maxServerSeq: number,
+  cutoffTime: bigint,
+): Prisma.Sql => Prisma.sql`
+  WITH fresh_prefix AS MATERIALIZED (
+    SELECT server_seq FROM operations
+    WHERE user_id = ${userId}
+      AND received_at >= ${cutoffTime}
+      AND server_seq < ${maxServerSeq}
+    ORDER BY received_at
+  )
+  SELECT server_seq FROM operations
+  WHERE user_id = ${userId}
+    AND server_seq > 1
+    AND server_seq <= (SELECT min(server_seq) FROM fresh_prefix)
+    AND (
+      op_type IN ('SYNC_IMPORT', 'BACKUP_IMPORT')
+      OR (op_type = 'REPAIR' AND repair_base_server_seq IS NOT NULL)
+    )
+  ORDER BY server_seq DESC
+  LIMIT 1
+`;
+
+/**
  * True when `opType` carries the user's full state (SYNC_IMPORT, BACKUP_IMPORT,
  * REPAIR). Whether it is a proven causal boundary additionally depends on the
  * REPAIR base cursor; use {@link isCausalFullStateOperation} for that decision.

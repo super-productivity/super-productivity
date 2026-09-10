@@ -191,9 +191,9 @@ export class TaskBulkActionService {
     }
     const focusTargetId = this._getFocusTargetAfterRemoval();
     const { eligible: topLevel, skippedSubtasks: loneSubtasks } = splitParentOnly(tasks);
-    const loneSubtasksWithData = await Promise.all(
-      loneSubtasks.map((t) => this._withSubTasks(t)),
-    );
+    const loneSubtasksWithData = (
+      await Promise.all(loneSubtasks.map((t) => this._withSubTasks(t)))
+    ).filter((t): t is TaskWithSubTasks => !!t);
     await this._runSuppressed(() => {
       loneSubtasksWithData.forEach((t) => this._taskService.remove(t));
       if (topLevel.length) {
@@ -224,7 +224,10 @@ export class TaskBulkActionService {
       }
     }
     const focusTargetId = this._getFocusTargetAfterRemoval();
-    this._taskService.remove(await this._withSubTasks(task));
+    const taskWithSubTasks = await this._withSubTasks(task);
+    if (taskWithSubTasks) {
+      this._taskService.remove(taskWithSubTasks);
+    }
     this._multiSelect.clear();
     await this._flush();
     this._finish(focusTargetId);
@@ -247,21 +250,19 @@ export class TaskBulkActionService {
     try {
       // Plain moves first, then one awaited (possibly confirmed) step per config.
       for (const task of tasks.filter((t) => !t.repeatCfgId)) {
+        const withSubTasks = await this._withSubTasks(task);
         if (
-          await this._moveToProjectService.moveToProject(
-            await this._withSubTasks(task),
-            projectId,
-          )
+          withSubTasks &&
+          (await this._moveToProjectService.moveToProject(withSubTasks, projectId))
         ) {
           movedCount++;
         }
       }
       for (const task of tasks.filter((t) => !!t.repeatCfgId)) {
+        const withSubTasks = await this._withSubTasks(task);
         if (
-          await this._moveToProjectService.moveToProject(
-            await this._withSubTasks(task),
-            projectId,
-          )
+          withSubTasks &&
+          (await this._moveToProjectService.moveToProject(withSubTasks, projectId))
         ) {
           movedCount++;
         }
@@ -604,7 +605,12 @@ export class TaskBulkActionService {
       .filter((t): t is Task => !!t);
   }
 
-  private async _withSubTasks(task: Task): Promise<TaskWithSubTasks> {
+  /**
+   * `undefined` when the task vanished between selection and use (deleted or
+   * synced away in between) — normal, so callers skip it rather than pass it
+   * on: an id-less task reaching a delete wipes every top-level task (#9946).
+   */
+  private async _withSubTasks(task: Task): Promise<TaskWithSubTasks | undefined> {
     return firstValueFrom(
       this._store.select(selectTaskByIdWithSubTaskData, { id: task.id }).pipe(first()),
     );
