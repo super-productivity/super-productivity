@@ -6,7 +6,11 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 
 const ROOT = join(__dirname, '..');
-const readRoot = (...pathParts) => readFileSync(join(ROOT, ...pathParts), 'utf8');
+// `.gitattributes` forces LF only for scss/html/js/ts, so YAML lands in the
+// working tree with CRLF on Windows checkouts. Normalize before parsing so the
+// line-exact section lookup below works on every runner.
+const readRoot = (...pathParts) =>
+  readFileSync(join(ROOT, ...pathParts), 'utf8').replace(/\r\n/g, '\n');
 
 const BUILDER_YAML = readRoot('electron-builder.yaml');
 const RELEASE_WORKFLOW = readRoot('.github', 'workflows', 'build.yml');
