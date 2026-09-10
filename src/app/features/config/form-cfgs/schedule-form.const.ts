@@ -21,7 +21,7 @@ export const SCHEDULE_FORM_CFG: ConfigFormSection<ScheduleConfig> = {
       templateOptions: {
         required: true,
         label: T.GCF.SCHEDULE.L_WORK_START,
-        description: T.GCF.SCHEDULE.WORK_START_END_DESCRIPTION,
+        description: T.GCF.SCHEDULE.WORK_START_DESCRIPTION,
       },
       validators: {
         validTimeString: (c: { value: string | undefined }) => {
@@ -36,7 +36,7 @@ export const SCHEDULE_FORM_CFG: ConfigFormSection<ScheduleConfig> = {
       templateOptions: {
         required: true,
         label: T.GCF.SCHEDULE.L_WORK_END,
-        description: T.GCF.SCHEDULE.WORK_START_END_DESCRIPTION,
+        description: T.GCF.SCHEDULE.WORK_END_DESCRIPTION,
       },
       validators: {
         validTimeString: (c: { value: string | undefined }) => {
