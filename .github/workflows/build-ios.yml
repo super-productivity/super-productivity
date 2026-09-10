@@ -115,6 +115,17 @@ jobs:
           fi
           echo "Bundle ID verification passed!"
 
+      - name: Install share extension provisioning profile
+        env:
+          IOS_SHARE_PROVISION_PROFILE: ${{ secrets.IOS_SHARE_PROVISION_PROFILE }}
+        run: |
+          PROFILE_PATH="$RUNNER_TEMP/ios-share.mobileprovision"
+          echo "$IOS_SHARE_PROVISION_PROFILE" | base64 --decode > "$PROFILE_PATH"
+          security cms -D -i "$PROFILE_PATH" > "$RUNNER_TEMP/ios-share-profile.plist"
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" "$RUNNER_TEMP/ios-share-profile.plist")
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID}.mobileprovision"
+          echo "SHARE_PROVISIONING_PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+
       - name: Get npm cache directory
         id: npm-cache-dir
         run: |
@@ -197,6 +208,8 @@ jobs:
               <dict>
                   <key>com.super-productivity.app</key>
                   <string>${{ env.PROVISIONING_PROFILE_UUID }}</string>
+                  <key>com.super-productivity.app.ShareExtension</key>
+                  <string>${{ env.SHARE_PROVISIONING_PROFILE_UUID }}</string>
               </dict>
           </dict>
           </plist>
