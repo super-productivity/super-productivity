@@ -59,6 +59,7 @@ describe('TaskContextMenuInnerComponent', () => {
     taskService = jasmine.createSpyObj('TaskService', [
       'currentTaskId',
       'moveToProject',
+      'remove',
       'getTasksWithSubTasksByRepeatCfgId$',
       'getArchiveTasksForRepeatCfgId',
     ]);
@@ -233,6 +234,27 @@ describe('TaskContextMenuInnerComponent', () => {
       expect(taskDuplicateService.duplicate).toHaveBeenCalledOnceWith(
         mockTaskWithSubTasks,
       );
+    }));
+  });
+
+  describe('deleteTask()', () => {
+    // #9946: the selector returns undefined for a task that is gone from the
+    // store; removing an id-less stub used to wipe every top-level task.
+    it('removes nothing when the task is gone from the store', fakeAsync(() => {
+      component.task = {
+        ...DEFAULT_TASK,
+        id: 'GONE_ID',
+        projectId: 'P1',
+        subTaskIds: [],
+      };
+      store.overrideSelector(selectTaskByIdWithSubTaskData, undefined);
+
+      void (
+        component as unknown as { _performDelete: () => Promise<void> }
+      )._performDelete();
+      tick(50); // for the delay(50) in _getTaskWithSubtasks
+
+      expect(taskService.remove).not.toHaveBeenCalled();
     }));
   });
 

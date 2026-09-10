@@ -890,6 +890,66 @@ describe('LocalBackupService', () => {
         { dir: '/backups', from: new Date(META.created).toLocaleString() },
       );
     });
+
+    describe('_askForElectronBackupRestore()', () => {
+      type LocalBackupServiceWithElectronRestore = {
+        _askForElectronBackupRestore: () => Promise<void>;
+      };
+      const BACKUP_STR = JSON.stringify({
+        task: { ids: ['a'], entities: {} },
+        project: { ids: [], entities: {} },
+      });
+      const restore = (): Promise<void> =>
+        (
+          service as unknown as LocalBackupServiceWithElectronRestore
+        )._askForElectronBackupRestore();
+
+      beforeEach(() => {
+        translateServiceSpy.instant.and.returnValue('msg');
+        backupServiceSpy.importCompleteBackup.and.resolveTo();
+        (window.confirm as jasmine.Spy).calls.reset();
+      });
+
+      it('imports the newest backup when the user confirms', async () => {
+        spyOn(service, 'checkBackupAvailable').and.resolveTo(META);
+        spyOn(service, 'loadBackupElectron').and.resolveTo(BACKUP_STR);
+        (window.confirm as jasmine.Spy).and.returnValue(true);
+
+        await restore();
+
+        expect(backupServiceSpy.importCompleteBackup).toHaveBeenCalled();
+      });
+
+      it('does not import when the user declines', async () => {
+        spyOn(service, 'checkBackupAvailable').and.resolveTo(META);
+        spyOn(service, 'loadBackupElectron').and.resolveTo(BACKUP_STR);
+        (window.confirm as jasmine.Spy).and.returnValue(false);
+
+        await restore();
+
+        expect(backupServiceSpy.importCompleteBackup).not.toHaveBeenCalled();
+      });
+
+      it('does not prompt when no backup is available', async () => {
+        spyOn(service, 'checkBackupAvailable').and.resolveTo(false);
+        const loadSpy = spyOn(service, 'loadBackupElectron');
+
+        await restore();
+
+        expect(loadSpy).not.toHaveBeenCalled();
+        expect(window.confirm).not.toHaveBeenCalled();
+      });
+
+      it('stays silent when the newest backup cannot be read', async () => {
+        spyOn(service, 'checkBackupAvailable').and.resolveTo(META);
+        spyOn(service, 'loadBackupElectron').and.rejectWith(new Error('EACCES'));
+
+        await restore();
+
+        expect(window.confirm).not.toHaveBeenCalled();
+        expect(backupServiceSpy.importCompleteBackup).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('import backup', () => {

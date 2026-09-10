@@ -393,6 +393,21 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
     expect(taskService.remove).toHaveBeenCalledOnceWith(task);
   }));
 
+  // #9946: the selector returns undefined for a task that is gone from the
+  // store; removing an id-less stub used to wipe every top-level task.
+  it('should not delete anything when the task is gone from the store', fakeAsync(() => {
+    const store = TestBed.inject(MockStore);
+    const taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
+    store.overrideSelector(selectTaskByIdWithSubTaskData, undefined);
+    fixture.componentRef.setInput('event', makeTaskScheduleEvent());
+    fixture.detectChanges();
+
+    component.deleteTask();
+    tick(51);
+
+    expect(taskService.remove).not.toHaveBeenCalled();
+  }));
+
   describe('style', () => {
     it('should render overlapping events in equal-width lanes', () => {
       fixture.componentRef.setInput(

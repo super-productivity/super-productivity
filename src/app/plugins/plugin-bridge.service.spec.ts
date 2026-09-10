@@ -2,6 +2,7 @@
 // Active tests for setCounter fix (issue #5812)
 import { TestBed } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { selectTaskByIdWithSubTaskData } from '../features/tasks/store/task.selectors';
 import { of } from 'rxjs';
 import { PluginBridgeService } from './plugin-bridge.service';
 import { PluginShortcutCfg } from '@super-productivity/plugin-api';
@@ -540,6 +541,58 @@ describe('PluginBridgeService - iframe task selection methods', () => {
 
     await expectAsync(bound.getFocusedTask()).toBeResolvedTo(null);
     expect(taskService.getByIdOnce$).not.toHaveBeenCalled();
+  });
+});
+
+// #9946: deleteTask is the one live entry point that can hand an unknown id to
+// TaskService.remove(). The selector used to answer with a truthy id-less stub,
+// so this guard did nothing and the delete wiped every top-level task.
+describe('PluginBridgeService - deleteTask() with an unknown id', () => {
+  let service: PluginBridgeService;
+  let taskService: jasmine.SpyObj<TaskService>;
+  let store: MockStore;
+
+  beforeEach(() => {
+    taskService = jasmine.createSpyObj<TaskService>('TaskService', ['remove'], {
+      allTasks$: of([]),
+      selectedTask$: of(null),
+    });
+
+    TestBed.configureTestingModule({
+      providers: [
+        PluginBridgeService,
+        provideMockStore(),
+        { provide: SnackService, useValue: {} },
+        { provide: NotifyService, useValue: {} },
+        { provide: MatDialog, useValue: {} },
+        { provide: PluginHooksService, useValue: {} },
+        { provide: TaskService, useValue: taskService },
+        { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
+        { provide: ProjectService, useValue: {} },
+        { provide: TagService, useValue: {} },
+        { provide: PluginUserPersistenceService, useValue: {} },
+        { provide: PluginConfigService, useValue: {} },
+        { provide: TaskArchiveService, useValue: {} },
+        { provide: Router, useValue: {} },
+        { provide: TranslateService, useValue: { instant: () => 'Task not found' } },
+        { provide: SyncWrapperService, useValue: {} },
+        { provide: GlobalThemeService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: {} },
+        { provide: DataInitService, useValue: {} },
+      ],
+    });
+
+    service = TestBed.inject(PluginBridgeService);
+    store = TestBed.inject(MockStore);
+  });
+
+  it('throws and removes nothing', async () => {
+    store.overrideSelector(selectTaskByIdWithSubTaskData, undefined);
+
+    await expectAsync(service.deleteTask('NO_SUCH_TASK')).toBeRejected();
+    expect(taskService.remove).not.toHaveBeenCalled();
   });
 });
 
