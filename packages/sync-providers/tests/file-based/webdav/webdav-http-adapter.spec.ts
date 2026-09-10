@@ -303,6 +303,9 @@ describe('WebDavHttpAdapter', () => {
       const msg = (err as Error).message ?? '';
       expect(msg).not.toContain('user:pass');
       expect(msg).not.toContain('secret');
+      // NetworkUnavailableSPError is documented as safe to render verbatim, so
+      // the user's private WebDAV host must not ride along in the message.
+      expect(msg).not.toContain('dav.example.com');
     });
 
     it('PotentialCorsError carries only the scrubbed URL, never the raw error', async () => {

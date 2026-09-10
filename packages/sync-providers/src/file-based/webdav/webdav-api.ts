@@ -429,6 +429,13 @@ export class WebdavApi {
    * CORS-safelisted request header, so on the web build it forces a preflight
    * that many WebDAV servers reject. The fetch path already passes
    * `cache: 'no-store'` and the native path adds its own no-cache headers.
+   *
+   * Known gap (#9985): only the body is checked, so a response pairing the
+   * correct body with the *previous* version's `ETag` — possible on a stale
+   * connection when both versions happen to be the same length — is accepted
+   * and its stale rev stored, costing a 412 on the next conditional PUT. Not
+   * guarded because no report shows that combination: STRATO's stale headers
+   * came with a stale or truncated body, which the hash check already catches.
    */
   private async _readBackUpload(
     path: string,

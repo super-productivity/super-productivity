@@ -255,14 +255,21 @@ export const createWindow = async ({
     ) {
       removeKeyInAnyCase(requestHeaders, 'User-Agent');
     }
-    // WebDavHttpAdapter marks desktop uploads because renderer fetch strips
-    // Connection. Consume the marker here; it must not reach the server.
+    // WebDavHttpAdapter marks desktop uploads because renderer fetch refuses to
+    // set Connection itself. Consume the marker here; it must not reach the
+    // server. The literal below mirrors that adapter's ELECTRON_UPLOAD_HEADER
+    // and is pinned to it by electron/webdav-connection.test.cjs — the two
+    // build targets cannot import each other.
     const webdavUploadHeader = Object.keys(requestHeaders).find(
       (key) => key.toLowerCase() === 'x-superproductivity-webdav-upload',
     );
     if (webdavUploadHeader) {
       delete requestHeaders[webdavUploadHeader];
       // #9985: avoid verifying on a PUT connection retaining the old file.
+      // HTTP/1.1 only — Connection is a connection-specific header that RFC 9113
+      // forbids over HTTP/2, so any conformant client drops it there. The
+      // WebdavApi verification retry budget is the cross-protocol safety net;
+      // the reported STRATO HiDrive failure was reproduced over HTTP/1.1.
       if (details.method === 'PUT') {
         removeKeyInAnyCase(requestHeaders, 'Connection');
         requestHeaders.Connection = 'close';
