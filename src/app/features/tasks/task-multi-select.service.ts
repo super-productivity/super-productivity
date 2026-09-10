@@ -23,7 +23,7 @@ export class TaskMultiSelectService {
   private readonly _selectedIds = signal<ReadonlySet<string>>(new Set());
   private readonly _anchorId = signal<string | null>(null);
   private readonly _menuOpenRequest = signal<{ x: number; y: number } | null>(null);
-  private readonly _isBulkFeedbackSuppressed = signal(false);
+  private readonly _bulkFeedbackSuppressionDepth = signal(0);
   private readonly _isTouchSelectionMode = signal(false);
   private readonly _pendingRemovals = new Set<string>();
   /**
@@ -40,12 +40,15 @@ export class TaskMultiSelectService {
   /** Set when a selected row asks for the bulk menu (right-click / Q). */
   readonly menuOpenRequest = this._menuOpenRequest.asReadonly();
   /**
-   * True while a bulk action dispatches its per-task loop. Per-task snackbars
-   * and the done sound check this so one summary replaces N notifications.
+   * True while at least one bulk action dispatches its per-task loop. Per-task
+   * snackbars and the done sound check this so one summary replaces N
+   * notifications.
    * Lives here (not on the bulk action service) so effects only depend on
    * this small service.
    */
-  readonly isBulkFeedbackSuppressed = this._isBulkFeedbackSuppressed.asReadonly();
+  readonly isBulkFeedbackSuppressed = computed(
+    () => this._bulkFeedbackSuppressionDepth() > 0,
+  );
   /**
    * Explicit selection mode for touch, where there is no modifier key: rows
    * show a selection ring, a tap toggles, swipe / drag / title edit are
@@ -168,8 +171,18 @@ export class TaskMultiSelectService {
     this._isTouchSelectionMode.set(true);
   }
 
+  /**
+   * Reference-counted, not a plain flag: two bulk actions can overlap (a bulk
+   * action yields a macrotask before it ends, and a held shortcut key fires
+   * again in that window). With a boolean, whichever finished first
+   * un-suppressed while the other was still dispatching, so its remaining
+   * per-task snackbars and the done sound escaped. Calls must be balanced;
+   * the depth floors at 0 so a stray release cannot make it negative.
+   */
   setBulkFeedbackSuppressed(isSuppressed: boolean): void {
-    this._isBulkFeedbackSuppressed.set(isSuppressed);
+    this._bulkFeedbackSuppressionDepth.update((depth) =>
+      isSuppressed ? depth + 1 : Math.max(0, depth - 1),
+    );
   }
 
   /** Ctrl/Cmd+A: select every row of the focused row's list; it becomes the anchor. */

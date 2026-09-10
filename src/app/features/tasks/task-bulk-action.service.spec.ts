@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
+import { computed, Signal, signal } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
 import { of } from 'rxjs';
@@ -33,7 +33,7 @@ describe('TaskBulkActionService', () => {
     selectedIds: typeof selectedIds;
     selectedIdsInDomOrder: jasmine.Spy;
     clear: jasmine.Spy;
-    isBulkFeedbackSuppressed: ReturnType<typeof signal<boolean>>;
+    isBulkFeedbackSuppressed: Signal<boolean>;
     setBulkFeedbackSuppressed: (v: boolean) => void;
     isDestroyedHost: () => boolean;
     findLiveRowEl: () => HTMLElement | null;
@@ -97,7 +97,10 @@ describe('TaskBulkActionService', () => {
     moveToProjectService = {
       moveToProject: jasmine.createSpy('moveToProject').and.resolveTo(true),
     };
-    const suppressed = signal(false);
+    // Mirrors the real service's reference counting, so overlapping bulk
+    // actions behave here as they do in the app.
+    const suppressionDepth = signal(0);
+    const suppressed = computed(() => suppressionDepth() > 0);
     multiSelect = {
       selectedIds,
       selectedIdsInDomOrder: jasmine
@@ -105,7 +108,8 @@ describe('TaskBulkActionService', () => {
         .and.returnValue([]),
       clear: jasmine.createSpy('clear'),
       isBulkFeedbackSuppressed: suppressed,
-      setBulkFeedbackSuppressed: (v: boolean) => suppressed.set(v),
+      setBulkFeedbackSuppressed: (v: boolean) =>
+        suppressionDepth.update((depth) => (v ? depth + 1 : Math.max(0, depth - 1))),
       isDestroyedHost: () => false,
       findLiveRowEl: () => null,
       isTouchSelectionMode: signal(false),
@@ -369,6 +373,18 @@ describe('TaskBulkActionService', () => {
   });
 
   describe('unschedule', () => {
+    it('keeps feedback suppressed until the later overlapping action ends', async () => {
+      select([t('a', { dueDay: '2026-09-10' }), t('b', { dueDay: '2026-09-10' })]);
+      // A held shortcut key fires a second bulk action inside the first's
+      // trailing macrotask yield; the first must not un-suppress under it.
+      const first = service.unschedule();
+      const second = service.unschedule();
+      await first;
+      expect(service.isFeedbackSuppressed()).toBeTrue();
+      await second;
+      expect(service.isFeedbackSuppressed()).toBeFalse();
+    });
+
     it('dispatches per task with the toast skipped and shows one summary', async () => {
       select([t('a', { dueDay: '2026-09-10' }), t('b'), t('c', { dueWithTime: 123 })]);
       await service.unschedule();

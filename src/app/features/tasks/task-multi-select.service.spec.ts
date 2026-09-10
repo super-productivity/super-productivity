@@ -302,6 +302,24 @@ describe('TaskMultiSelectService', () => {
       expect(service.isBulkFeedbackSuppressed()).toBeFalse();
       service.setBulkFeedbackSuppressed(true);
       expect(service.isBulkFeedbackSuppressed()).toBeTrue();
+      service.setBulkFeedbackSuppressed(false);
+      expect(service.isBulkFeedbackSuppressed()).toBeFalse();
+    });
+
+    it('stays suppressed until the last of two overlapping bulk actions ends', () => {
+      service.setBulkFeedbackSuppressed(true);
+      service.setBulkFeedbackSuppressed(true);
+      service.setBulkFeedbackSuppressed(false);
+      // The second action is still dispatching; its per-task snacks must not escape.
+      expect(service.isBulkFeedbackSuppressed()).toBeTrue();
+      service.setBulkFeedbackSuppressed(false);
+      expect(service.isBulkFeedbackSuppressed()).toBeFalse();
+    });
+
+    it('an unbalanced release cannot drive the depth negative', () => {
+      service.setBulkFeedbackSuppressed(false);
+      service.setBulkFeedbackSuppressed(true);
+      expect(service.isBulkFeedbackSuppressed()).toBeTrue();
     });
 
     it('prune keeps only existing ids', () => {
