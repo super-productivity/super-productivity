@@ -1,6 +1,7 @@
 import { fakeAsync, flushMicrotasks, TestBed, tick } from '@angular/core/testing';
 import { BehaviorSubject, of, Subject } from 'rxjs';
 import { LocalBackupService } from './local-backup.service';
+import { LocalBackupMeta } from './local-backup.model';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { StateSnapshotService } from '../../op-log/backup/state-snapshot.service';
 import { BackupService } from '../../op-log/backup/backup.service';
@@ -836,6 +837,57 @@ describe('LocalBackupService', () => {
 
       expect(translateServiceSpy.instant).toHaveBeenCalledWith(
         T.CONFIRM.RESTORE_FILE_BACKUP_ANDROID,
+      );
+    });
+  });
+
+  describe('informed Electron restore prompt (#9945)', () => {
+    type LocalBackupServiceWithElectronPrompt = {
+      _restoreElectronPromptMsg: (
+        backupMeta: LocalBackupMeta,
+        backupData: string,
+      ) => string;
+    };
+    const META: LocalBackupMeta = {
+      name: '2026-09-05_162948.json',
+      path: '/backups/2026-09-05_162948.json',
+      folder: '/backups',
+      created: 1757090988000,
+    };
+    const promptMsg = (backupData: string): string =>
+      (
+        service as unknown as LocalBackupServiceWithElectronPrompt
+      )._restoreElectronPromptMsg(META, backupData);
+
+    it('names the task and project counts when the backup parses', () => {
+      translateServiceSpy.instant.and.returnValue('msg');
+
+      promptMsg(
+        JSON.stringify({
+          task: { ids: ['a', 'b'], entities: {} },
+          project: { ids: ['p1'], entities: {} },
+        }),
+      );
+
+      expect(translateServiceSpy.instant).toHaveBeenCalledWith(
+        T.CONFIRM.RESTORE_FILE_BACKUP_WITH_COUNTS,
+        {
+          dir: '/backups',
+          from: new Date(META.created).toLocaleString(),
+          tasks: 2,
+          projects: 1,
+        },
+      );
+    });
+
+    it('falls back to the count-less prompt for an unparseable backup', () => {
+      translateServiceSpy.instant.and.returnValue('msg');
+
+      promptMsg('{corrupt');
+
+      expect(translateServiceSpy.instant).toHaveBeenCalledWith(
+        T.CONFIRM.RESTORE_FILE_BACKUP,
+        { dir: '/backups', from: new Date(META.created).toLocaleString() },
       );
     });
   });
