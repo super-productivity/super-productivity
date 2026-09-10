@@ -150,6 +150,34 @@ jobs:
           release: false
           args: '--publish never'
 
+      # electron-builder 26.15.0-26.15.6 only 7z-decompressed the snap template's
+      # .tar.7z and shipped the inner .tar verbatim at the snap root, so the
+      # desktop-integration scripts command.sh sources were missing and every
+      # edge revision failed to start (#9992, electron-builder#10002). The build
+      # itself stayed green, so assert on the packaged payload instead.
+      - name: Verify snap template was unpacked
+        run: |
+          set -euo pipefail
+          SNAP_FILE=$(find ./.tmp/app-builds -type f -name '*.snap' -print -quit)
+          if [ -z "$SNAP_FILE" ]; then
+            echo "::error::no .snap produced in .tmp/app-builds"
+            exit 1
+          fi
+          # squashfs-tools is not guaranteed on the runner image, and installing without
+          # refreshing apt lists first fails with "Unable to locate package".
+          if ! command -v unsquashfs > /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends squashfs-tools
+          fi
+          unsquashfs -l "$SNAP_FILE" > "$RUNNER_TEMP/snap-listing.txt"
+          for script in desktop-init.sh desktop-common.sh desktop-gnome-specific.sh; do
+            grep -qx "squashfs-root/$script" "$RUNNER_TEMP/snap-listing.txt" || {
+              echo "::error::$script missing from the snap root -- the template archive was not unpacked"
+              grep -E '^squashfs-root/[^/]+$' "$RUNNER_TEMP/snap-listing.txt"
+              exit 1
+            }
+          done
+
       - name: Normalize snap file name
         if: false == startsWith(github.ref, 'refs/tags/v')
         run: find ./.tmp/app-builds -type f -name '*.snap' -exec sh -c 'x="{}"; mv "$x" ".tmp/app-builds/sp.snap"' \;

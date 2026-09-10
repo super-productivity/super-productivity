@@ -276,7 +276,7 @@
     "detect-it": "^4.0.1",
     "dotenv": "^17.4.2",
     "electron": "43.5.0",
-    "electron-builder": "^26.15.3",
+    "electron-builder": "^26.16.1",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",
