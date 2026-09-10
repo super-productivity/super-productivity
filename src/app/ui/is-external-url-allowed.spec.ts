@@ -13,6 +13,7 @@ describe('isExternalUrlSchemeAllowed', () => {
       'https://example.com/path?q=1#frag',
       'HTTPS://EXAMPLE.COM', // scheme is case-insensitive
       'mailto:someone@example.com',
+      'mid:message-id',
       'file:///home/user/notes.txt',
       '  https://example.com  ', // surrounding whitespace tolerated
       'tel:+123456789',
@@ -47,6 +48,7 @@ describe('isExternalUrlSchemeAllowed', () => {
         'http:',
         'https:',
         'mailto:',
+        'mid:',
         'file:',
         'tel:',
         'sms:',

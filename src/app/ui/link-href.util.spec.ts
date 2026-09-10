@@ -6,6 +6,7 @@ describe('toRenderableHref', () => {
       'http://example.com',
       'https://example.com/path?q=1#frag',
       'mailto:user@example.com',
+      'mid:message-id',
       'tel:+1234567890',
       'file:///home/user/notes.txt',
       'obsidian://open?vault=Notes',
