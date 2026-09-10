@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { firstValueFrom, Subject } from 'rxjs';
 import { OAuthFlowConfig, OAuthTokenResult } from '@super-productivity/plugin-api';
 import { generateCodeChallenge, generateCodeVerifier } from '@sp/sync-providers/pkce';
@@ -25,6 +25,35 @@ const RESERVED_OAUTH_PARAMS = new Set([
   'state',
 ]);
 
+/** The one RFC 6749 §5.2 code that proves the stored grant is dead — re-consent is the only fix. */
+const TERMINAL_OAUTH_ERROR_CODE = 'invalid_grant';
+
+/** Reads the `error` code out of an RFC 6749 §5.2 error body, if there is one. */
+const readOAuthErrorCode = (body: unknown): string | null => {
+  if (typeof body !== 'object' || body === null) {
+    return null;
+  }
+  const code = (body as { error?: unknown }).error;
+  return typeof code === 'string' ? code : null;
+};
+
+/**
+ * True only when the authorization server rejected the stored grant itself, i.e.
+ * Google's `400 {"error":"invalid_grant"}` for a revoked or expired refresh token.
+ *
+ * Deliberately keyed on the error body rather than the status code: a corporate proxy
+ * can answer 4xx on our behalf, and misreading that as a rejection destroys a perfectly
+ * good refresh token. `invalid_client` is not terminal either — it says the app's own
+ * credentials are wrong, which deleting the user's token cannot fix.
+ *
+ * The two outcomes are not symmetric: deleting live credentials is unrecoverable
+ * without full re-consent, while keeping dead ones only costs a stale "connected"
+ * state, so anything unrecognised preserves the token.
+ */
+const isTerminalOAuthRefreshError = (err: unknown): boolean =>
+  err instanceof HttpErrorResponse &&
+  readOAuthErrorCode(err.error) === TERMINAL_OAUTH_ERROR_CODE;
+
 interface PendingRedirect {
   resolve: (code: string) => void;
   reject: (error: Error) => void;
@@ -40,6 +69,9 @@ export class PluginOAuthService {
 
   /** Emits the pluginId when a token refresh fails and in-memory tokens are cleared. */
   tokenInvalidated$ = new Subject<string>();
+
+  /** Emits the pluginId after a successful refresh, so the new token can be re-persisted. */
+  tokensRefreshed$ = new Subject<string>();
 
   async prepareRedirectUri(redirectUri?: string): Promise<string> {
     if (redirectUri) {
@@ -286,11 +318,17 @@ export class PluginOAuthService {
         accessToken: refreshed.accessToken,
         expiresAt: refreshed.expiresAt,
       });
+      this.tokensRefreshed$.next(pluginId);
       return refreshed.accessToken;
     } catch (err) {
       PluginLog.err(`Failed to refresh token for plugin ${pluginId}`, err);
-      this._tokenStore.delete(pluginId);
-      this.tokenInvalidated$.next(pluginId);
+      // Only a real rejection by the authorization server means the refresh token is
+      // dead. Dropping credentials on a transient failure (offline, 5xx, proxy error)
+      // silently deletes them from disk and forces a full re-consent — see #9939.
+      if (isTerminalOAuthRefreshError(err)) {
+        this._tokenStore.delete(pluginId);
+        this.tokenInvalidated$.next(pluginId);
+      }
       return null;
     }
   }

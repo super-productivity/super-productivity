@@ -282,7 +282,9 @@ describe('PluginOAuthService', () => {
       expect(token).toBe('refreshed-token');
     });
 
-    it('should return null if refresh fails', async () => {
+    it('should keep tokens when client authentication fails', async () => {
+      // invalid_client faults the app's own credentials, not the user's grant —
+      // deleting their refresh token cannot fix it and re-consent would fail too.
       const tokenUrl = 'https://oauth2.googleapis.com/token';
       service.storeTokens('plugin-1', {
         accessToken: 'old-token',
@@ -295,11 +297,155 @@ describe('PluginOAuthService', () => {
       const promise = service.getValidToken('plugin-1');
 
       const req = httpMock.expectOne(tokenUrl);
-      req.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+      req.flush({ error: 'invalid_client' }, { status: 401, statusText: 'Unauthorized' });
 
       const token = await promise;
       expect(token).toBeNull();
+      expect(service.hasTokens('plugin-1')).toBe(true);
+    });
+
+    const REFRESH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+
+    const storeNearExpiryTokens = (): void =>
+      service.storeTokens('plugin-1', {
+        accessToken: 'old-token',
+        refreshToken: 'refresh-token',
+        expiresAt: Date.now() + 60000, // within the 5-min refresh buffer
+        tokenUrl: REFRESH_TOKEN_URL,
+        clientId: 'cid',
+      });
+
+    it('should keep tokens when the refresh fails with a network error', async () => {
+      const invalidated: string[] = [];
+      service.tokenInvalidated$.subscribe((id) => invalidated.push(id));
+      storeNearExpiryTokens();
+
+      const promise = service.getValidToken('plugin-1');
+      httpMock
+        .expectOne(REFRESH_TOKEN_URL)
+        .error(new ProgressEvent('error'), { status: 0, statusText: 'Unknown Error' });
+
+      expect(await promise).toBeNull();
+      expect(service.hasTokens('plugin-1')).toBe(true);
+      expect(invalidated).toEqual([]);
+    });
+
+    it('should keep tokens when the refresh fails with a server error', async () => {
+      storeNearExpiryTokens();
+
+      const promise = service.getValidToken('plugin-1');
+      httpMock
+        .expectOne(REFRESH_TOKEN_URL)
+        .flush('Service Unavailable', { status: 503, statusText: 'Service Unavailable' });
+
+      expect(await promise).toBeNull();
+      expect(service.hasTokens('plugin-1')).toBe(true);
+    });
+
+    it('should keep tokens when the refresh is rate limited', async () => {
+      storeNearExpiryTokens();
+
+      const promise = service.getValidToken('plugin-1');
+      httpMock
+        .expectOne(REFRESH_TOKEN_URL)
+        .flush('Too Many Requests', { status: 429, statusText: 'Too Many Requests' });
+
+      expect(await promise).toBeNull();
+      expect(service.hasTokens('plugin-1')).toBe(true);
+    });
+
+    it('should refresh successfully after a transient failure', async () => {
+      storeNearExpiryTokens();
+
+      const failing = service.getValidToken('plugin-1');
+      httpMock
+        .expectOne(REFRESH_TOKEN_URL)
+        .error(new ProgressEvent('error'), { status: 0, statusText: 'Unknown Error' });
+      expect(await failing).toBeNull();
+
+      const retried = service.getValidToken('plugin-1');
+      httpMock
+        .expectOne(REFRESH_TOKEN_URL)
+        .flush({ access_token: 'refreshed-token', expires_in: 3600 });
+
+      expect(await retried).toBe('refreshed-token');
+    });
+
+    it('should clear tokens when the refresh token is rejected', async () => {
+      const invalidated: string[] = [];
+      service.tokenInvalidated$.subscribe((id) => invalidated.push(id));
+      storeNearExpiryTokens();
+
+      const promise = service.getValidToken('plugin-1');
+      httpMock
+        .expectOne(REFRESH_TOKEN_URL)
+        .flush({ error: 'invalid_grant' }, { status: 400, statusText: 'Bad Request' });
+
+      expect(await promise).toBeNull();
       expect(service.hasTokens('plugin-1')).toBe(false);
+      expect(invalidated).toEqual(['plugin-1']);
+    });
+
+    it('should keep tokens when a 4xx carries no OAuth error code', async () => {
+      // A corporate proxy answering on the token endpoint's behalf must not be
+      // mistaken for the authorization server rejecting the grant.
+      storeNearExpiryTokens();
+
+      const promise = service.getValidToken('plugin-1');
+      httpMock
+        .expectOne(REFRESH_TOKEN_URL)
+        .flush('<html>Proxy Authentication Required</html>', {
+          status: 407,
+          statusText: 'Proxy Authentication Required',
+        });
+
+      expect(await promise).toBeNull();
+      expect(service.hasTokens('plugin-1')).toBe(true);
+    });
+
+    it('should keep tokens when a recoverable OAuth error is returned', async () => {
+      storeNearExpiryTokens();
+
+      const promise = service.getValidToken('plugin-1');
+      httpMock.expectOne(REFRESH_TOKEN_URL).flush(
+        { error: 'temporarily_unavailable' },
+        {
+          status: 400,
+          statusText: 'Bad Request',
+        },
+      );
+
+      expect(await promise).toBeNull();
+      expect(service.hasTokens('plugin-1')).toBe(true);
+    });
+
+    it('should keep tokens when the refresh throws a non-HTTP error', async () => {
+      // A stored non-HTTPS tokenUrl makes _postTokenRequest throw before any request
+      // goes out — an unknown failure shape, so credentials must survive it.
+      service.storeTokens('plugin-1', {
+        accessToken: 'old-token',
+        refreshToken: 'refresh-token',
+        expiresAt: Date.now() + 60000,
+        tokenUrl: 'http://insecure.example/token',
+        clientId: 'cid',
+      });
+
+      expect(await service.getValidToken('plugin-1')).toBeNull();
+      expect(service.hasTokens('plugin-1')).toBe(true);
+    });
+
+    it('should announce a successful refresh so the new token can be persisted', async () => {
+      const refreshed: string[] = [];
+      service.tokensRefreshed$.subscribe((id) => refreshed.push(id));
+      storeNearExpiryTokens();
+
+      const promise = service.getValidToken('plugin-1');
+      httpMock
+        .expectOne(REFRESH_TOKEN_URL)
+        .flush({ access_token: 'refreshed-token', expires_in: 3600 });
+
+      await promise;
+      expect(refreshed).toEqual(['plugin-1']);
     });
   });
 
