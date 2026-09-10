@@ -42,8 +42,15 @@ test.describe('Fullscreen note editor toolbar on a phone', () => {
     // Reopen the saved note. #10015 is about editing an existing Project Note,
     // which is DialogFullscreenMarkdownComponent itself — the add-note flow
     // above is the DialogAddNoteComponent subclass, and the two only share this
-    // template by path, so assert against the one the issue actually names.
+    // template by path.
     await page.locator('note', { hasText: noteText }).locator('.markdown-preview').tap();
+
+    // Both components declare `selector: 'dialog-fullscreen-markdown'`, so the
+    // element alone cannot tell them apart. Prefilled content can: the add-note
+    // dialog always opens empty.
+    await expect(page.locator('dialog-fullscreen-markdown textarea')).toHaveValue(
+      noteText,
+    );
 
     const toolbar = page.locator('dialog-fullscreen-markdown .formatting-toolbar');
     await expect(toolbar).toBeVisible();
