@@ -255,6 +255,19 @@ export const createWindow = async ({
     ) {
       removeKeyInAnyCase(requestHeaders, 'User-Agent');
     }
+    // WebDavHttpAdapter marks desktop uploads because renderer fetch strips
+    // Connection. Consume the marker here; it must not reach the server.
+    const webdavUploadHeader = Object.keys(requestHeaders).find(
+      (key) => key.toLowerCase() === 'x-superproductivity-webdav-upload',
+    );
+    if (webdavUploadHeader) {
+      delete requestHeaders[webdavUploadHeader];
+      // #9985: avoid verifying on a PUT connection retaining the old file.
+      if (details.method === 'PUT') {
+        removeKeyInAnyCase(requestHeaders, 'Connection');
+        requestHeaders.Connection = 'close';
+      }
+    }
     applyJiraImageAuth(details.url, requestHeaders, details.resourceType);
     callback({ requestHeaders });
   });

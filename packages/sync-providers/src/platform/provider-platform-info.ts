@@ -20,10 +20,9 @@ export interface ProviderPlatformInfo {
   /**
    * True when running inside the Electron desktop shell.
    *
-   * Optional so hosts that predate it keep today's behaviour: every consumer
-   * treats a missing value as `false`, and the flag only ever *disables* a
-   * heuristic. Electron neutralises CORS app-wide (see `electron/main-window.ts`),
-   * so a failed request there is never a cross-origin problem — #9985.
+   * Optional so hosts that predate it keep today's behaviour: consumers treat
+   * a missing value as `false`. Enables the desktop WebDAV transport handling
+   * coordinated with `electron/main-window.ts` (#9985).
    */
   readonly isElectron?: boolean;
 }

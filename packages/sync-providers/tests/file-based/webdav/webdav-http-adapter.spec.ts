@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NOOP_SYNC_LOGGER, type SyncLogger } from '@sp/sync-core';
 import { WebDavHttpAdapter } from '../../../src/file-based/webdav/webdav-http-adapter';
+import { WebDavHttpHeader } from '../../../src/file-based/webdav/webdav.const';
 import {
   AuthFailSPError,
   HttpNotOkAPIError,
@@ -67,33 +68,67 @@ describe('WebDavHttpAdapter', () => {
       );
     });
 
-    it('sends no-cache request headers on the native path (#7144)', async () => {
-      // Regression guard: iOS URLSession / upstream proxies otherwise serve a
-      // stale sync-data.json, which hides remote changes and defeats the
-      // content-hash conflict check, causing silent overwrite/data loss.
-      const nativeHttp = vi.fn().mockResolvedValue({
-        status: 200,
-        headers: {},
-        data: 'native-body',
-      });
-      const adapter = new WebDavHttpAdapter(
-        makeDeps({ isNativePlatform: true, nativeHttp }),
-      );
+    it.each(['GET', 'PUT'])(
+      'sends no-cache headers without an Electron marker on native %s (#7144)',
+      async (method) => {
+        // Regression guard: iOS URLSession / upstream proxies otherwise serve a
+        // stale sync-data.json, which hides remote changes and defeats the
+        // content-hash conflict check, causing silent overwrite/data loss.
+        const nativeHttp = vi.fn().mockResolvedValue({
+          status: 200,
+          headers: {},
+          data: 'native-body',
+        });
+        const adapter = new WebDavHttpAdapter(
+          makeDeps({ isNativePlatform: true, nativeHttp }),
+        );
 
-      await adapter.request({
-        url: 'https://dav.example.com/sync/file',
-        method: 'GET',
-        headers: { Authorization: 'Basic abc' },
-      });
+        await adapter.request({
+          url: 'https://dav.example.com/sync/file',
+          method,
+          headers: { Authorization: 'Basic abc' },
+        });
 
-      const sentHeaders = (
-        nativeHttp.mock.calls[0][0] as { headers: Record<string, string> }
-      ).headers;
-      expect(sentHeaders['Cache-Control']).toBe('no-cache, no-store');
-      expect(sentHeaders['Pragma']).toBe('no-cache');
-      // Caller headers are preserved.
-      expect(sentHeaders['Authorization']).toBe('Basic abc');
-    });
+        const sentHeaders = (
+          nativeHttp.mock.calls[0][0] as { headers: Record<string, string> }
+        ).headers;
+        expect(sentHeaders['Cache-Control']).toBe('no-cache, no-store');
+        expect(sentHeaders['Pragma']).toBe('no-cache');
+        expect(sentHeaders['X-SuperProductivity-WebDAV-Upload']).toBeUndefined();
+        // Caller headers are preserved.
+        expect(sentHeaders['Authorization']).toBe('Basic abc');
+      },
+    );
+
+    it.each([
+      [true, 'PUT', '1'],
+      [true, 'GET', null],
+      [false, 'PUT', null],
+    ])(
+      'marks only Electron WebDAV PUTs (electron=%s, method=%s)',
+      async (isElectron, method, marker) => {
+        const fetchImpl = vi.fn().mockResolvedValue(okFetchResponse());
+        const adapter = new WebDavHttpAdapter(
+          makeDeps({
+            isElectron,
+            fetchImpl: fetchImpl as unknown as typeof fetch,
+          }),
+        );
+        const headers = {
+          Authorization: 'Basic abc',
+          [WebDavHttpHeader.IF_MATCH]: '"rev"',
+        };
+        await adapter.request({ url: 'https://dav.example.com/file', method, headers });
+        const sent = new Headers((fetchImpl.mock.calls[0][1] as RequestInit).headers);
+        expect(sent.get('X-SuperProductivity-WebDAV-Upload')).toBe(marker);
+        expect(sent.get('Authorization')).toBe('Basic abc');
+        expect(sent.get('If-Match')).toBe('"rev"');
+        expect(headers).toEqual({
+          Authorization: 'Basic abc',
+          [WebDavHttpHeader.IF_MATCH]: '"rev"',
+        });
+      },
+    );
 
     it('uses fetch when not native', async () => {
       const fetchImpl = vi.fn().mockResolvedValue(okFetchResponse(200, 'web-body'));

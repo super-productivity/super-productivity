@@ -43,6 +43,7 @@ export interface WebDavHttpAdapterDeps {
 
 export class WebDavHttpAdapter {
   private static readonly L = 'WebDavHttpAdapter';
+  private static readonly ELECTRON_UPLOAD_HEADER = 'X-SuperProductivity-WebDAV-Upload';
 
   /**
    * Sync correctness (#7144): force revalidation on the NATIVE HTTP path. iOS
@@ -123,9 +124,16 @@ export class WebDavHttpAdapter {
         });
         try {
           const fetchImpl = this._deps.webFetch();
+          // Electron's main-window request hook consumes this marker and sets
+          // Connection: close, which renderer fetch cannot set itself (#9985).
+          // Keep it off the web/native paths and preserve conditional headers.
+          const headers =
+            this._deps.platformInfo.isElectron && options.method === 'PUT'
+              ? { ...options.headers, [WebDavHttpAdapter.ELECTRON_UPLOAD_HEADER]: '1' }
+              : options.headers;
           const fetchResponse = await fetchImpl(options.url, {
             method: options.method,
-            headers: options.headers,
+            headers,
             body: options.body,
             // Disable HTTP caching to ensure we get fresh metadata for sync operations
             cache: 'no-store',
