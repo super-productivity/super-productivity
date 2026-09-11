@@ -40,7 +40,8 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
+  # `gh pr comment` and the label-delete API call both go through the Issues
+  # API (PRs are issues); no `pull-requests: write` is needed.
   issues: write
 
 concurrency:
@@ -212,6 +213,9 @@ jobs:
           ASC_KEY_ID: ${{ secrets.mac_api_key_id }}
           ASC_ISSUER_ID: ${{ secrets.mac_api_key_issuer_id }}
           ASC_KEY_CONTENT: ${{ secrets.mac_api_key }}
+          # Optional repo variable; the Fastfile falls back to "Public Testers"
+          # when unset.
+          TESTFLIGHT_GROUP: ${{ vars.TESTFLIGHT_GROUP }}
         run: |
           set -euo pipefail
           shopt -s nullglob

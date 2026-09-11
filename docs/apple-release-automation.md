@@ -71,7 +71,8 @@ Guards:
 - **Same-repo PRs only** (`head.repo.full_name == github.repository`). The job
   handles Apple signing secrets, so a fork PR must be pushed to a branch in this
   repo first. This is why the workflow uses `pull_request` (the PR head is built)
-  rather than `pull_request_target`.
+  rather than `pull_request_target`. Labeling a fork PR is silently skipped (no
+  comment, label stays on) — remove the label by hand in that case.
 - **Upload only** — it never submits the app for App Store review.
 - The signing setup is shared with `build-ios.yml` through
   `.github/actions/setup-ios-signing`. Both reuse the same App Distribution
@@ -84,8 +85,10 @@ One-time setup (Apple's side cannot be automated):
 2. Merge this workflow to the default branch before labeling older branches —
    for a branch that predates the shared signing action, the workflow falls back
    to the base branch for that action.
-3. In App Store Connect create an External Testing group, enable its Public Link,
-   and let the first build clear Beta App Review. Later builds usually auto-approve.
+3. In App Store Connect create an External Testing group named exactly
+   `Public Testers` (or set the repository variable `TESTFLIGHT_GROUP` to match
+   a different name), enable its Public Link, and let the first build clear
+   Beta App Review. Later builds usually auto-approve.
 4. Add the group's Public Link as the repository variable
    `TESTFLIGHT_PUBLIC_LINK` (a variable, not a secret — it is meant to be shared).
    Without it the PR comment still reports success/failure but prints no link.
