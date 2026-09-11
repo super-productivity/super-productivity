@@ -17,7 +17,7 @@ import {
   placeholder as cmPlaceholder,
 } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { liveMarkdown } from './live-markdown-extension';
+import { liveMarkdown, type ResolveImageSrc } from './live-markdown-extension';
 import { liveMarkdownTheme } from './live-markdown-theme';
 import {
   markdownEditKeymap,
@@ -39,7 +39,7 @@ import { DateService } from '../../../core/date/date.service';
 @Component({
   selector: 'live-markdown-editor',
   template: '<div #hostEl class="cm-host"></div>',
-  styles: [':host, .cm-host { display: block; width: 100%; }'],
+  styleUrls: ['./live-markdown-editor.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LiveMarkdownEditorComponent {
@@ -47,9 +47,16 @@ export class LiveMarkdownEditorComponent {
 
   readonly model = input<string>('');
   readonly placeholderTxt = input<string>('');
+  readonly ariaLabel = input<string>('');
   readonly autoFocus = input<boolean>(false);
   /** Extra key bindings, e.g. the fullscreen dialog's Ctrl+Enter save. */
   readonly extraKeymap = input<readonly KeyBinding[]>([]);
+  /**
+   * Turns a markdown image src into something loadable. Pasted images live
+   * behind `indexeddb://` URLs that only resolve after a lookup; without a
+   * resolver the src is used as-is.
+   */
+  readonly resolveImageSrc = input<ResolveImageSrc | undefined>(undefined);
 
   /** Every document change, for consumers that auto-save while typing. */
   readonly docChanged = output<string>();
@@ -151,8 +158,9 @@ export class LiveMarkdownEditorComponent {
           history(),
           EditorView.lineWrapping,
           cmPlaceholder(this.placeholderTxt()),
-          liveMarkdown(),
+          liveMarkdown(this.resolveImageSrc()),
           liveMarkdownTheme,
+          EditorView.contentAttributes.of(this._contentAttributes()),
           // Ours first: the markdown bindings must win over the defaults for
           // Enter (list continuation) and Tab (indent).
           keymap.of([
@@ -185,6 +193,23 @@ export class LiveMarkdownEditorComponent {
         ],
       }),
     });
+  }
+
+  /**
+   * Notes are prose: CodeMirror disables spellcheck by default (it is built for
+   * code) and the textarea this replaces had it on.
+   */
+  private _contentAttributes(): Record<string, string> {
+    const label = this.ariaLabel() || this.placeholderTxt();
+    return {
+      spellcheck: 'true',
+      autocapitalize: 'sentences',
+      // An empty aria-label is worse than none: it silences the role's own
+      // accessible name.
+      /* eslint-disable-next-line @typescript-eslint/naming-convention --
+         DOM attribute name, not an identifier. */
+      ...(label ? { 'aria-label': label } : {}),
+    };
   }
 
   private _emitIfChanged(): void {

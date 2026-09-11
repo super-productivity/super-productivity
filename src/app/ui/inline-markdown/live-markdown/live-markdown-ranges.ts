@@ -9,15 +9,21 @@ import type { Tree } from '@lezer/common';
  * - `mark` — inline class over a span (bold, italic, code, …)
  * - `line` — class on the whole line; `from` is the line start and `to === from`
  * - `checkbox` — replace a `- [ ] ` prefix with a real, clickable checkbox
+ * - `image` — replace `![alt](src)` with the rendered image
  */
 export interface LiveMarkdownRange {
   readonly from: number;
   readonly to: number;
-  readonly type: 'hide' | 'mark' | 'line' | 'checkbox';
+  readonly type: 'hide' | 'mark' | 'line' | 'checkbox' | 'image';
   readonly cls?: string;
   /** Only set for `checkbox` ranges. */
   readonly isChecked?: boolean;
+  /** Only set for `image` ranges. */
+  readonly image?: { readonly src: string; readonly alt: string };
 }
+
+/** `![alt](src)` — src stops at the first space so a `"title"` is not swallowed. */
+const IMAGE_RE = /^!\[([^\]]*)\]\(\s*([^\s)]+)/;
 
 /**
  * A checklist line's `- [ ] ` / `1. [x] ` prefix. Captures the indent, the list
@@ -141,6 +147,21 @@ export const buildLiveMarkdownRanges = ({
       if (name === 'HorizontalRule') {
         pushLineClass(from, 'cm-md-hr');
         return;
+      }
+
+      // An image renders as the image itself, but reverts to `![alt](src)` on
+      // the caret's line so the source stays editable.
+      if (name === 'Image' && !isRevealed) {
+        const match = IMAGE_RE.exec(doc.sliceString(from, to));
+        if (match) {
+          ranges.push({
+            from,
+            to,
+            type: 'image',
+            image: { alt: match[1], src: match[2] },
+          });
+          return;
+        }
       }
 
       // Tables stay literal pipe source — a real <table> widget would have to

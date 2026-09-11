@@ -8,6 +8,7 @@ import {
   type ViewUpdate,
   WidgetType,
 } from '@codemirror/view';
+import { isPathSafeToOpen } from '../../../../../electron/shared-with-frontend/is-external-url-allowed';
 import { markdownLanguage } from './markdown-language';
 import {
   buildLiveMarkdownRanges,
@@ -77,6 +78,56 @@ const taskCheckboxToggle = EditorView.domEventHandlers({
   },
 });
 
+/**
+ * Resolves a markdown image src to something loadable — the app stores pasted
+ * images behind `indexeddb://` URLs that only mean something after a lookup.
+ * Returning null leaves the image unrendered.
+ */
+export type ResolveImageSrc = (src: string) => Promise<string | null>;
+
+/**
+ * Renders `![alt](src)` inline. Only reached for a src that passed
+ * isPathSafeToOpen: an image src auto-loads on render, so a remote
+ * `file://host/share` or UNC src would make the OS open an SMB connection and
+ * leak the user's NTLM hash just by opening a note (GHSA-hr87-735w-hfq3). The
+ * rendered-markdown path blocks the same shape in marked-options-factory.
+ */
+class ImageWidget extends WidgetType {
+  constructor(
+    readonly src: string,
+    readonly alt: string,
+    private readonly _resolve: ResolveImageSrc | undefined,
+  ) {
+    super();
+  }
+
+  override eq(other: ImageWidget): boolean {
+    return other.src === this.src && other.alt === this.alt;
+  }
+
+  override toDOM(): HTMLElement {
+    const img = document.createElement('img');
+    img.className = 'cm-md-image';
+    img.alt = this.alt;
+    if (this._resolve) {
+      // Async: an indexeddb:// src has to be read back before it can load.
+      void this._resolve(this.src).then((resolved) => {
+        if (resolved) {
+          img.src = resolved;
+        }
+      });
+    } else {
+      img.src = this.src;
+    }
+    return img;
+  }
+
+  /** Purely decorative — clicks belong to the editor, not the image. */
+  override ignoreEvent(): boolean {
+    return true;
+  }
+}
+
 const markFor = (cls: string): Decoration => {
   let dec = markCache.get(cls);
   if (!dec) {
@@ -95,7 +146,10 @@ const lineFor = (cls: string): Decoration => {
   return dec;
 };
 
-const buildDecorations = (view: EditorView): DecorationSet => {
+const buildDecorations = (
+  view: EditorView,
+  resolveImageSrc: ResolveImageSrc | undefined,
+): DecorationSet => {
   const { doc } = view.state;
   const revealedLines = revealedLinesFor(doc, view.state.selection.ranges, view.hasFocus);
   const ranges = buildLiveMarkdownRanges({
@@ -106,7 +160,19 @@ const buildDecorations = (view: EditorView): DecorationSet => {
   // `Decoration.set(_, true)` sorts for us; the tree yields parents before
   // children, which a RangeSetBuilder would reject.
   return Decoration.set(
-    ranges.map(({ from, to, type, cls, isChecked }) => {
+    ranges.flatMap(({ from, to, type, cls, isChecked, image }) => {
+      if (type === 'image') {
+        // An unsafe src is left as plain `![alt](src)` source rather than
+        // rendered or silently dropped, so the user can still see and fix it.
+        if (!image || !isPathSafeToOpen(image.src)) {
+          return [];
+        }
+        return [
+          Decoration.replace({
+            widget: new ImageWidget(image.src, image.alt, resolveImageSrc),
+          }).range(from, to),
+        ];
+      }
       const dec =
         type === 'hide'
           ? HIDE
@@ -117,7 +183,7 @@ const buildDecorations = (view: EditorView): DecorationSet => {
             : type === 'line'
               ? lineFor(cls!)
               : markFor(cls!);
-      return dec.range(from, to);
+      return [dec.range(from, to)];
     }),
     true,
   );
@@ -129,31 +195,32 @@ const buildDecorations = (view: EditorView): DecorationSet => {
  * itself is never rewritten — every decoration is view-only, so the text that
  * round-trips to `task.notes` is byte-for-byte what the user typed.
  */
-const liveMarkdownPlugin = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
+const liveMarkdownPlugin = (resolveImageSrc: ResolveImageSrc | undefined): Extension =>
+  ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
 
-    constructor(view: EditorView) {
-      this.decorations = buildDecorations(view);
-    }
-
-    update(update: ViewUpdate): void {
-      // focusChanged matters: an unfocused editor reveals no lines at all.
-      if (
-        update.docChanged ||
-        update.selectionSet ||
-        update.viewportChanged ||
-        update.focusChanged
-      ) {
-        this.decorations = buildDecorations(update.view);
+      constructor(view: EditorView) {
+        this.decorations = buildDecorations(view, resolveImageSrc);
       }
-    }
-  },
-  { decorations: (plugin) => plugin.decorations },
-);
 
-export const liveMarkdown = (): Extension => [
+      update(update: ViewUpdate): void {
+        // focusChanged matters: an unfocused editor reveals no lines at all.
+        if (
+          update.docChanged ||
+          update.selectionSet ||
+          update.viewportChanged ||
+          update.focusChanged
+        ) {
+          this.decorations = buildDecorations(update.view, resolveImageSrc);
+        }
+      }
+    },
+    { decorations: (plugin) => plugin.decorations },
+  );
+
+export const liveMarkdown = (resolveImageSrc?: ResolveImageSrc): Extension => [
   markdownLanguage,
-  liveMarkdownPlugin,
+  liveMarkdownPlugin(resolveImageSrc),
   taskCheckboxToggle,
 ];

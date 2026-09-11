@@ -83,6 +83,15 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   private _location = inject(Location);
   private _dateService = inject(DateService);
   private _currentPastePlaceholder: string | null = null;
+
+  /**
+   * Pasted images are stored behind `indexeddb://` (or, in Electron, a
+   * `file:///…/clipboard-images/` path) and have to be read back before they can
+   * load. Anything else — a plain http(s) image — is used unchanged.
+   */
+  readonly resolveImageSrc = async (src: string): Promise<string> =>
+    (await this._clipboardImageService.resolveClipboardImageUrl(src)) ?? src;
+
   private _isFullscreenDialogOpen = false;
   private _isDestroyed = false;
   private _resolveGeneration = 0;

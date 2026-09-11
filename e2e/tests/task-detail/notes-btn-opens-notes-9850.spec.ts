@@ -31,11 +31,14 @@ test.describe('Notes icon opens the notes section (#9850)', () => {
     const detailPanel = page.locator(DETAIL_PANEL);
     const noteMarkdown = detailPanel.locator('inline-markdown').first();
     // On desktop a fresh task already shows the notes section expanded, so the
-    // note can be typed through the inline editor; blur persists it.
-    await noteMarkdown.locator('.markdown-parsed').click();
-    const textarea = noteMarkdown.locator('textarea');
-    await textarea.fill(NOTE_TEXT);
-    await textarea.press('Tab');
+    // note can be typed through the inline editor; blur persists it. The editor
+    // is CodeMirror (#9910), so type into it rather than filling a textarea —
+    // and Tab still blurs, because the list-indent binding declines outside a
+    // list and lets the browser's default focus move through.
+    const editor = noteMarkdown.locator('.cm-content');
+    await editor.click();
+    await page.keyboard.type(NOTE_TEXT);
+    await editor.press('Tab');
     await expect(noteMarkdown).toContainText(NOTE_TEXT);
 
     // Close the panel again; on desktop the row button shows the close icon.

@@ -16,6 +16,7 @@
         [model]="modelCopy() ?? ''"
         [placeholderTxt]="placeholderTxt() ?? ''"
         [autoFocus]="isLock() || isPendingLiveFocus()"
+        [resolveImageSrc]="resolveImageSrc"
         (changed)="onLiveEditorChanged($event)"
         (focused)="onLiveEditorFocused()"
         (blurred)="onLiveEditorBlurred()"

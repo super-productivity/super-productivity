@@ -62,6 +62,9 @@ describe('TaskDetailPanelComponent', () => {
       cfg: jasmine.createSpy().and.returnValue({ keyboard: {} }),
       tasks: jasmine.createSpy().and.returnValue({}),
       clipboardImages: jasmine.createSpy().and.returnValue(null),
+      // These specs drive the textarea notes editor; the live markdown editor
+      // (#9910) has its own specs and an e2e.
+      misc: jasmine.createSpy().and.returnValue({ isLiveMarkdownPreview: false }),
     });
     const mockIssueService = jasmine.createSpyObj(
       'IssueService',
@@ -419,7 +422,10 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
         { provide: LayoutService, useValue: { isXs: () => false } },
-        { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
+        {
+          provide: GlobalConfigService,
+          useValue: { cfg: () => ({}), misc: () => ({ isLiveMarkdownPreview: false }) },
+        },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
           provide: TaskRepeatCfgService,
@@ -535,7 +541,10 @@ describe('TaskDetailPanelComponent notes target does not auto-edit', () => {
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
         { provide: LayoutService, useValue: { isXs: () => false } },
-        { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
+        {
+          provide: GlobalConfigService,
+          useValue: { cfg: () => ({}), misc: () => ({ isLiveMarkdownPreview: false }) },
+        },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
           provide: TaskRepeatCfgService,
@@ -634,7 +643,10 @@ describe('TaskDetailPanelComponent add sub-task', () => {
         { provide: LayoutService, useValue: { isXs: () => false } },
         {
           provide: GlobalConfigService,
-          useValue: { cfg: () => ({ keyboard: { taskAddSubTask: 'a' } }) },
+          useValue: {
+            cfg: () => ({ keyboard: { taskAddSubTask: 'a' } }),
+            misc: () => ({ isLiveMarkdownPreview: false }),
+          },
         },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {

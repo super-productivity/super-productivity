@@ -2,6 +2,7 @@ import { Locator, Page } from '@playwright/test';
 import { BasePage } from './base.page';
 import { cssSelectors } from '../constants/selectors';
 import { waitForAngularStability } from '../utils/waits';
+import { fillMarkdownEditor } from '../utils/markdown-editor';
 
 const { MAT_DIALOG, DIALOG_FULLSCREEN_MARKDOWN, SAVE_NOTE_BTN } = cssSelectors;
 
@@ -106,13 +107,10 @@ export class DialogPage extends BasePage {
   }
 
   /**
-   * Fill markdown textarea in fullscreen dialog
+   * Fill the markdown editor in the fullscreen dialog
    */
   async fillMarkdownDialog(content: string): Promise<void> {
-    const dialog = this.page.locator(DIALOG_FULLSCREEN_MARKDOWN);
-    const textarea = dialog.locator('textarea').first();
-    await textarea.waitFor({ state: 'visible', timeout: 5000 });
-    await textarea.fill(content);
+    await fillMarkdownEditor(this.page.locator(DIALOG_FULLSCREEN_MARKDOWN), content);
   }
 
   /**

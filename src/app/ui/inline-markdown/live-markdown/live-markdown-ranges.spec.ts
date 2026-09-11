@@ -172,6 +172,44 @@ describe('tables', () => {
   });
 });
 
+describe('images', () => {
+  const imageRanges = (src: string, revealed: number[] = []): LiveMarkdownRange[] =>
+    build(src, revealed).filter((r) => r.type === 'image');
+
+  it('replaces the whole ![alt](src) with an image range', () => {
+    const src = '![a pic](http://x.com/a.png)';
+    expect(imageRanges(src)).toEqual([
+      {
+        from: 0,
+        to: src.length,
+        type: 'image',
+        image: { alt: 'a pic', src: 'http://x.com/a.png' },
+      },
+    ]);
+  });
+
+  it('handles an empty alt text', () => {
+    expect(imageRanges('![](x.png)')[0].image).toEqual({ alt: '', src: 'x.png' });
+  });
+
+  it('keeps an indexeddb:// src intact for the resolver', () => {
+    const url = 'indexeddb://clipboard-images/abc123.png';
+    expect(imageRanges(`![](${url})`)[0].image?.src).toBe(url);
+  });
+
+  it('does not swallow a title into the src', () => {
+    expect(imageRanges('![a](x.png "the title")')[0].image?.src).toBe('x.png');
+  });
+
+  it('falls back to raw source on the caret line so the src stays editable', () => {
+    expect(imageRanges('![a](x.png)', [1])).toEqual([]);
+  });
+
+  it('leaves a plain link alone', () => {
+    expect(imageRanges('[a](x.png)')).toEqual([]);
+  });
+});
+
 describe('taskMarkerToggleFor', () => {
   it('points at the state character and flips it on', () => {
     const line = '- [ ] buy milk';

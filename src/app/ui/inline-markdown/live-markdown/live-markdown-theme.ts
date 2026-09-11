@@ -82,6 +82,14 @@ export const liveMarkdownTheme = EditorView.theme({
   '.cm-md-table-header': { fontWeight: 'bold' },
   '.cm-md-table-sep': { color: 'var(--text-color-muted, inherit)', opacity: '0.5' },
   '.cm-md-table-delim': { color: 'var(--text-color-muted, inherit)', opacity: '0.6' },
+  // Mirrors `img` in styles/components/markdown.scss: a pasted screenshot must
+  // not blow the note's width open.
+  '.cm-md-image': {
+    maxWidth: '100%',
+    maxHeight: '400px',
+    borderRadius: 'var(--card-border-radius, 4px)',
+    verticalAlign: 'top',
+  },
   '.cm-md-quote': {
     borderLeft: '3px solid var(--extra-border-color, currentColor)',
     paddingLeft: 'var(--s, 8px)',

@@ -119,6 +119,14 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   readonly previewEl = viewChild<MarkdownComponent>('previewEl');
   readonly textareaEl = viewChild<ElementRef>('textareaEl');
   readonly liveEditorEl = viewChild<LiveMarkdownEditorComponent>('liveEditorEl');
+  /**
+   * Pasted images are stored behind `indexeddb://` (or, in Electron, a
+   * `file:///…/clipboard-images/` path) and have to be read back before they can
+   * load. Anything else — a plain http(s) image — is used unchanged.
+   */
+  readonly resolveImageSrc = async (src: string): Promise<string> =>
+    (await this._clipboardImageService.resolveClipboardImageUrl(src)) ?? src;
+
   /** Ctrl/Cmd+Enter saves and closes, matching the textarea's keydownHandler. */
   readonly liveEditorKeymap = [
     {

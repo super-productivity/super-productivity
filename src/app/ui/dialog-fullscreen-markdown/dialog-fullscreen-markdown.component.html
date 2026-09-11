@@ -224,6 +224,7 @@
             [model]="data.content"
             [autoFocus]="true"
             [extraKeymap]="liveEditorKeymap"
+            [resolveImageSrc]="resolveImageSrc"
             (docChanged)="onLiveEditorDocChanged($event)"
             (pasted)="pasteHandler($event)"
           ></live-markdown-editor>
