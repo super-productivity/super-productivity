@@ -1116,33 +1116,42 @@ export class FileBasedSyncAdapterService {
       }
       if (this._isRecoverableCorruption(e)) {
         // Primary sync-data.json is corrupt/empty/unparseable (e.g. interrupted
-        // write). Try to recover from the .bak artifact before failing.
-        const recovered = await this._readBakFile<FileBasedSyncData>(
-          provider,
-          cfg,
-          encryptKey,
-          FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
-          FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
+        // write). Confirm it is REALLY corrupt (#9683) before adopting .bak.
+        const confirmed = await this._reDownloadOrNull(() =>
+          this._downloadSyncFile(provider, cfg, encryptKey),
         );
-        if (recovered) {
-          recoveredFromBackup = true;
-          OpLog.warn(
-            'FileBasedSyncAdapter: Primary sync file unreadable; recovered from backup',
-          );
-          syncData = recovered.data;
-          // Seed the cache with the CORRUPT PRIMARY file's rev (annotated onto the
-          // error in _downloadSyncFile), not the .bak rev. The next conditional
-          // upload then matches sync-data.json and OVERWRITES (heals) it. Using the
-          // .bak rev would mismatch the primary on every upload, leaving sync stuck
-          // in a re-recover/re-fail loop. Fall back to the .bak rev if the primary
-          // rev is unavailable (a later mismatch just re-recovers — no data loss).
-          const primaryRev =
-            (e as { primaryRev?: string } | null)?.primaryRev ?? recovered.rev;
-          rev = primaryRev;
+        if (confirmed) {
+          syncData = confirmed.data;
+          rev = confirmed.rev;
           this._setCachedSyncData(providerKey, syncData, rev);
-          this._notifyRecoveredCorruptPrimaryOnce(providerKey, primaryRev);
         } else {
-          throw e;
+          const recovered = await this._readBakFile<FileBasedSyncData>(
+            provider,
+            cfg,
+            encryptKey,
+            FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+            FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
+          );
+          if (recovered) {
+            recoveredFromBackup = true;
+            OpLog.warn(
+              'FileBasedSyncAdapter: Primary sync file unreadable; recovered from backup',
+            );
+            syncData = recovered.data;
+            // Seed the cache with the CORRUPT PRIMARY file's rev (annotated onto the
+            // error in _downloadSyncFile), not the .bak rev. The next conditional
+            // upload then matches sync-data.json and OVERWRITES (heals) it. Using the
+            // .bak rev would mismatch the primary on every upload, leaving sync stuck
+            // in a re-recover/re-fail loop. Fall back to the .bak rev if the primary
+            // rev is unavailable (a later mismatch just re-recovers — no data loss).
+            const primaryRev =
+              (e as { primaryRev?: string } | null)?.primaryRev ?? recovered.rev;
+            rev = primaryRev;
+            this._setCachedSyncData(providerKey, syncData, rev);
+            this._notifyRecoveredCorruptPrimaryOnce(providerKey, primaryRev);
+          } else {
+            throw e;
+          }
         }
       } else {
         throw e;
@@ -2629,23 +2638,34 @@ export class FileBasedSyncAdapterService {
         // Corrupt/torn sync-ops.json (the hot file, rewritten every op-bearing
         // sync): recover from .bak — same SPAP-8 semantics as the single-file
         // path, including seeding the heal cache with the CORRUPT primary's rev
-        // so this cycle's upload conditionally matches and heals it.
-        const recovered = await this._readBakFile<FileBasedOpsFile>(
-          provider,
-          cfg,
-          encryptKey,
-          FILE_BASED_SYNC_CONSTANTS.OPS_BACKUP_FILE,
-          FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+        // so this cycle's upload conditionally matches and heals it. Gated on a
+        // confirming re-read (#9683) so a one-off mangled response cannot
+        // heal-overwrite an intact primary with a stale .bak.
+        const confirmed = await this._reDownloadOrNull(() =>
+          this._downloadOpsFile(provider, cfg, encryptKey),
         );
-        if (!recovered) throw e;
-        recoveredFromBackup = true;
-        OpLog.warn(
-          'FileBasedSyncAdapter: Primary ops file unreadable; recovered from backup',
-        );
-        opsFile = recovered.data;
-        opsRev = (e as { primaryRev?: string } | null)?.primaryRev ?? recovered.rev;
-        this._setCachedOpsData(providerKey, opsFile, opsRev, true);
-        this._notifyRecoveredCorruptPrimaryOnce(providerKey, opsRev);
+        if (confirmed) {
+          opsFile = confirmed.data;
+          opsRev = confirmed.rev;
+          this._setCachedOpsData(providerKey, opsFile, opsRev);
+        } else {
+          const recovered = await this._readBakFile<FileBasedOpsFile>(
+            provider,
+            cfg,
+            encryptKey,
+            FILE_BASED_SYNC_CONSTANTS.OPS_BACKUP_FILE,
+            FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+          );
+          if (!recovered) throw e;
+          recoveredFromBackup = true;
+          OpLog.warn(
+            'FileBasedSyncAdapter: Primary ops file unreadable; recovered from backup',
+          );
+          opsFile = recovered.data;
+          opsRev = (e as { primaryRev?: string } | null)?.primaryRev ?? recovered.rev;
+          this._setCachedOpsData(providerKey, opsFile, opsRev, true);
+          this._notifyRecoveredCorruptPrimaryOnce(providerKey, opsRev);
+        }
       } else {
         throw e;
       }
@@ -3160,6 +3180,40 @@ export class FileBasedSyncAdapterService {
       (e as { primaryRev?: string }).primaryRev = rev;
     }
     return e;
+  }
+
+  /**
+   * #9683(a): confirming re-read before `.bak` adoption.
+   *
+   * `_isRecoverableCorruption()` classifies the FIRST response, so any transport
+   * that hands back a mangled body as a success (a silently truncated 200 —
+   * prefix intact, tail cut) makes a HEALTHY primary look corrupt. Adopting the
+   * stale `.bak` then heal-overwrites the intact primary at its real rev, losing
+   * one generation of ops. Re-running the FULL download+decode once distinguishes
+   * the two: genuine corruption fails again (→ null, recover as before), a one-off
+   * mangled read succeeds (→ use the good data, no recovery, no heal-overwrite).
+   *
+   * Cost: one extra GET, only on cycles that already failed to decode. Residual:
+   * a deterministic mangler (same corrupt bytes on every read) is indistinguishable
+   * from real corruption — the acknowledged limit of any re-read gate (#9682).
+   */
+  private async _reDownloadOrNull<T>(
+    download: () => Promise<{ data: T; rev: string }>,
+  ): Promise<{ data: T; rev: string } | null> {
+    try {
+      const res = await download();
+      OpLog.warn(
+        'FileBasedSyncAdapter: primary decoded fine on re-read — treating the first ' +
+          'failure as a transient transport fault; skipping .bak recovery.',
+      );
+      return res;
+    } catch (e) {
+      OpLog.normal(
+        'FileBasedSyncAdapter: primary still unreadable on re-read; proceeding with .bak recovery.',
+        e,
+      );
+      return null;
+    }
   }
 
   /**

@@ -2795,6 +2795,75 @@ describe('FileBasedSyncAdapterService', () => {
       expect(mainRevToMatch).not.toContain('bak-rev-heal');
     });
 
+    it('(#9683a) a TRANSIENT decode failure of a HEALTHY primary must not adopt .bak and heal-overwrite it', async () => {
+      // Reproduces the asymmetric-transport shape from #9683 (a) end-to-end,
+      // through the REAL decode path — no injected error:
+      //
+      //   1. The primary on the server is HEALTHY (generation N).
+      //   2. One GET returns a TRUNCATED body as a success (prefix intact, JSON
+      //      tail cut). The prefix stage passes; JSON.parse fails →
+      //      real JsonParseError, which _isRecoverableCorruption() enrolls.
+      //   3. .bak is adopted with NO confirming re-read.
+      //   4. Because the download SUCCEEDED we hold the primary's REAL rev, so
+      //      the follow-up conditional upload MATCHES and overwrites the intact
+      //      primary with generation N-1 content — one generation of ops lost.
+      //
+      // Contrast with the empty-body transport failure (EmptyRemoteBodySPError),
+      // which degrades safely: `downloadFile` itself throws, no primary rev is
+      // annotated, so the heal upload uses the .bak rev and loses the conditional
+      // write instead of clobbering. The rev we hold is what makes this class
+      // destructive.
+      const healthyPrimary = createMockSyncData({
+        syncVersion: 9,
+        recentOps: [compactOp('gen-N-op') as never],
+      });
+      const staleBak = createMockSyncData({
+        syncVersion: 8,
+        recentOps: [compactOp('gen-N-minus-1-op') as never],
+      });
+      const healthyBody = addPrefix(healthyPrimary);
+      // Prefix intact, JSON tail cut — exactly what a silently truncated 200 gives.
+      const truncatedBody = healthyBody.slice(0, healthyBody.length - 30);
+
+      let primaryGets = 0;
+      mockProvider.downloadFile.and.callFake((path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+          return Promise.resolve({
+            dataStr: addPrefix(staleBak),
+            rev: 'stale-bak-rev',
+          });
+        }
+        primaryGets++;
+        // Transient: only the FIRST read is mangled. A confirming re-read (the
+        // fix this test drives) would see the intact file and refuse recovery.
+        return Promise.resolve({
+          dataStr: primaryGets === 1 ? truncatedBody : healthyBody,
+          rev: 'healthy-primary-rev',
+        });
+      });
+
+      const mainUploads: string[] = [];
+      mockProvider.uploadFile.and.callFake((path: string, dataStr: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE) {
+          mainUploads.push(dataStr);
+        }
+        return Promise.resolve({ rev: 'healed-rev' });
+      });
+
+      const result = await adapter.downloadOps(0);
+
+      // The healthy primary's ops must survive a transient mangled read.
+      expect(result.ops.map((o) => o.op.id)).toContain('gen-N-op');
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+
+      // ...and the follow-up upload must not overwrite the intact primary with
+      // the previous generation.
+      const uploaded = parseWithPrefix(mainUploads[mainUploads.length - 1]);
+      expect(uploaded.recentOps.map((o) => o.id)).toContain('gen-N-op');
+    });
+
     it('(c) never issues isForceOverwrite=true on the rev-mismatch retry path', async () => {
       const syncData = createMockSyncData({ syncVersion: 1 });
       mockProvider.downloadFile.and.returnValue(
