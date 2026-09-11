@@ -37,6 +37,10 @@ import {
   DEFAULT_PLAINSPACE_CFG,
   PLAINSPACE_CONFIG_FORM_SECTION,
 } from './providers/plainspace/plainspace.const';
+import {
+  DEFAULT_OUTLOOK_TASKS_CFG,
+  OUTLOOK_TASKS_CONFIG_FORM_SECTION,
+} from './providers/outlook-tasks/outlook-tasks.const';
 
 export const DELAY_BEFORE_ISSUE_POLLING = 8000;
 
@@ -52,6 +56,7 @@ export const CLICKUP_TYPE: MigratedIssueProviderKey = 'CLICKUP';
 export const AZURE_DEVOPS_TYPE: MigratedIssueProviderKey = 'AZURE_DEVOPS';
 export const NEXTCLOUD_DECK_TYPE: BuiltInIssueProviderKey = 'NEXTCLOUD_DECK';
 export const PLAINSPACE_TYPE: BuiltInIssueProviderKey = 'PLAINSPACE';
+export const OUTLOOK_TASKS_TYPE: BuiltInIssueProviderKey = 'OUTLOOK_TASKS';
 
 export const ISSUE_PROVIDER_TYPES: BuiltInIssueProviderKey[] = [
   GITLAB_TYPE,
@@ -62,6 +67,7 @@ export const ISSUE_PROVIDER_TYPES: BuiltInIssueProviderKey[] = [
   REDMINE_TYPE,
   NEXTCLOUD_DECK_TYPE,
   PLAINSPACE_TYPE,
+  OUTLOOK_TASKS_TYPE,
 ] as const;
 
 export const ISSUE_PROVIDER_ICON_MAP = {
@@ -73,6 +79,7 @@ export const ISSUE_PROVIDER_ICON_MAP = {
   [REDMINE_TYPE]: 'redmine',
   [NEXTCLOUD_DECK_TYPE]: 'nextcloud_deck',
   [PLAINSPACE_TYPE]: 'plainspace',
+  [OUTLOOK_TASKS_TYPE]: 'outlook',
 } as const;
 
 export const ISSUE_PROVIDER_HUMANIZED = {
@@ -84,6 +91,7 @@ export const ISSUE_PROVIDER_HUMANIZED = {
   [REDMINE_TYPE]: 'Redmine',
   [NEXTCLOUD_DECK_TYPE]: 'Nextcloud Deck',
   [PLAINSPACE_TYPE]: 'Plainspace',
+  [OUTLOOK_TASKS_TYPE]: 'Outlook Tasks',
 } as const;
 
 export const DEFAULT_ISSUE_PROVIDER_CFGS = {
@@ -95,6 +103,7 @@ export const DEFAULT_ISSUE_PROVIDER_CFGS = {
   [REDMINE_TYPE]: DEFAULT_REDMINE_CFG,
   [NEXTCLOUD_DECK_TYPE]: DEFAULT_NEXTCLOUD_DECK_CFG,
   [PLAINSPACE_TYPE]: DEFAULT_PLAINSPACE_CFG,
+  [OUTLOOK_TASKS_TYPE]: DEFAULT_OUTLOOK_TASKS_CFG,
 } as const;
 
 export const ISSUE_PROVIDER_FORM_CFGS_MAP = {
@@ -106,6 +115,7 @@ export const ISSUE_PROVIDER_FORM_CFGS_MAP = {
   [REDMINE_TYPE]: REDMINE_CONFIG_FORM_SECTION,
   [NEXTCLOUD_DECK_TYPE]: NEXTCLOUD_DECK_CONFIG_FORM_SECTION,
   [PLAINSPACE_TYPE]: PLAINSPACE_CONFIG_FORM_SECTION,
+  [OUTLOOK_TASKS_TYPE]: OUTLOOK_TASKS_CONFIG_FORM_SECTION,
 } as const;
 
 export const DEFAULT_ISSUE_STRS: { ISSUE_STR: string; ISSUES_STR: string } = {
@@ -131,6 +141,7 @@ export const ISSUE_STR_MAP: Record<
   [REDMINE_TYPE]: DEFAULT_ISSUE_STRS,
   [NEXTCLOUD_DECK_TYPE]: DEFAULT_ISSUE_STRS,
   [PLAINSPACE_TYPE]: DEFAULT_ISSUE_STRS,
+  [OUTLOOK_TASKS_TYPE]: DEFAULT_ISSUE_STRS,
 } as const;
 
 export const ISSUE_PROVIDER_DEFAULT_COMMON_CFG: Omit<

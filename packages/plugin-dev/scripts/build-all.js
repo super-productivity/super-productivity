@@ -263,6 +263,32 @@ const plugins = [
     },
   },
   {
+    name: 'outlook-tasks-provider',
+    path: 'outlook-tasks-provider',
+    needsInstall: true,
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/outlook-tasks-provider',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const distPath = path.join(pluginPath, 'dist');
+      if (fs.existsSync(distPath)) {
+        const files = fs.readdirSync(distPath);
+        for (const file of files) {
+          const src = path.join(distPath, file);
+          const dest = path.join(targetDir, file);
+          copyRecursive(src, dest);
+        }
+      }
+      return 'Built and copied to assets';
+    },
+  },
+  {
     name: 'voice-reminder',
     path: 'voice-reminder',
     needsInstall: false,

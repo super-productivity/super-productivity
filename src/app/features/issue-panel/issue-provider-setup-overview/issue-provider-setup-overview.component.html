@@ -117,6 +117,14 @@
     <mat-icon svgIcon="plainspace"></mat-icon>
     <span>Plainspace</span>
   </button>
+  <button
+    class="provider-tile focus-ring"
+    type="button"
+    (click)="openSetupDialog('OUTLOOK_TASKS')"
+  >
+    <mat-icon svgIcon="outlook"></mat-icon>
+    <span>Outlook Tasks</span>
+  </button>
   @for (provider of pluginProviders; track provider.pluginId) {
     <button
       class="provider-tile focus-ring"

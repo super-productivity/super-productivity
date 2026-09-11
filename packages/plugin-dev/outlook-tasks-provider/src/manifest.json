@@ -1,0 +1,26 @@
+{
+  "id": "outlook-tasks-provider",
+  "name": "Outlook Tasks",
+  "version": "1.0.0",
+  "manifestVersion": 1,
+  "minSupVersion": "18.0.0",
+  "author": "Super Productivity",
+  "description": "Syncs Microsoft To Do / Outlook Tasks with Super Productivity via Microsoft Graph API",
+  "type": "issueProvider",
+  "icon": "icon.svg",
+  "iFrame": false,
+  "permissions": ["oauth"],
+  "hooks": [],
+  "i18n": {
+    "languages": ["en"]
+  },
+  "issueProvider": {
+    "pollIntervalMs": 300000,
+    "icon": "outlook",
+    "humanReadableName": "Outlook Tasks",
+    "issueStrings": {
+      "singular": "Task",
+      "plural": "Tasks"
+    }
+  }
+}
