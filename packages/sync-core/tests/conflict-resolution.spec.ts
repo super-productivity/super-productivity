@@ -90,27 +90,14 @@ describe('deepEqual', () => {
   });
 
   /**
-   * DOCUMENTS CURRENT BEHAVIOUR — passes on master.
-   *
-   * `seen` is one WeakSet shared across the whole traversal, never unwound,
-   * and every visited object is added from BOTH sides. A DAG — the same object
-   * referenced twice, which is not a cycle — therefore trips the
-   * circular-reference bail on its second visit, and two structurally
-   * identical values compare unequal.
-   *
-   * Because `seen` is fed from both sides, aliasing on EITHER side is enough:
-   * a value with no sharing at all still compares unequal to an aliased one
-   * of the same shape. See `hasServerMigrationStateData` in
-   * src/app/op-log/sync/server-migration.service.ts, which compares live state
-   * against aliased module-level defaults.
-   *
-   * A true cycle must keep returning false — that contract is pinned by the
-   * spec above, and any fix here has to preserve it.
-   *
-   * When deepEqual is fixed, DELETE this spec rather than flipping its
-   * assertions: the `false` below is the bug, not the contract.
+   * A DAG — the same object referenced twice — is not a cycle. `structuredClone`
+   * preserves aliasing and module-level defaults are routinely aliased (see
+   * `hasServerMigrationStateData`, which compares live state against
+   * `MODEL_CONFIGS[key].defaultData`), so treating one as circular made
+   * structurally identical values compare unequal and minted a full-state
+   * SYNC_IMPORT that had no reason to exist.
    */
-  it('known defect (delete when deepEqual is fixed): returns false for a shared (non-circular) sub-object referenced twice', () => {
+  it('compares a shared (non-circular) sub-object referenced twice as equal', () => {
     const logger = createLogger();
     const shared = { weekDays: { mon: true, sat: false } };
     const a = { first: { cfg: shared }, second: { cfg: shared } };
@@ -120,24 +107,35 @@ describe('deepEqual', () => {
     // shape AND in sharing.
     expect(b.first.cfg).toBe(b.second.cfg);
 
-    expect(deepEqual(a, b, { logger })).toBe(false);
-    // Pin the mechanism, not just the outcome: this is the circular-reference
-    // bail firing on a DAG, not a depth or key-count mismatch.
-    expect(logger.warn).toHaveBeenCalledWith(
-      'sync-core.deepEqual detected circular reference, returning false',
-    );
+    expect(deepEqual(a, b, { logger })).toBe(true);
+    expect(logger.warn).not.toHaveBeenCalled();
 
-    // Breaking the aliasing on both sides makes the same values compare equal.
     const unaliased = {
       first: { cfg: { weekDays: { mon: true, sat: false } } },
       second: { cfg: { weekDays: { mon: true, sat: false } } },
     };
     expect(deepEqual(unaliased, structuredClone(unaliased))).toBe(true);
 
-    // ...but breaking it on ONE side only is not enough, because `seen` takes
-    // objects from both. This is why a JSON-sourced state (no aliasing) still
-    // compares unequal to an aliased default.
-    expect(deepEqual(unaliased, a)).toBe(false);
+    // Aliasing on ONE side only must not change the answer either: a
+    // JSON-sourced state carries no aliasing and is compared against defaults
+    // that do.
+    expect(deepEqual(unaliased, a)).toBe(true);
+    expect(deepEqual(a, unaliased)).toBe(true);
+  });
+
+  it('still detects a cycle reached through a shared sub-object', () => {
+    const logger = createLogger();
+    const makeCyclicViaDag = (): Record<string, unknown> => {
+      const shared: Record<string, unknown> = { value: 1 };
+      const root: Record<string, unknown> = { first: shared, second: shared };
+      shared['root'] = root;
+      return root;
+    };
+
+    expect(deepEqual(makeCyclicViaDag(), makeCyclicViaDag(), { logger })).toBe(false);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'sync-core.deepEqual detected circular reference, returning false',
+    );
   });
 
   it('returns false and logs when max depth is exceeded', () => {

@@ -28,6 +28,18 @@ const RESERVED_OAUTH_PARAMS = new Set([
 /** The one RFC 6749 §5.2 code that proves the stored grant is dead — re-consent is the only fix. */
 const TERMINAL_OAUTH_ERROR_CODE = 'invalid_grant';
 
+/**
+ * Used when a refresh response omits `expires_in` (OPTIONAL per RFC 6749 5.1,
+ * and in practice usually omitted for tokens that do not expire at all).
+ *
+ * Guessing high is not free: refresh is driven only by `expiresAt`, never by a
+ * 401, so a provider that omits `expires_in` AND issues a short-lived token
+ * leaves the plugin with a dead token until this hour elapses. One hour is the
+ * common provider default and no such provider has been reported; if one is,
+ * refresh on 401 rather than shortening this guess for everyone.
+ */
+const DEFAULT_TOKEN_LIFETIME_SEC = 3600;
+
 /** Reads the `error` code out of an RFC 6749 §5.2 error body, if there is one. */
 const readOAuthErrorCode = (body: unknown): string | null => {
   if (typeof body !== 'object' || body === null) {
@@ -211,11 +223,30 @@ export class PluginOAuthService {
     }
 
     const response = await this._postTokenRequest<{
-      access_token: string;
-      expires_in: number;
+      access_token?: unknown;
+      expires_in?: unknown;
+      error?: unknown;
     }>(tokenUrl, params);
 
-    const expiresInMs = response.expires_in * 1000;
+    // A 200 is not proof of a usable token: `expires_in` is OPTIONAL (RFC 6749
+    // 5.1) and some servers report failure in a 200 body (GitHub's
+    // `{"error":"bad_refresh_token"}`). Persisting `undefined` / `NaN` here
+    // makes `restoreTokens` reject the record on the next start and discard the
+    // whole grant — the full re-consent loss of #9939, via the write path.
+    if (typeof response?.access_token !== 'string' || !response.access_token) {
+      throw new Error(
+        `OAuth refresh response carried no access_token${
+          readOAuthErrorCode(response) ? ` (error=${readOAuthErrorCode(response)})` : ''
+        }`,
+      );
+    }
+    // Absent or unusable `expires_in` falls back to a conservative lifetime
+    // rather than NaN: the token still works, it is just refreshed sooner.
+    const expiresInSec =
+      typeof response.expires_in === 'number' && Number.isFinite(response.expires_in)
+        ? response.expires_in
+        : DEFAULT_TOKEN_LIFETIME_SEC;
+    const expiresInMs = expiresInSec * 1000;
     return {
       accessToken: response.access_token,
       expiresAt: Date.now() + expiresInMs,
@@ -313,6 +344,15 @@ export class PluginOAuthService {
         tokens.refreshToken,
         tokens.clientSecret,
       );
+      // The store can have moved on during the network round trip: the user hit
+      // Disconnect (`clearTokens`), or a re-auth stored a fresh grant. Writing
+      // our now-stale record back would undo either — and `tokensRefreshed$`
+      // makes the bridge persist it to IndexedDB, so the resurrection survives
+      // a restart.
+      if (this._tokenStore.get(pluginId) !== tokens) {
+        PluginLog.log(`Discarding refreshed token for plugin ${pluginId}: store changed`);
+        return null;
+      }
       this._tokenStore.set(pluginId, {
         ...tokens,
         accessToken: refreshed.accessToken,

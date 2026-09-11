@@ -42,7 +42,7 @@
     @if (isShowChecklistToggle() && isMarkdownFormattingEnabled()) {
       <!--  -->
       <button
-        [matTooltip]="T.F.TASK.ADDITIONAL_INFO.ADD_CHECKLIST_ITEM | translate"
+        [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.TASK_LIST | translate"
         (mousedown)="$event.preventDefault()"
         (click)="toggleChecklistMode($event)"
         mat-icon-button
@@ -84,7 +84,7 @@
       </mat-menu>
     }
     <button
-      [matTooltip]="'Open in fullscreen'"
+      [matTooltip]="T.F.TASK.ADDITIONAL_INFO.OPEN_IN_FULLSCREEN | translate"
       (mousedown)="$event.preventDefault()"
       (click)="openFullScreen()"
       mat-icon-button

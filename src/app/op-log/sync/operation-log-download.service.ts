@@ -110,7 +110,11 @@ export class OperationLogDownloadService implements OnDestroy {
    */
   async downloadRemoteOps(
     syncProvider: OperationSyncCapable,
-    options?: { forceFromSeq0?: boolean; includeOwnAndAppliedOps?: boolean },
+    options?: {
+      forceFromSeq0?: boolean;
+      isReDeliveryRetry?: boolean;
+      includeOwnAndAppliedOps?: boolean;
+    },
   ): Promise<DownloadResult> {
     if (!syncProvider) {
       OpLog.warn(
@@ -124,7 +128,11 @@ export class OperationLogDownloadService implements OnDestroy {
 
   private async _downloadRemoteOpsViaApi(
     syncProvider: OperationSyncCapable,
-    options?: { forceFromSeq0?: boolean; includeOwnAndAppliedOps?: boolean },
+    options?: {
+      forceFromSeq0?: boolean;
+      isReDeliveryRetry?: boolean;
+      includeOwnAndAppliedOps?: boolean;
+    },
   ): Promise<DownloadResult> {
     const forceFromSeq0 = options?.forceFromSeq0 ?? false;
     OpLog.normal(
@@ -194,8 +202,15 @@ export class OperationLogDownloadService implements OnDestroy {
       // `<=` check is meaningless there — and the reproduced bug is
       // SuperSync-only anyway, so a future provider mode must opt in explicitly
       // rather than inherit a filter nobody reasoned about for it.
+      // Keyed on the CALLER'S intent, never on `forceFromSeq0` alone: that flag
+      // is also set for a provider switch (`SyncWrapperService`), whose whole
+      // point is a fresh state comparison that reaches the conflict gate. A
+      // switch back to a previously-used SuperSync account carries a non-zero
+      // cursor for that provider and a local clock inherited from the other
+      // one, so filtering there would silently drop the server's history, skip
+      // the dialog, and let this device upload its divergent state.
       const isReDeliveryFilterActive =
-        forceFromSeq0 &&
+        !!options?.isReDeliveryRetry &&
         !options?.includeOwnAndAppliedOps &&
         syncProvider.providerMode === 'superSyncOps';
       // Not const: a gap reset below switches to a new server epoch whose seq

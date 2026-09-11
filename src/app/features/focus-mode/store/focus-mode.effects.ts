@@ -874,15 +874,9 @@ export class FocusModeEffects {
           // Throttle to prevent excessive IPC calls (timer ticks every 1s)
           // Use leading + trailing to ensure immediate feedback and final state
           throttleTime(500, undefined, { leading: true, trailing: true }),
-          withLatestFrom(
-            this.store.select(selectors.selectProgress),
-            this.store.select(selectors.selectIsRunning),
-          ),
-          tap(([_action, progress, isRunning]) => {
-            window.ea.setProgressBar({
-              progress: progress / 100,
-              progressBarMode: isRunning ? 'normal' : 'pause',
-            });
+          withLatestFrom(this.store.select(selectors.selectOsProgressBar)),
+          tap(([_action, osProgressBar]) => {
+            window.ea.setProgressBar(osProgressBar);
           }),
         ),
       { dispatch: false },

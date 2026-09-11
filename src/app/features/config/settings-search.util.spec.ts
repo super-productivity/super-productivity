@@ -92,6 +92,12 @@ describe('searchSettings', () => {
     expect(hit.tabIndex).toBe(0);
   });
 
+  it('should find the Appearance group heading, which is not a config-section', () => {
+    const [hit] = searchSettings(TABS, 'appearance', translate);
+    expect(hit.scrollSelector).toBe('.appearance-section');
+    expect(hit.tabIndex).toBe(0);
+  });
+
   it('should return an empty array when nothing matches', () => {
     expect(searchSettings(TABS, 'zzz', translate)).toEqual([]);
   });

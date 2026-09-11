@@ -992,6 +992,10 @@
       "D_DELETE": {
         "MSG": "Are you sure you want to delete the project \"{{title}}\"?"
       },
+      "D_RENAME": {
+        "LABEL": "Project name",
+        "PLACEHOLDER": "Enter project name"
+      },
       "COMPLETE": {
         "COMPLETED_ON": "Completed {{date}}",
         "REOPEN": "Reopen",
@@ -1764,6 +1768,10 @@
       "D_DELETE": {
         "CONFIRM_MSG": "Do you really want to delete the tag \"{{tagName}}\"? It will be removed from all tasks. This cannot be undone!"
       },
+      "D_RENAME": {
+        "LABEL": "Tag name",
+        "PLACEHOLDER": "Enter tag name"
+      },
       "D_EDIT": {
         "ADD": "Add tags for \"{{title}}\"",
         "EDIT": "Edit tags for \"{{title}}\"",
@@ -1837,7 +1845,6 @@
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Links & Files",
-        "ADD_CHECKLIST_ITEM": "Add checklist item",
         "CHECKLIST_ACTIONS": "Checklist actions",
         "CHECK_ALL": "Check all",
         "CLEAR_COMPLETED": "Clear completed",
@@ -1866,7 +1873,8 @@
         "SUB_TASKS": "Subtasks ({{nr}})",
         "SUB_TASKS_EMPTY": "Subtasks",
         "TIME": "Duration",
-        "TITLE_PLACEHOLDER": "Enter a title"
+        "TITLE_PLACEHOLDER": "Enter a title",
+        "OPEN_IN_FULLSCREEN": "Open in fullscreen"
       },
       "B": {
         "ADD_ALL_TO_TODAY": "Add all to today",
@@ -2499,6 +2507,7 @@
     "PASSWORD_STRENGTH_WEAK": "Weak",
     "PROCESSING": "Processing",
     "REMOVE": "Remove",
+    "RENAME": "Rename",
     "SAVE": "Save",
     "SHARE": "Share",
     "SUBMIT": "Submit",
@@ -2770,6 +2779,7 @@
       "ZH_TW": "中文(繁體)"
     },
     "MISC": {
+      "APPEARANCE": "Appearance",
       "DARK_MODE": "Dark Mode",
       "DARK_MODE_ARIA_LABEL": "Dark mode selection",
       "DARK_MODE_DARK": "Dark",
@@ -2802,7 +2812,7 @@
       "START_OF_NEXT_DAY_HINT": "The time when your day starts (Format: HH:mm, e.g. 02:30)",
       "THEME": "Theme",
       "THEME_EXPERIMENTAL": "Theme (experimental)",
-      "THEME_INSTALL_BUTTON": "Install theme…",
+      "THEME_INSTALL_BUTTON": "Install theme",
       "THEME_INSTALL_TOOLTIP": "Upload a CSS theme file. Themes only change visuals — never run code — but they can still affect how your data is rendered. Only install themes from sources you trust.",
       "THEME_INSTALLED_WITH_WARNINGS": "Theme installed. Missing tokens: {{tokens}}",
       "THEME_INVALID_CSS_FILE": "Could not install theme: invalid or unsafe CSS file.",
@@ -2811,7 +2821,7 @@
       "THEME_SELECT_LABEL": "Select Theme",
       "TITLE": "Misc Settings",
       "WALLPAPER": "Wallpaper",
-      "WALLPAPER_BUTTON": "Set wallpaper…",
+      "WALLPAPER_BUTTON": "Set wallpaper",
       "WALLPAPER_DIALOG_TITLE": "Global wallpaper",
       "WALLPAPER_HINT": "Shown on pages without their own background (Planner, Schedule, Boards, Settings…). Tags and projects with their own image override it."
     },
@@ -2845,7 +2855,8 @@
       "LUNCH_BREAK_START_END_DESCRIPTION": "e.g. 13:00",
       "MONTH": "Month",
       "TITLE": "Schedule",
-      "WORK_START_END_DESCRIPTION": "e.g. 17:00"
+      "WORK_END_DESCRIPTION": "e.g. 17:00",
+      "WORK_START_DESCRIPTION": "e.g. 9:00"
     },
     "SHORT_SYNTAX": {
       "HELP": "<p>Here you can control short syntax options when creating a task</p>",

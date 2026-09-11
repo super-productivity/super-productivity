@@ -15,7 +15,7 @@ import { isExternalUrlSchemeAllowed } from '../../../electron/shared-with-fronte
  * both stay out of the match set.
  */
 const BARE_HOST_RE =
-  /^(?:www\.[a-z0-9-]+(?:\.[a-z0-9-]+)*|[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+(?=[/?#]))/i;
+  /^(?:www\.[a-z0-9-]+(?:\.[a-z0-9-]+)*(?=$|[/?#])|[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+(?=[/?#]))/i;
 
 const _withScheme = (href: string): string => {
   if (href.startsWith('//')) {

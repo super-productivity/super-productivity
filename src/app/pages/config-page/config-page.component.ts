@@ -69,12 +69,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { LocalBackupService } from '../../imex/local-backup/local-backup.service';
 import { DialogBackupsListComponent } from '../../imex/local-backup/dialog-backups-list/dialog-backups-list.component';
 import { FormsModule } from '@angular/forms';
-import {
-  MatFormField,
-  MatLabel,
-  MatPrefix,
-  MatSuffix,
-} from '@angular/material/form-field';
+import { MatFormField, MatPrefix, MatSuffix } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
 import { MatAutocomplete, MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { MatOption } from '@angular/material/core';
@@ -108,7 +103,6 @@ const TAB_ANIMATION_DURATION_MS = 200;
     NgTemplateOutlet,
     FormsModule,
     MatFormField,
-    MatLabel,
     MatInput,
     MatPrefix,
     MatSuffix,

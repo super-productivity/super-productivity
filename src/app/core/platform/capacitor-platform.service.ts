@@ -45,6 +45,17 @@ export class CapacitorPlatformService {
   readonly isMobile: boolean;
 
   /**
+   * Whether running in the legacy Android WebView shell (`MODE_ONLINE` in
+   * `LaunchDecider.kt`) rather than the Capacitor activity.
+   *
+   * `isNative` is true here as well, but there is no Capacitor bridge, so every
+   * Capacitor plugin silently falls back to its web implementation. Callers that
+   * would otherwise reach a plugin must branch on this and use the `SUPAndroid`
+   * JS interface — or degrade — instead.
+   */
+  readonly isLegacyAndroidWebView: boolean;
+
+  /**
    * Platform capabilities for conditional feature enabling
    */
   readonly capabilities: PlatformCapabilities;
@@ -54,6 +65,7 @@ export class CapacitorPlatformService {
     // Include legacy Android WebView in isNative check
     this.isNative = Capacitor.isNativePlatform() || this._isAndroidWebView;
     this.isMobile = this.platform === 'ios' || this.platform === 'android';
+    this.isLegacyAndroidWebView = this._isAndroidWebView && !Capacitor.isNativePlatform();
     this.capabilities = this._getCapabilities();
   }
 

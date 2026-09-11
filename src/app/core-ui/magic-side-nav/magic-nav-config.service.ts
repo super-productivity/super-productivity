@@ -356,6 +356,7 @@ export class MagicNavConfigService {
         window.open(item.href, '_blank');
         break;
       case 'action':
+      case 'plugin':
         item.action?.();
         break;
       default:

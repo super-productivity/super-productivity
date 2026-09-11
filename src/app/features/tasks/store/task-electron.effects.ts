@@ -13,7 +13,10 @@ import {
 import { selectCurrentTask, selectTaskEntities } from './task.selectors';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { GlobalConfigService } from '../../config/global-config.service';
-import { selectIsOverlayShown } from '../../focus-mode/store/focus-mode.selectors';
+import {
+  selectIsOverlayShown,
+  selectIsRunning as selectIsFocusTimerRunning,
+} from '../../focus-mode/store/focus-mode.selectors';
 import { TimeTrackingActions } from '../../time-tracking/store/time-tracking.actions';
 import { FocusModeService } from '../../focus-mode/focus-mode.service';
 import {
@@ -184,8 +187,11 @@ export class TaskElectronEffects {
         // collapses 1 IPC/sec into ~1 IPC/3s. Leading+trailing keeps the first
         // tick after start instant and the final value at the end of a window.
         throttleTime(3000, undefined, { leading: true, trailing: true }),
-        withLatestFrom(this._store$.select(selectIsOverlayShown)),
-        // Don't show progress bar when focus session is running
+        withLatestFrom(this._store$.select(selectIsFocusTimerRunning)),
+        // A running focus session owns the OS progress bar (it publishes its own
+        // session progress). Gating on the overlay being *shown* instead left
+        // both writers active whenever the overlay was hidden, so the bar and
+        // the tray icon cycled between the two values every second (#9944, #3131).
         filter(([a, isFocusSessionRunning]) => !isFocusSessionRunning),
         tap(([{ task }]) => {
           const progress = task.timeSpent / task.timeEstimate;

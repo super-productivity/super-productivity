@@ -1446,6 +1446,7 @@ describe('OperationLogDownloadService', () => {
           it('should skip ops behind the cursor whose author counter the local clock covers, but keep their clocks', async () => {
             const result = await service.downloadRemoteOps(mockApiProvider, {
               forceFromSeq0: true,
+              isReDeliveryRetry: true,
             });
 
             expect(result.newOps.map((op) => op.id)).toEqual([
@@ -1460,10 +1461,26 @@ describe('OperationLogDownloadService', () => {
           it('should deliver everything in raw-rebuild mode (includeOwnAndAppliedOps)', async () => {
             const result = await service.downloadRemoteOps(mockApiProvider, {
               forceFromSeq0: true,
+              isReDeliveryRetry: true,
               includeOwnAndAppliedOps: true,
             });
 
             expect(result.newOps.length).toBe(6);
+          });
+
+          it('should deliver everything for a provider switch (forced, but not a re-delivery retry)', async () => {
+            // SyncWrapperService sets forceFromSeq0 on a provider SWITCH so the
+            // conflict gate can compare states. That cursor belongs to the
+            // provider being switched back to and the local clock was advanced
+            // by work done on the other provider, so filtering here would drop
+            // the server's history with no dialog and no merge, and this device
+            // would then upload its divergent state.
+            const result = await service.downloadRemoteOps(mockApiProvider, {
+              forceFromSeq0: true,
+            });
+
+            expect(result.newOps.length).toBe(6);
+            expect(mockOpLogStore.getVectorClock).not.toHaveBeenCalled();
           });
 
           it('should leave the normal (non-forced) download untouched', async () => {
@@ -1478,6 +1495,7 @@ describe('OperationLogDownloadService', () => {
 
             const result = await service.downloadRemoteOps(mockApiProvider, {
               forceFromSeq0: true,
+              isReDeliveryRetry: true,
             });
 
             expect(result.newOps.length).toBe(6);
@@ -1509,6 +1527,7 @@ describe('OperationLogDownloadService', () => {
 
             const result = await service.downloadRemoteOps(mockApiProvider, {
               forceFromSeq0: true,
+              isReDeliveryRetry: true,
             });
 
             expect(mockApiProvider.downloadOps).toHaveBeenCalledTimes(2);

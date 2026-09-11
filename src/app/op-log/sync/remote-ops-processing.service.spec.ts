@@ -2116,6 +2116,45 @@ describe('RemoteOpsProcessingService', () => {
       );
     });
 
+    it('should withdraw the causal repair base before validating a partial apply failure', async () => {
+      // A REPAIR minted after a partial apply failure must NOT claim the whole
+      // downloaded cursor: its snapshot only covers the ops that actually
+      // applied. A falsely causal REPAIR makes receivers drop their concurrent
+      // prefix ops outright (`SyncImportFilterService`, `isPrefixOp` +
+      // `repairBaseServerSeq !== undefined`) instead of replaying them after the
+      // repair boundary, deleting work that was never in the snapshot.
+      const repairSyncContext = TestBed.inject(RepairSyncContextService);
+      const remoteOps: Operation[] = [
+        createFullOp({ id: 'op-1' }),
+        createFullOp({ id: 'op-2' }),
+        createFullOp({ id: 'op-3' }),
+      ];
+
+      opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
+      opLogStoreSpy.markApplied.and.returnValue(Promise.resolve());
+      opLogStoreSpy.markFailed.and.returnValue(Promise.resolve());
+      operationApplierServiceSpy.applyOperations.and.callFake(async (ops, options) => {
+        await options?.onReducersCommitted?.(ops);
+        return {
+          appliedOps: [remoteOps[0]],
+          failedOp: { op: remoteOps[1], error: new Error('Test error') },
+        };
+      });
+
+      let baseDuringValidation: number | undefined = -1;
+      validateStateServiceSpy.validateAndRepairCurrentState.and.callFake(async () => {
+        baseDuringValidation = repairSyncContext.baseServerSeq;
+        return true;
+      });
+
+      await repairSyncContext.runWithBaseServerSeq(150, async () => {
+        await expectAsync(service.applyNonConflictingOps(remoteOps)).toBeRejected();
+      });
+
+      expect(validateStateServiceSpy.validateAndRepairCurrentState).toHaveBeenCalled();
+      expect(baseDuringValidation).toBeUndefined();
+    });
+
     it('should preserve the incomplete-remote error when the deferred drain also fails', async () => {
       const remoteOps: Operation[] = [
         createFullOp({ id: 'op-1' }),

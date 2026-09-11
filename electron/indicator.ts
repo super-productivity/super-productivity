@@ -208,7 +208,12 @@ function initListeners(): void {
   initTaskWidgetSettingsListener();
 
   ipcMain.on(IPC.SET_PROGRESS_BAR, (ev: IpcMainEvent, { progress }) => {
-    if (_isRunning && tray) {
+    // Exactly one writer may own the tray icon per tick, otherwise the menu bar
+    // icon visibly blinks (#9944): the focus overlay owns it while it is shown
+    // (session progress), CURRENT_TASK_UPDATED owns it otherwise (task
+    // progress). Both fired every second before, so the icon flipped between
+    // the progress ring and the plain running icon twice per second.
+    if (_isRunning && tray && _lastIsFocusModeEnabled) {
       setTrayIcon(tray, getRunningIconPath(progress));
     }
 

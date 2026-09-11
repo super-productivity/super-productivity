@@ -385,6 +385,7 @@ describe('markedOptionsFactory', () => {
         const linkRenderer = options.renderer!.link.bind({ parser: mockParser });
         [
           'mailto:a@b.com',
+          'mid:message-id',
           'file:///tmp/x',
           'https://example.com',
           // #8429: app deep-links must stay clickable

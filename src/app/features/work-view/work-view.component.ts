@@ -403,6 +403,12 @@ export class WorkViewComponent implements OnInit, OnDestroy {
 
   private _subs: Subscription = new Subscription();
   private _pendingFocusItemTaskId: string | null = null;
+  /**
+   * Whether the pending reveal came from global search. Kept as a field rather
+   * than a parameter because the `splitTopEl` setter replays the reveal without
+   * going through the query params again. (#5476)
+   */
+  private _isPendingFocusItemFromSearch = false;
   private _pendingFocusItemTimeout?: number;
   private _splitTopElement?: HTMLElement;
   private _switchListAnimationTimeout?: number;
@@ -517,6 +523,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
             splitInputPos: this.splitInputPos,
           });
           this._pendingFocusItemTaskId = params.focusItem;
+          this._isPendingFocusItemFromSearch = params.isFromSearch === 'true';
           this._focusItemInWorkViewWhenReady(params.focusItem);
         } else {
           // Cancel the chain too, not just the marker: a still-running loop
@@ -527,6 +534,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
             this._pendingFocusItemTimeout = undefined;
           }
           this._pendingFocusItemTaskId = null;
+          this._isPendingFocusItemFromSearch = false;
         }
         // NOTE: otherwise this is not triggered right away
         this._cd.detectChanges();
@@ -703,6 +711,12 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       const centeredTop = relativeTop - containerCenterOffset + elementCenterOffset;
       container.scrollTop = Math.max(centeredTop, 0);
       el.focus({ preventScroll: true });
+      // Search only: every other `focusItem` caller (reminder snacks, tracked-task
+      // pill, issue creation, calendar banner) navigates without the user having
+      // asked where the task is. (#5476)
+      if (this._isPendingFocusItemFromSearch) {
+        this.layoutService.highlightTaskBriefly(el);
+      }
       recordSearchNavDebug('workView:focusSuccess', {
         taskId,
         selectedTaskId: this.selectedTaskId(),
@@ -723,6 +737,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
         });
       }, 0);
       this._pendingFocusItemTaskId = null;
+      this._isPendingFocusItemFromSearch = false;
       return;
     }
 
@@ -731,6 +746,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       // setter replay the whole loop on every later context change, re-opening
       // containers the user has since collapsed by hand.
       this._pendingFocusItemTaskId = null;
+      this._isPendingFocusItemFromSearch = false;
       return;
     }
 

@@ -768,30 +768,43 @@ describe('InlineMarkdownComponent', () => {
   });
 
   describe('toggleChecklistMode', () => {
-    it('should preserve unsaved textarea content when adding checklist item while focused', () => {
-      // Arrange
-      const originalValue = 'original text';
-      const unsavedValue = 'unsaved typed content';
-      spyOn(component.changed, 'emit');
-
-      component.model = originalValue;
+    const setupMockTextarea = (
+      text: string,
+      selectionStart = 0,
+      selectionEnd: number = selectionStart,
+    ): any => {
+      component.model = text;
       fixture.detectChanges();
-
       component['isShowEdit'].set(true);
 
       const mockTextareaEl = {
         nativeElement: {
-          value: unsavedValue,
-          selectionStart: unsavedValue.length,
-          focus: () => {},
-          setSelectionRange: () => {},
+          value: text,
+          selectionStart,
+          selectionEnd,
+          focus: jasmine.createSpy('focus'),
+          setSelectionRange: jasmine.createSpy('setSelectionRange'),
           style: {},
+          scrollHeight: 100,
+          offsetHeight: 100,
         },
       };
       spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
       spyOn(component, 'wrapperEl').and.returnValue({
         nativeElement: { style: {} },
       } as any);
+
+      return mockTextareaEl;
+    };
+
+    it('should preserve unsaved textarea content when adding checklist item while focused', () => {
+      // Arrange
+      const originalValue = 'original text';
+      const unsavedValue = 'unsaved typed content';
+      spyOn(component.changed, 'emit');
+
+      const mockTextareaEl = setupMockTextarea(originalValue, unsavedValue.length);
+      mockTextareaEl.nativeElement.value = unsavedValue;
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -810,25 +823,7 @@ describe('InlineMarkdownComponent', () => {
       // Arrange
       const value = 'same text';
       spyOn(component.changed, 'emit');
-
-      component.model = value;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value,
-          selectionStart: value.length,
-          focus: () => {},
-          setSelectionRange: () => {},
-          style: {},
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(value, value.length);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -957,26 +952,7 @@ describe('InlineMarkdownComponent', () => {
     it('should insert checklist item after cursor line, not at end', () => {
       // Arrange
       const text = '- [ ] First\n- [ ] Second\n- [ ] Third';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 5, // middle of "First" line
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 5);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -992,26 +968,7 @@ describe('InlineMarkdownComponent', () => {
     it('should insert between grouped checklists without affecting other groups', () => {
       // Arrange
       const text = '## Group 1\n- [ ] A\n- [ ] B\n\n## Group 2\n- [ ] C';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 17, // on "A" line
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 17);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1027,26 +984,7 @@ describe('InlineMarkdownComponent', () => {
     it('should insert after first line when cursor is at position 0', () => {
       // Arrange
       const text = '- [ ] Only item';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 0,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 0);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1060,26 +998,7 @@ describe('InlineMarkdownComponent', () => {
     it('should append to end when cursor is at end of text', () => {
       // Arrange
       const text = '- [ ] First\n- [ ] Second';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: text.length,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, text.length);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1093,26 +1012,7 @@ describe('InlineMarkdownComponent', () => {
     it('should adjust cursor position after double-newline cleanup', () => {
       // Arrange — text with double newline before a checklist item
       const text = '- [ ] A\n\n- [ ] B';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 16, // on "B" line
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 16);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1129,27 +1029,10 @@ describe('InlineMarkdownComponent', () => {
       // Arrange: simulates blur firing between mousedown and click events,
       // where isShowEdit becomes false but the textarea is still in the DOM
       const text = '- [ ] asdasd\n\n# some text after';
-      component.model = text;
-      fixture.detectChanges();
+      setupMockTextarea(text, 12);
 
       // isShowEdit was set to false by blur, but textarea still exists in DOM
       component['isShowEdit'].set(false);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 12, // end of "asdasd"
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1188,26 +1071,7 @@ describe('InlineMarkdownComponent', () => {
     it('should position cursor at end of inserted item via setSelectionRange', fakeAsync(() => {
       // Arrange
       const text = '- [ ] First\n- [ ] Second';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 5, // middle of "First" line
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      const mockTextareaEl = setupMockTextarea(text, 5);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1224,26 +1088,7 @@ describe('InlineMarkdownComponent', () => {
     it('should handle empty non-default text while editing', () => {
       // Arrange
       const text = '';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 0,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 0);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1257,28 +1102,8 @@ describe('InlineMarkdownComponent', () => {
     it('should handle isDefaultText while editing (textarea exists)', () => {
       // Arrange
       spyOn(component.changed, 'emit');
-
-      component.model = '';
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: '',
-          selectionStart: 0,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
+      setupMockTextarea('', 0);
       spyOn(component, 'isDefaultText').and.returnValue(true);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1294,26 +1119,7 @@ describe('InlineMarkdownComponent', () => {
     it('should insert at cursor on line with trailing newline', () => {
       // Arrange — text ends with a newline, cursor at the empty last line
       const text = '- [ ] Item\n';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 11, // after the trailing newline
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 11);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1327,26 +1133,7 @@ describe('InlineMarkdownComponent', () => {
     it('should set isChecklistMode to true after insertion from textarea', () => {
       // Arrange
       const text = '- [ ] A\n- [ ] B';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: text.length,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, text.length);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1380,27 +1167,7 @@ describe('InlineMarkdownComponent', () => {
     it('should produce exact output when inserting after middle item of checklist', () => {
       // Arrange
       const text = '- [ ] A\n- [ ] B\n- [ ] C';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      // Cursor at end of "B" line (position: "- [ ] A\n- [ ] B".length = 15)
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 15,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 15);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1414,26 +1181,7 @@ describe('InlineMarkdownComponent', () => {
     it('should produce exact output when inserting into text with mixed content', () => {
       // Arrange
       const text = 'Some notes\n- [ ] Task';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: text.length,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, text.length);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1446,26 +1194,8 @@ describe('InlineMarkdownComponent', () => {
 
     it('should update model when textarea value differs from model', () => {
       // Arrange
-      component.model = 'old';
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: 'new',
-          selectionStart: 3,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      const mockTextareaEl = setupMockTextarea('old', 3);
+      mockTextareaEl.nativeElement.value = 'new';
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1479,27 +1209,8 @@ describe('InlineMarkdownComponent', () => {
     it('should not lose new checklist item when model setter is called after emit (Angular CD simulation)', () => {
       // Arrange
       const text = '- [ ] Existing';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
       spyOn(component.changed, 'emit');
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: text.length,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, text.length);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1518,27 +1229,8 @@ describe('InlineMarkdownComponent', () => {
     it('should add exactly one checklist item on each repeated click', () => {
       // Arrange
       const initialText = '- [ ] Item 1';
-      component.model = initialText;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
       spyOn(component.changed, 'emit');
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: initialText,
-          selectionStart: initialText.length,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      const mockTextareaEl = setupMockTextarea(initialText, initialText.length);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1556,6 +1248,7 @@ describe('InlineMarkdownComponent', () => {
       // Click 2 — update textarea mock to reflect current state
       mockTextareaEl.nativeElement.value = component.modelCopy()!;
       mockTextareaEl.nativeElement.selectionStart = component.modelCopy()!.length;
+      mockTextareaEl.nativeElement.selectionEnd = component.modelCopy()!.length;
 
       component.toggleChecklistMode(mockEvent);
       const afterClick2 = component.modelCopy()!;
@@ -1595,27 +1288,8 @@ describe('InlineMarkdownComponent', () => {
     it('should emit changed exactly once from textarea path', () => {
       // Arrange
       const text = '- [ ] Item';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
       spyOn(component.changed, 'emit');
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: text.length,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, text.length);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1649,26 +1323,7 @@ describe('InlineMarkdownComponent', () => {
     it('should insert between newline-separated items when cursor is on the newline', () => {
       // Arrange
       const text = '- [ ] A\n- [ ] B';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 7, // at the '\n' between A and B
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 7);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1678,6 +1333,102 @@ describe('InlineMarkdownComponent', () => {
       // Assert — new item inserted between A and B
       expect(component.modelCopy()).toBe('- [ ] A\n- [ ] \n- [ ] B');
     });
+
+    it('should insert empty checklist item after cursor line when selectionStart equals selectionEnd', fakeAsync(() => {
+      // Arrange — collapsed cursor in the middle of a line
+      const text = '- [ ] First\n- [ ] Second';
+      const mockTextareaEl = setupMockTextarea(text, 5, 5);
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+      tick();
+
+      // Assert — empty item inserted after "First" line, selection placed at end of inserted item
+      expect(component.modelCopy()).toBe('- [ ] First\n- [ ] \n- [ ] Second');
+      expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(18, 18);
+    }));
+
+    it('should convert selected text to checklist items and preserve selection range', fakeAsync(() => {
+      // Arrange
+      const text = 'Folge 1: 17. Dezember\nFolge 2: 24. Dezember\nFolge 3: 31. Dezember';
+      const mockTextareaEl = setupMockTextarea(text, 0, text.length);
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+      tick();
+
+      // Assert — selected text converted to checklist items and selection range preserved
+      const expectedText =
+        '- [ ] Folge 1: 17. Dezember\n- [ ] Folge 2: 24. Dezember\n- [ ] Folge 3: 31. Dezember';
+      expect(component.modelCopy()).toBe(expectedText);
+      expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(
+        0,
+        expectedText.length,
+      );
+    }));
+
+    it('should convert partially selected text to checklist items and preserve selection range', fakeAsync(() => {
+      // Arrange
+      const text = 'Line 1\nLine 2\nLine 3\nLine 4';
+      const mockTextareaEl = setupMockTextarea(text, 7, 20); // "Line 2\nLine 3"
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+      tick();
+
+      // Assert — only selected lines converted and selection range covers converted block
+      const expectedText = 'Line 1\n- [ ] Line 2\n- [ ] Line 3\nLine 4';
+      expect(component.modelCopy()).toBe(expectedText);
+      expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(7, 32);
+    }));
+
+    it('should toggle checklist prefix when selected text already has checklist items and preserve selection range', fakeAsync(() => {
+      // Arrange
+      const text = '- [ ] Item 1\n- [ ] Item 2\n- [ ] Item 3';
+      const mockTextareaEl = setupMockTextarea(text, 0, text.length);
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+      tick();
+
+      // Assert — checklist items toggled to plain bullets and selection preserved
+      const expectedText = '- Item 1\n- Item 2\n- Item 3';
+      expect(component.modelCopy()).toBe(expectedText);
+      expect(component.isChecklistMode()).toBe(false);
+      expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(
+        0,
+        expectedText.length,
+      );
+    }));
+
+    it('should convert selected text when isDefaultText is true and textarea has non-empty text (issue #6015 regression)', fakeAsync(() => {
+      // Arrange — task with no saved notes (isDefaultText = true), user pasted text in textarea without blurring
+      const text = 'Pasted task 1\nPasted task 2';
+      const mockTextareaEl = setupMockTextarea('', 0, text.length);
+      mockTextareaEl.nativeElement.value = text;
+      spyOn(component, 'isDefaultText').and.returnValue(true);
+      spyOn(component, 'defaultText').and.returnValue('');
+      spyOn(component.changed, 'emit');
+
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+      tick();
+
+      // Assert — converts the pasted selection rather than replacing everything with "- [ ] "
+      const expectedText = '- [ ] Pasted task 1\n- [ ] Pasted task 2';
+      expect(component.modelCopy()).toBe(expectedText);
+      expect(component.changed.emit).toHaveBeenCalledWith(expectedText);
+      expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(
+        0,
+        expectedText.length,
+      );
+    }));
   });
 
   describe('model setter race condition', () => {
