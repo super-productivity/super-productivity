@@ -144,6 +144,28 @@ describe('PluginOAuthLifecycleEffects', () => {
     expect(await loadOAuthTokens(legacyKey)).toBeNull();
   });
 
+  it('does not leave an unowned legacy credential after fallback hydration', async () => {
+    hydration.setHydrationFallbackActive(true);
+    await boot(['a']);
+    expect(await loadOAuthTokens(legacyKey)).toBeNull();
+    expect(await loadOAuthTokens(scopedKey('a'))).toBeNull();
+    await run(() =>
+      store.dispatch(
+        IssueProviderActions.loadIssueProviders({
+          issueProviders: [provider('b')],
+        }),
+      ),
+    );
+    hydration.setHydrationFallbackActive(false);
+    // A later clean startup must not be able to bind A's old credential to B.
+    expect(
+      await bridge.migrateLegacyOAuthTokenToScopedKey(GOOGLE_CALENDAR_PLUGIN_ID, 'b'),
+    ).toBeFalse();
+    expect(
+      await bridge.getOAuthToken(GOOGLE_CALENDAR_PLUGIN_ID, undefined, 'b'),
+    ).toBeNull();
+  });
+
   it('does not choose an account when multiple providers existed at boot', async () => {
     await boot(['a', 'b']);
     await run(() =>

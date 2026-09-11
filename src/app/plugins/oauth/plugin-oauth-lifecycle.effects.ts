@@ -63,12 +63,13 @@ export class PluginOAuthLifecycleEffects {
               of(ids!).pipe(
                 waitForSyncWindow(this._hydrationState, 'pluginOAuthLifecycle'),
                 concatMap(async (bootIds) => {
-                  if (this._hydrationState.isHydrationFallbackActive()) {
-                    return;
-                  }
                   const currentIds = await firstValueFrom(this._googleProviderIds$);
                   if (previousIds === null) {
-                    if (bootIds.length === 1 && sameIds(bootIds, currentIds)) {
+                    if (
+                      !this._hydrationState.isHydrationFallbackActive() &&
+                      bootIds.length === 1 &&
+                      sameIds(bootIds, currentIds)
+                    ) {
                       await this._pluginOAuthBridge.migrateLegacyOAuthTokenToScopedKey(
                         GOOGLE_CALENDAR_PLUGIN_ID,
                         bootIds[0],

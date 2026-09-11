@@ -320,6 +320,89 @@ describe('PluginOAuthService', () => {
       expect(token).toBeNull();
       expect(service.hasTokens('plugin-1')).toBe(false);
     });
+
+    it('does not reauthenticate a disconnected account when its refresh completes', async () => {
+      const key = 'google-calendar-provider__oauth__account-a';
+      const tokenUrl = 'https://oauth2.googleapis.com/token';
+      service.storeTokens(key, {
+        accessToken: 'expired',
+        refreshToken: 'refresh-a',
+        expiresAt: 0,
+        tokenUrl,
+        clientId: 'cid',
+      });
+      const pending = service.getValidToken(key);
+      const request = httpMock.expectOne(tokenUrl);
+      service.clearTokens(key);
+      request.flush({ access_token: 'late-access', expires_in: 3600 });
+      expect(await pending).toBeNull();
+      expect(await service.getValidToken(key)).toBeNull();
+    });
+
+    it('keeps the new account refresh separate from a superseded refresh', async () => {
+      const key = 'google-calendar-provider__oauth__account-a';
+      const tokenUrl = 'https://oauth2.googleapis.com/token';
+      service.storeTokens(key, {
+        accessToken: 'expired-a',
+        refreshToken: 'refresh-a',
+        expiresAt: 0,
+        tokenUrl,
+        clientId: 'cid',
+      });
+      const oldPending = service.getValidToken(key);
+      const oldRequest = httpMock.expectOne(tokenUrl);
+      service.clearTokensByPrefix('google-calendar-provider__oauth__');
+      service.storeTokens(key, {
+        accessToken: 'expired-b',
+        refreshToken: 'refresh-b',
+        expiresAt: 0,
+        tokenUrl,
+        clientId: 'cid',
+      });
+      const newPending = service.getValidToken(key);
+      // Flush the old request before another caller joins the new refresh.
+      oldRequest.flush({ access_token: 'wrong-account', expires_in: 3600 });
+      expect(await oldPending).toBeNull();
+      const joinedPending = service.getValidToken(key);
+      const newRequest = httpMock.expectOne(tokenUrl);
+      expect(new URLSearchParams(newRequest.request.body).get('refresh_token')).toBe(
+        'refresh-b',
+      );
+      newRequest.flush({ access_token: 'new-account', expires_in: 3600 });
+      expect(await newPending).toBe('new-account');
+      expect(await joinedPending).toBe('new-account');
+      expect(await service.getValidToken(key)).toBe('new-account');
+    });
+
+    it('does not invalidate a reconnected account when the previous refresh fails', async () => {
+      const key = 'google-calendar-provider__oauth__account-a';
+      const tokenUrl = 'https://oauth2.googleapis.com/token';
+      service.storeTokens(key, {
+        accessToken: 'expired-a',
+        refreshToken: 'refresh-a',
+        expiresAt: 0,
+        tokenUrl,
+        clientId: 'cid',
+      });
+      const pending = service.getValidToken(key);
+      const request = httpMock.expectOne(tokenUrl);
+      service.storeTokens(key, {
+        accessToken: 'connected-b',
+        refreshToken: 'refresh-b',
+        expiresAt: 4102444800000,
+        tokenUrl,
+        clientId: 'cid',
+      });
+      const invalidated: string[] = [];
+      const subscription = service.tokenInvalidated$.subscribe((id) =>
+        invalidated.push(id),
+      );
+      request.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+      expect(await pending).toBeNull();
+      expect(await service.getValidToken(key)).toBe('connected-b');
+      expect(invalidated).toEqual([]);
+      subscription.unsubscribe();
+    });
   });
 
   describe('token serialization', () => {
