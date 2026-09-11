@@ -13,7 +13,7 @@ review.
 | Target                                               | Workflow                                                      | Output                         |
 | ---------------------------------------------------- | ------------------------------------------------------------- | ------------------------------ |
 | iOS App Store                                        | `.github/workflows/build-ios.yml`                             | `.ipa` → App Store Connect     |
-| iOS TestFlight (public testers, label-triggered)     | `.github/workflows/build-ios-testflight.yml`                  | `.ipa` → TestFlight (external) |
+| iOS TestFlight (public testers, label-triggered)     | `build-ios-testflight.yml` → `publish-ios-testflight.yml`     | `.ipa` → TestFlight (external) |
 | Mac App Store                                        | `.github/workflows/build-publish-to-mac-store-on-release.yml` | MAS `.pkg` → App Store Connect |
 | Mac direct download (notarized DMG/zip, auto-update) | `.github/workflows/build.yml` (`mac-bin`)                     | GitHub release asset           |
 
@@ -59,20 +59,30 @@ commit lands before tagging.
 A maintainer who wants outside testers to try a feature branch — e.g. one that
 touches native iOS code and so cannot be exercised in the web preview — applies
 the `ios-test-flight` label to a same-repo PR.
-`.github/workflows/build-ios-testflight.yml` then builds the PR head, exports an
-App Store Connect IPA, and runs the `fastlane ios testflight` lane, which uploads
-to the external TestFlight group (default name `Public Testers`, override with
-the `TESTFLIGHT_GROUP` variable) and submits it for Beta App Review. The workflow
-posts the group's Public Link back on the PR and removes the label so re-applying
-it starts a fresh build.
+`.github/workflows/build-ios-testflight.yml` builds an **unsigned** archive with
+no Apple credentials. After it completes,
+`.github/workflows/publish-ios-testflight.yml` runs trusted code from `master`,
+validates and repacks the archive without credentials, waits for approval through
+the protected `ios-testflight` environment, then signs and runs the
+`fastlane ios testflight` lane. The lane verifies the external group and Public
+Link, uploads the build, and submits it for Beta App Review. The publisher then
+comments on the PR and removes the label so re-applying it starts a fresh build.
 
 ### Security boundary
 
-- **Same-repo PRs only** (`head.repo.full_name == github.repository`). The job
-  handles Apple signing secrets, so a fork PR must be pushed to a branch in this
-  repo first. This is why the workflow uses `pull_request` (the PR head is built)
-  rather than `pull_request_target`. Labeling a fork PR is silently skipped (no
-  comment, label stays on) — remove the label by hand in that case.
+- **Same-repo PRs targeting `master` only.** A fork PR must be pushed to a branch
+  in this repo first. Labeling a fork PR is silently skipped (no comment, label
+  stays on) — remove the label by hand in that case.
+- **PR code never receives Apple credentials.** npm lifecycle scripts, CocoaPods,
+  Xcode project files, and build phases run only in the unsigned build workflow.
+- **Trusted publisher.** `workflow_run` loads the publisher from the default
+  branch. Its credential-free validation job confirms the source workflow path,
+  associated open PR, same-repo head, current head SHA, `master` base, label,
+  metadata, app IDs, versions, build numbers, archive paths, and symlinks. It
+  repacks the validated archive before the credentialed job downloads it.
+- **Human signing gate.** The publish job is bound to the protected
+  `ios-testflight` environment. Approve only when its job name shows the intended
+  PR number and full head SHA. No Apple secret is available before this gate.
 - **Upload only** — it never submits the app for App Store review.
 - The signing setup is shared with `build-ios.yml` through
   `.github/actions/setup-ios-signing`. Both reuse the same App Distribution
@@ -120,15 +130,33 @@ In **App Store Connect → Apps → Super Productivity → TestFlight**:
    value.
 3. Enable the group's **Public Link** and initially use a conservative tester
    limit (for example, 100).
-4. Copy the public join URL. The workflow submits each uploaded build for Beta
-   App Review; Apple reviews the first build and later builds usually approve
-   faster. A successful workflow means upload/distribution setup succeeded, not
-   necessarily that Apple has already approved the build for external testers.
+4. Copy the public join URL. The Fastlane lane fails closed unless exactly one
+   matching external group exists and its Public Link is enabled.
+
+The workflow submits each uploaded build for Beta App Review; Apple reviews the
+first build and later builds usually approve faster. A successful workflow means
+upload/distribution setup succeeded, not necessarily that Apple has already
+approved the build for external testers.
 
 ### One-time GitHub setup
 
+Before merging or applying the label, create the environment under
+**Settings → Environments → New environment**:
+
+1. Name it exactly `ios-testflight`.
+2. Add only trusted release maintainers as **Required reviewers**. If more than
+   one release maintainer is available, enable **Prevent self-review**.
+3. Restrict deployment branches to `master`.
+4. Add the environment secret `IOS_TESTFLIGHT_ENV_READY` with the exact value
+   `configured`. This fail-closed marker is deliberately not a repository secret.
+5. Save and verify the protection rules. A missing environment may be created
+   automatically without protection, but without this environment-only marker
+   the publish job stops before checkout or signing.
+
 Under **Settings → Secrets and variables → Actions**, verify the existing iOS
-release secrets and add the extension profile:
+release secrets and add the extension profile. They may remain repository
+secrets because only the protected publisher job references them; the unsigned
+PR workflow references none:
 
 | Secret                        | Purpose                                                     |
 | ----------------------------- | ----------------------------------------------------------- |
@@ -143,10 +171,9 @@ release secrets and add the extension profile:
 | `UNSPLASH_KEY`                | Existing frontend build-time Unsplash key                   |
 | `UNSPLASH_CLIENT_ID`          | Existing frontend build-time Unsplash client ID             |
 
-These names currently refer to repository secrets, like `build-ios.yml`. If the
-Apple credentials move to an environment, both iOS workflows must declare that
-environment before they can read them. The API key needs the **App Manager** role
-to manage external TestFlight distribution and Beta App Review.
+The API key needs the **App Manager** role to manage external TestFlight
+distribution and Beta App Review. The automatic `GITHUB_TOKEN` is not a setup
+secret; jobs receive only the explicit read/write permissions in their workflow.
 
 Create these repository variables:
 
@@ -160,14 +187,23 @@ the description “Build and distribute this PR through public iOS TestFlight.�
 
 ### Activate and operate
 
-1. Merge this workflow to the default branch before labeling older branches —
-   for a branch that predates the shared signing action or TestFlight Fastlane
-   lane, the workflow falls back to the base branch for those CI helpers.
-2. Apply `ios-test-flight` to the same-repo PR to build its current head commit.
-3. Follow the Actions run and then the build under App Store Connect → TestFlight.
-4. After upload, the workflow comments with the stable public link and removes
-   the label. Remove and re-apply the label after new commits to request another
-   build.
+1. Create and protect the `ios-testflight` environment before merging the
+   workflows.
+2. Merge the workflows to `master`. Old feature branches do not need to contain
+   them: the unsigned builder restores the version helper from its exact trusted
+   base commit, and the publisher always runs from the default branch.
+3. Apply `ios-test-flight` to a same-repo PR targeting `master`.
+4. Wait for **iOS TestFlight Build on Label** to produce the unsigned archive.
+5. Open **iOS TestFlight Publish**. Its validation job recomputes the expected
+   marketing version from the greater of the trusted base package version and
+   stable tags merged into that base, then increments the patch. The build number
+   is the source workflow's `run_number.run_attempt` and is checked in both app
+   targets.
+6. Review the PR and exact SHA shown in the protected publish job name, then
+   approve the `ios-testflight` deployment.
+7. Follow the build under App Store Connect → TestFlight. After upload, the
+   publisher comments with the stable public link and removes the label. Remove
+   and re-apply the label after new commits to request another build.
 
 Testers only need an iPhone or iPad, the TestFlight app, and the public link.
 They do not need a Mac, Xcode, or an Apple Developer account.
@@ -180,6 +216,12 @@ They do not need a Mac, Xcode, or an Apple Developer account.
   TestFlight slot.
 - If export reports a missing or mismatched profile, check both App IDs, their
   App Group assignment, the profile certificate, and the two profile secrets.
+- If validation reports a stale head or base, remove/re-apply the label to build
+  the current PR state. Validation intentionally refuses to sign an archive after
+  the PR head changes.
+- Source build failures, validation failures, and normal publish failures are
+  reported on the PR and remove the label. A hard cancellation of the publisher
+  can prevent reporting; remove the label manually in that case.
 - To stop distributing a bad build, use **Expire Build** in App Store Connect.
 - To disable public PR builds, remove the `ios-test-flight` label and disable or
   remove `.github/workflows/build-ios-testflight.yml`. Installed builds are not

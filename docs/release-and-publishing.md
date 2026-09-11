@@ -75,8 +75,9 @@ Apple's detailed submission behavior, API-key requirements, and recovery cases
 are in [Apple release automation](apple-release-automation.md).
 
 Feature-branch builds for outside testers are separate from releases: applying
-the `ios-test-flight` label to a same-repo PR uploads it to the public TestFlight
-group (`build-ios-testflight.yml`). See
+the `ios-test-flight` label to a same-repo PR creates an unsigned archive; a
+protected publisher then signs and uploads it to the public TestFlight group
+(`build-ios-testflight.yml` → `publish-ios-testflight.yml`). See
 [Apple release automation](apple-release-automation.md#public-testflight-builds-label-triggered).
 
 The desktop workflow's draft/prerelease flag detection does not use exactly the

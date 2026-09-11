@@ -1,95 +1,84 @@
-name: iOS TestFlight on Label
+name: iOS TestFlight Build on Label
 
-# A maintainer applies the `ios-test-flight` label to a same-repo PR and this
-# builds the PR head and uploads it to the external TestFlight group whose Public
-# Link is posted back on the PR. This lets people without a Mac/Xcode try a
-# feature branch on a real device.
-#
-# Why the guards:
-#   - `pull_request` (not `pull_request_target`) so the checked-out tree is the
-#     PR head. Combined with Apple signing secrets in the job, that is only safe
-#     for same-repo PRs, hence the `head.repo.full_name == github.repository`
-#     check. Fork PRs must be pushed to a branch in this repo first (the
-#     share-extension PR was handled this way).
-#   - Local actions and the Fastfile resolve from the checked-out tree, so if
-#     the head branch predates these CI helpers, the workflow falls back to the
-#     base branch for them (step "Ensure TestFlight CI helpers are available").
-#
-# One-time setup (cannot be automated):
-#   1. Create the `ios-test-flight` label, then merge this workflow to the
-#      default branch before labeling old branches.
-#   2. In App Store Connect create an External Testing group (default name
-#      "Public Testers" — see fastlane/Fastfile) and enable its Public Link.
-#      Each build is submitted for Beta App Review; the first is reviewed by
-#      Apple and later builds usually auto-approve.
-#   3. Add the group's Public Link as the repository variable
-#      TESTFLIGHT_PUBLIC_LINK (a variable, not a secret — it is meant to be
-#      shared).
-#
-# The label is removed at the end so re-applying it starts a fresh build. Uploads
-# only, never an App Store review submission.
-#
-# Permission note: applying labels needs triage access or higher, but the build
-# only ever uses same-repo branch code, which only users with write access can
-# create — so a labeler cannot introduce code the write-access holders have not
-# already put on a branch in this repo.
+# This is the untrusted half of the public TestFlight pipeline. It intentionally
+# receives no Apple credentials: PR-controlled npm scripts, CocoaPods, Xcode
+# project files, and build phases execute here and only produce an unsigned
+# archive. publish-ios-testflight.yml runs from the default branch, validates the
+# archive, waits for protected-environment approval, then signs and uploads it.
 
 on:
   pull_request:
+    branches: [master]
     types: [labeled]
 
 permissions:
   contents: read
-  # `gh pr comment` and the label-delete API call both go through the Issues
-  # API (PRs are issues); no `pull-requests: write` is needed.
-  issues: write
 
 concurrency:
-  group: ios-testflight-${{ github.event.pull_request.number }}
-  # Not `cancel-in-progress`: the PR-build lane uploads to TestFlight, and we
-  # want the cleanup step (label removal + comment) to run deterministically.
+  group: ios-testflight-build-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
-  testflight:
+  build-unsigned-archive:
     if: >
       github.event.label.name == 'ios-test-flight' &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: macos-26
-    timeout-minutes: 90
-    env:
-      UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
-      UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
-      PR_NUMBER: ${{ github.event.pull_request.number }}
-      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    timeout-minutes: 60
 
     steps:
+      - name: Record TestFlight request
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/request"
+          jq -n \
+            --argjson pr_number "$PR_NUMBER" \
+            --arg head_sha "$HEAD_SHA" \
+            --arg base_sha "$BASE_SHA" \
+            --argjson run_id "$GITHUB_RUN_ID" \
+            --argjson run_number "$GITHUB_RUN_NUMBER" \
+            --argjson run_attempt "$GITHUB_RUN_ATTEMPT" \
+            '{pr_number: $pr_number, head_sha: $head_sha, base_sha: $base_sha,
+              run_id: $run_id, run_number: $run_number, run_attempt: $run_attempt}' \
+            > "$RUNNER_TEMP/request/metadata.json"
+
+      - name: Upload request metadata
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-testflight-request-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/request/metadata.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Check out PR head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
-          ref: ${{ env.HEAD_SHA }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Ensure TestFlight CI helpers are available
-        # Older feature branches can predate both the shared signing action and
-        # the TestFlight Fastlane lane. Prefer the PR versions when present;
-        # otherwise copy only the missing helpers from the trusted base branch.
+      - name: Restore trusted version helper
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          ACTION=.github/actions/setup-ios-signing/action.yml
-          MISSING_ACTION=false
-          MISSING_LANE=false
-          [ -f "$ACTION" ] || MISSING_ACTION=true
-          grep -q '^  lane :testflight do' fastlane/Fastfile || MISSING_LANE=true
+          # Old PR branches predate the helper. Use the exact base commit from
+          # the label event, never a moving branch name or a PR-provided copy.
+          git checkout "$BASE_SHA" -- tools/ios-testflight-version.js
+          git show "$BASE_SHA:package.json" > "$RUNNER_TEMP/base-package.json"
 
-          if [ "$MISSING_ACTION" = true ] || [ "$MISSING_LANE" = true ]; then
-            git fetch --depth=1 origin "${{ github.event.pull_request.base.ref }}"
-          fi
-          if [ "$MISSING_ACTION" = true ]; then
-            git checkout FETCH_HEAD -- .github/actions/setup-ios-signing
-          fi
-          if [ "$MISSING_LANE" = true ]; then
-            git checkout FETCH_HEAD -- fastlane/Fastfile
-          fi
+      - name: Select Xcode 26.2
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.2.app
+          echo "SDKROOT=$(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk" >> "$GITHUB_ENV"
+
+      - name: Verify Xcode and SDK version
+        run: |
+          xcodebuild -version
+          xcrun --show-sdk-version
+          xcodebuild -showsdks | grep -E "(iOS|iphoneos)"
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
@@ -101,53 +90,34 @@ jobs:
           git config --global url."https://github.com/".insteadOf
           ssh://git@github.com/
 
-      - name: Configure iOS signing
-        uses: ./.github/actions/setup-ios-signing
-        with:
-          mac_certs: ${{ secrets.mac_certs }}
-          mac_certs_password: ${{ secrets.mac_certs_password }}
-          ios_provision_profile: ${{ secrets.IOS_PROVISION_PROFILE }}
-          ios_share_provision_profile: ${{ secrets.IOS_SHARE_PROVISION_PROFILE }}
-
       - name: Get npm cache directory
         id: npm-cache-dir
-        run: |
-          echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+        run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
 
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
-        id: npm-cache
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
           key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node22-
 
-      - name: Install npm Packages
+      - name: Install npm packages
         run: npm i
 
       - name: Generate environment
         run: npm run env
 
-      - name: Set iOS version from package.json
+      - name: Set TestFlight version
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          FULL_VERSION=$(node -p "require('./package.json').version")
-          # Strip pre-release suffix (e.g., "17.0.0-RC.3" -> "17.0.0")
-          # App Store Connect requires X.Y.Z; the build number differentiates
-          # uploads. Run number + attempt keep same-minute runs and reruns unique
-          # (see docs/plans/2026-07-14-ios-testflight-master-builds.md).
-          VERSION=$(echo "$FULL_VERSION" | sed 's/-.*//')
-          BUILD_NUMBER="$(date -u +%Y%m%d%H%M).${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
-          echo "Setting iOS version to $VERSION (build $BUILD_NUMBER) [from $FULL_VERSION]"
+          VERSION=$(node tools/ios-testflight-version.js "$RUNNER_TEMP/base-package.json" "$BASE_SHA")
+          BUILD_NUMBER="${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          echo "Setting iOS TestFlight version to $VERSION (build $BUILD_NUMBER)"
 
           cd ios/App
-          if ! xcrun agvtool new-marketing-version "$VERSION"; then
-            echo "Error: Failed to set marketing version to $VERSION"
-            exit 1
-          fi
-          if ! xcrun agvtool new-version -all "$BUILD_NUMBER"; then
-            echo "Error: Failed to set build number to $BUILD_NUMBER"
-            exit 1
-          fi
+          xcrun agvtool new-marketing-version "$VERSION"
+          xcrun agvtool new-version -all "$BUILD_NUMBER"
 
       - name: Build Angular frontend
         run: npm run buildFrontend:prodWeb
@@ -156,15 +126,12 @@ jobs:
         run: npm run sync:ios
 
       - name: Install CocoaPods
-        run: |
-          cd ios/App
-          pod install
+        working-directory: ios/App
+        run: pod install
 
-      - name: Archive iOS app
+      - name: Archive iOS app without signing
+        working-directory: ios/App
         run: |
-          cd ios/App
-          # Archive without code signing - signing is handled during export
-          # This avoids conflicts with CocoaPods frameworks
           xcodebuild archive \
             -workspace App.xcworkspace \
             -scheme App \
@@ -174,106 +141,16 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Create ExportOptions.plist
+      - name: Pack unsigned archive
         run: |
-          cat > "$RUNNER_TEMP/ExportOptions.plist" << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store-connect</string>
-              <key>teamID</key>
-              <string>${{ secrets.APPLE_TEAM_ID }}</string>
-              <key>uploadSymbols</key>
-              <true/>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.super-productivity.app</key>
-                  <string>${{ env.PROVISIONING_PROFILE_UUID }}</string>
-              </dict>
-          </dict>
-          </plist>
-          EOF
+          test -f "$RUNNER_TEMP/App.xcarchive/Info.plist"
+          tar -czf "$RUNNER_TEMP/App.xcarchive.tar.gz" \
+            -C "$RUNNER_TEMP" App.xcarchive
 
-          if [ -f ios/App/ShareExtension/Info.plist ]; then
-            if [ -z "${SHARE_PROVISIONING_PROFILE_UUID:-}" ]; then
-              echo "ERROR: ShareExtension target requires IOS_SHARE_PROVISION_PROFILE"
-              exit 1
-            fi
-            /usr/libexec/PlistBuddy -c \
-              "Add :provisioningProfiles:com.super-productivity.app.ShareExtension string $SHARE_PROVISIONING_PROFILE_UUID" \
-              "$RUNNER_TEMP/ExportOptions.plist"
-          fi
-
-      - name: Export IPA
-        run: |
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/App.xcarchive" \
-            -exportPath "$RUNNER_TEMP/ipa-output" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
-
-      - name: List exported files
-        run: ls -la "$RUNNER_TEMP/ipa-output"
-
-      - name: Set up Ruby and fastlane
-        # Pinned by SHA per repo policy. ruby-version is required: with no
-        # .ruby-version file in the repo the action errors out rather than
-        # using system Ruby. bundler-cache runs `bundle install` and caches the
-        # ~210-gem fastlane tree so it isn't reinstalled each run.
-        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+      - name: Upload unsigned archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          ruby-version: '3.3'
-          bundler-cache: true
-
-      - name: Upload to TestFlight
-        env:
-          ASC_KEY_ID: ${{ secrets.mac_api_key_id }}
-          ASC_ISSUER_ID: ${{ secrets.mac_api_key_issuer_id }}
-          ASC_KEY_CONTENT: ${{ secrets.mac_api_key }}
-          # Optional repo variable; the Fastfile falls back to "Public Testers"
-          # when unset.
-          TESTFLIGHT_GROUP: ${{ vars.TESTFLIGHT_GROUP }}
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          export CHANGELOG="Test build from PR #${PR_NUMBER} (${HEAD_SHA:0:7})"
-          ipas=("$RUNNER_TEMP"/ipa-output/*.ipa)
-          if [ ${#ipas[@]} -ne 1 ]; then
-            echo "Expected exactly 1 .ipa, found ${#ipas[@]}: ${ipas[*]:-none}"
-            exit 1
-          fi
-          export IPA_PATH="${ipas[0]}"
-          echo "Uploading $IPA_PATH to TestFlight ($CHANGELOG)"
-          bundle exec fastlane ios testflight
-
-      - name: Report result and clear the label
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PUBLIC_LINK: ${{ vars.TESTFLIGHT_PUBLIC_LINK }}
-          JOB_STATUS: ${{ job.status }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          if [ "$JOB_STATUS" = "success" ]; then
-            status_line="✅ TestFlight build for \`${HEAD_SHA:0:7}\` uploaded."
-          else
-            status_line="❌ TestFlight build for \`${HEAD_SHA:0:7}\` failed — see the [run]($RUN_URL)."
-          fi
-          if [ -n "$PUBLIC_LINK" ]; then
-            link_line="Join the beta: $PUBLIC_LINK"
-          else
-            link_line="_No \`TESTFLIGHT_PUBLIC_LINK\` repository variable is set._"
-          fi
-          printf -v body '%s\n\n%s\n\n_The `ios-test-flight` label has been removed; re-apply it to build again._' \
-            "$status_line" "$link_line"
-          # Best-effort: a transient comment failure must not mark a successful
-          # upload as failed, and must not skip the label cleanup below.
-          gh pr comment "$PR_NUMBER" --body "$body" || echo "Failed to comment on the PR."
-
-          # Remove the label so re-applying it starts a fresh build.
-          gh api -X DELETE \
-            "repos/${{ github.repository }}/issues/$PR_NUMBER/labels/ios-test-flight" \
-            || echo "Label already removed."
+          name: ios-testflight-unsigned-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/App.xcarchive.tar.gz
+          if-no-files-found: error
+          retention-days: 7
