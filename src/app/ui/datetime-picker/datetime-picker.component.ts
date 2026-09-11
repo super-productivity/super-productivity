@@ -45,27 +45,17 @@ const DEFAULT_TIME = '09:00';
 export type QuickAccessId = 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth';
 
 /**
- * Quick access shortcuts, rendered as icon + visible label. The label is the
- * short, context-free string; the context-specific string (e.g. "Schedule next
- * week" vs the deadline wording) is resolved per host via
- * `quickAccessTranslationPrefix` and used as the accessible name.
+ * Quick access shortcuts, rendered as icon + visible label. The label doubles as
+ * the accessible name — an aria-label with richer wording ("Schedule next week")
+ * would diverge from the visible text in every locale that translates one string
+ * and falls back to English for the other, failing WCAG 2.5.3 (Label in Name).
  */
-export const QUICK_ACCESS_ITEMS: {
-  id: QuickAccessId;
-  icon: string;
-  label: string;
-  ariaKey: string;
-}[] = [
-  { id: 'today', icon: 'wb_sunny', label: T.G.TODAY, ariaKey: 'QA_TODAY' },
-  { id: 'tomorrow', icon: 'wb_twilight', label: T.G.TOMORROW, ariaKey: 'QA_TOMORROW' },
-  { id: 'nextWeek', icon: 'next_week', label: T.G.NEXT_WEEK, ariaKey: 'QA_NEXT_WEEK' },
-  {
-    id: 'nextMonth',
-    icon: 'bedtime',
-    label: T.G.NEXT_MONTH,
-    ariaKey: 'QA_NEXT_MONTH',
-  },
-];
+const QUICK_ACCESS_ITEMS = [
+  { id: 'today', icon: 'wb_sunny', label: T.G.TODAY },
+  { id: 'tomorrow', icon: 'wb_twilight', label: T.G.TOMORROW },
+  { id: 'nextWeek', icon: 'next_week', label: T.G.NEXT_WEEK },
+  { id: 'nextMonth', icon: 'bedtime', label: T.G.NEXT_MONTH },
+] as const satisfies readonly { id: QuickAccessId; icon: string; label: string }[];
 
 @Component({
   selector: 'datetime-picker',
@@ -106,7 +96,6 @@ export class DateTimePickerComponent implements AfterViewInit {
   timeLabel = input<string>('Time');
   reminderLabel = input<string>(T.F.TASK.D_SCHEDULE_TASK.REMIND_AT);
   showQuickAccess = input<boolean>(true);
-  quickAccessTranslationPrefix = input<string>('F.TASK.D_SCHEDULE_TASK');
 
   // Outputs
   dateSelected = output<Date>();

@@ -139,18 +139,28 @@
   padding: var(--s-half) var(--s-quarter);
   border: 0;
   background: transparent;
+  // A plain button does not inherit the app font — the UA stylesheet would
+  // render these four labels in Arial while the rest of the picker uses the
+  // theme font.
+  font: inherit;
   color: var(--text-color);
   border-radius: var(--card-border-radius);
   cursor: pointer;
   transition: background-color var(--transition-duration-s) ease;
 
-  &:hover {
+  // Touch has no hover, so :active carries the tap feedback the Material
+  // ripple used to provide.
+  -webkit-tap-highlight-color: transparent;
+
+  &:hover,
+  &:active {
     background-color: var(--calendar-hover-bg);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--c-accent);
-    outline-offset: -2px;
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    // Inset — a positive offset would be clipped by the row's bottom border.
+    outline-offset: calc(-1 * var(--focus-ring-offset));
   }
 
   mat-icon {

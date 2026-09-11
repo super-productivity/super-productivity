@@ -4,12 +4,9 @@
       <button
         type="button"
         class="quick-access-btn"
-        [attr.aria-label]="
-          quickAccessTranslationPrefix() + '.' + item.ariaKey | translate
-        "
         (click)="quickAccessBtnClick($event, item.id)"
       >
-        <mat-icon aria-hidden="true">{{ item.icon }}</mat-icon>
+        <mat-icon>{{ item.icon }}</mat-icon>
         <span class="quick-access-label">{{ item.label | translate }}</span>
       </button>
     }

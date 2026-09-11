@@ -361,25 +361,23 @@ describe('DateTimePickerComponent', () => {
     const getQuickAccessBtns = (): HTMLButtonElement[] =>
       Array.from(fixture.nativeElement.querySelectorAll('.quick-access button'));
 
-    it('should render every shortcut with a visible label and an accessible name', () => {
+    // No translations are loaded in the test bed, so the pipe echoes the key —
+    // which makes these assertions pin the exact keys, not just "some text".
+    it('should render each shortcut with its label as the visible text', () => {
       fixture.detectChanges();
-      const btns = getQuickAccessBtns();
-      expect(btns.length).toBe(4);
+      const labels = getQuickAccessBtns().map((btn) =>
+        btn.querySelector('.quick-access-label')?.textContent?.trim(),
+      );
 
-      btns.forEach((btn) => {
-        const label = btn.querySelector('.quick-access-label');
-        expect(label?.textContent?.trim()).toBeTruthy();
-        expect(btn.getAttribute('aria-label')).toBeTruthy();
-      });
+      expect(labels).toEqual(['G.TODAY', 'G.TOMORROW', 'G.NEXT_WEEK', 'G.NEXT_MONTH']);
     });
 
-    it('should use the host-specific translation prefix for the accessible name', () => {
-      fixture.componentRef.setInput('quickAccessTranslationPrefix', 'F.TASK.D_DEADLINE');
+    it('should not set an aria-label that could diverge from the visible label', () => {
       fixture.detectChanges();
 
-      expect(getQuickAccessBtns()[0].getAttribute('aria-label')).toBe(
-        'F.TASK.D_DEADLINE.QA_TODAY',
-      );
+      getQuickAccessBtns().forEach((btn) => {
+        expect(btn.getAttribute('aria-label')).toBeNull();
+      });
     });
 
     it('should emit the shortcut id on click', () => {
