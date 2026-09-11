@@ -1,10 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import { info } from 'electron-log/main';
-import {
-  getWin,
-  getWasMaximizedBeforeHide,
-  setWasMaximizedBeforeHide,
-} from './main-window';
+import { getWin, getWasMaximizedBeforeHide } from './main-window';
 import {
   getIsTaskWidgetAlwaysShow,
   getIsTaskWidgetUserForcedVisible,
@@ -106,7 +102,6 @@ export function toggleWindowVisibility(passedWin: BrowserWindow): void {
   //   enabled AND the tray was successfully (re)created; otherwise minimize so a taskbar
   //   handle remains as a safety net. blur() is a Windows focus workaround (electron#20464)
   //   and a no-op elsewhere.
-  setWasMaximizedBeforeHide(win.isMaximized());
   if (IS_MAC) {
     win.hide();
   } else if (getIsMinimizeToTray() && ensureIndicator()) {

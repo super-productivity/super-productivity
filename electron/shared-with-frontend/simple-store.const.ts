@@ -12,4 +12,7 @@ export enum SimpleStoreKey {
   PLUGIN_NODE_EXECUTION_CONSENT = 'pluginNodeExecutionConsent',
   // Legacy key kept for backwards compatibility when reading persisted settings
   LEGACY_IS_USE_OBSIDIAN_STYLE_HEADER = 'isUseObsidianStyleHeader',
+  // Whether the main window was maximized when it was last hidden/closed (#7276).
+  // electron-window-state cannot be trusted with this bit, see window-maximized-state.ts.
+  WINDOW_WAS_MAXIMIZED = 'windowWasMaximized',
 }
