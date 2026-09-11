@@ -41,10 +41,6 @@ progress-bar {
   margin: var(--s);
   border-bottom: 2px solid var(--c-primary) !important;
 
-  ::ng-deep textarea {
-    font-weight: 600 !important;
-  }
-
   task-title {
     padding-top: var(--s-half);
     padding-bottom: var(--s-half);

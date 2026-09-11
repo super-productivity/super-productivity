@@ -323,6 +323,63 @@ describe('TaskDetailPanelComponent', () => {
       expect(component.showScheduleIcon()).toBe('today');
     });
   });
+
+  describe('title editor sizing (#9641)', () => {
+    // task-title sizes its edit box from an invisible .height-measure span and
+    // overlays an absolutely positioned, overflow:hidden textarea on it. If the
+    // panel styles the textarea differently from the measurer, the text wraps
+    // to more lines than the box is tall, and because focusing moves the caret
+    // to the end the textarea scrolls down — hiding the start of a long title
+    // with no way to scroll back.
+    const LONG_TITLE =
+      'Test1 Test2 Test3 Test4 Test Test Test Test Test Test Test Test Test Test Test Test';
+
+    const startEditingTitle = (): { textarea: HTMLElement; measurer: HTMLElement } => {
+      const titleEl = fixture.nativeElement.querySelector('task-title') as HTMLElement;
+      titleEl.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      fixture.detectChanges();
+
+      const textarea = titleEl.querySelector('textarea') as HTMLElement | null;
+      const measurer = titleEl.querySelector('.height-measure') as HTMLElement | null;
+      expect(textarea).toBeTruthy();
+      expect(measurer).toBeTruthy();
+      return { textarea: textarea as HTMLElement, measurer: measurer as HTMLElement };
+    };
+
+    beforeEach(() => {
+      componentRef.setInput('task', { ...MOCK_TASK, title: LONG_TITLE });
+      // Phone-width viewport: a long title has to wrap for the bug to show.
+      fixture.nativeElement.style.width = '360px';
+      fixture.detectChanges();
+    });
+
+    it('renders the title textarea with the same text metrics as its measurer', () => {
+      const { textarea, measurer } = startEditingTitle();
+
+      expect(getComputedStyle(textarea).fontWeight).toBe(
+        getComputedStyle(measurer).fontWeight,
+      );
+    });
+
+    it('does not clip the title textarea below its own content height', () => {
+      const words = LONG_TITLE.split(' ');
+      const clipped: string[] = [];
+
+      for (let wordCount = 4; wordCount <= words.length; wordCount++) {
+        const title = words.slice(0, wordCount).join(' ');
+        componentRef.setInput('task', { ...MOCK_TASK, title });
+        fixture.detectChanges();
+        const { textarea } = startEditingTitle();
+        if (textarea.scrollHeight > textarea.clientHeight) {
+          clipped.push(
+            `${title} (${textarea.scrollHeight}px content in ${textarea.clientHeight}px box)`,
+          );
+        }
+      }
+
+      expect(clipped).toEqual([]);
+    });
+  });
 });
 
 const fakeTask = (id: string): TaskWithSubTasks =>
