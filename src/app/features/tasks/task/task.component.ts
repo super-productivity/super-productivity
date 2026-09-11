@@ -123,6 +123,7 @@ import {
 } from '../add-subtask-input/add-subtask-input.component';
 import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 import { getSubTaskTimeLeftForDisplay } from '../util/get-sub-task-time-left-for-display';
+import { isTaskOnToday } from '../util/is-task-on-today';
 
 const isInteractiveTarget = (target: EventTarget | null): boolean =>
   target instanceof Element &&
@@ -279,14 +280,13 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
           t.dueDay < todayStr))
     );
   });
-  isScheduledToday = computed(() => {
-    const t = this.task();
-    const todayStr = this.globalTrackingIntervalService.todayDateStr();
-    return (
-      (t.dueWithTime && this._dateService.isToday(t.dueWithTime)) ||
-      (t.dueDay && t.dueDay === todayStr)
-    );
-  });
+  isScheduledToday = computed(() =>
+    isTaskOnToday(
+      this.task(),
+      this.globalTrackingIntervalService.todayDateStr(),
+      this._dateService.getStartOfNextDayDiffMs(),
+    ),
+  );
   hasTimeConflict = computed(() => {
     const task = this.task();
     return (
