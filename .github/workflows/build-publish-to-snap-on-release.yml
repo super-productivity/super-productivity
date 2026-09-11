@@ -43,9 +43,13 @@ jobs:
           mv .tmp/snap-release/*.snap .tmp/snap-release/sp.snap
 
       # Run snapcraft from Canonical's official container so we don't depend on
-      # `sudo snap install snapcraft --classic` working on the runner. The
-      # container wrapper already runs `snapcraft "$@"`, so the docker CMD must
-      # not include a leading `snapcraft` word.
+      # `sudo snap install snapcraft --classic` working on the runner.
+      # `--entrypoint /bin/snapcraft` skips the image's pebble wrapper and its
+      # unconditional `apt update`, which an upload does not need and which
+      # burned a whole 10m timeout on the branch path on 2026-09-11 (see
+      # build.yml). The CMD is snapcraft's own argv, so still no leading
+      # `snapcraft` word. Bypassing pebble also drops its hard-coded /project
+      # working dir -- hence the absolute path.
       - name: Upload release snap to edge and stable
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
         with:
@@ -57,8 +61,9 @@ jobs:
               -v "$PWD/.tmp/snap-release:/project" \
               -e SNAPCRAFT_STORE_CREDENTIALS \
               -e SNAPCRAFT_HAS_TTY=true \
+              --entrypoint /bin/snapcraft \
               ghcr.io/canonical/snapcraft:8_core24 \
-              upload sp.snap --release edge,stable
+              upload /project/sp.snap --release edge,stable
 
 #      - uses: actions/setup-node@v3
 #        with:

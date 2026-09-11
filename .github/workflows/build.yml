@@ -192,14 +192,30 @@ jobs:
           else
             echo "has_final_release_tag=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # Pulled in its own step so the image download (~10s, occasionally much
+      # worse) is not charged against the upload step's store-review budget.
+      - name: Pull snapcraft image
+        if: false == startsWith(github.ref, 'refs/tags/v') && steps.release-tag.outputs.has_final_release_tag != 'true'
+        timeout-minutes: 10
+        run: docker pull ghcr.io/canonical/snapcraft:8_core24
+
       # Upload branch builds to edge. Published releases upload the exact
       # GitHub release snap to edge/stable in build-publish-to-snap-on-release.yml.
       # Uses Canonical's official snapcraft container instead of `sudo snap
       # install snapcraft --classic` on the runner, which has been a recurring
       # source of "unable to contact snap store" failures.
-      # The container runs snapcraft as a pebble service whose working-dir is
-      # hard-coded to /project, so docker's -w flag is ignored — mount the
-      # build dir at /project so `snapcraft upload sp.snap` resolves correctly.
+      # We bypass the image's default entrypoint and exec /bin/snapcraft
+      # directly. The default path starts a pebble daemon that runs
+      # /bin/run-snapcraft.sh, which is an unconditional `apt update` before
+      # `exec /bin/snapcraft "$@"`. That refresh exists so a *build* can
+      # apt-get install; an upload is a pure store API call and installs
+      # nothing. On 2026-09-11 a slow archive.ubuntu.com spent the entire
+      # 10m budget in that apt (runs 34601232816 and 34601758753 both died
+      # mid-`Get:`, never contacting the store) -- i.e. the bound meant for
+      # the store review was being gambled on Ubuntu mirror throughput.
+      # Bypassing it also drops pebble's hard-coded /project working dir,
+      # so pass the snap by absolute path rather than relying on cwd.
       #
       # `upload --release edge` blocks until the store's automated review
       # finishes. That is normally quick -- 78s and 161s on 2026-08-27 -- but
@@ -234,10 +250,10 @@ jobs:
         timeout-minutes: 15
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-        # The snapcraft-rocks image's wrapper already runs `snapcraft "$@"`,
-        # so the docker CMD must NOT include a leading `snapcraft` word —
-        # that gets passed as the subcommand and snapcraft errors with
-        # "no such command 'snapcraft'".
+        # `--entrypoint /bin/snapcraft` replaces the image's pebble+apt
+        # wrapper, so the CMD here is snapcraft's own argv — still no leading
+        # `snapcraft` word (that would become the subcommand and error with
+        # "no such command 'snapcraft'").
         run: |
           set -o pipefail
           rc=0
@@ -246,8 +262,9 @@ jobs:
               -v "$PWD/.tmp/app-builds:/project" \
               -e SNAPCRAFT_STORE_CREDENTIALS \
               -e SNAPCRAFT_HAS_TTY=true \
+              --entrypoint /bin/snapcraft \
               ghcr.io/canonical/snapcraft:8_core24 \
-              upload sp.snap --release edge 2>&1 \
+              upload /project/sp.snap --release edge 2>&1 \
             | tee "$RUNNER_TEMP/snap-upload.log" || rc=$?
 
           if [ "$rc" -eq 0 ] && grep -q "released to 'edge'" "$RUNNER_TEMP/snap-upload.log"; then
