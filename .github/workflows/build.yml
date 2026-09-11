@@ -707,99 +707,12 @@ jobs:
           Write-Host "Final executables:"
           Get-ChildItem -Path .tmp/app-builds -Filter *.exe | Format-Table -AutoSize
 
+      # Blockmaps and latest.yml are generated during the build, over the
+      # unsigned executables SignPath has since replaced, so both have to be
+      # rebuilt from the signed files before publishing.
       - name: Regenerate blockmaps and generate latest.yml for signed executables
         shell: pwsh
-        run: |
-          $buildDir = ".tmp/app-builds"
-          # Only regenerate blockmaps for NSIS setup files (portables don't use them)
-          $setupExes = Get-ChildItem -Path $buildDir -Filter "Super-Productivity-Setup*.exe"
-
-          # Resolve the platform-specific app-builder binary from the lockfile-pinned package
-          $appBuilder = node -e "console.log(require('app-builder-bin').appBuilderPath)"
-
-          foreach ($exe in $setupExes) {
-            $blockmapPath = "$($exe.FullName).blockmap"
-            Write-Host "Regenerating blockmap for $($exe.Name)..."
-            $output = & $appBuilder blockmap --input="$($exe.FullName)" --output="$blockmapPath" --compression=gzip
-            Write-Host "  blockmap output: $output"
-          }
-
-          # Update latest.yml with hashes from signed executables
-          # (electron-builder generates it during build, but with hashes of unsigned files)
-          node -e "
-            const fs = require('fs');
-            const path = require('path');
-            const yaml = require('js-yaml');
-            const crypto = require('crypto');
-
-            const buildDir = '.tmp/app-builds';
-            const ymlPath = path.join(buildDir, 'latest.yml');
-
-            function getFileInfo(filePath) {
-              const fileBuffer = fs.readFileSync(filePath);
-              const info = {
-                sha512: crypto.createHash('sha512').update(fileBuffer).digest('base64'),
-                size: fileBuffer.length,
-              };
-              const blockmapPath = filePath + '.blockmap';
-              if (fs.existsSync(blockmapPath)) {
-                info.blockMapSize = fs.statSync(blockmapPath).size;
-              }
-              return info;
-            }
-
-            if (fs.existsSync(ymlPath)) {
-              // Update existing latest.yml (preserves all electron-builder fields)
-              const ymlData = yaml.load(fs.readFileSync(ymlPath, 'utf8'));
-              if (!ymlData.files || ymlData.files.length === 0) {
-                console.error('ERROR: latest.yml has no file entries');
-                process.exit(1);
-              }
-              for (const fileEntry of ymlData.files) {
-                const filePath = path.join(buildDir, fileEntry.url);
-                if (!fs.existsSync(filePath)) {
-                  console.error('ERROR: File referenced in latest.yml not found: ' + fileEntry.url);
-                  process.exit(1);
-                }
-                const info = getFileInfo(filePath);
-                Object.assign(fileEntry, info);
-                console.log('  Updated ' + fileEntry.url + ': sha512=' + info.sha512.substring(0, 20) + '... size=' + info.size);
-              }
-              if (ymlData.path) {
-                const primary = ymlData.files.find(f => f.url === ymlData.path);
-                if (primary) { ymlData.sha512 = primary.sha512; }
-              }
-              fs.writeFileSync(ymlPath, yaml.dump(ymlData, { lineWidth: -1 }));
-              console.log('latest.yml updated with signed file hashes');
-            } else {
-              // Fallback: generate from scratch if latest.yml was not created
-              console.log('No existing latest.yml found, generating from scratch');
-              const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-              const setupExes = fs.readdirSync(buildDir)
-                .filter(f => f.startsWith('Super-Productivity-Setup') && f.endsWith('.exe'));
-              if (setupExes.length === 0) {
-                console.error('ERROR: No setup executables found in ' + buildDir);
-                process.exit(1);
-              }
-              const files = setupExes.map(filename => {
-                const filePath = path.join(buildDir, filename);
-                const info = getFileInfo(filePath);
-                console.log('  ' + filename + ': sha512=' + info.sha512.substring(0, 20) + '... size=' + info.size);
-                return { url: filename, ...info };
-              });
-              const primary = files.find(f => f.url === 'Super-Productivity-Setup.exe')
-                || files[0];
-              const latestYml = {
-                version: pkg.version,
-                files,
-                path: primary.url,
-                sha512: primary.sha512,
-                releaseDate: new Date().toISOString(),
-              };
-              fs.writeFileSync(ymlPath, yaml.dump(latestYml, { lineWidth: -1 }));
-              console.log('Generated latest.yml for ' + files.length + ' signed executables');
-            }
-          "
+        run: node tools/finalize-windows-release-metadata.js .tmp/app-builds
 
       # Existing website and package-manager manifests still use the old
       # architecture-specific URLs. Byte-for-byte copies preserve those public
@@ -834,5 +747,9 @@ jobs:
             .tmp/app-builds/*.exe
             .tmp/app-builds/Super-Productivity-Setup*.blockmap
             .tmp/app-builds/latest*.yml
+          # An unmatched glob is a silent success by default. Missing blockmaps
+          # or latest.yml means a published Windows release whose updater feed
+          # is broken -- fail the job instead of shipping it.
+          fail_on_unmatched_files: true
           draft: true
           prerelease: ${{ contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
