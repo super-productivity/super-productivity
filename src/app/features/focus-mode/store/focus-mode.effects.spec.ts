@@ -1,6 +1,6 @@
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
-import { BehaviorSubject, Observable, of, Subscription } from 'rxjs';
+import { BehaviorSubject, Observable, of, Subject, Subscription } from 'rxjs';
 import { FocusModeEffects } from './focus-mode.effects';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { FocusModeStrategyFactory } from '../focus-mode-strategies';
@@ -30,6 +30,8 @@ import { updateGlobalConfigSection } from '../../config/store/global-config.acti
 import { take, toArray } from 'rxjs/operators';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { DEFAULT_TASK } from '../../tasks/task.model';
+import { IS_ELECTRON_TOKEN } from '../../../app.constants';
+import { Action } from '@ngrx/store';
 
 describe('FocusModeEffects', () => {
   let actions$: Observable<any>;
@@ -154,6 +156,7 @@ describe('FocusModeEffects', () => {
         { provide: TakeABreakService, useValue: takeABreakServiceMock },
         { provide: NotifyService, useValue: notifyServiceMock },
         { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: false },
+        { provide: IS_ELECTRON_TOKEN, useValue: true },
         {
           provide: GlobalTrackingIntervalService,
           useValue: {
@@ -3029,5 +3032,104 @@ describe('FocusModeEffects', () => {
         });
       });
     });
+  });
+  // The OS progress bar (taskbar/dock) has exactly one writer at a time: a
+  // *timed* session owns it and task-electron.effects stands down. When the
+  // session releases it (cancel/pause), nothing else clears the bar - the task
+  // writer only wakes on setCurrentTask, and focus mode dispatches
+  // unsetCurrentTask - so this effect must clear it on the handoff itself.
+  describe('setTaskBarProgress$', () => {
+    let actionsSubject: Subject<Action>;
+    let setProgressBarSpy: jasmine.Spy;
+    const NO_PROGRESS = { progress: -1, progressBarMode: 'none' };
+    const runningCountdown = createMockTimer({
+      isRunning: true,
+      purpose: 'work',
+      duration: 25 * 60 * 1000,
+      elapsed: 5 * 60 * 1000,
+    });
+    const runningFlowtime = createMockTimer({
+      isRunning: true,
+      purpose: 'work',
+      duration: 0,
+      elapsed: 5 * 60 * 1000,
+    });
+
+    const setTimer = (timer: TimerState): void => {
+      store.overrideSelector(selectors.selectTimer, timer);
+      store.refreshState();
+    };
+
+    // The writer throttles to 500ms; step past it so every action reaches it.
+    const dispatch = (action: Action): void => {
+      actionsSubject.next(action);
+      tick(600);
+    };
+
+    beforeEach(() => {
+      actionsSubject = new Subject<Action>();
+      actions$ = actionsSubject;
+      setProgressBarSpy = jasmine.createSpy('setProgressBar');
+      (window as any).ea = { setProgressBar: setProgressBarSpy };
+    });
+
+    afterEach(() => {
+      delete (window as any).ea;
+    });
+
+    it('should publish normal progress while a countdown session runs', fakeAsync(() => {
+      setTimer(runningCountdown);
+      const sub = effects.setTaskBarProgress$.subscribe();
+
+      dispatch(actions.tick());
+      sub.unsubscribe();
+
+      expect(setProgressBarSpy).toHaveBeenCalledOnceWith({
+        progress: 0.2,
+        progressBarMode: 'normal',
+      });
+    }));
+
+    it('should clear the bar exactly once when a countdown session is cancelled', fakeAsync(() => {
+      setTimer(runningCountdown);
+      const sub = effects.setTaskBarProgress$.subscribe();
+      dispatch(actions.tick());
+      setProgressBarSpy.calls.reset();
+
+      setTimer(createMockTimer({ isRunning: false, purpose: null }));
+      dispatch(actions.cancelFocusSession());
+      // Anything after the release (e.g. a stray tick) must not re-clear.
+      dispatch(actions.tick());
+      sub.unsubscribe();
+
+      expect(setProgressBarSpy).toHaveBeenCalledOnceWith(NO_PROGRESS);
+    }));
+
+    it('should clear the bar when a countdown session is paused', fakeAsync(() => {
+      setTimer(runningCountdown);
+      const sub = effects.setTaskBarProgress$.subscribe();
+      dispatch(actions.tick());
+      setProgressBarSpy.calls.reset();
+
+      setTimer({ ...runningCountdown, isRunning: false });
+      dispatch(actions.pauseFocusSession({}));
+      sub.unsubscribe();
+
+      expect(setProgressBarSpy).toHaveBeenCalledOnceWith(NO_PROGRESS);
+    }));
+
+    // Flowtime owns nothing, so the task writer publishes instead; clearing on
+    // every tick would fight it and make the bar flicker.
+    it('should never write while a Flowtime session ticks', fakeAsync(() => {
+      setTimer(runningFlowtime);
+      const sub = effects.setTaskBarProgress$.subscribe();
+
+      dispatch(actions.tick());
+      dispatch(actions.tick());
+      dispatch(actions.tick());
+      sub.unsubscribe();
+
+      expect(setProgressBarSpy).not.toHaveBeenCalled();
+    }));
   });
 });
