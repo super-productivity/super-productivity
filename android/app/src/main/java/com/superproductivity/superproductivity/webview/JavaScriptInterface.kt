@@ -413,6 +413,13 @@ class JavaScriptInterface(
         return WidgetDoneQueue.getAndClear(activity)
     }
 
+    /** Get the project selected by the most recent widget row tap and clear it. */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getWidgetProjectToOpen(): String? {
+        return TaskListWidgetProvider.getAndClearProjectToOpen(activity)
+    }
+
     /**
      * Re-render the home screen widget from the current `widget_data` KeyValStore
      * snapshot. Called by Angular after each snapshot push.

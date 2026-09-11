@@ -17,6 +17,7 @@ import org.json.JSONObject
 object WidgetDoneQueue {
     private const val PREFS_NAME = "SuperProductivityWidgetDone"
     private const val KEY_DONE_TASKS = "WIDGET_DONE_TASK_IDS"
+    private const val KEY_DONE_TIMESTAMPS = "WIDGET_DONE_TASK_TIMESTAMPS"
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -33,9 +34,24 @@ object WidgetDoneQueue {
             }
         } ?: JSONObject()
         map.put(taskId, isDone)
+        val timestamps = prefs.getString(KEY_DONE_TIMESTAMPS, null)?.let {
+            try {
+                JSONObject(it)
+            } catch (e: Exception) {
+                JSONObject()
+            }
+        } ?: JSONObject()
+        if (isDone) {
+            timestamps.put(taskId, System.currentTimeMillis())
+        } else {
+            timestamps.remove(taskId)
+        }
         // commit (not apply): the enqueue runs in a short-lived broadcast, the process
         // may be killed right after — the tap must survive that.
-        prefs.edit().putString(KEY_DONE_TASKS, map.toString()).commit()
+        prefs.edit()
+            .putString(KEY_DONE_TASKS, map.toString())
+            .putString(KEY_DONE_TIMESTAMPS, timestamps.toString())
+            .commit()
     }
 
     /** Non-clearing read used to overlay pending done state at widget render time. */
@@ -50,13 +66,30 @@ object WidgetDoneQueue {
         }
     }
 
+    /** Completion instants for pending "done" targets, used only by native rendering. */
+    @Synchronized
+    fun peekDoneTimestamps(context: Context): Map<String, Long> {
+        val data = getPrefs(context).getString(KEY_DONE_TIMESTAMPS, null) ?: return emptyMap()
+        return try {
+            val map = JSONObject(data)
+            map.keys().asSequence().mapNotNull { taskId ->
+                map.optLong(taskId, 0L).takeIf { it > 0L }?.let { taskId to it }
+            }.toMap()
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
     /** @return JSON object string `{taskId: targetIsDone}`, or null if empty. */
     @Synchronized
     fun getAndClear(context: Context): String? {
         val prefs = getPrefs(context)
         val data = prefs.getString(KEY_DONE_TASKS, null)
         if (data != null) {
-            prefs.edit().remove(KEY_DONE_TASKS).commit()
+            prefs.edit()
+                .remove(KEY_DONE_TASKS)
+                .remove(KEY_DONE_TIMESTAMPS)
+                .commit()
         }
         return data
     }

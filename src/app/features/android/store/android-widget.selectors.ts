@@ -1,12 +1,21 @@
 import { createSelector } from '@ngrx/store';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { selectTaskEntities } from '../../tasks/store/task.selectors';
-import { selectProjectFeatureState } from '../../project/store/project.selectors';
+import {
+  selectProjectFeatureState,
+  selectUnarchivedVisibleProjects,
+} from '../../project/store/project.selectors';
 import {
   selectStartOfNextDayDiffMs,
   selectTodayStr,
 } from '../../../root-store/app-state/app-state.selectors';
-import { AndroidWidgetData, AndroidWidgetTask } from '../android-widget.model';
+import {
+  AndroidWidgetData,
+  AndroidWidgetProject,
+  AndroidWidgetTask,
+} from '../android-widget.model';
+
+const MAX_WIDGET_TASKS = 20;
 
 /**
  * The instant the logical day `dayStr` stops being "today": local midnight after it,
@@ -28,36 +37,40 @@ export const getWidgetValidUntil = (
 };
 
 /**
- * Projects today's tasks into the exact `widget_data` blob shape, so downstream
- * consumers get referential stability from the selector memoization and cheap
- * change detection via JSON comparison in WidgetDataService.
+ * Projects Today's tasks and the selectable active project lists into the exact
+ * `widget_data` blob shape. Native only chooses between these projections; it never
+ * recreates Today membership or project ordering.
  */
 export const selectAndroidWidgetData = createSelector(
   selectTodayTaskIds,
   selectTaskEntities,
   selectProjectFeatureState,
+  selectUnarchivedVisibleProjects,
   selectTodayStr,
   selectStartOfNextDayDiffMs,
   (
     todayTaskIds,
     taskEntities,
     projectState,
+    visibleProjects,
     dayStr,
     startOfNextDayDiffMs,
   ): AndroidWidgetData => {
     const tasks: AndroidWidgetTask[] = [];
     const projectColors: { [projectId: string]: string } = {};
-
-    for (const taskId of todayTaskIds) {
+    const toWidgetTask = (taskId: string): AndroidWidgetTask | null => {
       const task = taskEntities[taskId];
       if (!task) {
-        continue;
+        return null;
       }
       const widgetTask: AndroidWidgetTask = {
         id: task.id,
         title: task.title,
         isDone: task.isDone,
       };
+      if (task.isDone && typeof task.doneOn === 'number') {
+        widgetTask.doneOn = task.doneOn;
+      }
       if (task.projectId) {
         widgetTask.projectId = task.projectId;
         const color = projectState.entities[task.projectId]?.theme?.primary;
@@ -65,8 +78,35 @@ export const selectAndroidWidgetData = createSelector(
           projectColors[task.projectId] = color;
         }
       }
-      tasks.push(widgetTask);
+      return widgetTask;
+    };
+
+    for (const taskId of todayTaskIds) {
+      const widgetTask = toWidgetTask(taskId);
+      if (widgetTask) {
+        tasks.push(widgetTask);
+      }
     }
+
+    const projects: AndroidWidgetProject[] = visibleProjects.map((project) => {
+      const projectTasks: AndroidWidgetTask[] = [];
+      // Keep the established project-wide order: active list first, then backlog.
+      for (const taskIds of [project.taskIds || [], project.backlogTaskIds || []]) {
+        for (const taskId of taskIds) {
+          const task = toWidgetTask(taskId);
+          if (task) {
+            projectTasks.push(task);
+            if (projectTasks.length === MAX_WIDGET_TASKS) {
+              break;
+            }
+          }
+        }
+        if (projectTasks.length === MAX_WIDGET_TASKS) {
+          break;
+        }
+      }
+      return { id: project.id, title: project.title, tasks: projectTasks };
+    });
 
     return {
       v: 1,
@@ -74,6 +114,7 @@ export const selectAndroidWidgetData = createSelector(
       validUntil: getWidgetValidUntil(dayStr, startOfNextDayDiffMs),
       tasks,
       projectColors,
+      projects,
     };
   },
 );
