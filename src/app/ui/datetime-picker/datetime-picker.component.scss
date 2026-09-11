@@ -121,7 +121,9 @@
   @include extraBorder('-bottom');
 
   button + button {
-    @include extraBorder('-left');
+    // Logical, not physical: in RTL a border-left would land on the row's
+    // outer edge and drop the separator between the first two buttons.
+    @include extraBorder('-inline-start');
   }
 }
 
