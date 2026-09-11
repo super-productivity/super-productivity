@@ -209,10 +209,11 @@ function initListeners(): void {
 
   ipcMain.on(IPC.SET_PROGRESS_BAR, (ev: IpcMainEvent, { progress }) => {
     // Exactly one writer may own the tray icon per tick, otherwise the menu bar
-    // icon visibly blinks (#9944): the focus overlay owns it while it is shown
-    // (session progress), CURRENT_TASK_UPDATED owns it otherwise (task
-    // progress). Both fired every second before, so the icon flipped between
-    // the progress ring and the plain running icon twice per second.
+    // icon visibly blinks (#9944): while the focus overlay is shown the icon
+    // follows whatever SET_PROGRESS_BAR carries, otherwise CURRENT_TASK_UPDATED
+    // owns it (and skips its own write on the same flag). Both used to write
+    // every second, flipping the icon between the progress ring and the plain
+    // running icon twice per second.
     if (_isRunning && tray && _lastIsFocusModeEnabled) {
       setTrayIcon(tray, getRunningIconPath(progress));
     }

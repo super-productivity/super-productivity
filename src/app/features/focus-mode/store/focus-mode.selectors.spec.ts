@@ -475,26 +475,46 @@ describe('FocusModeSelectors', () => {
     });
   });
 
+  describe('selectIsOsProgressBarOwnedBySession', () => {
+    it('should own the bar for a running timed session', () => {
+      const result = selectors.selectIsOsProgressBarOwnedBySession.projector(
+        true,
+        1500000,
+      );
+
+      expect(result).toBe(true);
+    });
+
+    // Flowtime has no target duration, so it has no progress of its own. Owning
+    // the bar here would pin it to 0 and cycle against the task-progress writer
+    // in task-electron.effects (#9944).
+    it('should not own the bar for an open-ended (Flowtime) session', () => {
+      const result = selectors.selectIsOsProgressBarOwnedBySession.projector(true, 0);
+
+      expect(result).toBe(false);
+    });
+
+    it('should not own the bar while no session runs', () => {
+      const result = selectors.selectIsOsProgressBarOwnedBySession.projector(
+        false,
+        1500000,
+      );
+
+      expect(result).toBe(false);
+    });
+  });
+
   describe('selectOsProgressBar', () => {
-    it('should publish the session progress when a duration is set', () => {
-      const result = selectors.selectOsProgressBar.projector(50, true, 1500000);
+    it('should publish the session progress while it owns the bar', () => {
+      const result = selectors.selectOsProgressBar.projector(true, 50);
 
       expect(result).toEqual({ progress: 0.5, progressBarMode: 'normal' });
     });
 
-    it('should publish pause mode when the session is not running', () => {
-      const result = selectors.selectOsProgressBar.projector(50, false, 1500000);
+    it('should publish nothing while it does not own the bar', () => {
+      const result = selectors.selectOsProgressBar.projector(false, 0);
 
-      expect(result).toEqual({ progress: 0.5, progressBarMode: 'pause' });
-    });
-
-    // Flowtime has no target duration, so progress is always 0. Publishing it
-    // pinned the OS progress bar to empty and cycled against the task-progress
-    // writer in task-electron.effects (#9944, #3131).
-    it('should hide the bar for an open-ended (Flowtime) session', () => {
-      const result = selectors.selectOsProgressBar.projector(0, true, 0);
-
-      expect(result).toEqual({ progress: -1, progressBarMode: 'none' });
+      expect(result).toBeNull();
     });
   });
 });
