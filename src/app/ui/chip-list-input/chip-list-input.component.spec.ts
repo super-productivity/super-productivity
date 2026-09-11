@@ -198,6 +198,16 @@ describe('ChipListInputComponent', () => {
       expect(addNewSpy).not.toHaveBeenCalled();
     });
 
+    it('Tab on an untouched input adds nothing and lets focus move on', async () => {
+      await openPanelWith('');
+
+      const notPrevented = pressKey('Tab', TAB);
+
+      expect(addSpy).not.toHaveBeenCalled();
+      expect(addNewSpy).not.toHaveBeenCalled();
+      expect(notPrevented).toBeTrue();
+    });
+
     it('Shift+Tab adds nothing and drops the partial text', async () => {
       await openPanelWith('ban');
 

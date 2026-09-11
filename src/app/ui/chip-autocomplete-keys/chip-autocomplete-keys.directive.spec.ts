@@ -159,6 +159,37 @@ describe('ChipAutocompleteKeysDirective', () => {
     expect(getAutocomplete().isOpen).toBeFalse();
   });
 
+  it('Tab on an untouched input (panel opened on focus) adds nothing and lets focus move on', async () => {
+    await typeAndOpen('');
+    expect(getAutocomplete().isOpen).toBeTrue();
+
+    const notPrevented = pressKey('Tab', TAB);
+
+    expect(host.accepted).toEqual([]);
+    expect(host.committed).toEqual([]);
+    expect(notPrevented).toBeTrue();
+  });
+
+  it('Enter on an untouched input does nothing', async () => {
+    await typeAndOpen('');
+
+    pressKey('Enter', ENTER);
+
+    expect(host.accepted).toEqual([]);
+    expect(host.committed).toEqual([]);
+    expect(getAutocomplete().isOpen).toBeTrue();
+  });
+
+  it('ignores Enter while an IME composition is in progress', async () => {
+    await typeAndOpen('ban');
+
+    pressKey('Enter', ENTER, { isComposing: true });
+    pressKey('Process', 229, { key: 'Process' });
+
+    expect(host.committed).toEqual([]);
+    expect(getInput().value).toBe('ban');
+  });
+
   it('does nothing while the panel is closed', async () => {
     await typeAndOpen('zzz');
     expect(getAutocomplete().isOpen).toBeFalse();
