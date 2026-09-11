@@ -1,4 +1,10 @@
-import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
+import {
+  ComponentFixture,
+  DeferBlockState,
+  fakeAsync,
+  TestBed,
+  tick,
+} from '@angular/core/testing';
 import { MatDialog, MatDialogState } from '@angular/material/dialog';
 import { MarkdownModule } from 'ngx-markdown';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -68,6 +74,95 @@ describe('InlineMarkdownComponent', () => {
 
     fixture = TestBed.createComponent(InlineMarkdownComponent);
     component = fixture.componentInstance;
+  });
+
+  /**
+   * The shipped path: markdown formatting is on by default, so the live editor
+   * is what real users get. It sits behind `@defer (on immediate)`, which never
+   * renders on its own in TestBed — each spec renders the block explicitly.
+   */
+  describe('live markdown editor', () => {
+    const mountLiveEditor = async (model: string): Promise<void> => {
+      component.model = model;
+      fixture.detectChanges();
+      const [deferBlock] = await fixture
+        .whenStable()
+        .then(() => fixture.getDeferBlocks());
+      await deferBlock.render(DeferBlockState.Complete);
+    };
+
+    it('mounts the live editor instead of the textarea', async () => {
+      await mountLiveEditor('# A heading');
+
+      expect(component.liveEditorEl()).toBeTruthy();
+      expect(component.textareaEl()).toBeUndefined();
+      // The document keeps the raw markdown; only the view hides the marker.
+      expect(component.liveEditorEl()!.value).toBe('# A heading');
+      expect(
+        fixture.nativeElement.querySelector('.cm-content').textContent,
+      ).not.toContain('#');
+    });
+
+    // Typing must not save: a note is one op per edit session, not per keystroke.
+    it("does not commit while typing, and commits on the editor's own change", async () => {
+      await mountLiveEditor('before');
+      spyOn(component.changed, 'emit');
+
+      component.onLiveEditorDocChanged('while typing');
+      expect(component.changed.emit).not.toHaveBeenCalled();
+
+      component.onLiveEditorChanged('committed');
+      expect(component.changed.emit).toHaveBeenCalledWith('committed');
+    });
+
+    // Closing the detail panel destroys this component on mousedown and the
+    // editor's blur lands afterwards, where the emit is dropped — so the last
+    // typed document has to be committed from ngOnDestroy.
+    it('commits the last typed document on destroy', async () => {
+      await mountLiveEditor('before');
+      spyOn(component.changed, 'emit');
+
+      component.onLiveEditorDocChanged('typed but never blurred');
+      component.ngOnDestroy();
+
+      expect(component.changed.emit).toHaveBeenCalledWith('typed but never blurred');
+    });
+
+    // ...but only for the task it was typed into. Switching tasks re-uses this
+    // component instance, and a stale doc would be written onto the next task.
+    it('drops the typed document when the model switches to another note', async () => {
+      await mountLiveEditor('task A notes');
+      component.onLiveEditorDocChanged('task A notes, edited');
+      spyOn(component.changed, 'emit');
+
+      component.model = 'task B notes';
+      component.ngOnDestroy();
+
+      expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+
+    // The checklist toolbar is the one control editing the document from
+    // outside the editor: it has to see a checklist while it is still being
+    // typed, not only after the blur that commits it.
+    it('offers the checklist actions for a checklist that is still being typed', async () => {
+      fixture.componentRef.setInput('isShowChecklistToggle', true);
+      await mountLiveEditor('not a checklist yet');
+      expect(component.isCurrentlyChecklist()).toBe(false);
+
+      component.onLiveEditorDocChanged('- [ ] one');
+
+      expect(component.isCurrentlyChecklist()).toBe(true);
+    });
+
+    // The transforms read the mounted editor, not the last committed copy.
+    it("applies a checklist transform to the editor's current document", async () => {
+      await mountLiveEditor('- [ ] one\n- [ ] two');
+      spyOn(component.changed, 'emit');
+
+      component.checkAllChecklistItems();
+
+      expect(component.changed.emit).toHaveBeenCalledWith('- [x] one\n- [x] two');
+    });
   });
 
   describe('keypressHandler', () => {

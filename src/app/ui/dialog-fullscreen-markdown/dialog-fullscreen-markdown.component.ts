@@ -457,6 +457,14 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   }
 
   private async _updateResolvedContent(content: string): Promise<void> {
+    // Only the `<markdown>` preview consumes this, and the live editor never
+    // mounts one — it resolves image sources itself, per image. Without this
+    // the dialog would re-resolve every image in the note 100 ms after every
+    // keystroke, for a value nothing reads. The dialog is modal, so the
+    // setting behind `isLiveMarkdown` cannot flip while it is open.
+    if (this.isLiveMarkdown()) {
+      return;
+    }
     const resolved = await this._clipboardImageService.resolveMarkdownImages(content);
     this.resolvedContent.set(resolved);
   }
