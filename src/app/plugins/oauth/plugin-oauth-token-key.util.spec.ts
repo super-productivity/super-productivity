@@ -27,4 +27,11 @@ describe('plugin-oauth-token-key.util', () => {
       withPluginOAuthTokenKey('uploaded-oauth-plugin', { value: 1 }, 'provider-a'),
     ).toEqual({ value: 1 });
   });
+
+  it('isolates non-scoped plugin config writes from the stored provider', () => {
+    const stored = { calendarId: 'original' };
+    const config = withPluginOAuthTokenKey('caldav-provider', stored, 'provider-a');
+    config['calendarId'] = 'changed-by-plugin';
+    expect(stored.calendarId).toBe('original');
+  });
 });

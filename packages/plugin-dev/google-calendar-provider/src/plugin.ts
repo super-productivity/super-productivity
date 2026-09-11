@@ -11,6 +11,7 @@ import type {
 declare const PluginAPI: {
   registerIssueProvider(definition: IssueProviderPluginDefinition): void;
   startOAuthFlow(config: OAuthFlowConfig): Promise<OAuthTokenResult>;
+  // Internal host ↔ bundled-plugin contract; not supported for third-party plugins.
   getOAuthToken(tokenKey?: string): Promise<string | null>;
   clearOAuthToken(): Promise<void>;
 };
@@ -39,6 +40,7 @@ const MOBILE_CLIENT_ID =
 const IOS_CLIENT_ID =
   '637968426975-ka1muro7mee1go0m7hhog49fm7svr4os.apps.googleusercontent.com';
 
+// Transient host config paired with getOAuthToken(tokenKey), never synced or public.
 const SP_OAUTH_TOKEN_KEY_CFG_KEY = '__spOAuthTokenKey';
 
 // --- Config ---

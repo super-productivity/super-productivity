@@ -518,13 +518,6 @@ export class PluginBridgeService implements OnDestroy {
     return this._pluginOAuthBridge.clearOAuthToken(pluginId, tokenKey);
   }
 
-  async migrateLegacyOAuthTokenToScopedKey(
-    pluginId: string,
-    tokenKey: string,
-  ): Promise<boolean> {
-    return this._pluginOAuthBridge.migrateLegacyOAuthTokenToScopedKey(pluginId, tokenKey);
-  }
-
   async request<T = unknown>(
     url: string,
     options?: PluginRequestOptions,

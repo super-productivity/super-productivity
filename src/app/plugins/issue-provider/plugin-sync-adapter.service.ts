@@ -81,7 +81,7 @@ export const createPluginSyncAdapter = (
     getHeaders: () => Record<string, string> | Promise<Record<string, string>>,
   ) => PluginHttp,
   tagService: TagService,
-  pluginId = '',
+  pluginId: string,
 ): IssueSyncAdapter<IssueProviderPluginType> => {
   const isPushSupported = !!definition.updateIssue;
   const fieldMappings: FieldMapping[] = (definition.fieldMappings ?? []).map((pm) =>

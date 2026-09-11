@@ -8,6 +8,7 @@ import {
   loadOAuthTokens,
   deleteOAuthTokens,
   deleteOAuthTokensByPrefix,
+  moveOAuthTokens,
 } from './plugin-oauth-token-store';
 import { IS_ELECTRON } from '../../app.constants';
 import {
@@ -93,9 +94,6 @@ export class PluginOAuthBridgeService {
     });
 
     await this._persistOAuthTokens(scopedPluginId);
-    if (tokenKey) {
-      await this._markScopedTokenKeyInitialized(scopedPluginId);
-    }
 
     return tokens;
   }
@@ -122,25 +120,18 @@ export class PluginOAuthBridgeService {
     const legacyKey = this._oauthPersistenceKey(pluginId);
     const scopedKey = this._oauthPersistenceKey(pluginId, tokenKey);
 
-    if (await this._hasStoredTokens(scopedKey)) {
-      await this._markScopedTokenKeyInitialized(scopedKey);
-      return true;
-    }
-    if (await this._isScopedTokenKeyInitialized(scopedKey)) {
+    try {
+      const serialized = await moveOAuthTokens(legacyKey, scopedKey);
+      this._pluginOAuthService.clearTokens(legacyKey);
+      if (!serialized) {
+        return false;
+      }
+      this._pluginOAuthService.restoreTokens(scopedKey, serialized);
+      return this._pluginOAuthService.hasTokens(scopedKey);
+    } catch (error) {
+      PluginLog.err('PluginOAuthBridge: Failed to migrate legacy OAuth tokens:', error);
       return false;
     }
-    if (!(await this._hasStoredTokens(legacyKey))) {
-      return false;
-    }
-
-    const serialized = this._pluginOAuthService.serializeTokens(legacyKey);
-    if (!serialized) {
-      return false;
-    }
-    this._pluginOAuthService.restoreTokens(scopedKey, serialized);
-    await saveOAuthTokens(scopedKey, serialized);
-    await this._markScopedTokenKeyInitialized(scopedKey);
-    return true;
   }
 
   async restoreAndCheckOAuthTokens(
@@ -198,34 +189,6 @@ export class PluginOAuthBridgeService {
 
   private _oauthPersistenceKey(pluginId: string, tokenKey?: string): string {
     return tokenKey ? `${pluginId}__oauth__${tokenKey}` : `${pluginId}__oauth`;
-  }
-
-  private _scopedTokenMarkerKey(scopedKey: string): string {
-    return `${scopedKey}__initialized`;
-  }
-
-  private async _hasStoredTokens(oauthKey: string): Promise<boolean> {
-    if (!this._pluginOAuthService.hasTokens(oauthKey)) {
-      await this._restoreOAuthTokens(oauthKey);
-    }
-    return this._pluginOAuthService.hasTokens(oauthKey);
-  }
-
-  private async _isScopedTokenKeyInitialized(scopedKey: string): Promise<boolean> {
-    try {
-      return (await loadOAuthTokens(this._scopedTokenMarkerKey(scopedKey))) !== null;
-    } catch (error) {
-      PluginLog.err('PluginOAuthBridge: Failed to read scoped OAuth marker:', error);
-      return false;
-    }
-  }
-
-  private async _markScopedTokenKeyInitialized(scopedKey: string): Promise<void> {
-    try {
-      await saveOAuthTokens(this._scopedTokenMarkerKey(scopedKey), '1');
-    } catch (error) {
-      PluginLog.err('PluginOAuthBridge: Failed to persist scoped OAuth marker:', error);
-    }
   }
 
   private async _persistOAuthTokens(oauthKey: string): Promise<void> {

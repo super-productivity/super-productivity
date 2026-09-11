@@ -1,5 +1,5 @@
+// Internal host ↔ bundled Google Calendar contract, not a third-party plugin API.
 export const PLUGIN_OAUTH_TOKEN_KEY_CFG_KEY = '__spOAuthTokenKey';
-export const PLUGIN_OAUTH_LEGACY_FALLBACK_CFG_KEY = '__spOAuthLegacyFallback';
 export const GOOGLE_CALENDAR_PLUGIN_ID = 'google-calendar-provider';
 
 export const shouldScopePluginOAuth = (pluginId: string): boolean =>
@@ -15,4 +15,4 @@ export const withPluginOAuthTokenKey = (
         ...pluginConfig,
         [PLUGIN_OAUTH_TOKEN_KEY_CFG_KEY]: issueProviderId,
       }
-    : pluginConfig;
+    : { ...pluginConfig };

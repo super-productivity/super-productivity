@@ -597,6 +597,8 @@ export class PluginAPI implements PluginAPIInterface {
     return this.#pluginI18nService.getCurrentLanguage();
   }
 
+  // tokenKey is an internal host ↔ bundled Google Calendar contract.
+  // Third-party plugins use the published, unscoped OAuth API.
   async startOAuthFlow(
     config: OAuthFlowConfig,
     tokenKey?: string,
