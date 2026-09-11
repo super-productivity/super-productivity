@@ -2202,6 +2202,7 @@
         "GROUP_TAG": "Tag",
         "RESET_ALL": "Reset All",
         "SAVE_SORT": "Apply sort to task order",
+        "SAVE_SORT_NO_CHANGES": "The task order already matches this sort.",
         "SCHEDULED_NEXT_MONTH": "Next Month",
         "SCHEDULED_NEXT_WEEK": "Next Week",
         "SCHEDULED_THIS_MONTH": "This Month",
