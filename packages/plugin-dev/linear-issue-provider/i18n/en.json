@@ -3,6 +3,7 @@
     "API_KEY": "API Key",
     "TEAM_ID": "Team ID (optional, filter to a specific team)",
     "PROJECT_ID": "Project ID (optional, filter to a specific project)",
+    "AUTO_IMPORT_CURRENT_CYCLE_ONLY": "Only auto-import issues from current cycle",
     "HOW_TO_GET_TOKEN": "Get your API key"
   },
   "DISPLAY": {
