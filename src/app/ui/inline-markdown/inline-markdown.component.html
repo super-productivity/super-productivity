@@ -4,7 +4,25 @@
   class="markdown-wrapper"
   spResolveClipboardImages
 >
-  @if (isShowEdit() || !isMarkdownFormattingEnabled()) {
+  @if (isLiveMarkdownEditor()) {
+    <!--
+      Always mounted: the live editor is both the read and the edit view, so
+      there is no preview to toggle against. Lazy chunk on purpose — CodeMirror
+      is ~89kB transfer and users who turn the setting off never load it (#9910).
+    -->
+    @defer (on immediate) {
+      <live-markdown-editor
+        #liveEditorEl
+        [model]="modelCopy() ?? ''"
+        [placeholderTxt]="placeholderTxt() ?? ''"
+        [autoFocus]="isLock() || isPendingLiveFocus()"
+        (changed)="onLiveEditorChanged($event)"
+        (focused)="onLiveEditorFocused()"
+        (blurred)="onLiveEditorBlurred()"
+        (pasted)="pasteHandler($event)"
+      ></live-markdown-editor>
+    }
+  } @else if (isShowEdit() || !isMarkdownFormattingEnabled()) {
     <textarea
       #textareaEl
       (blur)="untoggleShowEdit(); setBlur($event)"

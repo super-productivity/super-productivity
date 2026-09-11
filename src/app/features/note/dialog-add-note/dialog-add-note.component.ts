@@ -12,6 +12,7 @@ import { MatButton, MatIconButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import { SnackService } from '../../../core/snack/snack.service';
 import { IS_MOBILE } from 'src/app/util/is-mobile';
+import { LiveMarkdownEditorComponent } from '../../../ui/inline-markdown/live-markdown/live-markdown-editor.component';
 
 @Component({
   // selector: 'dialog-add-note',
@@ -32,6 +33,7 @@ import { IS_MOBILE } from 'src/app/util/is-mobile';
     MatButton,
     MatIconButton,
     TranslatePipe,
+    LiveMarkdownEditorComponent,
   ],
 })
 export class DialogAddNoteComponent extends DialogFullscreenMarkdownComponent {

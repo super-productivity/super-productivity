@@ -39,6 +39,11 @@ export type MiscConfig = Readonly<{
   // the right edge of the viewport instead of the horizontal top header.
   // Desktop only. Optional because it was added later.
   isVerticalActionBar?: boolean;
+  // Experimental Obsidian-style note editor (#9910): renders markdown inline
+  // while typing instead of showing raw source plus a separate preview.
+  // Optional + runtime default on purpose: a required field on a persisted model
+  // fails typia validation on every existing install (AGENTS.md sync rule 11).
+  isLiveMarkdownPreview?: boolean;
   // optional because it was added later
   isDisableCelebration?: boolean;
   isShowProductivityTipLonger?: boolean;

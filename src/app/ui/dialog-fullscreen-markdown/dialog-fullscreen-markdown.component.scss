@@ -119,6 +119,17 @@
     min-height: 0;
     overflow: hidden;
 
+    // The live editor replaces the textarea 1:1 here; it brings its own padding
+    // and font sizes (live-markdown-theme), so only the flex/scroll box is set.
+    live-markdown-editor {
+      flex-grow: 1;
+      // Allow proper flex shrinking
+      min-height: 0;
+      overflow: auto;
+
+      @include scrollY;
+    }
+
     textarea {
       flex-grow: 1;
       padding: var(--s) var(--s2);

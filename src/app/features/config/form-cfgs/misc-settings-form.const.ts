@@ -123,6 +123,13 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
       },
     },
     {
+      key: 'isLiveMarkdownPreview',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.GCF.MISC.IS_LIVE_MARKDOWN_PREVIEW,
+      },
+    },
+    {
       key: 'isDisableCelebration',
       type: 'checkbox',
       templateOptions: {

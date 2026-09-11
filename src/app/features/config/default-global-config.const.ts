@@ -59,6 +59,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     startOfNextDayTime: '00:00',
     isDisableAnimations: false,
     isVerticalActionBar: false,
+    isLiveMarkdownPreview: true,
     isDisableCelebration: false,
     // NOTE: isUseCustomWindowTitleBar is intentionally NOT defaulted here. A
     // persisted default would be pushed to Electron on every launch and override

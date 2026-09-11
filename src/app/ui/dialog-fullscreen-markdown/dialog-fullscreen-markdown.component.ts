@@ -1,6 +1,7 @@
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
+  computed,
   ChangeDetectorRef,
   Component,
   DestroyRef,
@@ -55,6 +56,8 @@ import { IS_MOBILE } from 'src/app/util/is-mobile';
 import { IS_IOS } from 'src/app/util/is-ios';
 import { Keyboard } from '@capacitor/keyboard';
 import { DialogMarkdownShortcutsComponent } from './dialog-markdown-shortcuts.component';
+import { LiveMarkdownEditorComponent } from '../inline-markdown/live-markdown/live-markdown-editor.component';
+import { GlobalConfigService } from '../../features/config/global-config.service';
 import {
   isShortcutWithKey,
   MARKDOWN_SHORTCUTS,
@@ -82,6 +85,7 @@ const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TE
     MatIconButton,
     MatTooltip,
     TranslatePipe,
+    LiveMarkdownEditorComponent,
   ],
 })
 export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit {
@@ -91,6 +95,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   private readonly _clipboardPasteHandler = inject(ClipboardPasteHandlerService);
   private readonly _cdr = inject(ChangeDetectorRef);
   private readonly _dateService = inject(DateService);
+  private readonly _globalConfigService = inject(GlobalConfigService);
   _matDialogRef = inject<MatDialogRef<DialogFullscreenMarkdownComponent>>(MatDialogRef);
   data: {
     content: string;
@@ -104,8 +109,26 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
 
   T: typeof T = T;
   viewMode: ViewMode = isSmallScreen() ? 'TEXT_ONLY' : 'SPLIT';
+  /**
+   * The live editor renders and edits in the same view, so the TEXT/SPLIT/PARSED
+   * toggle has nothing left to switch between and is dropped entirely (#9910).
+   */
+  readonly isLiveMarkdown = computed(
+    () => this._globalConfigService.misc()?.isLiveMarkdownPreview ?? true,
+  );
   readonly previewEl = viewChild<MarkdownComponent>('previewEl');
   readonly textareaEl = viewChild<ElementRef>('textareaEl');
+  readonly liveEditorEl = viewChild<LiveMarkdownEditorComponent>('liveEditorEl');
+  /** Ctrl/Cmd+Enter saves and closes, matching the textarea's keydownHandler. */
+  readonly liveEditorKeymap = [
+    {
+      key: 'Mod-Enter',
+      run: (): boolean => {
+        this.close();
+        return true;
+      },
+    },
+  ];
   readonly contentChanged = output<string>();
   private readonly _contentChanges$ = new Subject<string>();
   private _currentPastePlaceholder: string | null = null;
@@ -133,6 +156,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
 
     const lastViewMode = localStorage.getItem(LS.LAST_FULLSCREEN_EDIT_VIEW_MODE);
     if (
+      !this.isLiveMarkdown() &&
       ALL_VIEW_MODES.includes(lastViewMode as ViewMode) &&
       // empty notes should never be in preview mode
       this.data &&
@@ -209,8 +233,14 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   }
 
   ngAfterViewInit(): void {
-    // Focus textarea if present (not in PARSED view mode)
+    // Focus textarea if present (not in PARSED view mode). The live editor
+    // focuses itself via [autoFocus].
     this.textareaEl()?.nativeElement?.focus();
+  }
+
+  onLiveEditorDocChanged(content: string): void {
+    this.data.content = content;
+    this._contentChanges$.next(content);
   }
 
   openShortcutsHelp(): void {
@@ -317,7 +347,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
         this.data.content = content;
         this._contentChanges$.next(content);
       },
-      getTextarea: () => this.textareaEl()?.nativeElement || null,
+      getTextarea: () => this.liveEditorEl() ?? this.textareaEl()?.nativeElement ?? null,
       getTaskId: () => this.data.taskId || null,
     });
   }
@@ -471,6 +501,13 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   private _applyTransformWithArgs(
     transformFn: (text: string, start: number, end: number) => TextTransformResult,
   ): void {
+    const liveEditorEl = this.liveEditorEl();
+    if (liveEditorEl) {
+      // The editor dispatches the change itself; onLiveEditorDocChanged then
+      // syncs data.content, so there is no selection to restore by hand.
+      liveEditorEl.applyTransform(transformFn);
+      return;
+    }
     const textarea = this.textareaEl()?.nativeElement;
     if (!textarea) {
       return;

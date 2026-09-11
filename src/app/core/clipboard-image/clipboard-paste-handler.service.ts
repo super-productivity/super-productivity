@@ -5,6 +5,19 @@ import { TaskAttachmentService } from '../../features/tasks/task-attachment/task
 import { clipboardHasText } from '../../util/clipboard-has-text';
 import { T } from '../../t.const';
 
+/**
+ * Minimal editor surface the paste flow touches. Structurally satisfied by
+ * `HTMLTextAreaElement` and by `LiveMarkdownEditorComponent`, so image paste
+ * works the same in both editors.
+ */
+export interface PasteTargetEl {
+  readonly value: string;
+  readonly selectionStart: number;
+  readonly selectionEnd: number;
+  focus(): void;
+  setSelectionRange(start: number, end: number): void;
+}
+
 // Paste context interface
 export interface PasteContext {
   currentPlaceholder: {
@@ -13,7 +26,7 @@ export interface PasteContext {
   };
   getContent(): string;
   setContent(content: string): void;
-  getTextarea(): HTMLTextAreaElement | null;
+  getTextarea(): PasteTargetEl | null;
   getTaskId(): string | null;
   onPasteComplete?(content: string): void;
 }

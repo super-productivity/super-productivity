@@ -23,6 +23,9 @@ describe('InlineMarkdownComponent', () => {
   beforeEach(async () => {
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       tasks: jasmine.createSpy().and.returnValue({ isTurnOffMarkdown: false }),
+      // The experimental live editor reads misc.isLiveMarkdownPreview; these
+      // specs all cover the default (textarea) path.
+      misc: jasmine.createSpy().and.returnValue({ isLiveMarkdownPreview: false }),
     });
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
     mockClipboardImageService = jasmine.createSpyObj('ClipboardImageService', [

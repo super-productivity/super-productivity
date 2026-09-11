@@ -38,6 +38,7 @@ import { ClipboardImageService } from '../../core/clipboard-image/clipboard-imag
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { ResolveClipboardImagesDirective } from '../../core/clipboard-image/resolve-clipboard-images.directive';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
+import { LiveMarkdownEditorComponent } from './live-markdown/live-markdown-editor.component';
 import { Store } from '@ngrx/store';
 import { Location } from '@angular/common';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
@@ -68,6 +69,7 @@ const DRAG_THRESHOLD_PX = 5;
     MatMenuTrigger,
     TranslatePipe,
     ResolveClipboardImagesDirective,
+    LiveMarkdownEditorComponent,
   ],
 })
 export class InlineMarkdownComponent implements OnInit, OnDestroy {
@@ -112,10 +114,14 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   readonly wrapperEl = viewChild<ElementRef>('wrapperEl');
   readonly textareaEl = viewChild<ElementRef>('textareaEl');
   readonly previewEl = viewChild<MarkdownComponent>('previewEl');
+  readonly liveEditorEl = viewChild<LiveMarkdownEditorComponent>('liveEditorEl');
 
   isHideOverflow = signal(false);
   isChecklistMode = signal(false);
   isShowEdit = signal(false);
+  // Set when a parent asks for focus before the deferred editor chunk has
+  // loaded; the editor picks it up via [autoFocus] once it mounts.
+  isPendingLiveFocus = signal(false);
   modelCopy = signal<string | undefined>(undefined);
   resolvedModel = signal<string | undefined>(undefined);
   // Plain property for markdown component compatibility
@@ -128,6 +134,13 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   isTurnOffMarkdownParsing = computed(() => !this.isMarkdownFormattingEnabled());
 
+  // Obsidian-style editor (#9910): renders and edits in one view, so it fully
+  // replaces the read preview here. Only meaningful when markdown parsing is on.
+  isLiveMarkdownEditor = computed(() => {
+    const misc = this._globalConfigService.misc();
+    return this.isMarkdownFormattingEnabled() && (misc?.isLiveMarkdownPreview ?? true);
+  });
+
   // The rendered preview shows in read mode, and also below the textarea while
   // editing (live preview) — unless the consumer opts out via
   // isHidePreviewWhileEditing (the compact focus-mode panel does, to stay a
@@ -135,6 +148,9 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   isShowPreview = computed(
     () =>
       !this.isTurnOffMarkdownParsing() &&
+      // The live editor renders inline at all times — a second rendered copy
+      // would just duplicate the note.
+      !this.isLiveMarkdownEditor() &&
       !(this.isHidePreviewWhileEditing() && this.isShowEdit()),
   );
 
@@ -211,6 +227,13 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   // TODO: Skipped for migration because:
   //  Accessor inputs cannot be migrated as they are too complex.
   @Input() set isFocus(val: boolean) {
+    if (this.isLiveMarkdownEditor()) {
+      if (val) {
+        this.isPendingLiveFocus.set(true);
+        this.liveEditorEl()?.focus();
+      }
+      return;
+    }
     if (!this.isShowEdit() && val) {
       this._toggleShowEdit();
     }
@@ -233,7 +256,18 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       window.clearTimeout(this._hideOverFlowTimeout);
     }
 
-    if (this.isShowEdit() && !this._isFullscreenDialogOpen) {
+    if (this._isFullscreenDialogOpen) {
+      return;
+    }
+    const liveEditorEl = this.liveEditorEl();
+    if (liveEditorEl) {
+      // The live editor commits on blur; destroying the panel never blurs it.
+      if (liveEditorEl.value !== this.model) {
+        this.changed.emit(liveEditorEl.value);
+      }
+      return;
+    }
+    if (this.isShowEdit()) {
       const textareaEl = this.textareaEl();
       if (textareaEl) {
         const currentValue = textareaEl.nativeElement.value;
@@ -261,9 +295,9 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   }
 
   private _applyChecklistTransform(transform: (notes: string) => string): void {
-    // Read the freshest content: the textarea when editing, else the model.
+    // Read the freshest content: whichever editor is mounted, else the model.
     const textareaEl = this.textareaEl();
-    const current = textareaEl ? textareaEl.nativeElement.value : this._model || '';
+    const current = this._currentText();
     const next = transform(current);
     if (next === current) {
       return;
@@ -325,16 +359,18 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
         get: () => this._currentPastePlaceholder,
         set: (val) => (this._currentPastePlaceholder = val),
       },
-      getContent: () => this._model || '',
+      getContent: () => this._currentText(),
       setContent: (content) => {
         this.modelCopy.set(content);
         this._model = content;
         this.changed.emit(content);
       },
-      getTextarea: () => this.textareaEl()?.nativeElement || null,
+      getTextarea: () => this.liveEditorEl() ?? this.textareaEl()?.nativeElement ?? null,
       getTaskId: () => this.taskId() || null,
       onPasteComplete: async (content) => {
-        this.resizeTextareaToFit();
+        if (!this.liveEditorEl()) {
+          this.resizeTextareaToFit();
+        }
         await this._updateResolvedModel(content);
       },
     });
@@ -397,6 +433,36 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Commit a change made in the live editor (emitted on blur, like the textarea). */
+  onLiveEditorChanged(value: string): void {
+    this.modelCopy.set(value);
+    this.model = value;
+    this.changed.emit(value);
+  }
+
+  onLiveEditorFocused(): void {
+    this.isPendingLiveFocus.set(false);
+    this.isShowEdit.set(true);
+    this.focused.emit(new FocusEvent('focus'));
+  }
+
+  onLiveEditorBlurred(): void {
+    if (!this.isLock()) {
+      this.isShowEdit.set(false);
+    }
+    this.setBlur(new FocusEvent('blur'));
+  }
+
+  /** Freshest text, from whichever editor is mounted. */
+  private _currentText(): string {
+    const liveEditorEl = this.liveEditorEl();
+    if (liveEditorEl) {
+      return liveEditorEl.value;
+    }
+    const textareaEl = this.textareaEl();
+    return textareaEl ? textareaEl.nativeElement.value : this._model || '';
+  }
+
   resizeTextareaToFit(): void {
     this._hideOverflow();
     const textareaEl = this.textareaEl();
@@ -415,14 +481,15 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   openFullScreen(): void {
     this._isFullscreenDialogOpen = true;
     const taskId = this.taskId();
-    // Read directly from textarea since modelCopy may be stale (one-way ngModel binding)
-    const textareaEl = this.textareaEl();
-    const currentContent = textareaEl ? textareaEl.nativeElement.value : this.modelCopy();
+    // Read straight from the live editor / textarea: modelCopy lags behind
+    // (one-way ngModel binding, and the live editor only commits on blur — which
+    // the toolbar button suppresses via mousedown.preventDefault).
+    const currentContent = this._currentText();
     // Saves-and-closes on a navigation (resize crossing the mobile breakpoint,
     // Android back) instead of dropping the edit — see openFullscreenMarkdownDialog
     // (#8434).
     const dialogRef = openFullscreenMarkdownDialog(this._matDialog, this._location, {
-      content: currentContent ?? '',
+      content: currentContent,
       taskId,
     });
 
@@ -617,6 +684,11 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   private _toggleShowEdit(cursorPos?: number): void {
     this.isShowEdit.set(true);
     this.modelCopy.set(this.model || '');
+    if (this.isLiveMarkdownEditor()) {
+      this.isPendingLiveFocus.set(true);
+      this.liveEditorEl()?.focus();
+      return;
+    }
     setTimeout(() => {
       const textareaEl = this.textareaEl();
       if (!textareaEl) {
