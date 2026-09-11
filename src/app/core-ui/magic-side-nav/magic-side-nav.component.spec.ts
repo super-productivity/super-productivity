@@ -230,7 +230,7 @@ describe('MagicSideNavComponent', () => {
       expect(navConfigServiceMock.onNavItemClick).toHaveBeenCalledOnceWith(item);
     });
 
-    it('still executes plugin actions directly and notifies the service', () => {
+    it('dispatches plugin items to the service without executing them directly', () => {
       fixture = TestBed.createComponent(MagicSideNavComponent);
       const action = jasmine.createSpy('pluginAction');
       const item: NavPluginItem = {
@@ -244,7 +244,7 @@ describe('MagicSideNavComponent', () => {
 
       fixture.componentInstance.onItemClick(item);
 
-      expect(action).toHaveBeenCalledTimes(1);
+      expect(action).not.toHaveBeenCalled();
       expect(navConfigServiceMock.onNavItemClick).toHaveBeenCalledOnceWith(item);
     });
   });
