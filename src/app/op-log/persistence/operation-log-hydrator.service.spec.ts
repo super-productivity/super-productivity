@@ -1805,6 +1805,46 @@ describe('OperationLogHydratorService', () => {
         );
       });
 
+      // #9863: a legacy-migrated client's log opens with its own MIGRATION
+      // genesis op. The corrupt-snapshot rebuild must hand that op to the bulk
+      // replay together with the local client id (the meta-reducer's ownership
+      // gate turns it into loadAllData), and must then persist the rebuilt
+      // state — this is the one replay path that writes its result back.
+      it('replays an own MIGRATION genesis op through the bulk apply and persists the rebuilt snapshot (#9863)', async () => {
+        mockOpLogStore.loadStateCache.and.resolveTo(createMockSnapshot());
+        mockSnapshotService.isValidSnapshot.and.returnValue(false);
+
+        const localClientId = 'test-client';
+        const genesisOp = createMockOperation('genesis-op', OpType.Batch, {
+          actionType: ActionType.MIGRATION_GENESIS_IMPORT,
+          entityType: 'MIGRATION',
+          entityId: '*',
+          payload: { task: { ids: ['pre-migration-task'], entities: {} } },
+          clientId: localClientId,
+          vectorClock: { [localClientId]: 1 },
+        });
+        const postMigrationOp = createMockOperation('post-migration-op', OpType.Create, {
+          clientId: localClientId,
+          vectorClock: { [localClientId]: 2 },
+        });
+        mockOpLogStore.getLastSeq.and.resolveTo(2);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([
+          createMockEntry(1, genesisOp),
+          createMockEntry(2, postMigrationOp),
+        ]);
+
+        await service.hydrateStore();
+
+        expect(mockRecoveryService.attemptRecovery).not.toHaveBeenCalled();
+        expect(mockStore.dispatch).toHaveBeenCalledWith(
+          bulkApplyHydrationOperations({
+            operations: [genesisOp, postMigrationOp],
+            localClientId,
+          }),
+        );
+        expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalled();
+      });
+
       it('should attempt recovery for an invalid snapshot only when no ops exist (lastSeq === 0) (#7892)', async () => {
         const invalidSnapshot = createMockSnapshot();
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(invalidSnapshot));
