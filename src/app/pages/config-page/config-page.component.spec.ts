@@ -15,6 +15,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { LocalBackupService } from '../../imex/local-backup/local-backup.service';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 import { T } from '../../t.const';
+import { getAutomaticBackUpFormCfg } from '../../features/config/form-cfgs/automatic-backups-form.const';
 
 describe('ConfigPageComponent', () => {
   let component: ConfigPageComponent;
@@ -155,5 +156,58 @@ describe('ConfigPageComponent', () => {
     await setup(true, null);
 
     expect(findLastBackupLine()).toBeUndefined();
+  });
+
+  it('rebuilds desktop backups after repeated picks without duplicating sections', async () => {
+    const originalEa = window.ea;
+    const getBackupPath = jasmine
+      .createSpy('getBackupPath')
+      .and.resolveTo('/backups/first');
+    const pickBackupFolder = jasmine
+      .createSpy('pickBackupFolder')
+      .and.resolveTo('/backups/next');
+    window.ea = { getBackupPath, pickBackupFolder } as unknown as typeof window.ea;
+    mockLocalBackupService.getLastBackupTime.and.returnValue(1_718_000_000_000);
+
+    try {
+      component['_updateAutomaticBackUpCfg']();
+      await Promise.resolve();
+      const sectionCount = component.globalImexFormCfg.length;
+      for (const folder of ['/backups/second', '/backups/third']) {
+        getBackupPath.and.resolveTo(folder);
+        const section = component.globalImexFormCfg.find((s) => s.key === 'localBackup');
+        await section?.actions?.[0].onClick();
+        await Promise.resolve();
+
+        expect(component.globalImexFormCfg.length).toBe(sectionCount);
+        const sections = component.globalImexFormCfg.filter(
+          (s) => s.key === 'localBackup',
+        );
+        expect(sections.length).toBe(1);
+        expect(JSON.stringify(sections[0].items)).toContain(folder);
+        expect(findLastBackupLine()).toBeTruthy();
+      }
+      expect(pickBackupFolder).toHaveBeenCalledTimes(2);
+    } finally {
+      window.ea = originalEa;
+    }
+  });
+
+  it('escapes the desktop backup path and preserves the translated help', () => {
+    const section = getAutomaticBackUpFormCfg('/backups/<folder>"&');
+    const items = section.items as Array<{
+      templateOptions?: { text?: string };
+    }>;
+    const link = items.find((item) => item.templateOptions?.text?.startsWith('<a '));
+
+    expect(section.help).toBe(T.GCF.AUTO_BACKUPS.HELP);
+    expect(
+      items.some(
+        (item) => item.templateOptions?.text === T.GCF.AUTO_BACKUPS.HELP_DESKTOP,
+      ),
+    ).toBe(true);
+    expect(link?.templateOptions?.text).toBe(
+      '<a href="file:///backups/&lt;folder&gt;&quot;&amp;" target="_blank">/backups/&lt;folder&gt;&quot;&amp;</a>',
+    );
   });
 });
