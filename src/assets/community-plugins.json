@@ -174,5 +174,13 @@
     "author": "InitialCrow",
     "authorUrl": "https://github.com/InitialCrow",
     "stars": 0
+  },
+  {
+    "name": "OKR",
+    "shortDescription": "Manage objectives and key results in fixed two-month periods, with reordering, carry-over, and self-reviews for past objectives.",
+    "url": "https://github.com/x850044053wwt/super-productivity-okr",
+    "author": "dave",
+    "authorUrl": "https://github.com/x850044053wwt",
+    "stars": 0
   }
 ]
