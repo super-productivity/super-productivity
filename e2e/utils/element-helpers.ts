@@ -56,3 +56,16 @@ export const ensureGlobalAddTaskBarOpen = async (page: Page): Promise<Locator> =
   await addTaskInput.waitFor({ state: 'visible', timeout: 10000 });
   return addTaskInput;
 };
+
+/**
+ * The calendar header's "next month" arrow inside a scope (usually a dialog).
+ *
+ * Do not reach for this by role: the datetime picker's quick-access row has its
+ * own "Next month" shortcut, so `getByRole('button', { name: /next month/i })`
+ * matches two elements and fails on strict mode.
+ *
+ * @param scope - Locator to search within, e.g. the schedule dialog
+ * @returns Locator - The calendar's next-month navigation button
+ */
+export const calendarNextMonthBtn = (scope: Locator): Locator =>
+  scope.locator('.mat-calendar-next-button');
