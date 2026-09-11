@@ -243,7 +243,8 @@ npx prisma generate
 
 # Set up .env
 cp env.example .env
-# Edit .env to point to your PostgreSQL instance (DATABASE_URL)
+# Edit .env: point DATABASE_URL at your PostgreSQL instance, and set JWT_SECRET
+# and POSTGRES_PASSWORD — both ship empty and the server refuses to start without them
 
 # Push schema to DB
 npx prisma db push
