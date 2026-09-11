@@ -1,6 +1,7 @@
 import { createFeatureSelector, createSelector } from '@ngrx/store';
 import { FOCUS_MODE_FEATURE_KEY } from './focus-mode.reducer';
 import { FocusModeState } from '../focus-mode.model';
+import { selectCurrentTask } from '../../tasks/store/task.selectors';
 
 // Base selectors
 export const selectFocusModeState =
@@ -33,6 +34,12 @@ export const selectCurrentCycle = createSelector(
 export const selectLastSessionDuration = createSelector(
   selectFocusModeState,
   (state) => state.lastCompletedDuration,
+);
+
+// A paused work/break timer still owns the desktop timer display.
+export const selectIsTimerActive = createSelector(
+  selectTimer,
+  (timer) => timer.purpose !== null,
 );
 
 // Session selectors
@@ -124,4 +131,19 @@ export const selectIsInOvertime = createSelector(
     timer.purpose === 'work' &&
     timer.duration > 0 &&
     timer.elapsed >= timer.duration,
+);
+
+// Flowtime has no fixed duration: use the task estimate for desktop progress.
+// A negative value hides the bar when neither timer nor task has a target.
+export const selectDesktopProgress = createSelector(
+  selectTimer,
+  selectCurrentTask,
+  (timer, task) => {
+    if (timer.purpose === null) return -1;
+    if (timer.duration > 0) return timer.elapsed / timer.duration;
+    if (timer.purpose === 'work' && task && task.timeEstimate > 0) {
+      return task.timeSpent / task.timeEstimate;
+    }
+    return -1;
+  },
 );

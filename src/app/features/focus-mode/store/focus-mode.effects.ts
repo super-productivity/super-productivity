@@ -875,13 +875,13 @@ export class FocusModeEffects {
           // Use leading + trailing to ensure immediate feedback and final state
           throttleTime(500, undefined, { leading: true, trailing: true }),
           withLatestFrom(
-            this.store.select(selectors.selectProgress),
+            this.store.select(selectors.selectDesktopProgress),
             this.store.select(selectors.selectIsRunning),
           ),
           tap(([_action, progress, isRunning]) => {
             window.ea.setProgressBar({
-              progress: progress / 100,
-              progressBarMode: isRunning ? 'normal' : 'pause',
+              progress,
+              progressBarMode: progress < 0 ? 'none' : isRunning ? 'normal' : 'pause',
             });
           }),
         ),

@@ -13,7 +13,7 @@ import {
 import { selectCurrentTask, selectTaskEntities } from './task.selectors';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { GlobalConfigService } from '../../config/global-config.service';
-import { selectIsOverlayShown } from '../../focus-mode/store/focus-mode.selectors';
+import { selectIsTimerActive } from '../../focus-mode/store/focus-mode.selectors';
 import { TimeTrackingActions } from '../../time-tracking/store/time-tracking.actions';
 import { FocusModeService } from '../../focus-mode/focus-mode.service';
 import {
@@ -36,7 +36,7 @@ import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 @Injectable()
 export class TaskElectronEffects {
   private _actions$ = inject(LOCAL_ACTIONS);
-  private _store$ = inject<Store<any>>(Store);
+  private _store$ = inject(Store);
   private _configService = inject(GlobalConfigService);
   private _focusModeService = inject(FocusModeService);
   private _taskService = inject(TaskService);
@@ -58,7 +58,7 @@ export class TaskElectronEffects {
         .pipe(
           select(selectCurrentTask),
           withLatestFrom(
-            this._store$.pipe(select(selectIsOverlayShown)),
+            this._store$.pipe(select(selectIsTimerActive)),
             this._focusModeService.currentSessionTime$,
           ),
           // Only take the first value and complete
@@ -127,7 +127,7 @@ export class TaskElectronEffects {
         throttleTime(500, undefined, { leading: true, trailing: true }),
         withLatestFrom(
           this._store$.pipe(select(selectCurrentTask)),
-          this._store$.pipe(select(selectIsOverlayShown)),
+          this._store$.pipe(select(selectIsTimerActive)),
           this._focusModeService.currentSessionTime$.pipe(startWith(0)),
         ),
         tap(([action, current, isFocusModeEnabled, currentFocusSessionTime]) => {
@@ -148,7 +148,9 @@ export class TaskElectronEffects {
     () =>
       this._actions$.pipe(
         ofType(setCurrentTask),
-        tap(({ id }) => {
+        withLatestFrom(this._store$.select(selectIsTimerActive)),
+        filter(([, isTimerActive]) => !isTimerActive),
+        tap(([{ id }]) => {
           if (!id) {
             window.ea.setProgressBar({
               progress: -1,
@@ -164,7 +166,9 @@ export class TaskElectronEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
-        tap(({ task }) => {
+        withLatestFrom(this._store$.select(selectIsTimerActive)),
+        filter(([, isTimerActive]) => !isTimerActive),
+        tap(([{ task }]) => {
           if (task.changes.isDone) {
             window.ea.setProgressBar({
               progress: -1,
@@ -184,8 +188,8 @@ export class TaskElectronEffects {
         // collapses 1 IPC/sec into ~1 IPC/3s. Leading+trailing keeps the first
         // tick after start instant and the final value at the end of a window.
         throttleTime(3000, undefined, { leading: true, trailing: true }),
-        withLatestFrom(this._store$.select(selectIsOverlayShown)),
-        // Don't show progress bar when focus session is running
+        withLatestFrom(this._store$.select(selectIsTimerActive)),
+        // The timer owns progress even while paused or its overlay is hidden.
         filter(([a, isFocusSessionRunning]) => !isFocusSessionRunning),
         tap(([{ task }]) => {
           const progress = task.timeSpent / task.timeEstimate;

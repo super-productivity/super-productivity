@@ -1,3 +1,4 @@
+import { DEFAULT_TASK } from '../../tasks/task.model';
 import * as selectors from './focus-mode.selectors';
 import {
   FocusModeState,
@@ -473,5 +474,57 @@ describe('FocusModeSelectors', () => {
 
       expect(result).toBe(false);
     });
+  });
+});
+
+describe('desktop progress for focus timers', () => {
+  const timer: TimerState = {
+    purpose: 'work',
+    isRunning: true,
+    elapsed: 90000,
+    duration: 0,
+    startedAt: 1,
+  };
+  const task = {
+    ...DEFAULT_TASK,
+    id: 'task',
+    projectId: 'project',
+    subTasks: [],
+    timeSpent: 30 * 60000,
+    timeEstimate: 45 * 60000,
+  };
+
+  it('uses task progress for a running or paused Flowtime session', () => {
+    expect(selectors.selectDesktopProgress.projector(timer, task)).toBeCloseTo(2 / 3);
+    expect(
+      selectors.selectDesktopProgress.projector({ ...timer, isRunning: false }, task),
+    ).toBeCloseTo(2 / 3);
+  });
+  it('preserves overtime progress for the Electron boundary to clamp', () => {
+    expect(
+      selectors.selectDesktopProgress.projector(timer, {
+        ...task,
+        timeSpent: 90 * 60000,
+      }),
+    ).toBe(2);
+  });
+  it('uses session progress for fixed work and break durations', () => {
+    for (const purpose of ['work', 'break'] as const) {
+      expect(
+        selectors.selectDesktopProgress.projector(
+          { ...timer, purpose, duration: 300000 },
+          task,
+        ),
+      ).toBe(0.3);
+    }
+  });
+  it('hides progress without a target instead of showing an empty bar', () => {
+    expect(selectors.selectDesktopProgress.projector(timer, null)).toBe(-1);
+    expect(
+      selectors.selectDesktopProgress.projector(timer, { ...task, timeEstimate: 0 }),
+    ).toBe(-1);
+    expect(
+      selectors.selectDesktopProgress.projector({ ...timer, purpose: null }, task),
+    ).toBe(-1);
   });
 });
