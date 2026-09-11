@@ -1011,7 +1011,6 @@ const T = {
         MSG: 'F.PROJECT.D_DELETE.MSG',
       },
       D_RENAME: {
-        LABEL: 'F.PROJECT.D_RENAME.LABEL',
         PLACEHOLDER: 'F.PROJECT.D_RENAME.PLACEHOLDER',
       },
       COMPLETE: {
@@ -1820,7 +1819,6 @@ const T = {
         CONFIRM_MSG: 'F.TAG.D_DELETE.CONFIRM_MSG',
       },
       D_RENAME: {
-        LABEL: 'F.TAG.D_RENAME.LABEL',
         PLACEHOLDER: 'F.TAG.D_RENAME.PLACEHOLDER',
       },
       D_EDIT: {
