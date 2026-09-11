@@ -136,6 +136,10 @@
   <div class="title">{{ headerTitle() }}</div>
 </div>
 
+@if (!monthEvents().length) {
+  <div class="empty">{{ T.F.SCHEDULE.EMPTY | translate }}</div>
+}
+
 <div
   class="scroll-wrapper"
   [attr.data-horizontal-scroll]="shouldEnableHorizontalScroll() || null"

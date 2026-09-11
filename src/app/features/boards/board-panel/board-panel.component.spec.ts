@@ -158,6 +158,20 @@ describe('BoardPanelComponent - Backlog Feature', () => {
     expect(tasks[0].id).toBe(mockNonBacklogTaskId);
   });
 
+  it('should show the empty hint only while the panel has no tasks', () => {
+    fixture.componentRef.setInput('panelCfg', {
+      ...mockPanelCfg,
+      taskIds: [],
+      projectIds: ['p2'],
+    } as BoardPanelCfg);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.empty')).toBeTruthy();
+
+    fixture.componentRef.setInput('panelCfg', mockPanelCfg as BoardPanelCfg);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.empty')).toBeFalsy();
+  });
+
   it('should include all tasks regardless of backlog when backlogState is All', () => {
     fixture.componentRef.setInput('panelCfg', {
       ...mockPanelCfg,

@@ -7,6 +7,9 @@
   background: transparent;
   display: flex;
   flex-direction: column;
+  // containing block for the empty hint, which overlays rather than
+  // occupying a row (see .empty)
+  position: relative;
 }
 
 // we need this to prevent problems with route ani and scroll behavior
@@ -57,6 +60,24 @@
       }
     }
   }
+}
+
+// Overlaid, not in flow: as a flow child this stole ~50px from .scroll-wrapper,
+// and the month grid is sized against the viewport (calc(100vh - 120px)), so it
+// could not absorb the loss and clipped its last week row. Centring over the
+// whole host also avoids hard-coding an offset for .schedule-nav-controls.
+.empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  // let click-to-create keep working on the grid underneath
+  pointer-events: none;
+  padding: var(--s2);
+  text-align: center;
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
 }
 
 .schedule-nav-controls {

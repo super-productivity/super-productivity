@@ -866,6 +866,72 @@ describe('ScheduleComponent', () => {
     });
   });
 
+  describe('empty state', () => {
+    it('shows the empty hint when there is nothing scheduled', () => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.empty')).toBeTruthy();
+    });
+
+    it('hides the empty hint as soon as there is an event', () => {
+      mockScheduleService.createScheduleDaysWithContext.and.returnValue([
+        {
+          dayDate: '2026-01-20',
+          entries: [],
+          beyondBudgetTasks: [
+            {
+              id: 'some-task',
+              title: 'Some task',
+              timeEstimate: 30 * 60 * 1000,
+              timeSpent: 0,
+              subTaskIds: [],
+              dueDay: '2026-01-20',
+            } as unknown as ScheduleDay['beyondBudgetTasks'][number],
+          ],
+          isToday: true,
+        },
+      ]);
+      component['_selectedDate'].set(new Date(2026, 0, 20));
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.empty')).toBeFalsy();
+    });
+
+    // Regression test: as a flow child the hint stole its own height from
+    // .scroll-wrapper. The month grid is sized against the viewport
+    // (calc(100vh - 120px)) so it could not absorb that, and showing the hint
+    // clipped the last week row behind a new scrollbar. The hint must overlay.
+    it('does not push the scroll area down when it is shown', () => {
+      fixture.detectChanges();
+      const wrapper = fixture.nativeElement.querySelector(
+        '.scroll-wrapper',
+      ) as HTMLElement;
+      expect(fixture.nativeElement.querySelector('.empty')).toBeTruthy();
+      const topWithHint = wrapper.offsetTop;
+
+      mockScheduleService.createScheduleDaysWithContext.and.returnValue([
+        {
+          dayDate: '2026-01-20',
+          entries: [],
+          beyondBudgetTasks: [
+            {
+              id: 'some-task',
+              title: 'Some task',
+              timeEstimate: 30 * 60 * 1000,
+              timeSpent: 0,
+              subTaskIds: [],
+              dueDay: '2026-01-20',
+            } as unknown as ScheduleDay['beyondBudgetTasks'][number],
+          ],
+          isToday: true,
+        },
+      ]);
+      component['_selectedDate'].set(new Date(2026, 0, 20));
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.empty')).toBeFalsy();
+
+      expect(wrapper.offsetTop).toBe(topWithHint);
+    });
+  });
+
   describe('currentTimeRow computed', () => {
     it('should return null when not viewing today', () => {
       // Arrange - view a future range that doesn't contain today
