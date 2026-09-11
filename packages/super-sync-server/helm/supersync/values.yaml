@@ -167,6 +167,9 @@ externalDatabase:
   # The server must be PostgreSQL 14+ on a Linux host: migrations set
   # client_connection_check_interval, which an older or non-Linux server
   # rejects at connect (see the server README).
+  # Rendered as a plain pod env value, so the password is visible in
+  # `helm get manifest`, `kubectl describe pod` and release-history Secrets.
+  # Prefer existingSecret below for anything but a throwaway cluster.
   url: ""
   # -- Use an existing Kubernetes secret for the database URL.
   # The secret must contain a DATABASE_URL key with the same pool parameters.
