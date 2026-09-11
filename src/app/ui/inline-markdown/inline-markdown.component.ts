@@ -669,7 +669,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
         // Deferred like the textarea path: the model write above only reaches
         // the editor's document once the effect has run.
         liveEditorEl.focus();
-        liveEditorEl.setSelectionRange(cursorPos, cursorPos);
+        liveEditorEl.setSelectionRange(selectionStart, selectionEnd ?? selectionStart);
         return;
       }
       const textareaEl = this.textareaEl();
