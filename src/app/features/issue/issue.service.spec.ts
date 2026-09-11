@@ -26,6 +26,9 @@ import { RedmineCommonInterfacesService } from './providers/redmine/redmine-comm
 import { CalendarCommonInterfacesService } from './providers/calendar/calendar-common-interfaces.service';
 import { PluginIssueProviderAdapterService } from '../../plugins/issue-provider/plugin-issue-provider-adapter.service';
 import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
+import { GlobalConfigService } from '../config/global-config.service';
+import { IssueProvider } from './issue.model';
+import { TaskReminderOptionId } from '../tasks/task.model';
 
 describe('IssueService', () => {
   let service: IssueService;
@@ -41,6 +44,10 @@ describe('IssueService', () => {
   let navigateToTaskServiceSpy: jasmine.SpyObj<NavigateToTaskService>;
   let pluginAdapterSpy: jasmine.SpyObj<PluginIssueProviderAdapterService>;
   let pluginRegistrySpy: jasmine.SpyObj<PluginIssueProviderRegistryService>;
+  let commonInterfaceServiceSpy: jasmine.SpyObj<{
+    getFreshDataForIssueTask: () => unknown;
+    getFreshDataForIssueTasks: () => unknown;
+  }>;
 
   const createMockTask = (overrides: Partial<Task> = {}): Task =>
     ({
@@ -139,7 +146,10 @@ describe('IssueService', () => {
     const mockCommonInterfaceService = jasmine.createSpyObj('CommonInterfaceService', [
       'isEnabled',
       'getAddTaskData',
+      'getFreshDataForIssueTask',
+      'getFreshDataForIssueTasks',
     ]);
+    commonInterfaceServiceSpy = mockCommonInterfaceService;
 
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
@@ -169,6 +179,14 @@ describe('IssueService', () => {
         },
         { provide: PluginIssueProviderAdapterService, useValue: pluginAdapterSpy },
         { provide: PluginIssueProviderRegistryService, useValue: pluginRegistrySpy },
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            cfg: () => ({
+              reminder: { defaultTaskRemindOption: TaskReminderOptionId.AtStart },
+            }),
+          },
+        },
       ],
     });
     service = TestBed.inject(IssueService);
@@ -785,6 +803,116 @@ describe('IssueService', () => {
           msg: T.F.TASK.S.FOUND_MOVE_FROM_BACKLOG,
         }),
       );
+    });
+  });
+  describe('poll-driven reschedule keeps remindAt in step with dueWithTime (#10047)', () => {
+    const MIN_10 = 10 * 60 * 1000;
+    const oldDue = new Date('2025-01-20T14:00:00Z').getTime();
+    const newDue = new Date('2025-01-21T09:00:00Z').getTime();
+    const caldavProvider = {
+      id: 'caldav-provider-1',
+      issueProviderKey: 'CALDAV',
+    } as IssueProvider;
+    const createCaldavTask = (overrides: Partial<Task> = {}): Task =>
+      createMockTask({
+        id: 'caldav-task-1',
+        issueId: 'caldav-issue-1',
+        issueProviderId: 'caldav-provider-1',
+        issueType: 'CALDAV',
+        dueWithTime: undefined,
+        remindAt: undefined,
+        ...overrides,
+      });
+    const changesOfLastUpdate = (): Partial<Task> =>
+      taskServiceSpy.update.calls.mostRecent().args[1];
+
+    it('bulk poll: a task scheduled remotely for the first time gets the default reminder', async () => {
+      const task = createCaldavTask();
+      commonInterfaceServiceSpy.getFreshDataForIssueTasks.and.returnValue(
+        Promise.resolve([
+          {
+            task,
+            taskChanges: { dueWithTime: newDue, issueWasUpdated: true },
+            issue: {},
+          },
+        ]),
+      );
+
+      await service.refreshIssueTasks([task], caldavProvider);
+
+      expect(taskServiceSpy.update).toHaveBeenCalledTimes(1);
+      expect(changesOfLastUpdate().dueWithTime).toBe(newDue);
+      expect(changesOfLastUpdate().remindAt).toBe(newDue);
+    });
+
+    it('bulk poll: a remote reschedule moves the reminder and keeps its offset', async () => {
+      const task = createCaldavTask({ dueWithTime: oldDue, remindAt: oldDue - MIN_10 });
+      commonInterfaceServiceSpy.getFreshDataForIssueTasks.and.returnValue(
+        Promise.resolve([
+          {
+            task,
+            taskChanges: { dueWithTime: newDue, issueWasUpdated: true },
+            issue: {},
+          },
+        ]),
+      );
+
+      await service.refreshIssueTasks([task], caldavProvider);
+
+      expect(changesOfLastUpdate().remindAt).toBe(newDue - MIN_10);
+    });
+
+    it('bulk poll: a remote unschedule clears the reminder', async () => {
+      const task = createCaldavTask({ dueWithTime: oldDue, remindAt: oldDue });
+      commonInterfaceServiceSpy.getFreshDataForIssueTasks.and.returnValue(
+        Promise.resolve([
+          {
+            task,
+            taskChanges: { dueWithTime: null, dueDay: null, issueWasUpdated: true },
+            issue: {},
+          },
+        ]),
+      );
+
+      await service.refreshIssueTasks([task], caldavProvider);
+
+      const changes = changesOfLastUpdate();
+      expect(Object.prototype.hasOwnProperty.call(changes, 'remindAt')).toBeTrue();
+      expect(changes.remindAt).toBeUndefined();
+    });
+
+    it('bulk poll: an unchanged schedule leaves remindAt alone', async () => {
+      const task = createCaldavTask({ dueWithTime: oldDue, remindAt: undefined });
+      commonInterfaceServiceSpy.getFreshDataForIssueTasks.and.returnValue(
+        Promise.resolve([
+          {
+            task,
+            taskChanges: { dueWithTime: oldDue, title: 'renamed', issueWasUpdated: true },
+            issue: {},
+          },
+        ]),
+      );
+
+      await service.refreshIssueTasks([task], caldavProvider);
+
+      expect(
+        Object.prototype.hasOwnProperty.call(changesOfLastUpdate(), 'remindAt'),
+      ).toBeFalse();
+    });
+
+    it('single refresh: a remote reschedule moves the reminder too', async () => {
+      const task = createCaldavTask({ dueWithTime: oldDue, remindAt: oldDue });
+      commonInterfaceServiceSpy.getFreshDataForIssueTask.and.returnValue(
+        Promise.resolve({
+          taskChanges: { dueWithTime: newDue, issueWasUpdated: true },
+          issue: {},
+          issueTitle: 'x',
+        }),
+      );
+
+      await service.refreshIssueTask(task, false, false);
+
+      expect(changesOfLastUpdate().remindAt).toBe(newDue);
     });
   });
 });
