@@ -1894,11 +1894,7 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "Adicionar Tempo",
-        "QA_TODAY": "Hoje",
-        "QA_TOMORROW": "Amanhã",
         "RO_NEVER": "Nunca",
-        "QA_NEXT_MONTH": "Próximo mês",
-        "QA_NEXT_WEEK": "Próxima semana",
         "REMIND_AT": "Lembrar às",
         "REMOVE_DEADLINE": "Remover prazo",
         "RO_1H": "1 hora antes",

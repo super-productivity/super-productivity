@@ -1953,10 +1953,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "إضافة وقت",
-        "QA_NEXT_MONTH": "الشهر القادم",
-        "QA_NEXT_WEEK": "الأسبوع القادم",
-        "QA_TODAY": "اليوم",
-        "QA_TOMORROW": "غداً",
         "REMIND_AT": "تذكير في",
         "REMOVE_DEADLINE": "إزالة الموعد النهائي",
         "RO_10M": "قبل 10 دقائق",

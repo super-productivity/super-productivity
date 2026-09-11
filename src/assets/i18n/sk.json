@@ -1894,10 +1894,6 @@
         "OK": "Vytvoriť značky"
       },
       "D_DEADLINE": {
-        "QA_NEXT_MONTH": "Ďalší mesiac",
-        "QA_NEXT_WEEK": "Ďalší týždeň",
-        "QA_TODAY": "Dnes",
-        "QA_TOMORROW": "Zajtra",
         "RO_NEVER": "Nikdy",
         "ADD_TIME": "Pridať čas",
         "REMIND_AT": "Pripomenúť o",

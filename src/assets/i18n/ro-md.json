@@ -1886,10 +1886,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "Adaugă ora",
-        "QA_NEXT_MONTH": "Luna viitoare",
-        "QA_NEXT_WEEK": "Săptămîna viitoare",
-        "QA_TODAY": "Azi",
-        "QA_TOMORROW": "Mîine",
         "REMIND_AT": "Amintește la",
         "REMOVE_DEADLINE": "Șterge termen limită",
         "RO_1H": "Cu 1 oră înainte",

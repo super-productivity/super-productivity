@@ -1917,10 +1917,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "시간 추가",
-        "QA_NEXT_MONTH": "다음 달",
-        "QA_NEXT_WEEK": "다음 주",
-        "QA_TODAY": "오늘",
-        "QA_TOMORROW": "내일",
         "REMIND_AT": "알림 시간",
         "REMOVE_DEADLINE": "마감일 제거",
         "RO_1H": "1시간 전",

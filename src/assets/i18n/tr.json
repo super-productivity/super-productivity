@@ -1916,10 +1916,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "Saat ekle",
-        "QA_NEXT_MONTH": "Gelecek ay",
-        "QA_NEXT_WEEK": "Gelecek hafta",
-        "QA_TODAY": "Bugün",
-        "QA_TOMORROW": "Yarın",
         "REMIND_AT": "Hatırlatma zamanı",
         "REMOVE_DEADLINE": "Son tarihi kaldır",
         "RO_1H": "1 saat önce",

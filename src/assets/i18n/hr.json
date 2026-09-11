@@ -1902,10 +1902,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "Dodaj vrijeme",
-        "QA_NEXT_MONTH": "Sljedeći mjesec",
-        "QA_NEXT_WEEK": "Sljedeći tjedan",
-        "QA_TODAY": "Danas",
-        "QA_TOMORROW": "Sutra",
         "REMIND_AT": "Podsjeti u",
         "REMOVE_DEADLINE": "Ukloni rok",
         "RO_1H": "1 sat prije",

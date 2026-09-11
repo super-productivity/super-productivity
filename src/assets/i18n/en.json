@@ -1932,10 +1932,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "Add time",
-        "QA_NEXT_MONTH": "Next month",
-        "QA_NEXT_WEEK": "Next week",
-        "QA_TODAY": "Today",
-        "QA_TOMORROW": "Tomorrow",
         "REMIND_AT": "Remind at",
         "REMOVE_DEADLINE": "Remove deadline",
         "RO_1H": "1 hour before",

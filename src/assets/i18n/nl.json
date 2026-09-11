@@ -1893,10 +1893,6 @@
         "OK": "Labels maken"
       },
       "D_DEADLINE": {
-        "QA_NEXT_MONTH": "Volgende maand",
-        "QA_NEXT_WEEK": "Volgende week",
-        "QA_TODAY": "Vandaag",
-        "QA_TOMORROW": "Morgen",
         "RO_NEVER": "Nooit",
         "ADD_TIME": "Tijd toevoegen",
         "REMIND_AT": "Herinneren om",

@@ -1883,10 +1883,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "添加时间",
-        "QA_NEXT_MONTH": "下个月",
-        "QA_NEXT_WEEK": "下周",
-        "QA_TODAY": "今天",
-        "QA_TOMORROW": "明天",
         "REMIND_AT": "提醒时间",
         "REMOVE_DEADLINE": "移除截止日期",
         "RO_1H": "1 小时前",

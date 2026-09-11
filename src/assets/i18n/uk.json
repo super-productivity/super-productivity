@@ -1903,10 +1903,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "Додати час",
-        "QA_NEXT_MONTH": "Наступний місяць",
-        "QA_NEXT_WEEK": "Наступний тиждень",
-        "QA_TODAY": "Сьогодні",
-        "QA_TOMORROW": "Завтра",
         "REMIND_AT": "Нагадати о",
         "REMOVE_DEADLINE": "Видалити дедлайн",
         "RO_1H": "За 1 годину",

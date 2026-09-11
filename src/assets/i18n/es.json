@@ -1905,10 +1905,6 @@
         "OK": "Crear etiquetas"
       },
       "D_DEADLINE": {
-        "QA_NEXT_MONTH": "Próximo mes",
-        "QA_NEXT_WEEK": "Próxima semana",
-        "QA_TODAY": "Hoy",
-        "QA_TOMORROW": "Mañana",
         "RO_NEVER": "Nunca",
         "ADD_TIME": "Agregar hora",
         "REMIND_AT": "Recordar a las",

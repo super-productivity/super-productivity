@@ -1893,10 +1893,6 @@
         "OK": "Membuat tag"
       },
       "D_DEADLINE": {
-        "QA_NEXT_MONTH": "Bulan Depan",
-        "QA_NEXT_WEEK": "Minggu Depan",
-        "QA_TODAY": "Hari ini",
-        "QA_TOMORROW": "Besok",
         "RO_NEVER": "Tidak pernah",
         "ADD_TIME": "Tambah waktu",
         "REMIND_AT": "Ingatkan pada",

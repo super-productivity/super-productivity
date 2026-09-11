@@ -1893,10 +1893,6 @@
         "OK": "Opprett tagger"
       },
       "D_DEADLINE": {
-        "QA_NEXT_MONTH": "Neste måned",
-        "QA_NEXT_WEEK": "Neste uke",
-        "QA_TODAY": "I dag",
-        "QA_TOMORROW": "I morgen",
         "REMIND_AT": "Minne på",
         "RO_NEVER": "Aldri",
         "ADD_TIME": "Legg til tid",

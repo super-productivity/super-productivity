@@ -1866,11 +1866,7 @@
         "OK": "Luo tunnisteet"
       },
       "D_DEADLINE": {
-        "QA_TODAY": "Tänään",
-        "QA_TOMORROW": "Huomenna",
         "ADD_TIME": "Lisää aika",
-        "QA_NEXT_MONTH": "Ensi kuussa",
-        "QA_NEXT_WEEK": "Ensi viikolla",
         "REMIND_AT": "Muistuta klo",
         "REMOVE_DEADLINE": "Poista määräaika",
         "RO_1H": "1 tunti ennen",

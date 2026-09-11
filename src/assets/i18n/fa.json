@@ -1979,10 +1979,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "افزودن زمان",
-        "QA_NEXT_MONTH": "ماه آینده",
-        "QA_NEXT_WEEK": "هفته آینده",
-        "QA_TODAY": "امروز",
-        "QA_TOMORROW": "فردا",
         "REMIND_AT": "یادآوری در",
         "REMOVE_DEADLINE": "حذف ضرب‌الاجل",
         "RO_1H": "۱ ساعت قبل",

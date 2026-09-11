@@ -1893,10 +1893,6 @@
         "OK": "Crea tag"
       },
       "D_DEADLINE": {
-        "QA_NEXT_MONTH": "Mese prossimo",
-        "QA_NEXT_WEEK": "Prossima settimana",
-        "QA_TODAY": "Oggi",
-        "QA_TOMORROW": "Domani",
         "RO_NEVER": "Mai",
         "ADD_TIME": "Aggiungi orario",
         "REMIND_AT": "Ricorda alle",

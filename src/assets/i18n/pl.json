@@ -1899,10 +1899,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "Dodaj godzinę",
-        "QA_NEXT_MONTH": "Następny miesiąc",
-        "QA_NEXT_WEEK": "Następny tydzień",
-        "QA_TODAY": "Dzisiaj",
-        "QA_TOMORROW": "Jutro",
         "REMIND_AT": "Przypomnij",
         "REMOVE_DEADLINE": "Usuń termin",
         "RO_1H": "1 godzinę przed",

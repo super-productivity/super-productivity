@@ -1885,10 +1885,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "Lägg till tid",
-        "QA_NEXT_MONTH": "Nästa månad",
-        "QA_NEXT_WEEK": "Nästa vecka",
-        "QA_TODAY": "Idag",
-        "QA_TOMORROW": "Imorgon",
         "REMIND_AT": "Påminn kl",
         "REMOVE_DEADLINE": "Ta bort deadline",
         "RO_1H": "1 timme före",

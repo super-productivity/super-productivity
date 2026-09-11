@@ -1903,10 +1903,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "Uhrzeit hinzufügen",
-        "QA_NEXT_MONTH": "Nächsten Monat",
-        "QA_NEXT_WEEK": "Nächste Woche",
-        "QA_TODAY": "Heute",
-        "QA_TOMORROW": "Morgen",
         "REMIND_AT": "Erinnern um",
         "REMOVE_DEADLINE": "Frist entfernen",
         "RO_1H": "1 Stunde vorher",

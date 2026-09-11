@@ -1905,10 +1905,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "Thêm giờ",
-        "QA_NEXT_MONTH": "Tháng sau",
-        "QA_NEXT_WEEK": "Tuần sau",
-        "QA_TODAY": "Hôm nay",
-        "QA_TOMORROW": "Ngày mai",
         "REMIND_AT": "Nhắc lúc",
         "REMOVE_DEADLINE": "Xóa hạn",
         "RO_1H": "1 giờ trước",

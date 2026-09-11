@@ -1966,10 +1966,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "時間を追加",
-        "QA_NEXT_MONTH": "来月",
-        "QA_NEXT_WEEK": "来週",
-        "QA_TODAY": "今日",
-        "QA_TOMORROW": "明日",
         "REMIND_AT": "リマインド時刻",
         "REMOVE_DEADLINE": "期限を削除",
         "RO_1H": "1時間前",

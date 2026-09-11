@@ -1900,10 +1900,6 @@
         "OK": "Créer les balises"
       },
       "D_DEADLINE": {
-        "QA_NEXT_MONTH": "Mois prochain",
-        "QA_NEXT_WEEK": "Semaine prochaine",
-        "QA_TODAY": "Aujourd'hui",
-        "QA_TOMORROW": "Demain",
         "RO_NEVER": "Jamais",
         "ADD_TIME": "Ajouter une heure",
         "REMIND_AT": "Rappeler à",
