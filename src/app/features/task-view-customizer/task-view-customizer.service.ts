@@ -111,7 +111,7 @@ export class TaskViewCustomizerService {
       .subscribe(({ activeId, activeType }) => {
         this._currentContextKey = `${activeType}:${activeId}`;
         const stored = this._stateByContext[this._currentContextKey];
-        this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
+        this.selectedSort.set(this._sanitizeSort(stored?.sort));
         this.selectedGroup.set(this._sanitizeGroupForContext(stored?.group, activeType));
         this.selectedFilter.set(this._sanitizeFilter(stored?.filter));
         this.collapsedGroupIds.set(stored?.collapsedGroupIds ?? []);
@@ -196,6 +196,15 @@ export class TaskViewCustomizerService {
     return currentFilter
       ? { ...currentFilter, preset: stored.preset ?? null }
       : DEFAULT_OPTIONS.filter;
+  }
+
+  private _sanitizeSort(stored: SortOption | undefined): SortOption {
+    if (!stored) return DEFAULT_OPTIONS.sort;
+
+    const currentSort = OPTIONS.sort.list.find((option) => option.type === stored.type);
+    return currentSort
+      ? { ...currentSort, order: stored.order ?? currentSort.order }
+      : DEFAULT_OPTIONS.sort;
   }
 
   customizeUndoneTasks(
@@ -645,8 +654,8 @@ export class TaskViewCustomizerService {
     return tasks.sort((a, b) => {
       const [dayA, withTimeA] = getFields(a);
       const [dayB, withTimeB] = getFields(b);
-      const dateA = dayA ? new Date(dayA) : withTimeA ? new Date(withTimeA) : null;
-      const dateB = dayB ? new Date(dayB) : withTimeB ? new Date(withTimeB) : null;
+      const dateA = withTimeA ? new Date(withTimeA) : dayA ? new Date(dayA) : null;
+      const dateB = withTimeB ? new Date(withTimeB) : dayB ? new Date(dayB) : null;
 
       if (dateA === null && dateB === null) return 0;
       if (dateA === null) return 1 * factor;
@@ -657,12 +666,14 @@ export class TaskViewCustomizerService {
   }
 
   setSort(val: SortOption): void {
-    const isSame = val.type === this.selectedSort().type;
+    const nextSort = { ...val };
+    const isSame = nextSort.type === this.selectedSort().type;
     if (isSame) {
       // reverse sorting
-      val.order = val.order === SORT_ORDER.ASC ? SORT_ORDER.DESC : SORT_ORDER.ASC;
+      nextSort.order =
+        nextSort.order === SORT_ORDER.ASC ? SORT_ORDER.DESC : SORT_ORDER.ASC;
     }
-    this.selectedSort.set({ ...val });
+    this.selectedSort.set(nextSort);
   }
 
   setGroup(val: GroupOption): void {
@@ -681,13 +692,10 @@ export class TaskViewCustomizerService {
 
   /**
    * Instantly save sort changes by reordering tasks in the current work context
-   * ! Saved sorting will be default
+   * The selected sort remains active so it is persisted for this context.
    */
   async saveSort(): Promise<void> {
     const selectedSort = { ...this.selectedSort() };
-
-    // Saved sorting will be default
-    this.setSort(DEFAULT_OPTIONS.sort);
 
     const workContextId = this._workContextService.activeWorkContextId;
     const workContextType = this._workContextService.activeWorkContextType;

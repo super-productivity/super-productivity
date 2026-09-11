@@ -28,6 +28,7 @@ import {
   SORT_OPTION_TYPE,
   SORT_ORDER,
   SortOption,
+  OPTIONS,
 } from './types';
 import { DateAdapter } from '@angular/material/core';
 import { DEFAULT_FIRST_DAY_OF_WEEK, DEFAULT_LOCALE } from 'src/app/core/locale.constants';
@@ -984,6 +985,30 @@ describe('TaskViewCustomizerService', () => {
     expect(sorted[1].id).toBe('dl-today');
   });
 
+  it('should use scheduled times when sorting tasks that also have a scheduled day', () => {
+    const day = todayStr;
+    const sorted = service['applySort'](
+      [
+        {
+          ...mockTasks[0],
+          id: 'late',
+          dueDay: day,
+          dueWithTime: new Date(`${day}T11:00:00`).getTime(),
+        },
+        {
+          ...mockTasks[0],
+          id: 'early',
+          dueDay: day,
+          dueWithTime: new Date(`${day}T09:00:00`).getTime(),
+        },
+      ],
+      SORT_OPTION_TYPE.scheduledDate,
+      SORT_ORDER.ASC,
+    );
+
+    expect(sorted.map((task) => task.id)).toEqual(['early', 'late']);
+  });
+
   it('should sort tasks without deadline to the end when sorting by deadline', () => {
     const deadlineTasks: TaskWithSubTasks[] = [
       {
@@ -1133,6 +1158,18 @@ describe('TaskViewCustomizerService', () => {
     expect(service.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
   });
 
+  it('should not mutate the shared sort option when toggling direction', () => {
+    const nameOption = OPTIONS.sort.list.find(
+      (option) => option.type === SORT_OPTION_TYPE.name,
+    )!;
+
+    service.setSort(nameOption);
+    service.setSort(nameOption);
+
+    expect(service.selectedSort().order).toBe(SORT_ORDER.DESC);
+    expect(nameOption.order).toBe(SORT_ORDER.ASC);
+  });
+
   describe('saveSort', () => {
     const createTask = (
       id: string,
@@ -1191,8 +1228,12 @@ describe('TaskViewCustomizerService', () => {
       });
       expect(tagUpdateSpy).not.toHaveBeenCalled();
 
-      // Sort should set to default after saving, as the order is now persisted in the project
-      expect(service.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
+      // Keep the selected sort active so it remains the context's saved view state.
+      expect(service.selectedSort()).toEqual({
+        type: SORT_OPTION_TYPE.name,
+        order: SORT_ORDER.ASC,
+        label: T.F.TASK_VIEW.CUSTOMIZER.SORT_NAME,
+      });
 
       // Filter and group should NOT be reset
       expect(service.selectedFilter()).toEqual(expectedFilter);
@@ -1217,7 +1258,10 @@ describe('TaskViewCustomizerService', () => {
         taskIds: ['a', 'b'],
       });
       expect(projectUpdateSpy).not.toHaveBeenCalled();
-      expect(service.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
+      expect(service.selectedSort()).toEqual({
+        type: SORT_OPTION_TYPE.name,
+        label: T.F.TASK_VIEW.CUSTOMIZER.SORT_NAME,
+      });
     });
 
     it('should skip saving when no tasks available', async () => {
@@ -1232,7 +1276,10 @@ describe('TaskViewCustomizerService', () => {
 
       expect(projectUpdateSpy).not.toHaveBeenCalled();
       expect(tagUpdateSpy).not.toHaveBeenCalled();
-      expect(service.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
+      expect(service.selectedSort()).toEqual({
+        type: SORT_OPTION_TYPE.name,
+        label: T.F.TASK_VIEW.CUSTOMIZER.SORT_NAME,
+      });
     });
   });
 
@@ -1241,6 +1288,10 @@ describe('TaskViewCustomizerService', () => {
       type: SORT_OPTION_TYPE.name,
       order: SORT_ORDER.ASC,
       label: 'Name',
+    };
+    const restoredSavedSort: SortOption = {
+      ...savedSort,
+      label: T.F.TASK_VIEW.CUSTOMIZER.SORT_NAME,
     };
     const savedGroup: GroupOption = { type: GROUP_OPTION_TYPE.tag, label: 'Tag' };
     const savedFilter: FilterOption = {
@@ -1319,7 +1370,7 @@ describe('TaskViewCustomizerService', () => {
         of({ activeId: 'TODAY', activeType: WorkContextType.TAG }),
       );
 
-      expect(newService.selectedSort()).toEqual(savedSort);
+      expect(newService.selectedSort()).toEqual(restoredSavedSort);
       expect(newService.selectedGroup()).toEqual(savedGroup);
       expect(newService.selectedFilter()).toEqual(restoredSavedFilter);
     });
