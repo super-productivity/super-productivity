@@ -3,8 +3,9 @@
 # Usage: docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d supersync
 services:
   supersync:
+    # Loopback-bound on purpose — see the ports comment in docker-compose.yaml.
     ports: !override
-      - '1901:1900'
+      - '127.0.0.1:1901:1900'
     environment:
       - NODE_ENV=development
       - PORT=1900

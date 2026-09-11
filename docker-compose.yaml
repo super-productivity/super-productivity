@@ -57,8 +57,13 @@ services:
       context: .
       dockerfile: packages/super-sync-server/Dockerfile.test
     env_file: .env
+    # Loopback-bound on purpose: TEST_MODE exposes unauthenticated /api/test/*
+    # routes (cleanup wipes every user and operation) with rate limiting off.
+    # Docker's iptables rules bypass ufw/firewalld, so a bare '1900:1900' hands
+    # that to the whole LAN. Mirrors the production compose in
+    # packages/super-sync-server, which binds 127.0.0.1 for the same reason.
     ports:
-      - '1900:1900'
+      - '127.0.0.1:1900:1900'
     cap_drop:
       - ALL
     security_opt:
