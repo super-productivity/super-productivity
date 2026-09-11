@@ -101,6 +101,11 @@ export class LiveMarkdownEditorComponent {
       }
     });
 
+    // Deliberately no commit here. Angular destroys child views before the
+    // parent's ngOnDestroy, and by then the parent's own outputs are dead too
+    // ("NG0953: Unexpected emit for destroyed OutputRef"), so anything emitted
+    // from here is silently dropped. Consumers keep the last document from
+    // `docChanged` instead and commit it themselves.
     destroyRef.onDestroy(() => {
       this._view?.destroy();
       this._view = undefined;

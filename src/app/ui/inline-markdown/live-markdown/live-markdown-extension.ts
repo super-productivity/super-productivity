@@ -1,5 +1,5 @@
 import { syntaxTree } from '@codemirror/language';
-import type { Extension } from '@codemirror/state';
+import type { EditorState, Extension } from '@codemirror/state';
 import {
   Decoration,
   type DecorationSet,
@@ -9,6 +9,8 @@ import {
   WidgetType,
 } from '@codemirror/view';
 import { isPathSafeToOpen } from '../../../../../electron/shared-with-frontend/is-external-url-allowed';
+import { IS_ELECTRON } from '../../../app.constants';
+import { toRenderableHref } from '../../link-href.util';
 import { markdownLanguage } from './markdown-language';
 import {
   buildLiveMarkdownRanges,
@@ -21,6 +23,7 @@ const markCache = new Map<string, Decoration>();
 const lineCache = new Map<string, Decoration>();
 
 const TASK_CHECKBOX_CLASS = 'cm-md-task-checkbox';
+const LINK_CLASS = 'cm-md-link';
 
 /**
  * Renders a checklist item's `- [ ] ` prefix as a real checkbox. The document
@@ -72,8 +75,73 @@ const taskCheckboxToggle = EditorView.domEventHandlers({
       return false;
     }
     event.preventDefault();
+    // preventDefault suppresses the focus this click would have given the
+    // editor, and consumers commit the note on BLUR — without focus there is
+    // never a blur, so the toggle would change the document and never be
+    // saved. Focus explicitly so the normal commit path still runs.
+    view.focus();
     const pos = line.from + toggle.offset;
     view.dispatch({ changes: { from: pos, to: pos + 1, insert: toggle.nextChar } });
+    return true;
+  },
+});
+
+/** The raw destination of the link/autolink covering `pos`, if there is one. */
+const linkTargetAt = (state: EditorState, pos: number): string | null => {
+  let node: ReturnType<typeof syntaxTree>['topNode'] | null = syntaxTree(
+    state,
+  ).resolveInner(pos, 1);
+  while (
+    node &&
+    node.name !== 'Link' &&
+    node.name !== 'Autolink' &&
+    node.name !== 'URL'
+  ) {
+    node = node.parent;
+  }
+  if (!node) {
+    return null;
+  }
+  const urlNode = node.name === 'URL' ? node : node.getChild('URL');
+  return urlNode ? state.doc.sliceString(urlNode.from, urlNode.to) : null;
+};
+
+/**
+ * Makes links in a note followable again. The rendered preview this replaced
+ * produced real anchors; here the link is only a styled span, so the click has
+ * to be handled.
+ *
+ * Gesture: a click opens the link while the editor is NOT focused — i.e. while
+ * you are reading the note, which is what the preview used to do — and Mod+click
+ * opens it any time. Inside a focused editor a plain click belongs to the caret,
+ * or a link would be impossible to edit.
+ *
+ * The href goes through `toRenderableHref` exactly like the marked renderer:
+ * the destination is handed to `shell.openExternal` in Electron, so a note (which
+ * may have arrived by sync or import) must not be able to invoke an arbitrary OS
+ * protocol handler. A rejected href just places the caret.
+ */
+const linkOpen = EditorView.domEventHandlers({
+  mousedown: (event, view) => {
+    const target = event.target as HTMLElement;
+    if (event.button !== 0 || !target.classList?.contains(LINK_CLASS)) {
+      return false;
+    }
+    const isModClick = event.metaKey || event.ctrlKey;
+    if (view.hasFocus && !isModClick) {
+      return false;
+    }
+    const raw = linkTargetAt(view.state, view.posAtDOM(target));
+    const href = raw && toRenderableHref(raw);
+    if (!href) {
+      return false;
+    }
+    event.preventDefault();
+    if (IS_ELECTRON) {
+      window.ea.openExternalUrl(href);
+    } else {
+      window.open(href, '_blank', 'noopener,noreferrer');
+    }
     return true;
   },
 });
@@ -109,10 +177,13 @@ class ImageWidget extends WidgetType {
     const img = document.createElement('img');
     img.className = 'cm-md-image';
     img.alt = this.alt;
+    img.loading = 'lazy';
     if (this._resolve) {
       // Async: an indexeddb:// src has to be read back before it can load.
       void this._resolve(this.src).then((resolved) => {
-        if (resolved) {
+        // Re-checked: the guard below ran on the RAW src, and a resolver is a
+        // public input — whatever it hands back is what actually loads.
+        if (resolved && isPathSafeToOpen(resolved)) {
           img.src = resolved;
         }
       });
@@ -206,11 +277,16 @@ const liveMarkdownPlugin = (resolveImageSrc: ResolveImageSrc | undefined): Exten
 
       update(update: ViewUpdate): void {
         // focusChanged matters: an unfocused editor reveals no lines at all.
+        // The syntaxTree comparison matters for long notes: the initial parse
+        // is time-budgeted (~3kB), and the transaction that lands the rest
+        // carries none of the other flags, so without this the tail of a long
+        // note stays undecorated until the next caret move.
         if (
           update.docChanged ||
           update.selectionSet ||
           update.viewportChanged ||
-          update.focusChanged
+          update.focusChanged ||
+          syntaxTree(update.startState) !== syntaxTree(update.state)
         ) {
           this.decorations = buildDecorations(update.view, resolveImageSrc);
         }
@@ -223,4 +299,5 @@ export const liveMarkdown = (resolveImageSrc?: ResolveImageSrc): Extension => [
   markdownLanguage,
   liveMarkdownPlugin(resolveImageSrc),
   taskCheckboxToggle,
+  linkOpen,
 ];

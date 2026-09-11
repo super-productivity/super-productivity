@@ -1,7 +1,7 @@
 import { expect, test } from '../../fixtures/test.fixture';
 import { cssSelectors } from '../../constants/selectors';
 
-const { DETAIL_PANEL } = cssSelectors;
+const { DETAIL_PANEL, DETAIL_PANEL_BTN } = cssSelectors;
 
 /**
  * Issue #9910: task notes are edited in an Obsidian-style live editor — one
@@ -61,6 +61,86 @@ test.describe('Live markdown editor (#9910)', () => {
     await checkbox.click();
     await expect(checkbox).toHaveText('check_box');
     await expect(notes.locator('.cm-md-task-done')).toBeVisible();
+
+    // ...and that edit is SAVED. The widget flipping in the view proves
+    // nothing on its own: notes commit on blur, and the checkbox handler
+    // suppresses its own mousedown, so without an explicit focus the toggle
+    // would never reach task.notes. Close and reopen to read it back.
+    const task = taskPage.getTaskByText('live markdown task');
+    await task.locator(DETAIL_PANEL_BTN).click();
+    await expect(page.locator(DETAIL_PANEL)).not.toBeVisible();
+    await taskPage.openTaskDetail(task);
+
+    const reopened = page.locator(DETAIL_PANEL).locator('inline-markdown').first();
+    await reopened.locator('.cm-content').waitFor({ state: 'visible' });
+    await expect(reopened.locator('.cm-md-task-checkbox')).toHaveText('check_box');
+  });
+
+  // An image whose `![...](...)` spans a line break cannot be replaced by a
+  // view plugin — CodeMirror throws while building the view, which would leave
+  // the note blank and uneditable with no way back except the settings toggle.
+  test('survives an image that spans a line break', async ({
+    page,
+    workViewPage,
+    taskPage,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('multiline image task');
+    await taskPage.openTaskDetail(taskPage.getTaskByText('multiline image task'));
+
+    const notes = page.locator(DETAIL_PANEL).locator('inline-markdown').first();
+    const editor = notes.locator('.cm-content');
+    await editor.waitFor({ state: 'visible' });
+
+    await editor.click();
+    await page.keyboard.type('![foo');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('bar](img.png)');
+    await editor.blur();
+
+    // Left as plain source rather than rendered — and, crucially, the view was
+    // built at all: before the fix the constructor threw and the editor's host
+    // stayed empty.
+    await expect(editor).toContainText('![foo');
+    await expect(editor).toContainText('bar](img.png)');
+    expect(errors).toEqual([]);
+  });
+
+  test('opens a link when the note is not being edited', async ({
+    page,
+    workViewPage,
+    taskPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('link note task');
+    await taskPage.openTaskDetail(taskPage.getTaskByText('link note task'));
+
+    const notes = page.locator(DETAIL_PANEL).locator('inline-markdown').first();
+    const editor = notes.locator('.cm-content');
+    await editor.waitFor({ state: 'visible' });
+
+    await editor.click();
+    await page.keyboard.type('see [docs](https://example.com/docs) now');
+    await editor.blur();
+
+    // The editor renders a styled span, not an anchor, so the click has to be
+    // handled — nothing would open without it.
+    await page.evaluate(() => {
+      (window as unknown as { __opened: string[] }).__opened = [];
+      window.open = (url?: string | URL): null => {
+        (window as unknown as { __opened: string[] }).__opened.push(String(url));
+        return null;
+      };
+    });
+    await notes.locator('.cm-md-link').first().click();
+    await expect
+      .poll(() =>
+        page.evaluate(() => (window as unknown as { __opened: string[] }).__opened),
+      )
+      .toEqual(['https://example.com/docs']);
   });
 
   test('renders an image inline', async ({ page, workViewPage, taskPage }) => {

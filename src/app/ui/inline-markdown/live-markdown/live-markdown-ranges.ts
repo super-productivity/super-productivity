@@ -127,6 +127,10 @@ export const buildLiveMarkdownRanges = ({
     ranges.push({ from: lineStart, to: lineStart, type: 'line', cls });
   };
 
+  // `enter` returns whether to descend into the node's children: true for
+  // almost everything (a heading's `#` marker is a CHILD of the heading), false
+  // only where the node is replaced wholesale and its markers must not add
+  // their own ranges inside it.
   tree.iterate({
     enter: (node) => {
       const { name, from, to } = node;
@@ -136,32 +140,52 @@ export const buildLiveMarkdownRanges = ({
       const headingMatch = HEADING_NODE_RE.exec(name);
       if (headingMatch) {
         pushLineClass(from, `cm-md-h${headingMatch[1]}`);
-        return;
+        return true;
       }
       if (name === 'Blockquote') {
         for (let n = line.number; n <= doc.lineAt(to).number; n++) {
           pushLineClass(doc.line(n).from, 'cm-md-quote');
         }
-        return;
+        return true;
       }
       if (name === 'HorizontalRule') {
         pushLineClass(from, 'cm-md-hr');
-        return;
+        // The rule is drawn as the line's border, so the literal `---` would
+        // otherwise sit on top of it. It has no marker child to hide.
+        if (!isRevealed && to > from) {
+          ranges.push({ from, to, type: 'hide' });
+        }
+        return true;
       }
 
       // An image renders as the image itself, but reverts to `![alt](src)` on
       // the caret's line so the source stays editable.
-      if (name === 'Image' && !isRevealed) {
-        const match = IMAGE_RE.exec(doc.sliceString(from, to));
-        if (match) {
-          ranges.push({
-            from,
-            to,
-            type: 'image',
-            image: { alt: match[1], src: match[2] },
-          });
-          return;
+      //
+      // `to <= line.to` is not cosmetic: markdown allows a newline inside the
+      // alt text and around the destination, and CodeMirror refuses a
+      // replacing decoration that spans a line break when it comes from a view
+      // plugin ("Decorations that replace line breaks may not be specified via
+      // plugins") — it throws while constructing the view, which would leave
+      // the note blank and uneditable. A multi-line image stays raw source.
+      if (name === 'Image') {
+        if (!isRevealed && to <= line.to) {
+          const match = IMAGE_RE.exec(doc.sliceString(from, to));
+          if (match) {
+            ranges.push({
+              from,
+              to,
+              type: 'image',
+              image: { alt: match[1], src: match[2] },
+            });
+          }
         }
+        // Never descend, decorated or not. The `![`, `]`, `(`, URL and `)`
+        // children would otherwise hide themselves — inside the replacement
+        // when it was made (pointless), and, when it was NOT made, collapsing
+        // an image we deliberately left as source (multi-line, unparseable, or
+        // rejected by isPathSafeToOpen) down to bare alt text with nothing for
+        // the user to see or fix.
+        return false;
       }
 
       // Tables stay literal pipe source — a real <table> widget would have to
@@ -171,11 +195,11 @@ export const buildLiveMarkdownRanges = ({
         for (let n = line.number; n <= doc.lineAt(to).number; n++) {
           pushLineClass(doc.line(n).from, 'cm-md-table');
         }
-        return;
+        return true;
       }
       if (name === 'TableHeader') {
         pushLineClass(from, 'cm-md-table-header');
-        return;
+        return true;
       }
       if (name === 'TableDelimiter') {
         // The `|---|---|` separator occupies a whole line; the other delimiters
@@ -186,7 +210,7 @@ export const buildLiveMarkdownRanges = ({
         } else {
           ranges.push({ from, to, type: 'mark', cls: 'cm-md-table-delim' });
         }
-        return;
+        return true;
       }
 
       // A checklist item renders as a real checkbox, replacing the whole
@@ -207,32 +231,42 @@ export const buildLiveMarkdownRanges = ({
             type: 'checkbox',
             isChecked,
           });
-          return;
+          return true;
+        }
+      }
+
+      // A bare or angle-bracket autolink is a `URL` node with no Link parent.
+      // It carries no syntax to hide, but it still has to be styled and made
+      // clickable like an explicit link.
+      if (name === 'URL') {
+        const urlParent = node.node.parent?.name;
+        if (urlParent !== 'Link' && urlParent !== 'Image') {
+          ranges.push({ from, to, type: 'mark', cls: 'cm-md-link' });
+          return true;
         }
       }
 
       const inlineCls = INLINE_CLASS_BY_NODE[name];
       if (inlineCls && to > from) {
         ranges.push({ from, to, type: 'mark', cls: inlineCls });
-        return;
+        return true;
       }
 
       const parentName = node.node.parent?.name;
       const isHideable =
         HIDDEN_MARK_NODES.has(name) || isHideableCodeMark(name, parentName);
       if (!isHideable || isRevealed) {
-        return;
+        return true;
       }
-      // `URL` only hides as part of a link's `](…)` tail, never a bare autolink.
-      if (name === 'URL' && parentName !== 'Link' && parentName !== 'Image') {
-        return;
-      }
+      // A bare autolink's `URL` was already handled above; only a link's
+      // `](…)` tail reaches here.
       const isBlockMarker =
         (name === 'HeaderMark' || name === 'QuoteMark') && from === line.from;
       const end = withTrailingSpace(from, to, doc, isBlockMarker);
       if (end > from) {
         ranges.push({ from, to: end, type: 'hide' });
       }
+      return true;
     },
   });
 

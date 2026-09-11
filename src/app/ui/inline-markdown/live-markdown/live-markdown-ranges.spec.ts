@@ -100,12 +100,42 @@ describe('buildLiveMarkdownRanges', () => {
       const marks = build('# a\n**b** `c` ~~d~~\n- [ ] e\n> f\n---');
       expect(marks.every((r) => r.type === 'line' || r.to > r.from)).toBe(true);
     });
+
+    it('anchors every line range at a real line start', () => {
+      const src = '# a\n- [ ] e\n> f\n---';
+      const lineStarts = new Set(
+        src
+          .split('\n')
+          .reduce<
+            number[]
+          >((acc, line, i) => [...acc, i === 0 ? 0 : acc[i - 1] + src.split('\n')[i - 1].length + 1], []),
+      );
+      for (const range of build(src).filter((r) => r.type === 'line')) {
+        expect(lineStarts.has(range.from)).toBe(true);
+      }
+    });
   });
 
-  it('leaves the document text untouched — decorations are view-only', () => {
-    const src = '# Title\n\n**bold** and [a](http://x)\n';
-    const ranges = build(src);
-    expect(ranges.every((r) => r.from >= 0 && r.to <= src.length)).toBe(true);
+  // CodeMirror throws "Decorations that replace line breaks may not be
+  // specified via plugins" — the view never constructs, so the note renders
+  // blank and uneditable. Every replacing range has to stay inside its line.
+  it('never emits a replacing range that crosses a line break', () => {
+    const sources = [
+      '![foo\nbar](img.png)',
+      '![a](\nimg.png)',
+      '# Title\n\n**bold** and [a](http://x)\n- [ ] item\n---\n| a | b |\n|---|---|',
+    ];
+    for (const src of sources) {
+      const doc = Text.of(src.split('\n'));
+      const replacing = build(src).filter(
+        (r) => r.type === 'hide' || r.type === 'image' || r.type === 'checkbox',
+      );
+      for (const range of replacing) {
+        expect(doc.lineAt(range.from).number)
+          .withContext(`${JSON.stringify(src)} range ${range.from}-${range.to}`)
+          .toBe(doc.lineAt(range.to).number);
+      }
+    }
   });
 });
 
@@ -172,6 +202,39 @@ describe('tables', () => {
   });
 });
 
+describe('links', () => {
+  it('styles a bare autolink so it can be clicked', () => {
+    const ranges = build('see https://example.com for info');
+    expect(ranges).toEqual([{ from: 4, to: 23, type: 'mark', cls: 'cm-md-link' }]);
+  });
+
+  it('styles an angle-bracket autolink and hides its brackets', () => {
+    const ranges = build('<https://example.com>');
+    expect(ranges.filter((r) => r.cls === 'cm-md-link').length).toBe(1);
+    expect(hiddenText('<https://example.com>')).toEqual(['<', '>']);
+  });
+
+  it('still hides the ](url) tail of an explicit link', () => {
+    expect(hiddenText('see [docs](http://x.com) now')).toEqual([
+      '[',
+      ']',
+      '(',
+      'http://x.com',
+      ')',
+    ]);
+  });
+});
+
+describe('horizontal rules', () => {
+  it('hides the literal --- so only the drawn rule shows', () => {
+    expect(hiddenText('---')).toEqual(['---']);
+  });
+
+  it('keeps it visible on the caret line', () => {
+    expect(hiddenText('---', [1])).toEqual([]);
+  });
+});
+
 describe('images', () => {
   const imageRanges = (src: string, revealed: number[] = []): LiveMarkdownRange[] =>
     build(src, revealed).filter((r) => r.type === 'image');
@@ -207,6 +270,18 @@ describe('images', () => {
 
   it('leaves a plain link alone', () => {
     expect(imageRanges('[a](x.png)')).toEqual([]);
+  });
+
+  it('leaves an image that spans a line break as raw source', () => {
+    // A replacing decoration across a line break makes CodeMirror throw.
+    expect(imageRanges('![foo\nbar](img.png)')).toEqual([]);
+  });
+
+  it('emits no inner hide ranges, so a rejected src stays readable as source', () => {
+    // The extension drops the image range when isPathSafeToOpen fails. If the
+    // `![`, `]`, `(` and URL markers were hidden too, the blocked image would
+    // collapse to bare alt text with nothing to fix.
+    expect(hiddenText('![a](file://host/share/x.png)')).toEqual([]);
   });
 });
 

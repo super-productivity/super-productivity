@@ -18,6 +18,7 @@
         [autoFocus]="isLock() || isPendingLiveFocus()"
         [resolveImageSrc]="resolveImageSrc"
         (changed)="onLiveEditorChanged($event)"
+        (docChanged)="onLiveEditorDocChanged($event)"
         (focused)="onLiveEditorFocused()"
         (blurred)="onLiveEditorBlurred()"
         (pasted)="pasteHandler($event)"

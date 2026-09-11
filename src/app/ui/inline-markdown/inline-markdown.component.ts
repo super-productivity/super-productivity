@@ -92,6 +92,8 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   readonly resolveImageSrc = async (src: string): Promise<string> =>
     (await this._clipboardImageService.resolveClipboardImageUrl(src)) ?? src;
 
+  /** Last document the live editor reported; null until it reports one. */
+  private _liveDoc: string | null = null;
   private _isFullscreenDialogOpen = false;
   private _isDestroyed = false;
   private _resolveGeneration = 0;
@@ -268,11 +270,15 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     if (this._isFullscreenDialogOpen) {
       return;
     }
-    const liveEditorEl = this.liveEditorEl();
-    if (liveEditorEl) {
-      // The live editor commits on blur; destroying the panel never blurs it.
-      if (liveEditorEl.value !== this.model) {
-        this.changed.emit(liveEditorEl.value);
+    if (this.isLiveMarkdownEditor()) {
+      // The blur that would normally commit can arrive AFTER Angular has torn
+      // this component down — closing the detail panel destroys it on
+      // mousedown, and the browser fires blur at the removed element
+      // afterwards, where the emit is dropped. So commit from here, where the
+      // output is still alive, using the doc `docChanged` last recorded (the
+      // editor's own view is already destroyed by this point).
+      if (this._liveDoc !== null && this._liveDoc !== this.model) {
+        this.changed.emit(this._liveDoc);
       }
       return;
     }
@@ -444,9 +450,20 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   /** Commit a change made in the live editor (emitted on blur, like the textarea). */
   onLiveEditorChanged(value: string): void {
+    this._liveDoc = value;
     this.modelCopy.set(value);
     this.model = value;
     this.changed.emit(value);
+  }
+
+  /**
+   * Every keystroke, but deliberately NOT a save: it only records what the
+   * editor currently holds so `ngOnDestroy` has something to commit. The real
+   * save still happens on blur, so a note is still one op per edit session
+   * rather than one per keystroke.
+   */
+  onLiveEditorDocChanged(value: string): void {
+    this._liveDoc = value;
   }
 
   onLiveEditorFocused(): void {
@@ -598,14 +615,21 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     ev.stopPropagation();
 
     const textareaEl = this.textareaEl();
+    const liveEditorEl = this.liveEditorEl();
     let cursorPos: number | undefined;
     let selectionEnd: number | undefined;
     let currentText: string;
 
-    // Read current content from textarea if available, otherwise from modelCopy.
+    // Read the live content, not modelCopy: the toolbar button suppresses its
+    // own mousedown to keep focus, so the editor has NOT committed on blur and
+    // modelCopy still holds the pre-edit note. Reading it would throw away
+    // everything typed since the last blur.
     // Check textareaEl directly (not isShowEdit) because blur may have
     // set isShowEdit=false while the textarea is still in the DOM.
-    if (textareaEl) {
+    if (liveEditorEl) {
+      currentText = liveEditorEl.value;
+      cursorPos = liveEditorEl.selectionStart;
+    } else if (textareaEl) {
       currentText = textareaEl.nativeElement.value;
       cursorPos = textareaEl.nativeElement.selectionStart;
       selectionEnd = textareaEl.nativeElement.selectionEnd ?? cursorPos;
@@ -714,6 +738,14 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   private _setTextareaState(selectionStart: number, selectionEnd?: number): void {
     setTimeout(() => {
+      const liveEditorEl = this.liveEditorEl();
+      if (liveEditorEl) {
+        // Deferred like the textarea path: the model write above only reaches
+        // the editor's document once the effect has run.
+        liveEditorEl.focus();
+        liveEditorEl.setSelectionRange(cursorPos, cursorPos);
+        return;
+      }
       const textareaEl = this.textareaEl();
       if (textareaEl) {
         textareaEl.nativeElement.value = this.modelCopy();

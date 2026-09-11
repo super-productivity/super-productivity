@@ -1,12 +1,16 @@
 import type { Locator } from '@playwright/test';
 
 /**
- * The markdown editing surface inside `scope`. Since #9910 notes are edited in
- * a CodeMirror contenteditable (`.cm-content`); the plain textarea is still
- * reachable when the "Live Markdown editor" setting is off, so fall back to it.
+ * The markdown editing surface inside `scope`.
+ *
+ * Deliberately NOT `.cm-content, textarea`: the textarea still exists when the
+ * "Live Markdown editor" setting is off, and matching either one would let a
+ * silent fall back to the old editor keep every migrated suite green. The
+ * default is the live editor, so pin it — if that ever changes, these should
+ * fail loudly rather than quietly test the other path.
  */
 export const markdownEditor = (scope: Locator): Locator =>
-  scope.locator('.cm-content, textarea').first();
+  scope.locator('.cm-content').first();
 
 /**
  * Replaces the markdown editor's content. `fill()` is not used because it takes

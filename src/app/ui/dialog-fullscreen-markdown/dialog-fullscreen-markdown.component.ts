@@ -113,9 +113,17 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
    * The live editor renders and edits in the same view, so the TEXT/SPLIT/PARSED
    * toggle has nothing left to switch between and is dropped entirely (#9910).
    */
-  readonly isLiveMarkdown = computed(
-    () => this._globalConfigService.misc()?.isLiveMarkdownPreview ?? true,
-  );
+  readonly isLiveMarkdown = computed(() => {
+    // Both conditions, same as InlineMarkdownComponent: with markdown
+    // formatting off the user asked for plain text, and the two surfaces
+    // disagreeing would give them a textarea inline and a rendering editor in
+    // fullscreen for the same note.
+    const isFormattingOn =
+      this._globalConfigService.tasks()?.isMarkdownFormattingInNotesEnabled ?? true;
+    return (
+      isFormattingOn && (this._globalConfigService.misc()?.isLiveMarkdownPreview ?? true)
+    );
+  });
   readonly previewEl = viewChild<MarkdownComponent>('previewEl');
   readonly textareaEl = viewChild<ElementRef>('textareaEl');
   readonly liveEditorEl = viewChild<LiveMarkdownEditorComponent>('liveEditorEl');
@@ -248,7 +256,11 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
 
   onLiveEditorDocChanged(content: string): void {
     this.data.content = content;
-    this._contentChanges$.next(content);
+    // Routed through the same hook the textarea's (ngModelChange) fires rather
+    // than pushing _contentChanges$ directly: DialogAddNoteComponent overrides
+    // it to checkpoint the draft into sessionStorage, so bypassing it silently
+    // disabled crash recovery for new notes.
+    this.ngModelChange(content);
   }
 
   openShortcutsHelp(): void {
@@ -354,6 +366,11 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
       setContent: (content) => {
         this.data.content = content;
         this._contentChanges$.next(content);
+        // `data` is a plain object, so writing to it ticks nothing in a
+        // zoneless app — the image-paste swap runs in a promise continuation
+        // with no signal write of its own, and the editor would keep showing
+        // the placeholder until something else happened to schedule a check.
+        this._cdr.markForCheck();
       },
       getTextarea: () => this.liveEditorEl() ?? this.textareaEl()?.nativeElement ?? null,
       getTaskId: () => this.data.taskId || null,

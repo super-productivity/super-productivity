@@ -63,6 +63,9 @@ describe('DialogAddNoteComponent', () => {
           provide: GlobalConfigService,
           useValue: {
             misc: jasmine.createSpy().and.returnValue({ isLiveMarkdownPreview: false }),
+            tasks: jasmine
+              .createSpy()
+              .and.returnValue({ isMarkdownFormattingInNotesEnabled: true }),
           },
         },
         { provide: NoteService, useValue: mockNoteService },
