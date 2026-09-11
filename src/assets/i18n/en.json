@@ -3133,12 +3133,13 @@
       "CONNECT": "Connect",
       "CONNECTING": "Connecting…",
       "INTRO": "Collaborate on projects with others. Tasks assigned to you import automatically and stay in sync.",
-      "INVALID": "That token didn't work. Make sure you copied the whole token (it starts with \"pat_\") and try again.",
+      "INVALID": "Plainspace rejected that token. It may be expired or revoked — create a new one and paste it again.",
       "OPEN_LINK": "Open Plainspace",
       "TITLE": "Connect to Plainspace",
       "TOKEN_HELP": "Create an API token on Plainspace, then paste it below.",
       "TOKEN_LABEL": "API token",
-      "TOKEN_PLACEHOLDER": "pat_…"
+      "TOKEN_PLACEHOLDER": "pat_…",
+      "UNREACHABLE": "Couldn't reach Plainspace. Check your internet connection and the host, then try again."
     },
     "FORM": {
       "HOST": "Plainspace host",

@@ -35,8 +35,8 @@
     />
   </mat-form-field>
 
-  @if (hasError()) {
-    <p class="error">{{ T.PLAINSPACE.CONNECT.INVALID | translate }}</p>
+  @if (errorMsg(); as msg) {
+    <p class="error">{{ msg | translate }}</p>
   }
 </mat-dialog-content>
 
