@@ -22,8 +22,12 @@ services:
     #
     # Don't pin DB_PORT in an env file: every checkout sharing that file gets
     # the same fixed port back, and with it the collision.
+    # Loopback-bound for the same reason as supersync below: the credentials
+    # above are committed to a public repo, and postgres superuser access means
+    # code execution (COPY ... FROM PROGRAM) on the compose network. The one
+    # host consumer, `npm run supersync:db`, connects to localhost.
     ports:
-      - '${DB_PORT:-0}:5432'
+      - '127.0.0.1:${DB_PORT:-0}:5432'
     volumes:
       - db_data:/var/lib/postgresql/data
     # Gate on supersync_db existing AND accepting queries from the app user.
