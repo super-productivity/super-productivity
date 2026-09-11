@@ -80,6 +80,7 @@ test.describe('Calendar #10047', () => {
       route.fulfill({
         status: 200,
         contentType: 'text/calendar',
+        // eslint-disable-next-line @typescript-eslint/naming-convention
         headers: { 'Cache-Control': 'no-store' },
         body: buildIcal(),
       }),
