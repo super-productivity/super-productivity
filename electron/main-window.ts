@@ -319,9 +319,10 @@ export const createWindow = async ({
 
   // #7276: our own flag owns the maximized bit, electron-window-state only owns
   // size/position. The library gets this bit wrong in two ways: its `closed`
-  // handler reads isMaximized() on an already-hidden window (electron#27838),
-  // and it silently drops the whole persisted state — isMaximized included —
-  // when the last un-maximized bounds no longer fit on any connected display.
+  // handler reads isMaximized() on an already-hidden window, which no longer
+  // reports the truth on every platform, and it silently drops the whole
+  // persisted state — isMaximized included — when the last un-maximized bounds
+  // no longer fit on any connected display.
   const persistedWasMaximized = simpleStore[SimpleStoreKey.WINDOW_WAS_MAXIMIZED];
   // First launch after this fix shipped there is no flag yet, so adopt whatever
   // the library restored. Without this a user who is maximized at upgrade time

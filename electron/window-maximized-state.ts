@@ -6,11 +6,11 @@ import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
 // the tray within a session and when the app is relaunched (#7276).
 //
 // Why we track this ourselves instead of asking BrowserWindow: isMaximized() is
-// unreliable exactly at the moments we need it. A hidden window reports false on
-// Windows (electron#27838) and a minimized window reports false on X11, so any
-// value read at hide/minimize/quit time can be stale. Only maximize/unmaximize
-// transitions on an on-screen window are trustworthy, so those are the sole
-// writers.
+// unreliable exactly at the moments we need it. Measured on X11, a minimized
+// window reports false; on Wayland hide() destroys the xdg_toplevel, so the
+// window comes back un-maximized. Any value read at hide/minimize/quit time can
+// therefore be stale. Only maximize/unmaximize transitions on an on-screen
+// window are trustworthy, so those are the sole writers.
 let isMaximizedTracked = false;
 
 export const getWasMaximizedBeforeHide = (): boolean => isMaximizedTracked;
