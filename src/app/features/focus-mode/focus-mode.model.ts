@@ -50,6 +50,11 @@ export interface FocusModeState {
 
   // Internal flag: when true, tick reducer won't auto-stop work timer at duration
   _isOvertimeEnabled: boolean;
+
+  // Internal: Pomodoro work duration typed on the preparation screen. Overrides
+  // the configured duration for every cycle of this run and is never persisted,
+  // so the configured value stays the default after a restart.
+  _sessionWorkDuration: number | null;
 }
 
 // Mode strategy interface

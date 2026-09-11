@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { Store } from '@ngrx/store';
 import {
   FocusModeStrategy,
   FocusModeMode,
@@ -6,14 +7,22 @@ import {
 } from './focus-mode.model';
 import { GlobalConfigService } from '../config/global-config.service';
 import { FocusModeStorageService } from './focus-mode-storage.service';
+import { selectSessionWorkDuration } from './store/focus-mode.selectors';
 
 const MIN_BREAK_MS = 60 * 1000;
 
 @Injectable({ providedIn: 'root' })
 export class PomodoroStrategy implements FocusModeStrategy {
   private globalConfigService = inject(GlobalConfigService);
+  private sessionWorkDuration = inject(Store).selectSignal(selectSessionWorkDuration);
 
   get initialSessionDuration(): number {
+    // A duration typed on the preparation screen governs the whole run, so the
+    // cycles started after a break keep it instead of falling back to config.
+    const sessionDuration = this.sessionWorkDuration();
+    if (sessionDuration) {
+      return sessionDuration;
+    }
     const config = this.globalConfigService.pomodoroConfig();
     return config?.duration ?? FOCUS_MODE_DEFAULTS.SESSION_DURATION;
   }

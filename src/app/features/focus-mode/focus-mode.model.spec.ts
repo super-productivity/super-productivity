@@ -203,6 +203,7 @@ describe('FocusModeModel', () => {
         pausedTaskId: null,
         _isResumingBreak: false,
         _isOvertimeEnabled: false,
+        _sessionWorkDuration: null,
       };
 
       expect(state.timer).toEqual(timer);

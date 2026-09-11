@@ -30,6 +30,7 @@ describe('FocusModeSelectors', () => {
     pausedTaskId: null,
     _isResumingBreak: false,
     _isOvertimeEnabled: false,
+    _sessionWorkDuration: null,
     ...overrides,
   });
 

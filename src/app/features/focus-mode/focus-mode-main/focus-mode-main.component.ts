@@ -10,10 +10,10 @@ import {
   signal,
 } from '@angular/core';
 import { Log } from '../../../core/log';
-import { from, Observable, of, Subject, Subscription, timer } from 'rxjs';
+import { from, Observable, of, Subscription, timer } from 'rxjs';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { TaskService } from '../../tasks/task.service';
-import { debounceTime, switchMap, take } from 'rxjs/operators';
+import { switchMap, take } from 'rxjs/operators';
 import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
 import { fadeAnimation, fadeSwapAnimation } from '../../../ui/animations/fade.ani';
 import { IssueService } from '../../issue/issue.service';
@@ -30,6 +30,7 @@ import {
   selectFocusTask,
   setFocusModeMode,
   setFocusSessionDuration,
+  setSessionWorkDuration,
   startFocusPreparation,
   startFocusSession,
   unPauseFocusSession,
@@ -230,11 +231,6 @@ export class FocusModeMainComponent {
   displayDuration = signal(25 * 60 * 1000); // Default 25 minutes
   isTaskSelectorOpen = signal(false);
 
-  // Pomodoro's work duration lives in synced global config. Persisting on every
-  // keystroke emits one sync op per character, so coalesce rapid edits and write
-  // once the user pauses (or when the session starts — see startSession()).
-  private readonly _pomodoroDurationToPersist$ = new Subject<number>();
-
   // OS-level window focus. When the user tabs away (or focuses another app),
   // hide the muted control buttons so we don't blink at them.
   readonly isWindowFocused = signal(
@@ -341,11 +337,13 @@ export class FocusModeMainComponent {
         return;
       }
 
-      // Pomodoro's editable duration is its configured work-period — read
-      // straight from pomodoroConfig so the slider reflects the persisted
-      // value, not the (initially zero) session duration.
+      // Pomodoro's editable duration is the one typed for this run, else its
+      // configured work-period — read straight from either so the slider shows
+      // what will run, not the (initially zero) session duration.
       if (mode === FocusModeMode.Pomodoro && this._isPreparation()) {
-        const pomodoroDuration = this.focusModeService.pomodoroConfig()?.duration;
+        const pomodoroDuration =
+          this.focusModeService.sessionWorkDuration() ??
+          this.focusModeService.pomodoroConfig()?.duration;
         this.displayDuration.set(
           pomodoroDuration && pomodoroDuration > 0
             ? pomodoroDuration
@@ -366,10 +364,6 @@ export class FocusModeMainComponent {
         this.displayDuration.set(stored);
       }
     });
-
-    this._pomodoroDurationToPersist$
-      .pipe(debounceTime(400), takeUntilDestroyed())
-      .subscribe((duration) => this._persistPomodoroDuration(duration));
   }
 
   @HostListener('window:focus') onWindowFocus(): void {
@@ -497,12 +491,6 @@ export class FocusModeMainComponent {
       return;
     }
 
-    // Persist any pending (debounced) Pomodoro duration edit before starting so
-    // a value typed within the debounce window isn't dropped.
-    if (this.mode() === FocusModeMode.Pomodoro) {
-      this._persistPomodoroDuration(this.displayDuration());
-    }
-
     const config = this.focusModeConfig();
 
     // Sync between focus session and tracking is always on — require a task
@@ -612,22 +600,12 @@ export class FocusModeMainComponent {
 
   onDurationChange(duration: number): void {
     this.displayDuration.set(duration);
-
-    // Pomodoro's duration is persistent (synced) config, not session store.
-    // Debounce the write (see _pomodoroDurationToPersist$) so typing "25" emits
-    // one sync op rather than one per keystroke.
-    if (this.mode() === FocusModeMode.Pomodoro) {
-      this._pomodoroDurationToPersist$.next(duration);
-      return;
-    }
-
     this._store.dispatch(setFocusSessionDuration({ focusSessionDuration: duration }));
-  }
 
-  private _persistPomodoroDuration(duration: number): void {
-    const current = this.focusModeService.pomodoroConfig();
-    if (current && current.duration !== duration) {
-      this._globalConfigService.updateSection('pomodoro', { ...current, duration }, true);
+    // Pomodoro chains cycles without ever showing this screen again, so the
+    // typed duration is remembered for the run rather than written to config.
+    if (this.mode() === FocusModeMode.Pomodoro) {
+      this._store.dispatch(setSessionWorkDuration({ duration }));
     }
   }
 

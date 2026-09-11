@@ -129,6 +129,12 @@ export const selectIsResumingBreak = createSelector(
   (state) => state._isResumingBreak,
 );
 
+// Session-scoped Pomodoro work duration (preparation screen override)
+export const selectSessionWorkDuration = createSelector(
+  selectFocusModeState,
+  (state) => state._sessionWorkDuration,
+);
+
 // Overtime selectors
 export const selectIsOvertimeEnabled = createSelector(
   selectFocusModeState,

@@ -10,6 +10,7 @@ import {
   FocusScreen,
   FOCUS_MODE_DEFAULTS,
 } from '../focus-mode.model';
+import { updateGlobalConfigSection } from '../../config/store/global-config.actions';
 
 describe('FocusModeReducer', () => {
   beforeEach(() => {
@@ -665,6 +666,58 @@ describe('FocusModeReducer', () => {
     });
   });
 
+  describe('session work duration (#9645)', () => {
+    const SESSION_DURATION = 40 * 60 * 1000;
+
+    it('should set the session work duration', () => {
+      const result = focusModeReducer(
+        initialState,
+        a.setSessionWorkDuration({ duration: SESSION_DURATION }),
+      );
+
+      expect(result._sessionWorkDuration).toBe(SESSION_DURATION);
+    });
+
+    it('should survive a full Pomodoro cycle so the next session reuses it', () => {
+      const cycle = [
+        a.completeFocusSession({ isManual: false }),
+        a.incrementCycle(),
+        a.startBreak({ duration: 5 * 60 * 1000 }),
+        a.completeBreak({}),
+      ];
+
+      const result = cycle.reduce(
+        focusModeReducer,
+        focusModeReducer(
+          initialState,
+          a.setSessionWorkDuration({ duration: SESSION_DURATION }),
+        ),
+      );
+
+      expect(result._sessionWorkDuration).toBe(SESSION_DURATION);
+    });
+
+    it('should be cleared when the user leaves focus mode', () => {
+      const state = { ...initialState, _sessionWorkDuration: SESSION_DURATION };
+      const result = focusModeReducer(state, a.cancelFocusSession());
+
+      expect(result._sessionWorkDuration).toBeNull();
+    });
+
+    it('should survive a Pomodoro settings save, local or synced from another device', () => {
+      const state = { ...initialState, _sessionWorkDuration: SESSION_DURATION };
+      const result = focusModeReducer(
+        state,
+        updateGlobalConfigSection({
+          sectionKey: 'pomodoro',
+          sectionCfg: { duration: 30 * 60 * 1000 },
+        }),
+      );
+
+      expect(result._sessionWorkDuration).toBe(SESSION_DURATION);
+    });
+  });
+
   describe('cycle management', () => {
     it('should increment cycle', () => {
       const action = a.incrementCycle();
@@ -923,6 +976,34 @@ describe('FocusModeReducer', () => {
       );
 
       expect(result.mode).toBe(FocusModeMode.Pomodoro);
+    });
+
+    it('re-seeds the session work duration from a restored Pomodoro work session', () => {
+      const result = focusModeReducer(
+        { ...initialState, mode: FocusModeMode.Pomodoro },
+        a.restoreFocusSessionFromNative({
+          durationMs: 40 * 60 * 1000,
+          remainingMs: 10 * 60 * 1000,
+          isBreak: false,
+          isPaused: false,
+        }),
+      );
+
+      expect(result._sessionWorkDuration).toBe(40 * 60 * 1000);
+    });
+
+    it('does not seed the session work duration from a restored break', () => {
+      const result = focusModeReducer(
+        { ...initialState, mode: FocusModeMode.Pomodoro },
+        a.restoreFocusSessionFromNative({
+          durationMs: 5 * 60 * 1000,
+          remainingMs: 2 * 60 * 1000,
+          isBreak: true,
+          isPaused: false,
+        }),
+      );
+
+      expect(result._sessionWorkDuration).toBeNull();
     });
 
     it('clamps elapsed to 0 if remaining exceeds duration', () => {

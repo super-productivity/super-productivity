@@ -100,11 +100,6 @@
           <!-- Clock time display -->
           <div
             class="clock-time"
-            [matTooltip]="
-              isShowDurationSlider()
-                ? (T.F.FOCUS_MODE.CLICK_TO_EDIT_DURATION | translate)
-                : ''
-            "
             [title]="T.F.FOCUS_MODE.FOCUS_TIME_TOOLTIP | translate"
           >
             @if (focusModeService.isInOvertime()) {
@@ -161,6 +156,7 @@
               [hideHandle]="isPomodoro()"
               [useFlexibleIncrement]="!isPomodoro()"
               [blurOnEnter]="true"
+              [valueTitle]="T.F.FOCUS_MODE.CLICK_TO_EDIT_DURATION | translate"
               (modelChange)="onDurationChange($event)"
             ></input-duration-slider>
           </div>

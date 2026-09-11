@@ -35,6 +35,7 @@ export const initialState: FocusModeState = {
   pausedTaskId: null,
   _isResumingBreak: false,
   _isOvertimeEnabled: false,
+  _sessionWorkDuration: null,
 };
 
 const createWorkTimer = (duration: number): TimerState => ({
@@ -199,6 +200,8 @@ export const focusModeReducer = createReducer(
     isOverlayShown: false,
     pausedTaskId: null,
     _isOvertimeEnabled: false,
+    // Leaving focus mode ends the run the typed duration belonged to.
+    _sessionWorkDuration: null,
   })),
 
   // Flowtime end-of-session: store elapsed duration and pause the timer. The
@@ -301,6 +304,13 @@ export const focusModeReducer = createReducer(
     };
   }),
 
+  // Pomodoro only: remember the typed duration for the rest of this run. Kept
+  // outside `timer`, which completeBreak resets, so later cycles still see it.
+  on(a.setSessionWorkDuration, (state, { duration }) => ({
+    ...state,
+    _sessionWorkDuration: duration,
+  })),
+
   // Cycle management
   on(a.incrementCycle, (state) => ({
     ...state,
@@ -395,6 +405,12 @@ export const focusModeReducer = createReducer(
         // running timer; we don't pop the full-screen overlay on app reopen.
         currentScreen: isBreak ? FocusScreen.Break : FocusScreen.Main,
         mainState: FocusMainUIState.InProgress,
+        // The restored work session is the only surviving record of a typed
+        // duration, so re-seed it or the next cycle would drop to the config.
+        _sessionWorkDuration:
+          !isBreak && mode === FocusModeMode.Pomodoro
+            ? durationMs
+            : state._sessionWorkDuration,
       };
     },
   ),

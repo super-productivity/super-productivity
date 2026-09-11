@@ -68,6 +68,7 @@ describe('FocusModeMainComponent', () => {
   let currentTaskSubject: BehaviorSubject<TaskCopy | null>;
   let mainStateSignal: WritableSignal<FocusMainUIState>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
+  let globalConfigServiceSpy: jasmine.SpyObj<GlobalConfigService>;
 
   const mockTask: TaskCopy = {
     id: 'task-1',
@@ -89,11 +90,15 @@ describe('FocusModeMainComponent', () => {
 
   beforeEach(async () => {
     mainStateSignal = signal(FocusMainUIState.Preparation);
-    const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
-      tasks: jasmine.createSpy().and.returnValue({
-        notesTemplate: 'Default task notes template',
-      }),
-    });
+    globalConfigServiceSpy = jasmine.createSpyObj(
+      'GlobalConfigService',
+      ['updateSection'],
+      {
+        tasks: jasmine.createSpy().and.returnValue({
+          notesTemplate: 'Default task notes template',
+        }),
+      },
+    );
 
     currentTaskSubject = new BehaviorSubject<TaskCopy | null>(mockTask);
     const taskServiceSpy = jasmine.createSpyObj(
@@ -136,6 +141,7 @@ describe('FocusModeMainComponent', () => {
         isSkipPreparation: false,
       }),
       pomodoroConfig: jasmine.createSpy().and.returnValue(undefined),
+      sessionWorkDuration: jasmine.createSpy().and.returnValue(null),
       isInOvertime: jasmine.createSpy().and.returnValue(false),
       isSessionPaused: jasmine.createSpy().and.returnValue(false),
     });
@@ -666,6 +672,34 @@ describe('FocusModeMainComponent', () => {
     });
   });
 
+  describe('onDurationChange (issue #9645)', () => {
+    it('should remember a Pomodoro duration for the run instead of writing config', () => {
+      component.onDurationChange(2400000);
+
+      expect(component.displayDuration()).toBe(2400000);
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        actions.setFocusSessionDuration({ focusSessionDuration: 2400000 }),
+      );
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        actions.setSessionWorkDuration({ duration: 2400000 }),
+      );
+      expect(globalConfigServiceSpy.updateSection).not.toHaveBeenCalled();
+    });
+
+    it('should not remember a duration outside Pomodoro mode', () => {
+      (focusModeServiceSpy.mode as jasmine.Spy).and.returnValue(FocusModeMode.Countdown);
+
+      component.onDurationChange(2400000);
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        actions.setFocusSessionDuration({ focusSessionDuration: 2400000 }),
+      );
+      expect(mockStore.dispatch).not.toHaveBeenCalledWith(
+        actions.setSessionWorkDuration({ duration: 2400000 }),
+      );
+    });
+  });
+
   describe('mode selector visibility', () => {
     it('should show mode selector in preparation state (default)', () => {
       // Default setup has: mainState=Preparation
@@ -812,6 +846,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
         isSkipPreparation: false,
       }),
       pomodoroConfig: signal(undefined),
+      sessionWorkDuration: signal(null),
       isInOvertime: signal(false),
     };
 
@@ -1160,6 +1195,7 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       mainState: mainStateSignal,
       focusModeConfig: focusModeConfigSignal,
       pomodoroConfig: signal(undefined),
+      sessionWorkDuration: signal(null),
       isInOvertime: signal(false),
     };
 

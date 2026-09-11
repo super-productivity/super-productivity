@@ -61,6 +61,11 @@ export class InputDurationSliderComponent implements OnInit, OnDestroy {
   // for Pomodoro preparation, where the duration is typed rather than dragged.
   readonly hideHandle = input(false);
 
+  // Native tooltip for the editable value — the only hint that the value can be
+  // typed at all in the handle-less variant. Opt-in so the other consumers,
+  // where the input is an ordinary labelled field, stay untouched.
+  readonly valueTitle = input('');
+
   // On Enter, commit the typed value and drop focus. Opt-in (focus-mode) only:
   // blurring on Enter cancels the browser's implicit form submission, so the
   // default must stay off or the time-estimate dialogs (slider inside a <form>

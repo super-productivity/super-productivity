@@ -74,6 +74,15 @@ export const setFocusSessionDuration = createAction(
   props<{ focusSessionDuration: number }>(),
 );
 
+/**
+ * Pomodoro work duration typed on the preparation screen. Session-scoped: it
+ * survives breaks so later cycles run the same length, but is never persisted.
+ */
+export const setSessionWorkDuration = createAction(
+  '[FocusMode] Set Session Work Duration',
+  props<{ duration: number }>(),
+);
+
 export const completeTask = createAction('[FocusMode] Complete Task');
 
 export const adjustRemainingTime = createAction(

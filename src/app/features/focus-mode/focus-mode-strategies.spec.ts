@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { GlobalConfigService } from '../config/global-config.service';
 import {
   PomodoroStrategy,
@@ -8,10 +9,13 @@ import {
 } from './focus-mode-strategies';
 import { FocusModeMode, FOCUS_MODE_DEFAULTS } from './focus-mode.model';
 import { FocusModeStorageService } from './focus-mode-storage.service';
+import { initialState as focusModeInitialState } from './store/focus-mode.reducer';
+import { selectSessionWorkDuration } from './store/focus-mode.selectors';
 
 describe('FocusModeStrategies', () => {
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
   let focusModeStorage: jasmine.SpyObj<FocusModeStorageService>;
+  let store: MockStore;
 
   beforeEach(() => {
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
@@ -30,6 +34,7 @@ describe('FocusModeStrategies', () => {
         FlowtimeStrategy,
         CountdownStrategy,
         FocusModeStrategyFactory,
+        provideMockStore({ initialState: { focusMode: focusModeInitialState } }),
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
         {
           provide: FocusModeStorageService,
@@ -48,6 +53,13 @@ describe('FocusModeStrategies', () => {
       FocusModeStorageService,
     ) as jasmine.SpyObj<FocusModeStorageService>;
     focusModeStorage.getLastCountdownDuration.and.returnValue(null);
+    store = TestBed.inject(MockStore);
+  });
+
+  // overrideSelector memoizes on the selector itself, so a leaked override
+  // would follow into the next spec.
+  afterEach(() => {
+    store.resetSelectors();
   });
 
   describe('PomodoroStrategy', () => {
@@ -69,6 +81,24 @@ describe('FocusModeStrategies', () => {
         expect(strategy.initialSessionDuration).toBe(
           FOCUS_MODE_DEFAULTS.SESSION_DURATION,
         );
+      });
+
+      it('should prefer the session work duration over the config', () => {
+        store.overrideSelector(selectSessionWorkDuration, 2400000);
+        store.refreshState();
+
+        expect(strategy.initialSessionDuration).toBe(2400000);
+      });
+
+      it('should fall back to the config once the session work duration is cleared', () => {
+        store.overrideSelector(selectSessionWorkDuration, 2400000);
+        store.refreshState();
+        expect(strategy.initialSessionDuration).toBe(2400000);
+
+        store.overrideSelector(selectSessionWorkDuration, null);
+        store.refreshState();
+
+        expect(strategy.initialSessionDuration).toBe(1500000);
       });
     });
 
