@@ -186,25 +186,28 @@ const resolveDeadlineValue = (
  * deadline keeps its reminder. An explicit null that would otherwise keep an
  * existing reminder becomes 'clear' so only the reminder is touched, without
  * re-planning the deadline.
+ *
+ * Takes the *normalized* existing reminder (see `resolveDeadlineChange`): a
+ * stored `null` means "no reminder", so it must neither be carried over into
+ * `setDeadline` nor turn a `{"deadlineRemindAt": null}` no-op into a
+ * `clearDeadlineReminder` op.
  */
 const resolveReminderChange = (
   fields: Partial<WritableTaskFields>,
-  existingTask: Task | undefined,
+  existingDeadlineRemindAt: number | undefined,
   isDeadlineValueChanged: boolean,
 ): { type: 'clear' } | { type: 'value'; remindAt: number | undefined } => {
   if (!hasOwn(fields, 'deadlineRemindAt')) {
     return {
       type: 'value',
-      remindAt: isDeadlineValueChanged
-        ? undefined
-        : (existingTask?.deadlineRemindAt ?? undefined),
+      remindAt: isDeadlineValueChanged ? undefined : existingDeadlineRemindAt,
     };
   }
   const requested = fields.deadlineRemindAt ?? undefined;
   if (
     requested === undefined &&
     !isDeadlineValueChanged &&
-    existingTask?.deadlineRemindAt !== undefined
+    existingDeadlineRemindAt !== undefined
   ) {
     return { type: 'clear' };
   }
@@ -245,7 +248,11 @@ const resolveDeadlineChange = (
   const isDeadlineValueChanged =
     deadlineDay !== existingDeadlineDay || deadlineWithTime !== existingDeadlineWithTime;
 
-  const reminder = resolveReminderChange(fields, existingTask, isDeadlineValueChanged);
+  const reminder = resolveReminderChange(
+    fields,
+    existingDeadlineRemindAt,
+    isDeadlineValueChanged,
+  );
   if (reminder.type === 'clear') {
     return { ok: true, change: { type: 'clearReminder' } };
   }
