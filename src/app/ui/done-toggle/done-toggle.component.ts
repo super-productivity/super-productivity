@@ -27,12 +27,20 @@ export class DoneToggleComponent {
   readonly isCurrent = input<boolean>(false);
   readonly showDoneAnimation = input<boolean>(false);
   readonly showUndoneAnimation = input<boolean>(false);
+  /**
+   * Opt in where the surrounding row supports multi-select (the task list).
+   * Off by default: the Planner renders this same toggle and has no
+   * multi-select, so a modifier click there must still mark the task done —
+   * bailing unconditionally swallowed the toggle and let the click bubble to
+   * the planner row, which opened the detail panel instead.
+   */
+  readonly isMultiSelectAware = input<boolean>(false);
   readonly toggled = output<void>();
 
   onClick(ev: MouseEvent): void {
     // A modifier click selects the task row instead of toggling done; let it
     // bubble to the row.
-    if (isMultiSelectModifierEvent(ev)) {
+    if (this.isMultiSelectAware() && isMultiSelectModifierEvent(ev)) {
       return;
     }
     this.toggled.emit();

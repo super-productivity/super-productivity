@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 import { PlannerTaskComponent } from './planner-task.component';
 import { TaskService } from '../../tasks/task.service';
 import { DEFAULT_TASK, TaskCopy } from '../../tasks/task.model';
+import { DoneToggleComponent } from '../../../ui/done-toggle/done-toggle.component';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -20,6 +21,7 @@ const makeTask = (overrides: Partial<TaskCopy> = {}): TaskCopy =>
 
 describe('PlannerTaskComponent', () => {
   let currentTaskId: WritableSignal<string | null>;
+  let taskServiceMock: { toggleDoneWithAnimation: jasmine.Spy };
 
   const create = (
     task: TaskCopy,
@@ -35,7 +37,7 @@ describe('PlannerTaskComponent', () => {
 
   beforeEach(() => {
     currentTaskId = signal<string | null>(null);
-    const taskServiceMock = {
+    taskServiceMock = {
       ...jasmine.createSpyObj('TaskService', [
         'setSelectedId',
         'toggleDoneWithAnimation',
@@ -57,7 +59,10 @@ describe('PlannerTaskComponent', () => {
     // (ignored via NO_ERRORS_SCHEMA); the pipes used in the template are kept.
     TestBed.overrideComponent(PlannerTaskComponent, {
       set: {
-        imports: [MsToStringPipe, RenderLinksPipe, TranslatePipe],
+        // `done-toggle` stays REAL: the planner's modifier-click behaviour is a
+        // property of how this template configures that shared component, so
+        // stubbing it would test nothing (see the spec at the bottom).
+        imports: [DoneToggleComponent, MsToStringPipe, RenderLinksPipe, TranslatePipe],
         schemas: [NO_ERRORS_SCHEMA],
       },
     });
@@ -122,5 +127,38 @@ describe('PlannerTaskComponent', () => {
       const { fixture } = create(makeTask({ isDone: false }));
       expect(fixture.debugElement.nativeElement.classList.contains('isDone')).toBe(false);
     });
+  });
+
+  describe('done toggle (#9929 fallout)', () => {
+    /**
+     * The Planner has no multi-select, so its `done-toggle` must NOT opt into
+     * the multi-select bail — a Ctrl/Cmd/Shift click here has to keep marking
+     * the task done. Adding `[isMultiSelectAware]="true"` to this template (as
+     * `task.component.html` correctly does) would swallow the toggle AND let
+     * the click bubble to the planner row, which opens the detail panel.
+     */
+    const clickToggle = (task: TaskCopy, init: MouseEventInit): void => {
+      const { fixture } = create(task);
+      const toggle = fixture.nativeElement.querySelector('done-toggle') as HTMLElement;
+      toggle.dispatchEvent(
+        new MouseEvent('click', { bubbles: true, cancelable: true, ...init }),
+      );
+    };
+
+    it('marks the task done on a plain click', () => {
+      clickToggle(makeTask({ isDone: false }), {});
+      expect(taskServiceMock.toggleDoneWithAnimation).toHaveBeenCalled();
+    });
+
+    for (const [name, init] of [
+      ['ctrl', { ctrlKey: true }],
+      ['meta', { metaKey: true }],
+      ['shift', { shiftKey: true }],
+    ] as const) {
+      it(`still marks the task done on a ${name}+click`, () => {
+        clickToggle(makeTask({ isDone: false }), init);
+        expect(taskServiceMock.toggleDoneWithAnimation).toHaveBeenCalled();
+      });
+    }
   });
 });

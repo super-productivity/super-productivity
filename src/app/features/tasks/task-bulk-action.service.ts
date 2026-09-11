@@ -472,14 +472,15 @@ export class TaskBulkActionService {
       return;
     }
     const pick = result as DateTimePick;
+    // The dialog's "Remove" button closes with `{date: null, …}`. That is a
+    // removal, not a set: it must report DEADLINE_REMOVED and count only the
+    // tasks that actually had a deadline, which is exactly `removeDeadline()`.
+    if (pick.date === null) {
+      await this.removeDeadline();
+      return;
+    }
     await this._runSuppressed(() => {
       tasks.forEach((task) => {
-        if (pick.date === null) {
-          if (task.deadlineDay || task.deadlineWithTime) {
-            this._store.dispatch(TaskSharedActions.removeDeadline({ taskId: task.id }));
-          }
-          return;
-        }
         if (pick.time && isValidSplitTime(pick.time)) {
           const deadlineWithTime = getDateTimeFromClockString(
             pick.time,
@@ -573,6 +574,18 @@ export class TaskBulkActionService {
   }
 
   private async _moveBetweenProjectLists(target: 'backlog' | 'regular'): Promise<void> {
+    // Gated on the ACTIVE context, like the single-task shortcut
+    // (task.component.ts, #9374) and the bulk bar's own isShowBacklogBtns().
+    // Today and tag views have no backlog, so the move is position-only against
+    // each task's OWN project: invisible where the user is looking, yet one
+    // synced op per task. The keyboard path is the only way to reach this once
+    // the bar hides the buttons, so the gate has to live here.
+    const { isEnableBacklog } = await firstValueFrom(
+      this._workContextService.activeWorkContext$,
+    );
+    if (!isEnableBacklog) {
+      return;
+    }
     const { eligible, skippedSubtasks } = splitParentOnly(this._resolveInVisualOrder());
     const tasks = eligible.filter((t) => !!t.projectId);
     if (!tasks.length) {

@@ -282,6 +282,81 @@ describe('PluginOAuthService', () => {
       expect(token).toBe('refreshed-token');
     });
 
+    it('keeps the old expiry when the refresh response omits expires_in', async () => {
+      // expires_in is OPTIONAL per RFC 6749 5.1. `response.expires_in * 1000`
+      // on an absent field yields NaN, which is then persisted; on next start
+      // restoreTokens rejects the record and discards the whole grant - the
+      // full re-consent loss #9939 set out to close.
+      const tokenUrl = 'https://oauth2.googleapis.com/token';
+      service.storeTokens('plugin-1', {
+        accessToken: 'old-token',
+        refreshToken: 'refresh-token',
+        expiresAt: Date.now() + 60000,
+        tokenUrl,
+        clientId: 'cid',
+      });
+
+      const promise = service.getValidToken('plugin-1');
+      httpMock.expectOne(tokenUrl).flush({ access_token: 'refreshed-token' });
+
+      expect(await promise).toBe('refreshed-token');
+      const persisted = JSON.parse(service.serializeTokens('plugin-1') as string) as {
+        expiresAt: number;
+        accessToken: string;
+      };
+      expect(Number.isFinite(persisted.expiresAt)).toBeTrue();
+      expect(persisted.expiresAt).toBeGreaterThan(Date.now());
+    });
+
+    it('keeps the stored grant when the refresh response carries no access_token', async () => {
+      // GitHub answers 200 {"error":"bad_refresh_token"}. Persisting
+      // accessToken: undefined makes restoreTokens discard the grant on the
+      // next start.
+      const tokenUrl = 'https://oauth2.googleapis.com/token';
+      service.storeTokens('plugin-1', {
+        accessToken: 'old-token',
+        refreshToken: 'refresh-token',
+        expiresAt: Date.now() + 60000,
+        tokenUrl,
+        clientId: 'cid',
+      });
+
+      const promise = service.getValidToken('plugin-1');
+      httpMock.expectOne(tokenUrl).flush({ error: 'bad_refresh_token' });
+
+      expect(await promise).toBeNull();
+      const persisted = JSON.parse(service.serializeTokens('plugin-1') as string) as {
+        accessToken: string;
+      };
+      expect(persisted.accessToken).toBe('old-token');
+    });
+
+    it('does not resurrect tokens cleared while a refresh was in flight', async () => {
+      // The user hits Disconnect mid-refresh. Re-inserting the record also
+      // re-emits tokensRefreshed$, whose bridge subscriber writes the
+      // credentials back to IndexedDB, so the disconnect survives a restart.
+      const tokenUrl = 'https://oauth2.googleapis.com/token';
+      service.storeTokens('plugin-1', {
+        accessToken: 'old-token',
+        refreshToken: 'refresh-token',
+        expiresAt: Date.now() + 60000,
+        tokenUrl,
+        clientId: 'cid',
+      });
+      const refreshedEmissions: string[] = [];
+      service.tokensRefreshed$.subscribe((id) => refreshedEmissions.push(id));
+
+      const promise = service.getValidToken('plugin-1');
+      service.clearTokens('plugin-1');
+      httpMock
+        .expectOne(tokenUrl)
+        .flush({ access_token: 'refreshed-token', expires_in: 3600 });
+
+      expect(await promise).toBeNull();
+      expect(service.hasTokens('plugin-1')).toBeFalse();
+      expect(refreshedEmissions).toEqual([]);
+    });
+
     it('should keep tokens when client authentication fails', async () => {
       // invalid_client faults the app's own credentials, not the user's grant —
       // deleting their refresh token cannot fix it and re-consent would fail too.

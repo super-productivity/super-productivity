@@ -671,6 +671,15 @@ export class RemoteOpsProcessingService {
           result.failedOp.error,
         );
 
+        // Same reasoning as the blocked-op withdrawal above: the cursor the
+        // caller supplied covers ops this client did NOT apply, so a REPAIR
+        // minted by the validation below must not claim it. A falsely causal
+        // REPAIR is auto-accepted by receivers, which then DROP their
+        // concurrent prefix ops (`SyncImportFilterService`, isPrefixOp +
+        // repairBaseServerSeq !== undefined) instead of replaying them after
+        // the repair boundary — deleting work the snapshot never contained.
+        this.repairSyncContext.dropBaseServerSeqForCurrentRun();
+
         await this._validateAndFlagSession(
           'partial-apply-failure',
           callerHoldsLock,

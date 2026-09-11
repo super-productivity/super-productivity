@@ -64,6 +64,14 @@ describe('toRenderableHref', () => {
       'ms.msdt:1234',
       // `host:port@other` is userinfo, not a port — never a bare host.
       'trusted-bank.com:8080@evil.com/login',
+      // Same trick behind a `www.` label: the visible prefix is the bait and
+      // the real host is what follows the `@`.
+      'www.trusted-bank.com:8080@evil.com/login',
+      'www.trusted-bank.com@evil.com/login',
+      // Accepted collateral of the rule above: a schemeless host with a real
+      // port is indistinguishable from the userinfo bait without parsing, so
+      // it stays text. Write `http://www.example.com:8080/x` to link it.
+      'www.example.com:8080/path',
     ].forEach((href) => {
       it(`returns null for "${href}"`, () => {
         expect(toRenderableHref(href)).toBeNull();

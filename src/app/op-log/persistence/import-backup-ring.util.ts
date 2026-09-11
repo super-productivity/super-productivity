@@ -35,6 +35,14 @@ export interface ImportBackupEntry extends ImportBackupRef {
 export interface ImportBackupCaptureMeta {
   reason?: ImportBackupReason;
   taskCount?: number;
+  /**
+   * Never rotate this entry out during THIS capture. Set while restoring it:
+   * the pre-restore snapshot is written before the restore is known to have
+   * succeeded, so without this a restore of the oldest entry deletes that
+   * entry, and a failure afterwards (quota, IDB abort, app kill) leaves the
+   * user with no way to retry the only snapshot holding their data.
+   */
+  protectBackupId?: string;
 }
 
 interface PointerRow {
@@ -60,20 +68,42 @@ const readRingMeta = async (tx: OpLogTx): Promise<ImportBackupMeta[]> => {
 };
 
 /**
- * Newest-first entries that survive a rotation to `size`. The newest
- * pre-replacement capture (REMOTE_IMPORT / FORCE_DOWNLOAD) survives when size > 0 so
- * restores cannot rotate the pre-loss snapshot out (#10003); the other slots go
- * to the newest remaining entries.
+ * Newest-first entries that survive a rotation to `size`.
+ *
+ * Two slots are privileged, then the rest go to the newest remaining entries:
+ * - `protectBackupId`, the entry currently being restored (see
+ *   {@link ImportBackupCaptureMeta.protectBackupId}).
+ * - the NEWEST pre-replacement capture (REMOTE_IMPORT / FORCE_DOWNLOAD), so a
+ *   restore's own LOCAL_IMPORT capture cannot rotate it out (#10003).
+ *
+ * Known gap: only the newest such capture is guarded, so a run of
+ * `IMPORT_BACKUP_RING_SIZE` further full-state ops still ages out an older
+ * pre-loss snapshot. Widening that is a ring-policy decision, not a bug fix.
  */
-const keepNewest = (entries: ImportBackupMeta[], size: number): ImportBackupMeta[] => {
+const keepNewest = (
+  entries: ImportBackupMeta[],
+  size: number,
+  protectBackupId?: string,
+): ImportBackupMeta[] => {
   if (size === 0) {
     return [];
   }
+  const privileged = new Set<ImportBackupMeta>();
+  const protectedEntry =
+    protectBackupId !== undefined
+      ? entries.find((e) => e.backupId === protectBackupId)
+      : undefined;
+  if (protectedEntry) {
+    privileged.add(protectedEntry);
+  }
   const guarded = entries.find((e) => e.reason !== 'LOCAL_IMPORT');
+  if (guarded) {
+    privileged.add(guarded);
+  }
   const others = entries
-    .filter((e) => e !== guarded)
-    .slice(0, Math.max(0, guarded ? size - 1 : size));
-  return entries.filter((e) => e === guarded || others.includes(e));
+    .filter((e) => !privileged.has(e))
+    .slice(0, Math.max(0, size - privileged.size));
+  return entries.filter((e) => privileged.has(e) || others.includes(e));
 };
 
 /**
@@ -94,7 +124,7 @@ export const saveImportBackupTx = async (
     taskCount: meta.taskCount ?? 0,
   };
   const entries = [entry, ...(await readRingMeta(tx))];
-  const kept = keepNewest(entries, IMPORT_BACKUP_RING_SIZE);
+  const kept = keepNewest(entries, IMPORT_BACKUP_RING_SIZE, meta.protectBackupId);
   for (const evicted of entries.filter((e) => !kept.includes(e))) {
     await tx.delete(STORE_NAMES.IMPORT_BACKUP, evicted.backupId);
   }

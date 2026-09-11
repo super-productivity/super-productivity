@@ -512,6 +512,7 @@ export class OperationLogSyncService {
     // USE_REMOTE, CANCEL) — those paths return early above to avoid stale rejection handling.
     const downloadCallback = async (downloadOptions?: {
       forceFromSeq0?: boolean;
+      isReDeliveryRetry?: boolean;
       ignoredLocalFullStateOpIds?: string[];
     }): Promise<DownloadResultForRejection> => {
       const outcome = await this.downloadRemoteOps(syncProvider, {
@@ -617,6 +618,7 @@ export class OperationLogSyncService {
     syncProvider: OperationSyncCapable,
     options?: {
       forceFromSeq0?: boolean;
+      isReDeliveryRetry?: boolean;
       isNeverSynced?: boolean;
       ignoredLocalFullStateOpIds?: string[];
       /** Sync epoch captured at cycle start (#9074); fences local writes. */

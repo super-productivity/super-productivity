@@ -66,6 +66,16 @@ object NativeInsetShimGate {
      * there would switch the shim off as well and leave the device with no inset
      * owner: the #9316 symptom on a perfectly current WebView. Anything but the
      * current-package reading degrades to `null`, which runs the shim.
+     *
+     * KNOWN GAP (unobserved, so deliberately not guarded): "the current-package
+     * reading" is the package, not necessarily its `versionName`. `evaluate()`
+     * falls back to `parseMajorVersion(longVersionCode)` — the first three
+     * digits of the version code — when `versionName` does not parse, and that
+     * number can read >= 140 for an older WebView (124 -> 624). `SystemBars`
+     * reads `versionName` and would see 0 there, so the two would disagree and
+     * leave no inset owner. No device with an unparseable WebView `versionName`
+     * has been reported; if one ever is, make this require a `versionName`-
+     * derived major rather than widening the fallback.
      */
     fun activeProviderMajor(result: WebViewCompatibilityChecker.Result?): Int? =
         result?.takeIf { it.providerPackageIsCurrent }?.majorVersion

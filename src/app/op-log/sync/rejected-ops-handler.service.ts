@@ -477,7 +477,10 @@ export class RejectedOpsHandlerService {
               `concurrent ops still pending. Forcing full download from seq 0...`,
           );
 
-          const forceDownloadResult = await downloadCallback({ forceFromSeq0: true });
+          const forceDownloadResult = await downloadCallback({
+            forceFromSeq0: true,
+            isReDeliveryRetry: true,
+          });
           if (forceDownloadResult.kind === 'cancelled') {
             this._rollbackResolutionAttempts(opsToResolve);
             return { kind: 'cancelled' };
