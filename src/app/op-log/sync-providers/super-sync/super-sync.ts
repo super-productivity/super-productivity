@@ -13,6 +13,7 @@ import { SyncCredentialStore } from '../credential-store.service';
 import { APP_PROVIDER_PLATFORM_INFO } from '../platform/app-provider-platform-info';
 import { APP_WEB_FETCH } from '../platform/app-web-fetch';
 import { SyncProviderId } from '../provider.const';
+import { getAppSemver } from '../../../util/get-app-version-str';
 import {
   validateDeleteAllDataResponse,
   validateDevicesResponse,
@@ -98,6 +99,7 @@ export const createSuperSyncProvider = (): PackageSuperSyncProvider => {
     // framework-agnostic and never implicitly assumes the SP-hosted
     // server URL.
     defaultBaseUrl: SUPER_SYNC_DEFAULT_BASE_URL,
+    appVersion: getAppSemver(),
   };
   return new PackageSuperSyncProvider(deps);
 };

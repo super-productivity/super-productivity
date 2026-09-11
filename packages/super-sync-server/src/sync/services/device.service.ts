@@ -11,6 +11,7 @@ import {
   RETENTION_MS,
   SyncDeviceInfo,
 } from '../sync.types';
+import { CheckpointGateFleetSummary, summarizeCheckpointGate } from '../checkpoint-gate';
 
 /** Upper bound on rows `listDevices` returns, and so on the dialog's row count. */
 const MAX_LISTED_DEVICES = 100;
@@ -60,7 +61,9 @@ export class DeviceService {
    * for those are never written, and harvesting a hostname would put the first
    * user-identifying cleartext beyond the account email on a server whose whole
    * point is that op payloads are opaque to it. The clientId's platform prefix
-   * (E/A/I/B) is enough to tell devices apart.
+   * (E/A/I/B) is enough to tell devices apart. `app_version` IS written (by
+   * `touchDevice`) but is a bare semver read only by the checkpoint gate, so
+   * it stays out of the list too.
    *
    * The retention filter makes the "devices drop off the list after the
    * retention period" promise hold by construction — the daily cleanup job
@@ -97,17 +100,43 @@ export class DeviceService {
    *
    * The INSERT half registers download-only devices, which the upload
    * transaction's upsert would otherwise never create.
+   *
+   * `appVersion` (already validated by `parseAppVersion`) is recorded for the
+   * checkpoint gate (#9962). A changed version bypasses the throttle so an
+   * update is visible on the next poll, and an absent one (WebSocket heartbeat,
+   * pre-reporting clients) never overwrites a known version with NULL.
    */
-  async touchDevice(userId: number, clientId: string): Promise<void> {
+  async touchDevice(
+    userId: number,
+    clientId: string,
+    appVersion?: string,
+  ): Promise<void> {
     const nowBig = BigInt(Date.now());
     const staleBefore = nowBig - BigInt(DEVICE_TOUCH_THROTTLE_MS);
+    const version = appVersion ?? null;
     await prisma.$executeRaw`
-      INSERT INTO sync_devices (client_id, user_id, last_seen_at, last_acked_seq, created_at)
-      VALUES (${clientId}, ${userId}, ${nowBig}::bigint, 0, ${nowBig}::bigint)
+      INSERT INTO sync_devices (client_id, user_id, last_seen_at, last_acked_seq, created_at, app_version)
+      VALUES (${clientId}, ${userId}, ${nowBig}::bigint, 0, ${nowBig}::bigint, ${version})
       ON CONFLICT (user_id, client_id) DO UPDATE
-      SET last_seen_at = EXCLUDED.last_seen_at
+      SET last_seen_at = EXCLUDED.last_seen_at,
+          app_version = COALESCE(EXCLUDED.app_version, sync_devices.app_version)
       WHERE sync_devices.last_seen_at < ${staleBefore}::bigint
+         OR (EXCLUDED.app_version IS NOT NULL
+             AND sync_devices.app_version IS DISTINCT FROM EXCLUDED.app_version)
     `;
+  }
+
+  /**
+   * Fleet-wide gate roll-up over every device seen after `sinceTime`. One row
+   * per device in the window (bounded by the stale-device cleanup, so tens of
+   * thousands at most); grouped in-process so the comparison has one home.
+   */
+  async summarizeCheckpointGate(sinceTime: number): Promise<CheckpointGateFleetSummary> {
+    const rows = await prisma.syncDevice.findMany({
+      where: { lastSeenAt: { gt: BigInt(sinceTime) } },
+      select: { userId: true, appVersion: true },
+    });
+    return summarizeCheckpointGate(rows);
   }
 
   async deleteStaleDevices(beforeTime: number): Promise<number> {

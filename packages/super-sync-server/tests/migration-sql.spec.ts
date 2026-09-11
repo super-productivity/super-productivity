@@ -183,6 +183,32 @@ describe('performance migrations', () => {
     expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
   });
 
+  it('adds sync_devices.app_version as a nullable catalog-only column (#9962)', () => {
+    const migrationSql = readFileSync(
+      join(
+        currentDir,
+        '../prisma/migrations/20260911000000_add_sync_device_app_version/migration.sql',
+      ),
+      'utf8',
+    );
+
+    // Nullable with no default: pure catalog change, no rewrite, no backfill.
+    // A default would silently mark every pre-reporting device as versioned.
+    // The header comment explains exactly that, so match statements only.
+    const statements = migrationSql
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('--'))
+      .join('\n');
+    expect(statements).toMatch(
+      /ALTER TABLE "sync_devices"\s+ADD COLUMN "app_version" TEXT\s*;/i,
+    );
+    expect(statements).not.toMatch(/\bDEFAULT\b/i);
+    expect(statements).not.toMatch(/\bNOT NULL\b/i);
+    expect(statements).not.toMatch(/\bUPDATE\b/i);
+    expect(statements).not.toMatch(/\bCONCURRENTLY\b/i);
+    expect(statements).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
+  });
+
   it('adds the payload_bytes unbackfilled partial index concurrently', () => {
     const migrationSql = readFileSync(
       join(

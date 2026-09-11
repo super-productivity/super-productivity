@@ -10,6 +10,7 @@ import {
   createStateReplacementRequiredResults,
   SyncDeviceInfo,
 } from './sync.types';
+import { CheckpointGateFleetSummary } from './checkpoint-gate';
 import { Logger } from '../logger';
 import { Prisma } from '@prisma/client';
 import {
@@ -633,9 +634,9 @@ export class SyncService {
    * deliberately outside any transaction: this is advisory metadata for a UI
    * list and must never fail, slow, or lengthen the lock window of a sync.
    */
-  touchDevice(userId: number, clientId: string): void {
+  touchDevice(userId: number, clientId: string, appVersion?: string): void {
     void this.deviceService
-      .touchDevice(userId, clientId)
+      .touchDevice(userId, clientId, appVersion)
       .catch((err) =>
         Logger.debug(`[user:${userId}] touchDevice failed: ${(err as Error)?.message}`),
       );
@@ -863,6 +864,11 @@ export class SyncService {
 
   async deleteStaleDevices(beforeTime: number): Promise<number> {
     return this.deviceService.deleteStaleDevices(beforeTime);
+  }
+
+  /** Checkpoint-gate roll-up for the daily cleanup log (#9962). */
+  async summarizeCheckpointGate(sinceTime: number): Promise<CheckpointGateFleetSummary> {
+    return this.deviceService.summarizeCheckpointGate(sinceTime);
   }
 
   /**

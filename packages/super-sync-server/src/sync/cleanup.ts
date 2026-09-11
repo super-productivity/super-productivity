@@ -1,6 +1,7 @@
 import { getSyncService } from './sync.service';
 import { Logger } from '../logger';
 import { DEFAULT_SYNC_CONFIG, MS_PER_DAY } from './sync.types';
+import { MIN_CHECKPOINT_SAFE_APP_VERSION } from './checkpoint-gate';
 
 let cleanupTimer: NodeJS.Timeout | null = null;
 let initialCleanupTimer: NodeJS.Timeout | null = null;
@@ -54,6 +55,20 @@ const runDailyCleanup = async (): Promise<void> => {
     }
   } catch (error) {
     Logger.error(`Cleanup [stale-devices] failed: ${error}`);
+  }
+
+  // 2b. Checkpoint gate (#9962), read-only. Logged unconditionally: this count
+  // is what decides when an automatic client checkpoint cadence can be enabled,
+  // and it should be visible falling toward "all safe" run by run.
+  try {
+    const gate = await syncService.summarizeCheckpointGate(cutoffTime);
+    Logger.info(
+      `Cleanup [checkpoint-gate]: ${gate.safeAccounts} of ${gate.totalAccounts} account(s) ` +
+        `with a device inside retention run only clients >= ${MIN_CHECKPOINT_SAFE_APP_VERSION}; ` +
+        `${gate.unversionedDevices} device(s) report no version.`,
+    );
+  } catch (error) {
+    Logger.error(`Cleanup [checkpoint-gate] failed: ${error}`);
   }
 
   // 3. Clean up expired rate limit counters

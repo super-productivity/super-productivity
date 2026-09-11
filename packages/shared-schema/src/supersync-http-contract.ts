@@ -165,6 +165,14 @@ export const SuperSyncDownloadOpsQuerySchema = z.object({
   sinceSeq: z.coerce.number().int().min(0),
   limit: z.coerce.number().int().min(1).max(1000).optional(),
   excludeClient: SuperSyncClientIdSchema.optional(),
+  /**
+   * Bare semver of the calling app (`18.22.0`), recorded per device for the
+   * server's checkpoint gate (#9962). A query parameter rather than a header
+   * so browser clients need no new CORS allowance from older servers, which
+   * strip it as an unknown key. Loosely typed on purpose: the server drops a
+   * malformed value instead of failing the download.
+   */
+  appVersion: z.string().optional(),
 });
 
 export const SuperSyncUploadSnapshotRequestSchema = z

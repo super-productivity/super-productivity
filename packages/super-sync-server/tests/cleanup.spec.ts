@@ -21,6 +21,11 @@ const mockSyncService = {
     affectedUserIds: [],
   }),
   deleteStaleDevices: vi.fn().mockResolvedValue(0),
+  summarizeCheckpointGate: vi.fn().mockResolvedValue({
+    safeAccounts: 0,
+    totalAccounts: 0,
+    unversionedDevices: 0,
+  }),
   cleanupExpiredRateLimitCounters: vi.fn().mockReturnValue(0),
   cleanupExpiredRequestDedupEntries: vi.fn().mockReturnValue(0),
   deleteExpiredPendingPasskeyRegistrations: vi.fn().mockResolvedValue(0),
@@ -214,6 +219,37 @@ describe('Cleanup Jobs', () => {
       expect(mockSyncService.deleteStaleDevices).toHaveBeenCalled();
       expect(mockSyncService.cleanupExpiredRateLimitCounters).toHaveBeenCalled();
       expect(mockSyncService.cleanupExpiredRequestDedupEntries).toHaveBeenCalled();
+    });
+
+    it('logs the checkpoint-gate roll-up unconditionally (#9962)', async () => {
+      mockSyncService.summarizeCheckpointGate.mockResolvedValueOnce({
+        safeAccounts: 3,
+        totalAccounts: 10,
+        unversionedDevices: 7,
+      });
+
+      startCleanupJobs();
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      const cutoffCall = mockSyncService.deleteStaleDevices.mock.calls[0][0];
+      expect(mockSyncService.summarizeCheckpointGate).toHaveBeenCalledWith(cutoffCall);
+      expect(Logger.info).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /Cleanup \[checkpoint-gate\]: 3 of 10 account\(s\) .* >= 18\.21\.2; 7 device\(s\) report no version/,
+        ),
+      );
+    });
+
+    it('should continue cleanup even if the checkpoint-gate roll-up fails', async () => {
+      mockSyncService.summarizeCheckpointGate.mockRejectedValueOnce(
+        new Error('DB error'),
+      );
+
+      startCleanupJobs();
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(mockSyncService.cleanupExpiredRateLimitCounters).toHaveBeenCalled();
+      expect(mockSyncService.deleteAbandonedUnverifiedUsers).toHaveBeenCalled();
     });
 
     it('should continue cleanup even if device cleanup fails', async () => {

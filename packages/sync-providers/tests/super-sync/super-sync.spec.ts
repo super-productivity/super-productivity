@@ -168,6 +168,7 @@ const buildProvider = (
     isAndroidWebView: boolean;
     isIosNative: boolean;
     validators: SuperSyncResponseValidators;
+    appVersion: string;
   }>,
 ): BuildProviderResult => {
   const cfgStore = createCredentialStoreMock();
@@ -191,6 +192,7 @@ const buildProvider = (
     responseValidators: validators,
     defaultBaseUrl: SUPER_SYNC_DEFAULT_BASE_URL,
     webRequestRetryDelay: webRequestRetryDelay as (ms: number) => Promise<void>,
+    appVersion: overrides?.appVersion,
   };
   const provider = new SuperSyncProvider(deps);
   return {
@@ -664,6 +666,30 @@ describe('SuperSyncProvider', () => {
       await provider.downloadOps(0);
 
       expect(provider.supportsCausalRepairSnapshots()).toBe(true);
+    });
+
+    it('reports the app version as a query parameter when the host supplies one (#9962)', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider({ appVersion: '18.22.0' });
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(okResponse({ ops: [], hasMore: false, latestSeq: 0 }));
+
+      await provider.downloadOps(0, 'client-1');
+
+      const [url] = fetchMock.mock.calls[0] as [string];
+      expect(url).toBe(
+        'https://sync.example.com/api/sync/ops?sinceSeq=0&excludeClient=client-1&appVersion=18.22.0',
+      );
+    });
+
+    it('sends no appVersion parameter when the host supplies none', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(okResponse({ ops: [], hasMore: false, latestSeq: 0 }));
+
+      await provider.downloadOps(0, 'client-1');
+
+      const [url] = fetchMock.mock.calls[0] as [string];
+      expect(url).not.toContain('appVersion');
     });
 
     it('downloads operations successfully', async () => {
