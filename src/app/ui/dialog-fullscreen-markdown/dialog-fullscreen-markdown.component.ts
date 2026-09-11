@@ -113,17 +113,13 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
    * The live editor renders and edits in the same view, so the TEXT/SPLIT/PARSED
    * toggle has nothing left to switch between and is dropped entirely (#9910).
    */
-  readonly isLiveMarkdown = computed(() => {
-    // Both conditions, same as InlineMarkdownComponent: with markdown
-    // formatting off the user asked for plain text, and the two surfaces
-    // disagreeing would give them a textarea inline and a rendering editor in
-    // fullscreen for the same note.
-    const isFormattingOn =
-      this._globalConfigService.tasks()?.isMarkdownFormattingInNotesEnabled ?? true;
-    return (
-      isFormattingOn && (this._globalConfigService.misc()?.isLiveMarkdownPreview ?? true)
-    );
-  });
+  readonly isLiveMarkdown = computed(
+    // Same condition as InlineMarkdownComponent: with markdown formatting off
+    // the user asked for plain text, and the two surfaces disagreeing would
+    // give them a textarea inline and a rendering editor in fullscreen for the
+    // same note.
+    () => this._globalConfigService.tasks()?.isMarkdownFormattingInNotesEnabled ?? true,
+  );
   readonly previewEl = viewChild<MarkdownComponent>('previewEl');
   readonly textareaEl = viewChild<ElementRef>('textareaEl');
   readonly liveEditorEl = viewChild<LiveMarkdownEditorComponent>('liveEditorEl');

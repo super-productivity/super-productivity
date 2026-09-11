@@ -19,13 +19,23 @@ describe('InlineMarkdownComponent', () => {
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockClipboardImageService: jasmine.SpyObj<ClipboardImageService>;
+  /**
+   * Markdown formatting now decides which editor mounts: on → the live markdown
+   * editor (#9910), off → a plain textarea. Most specs here drive the component
+   * API directly and do not care; the ones that reach into the rendered DOM set
+   * this before the first `detectChanges`, since the config spy is a plain
+   * function and the `computed` over it caches on first read.
+   */
+  let isMarkdownFormattingOn: boolean;
 
   beforeEach(async () => {
+    isMarkdownFormattingOn = true;
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
-      tasks: jasmine.createSpy().and.returnValue({ isTurnOffMarkdown: false }),
-      // The experimental live editor reads misc.isLiveMarkdownPreview; these
-      // specs all cover the default (textarea) path.
-      misc: jasmine.createSpy().and.returnValue({ isLiveMarkdownPreview: false }),
+      tasks: jasmine.createSpy().and.callFake(() => ({
+        isTurnOffMarkdown: false,
+        isMarkdownFormattingInNotesEnabled: isMarkdownFormattingOn,
+      })),
+      misc: jasmine.createSpy().and.returnValue({}),
     });
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
     mockClipboardImageService = jasmine.createSpyObj('ClipboardImageService', [
@@ -61,6 +71,11 @@ describe('InlineMarkdownComponent', () => {
   });
 
   describe('keypressHandler', () => {
+    // The plain-text editor: reachable when markdown formatting is off.
+    beforeEach(() => {
+      isMarkdownFormattingOn = false;
+    });
+
     let mockTextareaEl: {
       nativeElement: {
         selectionEnd: number;
@@ -124,7 +139,8 @@ describe('InlineMarkdownComponent', () => {
   });
 
   describe('long note wrapping', () => {
-    it('should wrap long words while editing and previewing notes', fakeAsync(() => {
+    it('should wrap long words in the plain-text editor', fakeAsync(() => {
+      isMarkdownFormattingOn = false;
       const longToken = 'AVeryLongUnbrokenWordThatShouldWrapInsideTheEditor';
       component.model = `[${longToken}](https://example.com/${longToken})`;
       component['isShowEdit'].set(true);
@@ -134,120 +150,26 @@ describe('InlineMarkdownComponent', () => {
       const textarea = fixture.nativeElement.querySelector(
         'textarea.markdown-unparsed',
       ) as HTMLTextAreaElement;
-      const preview = fixture.nativeElement.querySelector(
-        'markdown.markdown-parsed',
-      ) as HTMLElement;
-      const previewLink = fixture.nativeElement.querySelector(
-        'markdown.markdown-parsed a',
-      ) as HTMLAnchorElement;
 
       expect(window.getComputedStyle(textarea).overflowWrap).toBe('anywhere');
       expect(window.getComputedStyle(textarea).whiteSpace).toBe('pre-wrap');
-      expect(window.getComputedStyle(preview).overflowWrap).toBe('anywhere');
-      expect(window.getComputedStyle(previewLink).overflowWrap).toBe('anywhere');
     }));
   });
 
-  describe('checklist glyph selectability', () => {
-    it('keeps the checkbox glyph unselectable while its label stays copyable', fakeAsync(() => {
-      component.model = 'placeholder';
-      fixture.detectChanges();
-      tick();
-      fixture.detectChanges();
-      tick();
-
-      const preview = fixture.nativeElement.querySelector(
-        'markdown.markdown-parsed',
-      ) as HTMLElement;
-      expect(preview).toBeTruthy();
-
-      // The custom checklist renderer (marked-options-factory) emits a Material
-      // Icons ligature span whose textContent is the glyph name. The unit-test
-      // module doesn't wire that renderer, so emulate its output to verify the
-      // stylesheet keeps the glyph out of the clipboard while the label is kept
-      // selectable.
-      preview.innerHTML =
-        '<li class="checkbox-wrapper undone">' +
-        '<span class="checkbox material-icons">check_box_outline_blank</span> ' +
-        '<span class="checkbox-label">buy milk</span></li>';
-      fixture.detectChanges();
-
-      const glyph = preview.querySelector('.checkbox') as HTMLElement;
-      const label = preview.querySelector('.checkbox-label') as HTMLElement;
-      expect(window.getComputedStyle(glyph).userSelect).toBe('none');
-      expect(window.getComputedStyle(label).userSelect).toBe('text');
-    }));
-  });
-
-  describe('XSS sanitization (GHSA-4rrp-xhp8-hf4p)', () => {
-    it('should not render an executable event handler from a malicious note', fakeAsync(() => {
-      component.model = '<img src=x onerror="alert(document.domain)">';
-      fixture.detectChanges();
-      tick();
-      fixture.detectChanges();
-      tick();
-
-      const preview = fixture.nativeElement.querySelector(
-        'markdown.markdown-parsed',
-      ) as HTMLElement;
-      expect(preview).toBeTruthy();
-      expect(preview.innerHTML).not.toContain('onerror');
-      // The sanitizer keeps the (now inert) <img>, just without the handler.
-      const img = preview.querySelector('img');
-      if (img) {
-        expect(img.getAttribute('onerror')).toBeNull();
-      }
-    }));
-
-    it('should still render a normal note (sanitizer does not break rendering)', fakeAsync(() => {
-      component.model = '**bold** and [link](https://example.com)';
-      fixture.detectChanges();
-      tick();
-      fixture.detectChanges();
-      tick();
-
-      const preview = fixture.nativeElement.querySelector(
-        'markdown.markdown-parsed',
-      ) as HTMLElement;
-      expect(preview.querySelector('strong')?.textContent).toBe('bold');
-      expect(preview.querySelector('a')?.getAttribute('href')).toBe(
-        'https://example.com',
-      );
-    }));
-  });
-
-  describe('isHidePreviewWhileEditing', () => {
-    const queryPreview = (): HTMLElement | null =>
-      fixture.nativeElement.querySelector('markdown.markdown-parsed');
-
-    it('keeps the live preview while editing by default (detail-panel behavior)', () => {
-      component.model = 'hello';
-      fixture.detectChanges();
-      component['isShowEdit'].set(true);
-      fixture.detectChanges();
-      expect(queryPreview()).toBeTruthy();
-    });
-
-    it('shows the rendered preview in read mode even when opted in', () => {
-      fixture.componentRef.setInput('isHidePreviewWhileEditing', true);
-      component.model = 'hello';
-      fixture.detectChanges();
-      component['isShowEdit'].set(false);
-      fixture.detectChanges();
-      expect(queryPreview()).toBeTruthy();
-    });
-
-    it('hides the preview while editing when opted in (focus-mode single view)', () => {
-      fixture.componentRef.setInput('isHidePreviewWhileEditing', true);
-      component.model = 'hello';
-      fixture.detectChanges();
-      component['isShowEdit'].set(true);
-      fixture.detectChanges();
-      expect(queryPreview()).toBeNull();
-    });
-  });
+  // The rendered-preview assertions that lived here (checkbox glyph
+  // selectability, XSS sanitization, isHidePreviewWhileEditing) are gone with
+  // the preview itself: this component now mounts the live markdown editor
+  // whenever markdown is parsed at all, so `isShowPreview()` can never be true.
+  // The sanitization contract they duplicated is covered end-to-end against the
+  // real marked + DomSanitizer pipeline in `src/app/ui/markdown-sanitization.spec.ts`
+  // (GHSA-4rrp-xhp8-hf4p), which is where it belongs.
 
   describe('ngOnDestroy', () => {
+    // The plain-text editor: reachable when markdown formatting is off.
+    beforeEach(() => {
+      isMarkdownFormattingOn = false;
+    });
+
     it('should emit changed event with current value when in edit mode and value has changed', () => {
       // Arrange
       const originalValue = 'original text';
@@ -771,6 +693,11 @@ describe('InlineMarkdownComponent', () => {
   });
 
   describe('toggleChecklistMode', () => {
+    // The plain-text editor: reachable when markdown formatting is off.
+    beforeEach(() => {
+      isMarkdownFormattingOn = false;
+    });
+
     const setupMockTextarea = (
       text: string,
       selectionStart = 0,

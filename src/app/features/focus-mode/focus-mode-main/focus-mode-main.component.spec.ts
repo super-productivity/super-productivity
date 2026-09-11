@@ -90,10 +90,13 @@ describe('FocusModeMainComponent', () => {
   beforeEach(async () => {
     mainStateSignal = signal(FocusMainUIState.Preparation);
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
+      // Formatting off keeps these specs on the plain-textarea notes path; the
+      // live markdown editor (#9910) has its own specs and an e2e.
       tasks: jasmine.createSpy().and.returnValue({
         notesTemplate: 'Default task notes template',
+        isMarkdownFormattingInNotesEnabled: false,
       }),
-      misc: jasmine.createSpy().and.returnValue({ isLiveMarkdownPreview: false }),
+      misc: jasmine.createSpy().and.returnValue({}),
     });
 
     currentTaskSubject = new BehaviorSubject<TaskCopy | null>(mockTask);
@@ -770,10 +773,13 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     isXsSignal = signal(true);
 
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
+      // Formatting off keeps these specs on the plain-textarea notes path; the
+      // live markdown editor (#9910) has its own specs and an e2e.
       tasks: jasmine.createSpy().and.returnValue({
         notesTemplate: 'Default task notes template',
+        isMarkdownFormattingInNotesEnabled: false,
       }),
-      misc: jasmine.createSpy().and.returnValue({ isLiveMarkdownPreview: false }),
+      misc: jasmine.createSpy().and.returnValue({}),
     });
 
     currentTaskSubject = new BehaviorSubject<TaskCopy | null>(mockTask);
@@ -1112,10 +1118,13 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
     storeSpy.selectSignal.and.returnValue(signal(null));
 
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
+      // Formatting off keeps these specs on the plain-textarea notes path; the
+      // live markdown editor (#9910) has its own specs and an e2e.
       tasks: jasmine.createSpy().and.returnValue({
         notesTemplate: 'Default task notes template',
+        isMarkdownFormattingInNotesEnabled: false,
       }),
-      misc: jasmine.createSpy().and.returnValue({ isLiveMarkdownPreview: false }),
+      misc: jasmine.createSpy().and.returnValue({}),
     });
 
     currentTaskSubject = new BehaviorSubject<TaskCopy | null>(mockTask);

@@ -57,15 +57,15 @@ describe('DialogAddNoteComponent', () => {
         { provide: ClipboardImageService, useValue: mockClipboardImageService },
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardPasteHandlerService, useValue: {} },
-        // These specs drive the textarea editor; the live markdown editor
-        // (#9910) is covered by its own specs and an e2e.
+        // Formatting off keeps these specs on the plain-textarea editor; the
+        // live markdown editor (#9910) is covered by its own specs and an e2e.
         {
           provide: GlobalConfigService,
           useValue: {
-            misc: jasmine.createSpy().and.returnValue({ isLiveMarkdownPreview: false }),
+            misc: jasmine.createSpy().and.returnValue({}),
             tasks: jasmine
               .createSpy()
-              .and.returnValue({ isMarkdownFormattingInNotesEnabled: true }),
+              .and.returnValue({ isMarkdownFormattingInNotesEnabled: false }),
           },
         },
         { provide: NoteService, useValue: mockNoteService },

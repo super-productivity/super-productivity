@@ -158,21 +158,19 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   isTurnOffMarkdownParsing = computed(() => !this.isMarkdownFormattingEnabled());
 
   // Obsidian-style editor (#9910): renders and edits in one view, so it fully
-  // replaces the read preview here. Only meaningful when markdown parsing is on.
-  isLiveMarkdownEditor = computed(() => {
-    const misc = this._globalConfigService.misc();
-    return this.isMarkdownFormattingEnabled() && (misc?.isLiveMarkdownPreview ?? true);
-  });
+  // replaces the read preview here. Whenever markdown is parsed at all, this is
+  // how notes are edited — with formatting off the user asked for plain text
+  // and gets a plain textarea.
+  isLiveMarkdownEditor = computed(() => this.isMarkdownFormattingEnabled());
 
-  // The rendered preview shows in read mode, and also below the textarea while
-  // editing (live preview) — unless the consumer opts out via
-  // isHidePreviewWhileEditing (the compact focus-mode panel does, to stay a
-  // single view). Hidden entirely when markdown parsing is off.
+  // The rendered preview is now unreachable from this component: it only ever
+  // showed alongside the textarea, and the textarea only appears when markdown
+  // parsing is off, where there is nothing to render. Kept as a computed rather
+  // than a literal so the template and the focus-mode opt-out keep reading the
+  // same way while the legacy path is retired (#9910).
   isShowPreview = computed(
     () =>
       !this.isTurnOffMarkdownParsing() &&
-      // The live editor renders inline at all times — a second rendered copy
-      // would just duplicate the note.
       !this.isLiveMarkdownEditor() &&
       !(this.isHidePreviewWhileEditing() && this.isShowEdit()),
   );

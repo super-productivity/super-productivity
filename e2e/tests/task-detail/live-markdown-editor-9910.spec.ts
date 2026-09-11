@@ -209,15 +209,17 @@ test.describe('Live markdown editor (#9910)', () => {
         Boolean(document.activeElement?.classList.contains('cm-content')),
       );
 
+    // Polled, not sampled: focus lands a tick after the click, and under a
+    // loaded parallel run that tick is not free.
     await editor.click();
-    expect(await isInEditor()).toBe(true);
+    await expect.poll(isInEditor).toBe(true);
     await page.keyboard.press('Escape');
-    expect(await isInEditor()).toBe(false);
+    await expect.poll(isInEditor).toBe(false);
 
     await editor.click();
-    expect(await isInEditor()).toBe(true);
+    await expect.poll(isInEditor).toBe(true);
     await page.keyboard.press('ControlOrMeta+Enter');
-    expect(await isInEditor()).toBe(false);
+    await expect.poll(isInEditor).toBe(false);
   });
 
   // `![alt](src =WxH)` is the app's own sizing syntax; CommonMark cannot parse

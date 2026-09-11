@@ -60,11 +60,13 @@ describe('TaskDetailPanelComponent', () => {
     });
     const mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       cfg: jasmine.createSpy().and.returnValue({ keyboard: {} }),
-      tasks: jasmine.createSpy().and.returnValue({}),
+      // Formatting off keeps these specs on the plain-textarea notes path; the
+      // live markdown editor (#9910) has its own specs and an e2e.
+      tasks: jasmine
+        .createSpy()
+        .and.returnValue({ isMarkdownFormattingInNotesEnabled: false }),
       clipboardImages: jasmine.createSpy().and.returnValue(null),
-      // These specs drive the textarea notes editor; the live markdown editor
-      // (#9910) has its own specs and an e2e.
-      misc: jasmine.createSpy().and.returnValue({ isLiveMarkdownPreview: false }),
+      misc: jasmine.createSpy().and.returnValue({}),
     });
     const mockIssueService = jasmine.createSpyObj(
       'IssueService',
@@ -424,7 +426,11 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
         { provide: LayoutService, useValue: { isXs: () => false } },
         {
           provide: GlobalConfigService,
-          useValue: { cfg: () => ({}), misc: () => ({ isLiveMarkdownPreview: false }) },
+          useValue: {
+            cfg: () => ({}),
+            misc: () => ({}),
+            tasks: () => ({ isMarkdownFormattingInNotesEnabled: false }),
+          },
         },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
@@ -543,7 +549,11 @@ describe('TaskDetailPanelComponent notes target does not auto-edit', () => {
         { provide: LayoutService, useValue: { isXs: () => false } },
         {
           provide: GlobalConfigService,
-          useValue: { cfg: () => ({}), misc: () => ({ isLiveMarkdownPreview: false }) },
+          useValue: {
+            cfg: () => ({}),
+            misc: () => ({}),
+            tasks: () => ({ isMarkdownFormattingInNotesEnabled: false }),
+          },
         },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
@@ -645,7 +655,8 @@ describe('TaskDetailPanelComponent add sub-task', () => {
           provide: GlobalConfigService,
           useValue: {
             cfg: () => ({ keyboard: { taskAddSubTask: 'a' } }),
-            misc: () => ({ isLiveMarkdownPreview: false }),
+            misc: () => ({}),
+            tasks: () => ({ isMarkdownFormattingInNotesEnabled: false }),
           },
         },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
