@@ -26,64 +26,69 @@
     (keydown)="quickAccessKeydown($event)"
   >
     <button
-      type="button"
-      class="quick-access-btn"
+      mat-icon-button
       tabindex="0"
       (click)="quickAccessBtnClick(1)"
+      [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_TODAY | translate"
+      [attr.aria-label]="T.F.TASK.D_SCHEDULE_TASK.QA_TODAY | translate"
     >
       <mat-icon>wb_sunny</mat-icon>
-      <span class="quick-access-label">{{ T.G.TODAY | translate }}</span>
     </button>
 
     <button
-      type="button"
-      class="quick-access-btn"
+      mat-icon-button
       tabindex="0"
       (click)="quickAccessBtnClick(2)"
+      [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_TOMORROW | translate"
+      [attr.aria-label]="T.F.TASK.D_SCHEDULE_TASK.QA_TOMORROW | translate"
     >
       <mat-icon>wb_twilight</mat-icon>
-      <span class="quick-access-label">{{ T.G.TOMORROW | translate }}</span>
     </button>
-
     <button
-      type="button"
-      class="quick-access-btn"
+      mat-icon-button
       tabindex="0"
       (click)="quickAccessBtnClick(3)"
+      [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_NEXT_WEEK | translate"
+      [attr.aria-label]="T.F.TASK.D_SCHEDULE_TASK.QA_NEXT_WEEK | translate"
     >
       <mat-icon>next_week</mat-icon>
-      <span class="quick-access-label">{{ T.G.NEXT_WEEK | translate }}</span>
     </button>
-
+    <!--      <button-->
+    <!--        mat-icon-button-->
+    <!--        tabindex="0"-->
+    <!--        (click)="quickAccessBtnClick(3)"-->
+    <!--        [matTooltip]="(T.F.TASK.D_SCHEDULE_TASK.QA_NEXT_MONTH|translate)"-->
+    <!--      >-->
+    <!--        <mat-icon>bedtime</mat-icon>-->
+    <!--      </button>-->
     <button
-      type="button"
-      class="quick-access-btn"
+      mat-icon-button
       tabindex="0"
-      [matTooltip]="kb.taskSchedule ? '[' + kb.taskSchedule + ']' : ''"
+      [matTooltip]="
+        (task.dueWithTime || task.dueDay
+          ? (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+          : (T.F.TASK.CMP.SCHEDULE | translate)) +
+        (kb.taskSchedule ? ' [' + kb.taskSchedule + ']' : '')
+      "
+      [attr.aria-label]="
+        task.dueWithTime || task.dueDay
+          ? (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+          : (T.F.TASK.CMP.SCHEDULE | translate)
+      "
       (click)="scheduleTask()"
     >
       <mat-icon>today</mat-icon>
-      <span class="quick-access-label">
-        {{
-          (task.dueWithTime || task.dueDay
-            ? T.F.TASK.CMP.EDIT_SCHEDULED
-            : T.F.TASK.D_SCHEDULE_TASK.SCHEDULE
-          ) | translate
-        }}
-      </span>
     </button>
 
     @if (task.dueWithTime || task.dueDay) {
       <button
-        type="button"
-        class="quick-access-btn"
+        mat-icon-button
         tabindex="0"
         (click)="unscheduleTask()"
+        [matTooltip]="T.F.TASK.CMP.UNSCHEDULE_TASK | translate"
+        [attr.aria-label]="T.F.TASK.CMP.UNSCHEDULE_TASK | translate"
       >
         <mat-icon>event_busy</mat-icon>
-        <span class="quick-access-label">
-          {{ T.F.TASK.D_SCHEDULE_TASK.UNSCHEDULE | translate }}
-        </span>
       </button>
     }
   </div>
