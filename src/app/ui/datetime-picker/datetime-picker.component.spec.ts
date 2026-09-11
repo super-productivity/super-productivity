@@ -357,4 +357,39 @@ describe('DateTimePickerComponent', () => {
     fixture.detectChanges();
     expect(component.isKeyboardNavigating).toBeTrue();
   });
+  describe('quick access', () => {
+    const getQuickAccessBtns = (): HTMLButtonElement[] =>
+      Array.from(fixture.nativeElement.querySelectorAll('.quick-access button'));
+
+    it('should render every shortcut with a visible label and an accessible name', () => {
+      fixture.detectChanges();
+      const btns = getQuickAccessBtns();
+      expect(btns.length).toBe(4);
+
+      btns.forEach((btn) => {
+        const label = btn.querySelector('.quick-access-label');
+        expect(label?.textContent?.trim()).toBeTruthy();
+        expect(btn.getAttribute('aria-label')).toBeTruthy();
+      });
+    });
+
+    it('should use the host-specific translation prefix for the accessible name', () => {
+      fixture.componentRef.setInput('quickAccessTranslationPrefix', 'F.TASK.D_DEADLINE');
+      fixture.detectChanges();
+
+      expect(getQuickAccessBtns()[0].getAttribute('aria-label')).toBe(
+        'F.TASK.D_DEADLINE.QA_TODAY',
+      );
+    });
+
+    it('should emit the shortcut id on click', () => {
+      fixture.detectChanges();
+      const emitted: string[] = [];
+      component.quickAccessClick.subscribe((v) => emitted.push(v));
+
+      getQuickAccessBtns().forEach((btn) => btn.click());
+
+      expect(emitted).toEqual(['today', 'tomorrow', 'nextWeek', 'nextMonth']);
+    });
+  });
 });

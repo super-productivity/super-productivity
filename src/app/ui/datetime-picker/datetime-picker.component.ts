@@ -15,7 +15,6 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatCalendar, MatCalendarView } from '@angular/material/datepicker';
-import { MatButtonModule } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import {
   MatFormField,
@@ -26,7 +25,6 @@ import {
 import { MatInput } from '@angular/material/input';
 import { MatSelect } from '@angular/material/select';
 import { MatOption } from '@angular/material/core';
-import { MatTooltip } from '@angular/material/tooltip';
 import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../t.const';
 import { DateService } from '../../core/date/date.service';
@@ -44,13 +42,37 @@ import { IS_ELECTRON_TOKEN } from '../../app.constants';
 
 const DEFAULT_TIME = '09:00';
 
+export type QuickAccessId = 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth';
+
+/**
+ * Quick access shortcuts, rendered as icon + visible label. The label is the
+ * short, context-free string; the context-specific string (e.g. "Schedule next
+ * week" vs the deadline wording) is resolved per host via
+ * `quickAccessTranslationPrefix` and used as the accessible name.
+ */
+export const QUICK_ACCESS_ITEMS: {
+  id: QuickAccessId;
+  icon: string;
+  label: string;
+  ariaKey: string;
+}[] = [
+  { id: 'today', icon: 'wb_sunny', label: T.G.TODAY, ariaKey: 'QA_TODAY' },
+  { id: 'tomorrow', icon: 'wb_twilight', label: T.G.TOMORROW, ariaKey: 'QA_TOMORROW' },
+  { id: 'nextWeek', icon: 'next_week', label: T.G.NEXT_WEEK, ariaKey: 'QA_NEXT_WEEK' },
+  {
+    id: 'nextMonth',
+    icon: 'bedtime',
+    label: T.G.NEXT_MONTH,
+    ariaKey: 'QA_NEXT_MONTH',
+  },
+];
+
 @Component({
   selector: 'datetime-picker',
   standalone: true,
   imports: [
     FormsModule,
     MatCalendar,
-    MatButtonModule,
     MatIcon,
     MatFormField,
     MatLabel,
@@ -59,7 +81,6 @@ const DEFAULT_TIME = '09:00';
     MatInput,
     MatSelect,
     MatOption,
-    MatTooltip,
     TranslateModule,
     TranslatePipe,
     TimeStepDirective,
@@ -91,11 +112,12 @@ export class DateTimePickerComponent implements AfterViewInit {
   dateSelected = output<Date>();
   timeChanged = output<string | null>();
   reminderChanged = output<TaskReminderOptionId>();
-  quickAccessClick = output<'today' | 'tomorrow' | 'nextWeek' | 'nextMonth'>();
+  quickAccessClick = output<QuickAccessId>();
   enterSubmit = output<void>();
 
   // Template variables
   T: typeof T = T;
+  quickAccessItems = QUICK_ACCESS_ITEMS;
   isInitValOnTimeFocus = true;
   isShowEnterMsg = false;
   @HostBinding('class.sp-hide-cursor') isKeyboardNavigating = false;
@@ -261,10 +283,7 @@ export class DateTimePickerComponent implements AfterViewInit {
     this._timeCheckVal = null;
   }
 
-  quickAccessBtnClick(
-    ev: MouseEvent,
-    val: 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth',
-  ): void {
+  quickAccessBtnClick(ev: MouseEvent, val: QuickAccessId): void {
     ev.preventDefault();
     this.quickAccessClick.emit(val);
   }
