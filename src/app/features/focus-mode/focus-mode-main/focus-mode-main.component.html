@@ -421,14 +421,11 @@
 
     <div class="notes-panel">
       <!-- No [isFocus]: the panel opens without stealing focus, so tapping is
-           what starts editing. isHidePreviewWhileEditing only matters on the
-           markdown-formatting-off path now that the live editor is one
-           surface; it keeps the compact panel from showing two at once. -->
+           what starts editing. -->
       <inline-markdown
         (blur)="isFocusNotes.set(false)"
         (blurred)="isFocusNotes.set(false)"
         (changed)="changeTaskNotes($event); isFocusNotes.set(false)"
-        [isHidePreviewWhileEditing]="true"
         [isShowControls]="true"
         [isDefaultText]="!displayed.notes"
         [model]="displayed.notes || defaultTaskNotes()"

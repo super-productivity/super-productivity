@@ -42,19 +42,6 @@
       rows="1"
     ></textarea>
   }
-
-  <!--  (focus)="clickOrFocusPreview($event, true)"-->
-  @if (isShowPreview()) {
-    <markdown
-      #previewEl
-      (mousedown)="previewMousedown($event)"
-      (click)="clickPreview($event)"
-      [data]="resolvedMarkdownData"
-      [class.preview-while-editing]="isShowEdit()"
-      class="mat-body-2 markdown-parsed markdown"
-      tabindex="0"
-    ></markdown>
-  }
 </div>
 
 @if (isShowControls()) {

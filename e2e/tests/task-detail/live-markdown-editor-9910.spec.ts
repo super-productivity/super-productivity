@@ -212,18 +212,24 @@ test.describe('Live markdown editor (#9910)', () => {
       page.evaluate(() =>
         Boolean(document.activeElement?.classList.contains('cm-content')),
       );
+    // Leaving the editor hands focus back to the detail panel's notes item —
+    // 150ms later, via its task-guarded focus. Waiting for that settled state
+    // (rather than just "not the editor") keeps the panel from grabbing focus
+    // in the middle of the next gesture.
+    const activeTag = (): Promise<string> =>
+      page.evaluate(() => document.activeElement?.tagName.toLowerCase() ?? '');
 
     // Polled, not sampled: focus lands a tick after the click, and under a
     // loaded parallel run that tick is not free.
     await editor.click();
     await expect.poll(isInEditor).toBe(true);
     await page.keyboard.press('Escape');
-    await expect.poll(isInEditor).toBe(false);
+    await expect.poll(activeTag).toBe('task-detail-item');
 
     await editor.click();
     await expect.poll(isInEditor).toBe(true);
     await page.keyboard.press('ControlOrMeta+Enter');
-    await expect.poll(isInEditor).toBe(false);
+    await expect.poll(activeTag).toBe('task-detail-item');
   });
 
   // `![alt](src =WxH)` is the app's own sizing syntax; CommonMark cannot parse
