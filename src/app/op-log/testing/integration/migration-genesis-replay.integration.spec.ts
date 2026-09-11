@@ -142,7 +142,10 @@ describe('MIGRATION genesis op replay-from-scratch (#9863)', () => {
       localClientId: CLIENT_ID,
     },
   ): RootState =>
-    rootReducer(createBaseState(), bulkApplyOperations({ operations, localClientId }));
+    rootReducer(
+      createBaseState(),
+      bulkApplyOperations({ operations, localClientId, isReplayFromEmptyBaseline: true }),
+    );
 
   it('control: a full-state SyncImport op followed by an add keeps both tasks', () => {
     const state = replayFromScratch([createSyncImportOp(), createPostMigrationAddOp()]);
@@ -195,6 +198,22 @@ describe('MIGRATION genesis op replay-from-scratch (#9863)', () => {
       jasmine.arrayWithExactContents([FOREIGN_TASK_ID, POST_MIGRATION_TASK_ID]),
     );
     expect(state[TASK_FEATURE_NAME].entities[PRE_MIGRATION_TASK_ID]).toBeUndefined();
+  });
+
+  // File providers still upload genesis ops, and their USE_REMOTE hydrates the
+  // remote snapshot first and replays the post-snapshot suffix on top. A
+  // leading own genesis in that suffix must not replace the hydrated state, so
+  // the caller has to declare the empty baseline explicitly.
+  it('leaves a leading own genesis op inert when the batch is not declared as replayed from an empty baseline', () => {
+    const state = rootReducer(
+      createBaseState(),
+      bulkApplyOperations({
+        operations: [createGenesisOp(), createPostMigrationAddOp()],
+        localClientId: CLIENT_ID,
+      }),
+    );
+
+    expect(state[TASK_FEATURE_NAME].ids).toEqual([POST_MIGRATION_TASK_ID]);
   });
 
   it('leaves an own genesis op inert when one of its own ops precedes it', () => {

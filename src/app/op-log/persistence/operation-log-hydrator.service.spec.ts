@@ -1801,6 +1801,7 @@ describe('OperationLogHydratorService', () => {
           bulkApplyHydrationOperations({
             operations: allOps.map((e) => e.op),
             localClientId: 'test-client',
+            isReplayFromEmptyBaseline: true,
           }),
         );
       });
@@ -1840,6 +1841,7 @@ describe('OperationLogHydratorService', () => {
           bulkApplyHydrationOperations({
             operations: [genesisOp, postMigrationOp],
             localClientId,
+            isReplayFromEmptyBaseline: true,
           }),
         );
         expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalled();
@@ -1888,6 +1890,7 @@ describe('OperationLogHydratorService', () => {
           bulkApplyHydrationOperations({
             operations: allOps.map((e) => e.op),
             localClientId: 'test-client',
+            isReplayFromEmptyBaseline: true,
           }),
         );
         // The degraded recovery must be visible to the user...
@@ -2034,6 +2037,7 @@ describe('OperationLogHydratorService', () => {
           bulkApplyHydrationOperations({
             operations: allOps.map((e) => e.op),
             localClientId: 'test-client',
+            isReplayFromEmptyBaseline: true,
           }),
         );
         // Degraded recovery is visible; the partial replay is never persisted
@@ -2075,6 +2079,7 @@ describe('OperationLogHydratorService', () => {
           bulkApplyHydrationOperations({
             operations: allOps.map((e) => e.op),
             localClientId: 'test-client',
+            isReplayFromEmptyBaseline: true,
           }),
         );
         // Hydration state is managed around the dispatch

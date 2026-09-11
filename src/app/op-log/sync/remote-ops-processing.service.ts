@@ -115,6 +115,13 @@ export class RemoteOpsProcessingService {
        * pointer and break that flow's Undo offer.
        */
       skipRecoveryPoint?: boolean;
+      /**
+       * Raw rebuild onto default state (USE_REMOTE on an API provider): the
+       * ops are the whole history from seq 0. Lets the client's own leading
+       * genesis op replay as full state (#9863). Never set on the file-provider
+       * snapshot + suffix path, where a snapshot was hydrated first.
+       */
+      isReplayFromEmptyBaseline?: boolean;
       ignoredLocalFullStateOpIds?: readonly string[];
       /**
        * Final full-state conflict check. Runs with the operation-log lock held,
@@ -420,6 +427,9 @@ export class RemoteOpsProcessingService {
       await this.applyNonConflictingOps(
         validOps,
         options.callerHoldsOperationLogLock ?? false,
+        {
+          isReplayFromEmptyBaseline: options.isReplayFromEmptyBaseline,
+        },
       );
       await this.validateAfterSync(options.callerHoldsOperationLogLock ?? false);
       return {
@@ -605,7 +615,10 @@ export class RemoteOpsProcessingService {
   async applyNonConflictingOps(
     ops: Operation[],
     callerHoldsLock: boolean = false,
-    options: { skipDeferredActionDrain?: boolean } = {},
+    options: {
+      skipDeferredActionDrain?: boolean;
+      isReplayFromEmptyBaseline?: boolean;
+    } = {},
   ): Promise<string[]> {
     const locallyReplayableOps =
       await this._withLocalOnlySyncSettingsForFullStateOps(ops);
@@ -630,6 +643,9 @@ export class RemoteOpsProcessingService {
             this.operationApplier.applyOperations(opsToApply, {
               skipDeferredLocalActions: true,
               onReducersCommitted: applyOptions?.onReducersCommitted,
+              ...(options.isReplayFromEmptyBaseline
+                ? { isReplayFromEmptyBaseline: true }
+                : {}),
             }),
         },
         isFullStateOperation: this._isFullStateOperation,

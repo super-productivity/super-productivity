@@ -54,6 +54,7 @@ export const bulkOperationsMetaReducer = <T>(
         operations,
         localClientId,
         atomicReplayGroups = [],
+        isReplayFromEmptyBaseline = false,
       } = action as ReturnType<typeof bulkApplyOperations>;
 
       // Apply every op in one synchronous reducer pass. Suppress the action
@@ -132,28 +133,39 @@ export const bulkOperationsMetaReducer = <T>(
             // keeps the op inert (the pre-fix behaviour) rather than risking a
             // foreign genesis op replacing this device's state mid-log.
             //
-            // It must also be the FIRST op of the batch. The genesis op is the
-            // state at the moment this client's log began, so it can only stand
-            // in for the history when nothing precedes it. Pre-#9921 clients
+            // It must also be the FIRST op of a batch that the caller declared
+            // as replayed from an empty baseline. The genesis op is the state at
+            // the moment this client's log began, so it can only stand in for
+            // the history when nothing precedes it — neither an earlier op in
+            // the batch nor state hydrated before the batch. Pre-#9921 clients
             // uploaded their genesis op like any other op, so a server history
             // can read [other device's ops…, own genesis, own ops…]; a
             // USE_REMOTE raw rebuild replays that order from seq 0 and a
             // full-state replay mid-batch would discard everything the other
-            // device did before this one joined. Every replay-from-scratch
-            // path hands the whole history to one dispatch (no chunking), so
-            // batch position is log position there. Mid-batch it stays inert —
-            // the pre-#10052 behaviour — and is logged so the loss is
-            // diagnosable.
+            // device did before this one joined. File providers still upload
+            // it, and their USE_REMOTE hydrates a snapshot first and replays
+            // the suffix on top — a leading own genesis there must stay inert.
+            // Every replay-from-scratch path hands the whole history to one
+            // dispatch (no chunking), so batch position is log position there.
+            // Otherwise it stays inert — the pre-#10052 behaviour — and is
+            // logged so the loss is diagnosable.
             const isOwnGenesisOp =
               !!localClientId &&
               op.clientId === localClientId &&
               isGenesisEntityType(op.entityType);
-            const isLeadingOwnGenesisOp = isOwnGenesisOp && operations[0]?.id === op.id;
+            const isLeadingOwnGenesisOp =
+              isOwnGenesisOp && isReplayFromEmptyBaseline && operations[0]?.id === op.id;
             if (isOwnGenesisOp && !isLeadingOwnGenesisOp) {
               OpLog.warn(
-                'bulkOperationsMetaReducer: own genesis op is not first in the batch — ' +
-                  'replaying it as inert; its pre-migration state is not restored',
-                { opId: op.id, entityType: op.entityType },
+                'bulkOperationsMetaReducer: own genesis op is not the first op of a ' +
+                  'replay from an empty baseline — replaying it as inert; its ' +
+                  'pre-migration state is not restored',
+                {
+                  opId: op.id,
+                  entityType: op.entityType,
+                  isFirstInBatch: operations[0]?.id === op.id,
+                  isReplayFromEmptyBaseline,
+                },
               );
             }
             try {

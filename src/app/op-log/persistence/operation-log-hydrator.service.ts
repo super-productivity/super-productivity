@@ -731,6 +731,7 @@ export class OperationLogHydratorService {
       replayBatch,
       localClientId,
       pendingRemoteOps.filter((entry) => allOpIds.has(entry.op.id)),
+      { isReplayFromEmptyBaseline: true },
     );
 
     if (fallbackCause !== undefined) {
@@ -772,6 +773,7 @@ export class OperationLogHydratorService {
     replayBatch: HydrationReplayBatch,
     localClientId: string | undefined,
     pendingRemoteOps: OperationLogEntry[],
+    options: { isReplayFromEmptyBaseline?: boolean } = {},
   ): Promise<void> {
     const {
       operations,
@@ -791,6 +793,9 @@ export class OperationLogHydratorService {
               operations,
               localClientId,
               ...(atomicReplayGroups.length > 0 ? { atomicReplayGroups } : {}),
+              ...(options.isReplayFromEmptyBaseline
+                ? { isReplayFromEmptyBaseline: true }
+                : {}),
             }),
           ),
       );

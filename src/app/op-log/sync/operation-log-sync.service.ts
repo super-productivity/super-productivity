@@ -2246,6 +2246,10 @@ export class OperationLogSyncService {
                 skipConflictDetection: true,
                 callerHoldsOperationLogLock: true,
                 skipRecoveryPoint: true,
+                // Whole history onto the default baseline dispatched above; the
+                // file-provider branch hydrates a snapshot first and must NOT
+                // set this (#9863 genesis gate).
+                isReplayFromEmptyBaseline: true,
               }),
           );
 
