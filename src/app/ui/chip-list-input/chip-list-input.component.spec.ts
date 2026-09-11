@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
-import { COMMA, ENTER } from '@angular/cdk/keycodes';
+import { COMMA, DOWN_ARROW, ENTER, TAB } from '@angular/cdk/keycodes';
 import { MatChipInputEvent } from '@angular/material/chips';
 import { MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
 import { ChipListInputComponent } from './chip-list-input.component';
@@ -101,6 +101,92 @@ describe('ChipListInputComponent', () => {
     expect('ctrlEnterSubmit' in component).toBeFalse();
     keydownOnInput({ code: 'Enter', ctrlKey: true });
     expect(component.separatorKeysCodes).toEqual([ENTER, COMMA]);
+  });
+
+  describe('keyboard with the autocomplete panel open (#9722)', () => {
+    let addSpy: jasmine.Spy;
+    let addNewSpy: jasmine.Spy;
+
+    const pressKey = (key: string, keyCode: number): boolean =>
+      getInput().dispatchEvent(
+        new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key, keyCode }),
+      );
+
+    const openPanelWith = async (text: string): Promise<void> => {
+      const input = getInput();
+      input.focus();
+      input.value = text;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(component.matAutocomplete()?.isOpen)
+        .withContext('autocomplete panel should be open')
+        .toBeTrue();
+    };
+
+    beforeEach(() => {
+      addSpy = jasmine.createSpy('addItem');
+      addNewSpy = jasmine.createSpy('addNewItem');
+      component.addItem.subscribe(addSpy);
+      component.addNewItem.subscribe(addNewSpy);
+    });
+
+    it('Tab accepts the first suggestion instead of creating a new item', async () => {
+      await openPanelWith('ban');
+
+      const notPrevented = pressKey('Tab', TAB);
+
+      expect(addSpy).toHaveBeenCalledOnceWith('B');
+      expect(addNewSpy).not.toHaveBeenCalled();
+      expect(notPrevented).toBeFalse();
+      expect(getInput().value).toBe('');
+    });
+
+    it('Tab accepts the suggestion highlighted with the arrow keys', async () => {
+      component.suggestions = [
+        { id: 'A', title: 'Apple' },
+        { id: 'B', title: 'Banana' },
+        { id: 'D', title: 'Blueberry' },
+      ];
+      await openPanelWith('b');
+      pressKey('ArrowDown', DOWN_ARROW);
+      pressKey('ArrowDown', DOWN_ARROW);
+
+      pressKey('Tab', TAB);
+
+      expect(addSpy).toHaveBeenCalledOnceWith('D');
+      expect(addNewSpy).not.toHaveBeenCalled();
+    });
+
+    it('Enter with no highlighted suggestion creates a new item from the typed text', async () => {
+      await openPanelWith('ban');
+
+      pressKey('Enter', ENTER);
+
+      expect(addNewSpy).toHaveBeenCalledOnceWith('ban');
+      expect(addSpy).not.toHaveBeenCalled();
+      expect(getInput().value).toBe('');
+    });
+
+    it('Enter with no highlighted suggestion adds the existing item on an exact title match', async () => {
+      await openPanelWith('Banana');
+
+      pressKey('Enter', ENTER);
+
+      expect(addSpy).toHaveBeenCalledOnceWith('B');
+      expect(addNewSpy).not.toHaveBeenCalled();
+    });
+
+    it('Enter with a highlighted suggestion adds only that suggestion', async () => {
+      await openPanelWith('ban');
+      pressKey('ArrowDown', DOWN_ARROW);
+
+      pressKey('Enter', ENTER);
+
+      expect(addSpy).toHaveBeenCalledOnceWith('B');
+      expect(addNewSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('suggestions setter', () => {

@@ -1,9 +1,11 @@
 import {
+  AfterViewInit,
   ChangeDetectionStrategy,
   Component,
   ElementRef,
   Input,
   input,
+  OnDestroy,
   output,
   viewChild,
 } from '@angular/core';
@@ -22,7 +24,7 @@ import {
   MatChipRow,
 } from '@angular/material/chips';
 import { map, startWith } from 'rxjs/operators';
-import { COMMA, ENTER } from '@angular/cdk/keycodes';
+import { COMMA, ENTER, hasModifierKey } from '@angular/cdk/keycodes';
 import { T } from '../../t.const';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
@@ -67,7 +69,7 @@ interface Suggestion {
     TagComponent,
   ],
 })
-export class ChipListInputComponent {
+export class ChipListInputComponent implements AfterViewInit, OnDestroy {
   T: typeof T = T;
 
   readonly label = input<string>();
@@ -82,6 +84,7 @@ export class ChipListInputComponent {
   separatorKeysCodes: number[] = DEFAULT_SEPARATOR_KEY_CODES;
   readonly inputEl = viewChild<ElementRef<HTMLInputElement>>('inputElRef');
   readonly matAutocomplete = viewChild<MatAutocomplete>('autoElRef');
+  readonly autocompleteTrigger = viewChild(MatAutocompleteTrigger);
   private _modelIds: string[] = [];
 
   filteredSuggestions: Observable<Suggestion[]> = this.inputCtrl.valueChanges.pipe(
@@ -137,11 +140,7 @@ export class ChipListInputComponent {
 
   selected(event: MatAutocompleteSelectedEvent): void {
     this._add(event.option.value);
-    const inputEl = this.inputEl();
-    if (inputEl) {
-      inputEl.nativeElement.value = '';
-    }
-    this.inputCtrl.setValue(null);
+    this._clearInput();
   }
 
   onInputKeydown(ev: KeyboardEvent): void {
@@ -151,6 +150,56 @@ export class ChipListInputComponent {
     } else {
       this.separatorKeysCodes = DEFAULT_SEPARATOR_KEY_CODES;
     }
+  }
+
+  ngAfterViewInit(): void {
+    this.inputEl()?.nativeElement.addEventListener(
+      'keydown',
+      this._onCapturingKeydown,
+      true,
+    );
+  }
+
+  ngOnDestroy(): void {
+    this.inputEl()?.nativeElement.removeEventListener(
+      'keydown',
+      this._onCapturingKeydown,
+      true,
+    );
+  }
+
+  private readonly _onCapturingKeydown = (ev: KeyboardEvent): void => {
+    const autocomplete = this.matAutocomplete();
+    const trigger = this.autocompleteTrigger();
+    if (!autocomplete?.isOpen || !trigger || hasModifierKey(ev)) {
+      return;
+    }
+
+    if (ev.key === 'Tab') {
+      const option = trigger.activeOption ?? autocomplete.options.first;
+      if (option) {
+        ev.preventDefault();
+        this._add(option.value);
+        this._clearInput();
+        trigger.closePanel();
+      }
+    } else if (ev.key === 'Enter' && !trigger.activeOption) {
+      ev.preventDefault();
+      const value = (this.inputCtrl.value || '').trim();
+      this._clearInput();
+      trigger.closePanel();
+      if (value) {
+        this._addByTitle(value);
+      }
+    }
+  };
+
+  private _clearInput(): void {
+    const inputEl = this.inputEl();
+    if (inputEl) {
+      inputEl.nativeElement.value = '';
+    }
+    this.inputCtrl.setValue(null);
   }
 
   private _updateModelItems(modelIds: string[]): void {
