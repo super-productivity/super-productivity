@@ -33,6 +33,7 @@ import { IssueTask, Task, TaskCopy } from '../tasks/task.model';
 import { GlobalConfigService } from '../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { withRemindAtForDueChange } from '../tasks/util/with-remind-at-for-due-change';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { IssueServiceInterface } from './issue-service-interface';
 import { JiraCommonInterfacesService } from './providers/jira/jira-common-interfaces.service';
 // Trello is now a plugin — no built-in service needed
@@ -354,7 +355,7 @@ export class IssueService {
       if (this.ISSUE_REFRESH_MAP[issueProviderId]?.[issueId]) {
         this.ISSUE_REFRESH_MAP[issueProviderId][issueId].next(update.issue);
       }
-      this._taskService.update(task.id, this._withRemindAt(task, update.taskChanges));
+      this._updateTaskFromPoll(task, update.taskChanges);
 
       if (isNotifySuccess) {
         this._snackService.open({
@@ -439,10 +440,7 @@ export class IssueService {
               update.issue,
             );
           }
-          this._taskService.update(
-            update.task.id,
-            this._withRemindAt(update.task, update.taskChanges),
-          );
+          this._updateTaskFromPoll(update.task, update.taskChanges);
         }
 
         if (updates.length === 1) {
@@ -860,17 +858,28 @@ export class IssueService {
   }
 
   /**
-   * A poll result is applied as one plain `updateTask`, which never touches
-   * `remindAt`. Derive it here so a remote (re)schedule or unschedule lands with
-   * its reminder in the same op (#10047) — same default the import path uses.
+   * A poll result is applied as a plain `updateTask`, which never touches
+   * `remindAt`. Derive it here so a remote (re)schedule lands with its reminder
+   * in the same op (#10047) — same default the import path uses.
+   *
+   * A remote unschedule is two ops on purpose: `remindAt: undefined` inside
+   * `updateTask` is dropped by JSON serialization and never replays on other
+   * devices (#9776), so the clear goes through `dismissReminderOnly`, whose
+   * reducer sets it deterministically. Rare enough that the extra op is fine.
    */
-  private _withRemindAt(task: Task, taskChanges: Partial<Task>): Partial<Task> {
-    return withRemindAtForDueChange(
+  private _updateTaskFromPoll(task: Task, taskChanges: Partial<Task>): void {
+    const { changes, isClearRemindAt } = withRemindAtForDueChange(
       task,
       taskChanges,
       this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
         DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
     );
+    this._taskService.update(task.id, changes);
+    if (isClearRemindAt) {
+      this._store.dispatch(
+        TaskSharedActions.dismissReminderOnly({ id: task.id, isSkipSnack: true }),
+      );
+    }
   }
 
   private _getService(key: IssueProviderKey): IssueServiceInterface | undefined {

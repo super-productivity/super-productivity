@@ -260,7 +260,7 @@ export const TaskSharedActions = createActionGroup({
       } satisfies PersistentActionMeta,
     }),
 
-    dismissReminderOnly: (taskProps: { id: string }) => ({
+    dismissReminderOnly: (taskProps: { id: string; isSkipSnack?: boolean }) => ({
       ...taskProps,
       meta: {
         isPersistent: true,

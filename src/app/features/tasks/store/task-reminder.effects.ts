@@ -201,6 +201,8 @@ export class TaskReminderEffects {
     () =>
       this._localActions$.pipe(
         ofType(TaskSharedActions.dismissReminderOnly),
+        // A background write (issue-provider poll) opts out via `isSkipSnack`.
+        filter(({ isSkipSnack }) => !isSkipSnack),
         tap(() => {
           this._snackService.open({
             type: 'SUCCESS',
