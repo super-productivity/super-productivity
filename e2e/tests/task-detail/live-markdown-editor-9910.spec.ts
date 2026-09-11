@@ -31,6 +31,10 @@ test.describe('Live markdown editor (#9910)', () => {
     await editor.waitFor({ state: 'visible' });
 
     await editor.click();
+    // The notes start out holding the stock notes template, and the config that
+    // supplies it loads asynchronously — select all so this test types into a
+    // known document either way.
+    await page.keyboard.press('ControlOrMeta+a');
     await page.keyboard.type('# A heading');
     await page.keyboard.press('Enter');
     await page.keyboard.type('- [ ] a checklist item');
@@ -78,7 +82,7 @@ test.describe('Live markdown editor (#9910)', () => {
 
   // An image whose `![...](...)` spans a line break cannot be replaced by a
   // view plugin — CodeMirror throws while building the view, which would leave
-  // the note blank and uneditable with no way back except the settings toggle.
+  // the note blank and uneditable with no way to get the text back out.
   test('survives an image that spans a line break', async ({
     page,
     workViewPage,
@@ -246,6 +250,87 @@ test.describe('Live markdown editor (#9910)', () => {
     await expect(img).toBeVisible();
     await expect(img).toHaveAttribute('width', '16');
     await expect(img).toHaveAttribute('height', '16');
+  });
+
+  // The checklist toolbar is the one control that edits the document from
+  // outside the editor, and it reads the live document rather than the last
+  // committed note — keying off the committed copy hid the actions menu for the
+  // whole time you were typing the checklist.
+  test('offers checklist actions while a checklist is still being typed', async ({
+    page,
+    workViewPage,
+    taskPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('checklist toolbar task');
+    await taskPage.openTaskDetail(taskPage.getTaskByText('checklist toolbar task'));
+
+    const notes = page.locator(DETAIL_PANEL).locator('inline-markdown').first();
+    const editor = notes.locator('.cm-content');
+    await editor.waitFor({ state: 'visible' });
+
+    await editor.click();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type('- [ ] one');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('- [x] two');
+
+    // Still focused, nothing committed yet.
+    const actionsBtn = notes
+      .locator('button')
+      .filter({ has: page.locator('mat-icon', { hasText: 'playlist_add_check' }) });
+    await expect(actionsBtn).toBeVisible();
+
+    await actionsBtn.click();
+    await page
+      .locator('.mat-mdc-menu-panel button')
+      .filter({ has: page.locator('mat-icon', { hasText: 'done_all' }) })
+      .click();
+    // The menu's overlay backdrop swallows clicks until it is gone.
+    await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(0);
+
+    // "Check all" rewrote the source: both items are checked, and it survives
+    // a close/reopen, so it went through the normal commit path.
+    await expect(notes.locator('.cm-md-task-checkbox')).toHaveCount(2);
+    const task = taskPage.getTaskByText('checklist toolbar task');
+    await task.locator(DETAIL_PANEL_BTN).click();
+    await expect(page.locator(DETAIL_PANEL)).not.toBeVisible();
+    // Once the notes hold a checklist the row swaps the plain notes toggle for
+    // the progress badge, so reopen through that (see `isShowToggleButton`).
+    await task.hover();
+    await task.locator('.checklist-progress-btn').click();
+
+    const reopened = page.locator(DETAIL_PANEL).locator('inline-markdown').first();
+    await reopened.locator('.cm-content').waitFor({ state: 'visible' });
+    await expect(reopened.locator('.cm-md-task-checkbox')).toHaveText([
+      'check_box',
+      'check_box',
+    ]);
+  });
+
+  // The regex src stops at the first `)`, which silently truncated a legal
+  // balanced-paren destination into a broken image with the source hidden
+  // behind the widget. The parsed URL node is used instead.
+  test('keeps an image destination that contains parentheses', async ({
+    page,
+    workViewPage,
+    taskPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('paren image task');
+    await taskPage.openTaskDetail(taskPage.getTaskByText('paren image task'));
+
+    const notes = page.locator(DETAIL_PANEL).locator('inline-markdown').first();
+    const editor = notes.locator('.cm-content');
+    await editor.waitFor({ state: 'visible' });
+
+    await editor.click();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type('![ico](assets/icons/favicon-32x32.png?a=(b))');
+    await editor.blur();
+
+    const img = notes.locator('img.cm-md-image');
+    await expect(img).toHaveAttribute('src', 'assets/icons/favicon-32x32.png?a=(b)');
   });
 
   test('renders an image inline', async ({ page, workViewPage, taskPage }) => {

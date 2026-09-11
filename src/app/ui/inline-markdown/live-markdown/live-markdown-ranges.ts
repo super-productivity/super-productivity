@@ -62,12 +62,18 @@ const imagePayload = (
 /**
  * Read the image starting at `from`, in either spelling, bounded by the end of
  * its line — a replacing decoration may not span a line break (see the caller).
+ *
+ * `treeSrc` is the destination as the markdown parser resolved it. Preferred
+ * over the regex, which stops the src at the first space or `)` and so
+ * truncates a perfectly legal `](https://x.org/Foo_(bar).png)` into a broken
+ * image — with the source hidden behind the widget, leaving no clue why.
  */
 const imageAt = (
   doc: Text,
   from: number,
   nodeTo: number,
   lineTo: number,
+  treeSrc: string | null,
 ): {
   readonly to: number;
   readonly image: ImagePayload;
@@ -79,7 +85,12 @@ const imageAt = (
       const size = TITLE_SIZE_RE.exec(text);
       return {
         to: nodeTo,
-        image: imagePayload(match[1], match[2], size?.[1] ?? '', size?.[2] ?? ''),
+        image: imagePayload(
+          match[1],
+          treeSrc === null ? match[2] : stripAngleBrackets(treeSrc),
+          size?.[1] ?? '',
+          size?.[2] ?? '',
+        ),
       };
     }
   }
@@ -92,8 +103,15 @@ const imageAt = (
     : null;
 };
 
-/** A line's leading blockquote markers, which sit before any list marker. */
-const QUOTE_PREFIX_RE = /^\s*(?:>\s?)+/;
+/** `<my img.png>` — a destination may be angle-wrapped so it can hold spaces. */
+const stripAngleBrackets = (url: string): string =>
+  url.startsWith('<') && url.endsWith('>') ? url.slice(1, -1) : url;
+
+/**
+ * A line's leading blockquote markers, which sit before any list marker.
+ * `\s*` after each `>`, not `\s?`: `>  > - [ ] x` is one quote too.
+ */
+const QUOTE_PREFIX_RE = /^\s*(?:>\s*)+/;
 
 /**
  * A checklist line's `- [ ] ` / `1. [x] ` prefix. Captures the indent, the list
@@ -264,7 +282,14 @@ export const buildLiveMarkdownRanges = ({
       // raw source.
       if (name === 'Image') {
         if (!isRevealed) {
-          const image = imageAt(doc, from, to, line.to);
+          const urlNode = node.node.getChild('URL');
+          const image = imageAt(
+            doc,
+            from,
+            to,
+            line.to,
+            urlNode ? doc.sliceString(urlNode.from, urlNode.to) : null,
+          );
           if (image) {
             ranges.push({ from, to: image.to, type: 'image', image: image.image });
             imageEnd = image.to;

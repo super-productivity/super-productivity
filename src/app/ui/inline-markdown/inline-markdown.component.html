@@ -8,7 +8,8 @@
     <!--
       Always mounted: the live editor is both the read and the edit view, so
       there is no preview to toggle against. Lazy chunk on purpose — CodeMirror
-      is ~89kB transfer and users who turn the setting off never load it (#9910).
+      is ~89kB transfer, kept out of the initial bundle and off the critical
+      path for anyone who never opens a note (#9910).
     -->
     @defer (on immediate) {
       <live-markdown-editor

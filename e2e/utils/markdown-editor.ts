@@ -3,11 +3,11 @@ import type { Locator } from '@playwright/test';
 /**
  * The markdown editing surface inside `scope`.
  *
- * Deliberately NOT `.cm-content, textarea`: the textarea still exists when the
- * "Live Markdown editor" setting is off, and matching either one would let a
- * silent fall back to the old editor keep every migrated suite green. The
- * default is the live editor, so pin it — if that ever changes, these should
- * fail loudly rather than quietly test the other path.
+ * Deliberately NOT `.cm-content, textarea`: the textarea still exists for the
+ * markdown-formatting-off path, and matching either one would let a silent fall
+ * back to the old editor keep every migrated suite green. Notes are edited in
+ * the live editor, so pin it — if that ever changes, these should fail loudly
+ * rather than quietly test the other path.
  */
 export const markdownEditor = (scope: Locator): Locator =>
   scope.locator('.cm-content').first();

@@ -93,8 +93,12 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   readonly resolveImageSrc = async (src: string): Promise<string> =>
     (await this._clipboardImageService.resolveClipboardImageUrl(src)) ?? src;
 
-  /** Last document the live editor reported; null until it reports one. */
-  private _liveDoc: string | null = null;
+  /**
+   * Last document the live editor reported; null until it reports one. A signal
+   * because the checklist toolbar has to notice a list being typed, before the
+   * blur that writes it back to `modelCopy`.
+   */
+  private readonly _liveDoc = signal<string | null>(null);
   private _isFullscreenDialogOpen = false;
   private _isDestroyed = false;
   private _resolveGeneration = 0;
@@ -177,11 +181,14 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   // True when the current notes are a markdown checklist — gates the checklist
   // bulk actions (check all / uncheck all / clear completed) in the UI.
+  // Reads the live document first: notes only write back to `modelCopy` on
+  // blur, so keying off it alone hid the checklist actions for the whole time
+  // you were actually typing the checklist.
   isCurrentlyChecklist = computed(
     () =>
       this.isShowChecklistToggle() &&
       this.isMarkdownFormattingEnabled() &&
-      isMarkdownChecklist(this.modelCopy() || ''),
+      isMarkdownChecklist(this._liveDoc() ?? this.modelCopy() ?? ''),
   );
 
   readonly T = T;
@@ -212,6 +219,11 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   @Input() set model(v: string) {
     this._model = v || '';
     this.modelCopy.set(v || '');
+    // Drop what the live editor last reported: on a task switch this setter
+    // runs before the editor has been handed the new document, and a destroy
+    // landing in that window would otherwise commit the PREVIOUS task's notes
+    // onto this one.
+    this._liveDoc.set(null);
 
     this._resolveGeneration++;
     if (v) {
@@ -287,8 +299,9 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       // afterwards, where the emit is dropped. So commit from here, where the
       // output is still alive, using the doc `docChanged` last recorded (the
       // editor's own view is already destroyed by this point).
-      if (this._liveDoc !== null && this._liveDoc !== this.model) {
-        this.changed.emit(this._liveDoc);
+      const liveDoc = this._liveDoc();
+      if (liveDoc !== null && liveDoc !== this.model) {
+        this.changed.emit(liveDoc);
       }
       return;
     }
@@ -470,7 +483,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   /** Commit a change made in the live editor (emitted on blur, like the textarea). */
   onLiveEditorChanged(value: string): void {
-    this._liveDoc = value;
+    this._liveDoc.set(value);
     this.modelCopy.set(value);
     this.model = value;
     this.changed.emit(value);
@@ -483,7 +496,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
    * rather than one per keystroke.
    */
   onLiveEditorDocChanged(value: string): void {
-    this._liveDoc = value;
+    this._liveDoc.set(value);
   }
 
   onLiveEditorFocused(): void {

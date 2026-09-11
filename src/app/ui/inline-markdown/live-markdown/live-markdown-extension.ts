@@ -10,6 +10,7 @@ import {
 } from '@codemirror/view';
 import { isPathSafeToOpen } from '../../../../../electron/shared-with-frontend/is-external-url-allowed';
 import { IS_ELECTRON } from '../../../app.constants';
+import { IS_MAC } from '../../../util/is-mac';
 import { toRenderableHref } from '../../link-href.util';
 import { markdownLanguage } from './markdown-language';
 import {
@@ -137,6 +138,8 @@ const linkOpen = (): Extension => {
     null;
   return EditorView.domEventHandlers({
     mousedown: (event, view) => {
+      // Always disarm first: a release outside the content DOM never reaches
+      // our mouseup, so an arm can otherwise survive the gesture that made it.
       armed = null;
       // `closest`, not `classList`: a bold or italic run inside a link renders
       // as a nested span carrying only its own class.
@@ -144,7 +147,9 @@ const linkOpen = (): Extension => {
       if (event.button !== 0 || !link) {
         return false;
       }
-      const isModClick = event.metaKey || event.ctrlKey;
+      // On macOS Ctrl+click IS the secondary click, so it must not open a link
+      // — the preview's real anchors never navigated for it either.
+      const isModClick = event.metaKey || (!IS_MAC && event.ctrlKey);
       if (view.hasFocus && !isModClick) {
         return false;
       }
@@ -160,6 +165,8 @@ const linkOpen = (): Extension => {
       armed = null;
       if (
         !link ||
+        // The same button that armed it has to be the one released.
+        event.button !== 0 ||
         Math.abs(event.clientX - link.x) > DRAG_SLOP_PX ||
         Math.abs(event.clientY - link.y) > DRAG_SLOP_PX
       ) {
