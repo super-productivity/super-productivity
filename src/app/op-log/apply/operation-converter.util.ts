@@ -251,6 +251,17 @@ const assertValidTaskTimeSyncPayload = (
   }
 };
 
+export interface ConvertOpToActionOptions {
+  /**
+   * Replay this op as a full-state `loadAllData` even though its opType is not
+   * a full-state type. Set by the bulk meta-reducer for the client's OWN
+   * genesis op (#9863): its payload is the complete pre-migration state and
+   * nothing else in the log carries it, so replaying it as a no-op would
+   * rebuild the store with only post-migration data.
+   */
+  replayAsFullState?: boolean;
+}
+
 /**
  * Converts an Operation from the operation log back into a PersistentAction.
  * Used during sync replay and recovery to re-dispatch operations.
@@ -262,14 +273,18 @@ const assertValidTaskTimeSyncPayload = (
  * For full-state operations (SYNC_IMPORT, BACKUP_IMPORT, Repair), this wraps
  * the payload in `appDataComplete` to match the loadAllData action format.
  */
-export const convertOpToAction = (op: Operation): PersistentAction => {
+export const convertOpToAction = (
+  op: Operation,
+  options: ConvertOpToActionOptions = {},
+): PersistentAction => {
   // Resolve any aliased action types to their current names
   const actionType = ACTION_TYPE_ALIASES[op.actionType] ?? op.actionType;
   const lwwEntityType = getLwwEntityType(actionType);
 
   // Handle full-state operations (SYNC_IMPORT, BACKUP_IMPORT, Repair) specially
   // These need their payload wrapped in appDataComplete for the loadAllData action
-  const isFullStateOp = FULL_STATE_OP_TYPES.has(op.opType as OpType);
+  const isFullStateOp =
+    FULL_STATE_OP_TYPES.has(op.opType as OpType) || options.replayAsFullState === true;
   const isSingletonLww =
     !isFullStateOp &&
     lwwEntityType !== undefined &&
