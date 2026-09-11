@@ -1,5 +1,4 @@
 import {
-  AfterViewInit,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -7,7 +6,6 @@ import {
   ElementRef,
   inject,
   input,
-  OnDestroy,
   output,
   signal,
   viewChild,
@@ -27,7 +25,7 @@ import {
 } from '@angular/material/chips';
 import { MatIcon } from '@angular/material/icon';
 import { ReactiveFormsModule, UntypedFormControl } from '@angular/forms';
-import { COMMA, ENTER, hasModifierKey } from '@angular/cdk/keycodes';
+import { COMMA, ENTER } from '@angular/cdk/keycodes';
 import { T } from '../../../t.const';
 import { TagService } from '../tag.service';
 import { TaskService } from '../../tasks/task.service';
@@ -36,6 +34,7 @@ import { TagComponent } from '../tag/tag.component';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TODAY_TAG } from '../tag.const';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ChipAutocompleteKeysDirective } from '../../../ui/chip-autocomplete-keys/chip-autocomplete-keys.directive';
 
 interface Suggestion {
   id: string;
@@ -61,12 +60,13 @@ const DEFAULT_SEPARATOR_KEY_CODES: number[] = [ENTER, COMMA];
     ReactiveFormsModule,
     MatOption,
     TranslatePipe,
+    ChipAutocompleteKeysDirective,
   ],
   templateUrl: './tag-edit.component.html',
   styleUrl: './tag-edit.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class TagEditComponent implements AfterViewInit, OnDestroy {
+export class TagEditComponent {
   T: typeof T = T;
 
   private _tagService = inject(TagService);
@@ -86,7 +86,6 @@ export class TagEditComponent implements AfterViewInit, OnDestroy {
 
   readonly inputEl = viewChild<ElementRef<HTMLInputElement>>('inputElRef');
   readonly matAutocomplete = viewChild<MatAutocomplete>('autoElRef');
-  readonly autocompleteTrigger = viewChild(MatAutocompleteTrigger);
 
   inputVal = signal<string>('');
   tagSuggestions = computed(() =>
@@ -178,47 +177,13 @@ export class TagEditComponent implements AfterViewInit, OnDestroy {
     this._clearInput();
   }
 
-  ngAfterViewInit(): void {
-    this.inputEl()?.nativeElement.addEventListener(
-      'keydown',
-      this._onCapturingKeydown,
-      true,
-    );
+  acceptSuggestion(id: string): void {
+    this._add(id);
   }
 
-  ngOnDestroy(): void {
-    this.inputEl()?.nativeElement.removeEventListener(
-      'keydown',
-      this._onCapturingKeydown,
-      true,
-    );
+  commitText(text: string): void {
+    this._addByTitle(text);
   }
-
-  private readonly _onCapturingKeydown = (ev: KeyboardEvent): void => {
-    const autocomplete = this.matAutocomplete();
-    const trigger = this.autocompleteTrigger();
-    if (!autocomplete?.isOpen || !trigger || hasModifierKey(ev)) {
-      return;
-    }
-
-    if (ev.key === 'Tab') {
-      const option = trigger.activeOption ?? autocomplete.options.first;
-      if (option) {
-        ev.preventDefault();
-        this._add(option.value);
-        this._clearInput();
-        trigger.closePanel();
-      }
-    } else if (ev.key === 'Enter' && !trigger.activeOption) {
-      ev.preventDefault();
-      const value = (this.inputCtrl.value || '').trim();
-      this._clearInput();
-      trigger.closePanel();
-      if (value) {
-        this._addByTitle(value);
-      }
-    }
-  };
 
   private _clearInput(): void {
     const inputEl = this.inputEl();

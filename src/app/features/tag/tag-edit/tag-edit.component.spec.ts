@@ -23,9 +23,19 @@ describe('TagEditComponent', () => {
   const getInput = (): HTMLInputElement =>
     fixture.nativeElement.querySelector('input') as HTMLInputElement;
 
-  const pressKey = (key: string, keyCode: number): boolean =>
+  const pressKey = (
+    key: string,
+    keyCode: number,
+    init: KeyboardEventInit = {},
+  ): boolean =>
     getInput().dispatchEvent(
-      new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key, keyCode }),
+      new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key,
+        keyCode,
+        ...init,
+      }),
     );
 
   const openPanelWith = async (text: string): Promise<void> => {
@@ -120,6 +130,16 @@ describe('TagEditComponent', () => {
 
       expect(tagUpdateSpy).toHaveBeenCalledOnceWith(['A', 'B']);
       expect(addTagSpy).not.toHaveBeenCalled();
+    });
+
+    it('Shift+Tab adds nothing and drops the partial text', async () => {
+      await openPanelWith('ban');
+
+      pressKey('Tab', TAB, { shiftKey: true });
+
+      expect(tagUpdateSpy).not.toHaveBeenCalled();
+      expect(addTagSpy).not.toHaveBeenCalled();
+      expect(getInput().value).toBe('');
     });
   });
 });

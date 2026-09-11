@@ -107,9 +107,19 @@ describe('ChipListInputComponent', () => {
     let addSpy: jasmine.Spy;
     let addNewSpy: jasmine.Spy;
 
-    const pressKey = (key: string, keyCode: number): boolean =>
+    const pressKey = (
+      key: string,
+      keyCode: number,
+      init: KeyboardEventInit = {},
+    ): boolean =>
       getInput().dispatchEvent(
-        new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key, keyCode }),
+        new KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          key,
+          keyCode,
+          ...init,
+        }),
       );
 
     const openPanelWith = async (text: string): Promise<void> => {
@@ -186,6 +196,16 @@ describe('ChipListInputComponent', () => {
 
       expect(addSpy).toHaveBeenCalledOnceWith('B');
       expect(addNewSpy).not.toHaveBeenCalled();
+    });
+
+    it('Shift+Tab adds nothing and drops the partial text', async () => {
+      await openPanelWith('ban');
+
+      pressKey('Tab', TAB, { shiftKey: true });
+
+      expect(addSpy).not.toHaveBeenCalled();
+      expect(addNewSpy).not.toHaveBeenCalled();
+      expect(getInput().value).toBe('');
     });
   });
 

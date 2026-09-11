@@ -24,6 +24,9 @@
       [matChipInputFor]="chipListElRef"
       [matChipInputSeparatorKeyCodes]="separatorKeysCodes"
       (keydown)="onInputKeydown($event)"
+      spChipAutocompleteKeys
+      (suggestionAccepted)="acceptSuggestion($event)"
+      (textCommitted)="commitText($event)"
     />
   </mat-chip-grid>
   <mat-autocomplete
