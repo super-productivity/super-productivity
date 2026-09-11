@@ -37,19 +37,41 @@ export class EnlargeImgDirective {
     }
   }
 
+  /**
+   * Runs `fn` on `transitionend` or after `ms`, whichever comes first.
+   * Safety fallback: `transitionend` never fires when transitions are off
+   * (body.isDisableAnimations / prefers-reduced-motion → transition: none),
+   * which would otherwise leave the full-viewport lightbox in the DOM
+   * swallowing every pointer event. 500ms > --transition-leave (225ms).
+   */
+  private _afterTransition(el: HTMLElement, fn: () => void, ms = 500): void {
+    let isDone = false;
+    const run = (): void => {
+      if (!isDone) {
+        isDone = true;
+        fn();
+      }
+    };
+    const timeoutId = setTimeout(run, ms);
+    el.addEventListener(
+      'transitionend',
+      () => {
+        clearTimeout(timeoutId);
+        run();
+      },
+      { once: true },
+    );
+  }
+
   private _hideImg(): void {
-    this._setOriginCoordsForImageAni();
-    this._renderer.addClass(this.enlargedImgWrapperEl, 'ani-remove');
-    this._renderer.removeClass(this.enlargedImgWrapperEl, 'ani-enter');
-    if (!this.enlargedImgWrapperEl) {
+    const wrapperEl = this.enlargedImgWrapperEl;
+    if (!wrapperEl) {
       throw new Error();
     }
-    this.enlargedImgWrapperEl.addEventListener('transitionend', () => {
-      if (!this.enlargedImgWrapperEl) {
-        throw new Error();
-      }
-      this.enlargedImgWrapperEl.remove();
-    });
+    this._setOriginCoordsForImageAni();
+    this._renderer.addClass(wrapperEl, 'ani-remove');
+    this._renderer.removeClass(wrapperEl, 'ani-enter');
+    this._afterTransition(wrapperEl, () => wrapperEl.remove());
   }
 
   private _setOriginCoordsForImageAni(): void {
@@ -108,9 +130,14 @@ export class EnlargeImgDirective {
       if (this.zoomMode === 0) {
         this._hideImg();
       } else {
-        (this.newImageEl as HTMLElement).addEventListener('transitionend', () => {
+        const wrapperElAtClick = this.enlargedImgWrapperEl;
+        this._afterTransition(this.newImageEl as HTMLElement, () => {
           setTimeout(() => {
-            this._hideImg();
+            // A reopen may have replaced the wrapper while the fallback timer
+            // was pending; never hide a lightbox this click did not open.
+            if (this.enlargedImgWrapperEl === wrapperElAtClick) {
+              this._hideImg();
+            }
           });
         });
         this._zoomOutImg();
@@ -122,9 +149,14 @@ export class EnlargeImgDirective {
       if (this.zoomMode === 0) {
         this._zoomImg();
       } else {
-        (this.newImageEl as HTMLElement).addEventListener('transitionend', () => {
+        const wrapperElAtClick = this.enlargedImgWrapperEl;
+        this._afterTransition(this.newImageEl as HTMLElement, () => {
           setTimeout(() => {
-            this._hideImg();
+            // A reopen may have replaced the wrapper while the fallback timer
+            // was pending; never hide a lightbox this click did not open.
+            if (this.enlargedImgWrapperEl === wrapperElAtClick) {
+              this._hideImg();
+            }
           });
         });
         this._zoomOutImg();

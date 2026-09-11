@@ -86,6 +86,9 @@ $check-len: 18;
 
     .done-check {
       opacity: 0.5;
+      // resting state, so the checkmark is still drawn when the animation is
+      // suppressed (body.isDisableAnimations / prefers-reduced-motion)
+      stroke-dashoffset: 0;
       animation: draw-check var(--transition-duration-s) ease-out forwards;
     }
   }
