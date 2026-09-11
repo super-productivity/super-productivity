@@ -19,11 +19,81 @@ export interface LiveMarkdownRange {
   /** Only set for `checkbox` ranges. */
   readonly isChecked?: boolean;
   /** Only set for `image` ranges. */
-  readonly image?: { readonly src: string; readonly alt: string };
+  readonly image?: {
+    readonly src: string;
+    readonly alt: string;
+    /** From the app's `=WxH` sizing syntax; absent when unsized. */
+    readonly width?: string;
+    readonly height?: string;
+  };
 }
 
 /** `![alt](src)` — src stops at the first space so a `"title"` is not swallowed. */
 const IMAGE_RE = /^!\[([^\]]*)\]\(\s*([^\s)]+)/;
+
+/**
+ * The app's image-sizing syntax as the user writes it. CommonMark has no such
+ * thing — an unquoted `=200x100` where a title belongs makes the whole inline
+ * image unparseable, so lezer ends the `Image` node after `![alt]` and leaves
+ * the rest as plain text. Without this the sized images already in people's
+ * notes would render as raw source (`marked` handles them via
+ * `preprocessMarkdown`, which the live editor never runs).
+ */
+const SIZED_IMAGE_RE = /^!\[([^\]]*)\]\(\s*([^\s)]+)\s+=(\d*)x(\d*)\)/;
+
+/** The same dimensions after `preprocessMarkdown` has rewritten them into a title. */
+const TITLE_SIZE_RE = /"(\d*)\|(\d*)"\s*\)$/;
+
+type ImagePayload = NonNullable<LiveMarkdownRange['image']>;
+
+/** Omit absent dimensions entirely rather than carrying `undefined` around. */
+const imagePayload = (
+  alt: string,
+  src: string,
+  width: string,
+  height: string,
+): ImagePayload => ({
+  alt,
+  src,
+  ...(width ? { width } : {}),
+  ...(height ? { height } : {}),
+});
+
+/**
+ * Read the image starting at `from`, in either spelling, bounded by the end of
+ * its line — a replacing decoration may not span a line break (see the caller).
+ */
+const imageAt = (
+  doc: Text,
+  from: number,
+  nodeTo: number,
+  lineTo: number,
+): {
+  readonly to: number;
+  readonly image: ImagePayload;
+} | null => {
+  if (nodeTo <= lineTo) {
+    const text = doc.sliceString(from, nodeTo);
+    const match = IMAGE_RE.exec(text);
+    if (match) {
+      const size = TITLE_SIZE_RE.exec(text);
+      return {
+        to: nodeTo,
+        image: imagePayload(match[1], match[2], size?.[1] ?? '', size?.[2] ?? ''),
+      };
+    }
+  }
+  const sized = SIZED_IMAGE_RE.exec(doc.sliceString(from, lineTo));
+  return sized
+    ? {
+        to: from + sized[0].length,
+        image: imagePayload(sized[1], sized[2], sized[3], sized[4]),
+      }
+    : null;
+};
+
+/** A line's leading blockquote markers, which sit before any list marker. */
+const QUOTE_PREFIX_RE = /^\s*(?:>\s?)+/;
 
 /**
  * A checklist line's `- [ ] ` / `1. [x] ` prefix. Captures the indent, the list
@@ -40,14 +110,28 @@ export const TASK_LINE_RE = /^(\s*)([-*+]|\d+[.)])\s+\[([ xX])\]\s?/;
 export const taskMarkerToggleFor = (
   lineText: string,
 ): { readonly offset: number; readonly nextChar: string } | null => {
-  const match = TASK_LINE_RE.exec(lineText);
-  if (!match) {
+  const quoted = taskLineMatch(lineText);
+  if (!quoted) {
     return null;
   }
+  const { offset, match } = quoted;
   return {
-    offset: match[0].indexOf('[') + 1,
+    offset: offset + match[0].indexOf('[') + 1,
     nextChar: match[3] === ' ' ? 'x' : ' ',
   };
+};
+
+/**
+ * Match a checklist prefix, skipping any blockquote markers first: inside a
+ * quote the line still reads `> - [ ] x`, and matching the raw line would miss
+ * it — leaving the one place in a note where a literal `[ ]` stays on screen.
+ */
+const taskLineMatch = (
+  lineText: string,
+): { readonly offset: number; readonly match: RegExpExecArray } | null => {
+  const offset = QUOTE_PREFIX_RE.exec(lineText)?.[0].length ?? 0;
+  const match = TASK_LINE_RE.exec(lineText.slice(offset));
+  return match ? { offset, match } : null;
 };
 
 export interface BuildLiveMarkdownRangesArgs {
@@ -122,6 +206,13 @@ export const buildLiveMarkdownRanges = ({
   revealedLines,
 }: BuildLiveMarkdownRangesArgs): LiveMarkdownRange[] => {
   const ranges: LiveMarkdownRange[] = [];
+  /**
+   * End of the image currently being replaced. The `=WxH` form is not
+   * CommonMark, so the nodes lezer finds in its tail (the `URL`, say) sit
+   * OUTSIDE the short `Image` node but INSIDE the replacement — and a marker
+   * hiding itself inside a replaced range is the overlap CodeMirror rejects.
+   */
+  let imageEnd = -1;
   const pushLineClass = (pos: number, cls: string): void => {
     const lineStart = doc.lineAt(pos).from;
     ranges.push({ from: lineStart, to: lineStart, type: 'line', cls });
@@ -134,6 +225,9 @@ export const buildLiveMarkdownRanges = ({
   tree.iterate({
     enter: (node) => {
       const { name, from, to } = node;
+      if (from < imageEnd) {
+        return false;
+      }
       const line = doc.lineAt(from);
       const isRevealed = revealedLines.has(line.number);
 
@@ -161,22 +255,19 @@ export const buildLiveMarkdownRanges = ({
       // An image renders as the image itself, but reverts to `![alt](src)` on
       // the caret's line so the source stays editable.
       //
-      // `to <= line.to` is not cosmetic: markdown allows a newline inside the
-      // alt text and around the destination, and CodeMirror refuses a
-      // replacing decoration that spans a line break when it comes from a view
-      // plugin ("Decorations that replace line breaks may not be specified via
-      // plugins") — it throws while constructing the view, which would leave
-      // the note blank and uneditable. A multi-line image stays raw source.
+      // The line bound `imageAt` takes is not cosmetic: markdown allows a
+      // newline inside the alt text and around the destination, and CodeMirror
+      // refuses a replacing decoration that spans a line break when it comes
+      // from a view plugin ("Decorations that replace line breaks may not be
+      // specified via plugins") — it throws while constructing the view, which
+      // would leave the note blank and uneditable. A multi-line image stays
+      // raw source.
       if (name === 'Image') {
-        if (!isRevealed && to <= line.to) {
-          const match = IMAGE_RE.exec(doc.sliceString(from, to));
-          if (match) {
-            ranges.push({
-              from,
-              to,
-              type: 'image',
-              image: { alt: match[1], src: match[2] },
-            });
+        if (!isRevealed) {
+          const image = imageAt(doc, from, to, line.to);
+          if (image) {
+            ranges.push({ from, to: image.to, type: 'image', image: image.image });
+            imageEnd = image.to;
           }
         }
         // Never descend, decorated or not. The `![`, `]`, `(`, URL and `)`
@@ -186,6 +277,16 @@ export const buildLiveMarkdownRanges = ({
         // rejected by isPathSafeToOpen) down to bare alt text with nothing for
         // the user to see or fix.
         return false;
+      }
+
+      // A code block keeps its fences (see isHideableCodeMark) but has no inline
+      // markers to render, so without a line class it would read as ordinary
+      // wrapped prose — the rendered preview gave it monospace and a background.
+      if (name === 'FencedCode' || name === 'CodeBlock') {
+        for (let n = line.number; n <= doc.lineAt(to).number; n++) {
+          pushLineClass(doc.line(n).from, 'cm-md-code-block');
+        }
+        return true;
       }
 
       // Tables stay literal pipe source — a real <table> widget would have to
@@ -218,16 +319,17 @@ export const buildLiveMarkdownRanges = ({
       // caret's line too: the checkbox IS the affordance, and letting it flip
       // back to raw text under the caret would make the list jump while typing.
       if (name === 'TaskMarker') {
-        const match = TASK_LINE_RE.exec(line.text);
-        if (match) {
+        const quoted = taskLineMatch(line.text);
+        if (quoted) {
+          const { offset, match } = quoted;
           const isChecked = match[3] !== ' ';
           pushLineClass(from, 'cm-md-task');
           if (isChecked) {
             pushLineClass(from, 'cm-md-task-done');
           }
           ranges.push({
-            from: line.from + match[1].length,
-            to: line.from + match[0].length,
+            from: line.from + offset + match[1].length,
+            to: line.from + offset + match[0].length,
             type: 'checkbox',
             isChecked,
           });

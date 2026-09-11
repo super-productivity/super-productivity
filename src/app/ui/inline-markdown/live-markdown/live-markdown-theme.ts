@@ -50,6 +50,13 @@ export const liveMarkdownTheme = EditorView.theme({
     borderRadius: '3px',
     backgroundColor: 'var(--separator-color, rgba(127,127,127,0.15))',
   },
+  // A fenced or indented block keeps its fences as source, so it gets the
+  // monospace + background the rendered `pre` had, applied per line.
+  '.cm-md-code-block': {
+    fontFamily: 'monospace',
+    fontSize: '12px',
+    backgroundColor: 'var(--separator-color, rgba(127,127,127,0.15))',
+  },
   '.cm-md-link': { color: 'var(--c-accent, inherit)', textDecoration: 'underline' },
   '.cm-md-list-mark': { color: 'var(--text-color-muted, inherit)' },
   // Mirrors `.checkbox` / `.checkbox-wrapper` in styles/components/markdown.scss

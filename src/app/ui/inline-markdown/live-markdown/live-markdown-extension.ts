@@ -106,45 +106,74 @@ const linkTargetAt = (state: EditorState, pos: number): string | null => {
   return urlNode ? state.doc.sliceString(urlNode.from, urlNode.to) : null;
 };
 
+/** Pointer travel (px) above which a gesture is a selection drag, not a click. */
+const DRAG_SLOP_PX = 4;
+
 /**
  * Makes links in a note followable again. The rendered preview this replaced
- * produced real anchors; here the link is only a styled span, so the click has
+ * produced real anchors; here the link is only a styled span, so the gesture has
  * to be handled.
  *
- * Gesture: a click opens the link while the editor is NOT focused — i.e. while
- * you are reading the note, which is what the preview used to do — and Mod+click
- * opens it any time. Inside a focused editor a plain click belongs to the caret,
- * or a link would be impossible to edit.
+ * Gesture: press-and-release on a link opens it while the editor is NOT focused
+ * — i.e. while you are reading the note, which is what the preview used to do —
+ * and Mod+click opens it any time. Inside a focused editor a plain click belongs
+ * to the caret, or a link would be impossible to edit.
+ *
+ * Deliberately armed on mousedown but fired on mouseup, and never calling
+ * preventDefault on the mousedown: opening from the mousedown itself turned a
+ * click-and-drag that started on a link into a navigation with nothing
+ * selected — the exact friction #8524 was built to remove — and made it
+ * impossible to put the caret at a link. Resolving the href up front keeps it
+ * independent of the caret move the mousedown causes.
  *
  * The href goes through `toRenderableHref` exactly like the marked renderer:
  * the destination is handed to `shell.openExternal` in Electron, so a note (which
  * may have arrived by sync or import) must not be able to invoke an arbitrary OS
  * protocol handler. A rejected href just places the caret.
  */
-const linkOpen = EditorView.domEventHandlers({
-  mousedown: (event, view) => {
-    const target = event.target as HTMLElement;
-    if (event.button !== 0 || !target.classList?.contains(LINK_CLASS)) {
+const linkOpen = (): Extension => {
+  // Per-editor state: `liveMarkdown()` is called once per view.
+  let armed: { readonly href: string; readonly x: number; readonly y: number } | null =
+    null;
+  return EditorView.domEventHandlers({
+    mousedown: (event, view) => {
+      armed = null;
+      // `closest`, not `classList`: a bold or italic run inside a link renders
+      // as a nested span carrying only its own class.
+      const link = (event.target as HTMLElement).closest?.(`.${LINK_CLASS}`);
+      if (event.button !== 0 || !link) {
+        return false;
+      }
+      const isModClick = event.metaKey || event.ctrlKey;
+      if (view.hasFocus && !isModClick) {
+        return false;
+      }
+      const raw = linkTargetAt(view.state, view.posAtDOM(link));
+      const href = raw && toRenderableHref(raw);
+      if (href) {
+        armed = { href, x: event.clientX, y: event.clientY };
+      }
       return false;
-    }
-    const isModClick = event.metaKey || event.ctrlKey;
-    if (view.hasFocus && !isModClick) {
-      return false;
-    }
-    const raw = linkTargetAt(view.state, view.posAtDOM(target));
-    const href = raw && toRenderableHref(raw);
-    if (!href) {
-      return false;
-    }
-    event.preventDefault();
-    if (IS_ELECTRON) {
-      window.ea.openExternalUrl(href);
-    } else {
-      window.open(href, '_blank', 'noopener,noreferrer');
-    }
-    return true;
-  },
-});
+    },
+    mouseup: (event) => {
+      const link = armed;
+      armed = null;
+      if (
+        !link ||
+        Math.abs(event.clientX - link.x) > DRAG_SLOP_PX ||
+        Math.abs(event.clientY - link.y) > DRAG_SLOP_PX
+      ) {
+        return false;
+      }
+      if (IS_ELECTRON) {
+        window.ea.openExternalUrl(link.href);
+      } else {
+        window.open(link.href, '_blank', 'noopener,noreferrer');
+      }
+      return true;
+    },
+  });
+};
 
 /**
  * Resolves a markdown image src to something loadable — the app stores pasted
@@ -164,13 +193,20 @@ class ImageWidget extends WidgetType {
   constructor(
     readonly src: string,
     readonly alt: string,
+    readonly width: string | undefined,
+    readonly height: string | undefined,
     private readonly _resolve: ResolveImageSrc | undefined,
   ) {
     super();
   }
 
   override eq(other: ImageWidget): boolean {
-    return other.src === this.src && other.alt === this.alt;
+    return (
+      other.src === this.src &&
+      other.alt === this.alt &&
+      other.width === this.width &&
+      other.height === this.height
+    );
   }
 
   override toDOM(): HTMLElement {
@@ -178,6 +214,15 @@ class ImageWidget extends WidgetType {
     img.className = 'cm-md-image';
     img.alt = this.alt;
     img.loading = 'lazy';
+    // The app's `![alt](src =WxH)` sizing syntax. Digits only (the regex that
+    // produced them allows nothing else), and set as attributes rather than
+    // inline styles to match the rendered-markdown path.
+    if (this.width) {
+      img.setAttribute('width', this.width);
+    }
+    if (this.height) {
+      img.setAttribute('height', this.height);
+    }
     if (this._resolve) {
       // Async: an indexeddb:// src has to be read back before it can load.
       void this._resolve(this.src).then((resolved) => {
@@ -240,7 +285,13 @@ const buildDecorations = (
         }
         return [
           Decoration.replace({
-            widget: new ImageWidget(image.src, image.alt, resolveImageSrc),
+            widget: new ImageWidget(
+              image.src,
+              image.alt,
+              image.width,
+              image.height,
+              resolveImageSrc,
+            ),
           }).range(from, to),
         ];
       }
@@ -299,5 +350,5 @@ export const liveMarkdown = (resolveImageSrc?: ResolveImageSrc): Extension => [
   markdownLanguage,
   liveMarkdownPlugin(resolveImageSrc),
   taskCheckboxToggle,
-  linkOpen,
+  linkOpen(),
 ];

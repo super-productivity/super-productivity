@@ -38,6 +38,7 @@ import { ClipboardImageService } from '../../core/clipboard-image/clipboard-imag
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { ResolveClipboardImagesDirective } from '../../core/clipboard-image/resolve-clipboard-images.directive';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
+import type { EditorView, KeyBinding } from '@codemirror/view';
 import { LiveMarkdownEditorComponent } from './live-markdown/live-markdown-editor.component';
 import { Store } from '@ngrx/store';
 import { Location } from '@angular/common';
@@ -126,6 +127,17 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   readonly textareaEl = viewChild<ElementRef>('textareaEl');
   readonly previewEl = viewChild<MarkdownComponent>('previewEl');
   readonly liveEditorEl = viewChild<LiveMarkdownEditorComponent>('liveEditorEl');
+
+  /**
+   * Escape and Ctrl+Enter leave the notes field, as they did on the textarea
+   * path (keypressHandler): blurring commits the note, and `keyboardUnToggle`
+   * is what hands focus back to the task detail panel. Without these the only
+   * way out of the editor by keyboard is Tab.
+   */
+  readonly liveEditorKeymap: readonly KeyBinding[] = [
+    { key: 'Escape', run: (view) => this._leaveLiveEditor(view) },
+    { key: 'Mod-Enter', run: (view) => this._leaveLiveEditor(view) },
+  ];
 
   isHideOverflow = signal(false);
   isChecklistMode = signal(false);
@@ -426,6 +438,16 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     }
 
     this._toggleShowEdit();
+  }
+
+  /**
+   * Blur commits the note through the normal path; the emitted Event is only a
+   * signal — the one consumer (`task-detail-panel`) ignores its payload.
+   */
+  private _leaveLiveEditor(view: EditorView): boolean {
+    view.contentDOM.blur();
+    this.keyboardUnToggle.emit(new Event('keyboardUnToggle'));
+    return true;
   }
 
   untoggleShowEdit(): void {

@@ -285,6 +285,102 @@ describe('images', () => {
   });
 });
 
+describe('image sizing', () => {
+  const imageOf = (src: string): LiveMarkdownRange | undefined =>
+    build(src).find((r) => r.type === 'image');
+
+  // `![alt](src =WxH)` is the app's own syntax (marked handles it via
+  // preprocessMarkdown). CommonMark cannot parse it, so lezer ends the Image
+  // node after `![alt]` and the live editor has to finish the job itself —
+  // otherwise every sized image already in a note renders as raw source.
+  it('renders the =WxH form and carries its dimensions', () => {
+    const src = '![a](img.png =200x100)';
+    expect(imageOf(src)).toEqual({
+      from: 0,
+      to: src.length,
+      type: 'image',
+      image: { alt: 'a', src: 'img.png', width: '200', height: '100' },
+    });
+  });
+
+  it('accepts a width-only or height-only form', () => {
+    expect(imageOf('![a](img.png =200x)')?.image).toEqual({
+      alt: 'a',
+      src: 'img.png',
+      width: '200',
+    });
+    expect(imageOf('![a](img.png =x100)')?.image).toEqual({
+      alt: 'a',
+      src: 'img.png',
+      height: '100',
+    });
+  });
+
+  it('reads the dimensions back out of a preprocessed "W|H" title', () => {
+    expect(imageOf('![a](img.png "200|100")')?.image).toEqual({
+      alt: 'a',
+      src: 'img.png',
+      width: '200',
+      height: '100',
+    });
+  });
+
+  it('leaves an ordinary title alone', () => {
+    expect(imageOf('![a](img.png "hello")')?.image).toEqual({
+      alt: 'a',
+      src: 'img.png',
+    });
+  });
+
+  it('swallows the whole sized image, leaving nothing to decorate inside it', () => {
+    // The `=WxH` tail sits outside the short Image node, so its URL would
+    // otherwise be styled INSIDE the replacement — the overlap CodeMirror
+    // rejects when the hidden marker is a replace too.
+    const src = '![a](https://x.com/i.png =20x10)';
+    expect(build(src).filter((r) => r.type !== 'image' && r.to > 0)).toEqual([]);
+  });
+});
+
+describe('code blocks', () => {
+  it('gives every line of a fenced block a class', () => {
+    expect(classesAt('```\nconst a = 1;\n```')).toEqual([
+      'cm-md-code-block',
+      'cm-md-code-block',
+      'cm-md-code-block',
+    ]);
+  });
+
+  it('keeps the fences visible', () => {
+    expect(hiddenText('```\ncode\n```')).toEqual([]);
+  });
+
+  it('covers an indented code block too', () => {
+    expect(classesAt('    indented')).toEqual(['cm-md-code-block']);
+  });
+});
+
+describe('checklists inside a blockquote', () => {
+  // The quote marker is hidden, so a missed match left a literal `[ ]` as the
+  // only raw markdown on screen anywhere in a note.
+  it('renders a checkbox for `> - [ ] x`', () => {
+    const src = '> - [ ] quoted task';
+    const checkbox = build(src).find((r) => r.type === 'checkbox');
+    expect(checkbox).toEqual({
+      from: src.indexOf('-'),
+      to: src.indexOf('quoted'),
+      type: 'checkbox',
+      isChecked: false,
+    });
+  });
+
+  it('does not overlap the hidden quote marker', () => {
+    const src = '> - [x] quoted';
+    const hide = build(src).filter((r) => r.type === 'hide');
+    const checkbox = build(src).find((r) => r.type === 'checkbox')!;
+    expect(hide.every((h) => h.to <= checkbox.from)).toBe(true);
+  });
+});
+
 describe('taskMarkerToggleFor', () => {
   it('points at the state character and flips it on', () => {
     const line = '- [ ] buy milk';
@@ -308,6 +404,14 @@ describe('taskMarkerToggleFor', () => {
 
   it('returns null for a non-checklist line', () => {
     expect(taskMarkerToggleFor('- just a bullet')).toBeNull();
+  });
+
+  it('points past the blockquote marker on a quoted item', () => {
+    const line = '> - [ ] quoted';
+    const toggle = taskMarkerToggleFor(line)!;
+    expect(line[toggle.offset]).toBe(' ');
+    expect(toggle.offset).toBe(line.indexOf('[') + 1);
+    expect(toggle.nextChar).toBe('x');
   });
 });
 

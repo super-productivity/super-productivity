@@ -17,6 +17,7 @@
         [placeholderTxt]="placeholderTxt() ?? ''"
         [autoFocus]="isLock() || isPendingLiveFocus()"
         [resolveImageSrc]="resolveImageSrc"
+        [extraKeymap]="liveEditorKeymap"
         (changed)="onLiveEditorChanged($event)"
         (docChanged)="onLiveEditorDocChanged($event)"
         (focused)="onLiveEditorFocused()"

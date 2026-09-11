@@ -143,6 +143,109 @@ test.describe('Live markdown editor (#9910)', () => {
       .toEqual(['https://example.com/docs']);
   });
 
+  // A press-and-drag that starts on a link is a selection gesture, not a click
+  // — opening from the mousedown hijacked it and left nothing selected, which
+  // is the friction #8524 was built to remove.
+  test('drag-selecting from a link selects text instead of opening it', async ({
+    page,
+    workViewPage,
+    taskPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('drag select task');
+    await taskPage.openTaskDetail(taskPage.getTaskByText('drag select task'));
+
+    const notes = page.locator(DETAIL_PANEL).locator('inline-markdown').first();
+    const editor = notes.locator('.cm-content');
+    await editor.waitFor({ state: 'visible' });
+
+    await editor.click();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type('read [the docs](https://example.com/docs) carefully');
+    await editor.blur();
+
+    await page.evaluate(() => {
+      (window as unknown as { __opened: string[] }).__opened = [];
+      window.open = (url?: string | URL): null => {
+        (window as unknown as { __opened: string[] }).__opened.push(String(url));
+        return null;
+      };
+    });
+
+    const link = notes.locator('.cm-md-link').first();
+    const box = (await link.boundingBox())!;
+    const halfHeight = box.height / 2;
+    const midY = box.y + halfHeight;
+    await page.mouse.move(box.x + 2, midY);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width + 40, midY, { steps: 8 });
+    await page.mouse.up();
+
+    expect(
+      await page.evaluate(() => (window as unknown as { __opened: string[] }).__opened),
+    ).toEqual([]);
+    expect(await page.evaluate(() => window.getSelection()?.toString() ?? '')).not.toBe(
+      '',
+    );
+  });
+
+  // Escape and Ctrl+Enter left the notes field on the textarea path. Without a
+  // binding the only way out of a contenteditable is Tab.
+  test('Escape and Ctrl+Enter leave the notes field', async ({
+    page,
+    workViewPage,
+    taskPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('keyboard exit task');
+    await taskPage.openTaskDetail(taskPage.getTaskByText('keyboard exit task'));
+
+    const notes = page.locator(DETAIL_PANEL).locator('inline-markdown').first();
+    const editor = notes.locator('.cm-content');
+    await editor.waitFor({ state: 'visible' });
+
+    const isInEditor = (): Promise<boolean> =>
+      page.evaluate(() =>
+        Boolean(document.activeElement?.classList.contains('cm-content')),
+      );
+
+    await editor.click();
+    expect(await isInEditor()).toBe(true);
+    await page.keyboard.press('Escape');
+    expect(await isInEditor()).toBe(false);
+
+    await editor.click();
+    expect(await isInEditor()).toBe(true);
+    await page.keyboard.press('ControlOrMeta+Enter');
+    expect(await isInEditor()).toBe(false);
+  });
+
+  // `![alt](src =WxH)` is the app's own sizing syntax; CommonMark cannot parse
+  // it, so without help it renders as raw source in every note that uses it.
+  test('renders the app image-sizing syntax', async ({
+    page,
+    workViewPage,
+    taskPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('sized image task');
+    await taskPage.openTaskDetail(taskPage.getTaskByText('sized image task'));
+
+    const notes = page.locator(DETAIL_PANEL).locator('inline-markdown').first();
+    const editor = notes.locator('.cm-content');
+    await editor.waitFor({ state: 'visible' });
+
+    await editor.click();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type('![an icon](assets/icons/favicon-32x32.png =16x16)');
+    await editor.blur();
+
+    const img = notes.locator('img.cm-md-image');
+    await expect(img).toBeVisible();
+    await expect(img).toHaveAttribute('width', '16');
+    await expect(img).toHaveAttribute('height', '16');
+  });
+
   test('renders an image inline', async ({ page, workViewPage, taskPage }) => {
     await workViewPage.waitForTaskList();
     await workViewPage.addTask('image note task');
