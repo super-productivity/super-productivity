@@ -41,6 +41,7 @@ import { expandFadeAnimation } from '../animations/expand.ani';
 import { fadeAnimation } from '../animations/fade.ani';
 import { getClockStringFromHours } from '../../util/get-clock-string-from-hours';
 import { IS_ELECTRON_TOKEN } from '../../app.constants';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 
 const DEFAULT_TIME = '09:00';
 
@@ -75,6 +76,7 @@ export class DateTimePickerComponent implements AfterViewInit {
   private readonly _cdr = inject(ChangeDetectorRef);
   private _el = inject(ElementRef);
   private readonly _isElectron = inject(IS_ELECTRON_TOKEN);
+  private readonly _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
 
   // Inputs
   selectedDate = input<Date | null>(null);
@@ -218,7 +220,14 @@ export class DateTimePickerComponent implements AfterViewInit {
   }
 
   onTimeInputClick(ev: PointerEvent): void {
-    if (!this._isElectron || ev.pointerType !== 'touch') {
+    // Electron touch (#8986) and the Android WebView (#9956) both focus the
+    // native time input without ever opening a picker or raising the IME, so
+    // the value is unreachable until we ask for the picker ourselves. Measured
+    // on Android 16 / WebView 149: a tap on <input type="time"> leaves
+    // mInputShown=false while a text input right next to it raises the
+    // keyboard, and showPicker() opens the native clock dialog. Mobile
+    // browsers open their own picker on tap, so they keep the default.
+    if ((!this._isElectron && !this._isAndroidWebView) || ev.pointerType !== 'touch') {
       return;
     }
 

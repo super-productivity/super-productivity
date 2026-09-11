@@ -8,6 +8,7 @@ import { TranslateModule, TranslateService, TranslateStore } from '@ngx-translat
 import { signal } from '@angular/core';
 import { TaskReminderOptionId } from '../../features/tasks/task.model';
 import { IS_ELECTRON_TOKEN } from '../../app.constants';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 
 describe('DateTimePickerComponent', () => {
   let component: DateTimePickerComponent;
@@ -33,6 +34,7 @@ describe('DateTimePickerComponent', () => {
         { provide: DateService, useValue: dateServiceSpy },
         { provide: GlobalConfigService, useValue: globalConfigServiceMock },
         { provide: IS_ELECTRON_TOKEN, useValue: true },
+        { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: false },
         TranslateService,
         TranslateStore,
       ],
@@ -150,8 +152,26 @@ describe('DateTimePickerComponent', () => {
     expect(showPickerSpy).not.toHaveBeenCalled();
   });
 
-  it('should preserve native touch handling outside Electron', () => {
+  // #9956: the Android WebView focuses the time input but opens neither a picker
+  // nor the IME, so without this the value cannot be changed on Android at all.
+  it('should open the native time picker when the time input is tapped in the Android WebView', () => {
     Object.defineProperty(component, '_isElectron', { value: false });
+    Object.defineProperty(component, '_isAndroidWebView', { value: true });
+    const timeInput = fixture.nativeElement.querySelector(
+      'input[type="time"]',
+    ) as HTMLInputElement;
+    const showPickerSpy = spyOn(timeInput, 'showPicker');
+
+    timeInput.dispatchEvent(
+      new PointerEvent('click', { bubbles: true, pointerType: 'touch' }),
+    );
+
+    expect(showPickerSpy).toHaveBeenCalledOnceWith();
+  });
+
+  it('should preserve native touch handling in mobile browsers', () => {
+    Object.defineProperty(component, '_isElectron', { value: false });
+    Object.defineProperty(component, '_isAndroidWebView', { value: false });
     const timeInput = fixture.nativeElement.querySelector(
       'input[type="time"]',
     ) as HTMLInputElement;
