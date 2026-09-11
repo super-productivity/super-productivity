@@ -13,8 +13,7 @@
 // for as long as the class is on. That ring sets no `position` either and still
 // paints unclipped over the neighbouring cells' collapsed borders.
 :host.highlight-searched-task {
-  box-shadow: 0 0 0 2px var(--c-accent);
-  border-radius: var(--card-border-radius);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--c-accent);
 }
 
 td {
