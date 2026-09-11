@@ -164,6 +164,38 @@ platform :ios do
   lane :release do
     submit_to_app_store(platform: 'ios', ipa: ENV.fetch('IPA_PATH'))
   end
+
+  desc 'Upload the prebuilt iOS .ipa to TestFlight for public testers'
+  # Used by .github/workflows/build-ios-testflight.yml when a maintainer applies
+  # the `ios-test-flight` label. Unlike `release`, this never submits the app for
+  # App Store review; it distributes to the external TestFlight group whose
+  # Public Link is shared on the PR. (External builds do go through Beta App
+  # Review, which `submit_beta_review` handles.)
+  #
+  # One-time Apple-side setup: an External Testing group (name from
+  # TESTFLIGHT_GROUP, default "Public Testers") with a Public Link. The first
+  # build is reviewed by Apple; later builds usually auto-approve.
+  #
+  # TESTFLIGHT_GROUP and CHANGELOG are optional. Note this lane shares the
+  # ASC_* credentials with `release`; the App Manager role is required (see
+  # header). See docs/plans/2026-07-14-ios-testflight-master-builds.md for the
+  # separate internal-master beta path.
+  lane :testflight do
+    upload_to_testflight(
+      api_key: asc_api_key,
+      app_identifier: APP_IDENTIFIER,
+      ipa: ENV.fetch('IPA_PATH'),
+      groups: [ENV.fetch('TESTFLIGHT_GROUP', 'Public Testers')],
+      distribute_external: true,
+      submit_beta_review: true,
+      changelog: ENV.fetch('CHANGELOG', 'Test build'),
+      # Wait for Apple's processing so the build actually reaches the external
+      # group. (`skip_waiting_for_build_processing: true` can exit before the
+      # external distribution step runs, leaving testers without the build.)
+      skip_waiting_for_build_processing: false,
+      wait_processing_timeout_duration: 1800,
+    )
+  end
 end
 
 platform :mac do

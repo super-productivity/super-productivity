@@ -1,0 +1,117 @@
+name: 'Setup iOS Signing'
+description: >
+  Shared iOS code-signing setup for the App Store release and the TestFlight
+  workflows: select Xcode, trust Apple's WWDR intermediate, import the
+  distribution certificate into a temporary keychain, install the provisioning
+  profile, and export PROVISIONING_PROFILE_UUID for ExportOptions.plist.
+
+inputs:
+  mac_certs:
+    description: 'base64-encoded "Apple Distribution" .p12 (shared with macOS)'
+    required: true
+  mac_certs_password:
+    description: 'Password for mac_certs'
+    required: true
+  ios_provision_profile:
+    description: 'base64-encoded .mobileprovision for com.super-productivity.app'
+    required: true
+  xcode_path:
+    description: 'Full path of the Xcode.app to select'
+    required: false
+    default: '/Applications/Xcode_26.2.app'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Select Xcode
+      shell: bash
+      # SDKROOT pin: the macos-26 image (2026-08) resolves the default SDK for
+      # bare `xcrun` calls to /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk,
+      # which doesn't exist there, so `xcrun --show-sdk-version`, `xcrun agvtool`
+      # and xcrun-based tool lookups fail ("SDK ... cannot be located") even with
+      # full Xcode selected. Pointing SDKROOT at the selected Xcode's macOS SDK
+      # overrides that resolution for all later steps. It cannot leak into the
+      # iOS archive: the app project pins SDKROOT = iphoneos in its build
+      # settings, which takes precedence over the environment.
+      run: |
+        sudo xcode-select -s '${{ inputs.xcode_path }}'
+        echo "SDKROOT=$(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk" >> "$GITHUB_ENV"
+
+    - name: Verify Xcode and SDK version
+      shell: bash
+      run: |
+        echo "=== Xcode Version ==="
+        xcodebuild -version
+        echo ""
+        echo "=== SDK Information ==="
+        xcrun --show-sdk-version
+        xcodebuild -showsdks | grep -E "(iOS|iphoneos)"
+
+    - name: Install Apple WWDR intermediate certificate
+      shell: bash
+      run: |
+        curl -fsSL https://www.apple.com/certificateauthority/AppleWWDRCAG4.cer -o "$RUNNER_TEMP/AppleWWDRCAG4.cer"
+        sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "$RUNNER_TEMP/AppleWWDRCAG4.cer"
+
+    - name: Configure signing keychain
+      shell: bash
+      env:
+        # Reuse mac_certs - "Apple Distribution" certificate works for both macOS and iOS
+        MAC_CERTS: ${{ inputs.mac_certs }}
+        MAC_CERTS_PASSWORD: ${{ inputs.mac_certs_password }}
+      run: |
+        CERT_PATH="$RUNNER_TEMP/dist-cert.p12"
+        KEYCHAIN_NAME="build.keychain"
+        KEYCHAIN_PATH="$HOME/Library/Keychains/${KEYCHAIN_NAME}-db"
+        echo "$MAC_CERTS" | base64 --decode > "$CERT_PATH"
+        echo "=== DIAGNOSTIC: Decoded .p12 SHA256 ==="
+        shasum -a 256 "$CERT_PATH"
+        echo "========================================"
+        security create-keychain -p "" "$KEYCHAIN_NAME"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "" "$KEYCHAIN_PATH"
+        security import "$RUNNER_TEMP/AppleWWDRCAG4.cer" -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+        security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$MAC_CERTS_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+        security list-keychains -s "$KEYCHAIN_PATH" "$HOME/Library/Keychains/login.keychain-db"
+        security default-keychain -s "$KEYCHAIN_PATH"
+        security set-key-partition-list -S apple-tool:,apple: -k "" "$KEYCHAIN_PATH"
+        security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+    - name: List available signing identities
+      shell: bash
+      run: security find-identity -v -p codesigning
+
+    - name: Install provisioning profile
+      shell: bash
+      env:
+        IOS_PROVISION_PROFILE: ${{ inputs.ios_provision_profile }}
+      run: |
+        PROFILE_PATH="$RUNNER_TEMP/ios-provisioning.mobileprovision"
+        echo "$IOS_PROVISION_PROFILE" | base64 --decode > "$PROFILE_PATH"
+        # Get the UUID from the provisioning profile
+        PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< $(security cms -D -i "$PROFILE_PATH"))
+        echo "Profile UUID: $PROFILE_UUID"
+        # Create the provisioning profiles directory if it doesn't exist
+        mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+        # Copy the profile with its UUID as the filename
+        cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID}.mobileprovision"
+        echo "PROVISIONING_PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+
+    - name: Verify provisioning profile
+      shell: bash
+      run: |
+        security cms -D -i "$HOME/Library/MobileDevice/Provisioning Profiles/${PROVISIONING_PROFILE_UUID}.mobileprovision" > /tmp/profile.plist
+        echo "=== PROVISIONING PROFILE INFO ==="
+        echo "Name: $(/usr/libexec/PlistBuddy -c "Print Name" /tmp/profile.plist)"
+        echo "Team: $(/usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" /tmp/profile.plist)"
+        PROFILE_APP_ID=$(/usr/libexec/PlistBuddy -c "Print Entitlements:application-identifier" /tmp/profile.plist | sed 's/^[A-Z0-9]*\.//')
+        echo "App ID: $PROFILE_APP_ID"
+        echo "=================================="
+        # Verify bundle ID matches
+        EXPECTED_BUNDLE_ID="com.super-productivity.app"
+        if [ "$PROFILE_APP_ID" != "$EXPECTED_BUNDLE_ID" ]; then
+          echo "ERROR: Provisioning profile app ID ($PROFILE_APP_ID) does not match expected bundle ID ($EXPECTED_BUNDLE_ID)"
+          echo "Please create a new provisioning profile with the correct bundle ID"
+          exit 1
+        fi
+        echo "Bundle ID verification passed!"

@@ -13,6 +13,7 @@ review.
 | Target                                               | Workflow                                                      | Output                         |
 | ---------------------------------------------------- | ------------------------------------------------------------- | ------------------------------ |
 | iOS App Store                                        | `.github/workflows/build-ios.yml`                             | `.ipa` → App Store Connect     |
+| iOS TestFlight (public testers, label-triggered)     | `.github/workflows/build-ios-testflight.yml`                  | `.ipa` → TestFlight (external) |
 | Mac App Store                                        | `.github/workflows/build-publish-to-mac-store-on-release.yml` | MAS `.pkg` → App Store Connect |
 | Mac direct download (notarized DMG/zip, auto-update) | `.github/workflows/build.yml` (`mac-bin`)                     | GitHub release asset           |
 
@@ -52,6 +53,46 @@ commit lands before tagging.
 > `alpha`, because GitHub Actions `contains()` is case-sensitive and this repo's
 > RC tags are predominantly **lowercase** `-rc.N`. Every pre-release tag in the
 > repo's history contains `-`; no final tag does.
+
+## Public TestFlight builds (label-triggered)
+
+A maintainer who wants outside testers to try a feature branch — e.g. one that
+touches native iOS code and so cannot be exercised in the web preview — applies
+the `ios-test-flight` label to a same-repo PR.
+`.github/workflows/build-ios-testflight.yml` then builds the PR head, exports an
+App Store Connect IPA, and runs the `fastlane ios testflight` lane, which uploads
+to the external TestFlight group (default name `Public Testers`, override with
+the `TESTFLIGHT_GROUP` variable) and submits it for Beta App Review. The workflow
+posts the group's Public Link back on the PR and removes the label so re-applying
+it starts a fresh build.
+
+Guards:
+
+- **Same-repo PRs only** (`head.repo.full_name == github.repository`). The job
+  handles Apple signing secrets, so a fork PR must be pushed to a branch in this
+  repo first. This is why the workflow uses `pull_request` (the PR head is built)
+  rather than `pull_request_target`.
+- **Upload only** — it never submits the app for App Store review.
+- The signing setup is shared with `build-ios.yml` through
+  `.github/actions/setup-ios-signing`. Both reuse the same App Distribution
+  certificate and App Manager API key, so this workflow carries the same
+  credential exposure as the release path.
+
+One-time setup (Apple's side cannot be automated):
+
+1. Create the `ios-test-flight` label.
+2. Merge this workflow to the default branch before labeling older branches —
+   for a branch that predates the shared signing action, the workflow falls back
+   to the base branch for that action.
+3. In App Store Connect create an External Testing group, enable its Public Link,
+   and let the first build clear Beta App Review. Later builds usually auto-approve.
+4. Add the group's Public Link as the repository variable
+   `TESTFLIGHT_PUBLIC_LINK` (a variable, not a secret — it is meant to be shared).
+   Without it the PR comment still reports success/failure but prints no link.
+
+The internal-`master` beta path proposed in
+[`docs/plans/2026-07-14-ios-testflight-master-builds.md`](plans/2026-07-14-ios-testflight-master-builds.md)
+is separate and not implemented here.
 
 ## Required secrets
 
