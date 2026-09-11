@@ -28,6 +28,7 @@ import {
   SORT_OPTION_TYPE,
   SORT_ORDER,
   SortOption,
+  OPTIONS,
 } from './types';
 import { DateAdapter } from '@angular/material/core';
 import { DEFAULT_FIRST_DAY_OF_WEEK, DEFAULT_LOCALE } from 'src/app/core/locale.constants';
@@ -35,6 +36,7 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { LanguageService } from 'src/app/core/language/language.service';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
+import { SnackService } from '../../core/snack/snack.service';
 
 describe('TaskViewCustomizerService', () => {
   let service: TaskViewCustomizerService;
@@ -154,6 +156,7 @@ describe('TaskViewCustomizerService', () => {
 
     TestBed.configureTestingModule({
       providers: [
+        { provide: SnackService, useValue: { open: jasmine.createSpy('open') } },
         {
           provide: LanguageService,
           useValue: mockLanguageService,
@@ -984,6 +987,30 @@ describe('TaskViewCustomizerService', () => {
     expect(sorted[1].id).toBe('dl-today');
   });
 
+  it('should use scheduled times when sorting tasks that also have a scheduled day', () => {
+    const day = todayStr;
+    const sorted = service['applySort'](
+      [
+        {
+          ...mockTasks[0],
+          id: 'late',
+          dueDay: day,
+          dueWithTime: new Date(`${day}T11:00:00`).getTime(),
+        },
+        {
+          ...mockTasks[0],
+          id: 'early',
+          dueDay: day,
+          dueWithTime: new Date(`${day}T09:00:00`).getTime(),
+        },
+      ],
+      SORT_OPTION_TYPE.scheduledDate,
+      SORT_ORDER.ASC,
+    );
+
+    expect(sorted.map((task) => task.id)).toEqual(['early', 'late']);
+  });
+
   it('should sort tasks without deadline to the end when sorting by deadline', () => {
     const deadlineTasks: TaskWithSubTasks[] = [
       {
@@ -1133,6 +1160,18 @@ describe('TaskViewCustomizerService', () => {
     expect(service.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
   });
 
+  it('should not mutate the shared sort option when toggling direction', () => {
+    const nameOption = OPTIONS.sort.list.find(
+      (option) => option.type === SORT_OPTION_TYPE.name,
+    )!;
+
+    service.setSort(nameOption);
+    service.setSort(nameOption);
+
+    expect(service.selectedSort().order).toBe(SORT_ORDER.DESC);
+    expect(nameOption.order).toBe(SORT_ORDER.ASC);
+  });
+
   describe('saveSort', () => {
     const createTask = (
       id: string,
@@ -1161,6 +1200,9 @@ describe('TaskViewCustomizerService', () => {
     });
 
     it('should save the sorted order for a project context as default', async () => {
+      const sortByName = OPTIONS.sort.list.find(
+        (option) => option.type === SORT_OPTION_TYPE.name,
+      )!;
       const taskA = createTask('a', 'Alpha');
       const taskB = createTask('b', 'Bravo');
 
@@ -1169,10 +1211,7 @@ describe('TaskViewCustomizerService', () => {
       mockWorkContextService.mainListTasks$ = of<TaskWithSubTasks[]>([taskB, taskA]);
       mockWorkContextService.undoneTasks$ = of<TaskWithSubTasks[]>([taskB, taskA]);
 
-      service.setSort({
-        type: SORT_OPTION_TYPE.name,
-        order: SORT_ORDER.ASC,
-      } as SortOption);
+      service.setSort(sortByName);
 
       const expectedFilter = {
         type: FILTER_OPTION_TYPE.tag,
@@ -1191,8 +1230,8 @@ describe('TaskViewCustomizerService', () => {
       });
       expect(tagUpdateSpy).not.toHaveBeenCalled();
 
-      // Sort should set to default after saving, as the order is now persisted in the project
-      expect(service.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
+      // Keep the selected sort active so it remains the context's saved view state.
+      expect(service.selectedSort()).toEqual(sortByName);
 
       // Filter and group should NOT be reset
       expect(service.selectedFilter()).toEqual(expectedFilter);
@@ -1200,6 +1239,9 @@ describe('TaskViewCustomizerService', () => {
     });
 
     it('should save the sorted order for a tag context as default', async () => {
+      const sortByName = OPTIONS.sort.list.find(
+        (option) => option.type === SORT_OPTION_TYPE.name,
+      )!;
       const taskA = createTask('a', 'Alpha', null);
       const taskB = createTask('b', 'Bravo', null);
 
@@ -1208,7 +1250,7 @@ describe('TaskViewCustomizerService', () => {
       mockWorkContextService.mainListTasks$ = of<TaskWithSubTasks[]>([taskB, taskA]);
       mockWorkContextService.undoneTasks$ = of<TaskWithSubTasks[]>([taskB, taskA]);
 
-      service.setSort({ type: SORT_OPTION_TYPE.name } as SortOption);
+      service.setSort(sortByName);
 
       await service.saveSort();
 
@@ -1217,22 +1259,45 @@ describe('TaskViewCustomizerService', () => {
         taskIds: ['a', 'b'],
       });
       expect(projectUpdateSpy).not.toHaveBeenCalled();
-      expect(service.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
+      expect(service.selectedSort()).toEqual(sortByName);
+    });
+
+    it('should reorder tasks by planned day when saving the planned-date sort', async () => {
+      const sortByPlannedDate = OPTIONS.sort.list.find(
+        (option) => option.type === SORT_OPTION_TYPE.scheduledDate,
+      )!;
+      const taskToday = { ...createTask('today', 'Today'), dueDay: todayStr };
+      const taskTomorrow = { ...createTask('tomorrow', 'Tomorrow'), dueDay: tomorrowStr };
+
+      mockWorkContextService.activeWorkContextId = 'project-sort';
+      mockWorkContextService.activeWorkContextType = WorkContextType.PROJECT;
+      mockWorkContextService.mainListTasks$ = of([taskTomorrow, taskToday]);
+      mockWorkContextService.undoneTasks$ = of([taskTomorrow, taskToday]);
+
+      service.setSort(sortByPlannedDate);
+      await service.saveSort();
+
+      expect(projectUpdateSpy).toHaveBeenCalledWith('project-sort', {
+        taskIds: ['today', 'tomorrow'],
+      });
     });
 
     it('should skip saving when no tasks available', async () => {
+      const sortByName = OPTIONS.sort.list.find(
+        (option) => option.type === SORT_OPTION_TYPE.name,
+      )!;
       mockWorkContextService.activeWorkContextId = 'project-sort';
       mockWorkContextService.activeWorkContextType = WorkContextType.PROJECT;
       mockWorkContextService.mainListTasks$ = of<TaskWithSubTasks[]>([]);
       mockWorkContextService.undoneTasks$ = of<TaskWithSubTasks[]>([]);
 
-      service.setSort({ type: SORT_OPTION_TYPE.name } as SortOption);
+      service.setSort(sortByName);
 
       await service.saveSort();
 
       expect(projectUpdateSpy).not.toHaveBeenCalled();
       expect(tagUpdateSpy).not.toHaveBeenCalled();
-      expect(service.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
+      expect(service.selectedSort()).toEqual(sortByName);
     });
   });
 
@@ -1241,6 +1306,10 @@ describe('TaskViewCustomizerService', () => {
       type: SORT_OPTION_TYPE.name,
       order: SORT_ORDER.ASC,
       label: 'Name',
+    };
+    const restoredSavedSort: SortOption = {
+      ...savedSort,
+      label: T.F.TASK_VIEW.CUSTOMIZER.SORT_NAME,
     };
     const savedGroup: GroupOption = { type: GROUP_OPTION_TYPE.tag, label: 'Tag' };
     const savedFilter: FilterOption = {
@@ -1262,6 +1331,7 @@ describe('TaskViewCustomizerService', () => {
       });
       TestBed.configureTestingModule({
         providers: [
+          { provide: SnackService, useValue: { open: jasmine.createSpy('open') } },
           TaskViewCustomizerService,
           { provide: LanguageService, useValue: mockLanguageService },
           { provide: TranslateService, useValue: { instant: (k: string) => k } },
@@ -1319,7 +1389,7 @@ describe('TaskViewCustomizerService', () => {
         of({ activeId: 'TODAY', activeType: WorkContextType.TAG }),
       );
 
-      expect(newService.selectedSort()).toEqual(savedSort);
+      expect(newService.selectedSort()).toEqual(restoredSavedSort);
       expect(newService.selectedGroup()).toEqual(savedGroup);
       expect(newService.selectedFilter()).toEqual(restoredSavedFilter);
     });
@@ -1452,6 +1522,7 @@ describe('TaskViewCustomizerService', () => {
 
       TestBed.configureTestingModule({
         providers: [
+          { provide: SnackService, useValue: { open: jasmine.createSpy('open') } },
           TaskViewCustomizerService,
           {
             provide: LanguageService,
