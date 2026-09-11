@@ -184,13 +184,18 @@ export const listImportBackupsTx = (tx: OpLogTx): Promise<ImportBackupMeta[]> =>
  * make room when a capture fails (typically storage quota). Zero clears all
  * snapshots, including the protected capture. The undo pointer is
  * retired if its snapshot goes. Returns how many snapshots were evicted.
+ *
+ * `protectBackupId` keeps the entry currently being restored, same as in
+ * {@link saveImportBackupTx}: the quota retry runs mid-restore, and pruning
+ * to the newest capture alone would delete the snapshot the retry is for.
  */
 export const pruneImportBackupRingTx = async (
   tx: OpLogTx,
   keep: number,
+  protectBackupId?: string,
 ): Promise<number> => {
   const entries = await readRingMeta(tx);
-  const kept = keepNewest(entries, keep);
+  const kept = keepNewest(entries, keep, protectBackupId);
   const evicted = entries.filter((e) => !kept.includes(e));
   if (evicted.length === 0) {
     return 0;

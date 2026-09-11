@@ -69,6 +69,30 @@ describe('import backup ring — integration (real IndexedDB)', () => {
     expect((reloaded?.state as { marker: string }).marker).toBe('pre-loss');
   });
 
+  it('keeps the snapshot being restored readable after the quota prune runs mid-restore', async () => {
+    const oldest = await store.saveImportBackup(
+      { marker: 'pre-loss' },
+      { reason: 'REMOTE_IMPORT', taskCount: 1 },
+    );
+    for (let i = 0; i < IMPORT_BACKUP_RING_SIZE - 1; i++) {
+      await store.saveImportBackup(
+        { marker: `filler-${i}` },
+        { reason: 'REMOTE_IMPORT', taskCount: 1 },
+      );
+    }
+
+    // The pre-restore capture of `oldest` hit the storage quota, so
+    // BackupService prunes the ring to one entry before retrying it.
+    await store.pruneImportBackups(1, oldest.backupId);
+
+    expect((await store.listImportBackups()).map((e) => e.backupId)).toContain(
+      oldest.backupId,
+    );
+    const reloaded = await store.loadImportBackupById(oldest.backupId);
+    expect(reloaded).not.toBeNull();
+    expect((reloaded?.state as { marker: string }).marker).toBe('pre-loss');
+  });
+
   it('still rotates the oldest entry out when nothing is protected', async () => {
     const oldest = await store.saveImportBackup(
       { marker: 'oldest' },

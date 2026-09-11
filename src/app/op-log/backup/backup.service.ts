@@ -312,7 +312,7 @@ export class BackupService {
       OpLog.warn(
         'BackupService: Recovery point hit storage quota; pruning ring and retrying',
       );
-      await this._opLogStore.pruneImportBackups(1);
+      await this._opLogStore.pruneImportBackups(1, meta.protectBackupId);
       return this._opLogStore.saveImportBackup(state, meta);
     }
   }

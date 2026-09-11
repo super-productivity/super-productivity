@@ -3,6 +3,7 @@ import {
   ImportBackupReason,
   listImportBackupsTx,
   loadImportBackupByIdTx,
+  pruneImportBackupRingTx,
   saveImportBackupTx,
 } from './import-backup-ring.util';
 import { OpLogTx } from './op-log-db-adapter';
@@ -64,6 +65,25 @@ describe('import backup ring', () => {
     expect(kept.map((e) => e.backupId)).toContain(oldest.backupId);
     expect(await loadImportBackupByIdTx(tx, oldest.backupId)).not.toBeNull();
     expect(kept.length).toBe(IMPORT_BACKUP_RING_SIZE);
+  });
+
+  it('does not evict the entry being restored when the quota prune runs mid-restore', async () => {
+    const tx = createTx();
+    const oldest = await save(tx, { pre: 'loss' }, 'REMOTE_IMPORT');
+    for (let i = 0; i < IMPORT_BACKUP_RING_SIZE - 1; i++) {
+      await save(tx, { i }, 'REMOTE_IMPORT');
+    }
+
+    // The pre-restore capture hit the storage quota, so the ring is pruned to
+    // make room before the capture is retried. Without the protection this
+    // keeps only the newest capture and deletes the snapshot being restored.
+    await pruneImportBackupRingTx(tx, 1, oldest.backupId);
+
+    const kept = await listImportBackupsTx(tx);
+    expect(kept.map((e) => e.backupId)).toContain(oldest.backupId);
+    expect(await loadImportBackupByIdTx(tx, oldest.backupId)).not.toBeNull();
+    // The prune still frees space; the protected entry is a floor, not a no-op.
+    expect(kept.length).toBeLessThan(IMPORT_BACKUP_RING_SIZE);
   });
 
   it('still guards the newest pre-replacement capture from a plain restore', async () => {
