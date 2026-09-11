@@ -419,3 +419,82 @@ test('tray title shows the task title when countdown display is disabled', () =>
   assert.equal(traySetTitleCalls.at(-1), 'Write release notes');
   assert.equal(traySetToolTipCalls.at(-1), 'Write release notes');
 });
+
+// A Flowtime session has no target duration, so focus mode publishes progress 0
+// while task tracking publishes the real task ratio. Both reached the tray icon
+// every second, flipping it between the progress ring and the plain running
+// icon — the blink reported in #9944 (and the dock-bar variant in #3131).
+test('tray icon has a single writer per tick while the focus overlay is hidden', () => {
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: 'darwin',
+  });
+  const { initIndicator } = loadIndicatorModule();
+
+  initIndicator({
+    showApp: () => {},
+    quitApp: () => {},
+    ICONS_FOLDER: '/icons/',
+    forceDarkTray: false,
+    app: { on: () => {} },
+  });
+
+  const currentTaskUpdated = ipcHandlers.get('CURRENT_TASK_UPDATED');
+  const setProgressBar = ipcHandlers.get('SET_PROGRESS_BAR');
+  const task = {
+    id: 'T1',
+    title: 'Task',
+    timeSpent: 30 * 60000,
+    timeEstimate: 60 * 60000,
+  };
+
+  traySetImageCalls = [];
+  for (let i = 0; i < 3; i++) {
+    task.timeSpent += 1000;
+    // task-electron.effects: isFocusModeEnabled === isOverlayShown === false
+    currentTaskUpdated({}, { ...task }, false, 0, false, 0, 'Flowtime');
+    // focus-mode.effects: Flowtime publishes no meaningful progress
+    setProgressBar({}, { progress: -1, progressBarMode: 'none' });
+  }
+
+  const iconPaths = traySetImageCalls.map((image) => image.iconPath);
+  assert.deepEqual(iconPaths, ['/icons/indicator/running-anim-l/8.png']);
+});
+
+test('the focus overlay owns the tray icon while it is shown', () => {
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: 'darwin',
+  });
+  const { initIndicator } = loadIndicatorModule();
+
+  initIndicator({
+    showApp: () => {},
+    quitApp: () => {},
+    ICONS_FOLDER: '/icons/',
+    forceDarkTray: false,
+    app: { on: () => {} },
+  });
+
+  const currentTaskUpdated = ipcHandlers.get('CURRENT_TASK_UPDATED');
+  const setProgressBar = ipcHandlers.get('SET_PROGRESS_BAR');
+
+  // isFocusModeEnabled === isOverlayShown === true
+  currentTaskUpdated(
+    {},
+    { id: 'T1', title: 'Task', timeSpent: 30 * 60000, timeEstimate: 60 * 60000 },
+    false,
+    0,
+    true,
+    0,
+    'Pomodoro',
+  );
+  traySetImageCalls = [];
+  setProgressBar({}, { progress: 0.2, progressBarMode: 'normal' });
+
+  assert.equal(traySetImageCalls.length, 1);
+  assert.match(
+    traySetImageCalls.at(-1).iconPath,
+    /\/icons\/indicator\/running-anim-l\/3\.png$/,
+  );
+});

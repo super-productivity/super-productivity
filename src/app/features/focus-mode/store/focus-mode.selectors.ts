@@ -89,6 +89,30 @@ export const selectIsRunning = createSelector(
   (timer) => timer.isRunning && timer.purpose !== null,
 );
 
+/**
+ * What the running focus session should publish to the OS progress bar
+ * (taskbar/dock). Flowtime has no target duration, so `selectProgress` is
+ * always 0 there: publishing it would pin the bar to empty and cycle against
+ * the task-progress writer in `task-electron.effects` (#9944, #3131). Hide the
+ * bar instead - an open-ended session has no progress to show.
+ */
+export const selectOsProgressBar = createSelector(
+  selectProgress,
+  selectIsRunning,
+  selectTimeDuration,
+  (
+    progress,
+    isRunning,
+    duration,
+  ): { progress: number; progressBarMode: 'normal' | 'pause' | 'none' } =>
+    duration > 0
+      ? {
+          progress: progress / 100,
+          progressBarMode: isRunning ? 'normal' : 'pause',
+        }
+      : { progress: -1, progressBarMode: 'none' },
+);
+
 // Session completed selector
 export const selectIsSessionCompleted = createSelector(
   selectCurrentScreen,

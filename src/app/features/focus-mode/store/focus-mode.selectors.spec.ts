@@ -474,4 +474,27 @@ describe('FocusModeSelectors', () => {
       expect(result).toBe(false);
     });
   });
+
+  describe('selectOsProgressBar', () => {
+    it('should publish the session progress when a duration is set', () => {
+      const result = selectors.selectOsProgressBar.projector(50, true, 1500000);
+
+      expect(result).toEqual({ progress: 0.5, progressBarMode: 'normal' });
+    });
+
+    it('should publish pause mode when the session is not running', () => {
+      const result = selectors.selectOsProgressBar.projector(50, false, 1500000);
+
+      expect(result).toEqual({ progress: 0.5, progressBarMode: 'pause' });
+    });
+
+    // Flowtime has no target duration, so progress is always 0. Publishing it
+    // pinned the OS progress bar to empty and cycled against the task-progress
+    // writer in task-electron.effects (#9944, #3131).
+    it('should hide the bar for an open-ended (Flowtime) session', () => {
+      const result = selectors.selectOsProgressBar.projector(0, true, 0);
+
+      expect(result).toEqual({ progress: -1, progressBarMode: 'none' });
+    });
+  });
 });
