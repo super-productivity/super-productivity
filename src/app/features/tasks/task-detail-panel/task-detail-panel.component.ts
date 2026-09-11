@@ -46,6 +46,7 @@ import { HISTORY_STATE, IS_ELECTRON } from '../../../app.constants';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { devError } from '../../../util/dev-error';
 import { GlobalConfigService } from '../../config/global-config.service';
+import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { getTaskRepeatInfoText } from './get-task-repeat-info-text.util';
@@ -138,6 +139,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   private _clipboardImageService = inject(ClipboardImageService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _issueService = inject(IssueService);
   private _jiraElectronBridge = inject(JiraElectronBridgeService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
@@ -364,13 +366,18 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   isOverdue = computed(() => {
     const t = this.task();
+    // Day-change dependency, so the overdue state flips at the day boundary
+    // while the panel stays open instead of freezing at first render (#9393).
+    // dueWithTime deliberately stays on Date.now(): no per-minute tick for a
+    // colour class; the day-change recompute refreshes it at least daily.
+    const todayStr = this._globalTrackingIntervalService.todayDateStr();
     return !!(
       !t.isDone &&
       ((t.dueWithTime && t.dueWithTime < Date.now()) ||
         (t.dueDay &&
           isDBDateStr(t.dueDay) &&
-          t.dueDay !== getDbDateStr() &&
-          t.dueDay < getDbDateStr()))
+          t.dueDay !== todayStr &&
+          t.dueDay < todayStr))
     );
   });
 
