@@ -17,7 +17,11 @@ require.cache[electronId] = {
   exports: {},
 };
 
-const { executeJiraRequest } = require(path.resolve(__dirname, 'jira.ts'));
+const {
+  executeJiraRequest,
+} = require(
+  path.resolve(__dirname, 'jira.ts'),
+);
 const {
   applyJiraImageAuth,
   clearRequestHeadersForImages,
@@ -265,7 +269,9 @@ test('rejects redirects to a different hostname', async () => {
     () => undefined,
   );
 
-  assert.deepEqual(fetchedUrls, ['https://jira.example.com/rest/api/latest/myself']);
+  assert.deepEqual(fetchedUrls, [
+    'https://jira.example.com/rest/api/latest/myself',
+  ]);
   assert.deepEqual(result, {
     requestId: 'request-1',
     error: { message: 'Unsafe Jira redirect blocked' },
@@ -350,11 +356,7 @@ test('scopes image authentication to a custom Jira origin with port and base pat
   assert.deepEqual(prefixCollisionHeaders, {});
 
   const xhrHeaders = {};
-  applyJiraImageAuth(
-    'http://localhost:8080/jira/rest/api/latest/issue/1',
-    xhrHeaders,
-    'xhr',
-  );
+  applyJiraImageAuth('http://localhost:8080/jira/rest/api/latest/issue/1', xhrHeaders, 'xhr');
   assert.deepEqual(xhrHeaders, {});
 });
 
@@ -366,7 +368,11 @@ test('treats a missing legacy PAT setting as basic authentication', () => {
   });
 
   const requestHeaders = {};
-  applyJiraImageAuth('https://jira.example.com/jira/image.png', requestHeaders, 'image');
+  applyJiraImageAuth(
+    'https://jira.example.com/jira/image.png',
+    requestHeaders,
+    'image',
+  );
   assert.equal(
     requestHeaders.authorization,
     `Basic ${Buffer.from('user:pass').toString('base64')}`,
@@ -377,7 +383,11 @@ test('clears Jira image authentication when it is no longer needed', () => {
   clearRequestHeadersForImages();
 
   const requestHeaders = {};
-  applyJiraImageAuth('https://jira.example.com/jira/image.png', requestHeaders, 'image');
+  applyJiraImageAuth(
+    'https://jira.example.com/jira/image.png',
+    requestHeaders,
+    'image',
+  );
   assert.deepEqual(requestHeaders, {});
 });
 
