@@ -20,7 +20,7 @@
   > button:nth-of-type(n + 2),
   > .additional-btn {
     //>  button:last-of-type {
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     align-self: stretch;
     display: inline-flex;
     min-width: 48px;
@@ -31,7 +31,7 @@
     justify-content: center;
 
     .mat-mdc-button-persistent-ripple {
-      border-radius: 0 !important;
+      border-radius: var(--radius-sm) !important;
     }
 
     .mat-mdc-button-touch-target {
