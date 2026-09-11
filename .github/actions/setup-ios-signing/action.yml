@@ -2,8 +2,9 @@ name: 'Setup iOS Signing'
 description: >
   Shared iOS code-signing setup for the App Store release and the TestFlight
   workflows: select Xcode, trust Apple's WWDR intermediate, import the
-  distribution certificate into a temporary keychain, install the provisioning
-  profile, and export PROVISIONING_PROFILE_UUID for ExportOptions.plist.
+  distribution certificate into a temporary keychain, install the app and
+  optional share-extension provisioning profiles, and export their UUIDs for
+  ExportOptions.plist.
 
 inputs:
   mac_certs:
@@ -15,6 +16,10 @@ inputs:
   ios_provision_profile:
     description: 'base64-encoded .mobileprovision for com.super-productivity.app'
     required: true
+  ios_share_provision_profile:
+    description: 'base64-encoded .mobileprovision for the optional ShareExtension target'
+    required: false
+    default: ''
   xcode_path:
     description: 'Full path of the Xcode.app to select'
     required: false
@@ -115,3 +120,26 @@ runs:
           exit 1
         fi
         echo "Bundle ID verification passed!"
+
+    - name: Install share extension provisioning profile
+      if: inputs.ios_share_provision_profile != ''
+      shell: bash
+      env:
+        IOS_SHARE_PROVISION_PROFILE: ${{ inputs.ios_share_provision_profile }}
+      run: |
+        PROFILE_PATH="$RUNNER_TEMP/ios-share.mobileprovision"
+        PROFILE_PLIST="$RUNNER_TEMP/ios-share-profile.plist"
+        echo "$IOS_SHARE_PROVISION_PROFILE" | base64 --decode > "$PROFILE_PATH"
+        security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
+
+        PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" "$PROFILE_PLIST")
+        PROFILE_APP_ID=$(/usr/libexec/PlistBuddy -c "Print Entitlements:application-identifier" "$PROFILE_PLIST" | sed 's/^[A-Z0-9]*\.//')
+        EXPECTED_BUNDLE_ID="com.super-productivity.app.ShareExtension"
+        if [ "$PROFILE_APP_ID" != "$EXPECTED_BUNDLE_ID" ]; then
+          echo "ERROR: Share profile app ID ($PROFILE_APP_ID) does not match expected bundle ID ($EXPECTED_BUNDLE_ID)"
+          exit 1
+        fi
+
+        cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID}.mobileprovision"
+        echo "SHARE_PROVISIONING_PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+        echo "Share extension profile installed: $PROFILE_UUID"

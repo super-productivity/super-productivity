@@ -11,9 +11,9 @@ name: iOS TestFlight on Label
 #     for same-repo PRs, hence the `head.repo.full_name == github.repository`
 #     check. Fork PRs must be pushed to a branch in this repo first (the
 #     share-extension PR was handled this way).
-#   - Local actions resolve from the checked-out tree, so if the head branch
-#     predates the shared signing action, the workflow falls back to the base
-#     branch for it (step "Ensure signing action is available").
+#   - Local actions and the Fastfile resolve from the checked-out tree, so if
+#     the head branch predates these CI helpers, the workflow falls back to the
+#     base branch for them (step "Ensure TestFlight CI helpers are available").
 #
 # One-time setup (cannot be automated):
 #   1. Create the `ios-test-flight` label, then merge this workflow to the
@@ -70,16 +70,25 @@ jobs:
           ref: ${{ env.HEAD_SHA }}
           persist-credentials: false
 
-      - name: Ensure signing action is available
-        # Local actions resolve from the checked-out tree, so a feature branch
-        # that predates the shared signing action would have nothing to call.
-        # Fall back to the base branch, but prefer the PR head when it already
-        # carries the action (e.g. while developing the action itself).
+      - name: Ensure TestFlight CI helpers are available
+        # Older feature branches can predate both the shared signing action and
+        # the TestFlight Fastlane lane. Prefer the PR versions when present;
+        # otherwise copy only the missing helpers from the trusted base branch.
         run: |
           ACTION=.github/actions/setup-ios-signing/action.yml
-          if [ ! -f "$ACTION" ]; then
+          MISSING_ACTION=false
+          MISSING_LANE=false
+          [ -f "$ACTION" ] || MISSING_ACTION=true
+          grep -q '^  lane :testflight do' fastlane/Fastfile || MISSING_LANE=true
+
+          if [ "$MISSING_ACTION" = true ] || [ "$MISSING_LANE" = true ]; then
             git fetch --depth=1 origin "${{ github.event.pull_request.base.ref }}"
+          fi
+          if [ "$MISSING_ACTION" = true ]; then
             git checkout FETCH_HEAD -- .github/actions/setup-ios-signing
+          fi
+          if [ "$MISSING_LANE" = true ]; then
+            git checkout FETCH_HEAD -- fastlane/Fastfile
           fi
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
@@ -98,6 +107,7 @@ jobs:
           mac_certs: ${{ secrets.mac_certs }}
           mac_certs_password: ${{ secrets.mac_certs_password }}
           ios_provision_profile: ${{ secrets.IOS_PROVISION_PROFILE }}
+          ios_share_provision_profile: ${{ secrets.IOS_SHARE_PROVISION_PROFILE }}
 
       - name: Get npm cache directory
         id: npm-cache-dir
@@ -187,6 +197,16 @@ jobs:
           </dict>
           </plist>
           EOF
+
+          if [ -f ios/App/ShareExtension/Info.plist ]; then
+            if [ -z "${SHARE_PROVISIONING_PROFILE_UUID:-}" ]; then
+              echo "ERROR: ShareExtension target requires IOS_SHARE_PROVISION_PROFILE"
+              exit 1
+            fi
+            /usr/libexec/PlistBuddy -c \
+              "Add :provisioningProfiles:com.super-productivity.app.ShareExtension string $SHARE_PROVISIONING_PROFILE_UUID" \
+              "$RUNNER_TEMP/ExportOptions.plist"
+          fi
 
       - name: Export IPA
         run: |

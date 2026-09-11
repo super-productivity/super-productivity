@@ -34,6 +34,7 @@ jobs:
           mac_certs: ${{ secrets.mac_certs }}
           mac_certs_password: ${{ secrets.mac_certs_password }}
           ios_provision_profile: ${{ secrets.IOS_PROVISION_PROFILE }}
+          ios_share_provision_profile: ${{ secrets.IOS_SHARE_PROVISION_PROFILE }}
 
       - name: Get npm cache directory
         id: npm-cache-dir
@@ -121,6 +122,16 @@ jobs:
           </dict>
           </plist>
           EOF
+
+          if [ -f ios/App/ShareExtension/Info.plist ]; then
+            if [ -z "${SHARE_PROVISIONING_PROFILE_UUID:-}" ]; then
+              echo "ERROR: ShareExtension target requires IOS_SHARE_PROVISION_PROFILE"
+              exit 1
+            fi
+            /usr/libexec/PlistBuddy -c \
+              "Add :provisioningProfiles:com.super-productivity.app.ShareExtension string $SHARE_PROVISIONING_PROFILE_UUID" \
+              "$RUNNER_TEMP/ExportOptions.plist"
+          fi
 
       - name: Export IPA
         run: |

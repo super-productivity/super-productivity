@@ -66,7 +66,7 @@ the `TESTFLIGHT_GROUP` variable) and submits it for Beta App Review. The workflo
 posts the group's Public Link back on the PR and removes the label so re-applying
 it starts a fresh build.
 
-Guards:
+### Security boundary
 
 - **Same-repo PRs only** (`head.repo.full_name == github.repository`). The job
   handles Apple signing secrets, so a fork PR must be pushed to a branch in this
@@ -79,19 +79,111 @@ Guards:
   certificate and App Manager API key, so this workflow carries the same
   credential exposure as the release path.
 
-One-time setup (Apple's side cannot be automated):
+### One-time Apple Developer setup
 
-1. Create the `ios-test-flight` label.
-2. Merge this workflow to the default branch before labeling older branches —
-   for a branch that predates the shared signing action, the workflow falls back
-   to the base branch for that action.
-3. In App Store Connect create an External Testing group named exactly
-   `Public Testers` (or set the repository variable `TESTFLIGHT_GROUP` to match
-   a different name), enable its Public Link, and let the first build clear
-   Beta App Review. Later builds usually auto-approve.
-4. Add the group's Public Link as the repository variable
-   `TESTFLIGHT_PUBLIC_LINK` (a variable, not a secret — it is meant to be shared).
-   Without it the PR comment still reports success/failure but prints no link.
+The share extension in [PR #10033](https://github.com/super-productivity/super-productivity/pull/10033)
+has its own bundle ID and profile. In
+[Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/):
+
+1. Register the App Group `group.com.super-productivity.app`.
+2. Edit the existing App ID `com.super-productivity.app`, enable **App Groups**,
+   and assign that group.
+3. Register the explicit App ID `com.super-productivity.app.ShareExtension`,
+   enable **App Groups**, and assign the same group.
+4. Regenerate the main app's App Store distribution provisioning profile using
+   the existing Apple Distribution certificate. The regenerated profile must
+   contain the App Group entitlement.
+5. Create an App Store distribution provisioning profile for
+   `com.super-productivity.app.ShareExtension` using the same certificate.
+
+Encode each downloaded profile as a single base64 line before adding it to
+GitHub:
+
+```bash
+openssl base64 -A -in MainApp.mobileprovision
+openssl base64 -A -in ShareExtension.mobileprovision
+```
+
+The shared signing action treats the extension profile as optional for branches
+without the extension. If `ios/App/ShareExtension/Info.plist` exists, both the
+release and TestFlight workflows fail before export unless the extension profile
+is available, then map both bundle IDs into `ExportOptions.plist`.
+
+### One-time App Store Connect setup
+
+In **App Store Connect → Apps → Super Productivity → TestFlight**:
+
+1. Complete the beta test information (description, feedback email, contact
+   information, review notes, and demo credentials if sign-in is required).
+2. Create an **External Testing** group named exactly `Public Testers`. To use a
+   different name, set the `TESTFLIGHT_GROUP` repository variable to that exact
+   value.
+3. Enable the group's **Public Link** and initially use a conservative tester
+   limit (for example, 100).
+4. Copy the public join URL. The workflow submits each uploaded build for Beta
+   App Review; Apple reviews the first build and later builds usually approve
+   faster. A successful workflow means upload/distribution setup succeeded, not
+   necessarily that Apple has already approved the build for external testers.
+
+### One-time GitHub setup
+
+Under **Settings → Secrets and variables → Actions**, verify the existing iOS
+release secrets and add the extension profile:
+
+| Secret                        | Purpose                                                     |
+| ----------------------------- | ----------------------------------------------------------- |
+| `APPLE_TEAM_ID`               | Team used in `ExportOptions.plist`                          |
+| `mac_certs`                   | Base64-encoded Apple Distribution `.p12`                    |
+| `mac_certs_password`          | Password for `mac_certs`                                    |
+| `IOS_PROVISION_PROFILE`       | Regenerated main-app profile with the App Group entitlement |
+| `IOS_SHARE_PROVISION_PROFILE` | Share-extension distribution profile                        |
+| `mac_api_key`                 | Raw App Store Connect API `.p8` contents                    |
+| `mac_api_key_id`              | App Store Connect API key ID                                |
+| `mac_api_key_issuer_id`       | App Store Connect API issuer ID                             |
+| `UNSPLASH_KEY`                | Existing frontend build-time Unsplash key                   |
+| `UNSPLASH_CLIENT_ID`          | Existing frontend build-time Unsplash client ID             |
+
+These names currently refer to repository secrets, like `build-ios.yml`. If the
+Apple credentials move to an environment, both iOS workflows must declare that
+environment before they can read them. The API key needs the **App Manager** role
+to manage external TestFlight distribution and Beta App Review.
+
+Create these repository variables:
+
+| Variable                 | Required | Value                                             |
+| ------------------------ | -------- | ------------------------------------------------- |
+| `TESTFLIGHT_PUBLIC_LINK` | Yes      | `https://testflight.apple.com/join/...`           |
+| `TESTFLIGHT_GROUP`       | No       | External group name; defaults to `Public Testers` |
+
+Finally, create the exact repository label `ios-test-flight`, for example with
+the description “Build and distribute this PR through public iOS TestFlight.”
+
+### Activate and operate
+
+1. Merge this workflow to the default branch before labeling older branches —
+   for a branch that predates the shared signing action or TestFlight Fastlane
+   lane, the workflow falls back to the base branch for those CI helpers.
+2. Apply `ios-test-flight` to the same-repo PR to build its current head commit.
+3. Follow the Actions run and then the build under App Store Connect → TestFlight.
+4. After upload, the workflow comments with the stable public link and removes
+   the label. Remove and re-apply the label after new commits to request another
+   build.
+
+Testers only need an iPhone or iPad, the TestFlight app, and the public link.
+They do not need a Mac, Xcode, or an Apple Developer account.
+
+### Failure and rollback
+
+- If fastlane times out after upload, inspect App Store Connect before retrying;
+  Apple may still be processing or reviewing the build. A re-applied label uses
+  a new build number, but an unnecessary upload creates noise and consumes a
+  TestFlight slot.
+- If export reports a missing or mismatched profile, check both App IDs, their
+  App Group assignment, the profile certificate, and the two profile secrets.
+- To stop distributing a bad build, use **Expire Build** in App Store Connect.
+- To disable public PR builds, remove the `ios-test-flight` label and disable or
+  remove `.github/workflows/build-ios-testflight.yml`. Installed builds are not
+  remotely removed; expiring a build prevents new installs.
 
 The internal-`master` beta path proposed in
 [`docs/plans/2026-07-14-ios-testflight-master-builds.md`](plans/2026-07-14-ios-testflight-master-builds.md)
