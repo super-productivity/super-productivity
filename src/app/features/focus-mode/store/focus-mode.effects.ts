@@ -876,7 +876,11 @@ export class FocusModeEffects {
           throttleTime(500, undefined, { leading: true, trailing: true }),
           withLatestFrom(this.store.select(selectors.selectOsProgressBar)),
           tap(([_action, osProgressBar]) => {
-            window.ea.setProgressBar(osProgressBar);
+            // null = an open-ended (Flowtime) session, which owns nothing:
+            // task-electron.effects publishes the task's own progress instead.
+            if (osProgressBar) {
+              window.ea.setProgressBar(osProgressBar);
+            }
           }),
         ),
       { dispatch: false },

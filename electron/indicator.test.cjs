@@ -420,10 +420,12 @@ test('tray title shows the task title when countdown display is disabled', () =>
   assert.equal(traySetToolTipCalls.at(-1), 'Write release notes');
 });
 
-// A Flowtime session has no target duration, so focus mode publishes progress 0
-// while task tracking publishes the real task ratio. Both reached the tray icon
-// every second, flipping it between the progress ring and the plain running
-// icon — the blink reported in #9944 (and the dock-bar variant in #3131).
+// Both writers fire every second while a focus session runs with the overlay
+// hidden: CURRENT_TASK_UPDATED carries task progress, SET_PROGRESS_BAR carries
+// the session's. When both reached the icon it flipped between the two frames
+// twice a second — the blink reported in #9944. Values differ on purpose here:
+// identical ones would be swallowed by setTrayIcon's path dedupe and the test
+// would pass even with two writers.
 test('tray icon has a single writer per tick while the focus overlay is hidden', () => {
   Object.defineProperty(process, 'platform', {
     configurable: true,
@@ -452,16 +454,20 @@ test('tray icon has a single writer per tick while the focus overlay is hidden',
   for (let i = 0; i < 3; i++) {
     task.timeSpent += 1000;
     // task-electron.effects: isFocusModeEnabled === isOverlayShown === false
-    currentTaskUpdated({}, { ...task }, false, 0, false, 0, 'Flowtime');
-    // focus-mode.effects: Flowtime publishes no meaningful progress
-    setProgressBar({}, { progress: -1, progressBarMode: 'none' });
+    currentTaskUpdated({}, { ...task }, false, 0, false, 0, 'Pomodoro');
+    // focus-mode.effects: session progress, unrelated to the task estimate
+    setProgressBar({}, { progress: 0.2, progressBarMode: 'normal' });
   }
 
   const iconPaths = traySetImageCalls.map((image) => image.iconPath);
   assert.deepEqual(iconPaths, ['/icons/indicator/running-anim-l/8.png']);
 });
 
-test('the focus overlay owns the tray icon while it is shown', () => {
+// The mirror case: with the overlay shown CURRENT_TASK_UPDATED stands down, so
+// the icon has to follow SET_PROGRESS_BAR. During a Flowtime session that
+// message carries the *task* progress (the session owns no progress of its
+// own), which is what keeps the ring rendering instead of the plain icon.
+test('tray icon follows SET_PROGRESS_BAR while the focus overlay is shown', () => {
   Object.defineProperty(process, 'platform', {
     configurable: true,
     value: 'darwin',
@@ -487,14 +493,14 @@ test('the focus overlay owns the tray icon while it is shown', () => {
     0,
     true,
     0,
-    'Pomodoro',
+    'Flowtime',
   );
   traySetImageCalls = [];
-  setProgressBar({}, { progress: 0.2, progressBarMode: 'normal' });
+  setProgressBar({}, { progress: 0.5, progressBarMode: 'normal' });
 
   assert.equal(traySetImageCalls.length, 1);
   assert.match(
     traySetImageCalls.at(-1).iconPath,
-    /\/icons\/indicator\/running-anim-l\/3\.png$/,
+    /\/icons\/indicator\/running-anim-l\/8\.png$/,
   );
 });

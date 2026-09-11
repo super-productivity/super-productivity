@@ -14,8 +14,8 @@ import { selectCurrentTask, selectTaskEntities } from './task.selectors';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { GlobalConfigService } from '../../config/global-config.service';
 import {
+  selectIsOsProgressBarOwnedBySession,
   selectIsOverlayShown,
-  selectIsRunning as selectIsFocusTimerRunning,
 } from '../../focus-mode/store/focus-mode.selectors';
 import { TimeTrackingActions } from '../../time-tracking/store/time-tracking.actions';
 import { FocusModeService } from '../../focus-mode/focus-mode.service';
@@ -187,12 +187,14 @@ export class TaskElectronEffects {
         // collapses 1 IPC/sec into ~1 IPC/3s. Leading+trailing keeps the first
         // tick after start instant and the final value at the end of a window.
         throttleTime(3000, undefined, { leading: true, trailing: true }),
-        withLatestFrom(this._store$.select(selectIsFocusTimerRunning)),
-        // A running focus session owns the OS progress bar (it publishes its own
-        // session progress). Gating on the overlay being *shown* instead left
-        // both writers active whenever the overlay was hidden, so the bar and
-        // the tray icon cycled between the two values every second (#9944, #3131).
-        filter(([a, isFocusSessionRunning]) => !isFocusSessionRunning),
+        withLatestFrom(this._store$.select(selectIsOsProgressBarOwnedBySession)),
+        // Stand down while a timed focus session owns the OS progress bar, so
+        // that surface only ever has one writer. Gating on the focus overlay
+        // being *shown* instead left both writers active whenever the overlay
+        // was hidden, and the bar cycled between the two values every second
+        // (#9944). Open-ended (Flowtime) sessions own nothing, so the task
+        // progress below keeps the bar meaningful there.
+        filter(([a, isOwnedByFocusSession]) => !isOwnedByFocusSession),
         tap(([{ task }]) => {
           const progress = task.timeSpent / task.timeEstimate;
           window.ea.setProgressBar({
