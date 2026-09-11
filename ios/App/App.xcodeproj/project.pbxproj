@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		994800000000000000000001 /* ShareInbox.swift in App */ = {isa = PBXBuildFile; fileRef = 994800000000000000000010; };
+		994800000000000000000002 /* ShareInbox.swift in Extension */ = {isa = PBXBuildFile; fileRef = 994800000000000000000010; };
+		994800000000000000000003 /* ShareInboxPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 994800000000000000000011; };
+		994800000000000000000004 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 994800000000000000000012; };
+		994800000000000000000005 /* en.json in Resources */ = {isa = PBXBuildFile; fileRef = 994800000000000000000013; };
+		994800000000000000000006 /* ShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 994800000000000000000014; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
@@ -22,7 +28,31 @@
 		B63E17A52C5F3D8A00A1B2C3 /* CustomViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B63E17A42C5F3D8A00A1B2C3 /* CustomViewController.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		994800000000000000000020 = {isa = PBXContainerItemProxy; containerPortal = 504EC2FC1FED79650016851F; proxyType = 1; remoteGlobalIDString = 994800000000000000000030; remoteInfo = ShareExtension; };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		994800000000000000000021 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (994800000000000000000006, );
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		994800000000000000000010 /* ShareInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/ShareInbox.swift; sourceTree = SOURCE_ROOT; };
+		994800000000000000000011 /* ShareInboxPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/ShareInboxPlugin.swift; sourceTree = SOURCE_ROOT; };
+		994800000000000000000012 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtension/ShareViewController.swift; sourceTree = SOURCE_ROOT; };
+		994800000000000000000013 /* en.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = ../../src/assets/i18n/en.json; sourceTree = SOURCE_ROOT; };
+		994800000000000000000014 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		994800000000000000000015 /* ShareExtension Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = ShareExtension/Info.plist; sourceTree = SOURCE_ROOT; };
+		994800000000000000000016 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension/ShareExtension.entitlements; sourceTree = SOURCE_ROOT; };
+		994800000000000000000017 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App/App.entitlements; sourceTree = SOURCE_ROOT; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -65,6 +95,13 @@
 		504EC2FB1FED79650016851F = {
 			isa = PBXGroup;
 			children = (
+				994800000000000000000010 /* ShareInbox.swift */,
+				994800000000000000000011 /* ShareInboxPlugin.swift */,
+				994800000000000000000012 /* ShareViewController.swift */,
+				994800000000000000000013 /* en.json */,
+				994800000000000000000015 /* ShareExtension Info.plist */,
+				994800000000000000000016 /* ShareExtension.entitlements */,
+				994800000000000000000017 /* App.entitlements */,
 				504EC3061FED79650016851F /* App */,
 				504EC3051FED79650016851F /* Products */,
 				7F8756D8B27F46E3366F6CEA /* Pods */,
@@ -75,6 +112,7 @@
 		504EC3051FED79650016851F /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				994800000000000000000014 /* ShareExtension.appex */,
 				504EC3041FED79650016851F /* App.app */,
 			);
 			name = Products;
@@ -112,6 +150,17 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		994800000000000000000030 /* ShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 994800000000000000000043;
+			buildPhases = (994800000000000000000031, 994800000000000000000032, );
+			buildRules = ();
+			dependencies = ();
+			name = ShareExtension;
+			productName = ShareExtension;
+			productReference = 994800000000000000000014;
+			productType = "com.apple.product-type.app-extension";
+		};
 		504EC3031FED79650016851F /* App */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 504EC3161FED79650016851F /* Build configuration list for PBXNativeTarget "App" */;
@@ -121,10 +170,12 @@
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
 				9592DBEFFC6D2A0C8D5DEB22 /* [CP] Embed Pods Frameworks */,
+				994800000000000000000021 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				994800000000000000000022 /* ShareExtension */,
 			);
 			name = App;
 			productName = App;
@@ -162,12 +213,14 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				994800000000000000000030 /* ShareExtension */,
 				504EC3031FED79650016851F /* App */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		994800000000000000000032 /* Extension Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (994800000000000000000005, ); runOnlyForDeploymentPostprocessing = 0; };
 		504EC3021FED79650016851F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -220,11 +273,14 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		994800000000000000000031 /* Extension Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (994800000000000000000002, 994800000000000000000004, ); runOnlyForDeploymentPostprocessing = 0; };
 		504EC3001FED79650016851F /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				994800000000000000000001 /* ShareInbox.swift in App */,
+				994800000000000000000003 /* ShareInboxPlugin.swift in Sources */,
 				B63E17A52C5F3D8A00A1B2C3 /* CustomViewController.swift in Sources */,
 				B63E17A12C5F3D8A00A1B2C3 /* WebDavHttpPlugin.swift in Sources */,
 				B63E17A32C5F3D8A00A1B2C3 /* WebDavHttpPlugin.m in Sources */,
@@ -234,6 +290,10 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		994800000000000000000022 /* ShareExtension */ = {isa = PBXTargetDependency; target = 994800000000000000000030; targetProxy = 994800000000000000000020; };
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		504EC30B1FED79650016851F /* Main.storyboard */ = {
@@ -255,6 +315,42 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		994800000000000000000041 /* Extension Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.super-productivity.app.ShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		994800000000000000000042 /* Extension Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.super-productivity.app.ShareExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		504EC3141FED79650016851F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -367,6 +463,7 @@
 			baseConfigurationReference = FC68EB0AF532CFC21C3344DD /* Pods-App.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
@@ -387,6 +484,7 @@
 			baseConfigurationReference = AF51FD2D460BCFE21FA515B2 /* Pods-App.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
@@ -404,6 +502,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		994800000000000000000043 = {isa = XCConfigurationList; buildConfigurations = (994800000000000000000041, 994800000000000000000042, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		504EC2FF1FED79650016851F /* Build configuration list for PBXProject "App" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
