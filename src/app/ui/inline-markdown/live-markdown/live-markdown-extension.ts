@@ -1,5 +1,6 @@
 import { syntaxTree } from '@codemirror/language';
 import type { EditorState, Extension } from '@codemirror/state';
+import { Lexer } from 'marked';
 import {
   Decoration,
   type DecorationSet,
@@ -67,7 +68,7 @@ const CHECKBOX_UNCHECKED = Decoration.replace({
 const taskCheckboxToggle = EditorView.domEventHandlers({
   mousedown: (event, view) => {
     const target = event.target as HTMLElement;
-    if (!target.classList?.contains(TASK_CHECKBOX_CLASS)) {
+    if (event.button !== 0 || !target.classList?.contains(TASK_CHECKBOX_CLASS)) {
       return false;
     }
     const line = view.state.doc.lineAt(view.posAtDOM(target));
@@ -102,6 +103,15 @@ const linkTargetAt = (state: EditorState, pos: number): string | null => {
   }
   if (!node) {
     return null;
+  }
+  if (node.name === 'Link') {
+    // Reuse the preview parser for angle-wrapped destinations and reference
+    // labels (including collapsed/shortcut references). Lexing the document
+    // first supplies its definitions to inlineTokens; this runs only on click.
+    const lexer = new Lexer();
+    lexer.lex(state.doc.toString());
+    const token = lexer.inlineTokens(state.doc.sliceString(node.from, node.to))[0];
+    return token?.type === 'link' ? token.href : null;
   }
   const urlNode = node.name === 'URL' ? node : node.getChild('URL');
   return urlNode ? state.doc.sliceString(urlNode.from, urlNode.to) : null;

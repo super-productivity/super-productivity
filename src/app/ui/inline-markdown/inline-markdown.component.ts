@@ -643,6 +643,9 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     if (this.isLiveMarkdownEditor()) {
       this.isPendingLiveFocus.set(true);
       this.liveEditorEl()?.focus();
+      if (cursorPos !== undefined) {
+        this._setTextareaState(cursorPos);
+      }
       return;
     }
     setTimeout(() => {

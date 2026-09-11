@@ -12,19 +12,22 @@
       path for anyone who never opens a note (#9910).
     -->
     @defer (on immediate) {
-      <live-markdown-editor
-        #liveEditorEl
-        [model]="modelCopy() ?? ''"
-        [placeholderTxt]="placeholderTxt() ?? ''"
-        [autoFocus]="isLock() || isPendingLiveFocus()"
-        [resolveImageSrc]="resolveImageSrc"
-        [extraKeymap]="liveEditorKeymap"
-        (changed)="onLiveEditorChanged($event)"
-        (docChanged)="onLiveEditorDocChanged($event)"
-        (focused)="onLiveEditorFocused()"
-        (blurred)="onLiveEditorBlurred()"
-        (pasted)="pasteHandler($event)"
-      ></live-markdown-editor>
+      <!-- A different task needs a fresh undo history, even if its notes match. -->
+      @for (id of [taskId()]; track id) {
+        <live-markdown-editor
+          #liveEditorEl
+          [model]="modelCopy() ?? ''"
+          [placeholderTxt]="placeholderTxt() ?? ''"
+          [autoFocus]="isLock() || isPendingLiveFocus()"
+          [resolveImageSrc]="resolveImageSrc"
+          [extraKeymap]="liveEditorKeymap"
+          (changed)="onLiveEditorChanged($event)"
+          (docChanged)="onLiveEditorDocChanged($event)"
+          (focused)="onLiveEditorFocused()"
+          (blurred)="onLiveEditorBlurred()"
+          (pasted)="pasteHandler($event)"
+        ></live-markdown-editor>
+      }
     }
   } @else if (isShowEdit() || !isMarkdownFormattingEnabled()) {
     <textarea

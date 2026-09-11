@@ -18,6 +18,8 @@ import { TranslateModule } from '@ngx-translate/core';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { Log } from '../../core/log';
 import { Location } from '@angular/common';
+import { EditorView } from '@codemirror/view';
+import { undo } from '@codemirror/commands';
 
 describe('InlineMarkdownComponent', () => {
   let component: InlineMarkdownComponent;
@@ -82,6 +84,9 @@ describe('InlineMarkdownComponent', () => {
    * renders on its own in TestBed — each spec renders the block explicitly.
    */
   describe('live markdown editor', () => {
+    const editorView = (): EditorView =>
+      EditorView.findFromDOM(fixture.nativeElement.querySelector('.cm-content'))!;
+
     const mountLiveEditor = async (model: string): Promise<void> => {
       component.model = model;
       fixture.detectChanges();
@@ -101,6 +106,56 @@ describe('InlineMarkdownComponent', () => {
       expect(
         fixture.nativeElement.querySelector('.cm-content').textContent,
       ).not.toContain('#');
+    });
+
+    for (const nextNotes of ['Task B notes', 'Task A notes, edited']) {
+      it(`isolates undo when switching tasks to ${nextNotes}`, async () => {
+        fixture.componentRef.setInput('taskId', 'task-a');
+        await mountLiveEditor('Task A notes');
+        const view = editorView();
+        view.dispatch({ changes: { from: view.state.doc.length, insert: ', edited' } });
+        component.onLiveEditorChanged(view.state.doc.toString());
+        fixture.detectChanges();
+
+        fixture.componentRef.setInput('taskId', 'task-b');
+        component.model = nextNotes;
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        expect(undo(editorView())).toBe(false);
+        expect(editorView().state.doc.toString()).toBe(nextNotes);
+      });
+    }
+
+    it('preserves undo after saving an edit on the same task', async () => {
+      fixture.componentRef.setInput('taskId', 'task-a');
+      await mountLiveEditor('Original notes');
+      const view = editorView();
+      view.dispatch({ changes: { from: view.state.doc.length, insert: ', edited' } });
+      component.onLiveEditorChanged(view.state.doc.toString());
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(undo(editorView())).toBe(true);
+      expect(editorView().state.doc.toString()).toBe('Original notes');
+    });
+
+    it('places typing after the first checklist marker', async () => {
+      fixture.componentRef.setInput('isDefaultText', true);
+      fixture.componentRef.setInput('defaultText', 'Default notes');
+      fixture.componentRef.setInput('isShowChecklistToggle', true);
+      await mountLiveEditor('Default notes');
+
+      component.toggleChecklistMode(new Event('click'));
+      fixture.detectChanges();
+      // Selection restoration follows the model update on the next timer turn;
+      // zoneless whenStable() does not wait for that timer.
+      await new Promise<void>((resolve) => setTimeout(resolve));
+      await fixture.whenStable();
+      const view = editorView();
+      view.dispatch(view.state.replaceSelection('milk'));
+
+      expect(view.state.doc.toString()).toBe('- [ ] milk');
     });
 
     // Typing must not save: a note is one op per edit session, not per keystroke.
