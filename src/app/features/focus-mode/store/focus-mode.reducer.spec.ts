@@ -110,16 +110,33 @@ describe('FocusModeReducer', () => {
 
       expect(result.isOverlayShown).toBe(false);
     });
+
+    it('should cancel an unstarted preparation countdown when the overlay closes', () => {
+      const state = {
+        ...initialState,
+        isOverlayShown: true,
+        mainState: FocusMainUIState.Countdown,
+      };
+
+      const result = focusModeReducer(state, a.hideFocusOverlay());
+
+      expect(result.mainState).toBe(FocusMainUIState.Preparation);
+    });
   });
 
   describe('screen navigation actions', () => {
     it('should reset to preparation state on task selection', () => {
-      const state = { ...initialState, currentScreen: FocusScreen.Main };
+      const runningState = focusModeReducer(
+        { ...initialState, currentScreen: FocusScreen.Main },
+        a.startFocusSession({ duration: 25 * 60 * 1000 }),
+      );
       const action = a.selectFocusTask();
-      const result = focusModeReducer(state, action);
+      const result = focusModeReducer(runningState, action);
 
       expect(result.currentScreen).toBe(FocusScreen.Main);
       expect(result.mainState).toBe(FocusMainUIState.Preparation);
+      expect(result.timer.purpose).toBeNull();
+      expect(result.timer.isRunning).toBe(false);
     });
 
     it('should stay on main screen for duration selection', () => {

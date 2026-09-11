@@ -4,6 +4,7 @@ import {
   getSuperSyncConfig,
   createSimulatedClient,
   closeClient,
+  renameTask,
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
@@ -11,6 +12,11 @@ import {
   expectTaskNotVisible,
   expectTaskVisible,
 } from '../../utils/supersync-assertions';
+import {
+  SuperSyncDownloadOpsResponseSchema,
+  SuperSyncUploadOpsResponseSchema,
+  type SuperSyncServerOperation,
+} from '../../../packages/shared-schema/src';
 
 interface SyncStatusResponse {
   storageUsedBytes: number;
@@ -48,6 +54,25 @@ const getSyncStatus = async (
   return body;
 };
 
+const getServerOperations = async (
+  baseUrl: string,
+  accessToken: string,
+): Promise<SuperSyncServerOperation[]> => {
+  const response = await fetch(`${baseUrl}/api/sync/ops?sinceSeq=0&limit=1000`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch server operations: ${response.status} ${await response.text()}`,
+    );
+  }
+
+  return SuperSyncDownloadOpsResponseSchema.parse(await response.json()).ops;
+};
+
 const useServerDataIfPrompted = async (client: SimulatedE2EClient): Promise<void> => {
   const appeared = await client.sync.syncImportConflictDialog
     .waitFor({ state: 'visible', timeout: 15000 })
@@ -56,11 +81,7 @@ const useServerDataIfPrompted = async (client: SimulatedE2EClient): Promise<void
 
   if (!appeared) return;
 
-  await client.sync.syncImportUseRemoteBtn.click();
-  await client.sync.syncImportConflictDialog.waitFor({
-    state: 'hidden',
-    timeout: 5000,
-  });
+  await client.sync.chooseSyncImportUseRemote();
 };
 
 const recoverWithNewPasswordAndServerData = async (
@@ -294,6 +315,126 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientC) await closeClient(clientC);
+    }
+  });
+
+  test('#8730 rejects an old-key immediate upload after another client changes the password', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }, testInfo) => {
+    testInfo.setTimeout(240000);
+    const appUrl = baseURL || 'http://localhost:4242';
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+
+    try {
+      const user = await createTestUser(testRunId);
+      const baseConfig = getSuperSyncConfig(user);
+      const oldPassword = `oldpass-8730-${testRunId}`;
+      const newPassword = `newpass-8730-${testRunId}`;
+      const originalTaskName = `Issue8730-Before-${testRunId}`;
+      const staleTaskName = `Issue8730-Stale-${testRunId}`;
+
+      clientA = await createSimulatedClient(browser, appUrl, 'A', testRunId);
+      await clientA.sync.setupSuperSync({
+        ...baseConfig,
+        isEncryptionEnabled: true,
+        password: oldPassword,
+      });
+
+      clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
+      await clientB.sync.setupSuperSync({
+        ...baseConfig,
+        isEncryptionEnabled: true,
+        password: oldPassword,
+      });
+
+      await clientA.workView.addTask(originalTaskName);
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
+      await waitForTask(clientB.page, originalTaskName);
+
+      await clientA.sync.changeEncryptionPassword(newPassword);
+
+      const clientBDecryptDialog = clientB.page.locator('dialog-handle-decrypt-error');
+      await clientB.sync.syncBtn.click();
+      await expect(clientBDecryptDialog).toBeVisible({ timeout: 30000 });
+      await clientBDecryptDialog.getByRole('button', { name: /cancel/i }).click();
+      await expect(clientBDecryptDialog).toBeHidden();
+      await clientB.sync.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
+
+      await clientB.page.evaluate(() => {
+        const testGlobal = globalThis as typeof globalThis & {
+          __SP_E2E_BLOCK_AUTO_SYNC?: boolean;
+          __SP_E2E_BLOCK_IMMEDIATE_UPLOAD?: boolean;
+        };
+        testGlobal.__SP_E2E_BLOCK_AUTO_SYNC = true;
+        testGlobal.__SP_E2E_BLOCK_IMMEDIATE_UPLOAD = false;
+      });
+
+      const staleUploadResponsePromise = clientB.page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' &&
+          new URL(response.url()).pathname === '/api/sync/ops',
+        { timeout: 30000 },
+      );
+      await renameTask(clientB, originalTaskName, staleTaskName);
+      const staleUploadResponse = await staleUploadResponsePromise;
+      expect(staleUploadResponse.ok()).toBe(true);
+
+      const uploadResponseBody = SuperSyncUploadOpsResponseSchema.parse(
+        await staleUploadResponse.json(),
+      );
+      expect(uploadResponseBody.results).toHaveLength(1);
+      const staleUploadResult = uploadResponseBody.results[0];
+      const serverOperations = await getServerOperations(
+        baseConfig.baseUrl,
+        baseConfig.accessToken,
+      );
+      const passwordChangeOp = serverOperations.find(
+        ({ op }) =>
+          op.opType === 'SYNC_IMPORT' && op.syncImportReason === 'PASSWORD_CHANGED',
+      );
+      expect(
+        passwordChangeOp,
+        'the password change must leave a real encrypted full-state operation',
+      ).toBeDefined();
+      if (!passwordChangeOp) {
+        throw new Error('The server did not return the password-change SYNC_IMPORT');
+      }
+      expect(passwordChangeOp.op.isPayloadEncrypted).toBe(true);
+      expect(typeof passwordChangeOp.op.payload).toBe('string');
+      expect(uploadResponseBody).toEqual(
+        expect.objectContaining({
+          newOps: expect.arrayContaining([
+            expect.objectContaining({
+              op: expect.objectContaining({ id: passwordChangeOp.op.id }),
+            }),
+          ]),
+        }),
+      );
+
+      const serverStaleTaskOp = serverOperations.find(
+        ({ op }) => op.id === staleUploadResult.opId,
+      );
+      const clientADecryptDialog = clientA.page.locator('dialog-handle-decrypt-error');
+
+      expect(
+        staleUploadResult.accepted,
+        `stale old-key upload must be rejected after the PASSWORD_CHANGED clean slate` +
+          (staleUploadResult.errorCode
+            ? ` (server error code: ${staleUploadResult.errorCode})`
+            : ''),
+      ).toBe(false);
+      expect(staleUploadResult.errorCode).toBe('INTERNAL_ERROR');
+      expect(serverStaleTaskOp).toBeUndefined();
+      await clientA.sync.syncAndWait();
+      await expect(clientADecryptDialog).toBeHidden();
+      expect(await clientA.sync.hasSyncError()).toBe(false);
+    } finally {
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
     }
   });
 
@@ -610,10 +751,7 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
         console.log(
           '[PasswordChange] Sync import conflict dialog appeared - using server data',
         );
-        await clientB.page
-          .locator('dialog-sync-import-conflict button:has-text("Use Server Data")')
-          .click();
-        await syncImportDialog.waitFor({ state: 'hidden', timeout: 5000 });
+        await clientB.sync.chooseSyncImportUseRemote();
       }
 
       // Now wait for sync to complete (may need another sync round)

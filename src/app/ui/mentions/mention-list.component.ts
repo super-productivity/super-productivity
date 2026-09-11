@@ -23,6 +23,10 @@ import { MatIcon } from '@angular/material/icon';
  *
  * Copyright (c) 2016 Dan MacFarlane
  */
+
+/** Breathing room kept between the list and the viewport edge when capping it. */
+const VIEWPORT_MARGIN = 8;
+
 @Component({
   selector: 'mention-list',
   styleUrls: ['./mention-list.component.scss'],
@@ -217,19 +221,43 @@ export class MentionListComponent implements AfterContentChecked {
     let left = this.coords.left;
     const top = this.coords.top;
     let dropUp = this.dropUp;
-    const bounds: ClientRect = this.list.nativeElement.getBoundingClientRect();
+    const listEl: HTMLElement = this.list.nativeElement;
+    // The component instance is reused across searches, so drop the cap left by
+    // the previous one — otherwise the list is measured at that height and both
+    // decisions below are made against a stale, too-small box.
+    listEl.style.maxHeight = '';
+    const bounds: ClientRect = listEl.getBoundingClientRect();
     // if off right of page, align right
     if (bounds.left + bounds.width > window.innerWidth) {
       left -= bounds.left + bounds.width - window.innerWidth + 10;
     }
-    // if more than half off the bottom of the page, force dropUp
-    // if ((bounds.top+bounds.height/2)>window.innerHeight) {
-    //   dropUp = true;
-    // }
+    // Not `innerHeight`: Android's WebView does not always apply adjustResize,
+    // so the layout viewport can stay at the full screen while the IME covers
+    // the bottom of it — see GlobalThemeService's visualViewport keyboard
+    // tracking. VisualViewport is the area that is really visible, and matches
+    // innerHeight wherever the layout viewport does shrink.
+    const visibleHeight = window.visualViewport?.height ?? window.innerHeight;
+    // Room on either side of the caret line the list was measured against.
+    const spaceBelow = visibleHeight - bounds.top;
+    const spaceAbove = bounds.top - this.offset;
+    // The global add-task bar is pinned to the bottom of the screen on touch
+    // devices, so a list that only ever drops down renders past the lower edge
+    // and reads as an empty strip with no entries in it (#5146). Flip it above
+    // the caret when it does not fit below and there is more room above.
+    if (bounds.bottom > visibleHeight && spaceAbove > spaceBelow) {
+      dropUp = true;
+    }
     // if top is off page, disable dropUp
     if (bounds.top < 0) {
       dropUp = false;
     }
+    // On a phone with the keyboard up neither side is necessarily tall enough,
+    // so cap the list to what is actually on screen — `.scrollable-menu` then
+    // scrolls it instead of letting the overflow be clipped away.
+    const available = Math.max(0, (dropUp ? spaceAbove : spaceBelow) - VIEWPORT_MARGIN);
+    listEl.style.maxHeight = bounds.height > available ? `${available}px` : '';
+
+    this.dropUp = dropUp;
     // set the revised/final position
     this.positionElement(left, top, dropUp);
   }
@@ -245,6 +273,14 @@ export class MentionListComponent implements AfterContentChecked {
     el.style.position = 'absolute';
     el.style.left = left + 'px';
     el.style.top = top + 'px';
+    // The app runs zoneless and this is called from a requestAnimationFrame, so
+    // nothing schedules a change detection pass for the template's
+    // `[class.mention-dropdown]` binding — apply it here. `this.dropUp` is kept
+    // in sync above, so a later pass agrees rather than fighting this.
+    this.list.nativeElement.classList.toggle(
+      'mention-dropdown',
+      dropUp && !this.styleOff,
+    );
   }
 
   private getBlockCursorDimensions(nativeParentElement: HTMLInputElement): {

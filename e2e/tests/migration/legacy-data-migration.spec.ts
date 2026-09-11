@@ -2,6 +2,10 @@ import { test, expect, Page } from '@playwright/test';
 import legacyData from '../../fixtures/legacy-full-migration-backup.json';
 import { MIGRATION_BACKUP_PREFIX } from '../../../electron/shared-with-frontend/get-backup-timestamp';
 import { skipOnboardingForE2E } from '../../utils/waits';
+import {
+  readMigratedState,
+  seedLegacyDatabase,
+} from '../../utils/legacy-migration-helpers';
 
 /**
  * Legacy Data Migration E2E Tests
@@ -16,82 +20,39 @@ import { skipOnboardingForE2E } from '../../utils/waits';
  * Run with: npm run e2e:file e2e/tests/migration/legacy-data-migration.spec.ts -- --retries=0
  */
 
-/**
- * Helper to seed the legacy 'pf' IndexedDB database with data
- * Must be called BEFORE navigating to the app
- */
-const seedLegacyDatabase = async (
-  page: Page,
-  data: Record<string, unknown>,
-): Promise<void> => {
-  await page.evaluate(async (entityData) => {
-    return new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open('pf', 1);
-
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        if (!db.objectStoreNames.contains('main')) {
-          db.createObjectStore('main');
-        }
-      };
-
-      request.onsuccess = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        const tx = db.transaction('main', 'readwrite');
-        const store = tx.objectStore('main');
-
-        // Store each entity type
-        for (const [key, value] of Object.entries(entityData)) {
-          store.put(value, key);
-        }
-
-        tx.oncomplete = () => {
-          db.close();
-          resolve();
-        };
-        tx.onerror = () => {
-          db.close();
-          reject(tx.error);
-        };
-      };
-
-      request.onerror = () => reject(request.error);
-    });
-  }, data);
-};
-
-/**
- * Helper to read data from SUP_OPS IndexedDB after migration
- */
-const readMigratedState = async (
-  page: Page,
-): Promise<{
-  globalConfig?: { sync?: Record<string, unknown> };
-  task?: { ids: string[]; entities: Record<string, unknown> };
-  project?: { ids: string[]; entities: Record<string, unknown> };
-  tag?: { ids: string[]; entities: Record<string, unknown> };
-  note?: { ids: string[]; entities: Record<string, unknown> };
-}> => {
+const readLegacyMigrationLock = async (page: Page): Promise<unknown> => {
   return page.evaluate(async () => {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open('SUP_OPS');
-      request.onsuccess = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        const tx = db.transaction('state_cache', 'readonly');
-        const store = tx.objectStore('state_cache');
-        const getReq = store.get('current');
-        getReq.onsuccess = () => {
+      const request = indexedDB.open('pf', 1);
+      request.onsuccess = () => {
+        const db = request.result;
+        const getRequest = db
+          .transaction('main', 'readonly')
+          .objectStore('main')
+          .get('_migration_lock');
+        getRequest.onsuccess = () => {
           db.close();
-          resolve(getReq.result?.state || {});
+          resolve(getRequest.result);
         };
-        getReq.onerror = () => {
+        getRequest.onerror = () => {
           db.close();
-          reject(getReq.error);
+          reject(getRequest.error);
         };
       };
       request.onerror = () => reject(request.error);
     });
   });
+};
+
+/**
+ * Helper to read data from SUP_OPS IndexedDB after migration
+ */
+type MigratedState = {
+  globalConfig?: { sync?: Record<string, unknown> };
+  task?: { ids: string[]; entities: Record<string, unknown> };
+  project?: { ids: string[]; entities: Record<string, unknown> };
+  tag?: { ids: string[]; entities: Record<string, unknown> };
+  note?: { ids: string[]; entities: Record<string, unknown> };
 };
 
 /**
@@ -230,7 +191,7 @@ test.describe('@migration Legacy Data Migration', () => {
       // ========================================================================
       // STEP 6: Verify migrated data via IndexedDB
       // ========================================================================
-      const state = await readMigratedState(page);
+      const state = await readMigratedState<MigratedState>(page);
 
       // --- Verify Tasks ---
       expect(state.task?.ids).toBeDefined();
@@ -383,9 +344,6 @@ test.describe('@migration Legacy Data Migration', () => {
   });
 
   test('should handle migration error gracefully', async ({ browser, baseURL }) => {
-    // This test verifies the error state handling
-    // We'll seed invalid data to potentially trigger validation errors
-
     const context = await browser.newContext({
       storageState: undefined,
       baseURL: baseURL || 'http://localhost:4242',
@@ -396,28 +354,9 @@ test.describe('@migration Legacy Data Migration', () => {
     await page.addInitScript(skipOnboardingForE2E);
 
     try {
-      // Seed minimal but valid data - app should still migrate successfully
-      // even with minimal data
-      const minimalData = {
-        task: { ids: [], entities: {}, currentTaskId: null },
-        project: {
-          ids: ['INBOX_PROJECT'],
-          entities: {
-            INBOX_PROJECT: {
-              id: 'INBOX_PROJECT',
-              title: 'Inbox',
-              taskIds: [],
-              backlogTaskIds: [],
-              noteIds: [],
-              isArchived: false,
-            },
-          },
-        },
-        globalConfig: {
-          misc: { isDisableInitialDialog: true },
-          sync: { isEnabled: false, syncProvider: null },
-        },
-      };
+      // A config object makes the legacy database worth migrating, but without
+      // task and project slices the data cannot be repaired.
+      const irreparableData = { globalConfig: {} };
 
       // Block all JS to prevent app initialization during seeding
       await page.route('**/*.js', async (route) => {
@@ -428,53 +367,33 @@ test.describe('@migration Legacy Data Migration', () => {
       await page.goto('/', { waitUntil: 'domcontentloaded' });
 
       // Seed the legacy database while JS is blocked
-      await seedLegacyDatabase(page, minimalData);
+      await seedLegacyDatabase(page, irreparableData);
 
       // Remove the route blocking so JS can load on reload
       await page.unroute('**/*.js');
 
       // Set up download listener and reload
-      const downloadPromise = page
-        .waitForEvent('download', { timeout: 60000 })
-        .catch(() => null);
+      const downloadPromise = page.waitForEvent('download', { timeout: 60000 });
       await page.reload({ waitUntil: 'domcontentloaded' });
 
-      // Migration dialog should appear
       const dialog = page.locator('dialog-legacy-migration');
+      await expect(dialog.locator('.error-message')).toContainText(
+        'Your old data could not be migrated.',
+        { timeout: 60000 },
+      );
+      // Two buttons once the backup exists: acknowledge, and the #9770 escape
+      // hatch that discards the unmigratable legacy data.
+      await expect(dialog.getByRole('button')).toHaveCount(2);
+      const acknowledgeButton = dialog.getByRole('button', { name: 'Ok' });
+      await expect(acknowledgeButton).toBeEnabled();
 
-      // Wait for either success or error state
-      const successText = dialog.getByText('Migration complete!');
-      const errorIcon = dialog.locator('mat-icon:has-text("error")');
-
-      // Wait for one of the outcomes
-      await Promise.race([
-        successText.waitFor({ state: 'visible', timeout: 60000 }),
-        errorIcon.waitFor({ state: 'visible', timeout: 60000 }),
-      ]);
-
-      // If error occurred, verify error handling
-      if (await errorIcon.isVisible().catch(() => false)) {
-        // Error message should be displayed
-        const errorMessage = dialog.locator('.error-message');
-        await expect(errorMessage).toBeVisible();
-
-        // OK button should be available to dismiss
-        const okButton = dialog.locator('button').filter({ hasText: 'OK' });
-        await expect(okButton).toBeVisible();
-      } else {
-        // Migration succeeded - app should load
-        await expect(dialog).not.toBeVisible({ timeout: 15000 });
-        await page.waitForSelector('magic-side-nav', {
-          state: 'visible',
-          timeout: 30000,
-        });
-      }
-
-      // Backup should have been downloaded (if migration started)
       const download = await downloadPromise;
-      if (download) {
-        expect(download.suggestedFilename()).toContain(MIGRATION_BACKUP_PREFIX);
-      }
+      expect(download.suggestedFilename()).toContain(MIGRATION_BACKUP_PREFIX);
+      expect(await download.failure()).toBeNull();
+
+      await acknowledgeButton.click();
+      await expect(dialog).not.toBeVisible();
+      await expect.poll(() => readLegacyMigrationLock(page)).toBeUndefined();
     } finally {
       await context.close();
     }

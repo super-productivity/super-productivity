@@ -2,15 +2,13 @@ import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import { OperationLogStoreService } from './operation-log-store.service';
-import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { SyncSessionValidationService } from '../sync/sync-session-validation.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
-import { Operation, OpType, ActionType, SyncImportReason } from '../core/operation.types';
-import { uuidv7 } from '../../util/uuid-v7';
+import { Operation } from '../core/operation.types';
 import { incrementVectorClock, mergeVectorClocks } from '../../core/util/vector-clock';
 import { OpLog } from '../../core/log';
 import { AppDataComplete } from '../model/model-config';
@@ -83,17 +81,11 @@ export class SyncHydrationService {
    * @param downloadedMainModelData - Entity models from remote meta file.
    *   These are NOT stored in IndexedDB (only archives are) so must be passed explicitly.
    * @param remoteVectorClock - Vector clock from the remote snapshot (for clock merging).
-   * @param createSyncImportOp - Whether to create a SYNC_IMPORT operation. Set to false
-   *   for file-based sync bootstrap to avoid "clean slate" semantics that would filter
-   *   concurrent ops from other clients. Default is true for backwards compatibility
-   *   and for explicit "use local/remote" conflict resolution flows.
    * @param hooks - Internal orchestration hooks around archive and state replacement.
    */
   async hydrateFromRemoteSync(
     downloadedMainModelData?: Record<string, unknown>,
     remoteVectorClock?: Record<string, number>,
-    createSyncImportOp: boolean = true,
-    syncImportReason?: SyncImportReason,
     hooks?: SnapshotHydrationHooks,
   ): Promise<void> {
     OpLog.normal('SyncHydrationService: Hydrating from remote sync...');
@@ -104,9 +96,7 @@ export class SyncHydrationService {
       // method, so user actions arriving after this read are deferred and must
       // be preserved on top of the downloaded snapshot rather than rejected as
       // if they belonged to the superseded local baseline.
-      const unsyncedOpsToReject = createSyncImportOp
-        ? []
-        : await this.opLogStore.getUnsynced();
+      const unsyncedOpsToReject = await this.opLogStore.getUnsynced();
 
       // 0. Capture current local-only sync settings BEFORE overwriting
       // These settings should remain local to each client and not be overwritten by remote data.
@@ -136,26 +126,10 @@ export class SyncHydrationService {
       // the old archive, then save it after this replacement and silently erase
       // downloaded entries. TASK_ARCHIVE is independent from OPERATION_LOG.
       const dbData = await this.lockService.request(LOCK_NAMES.TASK_ARCHIVE, async () => {
-        // Full-state imports retain their existing archive write order. File
-        // snapshots defer these writes to commitFileSnapshotBaseline(), where
+        // Archive writes are deferred to commitFileSnapshotBaseline(), where
         // archives, state, clock, and included operations commit atomically.
-        if (createSyncImportOp) {
-          if (downloadedArchiveYoung) {
-            await this.archiveDbAdapter.saveArchiveYoung(downloadedArchiveYoung);
-            hooks?.afterArchiveReplacement?.();
-            OpLog.normal(
-              'SyncHydrationService: Wrote archiveYoung to IndexedDB from sync',
-            );
-          }
-          if (downloadedArchiveOld) {
-            await this.archiveDbAdapter.saveArchiveOld(downloadedArchiveOld);
-            hooks?.afterArchiveReplacement?.();
-            OpLog.normal('SyncHydrationService: Wrote archiveOld to IndexedDB from sync');
-          }
-        }
-
-        // Archives must be read after the optional replacement while the same
-        // lock is still held so the state cache and loadAllData use one view.
+        // Read them under the same lock so the state cache and loadAllData
+        // share one view.
         return this.stateSnapshotService.getAllSyncModelDataFromStoreAsync();
       });
 
@@ -209,55 +183,18 @@ export class SyncHydrationService {
         incrementVectorClock(mergedClock, clientId),
       );
 
-      let lastSeq: number;
-
-      if (createSyncImportOp) {
-        // 4b. Create and append SYNC_IMPORT operation
-        // This is used for explicit "use local/remote" conflict resolution where we want
-        // "clean slate" semantics that discard concurrent ops from other clients.
-        OpLog.normal('SyncHydrationService: Creating SYNC_IMPORT with merged clock', {
-          localClockSize: Object.keys(localClock).length,
-          stateCacheClockSize: Object.keys(stateCacheClock).length,
-          remoteClockSize: remoteVectorClock ? Object.keys(remoteVectorClock).length : 0,
-          mergedClockSize: Object.keys(mergedClock).length,
-        });
-
-        const op: Operation = {
-          id: uuidv7(),
-          actionType: ActionType.LOAD_ALL_DATA,
-          opType: OpType.SyncImport,
-          entityType: 'ALL',
-          payload: locallyReplayableSyncedData,
-          clientId: clientId,
-          vectorClock: newClock,
-          timestamp: Date.now(),
-          schemaVersion: CURRENT_SCHEMA_VERSION,
-          syncImportReason: syncImportReason ?? 'FILE_IMPORT',
-        };
-
-        // 5. Append operation to SUP_OPS
-        await this.opLogStore.append(op, 'remote');
-        OpLog.normal('SyncHydrationService: Persisted SYNC_IMPORT operation');
-
-        // 6. Get the sequence number of the operation we just wrote
-        lastSeq = await this.opLogStore.getLastSeq();
-      } else {
-        // 4b-alt. Skip SYNC_IMPORT creation for file-based sync bootstrap.
-        // This avoids "clean slate" semantics so concurrent ops from other clients
-        // won't be filtered by SyncImportFilterService.
-        OpLog.normal(
-          'SyncHydrationService: Skipping SYNC_IMPORT creation (file-based bootstrap)',
-        );
-
-        // Any local pending ops are now based on superseded state and must be
-        // rejected: without a SYNC_IMPORT, SyncImportFilterService won't filter
-        // them automatically. The rejection is deferred into
-        // commitFileSnapshotBaseline() below so it commits atomically with the
-        // state replacement. Rejecting here (a separate transaction) would
-        // strand these ops as permanently non-uploadable if the baseline commit
-        // then failed (e.g. the op-log tail changed) and the old state survived.
-        lastSeq = await this.opLogStore.getLastSeq();
-      }
+      // 4b. No SYNC_IMPORT is created on this path. That avoids "clean slate"
+      // semantics, so concurrent ops from other clients are not filtered by
+      // SyncImportFilterService.
+      //
+      // Any local pending ops are now based on superseded state and must be
+      // rejected: without a SYNC_IMPORT, SyncImportFilterService won't filter
+      // them automatically. The rejection is deferred into
+      // commitFileSnapshotBaseline() below so it commits atomically with the
+      // state replacement. Rejecting here (a separate transaction) would
+      // strand these ops as permanently non-uploadable if the baseline commit
+      // then failed (e.g. the op-log tail changed) and the old state survived.
+      const lastSeq = await this.opLogStore.getLastSeq();
 
       // 7. Validate and repair synced data before dispatching.
       // This fixes stale task references (e.g., tags/projects referencing deleted tasks).
@@ -294,44 +231,16 @@ export class SyncHydrationService {
         this.sessionValidation.setFailed();
       }
 
-      // 8. Determine the working clock to use.
-      // When a SYNC_IMPORT was created, reset to minimal (only importing client's entry)
-      // to prevent dead client IDs from accumulating. The SYNC_IMPORT operation stores
-      // the full merged clock for SyncImportFilterService to use when filtering.
-      // When no SYNC_IMPORT (file-based bootstrap), keep the full merged clock.
-      let clockForStorage: Record<string, number>;
-      if (createSyncImportOp) {
-        clockForStorage = {};
-        // Guard against undefined — consistent with mergeRemoteOpClocks() in OperationLogStoreService
-        if (newClock[clientId] !== undefined) {
-          clockForStorage[clientId] = newClock[clientId];
-        }
-        OpLog.normal('SyncHydrationService: Reset working clock to minimal after sync', {
-          fullClockSize: Object.keys(newClock).length,
-          minimalClockSize: Object.keys(clockForStorage).length,
-        });
-      } else {
-        clockForStorage = newClock;
-      }
+      // 8. Keep the full merged clock. Without a SYNC_IMPORT there is no
+      // clean-slate baseline, so every known client entry must survive.
+      const clockForStorage = newClock;
 
       // 9. Commit the durable snapshot baseline before replacing live state.
       // File snapshots include the downloaded archives and represented remote
       // operations in this same transaction. If any write fails, the old
       // baseline remains intact and mid-hydration local actions can safely drain
       // against it; there is no cache-only or ops-only restart state.
-      if (createSyncImportOp) {
-        await this.opLogStore.saveStateCache({
-          state: dataToLoad,
-          lastAppliedOpSeq: lastSeq,
-          vectorClock: clockForStorage,
-          compactedAt: Date.now(),
-        });
-        hooks?.afterSnapshotCachePersisted?.();
-
-        // The SYNC_IMPORT was appended with source='remote', so update the
-        // working clock separately on this legacy full-state-import path.
-        await this.opLogStore.setVectorClock(clockForStorage);
-      } else {
+      {
         // Reject superseded local ops atomically with the state replacement.
         const rejectOpIds = unsyncedOpsToReject.map((entry) => entry.op.id);
         const appendResult = await this.opLogStore.commitFileSnapshotBaseline({

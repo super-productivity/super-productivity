@@ -18,7 +18,7 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
  *
  * IMPORTANT: TODAY_TAG is a "virtual tag" - membership is determined by task.dueDay,
  * NOT by task.tagIds. TODAY_TAG.taskIds only stores ordering.
- * See: docs/ai/today-tag-architecture.md
+ * See: ARCHITECTURE-DECISIONS.md Decision #2
  */
 describe('workContext selectors', () => {
   // Get today's date string for tests

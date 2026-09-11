@@ -55,9 +55,15 @@
 }
 
 <div class="form-ctrl-wrapper">
-  <mat-form-field class="time-form-field">
+  <mat-form-field
+    class="time-form-field"
+    subscriptSizing="dynamic"
+  >
     <mat-label>{{ timeLabel() }}</mat-label>
     <mat-icon matPrefix>schedule</mat-icon>
+    <!-- 12h/24h here follows the browser/OS UI locale, not our dateTimeLocale
+         setting: browsers ignore `lang`, navigator.language and the ICU default
+         for native time inputs, so this cannot be forced from the page (#8565). -->
     <input
       type="time"
       spTimeStep
@@ -83,6 +89,7 @@
     <mat-form-field
       [@expandFade]
       class="reminder-form-field"
+      subscriptSizing="dynamic"
     >
       <mat-icon matPrefix>alarm</mat-icon>
       <mat-label>{{ reminderLabel() | translate }}</mat-label>

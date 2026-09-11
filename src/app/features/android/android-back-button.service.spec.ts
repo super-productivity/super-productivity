@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
@@ -15,6 +16,8 @@ import { AppFeaturesConfig } from '../config/global-config.model';
 import { getStartPageUrlPath } from '../config/default-start-page.util';
 import { hideFocusOverlay } from '../focus-mode/store/focus-mode.actions';
 import { LayoutService } from '../../core-ui/layout/layout.service';
+import { TaskFocusService } from '../tasks/task-focus.service';
+import { TaskMultiSelectService } from '../tasks/task-multi-select.service';
 
 const TODAY_URL = `/tag/${TODAY_TAG.id}/tasks`;
 
@@ -22,6 +25,10 @@ const project = (over: Partial<Project>): Project =>
   ({ id: 'p1', isArchived: false, isHiddenFromMenu: false, ...over }) as Project;
 
 describe('AndroidBackButtonService (#7972)', () => {
+  const multiSelect = {
+    isSelecting: signal(false),
+    clear: jasmine.createSpy('clear'),
+  };
   let service: AndroidBackButtonService;
   let store: MockStore;
   let routerUrl: string;
@@ -36,6 +43,8 @@ describe('AndroidBackButtonService (#7972)', () => {
   let isShowIssuePanel: jasmine.Spy<() => boolean>;
   let hideAddTaskBar: jasmine.Spy;
   let hideAddTaskPanel: jasmine.Spy;
+  let isTaskContextMenuOpen: ReturnType<typeof signal<boolean>>;
+  let closeActiveTaskContextMenu: ReturnType<typeof signal<(() => void) | null>>;
 
   const setProjects = (projects: Project[]): void => {
     store.overrideSelector(selectAllProjects, projects);
@@ -65,6 +74,8 @@ describe('AndroidBackButtonService (#7972)', () => {
     isShowIssuePanel = jasmine.createSpy('isShowIssuePanel').and.returnValue(false);
     hideAddTaskBar = jasmine.createSpy('hideAddTaskBar');
     hideAddTaskPanel = jasmine.createSpy('hideAddTaskPanel');
+    isTaskContextMenuOpen = signal(false);
+    closeActiveTaskContextMenu = signal<(() => void) | null>(null);
 
     TestBed.configureTestingModule({
       providers: [
@@ -103,6 +114,17 @@ describe('AndroidBackButtonService (#7972)', () => {
             hideAddTaskPanel,
           },
         },
+        {
+          provide: TaskMultiSelectService,
+          useValue: multiSelect,
+        },
+        {
+          provide: TaskFocusService,
+          useValue: {
+            isTaskContextMenuOpen,
+            closeActiveTaskContextMenu,
+          },
+        },
       ],
     });
 
@@ -131,7 +153,44 @@ describe('AndroidBackButtonService (#7972)', () => {
     ).and.returnValue(false);
   });
 
+  describe('multi-selection', () => {
+    afterEach(() => {
+      multiSelect.isSelecting.set(false);
+      multiSelect.clear.calls.reset();
+    });
+
+    it('clears an active multi-selection instead of navigating', () => {
+      multiSelect.isSelecting.set(true);
+      service.handleBackButton();
+      expect(multiSelect.clear).toHaveBeenCalled();
+      expect(historyBack).not.toHaveBeenCalled();
+      expect(minimizeApp).not.toHaveBeenCalled();
+    });
+
+    it('closes an open dialog first and keeps the selection', () => {
+      multiSelect.isSelecting.set(true);
+      const dialogRef = { disableClose: false, close: jasmine.createSpy('close') };
+      openDialogs.push(dialogRef as never);
+      service.handleBackButton();
+      expect(dialogRef.close).toHaveBeenCalled();
+      expect(multiSelect.clear).not.toHaveBeenCalled();
+    });
+  });
+
   describe('overlays', () => {
+    it('closes an open task context menu before exiting from the start page', () => {
+      const closeTaskContextMenu = jasmine.createSpy('closeTaskContextMenu');
+      isTaskContextMenuOpen.set(true);
+      closeActiveTaskContextMenu.set(closeTaskContextMenu);
+
+      service.handleBackButton();
+
+      expect(closeTaskContextMenu).toHaveBeenCalled();
+      expect(historyBack).not.toHaveBeenCalled();
+      expect(minimizeApp).not.toHaveBeenCalled();
+      expect(navigateByUrl).not.toHaveBeenCalled();
+    });
+
     it('closes a history-state overlay via window.history.back()', () => {
       (
         service as unknown as { _isHistoryOverlayOpen: jasmine.Spy }

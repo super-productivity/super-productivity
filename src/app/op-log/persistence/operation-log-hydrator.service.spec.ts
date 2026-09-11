@@ -16,7 +16,9 @@ import { VectorClockService } from '../sync/vector-clock.service';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import { OperationLogSnapshotService } from './operation-log-snapshot.service';
+import { OperationLogCompactionService } from './operation-log-compaction.service';
 import { OperationLogRecoveryService } from './operation-log-recovery.service';
+import { TabSeqFrontierService } from './tab-seq-frontier.service';
 import { SyncHydrationService } from './sync-hydration.service';
 import {
   ActionType,
@@ -29,6 +31,8 @@ import { bulkApplyHydrationOperations } from '../apply/bulk-hydration.action';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
+import { environment } from '../../../environments/environment';
+import { getAppVersionStr } from '../../util/get-app-version-str';
 import { IDB_OPEN_ERROR_RELOAD_KEY } from './operation-log-hydrator.service';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { OperationLogEffects } from '../capture/operation-log.effects';
@@ -52,6 +56,7 @@ describe('OperationLogHydratorService', () => {
   let mockOperationLogEffects: jasmine.SpyObj<OperationLogEffects>;
   let mockHydrationStateService: jasmine.SpyObj<HydrationStateService>;
   let mockSnapshotService: jasmine.SpyObj<OperationLogSnapshotService>;
+  let mockCompactionService: jasmine.SpyObj<OperationLogCompactionService>;
   let mockRecoveryService: jasmine.SpyObj<OperationLogRecoveryService>;
   let mockSyncHydrationService: jasmine.SpyObj<SyncHydrationService>;
   let mockClientIdProvider: jasmine.SpyObj<ClientIdProvider>;
@@ -155,11 +160,16 @@ describe('OperationLogHydratorService', () => {
       'startApplyingRemoteOps',
       'endApplyingRemoteOps',
       'setHydrationFallbackActive',
+      'setHydrationInProgress',
     ]);
     mockSnapshotService = jasmine.createSpyObj('OperationLogSnapshotService', [
       'isValidSnapshot',
       'migrateSnapshotWithBackup',
       'saveCurrentStateAsSnapshot',
+    ]);
+    mockCompactionService = jasmine.createSpyObj('OperationLogCompactionService', [
+      'compact',
+      'compactIfBloated',
     ]);
     mockRecoveryService = jasmine.createSpyObj('OperationLogRecoveryService', [
       'recoverPendingRemoteOps',
@@ -216,6 +226,8 @@ describe('OperationLogHydratorService', () => {
     // branches on this return value, so a mock resolving undefined would model a
     // guard-skipped save and silently change which branch the tests exercise.
     mockSnapshotService.saveCurrentStateAsSnapshot.and.resolveTo(true);
+    mockCompactionService.compact.and.resolveTo(true);
+    mockCompactionService.compactIfBloated.and.resolveTo(undefined);
     mockRecoveryService.recoverPendingRemoteOps.and.resolveTo([]);
     mockRecoveryService.cleanupCorruptOps.and.returnValue(Promise.resolve());
     mockRecoveryService.attemptRecovery.and.returnValue(Promise.resolve());
@@ -237,6 +249,7 @@ describe('OperationLogHydratorService', () => {
         { provide: OperationLogEffects, useValue: mockOperationLogEffects },
         { provide: HydrationStateService, useValue: mockHydrationStateService },
         { provide: OperationLogSnapshotService, useValue: mockSnapshotService },
+        { provide: OperationLogCompactionService, useValue: mockCompactionService },
         { provide: OperationLogRecoveryService, useValue: mockRecoveryService },
         { provide: SyncHydrationService, useValue: mockSyncHydrationService },
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
@@ -368,6 +381,54 @@ describe('OperationLogHydratorService', () => {
         await service.hydrateStore();
 
         expect(mockOpLogStore.setVectorClock).toHaveBeenCalledWith(exactClock);
+      });
+    });
+
+    describe('tab applied-seq frontier establishment (#9438)', () => {
+      // The snapshot/compaction guard only arms once hydration establishes
+      // the frontier — these tests protect that wiring.
+      it('establishes the frontier at the snapshot anchor when there are no tail ops', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+
+        await service.hydrateStore();
+
+        const frontier = TestBed.inject(TabSeqFrontierService);
+        expect(frontier.isSaveSafeAt(5)).toBe(true);
+        expect(frontier.isSaveSafeAt(6)).toBe(false);
+      });
+
+      it('establishes the frontier at the last replayed tail seq', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([
+          createMockEntry(6, createMockOperation('op-6')),
+          createMockEntry(7, createMockOperation('op-7')),
+        ]);
+
+        await service.hydrateStore();
+
+        const frontier = TestBed.inject(TabSeqFrontierService);
+        expect(frontier.isSaveSafeAt(7)).toBe(true);
+        expect(frontier.isSaveSafeAt(8)).toBe(false);
+      });
+
+      it('covers reducer-rejected tail entries with the frontier (replay skips them by design)', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const rejectedEntry: OperationLogEntry = {
+          ...createMockEntry(6, createMockOperation('op-reducer-rejected')),
+          rejectedAt: Date.now(),
+          reducerRejectedAt: Date.now(),
+        };
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([rejectedEntry]);
+
+        await service.hydrateStore();
+
+        const frontier = TestBed.inject(TabSeqFrontierService);
+        expect(frontier.isSaveSafeAt(6)).toBe(true);
+        expect(frontier.isSaveSafeAt(5)).toBe(false);
       });
     });
 
@@ -511,6 +572,35 @@ describe('OperationLogHydratorService', () => {
         // Hydration state is managed around the dispatch
         expect(mockHydrationStateService.startApplyingRemoteOps).toHaveBeenCalled();
         expect(mockHydrationStateService.endApplyingRemoteOps).toHaveBeenCalled();
+      });
+
+      // #9084: the flag must bracket the whole run — from before the snapshot
+      // dispatch until after the tail replay — so the compaction guard covers
+      // the gap between them, not just the bulk-dispatch call itself.
+      it('should hold hydration-in-progress across the full run, from before the snapshot dispatch until after the tail replay (#9084)', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        const tailOps = [createMockEntry(6, createMockOperation('op-6'))];
+        mockOpLogStore.loadStateCache.and.resolveTo(snapshot);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo(tailOps);
+
+        const callOrder: string[] = [];
+        mockHydrationStateService.setHydrationInProgress.and.callFake(((
+          isInProgress: boolean,
+        ) => {
+          callOrder.push(isInProgress ? 'in-progress:true' : 'in-progress:false');
+        }) as never);
+        mockStore.dispatch.and.callFake(((action: { type: string }) => {
+          callOrder.push(`dispatch:${action.type}`);
+        }) as never);
+
+        await service.hydrateStore();
+
+        expect(callOrder).toEqual([
+          'in-progress:true',
+          `dispatch:${loadAllData.type}`,
+          `dispatch:${bulkApplyHydrationOperations.type}`,
+          'in-progress:false',
+        ]);
       });
 
       it('should replay a tail op with a malformed stored schemaVersion verbatim instead of failing into recovery', async () => {
@@ -2102,34 +2192,6 @@ describe('OperationLogHydratorService', () => {
     });
   });
 
-  describe('hydrateFromRemoteSync', () => {
-    it('should delegate to syncHydrationService', async () => {
-      await service.hydrateFromRemoteSync();
-
-      expect(mockSyncHydrationService.hydrateFromRemoteSync).toHaveBeenCalled();
-    });
-
-    it('should pass downloadedMainModelData to syncHydrationService', async () => {
-      const downloadedData = { task: { entities: {}, ids: [] } };
-
-      await service.hydrateFromRemoteSync(downloadedData);
-
-      expect(mockSyncHydrationService.hydrateFromRemoteSync).toHaveBeenCalledWith(
-        downloadedData,
-        undefined,
-      );
-    });
-
-    it('should pass undefined when no downloadedMainModelData provided', async () => {
-      await service.hydrateFromRemoteSync();
-
-      expect(mockSyncHydrationService.hydrateFromRemoteSync).toHaveBeenCalledWith(
-        undefined,
-        undefined,
-      );
-    });
-  });
-
   // ===========================================================================
   // retryFailedRemoteOps: Retry failed remote operations
   // ===========================================================================
@@ -2326,12 +2388,135 @@ describe('OperationLogHydratorService', () => {
       expect(reloadSpy).not.toHaveBeenCalled();
     });
 
+    // #9187: DB_VERSION 8-10 and later schema upgrades form downgrade barriers, so a
+    // VersionError means an old build is looking at an intact database. The
+    // generic dialog's "your browser storage may need to be cleared" would
+    // destroy that data and still not let this build open it.
+    describe('downgrade barrier (VersionError)', () => {
+      const arrangeVersionError = (): void => {
+        mockRecoveryService.recoverPendingRemoteOps.and.rejectWith(
+          new IndexedDBOpenError(
+            new DOMException(
+              'The requested version (7) is less than the existing version (10).',
+              'VersionError',
+            ),
+          ),
+        );
+      };
+
+      const shownMessage = (): string =>
+        (window.alert as jasmine.Spy).calls.mostRecent().args[0] as string;
+
+      it('never tells the user to clear storage or blames corruption', async () => {
+        arrangeVersionError();
+
+        await expectAsync(service.hydrateStore()).toBeRejected();
+
+        expect(window.alert).toHaveBeenCalledTimes(1);
+        const msg = shownMessage();
+        expect(msg).not.toContain('storage may need to be cleared');
+        expect(msg).not.toContain('Storage corruption');
+        expect(msg).not.toContain('Low disk space');
+        expect(msg).toContain('Do NOT clear your storage');
+      });
+
+      it('names the running version and keeps the technical detail', async () => {
+        arrangeVersionError();
+
+        await expectAsync(service.hydrateStore()).toBeRejected();
+
+        const msg = shownMessage();
+        // The channel-suffixed string, not the bare version: the suffix is what
+        // distinguishes two installed copies from each other (#9187).
+        expect(msg).toContain(getAppVersionStr());
+        expect(getAppVersionStr()).not.toBe(environment.version);
+        expect(msg).toContain('newer version');
+        // The raw browser text still reaches bug reports.
+        expect(msg).toContain('The requested version (7) is less than');
+      });
+
+      // No auto-reload assertion here: a VersionError is not a backing-store
+      // error, so the existing non-backing-store test above already covers it.
+      // Asserting it again passes with this branch deleted — a vacuous test.
+    });
+
     it('should clear the reload key after successful hydration', async () => {
       sessionStorage.setItem(IDB_OPEN_ERROR_RELOAD_KEY, '1');
       // Successful hydration — no errors thrown
       await service.hydrateStore();
 
       expect(sessionStorage.getItem(IDB_OPEN_ERROR_RELOAD_KEY)).toBeNull();
+    });
+  });
+
+  describe('startup compaction (op-log bloat safety net, #8336)', () => {
+    // Drive hydration down a path that reaches the post-hydration bloat check:
+    // a valid snapshot with no tail ops to replay. The threshold/failure
+    // behavior of the check itself is covered in the compaction service spec.
+    beforeEach(() => {
+      mockOpLogStore.loadStateCache.and.returnValue(
+        Promise.resolve(createMockSnapshot()),
+      );
+      mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve([]));
+    });
+
+    it('runs the bloat check after a successful hydration', async () => {
+      await service.hydrateStore();
+
+      expect(mockCompactionService.compactIfBloated).toHaveBeenCalledTimes(1);
+    });
+
+    it('starts the bloat check only after the hydration-in-progress flag is cleared (#9084)', async () => {
+      // The call site must stay after hydrateStore()'s finally — inside the
+      // try the #9084 guard would skip every startup compaction.
+      const callOrder: string[] = [];
+      mockHydrationStateService.setHydrationInProgress.and.callFake(((
+        isInProgress: boolean,
+      ) => {
+        callOrder.push(`flag:${isInProgress}`);
+      }) as never);
+      mockCompactionService.compactIfBloated.and.callFake((() => {
+        callOrder.push('bloat-check');
+        return Promise.resolve(undefined);
+      }) as never);
+
+      await service.hydrateStore();
+
+      const flagDownIdx = callOrder.indexOf('flag:false');
+      const checkIdx = callOrder.indexOf('bloat-check');
+      expect(flagDownIdx).toBeGreaterThanOrEqual(0);
+      expect(checkIdx).toBeGreaterThan(flagDownIdx);
+    });
+
+    it('skips the bloat check when hydration failed into recovery', async () => {
+      mockOpLogStore.loadStateCache.and.rejectWith(new Error('cache read failed'));
+
+      await service.hydrateStore();
+
+      expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
+      expect(mockCompactionService.compactIfBloated).not.toHaveBeenCalled();
+    });
+
+    it('does not block hydration on the bloat check (fire-and-forget)', async () => {
+      // hydrateStore() gates app boot; if the call site regresses to awaiting
+      // the check, this spec hangs into the jasmine timeout and fails.
+      let releaseCheck!: () => void;
+      mockCompactionService.compactIfBloated.and.returnValue(
+        new Promise<void>((resolve) => (releaseCheck = resolve)),
+      );
+
+      await service.hydrateStore();
+
+      expect(mockCompactionService.compactIfBloated).toHaveBeenCalledTimes(1);
+      releaseCheck();
+    });
+
+    it('still resolves hydration when the bloat check rejects (belt for the never-rejects contract)', async () => {
+      mockCompactionService.compactIfBloated.and.rejectWith(
+        new Error('bloat check broke its contract'),
+      );
+
+      await expectAsync(service.hydrateStore()).toBeResolved();
     });
   });
 });

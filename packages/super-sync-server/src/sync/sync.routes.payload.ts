@@ -7,8 +7,10 @@ import {
 import { Transform, type TransformCallback } from 'node:stream';
 import { z } from 'zod';
 import { SUPER_SYNC_MAX_OPS_PER_UPLOAD } from '@sp/shared-schema';
+import { isEncryptedPayloadTransportShape } from '@sp/sync-core';
 import { Logger } from '../logger';
 import { type CompressedJsonBodyParseResult } from './compressed-body-parser';
+import { SYNC_ERROR_CODES } from './sync.types';
 
 type ZodIssue = z.ZodError['issues'][number];
 
@@ -20,6 +22,55 @@ type ZodIssue = z.ZodError['issues'][number];
 export const ENCRYPTED_OPS_CLIENT_MESSAGE =
   'Server-side snapshot is unavailable because operations are end-to-end encrypted. ' +
   'Use the client app\'s "Sync Now" button to decrypt and restore locally.';
+
+/**
+ * Static client-facing message for the encrypted-only ingress gate.
+ * Never include the submitted payload value in the message, logs, or
+ * response — the rejected value may be user plaintext.
+ */
+export const E2EE_REQUIRED_CLIENT_MESSAGE =
+  'This server only accepts end-to-end encrypted payloads. ' +
+  'Update the app, enable sync encryption, then retry.';
+
+interface E2eeGateItem {
+  isPayloadEncrypted?: boolean;
+  payload: unknown;
+}
+
+/**
+ * Encrypted-only ingress gate check for one uploaded payload: the encryption
+ * flag must be explicitly true (missing is a violation, not "false-ish OK")
+ * and the payload must have the ciphertext transport shape. Shape check only —
+ * a lying flag over base64-encoded plaintext is out of scope by design (see
+ * docs/e2ee-legacy-data-eradication-plan.md).
+ */
+export const violatesE2eeGate = (item: E2eeGateItem): boolean =>
+  item.isPayloadEncrypted !== true || !isEncryptedPayloadTransportShape(item.payload);
+
+/**
+ * Rejects an upload at the encrypted-only ingress gate. Callers must invoke
+ * this BEFORE request fingerprinting, deduplication, quota work, snapshot
+ * preparation, or persistence so a rejected upload leaves no server-side
+ * trace. Logs counts only, never payload content.
+ */
+export const sendE2eeRequiredReply = (
+  reply: FastifyReply,
+  userId: number,
+  context: { clientId: string; surface: 'ops' | 'snapshot'; opsCount: number },
+): FastifyReply => {
+  Logger.audit({
+    event: 'E2EE_REQUIRED',
+    userId,
+    clientId: context.clientId,
+    errorCode: SYNC_ERROR_CODES.E2EE_REQUIRED,
+    surface: context.surface,
+    opsCount: context.opsCount,
+  });
+  return reply.status(400).send({
+    error: E2EE_REQUIRED_CLIENT_MESSAGE,
+    errorCode: SYNC_ERROR_CODES.E2EE_REQUIRED,
+  });
+};
 
 /**
  * Helper to create validation error response.
@@ -51,7 +102,7 @@ export const MAX_COMPRESSED_SIZE_SNAPSHOT = 30 * 1024 * 1024; // 30MB for /snaps
 export const MAX_DECOMPRESSED_SIZE_OPS = 30 * 1024 * 1024; // 30MB for /ops
 export const MAX_DECOMPRESSED_SIZE_SNAPSHOT = 60 * 1024 * 1024; // 60MB for /snapshot
 // Route-level guard that mirrors the shared contract but runs before Zod's
-// per-op validation and before SyncService can build large prefetch queries.
+// per-op validation and before SyncService can build large conflict-lookup queries.
 export const MAX_OPS_PER_BATCH = SUPER_SYNC_MAX_OPS_PER_UPLOAD;
 
 // Fastify's route bodyLimit runs before our parser can decode Android's

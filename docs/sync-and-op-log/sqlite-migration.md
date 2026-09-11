@@ -1,202 +1,171 @@
-# SQLite Migration Plan — Op-Log Persistence
+# Native SQLite Op-Log Migration
 
-> Status: **Phase A complete; Phase B in progress.** Tracks the data-loss
-> class behind issue #7892 (Android WebView storage evicted → total data loss
-> with no sync configured).
->
-> **Progress:**
->
-> - ✅ `OpLogDbAdapter` / `OpLogTx` port + declarative schema descriptor.
-> - ✅ `IndexedDbOpLogAdapter` (faithful `idb` backend) + 30 specs.
-> - ✅ `adoptConnection()` seam: the adapter shares the owning service's single
->   connection, so each service migrates method-by-method with one connection
->   and no spec breakage.
-> - ✅ **`OperationLogStoreService` fully migrated** — every method routes
->   through the adapter, including the two flagship atomic flows
->   (`appendWithVectorClockOverwrite`, `runDestructiveStateReplacement`). No direct
->   `this.db` calls remain.
-> - ✅ **`ArchiveStoreService` fully migrated** (own adopted connection +
->   `_withRetryOnClose` re-adopt path).
-> - ✅ **Phase B step 1 — DI:** both services inject `OP_LOG_DB_ADAPTER_FACTORY`
->   (a factory token; each service gets its own adapter). `adoptConnection` is
->   now an optional, IDB-only bridge method on the interface.
-> - ✅ **Phase B step 2 — `SqliteOpLogAdapter` (fully implemented):**
->   dependency-free schema→table planning + DDL (`planTables`/`buildDdl`),
->   value→column extraction, all query/index/range/count methods, cursor
->   `iterate` (incl. keyed + delete), and `BEGIN/COMMIT/ROLLBACK` transactions
->   with rollback-on-throw and SQLite→`DOMException` error mapping
->   (UNIQUE→ConstraintError, disk-full→QuotaExceededError). Talks only to a
->   minimal `SqliteDb` port, so no native dependency. 23 specs validate the
->   translation layer + transaction semantics against an in-memory SQLite
->   stand-in.
-> - ✅ **Phase B step 3 — real-engine validation (CI):** `sql.js` served into
->   Karma drives the adapter's behavioral contract (`sqlite-op-log-adapter.spec.ts`)
->   and a store-level pass (`remote-apply-store-port.integration.spec.ts`) against
->   actual SQLite. Confirms the `UNIQUE`→`ConstraintError` mapping,
->   `AUTOINCREMENT`-after-`clear()`, compound-index/NULL ranges, real
->   `BEGIN IMMEDIATE` rollback. No surprises.
-> - ✅ **Phase C step (algorithm) — backend migration:** `migrateOpLogBackend`
->   (`op-log-backend-migration.ts`) copies the whole DB source→dest with
->   verify-before-commit; tested real-IDB → sql.js. Not yet wired into startup.
-> - ⏳ Remaining (device-gated): add `@capacitor-community/sqlite` + a thin
->   `SqliteDb` wrapper over its `SQLiteDBConnection` (with the bridge-perf
->   mitigations — see followup B1), override `OP_LOG_DB_ADAPTER_FACTORY` for
->   native behind a flag, fix the store `init()` to call `adapter.init()` / skip
->   the IDB open on SQLite (see followup B3), wire the C1 migration trigger, and
->   run on-device. The other small IDB consumers (theme, credential, oauth,
->   client-id) are out of the data-loss scope (Phase D).
->
-> **Open decisions (need on-device validation):**
->
-> - Adding `@capacitor-community/sqlite` is a native dependency that can't be
->   validated in CI (its web build is WASM-on-IndexedDB, not the native path;
->   sql.js's universal build statically imports `node:` modules webpack can't
->   bundle for Karma). Defer the plugin + on-device run to a device-capable
->   environment.
-> - Consider shipping the cheap #7892 safeguards independently and sooner:
->   diagnostic logging of `navigator.storage.persist()` result on native, and a
->   periodic Capacitor Filesystem auto-backup (a second copy outside the
->   evictable WebView store).
-> - Gate after each group: 170 store unit + 3 archive unit + 367 op-log
->   integration specs green.
+**Status (July 2026):** Foundation implemented and tested in CI; native rollout
+not wired. IndexedDB remains the live op-log backend on every platform.
 
-> **Follow-up backlog:** the actionable, ordered list of what remains (the
-> near-term #7892 safeguards, the native SQLite wiring, and data migration)
-> lives in [`sqlite-migration-followup.md`](./sqlite-migration-followup.md).
+This document is the single status, rationale, and rollout contract for the
+native SQLite work associated with #7892 and #7931.
 
-## 0. Goal & non-goal
+## Goal and scope
 
-**Goal:** On **native (Capacitor iOS/Android)**, move the op-log persistence off
-WebView IndexedDB into app-private SQLite, so task data no longer lives in the
-OS-evictable WebView sandbox.
+On Capacitor Android, critical op-log state currently lives in WebView
+IndexedDB (`SUP_OPS`), which can be lost if WebView storage is evicted. The goal
+is to move that database to app-private SQLite on native iOS/Android while
+preserving the operation log's atomicity and recovery behavior.
 
-**Non-goal:** Replacing IndexedDB on web/PWA/Electron. Those either have no
-native SQLite or an already-adequate persistence model (Electron). Note that
-`@capacitor-community/sqlite`'s **web** build falls back to WASM SQLite
-persisted _into IndexedDB_ — which reintroduces the exact eviction risk. So this
-is a **native-only backend swap behind a shared abstraction**, not a global
-rewrite.
+This is not a global storage rewrite:
 
-## 1. Why (root cause)
+- web/PWA remain on IndexedDB;
+- Electron keeps its current persistence and rotated backups;
+- theme, credential, OAuth, and other small IndexedDB databases are outside the
+  #7892 critical-data scope; and
+- no native backend may become the default until migration and rollback are
+  proven on real devices.
 
-On Capacitor Android the app is a WebView. All op-log data lives in the
-WebView's IndexedDB (`SUP_OPS` database), which is subject to OS eviction under
-storage pressure and to being cleared as "cache" by the system or cleaner apps.
-`navigator.storage.persist()` (`startup.service.ts`) is the only mitigation
-today, and on Android WebView it is unlikely to be honored — and the
-"persistence not allowed" warning is deliberately suppressed on native. Moving
-the data into app-private SQLite (`/data/data/<pkg>/databases/`) makes it
-non-evictable; only a full _Clear storage_ or uninstall removes it.
+The mobile local-backup safeguards from #7924/#7925 are already active. They
+reduce the blast radius but do not replace durable app-private storage.
 
-## 2. Today's constraints (from the code)
+## Current implementation
 
-- **No storage-adapter seam exists.** 8 non-test files import `idb` directly.
-  `operation-log-store.service.ts` is ~1,750 lines implementing
-  `RemoteOperationApplyStorePort` + ~40 more public methods over ~84
-  transaction/index/cursor calls.
-- **Prior art:** the legacy `pfapi` layer injected an `IndexedDbAdapter` behind a
-  `DBAdapter` interface (`src/app/pfapi/api/pfapi.js`). Same _pattern_, revived
-  for the op-log system.
-- **Critical DB is `SUP_OPS`** (9 stores). Other IDB databases (`SUPThemes`,
-  `sup-sync`, `sup-plugin-oauth`, legacy `pf`) are cosmetic / re-acquirable /
-  read-only-migration and are out of scope for the data-loss fix.
-- **Atomicity is the hard part**, not CRUD. Two methods need single-transaction
-  multi-store writes that MUST stay atomic:
-  - `appendWithVectorClockOverwrite()` — OPS + VECTOR_CLOCK in one tx.
-  - `runDestructiveStateReplacement()` — OPS + STATE*CACHE + VECTOR_CLOCK +
-    CLIENT_ID (+ ARCHIVE*\*) in one tx (crash-safety, issues #7709, #7732).
-    Plus: auto-increment `seq` keypath, a **unique** `byId` index, and a compound
-    `[source, applicationStatus]` index.
-- **38 integration specs** in `op-log/testing/integration/` exercise this store;
-  several are IDB-specific (`indexeddb-error-recovery`, `clean-slate-interrupt`,
-  `multi-entity-atomicity`, `race-conditions`). These are the regression gate.
+### Landed, inactive foundation
 
-## 3. Strategy: adapter seam first, SQLite second
+- `OpLogDbAdapter` / `OpLogTx` define the backend-neutral persistence and
+  transaction contract; `OP_LOG_DB_SCHEMA` describes the stores and indexes.
+- `IndexedDbOpLogAdapter` is the production backend. Both
+  `OperationLogStoreService` and `ArchiveStoreService` obtain adapters through
+  `OP_LOG_DB_ADAPTER_FACTORY`.
+- Store initialization supports both connection-adopting IndexedDB adapters and
+  self-managing adapters: the latter call `adapter.init()` and do not open the
+  WebView database.
+- `SqliteOpLogAdapter` implements the port against a minimal `SqliteDb`
+  interface. It is covered by the in-memory translation tests, a real `sql.js`
+  contract pass, and a store-level integration pass.
+- Separate adapters that share one physical `SqliteDb` also share a FIFO queue
+  keyed by that connection, preventing overlapping `BEGIN` statements and
+  statements leaking into another transaction (#8746). The store-level race —
+  op-log appends against lock-free archive flushes over one connection — is
+  covered on both backends by
+  `src/app/op-log/testing/integration/sqlite-shared-connection.integration.spec.ts`.
+- Index reads exclude rows whose index column is NULL (a local op in
+  `bySyncedAt` / `bySourceAndStatus`), matching IndexedDB, which does not index
+  a record lacking the keyPath value (#8312).
+- Ranges are scalar-only; a compound index is queried by an exact key tuple
+  (`DbIndexQuery`). A genuine compound range has no meaning both backends
+  agree on, so the port cannot express one.
+- `DbIterateOptions.limit` pushes "first / latest row" scans down to `LIMIT ?`
+  so `getLastSeq()` never transfers the whole ops table (#8313).
+- `migrateOpLogBackend()` copies all op-log stores into an empty destination
+  transaction and verifies operation count, last sequence, and vector clock
+  before commit. It is validated in CI for real IndexedDB to `sql.js`.
+- `local-rules/no-adapter-in-tx` enforces the SQLite re-entrancy rule: code in a
+  transaction callback must use its `tx` handle, not enqueue another adapter
+  call behind its own transaction.
 
-### Phase A — Extract the persistence port (no behavior change) ⭐ highest risk/effort
+### Not wired
 
-Define `OpLogDbAdapter` (+ `OpLogTx`) expressed so neither IDB nor SQL leaks
-through — shaped around the operations the store needs, with a **callback-based
-`transaction()`** as the atomicity linchpin (IDB auto-commit and SQLite
-`BEGIN/COMMIT` both map onto "run fn, commit on resolve, roll back on throw").
+- The project does not include a native SQLite plugin or a native `SqliteDb`
+  wrapper.
+- `OP_LOG_DB_ADAPTER_FACTORY` still returns `IndexedDbOpLogAdapter` everywhere.
+- `migrateOpLogBackend()` has no startup trigger or completion marker.
+- No platform has a SQLite feature flag or fallback selection.
+- `SqliteOpLogAdapter` still falls back to sequence `0` if `SqliteDb.run()`
+  omits `lastId`; native rollout must replace that invalid fallback with a
+  positive-integer assertion.
+- The Capacitor bridge, native SQLite build, lifecycle behavior, and bulk-write
+  performance have not been validated on a device.
 
-1. Define `OpLogDbAdapter` / `OpLogTx` interfaces + a declarative `StoreSchema`
-   descriptor (replacing `runDbUpgrade`'s imperative
-   `createObjectStore`/`createIndex`).
-2. Implement `IndexedDbOpLogAdapter` over `idb` — faithful wrapper of today's
-   behavior incl. open-retry, `versionchange`/`close` listeners, and
-   `ConstraintError`→duplicate / `QuotaExceededError` mappings.
-3. Refactor `operation-log-store.service.ts` + `archive-store.service.ts` onto
-   the injected adapter. **No behavior change.**
-4. Keep all 38 integration specs green against the IDB adapter — the gate.
+Nothing in the landed SQLite foundation changes runtime storage behavior for
+current users.
 
-> Ship Phase A on its own. Pure refactor, independently valuable, nothing
-> user-visible changes.
+## Storage contract that must not change
 
-### Phase B — SQLite backend (native only)
+The SQLite backend must preserve the same observable guarantees as IndexedDB:
 
-1. Add `@capacitor-community/sqlite` + iOS/Android native config.
-2. Implement `SqliteOpLogAdapter implements OpLogDbAdapter`:
-   - One table per store. Ops table: `seq INTEGER PRIMARY KEY AUTOINCREMENT`,
-     `op_id TEXT UNIQUE` (→ `byId`), index on `synced_at` and
-     `(source, application_status)`. Singleton stores → single-row tables keyed
-     by `SINGLETON_KEY`.
-   - Store the encoded `CompactOperation` as a JSON/TEXT `payload` column — no
-     need to query inside ops, so `encode/decodeOperation` is unchanged.
-   - `transaction()` → `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK` (real ACID,
-     stronger than IDB's auto-commit-on-microtask-gap).
-   - Map SQLite errors → the same `StorageQuotaExceededError` / duplicate-op
-     errors the rest of the system expects.
-3. **DI wiring:** bind `OpLogDbAdapter` to `SqliteOpLogAdapter` when
-   `platformService.isNative`, else `IndexedDbOpLogAdapter`. One token, one
-   factory; the store doesn't know which backend it has.
+1. `ops.seq` is a positive, monotonically allocated primary key and `op.id` is
+   unique.
+2. `appendWithVectorClockOverwrite()` writes the operation and vector clock
+   atomically.
+3. Destructive state replacement writes operations, state cache, vector clock,
+   client ID, and archive state atomically.
+4. A transaction commits only when its callback resolves and rolls back on any
+   thrown/rejected operation.
+5. Two adapter instances over the same physical SQLite connection serialize
+   against one another.
+6. A transaction callback uses only the supplied `OpLogTx`. Re-entering a
+   public adapter method would wait behind the transaction's own queue slot.
+7. SQLite errors retain the error semantics callers rely on, including
+   duplicate-operation and quota failures.
 
-### Phase C — One-time data migration (native, first launch after update)
+The native wrapper must return the inserted row ID from the same write. An
+absent, zero, non-integer, or separately queried ID must fail before it can
+become an operation sequence.
 
-1. Detect: SQLite empty/absent **and** legacy `SUP_OPS` IndexedDB present.
-2. Copy OPS, STATE*CACHE, VECTOR_CLOCK, CLIENT_ID, ARCHIVE*\* IDB→SQLite in one
-   SQLite transaction (reuse IDB adapter read side + SQLite adapter write side).
-3. Verify (count + last-seq + vector-clock match), set a migration-complete
-   marker, **keep the IDB copy untouched** ≥1 release as fallback.
-4. Slots into the existing `_initBackups()` / `loadStateCache()` startup flow,
-   mirroring the proven legacy `pf`→`SUP_OPS` migration pattern.
+## Migration safety contract
 
-### Phase D — Other databases (optional, deferred)
+The first native rollout must treat backend migration as a high-risk state
+replacement, not as a best-effort copy:
 
-`SUPThemes`, `sup-plugin-oauth`, `sup-sync` are cosmetic / re-acquirable;
-migrate only if fully evacuating WebView storage. They do not affect the #7892
-data-loss class.
+1. Gate the SQLite selection behind a native-only feature flag that defaults
+   off.
+2. Quiesce op capture and every writer that can mutate `SUP_OPS`.
+3. Run only when the SQLite destination is empty and the legacy IndexedDB
+   source exists.
+4. Copy every store while preserving primary keys, including gaps in operation
+   sequences.
+5. Verify at least operation count, last sequence, and vector clock before the
+   destination transaction commits. Any mismatch rolls back.
+6. Write the completion marker only after the verified commit.
+7. Keep the IndexedDB source untouched for at least one released version and
+   provide an explicit fallback path.
+8. Never merge two non-empty backends.
 
-## 4. Sequencing & rollout
+`migrateOpLogBackend()` implements the copy and verify-before-commit core.
+Startup quiescence, detection, marker/fallback policy, and lifecycle handling
+remain caller responsibilities.
 
-1. **Phase A** → merge behind no flag (IDB still the only backend). Gate: all
-   unit + 38 integration specs green.
-2. **Phase B + C** → merge behind a native feature flag, default **off**.
-   Dogfood on real Android devices.
-3. Parameterize the integration harness to run a **second time against
-   `SqliteOpLogAdapter`** — catches auto-increment/unique-index/atomicity gaps.
-4. Staged enable on native; retain IDB fallback ≥1 release; then add cleanup.
+## Remaining rollout gates
 
-## 5. Risk register
+Complete these in order:
 
-| Risk                                                     | Severity | Mitigation                                                                                                    |
-| -------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
-| Refactor regresses sync correctness                      | High     | Phase A behavior-preserving; 38 specs gate; run suite against both adapters                                   |
-| Atomicity differs (IDB auto-commit vs SQL BEGIN/COMMIT)  | High     | Callback `transaction()`; SQLite stricter; dedicated `runDestructiveStateReplacement` interrupt specs (#7709) |
-| `@capacitor-community/sqlite` web fallback = WASM-on-IDB | Medium   | Native-only binding; never use SQLite backend on web/PWA                                                      |
-| Migration data loss/corruption                           | High     | Verify-before-mark; retain IDB copy ≥1 release; reuse `pf`→`SUP_OPS` pattern                                  |
-| Plugin/native build complexity                           | Medium   | Standard Capacitor plugin; CI for both platforms                                                              |
-| `seq` autoinc + `byId` unique parity                     | Medium   | Schema-level `AUTOINCREMENT` + `UNIQUE`; explicit parity specs                                                |
+1. Add the native SQLite dependency and a thin `SqliteDb` wrapper over one
+   app-private database connection.
+2. Validate insert IDs, transaction/error mapping, app pause/resume, abrupt
+   termination, and representative bulk writes on Android and iOS.
+3. Provide the two persistence services separate adapters over the same
+   physical connection, after dual-running the store-level integration specs
+   that compose multi-store transactions (`race-conditions`,
+   `clean-slate-interrupt`) against `SqliteOpLogAdapter`, as
+   `remote-apply-store-port` and `sqlite-shared-connection` already do.
+4. Add the native-only, default-off provider selection.
+5. Wire startup detection, quiescence, `migrateOpLogBackend()`, the completion
+   marker, retained-source fallback, and interrupted-migration recovery.
+6. Dogfood with the flag, then use a staged native rollout. Remove the
+   IndexedDB fallback and transitional `adoptConnection` bridge only after the
+   retained-source window and rollback evidence are complete.
 
-## 6. Effort
+Do not expand the migration to non-critical IndexedDB databases as part of
+these gates.
 
-- **Phase A** is the bulk (multi-week; touches the most correctness-sensitive
-  subsystem). This cost exists regardless of SQLite.
-- **Phase B** is comparatively small once A exists — the "just another adapter"
-  part.
-- **Phase C** moderate, pattern-matched to existing code.
-- **Phase D** optional.
+## Executable owners and verification
 
-Because Phase A takes months of careful work, pair this with the cheap interim
-mitigations (diagnostic logging of `persist()` result on native; native
-filesystem auto-backup) so users are protected in the meantime.
+| Concern                                    | Owner                                                     |
+| ------------------------------------------ | --------------------------------------------------------- |
+| Persistence port and transaction rules     | `src/app/op-log/persistence/op-log-db-adapter.ts`         |
+| Backend DI default                         | `src/app/op-log/persistence/op-log-db-adapter.token.ts`   |
+| IndexedDB backend                          | `src/app/op-log/persistence/indexed-db-op-log-adapter.ts` |
+| SQLite backend and shared-connection queue | `src/app/op-log/persistence/sqlite-op-log-adapter.ts`     |
+| Backend migration core                     | `src/app/op-log/persistence/op-log-backend-migration.ts`  |
+| Schema                                     | `src/app/op-log/persistence/op-log-db-schema.ts`          |
+
+Focused CI checks:
+
+```bash
+npm run test:file src/app/op-log/persistence/sqlite-op-log-adapter.spec.ts
+npm run test:file src/app/op-log/persistence/op-log-backend-migration.spec.ts
+npm run test:file src/app/op-log/testing/integration/remote-apply-store-port.integration.spec.ts
+npm run test:file src/app/op-log/testing/integration/sqlite-shared-connection.integration.spec.ts
+```
+
+CI proves adapter and SQLite-engine semantics, not the Capacitor bridge or
+device lifecycle. The rollout remains blocked until the on-device gates above
+are reproducible.

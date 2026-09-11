@@ -57,7 +57,6 @@ describe('PluginRunner', () => {
     mockI18nService = jasmine.createSpyObj('PluginI18nService', [
       'translate',
       'getCurrentLanguage',
-      'loadPluginTranslationsFromPath',
       'loadPluginTranslationsFromContent',
       'unloadPluginTranslations',
     ]);

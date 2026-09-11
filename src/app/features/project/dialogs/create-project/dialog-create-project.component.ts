@@ -34,7 +34,7 @@ import { WORK_CONTEXT_THEME_CONFIG_FORM_CONFIG } from '../../../work-context/wor
 import { GitlabCfg } from 'src/app/features/issue/providers/gitlab/gitlab.model';
 import { CaldavCfg } from 'src/app/features/issue/providers/caldav/caldav.model';
 import { OpenProjectCfg } from '../../../issue/providers/open-project/open-project.model';
-import { getRandomWorkContextColor } from '../../../work-context/work-context-color';
+import { getRandomWorkContextColor } from '../../../../ui/work-context-color';
 import { removeDebounceFromFormItems } from '../../../../util/remove-debounce-from-form-items';
 import { MatButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';

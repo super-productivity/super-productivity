@@ -8,6 +8,7 @@ export class TaskFocusService {
   readonly focusedTaskId = signal<string | null>(null);
   readonly lastFocusedTaskComponent = signal<TaskComponent | null>(null);
   readonly isTaskContextMenuOpen = signal(false);
+  readonly closeActiveTaskContextMenu = signal<(() => void) | null>(null);
 
   // Registry of all task components for efficient focus navigation
   private _taskComponentsRegistry = new Map<string, TaskComponent>();

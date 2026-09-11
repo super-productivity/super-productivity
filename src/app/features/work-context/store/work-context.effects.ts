@@ -14,6 +14,7 @@ import { TODAY_TAG } from '../../tag/tag.const';
 import { WorkContextType } from '../work-context.model';
 import { WorkContextService } from '../work-context.service';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Store } from '@ngrx/store';
 import { selectActiveContextTypeAndId } from './work-context.selectors';
 import { Log } from '../../../core/log';
@@ -65,6 +66,37 @@ export class WorkContextEffects {
       filter(
         ([, currentContext]) =>
           !currentContext || currentContext.activeId !== TODAY_TAG.id,
+      ),
+      map(() =>
+        setActiveWorkContext({
+          activeId: TODAY_TAG.id,
+          activeType: WorkContextType.TAG,
+        }),
+      ),
+    ),
+  );
+
+  /**
+   * Resets the active context when the project it points at is deleted locally.
+   *
+   * Nothing else does this: `validateContextAfterDataLoad$` below only covers
+   * `loadAllData` (sync/import), and the delete effects do config cleanup but
+   * never touch the context. Left as is, `activeWorkContextType` stays PROJECT
+   * with a dead id, so `TaskService.add()` stamps new tasks with a projectId
+   * that no longer exists and they end up in no list at all.
+   *
+   * The UI's "Delete project" navigates away before removing, so this is
+   * normally a no-op for it — except when `misc.defaultStartPage` points at the
+   * project being deleted, where its `navigateByUrl('/')` resolves right back
+   * to it and `WorkContextService` early-returns on the unchanged id.
+   */
+  resetContextOnDeletedProject$: Observable<unknown> = createEffect(() =>
+    this._actions$.pipe(
+      ofType(TaskSharedActions.deleteProject),
+      withLatestFrom(this._store$.select(selectActiveContextTypeAndId)),
+      filter(
+        ([{ projectId }, { activeType, activeId }]) =>
+          activeType === WorkContextType.PROJECT && activeId === projectId,
       ),
       map(() =>
         setActiveWorkContext({

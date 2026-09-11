@@ -4,6 +4,20 @@
 # ::1 first). Do NOT add a global `{ admin off }` block or rebind admin
 # without also updating the healthcheck, or Caddy will restart-loop.
 
+{
+    # Reverse-proxy failures are emitted by Caddy's runtime logger instead of
+    # the access logger configured below. Apply the same credential filter so
+    # an unavailable upstream cannot expose tokens through `docker logs`.
+    log default {
+        format filter {
+            # Preserve Caddy's non-TTY runtime log format for JSON-based ingestion.
+            wrap json
+            request>uri regexp "[?].*$" "?REDACTED"
+            request>headers>Referer delete
+        }
+    }
+}
+
 {$DOMAIN} {
     reverse_proxy supersync:1900 {
         # Allow up to 85 seconds for long-running operations
@@ -19,7 +33,9 @@
     header {
         X-Content-Type-Options nosniff
         X-Frame-Options DENY
-        Referrer-Policy strict-origin-when-cross-origin
+        # Login and recovery pages carry one-use credentials in their URL.
+        # Never forward those URLs as referrers to same-origin subrequests.
+        Referrer-Policy no-referrer
         -Server
     }
 
@@ -28,21 +44,22 @@
 
     # Logging
     #
-    # Redact the `token` query param from the logged URI. The WebSocket endpoint
+    # Replace the complete query suffix in logged URIs and drop Referer from
+    # access logs. The WebSocket endpoint
     # authenticates via `?token=<JWT>` (browsers can't set headers on a
     # WebSocket), and that JWT is valid for 365 days with no rotation — so
     # without this filter every WS upgrade writes a year-valid, full-sync
-    # credential to stdout / `docker logs`. `token` is only ever a query param
-    # carrying an auth secret (the WS JWT, plus the email-verification,
-    # passkey-recovery and magic-login links), never a benign field, so
-    # redacting it across this site block is targeted and safe. See #8343.
+    # credential to stdout / `docker logs`. Replacing the whole query also covers
+    # mixed-case or alternate secret names on malformed requests. Token-bearing
+    # pages can appear in Referer on same-origin subrequests if a client ignores
+    # the response policy, so that header is omitted defensively. See #8343.
     log {
         output stdout
         format filter {
             wrap console
-            request>uri query {
-                replace token REDACTED
-            }
+            request>uri regexp "[?].*$" "?REDACTED"
+            # Defense in depth for clients that send a token-bearing Referer.
+            request>headers>Referer delete
         }
     }
 }

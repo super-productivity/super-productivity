@@ -13,36 +13,17 @@
           matChipRemove
           >cancel
         </mat-icon>
-
-        @if (additionalActionIcon) {
-          <button
-            (click)="additionalAction.emit(modelItem.id)"
-            [class.isToggled]="isToggled(modelItem.id)"
-            [matTooltip]="
-              isToggled(modelItem.id)
-                ? additionalActionTooltipUnToggle()
-                : additionalActionTooltip()
-            "
-            class="additional"
-            mat-icon-button
-          >
-            <mat-icon style="transform: rotate(45deg)">{{
-              additionalActionIcon
-            }}</mat-icon>
-          </button>
-        }
       </mat-chip-row>
     }
     <input
       #inputElRef
       (matChipInputTokenEnd)="add($event)"
-      [autofocus]="isAutoFocus"
       [formControl]="inputCtrl"
       [matAutocomplete]="autoElRef"
       [matChipInputAddOnBlur]="true"
       [matChipInputFor]="chipListElRef"
       [matChipInputSeparatorKeyCodes]="separatorKeysCodes"
-      (keydown)="triggerCtrlEnterSubmit($event)"
+      (keydown)="onInputKeydown($event)"
     />
   </mat-chip-grid>
   <mat-autocomplete

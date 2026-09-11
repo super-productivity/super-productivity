@@ -8,7 +8,12 @@ import { ClientIdService } from '../../core/util/client-id.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
-import { ActionType, OperationLogEntry, OpType } from '../core/operation.types';
+import {
+  ActionType,
+  Operation,
+  OperationLogEntry,
+  OpType,
+} from '../core/operation.types';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { LOCAL_ONLY_SYNC_KEYS } from '../../features/config/local-only-sync-settings.util';
@@ -17,6 +22,7 @@ import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.serv
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
 import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
+import { createValidAppData } from '../validation/state-validity-test-utils';
 
 describe('SyncHydrationService', () => {
   let service: SyncHydrationService;
@@ -46,6 +52,7 @@ describe('SyncHydrationService', () => {
     mockStore.select.and.returnValue(of(defaultLocalSyncConfig));
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'append',
+      'appendOperationAndSnapshot',
       'getLastSeq',
       'saveStateCache',
       'setVectorClock',
@@ -114,7 +121,7 @@ describe('SyncHydrationService', () => {
     mockClientIdService.loadClientId.and.resolveTo('localClient');
     mockClientIdService.getOrGenerateClientId.and.resolveTo('localClient');
     mockVectorClockService.getCurrentVectorClock.and.resolveTo({ localClient: 5 });
-    mockOpLogStore.append.and.resolveTo(undefined);
+    mockOpLogStore.appendOperationAndSnapshot.and.resolveTo(11);
     mockOpLogStore.getLastSeq.and.resolveTo(10);
     mockOpLogStore.saveStateCache.and.resolveTo(undefined);
     mockOpLogStore.setVectorClock.and.resolveTo(undefined);
@@ -128,6 +135,16 @@ describe('SyncHydrationService', () => {
       wasRepaired: false,
     });
   };
+
+  // Hydration commits through commitFileSnapshotBaseline; no SYNC_IMPORT
+  // operation is created on this path.
+  const getCommittedBaseline = (): {
+    state: unknown;
+    vectorClock: Record<string, number>;
+    compactedAt: number;
+    lastAppliedOpSeq?: number;
+    schemaVersion?: number;
+  } => mockOpLogStore.commitFileSnapshotBaseline.calls.mostRecent().args[0];
 
   describe('hydrateFromRemoteSync', () => {
     beforeEach(setupDefaultMocks);
@@ -177,26 +194,11 @@ describe('SyncHydrationService', () => {
       await service.hydrateFromRemoteSync(downloadedData);
 
       // Verify the merged data was used
-      const appendCall = mockOpLogStore.append.calls.mostRecent();
-      const payload = appendCall.args[0].payload as Record<string, unknown>;
+      const payload = getCommittedBaseline().state as Record<string, unknown>;
       expect(payload['task']).toEqual({ ids: ['t1'] });
       expect(payload['project']).toEqual({ ids: ['p1'] });
       expect(payload['archiveYoung']).toEqual({ data: 'young' });
       expect(payload['archiveOld']).toEqual({ data: 'old' });
-    });
-
-    it('should create SYNC_IMPORT operation with correct properties', async () => {
-      await service.hydrateFromRemoteSync({ task: {} });
-
-      expect(mockOpLogStore.append).toHaveBeenCalledWith(
-        jasmine.objectContaining({
-          actionType: ActionType.LOAD_ALL_DATA,
-          opType: OpType.SyncImport,
-          entityType: 'ALL',
-          clientId: 'localClient',
-        }),
-        'remote',
-      );
     });
 
     it('should merge local and state cache vector clocks', async () => {
@@ -209,8 +211,7 @@ describe('SyncHydrationService', () => {
 
       await service.hydrateFromRemoteSync({});
 
-      const appendCall = mockOpLogStore.append.calls.mostRecent();
-      const vectorClock = appendCall.args[0].vectorClock;
+      const vectorClock = getCommittedBaseline().vectorClock;
       // Should have all clients with incremented local client
       expect(vectorClock['localClient']).toBe(6);
       expect(vectorClock['remoteClient']).toBe(10);
@@ -223,8 +224,7 @@ describe('SyncHydrationService', () => {
       await service.hydrateFromRemoteSync({});
 
       // Should still work with just local clock
-      const appendCall = mockOpLogStore.append.calls.mostRecent();
-      const vectorClock = appendCall.args[0].vectorClock;
+      const vectorClock = getCommittedBaseline().vectorClock;
       expect(vectorClock['localClient']).toBe(6);
     });
 
@@ -233,8 +233,7 @@ describe('SyncHydrationService', () => {
 
       await service.hydrateFromRemoteSync({});
 
-      const appendCall = mockOpLogStore.append.calls.mostRecent();
-      const vectorClock = appendCall.args[0].vectorClock;
+      const vectorClock = getCommittedBaseline().vectorClock;
       expect(vectorClock['localClient']).toBe(6);
     });
 
@@ -249,8 +248,7 @@ describe('SyncHydrationService', () => {
 
       await service.hydrateFromRemoteSync({}, remoteVectorClock);
 
-      const appendCall = mockOpLogStore.append.calls.mostRecent();
-      const vectorClock = appendCall.args[0].vectorClock;
+      const vectorClock = getCommittedBaseline().vectorClock;
       // Should have all clients: local (incremented), cached, and remote
       expect(vectorClock['localClient']).toBe(6); // incremented
       expect(vectorClock['cachedClient']).toBe(3);
@@ -266,8 +264,7 @@ describe('SyncHydrationService', () => {
       // Pass undefined explicitly
       await service.hydrateFromRemoteSync({}, undefined);
 
-      const appendCall = mockOpLogStore.append.calls.mostRecent();
-      const vectorClock = appendCall.args[0].vectorClock;
+      const vectorClock = getCommittedBaseline().vectorClock;
       expect(vectorClock['localClient']).toBe(6);
     });
 
@@ -282,8 +279,7 @@ describe('SyncHydrationService', () => {
 
       await service.hydrateFromRemoteSync({}, remoteVectorClock);
 
-      const appendCall = mockOpLogStore.append.calls.mostRecent();
-      const vectorClock = appendCall.args[0].vectorClock;
+      const vectorClock = getCommittedBaseline().vectorClock;
       // sharedClient should be max of 10, 8, 15 = 15
       expect(vectorClock['sharedClient']).toBe(15);
       expect(vectorClock['localClient']).toBe(6); // incremented from 5
@@ -307,8 +303,7 @@ describe('SyncHydrationService', () => {
 
       await service.hydrateFromRemoteSync(downloadedData);
 
-      const appendCall = mockOpLogStore.append.calls.mostRecent();
-      const payload = appendCall.args[0].payload as Record<string, unknown>;
+      const payload = getCommittedBaseline().state as Record<string, unknown>;
       const globalConfig = payload['globalConfig'] as Record<string, unknown>;
       const sync = globalConfig['sync'] as Record<string, unknown>;
       expect(sync['isEnabled']).toBe(defaultLocalSyncConfig.isEnabled);
@@ -327,8 +322,7 @@ describe('SyncHydrationService', () => {
 
       await service.hydrateFromRemoteSync(downloadedData);
 
-      const appendCall = mockOpLogStore.append.calls.mostRecent();
-      const payload = appendCall.args[0].payload as Record<string, unknown>;
+      const payload = getCommittedBaseline().state as Record<string, unknown>;
       expect(payload['task']).toEqual({ ids: ['t1'] });
     });
 
@@ -340,8 +334,7 @@ describe('SyncHydrationService', () => {
 
       await service.hydrateFromRemoteSync(downloadedData);
 
-      const appendCall = mockOpLogStore.append.calls.mostRecent();
-      const payload = appendCall.args[0].payload as Record<string, unknown>;
+      const payload = getCommittedBaseline().state as Record<string, unknown>;
       const globalConfig = payload['globalConfig'] as Record<string, unknown>;
       expect(globalConfig['lang']).toBe('en');
     });
@@ -354,39 +347,38 @@ describe('SyncHydrationService', () => {
       await expectAsync(service.hydrateFromRemoteSync({})).toBeResolved();
       expect(mockClientIdService.getOrGenerateClientId).toHaveBeenCalled();
 
-      // Verify the SYNC_IMPORT operation carries the ID returned by getOrGenerateClientId
-      const appendCall = mockOpLogStore.append.calls.mostRecent();
-      expect(appendCall.args[0].clientId).toBe('B_regen');
+      // No SYNC_IMPORT operation exists on this path, so assert the regenerated
+      // id is what the committed working clock is keyed on.
+      expect(Object.keys(getCommittedBaseline().vectorClock)).toContain('B_regen');
     });
 
-    it('should save state cache after appending operation', async () => {
-      mockOpLogStore.getLastSeq.and.resolveTo(42);
-
+    it('should commit the snapshot and working clock atomically', async () => {
       await service.hydrateFromRemoteSync({});
 
-      expect(mockOpLogStore.saveStateCache).toHaveBeenCalledWith(
+      expect(mockOpLogStore.commitFileSnapshotBaseline).toHaveBeenCalledWith(
         jasmine.objectContaining({
-          lastAppliedOpSeq: 42,
+          state: jasmine.any(Object),
+          vectorClock: { localClient: 6 },
         }),
       );
+      expect(mockOpLogStore.appendOperationAndSnapshot).not.toHaveBeenCalled();
+      expect(mockOpLogStore.append).not.toHaveBeenCalled();
+      expect(mockOpLogStore.saveStateCache).not.toHaveBeenCalled();
+      expect(mockOpLogStore.setVectorClock).not.toHaveBeenCalled();
     });
 
-    it('should update vector clock store after sync with minimal clock', async () => {
+    it('should commit the full merged clock, retaining other clients', async () => {
       mockVectorClockService.getCurrentVectorClock.and.resolveTo({ localClient: 5 });
       mockOpLogStore.loadStateCache.and.resolveTo({ vectorClock: { remote: 3 } } as any);
 
       await service.hydrateFromRemoteSync({});
 
-      // After SYNC_IMPORT, the working clock is reset to minimal (only own entry).
-      // The full merged clock is stored in the SYNC_IMPORT operation for filtering.
-      expect(mockOpLogStore.setVectorClock).toHaveBeenCalledWith(
-        jasmine.objectContaining({
-          localClient: 6,
-        }),
-      );
-      // Remote entries should NOT be in the minimal working clock
-      const setClockArg = mockOpLogStore.setVectorClock.calls.mostRecent().args[0];
-      expect(setClockArg['remote']).toBeUndefined();
+      // No SYNC_IMPORT is created here, so there is no clean-slate baseline to
+      // filter against: every known client entry must survive, and the local
+      // entry is incremented for this hydration.
+      const storedClock = getCommittedBaseline().vectorClock;
+      expect(storedClock['localClient']).toBe(6);
+      expect(storedClock['remote']).toBe(3);
     });
 
     it('should dispatch loadAllData with synced data', async () => {
@@ -431,8 +423,7 @@ describe('SyncHydrationService', () => {
         flushedBeforeLoad = !loadAllDataAlreadyDispatched();
       });
 
-      // createSyncImportOp = false → file-based bootstrap (no SYNC_IMPORT).
-      await service.hydrateFromRemoteSync({ task: { ids: ['t1'] } }, undefined, false);
+      await service.hydrateFromRemoteSync({ task: { ids: ['t1'] } });
 
       expect(mockTaskTimeSyncService.flush).toHaveBeenCalledTimes(1);
       expect(flushedBeforeLoad).toBe(true);
@@ -455,8 +446,7 @@ describe('SyncHydrationService', () => {
         }),
       );
       // State cache should also use repaired state
-      const saveCacheCall = mockOpLogStore.saveStateCache.calls.mostRecent();
-      expect(saveCacheCall.args[0].state).toBe(repairedState);
+      expect(getCommittedBaseline().state).toBe(repairedState);
     });
 
     it('should use original data when no repair needed', async () => {
@@ -488,13 +478,12 @@ describe('SyncHydrationService', () => {
 
       const validatedData = mockValidateStateService.validateAndRepair.calls.mostRecent()
         .args[0] as any;
-      expect(validatedData.globalConfig.misc.startOfNextDay).toBe(4);
-      expect(validatedData.globalConfig.misc.startOfNextDayTime).toBe('04:00');
+      expect(validatedData.globalConfig.misc.startOfNextDay).toBe(0);
+      expect(validatedData.globalConfig.misc.startOfNextDayTime).toBe('00:00');
 
-      const saveCacheCall = mockOpLogStore.saveStateCache.calls.mostRecent();
-      const savedState = saveCacheCall.args[0].state as any;
-      expect(savedState.globalConfig.misc.startOfNextDay).toBe(4);
-      expect(savedState.globalConfig.misc.startOfNextDayTime).toBe('04:00');
+      const savedState = getCommittedBaseline().state as any;
+      expect(savedState.globalConfig.misc.startOfNextDay).toBe(0);
+      expect(savedState.globalConfig.misc.startOfNextDayTime).toBe('00:00');
     });
 
     it('should handle null downloadedMainModelData by using only DB data', async () => {
@@ -505,54 +494,25 @@ describe('SyncHydrationService', () => {
 
       await service.hydrateFromRemoteSync(undefined);
 
-      const appendCall = mockOpLogStore.append.calls.mostRecent();
-      const payload = appendCall.args[0].payload as Record<string, unknown>;
+      const payload = getCommittedBaseline().state as Record<string, unknown>;
       expect(payload['archiveYoung']).toEqual({ data: 'archive' });
     });
 
-    it('should propagate errors from append', async () => {
-      mockOpLogStore.append.and.rejectWith(new Error('Append failed'));
+    it('should propagate errors from the atomic persistence commit', async () => {
+      mockOpLogStore.commitFileSnapshotBaseline.and.rejectWith(
+        new Error('Atomic commit failed'),
+      );
 
       await expectAsync(service.hydrateFromRemoteSync({})).toBeRejectedWithError(
-        'Append failed',
+        'Atomic commit failed',
       );
     });
 
-    it('should propagate errors from saveStateCache', async () => {
-      mockOpLogStore.saveStateCache.and.rejectWith(new Error('Save failed'));
-
-      await expectAsync(service.hydrateFromRemoteSync({})).toBeRejectedWithError(
-        'Save failed',
-      );
-    });
-
-    describe('createSyncImportOp parameter', () => {
-      it('should create SYNC_IMPORT when createSyncImportOp is true (default)', async () => {
+    describe('SYNC_IMPORT behaviour', () => {
+      it('should never create a SYNC_IMPORT operation', async () => {
         await service.hydrateFromRemoteSync({ task: {} });
 
-        expect(mockOpLogStore.append).toHaveBeenCalledWith(
-          jasmine.objectContaining({
-            opType: OpType.SyncImport,
-          }),
-          'remote',
-        );
-      });
-
-      it('should create SYNC_IMPORT when createSyncImportOp is explicitly true', async () => {
-        await service.hydrateFromRemoteSync({ task: {} }, undefined, true);
-
-        expect(mockOpLogStore.append).toHaveBeenCalledWith(
-          jasmine.objectContaining({
-            opType: OpType.SyncImport,
-          }),
-          'remote',
-        );
-      });
-
-      it('should NOT create SYNC_IMPORT when createSyncImportOp is false', async () => {
-        await service.hydrateFromRemoteSync({ task: {} }, undefined, false);
-
-        expect(mockOpLogStore.append).not.toHaveBeenCalled();
+        expect(mockOpLogStore.appendOperationAndSnapshot).not.toHaveBeenCalled();
       });
 
       it('should reject only the pending ops captured before snapshot hydration starts', async () => {
@@ -588,7 +548,7 @@ describe('SyncHydrationService', () => {
           },
         );
 
-        await service.hydrateFromRemoteSync({ task: {} }, undefined, false);
+        await service.hydrateFromRemoteSync({ task: {} });
 
         // The rejection is now folded into the atomic baseline commit (rejectOpIds)
         // rather than a standalone markRejected() that could outlive a failed
@@ -599,10 +559,10 @@ describe('SyncHydrationService', () => {
         expect(commitCall.args[0].rejectOpIds).toEqual([pendingBeforeHydration.op.id]);
       });
 
-      it('should commit the file snapshot baseline when createSyncImportOp is false', async () => {
+      it('should commit the file snapshot baseline', async () => {
         mockOpLogStore.getLastSeq.and.resolveTo(42);
 
-        await service.hydrateFromRemoteSync({ task: {} }, undefined, false);
+        await service.hydrateFromRemoteSync({ task: {} });
 
         expect(mockOpLogStore.commitFileSnapshotBaseline).toHaveBeenCalledWith(
           jasmine.objectContaining({ lastAppliedOpSeq: 42 }),
@@ -613,7 +573,7 @@ describe('SyncHydrationService', () => {
       it('should include the vector clock in the atomic file baseline', async () => {
         mockVectorClockService.getCurrentVectorClock.and.resolveTo({ localClient: 5 });
 
-        await service.hydrateFromRemoteSync({ task: {} }, undefined, false);
+        await service.hydrateFromRemoteSync({ task: {} });
 
         expect(mockOpLogStore.commitFileSnapshotBaseline).toHaveBeenCalledWith(
           jasmine.objectContaining({
@@ -634,7 +594,7 @@ describe('SyncHydrationService', () => {
         const prunedSentinel = { localClient: 6, importAuthor: 1 };
         mockOpLogStore.pruneClockForStorage.and.resolveTo(prunedSentinel);
 
-        await service.hydrateFromRemoteSync({ task: {} }, undefined, false);
+        await service.hydrateFromRemoteSync({ task: {} });
 
         const pruneArg = mockOpLogStore.pruneClockForStorage.calls.mostRecent().args[0];
         expect(pruneArg['localClient']).toBe(6); // incremented BEFORE pruning
@@ -643,10 +603,10 @@ describe('SyncHydrationService', () => {
         expect(commitArg.vectorClock).toBe(prunedSentinel);
       });
 
-      it('should still dispatch loadAllData when createSyncImportOp is false', async () => {
+      it('should still dispatch loadAllData', async () => {
         const downloadedData = { task: { ids: ['t1'] } };
 
-        await service.hydrateFromRemoteSync(downloadedData, undefined, false);
+        await service.hydrateFromRemoteSync(downloadedData);
 
         expect(mockStore.dispatch).toHaveBeenCalledWith(
           loadAllData({
@@ -660,7 +620,7 @@ describe('SyncHydrationService', () => {
       it('should invoke beforeStateLoad immediately before replacing NgRx state', async () => {
         let dispatchCountAtHook = -1;
 
-        await service.hydrateFromRemoteSync({}, undefined, false, undefined, {
+        await service.hydrateFromRemoteSync({}, undefined, {
           beforeStateLoad: () => {
             dispatchCountAtHook = mockStore.dispatch.calls.count();
           },
@@ -674,7 +634,7 @@ describe('SyncHydrationService', () => {
         let dispatchCountBeforeStateLoad = -1;
         let dispatchCountAfterStateLoad = -1;
 
-        await service.hydrateFromRemoteSync({}, undefined, false, undefined, {
+        await service.hydrateFromRemoteSync({}, undefined, {
           beforeStateLoad: () => {
             dispatchCountBeforeStateLoad = mockStore.dispatch.calls.count();
           },
@@ -693,7 +653,7 @@ describe('SyncHydrationService', () => {
         mockStore.dispatch.and.throwError('state dispatch failed');
 
         await expectAsync(
-          service.hydrateFromRemoteSync({}, undefined, false, undefined, {
+          service.hydrateFromRemoteSync({}, undefined, {
             beforeStateLoad: () => {
               didRunBeforeStateLoad = true;
             },
@@ -714,7 +674,7 @@ describe('SyncHydrationService', () => {
           return { seqs: [], writtenOps: [], skippedCount: 0 };
         });
 
-        await service.hydrateFromRemoteSync({}, undefined, false, undefined, {
+        await service.hydrateFromRemoteSync({}, undefined, {
           afterSnapshotCachePersisted: () => {
             callOrder.push('after-snapshot-cache-persisted');
           },
@@ -744,7 +704,7 @@ describe('SyncHydrationService', () => {
         );
 
         await expectAsync(
-          service.hydrateFromRemoteSync({}, undefined, false, undefined, {
+          service.hydrateFromRemoteSync({}, undefined, {
             afterSnapshotCachePersisted: () => {
               didPersistSnapshotCache = true;
             },
@@ -780,8 +740,6 @@ describe('SyncHydrationService', () => {
             archiveYoung: { task: { ids: [], entities: {} } },
           },
           undefined,
-          false,
-          undefined,
           {
             afterArchiveReplacement: () => callOrder.push('after-archive-replace'),
           },
@@ -804,8 +762,6 @@ describe('SyncHydrationService', () => {
               archiveYoung: { task: { ids: [], entities: {} } },
             },
             undefined,
-            false,
-            undefined,
             {
               afterArchiveReplacement: () => {
                 didReplaceArchive = true;
@@ -817,11 +773,11 @@ describe('SyncHydrationService', () => {
         expect(didReplaceArchive).toBeFalse();
       });
 
-      it('should still merge remote vector clock when createSyncImportOp is false', async () => {
+      it('should still merge remote vector clock', async () => {
         const remoteVectorClock = { remoteClient: 100 };
         mockVectorClockService.getCurrentVectorClock.and.resolveTo({ localClient: 5 });
 
-        await service.hydrateFromRemoteSync({ task: {} }, remoteVectorClock, false);
+        await service.hydrateFromRemoteSync({ task: {} }, remoteVectorClock);
 
         expect(mockOpLogStore.commitFileSnapshotBaseline).toHaveBeenCalledWith(
           jasmine.objectContaining({
@@ -833,7 +789,7 @@ describe('SyncHydrationService', () => {
         );
       });
 
-      it('should still validate and repair when createSyncImportOp is false', async () => {
+      it('should still validate and repair', async () => {
         const repairedState = { task: { repaired: true } } as any;
         mockValidateStateService.validateAndRepair.and.resolveTo({
           isValid: true,
@@ -841,7 +797,7 @@ describe('SyncHydrationService', () => {
           repairedState,
         });
 
-        await service.hydrateFromRemoteSync({ task: {} }, undefined, false);
+        await service.hydrateFromRemoteSync({ task: {} });
 
         expect(mockStore.dispatch).toHaveBeenCalledWith(
           loadAllData({
@@ -866,7 +822,7 @@ describe('SyncHydrationService', () => {
       await service.hydrateFromRemoteSync({ task: {} });
 
       // If it didn't throw, the stripping handled the edge case
-      expect(mockOpLogStore.append).toHaveBeenCalled();
+      expect(mockOpLogStore.commitFileSnapshotBaseline).toHaveBeenCalled();
     });
 
     it('should preserve synced globalConfig properties while overlaying local-only sync settings', async () => {
@@ -884,8 +840,7 @@ describe('SyncHydrationService', () => {
 
       await service.hydrateFromRemoteSync(downloadedData);
 
-      const appendCall = mockOpLogStore.append.calls.mostRecent();
-      const payload = appendCall.args[0].payload as Record<string, unknown>;
+      const payload = getCommittedBaseline().state as Record<string, unknown>;
       const globalConfig = payload['globalConfig'] as Record<string, unknown>;
       expect(globalConfig['lang']).toBe('de');
       expect(globalConfig['theme']).toBe('dark');
@@ -942,8 +897,7 @@ describe('SyncHydrationService', () => {
       await service.hydrateFromRemoteSync(remoteDataWithSyncDisabled);
 
       // Step 3: Capture the snapshot that was saved (this is what hydrator will load on reload)
-      const savedSnapshot = mockOpLogStore.saveStateCache.calls.mostRecent().args[0];
-      const snapshotState = savedSnapshot.state as Record<string, unknown>;
+      const snapshotState = getCommittedBaseline().state as Record<string, unknown>;
       const snapshotGlobalConfig = snapshotState['globalConfig'] as Record<
         string,
         unknown
@@ -999,8 +953,7 @@ describe('SyncHydrationService', () => {
       await service.hydrateFromRemoteSync(downloadedData);
 
       // Check that saved state cache has local isEnabled (true)
-      const saveCacheCall = mockOpLogStore.saveStateCache.calls.mostRecent();
-      const savedState = saveCacheCall.args[0].state as Record<string, unknown>;
+      const savedState = getCommittedBaseline().state as Record<string, unknown>;
       const globalConfig = savedState['globalConfig'] as Record<string, unknown>;
       const sync = globalConfig['sync'] as Record<string, unknown>;
       expect(sync['isEnabled']).toBe(true);
@@ -1033,8 +986,7 @@ describe('SyncHydrationService', () => {
 
       await service.hydrateFromRemoteSync(downloadedData);
 
-      const appendCall = mockOpLogStore.append.calls.mostRecent();
-      const payload = appendCall.args[0].payload as Record<string, unknown>;
+      const payload = getCommittedBaseline().state as Record<string, unknown>;
       const globalConfig = payload['globalConfig'] as Record<string, unknown>;
       const sync = globalConfig['sync'] as Record<string, unknown>;
 
@@ -1066,8 +1018,7 @@ describe('SyncHydrationService', () => {
       await service.hydrateFromRemoteSync(downloadedData);
 
       // Check that saved state cache has local isEnabled (false)
-      const saveCacheCall = mockOpLogStore.saveStateCache.calls.mostRecent();
-      const savedState = saveCacheCall.args[0].state as Record<string, unknown>;
+      const savedState = getCommittedBaseline().state as Record<string, unknown>;
       const globalConfig = savedState['globalConfig'] as Record<string, unknown>;
       const sync = globalConfig['sync'] as Record<string, unknown>;
       expect(sync['isEnabled']).toBe(false);
@@ -1147,8 +1098,7 @@ describe('SyncHydrationService', () => {
           .toBe(localSync[key]);
       }
 
-      const savedState = mockOpLogStore.saveStateCache.calls.mostRecent().args[0]
-        .state as Record<string, unknown>;
+      const savedState = getCommittedBaseline().state as Record<string, unknown>;
       const savedSync = (savedState['globalConfig'] as Record<string, unknown>)[
         'sync'
       ] as Record<string, unknown>;
@@ -1184,8 +1134,7 @@ describe('SyncHydrationService', () => {
       await service.hydrateFromRemoteSync(downloadedData);
 
       // Check snapshot
-      const saveCacheCall = mockOpLogStore.saveStateCache.calls.mostRecent();
-      const savedState = saveCacheCall.args[0].state as Record<string, unknown>;
+      const savedState = getCommittedBaseline().state as Record<string, unknown>;
       const savedGlobalConfig = savedState['globalConfig'] as Record<string, unknown>;
       const savedSync = savedGlobalConfig['sync'] as Record<string, unknown>;
       expect(savedSync['isEnabled']).toBe(true);
@@ -1206,5 +1155,143 @@ describe('SyncHydrationService', () => {
       expect(dispatchedSync['syncInterval']).toBe(300000);
       expect(dispatchedSync['isManualSyncOnly']).toBe(true);
     });
+  });
+});
+
+describe('SyncHydrationService operation-log persistence', () => {
+  let service: SyncHydrationService;
+  let opLogStore: OperationLogStoreService;
+
+  beforeEach(async () => {
+    const store = jasmine.createSpyObj<Store>('Store', ['dispatch', 'select']);
+    store.select.and.returnValue(
+      of({
+        ...DEFAULT_GLOBAL_CONFIG.sync,
+        isEnabled: true,
+        syncProvider: SyncProviderId.WebDAV,
+      }),
+    );
+    const stateSnapshot = jasmine.createSpyObj<StateSnapshotService>(
+      'StateSnapshotService',
+      ['getAllSyncModelDataFromStoreAsync'],
+    );
+    stateSnapshot.getAllSyncModelDataFromStoreAsync.and.resolveTo({} as never);
+    const clientId = jasmine.createSpyObj<ClientIdService>('ClientIdService', [
+      'loadClientId',
+      'getOrGenerateClientId',
+      'clearCache',
+    ]);
+    clientId.loadClientId.and.resolveTo('localClient');
+    clientId.getOrGenerateClientId.and.resolveTo('localClient');
+    const vectorClock = jasmine.createSpyObj<VectorClockService>('VectorClockService', [
+      'getCurrentVectorClock',
+    ]);
+    vectorClock.getCurrentVectorClock.and.resolveTo({ localClient: 5 });
+    const validator = jasmine.createSpyObj<ValidateStateService>('ValidateStateService', [
+      'validateAndRepair',
+    ]);
+    validator.validateAndRepair.and.resolveTo({
+      isValid: true,
+      wasRepaired: false,
+    });
+    const archiveDb = jasmine.createSpyObj<ArchiveDbAdapter>('ArchiveDbAdapter', [
+      'saveArchiveYoung',
+      'saveArchiveOld',
+    ]);
+    archiveDb.saveArchiveYoung.and.resolveTo();
+    archiveDb.saveArchiveOld.and.resolveTo();
+    const lockService = jasmine.createSpyObj<LockService>('LockService', ['request']);
+    lockService.request.and.callFake(async (_lockName, callback) => callback());
+    const taskTimeSync = jasmine.createSpyObj<TaskTimeSyncService>(
+      'TaskTimeSyncService',
+      ['flush'],
+    );
+
+    TestBed.configureTestingModule({
+      providers: [
+        SyncHydrationService,
+        OperationLogStoreService,
+        { provide: Store, useValue: store },
+        { provide: StateSnapshotService, useValue: stateSnapshot },
+        { provide: ClientIdService, useValue: clientId },
+        { provide: VectorClockService, useValue: vectorClock },
+        { provide: ValidateStateService, useValue: validator },
+        {
+          provide: SnackService,
+          useValue: jasmine.createSpyObj('SnackService', ['open']),
+        },
+        { provide: ArchiveDbAdapter, useValue: archiveDb },
+        { provide: LockService, useValue: lockService },
+        { provide: TaskTimeSyncService, useValue: taskTimeSync },
+      ],
+    });
+
+    service = TestBed.inject(SyncHydrationService);
+    opLogStore = TestBed.inject(OperationLogStoreService);
+    await opLogStore.init();
+    await opLogStore._clearAllDataForTesting();
+  });
+
+  afterEach(async () => {
+    await opLogStore._clearAllDataForTesting();
+  });
+
+  it('replays a second-tab append after restart without regressing its clock', async () => {
+    const secondTabStore = TestBed.runInInjectionContext(
+      () => new OperationLogStoreService(),
+    );
+    await secondTabStore.init();
+    const concurrentOp: Operation = {
+      id: 'second-tab-after-sync-import',
+      actionType: ActionType.TASK_SHARED_UPDATE,
+      opType: OpType.Update,
+      entityType: 'TASK',
+      entityId: 'task-from-second-tab',
+      payload: { title: 'Second tab' },
+      clientId: 'localClient',
+      vectorClock: { localClient: 7 },
+      timestamp: Date.now(),
+      schemaVersion: 1,
+    };
+    let concurrentAppend: Promise<number> | undefined;
+    const appendFromSecondTab = async (): Promise<void> => {
+      concurrentAppend ??= secondTabStore.appendWithVectorClockOverwrite(
+        concurrentOp,
+        'local',
+      );
+      await concurrentAppend;
+    };
+
+    const realAppend = opLogStore.append.bind(opLogStore);
+    spyOn(opLogStore, 'append').and.callFake(async (op, source, options) => {
+      const seq = await realAppend(op, source, options);
+      await appendFromSecondTab();
+      return seq;
+    });
+    // Hydration commits through commitFileSnapshotBaseline, so interleave the
+    // second tab's append with that call to reproduce the concurrent write.
+    const realCommitBaseline = opLogStore.commitFileSnapshotBaseline.bind(opLogStore);
+    spyOn(opLogStore, 'commitFileSnapshotBaseline').and.callFake(async (params) => {
+      const result = await realCommitBaseline(params);
+      await appendFromSecondTab();
+      return result;
+    });
+
+    await service.hydrateFromRemoteSync(
+      createValidAppData() as unknown as Record<string, unknown>,
+    );
+
+    const restartedStore = TestBed.runInInjectionContext(
+      () => new OperationLogStoreService(),
+    );
+    await restartedStore.init();
+    const cache = await restartedStore.loadStateCache();
+    // No SYNC_IMPORT operation is written, so the frontier is the pre-commit
+    // tail (0) and the second tab's op is the first entry after it.
+    expect(cache?.lastAppliedOpSeq).toBe(0);
+    const replayTail = await restartedStore.getOpsAfterSeq(cache?.lastAppliedOpSeq ?? 0);
+    expect(replayTail.map((entry) => entry.op.id)).toEqual([concurrentOp.id]);
+    expect(replayTail[0].seq).toBe(1);
+    expect(await restartedStore.getVectorClock()).toEqual({ localClient: 7 });
   });
 });

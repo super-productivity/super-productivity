@@ -11,6 +11,7 @@ import { CdkScrollable } from '@angular/cdk/scrolling';
 import { PlannerCalendarNavComponent } from './planner-calendar-nav/planner-calendar-nav.component';
 import { PlannerService } from './planner.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
+import { selectPlannerDayMap } from './store/planner.selectors';
 
 @Component({
   selector: 'planner',
@@ -33,22 +34,31 @@ export class PlannerComponent {
   readonly T = T;
 
   private _days = toSignal(this._plannerService.days$, { initialValue: [] });
+  private _plannerDayMap = toSignal(this._store.select(selectPlannerDayMap), {
+    initialValue: {},
+  });
   private _prevDaysWithTasksKey = '';
   private _prevDaysWithTasks: ReadonlySet<string> = new Set();
   daysWithTasks = computed<ReadonlySet<string>>(() => {
     const days = this._days();
-    const dayDates: string[] = [];
+    const plannerDayMap = this._plannerDayMap();
+    const dayDates = new Set(
+      Object.entries(plannerDayMap)
+        .filter(([, tasks]) => tasks.length > 0)
+        .map(([dayDate]) => dayDate),
+    );
     for (const day of days) {
       if (day.tasks.length > 0) {
-        dayDates.push(day.dayDate);
+        dayDates.add(day.dayDate);
       }
     }
-    const key = dayDates.join(',');
+    const sortedDayDates = [...dayDates].sort();
+    const key = sortedDayDates.join(',');
     if (key === this._prevDaysWithTasksKey) {
       return this._prevDaysWithTasks;
     }
     this._prevDaysWithTasksKey = key;
-    this._prevDaysWithTasks = new Set(dayDates);
+    this._prevDaysWithTasks = new Set(sortedDayDates);
     return this._prevDaysWithTasks;
   });
 

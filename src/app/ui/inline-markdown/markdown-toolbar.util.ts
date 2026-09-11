@@ -488,10 +488,9 @@ export const insertLink = (
   const linkMarkdown = `[${selectedText}](${url})`;
   const newText =
     text.substring(0, selectionStart) + linkMarkdown + text.substring(selectionEnd);
-  // Place cursor at URL position: [ + text + ]( = 1 + text.length + 2 = text.length + 3
-  // But we want cursor AFTER the opening paren, which is at position: 1 + text.length + 2 = text.length + 3
-  // Test expects: for "hello" (5 chars), URL starts at 9 = 0 + 5 + 4
-  const urlStart = selectionStart + selectedText.length + 4; // After "[text]("
+  // Select the url so it is ready to be replaced. The url sits after "[text](",
+  // which is 1 ("[") + text.length + 2 ("](") = text.length + 3 characters.
+  const urlStart = selectionStart + selectedText.length + 3; // After "[text]("
   return {
     text: newText,
     selectionStart: urlStart,
@@ -523,9 +522,9 @@ export const insertImage = (
   const imageMarkdown = `![${selectedText}](${url})`;
   const newText =
     text.substring(0, selectionStart) + imageMarkdown + text.substring(selectionEnd);
-  // Place cursor at URL position: ![ + text + ]( = 2 + text.length + 2 = text.length + 4
-  // Test expects: for "hello" (5 chars), URL starts at 10 = 0 + 5 + 5
-  const urlStart = selectionStart + selectedText.length + 5; // After "![text]("
+  // Select the url so it is ready to be replaced. The url sits after "![text](",
+  // which is 2 ("![") + text.length + 2 ("](") = text.length + 4 characters.
+  const urlStart = selectionStart + selectedText.length + 4; // After "![text]("
   return {
     text: newText,
     selectionStart: urlStart,

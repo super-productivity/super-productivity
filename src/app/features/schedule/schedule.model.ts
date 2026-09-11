@@ -12,6 +12,7 @@ export interface ScheduleEvent {
   timeLeftInHours: number;
   dayOfMonth?: number;
   plannedForDay?: string;
+  sourceOccurrenceDate?: string;
   data?: SVE['data'];
   overlap?: { count: number; offset: number };
   isBeyondBudget?: boolean;
@@ -30,6 +31,7 @@ interface SVEBase {
   start: number;
   duration: number;
   plannedForDay?: string;
+  sourceOccurrenceDate?: string;
   isBeyondBudget?: boolean;
 }
 
@@ -177,6 +179,7 @@ export interface BlockedBlockEntryScheduledRepeatProjection {
     | BlockedBlockType.ScheduledRepeatProjection
     | BlockedBlockType.ScheduledRepeatProjectionSplit;
   data: TaskRepeatCfg;
+  sourceOccurrenceDate?: string;
 }
 
 export interface BlockedBlockEntryCalendarEvent {

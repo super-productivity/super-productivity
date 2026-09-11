@@ -110,12 +110,12 @@ export class MobileNotificationEffects {
                 this._notifyPermissionIssue();
                 return;
               }
-              if (permissionState !== 'granted') {
-                // Not asked yet — defer the prompt and the exact-alarm check
-                // until a notification actually needs scheduling.
-                return;
-              }
-              await this._warnIfExactAlarmPermissionDeniedOnce();
+              // Deliberately no exact-alarm check here. `ensureExactAlarmPermission()`
+              // opens Android's "Alarms & reminders" settings PAGE, and running it at
+              // startup sent users there with nothing scheduled — reachable for anyone
+              // once notifications are granted, which now happens on the first timer
+              // start (#9648). The scheduling effects below run it when a reminder
+              // actually needs an alarm, which is the only moment it can matter.
             } catch (error) {
               Log.err(error);
               this._notifyPermissionIssue(error?.toString());

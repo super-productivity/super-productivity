@@ -58,6 +58,15 @@ export const selectIsLongBreak = createSelector(
   (timer) => timer.purpose === 'break' && timer.isLongBreak === true,
 );
 
+export const selectIsBreakTimeUp = createSelector(
+  selectTimer,
+  (timer) =>
+    timer.purpose === 'break' &&
+    !timer.isRunning &&
+    timer.startedAt !== null &&
+    timer.elapsed >= timer.duration,
+);
+
 // Timer selectors - much simpler!
 export const selectTimeElapsed = createSelector(selectTimer, (timer) => timer.elapsed);
 

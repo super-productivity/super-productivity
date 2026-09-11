@@ -4,11 +4,8 @@ import {
   ElementRef,
   Input,
   input,
-  OnDestroy,
   output,
   viewChild,
-  HostAttributeToken,
-  inject,
 } from '@angular/core';
 import { FormsModule, ReactiveFormsModule, UntypedFormControl } from '@angular/forms';
 import { Observable } from 'rxjs';
@@ -30,11 +27,11 @@ import { T } from '../../t.const';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
-import { MatIconButton } from '@angular/material/button';
 import { MatOption } from '@angular/material/core';
 import { TranslatePipe } from '@ngx-translate/core';
 import { AsyncPipe } from '@angular/common';
 import { TagComponent } from '../../features/tag/tag/tag.component';
+import { sortByTitle } from '../../util/sort-by-title';
 
 const DEFAULT_SEPARATOR_KEY_CODES: number[] = [ENTER, COMMA];
 
@@ -59,7 +56,6 @@ interface Suggestion {
     MatIcon,
     MatChipRemove,
     MatTooltip,
-    MatIconButton,
     FormsModule,
     MatAutocompleteTrigger,
     MatChipInput,
@@ -71,34 +67,19 @@ interface Suggestion {
     TagComponent,
   ],
 })
-export class ChipListInputComponent implements OnDestroy {
-  autoFocus = inject(new HostAttributeToken('autoFocus'), { optional: true });
-
-  // TODO maybe use new api
-  // autoFocus = inject(new HostAttributeToken('autoFocus'));
-
+export class ChipListInputComponent {
   T: typeof T = T;
 
   readonly label = input<string>();
-  // TODO: Skipped for migration because:
-  //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
-  //  and migrating would break narrowing currently.
-  @Input() additionalActionIcon?: string;
-  readonly additionalActionTooltip = input<string>();
-  readonly additionalActionTooltipUnToggle = input<string>();
-  readonly toggledItems = input<string[]>();
 
   readonly addItem = output<string>();
   readonly addNewItem = output<string>();
   readonly removeItem = output<string>();
-  readonly additionalAction = output<string>();
-  readonly ctrlEnterSubmit = output<void>();
 
   suggestionsIn: Suggestion[] = [];
   modelItems: Suggestion[] = [];
   inputCtrl: UntypedFormControl = new UntypedFormControl();
   separatorKeysCodes: number[] = DEFAULT_SEPARATOR_KEY_CODES;
-  isAutoFocus = false;
   readonly inputEl = viewChild<ElementRef<HTMLInputElement>>('inputElRef');
   readonly matAutocomplete = viewChild<MatAutocomplete>('autoElRef');
   private _modelIds: string[] = [];
@@ -114,30 +95,11 @@ export class ChipListInputComponent implements OnDestroy {
     ),
   );
 
-  private _autoFocusTimeout?: number;
-
-  constructor() {
-    const autoFocus = this.autoFocus;
-
-    if (typeof autoFocus === 'string') {
-      this.isAutoFocus = true;
-      this._autoFocusTimeout = window.setTimeout(() => {
-        this.inputEl()?.nativeElement.focus();
-        // NOTE: we need to wait a little for the tag dialog to be there
-      }, 300);
-    }
-  }
-
-  ngOnDestroy(): void {
-    if (this._autoFocusTimeout) {
-      window.clearTimeout(this._autoFocusTimeout);
-    }
-  }
-
   // TODO: Skipped for migration because:
   //  Accessor inputs cannot be migrated as they are too complex.
   @Input() set suggestions(val: Suggestion[]) {
-    this.suggestionsIn = val.sort((a, b) => a.title.localeCompare(b.title));
+    // copy first: consumers pass memoized NgRx selector output, sort() mutates in place
+    this.suggestionsIn = sortByTitle(val);
     this._updateModelItems(this._modelIds);
   }
 
@@ -182,21 +144,12 @@ export class ChipListInputComponent implements OnDestroy {
     this.inputCtrl.setValue(null);
   }
 
-  isToggled(id: string): boolean {
-    const toggledItems = this.toggledItems();
-    return !!toggledItems && toggledItems.includes(id);
-  }
-
-  triggerCtrlEnterSubmit(ev: KeyboardEvent): void {
+  onInputKeydown(ev: KeyboardEvent): void {
     const isCyrillic = /^[А-яёЁ]$/.test(ev.key);
     if (isCyrillic) {
       this.separatorKeysCodes = [ENTER];
     } else {
       this.separatorKeysCodes = DEFAULT_SEPARATOR_KEY_CODES;
-    }
-
-    if (ev.code === 'Enter' && ev.ctrlKey) {
-      this.ctrlEnterSubmit.emit();
     }
   }
 

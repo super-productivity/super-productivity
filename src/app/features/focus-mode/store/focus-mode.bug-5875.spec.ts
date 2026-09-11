@@ -93,6 +93,7 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
 
     const takeABreakServiceMock = {
       otherNoBreakTIme$: new BehaviorSubject<number>(0),
+      resetTimer: jasmine.createSpy('resetTimer'),
     };
 
     TestBed.configureTestingModule({

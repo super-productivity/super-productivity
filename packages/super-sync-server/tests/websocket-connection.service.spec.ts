@@ -408,6 +408,41 @@ describe('WebSocketConnectionService', () => {
     });
   });
 
+  describe('closeForUser', () => {
+    it('should close every socket of that user only, with the token-revoked code', () => {
+      const wsA = createMockWs();
+      const wsB = createMockWs();
+      const wsOther = createMockWs();
+      service.addConnection(1, 'client-a', wsA as any);
+      service.addConnection(1, 'client-b', wsB as any);
+      service.addConnection(2, 'client-c', wsOther as any);
+
+      service.closeForUser(1);
+
+      expect(wsA.close).toHaveBeenCalledWith(4003, 'Token revoked');
+      expect(wsB.close).toHaveBeenCalledWith(4003, 'Token revoked');
+      expect(wsOther.close).not.toHaveBeenCalled();
+      expect(service.getConnectionCount()).toBe(1);
+    });
+
+    it('should no-op for a user with no connections', () => {
+      expect(() => service.closeForUser(99)).not.toThrow();
+    });
+
+    it('should close the revoking caller too — a clientId is self-declared, sparing it would be spoofable', () => {
+      const wsCaller = createMockWs();
+      const wsOtherDevice = createMockWs();
+      service.addConnection(1, 'client-caller', wsCaller as any);
+      service.addConnection(1, 'client-other', wsOtherDevice as any);
+
+      service.closeForUser(1);
+
+      expect(wsCaller.close).toHaveBeenCalledWith(4003, 'Token revoked');
+      expect(wsOtherDevice.close).toHaveBeenCalledWith(4003, 'Token revoked');
+      expect(service.getConnectionCount()).toBe(0);
+    });
+  });
+
   describe('notifyNewOps', () => {
     it('should send to other clients and exclude sender', () => {
       const wsA = createMockWs();
@@ -485,6 +520,49 @@ describe('WebSocketConnectionService', () => {
   });
 
   describe('startHeartbeat', () => {
+    it('touches the device row of a live socket, throttled to the shared interval', () => {
+      const touch = vi.fn();
+      const ws = createMockWs();
+      service.addConnection(1, 'client-a', ws as any);
+
+      service.startHeartbeat(touch);
+
+      // First tick is inside the throttle window measured from accept.
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      expect(touch).not.toHaveBeenCalled();
+
+      // Crossing DEVICE_TOUCH_THROTTLE_MS (2 min) yields exactly one write...
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      expect(touch).toHaveBeenCalledTimes(1);
+      expect(touch).toHaveBeenCalledWith(1, 'client-a');
+
+      // ...and the next ticks are throttled again rather than one per heartbeat.
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      vi.advanceTimersByTime(30_000);
+      ws._emitPong();
+      expect(touch).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps pinging when no touch fn is injected', () => {
+      const ws = createMockWs();
+      service.addConnection(1, 'client-a', ws as any);
+      ws.send.mockClear();
+
+      service.startHeartbeat();
+      vi.advanceTimersByTime(30_000);
+
+      expect(parseSendCalls(ws)).toContainEqual(
+        expect.objectContaining({ type: 'ping' }),
+      );
+    });
+
     it('should send ping at interval', () => {
       const ws = createMockWs();
       service.addConnection(1, 'client-a', ws as any);

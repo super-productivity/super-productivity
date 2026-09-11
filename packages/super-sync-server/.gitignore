@@ -4,8 +4,12 @@ data
 ./.env
 .env
 
-# Generated from privacy.template.html at server startup
+# Generated from the *.template.html files at server startup
 public/privacy.html
+public/index.html
+# Installed at startup from <DATA_DIR>/legal/terms.html when the operator supplies one.
+# The image deliberately ships no Terms of Service; ours live in legal/terms.html.
+public/terms.html
 
 # Health alert state
 .health-alert/
@@ -16,3 +20,4 @@ backups/
 initdb.d/
 secrets/
 tde-keys/
+.tmp-lock-retry-*

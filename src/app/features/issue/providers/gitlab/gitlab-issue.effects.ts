@@ -5,22 +5,29 @@ import { GITLAB_TYPE } from '../../issue.const';
 import { IssueProviderService } from '../../issue-provider.service';
 import { TaskCopy } from '../../../tasks/task.model';
 import { BeforeFinishDayService } from '../../../before-finish-day/before-finish-day.service';
-import { WorkContextService } from '../../../work-context/work-context.service';
+import { Store } from '@ngrx/store';
+import { selectAllTasksInActiveProjects } from '../../../tasks/store/task.selectors';
 
 @Injectable()
 export class GitlabIssueEffects {
   private readonly _matDialog = inject(MatDialog);
   private readonly _beforeFinishDayService = inject(BeforeFinishDayService);
-  private readonly _workContextService = inject(WorkContextService);
+  private readonly _store = inject(Store);
   private readonly _issueProviderService = inject(IssueProviderService);
 
   constructor() {
-    this._beforeFinishDayService.addAction(async () => {
-      const tasksForCurrentList =
-        await this._workContextService.allTasksForCurrentContext$
-          .pipe(first())
-          .toPromise();
-      const gitlabTasks = tasksForCurrentList.filter((t) => t.issueType === GITLAB_TYPE);
+    this._beforeFinishDayService.addAction(async (dayStr) => {
+      // The summary includes worked-on tasks from every context, including tasks
+      // that the user has configured not to auto-add to Today. `dayStr`, not
+      // today: the daily summary can finish a past day, and the worklog must
+      // report the hours booked on THAT day.
+      const tasks = await this._store
+        .select(selectAllTasksInActiveProjects)
+        .pipe(first())
+        .toPromise();
+      const gitlabTasks = tasks.filter(
+        (t) => t.issueType === GITLAB_TYPE && (t.timeSpentOnDay?.[dayStr] ?? 0) > 0,
+      );
       if (gitlabTasks.length > 0) {
         // sort gitlab tasks by issueProviderId
         const gitlabTasksByIssueProviderId: { [key: string]: TaskCopy[] } =
@@ -57,6 +64,7 @@ export class GitlabIssueEffects {
                     gitlabCfg: gitlabCfgForProvider,
                     issueProviderId,
                     tasksForIssueProvider,
+                    day: dayStr,
                   },
                 })
                 .afterClosed()

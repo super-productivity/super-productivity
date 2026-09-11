@@ -8,7 +8,7 @@
   ></focus-mode-countdown>
 }
 
-<focus-mode-layout>
+<focus-mode-layout [class.has-mode-selector]="isShowModeSelector()">
   <!-- ========== ROW 1: TOP CONTROLS ========== -->
   <!-- Mode selector (Preparation) and simple counters (In Progress) are mutually
        exclusive; whichever is active projects into the layout's top slot. That
@@ -89,6 +89,7 @@
             <button
               mat-icon-button
               [matTooltip]="T.F.FOCUS_MODE.REMOVE_TIME_MINUTE | translate"
+              [attr.aria-label]="T.F.FOCUS_MODE.REMOVE_TIME_MINUTE | translate"
               (click)="adjustTime(-60000)"
               class="time-adjust-btn time-adjust-btn--decrease"
             >
@@ -127,6 +128,7 @@
             <button
               mat-icon-button
               [matTooltip]="T.F.FOCUS_MODE.ADD_TIME_MINUTE | translate"
+              [attr.aria-label]="T.F.FOCUS_MODE.ADD_TIME_MINUTE | translate"
               (click)="adjustTime(60000)"
               class="time-adjust-btn time-adjust-btn--increase"
             >
@@ -182,6 +184,11 @@
             ? (T.F.FOCUS_MODE.SELECT_TASK_FIRST | translate)
             : (T.F.FOCUS_MODE.START_FOCUS_SESSION | translate)
         "
+        [attr.aria-label]="
+          isPlayButtonDisabled()
+            ? (T.F.FOCUS_MODE.SELECT_TASK_FIRST | translate)
+            : (T.F.FOCUS_MODE.START_FOCUS_SESSION | translate)
+        "
         [disabled]="isPlayButtonDisabled() || isLaunching()"
         (click)="startSession()"
         class="play-button"
@@ -193,6 +200,7 @@
         <button
           mat-icon-button
           [matTooltip]="T.F.FOCUS_MODE.POMODORO_SETTINGS | translate"
+          [attr.aria-label]="T.F.FOCUS_MODE.POMODORO_SETTINGS | translate"
           (click)="openPomodoroSettings()"
           class="mode-settings-btn"
         >
@@ -204,6 +212,7 @@
         <button
           mat-icon-button
           [matTooltip]="T.F.FOCUS_MODE.FLOWTIME_SETTINGS | translate"
+          [attr.aria-label]="T.F.FOCUS_MODE.FLOWTIME_SETTINGS | translate"
           (click)="openFlowtimeSettings()"
           class="mode-settings-btn"
         >
@@ -224,7 +233,8 @@
   }
 
   <!-- ========== ROW 4: Session control row (In Progress state) ========== -->
-  <!-- Back to Planning · Pause · Complete · Reset · (issue) · Notes — one bottom row. -->
+  <!-- Primary actions stay visible. Secondary actions use More on mobile and
+       remain directly available on wider screens. -->
   @if (isShowBottomControls()) {
     <section
       @fadeSwap
@@ -236,6 +246,7 @@
         mat-icon-button
         class="exit-session-btn"
         [matTooltip]="T.F.FOCUS_MODE.BACK_TO_PLANNING | translate"
+        [attr.aria-label]="T.F.FOCUS_MODE.BACK_TO_PLANNING | translate"
         (click)="exitToPlanning()"
       >
         <mat-icon>arrow_back</mat-icon>
@@ -247,6 +258,7 @@
           mat-icon-button
           class="pause-resume-btn"
           [matTooltip]="T.F.FOCUS_MODE.RESUME_SESSION | translate"
+          [attr.aria-label]="T.F.FOCUS_MODE.RESUME_SESSION | translate"
           (click)="resumeSession()"
         >
           <mat-icon>play_arrow</mat-icon>
@@ -256,6 +268,7 @@
           mat-icon-button
           class="pause-resume-btn"
           [matTooltip]="T.F.FOCUS_MODE.PAUSE_SESSION | translate"
+          [attr.aria-label]="T.F.FOCUS_MODE.PAUSE_SESSION | translate"
           (click)="pauseSession()"
         >
           <mat-icon>pause</mat-icon>
@@ -267,55 +280,112 @@
           mat-icon-button
           class="complete-session-btn"
           [matTooltip]="T.F.FOCUS_MODE.COMPLETE_FOCUS_SESSION | translate"
+          [attr.aria-label]="T.F.FOCUS_MODE.COMPLETE_FOCUS_SESSION | translate"
           (click)="completeFocusSession()"
         >
           <mat-icon>done_all</mat-icon>
         </button>
       }
 
-      @if (isShowCompleteSessionButton() && isPomodoro()) {
+      @if (isXs() && (isPomodoro() || displayed)) {
         <button
           mat-icon-button
-          [matTooltip]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
-          (click)="resetCycles()"
+          class="secondary-actions-menu-btn"
+          [matMenuTriggerFor]="secondarySessionActions"
+          [matTooltip]="T.G.MORE_ACTIONS | translate"
+          [attr.aria-label]="T.G.MORE_ACTIONS | translate"
         >
-          <mat-icon>restart_alt</mat-icon>
+          <mat-icon>more_vert</mat-icon>
         </button>
-      }
+      } @else {
+        @if (isShowCompleteSessionButton() && isPomodoro()) {
+          <button
+            mat-icon-button
+            class="reset-cycles-btn"
+            [matTooltip]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
+            [attr.aria-label]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
+            (click)="resetCycles()"
+          >
+            <mat-icon>restart_alt</mat-icon>
+          </button>
+        }
 
-      @if (displayed && displayed.issueId && displayed.issueType !== ICAL_TYPE) {
-        <a
-          mat-icon-button
-          [matTooltip]="T.F.FOCUS_MODE.OPEN_ISSUE_IN_BROWSER | translate"
-          target="_blank"
-          [href]="issueUrl$ | async"
-        >
-          @if (displayed.issuePoints) {
-            <div class="mini-badge bgc-primary">{{ displayed.issuePoints }}</div>
-          }
-          <mat-icon [svgIcon]="displayed.issueType | issueIcon"></mat-icon>
-        </a>
-      }
+        @if (displayed && displayed.issueId && displayed.issueType !== ICAL_TYPE) {
+          <a
+            mat-icon-button
+            class="open-issue-btn"
+            target="_blank"
+            rel="noopener"
+            [href]="issueUrl$ | async"
+            [matTooltip]="T.F.FOCUS_MODE.OPEN_ISSUE_IN_BROWSER | translate"
+            [attr.aria-label]="T.F.FOCUS_MODE.OPEN_ISSUE_IN_BROWSER | translate"
+          >
+            @if (displayed.issuePoints) {
+              <div class="mini-badge bgc-primary">{{ displayed.issuePoints }}</div>
+            }
+            <mat-icon [svgIcon]="displayed.issueType | issueIcon"></mat-icon>
+          </a>
+        }
 
-      @if (displayed) {
-        <button
-          (click)="isFocusNotes.set(!isFocusNotes())"
-          [matTooltip]="T.F.FOCUS_MODE.SHOW_HIDE_NOTES_AND_ATTACHMENTS | translate"
-          class="ico-btn show-additional-info-btn"
-          color=""
-          mat-icon-button
-        >
-          @if (!isFocusNotes()) {
-            <mat-icon>chat</mat-icon>
-          }
-          @if (isFocusNotes()) {
-            <mat-icon>expand_more</mat-icon>
-          }
-        </button>
+        @if (displayed) {
+          <button
+            mat-icon-button
+            class="ico-btn show-additional-info-btn show-notes-btn"
+            [matTooltip]="T.F.FOCUS_MODE.SHOW_HIDE_NOTES_AND_ATTACHMENTS | translate"
+            [attr.aria-label]="T.F.FOCUS_MODE.SHOW_HIDE_NOTES_AND_ATTACHMENTS | translate"
+            (click)="isFocusNotes.set(!isFocusNotes())"
+          >
+            @if (!isFocusNotes()) {
+              <mat-icon>chat</mat-icon>
+            } @else {
+              <mat-icon>expand_more</mat-icon>
+            }
+          </button>
+        }
       }
     </section>
   }
 </focus-mode-layout>
+
+<mat-menu #secondarySessionActions="matMenu">
+  <ng-template matMenuContent>
+    @if (isShowCompleteSessionButton() && isPomodoro()) {
+      <button
+        mat-menu-item
+        (click)="resetCycles()"
+      >
+        <mat-icon>restart_alt</mat-icon>
+        <span>{{ T.F.FOCUS_MODE.RESET_CYCLES | translate }}</span>
+      </button>
+    }
+
+    @if (displayed && displayed.issueId && displayed.issueType !== ICAL_TYPE) {
+      <a
+        mat-menu-item
+        target="_blank"
+        rel="noopener"
+        [href]="issueUrl$ | async"
+      >
+        <mat-icon [svgIcon]="displayed.issueType | issueIcon"></mat-icon>
+        <span>{{ T.F.FOCUS_MODE.OPEN_ISSUE_IN_BROWSER | translate }}</span>
+      </a>
+    }
+
+    @if (displayed) {
+      <button
+        mat-menu-item
+        (click)="isFocusNotes.set(!isFocusNotes())"
+      >
+        @if (!isFocusNotes()) {
+          <mat-icon>chat</mat-icon>
+        } @else {
+          <mat-icon>expand_more</mat-icon>
+        }
+        <span>{{ T.F.FOCUS_MODE.SHOW_HIDE_NOTES_AND_ATTACHMENTS | translate }}</span>
+      </button>
+    }
+  </ng-template>
+</mat-menu>
 
 <!-- ========== OVERLAYS (anchored to :host, above the layout) ========== -->
 
@@ -344,6 +414,7 @@
       class="hide-notes-btn"
       color=""
       mat-mini-fab
+      [attr.aria-label]="T.G.CLOSE | translate"
     >
       <mat-icon>expand_more</mat-icon>
     </button>

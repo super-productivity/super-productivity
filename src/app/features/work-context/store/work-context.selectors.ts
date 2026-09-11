@@ -37,7 +37,7 @@ export const WORK_CONTEXT_FEATURE_NAME = 'workContext';
  * Fallback: Tasks with dueWithTime for today (but no/stale dueDay) are also included.
  * This handles edge cases like imported tasks with scheduled times.
  *
- * See: docs/ai/today-tag-architecture.md
+ * See: ARCHITECTURE-DECISIONS.md Decision #2
  */
 const computeOrderedTaskIdsForToday = (
   todayTag: Tag | undefined,
@@ -61,7 +61,7 @@ const computeOrderedTaskIdsForToday = (
   // - Only check dueDay if dueWithTime is not set
   // - If dueWithTime is set, do NOT check dueDay (even for legacy data with both fields)
   // - This ensures correct behavior with both new data (only one field set) and legacy data (both fields set)
-  // See: docs/ai/dueDay-dueWithTime-mutual-exclusivity.md
+  // See: ARCHITECTURE-DECISIONS.md Decision #1
   const tasksForToday: string[] = [];
   for (const taskId of Object.keys(taskEntities)) {
     const task = taskEntities[taskId];
@@ -288,7 +288,14 @@ export const selectStartableTasksActiveContextFirst = createSelector(
   },
 );
 
-export const selectDoneTaskIdsForActiveContext = createSelector(
+/**
+ * Ids of the NOT-done tasks in the active context — the move-up/down reducers
+ * skip over everything absent from this list. Historically misnamed
+ * `selectDoneTaskIdsForActiveContext`; the matching `doneTaskIds` op payload
+ * field keeps the old name because released clients replay it (see
+ * work-context-meta.actions.ts).
+ */
+export const selectUndoneTaskIdsForActiveContext = createSelector(
   selectActiveWorkContext,
   selectTaskEntities,
   (activeContext, entities): string[] => {
@@ -305,7 +312,8 @@ export const selectDoneTaskIdsForActiveContext = createSelector(
   },
 );
 
-export const selectDoneBacklogTaskIdsForActiveContext = createSelector(
+/** Backlog counterpart of selectUndoneTaskIdsForActiveContext (NOT-done ids). */
+export const selectUndoneBacklogTaskIdsForActiveContext = createSelector(
   selectActiveWorkContext,
   selectTaskEntities,
   (activeContext, entities): string[] | undefined => {
@@ -329,7 +337,7 @@ export const selectDoneBacklogTaskIdsForActiveContext = createSelector(
  * NOT by task.tagIds (TODAY_TAG should NEVER be in task.tagIds).
  * TODAY_TAG.taskIds only stores the ordering.
  *
- * See: docs/ai/today-tag-architecture.md
+ * See: ARCHITECTURE-DECISIONS.md Decision #2
  */
 // SPAP-20: fed by the scheduling snapshot (as a Record) instead of the full
 // active-project task entities, so a `timeSpent`-only tick — which does not
@@ -422,7 +430,7 @@ export const selectTimelineTasks = createSelector(
  * This is used by ValidateStateService to repair state after sync, preventing
  * divergence caused by per-entity conflict resolution of multi-entity operations.
  *
- * See: docs/ai/today-tag-architecture.md
+ * See: ARCHITECTURE-DECISIONS.md Decision #2
  */
 export const selectTodayTagRepair = createSelector(
   selectTagFeatureState,

@@ -56,6 +56,40 @@ describe('PluginDialogComponent', () => {
     ]);
   });
 
+  it('removes executable attributes from plugin HTML', async () => {
+    await createComponent({
+      htmlContent: `
+        <img id="plugin-dialog-img" onerror="alert(document.domain)">
+        <a id="plugin-dialog-link" href="#" onmouseover="alert(document.domain)">
+          Link
+        </a>
+      `,
+    });
+
+    const img = fixture.nativeElement.querySelector('mat-dialog-content img');
+    const link = fixture.nativeElement.querySelector('mat-dialog-content a');
+
+    expect(img.getAttribute('onerror')).toBeNull();
+    expect(link.getAttribute('onmouseover')).toBeNull();
+  });
+
+  it('preserves safe rich HTML and form controls', async () => {
+    await createComponent({
+      htmlContent: `
+        <h2>Plugin settings</h2>
+        <label for="plugin-dialog-input">Name</label>
+        <input id="plugin-dialog-input" value="Example">
+        <p><strong>Ready</strong></p>
+      `,
+    });
+
+    const input = fixture.nativeElement.querySelector('mat-dialog-content input');
+
+    expect(fixture.nativeElement.querySelector('h2').textContent).toBe('Plugin settings');
+    expect(input.value).toBe('Example');
+    expect(fixture.nativeElement.querySelector('strong').textContent).toBe('Ready');
+  });
+
   it('closes with the clicked custom button label', async () => {
     const onClick = jasmine.createSpy('onClick').and.resolveTo();
     const component = await createComponent({

@@ -5,10 +5,8 @@ import {
   type TokenizerExtensionFunction,
   type TokenizerStartFunction,
 } from 'marked';
-import {
-  isExternalUrlSchemeAllowed,
-  isPathSafeToOpen,
-} from '../../../electron/shared-with-frontend/is-external-url-allowed';
+import { isPathSafeToOpen } from '../../../electron/shared-with-frontend/is-external-url-allowed';
+import { toRenderableHref } from './link-href.util';
 import { escapeHtml } from '../util/escape-html';
 
 /**
@@ -165,10 +163,11 @@ export const markedOptionsFactory = (): MarkedOptions => {
     // Block unsafe URL schemes from rendering as clickable links. On click the
     // href is passed verbatim to shell.openExternal (Electron), which would let
     // note content silently invoke OS protocol handlers. See GHSA-hr87-735w-hfq3.
-    if (!isExternalUrlSchemeAllowed(href)) {
+    const url = toRenderableHref(href);
+    if (!url) {
       return `<span class="markdown-blocked-link" title="Link blocked: unsafe URL scheme">${text}</span>`;
     }
-    return `<a target="_blank" rel="noopener noreferrer" href="${escapeHtmlAttr(href)}" title="${escapeHtmlAttr(title || '')}">${text}</a>`;
+    return `<a target="_blank" rel="noopener noreferrer" href="${escapeHtmlAttr(url)}" title="${escapeHtmlAttr(title || '')}">${text}</a>`;
   };
 
   // Custom image renderer with support for sizing syntax

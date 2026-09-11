@@ -76,7 +76,7 @@ if (plugin.onMessage) {
   plugin.onMessage(async (message: any) => {
     switch (message?.type) {
       case 'getRules':
-        return await automationManager.getRegistry().getRules();
+        return await automationManager.getRules();
       case 'getDefinitions':
         return {
           triggers: globalRegistry
@@ -90,18 +90,16 @@ if (plugin.onMessage) {
             .map((a) => ({ id: a.id, name: a.name, description: a.description })),
         };
       case 'saveRule':
-        await automationManager.getRegistry().addOrUpdateRule(message.payload);
+        await automationManager.saveRule(message.payload);
         return { success: true };
       case 'addRules':
-        await automationManager.getRegistry().addRules(message.payload);
+        await automationManager.addRules(message.payload);
         return { success: true };
       case 'deleteRule':
-        await automationManager.getRegistry().deleteRule(message.payload.id);
+        await automationManager.deleteRule(message.payload.id);
         return { success: true };
       case 'toggleRuleStatus':
-        await automationManager
-          .getRegistry()
-          .toggleRuleStatus(message.payload.id, message.payload.isEnabled);
+        await automationManager.toggleRuleStatus(message.payload.id, message.payload.isEnabled);
         return { success: true };
       case 'getProjects':
         return await plugin.getAllProjects();

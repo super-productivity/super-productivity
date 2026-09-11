@@ -5,6 +5,7 @@ import type { NativeHttpExecutor } from '../../http/native-http-retry';
 import {
   AuthFailSPError,
   HttpNotOkAPIError,
+  NetworkUnavailableSPError,
   PotentialCorsError,
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
@@ -42,6 +43,18 @@ export interface WebDavHttpAdapterDeps {
 
 export class WebDavHttpAdapter {
   private static readonly L = 'WebDavHttpAdapter';
+  /**
+   * Marks a desktop WebDAV upload so `electron/main-window.ts` can put
+   * `Connection: close` on it — renderer `fetch` refuses to set that header
+   * itself (#9985). The main process matches this exact name as a literal (the
+   * two build targets cannot import each other), and the Electron test
+   * `webdav-connection.test.cjs` reads this constant so the two cannot drift.
+   *
+   * HTTP/1.1 only: RFC 9113 forbids connection-specific headers over HTTP/2, so
+   * the marker is inert there and `WebdavApi`'s verification retry budget is
+   * what covers h2 servers.
+   */
+  private static readonly ELECTRON_UPLOAD_HEADER = 'X-SuperProductivity-WebDAV-Upload';
 
   /**
    * Sync correctness (#7144): force revalidation on the NATIVE HTTP path. iOS
@@ -122,9 +135,16 @@ export class WebDavHttpAdapter {
         });
         try {
           const fetchImpl = this._deps.webFetch();
+          // Electron's main-window request hook consumes this marker and sets
+          // Connection: close, which renderer fetch cannot set itself (#9985).
+          // Keep it off the web/native paths and preserve conditional headers.
+          const headers =
+            this._deps.platformInfo.isElectron && options.method === 'PUT'
+              ? { ...options.headers, [WebDavHttpAdapter.ELECTRON_UPLOAD_HEADER]: '1' }
+              : options.headers;
           const fetchResponse = await fetchImpl(options.url, {
             method: options.method,
-            headers: options.headers,
+            headers,
             body: options.body,
             // Disable HTTP caching to ensure we get fresh metadata for sync operations
             cache: 'no-store',
@@ -132,6 +152,30 @@ export class WebDavHttpAdapter {
 
           response = await this._convertFetchResponse(fetchResponse);
         } catch (fetchError) {
+          if (fetchError instanceof TypeError && this._deps.platformInfo.isElectron) {
+            // #9985: the desktop shell injects `Access-Control-Allow-*: *` on
+            // every response and forces preflights to 200, so CORS cannot be
+            // the cause here. Reporting it sent a user chasing a dead end while
+            // the real failure was a truncated response from the WebDAV server.
+            // Structured meta only — some browsers embed the full URL in
+            // `error.message`, which must never reach an exportable log.
+            this._deps.logger.critical(
+              `${WebDavHttpAdapter.L}.request() network failure`,
+              errorMeta(fetchError, { url: scrubbedUrl, method: options.method }),
+            );
+            // No host in the message: NetworkUnavailableSPError is documented as
+            // safe to render verbatim, and the host is already in the log meta.
+            //
+            // Known gap: Chromium reports the real cause (#9985's
+            // net::ERR_CONTENT_LENGTH_MISMATCH) only to devtools, never on the
+            // TypeError — whose message is a bare "Failed to fetch" — so there
+            // is nothing further to extract here. Recovering it would mean
+            // piping `session.webRequest.onErrorOccurred` back to the renderer.
+            throw new NetworkUnavailableSPError(
+              'Network request failed. Check your connection and whether the ' +
+                'server is reachable.',
+            );
+          }
           if (this._isLikelyCors(fetchError)) {
             // Privacy: PotentialCorsError carries only the scrubbed URL,
             // never the raw fetch error. The original-error meta below is
@@ -162,6 +206,7 @@ export class WebDavHttpAdapter {
       if (
         e instanceof AuthFailSPError ||
         e instanceof PotentialCorsError ||
+        e instanceof NetworkUnavailableSPError ||
         e instanceof HttpNotOkAPIError ||
         e instanceof RemoteFileNotFoundAPIError ||
         e instanceof TooManyRequestsAPIError
@@ -207,8 +252,8 @@ export class WebDavHttpAdapter {
    *
    * Bias is intentional: WebDAV's most common deployment failure mode
    * IS misconfigured CORS, so over-attributing offline / DNS to CORS
-   * still surfaces an actionable hint to the user. Native-platform
-   * paths never hit this branch.
+   * still surfaces an actionable hint to the user. Native-platform and
+   * Electron paths never hit this branch — Electron is handled above.
    */
   private _isLikelyCors(error: unknown): boolean {
     if (!(error instanceof TypeError)) return false;

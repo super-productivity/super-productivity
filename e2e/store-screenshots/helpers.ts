@@ -51,9 +51,11 @@ export const openTaskDetailPanel = async (page: Page, taskId: string): Promise<v
 
 /**
  * Nudge the schedule's scroll container up by `pxUp` pixels so the
- * captured frame shows a bit of context before work-start (default
- * scroll lands flush at work-start, which crops anything earlier in the
- * day). Pass through to the schedule scroll-wrapper rather than the
+ * captured frame shows a bit of context before the current time. The
+ * default scroll now already leaves a lead above its target (see
+ * scroll-padding-top on .scroll-wrapper), so this over-corrects; shrink
+ * `pxUp` when the screenshots are next regenerated. Pass through to the
+ * schedule scroll-wrapper rather than the
  * page scroll so we don't disturb non-schedule layouts.
  */
 export const scrollScheduleUp = async (page: Page, pxUp = 80): Promise<void> => {

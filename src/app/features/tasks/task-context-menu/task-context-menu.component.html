@@ -1,8 +1,8 @@
-@if (isShowInner) {
+@if (isOpen()) {
   <task-context-menu-inner
     #taskContextMenuInner
     [isAdvancedControls]="isAdvancedControls()"
-    (close)="isShowInner = false"
+    (close)="onClose()"
     [task]="task()"
   ></task-context-menu-inner>
 }

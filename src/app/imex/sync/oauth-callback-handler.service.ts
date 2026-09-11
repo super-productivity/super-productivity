@@ -1,13 +1,12 @@
 import { Injectable, OnDestroy, inject } from '@angular/core';
-import { Subject } from 'rxjs';
-import { App, URLOpenListenerEvent } from '@capacitor/app';
-import { PluginListenerHandle } from '@capacitor/core';
+import { Subject, Subscription } from 'rxjs';
 import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
 import { IS_ELECTRON } from '../../app.constants';
 import { SyncLog } from '../../core/log';
 import { PluginOAuthService } from '../../plugins/oauth/plugin-oauth.service';
 import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const';
 import { validateOAuthState } from './oauth-state.util';
+import { PENDING_CAPACITOR_OAUTH_URL } from './pending-capacitor-oauth-url';
 
 type OAuthProvider = 'dropbox' | 'onedrive' | 'plugin' | 'unknown';
 
@@ -23,8 +22,9 @@ export interface OAuthCallbackData {
 })
 export class OAuthCallbackHandlerService implements OnDestroy {
   private _pluginOAuthService = inject(PluginOAuthService);
+  private _pendingCapacitorOAuthUrl$ = inject(PENDING_CAPACITOR_OAUTH_URL);
   private _authCodeReceived$ = new Subject<OAuthCallbackData>();
-  private _urlListenerHandle?: PluginListenerHandle;
+  private _urlSub?: Subscription;
   private _isDestroyed = false;
 
   readonly authCodeReceived$ = this._authCodeReceived$.asObservable();
@@ -40,40 +40,44 @@ export class OAuthCallbackHandlerService implements OnDestroy {
 
   ngOnDestroy(): void {
     this._isDestroyed = true;
-    this._urlListenerHandle?.remove();
+    this._urlSub?.unsubscribe();
     this._authCodeReceived$.complete();
   }
 
-  private async _setupAppUrlListener(): Promise<void> {
-    this._urlListenerHandle = await App.addListener(
-      'appUrlOpen',
-      (event: URLOpenListenerEvent) => {
-        SyncLog.log('OAuthCallbackHandler: Received URL');
+  /**
+   * Consumes URLs routed from the single native `appUrlOpen` listener in
+   * `main.ts` rather than registering a second one. Capacitor delivers a
+   * cold-start URL only to the first listener added for the event and then
+   * discards it, so a second listener here would never see a launch URL.
+   * See `pending-capacitor-oauth-url.ts`.
+   */
+  private _setupAppUrlListener(): void {
+    this._urlSub = this._pendingCapacitorOAuthUrl$.subscribe((url: string) => {
+      SyncLog.log('OAuthCallbackHandler: Received URL');
 
-        if (event.url.includes('plugin-oauth-callback')) {
-          this._handlePluginOAuthCallback(event.url);
-        } else if (
-          event.url.startsWith('com.super-productivity.app://oauth-callback') ||
-          event.url.startsWith('superproductivity://oauth-callback')
-        ) {
-          const callbackData = this._parseOAuthCallback(event.url);
+      if (url.includes('plugin-oauth-callback')) {
+        this._handlePluginOAuthCallback(url);
+      } else if (
+        url.startsWith('com.super-productivity.app://oauth-callback') ||
+        url.startsWith('superproductivity://oauth-callback')
+      ) {
+        const callbackData = this._parseOAuthCallback(url);
 
-          if (callbackData.code) {
-            SyncLog.log('OAuthCallbackHandler: Extracted auth code');
-          } else if (callbackData.error) {
-            SyncLog.warn(
-              'OAuthCallbackHandler: OAuth error',
-              callbackData.error,
-              callbackData.error_description,
-            );
-          } else {
-            SyncLog.warn('OAuthCallbackHandler: No auth code or error in URL');
-          }
-
-          this._authCodeReceived$.next(callbackData);
+        if (callbackData.code) {
+          SyncLog.log('OAuthCallbackHandler: Extracted auth code');
+        } else if (callbackData.error) {
+          SyncLog.warn(
+            'OAuthCallbackHandler: OAuth error',
+            callbackData.error,
+            callbackData.error_description,
+          );
+        } else {
+          SyncLog.warn('OAuthCallbackHandler: No auth code or error in URL');
         }
-      },
-    );
+
+        this._authCodeReceived$.next(callbackData);
+      }
+    });
   }
 
   private _setupElectronOAuthListener(): void {
@@ -174,7 +178,14 @@ export class OAuthCallbackHandlerService implements OnDestroy {
         this._pluginOAuthService.handleRedirectError('no_code_or_error', state);
       }
     } catch (e) {
-      SyncLog.err('OAuthCallbackHandler: Failed to parse plugin OAuth URL', url, e);
+      // Log a non-identifying descriptor only, never the URL or the error
+      // object: the URL carries the auth code, and an `ERR_INVALID_URL` keeps
+      // the raw URL on an enumerable `input` property that inspection prints.
+      // The log is exportable (rule #9). Matches `protocol-handler.ts`.
+      SyncLog.err(
+        'OAuthCallbackHandler: Failed to parse plugin OAuth URL',
+        url.split(':')[0],
+      );
       this._pluginOAuthService.handleRedirectError('parse_error');
     }
   }

@@ -22,7 +22,7 @@
 
 .day-labels {
   font-size: 11px;
-  color: var(--text-muted, rgba(255, 255, 255, 0.5));
+  color: var(--text-color-muted);
   padding-bottom: var(--s-quarter);
 }
 
@@ -55,7 +55,7 @@
   &.is-active {
     border-color: var(--c-primary);
     background: var(--c-primary);
-    color: var(--text-on-primary, #fff);
+    color: var(--c-contrast);
   }
 
   &.is-past {

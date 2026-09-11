@@ -25,7 +25,17 @@
       "ERROR": "Tidak dapat memeriksa pembaruan. Silakan coba lagi nanti.",
       "UP_TO_DATE": "Kamu sudah menggunakan versi terbaru ({{version}})."
     },
-    "UPDATE_WEB_APP": "Versi baru tersedia. Muat Versi Terbaru?"
+    "UPDATE_WEB_APP": "Versi baru tersedia. Muat Versi Terbaru?",
+    "B_SUPER_SYNC_ENCRYPTION": {
+      "ALREADY_ENCRYPTED": "Akun ini sudah dienkripsi di perangkat lain. Masukkan kata sandi yang sudah ada agar sinkronisasi tetap berjalan.",
+      "ENABLE": "Aktifkan enkripsi",
+      "LATER": "Nanti",
+      "MSG": "SuperSync dienkripsi secara ujung ke ujung, tetapi akun ini masih disinkronkan tanpa kata sandi. Tetapkan kata sandi untuk melindungi data Anda — data tetap tersimpan dan akan diunggah ulang dalam keadaan terenkripsi pada sinkronisasi berikutnya."
+    },
+    "DROP_LINK": {
+      "SNACK": "Tugas dibuat dari tautan yang dijatuhkan",
+      "TASK_TITLE": "Periksa {{url}}"
+    }
   },
   "BL": {
     "NO_TASKS": "Saat ini tidak ada tugas di backlog Anda"
@@ -40,10 +50,21 @@
     "RESTORE_FILE_BACKUP": "Sepertinya TIDAK ADA DATA, tetapi ada cadangan yang tersedia di \"{{dir}}\". Apakah Anda ingin memulihkan cadangan dari {{from}}?",
     "RESTORE_FILE_BACKUP_ANDROID": "Sepertinya TIDAK ADA DATA, tetapi ada cadangan yang tersedia. Apakah Anda ingin memuatnya?",
     "RESTORE_STRAY_BACKUP": "Selama sinkronisasi terakhir mungkin ada beberapa kesalahan. Apakah Anda ingin memulihkan cadangan terakhir?",
-    "DELETE_SECTION": "Yakin ingin menghapus bagian ini? Tugas di dalamnya akan dipindahkan ke daftar tugas."
+    "DELETE_SECTION": "Yakin ingin menghapus bagian ini? Tugas di dalamnya akan dipindahkan ke daftar tugas.",
+    "RESTORE_FILE_BACKUP_MOBILE": "Tidak ada data yang ditemukan di perangkat ini, tetapi tersedia cadangan untuk dipulihkan (tugas: {{tasks}}, proyek: {{projects}}). Pulihkan cadangan tersebut?",
+    "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "Pulihkan cadangan otomatis terbaru (tugas: {{tasks}}, proyek: {{projects}})? Tindakan ini mengganti semua data saat ini di perangkat ini dan, jika Anda menggunakan sinkronisasi, menimpa data di perangkat lain pada sinkronisasi berikutnya."
   },
   "DATETIME_SCHEDULE": {
-    "PRESS_ENTER_AGAIN": "Tekan enter lagi untuk menyimpan"
+    "PRESS_ENTER_AGAIN": "Tekan enter lagi untuk menyimpan",
+    "MONTH": "Bulan",
+    "NEXT_24_YEARS": "24 tahun berikutnya",
+    "NEXT_MONTH": "Bulan berikutnya",
+    "NEXT_YEAR": "Tahun berikutnya",
+    "PREVIOUS_24_YEARS": "24 tahun sebelumnya",
+    "PREVIOUS_MONTH": "Bulan sebelumnya",
+    "PREVIOUS_YEAR": "Tahun sebelumnya",
+    "SWITCH_TO_MULTI_YEAR_VIEW": "Pilih tahun",
+    "SWITCH_TO_YEAR_VIEW": "Pilih bulan"
   },
   "DIALOG_UNSPLASH_PICKER": {
     "BY": "Oleh",
@@ -82,16 +103,23 @@
         "EDIT_ATTACHMENT": "Ubah lampiran",
         "LABELS": {
           "IMG": "Gambar",
-          "LINK": "URL"
+          "LINK": "URL",
+          "FILE": "Jalur berkas"
         },
         "SELECT_TYPE": "Pilih tipe",
         "TYPES": {
           "FILE": "Berkas (dibuka oleh aplikasi sistem default)",
           "IMG": "Gambar (ditampilkan sebagai thumbnail)",
           "LINK": "Tautan (buka di browser)"
+        },
+        "PLACEHOLDERS": {
+          "FILE": "/path/to/file",
+          "IMG": "https://example.com/image.png",
+          "LINK": "https://example.com"
         }
       },
-      "LOCAL_FILE_UNAVAILABLE": "Lampiran ini hanya tersedia di perangkat tempat lampiran ditambahkan."
+      "LOCAL_FILE_UNAVAILABLE": "Lampiran ini hanya tersedia di perangkat tempat lampiran ditambahkan.",
+      "COMMAND_UNSUPPORTED": "Lampiran perintah tidak dapat lagi menjalankan perintah."
     },
     "BOARDS": {
       "DEFAULT": {
@@ -133,7 +161,14 @@
         "TAGS_EXCLUDED_MATCH_MODE": "Pencocokan tag yang dikecualikan",
         "TAGS_MATCH_ALL": "Cocokkan semua (AND)",
         "TAGS_MATCH_ANY": "Cocokkan salah satu (OR)",
-        "TAGS_MATCH_MODE": "Pencocokan tag wajib"
+        "TAGS_MATCH_MODE": "Pencocokan tag wajib",
+        "ONLY_PARENT_TASKS": "Hanya tugas induk",
+        "PROJECT": "Proyek",
+        "PROJECT_ALL": "Semua Proyek",
+        "SCHEDULED_STATE": "Status penjadwalan",
+        "SCHEDULED_STATE_ALL": "Semua",
+        "SCHEDULED_STATE_NOT_SCHEDULED": "Tidak Terjadwal",
+        "SCHEDULED_STATE_SCHEDULED": "Terjadwal"
       },
       "V": {
         "ADD_NEW_BOARD": "Tambahkan papan baru",
@@ -162,7 +197,8 @@
         "TWO_WAY_SYNC_SECTION": "Sinkronisasi Dua Arah (eksperimental)",
         "TWO_WAY_SYNC_STATUS": "Arah sinkronisasi status",
         "TWO_WAY_SYNC_TITLE": "Arah sinkronisasi judul",
-        "IS_ADD_SUB_TASKS": "Impor juga subtugas saat tugas ditambahkan"
+        "IS_ADD_SUB_TASKS": "Impor juga subtugas saat tugas ditambahkan",
+        "POLL_INTERVAL_MINUTES": "Interval polling (menit)"
       },
       "FORM_SECTION": {
         "HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar tugas CalDav yang belum selesai untuk proyek tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan terdaftar sebagai saran dan akan memberikan tautan ke todo serta informasi lebih lanjut tentangnya.</p> <p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua tugas yang belum selesai ke backlog tugas Anda</p><p>Agar berfungsi untuk nextcloud di aplikasi web, Anda mungkin perlu memasukkannya ke daftar putih (whitelist) \"https://app.super-productivity.com\" melalui aplikasi Nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
@@ -205,7 +241,8 @@
         "EVENT_HIDDEN": "Acara kalender disembunyikan",
         "EVENT_RESCHEDULED": "Acara dijadwalkan ulang",
         "EVENT_DELETED": "Acara dihapus",
-        "TIME_BLOCK_ERROR": "Gagal menyinkronkan blok waktu: {{errTxt}}"
+        "TIME_BLOCK_ERROR": "Gagal menyinkronkan blok waktu: {{errTxt}}",
+        "EVENT_MOVED": "Acara dipindahkan"
       },
       "CONTEXT_MENU": {
         "CREATE_TASK": "Buat sebagai tugas",
@@ -321,7 +358,26 @@
       "RESET_CYCLES": "Reset penghitung sesi",
       "RESUME_BREAK": "Lanjutkan istirahat",
       "SELECT_TASK_FIRST": "Pilih tugas terlebih dahulu untuk mulai pelacakan",
-      "OVERTIME_MSG": "Waktu habis — istirahat saat Anda siap"
+      "OVERTIME_MSG": "Waktu habis — istirahat saat Anda siap",
+      "BREAK_TITLE": "Istirahat",
+      "BROWSER_TITLE_BREAK": "Istirahat",
+      "BROWSER_TITLE_PAUSED": "Dijeda",
+      "FLOWTIME_SETTINGS": "Pengaturan Flowtime",
+      "FLOWTIME_ENABLE_BREAKS": "Aktifkan istirahat Flowtime",
+      "FLOWTIME_BREAK_MODE": "Mode perhitungan istirahat",
+      "FLOWTIME_BREAK_MODE_RATIO": "Berbasis rasio",
+      "FLOWTIME_BREAK_MODE_RULE": "Berbasis aturan",
+      "FLOWTIME_BREAK_PERCENTAGE": "Persentase istirahat",
+      "FLOWTIME_BREAK_PERCENTAGE_DESC": "Durasi istirahat dihitung sebesar persentase ini dari durasi sesi kerja.",
+      "FLOWTIME_BREAK_RULES_DESC": "Aturan dievaluasi dalam urutan menaik. Jika rentang tumpang tindih, aturan pertama yang cocok akan digunakan.",
+      "FLOWTIME_ADD_BREAK_RULE": "Tambahkan aturan istirahat",
+      "FLOWTIME_VALIDATION_MIN_MAX": "Durasi maks harus lebih besar dari atau sama dengan durasi min",
+      "FLOWTIME_BREAK_RULE_MIN": "Durasi kerja min (m)",
+      "FLOWTIME_BREAK_RULE_MAX": "Durasi kerja maks (m)",
+      "FLOWTIME_BREAK_RULE_DURATION": "Durasi istirahat (m)",
+      "SESSION_COMPLETED_BANNER": "Sesi fokus selesai — Anda bekerja selama {{duration}}.",
+      "SESSION_COMPLETED_BANNER_ACTION": "Selanjutnya?",
+      "SESSION_COMPLETED_NOTIFICATION_BODY": "Anda bekerja selama {{duration}}."
     },
     "GITEA": {
       "FORM": {
@@ -418,7 +474,10 @@
         "OPTIONS_LOADED": "Opsi dimuat",
         "RELOAD_OPTIONS": "Muat ulang opsi",
         "SETUP_TITLE": "Siapkan konfigurasi {{title}}",
-        "TEST_CONNECTION": "Uji koneksi"
+        "TEST_CONNECTION": "Uji koneksi",
+        "LOAD_OPTIONS_FIRST": "Muat opsi terlebih dahulu",
+        "NO_OPTIONS_FOUND_HELP": "Tidak ada opsi yang ditemukan. Periksa detail koneksi dan muat ulang opsi.",
+        "OAUTH_UNAVAILABLE_WEB": "Tersedia di aplikasi desktop dan seluler. Pengaturan yang disinkronkan tetap tersimpan, tetapi data langsung tidak dapat dimuat di aplikasi web."
       },
       "HOW_TO_GET_A_TOKEN": "Bagaimana cara mendapatkan token?",
       "ISSUE_CONTENT": {
@@ -485,7 +544,10 @@
         "TITLE": "Arah sinkronisasi judul",
         "DUE_DAY": "Hari tenggat",
         "DUE_WITH_TIME": "Tanggal/waktu tenggat",
-        "TIME_ESTIMATE": "Estimasi waktu"
+        "TIME_ESTIMATE": "Estimasi waktu",
+        "AUTO_CREATE_TAGS": "Buat tag secara otomatis untuk label yang disinkronkan",
+        "AUTO_CREATE_TAGS_DESCRIPTION": "Secara otomatis membuat tag lokal saat label yang tidak dikenal ditarik dari penyedia jarak jauh.",
+        "TAGS": "Arah sinkronisasi tag/kategori"
       },
       "DEFAULT_NOTE_LABEL": "Catatan default untuk tugas yang diimpor",
       "DEFAULT_TAGS_LABEL": "Tag default untuk tugas yang diimpor",
@@ -571,7 +633,9 @@
         "PASSWORD": "Token / Kata sandi",
         "USE_PAT": "Gunakan Token Akses Pribadi daripada kata sandi",
         "USER_NAME": "Email / Nama pengguna",
-        "WONKY_COOKIE_MODE": "Autentikasi Cadangan Cookie Tidak Stabil (hanya aplikasi desktop)"
+        "WONKY_COOKIE_MODE": "Autentikasi Cadangan Cookie Tidak Stabil (hanya aplikasi desktop)",
+        "ALLOW_FETCH_FALLBACK": "Ambil data Jira langsung dari browser (lewati ekstensi)",
+        "ALT_PUBLIC_LINK_HOST": "Host alternatif untuk tautan Jira (misalnya URL publik saat host API berbeda; awalan jalur diperbolehkan)"
       },
       "FORM_SECTION": {
         "ADV_CFG": "Konfigurasi Lanjutan",
@@ -763,11 +827,17 @@
           "NUMBERED_LIST": "Daftar bernomor",
           "QUOTE": "Kutipan",
           "STRIKETHROUGH": "Coret",
-          "TASK_LIST": "Daftar Tugas"
+          "TASK_LIST": "Daftar Tugas",
+          "KEYBOARD_SHORTCUTS": "Pintasan keyboard"
         },
         "VIEW_PARSED": "Lihat sebagai Markdown yang diuraikan (tidak dapat diedit)",
         "VIEW_SPLIT": "Lihat Markdown yang diuraikan dan tidak diuraikan dalam tampilan terpisah",
-        "VIEW_TEXT_ONLY": "Lihat sebagai teks yang belum diurai"
+        "VIEW_TEXT_ONLY": "Lihat sebagai teks yang belum diurai",
+        "SHORTCUTS": {
+          "DIALOG_TITLE": "Pintasan Keyboard Markdown",
+          "COLUMN_ACTION": "Tindakan",
+          "COLUMN_SHORTCUT": "Pintasan"
+        }
       },
       "NOTE_CMP": {
         "DISABLE_PARSE": "Nonaktifkan penguraian Markdown untuk pratinjau",
@@ -869,7 +939,9 @@
         "REMOVED_PLAN_DATE": "Tanggal rencana yang dihapus untuk tugas '{{taskTitle}}'",
         "TASK_ALREADY_PLANNED": "Tugas sudah direncanakan untuk {{date}}",
         "TASK_PLANNED_FOR": "Tugas yang direncanakan untuk <strong>{{date}}</strong>{{extra}}"
-      }
+      },
+      "DAY_LOAD": "Direncanakan: {{planned}} / Tersedia: {{available}}",
+      "PLANNED_LOAD": "Direncanakan: {{planned}}"
     },
     "POMODORO": {
       "BREAK_IS_DONE": "Istirahat Anda selesai!"
@@ -909,14 +981,60 @@
         "L_THEME_COLOR": "Tema Warna",
         "TITLE": "Tema",
         "D_BACKGROUND_OVERLAY_OPACITY": "Sesuaikan nilai ini untuk membuat latar belakang lebih atau kurang transparan. Standarnya 20%.",
-        "L_BACKGROUND_OVERLAY_OPACITY": "Gelapkan/terangkan gambar latar belakang untuk kontras yang lebih baik"
+        "L_BACKGROUND_OVERLAY_OPACITY": "Gelapkan/terangkan gambar latar belakang untuk kontras yang lebih baik",
+        "D_BACKGROUND_IMAGE_BLUR": "Sesuaikan nilai ini untuk memburamkan gambar latar belakang. Nilai defaultnya 0px.",
+        "L_BACKGROUND_IMAGE_BLUR": "Buramkan gambar latar belakang",
+        "BTN_SELECT_IMAGE": "Pilih",
+        "S_BACKGROUND_IMAGE_READ_ERROR": "Tidak dapat membaca berkas gambar yang dipilih.",
+        "S_BACKGROUND_IMAGE_RESELECT_REQUIRED": "Berkas gambar latar belakang lokal perlu dipilih kembali setelah pembaruan keamanan.",
+        "S_BACKGROUND_IMAGE_TOO_LARGE": "Gambar yang dipilih terlalu besar. Pilih berkas yang lebih kecil dari {{maxSizeKb}} KB."
       },
       "S": {
         "ARCHIVED": "Proyek yang Diarsipkan",
         "CREATED": "Membuat proyek <strong>{{title}}</strong>. Anda dapat memilihnya dari menu di kiri atas.",
         "DELETED": "Proyek yang Dihapus",
         "UNARCHIVED": "Proyek yang tidak diarsipkan",
-        "UPDATED": "Memperbarui pengaturan proyek."
+        "UPDATED": "Memperbarui pengaturan proyek.",
+        "REOPENED": "Proyek dibuka kembali",
+        "SHOW_IN_MENU": "Tampilkan di bilah samping",
+        "UNARCHIVED_HIDDEN_FROM_MENU": "Proyek dipulihkan, tetapi masih disembunyikan dari bilah samping"
+      },
+      "D_CONFIRM_ARCHIVE": {
+        "MSG": "Arsipkan proyek \"{{title}}\"? Tugas, konfigurasi pengulangan, dan pengingat dijeda sampai Anda memulihkannya.",
+        "OK": "Arsipkan"
+      },
+      "COMPLETE": {
+        "COMPLETED_ON": "Diselesaikan {{date}}",
+        "REOPEN": "Buka kembali",
+        "NOTICE": "Proyek ini telah selesai.",
+        "ERROR": "Tidak dapat menyelesaikan proyek. Silakan coba lagi.",
+        "RESOLVE": {
+          "MSG": "masih memiliki {{nr}} tugas yang belum selesai. Apa yang harus dilakukan terhadap tugas-tugas tersebut?",
+          "MSG_ONE": "masih memiliki {{nr}} tugas yang belum selesai. Apa yang harus dilakukan terhadapnya?",
+          "MOVE_TO_INBOX": "Pindahkan ke Kotak Masuk",
+          "MARK_DONE": "Tandai selesai"
+        },
+        "CONFIRM": {
+          "TITLE": "Selesaikan proyek?",
+          "MSG": "Selesaikan <strong>{{title}}</strong> dan pindahkan ke daftar proyek yang diarsipkan?"
+        },
+        "CELEBRATION": {
+          "TITLE": "Proyek selesai!",
+          "STARTED": "Dimulai",
+          "FINISHED": "Selesai",
+          "DURATION": "Diselesaikan dalam {{nr}} hari",
+          "TASKS_DONE": "Tugas diselesaikan",
+          "TIME_SPENT": "Waktu yang dilacak",
+          "DAYS_WORKED": "Jumlah hari bekerja",
+          "DONE_BTN": "Tutup"
+        }
+      },
+      "ARCHIVED_NOTICE": "Proyek ini diarsipkan.",
+      "ARCHIVED_PROJECTS": {
+        "EMPTY": "Tidak ada proyek yang diarsipkan.",
+        "LINK_LABEL": "Proyek yang diarsipkan",
+        "SEARCH": "Cari proyek yang diarsipkan",
+        "UNARCHIVE": "Pulihkan proyek"
       }
     },
     "PROJECT_FOLDER": {
@@ -936,7 +1054,9 @@
         "PLACEHOLDER": "Pilih Folder"
       },
       "TOOLTIP_CREATE": "Buat folder proyek",
-      "TOOLTIP_VISIBILITY": "Tampilkan/sembunyikan proyek"
+      "TOOLTIP_VISIBILITY": "Tampilkan/sembunyikan proyek",
+      "ADD_SUBFOLDER": "Tambahkan subfolder",
+      "ADD_PROJECT": "Tambahkan proyek"
     },
     "QUICK_HISTORY": {
       "NO_DATA": "Tidak ada data untuk tahun ini",
@@ -1018,12 +1138,29 @@
       "PREVIOUS_MONTH": "Bulan sebelumnya",
       "PREVIOUS_WEEK": "Minggu sebelumnya",
       "VIEW_MONTH": "Lihat bulan",
-      "VIEW_WEEK": "Lihat minggu"
+      "VIEW_WEEK": "Lihat minggu",
+      "CLICK_TO_CREATE_TASK": "klik untuk membuat tugas",
+      "DROP_TASKS_HERE_TO_SCHEDULE": "Jatuhkan tugas di sini untuk menjadwalkannya",
+      "EXCESS_TASK_TOOLTIP": "Tugas ini tidak sepenuhnya muat pada hari ini.",
+      "EXCESS_TASKS_DAY_TOOLTIP": "{{count}} tugas tidak muat dalam waktu yang tersedia",
+      "EXCESS_TASKS_DAY_TOOLTIP_ONE": "1 tugas tidak muat dalam waktu yang tersedia",
+      "MORE_EVENTS": {
+        "ONE": "{{count}} acara lagi",
+        "OTHER": "{{count}} acara lainnya"
+      },
+      "NEXT_DAY": "Hari Berikutnya",
+      "PREVIOUS_DAY": "Hari Sebelumnya",
+      "PLAN_TASK_FOR_DAY_PLACEHOLDER": "Rencanakan tugas untuk hari...",
+      "VIEW_DAY": "Lihat Hari",
+      "SCHEDULE_TASK_PLACEHOLDER": "Jadwalkan tugas...",
+      "TOGGLE_DAY_PLANNING_HINT": "Ctrl+1 untuk mengalihkan perencanaan hari",
+      "TOGGLE_TIME_SCHEDULING_HINT": "Ctrl+1 untuk mengalihkan penjadwalan waktu"
     },
     "SEARCH_BAR": {
       "INFO": "Klik ikon daftar untuk mencari tugas yang diarsipkan",
       "NO_RESULTS": "Tidak ada tugas yang ditemukan sesuai pencarian Anda",
-      "PLACEHOLDER": "Cari tugas atau deskripsi tugas"
+      "PLACEHOLDER": "Cari tugas atau deskripsi tugas",
+      "INCLUDE_COMPLETED": "Sertakan tugas yang selesai dan diarsipkan"
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {
@@ -1114,7 +1251,9 @@
         "VECTOR_COMPARISON_CONCURRENT": "Konkuren (Konflik Sejati)",
         "VECTOR_COMPARISON_EQUAL": "Sama",
         "VECTOR_COMPARISON_LOCAL_GREATER": "Lokal > Jarak Jauh",
-        "VECTOR_COMPARISON_LOCAL_LESS": "Lokal < Jarak Jauh"
+        "VECTOR_COMPARISON_LOCAL_LESS": "Lokal < Jarak Jauh",
+        "CHANGES_UNKNOWN": "tidak diketahui",
+        "OVERWRITE_WARNING_UNKNOWN": "PERINGATAN: Perangkat ini tidak dapat menentukan jumlah perubahan yang belum disinkronkan pada data {{targetName}} (tidak ada catatan sinkronisasi sebelumnya). Menimpa data {{targetName}} dengan versi {{sourceName}} dapat membuang perubahan. Apakah Anda yakin?"
       },
       "D_DECRYPT_ERROR": {
         "BTN_OVER_WRITE_REMOTE": "Mengubah dan menimpa remote",
@@ -1197,7 +1336,12 @@
           "L_NEW_PASSWORD": "Kata Sandi Enkripsi Baru",
           "L_REMOVE_ENCRYPTION": "Atau Hapus Enkripsi",
           "PASSWORD_MIN_LENGTH": "Kata sandi minimal 8 karakter",
-          "REMOVE_ENCRYPTION_WARNING": "Menghapus enkripsi akan mengunggah ulang data tanpa enkripsi. Semua perangkat perlu dikonfigurasi ulang."
+          "REMOVE_ENCRYPTION_WARNING": "Menghapus enkripsi akan mengunggah ulang data tanpa enkripsi. Semua perangkat perlu dikonfigurasi ulang.",
+          "ENCRYPTION_SETUP_INTRO": "<strong>Tetapkan kata sandi untuk mengenkripsi data Anda sebelum diunggah</strong>, agar data tidak pernah meninggalkan perangkat ini tanpa enkripsi. Ini opsional — Anda juga dapat mengaktifkan atau mengubahnya nanti.",
+          "SETUP_ENCRYPTION_BTN": "Enkripsi & Lanjutkan",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Gunakan kata sandi yang sama di semua perangkat. Jika Anda melupakannya, data terenkripsi tidak dapat dipulihkan.",
+          "SETUP_ENCRYPTION_TITLE": "Enkripsi sebelum unggahan pertama?",
+          "SETUP_SKIP_ENCRYPTION_BTN": "Lewati"
         },
         "L_ENABLE_COMPRESSION": "Aktifkan Kompresi (transfer data lebih cepat)",
         "L_ENABLE_ENCRYPTION": "Aktifkan enkripsi ujung ke ujung (eksperimental) - Membuat data Anda tidak dapat diakses oleh penyedia sinkronisasi Anda",
@@ -1209,7 +1353,8 @@
         "LOCAL_FILE": {
           "L_SYNC_FOLDER_PATH": "Jalur folder sinkronisasi",
           "INFO_TEXT": "<strong>Peringatan:</strong> <strong>Jangan</strong> gunakan alat sinkronisasi file seperti Syncthing, Resilio, atau sejenisnya untuk menyinkronkan folder ini antar perangkat — mereka <strong>akan</strong> menyebabkan kerusakan data dan konflik. Untuk sinkronisasi multi-perangkat, gunakan WebDAV, Dropbox, atau SuperSync.",
-          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Memerlukan izin akses file"
+          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Memerlukan izin akses file",
+          "S_COMMIT_FOLDER_ERROR": "Tidak dapat menyimpan folder sinkronisasi yang dipilih. Folder mungkin telah dipindahkan atau dihapus — pilih kembali."
         },
         "SUPER_SYNC": {
           "L_CONFIRM_PASSWORD": "Konfirmasi kata sandi",
@@ -1265,7 +1410,8 @@
           "SERVER_URL_DESCRIPTION": "Biarkan apa adanya untuk server resmi, atau masukkan URL server kustom",
           "SETUP_DISABLE_SUPERSYNC_BTN": "Nonaktifkan SuperSync",
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "Gunakan kata sandi yang sama di semua perangkat. Kata sandi yang terlupa dapat direset dengan menimpa data remote.",
-          "SETUP_ENCRYPTION_TITLE": "SuperSync: Atur Kata Sandi"
+          "SETUP_ENCRYPTION_TITLE": "SuperSync: Atur Kata Sandi",
+          "E2E_ENCRYPTION_INFO": "SuperSync menggunakan enkripsi ujung ke ujung. Data Anda dienkripsi di perangkat ini sebelum meninggalkannya, menggunakan kata sandi yang Anda pilih saat penyiapan."
         },
         "TITLE": "Sinkronisasi",
         "WEB_DAV": {
@@ -1320,7 +1466,32 @@
           "L_SERVER_URL": "URL server Nextcloud",
           "SERVER_URL_DESCRIPTION": "mis. https://cloud.example.com atau https://example.com/nextcloud",
           "L_APP_PASSWORD": "Kata sandi aplikasi",
-          "APP_PASSWORD_DESCRIPTION": "Buka Nextcloud → Pengaturan → Keamanan → Kata sandi aplikasi untuk membuatnya"
+          "APP_PASSWORD_DESCRIPTION": "Buka Nextcloud → Pengaturan → Keamanan → Kata sandi aplikasi untuk membuatnya",
+          "FILE_USER_NAME_DESCRIPTION": "ID pengguna Nextcloud Anda — bukan alamat email atau nama tampilan. Untuk menemukannya, buka Files di Nextcloud, klik ikon roda gigi pengaturan (sudut kiri bawah), lalu salin <user-id> dari URL WebDAV yang ditampilkan di sana (.../remote.php/dav/files/<user-id>/).",
+          "L_FILE_USER_NAME": "Nama pengguna",
+          "L_LOGIN_NAME": "Nama login/email (opsional)",
+          "LOGIN_NAME_DESCRIPTION": "Isi hanya jika server Anda memerlukan login yang berbeda dari nama pengguna di atas, misalnya alamat email.",
+          "L_DETECT_USER_ID": "Deteksi ID pengguna",
+          "S_DETECT_USER_ID_NEED_LOGIN": "Masukkan URL Server, login Anda (Nama pengguna atau Nama login/email), dan Kata Sandi Aplikasi terlebih dahulu.",
+          "S_DETECT_USER_ID_SUCCESS": "ID pengguna Nextcloud Anda ditemukan: {{userId}}. ID tersebut telah diisikan ke bidang Nama pengguna.",
+          "S_DETECT_USER_ID_FAIL": "Tidak dapat mendeteksi ID pengguna Anda: {{error}}",
+          "S_TEST_FAIL_USER_NOT_FOUND": "Uji koneksi gagal: folder pengguna tidak ditemukan (404). Login Anda berfungsi, tetapi \"Nama pengguna\" harus berupa ID pengguna Nextcloud — bukan alamat email atau nama tampilan. Untuk menemukannya, buka Files di Nextcloud, klik ikon roda gigi pengaturan (sudut kiri bawah), lalu salin <user-id> dari URL WebDAV yang ditampilkan di sana (.../remote.php/dav/files/<user-id>/). URL target: {{url}}"
+        },
+        "BTN_REAUTHENTICATE": "Autentikasi ulang",
+        "REAUTH_SUCCESS": "Autentikasi ulang berhasil! Kredensial diperbarui.",
+        "L_USE_SPLIT_SYNC_FILES": "Surgical sync (eksperimental) – Sinkronisasi lebih cepat dengan tata letak berkas ops/snapshot terpisah. Setelah diaktifkan, semua perangkat yang menyinkronkan folder ini juga harus mengaktifkannya.",
+        "ONEDRIVE": {
+          "CLIENT_ID_DESCRIPTION": "ID aplikasi (klien) dari pendaftaran aplikasi Microsoft Entra Anda",
+          "INFO_TEXT": "Autentikasi Microsoft 365 menggunakan OAuth. Isi klien dan tenant terlebih dahulu, lalu lakukan autentikasi. <strong>Menggunakan pendaftaran aplikasi Entra Anda sendiri?</strong> Di desktop, daftarkan URI pengalihan <code>superproductivity://oauth-callback/onedrive</code> di bagian \"Mobile and desktop applications\", aktifkan \"Allow public client flows\", dan berikan izin terdelegasi <code>Files.ReadWrite.AppFolder</code>. Lihat <a href=\"https://github.com/super-productivity/super-productivity/wiki/2.09-Configure-Sync-Backend\" target=\"_blank\" rel=\"noopener\">panduan penyiapan OneDrive</a>.",
+          "L_CLIENT_ID": "ID Aplikasi (Klien)",
+          "L_SYNC_FOLDER_PATH": "Jalur Folder Sinkronisasi",
+          "L_TENANT_ID": "ID Tenant",
+          "L_USE_CUSTOM_APP": "Gunakan pendaftaran aplikasi Microsoft Entra saya sendiri",
+          "OFFICIAL_MODE_INFO": "Menggunakan fitur masuk Microsoft 365 bawaan untuk aplikasi ini. Beralihlah ke mode kustom hanya jika Anda memerlukan pendaftaran aplikasi Entra sendiri.",
+          "PLATFORM_INFO": "Sinkronisasi OneDrive hanya tersedia di aplikasi desktop dan seluler, bukan di versi browser.",
+          "SYNC_FOLDER_PATH_DESCRIPTION": "Disimpan di Folder Aplikasi OneDrive Anda (misalnya super-productivity)",
+          "TENANT_ID_DESCRIPTION": "Gunakan 'common' untuk proses masuk multi-tenant",
+          "USE_CUSTOM_APP_DESCRIPTION": "Aktifkan jika Anda ingin memberikan ID Aplikasi (Klien) sendiri"
         }
       },
       "S": {
@@ -1396,7 +1567,22 @@
         "ERROR_SYNC_VERSION_MISMATCH": "Data sinkronisasi jarak jauh menggunakan versi format yang tidak kompatibel. Pastikan semua perangkat menjalankan versi Super Productivity yang sama.",
         "WARN_CLIENT_ID_REGENERATED": "ID perangkat sinkronisasi tidak valid dan telah dibuat ulang. Konflik sinkronisasi dapat terjadi pada sinkronisasi berikutnya.",
         "LEGACY_FORMAT_DETECTED": "Format sinkronisasi tidak cocok: penyimpanan jarak jauh terakhir ditulis oleh versi aplikasi lama (v16.x atau sebelumnya) yang menggunakan format sinkronisasi berbeda. Perbarui semua perangkat Anda ke versi aplikasi yang sama. \"Paksa timpa\" membuka blokir perangkat ini dengan menulis format baru di samping file lama; gunakan hanya jika tidak ada perangkat lama yang akan menyinkronkan ke remote ini lagi, jika tidak perangkat tersebut akan diam-diam berbeda dari perangkat ini.",
-        "SYNC_VALIDATION_FAILED": "Validasi status gagal setelah sinkronisasi. Beberapa data mungkin tidak konsisten."
+        "SYNC_VALIDATION_FAILED": "Validasi status gagal setelah sinkronisasi. Beberapa data mungkin tidak konsisten.",
+        "AUTH_SERVICE_UNAVAILABLE": "Layanan autentikasi untuk sementara tidak tersedia (HTTP {{status}}). Silakan coba lagi.",
+        "AUTH_SERVICE_UNAVAILABLE_WITH_REFERENCE": "Layanan autentikasi untuk sementara tidak tersedia (HTTP {{status}}). Silakan coba lagi. Referensi: {{reference}}.",
+        "DEFERRED_ACTION_PERMANENT_FAILED": "Perubahan tidak dapat disimpan dan sinkronisasi dijeda. Muat ulang untuk memulihkan keadaan terakhir yang tersimpan.",
+        "FORCE_UPLOAD_FAILED": "Gagal menimpa data server. Perubahan lokal Anda tetap tersedia.",
+        "HYDRATION_FALLBACK_RECOVERY": "Gagal memuat data tersimpan — menampilkan data yang dapat dipulihkan dari log lokal. Item yang hilang dapat dipulihkan dengan sinkronisasi penuh atau impor cadangan.",
+        "INCOMPLETE_REMOTE_OPERATIONS": "Perubahan yang diunduh tidak dapat diterapkan sepenuhnya. Sinkronisasi dijeda untuk melindungi data Anda. Mulai ulang aplikasi untuk mencoba kembali. Jika masalah ini terus terjadi, pulihkan cadangan.",
+        "INTEGRITY_TAMPER_DETECTED": "Sinkronisasi dihentikan: server mengembalikan data yang gagal dalam pemeriksaan integritas keamanan. Data lokal Anda aman. Hal ini dapat menunjukkan bahwa server sinkronisasi telah dimanipulasi atau salah dikonfigurasi.",
+        "LOCAL_DATA_REPLACE_UNDO": "Data lokal Anda diganti dengan data server.",
+        "LOCAL_FILE_RESELECT_REQUIRED": "Sinkronisasi berkas lokal mengharuskan folder sinkronisasi dipilih kembali setelah pembaruan keamanan. Buka pengaturan Sinkronisasi dan pilih kembali folder tersebut.",
+        "NETWORK_ERROR": "Permintaan sinkronisasi gagal karena masalah jaringan sementara. Perubahan Anda tetap tersimpan secara lokal dan sinkronisasi akan mencoba kembali.",
+        "OAUTH_STATE_INVALID": "Nilai state OAuth tidak cocok — URL callback tidak cocok dengan permintaan perangkat ini. Silakan coba autentikasi lagi.",
+        "ONEDRIVE_AUTH_FAILED": "Proses masuk OneDrive gagal pada langkah token ({{error}}). Hal ini biasanya berarti pendaftaran aplikasi Microsoft Entra Anda belum disiapkan sebagai klien publik. Lihat panduan penyiapan OneDrive di wiki.",
+        "RESTORE_ENCRYPTED": "Pemulihan dari riwayat server tidak tersedia saat enkripsi ujung ke ujung diaktifkan. Server tidak dapat membaca data terenkripsi Anda untuk merekonstruksi titik waktu sebelumnya.",
+        "SPLIT_FORMAT_ENABLE_SETTING": "Folder sinkronisasi ini telah ditingkatkan ke format berkas terpisah. Aktifkan Surgical sync di pengaturan Sinkronisasi untuk melanjutkan.",
+        "SYNC_DATA_RECOVERED_FROM_BACKUP": "Data sinkronisasi dipulihkan dari cadangan setelah berkas utama tidak dapat dibaca."
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "Bersihkan Semua",
@@ -1477,7 +1663,64 @@
         "RECOMMEND_SERVER": "Disarankan: Terima data server agar tetap sinkron dengan perangkat lain.",
         "TITLE": "Konflik Sinkronisasi Terdeteksi",
         "USE_LOCAL": "Gunakan Data Saya",
-        "USE_REMOTE": "Gunakan Data Server"
+        "USE_REMOTE": "Gunakan Data Server",
+        "FIRST_SYNC_USE_LOCAL_CONFIRM": "Perangkat ini belum pernah disinkronkan. \"Gunakan Data Saya\" akan mengganti data di server secara permanen dengan data lokal perangkat ini. Tindakan ini tidak dapat dibatalkan. Lanjutkan?",
+        "FIRST_SYNC_WARNING": "Perangkat ini belum pernah disinkronkan, sehingga \"Gunakan Data Saya\" akan menimpa data yang sudah ada di server dengan data perangkat ini.",
+        "USE_REMOTE_CONFIRM": "Tindakan ini mengganti data perangkat ini dengan data server dan membuang {{count}} perubahan lokal. Lanjutkan?"
+      },
+      "B": {
+        "CONTENT_CONFLICT_RESOLVED": "Pengeditan yang bertentangan pada {{taskList}} diselesaikan secara otomatis dengan mempertahankan versi terbaru. Pengeditan lama mungkin telah dibuang — harap periksa kembali.",
+        "CONTENT_CONFLICT_TITLE_CHANGE": "{{kept}} (dibuang: {{discarded}})",
+        "CONTENT_CONFLICT_UNTITLED": "Tugas tanpa judul"
+      },
+      "CONFLICT_REVIEW": {
+        "PAGE_TITLE": "Konflik Sinkronisasi",
+        "PAGE_SUBTITLE": "Pengeditan yang diselesaikan secara otomatis saat sinkronisasi. Tinjau dan, jika perlu, beralih ke versi lainnya.",
+        "CONFIG_LINK": "Tinjau konflik sinkronisasi",
+        "BADGE_TOOLTIP": "{{count}} konflik sinkronisasi yang belum ditinjau",
+        "BANNER_MSG": "{{count}} konflik sinkronisasi diselesaikan otomatis ({{remoteWins}} konflik dimenangkan oleh versi jarak jauh, {{localWins}} konflik dimenangkan oleh versi lokal)",
+        "BANNER_REVIEW": "Tinjau",
+        "TAB_UNREVIEWED": "Belum ditinjau ({{count}})",
+        "TAB_HISTORY": "Riwayat",
+        "EMPTY_UNREVIEWED": "Tidak ada konflik untuk ditinjau.",
+        "EMPTY_HISTORY": "Belum ada riwayat konflik.",
+        "GROUP_TASK": "Tugas",
+        "GROUP_PROJECT": "Proyek",
+        "GROUP_TAG": "Tag",
+        "GROUP_NOTE": "Catatan",
+        "GROUP_OTHER": "Lainnya",
+        "COL_FIELD": "Bidang",
+        "COL_LOCAL": "Lokal",
+        "COL_REMOTE": "Jarak Jauh",
+        "COL_CURRENT": "Saat ini (sekarang)",
+        "WINNER_LOCAL": "Lokal menang",
+        "WINNER_REMOTE": "Jarak jauh menang",
+        "WINNER_MERGED": "Digabungkan",
+        "REASON_NEWER": "Pengeditan terbaru menang",
+        "REASON_TIE": "Seri, versi jarak jauh menang",
+        "REASON_DELETE_WINS": "Penghapusan menang",
+        "REASON_DELETE_LOST": "Penghapusan ditimpa oleh pengeditan",
+        "REASON_DISJOINT_MERGE": "Digabungkan otomatis",
+        "REASON_NOISE": "Tidak ada perubahan konten",
+        "REASON_CLOCK_CORRUPTION": "Diduga terjadi kerusakan jam vektor",
+        "STATUS_UNREVIEWED": "Belum ditinjau",
+        "STATUS_KEPT": "Dipertahankan",
+        "STATUS_FLIPPED": "Dialihkan",
+        "STATUS_INFO": "Info",
+        "THIS_DEVICE": "Perangkat ini",
+        "DEVICE_LABEL": "Perangkat {{id}}",
+        "MERGED_FIELD_CHIP": "{{field}} ← {{side}}",
+        "SIDE_LOCAL": "lokal",
+        "SIDE_REMOTE": "jarak jauh",
+        "ACTION_KEEP": "Pertahankan",
+        "ACTION_FLIP": "Alihkan",
+        "BULK_KEEP_ALL": "Pertahankan semua",
+        "BULK_FLIP_LOCAL": "Alihkan semua → Lokal",
+        "BULK_FLIP_REMOTE": "Alihkan semua → Jarak Jauh",
+        "FLIP_UNSUPPORTED": "Pengalihan versi belum didukung untuk jenis item ini.",
+        "FLIP_DONE": "Versi lainnya telah diterapkan.",
+        "STALE_CONFIRM": "\"{{title}}\" telah berubah sejak konflik ini diselesaikan. Pengalihan akan menimpa pengeditan yang lebih baru tersebut. Lanjutkan?",
+        "WINNING_SIDE": "Dipertahankan"
       }
     },
     "TAG": {
@@ -1523,7 +1766,9 @@
         "NO_PARENT": "Tidak ada folder (tingkat root)",
         "PLACEHOLDER": "Pilih Folder"
       },
-      "TOOLTIP_CREATE": "Buat folder tag"
+      "TOOLTIP_CREATE": "Buat folder tag",
+      "ADD_SUBFOLDER": "Tambahkan subfolder",
+      "ADD_TAG": "Tambahkan tag"
     },
     "TASK": {
       "ADD_TASK_BAR": {
@@ -1550,7 +1795,10 @@
         "REPEAT_BUTTON": "Ulangi",
         "TOGGLE_ADD_TO_BACKLOG_TODAY": "Alihkan menambahkan tugas ke backlog / daftar hari ini",
         "TOGGLE_ADD_TOP_OR_BOTTOM": "Alihkan menambahkan tugas ke atas & bawah daftar",
-        "TOOLTIP_CLEAR_REPEAT": "Hapus pengaturan pengulangan"
+        "TOOLTIP_CLEAR_REPEAT": "Hapus pengaturan pengulangan",
+        "NOTE_PLACEHOLDER": "Tambahkan catatan… (Ctrl+Enter untuk menambahkan tugas)",
+        "TOOLTIP_CLEAR_DEADLINE": "Hapus tenggat waktu",
+        "TOOLTIP_NOTE": "Catatan (Ctrl+2)"
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Tambahkan lampiran",
@@ -1572,7 +1820,16 @@
         "DEADLINE_OVERDUE": "Terlambat!",
         "FROM_PARENT": "(dari induk)",
         "ISSUE": "Tautan Isu",
-        "REMINDER": "Pengingat"
+        "REMINDER": "Pengingat",
+        "ADD_CHECKLIST_ITEM": "Tambahkan item daftar periksa",
+        "CHECKLIST_ACTIONS": "Tindakan daftar periksa",
+        "CHECK_ALL": "Centang semua",
+        "CLEAR_COMPLETED": "Hapus yang selesai",
+        "NOTES_OR_CHECKLIST": "Catatan / Daftar Periksa",
+        "UNCHECK_ALL": "Hapus centang semua",
+        "PASTE_IMAGE_HINT": "Ctrl+V untuk menempelkan gambar",
+        "PASTE_IMAGE_HINT_MAC": "Cmd+V untuk menempelkan gambar",
+        "PASTED_IMAGE_TITLE": "Gambar yang ditempelkan"
       },
       "B": {
         "ADD_HALF_HOUR": "Tambah 1/2 jam",
@@ -1615,7 +1872,13 @@
         "SET_DEADLINE": "Atur tenggat waktu",
         "CLEAR_ESTIMATE": "Hapus estimasi",
         "CUSTOM_ESTIMATE": "Kustom…",
-        "ESTIMATE": "Estimasi"
+        "ESTIMATE": "Estimasi",
+        "ADD_SUB_TASK_PLACEHOLDER": "Tambahkan subtugas...",
+        "CHECKLIST_PROGRESS": "Daftar periksa: {{done}} dari {{total}} selesai",
+        "MARK_UNDONE": "Tandai belum selesai",
+        "SHOW_HIDDEN_DONE_SUB_TASKS": "+ {{nr}} subtugas selesai",
+        "SHOW_HIDDEN_SUB_TASKS": "+ {{nr}} subtugas",
+        "TIME_CONFLICT": "Tumpang tindih dengan tugas terjadwal lainnya"
       },
       "D_CONFIRM_DELETE": {
         "OK": "Hapus",
@@ -1668,7 +1931,17 @@
         "DEADLINE_REMINDER": "Pengingat Tenggat Waktu",
         "DEADLINE_SECTION": "Tenggat Waktu",
         "DUE_SECTION": "Direncanakan",
-        "TASK_REMINDERS": "Pengingat Tugas"
+        "TASK_REMINDERS": "Pengingat Tugas",
+        "MARK_AS_DONE": "Tandai selesai",
+        "MORE_ACTIONS": "Tindakan lainnya",
+        "OR_DIRECTLY_FOR_ALL": "Atau langsung untuk semua:",
+        "SCHEDULE_FOR_TODAY": "Jadwalkan untuk hari ini",
+        "DROP_TIME_KEEP_TODAY": "Hapus waktu, tetap di Hari Ini",
+        "DELETE": "Hapus tugas",
+        "KEEP_IN_TODAY": "Tetap di Hari Ini",
+        "SCHEDULED_FOR": "Direncanakan untuk",
+        "SNOOZE_FOR": "Tunda {{m}}m",
+        "SNOOZE_FOR_SHORT": "{{m}}m"
       },
       "D_SCHEDULE_TASK": {
         "QA_NEXT_MONTH": "Jadwal Bulan Depan",
@@ -1684,7 +1957,11 @@
         "RO_NEVER": "Never",
         "RO_START": "ketika itu dimulai",
         "SCHEDULE": "Jadwalkan",
-        "UNSCHEDULE": "Batalkan jadwal"
+        "UNSCHEDULE": "Batalkan jadwal",
+        "DOES_NOT_REPEAT": "Tidak berulang",
+        "INFO_OUTSIDE_WORK_HOURS": "Berada di luar jam kerja yang Anda konfigurasikan.",
+        "INFO_OVERLAP": "Tumpang tindih dengan tugas terjadwal lainnya.",
+        "REPEAT": "Ulangi"
       },
       "D_SELECT_DATE_AND_TIME": {
         "DATE": "Tanggal",
@@ -1758,7 +2035,11 @@
         "WEEKLY_CURRENT_WEEKDAY": "Mingguan pada {{weekdayStr}}",
         "WEEKLY_CURRENT_WEEKDAY_AND_TIME": "Mingguan pada {{weekdayStr}}, {{timeStr}}",
         "YEARLY_CURRENT_DATE": "Tahunan pada {{dayAndMonthStr}}",
-        "YEARLY_CURRENT_DATE_AND_TIME": "Tahunan {{dayAndMonthStr}}, {{timeStr}}"
+        "YEARLY_CURRENT_DATE_AND_TIME": "Tahunan {{dayAndMonthStr}}, {{timeStr}}",
+        "MONTHLY_LAST_DAY": "Setiap bulan pada hari terakhir",
+        "MONTHLY_LAST_DAY_AND_TIME": "Setiap bulan pada hari terakhir, {{timeStr}}",
+        "MONTHLY_NTH_WEEKDAY": "Setiap bulan pada {{weekdayStr}} {{ordinalStr}}",
+        "MONTHLY_NTH_WEEKDAY_AND_TIME": "Setiap bulan pada {{weekdayStr}} {{ordinalStr}}, {{timeStr}}"
       },
       "D_CONFIRM_MOVE_TO_PROJECT": {
         "MSG": "Ada {{tasksNr}} instance yang dibuat untuk tugas berulang ini. Apakah Anda ingin memindahkan semuanya ke proyek \"{{projectName}}\"?",
@@ -1837,7 +2118,16 @@
         "WEEK_OF_MONTH": "Minggu dalam bulan",
         "WEEKDAY": "Hari kerja",
         "SKIP_FOR_DATE": "Lewati untuk {{date}}",
-        "SKIP_INSTANCE": "Lewati untuk hari ini"
+        "SKIP_INSTANCE": "Lewati untuk hari ini",
+        "MONTHLY_MODE_DAY_OF_MONTH_DESCRIPTION": "\"Hari dalam bulan\" menggunakan hari yang ditampilkan pada tanggal mulai.",
+        "ORD_FIRST_NTH": "pertama",
+        "ORD_FOURTH_NTH": "keempat",
+        "ORD_LAST_NTH": "terakhir",
+        "ORD_SECOND_NTH": "kedua",
+        "ORD_THIRD_NTH": "ketiga",
+        "WAIT_FOR_COMPLETION": "Hanya buat tugas berikutnya setelah tugas saat ini selesai",
+        "WAIT_FOR_COMPLETION_DESCRIPTION": "Mencegah penumpukan beberapa tugas berulang yang tertunda. Tugas berikutnya hanya akan dibuat setelah tugas saat ini selesai",
+        "WEEKDAY_REQUIRED": "Pilih setidaknya satu hari dalam seminggu"
       },
       "SNACK_REPEAT_DIALOG_FAIL": "Tidak dapat membuka dialog konfigurasi pengulangan. Anda dapat mengonfigurasinya dari menu tugas.",
       "D_SKIP_INSTANCE": {
@@ -1896,7 +2186,9 @@
     "TIME_TRACKING": {
       "B": {
         "ALREADY_DID": "Saya sudah melakukan",
-        "SNOOZE": "Tunda {{time}}"
+        "SNOOZE": "Tunda {{time}}",
+        "BREAK_SNACK": "Selamat beristirahat!",
+        "PAUSE_AND_BREAK": "Jeda & beristirahat"
       },
       "B_TTR": {
         "ADD_TO_TASK": "Tambah ke tugas",
@@ -1919,7 +2211,22 @@
         "TASK": "Tugas",
         "TRACK_TO": "Lacak ke",
         "WARN_SIMPLE_COUNTER": "Waktu akan dihitung ke tombol penghitung sederhana yang diaktifkan.",
-        "WARN_SIMPLE_COUNTER_BREAK": "Waktu MASIH akan dihitung pada tombol penghitung sederhana yang diaktifkan."
+        "WARN_SIMPLE_COUNTER_BREAK": "Waktu MASIH akan dihitung pada tombol penghitung sederhana yang diaktifkan.",
+        "ALL_TIME_ASSIGNED": "Seluruh waktu idle telah ditetapkan",
+        "BREAK_SUMMARY": "{{time}} akan ditambahkan ke waktu istirahat Anda.",
+        "CONFIRM_BREAK": "Lacak sebagai istirahat",
+        "CONFIRM_CREATE_TASK": "Buat tugas & lacak",
+        "CONFIRM_SPLIT": "Lacak semua",
+        "CONFIRM_TASK": "Lacak ke tugas",
+        "CONFIRM_TRACK": "Lacak waktu",
+        "DONT_TRACK": "Jangan lacak",
+        "MODE_BREAK": "Sedang beristirahat",
+        "MODE_SPLIT": "Sedikit dari keduanya",
+        "MODE_TASK": "Mengerjakan tugas",
+        "TIME_OVER_ASSIGNED": "Melebihi waktu idle Anda sebesar {{time}}",
+        "TIME_UNASSIGNED": "{{time}} belum ditetapkan",
+        "USE_REMAINING_TIME": "Tetapkan waktu yang tersisa",
+        "WHAT_WERE_YOU_DOING": "Apa yang tadi Anda lakukan?"
       },
       "D_TRACKING_REMINDER": {
         "CREATE_AND_TRACK": "<em>Buat</em> dan lacak untuk",
@@ -1965,7 +2272,10 @@
         "WORKED": "Bekerja",
         "RESTORE_TASK_FROM_ARCHIVE": "Pulihkan tugas dari arsip",
         "VIEW_TASK_DETAILS": "Lihat detail tugas",
-        "WEEK_NR_SHORT": "M{{nr}}"
+        "WEEK_NR_SHORT": "M{{nr}}",
+        "EXPORT_DATA": "Ekspor data",
+        "WEEK_RANGE_TOOLTIP": "{{start}}.–{{end}}., hari: {{days}}, waktu: {{time}}",
+        "WORK_TIMES": "Waktu kerja"
       },
       "D_CONFIRM_RESTORE": "Yakin ingin memindahkan tugas <strong>\"{{title}}\"</strong> ke dalam daftar tugas hari ini?",
       "D_EXPORT_TITLE": "Ekspor Worklog {{start}}–{{end}}",
@@ -2017,6 +2327,12 @@
       "PASTE_SUCCESS": "Gambar berhasil ditempel",
       "SIZE_EXCEEDED": "Ukuran gambar ({{actualSize}}) melebihi ukuran maksimum yang diizinkan ({{maxSize}})",
       "STORAGE_QUOTA_EXCEEDED": "Kuota penyimpanan terlampaui. Harap kosongkan ruang atau kurangi ukuran gambar."
+    },
+    "ANDROID": {
+      "FOREGROUND_SERVICE_START_FAILED_FOCUS": "Android memblokir notifikasi mode fokus yang persisten. Timer tetap berjalan di aplikasi, tetapi peringatan latar belakang mungkin tidak tersedia. Periksa izin notifikasi serta pembatasan baterai/latar belakang.",
+      "FOREGROUND_SERVICE_START_FAILED_TRACKING": "Android memblokir notifikasi pelacakan waktu yang persisten. Waktu tetap dilacak di aplikasi, tetapi pemulihan di latar belakang mungkin tidak tersedia. Periksa izin notifikasi serta pembatasan baterai/latar belakang.",
+      "OPEN_NOTIFICATION_SETTINGS": "Buka pengaturan",
+      "WIDGET_TASKS_UPDATED": "{{count}} tugas diperbarui dari widget"
     }
   },
   "FILE_IMEX": {
@@ -2042,7 +2358,9 @@
     "S_ERR_NETWORK": "Impor gagal: Kesalahan jaringan saat mengambil data dari URL",
     "S_IMPORT_FROM_URL_ERR_DECODE": "Kesalahan: Tidak dapat mendekode parameter URL untuk impor. Pastikan formatnya benar.",
     "URL_PLACEHOLDER": "Masukkan URL untuk impor",
-    "BTN_COMPRESS_ARCHIVE": "Kompres Arsip"
+    "BTN_COMPRESS_ARCHIVE": "Kompres Arsip",
+    "IMPORT_FROM_TODOIST": "Impor dari Todoist",
+    "S_ERR_TODOIST_IMPORT_OPEN": "Tidak dapat membuka pengimpor Todoist"
   },
   "G": {
     "ADD": "Menambahkan",
@@ -2070,7 +2388,7 @@
     "NO_CON": "Anda sedang offline. Harap sambungkan kembali ke internet.",
     "NONE": "Tidak ada",
     "OK": "Oke",
-    "OVERDUE": "Terlambat",
+    "OVERDUE": "Dari hari sebelumnya",
     "REMOVE": "Hapus",
     "SAVE": "Simpan",
     "SHARE": "Bagikan",
@@ -2089,7 +2407,9 @@
     "PROCESSING": "Memproses",
     "TOGGLE_PASSWORD_VISIBILITY": "Tampilkan/sembunyikan kata sandi",
     "COMMENT": "Komentar",
-    "OPEN_IN_BROWSER": "Buka di browser"
+    "OPEN_IN_BROWSER": "Buka di browser",
+    "CLEAR": "Bersihkan",
+    "MORE_ACTIONS": "Tindakan lainnya"
   },
   "GCF": {
     "APP_FEATURES": {
@@ -2118,7 +2438,14 @@
       "HELP": "Simpan otomatis semua data ke folder aplikasi Anda agar siap jika terjadi kesalahan.",
       "LABEL_IS_ENABLED": "Aktifkan pencadangan otomatis",
       "LOCATION_INFO": "Cadangan disimpan ke:",
-      "TITLE": "Cadangan Otomatis"
+      "TITLE": "Cadangan Otomatis",
+      "LAST_BACKUP_INFO": "Cadangan terakhir: {{date}}",
+      "MAX_BACKUP_FILES": "Jumlah maksimum berkas cadangan",
+      "MAX_BACKUP_FILES_DESCRIPTION": "Khusus desktop. Berkas cadangan otomatis yang lebih lama akan dihapus setelah batas ini terlampaui.",
+      "RESTORE_LATEST": "Pulihkan cadangan otomatis terbaru",
+      "S_AUTO_RESTORED": "{{tasks}} tugas dan {{projects}} proyek telah dipulihkan dari cadangan di perangkat.",
+      "S_NO_BACKUP_AVAILABLE": "Tidak ada cadangan otomatis yang tersedia.",
+      "S_RESTORE_SUCCESS": "Cadangan berhasil dipulihkan."
     },
     "CALENDARS": {
       "BROWSER_WARNING": "Karena pembatasan asal silang <b>, ini kemungkinan TIDAK akan berfungsi dengan Super Productivity versi Browser.<br /> Silakan <a href=\"https://super-productivity.com/download/\">unduh versi desktop</a> untuk menggunakan fitur ini!</b>",
@@ -2129,7 +2456,12 @@
       "AUTO_IMPORT_FOR_CURRENT_DAY": "Impor otomatis acara sebagai tugas untuk hari ini",
       "CAL_COLOR": "Warna kalender",
       "DISABLE_FOR_WEB_APP": "Nonaktifkan saat menggunakan aplikasi web",
-      "REFERENCE_CALENDAR": "Kalender referensi (hanya tampilan, tanpa pembuatan tugas)"
+      "REFERENCE_CALENDAR": "Kalender referensi (hanya tampilan, tanpa pembuatan tugas)",
+      "FILTER_EXCLUDE_REGEX": "Kecualikan acara yang cocok dengan regex (opsional)",
+      "FILTER_EXCLUDE_REGEX_DESCRIPTION": "Acara dengan judul yang cocok dengan ekspresi reguler ini akan disembunyikan. Diterapkan setelah filter penyertaan. Contoh: Lunch|Daily|Blocker",
+      "FILTER_INCLUDE_REGEX": "Sertakan acara yang cocok dengan regex (opsional)",
+      "FILTER_INCLUDE_REGEX_DESCRIPTION": "Hanya acara dengan judul yang cocok dengan ekspresi reguler ini yang akan ditampilkan. Biarkan kosong untuk menyertakan semua acara. Contoh: meeting|standup",
+      "INVALID_REGEX": "Ekspresi reguler tidak valid"
     },
     "CLIPBOARD_IMAGES": {
       "SELECT_PATH": "Pilih Folder",
@@ -2178,14 +2510,16 @@
       "FOCUS_MODE_SOUND_OFF": "Mati",
       "FOCUS_MODE_SOUND_TICK": "Detak",
       "FOCUS_MODE_SOUND_WHITE_NOISE": "White noise",
-      "L_FOCUS_MODE_SOUND": "Suara ambient selama sesi fokus"
+      "L_FOCUS_MODE_SOUND": "Suara ambient selama sesi fokus",
+      "L_SHOW_PREPARATION_SCREEN": "Tampilkan layar persiapan sebelum setiap sesi (hitung mundur roket)"
     },
     "IDLE": {
       "HELP": "<div><p>Ketika penanganan waktu idle diaktifkan, sebuah dialog akan terbuka setelah jangka waktu tertentu untuk memeriksa apakah dan pada tugas mana Anda ingin melacak waktu Anda, saat Anda menganggur.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Aktifkan penanganan waktu idle",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Hanya picu dialog waktu idle saat tugas saat ini dipilih",
       "MIN_IDLE_TIME": "Memicu idle setelah X",
-      "TITLE": "Penanganan Menganggur"
+      "TITLE": "Penanganan Menganggur",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Jangan tampilkan dialog idle selama sesi mode fokus"
     },
     "IMEX": {
       "HELP": "<p>Di sini Anda dapat mengekspor semua data Anda sebagai <strong>JSON</strong> untuk cadangan, tetapi juga menggunakannya dalam konteks yang berbeda (contoh. Anda mungkin ingin mengekspor proyek Anda di browser dan mengimpornya ke versi desktop). </p> <p>Impor mengharapkan JSON yang valid untuk disalin ke area teks. <strong>CATATAN: Setelah Anda menekan tombol impor, semua setelan dan data Anda saat ini akan ditimpa!</strong></p>",
@@ -2246,7 +2580,15 @@
       "ZOOM_IN": "Perbesar (khusus Desktop)",
       "ZOOM_OUT": "Perkecil (khusus Desktop)",
       "TASK_UNSCHEDULE": "Batalkan jadwal tugas",
-      "TASK_OPEN_NOTES_FULLSCREEN": "Buka catatan/daftar periksa dalam layar penuh"
+      "TASK_OPEN_NOTES_FULLSCREEN": "Buka catatan/daftar periksa dalam layar penuh",
+      "GLOBAL_TOGGLE_TASK_WIDGET": "Tampilkan/sembunyikan widget tugas",
+      "TASK_SCHEDULE_TODAY": "Jadwalkan tugas untuk hari ini",
+      "TASK_SCHEDULE_TOMORROW": "Jadwalkan tugas untuk besok",
+      "TASK_SCHEDULE_NEXT_WEEK": "Jadwalkan tugas untuk minggu depan",
+      "TASK_SCHEDULE_NEXT_MONTH": "Jadwalkan tugas untuk bulan depan",
+      "TASK_SCHEDULE_DEADLINE": "Tetapkan tenggat waktu tugas",
+      "TASK_OPEN_NOTES_PANEL": "Buka catatan/daftar periksa di panel tugas",
+      "TOGGLE_SIDE_NAV_MODE": "Alihkan mode ringkas/penuh bilah samping"
     },
     "LANG": {
       "AR": "عربى",
@@ -2298,7 +2640,9 @@
       "RO_MD": "Română (Moldova)",
       "TIME_LOCALE_RO_MD": "Romania (Moldova): 24 jam, DD.MM.YYYY",
       "TIME_LOCALE_RO_RO": "Romania: 24 jam, DD.MM.YYYY",
-      "TIME_LOCALE_PL_PL": "Polandia: 24 jam, DD.MM.YYYY"
+      "TIME_LOCALE_PL_PL": "Polandia: 24 jam, DD.MM.YYYY",
+      "TIME_LOCALE_ISO": "ISO 8601: 24 jam, YYYY-MM-DD",
+      "VI": "Tiếng Việt"
     },
     "MISC": {
       "DARK_MODE": "Mode gelap",
@@ -2335,7 +2679,13 @@
       "THEME_REMOVE_BUTTON": "Hapus tema",
       "THEME_REMOVED_TOAST": "Tema dihapus; dikembalikan ke Default.",
       "IS_LOCAL_REST_API_ENABLED": "Aktifkan REST API lokal (desktop saja)",
-      "IS_LOCAL_REST_API_ENABLED_HINT": "Memungkinkan skrip lokal mengontrol aplikasi yang sedang berjalan melalui http://127.0.0.1:3876. Aplikasi apa pun yang berjalan di komputer ini akan dapat membaca dan mengubah tugas Anda."
+      "IS_LOCAL_REST_API_ENABLED_HINT": "Memungkinkan skrip lokal mengontrol aplikasi yang sedang berjalan melalui http://127.0.0.1:3876. Aplikasi apa pun yang berjalan di komputer ini akan dapat membaca dan mengubah tugas Anda.",
+      "IS_VERTICAL_ACTION_BAR": "Bilah tindakan vertikal di samping (eksperimental)",
+      "IS_VERTICAL_ACTION_BAR_HINT": "Memindahkan tombol tindakan header ke bilah vertikal di tepi kanan jendela. Khusus desktop.",
+      "WALLPAPER": "Wallpaper",
+      "WALLPAPER_BUTTON": "Atur wallpaper…",
+      "WALLPAPER_DIALOG_TITLE": "Wallpaper global",
+      "WALLPAPER_HINT": "Ditampilkan pada halaman tanpa latar belakang sendiri (Perencana, Jadwal, Papan, Pengaturan…). Tag dan proyek dengan gambar sendiri akan menggantikannya."
     },
     "POMODORO": {
       "BREAK_DURATION": "Durasi istirahat pendek",
@@ -2378,7 +2728,8 @@
       "URL_BEHAVIOR_EXTRACT": "Ekstrak URL ke lampiran",
       "URL_BEHAVIOR_KEEP": "Simpan URL di judul tugas",
       "URL_BEHAVIOR_KEEP_AND_ATTACH": "Simpan URL di judul tugas dan tambahkan ke lampiran",
-      "URL_BEHAVIOR_LABEL": "Perilaku URL saat menambahkan tugas"
+      "URL_BEHAVIOR_LABEL": "Perilaku URL saat menambahkan tugas",
+      "IS_ENABLE_DEADLINE": "Aktifkan sintaks pendek tenggat waktu (!<deadline time>)"
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Mengambil suara pengingat istirahat",
@@ -2431,6 +2782,11 @@
       "IS_ENABLED": "Aktifkan widget tugas",
       "IS_ALWAYS_SHOW": "Selalu tampilkan widget tugas (bahkan saat jendela utama terlihat)",
       "OPACITY": "Opasitas widget tugas"
+    },
+    "FOCUS_MODE_LOCAL": {
+      "HELP": "Pengaturan ini hanya berlaku di perangkat ini dan tidak disinkronkan.",
+      "L_IS_LOOP_BREAK_END_ALARM": "Ulangi suara akhir istirahat hingga saya menutup istirahat (khusus perangkat ini)",
+      "TITLE": "Mode Fokus (perangkat ini)"
     }
   },
   "GLOBAL": {
@@ -2519,7 +2875,8 @@
       "REPORT_A_PROBLEM": "Laporkan masalah",
       "SEND_FEEDBACK": "Kirim masukan",
       "START_WELCOME": "Mulai Tur Selamat Datang",
-      "SYNC": "Howto: Mengonfigurasi Sinkronisasi"
+      "SYNC": "Howto: Mengonfigurasi Sinkronisasi",
+      "CREATE_TASK": "Cara membuat tugas"
     },
     "METRICS": "Metrik",
     "NO_TASKS_TO_TRACK": "Tambahkan tugas terlebih dahulu untuk mulai melacak waktu",
@@ -2553,7 +2910,19 @@
     "PROJECT_SETTINGS": "Pengaturan Proyek",
     "SHOW_TRACKED_TASK": "Tampilkan tugas yang dilacak",
     "TOGGLE_SHOW_BOOKMARKS": "Tampilkan/sembunyikan bookmark",
-    "ADD_SECTION": "Tambah bagian"
+    "ADD_SECTION": "Tambah bagian",
+    "ARCHIVE_PROJECT": "Arsipkan proyek",
+    "COMPLETE_PROJECT": "Selesaikan proyek",
+    "EML_EMPTY": "Email yang dijatuhkan tidak memiliki pengirim atau subjek",
+    "EML_PARSE_ERROR": "Maaf, berkas email tersebut tidak dapat dibaca. Berkas mungkin rusak atau tidak didukung.",
+    "EML_TOO_LARGE": "Berkas email tersebut terlalu besar untuk diimpor.",
+    "SYNC_STATE": {
+      "ERROR": "Masalah sinkronisasi — klik untuk mencoba lagi",
+      "IN_SYNC": "Tersinkron — klik untuk sinkronisasi sekarang",
+      "OFFLINE": "Anda sedang offline — sinkronisasi dilanjutkan saat Anda terhubung kembali",
+      "SYNCING": "Menyinkronkan…"
+    },
+    "ARCHIVED_PROJECTS": "Proyek yang Diarsipkan"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Apakah Anda ingin mengunduh cadangan data lama Anda (dapat digunakan dengan versi Super Productivity yang lebih lama)?",
@@ -2596,7 +2965,9 @@
       "TASK_SWIPE_RIGHT_TOUCH": "Geser tugas ke kanan untuk menandainya selesai",
       "OR_PRESS": "atau tekan",
       "SKIP_ARIA": "Tutup petunjuk"
-    }
+    },
+    "SYNC_CTA": "Sudah menggunakan Super Productivity di perangkat lain?",
+    "SYNC_CTA_LINK": "Siapkan sinkronisasi"
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Tambahkan tugas mulai hari ini",
@@ -2724,7 +3095,15 @@
     "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Gagal memuat daftar plugin komunitas",
     "LANGUAGES": "Bahasa:",
     "ICON_TOO_LARGE": "Ikon plugin terlalu besar (maks {{maxSize}}KB)",
-    "INDEX_HTML_TOO_LARGE": "index.html plugin terlalu besar (maks {{maxSize}}KB)"
+    "INDEX_HTML_TOO_LARGE": "index.html plugin terlalu besar (maks {{maxSize}}KB)",
+    "ALLOWED_HOSTS": "Akses jaringan",
+    "AUTHORED_BY": "oleh {{author}}",
+    "NODE_EXECUTION_PERMISSION_DENIED": "Izin eksekusi Node.js tidak diberikan",
+    "NODE_EXECUTION_BUILT_IN_ONLY": "Eksekusi Node.js saat ini hanya tersedia untuk plugin desktop bawaan.",
+    "PLUGIN_ID_RESERVED": "ID plugin \"{{pluginId}}\" dicadangkan untuk plugin bawaan",
+    "SETUP_ISSUE_PROVIDER": "Siapkan di Panel Penyedia Isu",
+    "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Tidak dapat terhubung ke bridge eksekusi Node.js. Coba nonaktifkan lalu aktifkan kembali plugin.",
+    "PLUGIN_LOAD_FAILED": "Plugin \"{{pluginName}}\" gagal dimuat: {{error}}"
   },
   "PM": {
     "TITLE": "Proyek Metrik",
@@ -2758,7 +3137,8 @@
       "ENCRYPTED": "Terenkripsi",
       "NEEDS_AUTH": "Autentikasi diperlukan",
       "SET_UP_SYNC": "Siapkan sinkronisasi"
-    }
+    },
+    "CLICK_TO_COPY_VERSION": "Klik untuk menyalin versi"
   },
   "SCHEDULE": {
     "LAST": "Terakhir:",
@@ -2863,5 +3243,55 @@
     "S_SHARE_FAILED": "Gagal membagikan log",
     "SHARE_FILE": "Bagikan file",
     "TITLE": "Log"
+  },
+  "PLAINSPACE": {
+    "CLAIM": "Klaim",
+    "CLAIM_FAILED": "Tidak dapat mengklaim tugas ini — tugas mungkin baru saja diklaim oleh orang lain, atau Anda sedang offline.",
+    "CLAIM_POOL_TITLE": "Tersedia untuk diklaim",
+    "CLAIM_SUCCESS": "Tugas diklaim dan ditambahkan ke daftar Anda.",
+    "CONNECT": {
+      "CONNECT": "Hubungkan",
+      "CONNECTING": "Menghubungkan…",
+      "INTRO": "Berkolaborasi dalam proyek dengan orang lain. Tugas yang ditetapkan kepada Anda diimpor secara otomatis dan tetap tersinkron.",
+      "INVALID": "Token tersebut tidak berfungsi. Pastikan Anda menyalin seluruh token (diawali dengan \"pat_\"), lalu coba lagi.",
+      "OPEN_LINK": "Buka Plainspace",
+      "TITLE": "Hubungkan ke Plainspace",
+      "TOKEN_HELP": "Buat token API di Plainspace, lalu tempelkan di bawah ini.",
+      "TOKEN_LABEL": "Token API",
+      "TOKEN_PLACEHOLDER": "pat_…"
+    },
+    "FORM": {
+      "HOST": "Host Plainspace",
+      "SPACE_ID": "ID Space",
+      "SPACE_ID_DESCRIPTION": "Space yang disinkronkan oleh penyedia ini — tempelkan ID atau slug yang ditampilkan di URL space (plainspace.org/<slug>/…).",
+      "TOKEN": "Token API",
+      "TOKEN_DESCRIPTION": "Token API pribadi (diawali dengan \"pat_\"). Di Plainspace, buka Space → People → Advanced → API tokens untuk membuatnya."
+    },
+    "FORM_SECTION": {
+      "HELP": "Hubungkan space Plainspace dengan token API pribadi untuk mengimpor tugas yang ditetapkan kepada Anda dan mengklaim tugas yang belum diklaim.",
+      "TITLE": "Plainspace"
+    },
+    "LOGIN_REQUIRED": "Token API Plainspace diperlukan untuk membagikan proyek.",
+    "NO_UNCLAIMED": "Saat ini tidak ada tugas yang belum diklaim.",
+    "OFFLINE": "Anda sedang offline. Koneksi ke Plainspace memerlukan sambungan internet.",
+    "OPEN_FAILED": "Tidak dapat membuka proyek Plainspace — periksa koneksi Anda dan coba lagi.",
+    "OPEN_IN_PLAINSPACE": "Buka di Plainspace",
+    "RECURRING": "Tugas berulang",
+    "SHARE_DESCRIPTION": "Membuat space Plainspace bersama dan menautkannya ke proyek ini agar Anda dapat berkolaborasi dengan orang lain.",
+    "SHARE_FAILED": "Tidak dapat membagikan proyek ini di Plainspace.",
+    "SHARE_LABEL": "Berkolaborasi dalam proyek ini di Plainspace (Beta)",
+    "SHARE_MENU": "Berkolaborasi di Plainspace (Beta)",
+    "SHARE_SUCCESS": "Proyek dibagikan di Plainspace. Tugas yang ditetapkan kepada Anda akan diimpor secara otomatis.",
+    "SPACE_PICKER": {
+      "CREATE_NEW": "Buat space baru",
+      "ERROR": "Tidak dapat menjangkau Plainspace. Periksa koneksi Anda dan pastikan token masih valid, lalu coba lagi.",
+      "INTRO": "Tautkan space yang sudah ada untuk mengimpor tugas yang ditetapkan kepada Anda, atau buat space baru.",
+      "LINK": "Tautkan space",
+      "LOADING": "Memuat space Anda…",
+      "NONE": "Anda belum memiliki space — buat satu untuk memulai.",
+      "RECONNECT": "Gunakan token yang berbeda",
+      "SELECT_LABEL": "Space yang sudah ada",
+      "TITLE": "Pilih space Plainspace"
+    }
   }
 }

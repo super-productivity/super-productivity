@@ -1,5 +1,6 @@
 import { test, expect } from '../../fixtures/test.fixture';
 import type { Locator } from '@playwright/test';
+import { waitForStatePersistence } from '../../utils/waits';
 
 const TASK_SEL = 'task';
 const TASK_TITLE = 'task task-title';
@@ -18,10 +19,12 @@ const markTaskAsDone = async (task: Locator): Promise<void> => {
 test.describe('Finish Day Quick History With Subtasks', () => {
   test('should complete full finish day flow with subtasks', async ({
     page,
+    dialogPage,
+    taskPage,
     workViewPage,
     testPrefix,
   }) => {
-    test.setTimeout(60000); // Increase timeout for this long flow
+    test.setTimeout(90000); // Increase timeout for this long flow
     // Wait for work view to be ready
     await workViewPage.waitForTaskList();
 
@@ -94,5 +97,33 @@ test.describe('Finish Day Quick History With Subtasks', () => {
     await expect(rows.nth(0)).toContainText(parentTitle);
     await expect(rows.nth(1)).toContainText(firstSubtaskTitle);
     await expect(rows.nth(2)).toContainText(secondSubtaskTitle);
+
+    // Step 9: Restore the parent through the real History action
+    await page.getByRole('button', { name: 'Restore task from archive' }).first().click();
+    await dialogPage.waitForDialog();
+    await Promise.all([
+      page.waitForURL(/#\/tag\/TODAY\/tasks/, { timeout: 15000 }),
+      dialogPage.clickDialogButton('Do it!'),
+    ]);
+
+    const expectRestoredHierarchy = async (): Promise<void> => {
+      const restoredParent = taskPage.getTaskByText(parentTitle).first();
+      await expect(restoredParent).toBeVisible();
+      const restoredSubTasks = taskPage.getSubTasks(restoredParent);
+      await expect(restoredSubTasks).toHaveCount(2);
+      await expect(
+        restoredSubTasks.locator('task-title').filter({ hasText: firstSubtaskTitle }),
+      ).toBeVisible();
+      await expect(
+        restoredSubTasks.locator('task-title').filter({ hasText: secondSubtaskTitle }),
+      ).toBeVisible();
+    };
+
+    // Step 10: Today placement and hierarchy survive persistence + reload
+    await expectRestoredHierarchy();
+    await waitForStatePersistence(page);
+    await page.reload();
+    await workViewPage.waitForTaskList();
+    await expectRestoredHierarchy();
   });
 });

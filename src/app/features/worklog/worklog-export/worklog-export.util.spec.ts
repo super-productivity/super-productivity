@@ -1,12 +1,19 @@
 import { WorkStartEnd } from 'src/app/features/work-context/work-context.model';
 import { WorklogGrouping } from '../worklog.model';
-import { createRows, formatRows } from './worklog-export.util';
+import {
+  createRows,
+  formatRows,
+  formatText,
+  getHeadlineCol,
+} from './worklog-export.util';
 import { DEFAULT_TASK, WorklogTask } from '../../tasks/task.model';
 import { DEFAULT_PROJECT } from '../../project/project.const';
 import { DEFAULT_TAG } from '../../tag/tag.const';
 import { Project } from 'src/app/features/project/project.model';
 import { WorklogExportData, WorkTimes } from './worklog-export.model';
 import { Tag } from '../../tag/tag.model';
+import { msToClockString } from '../../../ui/duration/ms-to-clock-string.pipe';
+import { msToString } from '../../../ui/duration/ms-to-string.pipe';
 
 const startTime1 = new Date(2021, 1, 5, 10, 0, 0).getTime();
 const endTime1 = new Date(2021, 1, 5, 12, 0, 0).getTime();
@@ -471,5 +478,77 @@ describe('worklog-export.util moment replacement', () => {
         expect(rounded).toBe(expected);
       });
     });
+  });
+});
+
+describe('getHeadlineCol', () => {
+  it('gives the two title columns distinct headers', () => {
+    expect(getHeadlineCol('TITLES')).toBe('Parent Titles');
+    expect(getHeadlineCol('TITLES_INCLUDING_SUB')).toBe('Titles');
+  });
+});
+
+describe('formatText', () => {
+  it('escapes delimiters, quotes, and line breaks while preserving ordinary fields', () => {
+    const csv = formatText(
+      ['Date', 'Titles'],
+      [
+        ['2026-07-26', 'Plain task'],
+        ['2026-07-27', 'Client; follow-up'],
+        ['2026-07-28', 'She said "hello"'],
+        ['2026-07-29', 'Line one\r\nLine two'],
+      ],
+    );
+
+    expect(csv).toBe(
+      'Date;Titles\n' +
+        '2026-07-26;Plain task\n' +
+        '2026-07-27;"Client; follow-up"\n' +
+        '2026-07-28;"She said ""hello"""\n' +
+        '2026-07-29;"Line one\r\nLine two"',
+    );
+  });
+
+  it('neutralizes spreadsheet formula injection in field values', () => {
+    const csv = formatText(
+      ['Date', 'Titles'],
+      [
+        ['2026-07-26', "=cmd|' /C calc'!A0"],
+        ['2026-07-27', '+SUM(A1:A9)'],
+        ['2026-07-28', '-2+3'],
+        ['2026-07-29', '@evil'],
+      ],
+    );
+
+    expect(csv).toBe(
+      'Date;Titles\n' +
+        "2026-07-26;'=cmd|' /C calc'!A0\n" +
+        "2026-07-27;'+SUM(A1:A9)\n" +
+        "2026-07-28;'-2+3\n" +
+        "2026-07-29;'@evil",
+    );
+  });
+
+  it('neutralizes a leading line break, which spreadsheets skip before parsing', () => {
+    const csv = formatText(['Titles'], [['\n=1+1']]);
+    expect(csv).toBe('Titles\n' + '"\'\n=1+1"');
+  });
+
+  it('leaves the bare zero-duration placeholder untouched', () => {
+    // msToClockString(0)/msToString(0) render `-`, and TIME_CLOCK is a default
+    // export column, so prefixing it would corrupt every zero row.
+    expect(msToClockString(0)).toBe('-');
+    expect(msToString(0)).toBe('-');
+
+    const csv = formatText(
+      ['Time Clock', 'Time String'],
+      [[msToClockString(0), msToString(0)]],
+    );
+    expect(csv).toBe('Time Clock;Time String\n-;-');
+  });
+
+  it('does not touch ordinary numbers and times', () => {
+    const csv = formatText(['Worked', 'Start'], [[7200000, '10:00']]);
+    expect(csv).toBe('Worked;Start\n7200000;10:00');
   });
 });

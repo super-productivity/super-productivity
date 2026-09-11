@@ -17,14 +17,17 @@ import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { DateAdapter } from '@angular/material/core';
 import { of, throwError } from 'rxjs';
 import { selectTaskByIdWithSubTaskData } from '../../store/task.selectors';
-import { addSubTask } from '../../store/task.actions';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { DateService } from '../../../../core/date/date.service';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { AddSubtaskInputService } from '../../add-subtask-input/add-subtask-input.service';
 import { Project } from '../../../project/project.model';
 import { Tag } from '../../../tag/tag.model';
-import { DEFAULT_TASK, Task } from '../../task.model';
+import { DEFAULT_TASK, Task, TaskWithSubTasks } from '../../task.model';
+import { By } from '@angular/platform-browser';
+import { MatMenu } from '@angular/material/menu';
+import { TaskDuplicateService } from '../../task-duplicate.service';
+import { TaskMultiSelectService } from '../../task-multi-select.service';
 
 const projectInTreeOrder = (id: string, title: string): Project =>
   ({
@@ -47,23 +50,33 @@ describe('TaskContextMenuInnerComponent', () => {
   let component: TaskContextMenuInnerComponent;
   let fixture: ComponentFixture<TaskContextMenuInnerComponent>;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskDuplicateService: jasmine.SpyObj<TaskDuplicateService>;
   let addSubtaskInputService: jasmine.SpyObj<AddSubtaskInputService>;
   let store: MockStore;
+  let isTaskContextMenuOpen: ReturnType<typeof signal<boolean>>;
+  let closeActiveTaskContextMenu: ReturnType<typeof signal<(() => void) | null>>;
 
   beforeEach(async () => {
     taskService = jasmine.createSpyObj('TaskService', [
-      'add',
-      'createNewTaskWithDefaults',
       'currentTaskId',
+      'selectedTaskId',
+      'setSelectedId',
       'moveToProject',
+      'remove',
       'getTasksWithSubTasksByRepeatCfgId$',
       'getArchiveTasksForRepeatCfgId',
     ]);
     taskService.currentTaskId.and.returnValue('some-id');
+    taskDuplicateService = jasmine.createSpyObj<TaskDuplicateService>(
+      'TaskDuplicateService',
+      ['duplicate'],
+    );
     addSubtaskInputService = jasmine.createSpyObj<AddSubtaskInputService>(
       'AddSubtaskInputService',
       ['requestOpen'],
     );
+    isTaskContextMenuOpen = signal(false);
+    closeActiveTaskContextMenu = signal<(() => void) | null>(null);
 
     await TestBed.configureTestingModule({
       imports: [
@@ -74,6 +87,7 @@ describe('TaskContextMenuInnerComponent', () => {
       providers: [
         provideMockStore(),
         { provide: TaskService, useValue: taskService },
+        { provide: TaskDuplicateService, useValue: taskDuplicateService },
         { provide: AddSubtaskInputService, useValue: addSubtaskInputService },
         {
           provide: TaskRepeatCfgService,
@@ -122,7 +136,8 @@ describe('TaskContextMenuInnerComponent', () => {
           provide: TaskFocusService,
           useValue: {
             focusedTaskId: { set: () => {} },
-            isTaskContextMenuOpen: { set: () => {} },
+            isTaskContextMenuOpen,
+            closeActiveTaskContextMenu,
           },
         },
         { provide: LocaleDatePipe, useValue: {} },
@@ -144,6 +159,26 @@ describe('TaskContextMenuInnerComponent', () => {
   afterEach(() => {
     selectTaskByIdWithSubTaskData.release();
     store.resetSelectors();
+  });
+
+  describe('enterSelectionMode()', () => {
+    it('enters touch selection mode with the task selected', () => {
+      const multiSelect = TestBed.inject(TaskMultiSelectService);
+      taskService.selectedTaskId.and.returnValue(null);
+      component.enterSelectionMode();
+      expect(multiSelect.isTouchSelectionMode()).toBeTrue();
+      expect(multiSelect.has('task-default')).toBeTrue();
+      expect(taskService.setSelectedId).not.toHaveBeenCalled();
+      multiSelect.clear();
+    });
+
+    it('closes an open detail panel first', () => {
+      const multiSelect = TestBed.inject(TaskMultiSelectService);
+      taskService.selectedTaskId.and.returnValue('other-task');
+      component.enterSelectionMode();
+      expect(taskService.setSelectedId).toHaveBeenCalledWith(null);
+      multiSelect.clear();
+    });
   });
 
   describe('tree ordered dropdown data', () => {
@@ -169,114 +204,117 @@ describe('TaskContextMenuInnerComponent', () => {
   });
 
   describe('duplicate()', () => {
-    it('should duplicate subtasks with timeEstimate and notes', fakeAsync(() => {
-      const mockTask = {
+    it('delegates a task without subtasks directly to TaskDuplicateService', async () => {
+      const mockTask: Task = {
+        ...DEFAULT_TASK,
+        id: 'PARENT_ID',
+        title: 'Parent Task',
+        projectId: 'P1',
+        tagIds: [],
+        subTaskIds: [],
+      };
+
+      component.task = mockTask;
+
+      await component.duplicate();
+
+      expect(taskDuplicateService.duplicate).toHaveBeenCalledOnceWith({
+        ...mockTask,
+        subTasks: [],
+      });
+    });
+
+    it('delegates the complete task tree to TaskDuplicateService', fakeAsync(() => {
+      const mockTask: Task = {
+        ...DEFAULT_TASK,
         id: 'PARENT_ID',
         title: 'Parent Task',
         projectId: 'P1',
         tagIds: [],
         subTaskIds: ['SUB_ID'],
-      } as any;
-
-      const mockSubTask = {
-        id: 'SUB_ID',
-        title: 'Sub Task',
-        isDone: true,
-        projectId: 'P1',
-        timeEstimate: 3600000,
-        notes: 'Some notes',
       };
-
-      const mockTaskWithSubTasks = {
+      const mockTaskWithSubTasks: TaskWithSubTasks = {
         ...mockTask,
-        subTasks: [mockSubTask],
-      };
-
-      component.task = mockTask;
-      taskService.add.and.returnValue('NEW_PARENT_ID');
-      taskService.createNewTaskWithDefaults.and.returnValue({
-        id: 'NEW_SUB_ID',
-      } as any);
-
-      store.overrideSelector(selectTaskByIdWithSubTaskData, mockTaskWithSubTasks);
-      spyOn(store, 'dispatch');
-
-      component.duplicate();
-      tick(50); // for the delay(50) in _getTaskWithSubtasks
-
-      expect(taskService.add).toHaveBeenCalledWith(
-        'Parent Task (copy)',
-        false,
-        jasmine.objectContaining({ projectId: 'P1' }),
-        false,
-      );
-
-      expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith(
-        jasmine.objectContaining({
-          title: 'Sub Task',
-          additional: jasmine.objectContaining({
-            timeEstimate: 3600000,
-            notes: 'Some notes',
+        subTasks: [
+          {
+            ...DEFAULT_TASK,
+            id: 'SUB_ID',
+            title: 'Sub Task',
             isDone: true,
             projectId: 'P1',
-          }),
-        }),
-      );
-
-      expect(store.dispatch).toHaveBeenCalledWith(
-        addSubTask({
-          task: { id: 'NEW_SUB_ID' } as any,
-          parentId: 'NEW_PARENT_ID',
-        }),
-      );
-    }));
-
-    it('should duplicate parent task with notes', fakeAsync(() => {
-      const mockTask = {
-        id: 'PARENT_ID',
-        title: 'Parent Task',
-        projectId: 'P1',
-        tagIds: [],
-        subTaskIds: [],
-        notes: 'My important notes',
-      } as any;
+            timeEstimate: 3_600_000,
+            notes: 'Some notes',
+          },
+        ],
+      };
 
       component.task = mockTask;
-      taskService.add.and.returnValue('NEW_PARENT_ID');
+      store.overrideSelector(selectTaskByIdWithSubTaskData, mockTaskWithSubTasks);
 
-      component.duplicate();
-      tick(50);
+      void component.duplicate();
+      tick(50); // for the delay(50) in _getTaskWithSubtasks
 
-      expect(taskService.add).toHaveBeenCalledWith(
-        'Parent Task (copy)',
-        false,
-        jasmine.objectContaining({ notes: 'My important notes' }),
-        false,
+      expect(taskDuplicateService.duplicate).toHaveBeenCalledOnceWith(
+        mockTaskWithSubTasks,
       );
     }));
+  });
 
-    it('should not include notes when parent task has no notes', fakeAsync(() => {
-      const mockTask = {
-        id: 'PARENT_ID',
-        title: 'Parent Task',
+  describe('deleteTask()', () => {
+    // #9946: the selector returns undefined for a task that is gone from the
+    // store; removing an id-less stub used to wipe every top-level task.
+    it('removes nothing when the task is gone from the store', fakeAsync(() => {
+      component.task = {
+        ...DEFAULT_TASK,
+        id: 'GONE_ID',
         projectId: 'P1',
-        tagIds: [],
         subTaskIds: [],
-        notes: '',
-      } as any;
+      };
+      store.overrideSelector(selectTaskByIdWithSubTaskData, undefined);
 
-      component.task = mockTask;
-      taskService.add.and.returnValue('NEW_PARENT_ID');
+      void (
+        component as unknown as { _performDelete: () => Promise<void> }
+      )._performDelete();
+      tick(50); // for the delay(50) in _getTaskWithSubtasks
 
-      component.duplicate();
-      tick(50);
-
-      const callArgs = taskService.add.calls.mostRecent().args[2] as any;
-      expect(callArgs.notes).toBeUndefined();
+      expect(taskService.remove).not.toHaveBeenCalled();
     }));
   });
 
   describe('getElementById for task ID lookup', () => {
+    it('registers its close callback when opened and clears it when closed', () => {
+      const closeMenu = jasmine.createSpy('closeMenu');
+      (
+        component as unknown as {
+          contextMenuTrigger: () => { closeMenu: () => void; openMenu: () => void };
+        }
+      ).contextMenuTrigger = () => ({ closeMenu, openMenu: () => {} });
+
+      component.open();
+
+      expect(closeActiveTaskContextMenu()).not.toBeNull();
+      closeActiveTaskContextMenu()?.();
+      expect(closeMenu).toHaveBeenCalled();
+
+      component.onClose();
+      expect(closeActiveTaskContextMenu()).toBeNull();
+    });
+
+    it('does not clear a newer menu registration when destroyed', () => {
+      (
+        component as unknown as {
+          contextMenuTrigger: () => { closeMenu: () => void; openMenu: () => void };
+        }
+      ).contextMenuTrigger = () => ({ closeMenu: () => {}, openMenu: () => {} });
+      component.open();
+      const newerClose = (): void => {};
+      closeActiveTaskContextMenu.set(newerClose);
+
+      component.ngOnDestroy();
+
+      expect(closeActiveTaskContextMenu()).toBe(newerClose);
+    });
+
     it('should use getElementById for task ID in focusRelatedTaskOrNext', fakeAsync(() => {
       component.task = {
         id: 'task-with-{special}-chars',
@@ -317,6 +355,39 @@ describe('TaskContextMenuInnerComponent', () => {
       tick(100);
 
       expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    }));
+
+    it('should restore external focus only after the root menu closes', fakeAsync(() => {
+      component.task = {
+        id: 'T1',
+        title: 'Test',
+        projectId: 'P1',
+        tagIds: [],
+        subTaskIds: [],
+      } as any;
+
+      const trigger = document.createElement('button');
+      document.body.appendChild(trigger);
+      const triggerFocusSpy = spyOn(trigger, 'focus');
+      const getByIdSpy = spyOn(document, 'getElementById');
+
+      component.open(undefined, false, trigger);
+      fixture.detectChanges();
+      const menus = fixture.debugElement.queryAll(By.directive(MatMenu));
+      expect(menus.length).toBeGreaterThan(1);
+
+      menus[1].injector.get(MatMenu).closed.emit();
+      tick();
+
+      expect(triggerFocusSpy).not.toHaveBeenCalled();
+      expect(getByIdSpy).not.toHaveBeenCalled();
+
+      component.onClose();
+      tick();
+
+      expect(triggerFocusSpy).toHaveBeenCalledOnceWith({ preventScroll: true });
+      expect(getByIdSpy).not.toHaveBeenCalled();
+      trigger.remove();
     }));
   });
 

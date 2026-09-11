@@ -28,6 +28,14 @@
   ></div>
 }
 <!-- -->
+<!--
+  Perf note: the @else branch means toggling the focus overlay destroys and
+  rebuilds the entire app shell (side nav, router outlet, work view, every task
+  row). @defer only delays loading the overlay; it does not keep the shell
+  alive. Rendering the overlay as an absolutely positioned sibling and hiding
+  the shell with CSS would avoid the teardown. Only visible when profiling
+  overlay *close*.
+-->
 @if (isShowFocusOverlay()) {
   @defer (on immediate) {
     <focus-mode-overlay @warp></focus-mode-overlay>
@@ -35,7 +43,10 @@
 } @else {
   <div
     class="app-container"
+    [style.height]="iosShellHeight()"
+    [style.min-height]="iosShellHeight()"
     [class.has-mobile-bottom-nav]="isShowMobileButtonNav()"
+    [class.is-multi-selecting]="isMultiSelecting()"
     [class.has-vertical-action-bar]="isVerticalActionBar()"
     [class.app-entrance]="isAppEntrance()"
     [class.is-onboarding]="isShowOnboardingPresets()"
@@ -67,6 +78,7 @@
         </div>
       </right-panel>
       <global-progress-bar></global-progress-bar>
+      <task-multi-select-bar></task-multi-select-bar>
     </main>
 
     <!-- Mobile Bottom Navigation -->

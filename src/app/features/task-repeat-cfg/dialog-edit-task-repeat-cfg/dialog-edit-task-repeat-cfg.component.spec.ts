@@ -79,6 +79,8 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       task?: TaskCopy;
       repeatCfg?: TaskRepeatCfg;
       targetDate?: string;
+      initialStartDate?: string;
+      isRemoveConfirmationRequired?: boolean;
     },
     getRepeatCfgReturnValue?:
       | Observable<TaskRepeatCfg | undefined>
@@ -95,6 +97,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       'getTaskRepeatCfgByIdAllowUndefined$',
       'updateTaskRepeatCfg',
       'addTaskRepeatCfgToTask',
+      'deleteTaskRepeatCfg',
       'deleteTaskRepeatCfgWithDialog',
     ]);
     mockDateService = jasmine.createSpyObj('DateService', [
@@ -352,6 +355,104 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
 
       expect(component.isEdit()).toBe(false);
     });
+  });
+
+  describe('deleteInstance', () => {
+    it('formats a date-only target date at local midnight in the skip confirmation', async () => {
+      const fixture = await setupTestBed({
+        repeatCfg: mockRepeatCfg,
+        targetDate: '2026-06-10',
+      });
+      const component = fixture.componentInstance;
+      component.canRemoveInstance.set(true);
+      const toLocaleDateStringSpy = spyOn(
+        Date.prototype,
+        'toLocaleDateString',
+      ).and.callFake(function (this: Date): string {
+        return String(this.getHours());
+      });
+      spyOn(TestBed.inject(TranslateService), 'instant').and.callFake(
+        (_key: string, params?: { date?: string }) => params?.date || '',
+      );
+
+      component.deleteInstance();
+
+      expect(toLocaleDateStringSpy).toHaveBeenCalled();
+      expect(mockMatDialog.open).toHaveBeenCalledWith(
+        jasmine.anything(),
+        jasmine.objectContaining({ data: jasmine.objectContaining({ message: '0' }) }),
+      );
+    });
+  });
+
+  describe('new config initialization', () => {
+    it('uses the explicit initial start date from the schedule dialog', async () => {
+      const taskWithStoredDueDate = {
+        ...mockTask,
+        dueDay: '2026-06-01',
+      } as TaskCopy;
+      const fixture = await setupTestBed({
+        task: taskWithStoredDueDate,
+        initialStartDate: '2026-06-12',
+      });
+
+      expect(fixture.componentInstance.repeatCfg().startDate).toBe('2026-06-12');
+    });
+
+    it('returns the created config ID when saving', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      mockTaskRepeatCfgService.addTaskRepeatCfgToTask.and.callFake(
+        () => 'created-repeat-cfg',
+      );
+
+      fixture.componentInstance.save();
+
+      expect(mockDialogRef.close).toHaveBeenCalledOnceWith('created-repeat-cfg');
+    });
+  });
+
+  describe('remove', () => {
+    it('removes without confirmation when the config was created from the schedule dialog', fakeAsync(async () => {
+      const taskWithRepeatCfg = {
+        ...mockTask,
+        repeatCfgId: 'repeat-cfg-123',
+      } as TaskCopy;
+      const fixture = await setupTestBed(
+        {
+          task: taskWithRepeatCfg,
+          isRemoveConfirmationRequired: false,
+        },
+        of(mockRepeatCfg),
+      );
+      fixture.detectChanges();
+      tick();
+
+      fixture.componentInstance.remove();
+
+      expect(mockTaskRepeatCfgService.deleteTaskRepeatCfg).toHaveBeenCalledOnceWith(
+        'repeat-cfg-123',
+      );
+      expect(
+        mockTaskRepeatCfgService.deleteTaskRepeatCfgWithDialog,
+      ).not.toHaveBeenCalled();
+    }));
+
+    it('keeps confirmation for a pre-existing repeat config', fakeAsync(async () => {
+      const taskWithRepeatCfg = {
+        ...mockTask,
+        repeatCfgId: 'repeat-cfg-123',
+      } as TaskCopy;
+      const fixture = await setupTestBed({ task: taskWithRepeatCfg }, of(mockRepeatCfg));
+      fixture.detectChanges();
+      tick();
+
+      fixture.componentInstance.remove();
+
+      expect(
+        mockTaskRepeatCfgService.deleteTaskRepeatCfgWithDialog,
+      ).toHaveBeenCalledOnceWith('repeat-cfg-123');
+      expect(mockTaskRepeatCfgService.deleteTaskRepeatCfg).not.toHaveBeenCalled();
+    }));
   });
 
   describe('plannedStartDateStr localization (#8987 follow-up)', () => {
@@ -851,6 +952,53 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       component.save();
 
       expect(savedCfg().skipOverdue).toBe(true);
+    });
+  });
+
+  // save() re-derives the quick setting from the stored start date, so a preset
+  // that ignored that date rewrote it on every save — and a startDate in the
+  // change set reschedules the live instance (#7373).
+  describe('monthly anchors survive an unrelated save', () => {
+    const changes = (): Partial<TaskRepeatCfg> =>
+      mockTaskRepeatCfgService.updateTaskRepeatCfg.calls.mostRecent()
+        .args[1] as Partial<TaskRepeatCfg>;
+
+    it('keeps a future MONTHLY_LAST_DAY start date where the user put it', async () => {
+      const fixture = await setupTestBed({
+        repeatCfg: {
+          ...DEFAULT_TASK_REPEAT_CFG,
+          id: 'repeat-cfg-last-day',
+          title: 'Pay rent',
+          quickSetting: 'MONTHLY_LAST_DAY',
+          repeatCycle: 'MONTHLY',
+          monthlyLastDay: true,
+          startDate: '2099-09-30',
+        },
+      });
+
+      fixture.componentInstance.save();
+
+      expect(mockTaskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledTimes(1);
+      // `rescheduleTaskOnRepeatCfgUpdate$` filters on `field in changes`, so key
+      // absence is the assertion that matches the effect.
+      expect('startDate' in changes()).toBe(false);
+    });
+
+    it('keeps a future MONTHLY_FIRST_DAY start date where the user put it', async () => {
+      const fixture = await setupTestBed({
+        repeatCfg: {
+          ...DEFAULT_TASK_REPEAT_CFG,
+          id: 'repeat-cfg-first-day',
+          title: 'Pay rent',
+          quickSetting: 'MONTHLY_FIRST_DAY',
+          repeatCycle: 'MONTHLY',
+          startDate: '2099-10-01',
+        },
+      });
+
+      fixture.componentInstance.save();
+
+      expect('startDate' in changes()).toBe(false);
     });
   });
 });

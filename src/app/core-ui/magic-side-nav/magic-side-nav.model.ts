@@ -109,7 +109,6 @@ export interface NavConfig {
   items: NavItem[];
   fullModeByDefault: boolean;
   showLabels: boolean;
-  mobileBreakpoint: number;
   resizable: boolean;
   minWidth: number;
   maxWidth: number;

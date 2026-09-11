@@ -1,10 +1,20 @@
 # iOS home screen widget (port of the Android widget)
 
-Port of the Android task-list widget (PR #8737, plan
-[2026-07-03-android-home-screen-widget.md](2026-07-03-android-home-screen-widget.md))
-to iOS via a WidgetKit extension. The Android architecture — one-way versioned JSON
-snapshot + last-wins done-tap queue + render-time pending overlay — is exactly the
-shape WidgetKit wants, so this is a view-layer + plumbing port, not a redesign.
+> **Status:** Implemented on open PR #8950; not merged into this branch
+>
+> **Implementation branch:** `codex/pr-8950-improvements`
+>
+> **Last verified:** 2026-07-29
+>
+> Delete this plan after the implementation merges and its durable contract and
+> limitations have moved to a maintained widget guide.
+
+Port of the Android task-list widget (PR #8737; see
+[the maintained Android widget guide](../android-home-screen-widget.md)) to iOS
+via a WidgetKit extension. The Android architecture — one-way versioned JSON
+snapshot + last-wins done-tap queue + render-time pending overlay — is exactly
+the shape WidgetKit wants, so this is a view-layer + plumbing port, not a
+redesign.
 
 ## Architecture mapping (reuse the `v: 1` contract unchanged)
 

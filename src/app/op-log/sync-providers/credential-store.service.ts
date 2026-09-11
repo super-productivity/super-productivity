@@ -144,6 +144,17 @@ export class SyncCredentialStore<
   }
 
   /**
+   * Drops the in-memory copy so the next `load()` reads IndexedDB. The
+   * database is shared across browser tabs but this cache is not: after
+   * another tab rotates the token ("sign out other devices"), this tab
+   * would otherwise keep serving — and eventually striking out and
+   * clearing — the revoked token.
+   */
+  invalidateInMemoryCache(): void {
+    this._privateCfgInMemory = undefined;
+  }
+
+  /**
    * Updates the provider's private configuration with partial data.
    */
   async updatePartial(updates: Partial<PrivateCfgByProviderId<PID>>): Promise<void> {

@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import typia from 'typia';
 import { TaskService } from '../../features/tasks/task.service';
@@ -9,6 +10,17 @@ import { TagService } from '../../features/tag/tag.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
 import { isTodayWithOffset } from '../../util/is-today.util';
+import {
+  selectCurrentCycle,
+  selectIsBreakTimeUp,
+  selectIsInOvertime,
+  selectIsLongBreak,
+  selectIsRunning,
+  selectIsSessionCompleted,
+  selectMode,
+  selectTimeRemaining,
+  selectTimer,
+} from '../../features/focus-mode/store/focus-mode.selectors';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
@@ -178,6 +190,7 @@ export class LocalRestApiHandlerService {
   private readonly _projectService = inject(ProjectService);
   private readonly _tagService = inject(TagService);
   private readonly _dateService = inject(DateService);
+  private readonly _store = inject(Store);
   private _isInitialized = false;
 
   init(): void {
@@ -216,6 +229,10 @@ export class LocalRestApiHandlerService {
 
     if (method === 'GET' && path === '/status') {
       return this._handleGetStatus(requestId);
+    }
+
+    if (method === 'GET' && path === '/focus') {
+      return this._handleGetFocus(requestId);
     }
 
     if (method === 'GET' && path === '/task-control/current') {
@@ -265,6 +282,37 @@ export class LocalRestApiHandlerService {
       currentTask,
       currentTaskId: currentTask?.id ?? null,
       taskCount: allTasks.length,
+    });
+  }
+
+  private async _handleGetFocus(requestId: string): Promise<LocalRestApiResponsePayload> {
+    const state = await firstValueFrom(this._store);
+    const timer = selectTimer(state);
+    const mode = selectMode(state);
+    const cycle = selectCurrentCycle(state);
+    const isRunning = selectIsRunning(state);
+    const isBreakTimeUp = selectIsBreakTimeUp(state);
+    const isLongBreak = selectIsLongBreak(state);
+    const remainingMs = selectTimeRemaining(state);
+    const isSessionDone = selectIsSessionCompleted(state);
+    const isOvertime = selectIsInOvertime(state);
+
+    return createSuccessResponse(requestId, 200, {
+      mode,
+      cycle,
+      isSessionDone,
+      timer:
+        timer.purpose === null
+          ? null
+          : {
+              purpose: timer.purpose,
+              status: isRunning ? 'running' : isBreakTimeUp ? 'done' : 'paused',
+              isOvertime,
+              isLongBreak,
+              elapsedMs: timer.elapsed,
+              remainingMs,
+              durationMs: timer.duration,
+            },
     });
   }
 

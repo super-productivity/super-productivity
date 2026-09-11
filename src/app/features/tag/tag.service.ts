@@ -20,7 +20,7 @@ import { nanoid } from 'nanoid';
 import { DEFAULT_TAG } from './tag.const';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { sortByTitle } from '../../util/sort-by-title';
-import { getRandomWorkContextColor } from '../work-context/work-context-color';
+import { getRandomWorkContextColor } from '../../ui/work-context-color';
 import { DeletedTagTitlesSidecarService } from '../issue/two-way-sync/deleted-tag-titles-sidecar.service';
 import { MenuTreeService } from '../menu-tree/menu-tree.service';
 

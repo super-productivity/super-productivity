@@ -14,16 +14,26 @@ jobs:
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
 
     steps:
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: 22
       - name: Check out Git repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           persist-credentials: false
 
       - name: Select Xcode 26.2
-        run: sudo xcode-select -s /Applications/Xcode_26.2.app
+        # SDKROOT pin: the macos-26 image (2026-08) resolves the default SDK for
+        # bare `xcrun` calls to /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk,
+        # which doesn't exist there, so `xcrun --show-sdk-version`, `xcrun agvtool`
+        # and xcrun-based tool lookups fail ("SDK ... cannot be located") even with
+        # full Xcode selected. Pointing SDKROOT at the selected Xcode's macOS SDK
+        # overrides that resolution for all later steps. It cannot leak into the
+        # iOS archive: the app project pins SDKROOT = iphoneos in its build
+        # settings, which takes precedence over the environment.
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.2.app
+          echo "SDKROOT=$(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk" >> "$GITHUB_ENV"
 
       - name: Verify Xcode and SDK version
         run: |
@@ -213,7 +223,7 @@ jobs:
         # .ruby-version file in the repo the action errors out rather than
         # using system Ruby. bundler-cache runs `bundle install` and caches the
         # ~210-gem fastlane tree so it isn't reinstalled each run.
-        uses: ruby/setup-ruby@d45b1a4e94b71acab930e56e79c6aa188764e7f9 # v1.316.0
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         with:
           ruby-version: '3.3'
           bundler-cache: true

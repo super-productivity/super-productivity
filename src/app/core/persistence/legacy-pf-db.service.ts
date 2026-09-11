@@ -36,6 +36,9 @@ const STORE_NAME = 'main';
 
 // Migration lock key - stored in the pf database
 const MIGRATION_LOCK_KEY = '_migration_lock';
+// Set when the user chose to start without this database's data. Stored here,
+// next to the data it refers to, so it travels with it.
+const MIGRATION_SKIPPED_KEY = '_migration_skipped';
 const LOCK_TIMEOUT_MS = 60000; // 1 minute lock timeout
 
 interface MigrationLock {
@@ -175,6 +178,15 @@ export class LegacyPfDbService {
     let db: IDBPDatabase | undefined;
     try {
       db = await this._openDb();
+
+      // The user chose to start without this data. It is still on disk — this
+      // only stops migration and recovery from picking it up again.
+      if (await db.get(STORE_NAME, MIGRATION_SKIPPED_KEY)) {
+        Log.log(
+          'LegacyPfDbService.hasUsableEntityData: Legacy data skipped on user request',
+        );
+        return false;
+      }
 
       // Check for meaningful data in key models
       const task = await db.get(STORE_NAME, 'task');
@@ -377,6 +389,25 @@ export class LegacyPfDbService {
     } catch (e) {
       Log.warn('LegacyPfDbService.releaseMigrationLock failed:', e);
     }
+  }
+
+  /**
+   * Records that the user chose to start without the legacy data, so migration
+   * and recovery stop offering it.
+   *
+   * Deliberately does NOT delete anything. The `pf` store also holds sync
+   * credentials (`__sp_cred_*`, including the `encryptKey`), `CLIENT_ID` and
+   * `META_MODEL`, none of which the pre-migration backup covers — and leaving
+   * the model data in place too means a mis-click costs nothing and the data
+   * stays available to a later build or a support request.
+   *
+   * Reports whether the marker actually landed: `save()` swallows its own
+   * failures, and a marker that silently did not stick would drop the user back
+   * onto the same failed migration on the next boot.
+   */
+  async markMigrationSkipped(): Promise<boolean> {
+    await this.save(MIGRATION_SKIPPED_KEY, true);
+    return (await this.load<boolean>(MIGRATION_SKIPPED_KEY)) === true;
   }
 
   /**

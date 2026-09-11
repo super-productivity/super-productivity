@@ -38,7 +38,7 @@
 
 .summary {
   padding: var(--s2);
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--state-hover);
   border-radius: var(--card-border-radius);
   margin-bottom: var(--s2);
   display: flex;
@@ -70,10 +70,10 @@
   align-items: center;
   gap: 12px;
   padding: 12px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid var(--extra-border-color);
 
   &:hover {
-    background: rgba(0, 0, 0, 0.03);
+    background: var(--state-hover);
   }
 }
 
@@ -84,10 +84,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--extra-border-color);
   border-radius: var(--card-border-radius);
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--state-hover);
 
   img {
     max-width: 100%;

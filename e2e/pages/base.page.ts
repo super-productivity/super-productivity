@@ -134,9 +134,19 @@ export abstract class BasePage {
     }
   }
 
-  async addTask(taskName: string, skipClose = false): Promise<void> {
+  /**
+   * `expectedVisibleTitle` is the title after short-syntax parsing. Pass `null`
+   * when creation intentionally moves the task out of the current task list.
+   */
+  async addTask(
+    taskName: string,
+    skipClose = false,
+    expectedVisibleTitle: string | null = taskName,
+  ): Promise<void> {
     // Add test prefix to task name for isolation
     const prefixedTaskName = this.applyPrefix(taskName);
+    const prefixedExpectedVisibleTitle =
+      expectedVisibleTitle === null ? null : this.applyPrefix(expectedVisibleTitle);
 
     // Wait for any in-flight navigation to complete before interacting.
     // Angular hash-based routing can block Playwright's fill/click operations.
@@ -179,14 +189,16 @@ export abstract class BasePage {
     // Check if a dialog appeared (e.g., create tag dialog)
     const dialogExists = await safeIsVisible(this.page.locator('mat-dialog-container'));
 
-    if (!dialogExists) {
+    if (!dialogExists && prefixedExpectedVisibleTitle !== null) {
       // Wait for task to be created - check for the specific task
       const maxWaitTime = 15000; // Increased from 10s to handle slow renders
-      const taskSelector = `task:has-text("${prefixedTaskName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}")`;
+      const expectedTask = this.page
+        .locator('task')
+        .filter({ hasText: prefixedExpectedVisibleTitle });
 
       try {
         // Primary: wait for the specific task to be visible
-        await this.page.locator(taskSelector).first().waitFor({
+        await expectedTask.first().waitFor({
           state: 'visible',
           timeout: maxWaitTime,
         });
@@ -200,7 +212,8 @@ export abstract class BasePage {
           const currentCount = await this.page.locator('task').count();
           throw new Error(
             `Task creation failed. Expected ${expectedCount} tasks, but got ${currentCount}.\n` +
-              `Task name: "${prefixedTaskName}"\n` +
+              `Task input: "${prefixedTaskName}"\n` +
+              `Expected visible title: "${prefixedExpectedVisibleTitle}"\n` +
               `Existing tasks: ${JSON.stringify(tasks, null, 2)}`,
           );
         }

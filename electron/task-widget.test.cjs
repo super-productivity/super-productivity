@@ -23,8 +23,23 @@ const createDeferred = () => {
 };
 
 class FakeWebContents {
-  on() {}
-  send() {}
+  constructor() {
+    this.sent = [];
+    this._handlers = new Map();
+  }
+  on(eventName, handler) {
+    this._handlers.set(eventName, handler);
+  }
+  once(eventName, handler) {
+    this._handlers.set(eventName, handler);
+  }
+  emitOnce(eventName) {
+    const handler = this._handlers.get(eventName);
+    if (handler) handler();
+  }
+  send(channel, payload) {
+    this.sent.push({ channel, payload });
+  }
   focus() {}
   isDestroyed() {
     return false;
@@ -293,5 +308,29 @@ test('the closed event clears the sticky flag so it does not outlive the window'
     mod.getIsTaskWidgetUserForcedVisible(),
     false,
     'closing the window clears the sticky flag',
+  );
+});
+
+test('the opacity in effect at load time reaches the widget renderer once it finished loading', async () => {
+  const mod = loadModule();
+
+  mod.updateTaskWidgetEnabled(true);
+  await flush();
+
+  const { webContents } = createdWindows[0];
+
+  // The user's saved opacity arrives while the widget page is still loading.
+  // Sending it now is useless: the renderer only registers its `update-opacity`
+  // listener when task-widget-renderer.js runs, and ipcRenderer does not replay.
+  mod.updateTaskWidgetOpacity(5);
+  webContents.sent.length = 0;
+
+  webContents.emitOnce('did-finish-load');
+
+  assert.deepEqual(
+    webContents.sent.filter((m) => m.channel === 'update-opacity'),
+    // 5 % is below the 10 % floor, so the renderer must get the clamped value.
+    [{ channel: 'update-opacity', payload: 0.1 }],
+    'the opacity current at load time must reach the renderer exactly once, clamped',
   );
 });

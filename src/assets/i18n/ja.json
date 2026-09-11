@@ -25,6 +25,16 @@
     "UPDATE_CHECK": {
       "ERROR": "アップデートを確認できませんでした。後でもう一度お試しください。",
       "UP_TO_DATE": "最新バージョンを使用しています（{{version}}）。"
+    },
+    "B_SUPER_SYNC_ENCRYPTION": {
+      "ALREADY_ENCRYPTED": "このアカウントは別のデバイスですでに暗号化されています。同期を続けるには、現在のパスワードを入力してください。",
+      "ENABLE": "暗号化を有効にする",
+      "LATER": "後で",
+      "MSG": "SuperSync ではエンドツーエンド暗号化を使用しますが、このアカウントは現在もパスワードなしで同期されています。データを保護するためにパスワードを設定してください。データは保持され、次回の同期時に暗号化して再アップロードされます。"
+    },
+    "DROP_LINK": {
+      "SNACK": "ドロップしたリンクからタスクを作成しました",
+      "TASK_TITLE": "{{url}} を確認"
     }
   },
   "BL": {
@@ -40,10 +50,21 @@
     "RESTORE_FILE_BACKUP": "データがないようですが、「{{dir}}」で利用可能なバックアップがあります。 {{from}}から最新のバックアップを復元しますか？",
     "RESTORE_FILE_BACKUP_ANDROID": "データがないようですが、利用可能なバックアップがあります。ロードしますか？",
     "RESTORE_STRAY_BACKUP": "最後の同期中に、エラーが発生した可能性があります。最後のバックアップを復元しますか？",
-    "DELETE_SECTION": "このセクションを削除しますか？含まれるタスクはタスクリストに移動されます。"
+    "DELETE_SECTION": "このセクションを削除しますか？含まれるタスクはタスクリストに移動されます。",
+    "RESTORE_FILE_BACKUP_MOBILE": "このデバイスにデータが見つかりませんでしたが、復元可能なバックアップがあります（タスク: {{tasks}}、プロジェクト: {{projects}}）。復元しますか？",
+    "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "最新の自動バックアップを復元しますか（タスク: {{tasks}}、プロジェクト: {{projects}}）？これにより、このデバイスの現在のデータがすべて置き換えられます。同期を使用している場合は、次回の同期時に他のデバイスのデータも上書きされます。"
   },
   "DATETIME_SCHEDULE": {
-    "PRESS_ENTER_AGAIN": "保存するにはもう一度Enterキーを押してください"
+    "PRESS_ENTER_AGAIN": "保存するにはもう一度Enterキーを押してください",
+    "MONTH": "月",
+    "NEXT_24_YEARS": "次の24年間",
+    "NEXT_MONTH": "翌月",
+    "NEXT_YEAR": "翌年",
+    "PREVIOUS_24_YEARS": "過去24年間",
+    "PREVIOUS_MONTH": "前月",
+    "PREVIOUS_YEAR": "前年",
+    "SWITCH_TO_MULTI_YEAR_VIEW": "年を選択",
+    "SWITCH_TO_YEAR_VIEW": "月を選択"
   },
   "DIALOG_UNSPLASH_PICKER": {
     "BY": "によって",
@@ -77,16 +98,23 @@
         "EDIT_ATTACHMENT": "添付ファイルを編集",
         "LABELS": {
           "IMG": "画像",
-          "LINK": "URL"
+          "LINK": "URL",
+          "FILE": "ファイルパス"
         },
         "SELECT_TYPE": "タイプを選択",
         "TYPES": {
           "FILE": "ファイル（デフォルトのシステムアプリで開かれる）",
           "IMG": "画像（サムネイル表示）",
           "LINK": "リンク（ブラウザで開きます）"
+        },
+        "PLACEHOLDERS": {
+          "FILE": "/path/to/file",
+          "IMG": "https://example.com/image.png",
+          "LINK": "https://example.com"
         }
       },
-      "LOCAL_FILE_UNAVAILABLE": "この添付ファイルは、追加されたデバイスでのみ利用できます。"
+      "LOCAL_FILE_UNAVAILABLE": "この添付ファイルは、追加されたデバイスでのみ利用できます。",
+      "COMMAND_UNSUPPORTED": "コマンド添付ファイルからコマンドを実行することはできなくなりました。"
     },
     "BOARDS": {
       "DEFAULT": {
@@ -94,12 +122,12 @@
         "EISENHAUER_MATRIX": "アイゼンハウアーマトリックス",
         "IN_PROGRESS": "進行中で",
         "KANBAN": "カンバン",
-        "NOT_URGENT_IMPORTANT": "緊急性がなく、重要ではありません",
-        "NOT_URGENT_NOT_IMPORTANT": "緊急ではない、重要ではない",
+        "NOT_URGENT_IMPORTANT": "緊急ではないが重要",
+        "NOT_URGENT_NOT_IMPORTANT": "緊急でも重要でもない",
         "TO_DO": "やるべきこと",
         "URGENT": "緊急",
         "URGENT_IMPORTANT": "緊急かつ重要",
-        "URGENT_NOT_IMPORTANT": "緊急 & 重要ではない"
+        "URGENT_NOT_IMPORTANT": "緊急だが重要ではない"
       },
       "FORM": {
         "ADD_NEW_PANEL": "新しいパネルを追加",
@@ -128,7 +156,14 @@
         "TAGS_EXCLUDED_MATCH_MODE": "除外ラベルの一致条件",
         "TAGS_MATCH_ALL": "すべて一致（AND）",
         "TAGS_MATCH_ANY": "いずれか一致（OR）",
-        "TAGS_MATCH_MODE": "必須ラベルの一致条件"
+        "TAGS_MATCH_MODE": "必須ラベルの一致条件",
+        "ONLY_PARENT_TASKS": "親タスクのみ",
+        "PROJECT": "プロジェクト",
+        "PROJECT_ALL": "すべてのプロジェクト",
+        "SCHEDULED_STATE": "スケジュール状態",
+        "SCHEDULED_STATE_ALL": "すべて",
+        "SCHEDULED_STATE_NOT_SCHEDULED": "未スケジュール",
+        "SCHEDULED_STATE_SCHEDULED": "スケジュール済み"
       },
       "V": {
         "ADD_NEW_BOARD": "新しいボードを追加",
@@ -157,7 +192,8 @@
         "TWO_WAY_SYNC_SECTION": "双方向同期 (実験的)",
         "TWO_WAY_SYNC_STATUS": "ステータスの同期方向",
         "TWO_WAY_SYNC_TITLE": "タイトルの同期方向",
-        "IS_ADD_SUB_TASKS": "タスクが追加されたときにサブタスクもインポートする"
+        "IS_ADD_SUB_TASKS": "タスクが追加されたときにサブタスクもインポートする",
+        "POLL_INTERVAL_MINUTES": "ポーリング間隔（分）"
       },
       "FORM_SECTION": {
         "HELP": "<p>ここでは、SuperProductivityを構成して、特定のプロジェクトの未完了のCalDavタスクを日次計画ビューのタスク作成パネルに一覧表示できます。それらは提案としてリストされ、todoへのリンクとそれに関する詳細情報を提供します。</p> <p>さらに、未完了のすべてのToDoをタスクバックログに自動的に追加して同期することができます。</p>"
@@ -200,7 +236,8 @@
         "EVENT_HIDDEN": "カレンダーイベントを非表示にしました",
         "EVENT_RESCHEDULED": "イベントを再スケジュールしました",
         "EVENT_DELETED": "イベントを削除しました",
-        "TIME_BLOCK_ERROR": "時間ブロックの同期に失敗しました: {{errTxt}}"
+        "TIME_BLOCK_ERROR": "時間ブロックの同期に失敗しました: {{errTxt}}",
+        "EVENT_MOVED": "イベントを移動しました"
       },
       "CONTEXT_MENU": {
         "CREATE_TASK": "タスクとして作成",
@@ -316,7 +353,26 @@
       "RESUME_BREAK": "休憩を再開",
       "SELECT_TASK_FIRST": "トラッキングを開始するにはタスクを選択してください",
       "START_BREAK": "休憩を開始",
-      "OVERTIME_MSG": "時間です。準備ができたら休憩してください"
+      "OVERTIME_MSG": "時間です。準備ができたら休憩してください",
+      "BREAK_TITLE": "休憩",
+      "BROWSER_TITLE_BREAK": "休憩",
+      "BROWSER_TITLE_PAUSED": "一時停止",
+      "FLOWTIME_SETTINGS": "フロータイム設定",
+      "FLOWTIME_ENABLE_BREAKS": "フロータイムの休憩を有効にする",
+      "FLOWTIME_BREAK_MODE": "休憩時間の計算方法",
+      "FLOWTIME_BREAK_MODE_RATIO": "比率ベース",
+      "FLOWTIME_BREAK_MODE_RULE": "ルールベース",
+      "FLOWTIME_BREAK_PERCENTAGE": "休憩の割合",
+      "FLOWTIME_BREAK_PERCENTAGE_DESC": "作業セッションの長さに対するこの割合を休憩時間にします。",
+      "FLOWTIME_BREAK_RULES_DESC": "ルールは昇順で評価されます。範囲が重複する場合は、最初に一致したルールが使用されます。",
+      "FLOWTIME_ADD_BREAK_RULE": "休憩ルールを追加",
+      "FLOWTIME_VALIDATION_MIN_MAX": "最大時間は最小時間以上である必要があります",
+      "FLOWTIME_BREAK_RULE_MIN": "最小作業時間（分）",
+      "FLOWTIME_BREAK_RULE_MAX": "最大作業時間（分）",
+      "FLOWTIME_BREAK_RULE_DURATION": "休憩時間（分）",
+      "SESSION_COMPLETED_BANNER": "フォーカスセッション完了 — {{duration}} 作業しました。",
+      "SESSION_COMPLETED_BANNER_ACTION": "次は？",
+      "SESSION_COMPLETED_NOTIFICATION_BODY": "{{duration}} 作業しました。"
     },
     "GITEA": {
       "FORM": {
@@ -465,7 +521,10 @@
         "OPTIONS_LOADED": "オプションを読み込みました",
         "RELOAD_OPTIONS": "オプションを再読み込み",
         "SETUP_TITLE": "{{title}} を設定",
-        "TEST_CONNECTION": "接続をテスト"
+        "TEST_CONNECTION": "接続をテスト",
+        "LOAD_OPTIONS_FIRST": "最初にオプションを読み込む",
+        "NO_OPTIONS_FOUND_HELP": "オプションが見つかりませんでした。接続情報を確認して、オプションを再読み込みしてください。",
+        "OAUTH_UNAVAILABLE_WEB": "デスクトップ版とモバイル版のアプリで利用できます。同期された設定は保存されますが、Web アプリではライブデータを読み込めません。"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "新しいタスクの課題を自動作成",
@@ -480,7 +539,10 @@
         "TITLE": "タイトルの同期方向",
         "DUE_DAY": "期限日",
         "DUE_WITH_TIME": "期限日時",
-        "TIME_ESTIMATE": "時間見積もり"
+        "TIME_ESTIMATE": "時間見積もり",
+        "AUTO_CREATE_TAGS": "同期したラベルのタグを自動作成",
+        "AUTO_CREATE_TAGS_DESCRIPTION": "リモートプロバイダーから不明なラベルを取得したときに、ローカルタグを自動的に作成します。",
+        "TAGS": "タグ／カテゴリの同期方向"
       },
       "DEFAULT_NOTE_LABEL": "インポートしたタスクの既定メモ",
       "DEFAULT_TAGS_LABEL": "インポートしたタスクの既定タグ",
@@ -566,7 +628,9 @@
         "PASSWORD": "トークン/パスワード",
         "USE_PAT": "パスワードの代わりにパーソナルアクセストークンを使用する",
         "USER_NAME": "電子メール/ユーザー名",
-        "WONKY_COOKIE_MODE": "Wonky Cookie代替認証 (デスクトップアプリのみ)"
+        "WONKY_COOKIE_MODE": "Wonky Cookie代替認証 (デスクトップアプリのみ)",
+        "ALLOW_FETCH_FALLBACK": "ブラウザから Jira に直接アクセスする（拡張機能を経由しない）",
+        "ALT_PUBLIC_LINK_HOST": "Jira リンク用の代替ホスト（API ホストと異なる場合の公開 URL など。パスのプレフィックスも指定可能）"
       },
       "FORM_SECTION": {
         "ADV_CFG": "詳細設定",
@@ -734,7 +798,13 @@
           "NUMBERED_LIST": "番号付きリスト",
           "QUOTE": "引用",
           "STRIKETHROUGH": "取り消し線",
-          "TASK_LIST": "タスクリスト"
+          "TASK_LIST": "タスクリスト",
+          "KEYBOARD_SHORTCUTS": "キーボードショートカット"
+        },
+        "SHORTCUTS": {
+          "DIALOG_TITLE": "Markdown のキーボードショートカット",
+          "COLUMN_ACTION": "操作",
+          "COLUMN_SHORTCUT": "ショートカット"
         }
       },
       "NOTE_CMP": {
@@ -837,7 +907,9 @@
         "REMOVED_PLAN_DATE": "タスク「{{taskTitle}}」の計画日が削除されました。",
         "TASK_ALREADY_PLANNED": "タスクはすでに {{date}}で計画されている。",
         "TASK_PLANNED_FOR": " <strong>{{date}}</strong>{{extra}}に予定されているタスク"
-      }
+      },
+      "DAY_LOAD": "計画済み: {{planned}}／利用可能: {{available}}",
+      "PLANNED_LOAD": "計画済み: {{planned}}"
     },
     "POMODORO": {
       "BREAK_IS_DONE": "休憩時間が終わりました！"
@@ -871,20 +943,66 @@
         "L_THEME_COLOR": "テーマカラー",
         "TITLE": "テーマ",
         "D_BACKGROUND_OVERLAY_OPACITY": "この値を調整して、背景の透明度を変更できます。デフォルトは20%です。",
-        "L_BACKGROUND_OVERLAY_OPACITY": "コントラスト向上のため背景画像を暗く/明るくする"
+        "L_BACKGROUND_OVERLAY_OPACITY": "コントラスト向上のため背景画像を暗く/明るくする",
+        "D_BACKGROUND_IMAGE_BLUR": "この値を調整すると、背景画像をぼかすことができます。デフォルトは 0px です。",
+        "L_BACKGROUND_IMAGE_BLUR": "背景画像をぼかす",
+        "BTN_SELECT_IMAGE": "選択",
+        "S_BACKGROUND_IMAGE_READ_ERROR": "選択した画像ファイルを読み込めませんでした。",
+        "S_BACKGROUND_IMAGE_RESELECT_REQUIRED": "セキュリティ更新後は、ローカルの背景画像ファイルをもう一度選択する必要があります。",
+        "S_BACKGROUND_IMAGE_TOO_LARGE": "選択した画像は大きすぎます。{{maxSizeKb}} KB 未満のファイルを選択してください。"
       },
       "S": {
         "ARCHIVED": "アーカイブされたプロジェクト",
         "CREATED": "プロジェクト<strong>{{title}}</strong>を作成しました。あなたはそれを左上のメニューから選ぶことができます。",
         "DELETED": "削除されたプロジェクト",
         "UNARCHIVED": "未アーカイブプロジェクト",
-        "UPDATED": "更新されたプロジェクト設定"
+        "UPDATED": "更新されたプロジェクト設定",
+        "REOPENED": "プロジェクトを再開しました",
+        "SHOW_IN_MENU": "サイドバーに表示",
+        "UNARCHIVED_HIDDEN_FROM_MENU": "プロジェクトを復元しましたが、サイドバーでは非表示のままです"
       },
       "D_CONFIRM_DUPLICATE_BIG_PROJECT": {
         "CANCEL": "キャンセル",
         "MSG": "このプロジェクトは大きいため、複製に時間がかかる場合があります。続行しますか？",
         "OK": "複製する",
         "TITLE": "プロジェクトを複製しますか？"
+      },
+      "D_CONFIRM_ARCHIVE": {
+        "MSG": "プロジェクト「{{title}}」をアーカイブしますか？復元するまで、タスク、繰り返し設定、リマインダーは一時停止されます。",
+        "OK": "アーカイブ"
+      },
+      "COMPLETE": {
+        "COMPLETED_ON": "{{date}} に完了",
+        "REOPEN": "再開",
+        "NOTICE": "このプロジェクトは完了しています。",
+        "ERROR": "プロジェクトを完了できませんでした。もう一度お試しください。",
+        "RESOLVE": {
+          "MSG": "には未完了のタスクが {{nr}} 件残っています。これらをどうしますか？",
+          "MSG_ONE": "には未完了のタスクが {{nr}} 件残っています。このタスクをどうしますか？",
+          "MOVE_TO_INBOX": "受信トレイに移動",
+          "MARK_DONE": "完了としてマーク"
+        },
+        "CONFIRM": {
+          "TITLE": "プロジェクトを完了しますか？",
+          "MSG": "<strong>{{title}}</strong> を完了し、アーカイブ済みプロジェクトに移動しますか？"
+        },
+        "CELEBRATION": {
+          "TITLE": "プロジェクト完了！",
+          "STARTED": "開始",
+          "FINISHED": "終了",
+          "DURATION": "{{nr}} 日で完了",
+          "TASKS_DONE": "完了したタスク",
+          "TIME_SPENT": "記録時間",
+          "DAYS_WORKED": "作業日数",
+          "DONE_BTN": "閉じる"
+        }
+      },
+      "ARCHIVED_NOTICE": "このプロジェクトはアーカイブされています。",
+      "ARCHIVED_PROJECTS": {
+        "EMPTY": "アーカイブ済みのプロジェクトはありません。",
+        "LINK_LABEL": "アーカイブ済みプロジェクト",
+        "SEARCH": "アーカイブ済みプロジェクトを検索",
+        "UNARCHIVE": "プロジェクトを復元"
       }
     },
     "PROJECT_FOLDER": {
@@ -904,7 +1022,9 @@
         "PLACEHOLDER": "フォルダ選択"
       },
       "TOOLTIP_CREATE": "プロジェクトフォルダを作成する",
-      "TOOLTIP_VISIBILITY": "表示/隠しプロジェクト"
+      "TOOLTIP_VISIBILITY": "表示/隠しプロジェクト",
+      "ADD_SUBFOLDER": "サブフォルダーを追加",
+      "ADD_PROJECT": "プロジェクトを追加"
     },
     "QUICK_HISTORY": {
       "NO_DATA": "今年度のデータはありません",
@@ -986,12 +1106,29 @@
       "PREVIOUS_MONTH": "前月",
       "PREVIOUS_WEEK": "前週",
       "VIEW_MONTH": "月表示",
-      "VIEW_WEEK": "週表示"
+      "VIEW_WEEK": "週表示",
+      "CLICK_TO_CREATE_TASK": "クリックしてタスクを作成",
+      "DROP_TASKS_HERE_TO_SCHEDULE": "ここにタスクをドロップしてスケジュール",
+      "EXCESS_TASK_TOOLTIP": "このタスクは、この日の空き時間に収まりません。",
+      "EXCESS_TASKS_DAY_TOOLTIP": "利用可能な時間に収まらないタスクが {{count}} 件あります",
+      "EXCESS_TASKS_DAY_TOOLTIP_ONE": "利用可能な時間に収まらないタスクが 1 件あります",
+      "MORE_EVENTS": {
+        "ONE": "{{count}} 件のイベントをさらに表示",
+        "OTHER": "{{count}} 件のイベントをさらに表示"
+      },
+      "NEXT_DAY": "翌日",
+      "PREVIOUS_DAY": "前日",
+      "PLAN_TASK_FOR_DAY_PLACEHOLDER": "この日にタスクを計画…",
+      "VIEW_DAY": "日表示",
+      "SCHEDULE_TASK_PLACEHOLDER": "タスクをスケジュール…",
+      "TOGGLE_DAY_PLANNING_HINT": "Ctrl+1 で日単位の計画に切り替え",
+      "TOGGLE_TIME_SCHEDULING_HINT": "Ctrl+1 で時間指定のスケジュールに切り替え"
     },
     "SEARCH_BAR": {
       "INFO": "リストアイコンをクリックして、アーカイブされたタスクを検索します",
       "NO_RESULTS": "検索に一致するタスクが見つかりませんでした",
-      "PLACEHOLDER": "タスクまたはタスクの説明を検索する"
+      "PLACEHOLDER": "タスクまたはタスクの説明を検索する",
+      "INCLUDE_COMPLETED": "完了済み・アーカイブ済みのタスクを含める"
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {
@@ -1082,7 +1219,9 @@
         "VECTOR_COMPARISON_CONCURRENT": "同時(真の対立)",
         "VECTOR_COMPARISON_EQUAL": "等しい",
         "VECTOR_COMPARISON_LOCAL_GREATER": "ローカル>リモート",
-        "VECTOR_COMPARISON_LOCAL_LESS": "ローカル<リモート"
+        "VECTOR_COMPARISON_LOCAL_LESS": "ローカル<リモート",
+        "CHANGES_UNKNOWN": "不明",
+        "OVERWRITE_WARNING_UNKNOWN": "警告: このデバイスでは、{{targetName}} データに未同期の変更がいくつあるか判定できません（以前の同期記録がありません）。{{targetName}} データを {{sourceName}} のバージョンで上書きすると、変更が失われる可能性があります。続行しますか？"
       },
       "D_DECRYPT_ERROR": {
         "BTN_OVER_WRITE_REMOTE": "リモートの変更と上書き",
@@ -1122,7 +1261,8 @@
         "LOCAL_FILE": {
           "L_SYNC_FOLDER_PATH": "同期フォルダパス",
           "INFO_TEXT": "<strong>警告:</strong> Syncthing、Resilio、その他のファイル同期ツールを使用してこのフォルダーをデバイス間で同期<strong>しないでください</strong>。データの破損やコンフリクトが<strong>発生します</strong>。複数デバイス間の同期には、WebDAV、Dropbox、またはSuperSyncをご使用ください。",
-          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "ファイルアクセス権限が必要です"
+          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "ファイルアクセス権限が必要です",
+          "S_COMMIT_FOLDER_ERROR": "選択した同期フォルダーを保存できませんでした。移動または削除された可能性があります。もう一度選択してください。"
         },
         "TITLE": "同期",
         "WEB_DAV": {
@@ -1184,7 +1324,12 @@
           "L_REMOVE_ENCRYPTION": "または暗号化を解除",
           "PASSWORD_MIN_LENGTH": "パスワードは8文字以上である必要があります",
           "PASSWORDS_DONT_MATCH": "パスワードが一致しません",
-          "REMOVE_ENCRYPTION_WARNING": "暗号化を解除すると、データが暗号化なしで再アップロードされます。すべてのデバイスで再設定が必要です。"
+          "REMOVE_ENCRYPTION_WARNING": "暗号化を解除すると、データが暗号化なしで再アップロードされます。すべてのデバイスで再設定が必要です。",
+          "ENCRYPTION_SETUP_INTRO": "<strong>アップロード前にデータを暗号化するパスワードを設定してください</strong>。これにより、暗号化されていない状態でデータがこのデバイスから送信されることはありません。この設定は任意で、後から有効化または変更することもできます。",
+          "SETUP_ENCRYPTION_BTN": "暗号化して続行",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "すべてのデバイスで同じパスワードを使用してください。パスワードを忘れると、暗号化されたデータを復元できません。",
+          "SETUP_ENCRYPTION_TITLE": "初回アップロード前に暗号化しますか？",
+          "SETUP_SKIP_ENCRYPTION_BTN": "スキップ"
         },
         "GOOGLE": {
           "L_SYNC_FILE_NAME": "同期ファイル名"
@@ -1261,13 +1406,39 @@
           "SETUP_DISABLE_SUPERSYNC_BTN": "SuperSyncを無効にする",
           "SETUP_ENCRYPTION_BTN": "パスワードを設定",
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "すべてのデバイスで同じパスワードを使用してください。忘れたパスワードはリモートデータの上書きでリセットできます。",
-          "SETUP_ENCRYPTION_TITLE": "SuperSync: パスワードを設定"
+          "SETUP_ENCRYPTION_TITLE": "SuperSync: パスワードを設定",
+          "E2E_ENCRYPTION_INFO": "SuperSync はエンドツーエンド暗号化を使用します。セットアップ時に選んだパスワードを使用して、データはこのデバイスから送信される前に暗号化されます。"
         },
         "NEXTCLOUD": {
           "L_SERVER_URL": "NextcloudサーバーURL",
           "SERVER_URL_DESCRIPTION": "例: https://cloud.example.com または https://example.com/nextcloud",
           "L_APP_PASSWORD": "アプリパスワード",
-          "APP_PASSWORD_DESCRIPTION": "Nextcloud → 設定 → セキュリティ → アプリパスワードで生成してください"
+          "APP_PASSWORD_DESCRIPTION": "Nextcloud → 設定 → セキュリティ → アプリパスワードで生成してください",
+          "FILE_USER_NAME_DESCRIPTION": "Nextcloud のユーザー ID（メールアドレスや表示名ではありません）。確認するには、Nextcloud で「ファイル」を開き、左下の設定（歯車）をクリックして、表示される WebDAV URL（.../remote.php/dav/files/<user-id>/）から <user-id> をコピーしてください。",
+          "L_FILE_USER_NAME": "ユーザー名",
+          "L_LOGIN_NAME": "ログイン名／メールアドレス（任意）",
+          "LOGIN_NAME_DESCRIPTION": "上のユーザー名とは異なるログイン名（メールアドレスなど）がサーバーで必要な場合にのみ入力してください。",
+          "L_DETECT_USER_ID": "ユーザー ID を検出",
+          "S_DETECT_USER_ID_NEED_LOGIN": "サーバー URL、ログイン情報（ユーザー名またはログイン名／メールアドレス）、アプリパスワードを先に入力してください。",
+          "S_DETECT_USER_ID_SUCCESS": "Nextcloud のユーザー ID が見つかりました: {{userId}}。ユーザー名フィールドに入力しました。",
+          "S_DETECT_USER_ID_FAIL": "ユーザー ID を検出できませんでした: {{error}}",
+          "S_TEST_FAIL_USER_NOT_FOUND": "接続テストに失敗しました: ユーザーフォルダーが見つかりません（404）。ログインには成功していますが、「ユーザー名」にはメールアドレスや表示名ではなく、Nextcloud のユーザー ID を指定する必要があります。確認するには、Nextcloud で「ファイル」を開き、左下の設定（歯車）をクリックして、表示される WebDAV URL（.../remote.php/dav/files/<user-id>/）から <user-id> をコピーしてください。対象 URL: {{url}}"
+        },
+        "BTN_REAUTHENTICATE": "再認証",
+        "REAUTH_SUCCESS": "再認証に成功しました。認証情報を更新しました。",
+        "L_USE_SPLIT_SYNC_FILES": "Surgical sync（実験的）– ops/snapshot ファイルを分割した構成により、同期を高速化します。有効にすると、このフォルダーを同期するすべてのデバイスでも有効にする必要があります。",
+        "ONEDRIVE": {
+          "CLIENT_ID_DESCRIPTION": "Microsoft Entra アプリ登録のアプリケーション（クライアント）ID",
+          "INFO_TEXT": "Microsoft 365 の認証には OAuth を使用します。まずクライアントとテナントを入力してから認証してください。<strong>独自の Entra アプリ登録を使用しますか？</strong> デスクトップでは、「モバイルとデスクトップ アプリケーション」にリダイレクト URI <code>superproductivity://oauth-callback/onedrive</code> を登録し、「パブリック クライアント フローを許可する」を有効にして、委任された <code>Files.ReadWrite.AppFolder</code> 権限を付与してください。<a href=\"https://github.com/super-productivity/super-productivity/wiki/2.09-Configure-Sync-Backend\" target=\"_blank\" rel=\"noopener\">OneDrive セットアップガイド</a>を参照してください。",
+          "L_CLIENT_ID": "アプリケーション（クライアント）ID",
+          "L_SYNC_FOLDER_PATH": "同期フォルダーのパス",
+          "L_TENANT_ID": "テナント ID",
+          "L_USE_CUSTOM_APP": "独自の Microsoft Entra アプリ登録を使用",
+          "OFFICIAL_MODE_INFO": "このアプリに組み込まれた Microsoft 365 サインインを使用します。独自の Entra アプリ登録が必要な場合にのみカスタムモードへ切り替えてください。",
+          "PLATFORM_INFO": "OneDrive 同期はデスクトップ版とモバイル版のアプリでのみ利用でき、ブラウザ版では利用できません。",
+          "SYNC_FOLDER_PATH_DESCRIPTION": "OneDrive のアプリフォルダー内に保存されます（例: super-productivity）",
+          "TENANT_ID_DESCRIPTION": "マルチテナント サインインには 'common' を使用してください",
+          "USE_CUSTOM_APP_DESCRIPTION": "独自のアプリケーション（クライアント）ID を指定する場合に有効にしてください"
         }
       },
       "S": {
@@ -1343,7 +1514,22 @@
         "ERROR_SYNC_VERSION_MISMATCH": "リモート同期データは互換性のない形式バージョンを使用しています。すべてのデバイスで同じバージョンのSuper Productivityを実行してください。",
         "WARN_CLIENT_ID_REGENERATED": "同期デバイスIDが無効だったため再生成されました。次回の同期で競合が発生する可能性があります。",
         "LEGACY_FORMAT_DETECTED": "同期形式が一致しません: リモートストレージは、異なる同期形式を使用する古いアプリバージョン（v16.x以前）によって最後に書き込まれました。すべてのデバイスを同じアプリバージョンに更新してください。「強制上書き」は、レガシーファイルの横に新しい形式を書き込むことでこのデバイスのブロックを解除します。古いデバイスがこのリモートに今後同期しない場合にのみ使用してください。そうしないと、それらのデバイスはこのデバイスと静かに分岐します。",
-        "SYNC_VALIDATION_FAILED": "同期後の状態検証に失敗しました。一部のデータに不整合がある可能性があります。"
+        "SYNC_VALIDATION_FAILED": "同期後の状態検証に失敗しました。一部のデータに不整合がある可能性があります。",
+        "AUTH_SERVICE_UNAVAILABLE": "認証サービスは一時的に利用できません（HTTP {{status}}）。もう一度お試しください。",
+        "AUTH_SERVICE_UNAVAILABLE_WITH_REFERENCE": "認証サービスは一時的に利用できません（HTTP {{status}}）。もう一度お試しください。参照: {{reference}}。",
+        "DEFERRED_ACTION_PERMANENT_FAILED": "変更を保存できなかったため、同期を一時停止しました。最後に保存された状態を復元するには再読み込みしてください。",
+        "FORCE_UPLOAD_FAILED": "サーバーデータを上書きできませんでした。ローカルの変更は引き続き利用できます。",
+        "HYDRATION_FALLBACK_RECOVERY": "保存済みデータを読み込めなかったため、ローカルログから復元できた内容を表示しています。欠落した項目は、完全同期またはバックアップのインポートで復元できます。",
+        "INCOMPLETE_REMOTE_OPERATIONS": "ダウンロードした変更を最後まで適用できませんでした。データを保護するため、同期を一時停止しました。アプリを再起動して再試行してください。問題が続く場合は、バックアップを復元してください。",
+        "INTEGRITY_TAMPER_DETECTED": "同期を停止しました: サーバーから返されたデータがセキュリティ整合性チェックに失敗しました。ローカルデータは安全です。同期サーバーが改ざんされているか、設定が正しくない可能性があります。",
+        "LOCAL_DATA_REPLACE_UNDO": "ローカルデータをサーバー上のデータで置き換えました。",
+        "LOCAL_FILE_RESELECT_REQUIRED": "セキュリティ更新後は、ローカルファイル同期の同期フォルダーをもう一度選択する必要があります。同期設定を開き、フォルダーを再度選択してください。",
+        "NETWORK_ERROR": "一時的なネットワークの問題により同期リクエストに失敗しました。変更はローカルに保持され、同期は再試行されます。",
+        "OAUTH_STATE_INVALID": "OAuth state が一致しません。コールバック URL がこのデバイスのリクエストと一致しませんでした。もう一度認証してください。",
+        "ONEDRIVE_AUTH_FAILED": "OneDrive のサインインがトークン取得の段階で失敗しました（{{error}}）。通常は、Microsoft Entra アプリ登録がパブリック クライアントとして設定されていないことが原因です。Wiki の OneDrive セットアップガイドを参照してください。",
+        "RESTORE_ENCRYPTED": "エンドツーエンド暗号化が有効な場合、サーバー履歴から復元することはできません。サーバーは暗号化されたデータを読み取れないため、以前の時点を再構築できません。",
+        "SPLIT_FORMAT_ENABLE_SETTING": "この同期フォルダーは分割ファイル形式にアップグレードされました。続行するには、同期設定で Surgical sync を有効にしてください。",
+        "SYNC_DATA_RECOVERED_FROM_BACKUP": "メインファイルを読み取れなかったため、バックアップから同期データを復元しました。"
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "すべてクリア",
@@ -1445,7 +1631,64 @@
         "RECOMMEND_SERVER": "推奨: 他のデバイスと同期を維持するため、サーバーデータを受け入れてください。",
         "TITLE": "同期コンフリクトを検出",
         "USE_LOCAL": "自分のデータを使用",
-        "USE_REMOTE": "サーバーデータを使用"
+        "USE_REMOTE": "サーバーデータを使用",
+        "FIRST_SYNC_USE_LOCAL_CONFIRM": "このデバイスはまだ同期されたことがありません。「自分のデータを使用」を選ぶと、サーバー上のデータがこのデバイスのローカルデータで完全に置き換えられます。この操作は元に戻せません。続行しますか？",
+        "FIRST_SYNC_WARNING": "このデバイスはまだ同期されたことがないため、「自分のデータを使用」を選ぶと、サーバー上の既存データがこのデバイスのデータで上書きされます。",
+        "USE_REMOTE_CONFIRM": "このデバイスのデータをサーバー上のデータで置き換え、ローカルの変更 {{count}} 件を破棄します。続行しますか？"
+      },
+      "B": {
+        "CONTENT_CONFLICT_RESOLVED": "競合した {{taskList}} の編集は、最新バージョンを保持して自動的に解決されました。古い編集は破棄された可能性があります。念のため確認してください。",
+        "CONTENT_CONFLICT_TITLE_CHANGE": "{{kept}}（破棄: {{discarded}}）",
+        "CONTENT_CONFLICT_UNTITLED": "無題のタスク"
+      },
+      "CONFLICT_REVIEW": {
+        "PAGE_TITLE": "同期の競合",
+        "PAGE_SUBTITLE": "同期中に自動解決された編集です。内容を確認し、必要に応じてもう一方のバージョンに切り替えてください。",
+        "CONFIG_LINK": "同期の競合を確認",
+        "BADGE_TOOLTIP": "{{count}} 件の未確認の同期競合",
+        "BANNER_MSG": "{{count}} 件の同期競合を自動解決しました（リモート側の勝ち: {{remoteWins}}、ローカル側の勝ち: {{localWins}}）",
+        "BANNER_REVIEW": "確認",
+        "TAB_UNREVIEWED": "未確認（{{count}}）",
+        "TAB_HISTORY": "履歴",
+        "EMPTY_UNREVIEWED": "確認が必要な競合はありません。",
+        "EMPTY_HISTORY": "競合の履歴はまだありません。",
+        "GROUP_TASK": "タスク",
+        "GROUP_PROJECT": "プロジェクト",
+        "GROUP_TAG": "タグ",
+        "GROUP_NOTE": "メモ",
+        "GROUP_OTHER": "その他",
+        "COL_FIELD": "フィールド",
+        "COL_LOCAL": "ローカル",
+        "COL_REMOTE": "リモート",
+        "COL_CURRENT": "現在",
+        "WINNER_LOCAL": "ローカル側を採用",
+        "WINNER_REMOTE": "リモート側を採用",
+        "WINNER_MERGED": "マージ済み",
+        "REASON_NEWER": "新しい編集を採用",
+        "REASON_TIE": "同点のためリモート側を採用",
+        "REASON_DELETE_WINS": "削除を採用",
+        "REASON_DELETE_LOST": "削除より編集を優先",
+        "REASON_DISJOINT_MERGE": "自動マージ",
+        "REASON_NOISE": "内容の変更なし",
+        "REASON_CLOCK_CORRUPTION": "同期クロックの破損の可能性",
+        "STATUS_UNREVIEWED": "未確認",
+        "STATUS_KEPT": "保持",
+        "STATUS_FLIPPED": "切り替え済み",
+        "STATUS_INFO": "情報",
+        "THIS_DEVICE": "このデバイス",
+        "DEVICE_LABEL": "デバイス {{id}}",
+        "MERGED_FIELD_CHIP": "{{field}} ← {{side}}",
+        "SIDE_LOCAL": "ローカル",
+        "SIDE_REMOTE": "リモート",
+        "ACTION_KEEP": "保持",
+        "ACTION_FLIP": "切り替え",
+        "BULK_KEEP_ALL": "すべて保持",
+        "BULK_FLIP_LOCAL": "すべて切り替え → ローカル",
+        "BULK_FLIP_REMOTE": "すべて切り替え → リモート",
+        "FLIP_UNSUPPORTED": "この種類の項目は、まだ切り替えに対応していません。",
+        "FLIP_DONE": "もう一方のバージョンを適用しました。",
+        "STALE_CONFIRM": "この競合の解決後に「{{title}}」が変更されています。切り替えると、それ以降の編集が上書きされます。続行しますか？",
+        "WINNING_SIDE": "保持した側"
       }
     },
     "TAG": {
@@ -1491,7 +1734,9 @@
         "NO_PARENT": "フォルダなし(ルートレベル)",
         "PLACEHOLDER": "フォルダ選択"
       },
-      "TOOLTIP_CREATE": "タグフォルダを作成する"
+      "TOOLTIP_CREATE": "タグフォルダを作成する",
+      "ADD_SUBFOLDER": "サブフォルダーを追加",
+      "ADD_TAG": "タグを追加"
     },
     "TASK": {
       "ADD_TASK_BAR": {
@@ -1518,7 +1763,10 @@
         "REPEAT_BUTTON": "繰り返し",
         "TOGGLE_ADD_TO_BACKLOG_TODAY": "バックログ/今日のリストへの追加を切り替え",
         "TOGGLE_ADD_TOP_OR_BOTTOM": "リストの上部/下部への追加を切り替え",
-        "TOOLTIP_CLEAR_REPEAT": "繰り返し設定をクリア"
+        "TOOLTIP_CLEAR_REPEAT": "繰り返し設定をクリア",
+        "NOTE_PLACEHOLDER": "メモを追加…（Ctrl+Enter でタスクを追加）",
+        "TOOLTIP_CLEAR_DEADLINE": "期限をクリア",
+        "TOOLTIP_NOTE": "メモ（Ctrl+2）"
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "添付ファイルを追加する",
@@ -1540,7 +1788,16 @@
         "DEADLINE_OVERDUE": "期限超過！",
         "FROM_PARENT": "(親タスクから)",
         "ISSUE": "課題リンク",
-        "REMINDER": "リマインダー"
+        "REMINDER": "リマインダー",
+        "ADD_CHECKLIST_ITEM": "チェックリスト項目を追加",
+        "CHECKLIST_ACTIONS": "チェックリストの操作",
+        "CHECK_ALL": "すべてチェック",
+        "CLEAR_COMPLETED": "完了項目を消去",
+        "NOTES_OR_CHECKLIST": "メモ／チェックリスト",
+        "UNCHECK_ALL": "すべてのチェックを外す",
+        "PASTE_IMAGE_HINT": "Ctrl+V で画像を貼り付け",
+        "PASTE_IMAGE_HINT_MAC": "Cmd+V で画像を貼り付け",
+        "PASTED_IMAGE_TITLE": "貼り付けた画像"
       },
       "B": {
         "ADD_HALF_HOUR": "30分追加する",
@@ -1583,7 +1840,13 @@
         "SET_DEADLINE": "期限を設定",
         "CLEAR_ESTIMATE": "見積もりをクリア",
         "CUSTOM_ESTIMATE": "カスタム…",
-        "ESTIMATE": "見積もり"
+        "ESTIMATE": "見積もり",
+        "ADD_SUB_TASK_PLACEHOLDER": "サブタスクを追加…",
+        "CHECKLIST_PROGRESS": "チェックリスト: {{total}} 件中 {{done}} 件完了",
+        "MARK_UNDONE": "未完了に戻す",
+        "SHOW_HIDDEN_DONE_SUB_TASKS": "+ 完了したサブタスク {{nr}} 件",
+        "SHOW_HIDDEN_SUB_TASKS": "+ サブタスク {{nr}} 件",
+        "TIME_CONFLICT": "別のスケジュール済みタスクと重複しています"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
         "MSG": "新しいタグ {{tagsTxt}}を作成しますか？",
@@ -1615,7 +1878,17 @@
         "DEADLINE_REMINDER": "期限リマインダー",
         "DEADLINE_SECTION": "期限",
         "DUE_SECTION": "予定",
-        "TASK_REMINDERS": "タスクリマインダー"
+        "TASK_REMINDERS": "タスクリマインダー",
+        "MARK_AS_DONE": "完了としてマーク",
+        "MORE_ACTIONS": "その他の操作",
+        "OR_DIRECTLY_FOR_ALL": "またはすべてに直接適用:",
+        "SCHEDULE_FOR_TODAY": "今日にスケジュール",
+        "DROP_TIME_KEEP_TODAY": "時刻を削除し、今日に残す",
+        "DELETE": "タスクを削除",
+        "KEEP_IN_TODAY": "今日に残す",
+        "SCHEDULED_FOR": "予定日時",
+        "SNOOZE_FOR": "{{m}} 分スヌーズ",
+        "SNOOZE_FOR_SHORT": "{{m}} 分"
       },
       "D_SCHEDULE_TASK": {
         "QA_NEXT_MONTH": "来月のスケジュール",
@@ -1631,7 +1904,11 @@
         "RO_NEVER": "Never",
         "RO_START": "それが始まるとき",
         "SCHEDULE": "スケジュール",
-        "UNSCHEDULE": "予定外"
+        "UNSCHEDULE": "予定外",
+        "DOES_NOT_REPEAT": "繰り返さない",
+        "INFO_OUTSIDE_WORK_HOURS": "設定した作業時間外です。",
+        "INFO_OVERLAP": "別のスケジュール済みタスクと重複しています。",
+        "REPEAT": "繰り返し"
       },
       "D_SELECT_DATE_AND_TIME": {
         "DATE": "日付",
@@ -1726,7 +2003,11 @@
         "WEEKLY_CURRENT_WEEKDAY": "毎週 {{weekdayStr}}",
         "WEEKLY_CURRENT_WEEKDAY_AND_TIME": "毎週 {{weekdayStr}}、 {{timeStr}}",
         "YEARLY_CURRENT_DATE": " {{dayAndMonthStr}}の年間",
-        "YEARLY_CURRENT_DATE_AND_TIME": "年間 {{dayAndMonthStr}}、 {{timeStr}}"
+        "YEARLY_CURRENT_DATE_AND_TIME": "年間 {{dayAndMonthStr}}、 {{timeStr}}",
+        "MONTHLY_LAST_DAY": "毎月末日",
+        "MONTHLY_LAST_DAY_AND_TIME": "毎月末日、{{timeStr}}",
+        "MONTHLY_NTH_WEEKDAY": "毎月{{ordinalStr}}の{{weekdayStr}}",
+        "MONTHLY_NTH_WEEKDAY_AND_TIME": "毎月{{ordinalStr}}の{{weekdayStr}}、{{timeStr}}"
       },
       "D_CONFIRM_MOVE_TO_PROJECT": {
         "MSG": "この反復可能なタスク用に {{tasksNr}} 個のインスタンスが作成されています。これらすべてをプロジェクト \"{{projectName}}\" に移動しますか？\"?",
@@ -1805,7 +2086,16 @@
         "WEEK_OF_MONTH": "月内の週",
         "WEEKDAY": "曜日",
         "SKIP_FOR_DATE": "{{date}} をスキップ",
-        "SKIP_INSTANCE": "今日はスキップ"
+        "SKIP_INSTANCE": "今日はスキップ",
+        "MONTHLY_MODE_DAY_OF_MONTH_DESCRIPTION": "「日付」では、開始日に表示されている日を使用します。",
+        "ORD_FIRST_NTH": "最初",
+        "ORD_FOURTH_NTH": "4番目",
+        "ORD_LAST_NTH": "最後",
+        "ORD_SECOND_NTH": "2番目",
+        "ORD_THIRD_NTH": "3番目",
+        "WAIT_FOR_COMPLETION": "完了後に次のタスクを作成",
+        "WAIT_FOR_COMPLETION_DESCRIPTION": "未完了の繰り返しタスクが複数たまるのを防ぎます。次のインスタンスは、現在のタスクが完了した後にのみ作成されます",
+        "WEEKDAY_REQUIRED": "曜日を1つ以上選択してください"
       },
       "SNACK_REPEAT_DIALOG_FAIL": "繰り返し設定ダイアログを開けませんでした。タスクメニューから設定できます。",
       "D_SKIP_INSTANCE": {
@@ -1864,7 +2154,9 @@
     "TIME_TRACKING": {
       "B": {
         "ALREADY_DID": "私はすでにやった",
-        "SNOOZE": "スヌーズ {{time}}"
+        "SNOOZE": "スヌーズ {{time}}",
+        "BREAK_SNACK": "休憩を楽しんでください！",
+        "PAUSE_AND_BREAK": "一時停止して休憩"
       },
       "B_TTR": {
         "ADD_TO_TASK": "タスクに追加",
@@ -1887,7 +2179,22 @@
         "TASK": "タスク",
         "TRACK_TO": "以下に追加する：",
         "WARN_SIMPLE_COUNTER": "時間は作動したシンプルなカウンターボタンにカウントされます。",
-        "WARN_SIMPLE_COUNTER_BREAK": "時間は作動したシンプルなカウンターボタンでカウントされます。"
+        "WARN_SIMPLE_COUNTER_BREAK": "時間は作動したシンプルなカウンターボタンでカウントされます。",
+        "ALL_TIME_ASSIGNED": "すべてのアイドル時間を割り当てました",
+        "BREAK_SUMMARY": "{{time}} を休憩時間に追加します。",
+        "CONFIRM_BREAK": "休憩として記録",
+        "CONFIRM_CREATE_TASK": "タスクを作成して記録",
+        "CONFIRM_SPLIT": "すべて記録",
+        "CONFIRM_TASK": "タスクに記録",
+        "CONFIRM_TRACK": "時間を記録",
+        "DONT_TRACK": "記録しない",
+        "MODE_BREAK": "休憩していた",
+        "MODE_SPLIT": "両方を少しずつ",
+        "MODE_TASK": "タスクに取り組んでいた",
+        "TIME_OVER_ASSIGNED": "アイドル時間を {{time}} 超過しています",
+        "TIME_UNASSIGNED": "未割り当て: {{time}}",
+        "USE_REMAINING_TIME": "残り時間を割り当て",
+        "WHAT_WERE_YOU_DOING": "何をしていましたか？"
       },
       "D_TRACKING_REMINDER": {
         "CREATE_AND_TRACK": "<em>作成</em>して追加",
@@ -1933,7 +2240,10 @@
         "WORKED": "消費時間",
         "RESTORE_TASK_FROM_ARCHIVE": "アーカイブからタスクを復元",
         "VIEW_TASK_DETAILS": "タスクの詳細を表示",
-        "WEEK_NR_SHORT": "{{nr}}週"
+        "WEEK_NR_SHORT": "{{nr}}週",
+        "EXPORT_DATA": "データをエクスポート",
+        "WEEK_RANGE_TOOLTIP": "{{start}}～{{end}}、日数: {{days}}、時間: {{time}}",
+        "WORK_TIMES": "作業時間"
       },
       "D_CONFIRM_RESTORE": "タスク <strong>\"{{title}}\"</strong> を今日のタスクリストに移動しますか？",
       "D_EXPORT_TITLE": "作業ログのエクスポート {{start}} - {{end}}",
@@ -2012,6 +2322,12 @@
         "ERR_CREDENTIALS_MISSING": "Nextcloud URL、ユーザー名、パスワードを先に入力してください。",
         "ERR_LOAD_BOARDS": "デッキボードの読み込みに失敗しました。認証情報を確認してください。"
       }
+    },
+    "ANDROID": {
+      "FOREGROUND_SERVICE_START_FAILED_FOCUS": "Android により、フォーカスモードの常時通知がブロックされました。タイマーはアプリ内で継続しますが、バックグラウンドの通知を利用できない場合があります。通知の権限とバッテリー／バックグラウンドの制限を確認してください。",
+      "FOREGROUND_SERVICE_START_FAILED_TRACKING": "Android により、時間トラッキングの常時通知がブロックされました。時間はアプリ内で引き続き記録されますが、バックグラウンドでの復旧を利用できない場合があります。通知の権限とバッテリー／バックグラウンドの制限を確認してください。",
+      "OPEN_NOTIFICATION_SETTINGS": "設定を開く",
+      "WIDGET_TASKS_UPDATED": "{{count}} 件のタスクをウィジェットから更新しました"
     }
   },
   "FILE_IMEX": {
@@ -2037,7 +2353,9 @@
     "S_ERR_NETWORK": "インポートに失敗しました：URLからデータを取得中にネットワークエラーが発生しました",
     "S_IMPORT_FROM_URL_ERR_DECODE": "エラー：インポート用のURLパラメータをデコードできませんでした。正しくフォーマットされていることを確認してください。",
     "URL_PLACEHOLDER": "インポートするURLを入力してください",
-    "BTN_COMPRESS_ARCHIVE": "アーカイブを圧縮"
+    "BTN_COMPRESS_ARCHIVE": "アーカイブを圧縮",
+    "IMPORT_FROM_TODOIST": "Todoist からインポート",
+    "S_ERR_TODOIST_IMPORT_OPEN": "Todoist インポーターを開けませんでした"
   },
   "G": {
     "ADD": "追加",
@@ -2063,7 +2381,7 @@
     "NO_CON": "現在オフラインです。インターネットに再接続してください。",
     "NONE": "無し",
     "OK": "OK",
-    "OVERDUE": "遅れた",
+    "OVERDUE": "過去の日から",
     "REMOVE": "削除する",
     "SAVE": "保存する",
     "SUBMIT": "投稿する",
@@ -2084,14 +2402,23 @@
     "SHARE": "共有",
     "TOGGLE_PASSWORD_VISIBILITY": "パスワードの表示/非表示を切り替え",
     "COMMENT": "コメント",
-    "OPEN_IN_BROWSER": "ブラウザーで開く"
+    "OPEN_IN_BROWSER": "ブラウザーで開く",
+    "CLEAR": "クリア",
+    "MORE_ACTIONS": "その他の操作"
   },
   "GCF": {
     "AUTO_BACKUPS": {
       "HELP": "問題が発生した場合に備えて、すべてのデータをアプリフォルダに自動保存して準備します。",
       "LABEL_IS_ENABLED": "自動バックアップを有効にする",
       "LOCATION_INFO": "バックアップは次の場所に保存されます：",
-      "TITLE": "自動バックアップ"
+      "TITLE": "自動バックアップ",
+      "LAST_BACKUP_INFO": "前回のバックアップ: {{date}}",
+      "MAX_BACKUP_FILES": "バックアップファイルの最大数",
+      "MAX_BACKUP_FILES_DESCRIPTION": "デスクトップ版のみ。この上限を超えると、古い自動バックアップファイルが削除されます。",
+      "RESTORE_LATEST": "最新の自動バックアップを復元",
+      "S_AUTO_RESTORED": "デバイス上のバックアップからタスク {{tasks}} 件とプロジェクト {{projects}} 件を復元しました。",
+      "S_NO_BACKUP_AVAILABLE": "利用可能な自動バックアップはありません。",
+      "S_RESTORE_SUCCESS": "バックアップを復元しました。"
     },
     "CALENDARS": {
       "BROWSER_WARNING": "クロスオリジン制限 <b>のため、これは Super Productivity のブラウザ バージョンでは動作しない可能性があります。<br /> この機能を使用するには、 <a href=\"https://super-productivity.com/download/\">デスクトップ バージョン</a> をダウンロードしてください。</b>",
@@ -2102,7 +2429,12 @@
       "AUTO_IMPORT_FOR_CURRENT_DAY": "今日のイベントをタスクとして自動インポート",
       "CAL_COLOR": "カレンダーの色",
       "DISABLE_FOR_WEB_APP": "Webアプリ使用時は無効にする",
-      "REFERENCE_CALENDAR": "参照カレンダー（表示のみ、タスク作成なし）"
+      "REFERENCE_CALENDAR": "参照カレンダー（表示のみ、タスク作成なし）",
+      "FILTER_EXCLUDE_REGEX": "正規表現に一致するイベントを除外（任意）",
+      "FILTER_EXCLUDE_REGEX_DESCRIPTION": "タイトルがこの正規表現に一致するイベントは非表示になります。「含める」フィルターの後に適用されます。例: Lunch|Daily|Blocker",
+      "FILTER_INCLUDE_REGEX": "正規表現に一致するイベントを含める（任意）",
+      "FILTER_INCLUDE_REGEX_DESCRIPTION": "タイトルがこの正規表現に一致するイベントのみが表示されます。すべてのイベントを含める場合は空欄にしてください。例: meeting|standup",
+      "INVALID_REGEX": "無効な正規表現"
     },
     "EVALUATION": {
       "IS_HIDE_EVALUATION_SHEET": "日次サマリーの評価シートを非表示",
@@ -2121,14 +2453,16 @@
       "FOCUS_MODE_SOUND_OFF": "オフ",
       "FOCUS_MODE_SOUND_TICK": "チクタク音",
       "FOCUS_MODE_SOUND_WHITE_NOISE": "ホワイトノイズ",
-      "L_FOCUS_MODE_SOUND": "フォーカスセッション中の環境音"
+      "L_FOCUS_MODE_SOUND": "フォーカスセッション中の環境音",
+      "L_SHOW_PREPARATION_SCREEN": "各セッション前に準備画面（ロケットのカウントダウン）を表示"
     },
     "IDLE": {
       "HELP": "<div><p>アイドル時間処理が有効になっていると、アイドル時間が経過したときに、どのタスクで時間を追跡するかを確認するために、指定した時間が経過した後にダイアログが開きます。</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "アイドル時間処理を有効にする",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "現在のタスクが選択されている場合にのみアイドル時間ダイアログを起動する",
       "MIN_IDLE_TIME": "アイドル状態になるまでの時間",
-      "TITLE": "アイドル処理"
+      "TITLE": "アイドル処理",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "フォーカスモードのセッション中はアイドルダイアログを表示しない"
     },
     "IMEX": {
       "HELP": "<p>ここでは、すべてのデータをバックアップ用の <strong>JSON</strong> としてエクスポートできますが、それを別のコンテキストで使用することもできます（たとえば、プロジェクトをブラウザにエクスポートしてデスクトップバージョンにインポートできます） </p> <p>インポートは、有効なJSONがテキスト領域にコピーされることを期待しています。 <strong>注：インポートボタンを押すと、現在の設定とデータがすべて上書きされます。</strong></p>",
@@ -2189,7 +2523,15 @@
       "ZOOM_IN": "ズームイン（デスクトップのみ）",
       "ZOOM_OUT": "ズームアウト（デスクトップのみ）",
       "TASK_UNSCHEDULE": "タスクのスケジュールを解除",
-      "TASK_OPEN_NOTES_FULLSCREEN": "メモ/チェックリストを全画面で開く"
+      "TASK_OPEN_NOTES_FULLSCREEN": "メモ/チェックリストを全画面で開く",
+      "GLOBAL_TOGGLE_TASK_WIDGET": "タスクウィジェットを表示／非表示",
+      "TASK_SCHEDULE_TODAY": "タスクを今日にスケジュール",
+      "TASK_SCHEDULE_TOMORROW": "タスクを明日にスケジュール",
+      "TASK_SCHEDULE_NEXT_WEEK": "タスクを来週にスケジュール",
+      "TASK_SCHEDULE_NEXT_MONTH": "タスクを来月にスケジュール",
+      "TASK_SCHEDULE_DEADLINE": "タスクの期限を設定",
+      "TASK_OPEN_NOTES_PANEL": "タスクパネルでメモ／チェックリストを開く",
+      "TOGGLE_SIDE_NAV_MODE": "サイドバーのコンパクト／フルモードを切り替え"
     },
     "LANG": {
       "AR": "عربى",
@@ -2241,7 +2583,9 @@
       "SV": "Svenska",
       "TIME_LOCALE_RO_MD": "ルーマニア語 (モルドバ): 24時間, DD.MM.YYYY",
       "TIME_LOCALE_RO_RO": "ルーマニア語: 24時間, DD.MM.YYYY",
-      "TIME_LOCALE_PL_PL": "ポーランド語: 24時間制、DD.MM.YYYY"
+      "TIME_LOCALE_PL_PL": "ポーランド語: 24時間制、DD.MM.YYYY",
+      "TIME_LOCALE_ISO": "ISO 8601: 24時間、YYYY-MM-DD",
+      "VI": "Tiếng Việt"
     },
     "MISC": {
       "DARK_MODE": "ダークモード",
@@ -2278,7 +2622,13 @@
       "THEME_REMOVE_BUTTON": "テーマを削除",
       "THEME_REMOVED_TOAST": "テーマを削除しました。既定に戻しました。",
       "IS_LOCAL_REST_API_ENABLED": "ローカルREST APIを有効にする（デスクトップのみ）",
-      "IS_LOCAL_REST_API_ENABLED_HINT": "ローカルスクリプトが http://127.0.0.1:3876 経由で実行中のアプリを操作できるようにします。このコンピューターで実行中の任意のアプリケーションが、タスクを読み取ったり変更したりできるようになります。"
+      "IS_LOCAL_REST_API_ENABLED_HINT": "ローカルスクリプトが http://127.0.0.1:3876 経由で実行中のアプリを操作できるようにします。このコンピューターで実行中の任意のアプリケーションが、タスクを読み取ったり変更したりできるようになります。",
+      "IS_VERTICAL_ACTION_BAR": "側面に縦型アクションバーを表示（実験的）",
+      "IS_VERTICAL_ACTION_BAR_HINT": "ヘッダーのアクションボタンをウィンドウ右端の縦型バーに移動します。デスクトップ版のみ。",
+      "WALLPAPER": "壁紙",
+      "WALLPAPER_BUTTON": "壁紙を設定…",
+      "WALLPAPER_DIALOG_TITLE": "全体の壁紙",
+      "WALLPAPER_HINT": "独自の背景がないページ（プランナー、スケジュール、ボード、設定など）に表示されます。独自の画像を持つタグやプロジェクトでは、そちらが優先されます。"
     },
     "POMODORO": {
       "BREAK_DURATION": "短い休憩時間",
@@ -2321,7 +2671,8 @@
       "URL_BEHAVIOR_EXTRACT": "URLを添付ファイルに抽出",
       "URL_BEHAVIOR_KEEP": "タスクタイトルにURLを残す",
       "URL_BEHAVIOR_KEEP_AND_ATTACH": "タスクタイトルにURLを残し、添付ファイルにも追加",
-      "URL_BEHAVIOR_LABEL": "タスク追加時のURL処理"
+      "URL_BEHAVIOR_LABEL": "タスク追加時のURL処理",
+      "IS_ENABLE_DEADLINE": "期限の短縮構文を有効にする (!<deadline time>)"
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "休憩リマインダー音",
@@ -2426,6 +2777,11 @@
       "IS_ENABLED": "タスクウィジェットを有効にする",
       "IS_ALWAYS_SHOW": "タスクウィジェットを常に表示（メインウィンドウが表示されている場合も）",
       "OPACITY": "タスクウィジェットの不透明度"
+    },
+    "FOCUS_MODE_LOCAL": {
+      "HELP": "これらの設定はこのデバイスにのみ適用され、同期されません。",
+      "L_IS_LOOP_BREAK_END_ALARM": "休憩を終了するまで、休憩終了音を繰り返す（このデバイスのみ）",
+      "TITLE": "フォーカスモード（このデバイス）"
     }
   },
   "GLOBAL_RELATIVE_TIME": {
@@ -2509,7 +2865,8 @@
       "REPORT_A_PROBLEM": "問題を報告する",
       "SEND_FEEDBACK": "フィードバックを送る",
       "START_WELCOME": "ウェルカムツアー開始",
-      "SYNC": "ハウツー同期の設定"
+      "SYNC": "ハウツー同期の設定",
+      "CREATE_TASK": "使い方: タスクを作成"
     },
     "METRICS": "メトリック",
     "PLANNER": "プランナー",
@@ -2545,7 +2902,19 @@
     "TASK_LIST": "タスクリスト",
     "TASKS": "タスク",
     "TOGGLE_SHOW_BOOKMARKS": "ブックマークの表示/非表示",
-    "ADD_SECTION": "セクションを追加"
+    "ADD_SECTION": "セクションを追加",
+    "ARCHIVE_PROJECT": "プロジェクトをアーカイブ",
+    "COMPLETE_PROJECT": "プロジェクトを完了",
+    "EML_EMPTY": "ドロップしたメールに送信者または件名がありません",
+    "EML_PARSE_ERROR": "申し訳ありません。このメールファイルを読み取れませんでした。ファイルが破損しているか、対応していない形式の可能性があります。",
+    "EML_TOO_LARGE": "このメールファイルは大きすぎてインポートできません。",
+    "SYNC_STATE": {
+      "ERROR": "同期に問題があります — クリックして再試行",
+      "IN_SYNC": "同期済み — クリックして今すぐ同期",
+      "OFFLINE": "オフラインです — 再接続すると同期を再開します",
+      "SYNCING": "同期中…"
+    },
+    "ARCHIVED_PROJECTS": "アーカイブ済みプロジェクト"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "レガシーデータのバックアップをダウンロードしますか(古いバージョンのSuper Productivityで使用できます)?",
@@ -2588,7 +2957,9 @@
       "TASK_SWIPE_RIGHT_TOUCH": "タスクを右にスワイプして完了にする",
       "OR_PRESS": "または",
       "SKIP_ARIA": "ヒントを閉じる"
-    }
+    },
+    "SYNC_CTA": "別のデバイスですでに Super Productivity を使用していますか？",
+    "SYNC_CTA_LINK": "同期を設定"
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "今日のタスクを追加",
@@ -2716,7 +3087,15 @@
     "UPLOAD_PLUGIN_INSTRUCTION": "プラグインZIPファイルをアップロードしてインストール:",
     "VALIDATION_FAILED": "検証に失敗しました",
     "ICON_TOO_LARGE": "プラグインアイコンが大きすぎます（最大 {{maxSize}}KB）",
-    "INDEX_HTML_TOO_LARGE": "プラグインのindex.htmlが大きすぎます（最大 {{maxSize}}KB）"
+    "INDEX_HTML_TOO_LARGE": "プラグインのindex.htmlが大きすぎます（最大 {{maxSize}}KB）",
+    "ALLOWED_HOSTS": "ネットワークアクセス",
+    "AUTHORED_BY": "作成者: {{author}}",
+    "NODE_EXECUTION_PERMISSION_DENIED": "Node.js の実行権限が付与されませんでした",
+    "NODE_EXECUTION_BUILT_IN_ONLY": "Node.js の実行は現在、組み込みのデスクトッププラグインでのみ利用できます。",
+    "PLUGIN_ID_RESERVED": "プラグイン ID「{{pluginId}}」は組み込みプラグイン用に予約されています",
+    "SETUP_ISSUE_PROVIDER": "課題プロバイダーパネルで設定",
+    "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Node.js 実行ブリッジに接続できませんでした。プラグインを無効にしてから、もう一度有効にしてください。",
+    "PLUGIN_LOAD_FAILED": "プラグイン「{{pluginName}}」を読み込めませんでした: {{error}}"
   },
   "PM": {
     "TITLE": "プロジェクトメトリクス",
@@ -2750,7 +3129,8 @@
       "ENCRYPTED": "暗号化済み",
       "NEEDS_AUTH": "認証が必要",
       "SET_UP_SYNC": "同期を設定"
-    }
+    },
+    "CLICK_TO_COPY_VERSION": "クリックしてバージョンをコピー"
   },
   "SCHEDULE": {
     "NEXT": "次に",
@@ -2863,5 +3243,55 @@
     "S_SHARE_FAILED": "ログを共有できませんでした",
     "SHARE_FILE": "ファイルを共有",
     "TITLE": "ログ"
+  },
+  "PLAINSPACE": {
+    "CLAIM": "引き受ける",
+    "CLAIM_FAILED": "このタスクを引き受けられませんでした。直前に他のユーザーが引き受けたか、オフラインの可能性があります。",
+    "CLAIM_POOL_TITLE": "引き受け可能なタスク",
+    "CLAIM_SUCCESS": "タスクを引き受け、リストに追加しました。",
+    "CONNECT": {
+      "CONNECT": "接続",
+      "CONNECTING": "接続中…",
+      "INTRO": "他のユーザーとプロジェクトで共同作業できます。自分に割り当てられたタスクは自動的にインポートされ、同期されます。",
+      "INVALID": "トークンが機能しませんでした。トークン全体（「pat_」で始まります）をコピーしたことを確認し、もう一度お試しください。",
+      "OPEN_LINK": "Plainspace を開く",
+      "TITLE": "Plainspace に接続",
+      "TOKEN_HELP": "Plainspace で API トークンを作成し、下に貼り付けてください。",
+      "TOKEN_LABEL": "API トークン",
+      "TOKEN_PLACEHOLDER": "pat_…"
+    },
+    "FORM": {
+      "HOST": "Plainspace ホスト",
+      "SPACE_ID": "スペース ID",
+      "SPACE_ID_DESCRIPTION": "このプロバイダーと同期するスペースです。スペースの URL（plainspace.org/<slug>/…）に表示される ID またはスラッグを貼り付けてください。",
+      "TOKEN": "API トークン",
+      "TOKEN_DESCRIPTION": "個人用 API トークン（「pat_」で始まります）。Plainspace で Space → People → Advanced → API tokens を開いて作成してください。"
+    },
+    "FORM_SECTION": {
+      "HELP": "自分に割り当てられたタスクをインポートし、未割り当てのタスクを引き受けるには、個人用 API トークンで Plainspace のスペースに接続します。",
+      "TITLE": "Plainspace"
+    },
+    "LOGIN_REQUIRED": "プロジェクトを共有するには Plainspace API トークンが必要です。",
+    "NO_UNCLAIMED": "現在、未割り当てのタスクはありません。",
+    "OFFLINE": "オフラインです。Plainspace への接続にはインターネット接続が必要です。",
+    "OPEN_FAILED": "Plainspace のプロジェクトを開けませんでした。接続を確認して、もう一度お試しください。",
+    "OPEN_IN_PLAINSPACE": "Plainspace で開く",
+    "RECURRING": "繰り返しタスク",
+    "SHARE_DESCRIPTION": "共有の Plainspace スペースを作成してこのプロジェクトにリンクし、他のユーザーと共同作業できるようにします。",
+    "SHARE_FAILED": "このプロジェクトを Plainspace で共有できませんでした。",
+    "SHARE_LABEL": "Plainspace でこのプロジェクトを共同作業用に共有する（ベータ）",
+    "SHARE_MENU": "Plainspace で共同作業（ベータ）",
+    "SHARE_SUCCESS": "プロジェクトを Plainspace で共有しました。自分に割り当てられたタスクは自動的にインポートされます。",
+    "SPACE_PICKER": {
+      "CREATE_NEW": "新しいスペースを作成",
+      "ERROR": "Plainspace に接続できませんでした。接続とトークンが引き続き有効であることを確認して、もう一度お試しください。",
+      "INTRO": "既存のスペースをリンクして自分に割り当てられたタスクをインポートするか、新しいスペースを作成してください。",
+      "LINK": "スペースをリンク",
+      "LOADING": "スペースを読み込み中…",
+      "NONE": "スペースはまだありません。新しく作成して始めましょう。",
+      "RECONNECT": "別のトークンを使用",
+      "SELECT_LABEL": "既存のスペース",
+      "TITLE": "Plainspace のスペースを選択"
+    }
   }
 }

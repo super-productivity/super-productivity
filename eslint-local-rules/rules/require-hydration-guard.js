@@ -15,6 +15,9 @@
  *
  * Effects that USE SELECTORS AS THE PRIMARY SOURCE should include one of:
  * - `skipWhileApplyingRemoteOps()` operator (preferred)
+ * - `waitForSyncWindow()` operator - defers instead of dropping. Required when the
+ *   selector is edge-triggered (a value that flips once and stays, e.g. behind
+ *   `distinctUntilChanged()`), since a dropped edge is never re-emitted (#9348)
  * - `skipDuringSync()` operator (deprecated alias)
  * - `filter(() => !this.hydrationState.isApplyingRemoteOps())`
  *
@@ -60,7 +63,7 @@ module.exports = {
     },
     messages: {
       missingHydrationGuard:
-        'Selector-based effect is missing hydration guard. Add skipWhileApplyingRemoteOps() or filter with isApplyingRemoteOps() to prevent duplicate operations during sync replay.',
+        'Selector-based effect is missing hydration guard. Add skipWhileApplyingRemoteOps(), or waitForSyncWindow() if the selector is edge-triggered (a value that flips once and stays — dropping that emission loses it forever, see #9348), or filter with isApplyingRemoteOps().',
     },
     schema: [],
   },
@@ -293,7 +296,10 @@ module.exports = {
       return (
         chainText.includes('skipWhileApplyingRemoteOps') ||
         chainText.includes('skipDuringSync') ||
-        chainText.includes('isApplyingRemoteOps')
+        chainText.includes('isApplyingRemoteOps') ||
+        // defers instead of dropping - required when the selector is
+        // edge-triggered, because a dropped edge can never be recovered (#9348)
+        chainText.includes('waitForSyncWindow')
       );
     };
 

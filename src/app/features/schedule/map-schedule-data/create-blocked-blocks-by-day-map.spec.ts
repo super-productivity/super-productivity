@@ -1,5 +1,11 @@
 import { createBlockedBlocksByDayMap } from './create-blocked-blocks-by-day-map';
 import { TaskCopy, TaskWithDueTime } from '../../tasks/task.model';
+import {
+  DEFAULT_TASK_REPEAT_CFG,
+  TaskRepeatCfg,
+} from '../../task-repeat-cfg/task-repeat-cfg.model';
+import { BlockedBlockType } from '../schedule.model';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 const NDS = '1970-01-01';
 const H = 60 * 60 * 1000;
@@ -42,6 +48,49 @@ describe('createBlockedBlocksByDayMap()', () => {
   it('should work for empty case', () => {
     const r = createBlockedBlocksByDayMap([], [], [], undefined, undefined, 0);
     expect(r).toEqual({});
+  });
+
+  it('keeps a repeat projection source day when a scheduled occurrence crosses midnight', () => {
+    const occurrenceDate = new Date(2026, 6, 30, 12).getTime();
+    const occurrenceDay = getDbDateStr(occurrenceDate);
+    const continuedDay = getDbDateStr(new Date(2026, 6, 31, 12));
+    const repeatCfg: TaskRepeatCfg = {
+      ...DEFAULT_TASK_REPEAT_CFG,
+      id: 'daily-across-midnight',
+      // DEFAULT_TASK_REPEAT_CFG freezes the *real* current day into these two at
+      // module load. selectTaskRepeatCfgsForExactDay() drops any cfg whose
+      // effective last-creation day is >= the day being projected, so keeping
+      // the defaults makes this fixture stop projecting once the wall clock
+      // reaches occurrenceDay. A cfg that has never created a task is the state
+      // this case is actually about.
+      lastTaskCreation: undefined,
+      lastTaskCreationDay: undefined,
+      quickSetting: 'DAILY',
+      repeatCycle: 'DAILY',
+      startDate: occurrenceDay,
+      startTime: '23:00',
+      defaultEstimate: h(2),
+    };
+
+    const result = createBlockedBlocksByDayMap(
+      [],
+      [repeatCfg],
+      [],
+      undefined,
+      undefined,
+      occurrenceDate,
+      2,
+      new Date(2026, 6, 31, 12).getTime(),
+    );
+    const continuedEntry = result[continuedDay]
+      .flatMap((block) => block.entries)
+      .find(
+        (entry) => entry.type === BlockedBlockType.ScheduledRepeatProjectionSplit,
+      ) as {
+      sourceOccurrenceDate?: string;
+    };
+
+    expect(continuedEntry.sourceOccurrenceDate).toBe(occurrenceDay);
   });
 
   it('should work for basic case', () => {

@@ -1,5 +1,5 @@
 import { signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { registerLocaleData } from '@angular/common';
 import localeDe from '@angular/common/locales/de';
 import { provideMockStore } from '@ngrx/store/testing';
@@ -10,6 +10,7 @@ import { TaskService } from '../../tasks/task.service';
 import { DateService } from '../../../core/date/date.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 describe('PlannerDayComponent', () => {
   const createComponent = (
@@ -46,6 +47,54 @@ describe('PlannerDayComponent', () => {
       }
     ).dayLabel();
 
+  const createRenderedComponent = (): ComponentFixture<PlannerDayComponent> => {
+    TestBed.configureTestingModule({
+      imports: [PlannerDayComponent, TranslateModule.forRoot()],
+      providers: [
+        provideMockStore(),
+        { provide: MatDialog, useValue: jasmine.createSpyObj('MatDialog', ['open']) },
+        { provide: TaskService, useValue: {} },
+        { provide: DateService, useValue: {} },
+        { provide: LayoutService, useValue: { isXs: signal(false) } },
+        {
+          provide: DateTimeFormatService,
+          useValue: {
+            currentLocale: signal('en'),
+            isoTextLocale: signal('en'),
+          },
+        },
+      ],
+    });
+    const translateService = TestBed.inject(TranslateService);
+    translateService.setTranslation('en', {
+      F: {
+        PLANNER: {
+          DAY_LOAD: 'Planned: {{planned}} / Available: {{available}}',
+          NO_TASKS: 'No tasks',
+        },
+      },
+      G: { ADD: 'Add' },
+    });
+    translateService.use('en');
+
+    const fixture = TestBed.createComponent(PlannerDayComponent);
+    fixture.componentInstance.day = {
+      dayDate: '2026-05-11',
+      timeEstimate: 0,
+      timeLimit: 0,
+      itemsTotal: 0,
+      tasks: [],
+      deadlineTasks: [],
+      noStartTimeRepeatProjections: [],
+      allDayEvents: [],
+      scheduledIItems: [],
+      availableHours: 7 * 60 * 60 * 1000,
+      progressPercentage: 0,
+    };
+    fixture.detectChanges();
+    return fixture;
+  };
+
   beforeAll(() => registerLocaleData(localeDe, 'de-DE'));
 
   it('uses the UI language for the weekday label with ISO formatting enabled', () => {
@@ -58,5 +107,12 @@ describe('PlannerDayComponent', () => {
     const component = createComponent('de-DE', null);
 
     expect(getDayLabel(component)).toBe('Mo.');
+  });
+
+  it('labels planned and available time and displays an explicit zero', () => {
+    const fixture = createRenderedComponent();
+    const dayLoad = fixture.nativeElement.querySelector('.day-load');
+
+    expect(dayLoad?.textContent.trim()).toBe('Planned: 0m / Available: 7h');
   });
 });

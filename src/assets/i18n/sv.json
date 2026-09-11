@@ -6,6 +6,12 @@
       "MSG": "Vill du installera Super Productivity som en PWA?"
     },
     "B_OFFLINE": "Du är bortkopplad från internet. Synkronisering och begäran om data från ärendeleverantören fungerar inte.",
+    "B_SUPER_SYNC_ENCRYPTION": {
+      "ALREADY_ENCRYPTED": "Det här kontot är redan krypterat på en annan enhet. Ange ditt befintliga lösenord för att fortsätta synkronisera.",
+      "ENABLE": "Aktivera kryptering",
+      "LATER": "Senare",
+      "MSG": "SuperSync använder end-to-end-kryptering, men det här kontot synkroniseras fortfarande utan lösenord. Ange ett lösenord för att skydda dina data — de finns kvar och laddas upp igen krypterade vid nästa synkronisering."
+    },
     "B_SYNC_SAFETY": {
       "DISMISS": "Inte nu",
       "MSG": "Du har använt Super Productivity ett tag. Konfigurera synkronisering för att säkerhetskopiera dina data och hålla dem säkra på alla enheter.",
@@ -18,6 +24,10 @@
     "CONTEXT_MENU": {
       "CHANGE_PROJECT_SETTINGS": "Ändra projektinställningar",
       "CHANGE_TAG_SETTINGS": "Ändra tagginställningar"
+    },
+    "DROP_LINK": {
+      "SNACK": "Uppgift skapad från en släppt länk",
+      "TASK_TITLE": "Kontrollera {{url}}"
     },
     "SKIP_SYNC_WAIT": "Hoppa over synkväntan",
     "UPDATE_CHECK": {
@@ -96,10 +106,12 @@
     "ANDROID": {
       "FOREGROUND_SERVICE_START_FAILED_FOCUS": "Android blockerade den fasta aviseringen för fokusläge. Timern fortsätter i appen, men bakgrundsaviseringar kanske inte fungerar. Kontrollera aviseringsbehörighet och batteri-/bakgrundsbegränsningar.",
       "FOREGROUND_SERVICE_START_FAILED_TRACKING": "Android blockerade den fasta aviseringen för tidsspårning. Tiden spåras fortfarande i appen, men bakgrundsåterställning kanske inte fungerar. Kontrollera aviseringsbehörighet och batteri-/bakgrundsbegränsningar.",
-      "OPEN_NOTIFICATION_SETTINGS": "Öppna inställningar"
+      "OPEN_NOTIFICATION_SETTINGS": "Öppna inställningar",
+      "WIDGET_TASKS_UPDATED": "{{count}} uppgift(er) uppdaterades från widgeten"
     },
     "ATTACHMENT": {
       "LOCAL_FILE_UNAVAILABLE": "Den här bilagan är bara tillgänglig på enheten där den lades till.",
+      "COMMAND_UNSUPPORTED": "Kommandobilagor kan inte längre köra kommandon.",
       "DIALOG_EDIT": {
         "ADD_ATTACHMENT": "Lägg till bilaga",
         "EDIT_ATTACHMENT": "Redigera bilaga",
@@ -552,7 +564,9 @@
         "EDIT_TITLE": "Redigera konfiguration för {{title}}",
         "LOAD_OPTIONS": "Läs in alternativ",
         "LOAD_OPTIONS_FAILED": "Det gick inte att läsa in alternativ",
+        "LOAD_OPTIONS_FIRST": "Läs in alternativen först",
         "LOADING_OPTIONS": "Läser in alternativ...",
+        "NO_OPTIONS_FOUND_HELP": "Inga alternativ hittades. Kontrollera anslutningsuppgifterna och läs in alternativen igen.",
         "OAUTH_UNAVAILABLE_WEB": "Tillgängligt i skrivbords- och mobilapparna. Synkroniserade inställningar sparas, men livedata kan inte läsas in i webbappen.",
         "OPTIONS_LOADED": "Alternativ inlästa",
         "RELOAD_OPTIONS": "Läs in alternativ igen",
@@ -929,8 +943,10 @@
           "RE_PLAN_ALL": "Omplanera alla"
         }
       },
+      "DAY_LOAD": "Planerat: {{planned}} / Tillgängligt: {{available}}",
       "EDIT_REPEATED_TASK": "Redigera den upprepade uppgiften '{{taskName}}'",
       "NO_TASKS": "Inga uppgifter",
+      "PLANNED_LOAD": "Planerat: {{planned}}",
       "PLAN_VIEW": {
         "NO_DEADLINES": "Inga deadlines",
         "NO_SCHEDULED_ITEMS": "Inga schemalagda objekt"
@@ -1052,7 +1068,9 @@
         "PLACEHOLDER": "Välj mapp"
       },
       "TOOLTIP_CREATE": "Skapa projektmapp",
-      "TOOLTIP_VISIBILITY": "Visa/dölj projekt"
+      "TOOLTIP_VISIBILITY": "Visa/dölj projekt",
+      "ADD_SUBFOLDER": "Lägg till undermapp",
+      "ADD_PROJECT": "Lägg till projekt"
     },
     "REDMINE": {
       "DIALOG_TRACK_TIME": {
@@ -1110,10 +1128,12 @@
     },
     "SCHEDULE": {
       "CALENDAR_VISIBILITY": "Kalendersynlighet",
+      "CLICK_TO_CREATE_TASK": "klicka för att skapa en uppgift",
       "D_INITIAL": {
         "TEXT": "<p>Schemat ska ge dig en bättre bild av hur dina planerade uppgifter fördelar sig över tiden. Det genereras automatiskt utifrån dina uppgifter och kräver endast <strong>tidsuppskattningar för att fungera</strong>.</p><p>Det finns två olika typer av uppgifter: <strong>schemalagda uppgifter</strong>, som visas vid sin planerade tidpunkt, och <strong>regelbundna uppgifter</strong>, som ska utföras runt dessa fasta händelser. </p><p>Om du anger en start- och sluttid för arbetet (rekommenderas) kommer regelbundna uppgifter aldrig att visas utanför dessa gränser.</p>",
         "TITLE": "Schema"
       },
+      "DROP_TASKS_HERE_TO_SCHEDULE": "Släpp uppgifter här för att schemalägga dem",
       "END": "Arbetsavslutning",
       "EXCESS_TASK_TOOLTIP": "Den här uppgiften får inte helt plats den här dagen.",
       "EXCESS_TASKS_DAY_TOOLTIP": "{{count}} uppgifter får inte plats i den tillgängliga tiden",
@@ -1121,18 +1141,29 @@
       "INSERT_BEFORE": "Före",
       "LUNCH_BREAK": "Lunchrast",
       "MONTH": "Månad",
+      "MORE_EVENTS": {
+        "ONE": "{{count}} händelse till",
+        "OTHER": "{{count}} händelser till"
+      },
+      "NEXT_DAY": "Nästa dag",
       "NEXT_MONTH": "Nästa månad",
       "NEXT_WEEK": "Nästa vecka",
+      "PREVIOUS_DAY": "Föregående dag",
       "PREVIOUS_MONTH": "Föregående månad",
       "PREVIOUS_WEEK": "Föregående vecka",
+      "PLAN_TASK_FOR_DAY_PLACEHOLDER": "Planera uppgift för dagen…",
+      "VIEW_DAY": "Visa dag",
       "VIEW_MONTH": "Visa månad",
       "VIEW_WEEK": "Visa vecka",
       "NO_TASKS": "Det finns inga uppgifter för närvarande. Lägg till uppgifter via plusknappen (+) i toppfältet.",
       "NOW": "Nu",
       "PLAN_END_DAY": "Planera vid dagens slut",
       "PLAN_START_DAY": "Planera i början av dagen",
+      "SCHEDULE_TASK_PLACEHOLDER": "Schemalägg uppgift…",
       "SHIFT_KEY_INFO": "Håll Shift intryckt för att växla till dagplaneringsläge",
-      "START": "Arbetsstart"
+      "START": "Arbetsstart",
+      "TOGGLE_DAY_PLANNING_HINT": "Ctrl+1 för att växla till dagplanering",
+      "TOGGLE_TIME_SCHEDULING_HINT": "Ctrl+1 för att växla till tidsschemaläggning"
     },
     "SEARCH_BAR": {
       "INCLUDE_COMPLETED": "Inkludera slutförda och arkiverade uppgifter",
@@ -1189,11 +1220,65 @@
       "A": {
         "REMOTE_MODEL_VERSION_NEWER": "Den fjärranslutna modellversionen är nyare än den lokala. Uppdatera din lokala app till den senaste versionen!"
       },
+      "B": {
+        "CONTENT_CONFLICT_RESOLVED": "Motstridiga ändringar i {{taskList}} löstes automatiskt genom att behålla den senaste versionen. Äldre ändringar kan ha ignorerats — dubbelkolla gärna.",
+        "CONTENT_CONFLICT_TITLE_CHANGE": "{{kept}} (kasserad: {{discarded}})",
+        "CONTENT_CONFLICT_UNTITLED": "Namnlös uppgift"
+      },
       "BTN_RESTORE_FROM_HISTORY": "Återställ från historik",
       "BTN_SYNC_NOW": "Synkronisera nu",
       "C": {
         "FORCE_UPLOAD": "Om du tvingar fram en uppladdning av dina data kan det leda till dataförlust. Vill du fortsätta?",
         "DECRYPT_OVERWRITE": "Detta ERSÄTTER de krypterade data som finns på servern med den här enhetens lokala kopia och krypterar om dem med det nya lösenordet. Alla andra enheter behöver ange lösenordet igen och hämta de ersatta data. Osynkroniserade ändringar på dessa enheter går förlorade permanent. Vill du fortsätta?"
+      },
+      "CONFLICT_REVIEW": {
+        "PAGE_TITLE": "Synkroniseringskonflikter",
+        "PAGE_SUBTITLE": "Ändringar som löstes automatiskt under synkroniseringen. Granska dem och byt vid behov till den andra versionen.",
+        "CONFIG_LINK": "Granska synkroniseringskonflikter",
+        "BADGE_TOOLTIP": "Ogranskade synkroniseringskonflikter: {{count}}",
+        "BANNER_MSG": "Automatiskt lösta synkroniseringskonflikter: {{count}} (fjärrvinster: {{remoteWins}}, lokala vinster: {{localWins}})",
+        "BANNER_REVIEW": "Granska",
+        "TAB_UNREVIEWED": "Ogranskade ({{count}})",
+        "TAB_HISTORY": "Historik",
+        "EMPTY_UNREVIEWED": "Inga konflikter att granska.",
+        "EMPTY_HISTORY": "Det finns ännu ingen konflikthistorik.",
+        "GROUP_TASK": "Uppgifter",
+        "GROUP_PROJECT": "Projekt",
+        "GROUP_TAG": "Taggar",
+        "GROUP_NOTE": "Anteckningar",
+        "GROUP_OTHER": "Övrigt",
+        "COL_FIELD": "Fält",
+        "COL_LOCAL": "Lokal",
+        "COL_REMOTE": "Fjärr",
+        "COL_CURRENT": "Aktuellt (nu)",
+        "WINNER_LOCAL": "Den lokala versionen vann",
+        "WINNER_REMOTE": "Fjärrversionen vann",
+        "WINNER_MERGED": "Sammanslagen",
+        "REASON_NEWER": "Nyare ändring vann",
+        "REASON_TIE": "Oavgjort, fjärrversionen vann",
+        "REASON_DELETE_WINS": "Borttagning vann",
+        "REASON_DELETE_LOST": "Borttagningen åsidosattes av ändringen",
+        "REASON_DISJOINT_MERGE": "Automatiskt sammanslagen",
+        "REASON_NOISE": "Ingen innehållsändring",
+        "REASON_CLOCK_CORRUPTION": "Misstänkt skadad logisk klocka",
+        "STATUS_UNREVIEWED": "Ogranskad",
+        "STATUS_KEPT": "Behållen",
+        "STATUS_FLIPPED": "Bytt",
+        "STATUS_INFO": "Info",
+        "THIS_DEVICE": "Den här enheten",
+        "DEVICE_LABEL": "Enhet {{id}}",
+        "MERGED_FIELD_CHIP": "{{field}} ← {{side}}",
+        "SIDE_LOCAL": "lokal",
+        "SIDE_REMOTE": "fjärr",
+        "ACTION_KEEP": "Behåll",
+        "ACTION_FLIP": "Byt",
+        "BULK_KEEP_ALL": "Behåll alla",
+        "BULK_FLIP_LOCAL": "Byt alla → Lokal",
+        "BULK_FLIP_REMOTE": "Byt alla → Fjärr",
+        "FLIP_UNSUPPORTED": "Det går ännu inte att byta version för den här objekttypen.",
+        "FLIP_DONE": "Den andra versionen har tillämpats.",
+        "STALE_CONFIRM": "\"{{title}}\" har ändrats sedan konflikten löstes. Ett byte skriver över de nyare ändringarna. Vill du fortsätta?",
+        "WINNING_SIDE": "Behållen"
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "Öppna följande länk och kopiera den autentiseringskod som anges där till inmatningsfältet nedan.",
@@ -1208,6 +1293,7 @@
         "ADDITIONAL_INFO": "Ytterligare information",
         "CHANGES": "Ändringar",
         "CHANGES_SINCE_LAST_SYNC": "Ändringar sedan senaste synkroniseringen",
+        "CHANGES_UNKNOWN": "okänt",
         "COMPARISON_RESULT": "Jämförelseresultat",
         "DATE": "Datum",
         "LAST_SYNC": "Senaste synkronisering:",
@@ -1217,6 +1303,7 @@
         "LOCAL_REMOTE": "Lokal -> Fjärrkontroll",
         "NEVER": "Aldrig",
         "OVERWRITE_WARNING": "VARNING: Data för {{targetName}} innehåller cirka {{targetChanges}} ändringar, medan data för {{sourceName}} endast innehåller {{sourceChanges}} ändringar. Är du säker på att du vill skriva över data för {{targetName}} med versionen för {{sourceName}}? Denna åtgärd kan inte ångras.",
+        "OVERWRITE_WARNING_UNKNOWN": "VARNING: Den här enheten kan inte avgöra hur många osynkroniserade ändringar data för {{targetName}} har (det finns ingen registrering av en tidigare synkronisering). Om data för {{targetName}} skrivs över med versionen för {{sourceName}} kan ändringar gå förlorade. Är du säker?",
         "REMOTE": "Fjärrkontroll",
         "RESULT": "Resultat",
         "TEXT": "<p>Uppdatering från fjärrplats. Både lokala och fjärrdata verkar ha modifierats.</p>",
@@ -1362,13 +1449,18 @@
           "ENABLE_ENCRYPTION_TITLE": "Aktivera kryptering?",
           "ENABLE_ENCRYPTION_WARNING": "VARNING: Detta laddar upp dina data igen med kryptering. Om du glömmer krypteringslösenordet kan dina data inte återställas.",
           "ENABLE_ENCRYPTION_WHAT_HAPPENS": "Vad som kommer att hända:",
+          "ENCRYPTION_SETUP_INTRO": "<strong>Ange ett lösenord för att kryptera dina data innan de laddas upp</strong>, så att de aldrig lämnar enheten okrypterade. Detta är valfritt — du kan även aktivera eller ändra det senare.",
           "L_CHANGE_ENCRYPTION_PASSWORD": "Ändra krypteringslösenord",
           "L_CONFIRM_PASSWORD": "Bekräfta lösenord",
           "L_NEW_PASSWORD": "Nytt krypteringslösenord",
           "L_REMOVE_ENCRYPTION": "Eller ta bort kryptering",
           "PASSWORD_MIN_LENGTH": "Lösenordet måste vara minst 8 tecken",
           "PASSWORDS_DONT_MATCH": "Lösenorden matchar inte",
-          "REMOVE_ENCRYPTION_WARNING": "Att ta bort kryptering laddar upp dina data igen utan kryptering. Alla enheter måste konfigureras om."
+          "REMOVE_ENCRYPTION_WARNING": "Att ta bort kryptering laddar upp dina data igen utan kryptering. Alla enheter måste konfigureras om.",
+          "SETUP_ENCRYPTION_BTN": "Kryptera och fortsätt",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Använd samma lösenord på alla enheter. Om du glömmer det går krypterade data inte att återställa.",
+          "SETUP_ENCRYPTION_TITLE": "Kryptera före första uppladdningen?",
+          "SETUP_SKIP_ENCRYPTION_BTN": "Hoppa över"
         },
         "GOOGLE": {
           "L_SYNC_FILE_NAME": "Synkroniseringsfilnamn"
@@ -1397,10 +1489,12 @@
         "L_MANUAL_SYNC_ONLY": "Synkronisera bara manuellt (inaktivera automatisk synkronisering)",
         "L_SYNC_INTERVAL": "Synkroniseringsintervall",
         "L_SYNC_PROVIDER": "Synkroniseringsleverantör",
+        "L_USE_SPLIT_SYNC_FILES": "Kirurgisk synkronisering (experimentell) – Snabbare synkronisering med separata filer för operationer och ögonblicksbilder. När funktionen har aktiverats måste den även aktiveras på alla enheter som synkroniserar den här mappen.",
         "LOCAL_FILE": {
           "INFO_TEXT": "<strong>Varning:</strong> Använd <strong>inte</strong> filsynkroniseringsverktyg som Syncthing, Resilio eller liknande för att synkronisera denna mapp mellan enheter – de <strong>kommer</strong> att orsaka datakorruption och konflikter. För synkronisering mellan enheter, använd WebDAV, Dropbox eller SuperSync istället.",
           "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Behöver filbehörighet",
-          "L_SYNC_FOLDER_PATH": "Sökväg till synkroniseringsmapp"
+          "L_SYNC_FOLDER_PATH": "Sökväg till synkroniseringsmapp",
+          "S_COMMIT_FOLDER_ERROR": "Det gick inte att spara den valda synkroniseringsmappen. Den kan ha flyttats eller tagits bort — välj den igen."
         },
         "PASSWORD_SET_INFO": "?? Krypteringslösenord är inställt.",
         "SUPER_SYNC": {
@@ -1505,6 +1599,8 @@
       "S": {
         "ALREADY_IN_SYNC": "Redan synkroniserad",
         "ARCHIVE_OPERATION_FAILED": "Arkivoperation misslyckades. Viss upprensning kanske inte slutfördes.",
+        "AUTH_SERVICE_UNAVAILABLE": "Autentiseringstjänsten är tillfälligt otillgänglig (HTTP {{status}}). Försök igen.",
+        "AUTH_SERVICE_UNAVAILABLE_WITH_REFERENCE": "Autentiseringstjänsten är tillfälligt otillgänglig (HTTP {{status}}). Försök igen. Referens: {{reference}}.",
         "AUTH_SETUP_FAILED": "Autentiseringsuppsättningen misslyckades. Om du använder webbappen, se till att du använder HTTPS. Annars, prova den stabila versionen eller rapportera detta som en bugg.",
         "AUTH_TOKEN_REJECTED": "Synkroniseringstoken avvisades av servern: {{reason}}. Hämta en ny token.",
         "BTN_CONFIGURE": "Konfigurera",
@@ -1517,6 +1613,7 @@
         "DATA_REPAIRED": "Data automatiskt reparerad ({{count}} problem åtgärdade)",
         "DECRYPTION_FAILED": "Kunde inte dekryptera synkroniserade data. Kontrollera ditt krypteringslösenord.",
         "DEFERRED_ACTION_FAILED": "Vissa ändringar gjorda under synkronisering kunde inte sparas. Ladda om för att återställa.",
+        "DEFERRED_ACTION_PERMANENT_FAILED": "En ändring kunde inte sparas och synkroniseringen har pausats. Ladda om för att återställa det senast sparade tillståndet.",
         "DISABLE_ENCRYPTION_FAILED": "Kunde inte inaktivera kryptering: {{message}}",
         "ENABLE_ENCRYPTION_FAILED": "Kunde inte aktivera kryptering: {{message}}",
         "ENCRYPTION_DISABLED_ON_OTHER_DEVICE": "Kryptering inaktiverades på en annan enhet. Dina synkroniseringsinställningar har uppdaterats.",
@@ -1534,13 +1631,17 @@
         "WARN_CLIENT_ID_REGENERATED": "Synkroniseringsenhetens ID var ogiltigt och har skapats om. En synkroniseringskonflikt kan uppstå vid nästa synkronisering.",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Fel vid synkronisering. Kan inte läsa fjärrdata. Kanske du aktiverade kryptering och det lokala lösenordet inte matchar det som användes för att kryptera fjärrdata?",
         "FINISH_DAY_SYNC_ERROR": "Synkroniseringsfel vid avslutning av dagen. Försök igen.",
+        "FORCE_UPLOAD_FAILED": "Det gick inte att skriva över serverdata. Dina lokala ändringar finns kvar.",
         "FRESH_CLIENT_SYNC_CANCELLED": "Första synkronisering avbruten. Fjärrdata användes inte.",
         "HYDRATION_FAILED": "Kunde inte ladda data. Ladda om appen.",
+        "HYDRATION_FALLBACK_RECOVERY": "Det gick inte att läsa in sparade data — det som kunde återställas från den lokala loggen visas. Saknade objekt kan återställas med en fullständig synkronisering eller genom att importera en säkerhetskopia.",
         "IMPORTING": "Importerar data",
         "INCOMPLETE_CFG": "Autentisering för synkronisering misslyckades. Kontrollera din konfiguration!",
         "INCOMPLETE_OP_SYNC": "Synkronisering ofullständig: {{count}} operationsfil(er) kunde inte laddas ner",
+        "INCOMPLETE_REMOTE_OPERATIONS": "Hämtade ändringar kunde inte tillämpas fullständigt. Synkroniseringen har pausats för att skydda dina data. Starta om appen för att försöka igen. Återställ en säkerhetskopia om problemet kvarstår.",
         "INITIAL_SYNC_ERROR": "Första synkronisering misslyckades",
         "INTEGRITY_CHECK_FAILED": "Dataintegritetsproblem upptäckt. Automatisk reparation försökt. Om du upplever problem, ladda om appen.",
+        "INTEGRITY_TAMPER_DETECTED": "Synkroniseringen stoppades: servern returnerade data som inte klarade en säkerhetskontroll av integriteten. Dina lokala data är säkra. Detta kan tyda på att synkroniseringsservern har manipulerats eller konfigurerats fel.",
         "INVALID_AUTH_CODE": "Auktoriseringskoden avvisades. Försök autentisera igen och se till att kopiera koden exakt.",
         "INVALID_OPERATION_PAYLOAD": "Ogiltig operation upptäckt. Ändringar kanske inte sparas – ladda om.",
         "LEGACY_FORMAT_DETECTED": "Synkroniseringsformatet matchar inte: fjärrlagringen skrevs senast av en äldre appversion (v16.x eller tidigare) som använder ett annat synkroniseringsformat. Uppdatera alla dina enheter till samma appversion. ”Tvinga överskrivning” låser upp den här enheten genom att skriva det nya formatet bredvid de äldre filerna. Använd det bara om inga äldre enheter längre ska synkronisera mot den här fjärrplatsen, annars kommer de att skilja sig från den här enheten utan varning.",
@@ -1566,10 +1667,12 @@
         "RESTORE_ERROR": "Kunde inte återställa data",
         "RESTORE_SUCCESS": "Data återställd",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Kunde inte migrera data till servern – lokal datavalidering misslyckades. Försök importera en säkerhetskopia.",
+        "SPLIT_FORMAT_ENABLE_SETTING": "Den här synkroniseringsmappen har uppgraderats till formatet med separata filer. Aktivera Kirurgisk synkronisering i synkroniseringsinställningarna för att fortsätta.",
         "STORAGE_QUOTA_EXCEEDED": "Synkroniseringsserverns lagring är full. Dina ändringar synkroniseras INTE! Arkivera gamla uppgifter eller uppgradera din plan.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Lagringsutrymmet var lågt. Gamla data rensade.",
         "SUCCESS_DOWNLOAD": "Synkroniserade data från fjärrplats",
         "SUCCESS_VIA_BUTTON": "Data synkroniserad",
+        "SYNC_DATA_RECOVERED_FROM_BACKUP": "Synkroniseringsdata återställdes från en säkerhetskopia efter att huvudfilen inte kunde läsas.",
         "SYNC_VALIDATION_FAILED": "Tillståndsvalideringen misslyckades efter synkronisering. Vissa data kan vara inkonsekventa.",
         "TIMEOUT_ERROR": "Synkroniseringsoperationen fick timeout. {{suggestion}}",
         "TOO_MANY_OPS_TO_DOWNLOAD": "För många synkroniseringsoperationer att ladda ner. Vissa ändringar kan saknas.",
@@ -1653,7 +1756,9 @@
         "NO_PARENT": "Ingen mapp (rotnivå)",
         "PLACEHOLDER": "Välj mapp"
       },
-      "TOOLTIP_CREATE": "Skapa taggmapp"
+      "TOOLTIP_CREATE": "Skapa taggmapp",
+      "ADD_SUBFOLDER": "Lägg till undermapp",
+      "ADD_TAG": "Lägg till tagg"
     },
     "TASK": {
       "ADD_TASK_BAR": {
@@ -1819,12 +1924,14 @@
         "SCHEDULED_FOR": "Schemalagd till",
         "SNOOZE": "Snooze",
         "SNOOZE_FOR": "Snooza {{m}}m",
+        "SNOOZE_FOR_SHORT": "{{m}}m",
         "START": "Start",
         "TASK_REMINDERS": "Uppgiftspåminnelser",
         "UNSCHEDULE": "Avboka",
         "UNSCHEDULE_ALL": "Avboka alla"
       },
       "D_SCHEDULE_TASK": {
+        "DOES_NOT_REPEAT": "Upprepas inte",
         "INFO_OUTSIDE_WORK_HOURS": "Ligger utanför dina konfigurerade arbetstider.",
         "INFO_OVERLAP": "Överlappar med en annan schemalagd uppgift.",
         "QA_NEXT_MONTH": "Schema för nästa månad",
@@ -1832,6 +1939,7 @@
         "QA_TODAY": "Schema idag",
         "QA_TOMORROW": "Schema för imorgon",
         "REMIND_AT": "Påminn om vid",
+        "REPEAT": "Upprepa",
         "RO_1H": "1 timme innan det börjar",
         "RO_5M": "5 minuter innan det börjar",
         "RO_10M": "10 minuter innan det börjar",
@@ -1913,8 +2021,8 @@
         "MONTHLY_CURRENT_DATE_AND_TIME": "Månadsvis på {{dateDayStr}}, {{timeStr}}",
         "MONTHLY_LAST_DAY": "Varje månad den sista dagen",
         "MONTHLY_LAST_DAY_AND_TIME": "Varje månad den sista dagen, {{timeStr}}",
-        "MONTHLY_NTH_WEEKDAY": "Varje månad den {{ordinalStr}} {{weekdayStr}}",
-        "MONTHLY_NTH_WEEKDAY_AND_TIME": "Varje månad den {{ordinalStr}} {{weekdayStr}}, {{timeStr}}",
+        "MONTHLY_NTH_WEEKDAY": "Varje månad: {{weekdayStr}} — {{ordinalStr}}",
+        "MONTHLY_NTH_WEEKDAY_AND_TIME": "Varje månad: {{weekdayStr}} — {{ordinalStr}}, {{timeStr}}",
         "WEEKLY_CURRENT_WEEKDAY": "Veckovis på {{weekdayStr}}",
         "WEEKLY_CURRENT_WEEKDAY_AND_TIME": "Veckovis på {{weekdayStr}}, {{timeStr}}",
         "YEARLY_CURRENT_DATE": "Årligen den {{dayAndMonthStr}}",
@@ -1960,24 +2068,25 @@
         "INHERIT_SUBTASKS_DESCRIPTION": "När denna funktion är aktiverad kommer deluppgifter från den senaste uppgiftsinstansen att återskapas med den återkommande uppgiften.",
         "MONDAY": "måndag",
         "MONTHLY_MODE_DAY_OF_MONTH": "Dag i månaden",
+        "MONTHLY_MODE_DAY_OF_MONTH_DESCRIPTION": "\"Dag i månaden\" använder dagen som visas i startdatumet.",
         "NOTES": "Standardanteckningar",
         "ORD_FIRST": "första",
-        "ORD_FIRST_NTH": "första",
+        "ORD_FIRST_NTH": "den första förekomsten",
         "ORD_FOURTH": "fjärde",
-        "ORD_FOURTH_NTH": "fjärde",
+        "ORD_FOURTH_NTH": "den fjärde förekomsten",
         "ORD_LAST": "sista",
-        "ORD_LAST_NTH": "sista",
+        "ORD_LAST_NTH": "den sista förekomsten",
         "ORD_SECOND": "andra",
-        "ORD_SECOND_NTH": "andra",
+        "ORD_SECOND_NTH": "den andra förekomsten",
         "ORD_THIRD": "tredje",
-        "ORD_THIRD_NTH": "tredje",
+        "ORD_THIRD_NTH": "den tredje förekomsten",
         "Q_CUSTOM": "Anpassad upprepningskonfiguration",
         "Q_DAILY": "Varje dag",
         "Q_MONDAY_TO_FRIDAY": "Varje måndag till fredag",
         "Q_MONTHLY_CURRENT_DATE": "Varje månad på {{dateDayStr}}th",
         "Q_MONTHLY_FIRST_DAY": "Varje månad på första dagen",
         "Q_MONTHLY_LAST_DAY": "Varje månad på sista dagen",
-        "Q_MONTHLY_NTH_WEEKDAY": "Varje månad den {{ordinalStr}} {{weekdayStr}}",
+        "Q_MONTHLY_NTH_WEEKDAY": "Varje månad: {{weekdayStr}} — {{ordinalStr}}",
         "Q_WEEKLY_CURRENT_WEEKDAY": "Varje vecka på {{weekdayStr}}",
         "Q_YEARLY_CURRENT_DATE": "Varje år på {{dayAndMonthStr}}",
         "QUICK_SETTING": "Upprepa konfiguration",
@@ -2191,6 +2300,7 @@
     },
     "EXPORT_DATA": "Export Data",
     "IMPORT_FROM_FILE": "Importera från fil",
+    "IMPORT_FROM_TODOIST": "Importera från Todoist",
     "IMPORT_FROM_URL": "Importera från URL",
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Ange den fullständiga URL-adressen till den Super Productivity säkerhetskopia JSON-fil som du vill importera.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Importera från URL",
@@ -2202,6 +2312,7 @@
     "S_ERR_INVALID_DATA": "Import misslyckades: Ogiltig JSON",
     "S_ERR_INVALID_URL": "Import misslyckades: Ogiltig URL angiven",
     "S_ERR_NETWORK": "Import misslyckades: Nätverksfel vid hämtning av data från URL",
+    "S_ERR_TODOIST_IMPORT_OPEN": "Det gick inte att öppna Todoist-importen",
     "S_IMPORT_FROM_URL_ERR_DECODE": "Fel: Det gick inte att avkoda URL-parametern för import. Kontrollera att den är korrekt formaterad.",
     "URL_PLACEHOLDER": "Ange URL för import från"
   },
@@ -2230,6 +2341,7 @@
     "ICON_INP_DESCRIPTION": "Alla utf-8-emojis stöds också!",
     "INBOX_PROJECT_TITLE": "Inkorgen",
     "MINUTES": "{{m}} minuter",
+    "MORE_ACTIONS": "Fler åtgärder",
     "MOVE_BACKWARD": "Flytta bakåt",
     "MOVE_FORWARD": "Gå vidare",
     "NEXT": "Nästa",
@@ -2237,7 +2349,7 @@
     "NONE": "Ingen",
     "OK": "Okej",
     "OPEN_IN_BROWSER": "Öppna i webbläsare",
-    "OVERDUE": "Försenad",
+    "OVERDUE": "Från tidigare dagar",
     "PASSWORD_STRENGTH_FAIR": "Hyfsat",
     "PASSWORD_STRENGTH_STRONG": "Starkt",
     "PASSWORD_STRENGTH_WEAK": "Svagt",
@@ -2366,6 +2478,7 @@
       "HELP": "<div><p>När hantering av inaktiv tid är aktiverad öppnas en dialogruta efter en angiven tid för att kontrollera om och på vilken uppgift du vill spåra din tid när du har varit inaktiv.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Aktivera hantering av inaktiv tid",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Aktivera endast dialogrutan för inaktiv tid när en aktuell uppgift är vald",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Visa inte inaktivitetsdialogrutan under sessioner i fokusläge",
       "MIN_IDLE_TIME": "Aktivera viloläge efter X",
       "TITLE": "Tomgångshantering"
     },
@@ -2526,7 +2639,11 @@
       "THEME_REMOVE_BUTTON": "Ta bort tema",
       "THEME_REMOVED_TOAST": "Temat togs bort. Standardtemat används igen.",
       "THEME_SELECT_LABEL": "Välj tema",
-      "TITLE": "Diverse inställningar"
+      "TITLE": "Diverse inställningar",
+      "WALLPAPER": "Bakgrundsbild",
+      "WALLPAPER_BUTTON": "Ange bakgrundsbild…",
+      "WALLPAPER_DIALOG_TITLE": "Global bakgrundsbild",
+      "WALLPAPER_HINT": "Visas på sidor utan egen bakgrund (Planerare, Schema, Tavlor, Inställningar…). Taggar och projekt med en egen bild åsidosätter den."
     },
     "POMODORO": {
       "BREAK_DURATION": "Varaktighet för korta raster",
@@ -2562,6 +2679,7 @@
     },
     "SHORT_SYNTAX": {
       "HELP": "<p>Här kan du styra korta syntaxalternativ när du skapar en uppgift.</p>",
+      "IS_ENABLE_DEADLINE": "Aktivera kort syntax för deadline (!<deadlinetid>)",
       "IS_ENABLE_DUE": "Aktivera planerad kort syntax (@<planerad tid>)",
       "IS_ENABLE_PROJECT": "Enable project short syntax (+<Projektets namn>)",
       "IS_ENABLE_TAG": "Aktivera kort syntax för taggar (#<tagg>)",
@@ -2687,6 +2805,9 @@
     "DISABLE_FEATURE": "Inaktivera funktion",
     "DONATE": "Stöd oss",
     "DUPLICATE_PROJECT": "Duplicera",
+    "EML_EMPTY": "Det släppta e-postmeddelandet saknar avsändare eller ämne.",
+    "EML_PARSE_ERROR": "Det gick inte att läsa e-postfilen. Den kan vara skadad eller ha ett format som inte stöds.",
+    "EML_TOO_LARGE": "E-postfilen är för stor för att importeras.",
     "ENTER_FOCUS_MODE": "Gå till fokusläge",
     "FEATURE_DISABLED_SNACK": "\"{{featureName}}\" inaktiverad. Återaktivera i Appfunktionsinställningarna.",
     "GO_TO_TASK_LIST": "Gå till uppgiftslistan",
@@ -2848,6 +2969,7 @@
       "STEP_3": "Ge token ett namn (t.ex. ”Super Productivity”) och skapa den.",
       "STEP_4": "Kopiera token och klistra in den nedan.",
       "TITLE": "Anslut till Plainspace",
+      "TOKEN_HELP": "Skapa en API-token i Plainspace och klistra sedan in den nedan.",
       "TOKEN_LABEL": "API-token",
       "TOKEN_PLACEHOLDER": "pat_…"
     },
@@ -2864,11 +2986,14 @@
     },
     "LOGIN_REQUIRED": "En Plainspace API-token krävs för att dela ett projekt.",
     "NO_UNCLAIMED": "Det finns inga lediga uppgifter just nu.",
+    "OFFLINE": "Du är offline. En internetanslutning krävs för att ansluta till Plainspace.",
+    "OPEN_FAILED": "Det gick inte att öppna Plainspace-projektet — kontrollera anslutningen och försök igen.",
     "OPEN_IN_PLAINSPACE": "Öppna i Plainspace",
     "RECURRING": "Återkommande uppgift",
     "SHARE_DESCRIPTION": "Skapar ett delat Plainspace-space och länkar det till det här projektet så att du kan samarbeta med andra.",
     "SHARE_FAILED": "Det gick inte att dela projektet på Plainspace.",
     "SHARE_LABEL": "Samarbeta om projektet på Plainspace (beta)",
+    "SHARE_MENU": "Samarbeta på Plainspace (beta)",
     "SHARE_SUCCESS": "Projektet delades på Plainspace. Uppgifter som tilldelas dig importeras automatiskt.",
     "SPACE_PICKER": {
       "CREATE_NEW": "Skapa nytt space",
@@ -2884,6 +3009,7 @@
   },
   "PLUGINS": {
     "ACTION_TYPE_NOT_ALLOWED": "Åtgärdstyp '{{type}}' är inte tillåten",
+    "ALLOWED_HOSTS": "Nätverksåtkomst",
     "ALREADY_INITIALIZED": "Plugin är redan initialiserat",
     "AUTHORED_BY": "av {{author}}",
     "CHOOSE_PLUGIN_FILE": "Välj plugin-fil",

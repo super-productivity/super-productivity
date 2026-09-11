@@ -22,7 +22,19 @@ The smallest safe order is:
 6. remove only the conflict-review producers and UI that the deployment/persisted-data audit proves disposable;
 7. correct current sync documentation after behavior settles.
 
-**Timing constraint:** the conflict-review feature (962c5bbeb1, merged 2026-07-11) is on master but in no release tag, and releases ship every one to two weeks. The journal half of the producer freeze is already in place on master (`disableConflictJournal: true` at the production entry point in `RemoteOpsProcessingService`), so stable releases do not expand the persisted-data obligation. The disjoint-merge half of the original #9061 freeze was deliberately reverted by #9101 and MUST NOT be re-applied: with the merge disabled, concurrent edits to different fields of one entity resolve by whole-entity LWW and the earlier side's edit is silently and permanently lost on every client (#9095 — live in every release up to v18.14.0). The merge producer ships enabled; only the journal stays frozen for stable.
+> ## ⚠️ Release premise expired — re-derive before acting (2026-08-28)
+>
+> This plan was written while `962c5bbeb1` (PR #8874, conflict review) was
+> unreleased. It is now in **eight** stable tags — v18.15.0, v18.15.1, v18.16.0,
+> v18.17.0, v18.18.0, v18.19.0, v18.20.0, v18.20.1 (`git tag --contains`,
+> 2026-08-28). Every "not in a release" / "no stable tag contains it" statement
+> below is therefore **false**, including §1's timing constraint and §2's
+> conflict-journal verdict. Real users on eight shipped versions have written
+> journal rows. Task 1 must be redone against current tags before any
+> conflict-feature deletion; treat the rest of the document as unverified until
+> re-aligned.
+
+**Timing constraint (stale, see banner):** the conflict-review feature (962c5bbeb1, merged 2026-07-11) was unreleased when this was written, and releases ship every one to two weeks. The journal half of the producer freeze is already in place on master (`disableConflictJournal: true` at the production entry point in `RemoteOpsProcessingService`), so stable releases do not expand the persisted-data obligation. The disjoint-merge half of the original #9061 freeze was deliberately reverted by #9101 and MUST NOT be re-applied: with the merge disabled, concurrent edits to different fields of one entity resolve by whole-entity LWW and the earlier side's edit is silently and permanently lost on every client (#9095 — live in every release up to v18.14.0). The merge producer ships enabled; only the journal stays frozen for stable.
 
 Atomic browser startup and replacement of flag-and-poll maintenance exclusion remain worthwhile correctness projects, but they are not prerequisites for deleting the two partial SuperSync pipelines. Keeping them separate avoids turning a bounded simplification into a cross-tab/bootstrap and every-import-owner rewrite.
 
@@ -32,7 +44,7 @@ Atomic browser startup and replacement of flag-and-poll maintenance exclusion re
 | --------------------------------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Schema v3/v4, v2-to-v3 and v3-to-v4 barriers, IndexedDB version 10, and compatibility readers | **Keep**                                     | Removing them can reject stored operations, misresolve marked project deletion, or silently diverge. Their maintenance cost is tiny relative to data-loss risk.                                                                                                                                                                                                                                                                                                                                            |
 | Disjoint-merge planner/writer                                                                 | **Keep (rescoped 2026-07-17)**               | Removal re-introduces #9095: without the merge, concurrent edits to different fields of one entity resolve by whole-entity LWW and the earlier side's edit is silently lost on every client. The producer was unfrozen in #9101 and ships enabled. Keep both payload readers; preserve the separate schema-v4 project-delete-wins planner/classifier and historical losing-delete recovery.                                                                                                                |
-| Conflict journal writer and review UI/route/banner/badge                                      | **Conditional removal; high benefit**        | No stable tag contains the feature, but master edge artifacts, Android internal builds, and previews may contain device-local discarded values. Task 1 decides the supported-data obligation.                                                                                                                                                                                                                                                                                                              |
+| Conflict journal writer and review UI/route/banner/badge                                      | **Conditional removal — verdict stale**      | Written on the false premise that no stable tag contained the feature. Eight stable tags do (see banner), so device-local discarded values exist on real user installs, not just edge/internal builds. Re-derive the obligation in Task 1 before removing anything.                                                                                                                                                                                                                                        |
 | Conflict journal database/reader                                                              | **Keep until the data obligation expires**   | It may hold the only copy of discarded values. A temporary read/export path is cheaper than silently stranding supported data.                                                                                                                                                                                                                                                                                                                                                                             |
 | Flip-specific capture/replay handling                                                         | **Nothing to remove**                        | Flip dispatches an ordinary synced entity update. Remove UI references only, never generic update capture/replay.                                                                                                                                                                                                                                                                                                                                                                                          |
 | File-target state leak                                                                        | **Fix now; high value**                      | This is a contained correctness issue that can cause cross-target reads or writes. It is not counted as simplification.                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -107,6 +119,14 @@ If a task requires one of these, stop and write a separate behavior proposal wit
 ### Task 1: Audit deployed builds and persisted conflict data
 
 **Size:** Small audit; blocks conflict-feature deletion
+
+> A first pass of this audit was written on 2026-07-16 and is **void** — it assumed
+> `962c5bbeb1` was unreleased (see the banner at the top of this document). Redo it
+> from scratch, deriving the tag list with `git tag --contains 962c5bbeb1` rather
+> than copying any list from this file or recovering the old pass
+> (`git show 07511ab45c:docs/plans/2026-07-16-conflict-review-cohort-audit.md`).
+> Its one durable output, the `SUP_CONFLICT_JOURNAL_CLEARED_BEFORE` fail-safe,
+> survives below and in `conflict-journal.service.ts`.
 
 Record:
 

@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const Module = require('node:module');
 
@@ -17,12 +18,42 @@ let traySetTitleCalls = [];
 let traySetToolTipCalls = [];
 let ipcHandlers = new Map();
 let nextNativeImageIsEmpty = false;
+let templateImages = [];
 let beforeQuitHandler = () => {};
 let mockIsTrayShowCurrentTask = false;
 let mockIsTrayShowCurrentCountdown = false;
 
 const resetModule = () => {
   delete require.cache[indicatorModulePath];
+};
+
+// Width/height from the PNG IHDR chunk so tests see the real asset sizes;
+// paths that don't exist on disk (the '/icons/' fixtures) fall back to 16px.
+const readPngSize = (iconPath) => {
+  if (!fs.existsSync(iconPath)) {
+    return { width: 16, height: 16 };
+  }
+  const header = Buffer.alloc(24);
+  const fd = fs.openSync(iconPath, 'r');
+  fs.readSync(fd, header, 0, 24, 0);
+  fs.closeSync(fd);
+  return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
+};
+
+const createFakeNativeImage = (iconPath, size) => {
+  const image = {
+    iconPath,
+    kind: 'native-image',
+    isTemplate: false,
+    isEmpty: () => nextNativeImageIsEmpty,
+    getSize: () => size,
+    resize: ({ width, height }) => createFakeNativeImage(iconPath, { width, height }),
+    setTemplateImage: (value) => {
+      image.isTemplate = value;
+      templateImages.push(image);
+    },
+  };
+  return image;
 };
 
 const installMocks = () => {
@@ -72,12 +103,7 @@ const installMocks = () => {
         nativeImage: {
           createFromPath: (iconPath) => {
             createdFromPath.push(iconPath);
-            return {
-              iconPath,
-              kind: 'native-image',
-              isEmpty: () => nextNativeImageIsEmpty,
-              setTemplateImage: () => {},
-            };
+            return createFakeNativeImage(iconPath, readPngSize(iconPath));
           },
         },
       };
@@ -149,6 +175,7 @@ test.beforeEach(() => {
   traySetToolTipCalls = [];
   ipcHandlers = new Map();
   nextNativeImageIsEmpty = false;
+  templateImages = [];
   beforeQuitHandler = () => {};
   mockIsTrayShowCurrentTask = false;
   mockIsTrayShowCurrentCountdown = false;
@@ -290,6 +317,51 @@ test('non-Linux platforms keep the running progress animation', () => {
     traySetImageCalls.at(-1).iconPath,
     /\/icons\/indicator\/running-anim-l\/3\.png$/,
   );
+});
+
+// The static stopped/running icons are rendered at 24px so GNOME doesn't
+// upscale them (#8484), but the progress-animation frames are 16px. macOS draws
+// a template image at its native point size, so without normalizing the menu
+// bar icon shrinks (and the title text jumps) the moment tracking starts.
+test('macOS hands the tray 16pt template images regardless of source asset size', () => {
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: 'darwin',
+  });
+  const { initIndicator } = loadIndicatorModule();
+
+  initIndicator({
+    showApp: () => {},
+    quitApp: () => {},
+    ICONS_FOLDER: path.resolve(__dirname, 'assets/icons') + '/',
+    forceDarkTray: false,
+    app: { on: () => {} },
+  });
+
+  const currentTaskUpdated = ipcHandlers.get('CURRENT_TASK_UPDATED');
+  currentTaskUpdated(
+    {},
+    { id: 'T1', title: 'Task', timeSpent: 5 * 60000, timeEstimate: 25 * 60000 },
+    false,
+    0,
+    false,
+    0,
+    undefined,
+  );
+
+  const trayImages = [createdTrayArgs[0][0], ...traySetImageCalls];
+  // Sanity check: the fixture really covers both source sizes.
+  const sourceSizes = new Set(createdFromPath.map((p) => readPngSize(p).width));
+  assert.deepEqual(
+    [...sourceSizes].sort((a, b) => a - b),
+    [16, 24],
+  );
+
+  for (const image of trayImages) {
+    assert.equal(image.kind, 'native-image', image.iconPath);
+    assert.deepEqual(image.getSize(), { width: 16, height: 16 }, image.iconPath);
+    assert.equal(image.isTemplate, true, `not a template image: ${image.iconPath}`);
+  }
 });
 
 test('initIndicator falls back to icon path if NativeImage creation is empty', () => {

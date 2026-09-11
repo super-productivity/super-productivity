@@ -30,6 +30,21 @@ test.describe('Task detail', () => {
   const findDateInfo = (page: Page, infoPrefix: string): Locator =>
     page.locator('.edit-date-info').filter({ hasText: new RegExp(infoPrefix) });
 
+  const clearDateTimeInputs = async (page: Page): Promise<void> => {
+    const dateInput = page.getByRole('textbox', { name: 'Date' });
+    const timeInput = page.getByRole('combobox', { name: 'Time' });
+    // Let Angular's deferred initial ngModel writes settle before editing.
+    await expect(dateInput).toHaveValue(/\S/);
+    await expect(timeInput).toHaveValue(/\S/);
+    await dateInput.fill('');
+    // Blur to trigger form update (ngModelOptions: updateOn: 'blur')
+    await dateInput.press('Tab');
+    await timeInput.fill('');
+    await timeInput.press('Tab');
+    await expect(dateInput).toHaveValue('');
+    await expect(timeInput).toHaveValue('');
+  };
+
   test('should update created with a time change', async ({ page, workViewPage }) => {
     await addAndOpenIncompleteTask(workViewPage, page);
 
@@ -87,14 +102,7 @@ test.describe('Task detail', () => {
     await addAndOpenIncompleteTask(workViewPage, page);
 
     await findDateInfo(page, 'Created').click();
-
-    const dateInput = page.getByRole('textbox', { name: 'Date' });
-    const timeInput = page.getByRole('combobox', { name: 'Time' });
-    await dateInput.fill('');
-    // Blur to trigger form update (ngModelOptions: updateOn: 'blur')
-    await dateInput.press('Tab');
-    await timeInput.fill('');
-    await timeInput.press('Tab');
+    await clearDateTimeInputs(page);
 
     await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
@@ -106,14 +114,7 @@ test.describe('Task detail', () => {
     await addAndOpenCompleteTask(workViewPage, page);
 
     await findDateInfo(page, 'Completed').click();
-
-    const dateInput = page.getByRole('textbox', { name: 'Date' });
-    const timeInput = page.getByRole('combobox', { name: 'Time' });
-    await dateInput.fill('');
-    // Blur to trigger form update (ngModelOptions: updateOn: 'blur')
-    await dateInput.press('Tab');
-    await timeInput.fill('');
-    await timeInput.press('Tab');
+    await clearDateTimeInputs(page);
 
     await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
   });

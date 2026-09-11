@@ -81,7 +81,10 @@ describe('PluginOAuthBridgeService', () => {
         'restoreTokens',
         'getValidToken',
       ],
-      { tokenInvalidated$: new Subject<string>() },
+      {
+        tokenInvalidated$: new Subject<string>(),
+        tokensRefreshed$: new Subject<string>(),
+      },
     );
 
     TestBed.configureTestingModule({
@@ -145,6 +148,38 @@ describe('PluginOAuthBridgeService', () => {
         redirectUri: webCallback,
       }),
     );
+  });
+
+  // The token-store writes triggered by tokenInvalidated$/tokensRefreshed$ are
+  // fire-and-forget, so poll instead of awaiting a promise the bridge does not expose.
+  const waitForStoredTokens = async (expected: string | null): Promise<string | null> => {
+    let stored: string | null = null;
+    for (let i = 0; i < 50; i++) {
+      stored = await loadOAuthTokens('test-plugin__oauth');
+      if (stored === expected) {
+        return stored;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    return stored;
+  };
+
+  it('persists the rotated access token after a successful refresh', async () => {
+    await saveOAuthTokens('test-plugin__oauth', 'stale-tokens');
+    oauthService.serializeTokens.and.returnValue('refreshed-tokens');
+
+    oauthService.tokensRefreshed$.next('test-plugin__oauth');
+
+    expect(await waitForStoredTokens('refreshed-tokens')).toBe('refreshed-tokens');
+    await deleteOAuthTokens('test-plugin__oauth');
+  });
+
+  it('deletes persisted tokens once the grant is invalidated', async () => {
+    await saveOAuthTokens('test-plugin__oauth', 'stale-tokens');
+
+    oauthService.tokenInvalidated$.next('test-plugin__oauth');
+
+    expect(await waitForStoredTokens(null)).toBeNull();
   });
 
   it('persists oauth tokens in the local token store after a successful flow', async () => {

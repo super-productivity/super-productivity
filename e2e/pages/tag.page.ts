@@ -1,5 +1,6 @@
 import { type Locator, type Page } from '@playwright/test';
 import { BasePage } from './base.page';
+import { waitForMenuSettled } from '../utils/waits';
 
 export class TagPage extends BasePage {
   readonly tagsGroup: Locator;
@@ -18,9 +19,9 @@ export class TagPage extends BasePage {
   }
 
   /**
-   * Creates a new tag via the sidebar
+   * Opens the create tag dialog via the sidebar and returns its name input.
    */
-  async createTag(tagName: string): Promise<void> {
+  async openCreateTagDialog(): Promise<Locator> {
     // Find the Tags group header button
     const tagsGroupBtn = this.tagsGroup
       .locator('.g-multi-btn-wrapper nav-item button')
@@ -57,6 +58,15 @@ export class TagPage extends BasePage {
     // Add a small delay for Angular form initialization
     await this.page.waitForTimeout(500);
 
+    return tagNameInput;
+  }
+
+  /**
+   * Creates a new tag via the sidebar
+   */
+  async createTag(tagName: string): Promise<void> {
+    const tagNameInput = await this.openCreateTagDialog();
+
     await tagNameInput.fill(tagName);
 
     // Submit the form - click the Save button
@@ -83,6 +93,7 @@ export class TagPage extends BasePage {
       hasText: 'Toggle Tags',
     });
     await toggleTagsBtn.waitFor({ state: 'visible', timeout: 5000 });
+    await waitForMenuSettled(this.page);
     await toggleTagsBtn.click();
 
     // Wait for tag submenu to appear by waiting for any submenu button
@@ -90,6 +101,7 @@ export class TagPage extends BasePage {
       .locator('.mat-mdc-menu-panel')
       .nth(1)
       .waitFor({ state: 'visible', timeout: 3000 });
+    await waitForMenuSettled(this.page);
 
     // Find and click the tag in the submenu
     const tagOption = this.page.locator('.mat-mdc-menu-content button', {
@@ -147,16 +159,15 @@ export class TagPage extends BasePage {
       hasText: 'Toggle Tags',
     });
     await toggleTagsBtn.waitFor({ state: 'visible', timeout: 5000 });
+    await waitForMenuSettled(this.page);
     await toggleTagsBtn.click();
-
-    // Wait for tag submenu
-    await this.page.waitForTimeout(300);
 
     // Click the tag (which will uncheck it since it's assigned)
     const tagOption = this.page.locator('.mat-mdc-menu-content button', {
       hasText: tagName,
     });
     await tagOption.waitFor({ state: 'visible', timeout: 3000 });
+    await waitForMenuSettled(this.page);
     await tagOption.click();
 
     // Wait for all overlays to close to ensure clean state for next operation

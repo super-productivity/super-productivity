@@ -2,11 +2,21 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  EMOJI_PATTERN,
   buildAppStoreReleaseNotes,
+  stripEmoji,
   stripOtherPlatformLines,
   toPlainText,
   truncateToMaxChars,
 } = require('./prepare-appstore-release-notes');
+
+// Any emoji left in the text is a failed release lane, so assert against the
+// very pattern the code strips with: a hand-written subset here would silently
+// stop covering a member that a later edit drops from EMOJI_PATTERN. Rebuilt
+// without the /g flag, since a global regex reused across `test()` calls carries
+// lastIndex between them.
+const assertNoEmoji = (text) =>
+  assert.doesNotMatch(text, new RegExp(EMOJI_PATTERN.source, 'u'));
 
 test('strips bullets that name a non-Apple platform', () => {
   const markdown = [
@@ -131,6 +141,88 @@ test('end-to-end: produces clean plain-text What’s New without platform names'
   // Apple-relevant content is kept and bulletized (scope prefix retained).
   assert.match(text, /• focus-mode: surface session-done/);
   assert.match(text, /• tasks: preserve manual order within a tag/);
+});
+
+test('strips the emoji App Store Connect rejected for 18.20.0', () => {
+  // Verbatim shape of the bullet that failed both Apple release lanes: the
+  // bug-report issue template prefixes titles with "🚨 " and the squash merge
+  // carried it into the commit subject.
+  const markdown = [
+    '### Other Changes',
+    '',
+    '- 🚨 Cannot connect to CalDAV Todo issue provider (#9530)',
+  ].join('\n');
+
+  const text = buildAppStoreReleaseNotes(markdown);
+
+  assertNoEmoji(text);
+  // The note itself survives, with the gap the emoji left closed up.
+  assert.match(text, /• Cannot connect to CalDAV Todo issue provider \(#9530\)/);
+});
+
+test('strips emoji anywhere in the notes, keeping non-emoji symbols', () => {
+  const markdown = [
+    '🎉 A big release!',
+    '',
+    '### ✨ Features',
+    '',
+    '- Add focus mode 1️⃣ with a 👨‍👩‍👧 group view — see the guide → settings',
+    '- Fix the 🇩🇪 locale ✓',
+  ].join('\n');
+
+  const text = stripEmoji(markdown);
+
+  assertNoEmoji(text);
+  // Punctuation and arrows are not pictographs and must survive untouched.
+  assert.match(text, /A big release!/);
+  assert.match(text, /### Features/);
+  assert.match(text, /Add focus mode 1 with a group view — see the guide → settings/);
+  assert.match(text, /Fix the locale ✓/);
+});
+
+// Each of these is a separate member of EMOJI_PATTERN whose residue is invisible
+// in a diff, so without a case per member a later edit could drop one and leave
+// the suite green while shipping a character Apple rejects.
+test('strips the invisible emoji parts, leaving no residue', () => {
+  const cases = [
+    // Skin-tone modifier (\p{Emoji_Modifier}): the base is a pictograph, the
+    // modifier is not, so dropping either half leaves a stray character.
+    ['- Wave 👋🏽 goodbye to stale caches', /• Wave goodbye to stale caches/],
+    // Text-presentation selector (U+FE0E) trailing a dingbat.
+    ['- Mark done ✔︎ faster', /• Mark done faster/],
+    // Tag sequence (U+E0020-U+E007F): six invisible tag chars after the flag.
+    ['- Fix 🏴󠁧󠁢󠁥󠁮󠁧󠁿 English sorting', /• Fix English sorting/],
+  ];
+
+  for (const [markdown, expected] of cases) {
+    const text = buildAppStoreReleaseNotes(markdown);
+    assertNoEmoji(text);
+    assert.match(text, expected);
+    // Nothing invisible survives either: the line must be plain ASCII prose.
+    assert.doesNotMatch(text, /[^\x20-\x7E\n•]/);
+  }
+});
+
+test('drops a heading whose only bullet was pure emoji decoration', () => {
+  const markdown = ['### Features', '', '- 🎉', '', '### Fixes', '', '- Fix sync'].join(
+    '\n',
+  );
+
+  const text = buildAppStoreReleaseNotes(markdown);
+
+  // No bare "•" bullet and no heading left hanging over nothing.
+  assert.doesNotMatch(text, /^\s*[•\-]\s*$/m);
+  assert.doesNotMatch(text, /Features/);
+  assert.match(text, /Fixes/);
+  assert.match(text, /• Fix sync/);
+});
+
+test('leaves emoji-free notes byte-for-byte unchanged', () => {
+  const markdown = ['### Fixes', '', '- **tasks:** keep the list anchored (#8533)'].join(
+    '\n',
+  );
+
+  assert.equal(stripEmoji(markdown), markdown);
 });
 
 test('toPlainText converts markdown bullets/links/emphasis to plain text', () => {

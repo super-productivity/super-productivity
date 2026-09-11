@@ -21,8 +21,9 @@ export class PluginOAuthRedirectHandler implements OnDestroy {
     if (IS_ELECTRON) {
       this._setupElectronListener();
     } else if (!IS_NATIVE_PLATFORM) {
-      // Native mobile OAuth redirects are handled by OAuthCallbackHandlerService
-      // via Capacitor's appUrlOpen listener, not by this handler.
+      // Native mobile OAuth redirects arrive on the single Capacitor
+      // appUrlOpen listener in main.ts, which routes them to
+      // OAuthCallbackHandlerService, not to this handler.
       this._setupWebListener();
     }
   }

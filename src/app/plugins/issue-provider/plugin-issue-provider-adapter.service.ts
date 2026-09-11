@@ -25,6 +25,10 @@ import { T } from '../../t.const';
 import { PluginLog } from '../../core/log';
 import { withPluginOAuthTokenKey } from '../oauth/plugin-oauth-token-key.util';
 
+// Same shape as short-syntax-shared.reducer.ts: Task's fields are readonly,
+// so a partial that fields can be deleted from needs the modifier stripped.
+type MutableTaskChanges = { -readonly [K in keyof Task]?: Task[K] };
+
 @Injectable({ providedIn: 'root' })
 export class PluginIssueProviderAdapterService implements IssueServiceInterface {
   private _registry = inject(PluginIssueProviderRegistryService);
@@ -61,7 +65,10 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
         `[PluginIssueAdapter] testConnection failed for ${pluginCfg.issueProviderKey}:`,
         e,
       );
-      return false;
+      // Rethrow rather than collapsing to `false`: the only caller is the provider
+      // dialog's Test connection button, and swallowing the reason left every
+      // plugin provider with nothing to show but "Connection failed" (#9635).
+      throw e;
     }
   }
 
@@ -227,11 +234,30 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       if (isUpdated) {
         // Compute sync values once and pass through to avoid redundant calls
         const issueLastSyncedValues = this._extractSyncValues(issue, resolved.provider);
-        const addTaskData = this._getAddTaskDataForProvider(
-          issue,
-          resolved.provider,
-          issueLastSyncedValues,
-        );
+
+        // _buildBaseIssueTask emits content fields — title, isDone, and a due
+        // date when the issue carries one — straight from the raw issue. Two
+        // of them must not survive into a refresh:
+        //
+        // A field mapping declares OWNERSHIP of its task field. Where one
+        // exists, _applyFieldMappingPull is the only writer, because it alone
+        // honours the per-field sync direction and "the remote changed this
+        // since the last sync". Letting base through underneath it is what
+        // overwrote a field the user had set to `off`/`pushOnly` — and with the
+        // RAW value, skipping the mapping's toTaskValue, so a GitHub title also
+        // lost the `#123 ` prefix it had before. Where NO mapping exists there
+        // is no direction to violate, so base stays the fallback and the task
+        // keeps following the issue as it always has.
+        //
+        // Due dates are dropped either way: they are set on task creation and
+        // never re-pulled, so a refresh cannot reschedule what the user has
+        // planned. Same rule as BaseIssueProviderService.getFreshDataForIssueTask.
+        const baseTaskData: MutableTaskChanges = this._buildBaseIssueTask(issue);
+        delete baseTaskData.dueDay;
+        delete baseTaskData.dueWithTime;
+        for (const mapping of resolved.provider.definition.fieldMappings ?? []) {
+          delete baseTaskData[mapping.taskField];
+        }
 
         // Apply field mappings to pull changes from issue to task
         const fieldChanges = this._applyFieldMappingPull(
@@ -244,7 +270,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
 
         return {
           taskChanges: {
-            ...addTaskData,
+            ...baseTaskData,
             ...fieldChanges,
             issueWasUpdated: true,
             issueLastSyncedValues,
@@ -400,6 +426,12 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     return result;
   }
 
+  /**
+   * Maps issue fields onto task fields for the IMPORT path only, where there is
+   * no local content to protect and every mapping applies. Refreshing an
+   * existing task goes through `_applyFieldMappingPull` instead, which honours
+   * the per-field sync direction.
+   */
   private _extractTaskFieldsFromIssueWithSyncValues(
     issue: PluginIssue,
     provider: RegisteredPluginIssueProvider,
@@ -478,26 +510,49 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     return ['closed', 'done', 'completed', 'resolved'].includes(state);
   }
 
-  private _handleRemoteDeletion(task: Task): void {
-    const hasTimeTracking = task.timeSpent > 0;
-    if (hasTimeTracking) {
-      this._snackService.open({
-        type: 'WARNING',
-        msg: T.F.ISSUE.S.REMOTE_ISSUE_DELETED_WITH_TIME,
-        translateParams: { taskTitle: task.title },
-        ico: 'delete_forever',
-        actionStr: T.G.DELETE,
-        actionFn: () => this._taskService.removeMultipleTasks([task.id]),
-      });
-    } else {
-      this._taskService.removeMultipleTasks([task.id]);
-      this._snackService.open({
-        type: 'CUSTOM',
-        msg: T.F.ISSUE.S.REMOTE_ISSUE_DELETED,
-        translateParams: { taskTitle: task.title },
-        ico: 'delete_forever',
-      });
-    }
+  private _handleRemoteDeletion(requestedTask: Task): void {
+    // Re-read synchronously from NgRx so a delayed response cannot delete or
+    // warn about a task that was relinked while the provider request was in flight.
+    this._taskService.getByIdOnce$(requestedTask.id).subscribe((currentTask) => {
+      if (
+        !currentTask ||
+        currentTask.issueId !== requestedTask.issueId ||
+        currentTask.issueProviderId !== requestedTask.issueProviderId
+      ) {
+        return;
+      }
+
+      const hasTimeTracking = currentTask.timeSpent > 0;
+      if (hasTimeTracking) {
+        this._snackService.open({
+          type: 'WARNING',
+          msg: T.F.ISSUE.S.REMOTE_ISSUE_DELETED_WITH_TIME,
+          translateParams: { taskTitle: currentTask.title },
+          ico: 'delete_forever',
+          actionStr: T.G.DELETE,
+          actionFn: () => this._removeIfIssueStillMatches(currentTask),
+        });
+      } else {
+        this._taskService.removeMultipleTasks([currentTask.id]);
+        this._snackService.open({
+          type: 'CUSTOM',
+          msg: T.F.ISSUE.S.REMOTE_ISSUE_DELETED,
+          translateParams: { taskTitle: currentTask.title },
+          ico: 'delete_forever',
+        });
+      }
+    });
+  }
+
+  private _removeIfIssueStillMatches(requestedTask: Task): void {
+    this._taskService.getByIdOnce$(requestedTask.id).subscribe((currentTask) => {
+      if (
+        currentTask?.issueId === requestedTask.issueId &&
+        currentTask.issueProviderId === requestedTask.issueProviderId
+      ) {
+        this._taskService.removeMultipleTasks([currentTask.id]);
+      }
+    });
   }
 
   private _mapLabelsToTagIds(labels: string[], shouldCreate: boolean): string[] {

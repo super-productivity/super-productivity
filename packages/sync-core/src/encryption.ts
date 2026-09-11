@@ -6,6 +6,8 @@
  *   encryption/argon2.ts        — Argon2id params, deriveKeyFromPassword, DerivedKey
  *   encryption/legacy.ts        — backward-compat PBKDF2 decryption + warning handler
  *   encryption/session-cache.ts — session-level key caches
+ *   encryption/transport-shape.ts — dependency-free ciphertext-shape classifier
+ *                                   (exported directly via the package barrel)
  *   encryption.ts (this file)   — public API: encrypt/decrypt/encryptBatch/decryptBatch
  *
  * ## Wire format (public contract — do not change without a version-byte migration)
@@ -16,6 +18,11 @@
  * Ciphertext is base64-encoded for transport. `detectFormat()` discriminates
  * by length: < 28 bytes is invalid, < 44 bytes is unambiguously legacy,
  * >= 44 bytes is treated as Argon2id with a legacy fallback on auth failure.
+ * The Android background sync reads the Argon2id format independently
+ * (android `crypto/OpPayloadDecryptor.kt`) — changes here must be mirrored
+ * there and its fixtures regenerated (see the note in encryption/argon2.ts).
+ * CI verifies the round-trip live: tools/generate-android-crypto-fixtures.mjs
+ * feeds fresh encrypt() output to the Kotlin tests on every Android CI run.
  *
  * ## Salt and IV semantics
  *
@@ -60,6 +67,7 @@ import {
   setDecryptCache,
 } from './encryption/session-cache';
 import { decryptLegacy } from './encryption/legacy';
+import { toSyncLogError } from './sync-logger';
 
 // Re-export the test-and-host-facing pieces from submodules.
 export {
@@ -293,5 +301,125 @@ export const decryptBatch = async (
   for (const { index, result } of decryptedItems) {
     results[index] = result;
   }
+  return results;
+};
+
+export type DecryptSettledItem =
+  | { ok: true; plaintext: string }
+  | { ok: false; errorName: string };
+
+/**
+ * Per-item settled variant of `decryptBatch` for failure diagnosis. Individual
+ * items never reject the whole call: each settles as plaintext or a sanitized
+ * error NAME (`toSyncLogError` — never the error object; crypto/JSON messages
+ * can embed data). Names need case-by-case reading: `OperationError` is the
+ * WebCrypto AES-GCM auth-failure signature (wrong key or corrupt ciphertext),
+ * but the @noble no-WebCrypto fallback reports the same auth failure as a
+ * bare `Error`; `InvalidCiphertextError` means too-short/mangled data;
+ * `WebCryptoNotAvailableError` is an environment failure.
+ *
+ * Shares `decryptBatch`'s batch-local key map, so a batch spanning more unique
+ * salts than the session cache holds cannot thrash Argon2id re-derivations
+ * (the FIFO cache caps at SESSION_DECRYPT_CACHE_MAX_SIZE; per-item `decrypt()`
+ * in a loop would re-derive per salt beyond it). Format handling mirrors
+ * `decryptBatch`, including the legacy fallback for >= 44-byte ciphertexts;
+ * when both paths fail, the PRIMARY (Argon2) error name is reported.
+ */
+export const decryptBatchSettled = async (
+  dataItems: string[],
+  password: string,
+): Promise<DecryptSettledItem[]> => {
+  const results: DecryptSettledItem[] = new Array(dataItems.length);
+
+  interface SettledArgonItem {
+    index: number;
+    saltBase64: string;
+    buffer: ArrayBuffer;
+  }
+  const argonItems: SettledArgonItem[] = [];
+  const legacyItems: { index: number; data: string }[] = [];
+  const uniqueSalts = new Map<string, Uint8Array>();
+
+  for (let i = 0; i < dataItems.length; i++) {
+    try {
+      const buffer = decodeBase64(dataItems[i]);
+      const format = detectFormat(buffer);
+      if (format === 'invalid') {
+        results[i] = { ok: false, errorName: 'InvalidCiphertextError' };
+        continue;
+      }
+      if (format === 'legacy') {
+        legacyItems.push({ index: i, data: dataItems[i] });
+        continue;
+      }
+      const salt = new Uint8Array(buffer, 0, SALT_LENGTH);
+      const saltBase64 = encodeBase64(salt);
+      argonItems.push({ index: i, saltBase64, buffer });
+      if (!uniqueSalts.has(saltBase64)) {
+        uniqueSalts.set(saltBase64, salt);
+      }
+    } catch (e) {
+      results[i] = { ok: false, errorName: toSyncLogError(e).name };
+    }
+  }
+
+  // Serial derivation into a batch-local map — same OOM and cache-eviction
+  // reasoning as decryptBatch Phase 2.
+  const passwordHash = hashPasswordForCache(password);
+  const batchKeys = new Map<string, DerivedKey>();
+  const saltErrorNames = new Map<string, string>();
+  for (const [saltBase64, salt] of uniqueSalts) {
+    const cacheKey = `${passwordHash}:${saltBase64}`;
+    let key = getDecryptCache(cacheKey);
+    if (!key) {
+      try {
+        key = await deriveKeyFromPassword(password, salt);
+        setDecryptCache(cacheKey, key);
+      } catch (e) {
+        saltErrorNames.set(saltBase64, toSyncLogError(e).name);
+        continue;
+      }
+    }
+    batchKeys.set(saltBase64, key);
+  }
+
+  await Promise.all([
+    ...argonItems.map(async (item) => {
+      const key = batchKeys.get(item.saltBase64);
+      if (!key) {
+        results[item.index] = {
+          ok: false,
+          errorName: saltErrorNames.get(item.saltBase64) ?? 'KeyDerivationError',
+        };
+        return;
+      }
+      try {
+        results[item.index] = {
+          ok: true,
+          plaintext: await decryptWithDerivedKey(item.buffer, key),
+        };
+      } catch (e) {
+        try {
+          results[item.index] = {
+            ok: true,
+            plaintext: await decryptLegacy(dataItems[item.index], password),
+          };
+        } catch {
+          results[item.index] = { ok: false, errorName: toSyncLogError(e).name };
+        }
+      }
+    }),
+    ...legacyItems.map(async (item) => {
+      try {
+        results[item.index] = {
+          ok: true,
+          plaintext: await decryptLegacy(item.data, password),
+        };
+      } catch (e) {
+        results[item.index] = { ok: false, errorName: toSyncLogError(e).name };
+      }
+    }),
+  ]);
+
   return results;
 };

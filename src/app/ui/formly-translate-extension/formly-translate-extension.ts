@@ -2,6 +2,7 @@ import { ConfigOption, FormlyFieldConfig } from '@ngx-formly/core';
 import { TranslateService } from '@ngx-translate/core';
 import { map } from 'rxjs/operators';
 import { T } from '../../t.const';
+import { msToString } from '../duration/ms-to-string.pipe';
 
 /* eslint-disable @typescript-eslint/naming-convention */
 
@@ -57,6 +58,18 @@ export class TranslateExtension {
   }
 }
 
+/**
+ * `min`/`max` on a `duration` field are milliseconds, so the raw number reads as
+ * gibberish in the error ("Must not be smaller than 60000"). Render it the same
+ * way the field itself does.
+ */
+const boundVal = (field: FormlyFieldConfig, key: 'min' | 'max'): unknown => {
+  const val = field.templateOptions ? field.templateOptions[key] : null;
+  return field.type === 'duration' && typeof val === 'number'
+    ? msToString(val, true, true)
+    : (val ?? null);
+};
+
 export const registerTranslateExtension = (
   translate: TranslateService,
 ): ConfigOption => ({
@@ -85,16 +98,12 @@ export const registerTranslateExtension = (
     {
       name: 'min',
       message: (err, field) =>
-        translate.stream(T.V.E_MIN, {
-          val: field.templateOptions ? field.templateOptions.min : null,
-        }),
+        translate.stream(T.V.E_MIN, { val: boundVal(field, 'min') }),
     },
     {
       name: 'max',
       message: (err, field) =>
-        translate.stream(T.V.E_MAX, {
-          val: field.templateOptions ? field.templateOptions.max : null,
-        }),
+        translate.stream(T.V.E_MAX, { val: boundVal(field, 'max') }),
     },
   ],
 });

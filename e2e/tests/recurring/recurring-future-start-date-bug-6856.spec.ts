@@ -1,4 +1,9 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import {
+  openRecurDialog,
+  openRecurScheduleDialog,
+  saveRecurDialog,
+} from '../../utils/recurring-task-helpers';
 
 /**
  * Bug: https://github.com/super-productivity/super-productivity/issues/6856
@@ -34,26 +39,9 @@ test.describe('Recurring Task - Future Start Date (#6856)', () => {
     await expect(detailBtn).toBeVisible({ timeout: 5000 });
     await detailBtn.click();
 
-    const recurItem = page
-      .locator('task-detail-item')
-      .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
-    await expect(recurItem).toBeVisible({ timeout: 5000 });
-    await recurItem.click();
-
     // 3. Wait for the repeat dialog and set a future start date via calendar
-    const repeatDialog = page.locator('mat-dialog-container').first();
-    await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
-
-    // Open the schedule dialog
-    const scheduleBtn = repeatDialog.locator('.planned-start-date-btn');
-    await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
-    await scheduleBtn.click();
-
-    // Wait for the schedule dialog to appear
-    const scheduleDialog = page
-      .locator('mat-dialog-container')
-      .filter({ has: page.locator('datetime-picker') });
-    await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
+    await openRecurDialog(page);
+    const scheduleDialog = await openRecurScheduleDialog(page);
 
     const calendar = scheduleDialog.locator('mat-calendar');
     await expect(calendar).toBeVisible({ timeout: 5000 });
@@ -77,10 +65,7 @@ test.describe('Recurring Task - Future Start Date (#6856)', () => {
     await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
 
     // Save the repeat config — wait for the button to be enabled first
-    const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
-    await expect(saveBtn).toBeEnabled({ timeout: 5000 });
-    await saveBtn.click();
-    await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
+    await saveRecurDialog(page);
 
     // 4. Assert in-session first: the task should disappear from Today as soon
     // as the side-effect actions (updateTask + planTaskForDay) settle. This is

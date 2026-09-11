@@ -23,6 +23,7 @@ import {
   DEFAULT_PROJECT_COLOR,
   DEFAULT_TAG_COLOR,
 } from '../../work-context/work-context.const';
+import { ShortSyntaxConfig } from '../../config/global-config.model';
 
 @Component({
   template: `<add-task-bar></add-task-bar>`,
@@ -36,6 +37,7 @@ describe('AddTaskBarComponent Mentions Integration', () => {
   let fixture: ComponentFixture<TestHostComponent>;
   let tagsSubject: BehaviorSubject<any>;
   let miscSubject: BehaviorSubject<any>;
+  let shortSyntaxSubject: BehaviorSubject<ShortSyntaxConfig>;
 
   const validTags: Tag[] = [
     { id: '1', title: 'UX', color: '#ff0000', theme: { primary: '#ff0000' } } as Tag,
@@ -77,6 +79,12 @@ describe('AddTaskBarComponent Mentions Integration', () => {
 
   beforeEach(async () => {
     miscSubject = new BehaviorSubject({ defaultProjectId: null });
+    shortSyntaxSubject = new BehaviorSubject<ShortSyntaxConfig>({
+      isEnableTag: true,
+      isEnableDue: true,
+      isEnableDeadline: true,
+      isEnableProject: true,
+    });
     const taskServiceSpy = jasmine.createSpyObj('TaskService', [
       'add',
       'getByIdOnce$',
@@ -105,11 +113,7 @@ describe('AddTaskBarComponent Mentions Integration', () => {
       tagsNoMyDayAndNoListInTreeOrder: signal(validTags),
     });
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
-      shortSyntax$: of({
-        isEnableTag: true,
-        isEnableDue: true,
-        isEnableProject: true,
-      }),
+      shortSyntax$: shortSyntaxSubject,
       localization: () => ({ timeLocale: DEFAULT_LOCALE }),
       misc$: miscSubject,
       tasks$: new BehaviorSubject({ defaultProjectId: null }),
@@ -297,6 +301,20 @@ describe('AddTaskBarComponent Mentions Integration', () => {
         expect(triggerChars).toContain('#');
         expect(triggerChars).toContain('+');
 
+        done();
+      });
+    });
+
+    it('should omit deadline mentions when deadline syntax is disabled', (done) => {
+      shortSyntaxSubject.next({
+        ...shortSyntaxSubject.value,
+        isEnableDeadline: false,
+      });
+
+      component.mentionCfg$.subscribe((config) => {
+        const triggerChars = config.mentions!.map((mention) => mention.triggerChar);
+        expect(triggerChars).not.toContain('!');
+        expect(triggerChars).toContain('@');
         done();
       });
     });

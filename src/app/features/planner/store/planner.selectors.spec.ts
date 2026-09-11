@@ -430,23 +430,22 @@ describe('Planner Selectors - selectPlannerDays', () => {
     expect(result[0].progressPercentage).toBeUndefined();
   });
 
-  it('should include additional days from planner state not in dayDates', () => {
-    const tomorrow = getDbDateStr(new Date(Date.now() + 86400000));
-    const task = createMockTask({ id: 't1' });
+  it('should not expand the loaded range for a far-future planner day', () => {
+    const farFutureDay = '2099-12-31';
+    const task = createMockTask({ id: 'far-future-task' });
     const plannerState: PlannerState = {
       ...emptyPlannerState,
-      days: { [tomorrow]: ['t1'] },
+      days: { [farFutureDay]: ['far-future-task'] },
     };
 
-    const selector = createPlannerDaysSelector([today]);
+    const selector = createPlannerDaysSelector(
+      ['2026-07-25', '2026-07-26'],
+      '2026-07-25',
+    );
     const tasks = createTasksMapFromTasksArray([task]);
     const result = selector.projector(tasks, plannerState, defaultScheduleConfig, 0);
 
-    // Should include both today (from dayDates) and tomorrow (from planner state)
-    expect(result.length).toBe(2);
-    const dayDates = result.map((d) => d.dayDate);
-    expect(dayDates).toContain(today);
-    expect(dayDates).toContain(tomorrow);
+    expect(result.map((day) => day.dayDate)).toEqual(['2026-07-25', '2026-07-26']);
   });
 
   it('should filter out deleted tasks from planner days', () => {
@@ -642,6 +641,33 @@ describe('Planner Selectors - selectPlannerDays', () => {
 
     // timeEstimate = task (3600000) + timed event (7200000) = 10800000 ms = 3 hours
     expect(result[0].timeEstimate).toBe(10800000);
+  });
+
+  it('should not count tracked time without an estimate as planned workload', () => {
+    const thirtyMinutes = 30 * 60 * 1000;
+    const task = createMockTask({
+      id: 'tracked-without-estimate',
+      timeSpent: thirtyMinutes,
+      timeSpentOnDay: { [today]: thirtyMinutes },
+      timeEstimate: 0,
+    });
+    const selector = fromSelectors.selectPlannerDays(
+      [today],
+      [],
+      [task.id],
+      [],
+      [],
+      today,
+    );
+
+    const result = selector.projector(
+      createTasksMapFromTasksArray([task]),
+      emptyPlannerState,
+      defaultScheduleConfig,
+      0,
+    );
+
+    expect(result[0].timeEstimate).toBe(0);
   });
 });
 

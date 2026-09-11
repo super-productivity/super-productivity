@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 import { fakeAsync, tick } from '@angular/core/testing';
 import { IDBPDatabase, openDB } from 'idb';
 import { IndexedDbOpLogAdapter } from './indexed-db-op-log-adapter';
+import { DbKey } from './op-log-db-adapter';
 import { OP_LOG_DB_SCHEMA } from './op-log-db-schema';
 import { STORE_NAMES, OPS_INDEXES, SINGLETON_KEY } from './db-keys.const';
 import { runDbUpgrade } from './db-upgrade';
@@ -255,13 +256,34 @@ describe('IndexedDbOpLogAdapter', () => {
     await adapter.add(STORE_NAMES.OPS, makeOpEntry('a1', 'remote', 'applied'));
     await adapter.add(STORE_NAMES.OPS, makeOpEntry('p2', 'remote', 'pending'));
 
-    // Exact compound-key match expressed as a degenerate [k, k] range.
     const pending = await adapter.getAllFromIndex<{ op: { id: string } }>(
       STORE_NAMES.OPS,
       OPS_INDEXES.BY_SOURCE_AND_STATUS,
-      { lower: ['remote', 'pending'], upper: ['remote', 'pending'] },
+      ['remote', 'pending'],
     );
     expect(pending.map((r) => r.op.id).sort()).toEqual(['p1', 'p2']);
+  });
+
+  it('rejects a non-positive iterate limit (parity with SQLite)', async () => {
+    await expectAsync(
+      adapter.iterate(STORE_NAMES.OPS, { limit: 0, mode: 'readonly' }, () => 'stop'),
+    ).toBeRejectedWithError(/limit must be a positive integer/);
+  });
+
+  it('iterate honors `limit` (visits at most N entries)', async () => {
+    for (const id of ['a', 'b', 'c', 'd']) {
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry(id, 'local'));
+    }
+    const seen: DbKey[] = [];
+    await adapter.iterate(
+      STORE_NAMES.OPS,
+      { direction: 'prev', limit: 2, mode: 'readonly' },
+      (_v, key) => {
+        seen.push(key);
+        return 'continue';
+      },
+    );
+    expect(seen).toEqual([4, 3]);
   });
 
   it('delete() and clear() remove entries', async () => {

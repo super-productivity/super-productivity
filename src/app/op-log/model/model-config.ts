@@ -42,6 +42,7 @@ import {
   PluginUserDataState,
 } from '../../plugins/plugin-persistence.model';
 import { menuTreeInitialState } from '../../features/menu-tree/store/menu-tree.reducer';
+import { Log } from '../../core/log';
 
 export const CROSS_MODEL_VERSION = 4.5 as const;
 
@@ -181,4 +182,35 @@ export const getDefaultMainModelData = (): Partial<AppDataComplete> => {
     }
   }
   return result;
+};
+
+/**
+ * Fills in every model slice the given data does not carry, using the model's
+ * default state.
+ *
+ * A legacy `pf` database only holds the model keys that existed when it was last
+ * written, so data from an older install arrives without the slices added since
+ * (a July 2025 database has no `timeTracking`, `menuTree` or `boards`). Typia
+ * requires all of them, so without this both legacy migration and disaster
+ * recovery reject otherwise healthy data and the app boots into
+ * "Failed to load data" (#9770).
+ */
+export const withDefaultModelSlices = (data: object): AppDataComplete => {
+  const result: Record<string, unknown> = { ...data };
+  const defaulted: string[] = [];
+  for (const [key, config] of Object.entries(MODEL_CONFIGS)) {
+    if (result[key] === undefined || result[key] === null) {
+      // Clone: the defaults are shared module-level constants and this data is
+      // dispatched into (and mutated by) the store.
+      result[key] = structuredClone(config.defaultData);
+      defaulted.push(key);
+    }
+  }
+  if (defaulted.length) {
+    // Model names are schema, not user content — safe to log. Without this the
+    // fill is invisible, and a genesis snapshot permanently shadows the legacy
+    // database it was built from.
+    Log.log('withDefaultModelSlices: filled missing model slices', { defaulted });
+  }
+  return result as unknown as AppDataComplete;
 };

@@ -27,6 +27,7 @@ import { HydrationStateService } from '../../../op-log/apply/hydration-state.ser
 import { SnackService } from '../../../core/snack/snack.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
+import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
 
 export type NativeTrackingData = {
   taskId: string;
@@ -174,6 +175,7 @@ export class AndroidForegroundTrackingEffects {
   private _taskService = inject(TaskService);
   private _hydrationState = inject(HydrationStateService);
   private _snackService = inject(SnackService);
+  private _reminderService = inject(CapacitorReminderService);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _operationWriteFlush = inject(OperationWriteFlushService);
 
@@ -271,6 +273,20 @@ export class AndroidForegroundTrackingEffects {
                 taskId: currentTask.id,
                 timeSpent: currentTask.timeSpent,
               });
+              // The tracking notification is the user's first contact with
+              // notifications on many fresh installs; without this nothing ever
+              // requests POST_NOTIFICATIONS here and the notification is
+              // silently suppressed (#9648). Not awaited — this tap is
+              // synchronous and must not stall the service start — so the
+              // notification posted below is lost when the grant arrives late,
+              // and we re-post on grant.
+              void this._reminderService
+                .requestPermissionsInBackground()
+                .then((isNewlyGranted) => {
+                  if (isNewlyGranted) {
+                    void this._repostTrackingNotificationAfterGrant();
+                  }
+                });
               this._safeNativeCall(
                 () =>
                   androidInterface.startTrackingService?.(
@@ -496,6 +512,34 @@ export class AndroidForegroundTrackingEffects {
         ),
       { dispatch: false },
     );
+
+  /**
+   * Re-post the tracking notification after a late POST_NOTIFICATIONS grant.
+   *
+   * `startForeground()` already ran while the permission was denied, so Android
+   * dropped that notification and does not replay it. Only ACTION_UPDATE
+   * re-posts (TrackingForegroundService.updateNotification), and the regular
+   * update path suppresses deltas under 5s (isTimeSpentJumpForNotification), so
+   * a quick tap on Allow would otherwise leave the notification missing for the
+   * whole session. Verified on an API 34 emulator (#9648).
+   *
+   * Reads the CURRENT timeSpent rather than the value captured at start:
+   * updateTimeSpent() re-anchors startTimestamp/accumulatedMs, so pushing the
+   * stale start value would rewind the native counter by the dialog duration.
+   */
+  private async _repostTrackingNotificationAfterGrant(): Promise<void> {
+    const currentTask = await firstValueFrom(this._store.select(selectCurrentTask));
+    if (!currentTask) {
+      return;
+    }
+    DroidLog.log('Re-posting tracking notification after permission grant', {
+      taskId: currentTask.id,
+    });
+    this._safeNativeCall(
+      () => androidInterface.updateTrackingService?.(currentTask.timeSpent || 0),
+      'Failed to re-post tracking notification after permission grant',
+    );
+  }
 
   private _safeNativeCall(fn: () => void, errorMsg: string, showSnackbar = false): void {
     try {

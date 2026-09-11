@@ -30,7 +30,7 @@ export class NextcloudProvider extends WebdavBaseProvider<
   readonly id = PROVIDER_ID_NEXTCLOUD;
 
   constructor(deps: NextcloudDeps, extraPath?: string) {
-    super(deps, extraPath);
+    super(deps, extraPath, { useCanonicalOcEtag: true });
   }
 
   protected override get logLabel(): string {

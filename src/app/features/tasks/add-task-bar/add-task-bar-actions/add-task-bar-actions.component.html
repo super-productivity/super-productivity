@@ -169,7 +169,7 @@
     class="action-btn"
     data-test="add-task-bar-repeat-btn"
     [matMenuTriggerFor]="repeatMenu"
-    [class.has-value]="state().repeatQuickSetting"
+    [class.has-value]="state().repeat"
     [class.menu-open]="isRepeatMenuOpen()"
     (click)="onRepeatMenuClick()"
   >
@@ -179,7 +179,7 @@
     }}</span>
   </button>
 
-  @if (state().repeatQuickSetting) {
+  @if (state().repeat) {
     <button
       mat-button
       class="clear-btn"

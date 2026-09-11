@@ -1,6 +1,6 @@
 import { inject, Pipe, PipeTransform } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { ALLOWED_EXTERNAL_URL_SCHEMES } from '../../../../electron/shared-with-frontend/is-external-url-allowed';
+import { toRenderableHref } from '../link-href.util';
 
 /** Hint substrings used for fast pre-checks to skip regex when no URLs/markdown are present. */
 export const LINK_HINT_PROTOCOL = '://';
@@ -15,7 +15,7 @@ export const hasLinkHints = (text: string): boolean =>
 
 // URL regex matching URLs with protocol (http, https, file, webexteams) or www prefix.
 // ftp://, ssh://, blob:, etc. are intentionally excluded — they are either
-// non-browsable or handled by _isUrlSchemeSafe's denylist for markdown links.
+// non-browsable or rejected by toRenderableHref's scheme gate anyway.
 // Limit URL length to 2000 chars to prevent ReDoS attacks.
 const URL_REGEX =
   /(?:(?:https?|file|webexteams):\/\/\S{1,2000}(?=\s|$)|www\.\S{1,2000}(?=\s|$))/gi;
@@ -39,7 +39,6 @@ const HTML_ESCAPE_MAP: Record<string, string> = {
   "'": '&#39;',
 };
 /* eslint-enable @typescript-eslint/naming-convention */
-const SCHEME_RE = /^[a-z]+:/i;
 const TRAILING_PUNCT_RE = /[.,;!?]+$/;
 
 interface LinkMatch {
@@ -93,53 +92,6 @@ const _stripUrlTrailing = (raw: string): string => {
   return end < url.length ? url.substring(0, end) : url;
 };
 
-const _isUrlSchemeSafe = (url: string): boolean => {
-  const lowerUrl = url.trimStart().toLowerCase();
-  if (!lowerUrl) return false;
-  if (
-    lowerUrl.startsWith('http://') ||
-    lowerUrl.startsWith('https://') ||
-    lowerUrl.startsWith('file://') ||
-    lowerUrl.startsWith('//')
-  ) {
-    return true;
-  }
-  // Allow the shared deep-link / standard schemes (mailto:, tel:, obsidian:,
-  // vscode:, …) so links behave the same here as in the markdown note renderer.
-  // The dangerous schemes (javascript:, data:, vbscript:, ms-msdt:, …) are not
-  // in the allowlist and fall through to the scheme-shaped rejection below. #8429
-  if (ALLOWED_EXTERNAL_URL_SCHEMES.some((scheme) => lowerUrl.startsWith(scheme))) {
-    return true;
-  }
-  // Reject any URL that looks like it has a scheme (letters followed by colon).
-  // This catches javascript:, data:, vbscript:, ftp://, ssh://, etc.
-  // Does NOT match host:port (e.g. www.example.com:8080) because dots precede the colon.
-  if (SCHEME_RE.test(lowerUrl)) {
-    return false;
-  }
-  return true;
-};
-
-const _normalizeHref = (url: string): string => {
-  if (
-    url.startsWith('http://') ||
-    url.startsWith('https://') ||
-    url.startsWith('file://')
-  ) {
-    return url;
-  }
-  if (url.startsWith('//')) {
-    return `https:${url}`;
-  }
-  // Preserve an allow-listed scheme (mailto:, tel:, obsidian:, vscode:, …)
-  // verbatim; only schemeless host-style URLs get an http:// prefix. #8429
-  const lower = url.toLowerCase();
-  if (ALLOWED_EXTERNAL_URL_SCHEMES.some((scheme) => lower.startsWith(scheme))) {
-    return url;
-  }
-  return `http://${url}`;
-};
-
 /**
  * Single-pass link rendering: collects all markdown-link and plain-URL
  * matches sorted by position, then walks the string once, HTML-escaping
@@ -190,10 +142,10 @@ const _buildLinksHtml = (text: string): string => {
   for (const match of matches) {
     out.push(_escapeHtml(text.slice(cursor, match.index)));
 
-    if (!_isUrlSchemeSafe(match.url)) {
+    const href = toRenderableHref(match.url);
+    if (!href) {
       out.push(_escapeHtml(match.title));
     } else {
-      const href = _normalizeHref(match.url);
       const ariaLabel = match.isMarkdown ? '' : _ariaLabelForUrl(href);
       out.push(
         `<a href="${_escapeHtml(href)}"${ariaLabel} target="_blank" rel="noopener noreferrer">${_escapeHtml(match.title)}</a>`,

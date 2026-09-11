@@ -6,7 +6,8 @@
  */
 import { prisma } from '../../db';
 import {
-  CAUSAL_FULL_STATE_OPERATION_WHERE,
+  LatestCausalFullStateRow,
+  latestCausalFullStateSql,
   Operation,
   ServerOperation,
   VectorClock,
@@ -165,15 +166,21 @@ export class OperationDownloadService {
 
         // Find the latest full-state operation (SYNC_IMPORT, BACKUP_IMPORT, REPAIR)
         // These operations supersede all previous operations
-        const latestFullStateOp = await tx.operation.findFirst({
-          where: {
-            userId,
-            serverSeq: { lte: latestSeq },
-            ...CAUSAL_FULL_STATE_OPERATION_WHERE,
-          },
-          orderBy: { serverSeq: 'desc' },
-          select: { serverSeq: true, clientId: true },
-        });
+        // Raw SQL rather than `findFirst` so the op_type values reach PostgreSQL as
+        // LITERALS. Parameterized, this statement flips to a generic plan at execution 6
+        // on every pooled connection, the partial index becomes unreachable, and it
+        // degrades to a backward walk of the user's entire history — cancelled at the 60s
+        // statement_timeout for any user with no causal full-state op. Full reasoning on
+        // latestCausalFullStateSql; do not turn the literals back into params.
+        const latestFullStateRows = await tx.$queryRaw<LatestCausalFullStateRow[]>(
+          latestCausalFullStateSql(userId, latestSeq),
+        );
+        const latestFullStateOp = latestFullStateRows[0]
+          ? {
+              serverSeq: latestFullStateRows[0].server_seq,
+              clientId: latestFullStateRows[0].client_id,
+            }
+          : null;
 
         const latestSnapshotSeq = latestFullStateOp?.serverSeq ?? undefined;
 
@@ -329,10 +336,24 @@ export class OperationDownloadService {
     // Runs outside the interactive transaction: on large histories the aggregate
     // is slow enough to trip Prisma's transaction timeout. Bounded by
     // `latestSnapshotSeq` (captured inside the transaction) so newly-appended
-    // ops can't perturb the result. Background cleanup may delete rows in this
-    // range between commit and this query; in the common case the snapshot op's
-    // own vector_clock subsumes the deltas it replaces, so the per-client max
-    // is preserved.
+    // ops can't perturb the result.
+    //
+    // Background cleanup deletes rows in this range — since #9688 the old-ops
+    // sweep prunes fleet-wide, and this legacy path is taken by exactly the
+    // cohort it prunes (a missing `latest_full_state_*` marker means the newest
+    // causal op predates the marker migration, so its prefix is cold). The
+    // aggregate therefore CAN come back smaller than it once was: a
+    // BACKUP_IMPORT mints a fresh `{ clientId: 1 }` and subsumes nothing (see
+    // operation-upload.service.ts, `persistMergedFullStateClock`), so do NOT
+    // rely on "the snapshot op's own vector_clock covers the deltas it
+    // replaces" — that assumption is false and is what #8973 exists to avoid.
+    //
+    // It is nonetheless safe: a counter can only change a comparison if an op
+    // carrying it still exists, and every surviving op's clock reaches the
+    // client independently (`allOpClocks` on the download, `existingClock` on a
+    // rejection). Both consumers of `snapshotVectorClock` merge upward only, so
+    // a smaller contribution can only fail to add information that is no longer
+    // on the server anyway.
     const clockRows = await prisma.$queryRaw<
       Array<{ client_id: string; max_counter: bigint }>
     >`

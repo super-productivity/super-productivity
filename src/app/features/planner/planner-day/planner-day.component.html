@@ -9,11 +9,25 @@
   <!--<div class="day-estimate">{{ day.timeEstimate |roundDuration|msToString }}</div>-->
 
   <div class="day-counts">
-    <span>{{ day.timeEstimate | roundDuration | msToString }}</span>
+    @let plannedDuration = day.timeEstimate | roundDuration | msToString;
+    @let planned = plannedDuration === '-' ? '0m' : plannedDuration;
     @if (day.availableHours !== undefined) {
-      <span class="available-hours"
-        >/ {{ day.availableHours | roundDuration | msToString }}</span
-      >
+      @let availableDuration = day.availableHours | roundDuration | msToString;
+      @let available = availableDuration === '-' ? '0m' : availableDuration;
+      <span class="day-load">
+        {{
+          T.F.PLANNER.DAY_LOAD
+            | translate
+              : {
+                  planned,
+                  available,
+                }
+        }}
+      </span>
+    } @else {
+      <span class="day-load">
+        {{ T.F.PLANNER.PLANNED_LOAD | translate: { planned } }}
+      </span>
     }
 
     @if (day.itemsTotal > 5) {
@@ -87,9 +101,11 @@
   class="scheduled"
   [class.no-items]="day.scheduledIItems.length === 0"
 >
-  <div class="section-title">
-    <mat-icon>alarm</mat-icon>
-  </div>
+  @if (day.scheduledIItems.length > 0) {
+    <div class="section-title">
+      <mat-icon>alarm</mat-icon>
+    </div>
+  }
 
   <div
     class="scheduled-items"
@@ -147,11 +163,6 @@
           }
         }
       </div>
-    }
-
-    <!-- -->
-    @if (day.scheduledIItems.length === 0) {
-      <div class="empty">{{ T.F.PLANNER.PLAN_VIEW.NO_SCHEDULED_ITEMS | translate }}</div>
     }
   </div>
 </div>

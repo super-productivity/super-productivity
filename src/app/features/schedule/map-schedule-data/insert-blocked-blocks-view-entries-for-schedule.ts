@@ -211,6 +211,8 @@ export const insertBlockedBlocksViewEntriesForSchedule = (
               taskRepeatCfg,
               duration: timePlannedForSplitContinued,
               splitIndex: 0,
+              sourceOccurrenceDate:
+                currentVE.sourceOccurrenceDate ?? currentVE.plannedForDay,
             });
 
             // move entries
@@ -258,6 +260,8 @@ export const insertBlockedBlocksViewEntriesForSchedule = (
               taskRepeatCfg: currentVE.data,
               duration: timePlannedForSplitRepeatCfgProjectionContinued,
               splitIndex,
+              sourceOccurrenceDate:
+                currentVE.sourceOccurrenceDate ?? currentVE.plannedForDay,
             });
 
             // move entries
@@ -370,12 +374,16 @@ export const createSplitRepeat = ({
   taskRepeatCfg,
   splitIndex,
   duration,
+  sourceOccurrenceDate,
 }: {
   start: number;
   dayDate: string;
   taskRepeatCfg: TaskRepeatCfg;
   splitIndex: number;
   duration: number;
+  // the day the occurrence belongs to, which is not dayDate once a segment has
+  // been pushed across midnight -- without it a tail resolves to its render day
+  sourceOccurrenceDate?: string;
 }): SVERepeatProjectionSplitContinued => {
   return {
     id: `${taskRepeatCfg.id}_${dayDate}_${splitIndex}`,
@@ -385,5 +393,6 @@ export const createSplitRepeat = ({
     splitIndex,
     data: taskRepeatCfg,
     plannedForDay: dayDate,
+    ...(sourceOccurrenceDate ? { sourceOccurrenceDate } : {}),
   };
 };

@@ -778,6 +778,18 @@ const ICAL_NS = ICAL as unknown as {
 
 const MAX_OCCURRENCES_PER_EVENT = 1000;
 
+// Absolute cap on iterator steps per event, including pre-window skips. Unlike
+// MAX_OCCURRENCES_PER_EVENT (which only counts emitted occurrences), this bounds
+// the total work so a high-frequency unbounded RRULE (e.g. FREQ=MINUTELY or
+// SECONDLY) whose DTSTART is far before the sync window can't spin the thread
+// stepping through millions of skipped occurrences before reaching the window.
+// 100k steps covers ~11 years of hourly occurrences. A rule that hits the cap
+// before reaching the window is truncated to ZERO in-window results (the event
+// disappears entirely rather than partially). The cap is per event: total
+// expansion work still scales with the number of runaway masters, since no
+// budget is shared across events.
+const MAX_ITERATIONS_PER_EVENT = 100000;
+
 const icalTimeToMs = (t: unknown): number | null => {
   if (!t || typeof (t as { toJSDate?: () => Date }).toJSDate !== 'function') return null;
   const d = (t as { toJSDate: () => Date }).toJSDate();
@@ -972,11 +984,15 @@ const expandIcalToSearchResults = (
       // DTSTART years before `rangeStartMs` (common when the server returns the
       // un-expanded master) silently produces zero in-window results.
       let emitted = 0;
+      let iterations = 0;
       for (
         let next = iter.next() as { toJSDate: () => Date } | null;
         next != null;
         next = iter.next() as { toJSDate: () => Date } | null
       ) {
+        // Absolute safety bound so a high-frequency unbounded rule with a
+        // far-past DTSTART can't spin stepping through pre-window occurrences.
+        if (++iterations > MAX_ITERATIONS_PER_EVENT) break;
         const ms = next.toJSDate().getTime();
         if (isNaN(ms)) continue;
         if (ms >= rangeEndMs) break;

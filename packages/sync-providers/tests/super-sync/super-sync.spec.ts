@@ -33,6 +33,8 @@ import {
   SUPER_SYNC_DEFAULT_BASE_URL,
   SuperSyncProvider,
   type SuperSyncDeps,
+  type SuperSyncDeviceListResponse,
+  type SuperSyncReplaceTokenResult,
   type SuperSyncPrivateCfg,
   type SuperSyncResponseValidators,
   type SuperSyncStorage,
@@ -85,6 +87,7 @@ const createCredentialStoreMock = (): CredentialStoreMock & {
     upsertPartial: vi.fn(),
     clear: vi.fn(),
     onConfigChange: vi.fn(),
+    invalidateInMemoryCache: vi.fn(),
   };
   return {
     ...mock,
@@ -125,6 +128,8 @@ const createValidatorsPassthrough = (): SuperSyncResponseValidators => ({
   validateRestorePoints: (data) => data as RestorePointsResponse,
   validateRestoreSnapshot: (data) => data as RestoreSnapshotResponse,
   validateDeleteAllData: (data) => data as { success: boolean },
+  validateDevices: (data) => data as SuperSyncDeviceListResponse,
+  validateReplaceToken: (data) => data as SuperSyncReplaceTokenResult,
 });
 
 const createLoggerSpy = (): {
@@ -425,6 +430,33 @@ describe('SuperSyncProvider', () => {
     });
   });
 
+  describe('invalidateCredentialCache', () => {
+    it('drops the cached seq key so a token rotated by another tab is picked up', async () => {
+      const { provider, cfgStore, storage } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      storage.getLastServerSeq.mockReturnValue(10);
+      await provider.getLastServerSeq();
+      const oldKey = storage.getLastServerSeq.mock.calls[0][0] as string;
+
+      // Another tab replaced the token on the shared store; the cached seq
+      // key would keep reading the OLD token's (already removed) cursor slot.
+      cfgStore.load.mockResolvedValue({ ...testConfig, accessToken: 'rotated-token' });
+      provider.invalidateCredentialCache();
+      await provider.getLastServerSeq();
+
+      const newKey = storage.getLastServerSeq.mock.calls[1][0] as string;
+      expect(newKey).not.toBe(oldKey);
+    });
+
+    it('drops the credential store in-memory cache', () => {
+      const { provider, cfgStore } = buildProvider();
+
+      provider.invalidateCredentialCache();
+
+      expect(cfgStore.invalidateInMemoryCache).toHaveBeenCalled();
+    });
+  });
+
   describe('getWebSocketParams', () => {
     it('returns null when access token is missing', async () => {
       const { provider, cfgStore } = buildProvider();
@@ -697,6 +729,141 @@ describe('SuperSyncProvider', () => {
     });
   });
 
+  describe('getDevices', () => {
+    it('fetches the device list from the account-scoped endpoint', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      const mockResponse = {
+        devices: [{ clientId: 'E_abc123', lastSeenAt: 1700000000000 }],
+      };
+      fetchMock.mockResolvedValue(okResponse(mockResponse));
+
+      const result = await provider.getDevices();
+
+      expect(result).toEqual(mockResponse);
+      const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe('https://sync.example.com/api/sync/devices');
+      // Read-only by design: the server offers no per-device revocation.
+      expect(options.method).toBe('GET');
+    });
+  });
+
+  describe('signOutAllOtherDevices', () => {
+    const replaceTokenResponse = { token: 'fresh-token' };
+
+    it('posts to /api/replace-token and stores the fresh token', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      cfgStore.setComplete.mockResolvedValue(undefined);
+      fetchMock.mockResolvedValue(okResponse(replaceTokenResponse));
+
+      await provider.signOutAllOtherDevices();
+
+      const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe('https://sync.example.com/api/replace-token');
+      expect(options.method).toBe('POST');
+      // Fastify rejects a body-less POST with a JSON content type
+      // (FST_ERR_CTP_EMPTY_JSON_BODY) — an explicit body must be sent.
+      expect(options.body).toBe('{}');
+      expect(cfgStore.setComplete).toHaveBeenCalledWith({
+        ...testConfig,
+        accessToken: 'fresh-token',
+      });
+    });
+
+    it('sends the JSON body through the native HTTP path too', async () => {
+      const { provider, cfgStore, nativeHttpExecutor } = buildProvider({
+        isNativePlatform: true,
+      });
+      cfgStore.load.mockResolvedValue(testConfig);
+      cfgStore.setComplete.mockResolvedValue(undefined);
+      nativeHttpExecutor.mockResolvedValue({
+        status: 200,
+        data: replaceTokenResponse,
+      });
+
+      await provider.signOutAllOtherDevices();
+
+      const requestCfg = nativeHttpExecutor.mock.calls[0][0] as NativeHttpRequestConfig;
+      expect(requestCfg.url).toBe('https://sync.example.com/api/replace-token');
+      expect(requestCfg.method).toBe('POST');
+      expect(requestCfg.data).toBe('{}');
+    });
+
+    it('carries the lastServerSeq cursor over to the new token key', async () => {
+      const { provider, cfgStore, fetchMock, storage } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      // Mirror the real store: after setComplete, load returns the new config,
+      // so the seq key is recomputed from the fresh token.
+      cfgStore.setComplete.mockImplementation(async (cfg: SuperSyncPrivateCfg) => {
+        cfgStore.load.mockResolvedValue(cfg);
+      });
+      storage.getLastServerSeq.mockReturnValue(42);
+      fetchMock.mockResolvedValue(okResponse(replaceTokenResponse));
+
+      await provider.signOutAllOtherDevices();
+
+      const oldKey = storage.getLastServerSeq.mock.calls[0][0] as string;
+      const [newKey, seq] = storage.setLastServerSeq.mock.calls[0] as [string, number];
+      expect(seq).toBe(42);
+      // Same account, same op stream — but the key hashes the token, so without
+      // the carry-over the swap would reset the cursor and force a full re-download.
+      expect(newKey).not.toBe(oldKey);
+      // Crash-safety ordering: the cursor lands under the NEW token's key
+      // BEFORE the token is persisted — a hard kill in between leaves an
+      // orphaned entry, never a persisted token without its cursor.
+      expect(storage.setLastServerSeq.mock.invocationCallOrder[0]).toBeLessThan(
+        cfgStore.setComplete.mock.invocationCallOrder[0],
+      );
+      // The old token's entry is cleaned up, and only after the new one exists.
+      expect(storage.removeLastServerSeq).toHaveBeenCalledWith(oldKey);
+      expect(storage.removeLastServerSeq.mock.invocationCallOrder[0]).toBeGreaterThan(
+        storage.setLastServerSeq.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('does not delete the cursor when old and new seq keys coincide', async () => {
+      const { provider, cfgStore, fetchMock, storage } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      cfgStore.setComplete.mockResolvedValue(undefined);
+      storage.getLastServerSeq.mockReturnValue(42);
+      // Degenerate server response: the "fresh" token equals the old one, so
+      // both keys hash identically — removal would wipe the cursor just written.
+      fetchMock.mockResolvedValue(okResponse({ token: testConfig.accessToken }));
+
+      await provider.signOutAllOtherDevices();
+
+      expect(storage.setLastServerSeq).toHaveBeenCalledWith(expect.any(String), 42);
+      expect(storage.removeLastServerSeq).not.toHaveBeenCalled();
+    });
+
+    it('does not retry a transient failure — replace-token is not idempotent', async () => {
+      const { provider, cfgStore, fetchMock, webRequestRetryDelay } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      // If the bump landed server-side but the response was lost, a retry
+      // would re-POST with the already-revoked token and 401.
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+      await expect(provider.signOutAllOtherDevices()).rejects.toThrow();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(webRequestRetryDelay).not.toHaveBeenCalled();
+      expect(cfgStore.setComplete).not.toHaveBeenCalled();
+    });
+
+    it('keeps the stored config untouched when the response is invalid', async () => {
+      const validators = createValidatorsPassthrough();
+      validators.validateReplaceToken = () => {
+        throw new Error('invalid response');
+      };
+      const { provider, cfgStore, fetchMock } = buildProvider({ validators });
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(okResponse({ nope: true }));
+
+      await expect(provider.signOutAllOtherDevices()).rejects.toThrow('invalid response');
+      expect(cfgStore.setComplete).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getLastServerSeq', () => {
     it('returns 0 when no value is stored', async () => {
       const { provider, cfgStore, storage } = buildProvider();
@@ -912,6 +1079,52 @@ describe('SuperSyncProvider', () => {
           'test-op-id',
         ),
       ).rejects.toThrow(/HTTP 413.*Storage quota exceeded/);
+    });
+
+    it('preserves structured errorCode on web non-2xx responses', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(
+        errorResponse(
+          409,
+          'Conflict',
+          '{"error":"SYNC_IMPORT_EXISTS","errorCode":"SYNC_IMPORT_EXISTS"}',
+        ),
+      );
+
+      await expect(
+        provider.uploadSnapshot(
+          {},
+          'client-1',
+          'initial',
+          {},
+          1,
+          undefined,
+          'test-op-id',
+        ),
+      ).rejects.toMatchObject({
+        code: 'SYNC_IMPORT_EXISTS',
+        status: 409,
+      });
+    });
+
+    it('preserves structured PAYLOAD_TOO_LARGE errorCode on web upload rejection', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(
+        errorResponse(
+          413,
+          'Payload Too Large',
+          '{"error":"Too many operations in upload batch.","errorCode":"PAYLOAD_TOO_LARGE"}',
+        ),
+      );
+
+      await expect(
+        provider.uploadOps([createMockOperation()], 'client-1'),
+      ).rejects.toMatchObject({
+        code: 'PAYLOAD_TOO_LARGE',
+        status: 413,
+      });
     });
 
     it('truncates server reason to 80 chars', async () => {
@@ -1642,6 +1855,34 @@ describe('SuperSyncProvider', () => {
       await expect(
         ctx.provider.uploadOps([createMockOperation()], 'client-1'),
       ).rejects.toThrow(/^HTTP 422 — invalid op$/);
+    });
+
+    it('preserves structured errorCode on native non-2xx responses', async () => {
+      const ctx = buildProvider({ isNativePlatform: true });
+      ctx.cfgStore.load.mockResolvedValue(testConfig);
+      ctx.nativeHttpExecutor.mockResolvedValue({
+        status: 413,
+        headers: {},
+        data: {
+          error: 'Storage quota exceeded',
+          errorCode: 'STORAGE_QUOTA_EXCEEDED',
+        },
+      });
+
+      await expect(
+        ctx.provider.uploadSnapshot(
+          {},
+          'client-1',
+          'recovery',
+          {},
+          1,
+          undefined,
+          'test-op-id-native',
+        ),
+      ).rejects.toMatchObject({
+        code: 'STORAGE_QUOTA_EXCEEDED',
+        status: 413,
+      });
     });
 
     it('throws fixed user-facing message (no native error interpolation) on transient native error', async () => {

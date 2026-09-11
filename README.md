@@ -91,9 +91,9 @@
   - **Collect personal metrics** to see, which of your work routines need adjustments.
 - Integrate with **Jira**, **Trello**, **GitHub**, **GitLab**, **Gitea**, **OpenProject**, **Linear**, **ClickUp** and **Azure DevOps**. Auto import tasks assigned to you, plan the details locally, automatically create work logs, and get notified immediately, when something changes.
 - Basic **CalDAV** integration.
-- Back up and synchronize your data across multiple devices with **Dropbox** and **WebDAV** support
+- Back up and synchronize your data across multiple devices with **SuperSync**, **Dropbox** and **WebDAV** support. SuperSync is our own end-to-end encrypted sync service, which you can also [host yourself](https://github.com/super-productivity/super-productivity/tree/master/packages/super-sync-server).
 - Attach context information to tasks and projects. Create **notes**, attach **files** or create **project-level bookmarks** for links, files, and even commands.
-- Super Productivity **respects your privacy** and **does NOT collect any data** and there are no user accounts or registration. **You decide where you store your data!**
+- Super Productivity **respects your privacy** and **does NOT collect any data**. No account or registration is required. **You decide where you store your data!**
 - It's **free** and **open source** and always will be.
 
 And much more!

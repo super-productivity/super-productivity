@@ -46,12 +46,12 @@
   min-height: calc(100vh - var(--safe-area-top));
 }
 
-// iOS keeps 100vh tied to the layout viewport while the soft keyboard is open.
-// Use visualViewport height from JS so the app shell shrinks above the keyboard.
-:host-context(body.isIOS.isKeyboardVisible) .app-container {
-  height: calc(var(--visual-viewport-height) - var(--safe-area-top));
-  min-height: calc(var(--visual-viewport-height) - var(--safe-area-top));
-}
+// iOS keeps 100vh tied to the layout viewport while the soft keyboard is open,
+// so the shell has to be sized from the visualViewport height. That height now
+// arrives as a plain `height` bound from IosKeyboardService.shellHeight
+// rather than a `--visual-viewport-height` rule here: this element wraps the
+// task list, and a custom property it inherits makes WebKit restyle the whole
+// list on every frame of the keyboard animation (#9779).
 
 .main-content {
   flex: 1;
@@ -122,7 +122,10 @@
 .route-wrapper {
   flex-grow: 1;
   position: relative;
-  overflow: hidden;
+  // `clip` rather than `hidden`: `hidden` makes this a scroll container, so a route's
+  // scaled enter animation paints outside the box and the browser corrects by scrolling
+  // the wrapper — a transient nudge on route enter. See #9873, #9837.
+  overflow: clip;
   -webkit-app-region: no-drag !important;
   height: 100%;
   container-type: inline-size;
@@ -208,7 +211,7 @@ mat-sidenav {
 // Remove right border/shadow of the side nav
 
 :host ::ng-deep .mat-drawer.mat-drawer-side {
-  border-right-color: var(--sidebar-border-color);
+  border-right-color: transparent;
 }
 
 @include mq(component) {
@@ -218,14 +221,32 @@ mat-sidenav {
 }
 
 .bg-image {
-  position: absolute;
+  // `fixed`, not `absolute`: `body` is itself `position: absolute` (page.scss),
+  // so an absolutely-positioned `.bg-image` was sized/positioned directly
+  // against it -- nothing in between (app-root does sit in the DOM between
+  // the two and is `overflow: hidden`, but that doesn't clip an abspos
+  // descendant whose containing block is an ancestor of the clipping box).
+  // `.is-blurred` below scales this element -- that doesn't change its
+  // layout size, but it does expand its *painted* bounds, and those count
+  // toward its containing block's scrollable-overflow region (same
+  // transformed-descendant mechanism as #9873/#9837). Unlike a transform
+  // tied to a route-enter animation, this one is a static style, so `body`'s
+  // resulting overflow never settles back down: any scrollIntoView()
+  // elsewhere whose ancestor walk reached `body` (`.app-container`, a real
+  // DOM ancestor of most scroll targets, is `overflow: visible`, so it
+  // didn't stop there) could leave the whole app shell visibly shifted
+  // until restart. `position: fixed` anchors this to the viewport instead,
+  // which is excluded from any ancestor's scrollable-overflow accounting
+  // (no ancestor between here and the viewport sets transform/filter/
+  // contain, which would otherwise create a new containing block for fixed
+  // descendants).
+  position: fixed;
   inset: 0;
   pointer-events: none;
   width: 100%;
   height: 100%;
   background-size: cover !important;
   background-position: center !important;
-  background-attachment: fixed;
 
   &.is-blurred {
     transform: scale(1.12);

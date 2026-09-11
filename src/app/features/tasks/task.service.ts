@@ -477,7 +477,9 @@ export class TaskService {
 
   remove(task: TaskWithSubTasks): void {
     this._taskTimeSync.clearOne(task.id);
-    task.subTasks.forEach((subTask) => this._taskTimeSync.clearOne(subTask.id));
+    // Clear via subTaskIds (always present) not subTasks: the keyboard-delete path
+    // passes a raw Task entity whose subTasks array is undefined (see #9280).
+    task.subTaskIds.forEach((id) => this._taskTimeSync.clearOne(id));
     this._store.dispatch(TaskSharedActions.deleteTask({ task }));
   }
 
@@ -648,21 +650,21 @@ export class TaskService {
         .activeWorkContextType as WorkContextType;
 
       if (isBacklog) {
-        const doneBacklogTaskIds = await this._workContextService.doneBacklogTaskIds$
+        const undoneBacklogTaskIds = await this._workContextService.undoneBacklogTaskIds$
           .pipe(take(1))
           .toPromise();
-        if (!doneBacklogTaskIds) {
-          throw new Error('No doneBacklogTaskIds found');
+        if (!undoneBacklogTaskIds) {
+          throw new Error('No undoneBacklogTaskIds found');
         }
         this._store.dispatch(
           moveProjectTaskUpInBacklogList({
             taskId: id,
             workContextId,
-            doneBacklogTaskIds,
+            doneBacklogTaskIds: undoneBacklogTaskIds,
           }),
         );
       } else {
-        const doneTaskIds = await this._workContextService.doneTaskIds$
+        const undoneTaskIds = await this._workContextService.undoneTaskIds$
           .pipe(take(1))
           .toPromise();
         this._store.dispatch(
@@ -670,7 +672,7 @@ export class TaskService {
             taskId: id,
             workContextType,
             workContextId,
-            doneTaskIds,
+            doneTaskIds: undoneTaskIds,
           }),
         );
       }
@@ -702,21 +704,21 @@ export class TaskService {
 
       // this.
       if (isBacklog) {
-        const doneBacklogTaskIds = await this._workContextService.doneBacklogTaskIds$
+        const undoneBacklogTaskIds = await this._workContextService.undoneBacklogTaskIds$
           .pipe(take(1))
           .toPromise();
-        if (!doneBacklogTaskIds) {
-          throw new Error('No doneBacklogTaskIds found');
+        if (!undoneBacklogTaskIds) {
+          throw new Error('No undoneBacklogTaskIds found');
         }
         this._store.dispatch(
           moveProjectTaskDownInBacklogList({
             taskId: id,
             workContextId,
-            doneBacklogTaskIds,
+            doneBacklogTaskIds: undoneBacklogTaskIds,
           }),
         );
       } else {
-        const doneTaskIds = await this._workContextService.doneTaskIds$
+        const undoneTaskIds = await this._workContextService.undoneTaskIds$
           .pipe(take(1))
           .toPromise();
         this._store.dispatch(
@@ -724,7 +726,7 @@ export class TaskService {
             taskId: id,
             workContextType,
             workContextId,
-            doneTaskIds,
+            doneTaskIds: undoneTaskIds,
           }),
         );
       }
@@ -740,31 +742,33 @@ export class TaskService {
         .activeWorkContextType as WorkContextType;
 
       if (isBacklog) {
-        this._workContextService.doneBacklogTaskIds$
+        this._workContextService.undoneBacklogTaskIds$
           .pipe(take(1))
-          .subscribe((doneBacklogTaskIds) => {
-            if (!doneBacklogTaskIds) {
-              throw new Error('No doneBacklogTaskIds found');
+          .subscribe((undoneBacklogTaskIds) => {
+            if (!undoneBacklogTaskIds) {
+              throw new Error('No undoneBacklogTaskIds found');
             }
             this._store.dispatch(
               moveProjectTaskToTopInBacklogList({
                 taskId: id,
                 workContextId,
-                doneBacklogTaskIds,
+                doneBacklogTaskIds: undoneBacklogTaskIds,
               }),
             );
           });
       } else {
-        this._workContextService.doneTaskIds$.pipe(take(1)).subscribe((doneTaskIds) => {
-          this._store.dispatch(
-            moveTaskToTopInTodayList({
-              taskId: id,
-              workContextType,
-              workContextId,
-              doneTaskIds,
-            }),
-          );
-        });
+        this._workContextService.undoneTaskIds$
+          .pipe(take(1))
+          .subscribe((undoneTaskIds) => {
+            this._store.dispatch(
+              moveTaskToTopInTodayList({
+                taskId: id,
+                workContextType,
+                workContextId,
+                doneTaskIds: undoneTaskIds,
+              }),
+            );
+          });
       }
     }
   }
@@ -778,31 +782,33 @@ export class TaskService {
         .activeWorkContextType as WorkContextType;
 
       if (isBacklog) {
-        this._workContextService.doneBacklogTaskIds$
+        this._workContextService.undoneBacklogTaskIds$
           .pipe(take(1))
-          .subscribe((doneBacklogTaskIds) => {
-            if (!doneBacklogTaskIds) {
-              throw new Error('No doneBacklogTaskIds found');
+          .subscribe((undoneBacklogTaskIds) => {
+            if (!undoneBacklogTaskIds) {
+              throw new Error('No undoneBacklogTaskIds found');
             }
             this._store.dispatch(
               moveProjectTaskToBottomInBacklogList({
                 taskId: id,
                 workContextId,
-                doneBacklogTaskIds,
+                doneBacklogTaskIds: undoneBacklogTaskIds,
               }),
             );
           });
       } else {
-        this._workContextService.doneTaskIds$.pipe(take(1)).subscribe((doneTaskIds) => {
-          this._store.dispatch(
-            moveTaskToBottomInTodayList({
-              taskId: id,
-              workContextType,
-              workContextId,
-              doneTaskIds,
-            }),
-          );
-        });
+        this._workContextService.undoneTaskIds$
+          .pipe(take(1))
+          .subscribe((undoneTaskIds) => {
+            this._store.dispatch(
+              moveTaskToBottomInTodayList({
+                taskId: id,
+                workContextType,
+                workContextId,
+                doneTaskIds: undoneTaskIds,
+              }),
+            );
+          });
       }
     }
   }
@@ -1016,7 +1022,7 @@ export class TaskService {
 
     if (parentTasksToArchive.length) {
       // Only move parent tasks to archive, never subtasks
-      // Note: Full task payload required for sync - see docs/archive-operation-redesign.md
+      // Note: Full task payload required for sync - see docs/sync-and-op-log/operation-log-architecture.md
       // Persist first: dispatch removes the tasks from NgRx and makes the captured
       // operation eligible for a full-state snapshot. If archive persistence were
       // still in flight, that snapshot could acknowledge the operation while
@@ -1190,7 +1196,8 @@ export class TaskService {
     return this._store.pipe(select(selectTasksByIdFactory(ids)));
   }
 
-  getByIdWithSubTaskData$(id: string): Observable<TaskWithSubTasks> {
+  /** Emits `undefined` for an unknown id — always check before use (#9946). */
+  getByIdWithSubTaskData$(id: string): Observable<TaskWithSubTasks | undefined> {
     return this._store.pipe(select(selectTaskByIdWithSubTaskData, { id }), take(1));
   }
 

@@ -187,7 +187,8 @@
   z-index: 12;
   color: var(--text-color);
   background: var(--bg-lighter);
-  box-shadow: var(--whiteframe-shadow-1dp);
+  // Flat sticky header: the extraBorder bottom line separates it from scrolling
+  // content; a resting shadow on top of it just reads as a floating bar.
 
   &.isInPanel {
     //border: 0;
@@ -227,10 +228,12 @@
   grid-template-columns: var(--schedule-time-width) repeat(var(--nr-of-days), 1fr);
   width: 100%;
   box-sizing: border-box;
-  min-height: 32px;
+  // Kept in sync with the scroll-padding on .scroll-wrapper, which offsets the
+  // initial scroll target so it doesn't land under this sticky header.
+  min-height: $schedule-week-header-height;
 
   @include mq(xs, max) {
-    min-height: 22px;
+    min-height: $schedule-week-header-height-mobile;
   }
 }
 
@@ -374,7 +377,7 @@
 .cdk-drag-dragging {
   position: relative;
   z-index: 99 !important;
-  box-shadow: var(--whiteframe-shadow-20dp);
+  box-shadow: var(--whiteframe-shadow-24dp);
 }
 
 .drop-label {
@@ -397,7 +400,6 @@
 
 .work-end,
 .work-start {
-  scroll-margin-top: 80px;
   border-top: 2px dashed var(--separator-color);
   min-width: 100px;
   grid-column: 2 / -1;
@@ -478,7 +480,7 @@
 
   .time-badge {
     background: var(--c-accent);
-    color: var(--text-on-accent);
+    color: var(--palette-accent-contrast-500);
     padding: var(--s) var(--s2);
     border-radius: 20px;
     font-size: 14px;

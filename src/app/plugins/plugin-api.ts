@@ -152,6 +152,11 @@ export class PluginAPI implements PluginAPIInterface {
     this.#boundMethods.registerShortcut(shortcut);
   }
 
+  unregisterShortcut(shortcutId: string): void {
+    PluginLog.log(`Plugin ${this.#pluginId} unregistered shortcut`);
+    this.#boundMethods.unregisterShortcut(shortcutId);
+  }
+
   registerSidePanelButton(
     sidePanelBtnCfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>,
   ): void {
@@ -261,6 +266,11 @@ export class PluginAPI implements PluginAPIInterface {
     PluginLog.log(`Plugin ${this.#pluginId} requested to update project ${projectId}`);
     const projectCopyUpdates = projectDataToPartialProjectCopy(updates);
     return this.#pluginBridge.updateProject(projectId, projectCopyUpdates);
+  }
+
+  async deleteProject(projectId: string): Promise<void> {
+    PluginLog.log(`Plugin ${this.#pluginId} requested to delete project ${projectId}`);
+    return this.#boundMethods.deleteProject(projectId);
   }
 
   async getAllTags(): Promise<Tag[]> {

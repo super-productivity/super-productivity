@@ -115,7 +115,7 @@ body {
       color-mix(in srgb, var(--palette-primary-500) 12%, transparent),
       transparent 65%
     ),
-    linear-gradient(180deg, #fafbff 0px, #f3f5fa 900px);
+    linear-gradient(180deg, #f2f5fb 0px, #e9eef6 900px);
 
   --bg: transparent;
   --bg-darker: rgba(255, 255, 255, 0.55);
@@ -136,12 +136,18 @@ body {
    * reads as a calmer/softer surface next to the brighter cards. */
   --sidenav-bg: rgba(255, 255, 255, 0.62);
   --sidenav-bg-mobile: rgba(255, 255, 255, 0.78);
-  /* Active item = a darker patch carved INTO the glass (the way
-   * Tahoe renders selection — "depressed" not "raised"). A faint
-   * black overlay on top of the already-gray sidebar reads as a
-   * subtle darker pill, not a bright fill. */
-  --sidenav-item-active-bg: rgba(0, 0, 0, 0.06);
-  --sidenav-hover-bg: rgba(0, 0, 0, 0.03);
+  /* Selection = milky glass pill tinted with the user's primary
+   * (macOS renders focused sidebar selection with the accent color —
+   * Finder / System Settings). An earlier "darker patch carved into
+   * the glass" treatment (rgba(0,0,0,0.06)) was too subtle to read
+   * as a highlight at all. The white base keeps the pill glassy and
+   * keeps ink-strong text contrast-safe for any user primary. */
+  --sidenav-item-active-bg: color-mix(
+    in srgb,
+    var(--brand) 16%,
+    rgba(255, 255, 255, 0.44)
+  );
+  --sidenav-hover-bg: rgba(0, 0, 0, 0.05);
 
   --right-panel-bg: rgba(255, 255, 255, 0.92);
   --right-panel-bg-mobile: rgba(255, 255, 255, 0.92);
@@ -272,12 +278,14 @@ body {
 body.isDarkTheme {
   --lg-accent: #0a84ff;
 
-  /* Theme-contract primitives (dark) */
-  --surface-0: #07090f;
-  --surface-1: #0a0d18;
-  --surface-2: #1a1c22;
-  --surface-3: #242831;
-  --surface-4: #2c303a;
+  /* Theme-contract primitives (dark). Surface 0/1 track the
+   * #131829→#0b0e18 wallpaper base; the elevated surfaces (2–4) stay
+   * near-neutral so cards and utility fills don't read bluish. */
+  --surface-0: #0b0e18;
+  --surface-1: #10141f;
+  --surface-2: #22242c;
+  --surface-3: #2b2e37;
+  --surface-4: #343743;
   --lg-solid-utility-bg: var(--surface-3);
   --ink-strong: rgb(255, 255, 255);
   --ink: rgb(245, 245, 247);
@@ -289,44 +297,56 @@ body.isDarkTheme {
   --focus-ring: var(--lg-accent);
   --system-surface: var(--surface-1);
 
+  /* Dark wallpaper needs to sit a step above pitch black and carry a
+   * noticeably stronger primary tint — at the old 22/14/8% mixes over
+   * a #07090f base the radials were imperceptible, the app read as a
+   * flat black sheet, and translucent surfaces had nothing to refract
+   * (glass only reads as glass when the ground behind it is visible). */
   --lg-wallpaper:
     radial-gradient(
       ellipse 1400px 900px at 260px -90px,
-      color-mix(in srgb, var(--palette-primary-500) 22%, transparent),
+      color-mix(in srgb, var(--palette-primary-500) 34%, transparent),
       transparent 70%
     ),
     radial-gradient(
       ellipse 1100px 800px at 1325px 972px,
-      color-mix(in srgb, var(--palette-primary-500) 14%, transparent),
+      color-mix(in srgb, var(--palette-primary-500) 22%, transparent),
       transparent 70%
     ),
     radial-gradient(
       ellipse 900px 700px at 1368px 90px,
-      color-mix(in srgb, var(--palette-primary-500) 8%, transparent),
+      color-mix(in srgb, var(--palette-primary-500) 13%, transparent),
       transparent 65%
     ),
-    linear-gradient(180deg, #0a0d18 0px, #07090f 900px);
+    linear-gradient(180deg, #131829 0px, #0b0e18 900px);
 
   --bg: transparent;
-  --bg-darker: rgba(20, 22, 28, 0.6);
-  --bg-slightly-lighter: rgba(40, 42, 50, 0.55);
-  --bg-lighter: rgba(50, 52, 60, 0.55);
-  --bg-lightest: rgba(60, 62, 70, 0.6);
-  --bg-super-light: rgba(80, 82, 90, 0.65);
+  --bg-darker: rgba(28, 30, 36, 0.6);
+  --bg-slightly-lighter: rgba(50, 52, 60, 0.55);
+  --bg-lighter: rgba(60, 62, 72, 0.55);
+  --bg-lightest: rgba(70, 72, 84, 0.6);
+  --bg-super-light: rgba(90, 92, 104, 0.65);
 
   /* See light-mode rationale — Tahoe's dark sidebar sits a step
    * darker than the content surfaces around it. */
-  --card-bg: rgba(36, 38, 44, 0.88);
-  --sidenav-bg: rgba(14, 16, 22, 0.78);
-  --sidenav-bg-mobile: rgba(10, 12, 18, 0.92);
-  /* Selection = subtle darker patch within the dark glass. */
-  --sidenav-item-active-bg: rgba(0, 0, 0, 0.25);
-  --sidenav-hover-bg: rgba(0, 0, 0, 0.15);
+  --card-bg: rgba(44, 46, 54, 0.88);
+  --sidenav-bg: rgba(24, 26, 33, 0.7);
+  --sidenav-bg-mobile: rgba(20, 22, 29, 0.92);
+  /* Selection = brand-tinted glass pill (see light-mode rationale).
+   * A black-on-dark "carved" patch is invisible on the translucent
+   * dark sidebar; hover likewise needs a white overlay — darkening
+   * dark glass doesn't register. */
+  --sidenav-item-active-bg: color-mix(
+    in srgb,
+    var(--brand) 30%,
+    rgba(255, 255, 255, 0.08)
+  );
+  --sidenav-hover-bg: rgba(255, 255, 255, 0.07);
 
-  --right-panel-bg: rgba(28, 30, 38, 0.92);
-  --right-panel-bg-mobile: rgba(20, 22, 28, 0.94);
-  --bottom-panel-bg: rgba(28, 30, 38, 0.95);
-  --banner-bg: rgba(40, 42, 50, 0.92);
+  --right-panel-bg: rgba(36, 38, 46, 0.92);
+  --right-panel-bg-mobile: rgba(28, 30, 37, 0.94);
+  --bottom-panel-bg: rgba(36, 38, 46, 0.95);
+  --banner-bg: rgba(48, 50, 58, 0.92);
 
   --text-color: rgba(245, 245, 247, 0.96);
   --text-color-less-intense: rgba(235, 235, 240, 0.78);
@@ -335,13 +355,16 @@ body.isDarkTheme {
   --text-color-most-intense: rgba(255, 255, 255, 1);
 
   /* Dark task rows keep a high-alpha fill: enough translucency to
-   * avoid slabby blocks, but still readable over wallpaper/content. */
-  --task-c-bg: rgba(32, 34, 42, 0.94);
-  --task-c-selected-bg: rgba(72, 78, 94, 0.96);
-  --selected-task-bg-color: rgba(72, 78, 94, 0.96);
-  --sub-task-c-bg: rgba(26, 28, 34, 0.92);
-  --sub-task-c-bg-done: rgba(20, 22, 28, 0.88);
-  --task-c-bg-done: rgba(22, 24, 30, 0.9);
+   * avoid slabby blocks, but still readable over wallpaper/content.
+   * Hues stay near-neutral (blue lean ≤ ~10) — the blue ambiance
+   * should come from the wallpaper showing through, not from the
+   * surface pigment itself. */
+  --task-c-bg: rgba(46, 48, 56, 0.92);
+  --task-c-selected-bg: rgba(78, 82, 94, 0.96);
+  --selected-task-bg-color: rgba(78, 82, 94, 0.96);
+  --sub-task-c-bg: rgba(38, 40, 47, 0.9);
+  --sub-task-c-bg-done: rgba(32, 34, 40, 0.86);
+  --task-c-bg-done: rgba(34, 36, 42, 0.88);
   /* See light-mode rationale — sticky current task needs an opaque
    * fill so scrolling tasks underneath don't bleed through. */
   --task-c-current-bg: color-mix(
@@ -350,9 +373,9 @@ body.isDarkTheme {
     var(--lg-solid-utility-bg)
   );
   --task-c-drag-drop-bg: rgba(10, 132, 255, 0.16);
-  --sub-task-c-bg-in-selected: rgba(56, 58, 68, 0.94);
-  --task-detail-bg: rgb(40, 42, 50);
-  --task-detail-bg-hover: rgb(60, 62, 70);
+  --sub-task-c-bg-in-selected: rgba(60, 62, 72, 0.94);
+  --task-detail-bg: rgb(48, 50, 58);
+  --task-detail-bg-hover: rgb(62, 65, 76);
 
   /* Glass-like translucent fill, faint warm hint preserved */
   --standard-note-bg: rgba(56, 50, 38, 0.78);
@@ -367,8 +390,9 @@ body.isDarkTheme {
   --lg-rim-top: rgba(255, 255, 255, 0.42);
   --lg-rim-bottom: rgba(0, 0, 0, 0.36);
   /* Soft dark hairline — was bright white-on-dark which read as
-   * a second border alongside the rim's bottom-dark stop. */
-  --lg-hairline: rgba(255, 255, 255, 0.06);
+   * a second border alongside the rim's bottom-dark stop. Nudged up
+   * for boundary definition now that the wallpaper is lighter. */
+  --lg-hairline: rgba(255, 255, 255, 0.08);
   --lg-shine: rgba(255, 255, 255, 0.18);
 
   /* Dark dual rim — kept low so the white corner halos don't
@@ -381,10 +405,10 @@ body.isDarkTheme {
     inset -1px -1px 1px 0 rgba(255, 255, 255, 0.04);
 
   --lg-rim-quiet:
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.06), inset 0 -0.5px 0 rgba(0, 0, 0, 0.24);
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.08), inset 0 -0.5px 0 rgba(0, 0, 0, 0.24);
 
-  --lg-overlay-bg: rgba(40, 42, 50, 0.42);
-  --lg-mobile-nav-bg: rgba(40, 42, 50, 0.56);
+  --lg-overlay-bg: rgba(50, 52, 62, 0.42);
+  --lg-mobile-nav-bg: rgba(48, 50, 60, 0.56);
   --lg-overlay-rim: rgba(255, 255, 255, 0.32);
   --lg-backdrop-bg: rgba(0, 0, 0, 0.38);
 
@@ -423,11 +447,13 @@ body.isDarkTheme {
   --close-btn-border: transparent;
   --select-hover-bg: rgba(10, 132, 255, 0.18);
   --options-border-color: rgba(255, 255, 255, 0.12);
-  --attachment-bg: rgba(40, 42, 50, 0.85);
+  --attachment-bg: rgba(48, 50, 58, 0.85);
   --attachment-border: transparent;
-  --grid-color: rgba(255, 255, 255, 0.06);
+  /* Hour/day gridlines need a step more presence than other dark
+   * hairlines — they sit directly on the near-black wallpaper. */
+  --grid-color: rgba(255, 255, 255, 0.09);
   --progress-bg: rgba(255, 255, 255, 0.12);
-  --schedule-event-bg: rgb(32, 34, 42);
+  --schedule-event-bg: rgb(44, 46, 54);
 
   --hover-controls-border: none;
   --hover-controls-border-opacity: 0;
@@ -506,31 +532,35 @@ add-task-bar .add-task-container,
 
 /* Respect the "disable colored background tint" setting —
  * drop the primary-color radials, keep only the soft
- * neutral base gradient. */
+ * neutral base gradient. Deep enough that white cards still
+ * separate from the ground (the default TODAY tag ships with
+ * the tint disabled, so this is the common case). */
 body.isDisableBackgroundTint {
-  --lg-wallpaper: linear-gradient(180deg, #fafbff 0px, #f3f5fa 900px);
+  --lg-wallpaper: linear-gradient(180deg, #eff2f8 0px, #e7ebf3 900px);
 }
 
 body.isDisableBackgroundTint.isDarkTheme {
   /* Neutral dark — no color cast since "disable tint" means exactly
-   * that. A flat 1a1a1a → 141414 linear gradient bands visibly on
-   * tall screens (the eye is very sensitive to stripes in deep
-   * shadow), so we layer two off-axis neutral-white radials at very
-   * low alpha to break the linear progression and add ambient depth.
-   * Base values are dropped to ~0d / ~08 so the page feels properly
-   * dark rather than a charcoal mid-grey. */
+   * that. Two off-axis neutral-white radials at low alpha break the
+   * banding a flat linear gradient shows in deep shadow and add
+   * ambient depth. NOTE this wallpaper is what most users see: the
+   * default TODAY tag ships with isDisableBackgroundTint: true. The
+   * earlier ~0d/~08 base read as a pitch-black sheet on which glass
+   * surfaces had zero presence, so the base sits a step higher now
+   * (still clearly darker than every surface fill) and the radials
+   * are stronger. */
   --lg-wallpaper:
     radial-gradient(
       ellipse 1400px 900px at 260px -90px,
-      rgba(255, 255, 255, 0.03),
+      rgba(255, 255, 255, 0.05),
       transparent 70%
     ),
     radial-gradient(
       ellipse 1100px 800px at 1325px 972px,
-      rgba(255, 255, 255, 0.018),
+      rgba(255, 255, 255, 0.03),
       transparent 70%
     ),
-    linear-gradient(180deg, #0d0d0f 0px, #08080a 900px);
+    linear-gradient(180deg, #17181c 0px, #0e0f12 900px);
 }
 
 /* Tier A deliberately avoids filtering `.main-content`: filter and
@@ -617,7 +647,7 @@ magic-side-nav .nav-sidenav {
 
 body.isDarkTheme magic-side-nav .nav-sidenav {
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.09),
     0 2px 8px rgba(0, 0, 0, 0.22),
     0 10px 28px rgba(0, 0, 0, 0.28),
     0 0 0 0.5px var(--lg-hairline);
@@ -652,27 +682,13 @@ body.isMac.isElectron magic-side-nav .nav-list {
   padding-top: 48px !important;
 }
 
-/* Tahoe-style selection: the pill background is the only "carved
- * into the glass" cue (handled via --sidenav-item-active-bg above);
- * the LABEL drops back to strong neutral text and only the ICON
- * carries the brand color. The component sets text + icon to
- * --sidenav-active-text (= --brand) via !important, so this rule
- * needs !important to win. */
-magic-side-nav .nav-link.active,
-magic-side-nav .nav-link.active .nav-label {
-  color: var(--text-color-more-intense) !important;
-}
-
-magic-side-nav .nav-link.active .nav-icon {
-  color: var(--palette-primary-500) !important;
-}
-
-/* Drop the elevation shadow on active rows — the depressed-pill
- * background is the selection cue; an additional lift reads as a
- * raised button, which is the opposite of Tahoe's treatment. */
-magic-side-nav .nav-link.active {
-  box-shadow: none !important;
-}
+/* Selection colors come from --sidenav-item-active-bg /
+ * --sidenav-active-text alone — the nav component consumes both
+ * uniformly for anchor rows, button rows (projects/tags) and the
+ * mobile bottom nav. Earlier per-element color overrides here only
+ * out-specificized the component's anchor rules, not its
+ * `button[mat-menu-item]` rules, so the two row kinds rendered
+ * different active states. */
 
 /* ---------------------------------------------------------
  * Mobile bottom nav — calm floating glass, iOS-style.
@@ -711,18 +727,9 @@ body.isDarkTheme .mobile-bottom-nav {
     0 0 0 0.5px var(--lg-hairline) !important;
 }
 
-/* Bottom-nav active item — clean rounded pill, no offset.
- * Default theme uses a tiny negative-Y box-shadow and a
- * margin-bottom nudge that read as broken on glass. */
-.mobile-bottom-nav .nav-button.active {
-  background: rgba(255, 255, 255, 0.62) !important;
-  box-shadow: none !important;
-  margin-bottom: 0 !important;
-}
-
-body.isDarkTheme .mobile-bottom-nav .nav-button.active {
-  background: rgba(255, 255, 255, 0.18) !important;
-}
+/* Bottom-nav active item inherits the shared
+ * --sidenav-item-active-bg pill via the component — no override
+ * needed, which keeps side nav and bottom nav selection identical. */
 
 /* ---------------------------------------------------------
  * Bottom-sheet panel — Tier B glass, top-rounded.
@@ -793,8 +800,11 @@ body.isDarkTheme add-task-bar.global + .backdrop {
   background-color: var(--lg-overlay-bg) !important;
 }
 
-/* Tier B small chrome (chips, mini-FAB) — full glass at smaller blur */
-.mat-mdc-chip,
+/* Tier B small chrome — full glass at smaller blur. Only the
+ * mini-FAB, which floats over scrollable content where the blur has
+ * something to show. Chips deliberately get NO backdrop-filter: they
+ * sit on high-alpha panel surfaces where a blur is visually a no-op
+ * but still forces a compositing layer per chip. */
 .mat-mdc-mini-fab {
   backdrop-filter: blur(var(--lg-blur-chrome)) saturate(var(--lg-saturate));
   -webkit-backdrop-filter: blur(var(--lg-blur-chrome)) saturate(var(--lg-saturate));
@@ -1124,6 +1134,28 @@ body.isDarkTheme.isNoTouchOnly ::-webkit-scrollbar-thumb {
  *   become solid so translucency never depends on live blur.
  * --------------------------------------------------------- */
 
+/* prefers-reduced-motion: keep color/opacity fades (not motion),
+ * drop the springy press-scale and its transform transition — the
+ * overshooting --lg-ease-spring is exactly what this setting opts
+ * out of. */
+@media (prefers-reduced-motion: reduce) {
+  .mat-mdc-button,
+  .mat-mdc-outlined-button,
+  .mat-mdc-raised-button,
+  .mat-mdc-unelevated-button {
+    transition:
+      background-color var(--transition-duration-s) var(--lg-ease),
+      box-shadow var(--transition-duration-s) var(--lg-ease) !important;
+  }
+
+  .mat-mdc-button:active,
+  .mat-mdc-outlined-button:active,
+  .mat-mdc-raised-button:active,
+  .mat-mdc-unelevated-button:active {
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-transparency: reduce) {
   body {
     background: linear-gradient(180deg, #eef2f8 0px, #e6ecf4 900px) !important;
@@ -1148,25 +1180,25 @@ body.isDarkTheme.isNoTouchOnly ::-webkit-scrollbar-thumb {
     --lg-backdrop-bg: var(--scrim);
   }
   body.isDarkTheme {
-    background: linear-gradient(180deg, #0d1018 0px, #0a0c12 900px) !important;
-    --card-bg: #1a1c22;
-    --sidenav-bg: #14161c;
-    --sidenav-bg-mobile: #14161c;
-    --task-c-bg: #1a1c22;
-    --task-c-selected-bg: #242831;
-    --selected-task-bg-color: #242831;
-    --sub-task-c-bg: #20222a;
-    --sub-task-c-bg-done: #16181e;
-    --task-c-bg-done: #16181e;
-    --banner-bg: #1a1c22;
-    --task-detail-bg: #1a1c22;
-    --task-detail-bg-hover: #242831;
-    --right-panel-bg: #1a1c22;
-    --right-panel-bg-mobile: #1a1c22;
-    --bottom-panel-bg: #1a1c22;
-    --schedule-event-bg: #1a1c22;
-    --lg-overlay-bg: #242831;
-    --lg-mobile-nav-bg: #1a1c22;
+    background: linear-gradient(180deg, #141927 0px, #0d1019 900px) !important;
+    --card-bg: var(--surface-2);
+    --sidenav-bg: #181b23;
+    --sidenav-bg-mobile: #181b23;
+    --task-c-bg: var(--surface-2);
+    --task-c-selected-bg: var(--surface-3);
+    --selected-task-bg-color: var(--surface-3);
+    --sub-task-c-bg: #272a33;
+    --sub-task-c-bg-done: #1c1f26;
+    --task-c-bg-done: #1c1f26;
+    --banner-bg: var(--surface-2);
+    --task-detail-bg: var(--surface-2);
+    --task-detail-bg-hover: var(--surface-3);
+    --right-panel-bg: var(--surface-2);
+    --right-panel-bg-mobile: var(--surface-2);
+    --bottom-panel-bg: var(--surface-2);
+    --schedule-event-bg: var(--surface-2);
+    --lg-overlay-bg: var(--surface-3);
+    --lg-mobile-nav-bg: var(--surface-2);
     --lg-backdrop-bg: var(--scrim);
   }
   body.hasBgImage .bg-overlay {
@@ -1197,10 +1229,10 @@ body.isDarkTheme.isNoTouchOnly ::-webkit-scrollbar-thumb {
     --lg-mobile-nav-bg: #ffffff;
   }
   body.isDarkTheme {
-    --card-bg: #282a32;
-    --task-c-bg: #32343c;
-    --sidenav-bg: #14161c;
-    --lg-overlay-bg: #242831;
-    --lg-mobile-nav-bg: #1a1c22;
+    --card-bg: #2b2e37;
+    --task-c-bg: #333640;
+    --sidenav-bg: #181b23;
+    --lg-overlay-bg: var(--surface-3);
+    --lg-mobile-nav-bg: var(--surface-2);
   }
 }

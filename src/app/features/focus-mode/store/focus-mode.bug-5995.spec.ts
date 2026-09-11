@@ -90,6 +90,7 @@ describe('FocusMode Bug #5995: Resume paused break', () => {
 
     const takeABreakServiceMock = {
       otherNoBreakTIme$: new BehaviorSubject<number>(0),
+      resetTimer: jasmine.createSpy('resetTimer'),
     };
 
     TestBed.configureTestingModule({
@@ -179,6 +180,9 @@ describe('FocusMode Bug #5995: Resume paused break', () => {
 
   afterEach(() => {
     actions$.complete();
+    // `overrideSelector()` freezes the module-level memoized selector, so
+    // without this the overrides above leak into later spec FILES (#9544).
+    store.resetSelectors();
   });
 
   describe('Bug #3: Resume paused break should continue break', () => {

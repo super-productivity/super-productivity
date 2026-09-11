@@ -94,6 +94,12 @@ describe('AndroidBackButtonService integration with real Router (#7972)', () => 
     );
   });
 
+  afterEach(() => {
+    // `overrideSelector()` freezes the module-level memoized selector, so
+    // without this the overrides above leak into later spec FILES (#9544).
+    TestBed.inject(MockStore).resetSelectors();
+  });
+
   it('collapses repeated tab switches: back pops to the start destination', fakeAsync(() => {
     router.navigateByUrl(TODAY_URL);
     tick();

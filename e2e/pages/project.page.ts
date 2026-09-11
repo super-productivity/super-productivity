@@ -365,8 +365,15 @@ export class ProjectPage extends BasePage {
     let newProject;
     let projectFound = false;
 
-    // Check if .nav-children container exists after expansion
-    const navChildren = this.page.locator('.nav-children');
+    // Check if the Projects tree's .nav-children container exists after expansion.
+    // Scope it to that tree: every expanded tree (Tags, Notes, …) renders its own
+    // .nav-children, so an unscoped locator is a strict-mode violation as soon as
+    // a second one is open.
+    const navChildren = this.page
+      .locator('nav-list-tree')
+      .filter({ hasText: 'Projects' })
+      .first()
+      .locator('.nav-children');
     const navChildrenExists = await navChildren.count();
 
     if (navChildrenExists > 0) {
@@ -374,8 +381,8 @@ export class ProjectPage extends BasePage {
 
       try {
         // Primary approach: nav-child-item structure with nav-item button
-        newProject = this.page
-          .locator('.nav-children .nav-child-item nav-item button')
+        newProject = navChildren
+          .locator('.nav-child-item nav-item button')
           .filter({ hasText: projectName });
         await newProject.waitFor({ state: 'visible', timeout: 3000 });
         projectFound = true;
@@ -713,5 +720,46 @@ export class ProjectPage extends BasePage {
     await this.page
       .locator('.mat-mdc-menu-content')
       .waitFor({ state: 'visible', timeout: 3000 });
+  }
+
+  /** The archived-projects row for a project, matched by its prefixed title. */
+  archivedProjectRow(projectName: string): Locator {
+    return this.page
+      .locator('archived-projects-page .project-row')
+      .filter({ hasText: this.applyPrefix(projectName) });
+  }
+
+  /**
+   * Reopen a completed project from the archived-projects page.
+   *
+   * A single click is not reliable here: in CI the click is delivered but the
+   * handler never runs (no `[Project] Reopen Project` is dispatched, seen in
+   * the trace of run 33189475377), most likely because the page is still
+   * mid route-transition. So re-issue it until the row actually leaves the
+   * list. The click is bounded and skipped once the row is gone so a slow
+   * store update fails on the row assertion instead of an opaque click
+   * timeout.
+   */
+  async reopenArchivedProject(projectName: string): Promise<void> {
+    const row = this.archivedProjectRow(projectName);
+    const reopenBtn = row.getByRole('button', { name: 'Reopen' });
+    // Assert the button up front: without this, a project that was archived
+    // without being completed renders "Restore project" instead, the loop below
+    // would skip the click forever and report the row as merely still present.
+    await expect(reopenBtn).toBeVisible();
+
+    let attempts = 0;
+    await expect(async () => {
+      attempts++;
+      if (await reopenBtn.isVisible()) {
+        await reopenBtn.click({ timeout: 2000 });
+      }
+      await expect(row).toHaveCount(0, { timeout: 2000 });
+    }).toPass({ timeout: 15000 });
+    if (attempts > 1) {
+      // Surface the retry: the suite runs with retries: 0 so that
+      // non-determinism stays visible, and a silent in-test retry defeats that.
+      console.warn(`[reopenArchivedProject] took ${attempts} attempts`);
+    }
   }
 }

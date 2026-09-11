@@ -1058,4 +1058,38 @@ describe('taskSharedSchedulingMetaReducer', () => {
       expect(mockReducer).toHaveBeenCalledWith(baseState, action);
     });
   });
+
+  describe('ordering-only invariant for conflict resolution (#9426)', () => {
+    // ConflictResolutionService rejects conflicted multi-entity rows of these
+    // actions outright (ORDERING_ONLY_MULTI_ACTIONS): lossless ONLY while
+    // their handlers never touch task-entity fields — Today MEMBERSHIP is
+    // derived from task.dueDay/dueWithTime (ADR #2), so dropping the row loses
+    // at most list ordering. If one of these cases fails, the action changed
+    // semantics: remove it from the allowlist in conflict-resolution.service.ts
+    // (or give it a preserve path) BEFORE shipping the reducer change.
+    it('moveTaskInTodayTagList must leave the task feature state untouched', () => {
+      const testState = createStateWithExistingTasks([], [], [], ['task1', 'task2']);
+      const action = TaskSharedActions.moveTaskInTodayTagList({
+        toTaskId: 'task1',
+        fromTaskId: 'task2',
+      });
+
+      metaReducer(testState, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      expect(updatedState[TASK_FEATURE_NAME]).toBe(testState[TASK_FEATURE_NAME]);
+    });
+
+    it('removeTasksFromTodayTag must leave the task feature state untouched', () => {
+      const testState = createStateWithExistingTasks([], [], [], ['task1', 'task2']);
+      const action = TaskSharedActions.removeTasksFromTodayTag({
+        taskIds: ['task1'],
+      });
+
+      metaReducer(testState, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      expect(updatedState[TASK_FEATURE_NAME]).toBe(testState[TASK_FEATURE_NAME]);
+    });
+  });
 });

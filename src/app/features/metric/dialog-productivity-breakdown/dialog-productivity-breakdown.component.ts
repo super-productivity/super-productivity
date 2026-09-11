@@ -112,12 +112,7 @@ export class DialogProductivityBreakdownComponent {
     totalWorkMinutes: number,
     energyCheckin: number,
   ): number {
-    return calculateSustainabilityScore(
-      focusedMinutes,
-      totalWorkMinutes,
-      600,
-      energyCheckin,
-    );
+    return calculateSustainabilityScore(focusedMinutes, totalWorkMinutes, energyCheckin);
   }
 
   close(): void {

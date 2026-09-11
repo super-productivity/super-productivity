@@ -42,15 +42,6 @@ export interface IssueServiceInterface {
   // OPTIONAL
   // --------
 
-  /**
-   * Returns the subset of the given imported tasks that are no longer present
-   * for this user on the provider (deleted, or reassigned away). The caller
-   * decides whether and how to remove them locally. Implementations MUST NOT act
-   * on an inconclusive fetch — an outage or lost access must never look like a
-   * mass removal.
-   */
-  getRemovedRemoteTasks?(tasks: Task[]): Promise<Task[]>;
-
   getMappedAttachments?(issueData: IssueData): TaskAttachment[];
 
   getNewIssuesToAddToBacklog?(

@@ -1,0 +1,6 @@
+- Plugin translations now load from uploaded ZIPs
+- Restored the GitLab finish-day worklog dialog
+- Deleted calendar events no longer reappear
+- The add-task bar stays above system navigation
+- Subtasks now show move-to-top and move-to-bottom options
+- The schedule dialog now fits small phone screens

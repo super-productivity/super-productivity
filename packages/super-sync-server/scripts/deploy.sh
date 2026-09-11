@@ -95,7 +95,7 @@ load_env_value() {
     export "$key=$value"
 }
 
-for env_key in GHCR_USER GHCR_TOKEN DATABASE_URL POSTGRES_SERVICE POSTGRES_WAIT_TIMEOUT MIGRATION_TIMEOUT MIGRATE_STEP_TIMEOUT DEPLOY_WAIT_TIMEOUT SUPERSYNC_SKIP_IMAGE_REVISION_CHECK; do
+for env_key in GHCR_USER GHCR_TOKEN DATABASE_URL POSTGRES_SERVICE POSTGRES_WAIT_TIMEOUT MIGRATION_TIMEOUT MIGRATE_STEP_TIMEOUT DEPLOY_WAIT_TIMEOUT SUPERSYNC_SKIP_IMAGE_REVISION_CHECK SUPERSYNC_INSTALL_REPO_TERMS; do
     load_env_value "$env_key"
 done
 
@@ -380,6 +380,35 @@ if [ "$MIGRATE_STATUS" -ne 0 ]; then
     exit "$MIGRATE_STATUS"
 fi
 
+# Sync the checkout's Terms of Service into the data volume, so the git repository
+# is the single source of truth: every deploy installs the terms.html that matches
+# the deployed code, and the server's boot-time copy publishes it at /terms.html.
+# Opt-in via .env, NOT default: on a stock checkout legal/terms.html is the hosted
+# instance's ToS (German law, our venue and address), and publishing it on someone
+# else's domain is exactly what the operator-owned legal pages exist to prevent.
+# Set it only if legal/terms.html in your checkout is genuinely yours.
+if [ "${SUPERSYNC_INSTALL_REPO_TERMS:-false}" = "true" ]; then
+    if [ ! -f "$SERVER_DIR/legal/terms.html" ]; then
+        echo ""
+        echo "ERROR: SUPERSYNC_INSTALL_REPO_TERMS=true but $SERVER_DIR/legal/terms.html does not exist."
+        echo "       Supply the file or remove the flag from .env."
+        exit 1
+    fi
+    echo ""
+    echo "==> Installing legal/terms.html from the checkout into the data volume..."
+    # ${DATA_DIR:-} expands INSIDE the container, honoring an operator override.
+    # cp -f unlinks a destination left root-owned by an earlier manual `docker cp`,
+    # which uid 1001 could otherwise not open for write.
+    docker compose $COMPOSE_FILES run --rm --no-deps --interactive=false -T \
+        -v "$SERVER_DIR/legal:/repo-legal:ro" \
+        supersync sh -ec 'mkdir -p "${DATA_DIR:-/app/data}/legal" && cp -f /repo-legal/terms.html "${DATA_DIR:-/app/data}/legal/terms.html"'
+    # The server publishes the file only at boot, so a deploy that does not recreate
+    # the app container (same image, same config) leaves /terms.html unchanged.
+    echo "    Installed. Takes effect when the supersync container is next recreated;"
+    echo "    if this deploy does not replace it, run:"
+    echo "      docker compose $COMPOSE_FILES up -d --no-deps --force-recreate supersync"
+fi
+
 # The migration above already ran while the old app was still serving. Disable
 # startup migrations for this compose update so the replacement app starts
 # immediately after image creation. Direct docker-compose users keep the image
@@ -422,12 +451,126 @@ echo "    All containers healthy"
 
 # Verify HTTPS health check
 echo ""
+# Flatten stdin to one printable line of at most $1 bytes. Used for the .health-alert
+# markers, whose text can originate from a remote SMTP relay.
+sanitize_untrusted() {
+    LC_ALL=C tr -d '\000-\010\013-\037\177' |
+        LC_ALL=C sed 's/\xc2[\x80-\x9f]//g' |
+        tr '\n\t' '  ' |
+        head -c "$1" |
+        sed 's/[[:space:]]*$//'
+}
+
+# Report whether the separately-installed alert cron is active and completing.
+# Advisory only: deploys never edit the operator's crontab. (#9191)
+report_monitoring_status() {
+    local state_dir="$SERVER_DIR/.health-alert"
+    local script_path="$SERVER_DIR/scripts/health-alert.sh"
+    local cron_installed=true
+    local recent_run=false
+
+    echo ""
+    echo "==> Monitoring status"
+
+    if ! crontab -l 2>/dev/null | awk -v script="$script_path" '
+        NF >= 6 && $1 !~ /^#/ {
+            command_index = 6
+            while (command_index <= NF &&
+                   $command_index ~ /^[A-Za-z_][A-Za-z0-9_]*=/) {
+                command_index++
+            }
+            if ($command_index == script) found = 1
+        }
+        END { exit(found ? 0 : 1) }
+    '; then
+        cron_installed=false
+        echo "    WARNING: health-alert.sh is not in this user's crontab."
+    else
+        echo "    health-alert.sh: cron installed"
+    fi
+
+    # A fresh heartbeat is authoritative even when another user or scheduler
+    # runs the script and the current user's crontab has no matching entry.
+    if [ -f "$state_dir/last-run" ]; then
+        local last_run age
+        # Same directory, same trust boundary as mail-failed below: sanitize before
+        # printing. A bad value just fails the date parse, which the >30m branch reports.
+        last_run=$(sanitize_untrusted 40 < "$state_dir/last-run" 2>/dev/null) || true
+        age=$(( $(date -u +%s) - $(date -u -d "$last_run" +%s 2>/dev/null || echo 0) ))
+        if [ "$age" -gt 1800 ]; then
+            printf '    WARNING: last completed run was %s (>30m ago) — health-alert.sh is not completing.\n' "$last_run"
+        else
+            recent_run=true
+            printf '    last run: %s\n' "$last_run"
+        fi
+    else
+        echo "    WARNING: health-alert.sh has no completed run recorded yet (expected within 5 minutes)."
+    fi
+
+    if ! $cron_installed; then
+        if $recent_run; then
+            echo "    health-alert.sh: recent completed run found outside this user's crontab"
+        else
+            echo "             Monitoring is not confirmed active. Install with:"
+            echo "               (crontab -l 2>/dev/null; echo \"*/5 * * * * ALERT_EMAIL=you@example.com $script_path\") | crontab -"
+            echo "             Alerting also needs a \`mail\` command (mailutils or bsd-mailx;"
+            echo "             msmtp-mta does not provide one) — see scripts/MONITORING-README.md."
+        fi
+    fi
+
+    if [ -f "$state_dir/mail-failed" ]; then
+        # sanitize_untrusted both flattens and filters here, and both jobs are load-bearing.
+        # Flattening: record_mail_failure keeps the newline that separates timestamp from
+        # reason, and this printf is one line. Filtering: .health-alert is 0700 only until an
+        # operator widens it so a non-root deploy.sh can read it, and the reason is SMTP text
+        # from a remote relay either way. Keep the C1 filter in sync with health-alert.sh's
+        # record_mail_failure. printf, not echo — xpg_echo re-expands a printable \033.
+        local mail_ts mail_reason
+        mail_ts=$(head -1 "$state_dir/mail-failed" 2>/dev/null | sanitize_untrusted 40) || true
+        printf '    WARNING: alert email delivery FAILED at %s.\n' "$mail_ts"
+        mail_reason=$(tail -n +2 "$state_dir/mail-failed" 2>/dev/null | sanitize_untrusted 200) || true
+        if [ -n "$mail_reason" ]; then
+            printf '             Reason: %s\n' "$mail_reason"
+        fi
+        echo "             Checks are running but nobody is being told. Verify \`mail\` works."
+    else
+        echo "    alert email: no recorded failure (verified only when mail is attempted)"
+    fi
+
+    # Deliberately NOT an alert-mail problem: a blind OOM check is a broken capability, not
+    # an unhealthy service. health-alert.sh keeps it out of PROBLEMS so the dedupe hash and
+    # the recovery mail keep working; this is where the operator finds out instead.
+    if [ -f "$state_dir/oom-check-blind" ]; then
+        # Line 1 timestamp, line 2 reason -- same shape as mail-failed, same sanitize on read.
+        local oom_ts oom_reason
+        oom_ts=$(head -1 "$state_dir/oom-check-blind" 2>/dev/null | sanitize_untrusted 40) || true
+        oom_reason=$(sed -n '2p' "$state_dir/oom-check-blind" 2>/dev/null | sanitize_untrusted 40) || true
+        if [ "$oom_reason" = "no-journalctl" ]; then
+            # Not the operator's to fix: no systemd, so no journal and no group to join.
+            printf '    NOTE: no journalctl on this host, so the OOM check is unavailable (since %s).\n' "$oom_ts"
+            echo "          Not a misconfiguration — every other check is unaffected."
+        elif [ "$oom_reason" = "journal-error" ]; then
+            printf '    WARNING: OOM detection is BLIND (journal read failed, since %s).\n' "$oom_ts"
+            echo "             Check journalctl -k and journal configuration."
+        elif [ "$oom_reason" = "no-kernel-log" ]; then
+            printf '    NOTE: no kernel log entries are available, so the OOM check is unavailable\n'
+            printf '          (since %s). Check journal configuration and host kernel-log access.\n' "$oom_ts"
+        else
+            printf '    WARNING: OOM detection is BLIND (kernel log unreadable, since %s).\n' "$oom_ts"
+            echo "             Container OOM kills will not be alerted on. Add the cron user to"
+            echo "             group 'systemd-journal' (narrower than 'adm', which also opens /var/log):"
+            echo "               sudo usermod -aG systemd-journal \$USER   # then re-login"
+        fi
+    fi
+}
+
 echo "==> Verifying HTTPS health check..."
 for i in {1..6}; do
     if curl -sf "$HEALTH_URL" > /dev/null 2>&1; then
         echo ""
         echo "==> Deployment successful!"
         echo "    Service is healthy at $HEALTH_URL"
+        report_monitoring_status
         exit 0
     fi
     echo "    Waiting... (attempt $i/6)"

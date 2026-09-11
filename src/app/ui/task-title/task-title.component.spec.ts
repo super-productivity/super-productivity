@@ -78,6 +78,24 @@ describe('TaskTitleComponent', () => {
       expect(component.isEditing()).toBe(false);
     });
 
+    it('should end an ongoing edit when readonly becomes true', () => {
+      fixture.componentRef.setInput('readonly', false);
+      component.tmpValue.set('Test task');
+      fixture.detectChanges();
+      const clickEvent = new MouseEvent('click', { bubbles: true });
+      Object.defineProperty(clickEvent, 'target', {
+        value: document.createElement('span'),
+        enumerable: true,
+      });
+      component.onClick(clickEvent);
+      expect(component.isEditing()).toBe(true);
+
+      fixture.componentRef.setInput('readonly', true);
+      fixture.detectChanges();
+
+      expect(component.isEditing()).toBe(false);
+    });
+
     it('should allow editing when readonly is false', () => {
       fixture.componentRef.setInput('readonly', false);
       component.tmpValue.set('Test task');

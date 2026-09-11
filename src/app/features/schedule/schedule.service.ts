@@ -25,6 +25,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { TaskService } from '../tasks/task.service';
 import { startWith } from 'rxjs/operators';
 import { parseDbDateStr } from '../../util/parse-db-date-str';
+import { anchorContextNow } from './anchor-context-now';
 
 @Injectable({
   providedIn: 'root',
@@ -59,8 +60,18 @@ export class ScheduleService {
       const calendarEvents = this._calendarEvents();
       const currentTaskId = this._taskService.currentTaskId() ?? null;
 
+      // `daysToShow` here is logical today, which respects the start-of-next-day
+      // offset. Leaving `now` to its Date.now() default let the raw wall clock
+      // sit past that day's end between midnight and the offset, so every entry
+      // landed beyond the only rendered day and the panel came up empty.
+      const days = daysToShow();
+      const realNow = Date.now();
+      const now = days.length ? anchorContextNow(days[0], realNow) : realNow;
+
       return this.buildScheduleDays({
-        daysToShow: daysToShow(),
+        now,
+        realNow,
+        daysToShow: days,
         timelineTasks,
         taskRepeatCfgs,
         calendarEvents,
@@ -153,11 +164,26 @@ export class ScheduleService {
   }
 
   getDaysToShow(nrOfDaysToShow: number, referenceDate: Date | null = null): string[] {
-    const today = referenceDate ? referenceDate.getTime() : new Date().getTime();
+    // Default anchor is the logical day, not the raw clock: between calendar
+    // midnight and the configured start-of-next-day the window must still
+    // begin at (logical) today, which todayStr() elsewhere keeps naming.
+    // Cloned because the cursor is mutated below and referenceDate is the
+    // caller's (a selected-date signal value in the schedule component).
+    const cursor = referenceDate
+      ? new Date(referenceDate)
+      : this._dateService.getLogicalTodayDate();
+    // Only date parts are read below, so pin the cursor to midday first.
+    // setDate() preserves the wall time, and a late-evening one is normalised
+    // past midnight in zones whose spring-forward gap ends at 00:00
+    // (America/Godthab and America/Scoresbysund skip 23:00-23:59), which would
+    // drop a whole day from the window. Midday is never in a gap.
+    cursor.setHours(12, 0, 0, 0);
     const daysToShow: string[] = [];
     for (let i = 0; i < nrOfDaysToShow; i++) {
-      // eslint-disable-next-line no-mixed-operators
-      daysToShow.push(this._dateService.todayStr(today + i * 24 * 60 * 60 * 1000));
+      daysToShow.push(this._dateService.todayStr(cursor.getTime()));
+      // Calendar-day stepping: a DST transition day is 23h/25h long, so
+      // +24h ms arithmetic skips or duplicates a date around it.
+      cursor.setDate(cursor.getDate() + 1);
     }
     return daysToShow;
   }
@@ -167,7 +193,8 @@ export class ScheduleService {
     firstDayOfWeek: number = 0,
     referenceDate: Date | null = null,
   ): string[] {
-    const today = referenceDate || new Date();
+    // Same logical-day anchoring as getDaysToShow above.
+    const today = referenceDate || this._dateService.getLogicalTodayDate();
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
     // Calculate the first day to show based on firstDayOfWeek setting
@@ -241,7 +268,9 @@ export class ScheduleService {
 
   getDayClass(day: string, referenceMonth?: Date): string {
     const dayDate = parseDbDateStr(day);
-    const today = new Date();
+    // Logical day, same as the window anchors above: the today ring must sit
+    // on the column todayStr() names, not one off during the offset window.
+    const today = this._dateService.getLogicalTodayDate();
 
     // If referenceMonth is provided, use it to determine "current month"
     // Otherwise, use the actual current month

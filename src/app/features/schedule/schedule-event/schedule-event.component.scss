@@ -197,10 +197,15 @@
 }
 
 :host-context(.is-not-dragging) {
+  // Keep in sync with the repeat-projection branch of clickHandler(): a segment
+  // that opens the edit dialog must also look like it does. The continued types
+  // became clickable in #9314 and were missing the affordance.
   :host.CalendarEvent,
   :host.RepeatProjection,
   :host.RepeatProjectionSplit,
-  :host.ScheduledRepeatProjection {
+  :host.ScheduledRepeatProjection,
+  :host.RepeatProjectionSplitContinued,
+  :host.RepeatProjectionSplitContinuedLast {
     cursor: pointer;
 
     &:hover {
@@ -441,6 +446,13 @@
   //    height: calc(var(--offset-short-event) + var(--margin-bottom));
   //  }
   //}
+}
+
+// Not draggable (the head segment marks where the task starts), but clicking
+// still opens the task, so hint at it.
+:host.SplitTaskContinued,
+:host.SplitTaskContinuedLast {
+  cursor: pointer;
 }
 
 :host.draggable {

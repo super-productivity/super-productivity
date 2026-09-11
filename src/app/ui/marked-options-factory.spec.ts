@@ -390,6 +390,8 @@ describe('markedOptionsFactory', () => {
           // #8429: app deep-links must stay clickable
           'obsidian://open?vault=Notes',
           'vscode://file/home/user/x.ts',
+          'siyuan://blocks/20240101000000-abcdefg',
+          'x-devonthink-item://23082026-1234-5678-9ABC-DEF012345678',
           'webexteams://im?space=ff135070-68f8-11f1-9229-c7e6cca7a7cd&message=f4f13440-6b50-11f1-8868-03e71232fa87',
         ].forEach((href) => {
           const result = linkRenderer({
@@ -398,6 +400,51 @@ describe('markedOptionsFactory', () => {
             tokens: [{ type: 'text', raw: 'L', text: 'L' }],
           } as any);
           expect(result).toContain(`href="${escapeHtmlAttr(href)}"`);
+        });
+      });
+
+      it('renders a schemeless bare-domain link as an http:// anchor', () => {
+        const linkRenderer = options.renderer!.link.bind({ parser: mockParser });
+        [
+          ['www.example.com', 'http://www.example.com'],
+          ['example.com/path?q=1', 'http://example.com/path?q=1'],
+          // Protocol-relative — same handling as in task titles (renderLinks).
+          ['//example.com', 'https://example.com'],
+        ].forEach(([href, expected]) => {
+          const result = linkRenderer({
+            href,
+            title: '',
+            tokens: [{ type: 'text', raw: 'L', text: 'L' }],
+          } as any);
+          expect(result).toContain(`href="${expected}"`);
+        });
+      });
+
+      it('leaves everything but a bare web host to the scheme gate (still blocked)', () => {
+        const linkRenderer = options.renderer!.link.bind({ parser: mockParser });
+        [
+          '#section',
+          './notes.md',
+          '/abs/path',
+          // Registrable TLDs: a note's relative file reference must not become a
+          // one-click visit to a stranger's domain.
+          'readme.md',
+          'report.zip',
+          'example.com',
+          // Scheme-shaped hrefs must reach the gate unrewritten, so a future
+          // dot-containing allowlisted scheme cannot be hijacked by the prefix.
+          'com.evil.app://x',
+          'ms.msdt:1234',
+          // `host:port@other` is userinfo, not a port — never a bare host.
+          'trusted-bank.com:8080@evil.com/login',
+        ].forEach((href) => {
+          const result = linkRenderer({
+            href,
+            title: '',
+            tokens: [{ type: 'text', raw: 'Click here', text: 'Click here' }],
+          } as any);
+          expect(result).withContext(href).not.toContain('<a ');
+          expect(result).withContext(href).toContain('Click here');
         });
       });
 

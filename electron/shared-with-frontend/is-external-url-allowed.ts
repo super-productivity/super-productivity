@@ -13,10 +13,14 @@
  * item) — a far narrower surface than the OS-level handlers this allowlist
  * exists to block. They are allow-listed because productivity users routinely
  * link tasks to such apps (#8429: obsidian:// links stopped opening after the
- * GHSA-hr87 fix; #8859: outlook: deep-links to mail items). The GHSA-hr87 fix
- * was a regression that silently broke every previously-working scheme at once,
- * so the popular note/task apps in this same low-risk class (notion:, things:,
- * omnifocus:, bear:, joplin:) are restored proactively alongside #8859.
+ * GHSA-hr87 fix; #8859: outlook: deep-links to mail items; #9292: siyuan://
+ * links to notes; x-devonthink-item: links to DEVONthink documents, reported by
+ * email with no issue). The GHSA-hr87 fix was a regression that silently broke
+ * every previously-working scheme at once, so the popular note/task apps in this
+ * same low-risk class (notion:, things:, omnifocus:, bear:, joplin:) are
+ * restored proactively alongside #8859.
+ * Admission criterion: the payload must be an opaque app-internal identifier —
+ * reject any scheme that takes a filesystem path, URL, content body or command.
  * shortcut: a curated set — if a user needs a scheme that isn't here, the
  * upgrade path is a user-configurable allowlist in settings (MiscConfig).
  *
@@ -40,8 +44,10 @@ export const ALLOWED_EXTERNAL_URL_SCHEMES = [
   'omnifocus:',
   'bear:',
   'joplin:',
+  'siyuan:',
   'outlook:', // #8859 — Outlook desktop deep-links (outlook:<EntryID>)
   'webexteams:',
+  'x-devonthink-item:', // DEVONthink item links (x-devonthink-item://<uuid>)
 ];
 
 const LOCAL_FILE_URL_PREFIX = 'file:///';

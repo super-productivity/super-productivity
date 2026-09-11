@@ -1,0 +1,40 @@
+// iOS zooms the whole page when the focused form control's computed font-size
+// is below 16px, and only restores the scale on blur. That was suppressed
+// app-wide by `user-scalable=no` in the viewport meta until #9272 deliberately
+// dropped it to restore pinch-zoom (shipped in v18.16.0), which surfaced the
+// zoom on every sub-16px input (#9415, #9551, #9556).
+//
+// Apply to bare inputs/textareas that are NOT inside a mat-form-field — those
+// already resolve to 16px via --mat-form-field-container-text-size, which is
+// why most of the app was unaffected.
+//
+// Keep the literal: 16px is a WebKit platform threshold, not a design token.
+// Binding it to --font-size-lg (also 16px today) would silently re-arm the bug
+// the day that token is retuned.
+@mixin noIosFocusZoom() {
+  font-size: 16px;
+}
+
+// Same threshold, but only where touch is the primary input.
+//
+// Use for controls that have a non-focusable display counterpart rendered at
+// the same size (an inline editor behind rendered markdown, a title textarea
+// behind its static text). Those must move together or the text visibly jumps
+// size on tap — and moving them unconditionally would restyle the app for
+// desktop users, who are not affected by the zoom at all. On touch the larger
+// text is a readability win rather than a compromise.
+//
+// Apply to whatever element the size is inherited from so every layer follows
+// in one place. This nests as a DESCENDANT of the touch-primary body, so it
+// cannot target a component host — for that, write
+// `:host-context(body.isTouchPrimary) { @include noIosFocusZoom(); }` at the top
+// level of the stylesheet instead (see task-title.component.scss).
+//
+// Known gap: an iPad in mouse mode (`isMousePrimary`) that focuses via a
+// hardware Tab still zooms — accepted, since the zoom is far less disruptive at
+// that viewport.
+@mixin noIosFocusZoomOnTouch() {
+  :host-context(body.isTouchPrimary) & {
+    @include noIosFocusZoom();
+  }
+}

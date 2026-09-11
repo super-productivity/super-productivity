@@ -46,6 +46,7 @@ const ea: ElectronAPI = {
   getBackupPath: () => _invoke('GET_BACKUP_PATH') as Promise<string>,
   checkBackupAvailable: () =>
     _invoke('BACKUP_IS_AVAILABLE') as Promise<false | LocalBackupMeta>,
+  listBackups: () => _invoke('BACKUP_LIST') as Promise<LocalBackupMeta[]>,
   loadBackupData: (backupPath) =>
     _invoke('BACKUP_LOAD_DATA', backupPath) as Promise<string>,
   fileSyncSave: (args) => _invoke('FILE_SYNC_SAVE', args) as Promise<string | Error>,
@@ -207,7 +208,7 @@ const ea: ElectronAPI = {
     _send('REGISTER_GLOBAL_SHORTCUTS', keyboardCfg),
   showFullScreenBlocker: (args) => _send('FULL_SCREEN_BLOCKER', args),
 
-  backupAppData: (appData) => _send('BACKUP', appData),
+  backupAppData: (appData) => _invoke('BACKUP', appData) as Promise<void>,
 
   updateCurrentTask: (
     task,
@@ -294,6 +295,9 @@ const ea: ElectronAPI = {
   },
   sendLocalRestApiResponse: (payload: LocalRestApiResponsePayload) =>
     _send(IPC.LOCAL_REST_API_RESPONSE, payload),
+  getLocalRestApiToken: () => _invoke(IPC.LOCAL_REST_API_GET_TOKEN) as Promise<string>,
+  regenerateLocalRestApiToken: () =>
+    _invoke(IPC.LOCAL_REST_API_REGENERATE_TOKEN) as Promise<string>,
 };
 
 // Expose ea to window for ipc-event.ts using contextBridge for context isolation

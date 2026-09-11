@@ -9,8 +9,10 @@
   @include grabCursor();
   color: var(--text-color);
   background: var(--task-c-bg);
-  box-shadow: var(--task-shadow);
-  border: var(--task-border, none);
+  // Flat rows: resting elevation replaced by the shared task-border hairline so
+  // planner tasks match the main task list (isCurrent/isDragReady keep their lift).
+  box-shadow: none;
+  border: var(--task-border, 1px solid var(--task-border-color));
 
   &.isDone {
     opacity: var(--task-is-done-dim-opacity);
@@ -20,12 +22,10 @@
     }
   }
 
-  // note: we use .tags-container, since we don't want margins for an empty list
+  // v-margins come from the global .planner-tag-list-shared rules
   ::ng-deep .tags-container {
     // to match task title padding
     margin-left: 3px;
-    margin-bottom: var(--s-quarter);
-    margin-top: var(--s-quarter);
   }
 }
 
@@ -55,12 +55,6 @@
 
   @include mq(xs) {
     padding: var(--s-quarter) 0;
-  }
-}
-
-:host ::ng-deep .tag-title {
-  @include mq(xs) {
-    font-size: var(--planner-font-size-smaller) !important;
   }
 }
 

@@ -1,5 +1,8 @@
 import { IndexedDBOpenError } from './indexed-db-open.error';
-import { IDB_OPEN_ERROR_MSG } from '../../persistence/op-log-errors.const';
+import {
+  IDB_OPEN_ERROR_MSG,
+  IDB_OPEN_VERSION_BARRIER_MSG,
+} from '../../persistence/op-log-errors.const';
 import { HANDLED_ERROR_PROP_STR } from '../../../app.constants';
 
 describe('IndexedDBOpenError', () => {
@@ -123,6 +126,66 @@ describe('IndexedDBOpenError', () => {
       const error = new IndexedDBOpenError({ code: 'UNKNOWN' });
 
       expect(error.isBackingStoreError).toBe(false);
+    });
+  });
+
+  describe('isVersionError (#9187)', () => {
+    it('should be true for a downgrade-barrier VersionError', () => {
+      const error = new IndexedDBOpenError(
+        new DOMException(
+          'The requested version (7) is less than the existing version (10).',
+          'VersionError',
+        ),
+      );
+
+      expect(error.isVersionError).toBe(true);
+      // NOTE: deliberately no `isBackingStoreError` assertion here. It is false
+      // with or without this change (the message has no "backing store"), so it
+      // would pass against the unfixed code — a vacuous assertion.
+    });
+
+    // The wrapper's own message — not just the Log.err prefix — is what reaches
+    // HANDLED_ERROR_PROP_STR, getErrorTxt and the exported log history, i.e.
+    // what a user pastes into a bug report. Claiming retries there would send
+    // #9187 triage looking for a 7s window that never happened.
+    it('should not claim retries in the message when no retry ran', () => {
+      const error = new IndexedDBOpenError(
+        new DOMException(
+          'The requested version (7) is less than the existing version (10).',
+          'VersionError',
+        ),
+      );
+
+      expect(error.message).toContain(IDB_OPEN_VERSION_BARRIER_MSG);
+      expect(error.message).not.toContain('after multiple retries');
+      expect(error.message).toContain('The requested version (7) is less than');
+      // ...and the marker must carry the same corrected text.
+      expect((error as unknown as Record<string, unknown>)[HANDLED_ERROR_PROP_STR]).toBe(
+        error.message,
+      );
+    });
+
+    it('should keep the retry wording for failures that really did retry', () => {
+      const error = new IndexedDBOpenError(new Error('QuotaExceededError'));
+
+      expect(error.message).toContain(IDB_OPEN_ERROR_MSG);
+      expect(error.message).not.toContain(IDB_OPEN_VERSION_BARRIER_MSG);
+    });
+
+    it('should be false for other IndexedDB open failures', () => {
+      expect(new IndexedDBOpenError(new Error('QuotaExceededError')).isVersionError).toBe(
+        false,
+      );
+      expect(
+        new IndexedDBOpenError(new DOMException('nope', 'InvalidStateError'))
+          .isVersionError,
+      ).toBe(false);
+      expect(new IndexedDBOpenError(undefined).isVersionError).toBe(false);
+      // A message that merely mentions the words must not trigger it.
+      expect(
+        new IndexedDBOpenError(new Error('VersionError happened somewhere'))
+          .isVersionError,
+      ).toBe(false);
     });
   });
 

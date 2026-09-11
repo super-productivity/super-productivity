@@ -1,18 +1,25 @@
 import { TestBed } from '@angular/core/testing';
 import { PlannerService } from './planner.service';
 import { DateService } from '../../core/date/date.service';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { of, BehaviorSubject, ReplaySubject } from 'rxjs';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
-import { selectAllTasksWithDueTime } from '../tasks/store/task.selectors';
-import { selectAllTaskRepeatCfgs } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import {
+  selectAllTasksWithDueTime,
+  selectMapOfAllTasksInActiveProjects,
+} from '../tasks/store/task.selectors';
+import { selectActiveTaskRepeatCfgs } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { selectTodayTaskIds } from '../work-context/store/work-context.selectors';
 import { PlannerDay } from './planner.model';
 import { first, map, shareReplay } from 'rxjs/operators';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { signal, WritableSignal } from '@angular/core';
 import { LayoutService } from '../../core-ui/layout/layout.service';
+import { selectPlannerState } from './store/planner.selectors';
+import { selectTimelineConfig } from '../config/store/global-config.reducer';
+import { selectStartOfNextDayDiffMs } from '../../root-store/app-state/app-state.selectors';
+import { findSpringForwardSunday } from '../tasks/dst.test-helper';
 
 describe('PlannerService', () => {
   let service: PlannerService;
@@ -44,8 +51,25 @@ describe('PlannerService', () => {
         provideMockStore({
           selectors: [
             { selector: selectAllTasksWithDueTime, value: [] },
-            { selector: selectAllTaskRepeatCfgs, value: [] },
+            { selector: selectActiveTaskRepeatCfgs, value: [] },
             { selector: selectTodayTaskIds, value: [] },
+            { selector: selectMapOfAllTasksInActiveProjects, value: new Map() },
+            {
+              selector: selectPlannerState,
+              value: { days: {}, addPlannedTasksDialogLastShown: undefined },
+            },
+            {
+              selector: selectTimelineConfig,
+              value: {
+                isWorkStartEndEnabled: false,
+                workStart: '09:00',
+                workEnd: '17:00',
+                isLunchBreakEnabled: false,
+                lunchBreakStart: '12:00',
+                lunchBreakEnd: '13:00',
+              },
+            },
+            { selector: selectStartOfNextDayDiffMs, value: 0 },
           ],
         }),
         {
@@ -103,6 +127,7 @@ describe('PlannerService', () => {
 
   afterEach(() => {
     jasmine.clock().uninstall();
+    TestBed.inject(MockStore).resetSelectors();
   });
 
   describe('tomorrow$', () => {
@@ -480,6 +505,92 @@ describe('PlannerService', () => {
           expect(result!.dayDate).toBe(tomorrowStr);
           done();
         });
+      });
+    });
+  });
+
+  describe('getSnackExtraStr', () => {
+    it('should include a stored task on a day outside the loaded render window', async () => {
+      const dayStr = '2026-01-24';
+      mockDaysSubject.next([
+        createMockPlannerDay('2026-01-14'),
+        createMockPlannerDay('2026-01-15'),
+        createMockPlannerDay('2026-01-16'),
+        createMockPlannerDay('2026-01-17'),
+        createMockPlannerDay('2026-01-18'),
+      ]);
+
+      const store = TestBed.inject(MockStore);
+      store.overrideSelector(
+        selectMapOfAllTasksInActiveProjects,
+        new Map([
+          [
+            'out-of-window-task',
+            {
+              id: 'out-of-window-task',
+              title: 'Later task',
+              projectId: 'project1',
+              created: 0,
+              isDone: false,
+              subTaskIds: [],
+              tagIds: [],
+              timeSpentOnDay: {},
+              timeEstimate: 0,
+              timeSpent: 0,
+              attachments: [],
+            } as any,
+          ],
+        ]),
+      );
+      store.overrideSelector(selectPlannerState, {
+        days: { [dayStr]: ['out-of-window-task'] },
+        addPlannedTasksDialogLastShown: undefined,
+      });
+      store.refreshState();
+
+      await expectAsync(service.getSnackExtraStr(dayStr)).toBeResolvedTo(' – ∑ 1');
+    });
+  });
+
+  describe('daysToShow$ with a start-of-next-day offset', () => {
+    it('should start the window on the logical today between midnight and the offset', (done) => {
+      // 00:30 on Jan 15 with a 04:00 start-of-next-day is logically still Jan
+      // 14. Anchoring the window on the raw clock instead would start it at
+      // Jan 15, leaving the tasks still planned for (logical) today without a
+      // rendered day, and ensureDayLoaded can only extend the window forward,
+      // so no interaction can bring the day back.
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2026, 0, 15, 0, 30));
+      dateService.setStartOfNextDayDiff('04:00');
+      service.daysToShow$.pipe(first()).subscribe((days) => {
+        expect(days[0]).toBe('2026-01-14');
+        expect(days[1]).toBe('2026-01-15');
+        done();
+      });
+    });
+
+    it('should keep the window consecutive across a spring-forward day', (done) => {
+      // A spring-forward day is 23h long, so stepping the window in +24h ms
+      // increments from a late-evening anchor lands past it and the date
+      // disappears from the planner entirely.
+      const gap = findSpringForwardSunday(2026);
+      if (!gap) {
+        // Timezone without a spring-forward transition (UTC, Tokyo).
+        done();
+        return;
+      }
+      jasmine.clock().install();
+      const saturday = new Date(gap.sunday);
+      saturday.setDate(saturday.getDate() - 1);
+      saturday.setHours(23, 30, 0, 0);
+      jasmine.clock().mockDate(saturday);
+      const monday = new Date(gap.sunday);
+      monday.setDate(monday.getDate() + 1);
+      service.daysToShow$.pipe(first()).subscribe((days) => {
+        expect(days[0]).toBe(getDbDateStr(saturday));
+        expect(days[1]).toBe(getDbDateStr(gap.sunday));
+        expect(days[2]).toBe(getDbDateStr(monday));
+        done();
       });
     });
   });

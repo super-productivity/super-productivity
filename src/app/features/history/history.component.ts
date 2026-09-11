@@ -33,6 +33,10 @@ import { Log } from '../../core/log';
 import { DialogViewArchivedTaskComponent } from '../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 import { WorklogTaskRowComponent } from '../worklog/worklog-task-row/worklog-task-row.component';
 import { HistoryDayMetaComponent } from './history-day-meta/history-day-meta.component';
+import { DateService } from '../../core/date/date.service';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { parseDbDateStr } from '../../util/parse-db-date-str';
+import { WorklogDay, WorklogMonth, WorklogYear } from '../worklog/worklog.model';
 
 @Component({
   selector: 'history',
@@ -65,6 +69,7 @@ export class HistoryComponent {
   private readonly _route = inject(ActivatedRoute);
   private readonly _store = inject(Store);
   private readonly _taskArchiveService = inject(TaskArchiveService);
+  private readonly _dateService = inject(DateService);
   private readonly _queryParams = toSignal(this._route.queryParams, {
     initialValue: this._route.snapshot.queryParams,
   });
@@ -107,6 +112,31 @@ export class HistoryComponent {
         ? getDateRangeForWeek(+year, week, +month)
         : getDateRangeForMonth(+year, +month);
 
+    this._openExportDialog(rangeStart, rangeEnd);
+  }
+
+  exportAllData(): void {
+    const worklog = this.worklogData()?.worklog;
+    if (!worklog) {
+      return;
+    }
+
+    const dateStrings = (Object.values(worklog) as WorklogYear[])
+      .flatMap((year) => Object.values(year.ent) as WorklogMonth[])
+      .flatMap((month) => Object.values(month.ent) as WorklogDay[])
+      .map((day) => day.dateStr)
+      .sort();
+
+    const firstDate = dateStrings[0];
+    const lastDate = dateStrings[dateStrings.length - 1];
+    if (!firstDate || !lastDate) {
+      return;
+    }
+
+    this._openExportDialog(parseDbDateStr(firstDate), parseDbDateStr(lastDate));
+  }
+
+  private _openExportDialog(rangeStart: Date, rangeEnd: Date): void {
     this._matDialog.open(DialogWorklogExportComponent, {
       restoreFocus: true,
       panelClass: 'big',
@@ -153,9 +183,19 @@ export class HistoryComponent {
               .map((id) => archiveState.entities[id])
               .filter((t): t is Task => !!t);
           }
+          const restoreToToday = {
+            today: this._dateService.todayStr(),
+            startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+          };
 
           Log.log('RESTORE', { taskId: task.id, subTaskCount: subTasks?.length });
-          this._taskService.restoreTask(task, subTasks || []);
+          this._store.dispatch(
+            TaskSharedActions.restoreTask({
+              task,
+              subTasks: subTasks || [],
+              restoreToToday,
+            }),
+          );
           this._router.navigate(['/active/tasks']);
         }
       });

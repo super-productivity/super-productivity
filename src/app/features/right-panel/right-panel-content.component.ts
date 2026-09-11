@@ -12,7 +12,6 @@ import { TaskDetailTargetPanel, TaskWithSubTasks } from '../tasks/task.model';
 import { filter, map, startWith } from 'rxjs/operators';
 import { TaskService } from '../tasks/task.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
-import { slideInFromTopAni } from '../../ui/animations/slide-in-from-top.ani';
 import { slideInFromRightAni } from '../../ui/animations/slide-in-from-right.ani';
 import { taskDetailPanelTaskChangeAnimation } from '../tasks/task-detail-panel/task-detail-panel.ani';
 import { IssuePanelComponent } from '../issue-panel/issue-panel.component';
@@ -46,11 +45,7 @@ export type RightPanelContentPanelType = PanelContentType;
   templateUrl: './right-panel-content.component.html',
   styleUrls: ['./right-panel-content.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  animations: [
-    taskDetailPanelTaskChangeAnimation,
-    slideInFromTopAni,
-    slideInFromRightAni,
-  ],
+  animations: [taskDetailPanelTaskChangeAnimation, slideInFromRightAni],
   imports: [
     IssuePanelComponent,
     NotesComponent,

@@ -15,6 +15,58 @@
         <span class="tab-label">{{ labelKey | translate }}</span>
       </ng-template>
 
+      <mat-form-field
+        class="settings-search"
+        appearance="outline"
+        subscriptSizing="dynamic"
+      >
+        <mat-icon matPrefix>search</mat-icon>
+        <mat-label>{{ T.PS.SEARCH_PLACEHOLDER | translate }}</mat-label>
+        <input
+          matInput
+          [matAutocomplete]="settingsSearchAutoEl"
+          [ngModel]="searchQuery"
+          (ngModelChange)="onSearchChange($event)"
+        />
+        @if (searchQuery) {
+          <button
+            (click)="onSearchChange('')"
+            [attr.aria-label]="T.G.CLEAR | translate"
+            mat-icon-button
+            matSuffix
+            type="button"
+          >
+            <mat-icon>clear</mat-icon>
+          </button>
+        }
+      </mat-form-field>
+
+      <mat-autocomplete
+        #settingsSearchAutoEl="matAutocomplete"
+        class="settings-search-panel"
+        (optionSelected)="goToSearchResult($event.option.value)"
+        [autoActiveFirstOption]="true"
+      >
+        <!-- Guarded so an empty panel (and "no results") can't pop open on focus. -->
+        @if (searchQuery) {
+          @for (result of searchResults; track $index) {
+            <mat-option [value]="result">
+              <span>{{ result.labelKey | translate }}</span>
+              <span class="search-result__path">
+                {{ result.tabLabelKey | translate }}
+                @if (result.matchedLabelKey) {
+                  › {{ result.matchedLabelKey | translate }}
+                }
+              </span>
+            </mat-option>
+          } @empty {
+            <mat-option [disabled]="true">{{
+              T.PS.SEARCH_NO_RESULTS | translate
+            }}</mat-option>
+          }
+        }
+      </mat-autocomplete>
+
       <mat-tab-group
         class="settings-tabs"
         [(selectedIndex)]="selectedTabIndex"
@@ -76,7 +128,7 @@
             <!-- @todo: Create a single style for forming all the settings elements.
                         Make all as "sections" or as "forms" consistently.
             -->
-            <section class="config-section">
+            <section class="config-section sound-section">
               <config-sound-form
                 [cfg]="getGlobalCfgSection('sound')"
                 (save)="saveGlobalCfg($event)"
@@ -127,7 +179,7 @@
               {{ 'PS.TABS.PRODUCTIVITY' | translate }}
             </h2>
             @for (section of globalProductivityConfigFormCfg; track section.key) {
-              <section class="config-section">
+              <section class="config-section section-{{ section.key }}">
                 <config-section
                   (save)="saveGlobalCfg($event)"
                   [cfg]="getGlobalCfgSection(section.key)"
@@ -249,7 +301,7 @@
             </section>
 
             @for (section of globalImexFormCfg; track section.key) {
-              <section class="config-section imex-section">
+              <section class="config-section imex-section section-{{ section.key }}">
                 <config-section
                   (save)="saveGlobalCfg($event)"
                   [cfg]="getGlobalCfgSection(section.key)"

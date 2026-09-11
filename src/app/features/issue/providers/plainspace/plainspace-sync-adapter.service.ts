@@ -6,17 +6,13 @@ import { PlainspaceCfg } from './plainspace.model';
 import { PlainspaceApiService } from './plainspace-api.service';
 
 /**
- * Push fields, written via PATCH /tasks/:id:
+ * Field mappings between Super Productivity and Plainspace:
  * - `isDone` → `done`
- * - `title` → `title` (SP rename → Plainspace item text)
- * - `dueWithTime` → `scheduledAt` (SP scheduled time → Plainspace). SP stores an
- *   epoch-ms number; Plainspace wants an ISO instant, or null to unschedule.
- *   Plainspace's own reminder sweep then fires it for the team.
+ * - `title` → `title`
+ * - `dueWithTime` → `scheduledAt`
  *
- * Direction is `pushOnly` for all three: the reverse direction (Plainspace → SP)
- * is handled by issue-update polling (getFreshDataForIssueTask applies
- * getAddTaskData, which already carries title/isDone/scheduledAt), not this
- * adapter.
+ * Completion is the only field written back. Title and schedule are pulled from
+ * Plainspace by issue-update polling.
  *
  * `dueDay` (date-only scheduling, no time) is intentionally NOT mapped: Plainspace
  * `scheduledAt` always carries a time, so mapping a day-only task would fabricate
@@ -34,14 +30,14 @@ const PLAINSPACE_FIELD_MAPPINGS: FieldMapping[] = [
   {
     taskField: 'title',
     issueField: 'title',
-    defaultDirection: 'pushOnly',
+    defaultDirection: 'pullOnly',
     toIssueValue: (taskValue: unknown): string => (taskValue as string) ?? '',
     toTaskValue: (issueValue: unknown): string => (issueValue as string) ?? '',
   },
   {
     taskField: 'dueWithTime',
     issueField: 'scheduledAt',
-    defaultDirection: 'pushOnly',
+    defaultDirection: 'pullOnly',
     toIssueValue: (taskValue: unknown): string | null =>
       typeof taskValue === 'number' ? new Date(taskValue).toISOString() : null,
     toTaskValue: (issueValue: unknown): number | undefined =>
@@ -50,10 +46,8 @@ const PLAINSPACE_FIELD_MAPPINGS: FieldMapping[] = [
 ];
 
 /**
- * Two-way sync adapter for Plainspace: pushes a task's done state and scheduled
- * time back to Plainspace when it is completed/reopened or (re)scheduled in Super
- * Productivity. Registered for the `PLAINSPACE` issue type in
- * IssueTwoWaySyncEffects.
+ * Two-way sync adapter for Plainspace: writes completion changes back and leaves
+ * Plainspace-owned title and schedule data to the polling path.
  */
 @Injectable({ providedIn: 'root' })
 export class PlainspaceSyncAdapterService implements IssueSyncAdapter<PlainspaceCfg> {
@@ -64,7 +58,7 @@ export class PlainspaceSyncAdapterService implements IssueSyncAdapter<Plainspace
   }
 
   getSyncConfig(_cfg: PlainspaceCfg): FieldSyncConfig {
-    return { isDone: 'pushOnly', title: 'pushOnly', dueWithTime: 'pushOnly' };
+    return { isDone: 'pushOnly', title: 'pullOnly', dueWithTime: 'pullOnly' };
   }
 
   /**
@@ -98,27 +92,19 @@ export class PlainspaceSyncAdapterService implements IssueSyncAdapter<Plainspace
     changes: Record<string, unknown>,
     cfg: PlainspaceCfg,
   ): Promise<void> {
-    // `changes` is keyed by issue field (toPush from the effect). Collapse done
-    // and scheduled-time changes into a single PATCH.
-    const fields: { done?: boolean; title?: string; scheduledAt?: string | null } = {};
-    if ('isDone' in changes) {
-      fields.done = !!changes['isDone'];
-    }
-    if ('title' in changes) {
-      fields.title = (changes['title'] ?? '') as string;
-    }
-    if ('scheduledAt' in changes) {
-      fields.scheduledAt = (changes['scheduledAt'] ?? null) as string | null;
-    }
-    if (Object.keys(fields).length === 0) {
+    if (!('isDone' in changes)) {
       return;
     }
-    await firstValueFrom(this._api.patchTask$(issueId, fields, cfg));
+    const done = !!changes['isDone'];
+    const updated = await firstValueFrom(this._api.patchTask$(issueId, { done }, cfg));
+    if (!updated || updated.id !== issueId || updated.isDone !== done) {
+      throw new Error('Plainspace completion update failed');
+    }
   }
 
   extractSyncValues(issue: Record<string, unknown>): Record<string, unknown> {
-    // Every push field needs a baseline here, else computePushDecisions skips it
-    // as 'no-baseline' and nothing ever pushes.
+    // Completion needs a push baseline; title and schedule remain in the same
+    // remote baseline so polling can identify provider-owned changes.
     return {
       isDone: issue['isDone'],
       title: issue['title'],

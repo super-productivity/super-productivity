@@ -1,0 +1,109 @@
+name: Issue Reproduce
+
+# A maintainer applies the `needs repro` label; Claude Code tries to turn the
+# report into a failing Playwright test on a `repro/issue-N` branch, opens a
+# draft PR, and leaves one comment with the verdict. The label is the human
+# gate: the agent reads attacker-authored issue text while holding a token
+# that can push branches, so it must never run unprompted. The action also
+# requires the labeler to have write access; a triage-role label only yields
+# a failed run.
+#
+# Residual exposure: the Claude OAuth token and the job token sit in the
+# agent's environment. Git is limited to the exact commands the prompt needs,
+# file edits to e2e/tests, and the spec runs through run-repro-test.sh with
+# a credential-free environment, so test code the agent writes cannot read
+# them.
+#
+# CI on the draft PR waits for "Approve workflows to run" because it was
+# opened with the job token.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: issue-reproduce-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  reproduce:
+    if: github.event.label.name == 'needs repro'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Pre-commit runs the full lint and pre-push the whole unit suite; both
+      # already ran on master and would eat the agent's budget.
+      HUSKY: '0'
+
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          # The action writes its own token into the origin URL for pushes.
+          persist-credentials: false
+
+      # work around for npm installs from git+https://github.com/johannesjo/J2M.git
+      - name: Reconfigure git to use HTTP authentication
+        run: >
+          git config --global url."https://github.com/".insteadOf
+          ssh://git@github.com/
+
+      - name: Get npm cache directory
+        id: npm-cache-dir
+        run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        with:
+          path: ${{ steps.npm-cache-dir.outputs.dir }}
+          key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node22-
+
+      - name: Install npm packages
+        run: npm i
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # Built once here so the agent's turns go to the test, not the build.
+      # CI=true makes the Playwright webServer serve this build.
+      - name: Build frontend for E2E
+        run: npm run buildFrontend:e2e
+
+      - name: Reproduce with Claude Code
+        uses: anthropics/claude-code-action@a874e9ecd7bb36efdad65429c6b35815f5a08f10 # v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          bot_name: github-actions[bot]
+          # Only the number crosses into the prompt. The agent fetches the text
+          # itself, so no attacker-controlled string lands in this file.
+          prompt: |
+            Reproduce GitHub issue #${{ github.event.issue.number }} of
+            ${{ github.repository }} as a failing Playwright E2E test.
+            Read .github/prompts/issue-reproduce.md first and follow it exactly.
+          # Prefix-matched allowlist mirroring the exact commands in the prompt:
+          # no force pushes, no pushes outside repro/*, no edits outside
+          # e2e/tests, no test runs outside the credential-free wrapper.
+          claude_args: --max-turns 150 --allowedTools "Read,Glob,Grep,Edit(e2e/tests/**),Edit(.tmp/**),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh pr create:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git ls-remote:*),Bash(git switch -c repro/*),Bash(git add e2e/tests/*),Bash(git commit -m *),Bash(git push -u origin repro/*),Bash(.github/scripts/run-repro-test.sh:*)"
+
+      # The verdict comment is the agent's last step, so a timeout or a
+      # max-turns stop would otherwise leave the issue silent.
+      - name: Report a failed attempt
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: >
+          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY"
+          --body "🤖 Automated reproduction attempt failed before it could report. See $RUN_URL"

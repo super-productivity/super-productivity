@@ -1,6 +1,14 @@
 // Menu styles are in global styles: src/styles/components/_customizer-menu.scss
 // This is necessary because mat-menu renders in a global overlay container
 
+// This component renders only a `mat-menu`, which lives in that overlay — so
+// the host element has nothing in it and must not take part in layout. Without
+// this it still counts as a flex item wherever it is mounted, taking a `gap`
+// for a box that draws nothing.
+:host {
+  display: contents;
+}
+
 .menu-input-wrapper {
   padding: var(--s) var(--s2);
   min-width: 250px;

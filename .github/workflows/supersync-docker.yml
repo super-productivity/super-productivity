@@ -20,6 +20,11 @@ on:
         type: boolean
         default: true
 
+# Every run publishes the same mutable `latest` tag, so only the newest may push.
+concurrency:
+  group: supersync-docker-publish
+  cancel-in-progress: true
+
 jobs:
   build-and-push:
     name: Build and Push to GHCR
@@ -30,7 +35,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -41,7 +46,7 @@ jobs:
             objects.githubusercontent.com:443
 
       - name: Check out the repo
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -52,7 +57,7 @@ jobs:
           ssh://git@github.com/
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v2
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -68,7 +73,7 @@ jobs:
             type=sha,prefix={{branch}}-
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Resolve image source revision
         id: source-ref
@@ -99,8 +104,27 @@ jobs:
             VCS_REF=${{ steps.source-ref.outputs.revision }}
           no-cache: ${{ github.event_name == 'workflow_dispatch' && inputs.no_cache || false }}
           platforms: linux/amd64
+          # Buildx would otherwise attach a provenance attestation, turning every push
+          # into an OCI index with an untagged child version. Nobody consumes the
+          # attestation (deploys verify the VCS_REF revision label instead), and a flat
+          # one-version-per-build graph is what makes the prune step below safe.
+          provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Image digest
         run: echo "Image pushed with digest ${{ steps.meta.outputs.tags }}"
+
+      # Keep the registry from accumulating a version per master push forever. 15
+      # newest versions ≈ weeks of rollback targets at the current push cadence.
+      # Safe to count naively because the build is single-arch with provenance off:
+      # one version per build, no untagged children a deletion could orphan.
+      # Requires the package to grant this repo write access (it does — this same
+      # workflow publishes it with GITHUB_TOKEN).
+      - name: Prune old package versions
+        if: github.event_name == 'push'
+        uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5
+        with:
+          package-name: supersync
+          package-type: container
+          min-versions-to-keep: 15

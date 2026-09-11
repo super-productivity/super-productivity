@@ -29,9 +29,14 @@ import {
 import { updateGlobalConfigSection } from '../../config/store/global-config.actions';
 import { take, toArray } from 'rxjs/operators';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { DEFAULT_TASK } from '../../tasks/task.model';
 
 describe('FocusModeEffects', () => {
   let actions$: Observable<any>;
+  let takeABreakServiceMock: {
+    otherNoBreakTIme$: BehaviorSubject<number>;
+    resetTimer: jasmine.Spy;
+  };
   let effects: FocusModeEffects;
   let store: MockStore;
   let strategyFactoryMock: any;
@@ -100,8 +105,9 @@ describe('FocusModeEffects', () => {
         .and.returnValue(false),
     };
 
-    const takeABreakServiceMock = {
+    takeABreakServiceMock = {
       otherNoBreakTIme$: new BehaviorSubject<number>(0),
+      resetTimer: jasmine.createSpy('resetTimer'),
     };
 
     notifyServiceMock = {
@@ -163,6 +169,21 @@ describe('FocusModeEffects', () => {
 
   afterEach(() => {
     store.resetSelectors();
+  });
+
+  describe('resetBreakTimerOnBreakStart$', () => {
+    // #6064 / #9305: must go through resetTimer(), not otherNoBreakTIme$.next(0).
+    // The latter only zeroes the counter and skips the reminder teardown, so the
+    // "take a break" banner stays up and the lock-screen / fullscreen-blocker
+    // subjects stay latched at `true` for the rest of the session.
+    it('resets the break timer via resetTimer() when a break starts', (done) => {
+      actions$ = of(actions.startBreak({}));
+
+      effects.resetBreakTimerOnBreakStart$.subscribe(() => {
+        expect(takeABreakServiceMock.resetTimer).toHaveBeenCalledTimes(1);
+        done();
+      });
+    });
   });
 
   describe('syncDurationWithMode$', () => {
@@ -1219,7 +1240,10 @@ describe('FocusModeEffects', () => {
           },
           {
             provide: TakeABreakService,
-            useValue: { otherNoBreakTIme$: new BehaviorSubject<number>(0) },
+            useValue: {
+              otherNoBreakTIme$: new BehaviorSubject<number>(0),
+              resetTimer: jasmine.createSpy('resetTimer'),
+            },
           },
           { provide: NotifyService, useValue: { notify: androidNotify } },
           {
@@ -1230,6 +1254,13 @@ describe('FocusModeEffects', () => {
         ],
       });
       androidEffects = TestBed.inject(FocusModeEffects);
+    });
+
+    // This describe builds its OWN MockStore, so the outer `afterEach` (which
+    // resets the shared instance) does not clear the overrides above and they
+    // would leak into later spec files.
+    afterEach(() => {
+      TestBed.inject(MockStore).resetSelectors();
     });
 
     it('should banner but NOT notify on Android (native posts the completion notification)', (done) => {
@@ -2203,6 +2234,63 @@ describe('FocusModeEffects', () => {
   });
 
   describe('syncSessionStartToTracking$', () => {
+    it('should switch tracking to the explicitly selected focus task when the session starts', (done) => {
+      store.overrideSelector(selectors.selectPausedTaskId, 'paused-task');
+      store.overrideSelector(selectLastCurrentTask, null);
+      store.overrideSelector(selectTaskById, {
+        ...DEFAULT_TASK,
+        id: 'selected-task',
+        title: 'Selected Focus Task',
+        isDone: false,
+        projectId: '',
+      });
+      currentTaskId$.next('previously-tracked-task');
+      store.refreshState();
+
+      actions$ = of(
+        actions.startFocusSession({
+          duration: 25 * 60 * 1000,
+          taskId: 'selected-task',
+        }),
+      );
+
+      effects.syncSessionStartToTracking$.pipe(toArray()).subscribe((emitted) => {
+        expect(emitted).toEqual([setCurrentTask({ id: 'selected-task' })]);
+        done();
+      });
+    });
+
+    [null, 'previously-tracked-task'].forEach((currentTaskId) => {
+      it(`should reject an explicitly selected done task without changing ${
+        currentTaskId ? 'different' : 'empty'
+      } tracking`, (done) => {
+        store.overrideSelector(selectors.selectPausedTaskId, null);
+        store.overrideSelector(selectLastCurrentTask, null);
+        store.overrideSelector(selectTaskById, {
+          ...DEFAULT_TASK,
+          id: 'done-selected-task',
+          title: 'Done Selected Focus Task',
+          isDone: true,
+          projectId: '',
+        });
+        currentTaskId$.next(currentTaskId);
+        store.refreshState();
+
+        actions$ = of(
+          actions.startFocusSession({
+            duration: 25 * 60 * 1000,
+            taskId: 'done-selected-task',
+          }),
+        );
+
+        effects.syncSessionStartToTracking$.pipe(toArray()).subscribe((emitted) => {
+          const emittedTypes: string[] = emitted.map((action) => action.type);
+          expect(emittedTypes).toEqual([actions.selectFocusTask.type]);
+          done();
+        });
+      });
+    });
+
     it('should dispatch setCurrentTask when session starts with pausedTaskId and no current task', (done) => {
       store.overrideSelector(selectFocusModeConfig, {
         isSkipPreparation: false,

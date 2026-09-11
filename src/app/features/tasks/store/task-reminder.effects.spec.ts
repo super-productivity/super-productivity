@@ -17,6 +17,7 @@ import { createBaseState } from '../../../root-store/meta/task-shared-meta-reduc
 import { RootState } from '../../../root-store/root-state';
 import { TASK_FEATURE_NAME } from './task.reducer';
 import { plannerFeatureKey } from '../../planner/store/planner.reducer';
+import { TaskMultiSelectService } from '../task-multi-select.service';
 
 describe('TaskReminderEffects', () => {
   let actions$: Observable<Action>;
@@ -48,6 +49,10 @@ describe('TaskReminderEffects', () => {
 
     TestBed.configureTestingModule({
       providers: [
+        {
+          provide: TaskMultiSelectService,
+          useValue: { isBulkFeedbackSuppressed: () => false },
+        },
         TaskReminderEffects,
         provideMockActions(() => actions$),
         { provide: SnackService, useValue: snackServiceSpy },
@@ -409,6 +414,10 @@ describe('TaskReminderEffects - cancelNativeReminderOnUnschedule$ filter', () =>
 
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskReminderEffects,
           provideMockActions(() => actions$),
           { provide: SnackService, useValue: snackServiceSpy },
@@ -459,6 +468,10 @@ describe('TaskReminderEffects - cancelNativeReminderOnUnschedule$ filter', () =>
 
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskReminderEffects,
           provideMockActions(() => actions$),
           { provide: SnackService, useValue: snackServiceSpy },
@@ -507,6 +520,10 @@ describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () 
     beforeEach(() => {
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskReminderEffects,
           provideMockActions(() => actions$),
           {
@@ -583,6 +600,10 @@ describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () 
     beforeEach(() => {
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskReminderEffects,
           provideMockActions(() => actions$),
           {

@@ -137,6 +137,20 @@ describe('mapScheduleDaysToScheduleEvents()', () => {
     expect(res.eventsFlat[0].isBeyondBudget).toBe(true);
   });
 
+  it('preserves the source occurrence date of a continued repeat projection', () => {
+    const entry = {
+      ...fakeTaskEntry('CONTINUED', {
+        plannedForDay: '2026-07-31',
+        start: new Date(2026, 6, 31, 0, 0).getTime(),
+      }),
+      sourceOccurrenceDate: '2026-07-30',
+    };
+
+    const res = mapScheduleDaysToScheduleEvents([fakeDay({ entries: [entry] })], FH);
+
+    expect(res.eventsFlat[0].sourceOccurrenceDate).toBe('2026-07-30');
+  });
+
   it('should set calendar badge day for beyond budget planned tasks', () => {
     const res = mapScheduleDaysToScheduleEvents(
       [

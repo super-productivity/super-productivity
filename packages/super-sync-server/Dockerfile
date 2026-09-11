@@ -52,6 +52,10 @@ WORKDIR /app
 # Copy built artifacts from builder (note: tsconfig rootDir is "." so structure is dist/src/ and dist/scripts/)
 COPY --from=builder --chown=supersync:nodejs /repo/packages/super-sync-server/dist ./dist
 COPY --from=builder --chown=supersync:nodejs /repo/packages/super-sync-server/public ./public
+# Templates live OUTSIDE public/ on purpose: @fastify/static serves that whole directory,
+# so a template left there is downloadable at /privacy.template.html — which would republish
+# the very statements the generator suppresses when an operator has not configured them.
+COPY --from=builder --chown=supersync:nodejs /repo/packages/super-sync-server/templates ./templates
 COPY --from=builder --chown=supersync:nodejs /repo/packages/super-sync-server/prisma ./prisma
 COPY --from=builder --chown=supersync:nodejs /repo/packages/super-sync-server/scripts ./scripts
 COPY --from=builder --chown=supersync:nodejs /repo/packages/super-sync-server/src ./src

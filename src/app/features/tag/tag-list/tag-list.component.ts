@@ -31,6 +31,16 @@ import { getTaskRepeatInfoText } from '../../tasks/task-detail-panel/get-task-re
 import { TranslateService } from '@ngx-translate/core';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 
+/**
+ * Structural contract of what tag-list actually reads from its input. Both
+ * Task and TaskRepeatCfg satisfy it (repeat cfgs simply lack the optional
+ * issue/repeat fields, so those chips never render for them).
+ */
+export type TagListTask = Pick<
+  Task,
+  'tagIds' | 'issueId' | 'issueType' | 'issuePoints' | 'repeatCfgId'
+> & { projectId: string | null };
+
 @Component({
   selector: 'tag-list',
   templateUrl: './tag-list.component.html',
@@ -46,7 +56,7 @@ export class TagListComponent {
   private readonly _translateService = inject(TranslateService);
   private readonly _dateTimeFormatService = inject(DateTimeFormatService);
 
-  task = input.required<Task>();
+  task = input.required<TagListTask>();
 
   tagsToHide = input<string[]>();
 
@@ -106,7 +116,7 @@ export class TagListComponent {
       this.isShowProjectTagAlways() ||
       this.workContext()?.activeType === WorkContextType.TAG
     ) {
-      return this.task().projectId;
+      return this.task().projectId ?? undefined;
     }
     return undefined;
   });

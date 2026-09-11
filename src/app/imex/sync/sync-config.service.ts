@@ -12,9 +12,17 @@ import {
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SyncLog } from '../../core/log';
 import { clearSessionKeyCache } from '@sp/sync-core';
-import type { SuperSyncPrivateCfg } from '@sp/sync-providers/super-sync';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { HAS_OFFICIAL_ONEDRIVE_CLIENT_ID } from './onedrive-auth-mode.const';
+
+// Optional free-text fields where '' is a deliberate "cleared, use the
+// default" value. Every other field treats '' as "untouched" (see
+// _updatePrivateConfig) so Formly's resetOnHide cannot wipe saved credentials.
+// Checked against the private-cfg models so a field rename fails to compile.
+const CLEARABLE_FIELDS = ['loginName', 'deviceName'] as const satisfies readonly (
+  | keyof PrivateCfgByProviderId<SyncProviderId.Nextcloud>
+  | keyof PrivateCfgByProviderId<SyncProviderId.SuperSync>
+)[];
 
 // Maps sync providers to their corresponding form field in SyncConfig
 // Dropbox is null because it doesn't store settings in the form (uses OAuth)
@@ -37,6 +45,8 @@ const SENSITIVE_FIELDS = [
   'refreshToken',
   'loginName',
   'userName',
+  // User-typed presence device name: log history is exportable (rule 9).
+  'deviceName',
 ];
 
 /**
@@ -290,16 +300,14 @@ export class SyncConfigService {
     }
     const oldConfig = await activeProvider.privateCfg.load();
 
-    // Build new config - for SuperSync, always enable encryption when password is set
+    // Entering a password signals encryption intent for every provider. In
+    // particular, a file-based client prompted by an encrypted remote must not
+    // retain an explicit `false` intent and upload its next snapshot as plaintext.
     const newConfig = {
       ...oldConfig,
       encryptKey: pwd,
+      isEncryptionEnabled: true,
     } as PrivateCfgByProviderId<SyncProviderId>;
-
-    // For SuperSync, explicitly enable encryption
-    if (activeProvider.id === SyncProviderId.SuperSync) {
-      (newConfig as SuperSyncPrivateCfg).isEncryptionEnabled = true;
-    }
 
     await this._providerManager.setProviderConfig(activeProvider.id, newConfig);
 
@@ -398,7 +406,7 @@ export class SyncConfigService {
     // Empty credentials should be cleared by disabling the provider, not by form state
     const nonEmptyFormValues = Object.entries(providerCfgAsRecord).reduce(
       (acc, [key, value]) => {
-        if (providerId === SyncProviderId.Nextcloud && key === 'loginName') {
+        if ((CLEARABLE_FIELDS as readonly string[]).includes(key)) {
           if (value !== undefined && value !== null) {
             acc[key] = typeof value === 'string' ? value : '';
           }

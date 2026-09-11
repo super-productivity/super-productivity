@@ -44,7 +44,7 @@
       cdkDrag
       [cdkDragStartDelay]="dragDelayForTouch()"
       [cdkDragLockAxis]="isXs() ? 'y' : ''"
-      [cdkDragDisabled]="listModelId() === 'LATER_TODAY'"
+      [cdkDragDisabled]="listModelId() === 'LATER_TODAY' || isTouchSelectionMode()"
       [cdkDragData]="task"
       (pointerdown)="onDragPointerDown(task, $event)"
       (cdkDragStarted)="onDragStarted(task, $event)"

@@ -23,8 +23,12 @@ jobs:
     name: SuperSync Server Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      DATABASE_URL: postgresql://supersync:superpassword@localhost:5432/supersync_db
+    # DATABASE_URL is set PER STEP, not here. Job-level it also reached the unit step, and
+    # the unit suite is written for a machine with no database: monitoring-db.ts adds a
+    # `datasources` override only when DATABASE_URL is set, so monitoring-scripts.spec.ts's
+    # exact-match assertion passed locally and failed on every CI run. That failure then
+    # skipped the two steps below, so the PostgreSQL integration suite never ran here at
+    # all while the check still reported on it.
     services:
       postgres:
         image: postgres:16-alpine
@@ -41,10 +45,10 @@ jobs:
           --health-retries 10
     steps:
       - name: Check out Git repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           persist-credentials: false
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: 22
           cache: 'npm'
@@ -55,11 +59,36 @@ jobs:
           ssh://git@github.com/
       - name: Install npm Packages
         run: npm i
+      - name: Verify Helm upgrade value compatibility
+        working-directory: packages/super-sync-server
+        run: |
+          set -euo pipefail
+          chart_args=(
+            supersync helm/supersync
+            --show-only templates/deployment.yaml
+            --set postgresql.password=test
+            --set supersync.secret.jwtSecret=01234567890123456789012345678901
+          )
+          helm template "${chart_args[@]}" --set postgresql.connectionLimit=null |
+            grep -Fq 'connection_limit=20&pool_timeout=10'
+          if helm template "${chart_args[@]}" --set postgresql.connectionLimit=0 >/dev/null 2>&1; then
+            echo 'connectionLimit=0 unexpectedly passed Helm validation' >&2
+            exit 1
+          fi
+          # Liveness must stay off the DB-gated endpoint; readiness and startup keep it.
+          rendered=$(helm template "${chart_args[@]}")
+          printf '%s\n' "$rendered" | grep -A3 'livenessProbe:' | grep -q 'path: /live'
+          printf '%s\n' "$rendered" | grep -A3 'readinessProbe:' | grep -q 'path: /health'
+          printf '%s\n' "$rendered" | grep -A3 'startupProbe:' | grep -q 'path: /health'
       - name: Run SuperSync Server Tests
         run: cd packages/super-sync-server && npm test
       - name: Apply PostgreSQL Test Schema
         working-directory: packages/super-sync-server
+        env:
+          DATABASE_URL: postgresql://supersync:superpassword@localhost:5432/supersync_db
         run: npx prisma db push --skip-generate
       - name: Run SuperSync PostgreSQL Integration Tests
         working-directory: packages/super-sync-server
+        env:
+          DATABASE_URL: postgresql://supersync:superpassword@localhost:5432/supersync_db
         run: npm run test:integration:postgres

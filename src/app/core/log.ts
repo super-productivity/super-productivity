@@ -23,7 +23,9 @@ interface LogEntry {
 // deep local debugging call Log.setLevel(LogLevel.DEBUG) ad hoc.
 const LOG_LEVEL = LogLevel.VERBOSE;
 
-const MAX_DATA_LENGTH = 400;
+// Exported so payloads designed for the exported Logs can pin "fits in one
+// arg" in their specs (see operation-decrypt-failure-log.util.spec.ts).
+export const MAX_DATA_LENGTH = 400;
 
 const truncateSerialized = (value: string): string =>
   value.length > MAX_DATA_LENGTH ? 'short:' + value.substring(0, MAX_DATA_LENGTH) : value;

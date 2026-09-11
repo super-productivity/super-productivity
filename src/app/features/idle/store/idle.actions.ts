@@ -32,6 +32,3 @@ export const idleDialogResult = createAction(
     simpleCounterToggleBtnsWhenNoTrackItems?: SimpleCounterIdleBtn[];
   }>(),
 );
-
-// TODO better place would be the take a break module, if we ever add a store there
-export const triggerResetBreakTimer = createAction('[Idle] Reset break timer');

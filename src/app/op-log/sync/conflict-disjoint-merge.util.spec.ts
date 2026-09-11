@@ -351,4 +351,70 @@ describe('conflict-disjoint-merge.util', () => {
       expect(buildMergedFieldDiffs({}, {}, localMeta, remoteMeta)).toEqual([]);
     });
   });
+
+  // ── cleared fields (#9776): `changes: { field: undefined }` + out-of-band
+  // `clearedFields`. The author's op keeps the undefined key (structured clone);
+  // the same op after a JSON wire round-trip loses it. Both shapes must extract
+  // the IDENTICAL field set, or the author merges while the receiver falls back
+  // to whole-entity LWW — silent divergence on the same conflict. ──────────────
+  describe('cleared fields', () => {
+    /** Author-side shape: undefined key survives IndexedDB structured clone. */
+    const authorClearOp = (): Operation =>
+      op({
+        payload: {
+          actionPayload: {
+            task: { id: 'task-1', changes: { _hideSubTasksMode: undefined } },
+            clearedFields: ['_hideSubTasksMode'],
+          },
+          entityChanges: [],
+        },
+      });
+
+    /** The identical op after a JSON wire round-trip (undefined key dropped). */
+    const wireClearOp = (): Operation => JSON.parse(JSON.stringify(authorClearOp()));
+
+    it('restores a wire-dropped clear into the extracted changes', () => {
+      const changes = mergeChangedFields([wireClearOp()], 'task', 'task-1');
+      expect(Object.keys(changes)).toEqual(['_hideSubTasksMode']);
+      expect(changes['_hideSubTasksMode']).toBeUndefined();
+      expect(hasOpaqueChanges([wireClearOp()], 'task', 'task-1')).toBe(false);
+    });
+
+    it('extracts the identical field set for author-side and wire-side shapes', () => {
+      expect(mergeChangedFields([authorClearOp()], 'task', 'task-1')).toEqual(
+        mergeChangedFields([wireClearOp()], 'task', 'task-1'),
+      );
+    });
+
+    it('judges merge eligibility identically on both clients (clear vs disjoint edit)', () => {
+      const otherSideOp = op({
+        clientId: 'B',
+        vectorClock: { B: 1 },
+        payload: { task: { id: 'task-1', changes: { title: 'New title' } } },
+      });
+      const eligibleFor = (clearOp: Operation): boolean =>
+        isDisjointMergeEligible({
+          localOps: [clearOp],
+          remoteOps: [otherSideOp],
+          payloadKey: 'task',
+          entityId: 'task-1',
+        });
+      expect(eligibleFor(authorClearOp())).toBe(true);
+      expect(eligibleFor(wireClearOp())).toBe(true);
+    });
+
+    it('ignores junk clearedFields from the wire', () => {
+      const junkOp = op({
+        payload: {
+          actionPayload: {
+            task: { id: 'task-1', changes: {} },
+            clearedFields: 'not-an-array',
+          },
+          entityChanges: [],
+        },
+      });
+      expect(mergeChangedFields([junkOp], 'task', 'task-1')).toEqual({});
+      expect(hasOpaqueChanges([junkOp], 'task', 'task-1')).toBe(true);
+    });
+  });
 });

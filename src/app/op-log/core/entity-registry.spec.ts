@@ -8,6 +8,7 @@ import {
   isSingletonEntity,
   isMapEntity,
   isArrayEntity,
+  isLwwPayloadIdCanonical,
   EntityConfig,
 } from './entity-registry';
 
@@ -65,6 +66,42 @@ describe('entity-registry', () => {
     'PLUGIN_USER_DATA',
     'PLUGIN_METADATA',
   ];
+
+  describe('LWW payload id semantics', () => {
+    it('uses payload.id for adapter- and array-backed entities', () => {
+      expect(isLwwPayloadIdCanonical('TASK')).toBeTrue();
+      expect(isLwwPayloadIdCanonical('PLUGIN_USER_DATA')).toBeTrue();
+      expect(isLwwPayloadIdCanonical('TIME_TRACKING')).toBeFalse();
+      expect(isLwwPayloadIdCanonical('PLANNER')).toBeFalse();
+      expect(isLwwPayloadIdCanonical('ALL')).toBeFalse();
+      expect(isLwwPayloadIdCanonical('UNKNOWN')).toBeFalse();
+      expect(isLwwPayloadIdCanonical(undefined)).toBeFalse();
+    });
+
+    // #9256 was a MISCLASSIFICATION (a composite-id singleton mistaken for an
+    // adapter). Pin the payload-id verdict for EVERY entity so a future
+    // storagePattern change can't silently re-open the retarget gate for the
+    // wrong entity or slam it shut on a legitimate one. Table is exhaustive over
+    // ENTITY_CONFIGS via the categorized lists above. Array entities became
+    // canonical with #9526 (the LWW reducer applies them by payload identity,
+    // so the integrity gate must cover them).
+    it('is canonical for exactly the adapter and array entities and no others', () => {
+      for (const entityType of [...ADAPTER_ENTITIES, ...ARRAY_ENTITIES]) {
+        expect(isLwwPayloadIdCanonical(entityType))
+          .withContext(`id-addressed ${entityType} → canonical`)
+          .toBeTrue();
+      }
+      for (const entityType of [
+        ...SINGLETON_ENTITIES,
+        ...MAP_ENTITIES,
+        ...SPECIAL_OPERATION_TYPES,
+      ]) {
+        expect(isLwwPayloadIdCanonical(entityType))
+          .withContext(`non-id-addressed ${entityType} → not canonical`)
+          .toBeFalse();
+      }
+    });
+  });
 
   describe('ENTITY_CONFIGS completeness', () => {
     it('should have config for all regular entity types', () => {
@@ -408,7 +445,8 @@ describe('entity-registry', () => {
      * 2. Add it to the appropriate category array (ADAPTER_ENTITIES, SINGLETON_ENTITIES, etc.)
      * 3. Update the expected count below
      *
-     * See docs/ai/adding-new-entity-type-checklist.md for full checklist.
+     * The three steps above are the whole checklist; the guide this used to cite
+     * no longer exists. See operation.types.ts for the EntityType union itself.
      */
     it('test arrays should cover all EntityType union members (canary)', () => {
       const ALL_TESTED: EntityType[] = [

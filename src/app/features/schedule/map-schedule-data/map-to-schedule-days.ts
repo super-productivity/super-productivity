@@ -74,6 +74,13 @@ export const mapToScheduleDays = (
     (task) => !(typeof task.dueWithTime === 'number'),
   ) as TaskWithoutReminder[];
 
+  // Span the blocker window across every rendered day. The 10-day default was
+  // tuned for week view, where the visible range always sits inside it; a
+  // month grid is up to 42 days anchored at its first cell, so work-hours
+  // blocks and timed repeat projections would otherwise only cover the first
+  // stretch of the grid. Days outside the rendered range never mattered:
+  // createScheduleDays only consults the map for rendered dayDates, so a
+  // shorter-than-10 span changes nothing for day and week view either.
   const blockerBlocksDayMap = createBlockedBlocksByDayMap(
     scheduledTasks,
     scheduledTaskRepeatCfgs,
@@ -81,7 +88,7 @@ export const mapToScheduleDays = (
     workStartEndCfg,
     lunchBreakCfg,
     now,
-    undefined,
+    dayDates.length,
     realNow,
   );
 

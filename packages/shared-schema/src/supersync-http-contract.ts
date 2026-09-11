@@ -40,6 +40,56 @@ export const SUPER_SYNC_SNAPSHOT_OP_TYPES = [
 ] as const;
 
 /**
+ * Structured error codes the SuperSync server attaches to responses
+ * (`errorCode` on non-2xx bodies and per-op upload results).
+ *
+ * This is the producer/comparison vocabulary shared by server and client —
+ * NOT a wire validation set. Response schemas keep `errorCode` as a loose
+ * `z.string()` so an older client never rejects an otherwise-valid response
+ * just because a newer server introduced a code it does not know yet.
+ */
+export const SUPER_SYNC_ERROR_CODES = {
+  // Validation errors (400)
+  VALIDATION_FAILED: 'VALIDATION_FAILED',
+  INVALID_OP_ID: 'INVALID_OP_ID',
+  INVALID_OP_TYPE: 'INVALID_OP_TYPE',
+  INVALID_ENTITY_TYPE: 'INVALID_ENTITY_TYPE',
+  INVALID_ENTITY_ID: 'INVALID_ENTITY_ID',
+  INVALID_PAYLOAD: 'INVALID_PAYLOAD',
+  PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
+  INVALID_VECTOR_CLOCK: 'INVALID_VECTOR_CLOCK',
+  INVALID_TIMESTAMP: 'INVALID_TIMESTAMP',
+  MISSING_ENTITY_ID: 'MISSING_ENTITY_ID',
+  INVALID_SCHEMA_VERSION: 'INVALID_SCHEMA_VERSION',
+  INVALID_CLIENT_ID: 'INVALID_CLIENT_ID',
+
+  // Conflict errors (409)
+  CONFLICT_CONCURRENT: 'CONFLICT_CONCURRENT',
+  CONFLICT_SUPERSEDED: 'CONFLICT_SUPERSEDED',
+  REPAIR_STALE: 'REPAIR_STALE',
+  DUPLICATE_OPERATION: 'DUPLICATE_OPERATION',
+  SYNC_IMPORT_EXISTS: 'SYNC_IMPORT_EXISTS',
+
+  // Rate limiting (429)
+  RATE_LIMITED: 'RATE_LIMITED',
+
+  // Storage quota (413)
+  STORAGE_QUOTA_EXCEEDED: 'STORAGE_QUOTA_EXCEEDED',
+
+  // Encryption-related errors (400)
+  ENCRYPTED_OPS_NOT_SUPPORTED: 'ENCRYPTED_OPS_NOT_SUPPORTED',
+  // Encrypted-only ingress gate: upload rejected because a payload is not
+  // flagged encrypted or lacks the ciphertext transport shape.
+  E2EE_REQUIRED: 'E2EE_REQUIRED',
+
+  // Server errors (500)
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+} as const;
+
+export type SuperSyncErrorCode =
+  (typeof SUPER_SYNC_ERROR_CODES)[keyof typeof SUPER_SYNC_ERROR_CODES];
+
+/**
  * Constrains client-generated dedup keys to URL-safe chars so they can be
  * embedded in log lines without escape risk and trivially compared on the
  * server. Length is intentionally permissive (1..64) so existing clients
@@ -76,6 +126,8 @@ export const SuperSyncOperationSchema = z.object({
   vectorClock: SuperSyncVectorClockSchema,
   timestamp: z.number(),
   schemaVersion: z.number().int().min(1).max(100),
+  /** Optional (absent on old clients) — readers must sniff the payload type
+   * instead of relying on it (android `SuperSyncBackgroundProvider` does). */
   isPayloadEncrypted: z.boolean().optional(),
   syncImportReason: z.enum(SUPER_SYNC_IMPORT_REASONS).optional(),
   /** Server cursor proven to be included in a causally accepted REPAIR snapshot. */
@@ -86,7 +138,8 @@ export const SuperSyncOperationSchema = z.object({
 // structural types and fields that ValidationService does not handle strict,
 // but defer semantic operation validation to the server so one malformed op
 // cannot reject and stall every valid sibling in the batch. Download/response
-// schemas remain strict.
+// schemas stay structurally strict but keep their VOCABULARY fields loose —
+// see SuperSyncOperationResponseSchema.
 const SuperSyncUploadOperationSchema = SuperSyncOperationSchema.extend({
   id: z.string().max(SUPER_SYNC_MAX_INVALID_FIELD_TRANSPORT_LENGTH),
   clientId: z.string().max(SUPER_SYNC_MAX_INVALID_FIELD_TRANSPORT_LENGTH),
@@ -139,7 +192,22 @@ export const SuperSyncUploadSnapshotRequestSchema = z
     }
   });
 
-export const SuperSyncOperationResponseSchema = SuperSyncOperationSchema.passthrough();
+/**
+ * Vocabulary fields (`opType`, `syncImportReason`, restore-point `type`) are
+ * loose strings on the RESPONSE side, mirroring `errorCode`: a client must
+ * never reject a whole download page because a newer server relayed a value
+ * this client does not know yet. One unknown op would otherwise wedge every
+ * not-yet-updated device with a generic parse error, before the schema-version
+ * "update your app" path could run (#8764). Unknown values are handled per op
+ * after parsing (the receiver blocks at that op and keeps its cursor); the
+ * strict enums stay on the REQUEST side, where the server validates per op.
+ */
+const SUPER_SYNC_MAX_VOCABULARY_TRANSPORT_LENGTH = 255;
+
+export const SuperSyncOperationResponseSchema = SuperSyncOperationSchema.extend({
+  opType: z.string().min(1).max(SUPER_SYNC_MAX_VOCABULARY_TRANSPORT_LENGTH),
+  syncImportReason: z.string().max(SUPER_SYNC_MAX_VOCABULARY_TRANSPORT_LENGTH).optional(),
+}).passthrough();
 
 export const SuperSyncServerOperationSchema = z
   .object({
@@ -166,6 +234,7 @@ export const SuperSyncUploadOpsResponseSchema = z
     newOps: z.array(SuperSyncServerOperationSchema).optional(),
     latestSeq: z.number(),
     hasMorePiggyback: z.boolean().optional(),
+    deduplicated: z.boolean().optional(),
   })
   .passthrough();
 
@@ -177,9 +246,11 @@ export const SuperSyncDownloadOpsResponseSchema = z
     gapDetected: z.boolean().optional(),
     snapshotVectorClock: SuperSyncVectorClockSchema.optional(),
     serverTime: z.number().optional(),
+    // Capability flags are plain booleans: a `literal(true)` would turn a
+    // server that ever reports `false` into a page-wide parse failure.
     capabilities: z
       .object({
-        causalRepairSnapshots: z.literal(true).optional(),
+        causalRepairSnapshots: z.boolean().optional(),
       })
       .optional(),
   })
@@ -212,11 +283,41 @@ export const SuperSyncStatusResponseSchema = z
   })
   .passthrough();
 
+export const SuperSyncDeviceSchema = z
+  .object({
+    clientId: SuperSyncClientIdSchema,
+    /** Unix ms of the device's last sync activity (upload or download). */
+    lastSeenAt: z.number(),
+  })
+  .passthrough();
+
+export const SuperSyncDevicesResponseSchema = z
+  .object({
+    devices: z.array(SuperSyncDeviceSchema),
+  })
+  .passthrough();
+
+/**
+ * Response of `POST /api/replace-token`: a fresh JWT for the calling client.
+ * Issuing it bumps the account's `tokenVersion`, signing out every other device.
+ */
+// Only `token` is validated: it is the only field the client consumes, and
+// requiring more would turn a benign server-side response change into a
+// hard sign-out failure.
+export const SuperSyncReplaceTokenResponseSchema = z
+  .object({
+    token: z.string().min(1),
+  })
+  .passthrough();
+
 export const SuperSyncRestorePointSchema = z
   .object({
     serverSeq: z.number(),
     timestamp: z.number(),
-    type: z.enum(SUPER_SYNC_SNAPSHOT_OP_TYPES),
+    // Loose on purpose (see SuperSyncOperationResponseSchema); the client
+    // keeps unknown types — the dialog renders them generically and restore
+    // works by serverSeq.
+    type: z.string().max(SUPER_SYNC_MAX_VOCABULARY_TRANSPORT_LENGTH),
     clientId: z.string(),
     description: z.string().optional(),
   })
@@ -258,6 +359,11 @@ export type SuperSyncSnapshotUploadResponse = z.infer<
   typeof SuperSyncSnapshotUploadResponseSchema
 >;
 export type SuperSyncStatusResponse = z.infer<typeof SuperSyncStatusResponseSchema>;
+export type SuperSyncDevice = z.infer<typeof SuperSyncDeviceSchema>;
+export type SuperSyncDevicesResponse = z.infer<typeof SuperSyncDevicesResponseSchema>;
+export type SuperSyncReplaceTokenResponse = z.infer<
+  typeof SuperSyncReplaceTokenResponseSchema
+>;
 export type SuperSyncRestorePoint = z.infer<typeof SuperSyncRestorePointSchema>;
 export type SuperSyncRestorePointsResponse = z.infer<
   typeof SuperSyncRestorePointsResponseSchema

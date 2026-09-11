@@ -1,4 +1,5 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import { openRecurDialog, saveRecurDialog } from '../../utils/recurring-task-helpers';
 
 /**
  * Bug: https://github.com/super-productivity/super-productivity/issues/5594
@@ -32,15 +33,8 @@ test.describe('Issue #5594: First repeat occurrence should not always be today',
 
     // 3. Open task detail and click the repeat/recurrence icon
     await taskPage.openTaskDetail(task);
-    const recurItem = page
-      .locator('task-detail-item')
-      .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
-    await expect(recurItem).toBeVisible({ timeout: 5000 });
-    await recurItem.click();
-
     // 4. Wait for repeat dialog
-    const repeatDialog = page.locator('mat-dialog-container');
-    await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
+    const repeatDialog = await openRecurDialog(page);
 
     // 5. Change quickSetting to CUSTOM
     const quickSettingSelect = repeatDialog.locator('mat-select').first();
@@ -84,10 +78,7 @@ test.describe('Issue #5594: First repeat occurrence should not always be today',
     }
 
     // 8. Save the repeat config
-    const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
-    await expect(saveBtn).toBeEnabled({ timeout: 5000 });
-    await saveBtn.click();
-    await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
+    await saveRecurDialog(page);
 
     // Close task detail panel
     await page.keyboard.press('Escape');
@@ -140,19 +131,9 @@ test.describe('Issue #5594: First repeat occurrence should not always be today',
 
     // 3. Open repeat dialog
     await taskPage.openTaskDetail(task);
-    const recurItem = page
-      .locator('task-detail-item')
-      .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
-    await expect(recurItem).toBeVisible({ timeout: 5000 });
-    await recurItem.click();
-
     // 4. Save with default DAILY settings
-    const repeatDialog = page.locator('mat-dialog-container');
-    await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
-    const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
-    await expect(saveBtn).toBeEnabled({ timeout: 5000 });
-    await saveBtn.click();
-    await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
+    await openRecurDialog(page);
+    await saveRecurDialog(page);
 
     // Close task detail panel
     await page.keyboard.press('Escape');

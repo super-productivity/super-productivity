@@ -1,0 +1,28 @@
+diff --git a/node_modules/@nextcloud/cdav-library/dist/index.cjs b/node_modules/@nextcloud/cdav-library/dist/index.cjs
+index bf18fc1..c450541 100644
+--- a/node_modules/@nextcloud/cdav-library/dist/index.cjs
++++ b/node_modules/@nextcloud/cdav-library/dist/index.cjs
+@@ -3388,6 +3388,9 @@ class DavClient {
+    */
+   _extractPrincipalCollectionSets(props) {
+     const principalCollectionSets = props[`{${DAV}}principal-collection-set`];
++    if (!principalCollectionSets) {
++      return;
++    }
+     this.principalCollections = principalCollectionSets.map((principalCollection) => {
+       return this._request.pathname(principalCollection);
+     });
+diff --git a/node_modules/@nextcloud/cdav-library/dist/index.mjs b/node_modules/@nextcloud/cdav-library/dist/index.mjs
+index ed33157..10f5908 100644
+--- a/node_modules/@nextcloud/cdav-library/dist/index.mjs
++++ b/node_modules/@nextcloud/cdav-library/dist/index.mjs
+@@ -3386,6 +3386,9 @@ class DavClient {
+    */
+   _extractPrincipalCollectionSets(props) {
+     const principalCollectionSets = props[`{${DAV}}principal-collection-set`];
++    if (!principalCollectionSets) {
++      return;
++    }
+     this.principalCollections = principalCollectionSets.map((principalCollection) => {
+       return this._request.pathname(principalCollection);
+     });

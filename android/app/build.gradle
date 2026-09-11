@@ -20,9 +20,9 @@ android {
         minSdkVersion 24
         targetSdkVersion 36
         compileSdk 36
-        versionCode 18_15_01_9000
-        versionName "18.15.1"
-        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        versionCode 18_22_00_9000
+        versionName "18.22.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders = [
                 hostName       : "app.super-productivity.com",
                 defaultUrl     : "https://app.super-productivity.com",
@@ -56,8 +56,65 @@ android {
             }
 
             signingConfig signingConfigs.release
+            // Minification is deliberately OFF.
+            //
+            // Turning it on (#9766) produced a release build that crashes on
+            // start, and it reached every Play internal-track tester before
+            // anyone launched it: master auto-publishes to that track, so two
+            // minified builds shipped before the crash was reported.
+            //
+            // At the time, nothing in CI ever started a minified build. The
+            // emulator job installed the DEBUG variant, and the R8 job only
+            // checked keep rules against mapping.txt — a build that dies in
+            // onCreate passes both. That job also minified the FDROID flavor
+            // only, while the APK that ships to Play is the PLAY flavor. That
+            // gap is closed for play: android/run-android-checks.sh launches the
+            // minified playR8Test APK on every Android PR. R8 full mode is the
+            // default
+            // under AGP 8+ (android.enableR8.fullMode is unset), so obfuscation,
+            // shrinking, optimization and resource shrinking all ran against
+            // this app for the first time, simultaneously, in production.
+            //
+            // Google Play's DEX shrinking/obfuscation requirement only starts in
+            // February 2027, so there is nothing to buy by carrying that risk in
+            // the meantime.
+            //
+            // Before re-enabling, one thing is still missing: the launch smoke
+            // covers the PLAY flavor only. fdroidRelease would minify too, and
+            // build-android.yml already checks both mappings on the stated
+            // reasoning that playRelease passing says nothing about
+            // fdroidRelease — the runtime half has to honour that as well.
+            // shortcut: play-only launch, because nothing minified ships today;
+            // assemble and launch fdroidR8Test in run-android-checks.sh as part
+            // of the re-land, not after it.
             minifyEnabled false
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }
+        r8Test {
+            // A permanently minified, release-configured target so R8 is exercised
+            // in CI. Release minification was disabled after #9784; without a build
+            // that actually runs R8, the same class of runtime-only failure returns
+            // the moment it is re-enabled.
+            //
+            // This variant is NOT the instrumentation target — it is installed and
+            // launched by android/run-android-checks.sh. Pointing `testBuildType`
+            // here was tried and reverted: AGP then minifies the androidTest APK
+            // with -applymapping from the app, while kotlin-stdlib and androidx.*
+            // live in the app APK and are shrunk to what the *app* uses. Every test
+            // died in handleBindApplication on a member the app never calls
+            // (Intrinsics.checkNotNullParameter, then androidx.tracing.Trace), and
+            // UTP's am_instrument_timeout of 31536000s turned each into a hang.
+            // The keep rules to paper over that are open-ended; launching the APK
+            // needs none of them.
+            initWith release
+            signingConfig signingConfigs.debug
+            minifyEnabled true
+            shrinkResources true
+            setProguardFiles([
+                    getDefaultProguardFile("proguard-android-optimize.txt"),
+                    "proguard-rules.pro",
+            ])
+            matchingFallbacks = ["release"]
         }
     }
 
@@ -126,9 +183,22 @@ dependencies {
     // WidgetDataTest to lock the widget_data blob contract.
     testImplementation "org.json:json:20240303"
 
+    androidTestImplementation "androidx.test:core:1.6.1"
     androidTestImplementation "androidx.test:rules:1.6.1"
     androidTestImplementation "com.android.support.test:runner:1.0.2"
     androidTestImplementation "com.android.support.test.espresso:espresso-core:3.0.2"
+    androidTestImplementation "com.squareup.okhttp3:mockwebserver:4.12.0"
+}
+
+// The live crypto fixtures are generated outside Gradle
+// (tools/generate-android-crypto-fixtures.mjs), so declare them as a
+// unit-test input — otherwise a regenerated file leaves the test task
+// UP-TO-DATE/FROM-CACHE and LiveJsEncryptRoundTripTest silently reports
+// stale results (defeating its drift-detection purpose in CI).
+tasks.withType(Test).configureEach {
+    inputs.file(layout.buildDirectory.file('live-crypto-fixtures.tsv'))
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+        .optional()
 }
 
 apply from: 'capacitor.build.gradle'

@@ -191,7 +191,7 @@ class TrackingForegroundService : Service() {
     }
 
     private fun startTracking(taskId: String, title: String, timeSpentMs: Long): Boolean {
-        Log.d(TAG, "Starting tracking: taskId=$taskId, title=$title, timeSpentMs=$timeSpentMs")
+        Log.d(TAG, "Starting tracking: taskId=$taskId, timeSpentMs=$timeSpentMs")
 
         currentTaskId = taskId
         taskTitle = title

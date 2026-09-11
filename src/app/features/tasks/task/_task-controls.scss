@@ -109,7 +109,6 @@
   z-index: var(--z-time-wrapper);
   // note: fixes styles for empty time for very small mobile
   min-width: 25px;
-  //border: 1px solid red;
 
   @include mq(xxs) {
     min-width: 0;
@@ -274,16 +273,10 @@ progress-bar {
 }
 
 done-toggle {
-  --done-toggle-size: 34px;
+  --done-toggle-size: 40px;
 
   margin-left: var(--s);
   margin-right: 0;
-
-  @include verySmallMainContainer {
-    width: 8px;
-    min-width: 0;
-    opacity: 0;
-  }
 }
 
 //

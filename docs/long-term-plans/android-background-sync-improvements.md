@@ -1,92 +1,61 @@
 # Android Background Sync Improvements
 
 > **Status: Planned**
+>
+> **Owner / tracking:** Unassigned; create an issue before implementation.
+>
+> **Last verified:** 2026-07-29
 
 ## Context
 
-The current implementation (branch `claude/fix-android-reminder-sync-TdwQY`) uses Android WorkManager to poll the SuperSync server every ~15 minutes. When it detects that a task was completed, deleted, or had its reminder cleared on another device, it cancels the stale Android notification. This works but has limitations.
+Android WorkManager polls the SuperSync server approximately every 15 minutes.
+When it detects that a task was completed, deleted, rescheduled, or had its
+reminder cleared on another device, it updates or cancels the stale Android
+notification. This works but leaves a delay before native reminders reflect a
+remote change.
 
-This document outlines two improvements:
+This document records:
 
-1. **Fast app startup via cached sync state** — use the background worker's progress to speed up the initial sync when the app opens
-2. **Push-based notification cancellation via FCM** — eliminate the 15-minute polling gap
-
----
-
-## Phase 1: Fast App Startup via Cached Sync State
-
-### Problem
-
-When the user opens the app on Android, the sync layer starts from scratch — it doesn't know what the background worker has already seen. The worker has been tracking `lastServerSeq` in SharedPreferences, but that knowledge is wasted on app start.
-
-### Approach
-
-Expose the worker's cached state to the TypeScript layer so the app can skip already-processed operations or use the seq as a sync hint.
-
-### Design
-
-#### Option A: Seq Hint (Minimal)
-
-1. Add `getLastSyncSeq(): number` to `AndroidInterface`
-2. On app init, `SyncService` calls `androidInterface.getLastSyncSeq()` to get the worker's last-processed sequence number
-3. The sync layer uses this as a starting point, only fetching operations newer than this seq
-4. Benefit: reduces initial sync payload from potentially thousands of ops to at most ~15 minutes' worth
-
-**Bridge addition:**
-
-```typescript
-// android-interface.ts
-getLastSyncSeq?(): number;
-```
-
-```kotlin
-// JavaScriptInterface.kt
-@JavascriptInterface
-fun getLastSyncSeq(): Long {
-    return credentialStore.getLastServerSeq()
-}
-```
-
-**Sync layer integration point:** wherever the initial `sinceSeq` is determined in `SyncService` or `OperationApplierService`, check for the Android hint first.
-
-#### Option B: Cached Operations (More Ambitious)
-
-1. The worker writes fetched operations to a local cache (SharedPreferences or a small SQLite table) instead of just tracking seq
-2. On app start, the TypeScript layer reads cached ops via the bridge, applies them immediately, then syncs live for anything newer
-3. Benefit: app state is updated almost instantly on open, even before a network call
-
-**Trade-offs:**
-
-- More storage and complexity on the native side
-- Need to handle cache invalidation (e.g., if the user switches accounts)
-- Operations could be large if the user was offline for days
-
-**Recommendation:** Start with Option A. It's simple, low-risk, and already covers the common case (user opens app after a short break). Option B adds latency savings of one network round-trip, which matters less on modern connections.
-
-### Implementation Steps (Option A)
-
-1. Add `getLastSyncSeq()` to `AndroidInterface` and `JavaScriptInterface`
-2. In the sync initialization path, check `IS_ANDROID_WEB_VIEW` and call `getLastSyncSeq()`
-3. If the returned seq is greater than 0, use it as the starting point for `sinceSeq`
-4. Fall back to the normal sync path if 0 or unavailable
-
-### Edge Cases
-
-- **Account switch**: `lastServerSeq` is keyed by `baseUrl.hashCode()`, so switching accounts resets to 0 automatically
-- **Worker never ran**: Returns 0, sync proceeds normally — no regression
-- **Stale seq**: If the seq is very old (worker was killed by OS), the app just fetches more ops than usual — still correct, just slower
+1. a safety constraint around the worker's private sequence cursor; and
+2. possible ways to reduce the 15-minute notification-update delay.
 
 ---
 
-## Phase 2: Push-Based Cancellation via FCM
+## Rejected: using the reminder cursor for foreground sync
+
+The background worker's `lastServerSeq` is **not** proof that operations were
+stored in the operation log or applied to Angular state. It only records how far
+the native reminder worker has scanned while updating notifications.
+
+Therefore:
+
+- Never expose the reminder cursor as `getLastSyncSeq()` or seed the foreground
+  provider's `sinceSeq` from it.
+- Foreground sync may advance its own cursor only after the downloaded operations
+  are durably stored and successfully applied.
+- Seeing or filtering an operation for native reminder purposes does not make it
+  safe for foreground sync to skip that operation.
+
+Violating this boundary can permanently omit remote task changes from the app.
+Any future shared background-sync cache would need to store the actual operations
+and transfer them through the same durable apply/checkpoint path as a normal
+foreground download. That is a separate sync design, not a reminder optimization.
+
+---
+
+## Possible improvement: push-based cancellation
 
 ### Problem
 
 WorkManager's minimum periodic interval is 15 minutes. A user could complete a task on their desktop and still receive the reminder on their phone if it fires within that window.
 
-### Approach
+### Candidate approach
 
 Use Firebase Cloud Messaging (FCM) to push a lightweight signal from the SuperSync server when reminder-relevant operations occur. The Android app receives the push and immediately cancels the stale notification.
+
+This is **not approved implementation work**. It requires a tracked privacy,
+operations, and product decision because it adds Google infrastructure, device
+registration, server state, and a new delivery path.
 
 ### Prerequisites
 
@@ -142,7 +111,7 @@ WorkManager poll (15-min, guaranteed)
 
 ---
 
-## Phase 3: Extend to Other Sync Providers
+## Possible improvement: other sync providers
 
 ### Dropbox / WebDAV
 
@@ -167,8 +136,8 @@ This is heavier than SuperSync's operation-based API but workable for the ~15-mi
 
 ## Priority and Sequencing
 
-| Phase                     | Effort                                | Impact                      | Recommendation             |
-| ------------------------- | ------------------------------------- | --------------------------- | -------------------------- |
-| Phase 1 (seq hint)        | Small (~1 day)                        | Medium — faster app start   | Do first                   |
-| Phase 2 (FCM push)        | Large (~1 week, needs server changes) | High — instant cancellation | Do when server supports it |
-| Phase 3 (other providers) | Medium per provider                   | Medium — broader coverage   | Do on demand               |
+| Candidate                 | Effort                                | Impact                      | Recommendation                                   |
+| ------------------------- | ------------------------------------- | --------------------------- | ------------------------------------------------ |
+| FCM push                  | Large (~1 week, needs server changes) | High — faster cancellation  | Only after privacy/product/operations approval   |
+| Other sync providers      | Medium per provider                   | Medium — broader coverage   | Only in response to demonstrated provider demand |
+| Reminder cursor as a hint | Small                                 | Unsafe — can skip user data | Rejected; preserve the safety fence above        |

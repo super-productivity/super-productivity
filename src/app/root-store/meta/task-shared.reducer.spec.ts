@@ -19,6 +19,7 @@ import {
   plannerInitialState,
 } from '../../features/planner/store/planner.reducer';
 import { appStateFeatureKey } from '../app-state/app-state.reducer';
+import { TODAY_TAG } from '../../features/tag/tag.const';
 
 describe('taskSharedMetaReducer', () => {
   let mockReducer: jasmine.Spy;
@@ -1221,6 +1222,84 @@ describe('taskSharedMetaReducer', () => {
         },
         action,
       );
+    });
+
+    it('should atomically restore only the parent into captured Today', () => {
+      const today = '2026-01-05';
+      const subTasks = [
+        createMockTask({
+          id: 'subtask1',
+          parentId: 'task1',
+          dueDay: '2025-12-30',
+          dueWithTime: new Date('2025-12-30T10:00:00Z').getTime(),
+          remindAt: new Date('2025-12-30T09:55:00Z').getTime(),
+          tagIds: [TODAY_TAG.id],
+        }),
+        createMockTask({
+          id: 'subtask2',
+          parentId: 'task1',
+          dueDay: '2025-12-31',
+          dueWithTime: new Date('2025-12-31T10:00:00Z').getTime(),
+          remindAt: new Date('2025-12-31T09:55:00Z').getTime(),
+          tagIds: [TODAY_TAG.id],
+        }),
+      ];
+      const action = TaskSharedActions.restoreTask({
+        task: createMockTask({
+          dueDay: today,
+          dueWithTime: Number.NaN,
+          remindAt: new Date('2025-12-30T09:55:00Z').getTime(),
+          subTaskIds: ['subtask1', 'subtask2'],
+          tagIds: ['tag1', TODAY_TAG.id],
+        }),
+        subTasks,
+        restoreToToday: {
+          today,
+          startOfNextDayDiffMs: 0,
+        },
+      });
+      const replayState = {
+        ...baseState,
+        [appStateFeatureKey]: {
+          todayStr: '2026-01-06',
+          startOfNextDayDiffMs: 0,
+        },
+      } as RootState;
+
+      metaReducer(replayState, action);
+
+      const restoredState = mockReducer.calls.mostRecent().args[0] as RootState;
+      const restoredParent = restoredState[TASK_FEATURE_NAME].entities.task1;
+      const restoredSubTask1 = restoredState[TASK_FEATURE_NAME].entities.subtask1;
+      const restoredSubTask2 = restoredState[TASK_FEATURE_NAME].entities.subtask2;
+      expect(restoredParent?.dueDay).toBe(today);
+      expect(restoredParent?.dueWithTime).toBeUndefined();
+      expect(restoredParent?.remindAt).toBeUndefined();
+      expect(restoredParent?.subTaskIds).toEqual(['subtask1', 'subtask2']);
+      expect(restoredParent?.tagIds).not.toContain(TODAY_TAG.id);
+      expect(restoredSubTask1?.parentId).toBe('task1');
+      expect(restoredSubTask1?.dueDay).toBeUndefined();
+      expect(restoredSubTask1?.dueWithTime).toBeUndefined();
+      expect(restoredSubTask1?.remindAt).toBeUndefined();
+      expect(restoredSubTask1?.tagIds).not.toContain(TODAY_TAG.id);
+      expect(restoredSubTask2?.parentId).toBe('task1');
+      expect(restoredSubTask2?.dueDay).toBeUndefined();
+      expect(restoredSubTask2?.dueWithTime).toBeUndefined();
+      expect(restoredSubTask2?.remindAt).toBeUndefined();
+      expect(restoredSubTask2?.tagIds).not.toContain(TODAY_TAG.id);
+      expect(restoredState[TAG_FEATURE_NAME].entities[TODAY_TAG.id]?.taskIds).toEqual([
+        'task1',
+      ]);
+    });
+
+    it('should keep markerless restore out of Today', () => {
+      const action = createRestoreAction();
+
+      metaReducer(baseState, action);
+
+      const restoredState = mockReducer.calls.mostRecent().args[0] as RootState;
+      expect(restoredState[TASK_FEATURE_NAME].entities.task1?.dueDay).toBeUndefined();
+      expect(restoredState[TAG_FEATURE_NAME].entities[TODAY_TAG.id]?.taskIds).toEqual([]);
     });
 
     it('should add tasks to existing taskIds', () => {

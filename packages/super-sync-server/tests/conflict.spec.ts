@@ -1,18 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { Prisma } from '@prisma/client';
+import { describe, expect, it, vi } from 'vitest';
 import {
+  detectConflictForEntities,
   getConflictEntityIds,
   isSameDuplicateOperation,
   isSameIncomingOperation,
   isSameDuplicateTimestamp,
-  pruneVectorClockForStorage,
   resolveConflictForExistingOp,
   stableJsonStringify,
 } from '../src/sync/conflict';
 import {
+  CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
   DuplicateOperationCandidate,
-  MAX_VECTOR_CLOCK_SIZE,
   Operation,
 } from '../src/sync/sync.types';
+
+const TASK_TIME_DELTA_ACTION_TYPE = '[TimeTracking] Sync time spent';
 
 const op = (overrides: Partial<Operation> = {}): Operation => ({
   id: 'op-1',
@@ -69,10 +72,13 @@ describe('conflict helpers', () => {
     ).toBe(true);
   });
 
-  it('includes a divergent scalar entityId in the incoming conflict set', () => {
+  it('builds a deduplicated incoming conflict set that includes a divergent scalar', () => {
     expect(
       getConflictEntityIds(op({ entityId: 'task-scalar', entityIds: ['task-array'] })),
     ).toEqual(['task-scalar', 'task-array']);
+    expect(
+      getConflictEntityIds(op({ entityId: 'task-1', entityIds: ['task-1'] })),
+    ).toEqual(['task-1']);
   });
 
   it.each([false, true])(
@@ -122,6 +128,12 @@ describe('conflict helpers', () => {
     expect(isSameDuplicateOperation(duplicateCandidate(), 1, incoming, 60_000)).toBe(
       false,
     );
+  });
+
+  it('rejects an otherwise-identical duplicate operation from a different user', () => {
+    expect(
+      isSameDuplicateOperation(duplicateCandidate({ userId: 2 }), 1, op(), 60_000),
+    ).toBe(false);
   });
 
   it('accepts batch retries with identical entityIds', () => {
@@ -255,12 +267,12 @@ describe('conflict helpers', () => {
   it('accepts concurrent additive task-time deltas for the same task', () => {
     const result = resolveConflictForExistingOp(
       op({
-        actionType: '[TimeTracking] Sync time spent',
+        actionType: TASK_TIME_DELTA_ACTION_TYPE,
         vectorClock: { 'client-a': 1 },
       }),
       'task-1',
       {
-        actionType: '[TimeTracking] Sync time spent',
+        actionType: TASK_TIME_DELTA_ACTION_TYPE,
         clientId: 'client-b',
         vectorClock: { 'client-b': 1 },
       },
@@ -269,15 +281,42 @@ describe('conflict helpers', () => {
     expect(result).toEqual({ hasConflict: false });
   });
 
+  it.each([
+    ['incoming delta', TASK_TIME_DELTA_ACTION_TYPE, 'UPDATE_TASK'],
+    ['stored delta', 'UPDATE_TASK', TASK_TIME_DELTA_ACTION_TYPE],
+  ])(
+    'keeps a one-sided task-time delta conflicting (%s)',
+    (_label, incomingActionType, storedActionType) => {
+      const result = resolveConflictForExistingOp(
+        op({
+          actionType: incomingActionType,
+          vectorClock: { 'client-a': 1 },
+        }),
+        'task-1',
+        {
+          actionType: storedActionType,
+          clientId: 'client-b',
+          vectorClock: { 'client-b': 1 },
+        },
+      );
+
+      expect(result).toMatchObject({
+        hasConflict: true,
+        conflictType: 'concurrent',
+        existingClock: { 'client-b': 1 },
+      });
+    },
+  );
+
   it('still rejects a causally stale additive task-time delta', () => {
     const result = resolveConflictForExistingOp(
       op({
-        actionType: '[TimeTracking] Sync time spent',
+        actionType: TASK_TIME_DELTA_ACTION_TYPE,
         vectorClock: { 'client-a': 1 },
       }),
       'task-1',
       {
-        actionType: '[TimeTracking] Sync time spent',
+        actionType: TASK_TIME_DELTA_ACTION_TYPE,
         clientId: 'client-a',
         vectorClock: { 'client-a': 2 },
       },
@@ -301,45 +340,90 @@ describe('conflict helpers', () => {
     });
   });
 
+  it.each([
+    [
+      'clean exact-size batch',
+      CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
+      false,
+      [CONFLICT_DETECTION_ENTITY_BATCH_SIZE],
+    ],
+    [
+      'conflicting exact-size batch',
+      CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
+      true,
+      [CONFLICT_DETECTION_ENTITY_BATCH_SIZE],
+    ],
+    [
+      'conflicting overflow batch',
+      CONFLICT_DETECTION_ENTITY_BATCH_SIZE + 1,
+      true,
+      [CONFLICT_DETECTION_ENTITY_BATCH_SIZE, 1],
+    ],
+  ])(
+    'handles the boundary row and chunks correctly for a %s (%i entities)',
+    async (_label, entityCount, boundaryHasConflict, expectedBatchSizes) => {
+      const boundaryIndex = entityCount - 1;
+      const entityIds = Array.from(
+        { length: entityCount },
+        (_, index) => `task-${index}`,
+      );
+      const boundaryEntityId = entityIds[boundaryIndex];
+      const queriedBatchSizes: number[] = [];
+      const tx = {
+        $queryRaw: vi
+          .fn()
+          .mockImplementation(async (_strings: unknown, ...params: unknown[]) => {
+            // Located by shape, not by position: #9503 reordered the params and a
+            // positional index broke silently. `values.length > 0` is load-bearing —
+            // the shared array-branch CTE is ALSO a Prisma.Sql, with an EMPTY values
+            // array, so a bare Array.isArray check would match it if fragment order
+            // ever changed and would then report "no conflict" for every entity.
+            const idArrayParam = params.find(
+              (param): param is Prisma.Sql =>
+                !!param &&
+                typeof param === 'object' &&
+                Array.isArray((param as Prisma.Sql).values) &&
+                (param as Prisma.Sql).values.length > 0,
+            );
+            if (!idArrayParam) throw new Error('no entity-id array param in query');
+            const queriedEntityIds = idArrayParam.values;
+            queriedBatchSizes.push(queriedEntityIds.length);
+            if (!queriedEntityIds.includes(boundaryEntityId)) return [];
+
+            return [
+              {
+                entityId: boundaryEntityId,
+                clientId: boundaryHasConflict ? 'client-b' : 'client-a',
+                actionType: 'UPDATE_TASK',
+                vectorClock: boundaryHasConflict ? { 'client-b': 1 } : { 'client-a': 0 },
+              },
+            ];
+          }),
+      };
+
+      const result = await detectConflictForEntities(
+        1,
+        op({ vectorClock: { 'client-a': 1 } }),
+        entityIds,
+        tx as unknown as Prisma.TransactionClient,
+      );
+
+      expect(result).toMatchObject(
+        boundaryHasConflict
+          ? {
+              hasConflict: true,
+              conflictType: 'concurrent',
+              existingClock: { 'client-b': 1 },
+            }
+          : { hasConflict: false },
+      );
+      expect(queriedBatchSizes).toEqual(expectedBatchSizes);
+    },
+  );
+
   it('stable-stringifies object keys recursively', () => {
     expect(stableJsonStringify({ z: 1, a: { b: 2, a: 1 } })).toBe(
       '{"a":{"a":1,"b":2},"z":1}',
     );
-  });
-
-  it('prunes and mutates vector clocks before storage', () => {
-    const incoming = op({
-      clientId: 'client-25',
-      vectorClock: Object.fromEntries(
-        Array.from({ length: 25 }, (_, index) => [`client-${index + 1}`, index + 1]),
-      ),
-    });
-    const originalClock = incoming.vectorClock;
-
-    pruneVectorClockForStorage(incoming);
-
-    expect(incoming.vectorClock).not.toBe(originalClock);
-    expect(Object.keys(incoming.vectorClock)).toHaveLength(MAX_VECTOR_CLOCK_SIZE);
-    expect(incoming.vectorClock['client-25']).toBe(25);
-  });
-
-  it('preserves the active full-state author while pruning', () => {
-    const fullStateAuthor = 'import-client';
-    const incoming = op({
-      clientId: 'upload-client',
-      vectorClock: {
-        [fullStateAuthor]: 1,
-        'upload-client': 2,
-        ...Object.fromEntries(
-          Array.from({ length: 25 }, (_, index) => [`old-client-${index}`, 100 + index]),
-        ),
-      },
-    });
-
-    pruneVectorClockForStorage(incoming, [fullStateAuthor]);
-
-    expect(Object.keys(incoming.vectorClock)).toHaveLength(MAX_VECTOR_CLOCK_SIZE);
-    expect(incoming.vectorClock[fullStateAuthor]).toBe(1);
-    expect(incoming.vectorClock['upload-client']).toBe(2);
   });
 });

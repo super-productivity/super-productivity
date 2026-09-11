@@ -858,8 +858,9 @@ describe('Sync Scenarios Integration', () => {
     });
 
     // NOTE: Scenario 8.3 (Client acknowledgment tracking) was removed.
-    // ACK mechanism has been replaced with time-based cleanup (50 days).
-    // See sync-server-architecture-diagrams.md for details.
+    // Cleanup uses the 45-day retention window plus causal full-state boundaries,
+    // not a per-client ACK watermark. See
+    // packages/super-sync-server/docs/architecture.md for details.
 
     /**
      * Scenario 8.4: lastKnownServerSeq persistence simulation

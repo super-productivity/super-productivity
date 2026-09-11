@@ -215,6 +215,44 @@ describe('FocusModeSelectors', () => {
     });
   });
 
+  describe('selectIsBreakTimeUp', () => {
+    it('should return true for a completed break', () => {
+      const timer = createMockTimer({
+        isRunning: false,
+        startedAt: 1,
+        elapsed: 300000,
+        duration: 300000,
+        purpose: 'break',
+      });
+
+      expect(selectors.selectIsBreakTimeUp.projector(timer)).toBe(true);
+    });
+
+    it('should return false for a running break', () => {
+      const timer = createMockTimer({
+        isRunning: true,
+        startedAt: 1,
+        elapsed: 300000,
+        duration: 300000,
+        purpose: 'break',
+      });
+
+      expect(selectors.selectIsBreakTimeUp.projector(timer)).toBe(false);
+    });
+
+    it('should return false for an unstarted zero-duration break offer', () => {
+      const timer = createMockTimer({
+        isRunning: false,
+        startedAt: null,
+        elapsed: 0,
+        duration: 0,
+        purpose: 'break',
+      });
+
+      expect(selectors.selectIsBreakTimeUp.projector(timer)).toBe(false);
+    });
+  });
+
   describe('selectTimeElapsed', () => {
     it('should select elapsed time', () => {
       const timer = createMockTimer({ elapsed: 300000 });

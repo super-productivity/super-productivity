@@ -20,5 +20,5 @@
 .divider {
   margin: var(--s3) 0;
   border: none;
-  border-top: 1px solid rgba(128, 128, 128, 0.3);
+  border-top: 1px solid var(--separator-color);
 }

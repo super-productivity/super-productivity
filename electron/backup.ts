@@ -1,4 +1,5 @@
-import { app, ipcMain, IpcMainEvent } from 'electron';
+import { app, ipcMain } from 'electron';
+import type { IpcMainInvokeEvent } from 'electron';
 import {
   existsSync,
   mkdirSync,
@@ -22,10 +23,41 @@ import {
 } from './shared-with-frontend/backup-file-cleanup.util';
 
 export const BACKUP_DIR = path.join(app.getPath('userData'), `backups`);
-export const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
+
+/**
+ * Where a virtualized MSIX package's writes to BACKUP_DIR physically land, so
+ * Explorer (which runs outside the package and sees no redirection) can be
+ * pointed at them. Display-oriented but not inert: `BACKUP_LOAD_DATA` below
+ * also accepts it as an allow-listed read root.
+ *
+ * shortcut: the package family name is hardcoded and nothing in CI would notice
+ * it drifting (the appx config lives in the WIN_STORE_ELECTRON_BUILDER_YML
+ * secret); drift just fails the probe and we show BACKUP_DIR. Verified against
+ * the shipped v18.15.1 appx on 2026-07-21 — it is `<Identity Name>_<PublisherId>`,
+ * PublisherId being base32(SHA-256(UTF-16LE Publisher)[0..8]), so any release
+ * artifact re-checks it without a Windows machine.
+ */
+const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
   'Roaming',
   `Local\\Packages\\53707johannesjo.SuperProductivity_ch45amy23cdv6\\LocalCache\\Roaming`,
 );
+
+/**
+ * The backup location to *show* the user, which is not always the one we write
+ * to. Redirection applies only to virtualized packages and, since Windows 10
+ * 1903, is decided per file — it cannot be known statically, and assuming it
+ * always applies is what made #9209 the mirror image of #995.
+ *
+ * shortcut: an install that flipped from virtualized to full-trust keeps a
+ * stale LocalCache dir that still wins the probe, showing real but outdated
+ * backups. Accepted — restore reads BACKUP_DIR either way, so only manual
+ * recovery is affected. Upgrade path: probe for the newest filename in
+ * BACKUP_DIR (timestamps sort lexically) instead of for the directory.
+ */
+export const getBackupDirForDisplay = (): string =>
+  process.windowsStore && existsSync(BACKUP_DIR_WINSTORE)
+    ? BACKUP_DIR_WINSTORE
+    : BACKUP_DIR;
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 export function initBackupAdapter(): void {
@@ -33,34 +65,20 @@ export function initBackupAdapter(): void {
   log('Saving backups to', BACKUP_DIR);
 
   // BACKUP
-  ipcMain.on(IPC.BACKUP, backupData);
+  ipcMain.handle(IPC.BACKUP, backupData);
 
-  // IS_BACKUP_AVAILABLE
+  // IS_BACKUP_AVAILABLE — newest file only (startup restore prompt)
   ipcMain.handle(IPC.BACKUP_IS_AVAILABLE, (): LocalBackupMeta | false => {
-    if (!existsSync(BACKUP_DIR)) {
-      return false;
-    }
-
-    const files = readdirSync(BACKUP_DIR);
-    if (!files.length) {
-      return false;
-    }
-    const filesWithMeta: LocalBackupMeta[] = files.map(
-      (fileName: string): LocalBackupMeta => ({
-        name: fileName,
-        path: path.join(BACKUP_DIR, fileName),
-        folder: BACKUP_DIR,
-        created: statSync(path.join(BACKUP_DIR, fileName)).mtime.getTime(),
-      }),
-    );
-
-    filesWithMeta.sort((a: LocalBackupMeta, b: LocalBackupMeta) => a.created - b.created);
+    const files = listBackupFiles();
     log(
       'Avilable Backup Files: ',
-      filesWithMeta?.map && filesWithMeta.map((f) => f.path),
+      files.map((f) => f.path),
     );
-    return filesWithMeta.reverse()[0];
+    return files[0] ?? false;
   });
+
+  // BACKUP_LIST — every file, newest first (Settings → backups list)
+  ipcMain.handle(IPC.BACKUP_LIST, (): LocalBackupMeta[] => listBackupFiles());
 
   // RESTORE_BACKUP
   ipcMain.handle(IPC.BACKUP_LOAD_DATA, (ev, backupPath: string): string => {
@@ -82,6 +100,32 @@ export function initBackupAdapter(): void {
   });
 }
 
+/** All backup files in BACKUP_DIR, newest first; empty when the dir is missing. */
+const listBackupFiles = (): LocalBackupMeta[] => {
+  if (!existsSync(BACKUP_DIR)) {
+    return [];
+  }
+  const files: LocalBackupMeta[] = [];
+  for (const name of readdirSync(BACKUP_DIR)) {
+    if (!name.endsWith('.json')) {
+      continue;
+    }
+    const filePath = path.join(BACKUP_DIR, name);
+    try {
+      files.push({
+        name,
+        path: filePath,
+        folder: BACKUP_DIR,
+        created: statSync(filePath).mtime.getTime(),
+      });
+    } catch (e) {
+      // The retention cleanup may delete a file between readdir and stat.
+      log(`Skipping unreadable backup file ${name}`);
+    }
+  }
+  return files.sort((a, b) => b.created - a.created);
+};
+
 interface BackupDataArgs {
   data: AppDataCompleteLegacy | AppDataComplete;
   maxBackupFiles?: number | null;
@@ -95,7 +139,7 @@ const isBackupDataArgs = (arg: unknown): arg is BackupDataArgs =>
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function backupData(
-  ev: IpcMainEvent,
+  ev: IpcMainInvokeEvent,
   dataOrArgs: AppDataCompleteLegacy | BackupDataArgs,
 ): void {
   if (!existsSync(BACKUP_DIR)) {
@@ -124,11 +168,11 @@ function cleanupOldBackups(maxBackupFiles?: number | null): void {
   }
 
   try {
-    const files = readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.json'));
-    const filesWithMtime = files.map((fileName) => {
-      const filePath = path.join(BACKUP_DIR, fileName);
-      return { fileName, filePath, mtime: statSync(filePath).mtime.getTime() };
-    });
+    const filesWithMtime = listBackupFiles().map((file) => ({
+      fileName: file.name,
+      filePath: file.path,
+      mtime: file.created,
+    }));
 
     for (const file of selectBackupFilesToDelete(filesWithMtime, maxBackupFiles)) {
       try {

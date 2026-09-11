@@ -7,6 +7,7 @@
 - **Check `src/app/ui/` first** before creating new styled elements — 40+ reusable components exist.
 - **Component SCSS should be minimal** — shared styles belong in `src/styles/components/` or as a mixin.
 - **Material overlay components** (menus, dialogs, tooltips) render outside component scope — style them in `src/styles/components/` and add a comment in the component pointing there.
+- **Only reference custom properties that can reach the rule** — a `var(--x)` whose `--x` is undeclared, or declared only inside some component's `:host`, silently voids the whole declaration. Enforced across SCSS, theme CSS and inline `styles:`/`[ngStyle]` by `npm run lint:css-vars` (`tools/check-css-vars.js`), which explains the fix when it fails.
 
 ## Anti-Patterns
 
@@ -34,8 +35,64 @@ Rules:
 
 - **Icons:** drop generic `check`/`close` icons on OK/Cancel/Save/Submit — they add nothing. Keep icons that carry meaning (`alarm`/`today`/`event_busy` in scheduling, `wb_sunny`, `save`, `cloud_upload`, `delete_forever`).
 - **No `color` on cancel/close** — leftover `color="primary"` on a Cancel just tints it; remove it.
+- **Reactive appearance** — when a button's appearance must change at runtime, bind it on a single element (`[matButton]="cond ? 'filled' : 'outlined'"`) instead of swapping two buttons in an `@if`/`@else`. The attribute form is fixed at construction, and the swap re-creates the node, dropping focus and any click that lands mid-flip. See `finish-day-btn.component.html`.
 - **No dead classes** — the legacy Bootstrap `btn btn-primary` classes are gone; don't reintroduce them. `submit-button` is only styled inside `dialog-create-tag`.
 - **Symmetric choice dialogs** (e.g. sync "use remote" vs "use local") may use two matched `mat-stroked-button`s — there is no single primary.
+
+## Callouts (info / warning / danger / success)
+
+Tinted message boxes inside dialogs and config panes use the global `.callout`
+class from `src/styles/components/_callout.scss` — never a local `.warning-box`
+clone with its own `rgba(255, 152, 0, …)`, which is invisible to the 15 themes.
+
+```html
+<div class="callout callout--warning">
+  <mat-icon aria-hidden="true">warning</mat-icon>
+  <p>If you lose this password your synced data cannot be recovered.</p>
+</div>
+```
+
+| Modifier          | Tone token        | Use for                                   |
+| ----------------- | ----------------- | ----------------------------------------- |
+| _(none)_/`--info` | `--c-primary`     | Neutral context, "what will happen" notes |
+| `--success`       | `--color-success` | Confirmation, savings, "nothing to do"    |
+| `--warning`       | `--color-warning` | Irreversible-but-intended actions         |
+| `--danger`        | `--color-danger`  | Destructive actions, failures             |
+
+One tone token (`--callout-c`) drives icon color, border and fill, the latter two
+via `color-mix()` — so every tone is theme-aware and a new tone is one
+declaration. Outer spacing stays with the consumer
+(`.callout { margin-bottom: var(--s2); }` in the dialog's own SCSS), the
+primitive owns no margin.
+
+The icon is optional, but the copy must be a single child element — one `<p>`, or
+a `<div>` wrapping several. `.callout` is a flex row, so putting the class on a
+`<p>` and leaving the text bare turns every inline child into its own flex item:
+`<strong>Note:</strong> …` renders as two columns with a gap and a hanging indent
+on the wrap.
+
+Sibling: `.info-panel` (`_info-panel.scss`) is the same idea for
+formly-generated markup, where no icon element can be added and the glyph has to
+come from a `::before`.
+
+## Typography Scale
+
+| Variable         | Value | Variable          | Value |
+| ---------------- | ----- | ----------------- | ----- |
+| `--font-size-xs` | 11px  | `--font-size-xl`  | 18px  |
+| `--font-size-sm` | 12px  | `--font-size-2xl` | 22px  |
+| `--font-size-md` | 14px  | `--font-size-3xl` | 28px  |
+| `--font-size-lg` | 16px  |                   |       |
+
+Text sizes go through the scale; snap an off-scale value to the nearest step.
+Companion tokens: `--font-weight-medium/-semibold/-bold`,
+`--line-height-tight/-snug/-normal`, `--font-mono-stack`.
+
+Two deliberate exceptions — leave these as plain px/em:
+
+- **Material icon glyph sizes** written as a matched set — `font-size`, `width` and `height` all 20px. The glyph must equal its box or it decenters, and the scale has no 20/24px step. See `main-header.component.scss` and the `.tab-icon` rules in `config-page.component.scss`.
+- **Deliberately proportional `em`** sizes that track their parent
+  (`font-size: 1em` on an inline icon).
 
 ## Key Files
 
@@ -146,6 +203,7 @@ Quickest adoption — add the `.focus-ring` utility class from `util.scss`, whic
 | `--z-check-done`         | 11    | Task done checkbox       |
 | `--z-main-header`        | 12    | Main header              |
 | `--z-task-title-focus`   | 32    | Focused task title       |
+| `--z-multi-select-bar`   | 45    | Multi-select action bar  |
 | `--z-mobile-bottom-nav`  | 50    | Mobile bottom navigation |
 | `--z-side-nav`           | 60    | Side navigation          |
 | `--z-backdrop`           | 222   | Backdrop overlay         |

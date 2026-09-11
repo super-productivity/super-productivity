@@ -56,6 +56,10 @@ const ROUTE_UPLOAD_LIMIT = 100;
 
 const authTokenForUser = (userId: number): string => `user-${userId}-token`;
 
+// Uploads must pass the encrypted-only ingress gate: flag true + a payload
+// with the ciphertext transport shape (canonical base64, >= 28 bytes).
+const ENCRYPTED_PAYLOAD = Buffer.alloc(44, 7).toString('base64');
+
 const createOp = (clientId: string, entityId: string) => ({
   id: `op-${entityId}`,
   clientId,
@@ -63,7 +67,8 @@ const createOp = (clientId: string, entityId: string) => ({
   opType: 'CRT',
   entityType: 'TASK',
   entityId,
-  payload: { title: 'Test Task' },
+  payload: ENCRYPTED_PAYLOAD,
+  isPayloadEncrypted: true,
   vectorClock: {},
   timestamp: Date.now(),
   schemaVersion: 1,

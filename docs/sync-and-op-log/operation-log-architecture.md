@@ -1,11 +1,21 @@
 # Operation Log Architecture
 
-**Status:** Parts A, B, C, D Complete (single-version; cross-version sync A.7.11 documented, not implemented)
-**Branch:** `feat/operation-logs`
-**Last Updated:** January 8, 2026
+> **Maintainer routing:** use the
+> [Sync Architecture Field Guide](./sync-architecture.html) for the current
+> whole-system mental model. This long-form document preserves deep rationale,
+> migration policy, and implementation history; volatile mechanics in its
+> historical inventories can lag the focused contracts and executable owners
+> linked from the field guide.
 
-> **Note:** As of January 2026, the legacy PFAPI system has been completely eliminated.
-> All sync providers (SuperSync, WebDAV, Dropbox, LocalFile) now use the unified operation log system.
+**Status:** Deep rationale and migration/implementation history; receiver-side
+cross-version migration is active.
+**Routing reviewed:** July 20, 2026
+
+> **Historical overview warning:** the introductory inventory below predates
+> later file-v3, conflict, recovery, and server-retention work. All providers
+> (SuperSync, WebDAV/Nextcloud, Dropbox, OneDrive, and LocalFile) now enter the
+> unified client operation-log pipeline; use the field guide and its focused
+> source map for current behavior.
 
 ---
 
@@ -13,28 +23,42 @@
 
 ### The Core Concept: Event Sourcing
 
-The Operation Log fundamentally changes how the app treats data. Instead of treating the database as a "bucket" where we overwrite data (e.g., "The task title is now X"), we treat it as a **timeline of events** (e.g., "At 10:00 AM, User changed task title to X").
+The operation log records replayable state transitions instead of persisting each
+NgRx model independently. It is event-sourcing-inspired, but it is a bounded
+operation log rather than an immutable history from the beginning of time:
 
-- **Source of Truth:** The _Log_ is the truth. The "current state" of the app (what you see on screen) is just a calculation derived by replaying that log from the beginning of time.
-- **Immutability:** Once an operation is written, it is never changed. We only append new operations. If you "delete" a task, we don't remove the row; we append a `DELETE` operation.
+- **Local recovery boundary:** startup loads a state-cache snapshot, then replays
+  the retained tail. A safe terminal full-state operation can replace that work.
+- **Mutable lifecycle metadata:** operation payloads are append-only, but delivery,
+  application, rejection, and retry metadata changes as the row progresses.
+- **Bounded history:** compaction deletes operations already covered by a safe
+  snapshot and the relevant sync frontier. A `DELETE` is recorded as an operation,
+  but neither it nor a rejected loser is permanent audit history.
 
 ### 1. How Data is Saved (The Write Path)
 
 When a user performs an action (like ticking a checkbox):
 
-1.  **Capture:** The system intercepts the Redux action (e.g., `TaskUpdate`).
-2.  **Wrap:** It wraps this action into a standardized `Operation` object. This object includes:
-    - **Payload:** What changed (e.g., `{ isDone: true }`).
-    - **ID & Timestamp:** A unique ID (UUID v7) and the time it happened.
-    - **Vector Clock:** A version counter used to track causality (e.g., "This change happened _after_ version 5").
-3.  **Persist:** This `Operation` is immediately appended to the `SUP_OPS` table in IndexedDB. This is very fast because we're just adding a small JSON object, not rewriting a huge file.
-4.  **Broadcast:** The operation is broadcast to other open tabs so they update instantly.
+1. **Reduce:** NgRx commits the live-state transition synchronously.
+2. **Capture:** The capture meta-reducer marks a persistent local action as
+   pending, or defers it while remote operations are being applied.
+3. **Persist:** A non-dispatching effect serializes captured actions, validates
+   each operation, and atomically appends the operation plus its new vector clock
+   under the operation-log lock.
+4. **Schedule sync:** Only after that durable append does the client update its
+   pending status and request an upload.
+
+The reducer deliberately runs before the asynchronous append. If persistence
+fails, live state can therefore be ahead of the durable log; the client surfaces
+a reload action and prevents compaction from baking that phantom change into a
+snapshot. Open tabs do not exchange operation payloads: the web startup guard
+blocks a second active instance instead.
 
 ### 2. How Data is Loaded (The Read Path)
 
 Replaying _every_ operation since the beginning would be too slow. We use **Snapshots** to speed this up:
 
-1.  **Load Snapshot:** On startup, the app loads the most recent "Save Point" (a full copy of the app state saved, say, yesterday).
+1.  **Load Snapshot:** On startup, the app loads the latest valid state-cache snapshot.
 2.  **Replay Tail:** The app then queries the Log: "Give me all operations that happened _after_ this snapshot."
 3.  **Fast Forward:** It applies those few "tail" operations to the snapshot. Now the app is fully up to date.
 4.  **Hydration Optimization:** If a sync just happened, we might simply load the new state directly, skipping the replay entirely.
@@ -43,37 +67,41 @@ Replaying _every_ operation since the beginning would be too slow. We use **Snap
 
 The Operation Log enables two types of synchronization:
 
-**A. True "Server Sync" (The Modern Way)**
-This is efficient and precise.
+**A. SuperSync operation transport**
 
 - **Exchange:** Devices swap individual `Operations`, not full files. This saves massive amounts of bandwidth.
 - **Conflict Detection:** Because every operation has a **Vector Clock**, we can mathematically prove if two changes happened concurrently.
   - _Example:_ Device A sends "Update Title (Version 1 -> 2)". Device B sees it has "Version 1", so it applies the update safely.
   - _Conflict:_ If Device B _also_ made a change and is at "Version 2", it knows "Wait, we both changed Version 1 at the same time!" -> **Conflict Detected**.
-- **Resolution:** The user is shown a dialog to pick the winner. The loser isn't deleted; it's marked as "Rejected" in the log but kept for history.
+- **Resolution:** Semantic precedence and eligible disjoint-field merge run first;
+  remaining conflicts resolve deterministically with LWW. Ordinary operation
+  conflicts do not block on a winner dialog. Rejected rows are retained only until
+  compaction, and production conflict-journal emission is currently disabled.
 
-**B. "File-Based Sync" (Dropbox, WebDAV, Local File)**
-This uses a single-file approach with embedded operations.
+**B. File-provider operation transport**
 
-- File-based providers sync a single `sync-data.json` file containing: full state snapshot + recent operations buffer
-- When syncing, the system downloads the remote file, merges any new operations, and uploads the combined state
-- Conflict detection uses vector clocks - if two clients sync concurrently, the "piggybacking" mechanism ensures no operations are lost
-- This provides entity-level conflict resolution (vs old model-level "last write wins")
+- The default v2 format stores a full state/archive baseline and a bounded recent-op
+  buffer in one `sync-data.json`; each op-bearing upload rewrites that monolith.
+- The opt-in v3 split format makes `sync-ops.json` the hot commit point and rewrites
+  the snapshot/archive file only for bootstrap, compaction, migration, force-upload,
+  or gap recovery.
+- Both formats feed the same client operation-log pipeline. See
+  [Part B](#part-b-file-based-sync) for the current transport contract.
 
 ### 4. Safety & Self-Healing
 
-The system assumes data corruption is inevitable (power loss, bad sync, cosmic rays) and builds defenses against it:
-
-- **Validation Checkpoints:** Data is checked _before_ writing to disk, _after_ loading from disk, and _after_ receiving sync data.
-- **Auto-Repair:** If the state is invalid (e.g., a subtask points to a missing parent), the app doesn't crash. It runs an auto-repair script (e.g., detaches the subtask) and generates a special **`REPAIR` Operation**.
-- **Audit Trail:** This `REPAIR` op is saved to the log. This means you can look back and see exactly _when_ and _why_ the system modified your data automatically.
+Validation occurs at operation ingress and at the hydration/sync checkpoints
+described in Part D. Repairable state may produce a full-state `REPAIR`
+operation; unrepaired failures prevent the session from claiming success. A
+repair row is retained like other operations, not as permanent audit history.
 
 ### 5. Maintenance (Compaction)
 
-If we kept every operation forever, the database would grow huge.
-
-- **Compaction:** Every ~500 operations, the system takes a new Snapshot of the current state.
-- **Cleanup:** It then looks for old operations that are already "baked into" that snapshot and have been successfully synced to the server. It safely deletes them to free up space, keeping the log lean.
+After 500 durable local appends, the client _attempts_ compaction. The attempt can
+skip safely when remote reducer/archive work, pending local writes, a persistence
+divergence, hydration fallback, or an empty/degraded store makes snapshotting
+unsafe. A successful pass writes a new state-cache boundary and deletes only old,
+terminal rows covered by that boundary; unsynced and incomplete rows remain.
 
 ---
 
@@ -81,12 +109,12 @@ If we kept every operation forever, the database would grow huge.
 
 The Operation Log serves **four distinct purposes**:
 
-| Purpose                    | Description                                       | Status                        |
-| -------------------------- | ------------------------------------------------- | ----------------------------- |
-| **A. Local Persistence**   | Fast writes, crash recovery, event sourcing       | Complete ✅                   |
-| **B. File-Based Sync**     | Single-file sync for WebDAV/Dropbox/LocalFile     | Complete ✅                   |
-| **C. Server Sync**         | Upload/download individual operations (SuperSync) | Complete ✅ (single-version)¹ |
-| **D. Validation & Repair** | Prevent corruption, auto-repair invalid state     | Complete ✅                   |
+| Purpose                    | Description                                       | Status       |
+| -------------------------- | ------------------------------------------------- | ------------ |
+| **A. Local Persistence**   | Fast writes, crash recovery, event sourcing       | Complete ✅  |
+| **B. File-Based Sync**     | Default v2 monolith or opt-in v3 split files      | Complete ✅  |
+| **C. Server Sync**         | Upload/download individual operations (SuperSync) | Complete ✅¹ |
+| **D. Validation & Repair** | Prevent corruption, auto-repair invalid state     | Complete ✅  |
 
 > ¹ **Cross-version sync**: receiver-side op migration (A.7.11) runs before conflict detection. The remaining caveat is the released fleet: v17.0.0–v18.14.0 clients apply newer-schema ops (up to schema 5) unmigrated — see the [A.7.11 Bump Policy](#bump-policy--a-bump-does-not-protect-the-released-fleet).
 
@@ -95,23 +123,16 @@ The Operation Log serves **four distinct purposes**:
 This document is structured around these four purposes. Most complexity lives in **Part A** (local persistence). **Part B** handles file-based sync via the `FileBasedSyncAdapter`. **Part C** handles operation-based sync with SuperSync server. **Part D** integrates validation and automatic repair.
 
 ```
-┌───────────────────────────────────────────────────────────────────┐
-│                          User Action                              │
-└───────────────────────────────────────────────────────────────────┘
-                             ▼
-                        NgRx Store
-                  (Runtime Source of Truth)
-                             │
-         ┌───────────────────┼───────────────────┐
-         ▼                   │                   ▼
-   OpLogEffects              │             Other Effects
-         │                   │
-         ├──► SUP_OPS ◄──────┘
-         │    (Local Persistence - Part A)
-         │
-         └──► Sync Providers
-              ├── SuperSync (Part C - operation-based)
-              └── WebDAV/Dropbox/LocalFile (Part B - file-based)
+Local intent ──► NgRx reducer ──► live state
+      │
+      └──► capture + ordered append ──► SUP_OPS
+                                            │
+                                            ├──► SuperSync operation transport
+                                            └──► file-provider envelopes
+
+Remote input ──► migrate/filter/resolve ──► reducers + archive side effects
+                                                │
+                                                └──► durable checkpoint/cursor
 ```
 
 ---
@@ -121,9 +142,18 @@ This document is structured around these four purposes. Most complexity lives in
 The operation log is **not** incidental complexity. It is the minimum design
 that satisfies one hard, non-negotiable constraint:
 
-> **No silent data loss on concurrent multi-device edits, offline-first, with a
-> "dumb" server that cannot merge** (WebDAV/Dropbox/LocalFile have no server
-> logic; SuperSync payloads are end-to-end encrypted and opaque to the server).
+> **Design goal: no silent data loss on concurrent multi-device edits,
+> offline-first, with a "dumb" server that cannot merge** (file providers have no
+> server logic; SuperSync payloads can be end-to-end encrypted and opaque to the
+> server).
+
+This is the constraint the architecture is intended to satisfy, not a claim that
+all races are closed. The #9073 no-pending mitigation reconstructs retained
+concurrent local operations and routes supported overlapping crossings through
+deterministic LWW, but it cannot do so when the local side is no longer retained
+or cannot be decomposed safely. The focused
+[conflict contract](./conflict-journal-and-review.md#composition-residual-pre-existing-class)
+documents that residual and its possible class-level fixes.
 
 Independent prior analyses (three separate model reviews) evaluated every
 simpler approach against that constraint and rejected each:
@@ -136,12 +166,13 @@ simpler approach against that constraint and rejected each:
 | **CRDTs (Yjs/Automerge/etc.)**         | Math-guaranteed convergence                                      | High conceptual complexity; most implementations assume a trusted server or relay, clashing with the dumb-file + E2EE constraint. The op-log deliberately _borrows_ op-based-CRDT properties (UUID idempotency, causal ordering) without the full machinery.                          |
 | **Server-assigned sequence numbers**   | Let the server impose a total order                              | Requires server connectivity for ordering — incompatible with offline-first and file-based providers that have no server. Used only as a _complement_ (SuperSync seq for global order; vector clocks still required for the file-based/offline case).                                 |
 
-**Consequences any future redesign must preserve:** no silent loss from
-concurrent independent edits; works without a trusted/merging server and with
-opaque E2EE payloads; offline edits rebase cleanly on reconnect; tombstones
-with retention; bounded growth via snapshot + compaction; conflict metadata
-prefers false-concurrency over false-ordering (compare clocks _before_ pruning);
-scales to 10k+ active / 20k+ archived tasks without main-thread O(N) work.
+**Consequences any future redesign must preserve:** classify concurrent
+independent edits before overwriting them and keep any remaining residuals
+explicit; work without a trusted/merging server and with opaque E2EE payloads;
+rebase offline edits cleanly on reconnect; retain tombstones long enough;
+bound growth via snapshot + compaction; prefer false-concurrency over
+false-ordering in conflict metadata (compare clocks _before_ pruning); scale to
+10k+ active / 20k+ archived tasks without main-thread O(N) work.
 
 The only self-identified over-engineering historically was the vector-clock
 pruning _defense layers_, which were since removed (see
@@ -151,60 +182,38 @@ pruning _defense layers_, which were since removed (see
 
 # Part A: Local Persistence
 
-The operation log is primarily a **Write-Ahead Log (WAL)** for local persistence. It provides:
+The operation log is the durable transition log for local persistence. It is
+WAL-like, but the reducer runs before asynchronous capture/append, so the
+divergence guard is part of its safety contract. It provides:
 
 1. **Fast writes** - Small ops are instant vs. serializing 5MB on every change
-2. **Crash recovery** - Replay uncommitted ops from log
-3. **Event sourcing** - Full history of user actions for debugging/undo
+2. **Crash recovery** - Rebuild from a screened snapshot plus retained tail
+3. **Bounded evidence** - Retain recent transitions for recovery and debugging,
+   not as a permanent audit log or general undo history
 
 ## A.1 Database Architecture
 
-### SUP_OPS Database
+`SUP_OPS` contains more than a single append-only table. Its current stores and
+indexes are defined by
+[`OperationLogStoreService`](../../src/app/op-log/persistence/operation-log-store.service.ts),
+which is the authority for upgrades and transaction boundaries:
 
-```typescript
-// ops table - the event log
-interface OperationLogEntry {
-  seq: number; // Auto-increment primary key
-  op: Operation; // The operation
-  appliedAt: number; // When applied locally
-  source: 'local' | 'remote';
-  syncedAt?: number; // For server sync (Part C)
-  rejectedAt?: number; // When rejected during conflict resolution
-  applicationStatus?: 'pending' | 'archive_pending' | 'failed' | 'applied';
-}
+| Durable concern          | Role                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Operation rows           | Retained local and remote operations plus mutable delivery/application metadata                         |
+| State cache              | A boot-time baseline with its covered local sequence, vector clock, schema version, and entity frontier |
+| Clock/client/meta rows   | Working causal state, device identity, full-state metadata, and replacement/rebuild recovery markers    |
+| Young/old archive stores | Archived tasks and time-tracking data that live outside NgRx                                            |
 
-// state_cache table - periodic snapshots
-interface StateCache {
-  state: AllSyncModels; // Full snapshot
-  lastAppliedOpSeq: number;
-  vectorClock: VectorClock; // Current merged vector clock
-  compactedAt: number; // When this snapshot was created
-  schemaVersion?: number; // Optional for backward compatibility
-}
-```
+The exact operation envelope is owned by
+[`@sp/sync-core`](../../packages/sync-core/src/operation.types.ts) and narrowed for
+the application in
+[`operation.types.ts`](../../src/app/op-log/core/operation.types.ts). Do not copy
+those interfaces into design docs: both the envelope and row metadata evolve.
 
-### IndexedDB Structure
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         IndexedDB                                    │
-├─────────────────────────────────────────────────────────────────────┤
-│      'SUP_OPS' database (Operation Log)                             │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────┐       │
-│  │ ops (event log)      - Append-only operation log         │       │
-│  │ state_cache          - Periodic state snapshots          │       │
-│  │ meta                 - Vector clocks, sync state         │       │
-│  │ archive_young        - Recent archived tasks             │       │
-│  │ archive_old          - Old archived tasks                │       │
-│  │ client_id            - Sync device identity (v6)         │       │
-│  └──────────────────────────────────────────────────────────┘       │
-│                                                                      │
-│  ALL model data persisted here                                       │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-**Key insight:** All application data is persisted in the `SUP_OPS` database via the operation log system.
+Synced application-model recovery data lives in `SUP_OPS`. Provider credentials,
+conflict-journal records, plugin caches, and local UI/browser settings have
+separate owners; see the [user-data reference](../wiki/3.06-User-Data.md).
 
 ### Remote Apply Checkpoints
 
@@ -246,105 +255,34 @@ Local actions buffered during a remote-apply window stay ordered until each oper
 User Action
     │
     ▼
-NgRx Dispatch (action)
+NgRx reducer commits live state
     │
-    ├──► Reducer updates state (optimistic, in-memory)
-    │
-    └──► OperationLogEffects
+    └──► capture meta-reducer marks the local persistent action pending
               │
-              ├──► Filter: action.meta.isPersistent === true?
-              │         └──► Skip if false or missing
-              │
-              ├──► Filter: action.meta.isRemote === true?
-              │         └──► Skip (prevents re-logging sync/replay)
-              │
-              ├──► Convert action to Operation
-              │
-              ├──► Append to SUP_OPS.ops (disk)
-              │
-              ├──► Increment META_MODEL.vectorClock (Part B bridge)
-              │
-              └──► Broadcast to other tabs
-```
-
-### Operation Structure
-
-```typescript
-interface Operation {
-  id: string; // UUID v7 (time-ordered)
-  actionType: string; // NgRx action type
-  opType: OpType; // CRT | UPD | DEL | MOV | BATCH
-  entityType: EntityType; // TASK | PROJECT | TAG | NOTE | ...
-  entityId?: string; // Affected entity ID
-  entityIds?: string[]; // For batch operations
-  payload: unknown; // Action payload
-  clientId: string; // Device ID
-  vectorClock: VectorClock; // Per-op causality (for Part C)
-  timestamp: number; // Wall clock (epoch ms)
-  schemaVersion: number; // For migrations
-}
-
-type OpType =
-  | 'CRT' // Create
-  | 'UPD' // Update
-  | 'DEL' // Delete
-  | 'MOV' // Move (list reordering)
-  | 'BATCH' // Bulk operations (import, mass update)
-  | 'SYNC_IMPORT' // Full state import from remote sync
-  | 'BACKUP_IMPORT' // Full state import from backup file
-  | 'REPAIR'; // Auto-repair operation with full repaired state
-
-type EntityType =
-  | 'TASK'
-  | 'PROJECT'
-  | 'TAG'
-  | 'NOTE'
-  | 'GLOBAL_CONFIG'
-  | 'SIMPLE_COUNTER'
-  | 'WORK_CONTEXT'
-  | 'TASK_REPEAT_CFG'
-  | 'ISSUE_PROVIDER'
-  | 'PLANNER'
-  | 'MENU_TREE'
-  | 'METRIC'
-  | 'BOARD'
-  | 'REMINDER'
-  | 'PLUGIN_USER_DATA'
-  | 'PLUGIN_METADATA'
-  | 'MIGRATION'
-  | 'RECOVERY'
-  | 'ALL';
+              └──► non-dispatching effect, ordered with concatMap
+                        │
+                        ├──► validate identifiers/payload
+                        ├──► create operation + incremented clock
+                        └──► lock + atomic operation/clock append
+                                  │
+                                  ├──► success: upload/compaction bookkeeping
+                                  └──► failure: surface reload + fence compaction
 ```
 
 ### Persistent Action Pattern
 
-Actions are persisted based on explicit `meta.isPersistent: true`:
+Only actions with explicit `meta.isPersistent: true` enter the capture path.
+Remote/replayed actions set `meta.isRemote` and are never captured again. During
+remote application, new local persistent actions are buffered and appended later
+with clocks based on the applied remote frontier.
 
-```typescript
-// persistent-action.interface.ts
-export interface PersistentActionMeta {
-  isPersistent?: boolean; // When true, action is persisted
-  entityType: EntityType;
-  entityId?: string;
-  entityIds?: string[]; // For batch operations
-  opType: OpType;
-  isRemote?: boolean; // TRUE if from Sync (prevents re-logging)
-  isBulk?: boolean; // TRUE for batch operations
-}
-
-// Type guard - only actions with explicit isPersistent: true are persisted
-export const isPersistentAction = (action: Action): action is PersistentAction => {
-  const a = action as PersistentAction;
-  return !!a.meta && a.meta.isPersistent === true;
-};
-```
-
-Actions that should NOT be persisted:
-
-- UI-only actions (selectedTaskId, currentTaskId, toggle sidebar, etc.)
-- Load/hydration actions (data already in log)
-- Upsert actions (typically from sync/import)
-- Internal cleanup actions
+The contract is executable in
+[`persistent-action.interface.ts`](../../src/app/op-log/core/persistent-action.interface.ts),
+[`operation-capture.meta-reducer.ts`](../../src/app/op-log/capture/operation-capture.meta-reducer.ts),
+and
+[`operation-log.effects.ts`](../../src/app/op-log/capture/operation-log.effects.ts).
+UI-only state and hydration/replay plumbing must not masquerade as new user
+intent.
 
 ## A.3 Read Path (Hydration)
 
@@ -362,44 +300,77 @@ OperationLogHydratorService
     │
     ├──► Dispatch loadAllData(snapshot, { isHydration: true })
     │
-    └──► Load tail ops (seq > snapshot.lastAppliedOpSeq)
+    └──► Load replay range (seq > snapshot.lastAppliedOpSeq)
               │
-              ├──► If last op is SyncImport: load directly (skip replay)
+              ├──► If the final op carries full state and no reducer work is pending:
+              │      validate and load that state directly
               │
-              ├──► Otherwise: Replay ops (prevents re-logging via isRemote flag)
+              ├──► Otherwise: migrate operations, then replay the result
+              │      (migration may transform, split, or drop obsolete rows)
               │
-              └──► If replayed >10 ops: Save new snapshot for faster future loads
+              └──► If replayed >10 ops and state is valid: save a new snapshot
 ```
 
 ### Hydration Optimizations
 
 Two optimizations speed up hydration:
 
-1. **Skip replay for SyncImport**: When the last operation in the log is a `SyncImport` (full state import), the hydrator loads it directly instead of replaying all preceding operations. This significantly speeds up initial load after imports or syncs.
+1. **Direct-load a safe terminal full state**: When the last replayable operation is a `SYNC_IMPORT`, `BACKUP_IMPORT`, or `REPAIR`, and no row in that replay range still has pending reducer work, the hydrator validates and loads its full state directly. Pending work disables the shortcut so those rows can be replayed and checkpointed.
 
 2. **Save snapshot after replay**: After replaying more than 10 tail operations, a new state cache snapshot is saved. This avoids replaying the same operations on subsequent startups.
 
 ### Genesis Migration
 
-On first startup (SUP_OPS empty), the system initializes with default state:
+With no state cache, hydration first runs the local legacy migration check and
+then re-reads the cache. If both the cache and operation log are empty, the app
+keeps its normal initial NgRx state; it does not manufacture the pseudo-snapshot
+shown in older versions of this document. Legacy `pf` recovery is allowed only
+after proving that `SUP_OPS` contains neither a snapshot nor operation rows, and
+the recovery operation plus snapshot are committed atomically. See
+[`operation-log-hydrator.service.ts`](../../src/app/op-log/persistence/operation-log-hydrator.service.ts)
+and
+[`operation-log-recovery.service.ts`](../../src/app/op-log/persistence/operation-log-recovery.service.ts).
 
-```typescript
-async createGenesisSnapshot(): Promise<void> {
-  // Initialize with default state or migrate from legacy if present
-  const initialState = await this.getInitialState();
+A genesis op (`MIGRATION` / `RECOVERY`) is not replayable by other clients — it
+carries this client's whole state as an ordinary Batch op that receivers apply
+as a no-op. A client whose history is still only that genesis op (never synced,
+no full-state op) is therefore treated like a fresh client with local data at
+join time: it gets the local-data conflict dialog on a non-empty server, or
+seeds an empty server with a `SYNC_IMPORT`
+(`SyncLocalStateService.isNeverSyncedGenesisClient`, #9863). Because that
+download-side decision is what actually ships the state, API-based providers
+(SuperSync) never upload the genesis op itself: `OperationLogUploadService`
+leaves it out of the upload set and marks it synced locally once the round's
+full-state ops are settled (`isGenesisEntityType`, #9921). While the upload is
+still blocked (no encryption key yet), or when this client's own `SYNC_IMPORT`
+was just dropped on `SYNC_IMPORT_EXISTS`, the op stays pending, because a
+pending genesis op is what makes the incoming-import gate prompt. File-based
+providers keep uploading it: there the ops upload is what writes the state
+snapshot. Servers may still hold genesis ops uploaded by older clients;
+receivers apply them as no-ops as before.
 
-  // Create initial snapshot
-  await this.opLogStore.saveStateCache({
-    state: initialState,
-    lastAppliedOpSeq: 0,
-    vectorClock: {},
-    compactedAt: Date.now(),
-    schemaVersion: CURRENT_SCHEMA_VERSION
-  });
-}
-```
+Both join-time decisions are gated on `SyncLocalStateService.hasMeaningfulStoreData`,
+which uses `hasAnyUserData` — `hasMeaningfulStateData` widened with archives, live
+time tracking and repeat configs, since a legacy client's work can be entirely
+archived. Archived tasks and flushed time tracking live only in IndexedDB and the
+synchronous store snapshot substitutes an empty archive, so the gate falls back to
+the archive-inclusive snapshot when the narrow check finds nothing (#9932).
+Everything it counts is strictly non-default, keeping it a subset of the seeding's
+own check (`hasServerMigrationStateData`).
 
-For users upgrading from legacy formats, `ServerMigrationService` handles the migration during first sync.
+The wider notion is deliberately confined to that gate. `hasMeaningfulStateData`
+itself stays narrow because `hasNothingWorthUploading` consumes it in the refusing
+direction (#9256), where over-reporting "has data" would let a device holding
+nothing overwrite the server — time tracked against onboarding example tasks being
+exactly such a false positive.
+`ServerMigrationService.handleServerMigration` reports `created` /
+`reused_pending` / `skipped` (with a reason). On the server-reset branch only a
+genuine failure to ship existing state — validation failed, or no client id —
+answers `server_migration_skipped`, so the upload waits for the next cycle
+instead of settling the client onto a server without its base state. A state
+judged empty has nothing to ship, and a server that is no longer empty has been
+seeded by someone else; both continue with the ordinary upload, because blocking
+either would strand the cycle with the client's ops still pending.
 
 ## A.4 Compaction
 
@@ -412,190 +383,75 @@ Without compaction, the op log grows unbounded. Compaction:
 
 ### Triggers
 
-- Every **500 operations**
-- After sync download (safety)
-- On app close (optional)
+- An asynchronous attempt after **500 durable local operation appends**
+- Recovery of an older snapshot that lacks the current entity frontier
+- An emergency attempt after a storage-quota append failure
 
 ### Process
 
-```typescript
-async compact(): Promise<void> {
-  // 1. Acquire the operation-log lock
-  await this.lockService.request('sp_op_log', async () => {
-    // 2. Never advance a snapshot past reducer-uncommitted remote rows
-    if ((await this.opLogStore.getPendingRemoteOps()).length > 0) return;
+Normal compaction drains local capture before taking the operation-log lock. It
+then refuses to snapshot while remote work is incomplete, a local operation is
+pending or undrained, a persistence failure left live state ahead, hydration is
+running in fallback mode, or the live store has no meaningful data. Skipping is
+safe because the retained log remains the recovery source.
 
-    // 3. Read current state from NgRx (via delegate)
-    const currentState = await this.storeDelegate.getAllSyncModelDataFromStore();
-
-    // 4. Save new snapshot
-    const lastSeq = await this.opLogStore.getLastSeq();
-    await this.opLogStore.saveStateCache({
-      state: currentState,
-      lastAppliedOpSeq: lastSeq,
-      vectorClock: await this.opLogStore.getCurrentVectorClock(),
-      compactedAt: Date.now(),
-      schemaVersion: CURRENT_SCHEMA_VERSION
-    });
-
-    // 5. Delete old terminal ops only
-    const retentionWindowMs = 7 * 24 * 60 * 60 * 1000; // 7 days
-    const cutoff = Date.now() - retentionWindowMs;
-
-    await this.opLogStore.deleteOpsWhere(
-      (entry) => {
-        const rejected = entry.rejectedAt !== undefined;
-        const complete =
-          rejected ||
-          entry.applicationStatus === undefined ||
-          entry.applicationStatus === 'applied';
-        const terminalAt = entry.rejectedAt ?? entry.appliedAt;
-        return (
-          (!!entry.syncedAt || rejected) &&
-          complete &&
-          terminalAt < cutoff &&
-          entry.seq <= lastSeq
-        );
-      }
-    );
-  });
-}
-```
+On success it snapshots current state with the latest local sequence, working
+vector clock, schema version, and entity frontier, resets the compaction counter,
+then prunes only rows that are terminal, covered by the snapshot, and older than
+the retention cutoff. Active unsynced rows and incomplete remote rows survive.
+The exact guard ordering is load-bearing; follow
+[`operation-log-compaction.service.ts`](../../src/app/op-log/persistence/operation-log-compaction.service.ts)
+rather than reimplementing it from prose.
 
 ### Configuration
 
-| Setting                         | Value   | Description                                    |
-| ------------------------------- | ------- | ---------------------------------------------- |
-| Compaction trigger              | 500 ops | Ops before snapshot                            |
-| Retention window                | 7 days  | Keep recent synced ops                         |
-| Emergency retention             | 1 day   | Shorter retention for quota exceeded           |
-| Compaction timeout              | 25 sec  | Abort if exceeds (prevents lock expiration)    |
-| Max compaction failures         | 3       | Failures before user notification              |
-| Unsynced non-rejected ops       | ∞       | Never delete unsynced active ops               |
-| Incomplete remote ops           | ∞       | Never delete pending/archive_pending/failed    |
-| Rejected ops retention          | 7 days  | Delete after terminal rejection retention      |
-| Max download ops in memory      | 50,000  | Bounds memory during API download              |
-| Remote file retention           | 14 days | Server-side operation file retention           |
-| Max remote files to keep        | 100     | Minimum recent files on server                 |
-| Remote archive retries          | ∞       | Stay quarantined until side effects complete   |
-| Max rejected ops before warning | 10      | Threshold for user notification                |
-| Lock timeout                    | 30 sec  | localStorage fallback lock timeout             |
-| Lock acquire timeout            | 60 sec  | Max wait to acquire a lock                     |
-| Max download retries            | 3       | Retry attempts for failed file downloads       |
-| Max ops for snapshot (server)   | 100,000 | Server-side memory protection for snapshot gen |
+| Setting                       | Current value          | Meaning                                                  |
+| ----------------------------- | ---------------------- | -------------------------------------------------------- |
+| Automatic attempt             | 500 appends            | In-memory/persisted counter threshold                    |
+| Normal terminal-row retention | 7 days                 | Recent synced/rejected evidence remains available        |
+| Emergency retention           | 1 day                  | More aggressive eligible-row pruning after quota failure |
+| Phase timeout                 | 25 seconds             | Abort before an overlong compaction outruns lock safety  |
+| Failure notification          | 3 consecutive failures | Surface persistent maintenance failure                   |
+
+These values are centralized in
+[`operation-log.const.ts`](../../src/app/op-log/core/operation-log.const.ts).
 
 ## A.5 Multi-Tab Coordination
 
-### Write Locking
+Browser builds use the Web Locks API to serialize named critical sections over
+shared IndexedDB. Electron and Android WebView are single-instance and use an
+in-process promise mutex. Browsers without Web Locks also fall back to that
+single-tab mutex, which cannot protect two tabs.
 
-```typescript
-// Primary: Web Locks API
-await navigator.locks.request('sp_op_log_write', async () => {
-  await this.writeOperation(op);
-});
-
-// Fallback: localStorage mutex (for older WebViews)
-```
-
-### State Broadcast
-
-When one tab writes an operation:
-
-1. Write to SUP_OPS
-2. Broadcast via BroadcastChannel
-3. Other tabs receive and apply (with `isRemote=true` to prevent re-logging)
-
-```typescript
-// Tab A writes
-this.broadcastChannel.postMessage({ type: 'NEW_OP', op });
-
-// Tab B receives
-this.broadcastChannel.onmessage = (event) => {
-  if (event.data.type === 'NEW_OP') {
-    const action = convertOpToAction(event.data.op); // Sets isRemote: true
-    this.store.dispatch(action);
-  }
-};
-```
+The app does **not** broadcast operation payloads between live tabs. Startup uses
+a `BroadcastChannel` handshake to block a second same-origin instance. That
+single-instance policy and the Web Locks layer are complementary safeguards; see
+[`StartupService`](../../src/app/core/startup/startup.service.ts) and
+[`LockService`](../../src/app/op-log/sync/lock.service.ts).
 
 ## A.6 LOCAL_ACTIONS Token for Effects
 
-### The Problem
+Remote/replayed actions carry `meta.isRemote: true`. Re-running ordinary effects
+for them can duplicate notifications, external calls, and—most dangerously—new
+persistent actions. Therefore effects inject
+[`LOCAL_ACTIONS`](../../src/app/util/local-actions.token.ts), which excludes
+remote actions. The sole broad-stream exception is the operation-log capture
+effect, whose own filters enforce the persistence boundary.
 
-When operations are synced from remote clients (other tabs or devices), they are dispatched to NgRx with `meta.isRemote: true`. Effects that perform side effects (snacks, work logs, notifications, plugin hooks) should NOT run for these remote operations because:
-
-1. **Duplicate side effects** - The side effect already happened on the original client
-2. **Invalid state access** - The task/entity referenced by the action may not exist yet (out-of-order delivery)
-3. **User confusion** - Showing "Task completed!" snack for something completed on another device hours ago
-
-### The Solution: LOCAL_ACTIONS Injection Token
-
-The `LOCAL_ACTIONS` injection token provides a pre-filtered Actions stream that excludes remote operations:
-
-```typescript
-// src/app/util/local-actions.token.ts
-import { inject, InjectionToken } from '@angular/core';
-import { Actions } from '@ngrx/effects';
-import { Action } from '@ngrx/store';
-import { Observable } from 'rxjs';
-import { filter } from 'rxjs/operators';
-
-export const LOCAL_ACTIONS = new InjectionToken<Observable<Action>>('LOCAL_ACTIONS', {
-  providedIn: 'root',
-  factory: () => {
-    const actions$ = inject(Actions);
-    return actions$.pipe(filter((action: Action) => !(action as any).meta?.isRemote));
-  },
-});
-```
-
-### Usage in Effects
-
-Use `LOCAL_ACTIONS` instead of `Actions` for effects that should NOT run for remote operations:
-
-```typescript
-@Injectable()
-export class MyEffects {
-  private _actions$ = inject(LOCAL_ACTIONS); // LOCAL actions only (excludes isRemote)
-
-  // ✅ Use LOCAL_ACTIONS for side effects
-  showSnack$ = createEffect(
-    () =>
-      this._localActions$.pipe(
-        ofType(TaskSharedActions.updateTask),
-        filter((action) => action.task.changes.isDone === true),
-        tap(() => this.snackService.open({ msg: 'Task completed!' })),
-      ),
-    { dispatch: false },
-  );
-
-  // ✅ Use regular actions$ for state updates that should apply everywhere
-  moveTaskToList$ = createEffect(() =>
-    this._actions$.pipe(
-      ofType(moveTaskInTodayList),
-      // This dispatches another action - should work for all sources
-      map(({ taskId }) => TaskSharedActions.updateTask({ ... })),
-    ),
-  );
-}
-```
-
-### When to Use LOCAL_ACTIONS
-
-| Scenario                          | Use LOCAL_ACTIONS? | Reason                                              |
-| --------------------------------- | ------------------ | --------------------------------------------------- |
-| Show snackbar/toast               | ✅ Yes             | UI notification already happened on original client |
-| Post work log to Jira/OpenProject | ✅ Yes             | External API call already made                      |
-| Play sound                        | ✅ Yes             | Audio feedback is local-only                        |
-| Update Electron taskbar           | ✅ Yes             | Desktop UI is local-only                            |
-| Dispatch plugin hooks             | ✅ Yes             | Plugins already ran on original client              |
-| Update another entity in store    | ❌ No              | State change should apply everywhere                |
-| Navigate/route change             | ✅ Yes             | Navigation is local-only                            |
-| Dispatch cascading actions        | ⚠️ Depends         | If it modifies state: No. If side-effect only: Yes  |
+This is one half of the atomic-intent rule. A state transition that must replay
+atomically across synced slices or entities belongs in a meta-reducer so the
+reducer pass and captured operation remain one unit; an effect fan-out creates
+multiple independently syncable operations. Broader workflows may deliberately
+remain independent persistent actions when their normal side effects and
+entity-specific conflict boundaries matter, as documented for
+[project completion in ADR #5](../../ARCHITECTURE-DECISIONS.md#5-project-completion-decoupled-resolution-over-atomic-multi-entity-op).
+Selector-driven effects also require the hydration/sync guard. The normative
+contributor rules and examples live in
+[`contributor-sync-model.md`](./contributor-sync-model.md).
 
 ---
 
-## A.7 Disaster Recovery
+## A.6.1 Disaster Recovery
 
 ### SUP_OPS Corruption
 
@@ -614,34 +470,13 @@ must never place an older `pf` copy at the current SUP_OPS sequence frontier. Wh
 allowed, the recovery operation, state-cache snapshot, and vector clock commit in one IndexedDB
 transaction; an interrupted write cannot leave a snapshot claiming an operation that rolled back.
 
-### Implementation
-
-```typescript
-async hydrateStore(): Promise<void> {
-  try {
-    const snapshot = await this.opLogStore.loadStateCache();
-    if (!snapshot || !this.isValidSnapshot(snapshot)) {
-      // attemptRecovery() proceeds only if snapshot === null and lastSeq === 0
-      return await this.attemptRecovery();
-    }
-    // Normal hydration...
-  } catch (e) {
-    // This rethrows when SUP_OPS is non-empty or cannot be inspected.
-    await this.attemptRecovery();
-  }
-}
-
-private async attemptRecovery(): Promise<void> {
-  // 1. Try backup from state cache
-  const backupState = await this.tryLoadBackupSnapshot();
-  if (backupState) {
-    await this.recoverFromBackup(backupState);
-    return;
-  }
-  // 2. Try remote sync (triggers ServerMigrationService if needed)
-  // 3. Show error to user
-}
-```
+The exact branches matter: a corrupt but present snapshot first falls back to
+retained-op replay, while legacy recovery is a last resort for a provably empty
+`SUP_OPS` database. Follow
+[`operation-log-hydrator.service.ts`](../../src/app/op-log/persistence/operation-log-hydrator.service.ts)
+and
+[`operation-log-recovery.service.ts`](../../src/app/op-log/persistence/operation-log-recovery.service.ts)
+rather than translating this summary into recovery code.
 
 ## A.7 Schema Migrations
 
@@ -651,16 +486,11 @@ When Super Productivity's data model changes (new fields, renamed properties, re
 
 ### Configuration
 
-`CURRENT_SCHEMA_VERSION` is defined in `packages/shared-schema/src/schema-version.ts` (shared by client and server) and re-exported through `src/app/op-log/persistence/schema-migration.service.ts`:
-
-```typescript
-export const PROJECT_DELETE_WINS_SCHEMA_VERSION = 4;
-export const CURRENT_SCHEMA_VERSION = PROJECT_DELETE_WINS_SCHEMA_VERSION;
-export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
-// MAX_VERSION_SKIP was removed: current receivers block any newer-schema op
-// outright. Released v17.0.0–v18.14.0 clients still ship the old +3 band and
-// apply ops up to schema 5 UNMIGRATED — see the A.7.11 Bump Policy.
-```
+`CURRENT_SCHEMA_VERSION` and `MIN_SUPPORTED_SCHEMA_VERSION` are defined in
+[`packages/shared-schema/src/schema-version.ts`](../../packages/shared-schema/src/schema-version.ts)
+and re-exported by the client migration service. Current receivers have no
+forward-compatibility skip band; the released-fleet exception is documented in
+the bump policy below.
 
 ### Core Concepts
 
@@ -683,11 +513,11 @@ export const MIN_SUPPORTED_SCHEMA_VERSION = 1;
            ┌───────────────────┼───────────────────┐
            ▼                   ▼                   ▼
     Load Snapshot         Replay Ops         Receive Remote Ops
-    (superseded version)       (mixed versions)   (newer/older version)
+    (older version)       (mixed versions)   (ordered remote batch)
            │                   │                   │
            ▼                   ▼                   ▼
-    Run migrations       Apply ops as-is     Migrate if needed
-    on full state        (ops are additive)  (full state imports)
+    migrateState         migrateOperation    Screen, then migrate
+    shared chain         shared chain        compatible prefix
 ```
 
 ### A.7.1 Snapshot Migration (Local)
@@ -718,151 +548,74 @@ Continue with tail ops (ops after snapshot)
 
 ### A.7.2 Operation Replay (Mixed Versions)
 
-Operations in the log may have different schema versions. During replay:
+Operations in the log may have different schema versions. Before replay, the
+hydrator runs the shared operation-migration chain.
 
-```typescript
-// Operations are "additive" - they describe what changed, not full state
-// Example: { opType: 'UPD', payload: { task: { id: 'x', changes: { title: 'new' } } } }
-
-// Old ops apply to migrated state because:
-// 1. Fields they reference still exist (or are mapped)
-// 2. New fields have defaults filled by migration
-// 3. Renamed fields are handled by migration aliases
-
-async replayOperation(op: Operation, currentState: AppDataComplete): Promise<void> {
-  // Op schema version is informational - ops apply to current state structure
-  // The snapshot was already migrated to current schema
-  await this.operationApplier.applyOperations([op]);
-}
-```
-
-> **Limitation:** Operations are NOT migrated during replay. If a migration renames a field (e.g., `estimate` → `timeEstimate`), old operations referencing `estimate` will apply that field to the entity, potentially causing data inconsistency. To avoid this:
->
-> 1. **Prefer additive migrations** - Add new fields with defaults rather than renaming
-> 2. **Use aliases in reducers** - If renaming is necessary, reducers should accept both old and new field names
-> 3. **Force compaction after migration** - Reduce the window of mixed-version operations
->
-> Operation-level migration (transforming old ops to new schema during replay) is listed as a future enhancement in A.7.9.
+One source operation can remain unchanged, be transformed, expand into several
+operations, or be dropped as obsolete. The hydrator replays only the migrated
+result and keeps source-operation IDs for durable reducer checkpointing. See the
+shared [`migrate.ts`](../../packages/shared-schema/src/migrate.ts) chain and the
+client
+[`operation-log-hydrator.service.ts`](../../src/app/op-log/persistence/operation-log-hydrator.service.ts)
+for the executable contract.
 
 ### A.7.3 Remote Sync (Cross-Version Clients)
 
-When clients run different Super Productivity versions, sync must handle version differences:
+[`RemoteOpsProcessingService`](../../src/app/op-log/sync/remote-ops-processing.service.ts)
+screens a downloaded batch in transport order. For each operation it first
+validates the schema version. An invalid version, a version below the supported
+minimum, a version newer than this client, or a migration failure stops the
+batch at that operation. The compatible prefix may finish processing; the
+blocked operation and suffix are neither stored nor applied. Callers leave the
+transport cursor unchanged so that suffix is downloaded again after an update
+or migration fix.
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Remote Sync Scenarios                            │
-└─────────────────────────────────────────────────────────────────────┘
-
-Scenario 1: Newer client receives older ops
-──────────────────────────────────────────
-Client v2 ◄─── ops from v1 client
-    │
-    └── Ops apply normally (additive changes to migrated state)
-        Missing new fields use defaults from migration
-
-Scenario 2: Older client receives newer ops
-──────────────────────────────────────────
-[OUTDATED design sketch — actual behavior differs. Current (post-v18.14.0)
-receivers BLOCK any newer-schema op outright (cursor frozen, update prompt).
-Released v17–v18.14 receivers apply newer ops UNMIGRATED — unknown fields are
-NOT ignored; reducers write them into state. See the A.7.11 Bump Policy.]
-Client v1 ◄─── ops from v2 client
-    │
-    ├── Individual ops: Unknown fields ignored (graceful degradation)
-    │   { task: { id: 'x', changes: { title: 'a', newFieldV2: 'b' } } }
-    │                                            ↑ ignored by v1
-    │
-    └── Full state imports (SYNC_IMPORT): May fail validation
-        → User prompted to update app or resolve manually
-
-Scenario 3: Mixed version sync with conflicts
-──────────────────────────────────────────
-Client v1 conflicts with Client v2
-    │
-    └── Conflict resolution uses entity-level comparison
-        Version-specific fields handled during merge
-```
+Compatible older operations run through the shared migration chain before
+full-state filtering, conflict detection, or reducer application. A migration
+may transform or split an operation; `null` is an intentional terminal drop and
+does not block the cursor.
 
 ### A.7.4 Full State Imports (SYNC_IMPORT/BACKUP_IMPORT)
 
-When receiving full state from remote (e.g., SYNC_IMPORT from another client):
+Full-state operations do not have a separate forward-compatibility path. They
+pass through the same ordered compatibility screen as every other remote
+operation: a too-new full-state operation blocks itself and the suffix, and the
+caller freezes the cursor. Current code has no `MAX_VERSION_SKIP` branch and
+does not attempt to load newer state by stripping unknown fields.
 
-> **Note (2026-07):** the pseudo-code below predates the removal of the forward-compat band (`MAX_VERSION_SKIP` no longer exists; current receivers block any newer-versioned data outright). Kept as design context only.
-
-```typescript
-async handleFullStateImport(payload: { appDataComplete: AppDataComplete }): Promise<void> {
-  const { appDataComplete } = payload;
-
-  // 1. Detect schema version of incoming state (from schemaVersion field or structure)
-  const incomingVersion = appDataComplete.schemaVersion ?? detectSchemaVersion(appDataComplete);
-
-  if (incomingVersion < CURRENT_SCHEMA_VERSION) {
-    // 2a. Migrate incoming state up to current version
-    const migratedState = await this.migrateState(appDataComplete, incomingVersion);
-    this.store.dispatch(loadAllData({ appDataComplete: migratedState }));
-
-  } else if (incomingVersion > CURRENT_SCHEMA_VERSION + MAX_VERSION_SKIP) {
-    // 2b. Too far ahead - reject and prompt user to update
-    this.snackService.open({
-      type: 'ERROR',
-      msg: T.F.SYNC.S.VERSION_TOO_OLD,
-      actionStr: T.PS.UPDATE_APP,
-      actionFn: () => window.open(UPDATE_URL, '_blank'),
-    });
-    throw new Error(`Schema version ${incomingVersion} requires app update`);
-
-  } else if (incomingVersion > CURRENT_SCHEMA_VERSION) {
-    // 2c. Slightly ahead - attempt graceful load with warning
-    PFLog.warn('Received state from newer app version', { incomingVersion, current: CURRENT_SCHEMA_VERSION });
-    this.snackService.open({
-      type: 'WARN',
-      msg: T.F.SYNC.S.NEWER_VERSION_WARNING, // "Data from newer app version - some features may not work"
-    });
-    // Attempt load - unknown fields will be stripped by Typia validation
-    // This may cause data loss for fields the older app doesn't understand
-    this.store.dispatch(loadAllData({ appDataComplete }));
-
-  } else {
-    // 2d. Same version - direct load
-    this.store.dispatch(loadAllData({ appDataComplete }));
-  }
-
-  // 3. Save snapshot (always with current schema version)
-  await this.saveStateCache(/* current state with schemaVersion = CURRENT_SCHEMA_VERSION */);
-}
-```
+For an older full-state operation, the shared operation chain is the receiver
+boundary. A migration that changes persisted state shape must cover both
+snapshots through `migrateState` and relevant full-state or incremental payloads
+through `migrateOperation`; replacement semantics run only after that operation
+is compatible.
 
 ### A.7.5 Migration Implementation
 
-Migrations are defined in `packages/shared-schema/src/migrations/` (registered in its `index.ts`); the Angular wrapper is `src/app/op-log/persistence/schema-migration.service.ts`.
+Migrations are defined in
+[`packages/shared-schema/src/migrations/`](../../packages/shared-schema/src/migrations/)
+and executed by the shared [`migrate.ts`](../../packages/shared-schema/src/migrate.ts)
+chain. The stable type contract lives in
+[`migration.types.ts`](../../packages/shared-schema/src/migration.types.ts):
+every `SchemaMigration` supplies `migrateState`, while optional
+`migrateOperation` accepts an `OperationLike` and returns `OperationLike`,
+`OperationLike[]`, or `null`.
 
-**How to Create a New Migration:**
+**How to create a new migration:**
 
-1. Increment `CURRENT_SCHEMA_VERSION`
-2. Add entry to `MIGRATIONS` array with `fromVersion`, `toVersion`, `description`, `migrate()`
-3. Test migration chain (v1→v2→v3 should equal v1→v3)
+1. Read the [A.7.11 Bump Policy](#bump-policy--a-bump-does-not-protect-the-released-fleet)
+   and avoid a bump when older clients can safely tolerate a payload marker or
+   envelope.
+2. If a bump is required, update
+   [`schema-version.ts`](../../packages/shared-schema/src/schema-version.ts), add
+   the next contiguous registry entry, and declare whether operation migration
+   is required.
+3. Test state migration, unchanged/transformed/split/dropped operation results
+   as applicable, retained-tail replay, and the remote cursor-freeze path.
 
-```typescript
-interface SchemaMigration {
-  fromVersion: number;
-  toVersion: number;
-  description: string;
-  migrate: (state: unknown) => unknown;
-  migrateOperation?: (op: Operation) => Operation | null; // For field renames/removals
-  requiresOperationMigration: boolean;
-}
-```
-
-**Design Principles:**
-
-| Principle                      | Description                                        |
-| ------------------------------ | -------------------------------------------------- |
-| **Additive changes preferred** | Adding new optional fields with defaults is safest |
-| **Avoid breaking renames**     | Use aliases or transformations instead             |
-| **Preserve unknown fields**    | Don't strip fields from newer versions             |
-| **Idempotent migrations**      | Running twice should be safe                       |
-
-**Version Mismatch Handling:** Remote data too new → prompt user to update app. Remote data too old → show error, may need manual intervention.
+**Transforming-migration residual:** the receiver pipeline is implemented, but
+any future field rename or removal still needs a concrete payload
+transformation (or intentional drop) and cross-version tests. The existence of
+the shared chain alone does not make that change safe.
 
 ### A.7.10 Legacy Data Migration
 
@@ -901,7 +654,9 @@ All future schema changes should use the **Schema Migration** system (A.7) descr
 
 ### A.7.8 Cross-Version Sync
 
-**Status:** Implemented receiver-side: every remote op passes `SchemaMigrationService.migrateOperation()` before conflict detection (`RemoteOpsProcessingService`, STEP 1). Sender uploads ops as-is.
+**Status:** Implemented receiver-side: compatible remote ops pass
+`SchemaMigrationService.migrateOperation()` before conflict detection; a
+too-new op is blocked before migration. Senders upload ops as-is.
 
 **Guardrails for newer-schema ops:**
 
@@ -912,27 +667,21 @@ All future schema changes should use the **Schema Migration** system (A.7) descr
 
 ### A.7.11 Cross-Version Sync Implementation Guide
 
-> **Status:** The receiver-side migration pipeline is implemented and `CURRENT_SCHEMA_VERSION = 4` (two of the three existing migrations are no-op semantic barriers). The Bump Policy below is normative.
+> **Status:** Receiver-side state and operation migration is implemented. The
+> Bump Policy below is normative.
 
-This guide provides the implementation roadmap for supporting sync between clients on different schema versions.
+#### Receiver contract
 
-#### When to Bump CURRENT_SCHEMA_VERSION
+The current receiver contract is deliberately one-way:
 
-Bump the schema version when:
-
-| Change Type                     | Bump Version? | Reason                                                               |
-| ------------------------------- | ------------- | -------------------------------------------------------------------- |
-| Add optional field with default | ✅ Yes        | Old clients won't set it; new clients need to know to apply defaults |
-| Rename field                    | ✅ Yes        | Operations need payload transformation                               |
-| Remove field/feature            | ✅ Yes        | Operations may reference removed entities                            |
-| Change field type               | ✅ Yes        | Payload values need conversion                                       |
-| Add new entity type             | ✅ Yes        | Old snapshots need initialization                                    |
-| Add new action type             | ❌ No         | Old clients ignore unknown actions                                   |
-| Bug fix in reducer              | ❌ No         | Not a schema change                                                  |
-
-**Decision rule:** If the change affects how `state_cache` snapshots or operation payloads are structured, bump the version.
-
-> ⚠️ **This table is a legacy shape-based heuristic — the Bump Policy below supersedes it.** Several "✅ Yes" rows (especially _add optional field with default_) are degradable via the `LwwUpdatePayload` envelope / inert-marker pattern: when old clients can apply the op unmigrated, prefer a payload marker with **no** bump (Bump Policy item 0). Bump only for a change old clients would genuinely misapply — a transforming migration (rename/remove/type-change) or a semantic you must hard-fence.
+- Compatible older operations use the shared migration chain before conflict
+  detection.
+- The first too-new, unsupported, invalid, or failed-to-migrate operation stops
+  processing at that point. Its suffix is not migrated or applied, and callers
+  freeze the cursor.
+- A current client never forward-migrates a newer operation. Safety for older
+  released clients therefore comes from payload-level graceful degradation, not
+  from the version stamp.
 
 #### Bump Policy — a bump does NOT protect the released fleet
 
@@ -946,318 +695,147 @@ Therefore:
 0. **Default: do NOT bump.** A bump is near-irreversible and it is not free even when "safe": it hard-blocks every not-yet-updated post-v18.14.0 client (frozen cursor) on the new ops, and it cannot be reverted once any op carries the new version — a reverted client hard-blocks on the v(N+1) ops it already wrote and the USE_REMOTE recovery path throws on them. So a bump must earn its cost. If old clients can apply the op unmigrated (the envelope / inert-marker pattern), gate the new semantics on a payload marker and **leave `CURRENT_SCHEMA_VERSION` alone**. Only bump when a change genuinely requires it: a transforming migration (renamed/removed field, dropped op) or a semantic you must hard-fence off older clients. **Cautionary example — v4 (#9009, project delete-wins) was bumped for a marker-only change old clients degrade on fine: the feature is driven entirely by the payload marker (plus the `entityId === projectId` auth check); the `schemaVersion >= 4` gate adds only narrow malformed-op hardening, not feature correctness. It needed no bump, yet it now fences every lagging post-v18.14.0 client and can't be undone. Don't repeat it.**
 1. New op semantics MUST degrade gracefully on older clients — see the `LwwUpdatePayload` envelope pattern in `packages/sync-core` ('patch' ops apply correctly on pre-v3 clients via `updateOne`; the v4 delete-wins marker is inert for them). If they degrade, bumping is _safe_ at any fleet share (the stamp is a fence for future receivers, not a protection for current ones) — but safe ≠ necessary: if it degrades, prefer a marker/envelope with **no** bump (see 0).
 2. A change that older clients would MISAPPLY must not ship behind a bump alone. No fleet percentage makes it safe while released v17–v18.14 clients still sync: one lagging device silently misapplies the ops for its whole account and writes the result back with dominating clocks. Treat such changes as blocked until the v17–v18.14 sync fleet is effectively extinct — or redesign them to degrade (option 1).
+3. **Precondition: any bump PR must address the downgrade relabel (#8770).** Local hydration has no future-version gate — `stateNeedsMigration()` is `version < target` — so a vN client reading a v(N+1) state cache (rollback, snap channel lag, old sideloaded APK) loads it unmigrated (Checkpoint B validation is non-fatal and never repairs), and the next snapshot/compaction write stamps it `CURRENT_SCHEMA_VERSION`. The cache is then v(N+1)-shaped under a vN label — additive residue survives because typia's `createValidate` does not strip excess properties — and on re-upgrade the N→N+1 migration runs a **second** time on already-migrated state. Until #8770 ships a guard (repro-first, per the sync-change rule), every migration MUST be a no-op on already-migrated state (v1→v2 guards via `hasMigratedFields`; barrier migrations are no-ops by construction), and the bump PR must state how downgraded clients are handled.
 
-#### Operation Transformation Strategy
+#### Widening a wire vocabulary needs no bump — but the receiver must block
 
-When receiving operations from older versions:
+`opType`, `syncImportReason`, and restore-point `type` are strict enums only on
+the REQUEST side of the SuperSync contract, where the server validates per op.
+On the RESPONSE side they are loose strings, and the receiver decides per op
+(`remote-op-block.util.ts`, the one block predicate shared by
+`remote-ops-processing.service.ts`, the full-state conflict gate's prefix cut,
+and the USE_REMOTE preflight): an unknown
+value blocks the batch at that op exactly like `VERSION_TOO_NEW` — prefix
+applied, cursor frozen, "update your app" snack — never a skip, which would
+advance the cursor past data the client never understood. (Restore points of
+an unknown type are simply kept in the list and rendered generically.) Before this the
+transport parser rejected the whole page with a generic error and wedged every
+not-yet-updated device (#8764). Two consequences:
 
-```typescript
-// In SchemaMigrationService.migrateOperation()
-async migrateOperation(op: Operation): Promise<Operation | null> {
-  const opVersion = op.schemaVersion ?? 1;
+- Adding a value to one of these unions does not require a schema bump; per
+  rule 0 above, don't add one for it.
+- Clients released before this receiver change still wedge on any widening,
+  so a widening must wait for a release-lag window after it shipped. The
+  window covers servers too: `validation.service.ts` rejects unknown op types
+  on upload, so self-hosted servers must carry the new value first.
 
-  if (opVersion >= CURRENT_SCHEMA_VERSION) {
-    return op; // Already current
-  }
+A type-level assertion in `super-sync.ts` keeps the sync-core `OpType` enum
+and `SUPER_SYNC_OP_TYPES` identical, so a value added to one side fails the
+build instead of surfacing as a runtime block on other devices.
 
-  // Run through migration chain
-  let migratedPayload = op.payload;
-  for (let v = opVersion; v < CURRENT_SCHEMA_VERSION; v++) {
-    const migration = MIGRATIONS.find(m => m.fromVersion === v);
-    if (migration?.migrateOperation) {
-      const result = migration.migrateOperation(op.actionType, migratedPayload);
-      if (result === null) {
-        // Operation should be dropped (removed feature)
-        return null;
-      }
-      migratedPayload = result;
-    }
-  }
+#### Executable sources and release checks
 
-  return {
-    ...op,
-    payload: migratedPayload,
-    schemaVersion: CURRENT_SCHEMA_VERSION,
-  };
-}
-```
+Follow the executable contracts instead of copying their shapes into this guide:
 
-#### Conflict Detection Across Versions
+- Ordered remote screening and cursor-block result:
+  [`remote-ops-processing.service.ts`](../../src/app/op-log/sync/remote-ops-processing.service.ts)
+- Migration return types:
+  [`migration.types.ts`](../../packages/shared-schema/src/migration.types.ts)
+- Shared state and operation chains:
+  [`migrate.ts`](../../packages/shared-schema/src/migrate.ts)
+- Current/minimum versions and the code-level bump warning:
+  [`schema-version.ts`](../../packages/shared-schema/src/schema-version.ts)
 
-The migration shield ensures conflict detection always compares apples-to-apples:
-
-```
-Remote Op (v1)          Local Op (v2)
-     │                       │
-     ▼                       │
-┌─────────────────┐          │
-│ Migration Layer │          │
-│  (v1 → v2)      │          │
-└────────┬────────┘          │
-         │                   │
-         ▼                   ▼
-    ┌────────────────────────────┐
-    │   Conflict Detection       │
-    │   (Both ops now v2)        │
-    └────────────────────────────┘
-```
-
-**Key invariant:** Operations are ALWAYS migrated to current version BEFORE conflict detection. This ensures:
-
-- Vector clock comparison is valid (same logical schema)
-- LWW timestamp comparison is fair (same field semantics)
-- Entity IDs are comparable (no renamed references)
-
-#### Backward Compatibility Guarantees
-
-| Scenario                                      | Behavior                                                                                                                                      | User Experience                                 |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Older client → Newer client                   | Newer client migrates incoming ops                                                                                                            | Seamless                                        |
-| Newer client → post-v18.14.0 receiver         | Receiver blocks the op outright, freezes the cursor, prompts update                                                                           | Sync pauses loudly, lossless                    |
-| Newer client → released receiver (v17–v18.14) | Applies ops up to schema 5 UNMIGRATED (once-per-session warning); at ≥ 6 blocks but advances the cursor, permanently skipping the blocked ops | Silent misapply / silent loss — see Bump Policy |
-| Op below `MIN_SUPPORTED_SCHEMA_VERSION`       | Reject ops, prompt update                                                                                                                     | "Please update app" error                       |
-| Client too new (server rejects)               | N/A - server doesn't validate schema semantics (bounds check only)                                                                            | No issue                                        |
-
-There is no forward-migration path: an older client can never migrate a newer op. Cross-version safety toward older clients rests entirely on payload-level graceful degradation (see Bump Policy above). `MAX_VERSION_SKIP` no longer exists in current code; released v17–v18.14 clients shipped it as `3`.
-
-#### Migration Rollout Strategy
-
-When deploying a schema migration:
-
-1. **Release new version with migration code**
-   - Add migration to `MIGRATIONS` array
-   - Bump `CURRENT_SCHEMA_VERSION`
-   - Migration handles both state and operations
-
-2. **Graceful degradation period**
-   - Old clients continue working (they don't know about new schema)
-   - New clients migrate incoming old ops seamlessly
-   - Mixed-version sync works via receiver-side migration
-
-3. **Monitoring** (future)
-   - Track `op.schemaVersion` distribution in server logs
-   - Alert if many clients are > 2 versions behind
-
-4. **Cleanup** (optional, after many versions)
-   - Remove migrations for versions < `MIN_SUPPORTED_SCHEMA_VERSION`
-   - Update `MIN_SUPPORTED_SCHEMA_VERSION`
-   - Old clients will see "update required" prompt
-
-#### Example Migration: Renaming a Field
-
-```typescript
-// packages/shared-schema/src/migrations.ts
-export const MIGRATIONS: SchemaMigration[] = [
-  {
-    fromVersion: 1,
-    toVersion: 2,
-    description: 'Rename task.estimate to task.timeEstimate',
-
-    // Migrate state snapshot
-    migrateState: (state: unknown): unknown => {
-      const s = state as AppDataComplete;
-      return {
-        ...s,
-        task: {
-          ...s.task,
-          entities: Object.fromEntries(
-            Object.entries(s.task.entities).map(([id, task]) => [
-              id,
-              {
-                ...task,
-                timeEstimate: (task as any).estimate, // Copy old field
-                estimate: undefined, // Remove old field
-              },
-            ]),
-          ),
-        },
-      };
-    },
-
-    // Migrate operation payload
-    requiresOperationMigration: true,
-    migrateOperation: (actionType: string, payload: unknown): unknown | null => {
-      if (actionType.includes('[Task]') && payload && typeof payload === 'object') {
-        const p = payload as Record<string, unknown>;
-        if ('estimate' in p) {
-          return {
-            ...p,
-            timeEstimate: p.estimate,
-            estimate: undefined,
-          };
-        }
-      }
-      return payload; // No change for other actions
-    },
-  },
-];
-```
-
-#### Testing Cross-Version Sync
-
-Before releasing any migration:
-
-1. **Unit tests** in `schema-migration.service.spec.ts`:
-   - State migration correctness
-   - Operation migration correctness
-   - Null return for dropped operations
-
-2. **Integration tests** in `cross-version-sync.integration.spec.ts`:
-   - Client A (v1) syncs with Client B (v2)
-   - Both clients converge to same state
-   - No data loss during migration
-
-3. **E2E tests** (manual or automated):
-   - Install old app version, create data
-   - Update to new version
-   - Verify data migrated correctly
-   - Sync with another device on new version
+Before release, tests must cover the concrete state transformation, every
+relevant operation result (including split or drop), retained-tail replay, and a
+remote batch whose incompatible operation leaves its suffix and cursor
+untouched.
 
 ---
 
 # Part B: File-Based Sync
 
-File-based sync providers (WebDAV, Dropbox, LocalFile) use a single-file approach via the `FileBasedSyncAdapter`.
+WebDAV, Nextcloud, Dropbox, OneDrive, and LocalFile have no operation API. The
+client therefore adapts their file primitives to the same operation-sync
+interface used by the rest of the pipeline. The full visual tour lives in the
+field guide's [transport section](./sync-architecture.html#transport); this part
+records only the durable format boundary and its owners.
 
-## B.1 How File-Based Sync Works
+## B.1 Two Current Wire Formats
 
-```
-Sync Triggered (WebDAV/Dropbox/LocalFile)
-    │
-    ▼
-FileBasedSyncAdapter.downloadOps()
-    │
-    └──► Downloads sync-data.json from remote
-              │
-              ├──► Contains: state snapshot + recent ops buffer
-              │
-              └──► Compares vector clocks for conflict detection
-                        │
-                        ▼
-                   Process new ops, merge state
-                        │
-                        ▼
-                   FileBasedSyncAdapter.uploadOps()
-                        │
-                        └──► Upload merged state + ops
-```
+| Format                                      | Remote files                                                                                          | Normal op-bearing sync                                                                                                                                                      |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **v2 monolith (default)**                   | `sync-data.json` plus recovery backup                                                                 | Downloads the changed monolith, merges its retained ops, rebuilds current state plus both archive partitions, and conditionally rewrites the complete monolith.             |
+| **v3 split files (opt-in “Surgical sync”)** | `sync-ops.json`, referenced snapshot generation, compatibility state/backup files, and a v2 tombstone | Conditionally rewrites the bounded ops commit point. A full state/archive snapshot is written only for initial bootstrap, compaction, migration, force-upload, or recovery. |
 
-**Key file:** `src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts`
+Both formats carry a vector clock, schema version, synthetic `syncVersion`, and
+a bounded `recentOps` buffer. That common adapter and envelope do not themselves
+provide physical compare-and-swap. The provider interface calls its
+conditional-write token `rev`: a read returns it, and the adapter passes it back
+as the expected token for upload. It is provider-native where the backend
+supplies revision/ETag CAS and a synthetic content hash on the best-effort
+fallbacks:
 
-## B.2 FileBasedSyncData Format
+- Dropbox revisions and OneDrive ETags enforce atomic conditional replacement.
+- WebDAV/Nextcloud can enforce atomic replacement when a read returns a strong
+  ETag, which the upload sends as `If-Match`. Without a strong ETag, `rev` falls
+  back to a content hash; the pre-upload GET detects an already-stale writer but
+  cannot close the GET→PUT race, so concurrency protection is best effort.
+- LocalFile also uses a content hash and a read/check/write sequence with no
+  cross-process CAS. It is a single-writer, backup-only transport, not a safe
+  concurrent multi-device writer.
 
-```typescript
-interface FileBasedSyncData {
-  version: 2;
-  schemaVersion: number;
-  vectorClock: VectorClock;
-  syncVersion: number; // Content-based optimistic locking
-  lastSeq: number;
-  lastModified: number;
+Where the provider enforces CAS, a revision mismatch aborts the write and a
+later cycle downloads before retrying. The best-effort backends cannot broadly
+guarantee that every simultaneous write race will abort.
 
-  // Full state snapshot (~95% of file size)
-  state: AppDataComplete;
+The v3 migration is one-way for a sync folder. It leaves a v3 tombstone in the
+legacy `sync-data.json` location so clients that do not understand the split
+format stop instead of recreating an independent v2 history.
 
-  // Recent operations for conflict detection (last 200, ~5% of file)
-  recentOps: CompactOperation[];
+## B.2 Bootstrap, Incremental Catch-up, and Gaps
 
-  // Checksum for integrity verification
-  checksum?: string;
-}
-```
+File providers do not expose a server-assigned operation cursor. The adapter
+treats file `syncVersion` as a synthetic transport watermark and exposes it as
+`latestSeq` to the common sync orchestration. A normal op-bearing commit advances
+it once; snapshot replacement can reset it, which the gap path detects. It is
+not the provider `rev`/ETag and does not prove per-operation ordering. One upload
+can carry multiple operations under the same new watermark; stable operation
+IDs provide durable deduplication, while vector clocks carry causality.
 
-## B.3 Piggybacking Mechanism
+1. **Normal catch-up:** download the bounded ops buffer and pass every retained
+   candidate through the common applied-ID and conflict pipeline.
+2. **Fresh client / forced seq-0:** return a full state/archive baseline. In v2,
+   that baseline represents the monolith and its retained ops. In v3, the ops
+   file points to a validated snapshot generation; retained ops newer than the
+   snapshot boundary replay on top.
+3. **Gap:** a version reset, snapshot replacement, or trimmed operation needed by
+   this client signals a gap. The caller retries from seq 0 and installs the
+   causal baseline instead of pretending the remaining buffer is complete.
+4. **Commit:** the downloaded `rev`, vector clock, and expected synthetic
+   watermark remain staged until the caller confirms that baseline and ops were
+   durably applied. Cancelling a data-conflict decision does not advance the
+   baseline.
 
-When two clients sync concurrently, the adapter uses "piggybacking" to ensure no operations are lost:
+A bootstrap or gap baseline is transport state, not an automatic new
+`SYNC_IMPORT` for every download. The sync service hydrates the baseline under
+the op-log/archive locks and records which retained operations the baseline
+already contains; only the suffix beyond that boundary is replayed.
 
-1. Client A uploads state (syncVersion 1 → 2)
-2. Client B tries to upload, detects version mismatch
-3. Client B downloads A's changes, finds ops it hasn't seen
-4. Client B merges A's ops into its state, uploads (syncVersion 2 → 3)
-5. Both clients end up with all operations
+## B.3 Archive Boundary
 
-```typescript
-// In FileBasedSyncAdapter.uploadOps()
-const remote = await this._downloadRemoteData(provider);
-if (remote && remote.syncVersion !== expectedSyncVersion) {
-  // Another client synced - find ops we haven't processed
-  const newOps = remote.recentOps.filter((op) => op.seq > lastProcessedSeq);
-  // Return these as "piggybacked" ops for the caller to process
-  return { localOps, newOps };
-}
-```
+`archiveYoung` and `archiveOld` are local IndexedDB partitions, not independent
+remote histories. A full file baseline includes both partitions; archive intent
+also travels in operations so another client can execute the same idempotent
+move/restore side effect.
 
-## B.4 Sync Download Persistence
+- v2 re-embeds both complete archive partitions on each op-bearing monolith
+  upload.
+- v3 embeds them when it writes a full snapshot; op-only syncs between snapshots
+  do not rewrite the archive files, although an archive operation itself carries
+  the data required for deterministic application.
+- Applying a remote full-state baseline holds the archive mutex and commits the
+  young/old pair atomically. Compression uses that same mutex so it cannot write
+  an archive image read before a concurrent replacement.
 
-When remote data is downloaded, the sync system creates a SYNC_IMPORT operation:
+## B.4 Executable Owners
 
-```typescript
-async hydrateFromRemoteSync(downloadedMainModelData?: Record<string, unknown>): Promise<void> {
-  // 1. Create SYNC_IMPORT operation with downloaded state
-  const op: Operation = {
-    id: uuidv7(),
-    opType: 'SYNC_IMPORT',
-    entityType: 'ALL',
-    payload: downloadedMainModelData,
-    // ...
-  };
-  await this.opLogStore.append(op, 'remote');
-
-  // 2. Force snapshot for crash safety
-  await this.opLogStore.saveStateCache({
-    state: downloadedMainModelData,
-    lastAppliedOpSeq: lastSeq,
-    // ...
-  });
-
-  // 3. Dispatch to NgRx
-  this.store.dispatch(loadAllData({ appDataComplete: downloadedMainModelData }));
-}
-```
-
-### loadAllData Variants
-
-| Source               | Create Op?          | Force Snapshot? |
-| -------------------- | ------------------- | --------------- |
-| Hydration (startup)  | No                  | No              |
-| Remote sync download | Yes (SYNC_IMPORT)   | Yes             |
-| Backup file import   | Yes (BACKUP_IMPORT) | Yes             |
-
-## B.5 Archive Data Handling
-
-Archive data (`archiveYoung`, `archiveOld`) is included in the state snapshot for file-based sync.
-Archives are written directly to IndexedDB via `ArchiveDbAdapter` (bypassing the operation log for performance).
-
-Remote full-state replay holds the archive mutex while it loads, preflights, and writes both
-archive halves. When both halves are available, `archiveYoung` and `archiveOld` commit through
-one `saveArchivesAtomic()` transaction; a protected or omitted half is carried forward unchanged.
-`BACKUP_IMPORT` does not prompt on receiving clients: the originating restore was already an
-explicit user decision, so replay is deterministic across devices.
-
-Archive compression uses the same `TASK_ARCHIVE` mutex for its entire read-compress-write cycle.
-This prevents compression from overwriting a concurrent full-state replacement with archives it
-read before the replacement. The final young/old pair is still committed atomically.
-
-### Why Archives Bypass Operation Log
-
-1. **Size**: Archived tasks can grow to tens of thousands of entries over years
-2. **Frequency**: Archive updates are rare (only when archiving tasks or flushing old data)
-3. **Sync needs**: Archives sync as part of the state snapshot, but don't need operation-level granularity
-
-### Archive Write Path
-
-```
-Archive Operation (e.g., archiving a completed task)
-    │
-    ├──► 1. Update archive directly via ArchiveDbAdapter
-    │
-    └──► 2. On next sync, archive is included in state snapshot
-```
-
-**Key files:**
-
-- `src/app/op-log/archive/archive-db-adapter.service.ts`
-- `src/app/op-log/archive/archive-operation-handler.service.ts`
+| Contract                                                                                            | Owner                                                                                                                     |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| v2/v3 envelopes, filenames, caps, and snapshot reference                                            | [`packages/sync-providers/src/file-based-sync-data.ts`](../../packages/sync-providers/src/file-based-sync-data.ts)        |
+| Format selection, conditional IO, migration, gap detection, baseline staging, and archive inclusion | [`file-based-sync-adapter.service.ts`](../../src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts) |
+| Baseline installation and common download/conflict orchestration                                    | [`operation-log-sync.service.ts`](../../src/app/op-log/sync/operation-log-sync.service.ts)                                |
+| Local archive side effects                                                                          | [`archive-operation-handler.service.ts`](../../src/app/op-log/apply/archive-operation-handler.service.ts)                 |
 
 ---
 
@@ -1267,88 +845,49 @@ For server-based sync, the operation log IS the sync mechanism. Individual opera
 
 ## C.1 How Server Sync Differs from File-Based
 
-| Aspect              | File-Based Sync (Part B)     | Server Sync (Part C)  |
-| ------------------- | ---------------------------- | --------------------- |
-| What syncs          | State snapshot + recent ops  | Individual operations |
-| Conflict detection  | Vector clock on snapshot     | Entity-level per-op   |
-| Transport           | Single file (sync-data.json) | HTTP API              |
-| Op-log role         | Builds snapshot from ops     | IS the sync           |
-| `syncedAt` tracking | Not needed                   | Required              |
+| Aspect              | File-Based Sync (Part B)                                           | SuperSync (Part C)                   |
+| ------------------- | ------------------------------------------------------------------ | ------------------------------------ |
+| Incremental unit    | Bounded compact ops inside v2 or v3 file format                    | Individual retained operations       |
+| Baseline            | Client-written full state/archive snapshot                         | Causal full-state operation in log   |
+| Transport watermark | Synthetic `syncVersion` exposed as `latestSeq`, plus ID dedup      | Server-assigned sequence             |
+| Write-race guard    | Provider `rev`; atomic only when the backend supports physical CAS | Database transaction                 |
+| Server visibility   | No application logic                                               | Payloads opaque when E2EE is enabled |
 
 ## C.2 Operation Sync Protocol
 
-Providers that support operation sync implement `OperationSyncCapable`:
+The shared port is
+[`OperationSyncCapable`](../../packages/sync-providers/src/provider-types.ts).
+Its API and file-provider modes deliberately share one orchestration contract,
+but differ in pagination and baseline behavior. For SuperSync, one normal cycle:
 
-```typescript
-interface OperationSyncCapable {
-  supportsOperationSync: true;
-  uploadOps(
-    ops: SyncOperation[],
-    clientId: string,
-    lastKnownSeq: number,
-  ): Promise<UploadResponse>;
-  downloadOps(
-    sinceSeq: number,
-    clientId?: string,
-    limit?: number,
-  ): Promise<DownloadResponse>;
-  getLastServerSeq(): Promise<number>;
-  setLastServerSeq(seq: number): Promise<void>;
-}
-```
+1. waits for accepted local-action capture to finish and resolves a fenced
+   provider/epoch pair;
+2. downloads ordered pages after the last durably committed server sequence,
+   before uploading local rows;
+3. migrates, filters, conflict-resolves, applies, and checkpoints each compatible
+   prefix, advancing the cursor only after its baseline, operations, archive side
+   effects, applied IDs, and clocks are durable;
+4. uploads pending local rows in bounded batches and processes per-operation
+   acceptance/rejection results plus any piggybacked remote operations; and
+5. re-uploads newly synthesized local-win operations in the same cycle through a
+   bounded reconciliation loop.
 
-### Upload Flow
-
-```typescript
-async uploadPendingOps(syncProvider: OperationSyncCapable): Promise<void> {
-  const pendingOps = await this.opLogStore.getUnsynced();
-
-  // Upload in batches (up to 25 ops per request)
-  for (const chunk of chunkArray(pendingOps, 25)) {
-    const response = await syncProvider.uploadOps(
-      chunk.map(entry => toSyncOperation(entry.op)),
-      clientId,
-      lastKnownServerSeq
-    );
-
-    // Mark accepted ops as synced
-    const acceptedSeqs = response.results
-      .filter(r => r.accepted)
-      .map(r => findEntry(r.opId).seq);
-    await this.opLogStore.markSynced(acceptedSeqs);
-
-    // Process piggybacked new ops from other clients
-    if (response.newOps?.length > 0) {
-      await this.processRemoteOps(response.newOps);
-    }
-  }
-}
-```
-
-### Download Flow
-
-```typescript
-async downloadRemoteOps(syncProvider: OperationSyncCapable): Promise<void> {
-  let sinceSeq = await syncProvider.getLastServerSeq();
-  let hasMore = true;
-
-  while (hasMore) {
-    const response = await syncProvider.downloadOps(sinceSeq, undefined, 500);
-
-    // Filter already-applied ops
-    const newOps = response.ops.filter(op => !appliedOpIds.has(op.id));
-    await this.processRemoteOps(newOps);
-
-    sinceSeq = response.ops[response.ops.length - 1].serverSeq;
-    hasMore = response.hasMore;
-    await syncProvider.setLastServerSeq(response.latestSeq);
-  }
-}
-```
+An incompatible operation, failed apply, or cancelled full-state decision leaves
+its operation and suffix uncommitted, so a later cycle downloads them again. The
+executable orchestration lives in
+[`operation-log-sync.service.ts`](../../src/app/op-log/sync/operation-log-sync.service.ts),
+with upload routing in
+[`operation-log-upload.service.ts`](../../src/app/op-log/sync/operation-log-upload.service.ts)
+and ordered receiver processing in
+[`remote-ops-processing.service.ts`](../../src/app/op-log/sync/remote-ops-processing.service.ts).
 
 ## C.3 Full-State Operations via Snapshot Endpoint
 
-Operations that contain the full application state (`SyncImport`, `BackupImport`, `Repair`) can be very large (10-30MB+). Instead of sending these through the regular `/api/sync/ops` endpoint, they are uploaded via the dedicated `/api/sync/snapshot` endpoint which is optimized for large payloads.
+Operations that contain the full application state (`SYNC_IMPORT`,
+`BACKUP_IMPORT`, `REPAIR`) use the dedicated `/api/sync/snapshot` route rather
+than the regular operation-batch route. The route supports compressed large-body
+transport, but the accepted request is still validated, quota-checked, and stored
+as a full-state operation in the ordered log.
 
 ### Operation Routing
 
@@ -1359,44 +898,22 @@ Upload Flow
     │         │
     │         ├──► YES: Upload via /api/sync/snapshot
     │         │         • Uses uploadSnapshot() method
-    │         │         • Maps opType to reason: initial, recovery, migration
+    │         │         • SYNC_IMPORT → initial; BACKUP_IMPORT/REPAIR → recovery
     │         │         • Supports E2E encryption
     │         │
     │         └──► NO: Upload via /api/sync/ops (normal batched upload)
 ```
 
-### Implementation
-
-```typescript
-// Full-state op types routed to snapshot endpoint
-const FULL_STATE_OP_TYPES = new Set([
-  OpType.SyncImport,
-  OpType.BackupImport,
-  OpType.Repair,
-]);
-
-// In OperationLogUploadService._uploadPendingOpsViaApi():
-const fullStateOps = pendingOps.filter((entry) =>
-  FULL_STATE_OP_TYPES.has(entry.op.opType as OpType),
-);
-const regularOps = pendingOps.filter(
-  (entry) => !FULL_STATE_OP_TYPES.has(entry.op.opType as OpType),
-);
-
-// Upload full-state ops via snapshot endpoint
-for (const entry of fullStateOps) {
-  await syncProvider.uploadSnapshot(
-    entry.op.payload, // Full app state
-    entry.op.clientId,
-    mapOpTypeToReason(entry.op.opType), // 'initial' | 'recovery' | 'migration'
-    entry.op.vectorClock,
-    entry.op.schemaVersion,
-  );
-}
-
-// Upload regular ops in batches via ops endpoint
-// ... (existing batch upload logic)
-```
+Before upload, the client extracts and validates the wrapped full state, removes
+device-local sync settings, optionally encrypts the state, and preserves the
+original operation ID, vector clock, schema version, clean-slate/repair scope,
+and import reason. Those fields are part of correctness and deduplication; do not
+reconstruct the call from this prose. Follow
+[`OperationLogUploadService`](../../src/app/op-log/sync/operation-log-upload.service.ts),
+the public provider contract in
+[`provider-types.ts`](../../packages/sync-providers/src/provider-types.ts), and
+the server's
+[`snapshot handler`](../../packages/super-sync-server/src/sync/sync.routes.snapshot-handler.ts).
 
 ### OpType to Reason Mapping
 
@@ -1406,87 +923,61 @@ for (const entry of fullStateOps) {
 | `BACKUP_IMPORT` | `recovery`      | Restoring from backup file       |
 | `REPAIR`        | `recovery`      | Auto-repair with corrected state |
 
-### Benefits
-
-1. **Reduced body limit issues** - Snapshot endpoint has 30MB limit, separate from regular ops
-2. **Semantic clarity** - Full state uploads use appropriate endpoint
-3. **Server-side optimization** - Server can cache snapshots for faster client bootstrap
+The accepted upload remains a causal full-state operation in the server log, so
+clients can skip its covered prefix and apply the retained tail. For plaintext
+payloads only, an optional compressed cache accelerates _server-side replay and
+restore generation_; production clients do not download that cache. E2EE
+payloads remain replayable as operations but cannot populate a plaintext server
+cache.
 
 ## C.4 Conflict Detection
 
-Conflicts are detected using vector clocks at the entity level. **Importantly, a conflict can only
-occur when there are pending (unsynced) local operations for an entity.** If local has no pending
-changes for an entity, any remote operation is safe to apply - there's nothing local to conflict with.
+Client conflict classification compares each incoming entity operation with a
+local entity frontier built from snapshot metadata, retained applied operations,
+and pending operations. A concurrent pending local operation supplies the normal
+two-sided conflict directly.
 
-```typescript
-async detectConflicts(remoteOps: Operation[]): Promise<ConflictResult> {
-  const localPendingByEntity = await this.opLogStore.getUnsyncedByEntity();
-  const appliedFrontierByEntity = await this.opLogStore.getEntityFrontier();
+No pending row does not automatically mean “safe to apply.” For a concurrent op
+on a live entity, the #9073 mitigation reconstructs every retained local op still
+concurrent with the incoming clock. Supported overlapping, single-entity sides
+become a synthetic conflict and go through the same deterministic LWW path.
+Pairs that commute (identical content, disjoint real fields, noise-only changes,
+or positive task-time deltas) intentionally apply without LWW.
 
-  for (const remoteOp of remoteOps) {
-    const entityKey = `${remoteOp.entityType}:${remoteOp.entityId}`;
-    const localPendingOps = localPendingByEntity.get(entityKey) || [];
+Arrival-order behavior remains only where the client cannot construct a safe,
+deterministic local side: for example, its evidence was compacted into the
+snapshot frontier, an operation is multi-entity, or the retained side is a local
+delete/archive that needs compensation machinery. Those fallback cases do not
+create a conflict object or journal row. See
+[Composition residual (pre-existing class)](./conflict-journal-and-review.md#composition-residual-pre-existing-class)
+for the remaining composition and mixed-receiver limitations.
 
-    // FAST PATH: No pending local ops = no conflict possible
-    // Conflicts require concurrent modifications. If local hasn't modified
-    // this entity since last sync, any remote op can be applied safely.
-    if (localPendingOps.length === 0) {
-      nonConflicting.push(remoteOp);
-      continue;
-    }
-
-    // Build local frontier from applied + pending ops
-    const localFrontier = mergeClocks(
-      appliedFrontierByEntity.get(entityKey),
-      ...localPendingOps.map(op => op.vectorClock)
-    );
-
-    const comparison = compareVectorClocks(localFrontier, remoteOp.vectorClock);
-    if (comparison === VectorClockComparison.CONCURRENT) {
-      conflicts.push({
-        entityType: remoteOp.entityType,
-        entityId: remoteOp.entityId,
-        localOps: localPendingOps,
-        remoteOps: [remoteOp],
-        suggestedResolution: 'manual'
-      });
-    } else {
-      nonConflicting.push(remoteOp);
-    }
-  }
-
-  return { nonConflicting, conflicts };
-}
-```
-
-### Why Pending Ops Matter for Conflict Detection
-
-The key insight is that **conflicts are about uncommitted changes**, not historical state:
-
-- **Applied/synced ops**: Already reconciled between clients. Their vector clocks contributed to the
-  global sync state, but they don't represent "in-flight" changes that could be lost.
-- **Pending ops**: Not yet synced. These represent changes that could conflict with incoming remote ops.
-
-If Client A sends a delete operation for a task, and Client B has no pending ops for that task,
-Client B should simply apply the delete - there's no local work to lose. The snapshot/frontier
-vector clocks track _history_, not _intent_.
+The executable owners are `RemoteOpsProcessingService` and
+`ConflictResolutionService`; server upload conflict detection is a second gate,
+not a replacement for the client arrival-order problem above.
 
 ## C.5 Conflict Resolution (LWW Auto-Resolution)
 
-Conflicts are automatically resolved using Last-Write-Wins (LWW) strategy via `ConflictResolutionService.autoResolveConflictsLWW()`:
+Conflicts first apply explicit semantic precedence and eligible disjoint-field merging, then
+fall back to Last-Write-Wins (LWW) via
+`ConflictResolutionService.autoResolveConflictsLWW()`. For the current high-level policy, see
+the field guide's [causality section](./sync-architecture.html#causality); the focused
+[conflict journal and review contract](./conflict-journal-and-review.md) owns the more volatile
+merge and review details.
 
 ### LWW Resolution Strategy
 
 1. **Compare timestamps**: Each side's maximum operation timestamp is compared
 2. **Newer wins**: The side with the newer timestamp wins
-3. **Tie-breaker**: When timestamps are equal, remote wins (server-authoritative)
+3. **Tie-breaker**: When timestamps are equal, stable ordering of the client IDs attached to
+   the maximum-timestamp operations chooses the winner, so either the local or remote side can
+   win deterministically
 
-The selected operation or synthetic merge is persisted and applied before either original side
-is rejected. Only after reducer and archive work succeeds does the service finalize rejections
-and emit the conflict journal entry. A failed resolution therefore leaves the originals eligible
-for retry instead of recording a winner that never entered state. If a synthetic disjoint merge
-cannot pass reducer replay, that synthetic row is quarantined and the same conflict immediately
-falls back to ordinary LWW; a `merged` journal entry is emitted only when the merge itself succeeds.
+Winner selection and disjoint-field merging remain active in production. Conflict journaling is
+an observe-only capability and is not required for resolution: the production remote-processing
+path currently sets `disableConflictJournal: true`, so it does not emit journal entries. The
+journal store and review UI therefore remain dormant/incomplete rather than a complete record of
+resolved conflicts. See the focused contract above for current status and lifecycle details.
 
 ### When Local Wins
 
@@ -1497,7 +988,9 @@ When local state is newer, we can't just reject the remote ops - that would caus
    - Current entity state from NgRx store
    - Merged vector clock (local + remote) + increment
    - **Preserved maximum timestamp from local ops** (critical for correct LWW semantics - using `Date.now()` would give unfair advantage in future conflicts)
-3. **This new op will be uploaded** on next sync cycle, propagating local state to server
+3. **This new op is re-uploaded** by the current sync cycle's bounded
+   reconciliation loop. It remains pending for a later cycle only when that loop
+   is interrupted, blocked, or reaches its retry cap.
 
 A warning-level log is emitted: `OpLog.warn('LWW local wins - creating update op for ${entityType}:${entityId}')`
 
@@ -1517,7 +1010,7 @@ When a `moveToArchive` operation conflicts with a field-level update (e.g., rena
 
 **Implementation:** `ConflictResolutionService` checks whether either the local or remote side contains a `TASK_SHARED_MOVE_TO_ARCHIVE` action. If so, the archive side wins automatically, and a new archive operation is created with a merged vector clock (via `_createArchiveWinOp()`).
 
-This is the **first level** of archive resurrection prevention. The **second level** is in the `bulkOperationsMetaReducer` (see [Archive Resurrection Prevention](diagrams/06-archive-operations.md#archive-resurrection-prevention-two-level-defense)), which pre-scans operation batches for archive operations and skips any LWW Update operations targeting entities being archived in the same batch. This two-level defense handles the 3+ client scenario where LWW Updates can arrive before or after archive ops in the same batch.
+This is the **first level** of archive resurrection prevention. The **second level** is the [bulk archive filter](../../src/app/op-log/apply/bulk-archive-filter.util.ts), which pre-scans operation batches for archive operations and skips any LWW Update operations targeting entities being archived in the same batch. This two-level defense handles the 3+ client scenario where LWW Updates can arrive before or after archive ops in the same batch.
 
 **Key files:**
 
@@ -1554,29 +1047,16 @@ A non-blocking snack notification is shown after auto-resolution:
 
 - "Sync conflicts auto-resolved: X local win(s), Y remote win(s)"
 
-## C.6 Dependency Resolution
-
-Operations may have dependencies (e.g., subtask requires parent task):
-
-```typescript
-interface OperationDependency {
-  entityType: EntityType;
-  entityId: string;
-  mustExist: boolean; // Hard dependency
-  relation: 'parent' | 'reference';
-}
-
-// Operations with missing hard dependencies are queued for retry
-// After MAX_RETRY_ATTEMPTS (3), they're marked as permanently failed
-```
-
-## C.7 SYNC_IMPORT Filtering (Clean Slate Semantics)
+## C.6 Full-State Filtering
 
 When a `SYNC_IMPORT` or `BACKUP_IMPORT` operation is received, it represents an explicit user action to restore **all clients** to a specific point in time. Operations created without knowledge of the import are filtered out.
 
-**Implementation:** `SyncImportFilterService.filterOpsInvalidatedBySyncImport()`
+The executable owner is
+[`SyncImportFilterService`](../../src/app/op-log/sync/sync-import-filter.service.ts),
+with causal classification shared through
+[`classifyOpAgainstSyncImport`](../../packages/sync-core/src/sync-import-filter.ts).
 
-### The Problem
+### The Problem Without a Transport Fence
 
 Consider this scenario:
 
@@ -1586,340 +1066,152 @@ Consider this scenario:
 4. Client A comes online, uploads Op1, Op2, then downloads SYNC_IMPORT
 5. **Problem**: Op1, Op2 reference entities that were WIPED by the import
 
-### The Solution: Clean Slate Semantics
+### Explicit Import/Restore Semantics
 
-SYNC_IMPORT/BACKUP_IMPORT are explicit user actions to restore to a specific state. **ALL operations without knowledge of the import are dropped** - this ensures a true "restore to point in time" semantic.
+`SYNC_IMPORT` and `BACKUP_IMPORT` establish a clean slate. An operation that is
+causally greater than or equal to that boundary stays; an operation dominated by
+it is already represented and is dropped. A genuinely concurrent operation is
+also dropped because it was authored without knowledge of the reset.
 
-We use **vector clock comparison** (not UUIDv7 timestamps) because vector clocks track **causality** ("did the client know about the import?") rather than wall-clock time (which can be affected by clock drift).
+Pruned/reset clocks can make a _post-import_ operation compare concurrent. The
+classifier therefore keeps two provable cases: a higher counter from the import's
+own client, or an operation carrying at least the import client's boundary
+counter. These are causal proofs, not timestamp guesses. The latest boundary is
+chosen by durable batch/store order, never UUID order.
 
-```typescript
-// In SyncImportFilterService.filterOpsInvalidatedBySyncImport()
-for (const op of ops) {
-  // Full state import operations themselves are always valid
-  if (op.opType === OpType.SyncImport || op.opType === OpType.BackupImport) {
-    validOps.push(op);
-    continue;
-  }
+### Automatic Repair Semantics
 
-  // Use VECTOR CLOCK comparison to determine causality
-  const comparison = compareVectorClocks(op.vectorClock, latestImport.vectorClock);
+`REPAIR` is not an explicit clean slate. Causally older work is represented by
+its full state, but concurrent work normally replays on top. For a repair in the
+same downloaded batch, a concurrent prefix covered by its
+`repairBaseServerSeq` is dropped as already represented; a legacy repair without
+that proof moves the prefix immediately after the repair boundary. Concurrent
+suffix work remains valid.
 
-  if (
-    comparison === VectorClockComparison.GREATER_THAN ||
-    comparison === VectorClockComparison.EQUAL
-  ) {
-    // Op was created by a client that had knowledge of the import
-    validOps.push(op);
-  } else {
-    // CONCURRENT or LESS_THAN: Op was created without knowledge of import
-    // Filter it to ensure clean slate semantics
-    invalidatedOps.push(op);
-  }
-}
-```
+All of these decisions use vector clocks because the question is causal
+knowledge of the full-state boundary, not wall-clock recency.
 
-### Vector Clock Comparison Results
+SuperSync also prevents the invalid suffix from entering the server log. An
+incremental upload carrying `lastKnownServerSeq` is serialized with state
+replacement uploads on the user's sequence row. If its cursor predates the
+latest `SYNC_IMPORT` or `BACKUP_IMPORT`, the whole batch is rejected and the
+replacement is piggybacked before the client retries. Client-side filtering
+remains necessary for other providers, retained legacy data, and defense in
+depth.
 
-| Comparison     | Meaning                                | Action                     |
-| -------------- | -------------------------------------- | -------------------------- |
-| `GREATER_THAN` | Op created after seeing import         | ✅ Keep (has knowledge)    |
-| `EQUAL`        | Same causal history as import          | ✅ Keep                    |
-| `LESS_THAN`    | Op dominated by import                 | ❌ Drop (already captured) |
-| `CONCURRENT`   | Op created without knowledge of import | ❌ Drop (clean slate)      |
-
-**Example:**
-
-- SYNC_IMPORT clock: `{A: 10, B: 5}`
-- Op clock: `{A: 11, B: 5}` → `GREATER_THAN` → ✅ Keep (client A saw the import)
-- Op clock: `{B: 3}` → `LESS_THAN` → ❌ Drop (dominated by import)
-- Op clock: `{C: 1}` → `CONCURRENT` → ❌ Drop (client C didn't know about import)
-
-**Why Drop CONCURRENT?** An operation from a client that never saw the import may reference entities that no longer exist in the imported state. Dropping ensures the import truly restores all clients to the same point in time.
-
-See [diagrams/03-conflict-resolution.md](./diagrams/03-conflict-resolution.md) for visual diagrams.
+See the field guide's [causality and conflict policy](./sync-architecture.html#causality)
+for the visual overview.
 
 ---
 
 # Part D: Data Validation & Repair
 
-The operation log includes comprehensive validation and automatic repair to prevent data corruption and recover from invalid states.
+Validation is layered, but not every checkpoint automatically mutates user data.
+In particular, boot hydration prefers showing recoverable data over opening a
+repair dialog or silently rewriting it.
 
 ## D.1 Validation Architecture
 
-Four validation checkpoints ensure data integrity throughout the operation lifecycle:
-
-| Checkpoint | Location                            | When                      | Action on Failure                          |
-| ---------- | ----------------------------------- | ------------------------- | ------------------------------------------ |
-| **A**      | `operation-log.effects.ts`          | Before IndexedDB write    | Reject operation, log error, show snackbar |
-| **B**      | `operation-log-hydrator.service.ts` | After loading snapshot    | Attempt repair, create REPAIR op           |
-| **C**      | `operation-log-hydrator.service.ts` | After replaying tail ops  | Attempt repair, create REPAIR op           |
-| **D**      | `operation-log-sync.service.ts`     | After applying remote ops | Attempt repair, create REPAIR op           |
+| Boundary           | What runs                                                                                           | Failure behavior                                                                                                                                 |
+| ------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Local capture      | Structural operation-payload validation before append                                               | Do not persist the operation; mark live/durable divergence, surface reload, and fence compaction                                                 |
+| Snapshot hydration | Structural/cache screening plus schema migration; matching-schema snapshots use the trust fast path | Migration failure falls back to retained-log replay without overwriting the intact cache; validation errors are logged rather than auto-repaired |
+| Tail/full replay   | State validation after reducer replay                                                               | Continue with visible state but do not save an invalid replacement cache                                                                         |
+| Remote apply       | Active-state validation, then full state including archives only if repair is needed                | Repair and revalidate; persist a `REPAIR` operation before replacing live state, or mark the sync session failed                                 |
 
 ## D.2 REPAIR Operation Type
 
-When validation fails at checkpoints B, C, or D, the system attempts automatic repair using the `dataRepair()` function. If repair succeeds, a REPAIR operation is created:
-
-```typescript
-enum OpType {
-  // ... existing types
-  Repair = 'REPAIR', // Auto-repair operation with full repaired state
-}
-
-interface RepairPayload {
-  appDataComplete: AppDataCompleteNew; // Full repaired state
-  repairSummary: RepairSummary; // What was fixed
-  repairBaseServerSeq?: number; // Server cursor included in this repaired state
-}
-
-interface RepairSummary {
-  entityStateFixed: number; // Fixed ids/entities array sync
-  orphanedEntitiesRestored: number; // Tasks restored from archive
-  invalidReferencesRemoved: number; // Non-existent project/tag IDs removed
-  relationshipsFixed: number; // Project/tag ID consistency
-  structureRepaired: number; // Menu tree, inbox project creation
-  typeErrorsFixed: number; // Typia errors auto-fixed
-}
-```
+Post-sync repair uses `dataRepair()` and revalidates the result. A successful
+repair is represented by a causal full-state `REPAIR` operation containing the
+repaired state, a repair summary, and—when available—the server sequence on
+which the repair was based. The authoritative payload and summary types live in
+[`operation.types.ts`](../../src/app/op-log/core/operation.types.ts).
 
 ### REPAIR Operation Behavior
 
-- **During replay**: REPAIR operations load state directly (like SyncImport), skipping prior operations
+- **During startup**: A terminal REPAIR can use the safe full-state direct-load shortcut when no row in the replay range has pending reducer work. Otherwise the range is migrated and replayed normally.
 - **During sync**: REPAIR is narrower than an explicit import. Operations concurrent with it are replayed on top of the repaired snapshot (including a concurrent prefix that must move after the full-state boundary). On SuperSync, REPAIR never requests a clean slate; the server locks the user's sequence row and accepts the snapshot only when `repairBaseServerSeq` still equals the current server sequence. A stale repair is retired locally before the concurrent server suffix is downloaded.
 - **Upload ordering**: If a full-state upload fails, later regular operations stay pending. Permanent snapshot failures are classified by the central rejection handler after any remote work has been applied. A rejected local explicit import/restore remains a durable upload barrier across later sync cycles; incremental operations resume only after a newer full-state snapshot succeeds. Rejected remote imports are conflict-resolution history, and stale automatic REPAIR is excluded so its concurrent suffix can download and trigger a fresh repair if still necessary.
-- **User notification**: Shows snackbar with count of issues fixed
-- **Audit trail**: REPAIR operations are visible in the operation log for debugging
+- **User notification**: automatic/in-lock repair is non-blocking; explicitly
+  interactive repair may use the acknowledgement dialog.
+- **Retained evidence**: the repair row remains inspectable only while normal
+  operation retention keeps it; it is not a permanent audit trail.
 
 ## D.3 Checkpoint A: Payload Validation
 
-Before writing to IndexedDB, operation payloads are validated in `validate-operation-payload.ts`:
-
-```typescript
-validateOperationPayload(op: Operation): PayloadValidationResult {
-  // 1. Structural validation - payload must be object
-  // 2. OpType-specific validation:
-  //    - CREATE: entity with valid 'id' field required
-  //    - UPDATE: id + changes, or entity with id required
-  //    - DELETE: entityId/entityIds required
-  //    - MOVE: ids array required
-  //    - BATCH: non-empty payload required
-  //    - SYNC_IMPORT/BACKUP_IMPORT: appDataComplete structure required
-  //    - REPAIR: skip (internally generated)
-}
-```
-
-This validation is **intentionally lenient** - it checks structural requirements rather than deep entity validation. Full Typia validation happens at state checkpoints.
+Before a local append,
+[`validate-operation-payload.ts`](../../src/app/op-log/validation/validate-operation-payload.ts)
+checks the envelope and operation-specific payload structure. This is
+intentionally shallower than whole-state Typia and relationship validation.
+Internally generated `REPAIR` operations follow their own construction path.
 
 ## D.4 Checkpoints B & C: Hydration Validation
 
-During hydration, state is validated at two points:
+The hydrator validates a snapshot synchronously when migration ran or its schema
+stamp does not match. A matching-schema cache is trusted for startup speed; this
+is why adding a required persisted field without a migration is dangerous. After
+tail or from-zero replay, validation gates creation of a replacement cache.
 
-```
-App Startup
-    │
-    ▼
-Load snapshot from state_cache
-    │
-    ├──► CHECKPOINT B: Validate snapshot
-    │         │
-    │         └──► If invalid: repair + create REPAIR op
-    │
-    ▼
-Dispatch loadAllData(snapshot)
-    │
-    ▼
-Replay tail operations
-    │
-    └──► CHECKPOINT C: Validate current state
-              │
-              └──► If invalid: repair + create REPAIR op + dispatch repaired state
-```
-
-### Implementation
-
-```typescript
-// In operation-log-hydrator.service.ts
-private async _validateAndRepairState(state: AppDataCompleteNew): Promise<AppDataCompleteNew> {
-  if (this._isRepairInProgress) return state; // Prevent infinite loops
-
-  const result = this.validateStateService.validateAndRepair(state);
-  if (!result.wasRepaired) return state;
-
-  this._isRepairInProgress = true;
-  try {
-    await this.repairOperationService.createRepairOperation(
-      result.repairedState,
-      result.repairSummary,
-    );
-    return result.repairedState;
-  } finally {
-    this._isRepairInProgress = false;
-  }
-}
-```
+Hydration validation does **not** call `dataRepair()`: a boot-time native confirm
+can steal focus, and silently repairing the only visible copy is worse than
+loading it and logging the failure. See
+[`operation-log-hydrator.service.ts`](../../src/app/op-log/persistence/operation-log-hydrator.service.ts).
 
 ## D.5 Checkpoint D: Post-Sync Validation
 
-After applying remote operations, state is validated:
+After remote processing,
+[`RemoteOpsProcessingService`](../../src/app/op-log/sync/remote-ops-processing.service.ts)
+calls `ValidateStateService.validateAndRepairCurrentState()`. The valid fast path
+checks the active snapshot without archive reads. If invalid, it loads the full
+state including both archive partitions, repairs and revalidates it, writes the
+`REPAIR` operation/cache under the existing operation-log lock, and only then
+dispatches the repaired replacement with remote-effect suppression. Failure
+sets the session-validation latch, so the sync wrapper cannot claim `IN_SYNC`.
 
-- In `operation-log-sync.service.ts` - after applying non-conflicting ops (when no conflicts)
-- In `conflict-resolution.service.ts` - after resolving all conflicts
+## D.6 Executable Owners
 
-This catches:
-
-- State drift from remote operations
-- Corruption introduced during sync
-- Invalid operations from other clients
-
-## D.6 ValidateStateService
-
-Wraps validation and repair functionality using Typia and cross-model validation:
-
-```typescript
-@Injectable({ providedIn: 'root' })
-export class ValidateStateService {
-  validateState(state: AppDataCompleteNew): StateValidationResult {
-    // 1. Run Typia schema validation
-    const typiaResult = validateAllData(state);
-
-    // 2. Run cross-model relationship validation
-    //    NOTE: isRelatedModelDataValid errors are now caught and treated as validation failures
-    //    rather than crashing, allowing validateAndRepair to trigger dataRepair.
-    let isRelatedValid = true;
-    try {
-      isRelatedValid = isRelatedModelDataValid(state);
-    } catch (e) {
-      PFLog.warn(
-        'isRelatedModelDataValid threw an error, treating as validation failure',
-        e,
-      );
-      isRelatedValid = false;
-    }
-
-    return {
-      isValid,
-      typiaErrors,
-      crossModelError: !isRelatedValid
-        ? 'isRelatedModelDataValid threw error'
-        : undefined,
-    };
-  }
-
-  validateAndRepair(state: AppDataCompleteNew): ValidateAndRepairResult {
-    // 1. Validate
-    // 2. If invalid: run dataRepair()
-    // 3. Re-validate repaired state
-    // 4. Return repaired state + summary
-  }
-}
-```
-
-## D.7 RepairOperationService
-
-Creates REPAIR operations and notifies the user:
-
-```typescript
-@Injectable({ providedIn: 'root' })
-export class RepairOperationService {
-  async createRepairOperation(
-    repairedState: AppDataCompleteNew,
-    repairSummary: RepairSummary,
-  ): Promise<void> {
-    // 1. Create REPAIR operation with repaired state + summary
-    // 2. Append to operation log
-    // 3. Save state cache snapshot
-    // 4. Show notification to user
-  }
-
-  static createEmptyRepairSummary(): RepairSummary {
-    return {
-      entityStateFixed: 0,
-      orphanedEntitiesRestored: 0,
-      invalidReferencesRemoved: 0,
-      relationshipsFixed: 0,
-      structureRepaired: 0,
-      typeErrorsFixed: 0,
-    };
-  }
-}
-```
+| Responsibility                                             | Owner                                                                                              |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Typia plus cross-model validation and repair orchestration | [`validate-state.service.ts`](../../src/app/op-log/validation/validate-state.service.ts)           |
+| Pure repair transforms and summary accounting              | [`data-repair.ts`](../../src/app/op-log/validation/data-repair.ts)                                 |
+| Durable repair operation/cache creation and notification   | [`repair-operation.service.ts`](../../src/app/op-log/validation/repair-operation.service.ts)       |
+| SuperSync repair base sequence                             | [`repair-sync-context.service.ts`](../../src/app/op-log/validation/repair-sync-context.service.ts) |
 
 ---
 
-# Edge Cases & Missing Considerations
-
-This section documents known edge cases and areas requiring further design or implementation.
-
-## Storage & Resource Limits
+# Operational Boundaries
 
 ### IndexedDB Quota Exhaustion
 
-**Status:** ✅ Implemented (December 2025)
+Quota failure is not an optimistic rollback path. The reducer has already run,
+so an unrecovered append leaves live state ahead of the log; the client marks
+that divergence, fences compaction, and offers reload.
 
-When IndexedDB storage quota is exceeded, the system handles it gracefully:
-
-**Implementation** (see `operation-log.effects.ts`):
-
-1. **Error Detection**: Catches `QuotaExceededError` including browser variants:
-   - Standard: `DOMException` with name `QuotaExceededError`
-   - Firefox: `NS_ERROR_DOM_QUOTA_REACHED`
-   - Safari (legacy): Error code 22
-
-2. **Emergency Compaction**: Triggers `emergencyCompact()` with shorter retention:
-   - Normal retention: 7 days (`COMPACTION_RETENTION_MS`)
-   - Emergency retention: 24 hours (`EMERGENCY_COMPACTION_RETENTION_MS`)
-   - Only deletes ops that have been synced (`syncedAt` set)
-
-3. **Circuit Breaker**: Flag `isHandlingQuotaExceeded` prevents infinite retry loops:
-   - If quota exceeded during retry attempt, aborts immediately
-   - Shows error to user instead of looping forever
-
-4. **User Notification**: On permanent failure (after emergency compaction fails):
-   - Shows snackbar with error message
-   - Dispatches rollback action to revert optimistic update
-   - User data in NgRx store remains consistent
-
-**Constants** (`operation-log.const.ts`):
-
-- `EMERGENCY_COMPACTION_RETENTION_MS = 24 * 60 * 60 * 1000` (1 day)
-- `MAX_COMPACTION_FAILURES = 3`
+The specialized quota branch recognizes raw browser variants and contains a
+one-retry circuit breaker plus a 24-hour emergency retention policy. Its current
+reachability is deliberately narrow: the store wraps the standard Chromium
+error into the generic persistence-failure path, while raw legacy variants reach
+`emergencyCompact()`. Because that call is still inside the failing write's stack,
+the pending-write guard currently makes the compaction attempt skip. This is why
+the retry code must not be described as successful recovery today; a future
+delete-only emergency compactor would change that boundary. See the load-bearing
+comments in
+[`operation-log.effects.ts`](../../src/app/op-log/capture/operation-log.effects.ts)
+and
+[`operation-log-compaction.service.ts`](../../src/app/op-log/persistence/operation-log-compaction.service.ts).
 
 ### Compaction Trigger Coordination
 
-**Status:** Implemented ✅
-
 The 500-ops compaction trigger uses a persistent counter stored in `state_cache.compactionCounter`:
 
-- Counter is shared across tabs via IndexedDB
+- Each atomic append increments the durable counter
 - Counter persists across app restarts
 - Counter is reset after successful compaction
-- Web Locks still prevent concurrent compaction execution
+- The in-memory mirror avoids an IndexedDB read on every threshold check
 
-## Data Integrity Edge Cases
+### Device Identity and Legacy Data
 
-### Genesis Migration with Partial Data
-
-**Status:** ⚠️ Not Fully Defined — Edge Case Risk
-
-**Risk Level:** MEDIUM — Silent data loss possible in crash/interruption scenarios.
-
-What if data exists in both `pf` AND `SUP_OPS` databases?
-
-- **Scenario**: Crash during genesis migration, or app downgrade after migration
-- **Current behavior**: If `SUP_OPS.state_cache` exists, use it; ignore `pf` entirely
-- **Risk**: May lose newer data that was written to `pf` after partial migration completed
-- **Detection gap**: No mechanism to detect if `pf` has newer data than `SUP_OPS`
-
-**Proposed solution:**
-
-1. Store `migrationTimestamp` in both `SUP_OPS.state_cache` and `pf.META_MODEL`
-2. On startup, compare timestamps:
-   - If `pf.lastUpdate > SUP_OPS.migrationTimestamp`: Warn user, offer merge or re-migrate
-   - If equal or `pf` older: Proceed with SUP_OPS (current behavior)
-3. For app downgrades: Show clear error that downgrade may lose data, require explicit confirmation
-
-**Mitigation (current):** Genesis migration is a one-time event. Once SUP_OPS is established, all writes go there. Risk is limited to the migration moment itself.
-
-**Sync `clientId` (SUP_OPS schema v6, issue #7732):** The sync `clientId` —
+The sync `clientId` —
 the device's stable sync identity — lives in the `SUP_OPS` `client_id` store
 (key `current`). It used to live in the legacy `pf` database; storing it in
 `SUP_OPS` lets destructive flows (clean-slate, backup-restore) rotate it
@@ -1932,8 +1224,6 @@ fresh id.
 
 ### Compaction During Active Sync
 
-**Status:** Handled via Locks
-
 - Compaction and sync serialize on the operation-log lock
 - Compaction aborts before snapshotting while any non-rejected `pending` remote row exists
 - Deletion requires terminal status: synced applied/legacy-complete rows or old rejected rows
@@ -1945,24 +1235,34 @@ fresh id.
 
 # Part E: Smart Archive Handling
 
-The application splits data into "Active State" (in-memory, Redux) and "Archive State" (on-disk, rarely accessed) to maintain performance.
-
-- **ArchiveYoung**: Recently archived tasks and their worklogs (e.g., last 30 days).
-- **ArchiveOld**: Deep storage for historical data (months/years old).
+The application splits active NgRx state from two IndexedDB archive partitions.
+`archiveYoung` receives newly archived tasks and non-today time tracking;
+`archiveOld` holds tasks moved past the 21-day threshold and time tracking moved
+during the periodic full young-to-old flush.
 
 ## E.1 The Problem with Syncing Archives
 
-In the legacy system, changing one task in the archive required re-uploading the entire (potentially massive) archive file. This was bandwidth-intensive and slow.
+Archive partitions can contain tens of thousands of tasks and worklogs. Treating
+them as an always-rewritten remote file makes a small archive transition pay for
+the whole historical dataset. The cost depends on the transport: default v2
+file sync still rewrites that full baseline, while SuperSync and the opt-in v3
+file format can normally transfer the operation without rewriting a remote
+archive snapshot.
 
 ## E.2 New Strategy: Deterministic Local Side Effects
 
-In the Operation Log architecture, **we do NOT sync the archive files directly.** Instead, we sync the **Instructions** that modify the archives. Because the logic is deterministic, all clients end up with identical archive files without ever transferring them.
+Archive changes are replayable operations with deterministic, idempotent local
+side effects. The receiver updates its own IndexedDB archive partitions rather
+than installing a separately versioned archive database file. This does **not**
+mean archive data never crosses the network: `moveToArchive` carries the full
+task data needed by a receiver, and full file-sync baselines include both archive
+partitions.
 
-| Component        | Sync Strategy                 | Mechanism                                                                  |
-| ---------------- | ----------------------------- | -------------------------------------------------------------------------- |
-| **Active State** | **Operation Log**             | Standard sync (Ops applied to Redux)                                       |
-| **ArchiveYoung** | **Deterministic Side Effect** | `moveToArchive` ops trigger local moves from Active → Young on all clients |
-| **ArchiveOld**   | **Deterministic Side Effect** | `flushYoungToOld` ops trigger local flush from Young → Old on all clients  |
+| Transport             | What crosses the network for archive changes                                                                   |
+| --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **SuperSync**         | The archive operation payload; no separate archive-file upload.                                                |
+| **File v2 (default)** | The operation buffer plus complete state, `archiveYoung`, and `archiveOld` in the rewritten monolith.          |
+| **File v3 (opt-in)**  | Normally the operation in `sync-ops.json`; complete archive partitions when a snapshot is created or replaced. |
 
 ### E.3 Workflow: moveToArchive
 
@@ -1970,20 +1270,27 @@ When a user archives tasks:
 
 1.  **Client A (Origin):**
     - Generates `moveToArchive` operation.
-    - Locally moves Tasks + Worklogs from Active Store → `ArchiveYoung`.
-2.  **Sync:** Operation travels to Client B.
+    - Writes the task family to `archiveYoung` and moves non-today local
+      time-tracking data out of active state.
+2.  **Sync:** The operation, including the required full task data,
+    travels to Client B. File-v2 also rewrites its complete archive baseline.
 3.  **Client B (Remote):**
     - Receives `moveToArchive` operation.
     - Executes the **exact same logic**:
-      - Selects the targeted tasks from its _own_ Active Store.
-      - Moves Tasks + Worklogs to its _own_ `ArchiveYoung`.
+      - Writes the tasks carried by the action to its own `ArchiveYoung`.
       - Removes them from Active Store.
 
-**Result:** Both clients have identical `ArchiveYoung` files, but zero archive data was transferred over the network.
+**Result:** Both clients apply the same archive transition locally. SuperSync
+does not transfer a separate archive file; file v3 normally avoids a full
+archive snapshot rewrite between compactions; default file v2 does not.
 
 ### E.4 Workflow: Flushing (Young → Old)
 
-_Planned for future implementation._ When `ArchiveYoung` grows too large, client emits `flushYoungToOld` operation. All clients execute the same flush logic (move items older than X days), keeping `ArchiveOld` consistent.
+The originating client moves eligible data, then emits `flushYoungToOld` with
+the captured timestamp. Remote clients run the same threshold calculation under
+the archive mutex and atomically commit the new young/old pair. Passing the
+timestamp in the operation keeps replay independent of each receiver's wall
+clock.
 
 ### E.5 Idempotency Requirements
 
@@ -1995,125 +1302,54 @@ All archive operations MUST be idempotent:
 | `flushYoungToOld`    | Move only items not already in Old |
 | `restoreFromArchive` | Skip if task already in Active     |
 
-**Edge cases:** Missing entities (deleted/out-of-order) → queue for retry or skip. Out-of-order flush → idempotent no-op if Young is empty.
+The exact mutation and retry behavior belongs to
+[`ArchiveOperationHandler`](../../src/app/op-log/apply/archive-operation-handler.service.ts)
+and [`ArchiveService`](../../src/app/features/archive/archive.service.ts).
 
 ## E.6 Time Tracking Sync Semantics
 
-Time tracking data follows a special sync pattern that differs from regular entities.
-
-### E.6.1 TimeTrackingState Structure
-
-```typescript
-interface TimeTrackingState {
-  project: {
-    [projectId: string]: {
-      [dateStr: string]: { s?: number; e?: number; b?: number; bt?: number };
-    };
-  };
-  tag: {
-    [tagId: string]: {
-      [dateStr: string]: { s?: number; e?: number; b?: number; bt?: number };
-    };
-  };
-}
-// s = start time, e = end time, b = break count, bt = break time
-```
-
-This is a 3-level nested structure: `category → contextId → date → data`.
-
-### E.6.2 Three-Tier Storage Model
-
-Time tracking data exists in three locations:
-
-| Location         | Contents                    | Sync Frequency       |
-| ---------------- | --------------------------- | -------------------- |
-| **Active State** | Today's time tracking only  | Every sync (small)   |
-| **archiveYoung** | Recent data (< 21 days)     | Daily (medium)       |
-| **archiveOld**   | Historical data (≥ 21 days) | On flush only (rare) |
-
-This split reduces sync payload size significantly.
-
-### E.6.3 Data Flow
+Time tracking is a nested `project/tag → context ID → date → compact session`
+map. Its archive boundary differs from the task age boundary:
 
 ```
 Daily (finish work):
-  Active TimeTracking → archiveYoung
-  (Only today's data stays in active)
+  all non-today active entries → archiveYoung
 
 Every ~14 days (flush):
-  archiveYoung → archiveOld
-  (ALL timeTracking data moves, not threshold-based)
+  all archiveYoung time tracking → archiveOld
+
+Task archive flush in the same operation:
+  only task families older than 21 days → archiveOld
 ```
 
-### E.6.4 Merge Behavior
+Full-state assembly merges the three sources at field level with priority
+`current > archiveYoung > archiveOld`. Incremental sync remains operation-based;
+notably, concurrent positive task-time deltas commute and apply both instead of
+being reduced to whole-entry LWW.
 
-When merging time tracking from multiple sources (e.g., during import):
+| Responsibility                  | Owner                                                                                                     |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| State shape                     | [`time-tracking.model.ts`](../../src/app/features/time-tracking/time-tracking.model.ts)                   |
+| Full-state three-source merge   | [`merge-time-tracking-states.ts`](../../src/app/features/time-tracking/merge-time-tracking-states.ts)     |
+| Daily and periodic partitioning | [`sort-data-to-flush.ts`](../../src/app/features/archive/util/sort-data-to-flush.ts)                      |
+| Remote archive application      | [`archive-operation-handler.service.ts`](../../src/app/op-log/apply/archive-operation-handler.service.ts) |
 
-**Priority**: `current > archiveYoung > archiveOld`
+## E.7 Archive Payload Boundary
 
-**Deep Merge at Field Level**:
+[`TaskService.moveToArchive()`](../../src/app/features/tasks/task.service.ts)
+persists the selected parent-task batch, then dispatches one
+`moveToArchive({ tasks })` action. Capture records that persistent action as one
+operation carrying the selected batch's full task payload. The receiver needs
+that data because archive storage is outside NgRx and the tasks may no longer
+exist in its active state.
 
-```typescript
-// If current has {s: 100}, archiveYoung has {e: 200}, archiveOld has {b: 5}
-// Result: {s: 100, e: 200, b: 5}
-```
-
-This ensures no data loss when fields are partially populated across sources.
-
-### E.6.5 Conflict Resolution
-
-Time tracking uses **Last-Write-Wins (LWW)** for conflicts:
-
-- If Client A and B both modify `project[id][date]`, the last operation wins
-- This is intentional: later accurate measurement should override earlier estimate
-- No user conflict dialog - LWW is automatically applied
-
-### E.6.6 Fresh Client Hydration
-
-Fresh clients receive time tracking via SYNC_IMPORT:
-
-1. Server finds latest SYNC_IMPORT operation (snapshot skip optimization)
-2. SYNC_IMPORT contains complete `timeTracking` + `archiveYoung.timeTracking` + `archiveOld.timeTracking`
-3. Client applies SYNC_IMPORT → all time tracking data populated in one operation
-
-**Without SYNC_IMPORT**: Client replays all individual `syncTimeTracking` operations incrementally (slower but correct).
-
-### E.6.7 Key Implementation Files
-
-| File                                   | Purpose                           |
-| -------------------------------------- | --------------------------------- |
-| `merge-time-tracking-states.ts`        | Three-source merge with priority  |
-| `sort-data-to-flush.ts`                | Archive flush logic (young→old)   |
-| `time-tracking.reducer.ts`             | NgRx reducer for syncTimeTracking |
-| `archive-operation-handler.service.ts` | Handles flushYoungToOld remotely  |
-
-## E.7 Archive Payload: Rejected Optimizations
-
-`moveToArchive` deliberately carries **full task data** (~2 KB/task), not just
-IDs. Reason: archive sync is two systems — the operation syncs immediately, but
-the archive model file syncs later. A remote client receiving `moveToArchive`
-must write the tasks to its local archive _now_, before the archive file
-arrives and while the tasks are already deleted from the originating client's
-active state. So the operation must be self-sufficient.
-
-Smaller-payload alternatives were explored and rejected:
-
-| Option                              | Idea                                      | Why rejected                                                                                                                                                              |
-| ----------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A — private `_tasks` field          | strip before storage                      | remote ops still need the full data for sync                                                                                                                              |
-| B — meta-reducer enrichment         | capture tasks from state before deletion  | meta-reducers must be pure; awkward async from the sync reducer                                                                                                           |
-| C — two-phase (write + delete)      | split into two ops                        | same total payload, just more complexity                                                                                                                                  |
-| D — operation-derived archive store | archive populated entirely by ID-only ops | migration of years of existing archive data; initial sync must replay 20K+ archive ops; unbounded op-log growth; compaction must preserve archive state; PFAPI transition |
-
-**Decision: keep the full-payload approach** — it works, has no timing edge
-cases, is simple, and archiving is infrequent (end-of-day, not constant). The
-size reduction does not justify the complexity. For very large archives, chunk
-dispatches at `ARCHIVE_CHUNK_SIZE = 25`.
-
-**Escape hatch (preferred first resort if size becomes a real, not theoretical,
-problem):** task data is text/JSON and compresses >90% — compress the `_tasks`
-payload within the `moveToArchive` operation (LZ-string/GZIP) before sending.
-This removes the size concern without the Option-D architectural overhaul.
+There is no archive-specific chunking. SuperSync's
+[`DEFAULT_SYNC_CONFIG`](../../packages/super-sync-server/src/sync/sync.types.ts)
+limits each operation payload to `20 * 1024 * 1024` bytes (20 MiB) by default.
+A sufficiently large archive action can therefore exceed the per-operation
+limit; even below it, one very large payload is a known scalability and failure
+boundary. Current code neither splits nor compresses this action, and no
+replacement design is specified here.
 
 ---
 
@@ -2139,20 +1375,15 @@ If these changes happen in separate NgRx effects:
 
 ## F.2 The Solution: Meta-Reducers for Atomic Changes
 
-**Principle**: All related entity changes from a single user action should happen in a single reducer pass.
+**Principle**: Related entity changes that must replay as one atomic transition
+should happen in a single reducer pass.
 
-Meta-reducers intercept actions before they reach feature reducers and can modify the entire store state atomically:
-
-```typescript
-// tag-shared.reducer.ts - handles deleteTag atomically
-[deleteTag.type]: () => {
-  // 1. Remove tag references from tasks
-  // 2. Delete orphaned tasks (no project, no tags, no parent)
-  // 3. Clean up task repeat configs
-  // 4. Clean up time tracking state
-  return updatedState; // All changes in one pass
-},
-```
+Meta-reducers wrap the root reducer and can update every affected slice during
+that one pass. For example,
+[`tag-shared.reducer.ts`](../../src/app/root-store/meta/task-shared-meta-reducers/tag-shared.reducer.ts)
+owns tag deletion cleanup across tasks, repeat configurations, and time
+tracking. Its tests are the executable contract; do not reproduce the reducer
+shape from this guide.
 
 ### Meta-Reducers in Use
 
@@ -2206,16 +1437,22 @@ OperationLogEffects (per-action wrapper: writeOperationFromEffect)
 
 ## F.4 When to Use Meta-Reducers vs Effects
 
-| Scenario                           | Use Meta-Reducer | Use Effect |
-| ---------------------------------- | ---------------- | ---------- |
-| Updating related entities in store | ✅               | ❌         |
-| Deleting entity with cleanup       | ✅               | ❌         |
-| UI notifications (snackbar, sound) | ❌               | ✅         |
-| External API calls                 | ❌               | ✅         |
-| Archive operations (async I/O)     | ❌               | ✅         |
-| Navigation/routing                 | ❌               | ✅         |
+| Scenario                                                | Pattern                                  |
+| ------------------------------------------------------- | ---------------------------------------- |
+| One replay-atomic transition across slices/entities     | Meta-reducer                             |
+| Independent persistent workflow step                    | Ordinary reducer action                  |
+| Entity deletion whose cleanup must replay with deletion | Meta-reducer                             |
+| UI notifications (snackbar, sound)                      | Effect using `LOCAL_ACTIONS`             |
+| External API calls                                      | Effect using `LOCAL_ACTIONS`             |
+| Archive operations (async I/O)                          | Dedicated archive operation handler path |
+| Navigation/routing                                      | Effect using `LOCAL_ACTIONS`             |
 
-**Rule of thumb**: If it modifies NgRx state, use a meta-reducer. If it's a side effect (I/O, UI, external), use an effect with `LOCAL_ACTIONS`.
+**Rule of thumb**: state changes that must replay atomically across slices or
+entities use a meta-reducer. Independent workflow steps remain ordinary
+persistent actions; effects own I/O and UI side effects and use `LOCAL_ACTIONS`.
+The deliberate workflow exception and its costs are documented in the
+[Contributor Sync Model](./contributor-sync-model.md#the-atomicity-rule--one-replay-atomic-transition-one-op)
+and [ADR #5](../../ARCHITECTURE-DECISIONS.md#5-project-completion-decoupled-resolution-over-atomic-multi-entity-op).
 
 ## F.5 Board-Style Hybrid Pattern
 
@@ -2224,34 +1461,11 @@ For references between entities (e.g., `tag.taskIds`), we use a "board-style" pa
 - **Source of truth**: The child entity's reference (e.g., `task.tagIds`)
 - **Derived list**: The parent entity's list (e.g., `tag.taskIds`) is for ordering only
 
-Selectors recompute membership from the source of truth, providing self-healing:
-
-```typescript
-// work-context.selectors.ts
-export const computeOrderedTaskIdsForTag = (
-  tag: Tag,
-  allTasks: Dictionary<Task>,
-): string[] => {
-  // Use tag.taskIds for order, but filter by actual task.tagIds membership
-  const validFromTagList = tag.taskIds.filter((id) => {
-    const task = allTasks[id];
-    return task && !task.parentId && task.tagIds.includes(tag.id);
-  });
-
-  // Add any tasks that reference this tag but aren't in the list
-  const missingTasks = Object.values(allTasks).filter(
-    (task) =>
-      task &&
-      !task.parentId &&
-      task.tagIds.includes(tag.id) &&
-      !tag.taskIds.includes(task.id),
-  );
-
-  return [...validFromTagList, ...missingTasks.map((t) => t.id)];
-};
-```
-
-This ensures stale references are filtered and missing references are auto-added.
+Selectors recompute membership from the source of truth, filter stale ordering
+IDs, preserve the stored order, and append missing members. The current handling
+of nested tagged tasks is subtle; use
+[`computeOrderedTaskIdsForTag`](../../src/app/features/tag/store/tag.reducer.ts)
+instead of a copied implementation.
 
 ## F.6 Guidelines for New Features
 
@@ -2259,222 +1473,27 @@ When adding new entities or relationships:
 
 1. **Identify related entities** that must change together
 2. **Create or extend a meta-reducer** to handle atomic updates
-3. **Add action to `ACTION_AFFECTED_ENTITIES`** in `state-change-capture.service.ts`
+3. **Declare correct persistent metadata** (`entityType`, entity IDs, `opType`)
+   and cover capture/replay with the real action shape
 4. **Use `LOCAL_ACTIONS`** in effects for side effects only
 5. **Consider board-style pattern** for parent-child list references
 
 ---
 
-# Implementation Status
+# Source Map
 
-## Part A: Local Persistence
-
-### Complete ✅
-
-- SUP_OPS IndexedDB store (ops + state_cache)
-- NgRx effect capture with isPersistent pattern
-- Snapshot + tail replay hydration
-- Multi-tab BroadcastChannel coordination
-- Web Locks + localStorage fallback
-- Genesis migration from legacy data
-- Compaction with 7-day retention window
-- Disaster recovery from legacy 'pf' database
-- Schema migration service infrastructure (no migrations defined yet)
-- Persistent action metadata on all model actions
-- Rollback notification on persistence failure (shows snackbar with reload action)
-- Hydration optimizations (skip replay for SyncImport, save snapshot after >10 ops replayed)
-- **Migration safety backup (A.7.12)** - Creates backup before migration, restores on failure
-- **Tail ops migration (A.7.13)** - Migrates operations during hydration before replay
-- **Unified migration interface (A.7.15)** - `SchemaMigration` includes both `migrateState` and optional `migrateOperation`
-- **Persistent compaction counter** - Counter stored in `state_cache`, shared across tabs/restarts
-- **`syncedAt` index** - Index on ops store for faster `getUnsynced()` queries
-- **Quota handling** - Emergency compaction on `QuotaExceededError` with circuit breaker to prevent infinite loops
-
-### Not Implemented ⚠️
-
-| Item                            | Section | Risk if Missing                          | When Critical                                           |
-| ------------------------------- | ------- | ---------------------------------------- | ------------------------------------------------------- |
-| **Conflict-aware op migration** | A.7.11  | Conflicts may compare mismatched schemas | Before any schema migration that renames/removes fields |
-
-> **Note**: receiver-side op migration (A.7.11) runs before conflict detection. `CURRENT_SCHEMA_VERSION = 4`; released v17–v18.14 clients apply v3/v4 ops unmigrated and rely on payload-level graceful degradation — see the A.7.11 Bump Policy. What remains unimplemented is a _transforming_ migration for field renames/removals.
-
-## Part B: Legacy Sync Bridge
-
-### Complete ✅
-
-- `PfapiStoreDelegateService` (reads all NgRx models for sync)
-- META_MODEL vector clock update (B.2)
-- Sync download persistence via `hydrateFromRemoteSync()` (B.3)
-- All models in NgRx (no hybrid persistence)
-- Skip META_MODEL update during sync (prevents lock errors)
-
-## Part C: Server Sync
-
-### Complete ✅ (Single-Version)
-
-- Operation sync protocol interface (`OperationSyncCapable`)
-- `OperationLogSyncService` (orchestration, processRemoteOps, detectConflicts)
-- `OperationLogUploadService` (API upload + file-based fallback, batching)
-- `OperationLogDownloadService` (API download + file-based fallback, pagination)
-- Entity-level conflict detection (vector clock comparisons)
-- `ConflictResolutionService` (LWW auto-resolution + batch apply)
-- `VectorClockService` (global/entity frontier tracking, compaction recovery)
-- `OperationApplierService` (bulk-dispatch apply in causal arrival order; returns a failed op for caller retry/re-validation)
-- Rejected operation tracking (`rejectedAt` field + user notification)
-- Fresh client safety checks (prevents empty clients from overwriting server)
-- Bounded memory during download (`MAX_DOWNLOAD_OPS_IN_MEMORY = 50,000`)
-- Integration test suite (`sync-scenarios.integration.spec.ts`)
-- E2E test infrastructure (`supersync.spec.ts` with Playwright)
-- **End-to-end encryption** (December 2025):
-  - `OperationEncryptionService` for payload encryption/decryption
-  - AES-256-GCM with Argon2id key derivation
-  - Optional per-provider encryption password
-  - See [supersync-encryption-architecture.md](./supersync-encryption-architecture.md)
-- **Server-side security hardening** (December 2025):
-  - Structured audit logging for security events
-  - Structured error codes (`SYNC_ERROR_CODES`) for upload results
-  - Gap detection in download operations
-  - Request ID deduplication for idempotent uploads
-  - Transaction isolation for download operations
-  - Entity type allowlist to prevent injection
-  - Input validation for operation ID, entity ID, and schema version
-  - Server-side conflict detection
-  - Vector clock sanitization
-  - Rate limiting and size validation for plugin data
-  - JWT secret minimum length validation (32 chars)
-  - Batch cleanup queries (replaced N+1 pattern)
-  - Database index on `(user_id, received_at)` for cleanup queries
-
-> **Cross-version note**: incoming ops are migrated (A.7.11) before conflict detection. `CURRENT_SCHEMA_VERSION = 4` since 2026-07; cross-version safety against released v17–v18.14 clients rests on payload-level graceful degradation, not on the version fence — see the A.7.11 Bump Policy.
-
-## Part D: Validation & Repair
-
-### Complete ✅
-
-- Payload validation at write (Checkpoint A - structural validation before IndexedDB write)
-- State validation during hydration (Checkpoints B & C - Typia + cross-model validation)
-- Post-sync validation (Checkpoint D - validation after applying remote ops)
-- REPAIR operation type (auto-repair with full state + repair summary)
-- ValidateStateService (wraps Typia validation + data repair)
-- RepairOperationService (creates REPAIR ops, user notification)
-- User notification on repair (snackbar with issue count)
-
-## Future Enhancements 🔮
-
-| Component  | Description                                | Priority | Notes                                                                                             |
-| ---------- | ------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------- |
-| Auto-merge | Automatic merge for non-conflicting fields | Low      |                                                                                                   |
-| Undo/Redo  | Leverage op-log for undo history           | Low      |                                                                                                   |
-| Tombstones | Soft delete with retention window          | Medium   | Deferred Dec 2025 - current safeguards sufficient (see todo.md for evaluation)                    |
-| A.7.11     | Transforming operation migrations          | High     | Receiver-side pipeline exists; a rename/remove-field migration must follow the A.7.11 Bump Policy |
-
-> **Recently Completed (December 2025):**
->
-> - **Server Sync (SuperSync)**: Full upload/download infrastructure with conflict detection, user resolution UI, and integration tests
-> - **End-to-End Encryption**: AES-256-GCM payload encryption with Argon2id key derivation via `OperationEncryptionService`
-> - **Server Security Hardening**: Audit logging, structured error codes, request deduplication, transaction isolation, input validation, rate limiting
-> - **Unified Archive Handling**: `ArchiveOperationHandler` is now the single source of truth for all archive operations, used by both local effects and remote operation application
-> - **Simplified OperationCaptureService**: Tracks pending captures with a counter (no positional FIFO queue); `entityChanges` is computed in the write path from the action
-> - **Simplified OperationApplierService**: Applies ops in causal arrival order via bulk dispatch; a failed op is returned to the caller for re-validation/retry (no dependency resolver, no retry queues)
-> - **Tag sanitization**: Remove subtask IDs from tags when parent deleted, filter non-existent taskIds on sync
-> - **Anchor-based move operations**: All task drag-drop moves now use `afterTaskId` instead of full list replacement (including subtask moves)
-> - **Quota handling**: Emergency compaction and circuit breaker on `QuotaExceededError`
-> - **`syncedAt` index**: Faster `getUnsynced()` queries
-> - **Persistent compaction counter**: Tracks ops across tabs/restarts
-> - **Plugin data sync**: Operation logging for plugin user data and metadata
-> - **Gap detection**: Download operations detect and report sequence gaps
-> - **Server-side conflict detection**: Prevents concurrent modifications on server
-> - **Compaction race safety**: Safety check to abort deletion if new ops written during snapshot
-> - **Entity validation in meta-reducers**: Improved getTag/getProject helpers with validation and safe variants
-> - **Project cleanup in deleteTasks**: handleDeleteTasks now cleans up project taskIds/backlogTaskIds
-> - **Archive validation**: archiveOld tasks now validated for project/tag references, null-safety added
-> - **Lock service robustness**: Handle NaN timestamps and invalid lock formats in fallback lock
-> - **Array payload rejection**: Explicit check to reject arrays (which bypass `typeof === 'object'`)
-> - **Remote apply checkpoints**: reducer commit and vector-clock merge are atomic; `archive_pending` distinguishes unattempted archive work from attempted `failed` rows, while hydration and the sync gate keep incomplete work visible.
-
----
-
-# File Reference
-
-```
-src/app/op-log/
-├── operation.types.ts                    # Type definitions (Operation, OpType, EntityType)
-├── operation-log.const.ts                # Constants (thresholds, timeouts, limits)
-├── operation-log.effects.ts              # Action capture + META_MODEL bridge
-├── operation-converter.util.ts           # Op ↔ Action conversion
-├── persistent-action.interface.ts        # PersistentAction type + isPersistentAction guard
-├── entity-key.util.ts                    # Entity key generation utilities
-├── persistence/
-│   ├── operation-log-store.service.ts        # SUP_OPS IndexedDB wrapper
-│   ├── operation-log-hydrator.service.ts     # Startup hydration + crash recovery
-│   ├── operation-log-compaction.service.ts   # Snapshot + cleanup + emergency mode
-│   ├── operation-log-migration.service.ts    # Genesis migration from legacy
-│   └── schema-migration.service.ts           # State schema migrations
-├── sync/
-│   ├── operation-log-sync.service.ts         # Orchestration (Part C)
-│   ├── operation-log-download.service.ts     # Download ops (API + file fallback)
-│   ├── operation-log-upload.service.ts       # Upload ops (API + file fallback)
-│   ├── operation-encryption.service.ts       # E2EE payload encryption (AES-256-GCM)
-│   ├── vector-clock.service.ts               # Global/entity frontier tracking
-│   ├── lock.service.ts                       # Cross-tab locking (Web Locks + fallback)
-│   ├── conflict-resolution.service.ts        # LWW conflict resolution + user notification
-│   ├── sync-import-filter.service.ts         # Filter ops invalidated by SYNC_IMPORT
-│   ├── immediate-upload.service.ts           # Trigger immediate sync on critical ops
-│   ├── super-sync-status.service.ts          # SuperSync connection status tracking
-│   ├── server-migration.service.ts           # Server-side schema migration handling
-│   ├── operation-write-flush.service.ts      # Batch write operations with flush
-│   └── operation-sync.util.ts                # Sync helper utilities
-├── processing/
-│   ├── operation-applier.service.ts          # Apply ops via bulk dispatch in arrival order
-│   ├── operation-capture.service.ts          # Pending-capture counter + entityChanges extractor
-│   ├── operation-capture.meta-reducer.ts     # Meta-reducer for before/after state capture
-│   ├── hydration-state.service.ts            # Track hydration/remote ops application state
-│   ├── archive-operation-handler.service.ts  # Unified handler for archive side effects
-│   ├── archive-operation-handler.effects.ts  # Routes local actions to ArchiveOperationHandler
-│   ├── validate-state.service.ts             # Typia + cross-model validation
-│   ├── validate-operation-payload.ts         # Checkpoint A - payload validation
-│   └── repair-operation.service.ts           # REPAIR operation creation
-├── integration/                              # Integration test suite
-│   ├── sync-scenarios.integration.spec.ts    # Protocol-level sync tests
-│   ├── multi-client-sync.integration.spec.ts # Multi-client scenarios
-│   ├── state-consistency.integration.spec.ts # State validation tests
-│   └── helpers/                              # Test utilities
-│       ├── mock-sync-server.helper.ts        # Server mock for tests
-│       ├── simulated-client.helper.ts        # Client simulation
-│       ├── test-client.helper.ts             # Test client utilities
-│       └── operation-factory.helper.ts       # Test operation builders
-└── benchmarks/
-    └── operation-log-stress.benchmark.ts     # Manual perf harness (not auto-run in CI)
-
-src/app/features/work-context/store/
-├── work-context-meta.actions.ts          # Move actions (moveTaskInTodayList, etc.)
-└── work-context-meta.helper.ts           # Anchor-based positioning helpers
-
-src/app/op-log/sync-providers/
-├── super-sync/                           # SuperSync server provider
-│   ├── super-sync.ts                     # Server-based sync implementation
-│   └── super-sync.model.ts               # SuperSync types
-├── file-based/                           # File-based providers (Part B)
-│   ├── file-based-sync-adapter.service.ts  # Unified adapter for file providers
-│   ├── file-based-sync.types.ts          # FileBasedSyncData types
-│   ├── webdav/                           # WebDAV provider
-│   ├── dropbox/                          # Dropbox provider
-│   └── local-file/                       # Local file sync provider
-├── provider-manager.service.ts           # Provider activation/management
-├── wrapped-provider.service.ts           # Provider wrapper with encryption
-└── credential-store.service.ts           # OAuth/credential storage
-
-e2e/
-├── tests/sync/supersync.spec.ts          # E2E SuperSync tests (Playwright)
-├── pages/supersync.page.ts               # Page object for sync tests
-└── utils/supersync-helpers.ts            # E2E test utilities
-```
-
----
+Use the field guide's stable
+[executable source map](./sync-architecture.html#sources) instead of maintaining
+a copied file tree here. The main implementation boundaries are
+[`src/app/op-log/`](../../src/app/op-log/),
+[`packages/shared-schema/src/`](../../packages/shared-schema/src/),
+[`packages/sync-core/src/`](../../packages/sync-core/src/),
+[`packages/sync-providers/src/`](../../packages/sync-providers/src/), and
+[`packages/super-sync-server/src/`](../../packages/super-sync-server/src/).
 
 # References
 
-- [Operation Rules](./operation-rules.md) - Payload and validation rules
-- [Contributor Sync Model](./contributor-sync-model.md) - The single invariant for effects, reducers, and bulk dispatch
-- [SuperSync Encryption](./supersync-encryption-architecture.md) - End-to-end encryption implementation
+- [Contributor Sync Model](./contributor-sync-model.md) - The single invariant for effects, reducers, selector guards, and bulk dispatch
+- [SECTION Conflict Replay](./section-conflict-replay.md) - Narrow semantic-replay and released-client compatibility contract
+- [SuperSync Encryption](./supersync-encryption-architecture.md) - End-to-end encryption implementation and integrity boundary
 - [Vector Clocks](./vector-clocks.md) - Vector clock implementation details

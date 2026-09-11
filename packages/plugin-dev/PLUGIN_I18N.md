@@ -88,6 +88,25 @@ my-plugin/
 
 **File naming**: Use language codes from the manifest (e.g., `en.json`, `de.json`)
 
+The `i18n/` folder must sit at the root of the plugin ZIP, next to `manifest.json`.
+
+**Language codes must match one of Super Productivity's own codes, lowercase**
+(`en`, `de`, `pt-br`, `zh-tw`, …) — `pt-BR` is not the same as `pt-br` and is ignored.
+
+**Save translation files as UTF-8.** JSON is required to be UTF-8, and a file saved in a
+legacy 8-bit encoding (Latin-1/CP1252 — watch out for umlauts and accents) is rejected
+outright rather than loaded with mangled characters.
+
+A declared language is skipped when it ships no matching `i18n/<lang>.json` in the ZIP,
+or when that file is not valid UTF-8 JSON describing an object. Each of those is logged
+individually as a console warning. Unsupported language codes are reported together in one
+`Unsupported language codes: …` warning, truncated to the first few. `translate()` then
+falls back to returning the key, so check the console first when a translation does not
+show up.
+
+For uploaded plugin ZIPs, all declared translation files combined are limited to 5 MB;
+exceeding that rejects the upload.
+
 ### 3. Translation File Format
 
 Use hierarchical JSON structure for organization:

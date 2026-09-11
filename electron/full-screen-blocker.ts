@@ -1,7 +1,8 @@
 import { BrowserWindow, BrowserWindowConstructorOptions, ipcMain } from 'electron';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { TakeABreakConfig } from '../src/app/features/config/global-config.model';
-import { join, normalize } from 'path';
+import { join } from 'path';
+import { pathToFileURL } from 'node:url';
 import { assertSecureWebPreferences } from './web-preferences-guard';
 
 export const initFullScreenBlocker = (IS_DEV: boolean): void => {
@@ -23,6 +24,9 @@ export const initFullScreenBlocker = (IS_DEV: boolean): void => {
         contextIsolation: true,
         nodeIntegration: false,
         nodeIntegrationInSubFrames: false,
+        // Also disabled session-wide in start-app; this is the layer that holds
+        // if that call is skipped or this window ever gets its own session.
+        spellcheck: false,
       };
       assertSecureWebPreferences(webPreferences, 'full-screen-blocker');
       const win = new BrowserWindow({
@@ -44,15 +48,16 @@ export const initFullScreenBlocker = (IS_DEV: boolean): void => {
       win.setVisibleOnAllWorkspaces(true);
       win.setFullScreenable(false);
       isFullScreenWindowOpen = true;
+      const overlayUrl = pathToFileURL(
+        join(
+          __dirname,
+          IS_DEV
+            ? '../src/static/break-reminder-overlay.html'
+            : '../.tmp/angular-dist/browser/static/break-reminder-overlay.html',
+        ),
+      ).href;
       win.loadURL(
-        `file://${normalize(
-          join(
-            __dirname,
-            IS_DEV
-              ? '../src/static/break-reminder-overlay.html'
-              : '../dist/static/break-reminder-overlay.html',
-          ),
-        )}` +
+        overlayUrl +
           `#msg=${encodeURIComponent(msg)}&img=${encodeURIComponent(randomImgUrl ?? '')}&time=${
             takeABreakCfg.timedFullScreenBlockerDuration
           }`,

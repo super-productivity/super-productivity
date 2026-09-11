@@ -8,6 +8,8 @@ import { CaldavIssue, CaldavIssueReduced } from './caldav-issue.model';
 import { IssueProviderCaldav } from '../../issue.model';
 import { CaldavCfg } from './caldav.model';
 import { CALDAV_POLL_INTERVAL } from './caldav.const';
+import { Task } from '../../../tasks/task.model';
+import { createTask } from '../../../tasks/task.test-helper';
 
 const BASE_ISSUE: CaldavIssue = {
   id: 'uid-1',
@@ -39,6 +41,18 @@ const makeReduced = (id: string, related_to?: string): CaldavIssueReduced => ({
   ...(related_to ? { related_to } : {}),
 });
 
+const makeSpTask = (overrides: Partial<Task> = {}): Task =>
+  createTask({
+    id: 'sp-task-nanoid',
+    title: 'Local title',
+    notes: 'Local notes',
+    issueId: BASE_ISSUE.id,
+    issueProviderId: BASE_CFG.id,
+    issueType: 'CALDAV',
+    issueLastUpdated: 41,
+    ...overrides,
+  });
+
 // 2026-04-15 local-midnight timestamp (ical.js returns local-midnight for VALUE=DATE)
 const ALL_DAY_DATE_STR = '2026-04-15';
 const ALL_DAY_TIMESTAMP = new Date(2026, 3, 15, 0, 0, 0, 0).getTime(); // local midnight
@@ -65,12 +79,7 @@ describe('CaldavCommonInterfacesService', () => {
       providers: [
         CaldavCommonInterfacesService,
         { provide: CaldavClientService, useValue: caldavClientSpy },
-        {
-          provide: CaldavSyncAdapterService,
-          useValue: jasmine.createSpyObj('CaldavSyncAdapterService', {
-            extractSyncValues: {},
-          }),
-        },
+        CaldavSyncAdapterService,
         { provide: IssueProviderService, useValue: issueProviderServiceSpy },
       ],
     });
@@ -168,6 +177,247 @@ describe('CaldavCommonInterfacesService', () => {
       expect(result.dueWithTime).toBeNull();
       expect(result.deadlineDay).toBe('2026-04-20');
       expect(result.deadlineWithTime).toBeNull();
+    });
+  });
+
+  // Guards the completion pull: a server-side STATUS:COMPLETED must reach
+  // task.isDone, and the batch poll must key server todos by the VTODO UID
+  // (task.issueId) — not SP's own task id, which never matches a UID.
+  describe('getAddTaskData - completion mapping', () => {
+    it('should map completed=false → isDone=false', () => {
+      const result = service.getAddTaskData({ ...BASE_ISSUE, completed: false });
+      expect(result.isDone).toBe(false);
+    });
+
+    it('should map completed=true → isDone=true', () => {
+      const result = service.getAddTaskData({ ...BASE_ISSUE, completed: true });
+      expect(result.isDone).toBe(true);
+    });
+  });
+
+  describe('remote refresh', () => {
+    it('should tick the task done when the server todo is completed (default direction)', async () => {
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(BASE_CFG));
+      caldavClientSpy.getById$.and.returnValue(
+        of({ ...BASE_ISSUE, completed: true, etag_hash: 43 }),
+      );
+
+      const result = await service.getFreshDataForIssueTask(makeSpTask());
+      expect(result?.taskChanges.isDone).toBe(true);
+      expect(result?.taskChanges.issueWasUpdated).toBe(true);
+    });
+
+    it('should pull completion for a single task when status direction is both', async () => {
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          ...BASE_CFG,
+          twoWaySync: { isDone: 'both' },
+        }),
+      );
+      caldavClientSpy.getById$.and.returnValue(
+        of({ ...BASE_ISSUE, completed: true, etag_hash: 43 }),
+      );
+
+      const result = await service.getFreshDataForIssueTask(
+        makeSpTask({
+          issueLastSyncedValues: {
+            completed: false,
+            summary: BASE_ISSUE.summary,
+            note: BASE_ISSUE.note,
+          },
+        }),
+      );
+
+      expect(result?.taskChanges.isDone).toBeTrue();
+      expect(result?.taskChanges.issueWasUpdated).toBeTrue();
+    });
+
+    it('should reopen a task when completion differs even if a previous refresh consumed the etag', async () => {
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(BASE_CFG));
+      caldavClientSpy.getById$.and.returnValue(of(BASE_ISSUE));
+
+      const result = await service.getFreshDataForIssueTask(
+        makeSpTask({
+          isDone: true,
+          issueLastUpdated: BASE_ISSUE.etag_hash,
+        }),
+      );
+
+      expect(result?.taskChanges.isDone).toBeFalse();
+    });
+
+    it('should not overwrite a potential local change in both mode when the etag is unchanged', async () => {
+      const cfg: IssueProviderCaldav = {
+        ...BASE_CFG,
+        twoWaySync: {
+          isDone: 'both',
+          title: 'off',
+          notes: 'off',
+        },
+      };
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+      caldavClientSpy.getById$.and.returnValue(of(BASE_ISSUE));
+
+      const result = await service.getFreshDataForIssueTask(
+        makeSpTask({
+          isDone: true,
+          issueLastUpdated: BASE_ISSUE.etag_hash,
+        }),
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('should preserve a pending local both-mode value when only another remote field changed', async () => {
+      const cfg: IssueProviderCaldav = {
+        ...BASE_CFG,
+        twoWaySync: {
+          isDone: 'both',
+          title: 'off',
+          notes: 'off',
+        },
+      };
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+      caldavClientSpy.getById$.and.returnValue(
+        of({
+          ...BASE_ISSUE,
+          etag_hash: 43,
+          start: TIMED_TIMESTAMP,
+        }),
+      );
+
+      const result = await service.getFreshDataForIssueTask(
+        makeSpTask({
+          isDone: true,
+          issueLastUpdated: BASE_ISSUE.etag_hash,
+          issueLastSyncedValues: {
+            completed: BASE_ISSUE.completed,
+            summary: BASE_ISSUE.summary,
+            note: BASE_ISSUE.note,
+          },
+        }),
+      );
+
+      expect(result).not.toBeNull();
+      expect(result?.taskChanges.isDone).toBeUndefined();
+      expect(result?.taskChanges.dueWithTime).toBe(TIMED_TIMESTAMP);
+      expect(result?.taskChanges.issueLastSyncedValues).toEqual(
+        jasmine.objectContaining({ completed: false }),
+      );
+    });
+
+    it('should pull a both-mode field when its sync baseline is missing', async () => {
+      const cfg: IssueProviderCaldav = {
+        ...BASE_CFG,
+        twoWaySync: {
+          isDone: 'off',
+          title: 'off',
+          notes: 'both',
+        },
+      };
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+      caldavClientSpy.getById$.and.returnValue(
+        of({
+          ...BASE_ISSUE,
+          note: undefined,
+          etag_hash: 43,
+        }),
+      );
+
+      const result = await service.getFreshDataForIssueTask(
+        makeSpTask({
+          notes: 'Pending local notes',
+          issueLastUpdated: BASE_ISSUE.etag_hash,
+          issueLastSyncedValues: {
+            completed: BASE_ISSUE.completed,
+            summary: BASE_ISSUE.summary,
+          },
+        }),
+      );
+
+      expect(result?.taskChanges.notes).toBe('');
+      expect(result?.taskChanges.issueLastUpdated).toBe(43);
+    });
+
+    it('should not pull mapped fields whose directions are off or pushOnly', async () => {
+      const cfg: IssueProviderCaldav = {
+        ...BASE_CFG,
+        twoWaySync: {
+          isDone: 'off',
+          title: 'pushOnly',
+          notes: 'off',
+        },
+      };
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+      caldavClientSpy.getById$.and.returnValue(
+        of({
+          ...BASE_ISSUE,
+          completed: true,
+          summary: 'Remote title',
+          note: 'Remote notes',
+          etag_hash: 43,
+        }),
+      );
+
+      const result = await service.getFreshDataForIssueTask(makeSpTask());
+
+      expect(result).not.toBeNull();
+      expect(result?.taskChanges.isDone).toBeUndefined();
+      expect(result?.taskChanges.title).toBeUndefined();
+      expect(result?.taskChanges.notes).toBeUndefined();
+      expect(result?.taskChanges.issueLastUpdated).toBe(43);
+    });
+
+    it('should keep notes local when their direction uses the default off value', async () => {
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(BASE_CFG));
+      caldavClientSpy.getById$.and.returnValue(
+        of({ ...BASE_ISSUE, note: 'Remote notes', etag_hash: 43 }),
+      );
+
+      const result = await service.getFreshDataForIssueTask(makeSpTask());
+
+      expect(result).not.toBeNull();
+      expect(result?.taskChanges.notes).toBeUndefined();
+    });
+
+    it('should query and match batch updates by the VTODO UID (task.issueId), not the SP task id', async () => {
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(BASE_CFG));
+      caldavClientSpy.getByIds$.and.returnValue(
+        of([{ ...BASE_ISSUE, completed: true, etag_hash: 43 }]),
+      );
+
+      const result = await service.getFreshDataForIssueTasks([makeSpTask()]);
+
+      expect(caldavClientSpy.getByIds$).toHaveBeenCalledWith([BASE_ISSUE.id], BASE_CFG);
+      expect(result.length).toBe(1);
+      expect(result[0].taskChanges.isDone).toBeTrue();
+      expect(result[0].taskChanges.issueWasUpdated).toBeTrue();
+    });
+
+    it('should return no batch changes when neither the etag nor mapped fields changed', async () => {
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(BASE_CFG));
+      caldavClientSpy.getByIds$.and.returnValue(of([{ ...BASE_ISSUE }]));
+
+      const result = await service.getFreshDataForIssueTasks([
+        makeSpTask({
+          title: BASE_ISSUE.summary,
+          issueLastUpdated: BASE_ISSUE.etag_hash,
+        }),
+      ]);
+
+      expect(result).toEqual([]);
+    });
+
+    it('should reconcile batch completion when a previous refresh consumed the etag', async () => {
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(BASE_CFG));
+      caldavClientSpy.getByIds$.and.returnValue(of([{ ...BASE_ISSUE, completed: true }]));
+
+      const result = await service.getFreshDataForIssueTasks([
+        makeSpTask({ issueLastUpdated: BASE_ISSUE.etag_hash }),
+      ]);
+
+      expect(result.length).toBe(1);
+      expect(result[0].taskChanges.isDone).toBeTrue();
     });
   });
 

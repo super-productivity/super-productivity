@@ -67,6 +67,8 @@ export const Logger = {
    * - RATE_LIMITED: User hit rate limit
    * - AUTH_FAILED: Authentication attempt failed
    * - SUSPICIOUS_REQUEST: Request contained suspicious data
+   * - E2EE_REQUIRED: Upload rejected by the encrypted-only ingress gate
+   *   (carries `surface`: 'ops' | 'snapshot', and `opsCount`)
    */
   audit: (entry: AuditLogEntry): void => {
     const logEntry = {

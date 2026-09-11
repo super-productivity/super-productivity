@@ -183,7 +183,10 @@ describe('Magic Link Registration', () => {
       );
     });
 
-    it('should use Date.now() for termsAcceptedAt when not provided', async () => {
+    // An instance that publishes no legal pages has nothing to consent to, so recording a
+    // timestamp would assert an acceptance the user was never shown. The column is
+    // nullable precisely so "not applicable" is representable.
+    it('should leave termsAcceptedAt null when no privacy policy is configured', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
       mockPrisma.user.create.mockResolvedValue({
         id: 1,
@@ -196,10 +199,46 @@ describe('Magic Link Registration', () => {
       expect(mockPrisma.user.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            termsAcceptedAt: expect.any(BigInt),
+            termsAcceptedAt: null,
           }),
         }),
       );
+    });
+
+    it('should use Date.now() for termsAcceptedAt when a privacy policy is configured', async () => {
+      process.env.PRIVACY_CONTACT_NAME = 'Test Operator';
+      process.env.PRIVACY_ADDRESS_STREET = 'Example Street 1';
+      process.env.PRIVACY_ADDRESS_CITY = '12345 Example City';
+      process.env.PRIVACY_ADDRESS_COUNTRY = 'Testland';
+      process.env.PRIVACY_CONTACT_EMAIL = 'operator@example.test';
+      mockPrisma.user.findUnique.mockResolvedValue(null);
+      mockPrisma.user.create.mockResolvedValue({
+        id: 1,
+        email: testEmail,
+        isVerified: 0,
+      });
+
+      try {
+        await registerWithMagicLink(testEmail);
+
+        expect(mockPrisma.user.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              termsAcceptedAt: expect.any(BigInt),
+            }),
+          }),
+        );
+      } finally {
+        for (const key of [
+          'PRIVACY_CONTACT_NAME',
+          'PRIVACY_ADDRESS_STREET',
+          'PRIVACY_ADDRESS_CITY',
+          'PRIVACY_ADDRESS_COUNTRY',
+          'PRIVACY_CONTACT_EMAIL',
+        ]) {
+          delete process.env[key];
+        }
+      }
     });
   });
 

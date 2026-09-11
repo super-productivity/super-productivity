@@ -94,6 +94,142 @@ describe('SyncImportConflictGateService', () => {
     });
   });
 
+  it('should not prompt for a full-state op this client cannot interpret, nor for anything after it (#8764)', async () => {
+    const pendingTaskEntry = createEntry(
+      createOperation({
+        id: 'local-task-update',
+        actionType: 'test' as ActionType,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: 'task-1',
+        payload: { title: 'Local title' },
+        clientId: 'client-A',
+        vectorClock: { clientA: 1 },
+      }),
+    );
+    opLogStoreSpy.getUnsynced.and.resolveTo([pendingTaskEntry]);
+
+    const unknownReason = createOperation({
+      id: 'import-future-reason',
+      syncImportReason: 'FUTURE_REASON' as never,
+    });
+    expect(
+      (await service.checkIncomingFullStateConflict([unknownReason])).fullStateOp,
+    ).toBeUndefined();
+
+    const unknownOpType = createOperation({
+      id: 'future-op',
+      opType: 'FUTURE_OP' as unknown as OpType,
+    });
+    const importAfterBlock = createOperation({
+      id: 'import-after-block',
+      syncImportReason: 'SERVER_MIGRATION',
+    });
+    expect(
+      (await service.checkIncomingFullStateConflict([unknownOpType, importAfterBlock]))
+        .fullStateOp,
+    ).toBeUndefined();
+
+    const importFromNewerSchema = createOperation({
+      id: 'import-newer-schema',
+      syncImportReason: 'SERVER_MIGRATION',
+      schemaVersion: 99,
+    });
+    expect(
+      (await service.checkIncomingFullStateConflict([importFromNewerSchema])).fullStateOp,
+    ).toBeUndefined();
+
+    // The prefix before the block is still gated normally.
+    const result = await service.checkIncomingFullStateConflict([
+      importAfterBlock,
+      unknownOpType,
+    ]);
+    expect(result.fullStateOp).toBe(importAfterBlock);
+    expect(result.hasMeaningfulPending).toBeTrue();
+  });
+
+  describe('incoming causal REPAIR', () => {
+    const createPendingTaskEntry = (): OperationLogEntry =>
+      createEntry(
+        createOperation({
+          id: 'local-task-update',
+          actionType: 'test' as ActionType,
+          opType: OpType.Update,
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'Local title' },
+          clientId: 'client-A',
+          vectorClock: { clientA: 1 },
+        }),
+      );
+
+    /**
+     * A REPAIR is automatic. Prompting for it offers the user three wrong
+     * answers — force-upload (destroys every other device's work), force-download
+     * (destroys this device's pending work), or cancel (re-prompts next cycle).
+     * Defer it instead: this device keeps its work and its own repair pass fixes
+     * the same shared corruption locally. (#9773)
+     */
+    it('defers an incoming causal REPAIR instead of prompting', async () => {
+      const incomingRepair = createOperation({
+        id: 'remote-causal-repair',
+        actionType: ActionType.REPAIR_AUTO,
+        opType: OpType.Repair,
+        syncImportReason: 'REPAIR',
+        repairBaseServerSeq: 4,
+      });
+      opLogStoreSpy.getUnsynced.and.resolveTo([createPendingTaskEntry()]);
+
+      const result = await service.checkIncomingFullStateConflict([incomingRepair]);
+
+      expect(result.fullStateOp).toBe(incomingRepair);
+      expect(result.hasMeaningfulPending).toBeTrue();
+      expect(result.dialogData).toBeUndefined();
+      expect(result.deferredRepairOpId).toBe('remote-causal-repair');
+    });
+
+    it('still prompts for an incoming SYNC_IMPORT', async () => {
+      const incomingImport = createOperation({ syncImportReason: 'SERVER_MIGRATION' });
+      opLogStoreSpy.getUnsynced.and.resolveTo([createPendingTaskEntry()]);
+
+      const result = await service.checkIncomingFullStateConflict([incomingImport]);
+
+      expect(result.dialogData).toBeDefined();
+      expect(result.deferredRepairOpId).toBeUndefined();
+    });
+
+    it('does not defer a REPAIR when there is no meaningful pending work', async () => {
+      const incomingRepair = createOperation({
+        id: 'remote-causal-repair',
+        actionType: ActionType.REPAIR_AUTO,
+        opType: OpType.Repair,
+        syncImportReason: 'REPAIR',
+        repairBaseServerSeq: 4,
+      });
+      opLogStoreSpy.getUnsynced.and.resolveTo([]);
+
+      const result = await service.checkIncomingFullStateConflict([incomingRepair]);
+
+      expect(result.hasMeaningfulPending).toBeFalse();
+      expect(result.deferredRepairOpId).toBeUndefined();
+    });
+
+    it('does not defer a legacy REPAIR that carries no causal base', async () => {
+      const legacyRepair = createOperation({
+        id: 'remote-legacy-repair',
+        actionType: ActionType.REPAIR_AUTO,
+        opType: OpType.Repair,
+        syncImportReason: 'REPAIR',
+      });
+      opLogStoreSpy.getUnsynced.and.resolveTo([createPendingTaskEntry()]);
+
+      const result = await service.checkIncomingFullStateConflict([legacyRepair]);
+
+      expect(result.deferredRepairOpId).toBeUndefined();
+      expect(result.dialogData).toBeDefined();
+    });
+  });
+
   const createPendingConfigEntry = (sectionKey = 'sync'): OperationLogEntry =>
     createEntry(
       createOperation({

@@ -8,6 +8,7 @@ import { SyncConfigService } from '../sync-config.service';
 import { EncryptionPasswordChangeService } from '../encryption-password-change.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
+import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.service';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 
 describe('DialogEnterEncryptionPasswordComponent', () => {
@@ -19,6 +20,7 @@ describe('DialogEnterEncryptionPasswordComponent', () => {
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
+  let mockSyncLocalStateService: jasmine.SpyObj<SyncLocalStateService>;
 
   beforeEach(async () => {
     mockDialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
@@ -34,6 +36,11 @@ describe('DialogEnterEncryptionPasswordComponent', () => {
     mockProviderManager = jasmine.createSpyObj('SyncProviderManager', [
       'getActiveProvider',
     ]);
+    mockSyncLocalStateService = jasmine.createSpyObj('SyncLocalStateService', [
+      'hasNothingWorthUploading',
+      'warnNothingWorthUploading',
+    ]);
+    mockSyncLocalStateService.hasNothingWorthUploading.and.resolveTo(false);
     mockProviderManager.getActiveProvider.and.returnValue({
       id: SyncProviderId.SuperSync,
     } as any);
@@ -54,6 +61,7 @@ describe('DialogEnterEncryptionPasswordComponent', () => {
         { provide: SnackService, useValue: mockSnackService },
         { provide: MatDialog, useValue: mockMatDialog },
         { provide: SyncProviderManager, useValue: mockProviderManager },
+        { provide: SyncLocalStateService, useValue: mockSyncLocalStateService },
       ],
     }).compileComponents();
 
@@ -158,6 +166,28 @@ describe('DialogEnterEncryptionPasswordComponent', () => {
 
       component.cancel();
 
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('forceOverwrite() empty-device guard (#9256)', () => {
+    it('refuses and explains when this device has nothing to upload', async () => {
+      // "Use Local Data" runs a clean slate, which makes the server DELETE its
+      // operations. This dialog sits one button from where a user is asked to
+      // try an older password, so the refusal has to happen before the confirm.
+      // Without a return value the spec would fail on a TypeError instead of
+      // on its own assertions if the guard were removed.
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => of(true),
+      } as MatDialogRef<unknown>);
+      mockSyncLocalStateService.hasNothingWorthUploading.and.resolveTo(true);
+      component.passwordVal = 'some-password';
+
+      await component.forceOverwrite();
+
+      expect(mockSyncLocalStateService.warnNothingWorthUploading).toHaveBeenCalled();
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+      expect(mockEncryptionPasswordChangeService.changePassword).not.toHaveBeenCalled();
       expect(mockDialogRef.close).not.toHaveBeenCalled();
     });
   });

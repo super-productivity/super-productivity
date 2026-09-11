@@ -98,6 +98,33 @@
   }
 }
 
+.mobile-menu-close {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  min-height: var(--s6);
+  margin-left: auto;
+  padding: 0 var(--s2);
+  color: var(--sidenav-text);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+
+  &:hover {
+    background: var(--sidenav-hover-bg);
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: calc(-1 * var(--focus-ring-width));
+  }
+}
+
+:host-context(body:not(.isNativeMobile)) .mobile-menu-close {
+  margin-top: var(--safe-area-top);
+}
+
 // Mobile overlay
 .nav-backdrop-mobile {
   position: fixed;
@@ -255,6 +282,7 @@
     padding-bottom: calc(
       var(--safe-area-bottom) + var(--bottom-nav-height) + var(--bottom-nav-extra-offset)
     );
+    min-height: calc(100% - var(--s6));
   }
 
   :host-context(.isMac.isElectron) & {

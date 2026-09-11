@@ -175,7 +175,11 @@ describe('TaskRepeatCfgService', () => {
         repeatCycle: 'DAILY',
       };
 
-      service.addTaskRepeatCfgToTask(taskId, projectId, taskRepeatCfg as any);
+      const createdRepeatCfgId = service.addTaskRepeatCfgToTask(
+        taskId,
+        projectId,
+        taskRepeatCfg as any,
+      );
 
       expect(dispatchSpy).toHaveBeenCalledWith(
         jasmine.objectContaining({
@@ -187,6 +191,9 @@ describe('TaskRepeatCfgService', () => {
             id: jasmine.any(String),
           }),
         }),
+      );
+      expect(createdRepeatCfgId).toBe(
+        dispatchSpy.calls.mostRecent().args[0].taskRepeatCfg.id,
       );
     });
   });

@@ -17,6 +17,7 @@ import { uuidv7 } from '../../util/uuid-v7';
 import { devError } from '../../util/dev-error';
 import { incrementVectorClock } from '../../core/util/vector-clock';
 import { MultiEntityPayload, Operation, ActionType } from '../core/operation.types';
+import { KNOWN_ACTION_TYPES } from '../core/action-types.enum';
 import { OperationLogCompactionService } from '../persistence/operation-log-compaction.service';
 import { OpLog } from '../../core/log';
 import { SnackService } from '../../core/snack/snack.service';
@@ -42,8 +43,6 @@ import { SuperSyncStatusService } from '../sync/super-sync-status.service';
 interface WriteOperationOptions {
   callerHoldsOperationLogLock?: boolean;
 }
-
-const KNOWN_ACTION_TYPES: ReadonlySet<string> = new Set(Object.values(ActionType));
 
 /**
  * NgRx Effects for persisting application state changes as operations to the

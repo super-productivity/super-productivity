@@ -6,6 +6,7 @@ import { BehaviorSubject } from 'rxjs';
 import { DateService } from '../../core/date/date.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { selectTaskFeatureState } from '../tasks/store/task.selectors';
+import { selectPlannerDayMap } from './store/planner.selectors';
 import { signal } from '@angular/core';
 import { PlannerDay } from './planner.model';
 
@@ -60,6 +61,10 @@ describe('PlannerComponent', () => {
             {
               selector: selectTaskFeatureState,
               value: { ids: ['task-1', 'task-2'], entities: {} },
+            },
+            {
+              selector: selectPlannerDayMap,
+              value: {},
             },
           ],
         }),
@@ -149,6 +154,24 @@ describe('PlannerComponent', () => {
       const result = component.daysWithTasks();
 
       expect(result.size).toBe(0);
+    });
+
+    it('should include persisted task dates outside the loaded render window', () => {
+      const outOfWindowDay = '2026-02-26';
+      days$.next([
+        makePlannerDay('2026-02-16', 0),
+        makePlannerDay('2026-02-17', 0),
+        makePlannerDay('2026-02-18', 0),
+        makePlannerDay('2026-02-19', 0),
+        makePlannerDay('2026-02-20', 0),
+      ]);
+      TestBed.inject(MockStore).overrideSelector(selectPlannerDayMap, {
+        [outOfWindowDay]: makePlannerDay(outOfWindowDay, 1).tasks,
+      });
+      TestBed.inject(MockStore).refreshState();
+      fixture.detectChanges();
+
+      expect(component.daysWithTasks().has(outOfWindowDay)).toBeTrue();
     });
   });
 });

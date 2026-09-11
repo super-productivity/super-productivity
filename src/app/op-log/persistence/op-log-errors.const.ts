@@ -48,6 +48,22 @@ export const IDB_OPEN_ERROR_MSG =
   '[OpLogStore] Failed to open IndexedDB after multiple retries. See #6255.';
 
 /**
+ * Base message for the downgrade barrier. Says "further retries skipped" rather
+ * than "no retry ran", because attempts CAN precede it: a transient failure may
+ * burn an attempt, then another process commits the upgrade during the backoff,
+ * and the next attempt hits the barrier. `IDB_OPEN_ERROR_MSG` must not be
+ * reused here either: it claims a full retry budget, and the wrapper's `message`
+ * is the string that reaches `HANDLED_ERROR_PROP_STR`, `getErrorTxt` and the
+ * exported log history — i.e. exactly what a user pastes into a bug report.
+ * Correcting only the `Log.err` prefixes would leave the false claim in the
+ * copy most likely to be read.
+ *
+ * @see https://github.com/super-productivity/super-productivity/issues/9187
+ */
+export const IDB_OPEN_VERSION_BARRIER_MSG =
+  'Failed to open IndexedDB: rejected by the downgrade barrier, further retries skipped. See #9187.';
+
+/**
  * Pattern to detect "backing store" errors from the browser.
  * These errors indicate storage-level issues (disk I/O, file locks, corruption).
  * Used for heuristic error detection to show platform-specific guidance.
@@ -90,6 +106,35 @@ export const isLockRelatedIdbOpenError = (err: unknown): boolean => {
   }
   return false;
 };
+
+/**
+ * Is this open error the downgrade barrier firing? The browser throws
+ * `VersionError` when the requested `DB_VERSION` is lower than the version
+ * already on disk, i.e. an older app build is opening a database that a newer
+ * build upgraded. `DB_VERSION` 8-10 exist purely as such barriers (see
+ * `db-keys.const.ts`), so this is a supported, deliberate rejection — not
+ * storage damage.
+ *
+ * Two consequences, both handled by callers:
+ * - Retrying is pointless: the version numbers cannot change while the app
+ *   runs, so every attempt fails identically. The open loops break out
+ *   immediately instead of burning the ~7s non-lock budget on a white screen.
+ * - The recovery advice must differ: the generic dialog blames disk space and
+ *   corruption and suggests clearing storage, which here would destroy intact
+ *   data and still not let the old build open it.
+ *
+ * `DOMException` is checked alongside `Error` for the same reason as in
+ * `isLockRelatedIdbOpenError` above.
+ *
+ * Pass the ORIGINAL browser error. An already-wrapped `IndexedDBOpenError`
+ * overrides `name`, so it returns `false` here — read `.isVersionError` on the
+ * wrapper instead, or the caller silently falls back to the generic
+ * clear-your-storage dialog.
+ *
+ * @see https://github.com/super-productivity/super-productivity/issues/9187
+ */
+export const isIdbVersionError = (err: unknown): boolean =>
+  (err instanceof DOMException || err instanceof Error) && err.name === 'VersionError';
 
 // ============================================================================
 // Connection Closing Errors (Issue #6643)

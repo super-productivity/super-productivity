@@ -1,7 +1,7 @@
 /**
  * Utility functions for calculating productivity and sustainability metrics.
- * v2.7 - Productivity: Impact-driven with recognition for non-focus work (65/30/5 split)
- * v2.4 - Sustainability: Exponential decay + sigmoid workload model
+ * v2.8 - Productivity: Impact-driven with recognition for non-focus work (65/30/5 split)
+ * v2.5 - Sustainability: Exponential decay + sigmoid workload model
  * Includes robust fallbacks and heuristics for missing data.
  */
 
@@ -11,7 +11,7 @@ import { Metric } from './metric.model';
 
 export const PRODUCTIVITY_WEIGHTS = {
   IMPACT: 0.65, // User's assessment of work significance (primary driver)
-  FOCUS: 0.3, // Progress toward deep work target (soft-capped)
+  FOCUS: 0.3, // Progress toward deep work target (full credit at target, flat beyond)
   TOTAL_WORK: 0.05, // Credit for overall effort (capped at 10h)
 } as const;
 
@@ -20,7 +20,7 @@ export const PRODUCTIVITY_WEIGHTS = {
  * Freshness leads to emphasize energy and burnout prevention.
  */
 export const SUSTAINABILITY_WEIGHTS = {
-  FRESHNESS: 0.45, // Energy level (from simple check-in or detailed exhaustion)
+  FRESHNESS: 0.45, // Energy level (from check-in or neutral fallback)
   WORKLOAD: 0.4, // Reasonable work hours (penalizes overwork)
   FOCUS_BALANCE: 0.15, // Inverted-V curve - optimal at 4h, penalizes excess
 } as const;
@@ -30,7 +30,7 @@ export const SUSTAINABILITY_WEIGHTS = {
  */
 export const TIME_TARGETS = {
   DEFAULT_TARGET_FOCUSED_MINUTES: 240, // 4 hours - optimal deep work target
-  DEFAULT_WORKLOAD_LINEAR_ZERO_AT: 600, // 10 hours - point where workload score becomes 0
+  DEFAULT_MAX_WORK_MINUTES: 600, // 10 hours - cap for total work credit in productivity
   FOCUS_BALANCE_PEAK_MINUTES: 240, // 4 hours - optimal focus time for sustainability
 } as const;
 
@@ -39,16 +39,8 @@ export const TIME_TARGETS = {
  */
 export const SCALE_CONVERSIONS = {
   IMPACT_SCALE_MAX: 4, // Impact rating is 1-4 (simplified from 1-5)
-  EXHAUSTION_SCALE_MAX: 5, // Exhaustion is 1-5 (higher = worse)
   ENERGY_CHECKIN_MIN: 1, // Energy check-in is 1-3
   ENERGY_CHECKIN_DIVISOR: 2, // Convert (value - 1) / 2 to get 0-1 range
-} as const;
-
-/**
- * Soft-cap and decay parameters
- */
-export const SOFT_CAP = {
-  K_VALUE: 2.2, // Decay constant for exponential soft-cap (higher = faster diminishing returns)
 } as const;
 
 export const FOCUS_BALANCE_DECAY = {
@@ -98,17 +90,6 @@ const clamp = (value: number, min: number = 0, max: number = 1): number =>
   Math.max(min, Math.min(max, value));
 
 /**
- * Helper: Soft-cap function that provides diminishing returns above target.
- * Uses exponential decay: 1 - exp(-k * clamp(x))
- * @param x - Input value (typically a ratio like focusedMinutes to target minutes)
- * @param k - Decay constant (uses SOFT_CAP.K_VALUE by default)
- * @returns Soft-capped value between 0 and ~1
- */
-const softCap = (x: number, k: number = SOFT_CAP.K_VALUE): number => {
-  return 1 - Math.exp(-k * clamp(x));
-};
-
-/**
  * Helper: Safe division with fallback for zero denominator.
  * @param numerator - Value to divide
  * @param denominator - Value to divide by
@@ -132,13 +113,17 @@ export const focusSessionsToMinutes = (focusSessions: number[]): number => {
 /**
  * Calculates a productivity score (0-100) with impact rating as the primary driver.
  *
- * v2.7 - Impact-driven model with recognition for non-focus work:
+ * v2.8 - Impact-driven model with recognition for non-focus work:
  * - 65% Impact Rating: User's assessment of work value/significance (1-4, required)
- * - 30% Focus Progress: Progress toward deep work goal (soft-capped for diminishing returns)
+ * - 30% Focus Progress: Progress toward deep work goal (full credit at target, flat beyond)
  * - 5% Total Work: Credit for overall effort (capped at 10 hours)
  *
  * Making impact rating mandatory ensures users reflect on work value, not just time spent,
  * while still rewarding meaningful focus time and broader contributions beyond deep work.
+ *
+ * Focus beyond the target earns no extra credit, but is never penalized either — the
+ * score must not drop when focus time increases (overwork is penalized by the
+ * sustainability score instead).
  *
  * @param impactRating - User's assessment of work impact (1-4 scale, REQUIRED)
  * @param focusedMinutes - Total focused time for the day (in minutes)
@@ -153,30 +138,27 @@ export const focusSessionsToMinutes = (focusSessions: number[]): number => {
  *
  * @example
  * // Medium impact, typical day
- * calculateProductivityScore(2, 180, 360) // Returns ~60
+ * calculateProductivityScore(2, 180, 360) // Returns ~58
  *
  * @example
  * // Low impact despite good focus = moderate score
- * calculateProductivityScore(1, 240, 360) // Returns ~48
+ * calculateProductivityScore(1, 240, 360) // Returns ~49
  */
 export const calculateProductivityScore = (
   impactRating: number,
   focusedMinutes: number,
   totalWorkMinutes: number = focusedMinutes,
   targetFocusedMinutes: number = TIME_TARGETS.DEFAULT_TARGET_FOCUSED_MINUTES,
-  maxWorkMinutes: number = TIME_TARGETS.DEFAULT_WORKLOAD_LINEAR_ZERO_AT,
+  maxWorkMinutes: number = TIME_TARGETS.DEFAULT_MAX_WORK_MINUTES,
 ): number => {
   // Impact: User's reflection on work value (1-4 scale normalized to 0-1)
   const impact = clamp(impactRating / SCALE_CONVERSIONS.IMPACT_SCALE_MAX);
 
-  // Progress to Target:
-  // - Linear growth from 0 to target (0-1.0)
-  // - Soft-cap for diminishing returns beyond target (>1.0)
+  // Progress to Target: linear growth from 0 to target, full credit at target,
+  // flat beyond it. Must be continuous and non-decreasing in focusedMinutes so the
+  // score never drops for doing more focused work.
   const progressRatio = safeDiv(focusedMinutes, targetFocusedMinutes, 0);
-  const targetProgress =
-    progressRatio <= 1.0
-      ? progressRatio // Linear up to target: full credit for meeting goal
-      : softCap(progressRatio); // Soft-cap beyond target: diminishing returns
+  const targetProgress = clamp(progressRatio);
 
   // Total work contribution (capped at maxWorkMinutes to avoid rewarding overwork)
   const totalWorkRatioRaw = safeDiv(totalWorkMinutes, maxWorkMinutes, 0);
@@ -196,14 +178,10 @@ export const calculateProductivityScore = (
 /**
  * Calculates a sustainability score (0-100) to assess work-life balance and burnout risk.
  *
- * v2.4 - Improved balance model with exponential decay and sigmoid workload:
- * - 45% Freshness: Energy levels from check-in or exhaustion (inverted)
+ * v2.5 - Improved balance model with exponential decay and sigmoid workload:
+ * - 45% Freshness: Energy levels from check-in (neutral fallback when missing)
  * - 40% Workload: Sigmoid function (inflection at 8h, asymptotic decay)
  * - 15% Focus Balance: Linear growth to 4h, then exponential penalty for excess
- *
- * Changes from v2.3:
- * - Workload: Sigmoid instead of linear (avoids harsh 0 at 10h)
- * - Focus Balance: Exponential decay instead of linear (matches fatigue research)
  *
  * The focus balance curve rewards building up to 4h of focused work, but then
  * applies exponential penalty beyond 4h (cognitive fatigue is non-linear).
@@ -211,31 +189,27 @@ export const calculateProductivityScore = (
  *
  * @param focusedMinutes - Total focused time for the day (in minutes)
  * @param totalWorkMinutes - Total work time including meetings, emails, etc. (in minutes)
- * @param workloadLinearZeroAt - Minutes at which workload score becomes 0 (deprecated, kept for API compatibility)
  * @param energyCheckin - Simple energy check-in (1=exhausted, 2=ok, 3=good) - optional
- * @param exhaustion - Detailed exhaustion level (1-5 scale, higher = more exhausted) - optional
  * @returns Sustainability score from 0-100
  *
  * @example
- * // Target case: 7h work, 4h focus, medium energy = ~50
- * calculateSustainabilityScore(240, 420, 600, 2) // Returns ~52
+ * // Target case: 7h work, 4h focus, medium energy
+ * calculateSustainabilityScore(240, 420, 2) // Returns ~49
  *
  * @example
- * // Excessive focus (5h): exponential penalty vs 4h
- * calculateSustainabilityScore(300, 420, 600, 2) // Returns ~48 (lower than 4h)
+ * // Excessive focus (6h): exponential penalty vs 4h
+ * calculateSustainabilityScore(360, 420, 2) // Returns ~47 (lower than 4h)
  *
  * @example
  * // Good energy, reasonable hours, optimal focus = high score
- * calculateSustainabilityScore(240, 420, 600, 3) // Returns ~73
+ * calculateSustainabilityScore(240, 420, 3) // Returns ~72
  */
 export const calculateSustainabilityScore = (
   focusedMinutes: number,
   totalWorkMinutes: number,
-  workloadLinearZeroAt: number = TIME_TARGETS.DEFAULT_WORKLOAD_LINEAR_ZERO_AT,
   energyCheckin?: number,
 ): number => {
-  // Freshness: Energy level normalized to 0-1
-  // Priority: energyCheckin (simpler) > exhaustion (detailed) > neutral fallback
+  // Freshness: Energy level normalized to 0-1 (neutral fallback when missing)
   let freshness = DEFAULTS.FRESHNESS_NEUTRAL;
   if (energyCheckin !== undefined) {
     // energyCheckin: 1=exhausted, 2=ok, 3=good → (value-1)/2 → 0, 0.5, 1

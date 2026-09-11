@@ -532,7 +532,7 @@ export const addTaskToPlannerDay = (
  * not by task.tagIds. This helper cleans up legacy data and ensures the
  * invariant that TODAY_TAG should NEVER be in task.tagIds.
  *
- * See: docs/ai/today-tag-architecture.md
+ * See: ARCHITECTURE-DECISIONS.md Decision #2
  *
  * @param tagIds Current task tagIds
  * @returns Updated tagIds with TODAY_TAG removed, or original if not present

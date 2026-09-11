@@ -11,6 +11,7 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { SnackService } from '../../../core/snack/snack.service';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { LocalDraftService } from '../../../core/draft/local-draft.service';
 import { GlobalConfigState } from '../../config/global-config.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { INBOX_PROJECT } from '../project.const';
@@ -20,6 +21,7 @@ describe('ProjectEffects', () => {
   let actions$: Subject<any>;
   let store: MockStore;
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
+  let localDraftServiceSpy: jasmine.SpyObj<LocalDraftService>;
   let globalConfigServiceMock: {
     cfg: jasmine.Spy;
     updateSection: jasmine.Spy;
@@ -37,6 +39,7 @@ describe('ProjectEffects', () => {
     actions$ = new Subject<any>();
 
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
+    localDraftServiceSpy = jasmine.createSpyObj('LocalDraftService', ['clearDraft']);
     globalConfigServiceMock = {
       cfg: jasmine.createSpy('cfg').and.returnValue(createConfigState()),
       updateSection: jasmine.createSpy('updateSection'),
@@ -49,6 +52,7 @@ describe('ProjectEffects', () => {
         provideMockStore(),
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: GlobalConfigService, useValue: globalConfigServiceMock },
+        { provide: LocalDraftService, useValue: localDraftServiceSpy },
         { provide: LOCAL_ACTIONS, useValue: actions$ },
       ],
     });
@@ -59,6 +63,24 @@ describe('ProjectEffects', () => {
 
   afterEach(() => {
     store.resetSelectors();
+  });
+
+  describe('clearNoteDraftsOnProjectDelete', () => {
+    it('clears the drafts of the deleted project notes', (done) => {
+      effects.clearNoteDraftsOnProjectDelete.subscribe(() => {
+        expect(localDraftServiceSpy.clearDraft).toHaveBeenCalledWith('NOTE', 'n1');
+        expect(localDraftServiceSpy.clearDraft).toHaveBeenCalledWith('NOTE', 'n2');
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.deleteProject({
+          projectId: 'project-1',
+          noteIds: ['n1', 'n2'],
+          allTaskIds: [],
+        }),
+      );
+    });
   });
 
   describe('deleteProjectRelatedData', () => {

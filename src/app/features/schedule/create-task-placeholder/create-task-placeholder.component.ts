@@ -127,19 +127,6 @@ export class CreateTaskPlaceholderComponent implements OnDestroy {
     this._clearTimeouts();
     this.editEnd.emit();
   }
-  onTaskChange(taskOrTaskTitle: Task | string): void {
-    this.isCreate.set(typeof taskOrTaskTitle === 'string');
-
-    if (this.isCreate()) {
-      // New task creation
-      this.newTaskTitle.set(taskOrTaskTitle as string);
-      this.selectedTask.set(null);
-    } else {
-      // Existing task selection
-      this.selectedTask.set(taskOrTaskTitle as Task);
-      this.newTaskTitle.set('');
-    }
-  }
 
   async onTaskSelected(task: Task): Promise<void> {
     this._setState('Selecting');

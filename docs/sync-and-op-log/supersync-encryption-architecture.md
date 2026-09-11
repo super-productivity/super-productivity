@@ -2,7 +2,10 @@
 
 ## Overview
 
-SuperSync uses **AES-256-GCM** encryption with **Argon2id** key derivation for end-to-end encryption (E2EE). The server never sees plaintext data - all encryption/decryption happens client-side.
+SuperSync uses **AES-256-GCM** encryption with **Argon2id** key derivation for
+end-to-end encryption (E2EE). Operation payload encryption/decryption happens
+client-side. The server still sees the plaintext operation envelope metadata
+described under [Security Properties](#security-properties).
 
 ## Encryption Flow Diagram
 
@@ -159,81 +162,101 @@ SuperSync uses **AES-256-GCM** encryption with **Argon2id** key derivation for e
 
 ### 1. OperationEncryptionService
 
-**Location**: `src/app/op-log/sync/operation-encryption.service.ts`
+[`OperationEncryptionService`](../../src/app/op-log/sync/operation-encryption.service.ts)
+owns operation and snapshot payload encryption. Its current contract is more
+than an encrypt/decrypt round trip:
 
-```typescript
-// Encrypt before upload
-async encryptOperation(op: SyncOperation, encryptKey: string): Promise<SyncOperation> {
-  const payloadStr = JSON.stringify(op.payload);
-  const encryptedPayload = await encrypt(payloadStr, encryptKey);
-  return { ...op, payload: encryptedPayload, isPayloadEncrypted: true };
-}
-
-// Decrypt after download
-async decryptOperation(op: SyncOperation, encryptKey: string): Promise<SyncOperation> {
-  if (!op.isPayloadEncrypted) return op;
-  const decryptedStr = await decrypt(op.payload, encryptKey);
-  return { ...op, payload: JSON.parse(decryptedStr), isPayloadEncrypted: false };
-}
-```
+- Upload encrypts the JSON payload and marks the resulting operation encrypted.
+- Download authenticates and decrypts the ciphertext, parses the payload, and
+  then checks the unauthenticated envelope against authenticated payload data
+  before returning an operation for application.
+- LWW target/footprint mismatches and a plaintext `opType` that promotes a
+  non-full-state payload to a full-state operation fail closed. The executable
+  checks live in
+  [`verify-decrypted-op-integrity.ts`](../../src/app/op-log/sync/verify-decrypted-op-integrity.ts);
+  its specs define the accepted legacy and full-state shapes.
 
 ### 2. Encryption Algorithm
 
-**Location**: `src/app/pfapi/api/encryption/encryption.ts`
+**Location**: `packages/sync-core/src/encryption.ts` and its
+`packages/sync-core/src/encryption/` collaborators.
 
 - **Algorithm**: AES-256-GCM (Galois/Counter Mode)
 - **Key Derivation**: Argon2id (memory-hard, resistant to GPU attacks)
-- **Salt**: Random 16 bytes per encryption
-- **IV**: Random 12 bytes per encryption
-- **Output Format**: `salt || iv || ciphertext || authTag` (base64 encoded)
+- **Salt**: Random 16 bytes when a password's session encrypt key is derived;
+  reused with that cached key for the process session
+- **IV**: Fresh random 12 bytes per encrypted payload
+- **Output Format**: `salt || iv || (AES-GCM ciphertext + authTag)` (base64
+  encoded)
+
+The session-stable salt amortizes the expensive Argon2id derivation across
+operations. AES-GCM safety under that fixed derived key depends on the fresh IV
+remaining unique for every encrypted payload.
 
 ### 3. Upload Integration
 
-**Location**: `src/app/op-log/sync/operation-log-upload.service.ts`
+[`OperationLogUploadService`](../../src/app/op-log/sync/operation-log-upload.service.ts)
+gets the key through the provider contract and encrypts operation and snapshot
+payloads before transport. The upload boundary is fail-closed:
 
-```typescript
-// Check if encryption is enabled
-const privateCfg = await syncProvider.privateCfg.load();
-const isEncryptionEnabled = privateCfg?.isEncryptionEnabled && !!privateCfg?.encryptKey;
+- A provider that mandates E2EE (SuperSync) cannot upload pending operations or
+  snapshots without a usable key. Pending work remains unsynced for a later
+  encrypted retry, and the result reports that encryption setup is incomplete.
+- A file provider whose configuration says encryption is enabled but whose key
+  is missing throws before upload instead of falling back to plaintext.
+- The file-format encryption chokepoint independently enforces the same
+  no-key/no-upload rule in
+  [`encrypt-and-compress-handler.service.ts`](../../src/app/op-log/encryption/encrypt-and-compress-handler.service.ts).
 
-// Encrypt if enabled
-if (isEncryptionEnabled && encryptKey) {
-  syncOps = await this.encryptionService.encryptOperations(syncOps, encryptKey);
-}
-```
+Regression coverage lives in
+[`operation-log-upload.service.spec.ts`](../../src/app/op-log/sync/operation-log-upload.service.spec.ts)
+and
+[`encrypt-and-compress-handler.service.spec.ts`](../../src/app/op-log/encryption/encrypt-and-compress-handler.service.spec.ts).
 
 ### 4. Download Integration
 
-**Location**: `src/app/op-log/sync/operation-log-download.service.ts`
+[`OperationLogDownloadService`](../../src/app/op-log/sync/operation-log-download.service.ts)
+screens downloaded operations before application; the upload service applies
+the same inbound checks to piggybacked operations:
 
-```typescript
-// Decrypt if encrypted
-const hasEncryptedOps = ops.some((op) => op.isPayloadEncrypted);
-if (hasEncryptedOps && encryptKey) {
-  ops = await this.encryptionService.decryptOperations(ops, encryptKey);
-}
-```
+- If SuperSync configuration expects encryption, any plaintext inbound
+  operation rejects its batch. This prevents a forged
+  `isPayloadEncrypted=false` flag from bypassing decryption and all
+  post-decrypt checks; the focused owner is
+  [`assert-ops-encryption-expected.ts`](../../src/app/op-log/sync/assert-ops-encryption-expected.ts).
+- Encrypted input without a key raises the password-recovery error; it is never
+  treated as plaintext.
+- Successful AES-GCM authentication is followed by payload parsing and the
+  metadata/full-state checks described above. Decrypted operations are not
+  released to the apply pipeline first.
 
 ## Configuration Storage
 
-The encryption password is stored in the **private config** (not synced):
-
-```
-privateCfg: {
-  isEncryptionEnabled: true,
-  encryptKey: "user's password"  // Stored locally, never sent to server
-}
-```
+The encryption password/key is stored only in provider **private config**; it is
+not part of synced application state and is never sent to the server. Encryption
+intent is also stored in private config, but is mirrored to
+`globalConfig.sync.isEncryptionEnabled` so the sync pipeline can fail closed.
+That intent bit may travel inside an operation or snapshot payload, but remote
+values are non-authoritative: hydration reapplies the device's local value. The
+credential store and provider expose intent separately from key presence so a
+dropped key cannot silently turn an encrypted configuration into a plaintext
+one. Follow
+[`credential-store.service.ts`](../../src/app/op-log/sync-providers/credential-store.service.ts),
+[`provider-types.ts`](../../packages/sync-providers/src/provider-types.ts), and
+the concrete
+[`SuperSyncProvider`](../../packages/sync-providers/src/super-sync/super-sync.ts)
+instead of copying the private-config shape into new code.
 
 ## Security Properties
 
-| Property            | Guarantee                                       |
-| ------------------- | ----------------------------------------------- |
-| **Confidentiality** | Server cannot read operation payloads           |
-| **Integrity**       | GCM auth tag detects tampering of the _payload_ |
-| **Key Security**    | Argon2id makes brute-force expensive            |
-| **Forward Secrecy** | Each operation uses random IV                   |
-| **Wrong Password**  | Decryption fails, operation rejected            |
+| Property              | Guarantee                                                          |
+| --------------------- | ------------------------------------------------------------------ |
+| **Confidentiality**   | Server cannot read operation payloads                              |
+| **Payload integrity** | GCM auth tag detects tampering of the encrypted payload            |
+| **Key security**      | Argon2id makes password brute-force attempts expensive             |
+| **Nonce uniqueness**  | Each encrypted payload uses a fresh random IV under the cached key |
+| **Forward secrecy**   | Not provided; IV uniqueness is not forward secrecy                 |
+| **Wrong password**    | Decryption fails and the operation is rejected                     |
 
 > **Integrity scope (important).** Only `op.payload` is encrypted and covered by
 > the AES-GCM authentication tag. Every other operation field — `actionType`,
@@ -241,7 +264,7 @@ privateCfg: {
 > `schemaVersion`, `syncImportReason`, **and the `isPayloadEncrypted` flag
 > itself** — travels as **plaintext** and is **not** bound as Additional
 > Authenticated Data (AAD), so a malicious/compromised sync server or a TLS MITM
-> can tamper with it. As **defense-in-depth**, the client fails closed on three
+> can tamper with it. As **defense-in-depth**, the client fails closed on four
 > tamper vectors:
 >
 > - **Plaintext-injection downgrade:** a forged op with `isPayloadEncrypted=false`
@@ -255,9 +278,19 @@ privateCfg: {
 >   rests on the server contract that `deleteAllData()` removes every downloadable
 >   plaintext op. This is the SuperSync op-level twin of the file-based GHSA-vrc7
 >   download guard and the GHSA-9544 _upload_ guard.
-> - **LWW `entityId` retarget:** the client rejects an _encrypted_ LWW-update op
->   whose authenticated `payload.id` does not equal `op.entityId`
->   (`verify-decrypted-op-integrity.ts`).
+> - **LWW `entityId` retarget:** for adapter-backed LWW updates, where
+>   `payload.id` selects the entity the reducer applies, the client rejects an
+>   _encrypted_ op whose authenticated `payload.id` does not equal
+>   `op.entityId` (`verify-decrypted-op-integrity.ts`). Singleton LWW actions
+>   target their registered feature state as a whole, so contextual conflict
+>   IDs such as TIME_TRACKING's composite key have no canonical payload `id`.
+> - **Project-move footprint injection:** when an encrypted TASK project-move
+>   payload carries `projectMoveSubTaskIds`, the client requires exact-set
+>   equality between plaintext `op.entityIds` and the authenticated set
+>   `{op.entityId} ∪ projectMoveSubTaskIds`. This prevents a compromised server
+>   from appending victim task IDs to an otherwise valid move. Synthetic LWW
+>   operations without an authenticated footprint cannot be checked by this
+>   interim guard; binding the full envelope as GCM AAD remains the durable fix.
 > - **Full-state `opType` promotion:** after decrypting an operation tagged as
 >   `SYNC_IMPORT`, `BACKUP_IMPORT`, or `REPAIR`, the client structurally validates
 >   the authenticated payload as complete application data before the metadata can
@@ -279,7 +312,14 @@ privateCfg: {
 >
 > Known limitation: a peer running an app version that predates the GHSA-9544
 > _upload_ guard can still push plaintext ops; a keyed client then fails closed
-> here with the tamper message. Recovery is to update the old peer.
+> here with the tamper message. Keep older peers offline and update them before
+> they sync again. If an updated client has a verified complete copy, export a
+> backup and use its explicit **Force Overwrite** action to replace the mixed
+> history with an encrypted clean-slate full state. Never run that action from a
+> fresh or incomplete client. If no verified complete client remains, preserve
+> the database and clients for incident recovery; do not skip the row or advance
+> a cursor past it. See
+> [`backup-and-recovery.md`](../../packages/super-sync-server/docs/backup-and-recovery.md#recovering-a-mixed-encryptedplaintext-history).
 >
 > Full protection — binding the metadata (and the encryption flag) as GCM AAD
 > behind an envelope-version migration, with a monotonic "encryption floor" to
@@ -338,19 +378,22 @@ Sync error shown in UI
 
 ## Snapshot Encryption
 
-Full-state operations (backup import, repair) use the snapshot endpoint but follow the same encryption:
+Full-state operations (backup import and repair) use the snapshot endpoint but
+retain the same fail-closed boundary. The upload service validates the
+full-state structure before transport, encrypts the payload when a key is
+present, and cannot reach the snapshot upload branch for a
+mandatory-encryption provider with pending work but no key. On download, an
+encrypted full-state operation is accepted only after AES-GCM authentication
+and `assertDecryptedFullStateOpIntegrity()` validates it as complete
+application data (including supported legacy migration on a validation copy).
 
-```typescript
-// In operation-log-upload.service.ts
-if (encryptKey) {
-  state = await this.encryptionService.encryptPayload(state, encryptKey);
-}
-await syncProvider.uploadSnapshot(
-  state,
-  clientId,
-  reason,
-  vectorClock,
-  schemaVersion,
-  isPayloadEncrypted,
-);
-```
+Executable owners:
+
+- Upload routing and mandatory-key guard:
+  [`operation-log-upload.service.ts`](../../src/app/op-log/sync/operation-log-upload.service.ts)
+- Payload crypto and post-decrypt dispatch boundary:
+  [`operation-encryption.service.ts`](../../src/app/op-log/sync/operation-encryption.service.ts)
+- Full-state integrity validation:
+  [`verify-decrypted-op-integrity.ts`](../../src/app/op-log/sync/verify-decrypted-op-integrity.ts)
+- Full-state regression coverage:
+  [`verify-decrypted-op-integrity.spec.ts`](../../src/app/op-log/sync/verify-decrypted-op-integrity.spec.ts)

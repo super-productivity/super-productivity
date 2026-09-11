@@ -61,6 +61,15 @@ describe('LayoutService', () => {
     mockStore = TestBed.inject(Store) as jasmine.SpyObj<Store>;
   });
 
+  it('uses the same exclusive max-width boundaries as the shared SCSS breakpoints', () => {
+    const breakpointObserver = TestBed.inject(
+      BreakpointObserver,
+    ) as jasmine.SpyObj<BreakpointObserver>;
+
+    expect(breakpointObserver.observe).toHaveBeenCalledWith('(max-width: 599px)');
+    expect(breakpointObserver.observe).toHaveBeenCalledWith('(max-width: 397px)');
+  });
+
   describe('Focus restoration', () => {
     let mockTaskElement: HTMLElement;
 

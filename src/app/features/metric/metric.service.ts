@@ -333,7 +333,6 @@ export class MetricService {
     return calculateSustainabilityScore(
       focusedMinutes,
       totalWorkMinutes,
-      600,
       metric.energyCheckin,
     );
   }

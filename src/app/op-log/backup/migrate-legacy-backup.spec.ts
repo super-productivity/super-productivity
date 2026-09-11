@@ -6,6 +6,7 @@ import { validateFull } from '../validation/validation-fn';
 import { AppDataComplete, MODEL_CONFIGS } from '../model/model-config';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import fixture from './test-fixtures/legacy-v10-backup.json';
+import { getDbDateStr } from '../../util/get-db-date-str';
 
 /**
  * Creates a minimal v10-era legacy backup structure.
@@ -390,6 +391,37 @@ describe('migrate-legacy-backup', () => {
       const task = result.task.entities['task-1'];
       expect(task.dueWithTime).toBe(1704110400000);
       expect(task.plannedAt).toBeUndefined();
+    });
+
+    // #7645: this is the one raw caller of getStartOfNextDayDiffMs -- it feeds
+    // un-normalized config straight in and uses the resulting todayStr to assign
+    // dueDay / evict tasks from TODAY_TAG. v18.5.0-v18.6.x could persist
+    // `{ startOfNextDayTime: '24:00', startOfNextDay: 23 }`, which resolved to a
+    // ~24h offset and put the whole import on yesterday.
+    it('should not shift the day boundary for a poisoned start-of-next-day pair (#7645)', () => {
+      const data = createLegacyBackup();
+      data.globalConfig.misc.startOfNextDayTime = '24:00';
+      data.globalConfig.misc.startOfNextDay = 23;
+      data.tag.entities.TODAY.taskIds = ['task-1'];
+
+      const result = migrateLegacyBackup(data) as any;
+
+      expect(result.tag.entities.TODAY.taskIds).toEqual(['task-1']);
+      expect(result.task.entities['task-1'].dueDay).toBe(getDbDateStr(new Date()));
+    });
+
+    const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+
+    it('should honour a genuine legacy start-of-next-day hour without a time string', () => {
+      const data = createLegacyBackup();
+      data.globalConfig.misc.startOfNextDay = 4;
+      data.tag.entities.TODAY.taskIds = ['task-1'];
+
+      const result = migrateLegacyBackup(data) as any;
+
+      expect(result.task.entities['task-1'].dueDay).toBe(
+        getDbDateStr(new Date(Date.now() - FOUR_HOURS_MS)),
+      );
     });
 
     it('should migrate legacy task reminders to task.remindAt', () => {

@@ -36,6 +36,7 @@ import { INBOX_PROJECT } from '../../features/project/project.const';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { appStateFeatureKey } from '../../root-store/app-state/app-state.reducer';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { UnsupportedMultiEntityConflictError } from '../core/errors/sync-errors';
 
 /**
  * Minimal RootState for exercising the PRODUCTION `lwwUpdateMetaReducer` on a
@@ -401,6 +402,90 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     expect(rejected).toContain('remote-rename');
   });
 
+  // ── (a0b) #9776 follow-up: a cleared field must survive the disjoint merge ──
+  // The clear op arrives over the wire with its undefined-valued key dropped by
+  // JSON and only the out-of-band `clearedFields` marking it. Pre-fix the
+  // receiver classified it as opaque (no merge → whole-entity LWW) while the
+  // author merged — divergent strategies for the same conflict — and even the
+  // author's merged op lost the clear on upload (no `clearedFields` on the
+  // synthesized payload).
+  it('(a0b) merges a wire-shape field clear with a disjoint edit and re-lists the clear', async () => {
+    mockStore.select.and.returnValue(
+      of({ id: 'task-1', title: 'Local title', _hideSubTasksMode: undefined }),
+    );
+
+    const localOp = op({
+      id: 'local-title',
+      clientId: 'A',
+      vectorClock: { A: 1 },
+      timestamp: 2000,
+      payload: { task: { id: 'task-1', changes: { title: 'Local title' } } },
+    });
+    // Remote clear exactly as it comes off the wire: `changes` lost the
+    // undefined-valued key to JSON serialization; `clearedFields` survives.
+    const remoteOp: Operation = JSON.parse(
+      JSON.stringify(
+        op({
+          id: 'remote-clear',
+          clientId: 'B',
+          vectorClock: { B: 1 },
+          timestamp: 1000,
+          payload: {
+            actionPayload: {
+              task: { id: 'task-1', changes: { _hideSubTasksMode: undefined } },
+              clearedFields: ['_hideSubTasksMode'],
+            },
+            entityChanges: [],
+          },
+        }),
+      ),
+    );
+
+    await service.autoResolveConflictsLWW([conflictOf([localOp], [remoteOp])]);
+
+    const merged = mergedOpArgs();
+    expect(merged).toBeDefined();
+    const payload = extractActionPayload(merged!.payload);
+    expect(payload['title']).toBe('Local title');
+    // The clear is present in the delta AND re-listed out-of-band so it
+    // survives the merged op's own JSON upload.
+    expect(Object.keys(payload)).toContain('_hideSubTasksMode');
+    expect(payload['_hideSubTasksMode']).toBeUndefined();
+    expect((merged!.payload as { clearedFields?: string[] }).clearedFields).toEqual([
+      '_hideSubTasksMode',
+    ]);
+    expect((merged!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe('patch');
+
+    const rejected = mockOpLogStore.markRejected.calls.allArgs().flat(2);
+    expect(rejected).toContain('local-title');
+    expect(rejected).toContain('remote-clear');
+  });
+
+  // ── (a0c) clearedFields is scoped to disjoint merges ──
+  // Other patch-mode producers build payloads from live state, where an
+  // undefined-valued key is an accident of the object literal (e.g.
+  // taskRelationshipPatch materializes `parentId: undefined` for every root
+  // task), NOT a user intent. Listing those as clears would broadcast an
+  // explicit `parentId` clear on 100% of relationship patches and force-detach
+  // concurrently-created subtask links on receivers.
+  it('(a0c) does NOT list clearedFields on non-merge patch ops with accidental undefined keys', () => {
+    const opResult = service.createLWWUpdateOp(
+      'TASK',
+      'task-1',
+      // Shape of taskRelationshipPatch for a root task: parentId materialized
+      // but undefined.
+      { id: 'task-1', projectId: 'p1', parentId: undefined, subTaskIds: ['sub-1'] },
+      'clientA',
+      { clientA: 1 },
+      1000,
+      'patch',
+    );
+
+    expect(
+      (opResult.payload as { clearedFields?: string[] }).clearedFields,
+    ).toBeUndefined();
+  });
+
   it('(a1) fails closed before mutating the op log for a legacy remote bulk op', async () => {
     mockStore.select.and.returnValue(
       of({ id: 'task-2', title: 'Local title', timeSpent: 0 }),
@@ -447,7 +532,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
 
     await expectAsync(
       service.autoResolveConflictsLWW([conflictOf([localOp], [remoteBulkOp], 'task-2')]),
-    ).toBeRejectedWithError(/Cannot safely auto-resolve remote multi-entity operation/);
+    ).toBeRejectedWithError(UnsupportedMultiEntityConflictError);
 
     expect(mergedOpArgs('task-2')).toBeUndefined();
     expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalled();
@@ -810,7 +895,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
 
     await expectAsync(
       service.autoResolveConflictsLWW([conflictOf([localBulkOp], [remoteOp], 'task-2')]),
-    ).toBeRejectedWithError(/Cannot safely auto-resolve local multi-entity operation/);
+    ).toBeRejectedWithError(UnsupportedMultiEntityConflictError);
 
     expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalled();
     expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
@@ -1101,7 +1186,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
 
     await expectAsync(
       service.autoResolveConflictsLWW([conflictOf([localOp], [remoteOp])]),
-    ).toBeRejectedWithError(/Cannot safely auto-resolve remote multi-entity operation/);
+    ).toBeRejectedWithError(UnsupportedMultiEntityConflictError);
     expect(mergedOpArgs()).toBeUndefined();
     expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     expect(await journal.list('history')).toEqual([]);

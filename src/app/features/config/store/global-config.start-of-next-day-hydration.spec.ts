@@ -26,7 +26,6 @@ import { AppStateActions } from '../../../root-store/app-state/app-state.actions
 import { selectStartOfNextDayDiffMs } from '../../../root-store/app-state/app-state.selectors';
 import { LanguageService } from '../../../core/language/language.service';
 import { SnackService } from '../../../core/snack/snack.service';
-import { UserProfileService } from '../../user-profile/user-profile.service';
 import { KeyboardLayoutService } from '../../../core/keyboard-layout/keyboard-layout.service';
 import { IS_ELECTRON_TOKEN } from '../../../app.constants';
 import { IS_MAC_TOKEN } from '../../../util/is-mac';
@@ -118,10 +117,6 @@ describe('start-of-next-day offset across operation replay', () => {
           useValue: { setLng: (): void => undefined, tryAutoswitch: (): boolean => true },
         },
         { provide: SnackService, useValue: { open: (): void => undefined } },
-        {
-          provide: UserProfileService,
-          useValue: { migrateOnFirstEnable: (): Promise<void> => Promise.resolve() },
-        },
         { provide: KeyboardLayoutService, useValue: new KeyboardLayoutService() },
         { provide: IS_ELECTRON_TOKEN, useValue: false },
         { provide: IS_MAC_TOKEN, useValue: false },

@@ -16,7 +16,7 @@ import {
  * This pattern keeps the work context system simple while separating
  * "today" ordering (TODAY_TAG.taskIds) from future days (planner.days).
  *
- * See: docs/ai/today-tag-architecture.md
+ * See: ARCHITECTURE-DECISIONS.md Decision #2
  */
 export const TODAY_TAG: Tag = {
   color: null,

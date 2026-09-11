@@ -299,7 +299,7 @@ const handlePlanForDay = (
   if (isForToday) {
     // Adding to today - update TODAY_TAG.taskIds for ordering
     // IMPORTANT: TODAY_TAG should NEVER be in task.tagIds (virtual tag pattern)
-    // Membership is determined by task.dueDay. See: docs/ai/today-tag-architecture.md
+    // Membership is determined by task.dueDay. See: ARCHITECTURE-DECISIONS.md Decision #2
     const newTagTaskIds = unique(
       isAddToTop
         ? [task.id, ...todayTag.taskIds.filter((tid) => tid !== task.id)]

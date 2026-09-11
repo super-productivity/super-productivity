@@ -6,13 +6,17 @@ import { SnackService } from '../../core/snack/snack.service';
 import {
   SyncProviderBase,
   OperationSyncCapable,
+  SyncOperation,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { ActionType, OpType } from '../core/operation.types';
 import { CLOCK_DRIFT_THRESHOLD_MS } from '../core/operation-log.const';
 import { OpLog } from '../../core/log';
 import { T } from '../../t.const';
-import { OperationEncryptionService } from './operation-encryption.service';
+import {
+  OperationDecryptionError,
+  OperationEncryptionService,
+} from './operation-encryption.service';
 import { SuperSyncStatusService } from './super-sync-status.service';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { OperationIntegrityError } from '../core/errors/sync-errors';
@@ -30,6 +34,7 @@ describe('OperationLogDownloadService', () => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'getAppliedOpIds',
       'hasSyncedOps',
+      'getVectorClock',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
@@ -56,6 +61,7 @@ describe('OperationLogDownloadService', () => {
     });
     mockOpLogStore.getAppliedOpIds.and.returnValue(Promise.resolve(new Set<string>()));
     mockOpLogStore.hasSyncedOps.and.returnValue(Promise.resolve(false));
+    mockOpLogStore.getVectorClock.and.returnValue(Promise.resolve(null));
 
     TestBed.configureTestingModule({
       providers: [
@@ -111,6 +117,40 @@ describe('OperationLogDownloadService', () => {
         await service.downloadRemoteOps(mockApiProvider);
 
         expect(mockApiProvider.downloadOps).toHaveBeenCalled();
+      });
+
+      it('should hand an op with an unknown opType to the receiver instead of failing the page (#8764)', async () => {
+        const op = (id: string, opType: string): SyncOperation => ({
+          id,
+          clientId: 'other-client',
+          actionType: '[Task] Add' as ActionType,
+          opType: opType as OpType,
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: {},
+          vectorClock: { otherClient: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        });
+        mockApiProvider.downloadOps.and.returnValue(
+          Promise.resolve({
+            ops: [
+              { serverSeq: 1, receivedAt: Date.now(), op: op('op-known', OpType.Create) },
+              { serverSeq: 2, receivedAt: Date.now(), op: op('op-future', 'FUTURE_OP') },
+            ],
+            hasMore: false,
+            latestSeq: 2,
+          }),
+        );
+
+        const result = await service.downloadRemoteOps(mockApiProvider);
+
+        expect(result.success).toBeTrue();
+        expect(result.newOps.map((o) => o.id)).toEqual(['op-known', 'op-future']);
+        expect(result.newOps[1].opType as string).toBe('FUTURE_OP');
+        // The download layer never advances the cursor; that decision belongs
+        // to the caller after RemoteOpsProcessingService reports the block.
+        expect(mockApiProvider.setLastServerSeq).not.toHaveBeenCalled();
       });
 
       describe('encrypted ops with no key — log severity (Fix B)', () => {
@@ -195,6 +235,257 @@ describe('OperationLogDownloadService', () => {
             jasmine.stringMatching(NO_KEY_MSG),
           );
         });
+      });
+
+      it('logs only safe identifiers for an attributable encrypted-operation failure', async () => {
+        const errorSpy = spyOn(OpLog, 'error');
+        const diagnosticError = new OperationDecryptionError({
+          encryptedOperationCount: 2,
+          decryptedCount: 1,
+          parsedCount: 1,
+          passwordEvidence: 'confirmed-for-some-operations',
+          failures: [
+            { operationId: 'op-corrupt', encryptedBatchIndex: 1, stage: 'decrypt' },
+          ],
+        });
+        mockApiProvider.getEncryptKey = jasmine
+          .createSpy('getEncryptKey')
+          .and.returnValue(Promise.resolve('private-encryption-key'));
+        mockApiProvider.downloadOps.and.returnValue(
+          Promise.resolve({
+            ops: [
+              // Duplicate the untrusted ID so only the encrypted batch index can
+              // map the failure to the correct server sequence.
+              {
+                serverSeq: 41,
+                receivedAt: Date.now(),
+                op: {
+                  id: 'op-corrupt',
+                  clientId: 'c1',
+                  actionType: '[Task] Add' as ActionType,
+                  opType: OpType.Create,
+                  entityType: 'TASK',
+                  payload: 'private-earlier-encrypted-payload',
+                  isPayloadEncrypted: true,
+                  vectorClock: {},
+                  timestamp: Date.now(),
+                  schemaVersion: 1,
+                },
+              },
+              {
+                serverSeq: 42,
+                receivedAt: Date.now(),
+                op: {
+                  id: 'op-corrupt',
+                  clientId: 'c1',
+                  actionType: '[Task] Add' as ActionType,
+                  opType: OpType.Create,
+                  entityType: 'TASK',
+                  payload: 'private-encrypted-payload',
+                  isPayloadEncrypted: true,
+                  vectorClock: {},
+                  timestamp: Date.now(),
+                  schemaVersion: 1,
+                },
+              },
+            ],
+            hasMore: false,
+            latestSeq: 42,
+          }),
+        );
+        mockEncryptionService.decryptOperations.and.rejectWith(diagnosticError);
+
+        await expectAsync(service.downloadRemoteOps(mockApiProvider)).toBeRejectedWith(
+          diagnosticError,
+        );
+
+        expect(errorSpy).toHaveBeenCalledWith(
+          'OperationLogDownloadService: Encrypted operation batch could not be processed.',
+          {
+            encryptedOperationCount: 2,
+            decryptedCount: 1,
+            parsedCount: 1,
+            decryptedOpsInEarlierBatches: 0,
+            passwordEvidence: 'confirmed-for-some-operations',
+            failureCount: 1,
+          },
+          {
+            opId: 'op-corrupt',
+            encryptedBatchIndex: 1,
+            stage: 'decrypt',
+            serverSeq: 42,
+          },
+        );
+        const serializedLogCalls = JSON.stringify(errorSpy.calls.allArgs());
+        expect(serializedLogCalls).not.toContain('private-earlier-encrypted-payload');
+        expect(serializedLogCalls).not.toContain('private-encrypted-payload');
+        expect(serializedLogCalls).not.toContain('private-encryption-key');
+      });
+
+      it('carries decrypted ops from earlier pages as run-level password evidence', async () => {
+        const errorSpy = spyOn(OpLog, 'error');
+        const makeEncryptedServerOp = (
+          serverSeq: number,
+          id: string,
+        ): { serverSeq: number; receivedAt: number; op: SyncOperation } => ({
+          serverSeq,
+          receivedAt: Date.now(),
+          op: {
+            id,
+            clientId: 'c1',
+            actionType: '[Task] Add' as ActionType,
+            opType: OpType.Create,
+            entityType: 'TASK',
+            payload: `ciphertext-${id}`,
+            isPayloadEncrypted: true,
+            vectorClock: {},
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+        });
+        mockApiProvider.getEncryptKey = jasmine
+          .createSpy('getEncryptKey')
+          .and.returnValue(Promise.resolve('private-encryption-key'));
+        mockApiProvider.getLastServerSeq.and.returnValue(Promise.resolve(0));
+        mockApiProvider.downloadOps.and.returnValues(
+          Promise.resolve({
+            ops: [
+              makeEncryptedServerOp(1, 'op-page1-a'),
+              makeEncryptedServerOp(2, 'op-page1-b'),
+            ],
+            hasMore: true,
+            latestSeq: 3,
+          }),
+          Promise.resolve({
+            ops: [makeEncryptedServerOp(3, 'op-final')],
+            hasMore: false,
+            latestSeq: 3,
+          }),
+        );
+        // The failing batch alone decrypted nothing (the #9256 shape: a single
+        // corrupt op on the final page) — only the earlier page proves the key.
+        const diagnosticError = new OperationDecryptionError({
+          encryptedOperationCount: 1,
+          decryptedCount: 0,
+          parsedCount: 0,
+          passwordEvidence: 'no-operation-decrypted',
+          failures: [
+            { operationId: 'op-final', encryptedBatchIndex: 0, stage: 'decrypt' },
+          ],
+        });
+        mockEncryptionService.decryptOperations.and.callFake(async (ops) => {
+          if (ops.some((op) => op.id === 'op-final')) {
+            throw diagnosticError;
+          }
+          return ops.map((op) => ({
+            ...op,
+            payload: {},
+            isPayloadEncrypted: false,
+          }));
+        });
+
+        await expectAsync(service.downloadRemoteOps(mockApiProvider)).toBeRejectedWith(
+          diagnosticError,
+        );
+
+        expect(errorSpy).toHaveBeenCalledWith(
+          'OperationLogDownloadService: Encrypted operation batch could not be processed.',
+          jasmine.objectContaining({
+            decryptedOpsInEarlierBatches: 2,
+            passwordEvidence: 'confirmed-for-some-operations',
+            failureCount: 1,
+          }),
+          {
+            opId: 'op-final',
+            encryptedBatchIndex: 0,
+            stage: 'decrypt',
+            serverSeq: 3,
+          },
+        );
+      });
+
+      it('resets the earlier-batches evidence on gap reset because the key may change', async () => {
+        const errorSpy = spyOn(OpLog, 'error');
+        const makeEncryptedServerOp = (
+          serverSeq: number,
+          id: string,
+        ): { serverSeq: number; receivedAt: number; op: SyncOperation } => ({
+          serverSeq,
+          receivedAt: Date.now(),
+          op: {
+            id,
+            clientId: 'c1',
+            actionType: '[Task] Add' as ActionType,
+            opType: OpType.Create,
+            entityType: 'TASK',
+            payload: `ciphertext-${id}`,
+            isPayloadEncrypted: true,
+            vectorClock: {},
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+        });
+        mockApiProvider.getEncryptKey = jasmine
+          .createSpy('getEncryptKey')
+          .and.returnValue(Promise.resolve('private-encryption-key'));
+        mockApiProvider.getLastServerSeq.and.returnValue(Promise.resolve(100));
+        mockApiProvider.downloadOps.and.returnValues(
+          // Page decrypts fine → evidence counter reaches 2.
+          Promise.resolve({
+            ops: [
+              makeEncryptedServerOp(101, 'op-pre-gap-a'),
+              makeEncryptedServerOp(102, 'op-pre-gap-b'),
+            ],
+            hasMore: true,
+            latestSeq: 200,
+          }),
+          // Server signals a gap → reset branch re-fetches the key; pre-reset
+          // decrypts are no evidence for the key used after it.
+          Promise.resolve({
+            ops: [],
+            hasMore: false,
+            latestSeq: 1,
+            gapDetected: true,
+          }),
+          // Re-download from zero fails to decrypt.
+          Promise.resolve({
+            ops: [makeEncryptedServerOp(1, 'op-after-gap')],
+            hasMore: false,
+            latestSeq: 1,
+          }),
+        );
+        const diagnosticError = new OperationDecryptionError({
+          encryptedOperationCount: 1,
+          decryptedCount: 0,
+          parsedCount: 0,
+          passwordEvidence: 'no-operation-decrypted',
+          failures: [
+            { operationId: 'op-after-gap', encryptedBatchIndex: 0, stage: 'decrypt' },
+          ],
+        });
+        mockEncryptionService.decryptOperations.and.callFake(async (ops) => {
+          if (ops.some((op) => op.id === 'op-after-gap')) {
+            throw diagnosticError;
+          }
+          return ops.map((op) => ({
+            ...op,
+            payload: {},
+            isPayloadEncrypted: false,
+          }));
+        });
+
+        await expectAsync(service.downloadRemoteOps(mockApiProvider)).toBeRejectedWith(
+          diagnosticError,
+        );
+
+        expect(errorSpy).toHaveBeenCalledWith(
+          'OperationLogDownloadService: Encrypted operation batch could not be processed.',
+          jasmine.objectContaining({
+            decryptedOpsInEarlierBatches: 0,
+            passwordEvidence: 'no-operation-decrypted',
+          }),
+          jasmine.objectContaining({ opId: 'op-after-gap' }),
+        );
       });
 
       // GHSA-8pxh-mgc7-gp3g: reject an inbound plaintext op when SuperSync
@@ -1093,6 +1384,136 @@ describe('OperationLogDownloadService', () => {
 
           // No ops means no clocks to collect
           expect(result.allOpClocks).toBeUndefined();
+        });
+
+        describe('re-delivered ops already covered by the local vector clock', () => {
+          // A forced seq-0 download re-fetches everything after the server's latest
+          // full-state op. Ops that compaction already pruned from the local log are
+          // invisible to the applied-id filter, so without the clock filter an old
+          // SYNC_IMPORT resurfaces as a "new incoming import" on every
+          // concurrent-rejection retry and raises the conflict dialog.
+          const makeServerOp = (
+            serverSeq: number,
+            id: string,
+            clientId: string,
+            vectorClock: Record<string, number>,
+            opType: OpType = OpType.Update,
+          ): { serverSeq: number; receivedAt: number; op: SyncOperation } => ({
+            serverSeq,
+            receivedAt: Date.now(),
+            op: {
+              id,
+              clientId,
+              actionType: '[Task] Update' as ActionType,
+              opType,
+              entityType: 'TASK',
+              payload: {},
+              vectorClock,
+              timestamp: Date.now(),
+              schemaVersion: 1,
+            },
+          });
+          const serverOps = [
+            makeServerOp(
+              10,
+              'old-import',
+              'importClient',
+              { importClient: 3 },
+              OpType.SyncImport,
+            ),
+            makeServerOp(11, 'old-update', 'importClient', {
+              importClient: 40,
+              other: 2,
+            }),
+            makeServerOp(12, 'boundary-update', 'importClient', { importClient: 50 }),
+            makeServerOp(13, 'newer-update', 'importClient', { importClient: 51 }),
+            makeServerOp(14, 'unknown-client', 'clientX', { clientX: 1 }),
+            // Past the persisted cursor, so never processed here (e.g. blocked on a
+            // newer schema version) even though a resolver-merged clock covers it.
+            makeServerOp(15, 'beyond-cursor', 'importClient', { importClient: 45 }),
+          ];
+
+          beforeEach(() => {
+            mockOpLogStore.getVectorClock.and.returnValue(
+              Promise.resolve({ importClient: 50, ownClient: 10 }),
+            );
+            mockApiProvider.getLastServerSeq.and.returnValue(Promise.resolve(14));
+            mockApiProvider.downloadOps.and.returnValue(
+              Promise.resolve({ ops: serverOps, hasMore: false, latestSeq: 15 }),
+            );
+          });
+
+          it('should skip ops behind the cursor whose author counter the local clock covers, but keep their clocks', async () => {
+            const result = await service.downloadRemoteOps(mockApiProvider, {
+              forceFromSeq0: true,
+            });
+
+            expect(result.newOps.map((op) => op.id)).toEqual([
+              'newer-update',
+              'unknown-client',
+              'beyond-cursor',
+            ]);
+            // Rebuilding clock state is the point of the forced download
+            expect(result.allOpClocks!.length).toBe(6);
+          });
+
+          it('should deliver everything in raw-rebuild mode (includeOwnAndAppliedOps)', async () => {
+            const result = await service.downloadRemoteOps(mockApiProvider, {
+              forceFromSeq0: true,
+              includeOwnAndAppliedOps: true,
+            });
+
+            expect(result.newOps.length).toBe(6);
+          });
+
+          it('should leave the normal (non-forced) download untouched', async () => {
+            const result = await service.downloadRemoteOps(mockApiProvider);
+
+            expect(result.newOps.length).toBe(6);
+            expect(mockOpLogStore.getVectorClock).not.toHaveBeenCalled();
+          });
+
+          it('should deliver everything for file-based providers (synthetic serverSeq)', async () => {
+            mockApiProvider.providerMode = 'fileSnapshotOps';
+
+            const result = await service.downloadRemoteOps(mockApiProvider, {
+              forceFromSeq0: true,
+            });
+
+            expect(result.newOps.length).toBe(6);
+            expect(mockOpLogStore.getVectorClock).not.toHaveBeenCalled();
+          });
+
+          it('should stop filtering after a gap reset (new server epoch, stale cursor)', async () => {
+            // A gap means the server was reset or replaced, so the re-fetched ops
+            // carry seqs from a fresh epoch. The old cursor (14) would wrongly
+            // cover them and the clock check passes for the same authors, so
+            // without disabling the filter these are dropped and lost silently.
+            mockApiProvider.downloadOps.and.returnValues(
+              Promise.resolve({
+                ops: [],
+                hasMore: false,
+                latestSeq: 2,
+                gapDetected: true,
+              }),
+              Promise.resolve({
+                ops: [
+                  makeServerOp(1, 'fresh-a', 'importClient', { importClient: 3 }),
+                  makeServerOp(2, 'fresh-b', 'importClient', { importClient: 4 }),
+                ],
+                hasMore: false,
+                latestSeq: 2,
+                gapDetected: false,
+              }),
+            );
+
+            const result = await service.downloadRemoteOps(mockApiProvider, {
+              forceFromSeq0: true,
+            });
+
+            expect(mockApiProvider.downloadOps).toHaveBeenCalledTimes(2);
+            expect(result.newOps.map((op) => op.id)).toEqual(['fresh-a', 'fresh-b']);
+          });
         });
       });
 

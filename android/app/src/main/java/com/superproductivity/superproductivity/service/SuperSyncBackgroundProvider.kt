@@ -1,6 +1,7 @@
 package com.superproductivity.superproductivity.service
 
 import android.util.Log
+import com.superproductivity.superproductivity.crypto.OpPayloadDecryptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -16,8 +17,19 @@ import kotlin.math.abs
  * only TIME_TRACKING and CRT (addTask) ops populate it. For schedule/unschedule/
  * deadline actions, the actual data is in actionPayload. This provider uses
  * action-type matching to handle both paths.
+ *
+ * SuperSync encrypts op payloads end-to-end (mandatory since #8670), so the
+ * payload arrives as a base64 string, not JSON. [payloadDecryptor] makes those
+ * readable; without one (no E2EE password mirrored yet, e.g. old JS bundle)
+ * only the plaintext envelope fields (actionType/opType/entityId) are usable —
+ * cancels still work, schedules are skipped. The parameter has no default on
+ * purpose: passing null silently degrades to that envelope-only mode, so every
+ * construction site must make it an explicit decision (use
+ * [buildPayloadDecryptor]).
  */
-class SuperSyncBackgroundProvider : BackgroundSyncProvider {
+class SuperSyncBackgroundProvider(
+    private val payloadDecryptor: OpPayloadDecryptor?,
+) : BackgroundSyncProvider {
 
     companion object {
         private const val TAG = "SuperSyncBgProvider"
@@ -126,7 +138,7 @@ class SuperSyncBackgroundProvider : BackgroundSyncProvider {
         }
     }
 
-    private fun parseResponse(body: String): ReminderChangeResult {
+    internal fun parseResponse(body: String): ReminderChangeResult {
         val json = JSONObject(body)
         val ops = json.optJSONArray("ops")
             ?: return ReminderChangeResult(emptySet(), emptyList(), json.optLong("latestSeq", 0L), false)
@@ -144,17 +156,19 @@ class SuperSyncBackgroundProvider : BackgroundSyncProvider {
         for (i in 0 until ops.length()) {
             val serverOp = ops.getJSONObject(i)
             val op = serverOp.getJSONObject("op")
+            // Lazy so envelope-only ops (e.g. DEL) never pay for decryption
+            val payload = lazy(LazyThreadSafetyMode.NONE) { resolvePayload(op) }
 
             // Process schedules first so that within the same op, cancels take precedence
             val tempMap = mutableMapOf<Pair<String, Boolean>, ReminderToSchedule>()
-            extractRemindersToSchedule(op, tempMap, now)
+            extractRemindersToSchedule(op, payload, tempMap, now)
             for ((key, reminder) in tempMap) {
                 reminderMap[key] = reminder
                 taskLastAction[reminder.taskId] = "schedule"
             }
 
             val cancelIds = mutableSetOf<String>()
-            extractReminderRelevantTaskIds(op, cancelIds)
+            extractReminderRelevantTaskIds(op, payload, cancelIds)
             for (id in cancelIds) {
                 taskLastAction[id] = "cancel"
             }
@@ -175,14 +189,41 @@ class SuperSyncBackgroundProvider : BackgroundSyncProvider {
     }
 
     /**
+     * Resolves an op's payload to usable JSON: either the plaintext object
+     * directly, or — since payload E2EE became mandatory — the decrypted
+     * base64 string. Returns null when there is no payload or it can't be
+     * read (no decryptor, wrong password, corrupt data); callers then fall
+     * back to the plaintext envelope fields only.
+     */
+    private fun resolvePayload(op: JSONObject): JSONObject? {
+        // Discriminates by JSON type (object = plaintext, string = encrypted)
+        // rather than the op's isPayloadEncrypted flag — equivalent for every
+        // shipped format and robust when the optional flag is absent.
+        op.optJSONObject("payload")?.let { return it }
+        val decryptor = payloadDecryptor ?: return null
+        val encrypted = op.opt("payload") as? String ?: return null
+        val decrypted = decryptor.decrypt(encrypted) ?: return null
+        return try {
+            JSONObject(decrypted)
+        } catch (e: org.json.JSONException) {
+            Log.w(TAG, "Decrypted payload is not a JSON object, skipping op")
+            null
+        }
+    }
+
+    /**
      * Extracts task IDs from an operation if it represents a reminder-relevant change.
      * Server operation format:
      *   actionType = full NgRx action string, opType = "CRT"/"UPD"/"DEL",
      *   entityType = "TASK"/"PROJECT"/etc.,
      *   entityId = single ID, entityIds = batch IDs,
-     *   payload = { actionPayload: {...}, entityChanges: [...] }
+     *   payload = { actionPayload: {...}, entityChanges: [...] } (encrypted: base64 string)
      */
-    private fun extractReminderRelevantTaskIds(op: JSONObject, out: MutableSet<String>) {
+    private fun extractReminderRelevantTaskIds(
+        op: JSONObject,
+        payloadLazy: Lazy<JSONObject?>,
+        out: MutableSet<String>
+    ) {
         val entityType = op.optString("entityType", "")
         if (entityType != "TASK") return
 
@@ -215,7 +256,7 @@ class SuperSyncBackgroundProvider : BackgroundSyncProvider {
         // The payload structure is: payload.entityChanges[] with per-entity changes,
         // and payload.actionPayload with the original action payload.
         if (opType == "UPD") {
-            val payload = op.optJSONObject("payload") ?: return
+            val payload = payloadLazy.value ?: return
 
             // Primary: check entityChanges array (always present, consistent structure).
             // Each entry has: { entityType, entityId, opType, changes: { isDone, remindAt, ... } }
@@ -301,7 +342,12 @@ class SuperSyncBackgroundProvider : BackgroundSyncProvider {
      * 2. actionPayload — for schedule/reschedule/setDeadline actions where the op-log
      *    returns empty entityChanges and the reminder data is only in the action payload.
      */
-    private fun extractRemindersToSchedule(op: JSONObject, out: MutableMap<Pair<String, Boolean>, ReminderToSchedule>, now: Long) {
+    private fun extractRemindersToSchedule(
+        op: JSONObject,
+        payloadLazy: Lazy<JSONObject?>,
+        out: MutableMap<Pair<String, Boolean>, ReminderToSchedule>,
+        now: Long
+    ) {
         val entityType = op.optString("entityType", "")
         if (entityType != "TASK") return
 
@@ -309,7 +355,7 @@ class SuperSyncBackgroundProvider : BackgroundSyncProvider {
         // Only CRT and UPD operations can create/update reminders
         if (opType != "CRT" && opType != "UPD") return
 
-        val payload = op.optJSONObject("payload") ?: return
+        val payload = payloadLazy.value ?: return
         val actionType = op.optString("actionType", "")
 
         // Path 1: Check entityChanges (populated for CRT/addTask ops)

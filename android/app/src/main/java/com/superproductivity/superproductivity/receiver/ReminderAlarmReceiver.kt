@@ -7,6 +7,7 @@ import android.util.Log
 import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
 import com.superproductivity.superproductivity.service.SuperSyncBackgroundProvider
+import com.superproductivity.superproductivity.service.buildPayloadDecryptor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -44,7 +45,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         val isOngoing = intent.getBooleanExtra(EXTRA_IS_ONGOING, false)
         val triggerAtMs = intent.getLongExtra(EXTRA_TRIGGER_AT_MS, 0L)
 
-        Log.d(TAG, "Alarm triggered: id=$notificationId, title=$title, triggerAt=$triggerAtMs")
+        Log.d(TAG, "Alarm triggered: id=$notificationId, triggerAt=$triggerAtMs")
 
         val pendingResult = goAsync()
 
@@ -90,7 +91,11 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             context, credentials.baseUrl
         )
 
-        val result = SuperSyncBackgroundProvider().fetchQuick(
+        // Cache-only decryptor: a cold KDF takes seconds and would blow the
+        // goAsync() window. Ops with unknown salts degrade to envelope-only
+        // parsing, which fails open (notification shows).
+        val decryptor = buildPayloadDecryptor(context, TAG, deriveOnMiss = false)
+        val result = SuperSyncBackgroundProvider(decryptor).fetchQuick(
             credentials.baseUrl, credentials.accessToken, lastSeq
         ) ?: return false  // Error -> fail-open
 

@@ -6,6 +6,7 @@ import {
   clearSessionKeyCache,
   decrypt,
   decryptBatch,
+  decryptBatchSettled,
   deriveKeyFromPassword,
   encrypt,
   encryptBatch,
@@ -257,6 +258,110 @@ describe('encryption', () => {
       }
       const decrypted = await decryptBatch(encrypted, PASSWORD);
       expect(decrypted).toEqual(items);
+    });
+  });
+
+  describe('decryptBatchSettled', () => {
+    it('returns an empty result for an empty batch', async () => {
+      await expect(decryptBatchSettled([], PASSWORD)).resolves.toEqual([]);
+    });
+
+    it('settles ok and corrupt items independently, preserving order', async () => {
+      const encrypted = await encryptBatch(['item-0', 'item-1', 'item-2'], PASSWORD);
+      const corrupted = encrypted[1].slice(0, 30) + 'XXXX' + encrypted[1].slice(34);
+
+      const settled = await decryptBatchSettled(
+        [encrypted[0], corrupted, encrypted[2]],
+        PASSWORD,
+      );
+
+      expect(settled).toEqual([
+        { ok: true, plaintext: 'item-0' },
+        { ok: false, errorName: 'OperationError' },
+        { ok: true, plaintext: 'item-2' },
+      ]);
+    });
+
+    it('settles every item as failed for a wrong password', async () => {
+      const encrypted = await encryptBatch(['a', 'b'], PASSWORD);
+
+      const settled = await decryptBatchSettled(encrypted, 'wrong_password');
+
+      expect(settled).toEqual([
+        { ok: false, errorName: 'OperationError' },
+        { ok: false, errorName: 'OperationError' },
+      ]);
+    });
+
+    it('settles legacy PBKDF2 ciphertexts through the legacy path', async () => {
+      // < 16 bytes of plaintext → 28-43 byte ciphertext → unambiguous
+      // 'legacy' format. Longer legacy data is length-misclassified as
+      // Argon2 and covered by the fallback test below instead.
+      const legacy = await encryptLegacy('short', PASSWORD);
+
+      const settled = await decryptBatchSettled([legacy], PASSWORD);
+
+      expect(settled).toEqual([{ ok: true, plaintext: 'short' }]);
+    });
+
+    it('settles a long legacy ciphertext via the argon2-to-legacy fallback', async () => {
+      // >= 44 bytes decoded → misclassified as Argon2 by the length
+      // heuristic; the settled path must keep decryptBatch's fallback.
+      const longLegacy = await encryptLegacy(
+        'long legacy plaintext that pushes the ciphertext past 44 bytes',
+        PASSWORD,
+      );
+
+      const settled = await decryptBatchSettled([longLegacy], PASSWORD);
+
+      expect(settled).toEqual([
+        {
+          ok: true,
+          plaintext: 'long legacy plaintext that pushes the ciphertext past 44 bytes',
+        },
+      ]);
+    });
+
+    it('settles too-short and undecodable inputs without failing the batch', async () => {
+      const encrypted = await encrypt(DATA, PASSWORD);
+
+      const settled = await decryptBatchSettled(
+        [btoa('tiny'), '!!!not-base64!!!', encrypted],
+        PASSWORD,
+      );
+
+      expect(settled[0]).toEqual({ ok: false, errorName: 'InvalidCiphertextError' });
+      // The decode error name is environment-specific; only its safety matters.
+      expect(settled[1].ok).toBe(false);
+      expect(typeof (settled[1] as { errorName: string }).errorName).toBe('string');
+      expect(settled[2]).toEqual({ ok: true, plaintext: DATA });
+    });
+
+    it('settles batches with more unique salts than the session cache holds', async () => {
+      const COUNT = 120;
+      const CORRUPT_INDEX = 7;
+      const items = Array.from({ length: COUNT }, (_, i) => `item-${i}`);
+      const encrypted: string[] = [];
+      for (let i = 0; i < COUNT; i++) {
+        clearSessionKeyCache();
+        encrypted.push(await encrypt(items[i], PASSWORD));
+      }
+      encrypted[CORRUPT_INDEX] =
+        encrypted[CORRUPT_INDEX].slice(0, 30) +
+        'XXXX' +
+        encrypted[CORRUPT_INDEX].slice(34);
+
+      const settled = await decryptBatchSettled(encrypted, PASSWORD);
+
+      expect(settled.filter((item) => item.ok)).toHaveLength(COUNT - 1);
+      expect(settled[CORRUPT_INDEX]).toEqual({
+        ok: false,
+        errorName: 'OperationError',
+      });
+      expect(settled[COUNT - 1]).toEqual({
+        ok: true,
+        plaintext: `item-${COUNT - 1}`,
+      });
     });
   });
 

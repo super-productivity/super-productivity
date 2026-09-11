@@ -16,8 +16,9 @@ import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { IPC } from '../../../../../electron/shared-with-frontend/ipc-events.const';
 import { selectIdleConfig } from '../../config/store/global-config.reducer';
 import { selectIsSessionRunning } from '../../focus-mode/store/focus-mode.selectors';
-import { selectIsIdle } from './idle.selectors';
-import { triggerIdle } from './idle.actions';
+import { selectIdleTime, selectIsIdle } from './idle.selectors';
+import { openIdleDialog, triggerIdle } from './idle.actions';
+import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 
 describe('IdleEffects', () => {
   let effects: IdleEffects;
@@ -28,6 +29,10 @@ describe('IdleEffects', () => {
     addEventListener: jasmine.Spy;
   };
   let idleCallback: ((ev: Event, data?: unknown) => void) | null;
+  let simpleCounterServiceMock: {
+    enabledSimpleStopWatchCounters$: BehaviorSubject<{ id: string; isOn: boolean }[]>;
+    decreaseCounterToday: jasmine.Spy;
+  };
 
   const setup = (overrides?: {
     isSuppressIdleDuringFocusMode?: boolean;
@@ -56,6 +61,15 @@ describe('IdleEffects', () => {
 
     const taskServiceMock = {
       currentTaskId: jasmine.createSpy('currentTaskId').and.returnValue('task-1'),
+      removeTimeSpent: jasmine.createSpy('removeTimeSpent'),
+      setCurrentId: jasmine.createSpy('setCurrentId'),
+    };
+
+    simpleCounterServiceMock = {
+      enabledSimpleStopWatchCounters$: new BehaviorSubject<
+        { id: string; isOn: boolean }[]
+      >([]),
+      decreaseCounterToday: jasmine.createSpy('decreaseCounterToday'),
     };
 
     TestBed.configureTestingModule({
@@ -76,6 +90,7 @@ describe('IdleEffects', () => {
             },
             { selector: selectIsSessionRunning, value: isSessionRunning },
             { selector: selectIsIdle, value: false },
+            { selector: selectIdleTime, value: 0 },
           ],
         }),
         { provide: DataInitStateService, useValue: dataInitStateMock },
@@ -84,10 +99,7 @@ describe('IdleEffects', () => {
         { provide: TaskService, useValue: taskServiceMock },
         { provide: MatDialog, useValue: {} as any },
         { provide: UiHelperService, useValue: {} as any },
-        {
-          provide: SimpleCounterService,
-          useValue: { enabledSimpleStopWatchCounters$: new BehaviorSubject([]) },
-        },
+        { provide: SimpleCounterService, useValue: simpleCounterServiceMock },
         {
           provide: DateService,
           useValue: { todayStr: () => '2026-07-13' },
@@ -179,6 +191,137 @@ describe('IdleEffects', () => {
         expect(emitted[0]).toEqual(triggerIdle({ idleTime: 120000 }));
         done();
       }, 200);
+    });
+  });
+
+  describe('handleIdleInit$', () => {
+    // #9348: selectIsIdle emits `true` exactly once per idle episode. Dropping
+    // that single edge (rather than deferring it) loses the side effects for
+    // good AND leaves the store stuck at isIdle:true, which makes every later
+    // idle tick short-circuit on isAlreadyIdle - idle handling is then dead
+    // for the whole session.
+    let emitted: Action[];
+    let sub: { unsubscribe: () => void };
+
+    const listen = (): void => {
+      emitted = [];
+      sub = effects.handleIdleInit$.subscribe((a) => emitted.push(a));
+    };
+
+    const goIdle = (): void => {
+      store.overrideSelector(selectIsIdle, true);
+      store.refreshState();
+      TestBed.flushEffects();
+    };
+
+    const taskSpies = (): {
+      currentTaskId: jasmine.Spy;
+      removeTimeSpent: jasmine.Spy;
+      setCurrentId: jasmine.Spy;
+    } =>
+      TestBed.inject(TaskService) as unknown as {
+        currentTaskId: jasmine.Spy;
+        removeTimeSpent: jasmine.Spy;
+        setCurrentId: jasmine.Spy;
+      };
+
+    afterEach(() => {
+      sub?.unsubscribe();
+      // the effect starts a 1s poll interval; stop it so it cannot dispatch
+      // into a torn-down TestBed
+      (
+        effects as unknown as { _cancelIdlePoll?: () => void } | undefined
+      )?._cancelIdlePoll?.();
+      // startApplyingRemoteOps() writes a MODULE-level flag that TestBed teardown
+      // does not reset, so a test that throws before its own endApplyingRemoteOps()
+      // would leave every later spec buffering its actions - invisible, and Karma
+      // randomises spec order. Same precaution as tag.effects.spec.ts.
+      const hydrationState = TestBed.inject(HydrationStateService);
+      hydrationState.endApplyingRemoteOps();
+      hydrationState.clearPostSyncCooldown();
+      hydrationState.closeSyncWindow();
+    });
+
+    it('opens the idle dialog when nothing is being applied', () => {
+      setup();
+      listen();
+
+      goIdle();
+
+      expect(emitted.length).toBe(1);
+      expect(emitted[0].type).toBe(openIdleDialog.type);
+    });
+
+    it('defers - not drops - the idle side effects when the edge lands inside a sync apply window', () => {
+      setup();
+      const hydrationState = TestBed.inject(HydrationStateService);
+      listen();
+
+      hydrationState.startApplyingRemoteOps();
+      goIdle();
+
+      // still held: the mutations must not run mid-apply
+      expect(emitted.length).toBe(0);
+      expect(taskSpies().removeTimeSpent).not.toHaveBeenCalled();
+      expect(taskSpies().setCurrentId).not.toHaveBeenCalled();
+
+      hydrationState.endApplyingRemoteOps();
+      TestBed.flushEffects();
+
+      // ...but they must not be lost either
+      expect(emitted.length).toBe(1);
+      expect(emitted[0].type).toBe(openIdleDialog.type);
+      expect(taskSpies().removeTimeSpent).toHaveBeenCalledTimes(1);
+    });
+
+    // The deferral can outlive the user's return. If the entity were re-read
+    // after the wait, the idle time would be subtracted from whatever task is
+    // current by then - deleting real tracked work from a task that never
+    // accrued it.
+    it('subtracts the idle time from the task running at the edge, not one started during the wait', () => {
+      setup();
+      const hydrationState = TestBed.inject(HydrationStateService);
+      listen();
+
+      hydrationState.startApplyingRemoteOps();
+      goIdle();
+
+      // user comes back mid-window and starts tracking something else
+      taskSpies().currentTaskId.and.returnValue('task-2');
+
+      hydrationState.endApplyingRemoteOps();
+      TestBed.flushEffects();
+
+      expect(taskSpies().removeTimeSpent).toHaveBeenCalledTimes(1);
+      expect(taskSpies().removeTimeSpent.calls.mostRecent().args[0]).toBe('task-1');
+      expect(taskSpies().setCurrentId).toHaveBeenCalledWith(null);
+    });
+
+    // Same hazard, other entity: a counter switched on during the wait never ran
+    // during the idle period, so decrementing it would delete recorded habit time.
+    it('decrements the counters running at the edge, not ones started during the wait', () => {
+      setup();
+      const hydrationState = TestBed.inject(HydrationStateService);
+      simpleCounterServiceMock.enabledSimpleStopWatchCounters$.next([
+        { id: 'counter-at-edge', isOn: true },
+      ]);
+      listen();
+
+      hydrationState.startApplyingRemoteOps();
+      goIdle();
+
+      // user comes back mid-window, stops that counter and starts another
+      simpleCounterServiceMock.enabledSimpleStopWatchCounters$.next([
+        { id: 'counter-started-later', isOn: true },
+      ]);
+
+      hydrationState.endApplyingRemoteOps();
+      TestBed.flushEffects();
+
+      expect(simpleCounterServiceMock.decreaseCounterToday).toHaveBeenCalledTimes(1);
+      expect(
+        simpleCounterServiceMock.decreaseCounterToday.calls.mostRecent().args[0],
+      ).toBe('counter-at-edge');
     });
   });
 });

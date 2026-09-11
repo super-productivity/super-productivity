@@ -34,7 +34,7 @@ import { getNextRepeatOccurrence } from '../../features/task-repeat-cfg/store/ge
 import { getEffectiveLastTaskCreationDay } from '../../features/task-repeat-cfg/store/get-effective-last-task-creation-day.util';
 import { ShortTimePipe } from '../../ui/pipes/short-time.pipe';
 import { MatTooltip } from '@angular/material/tooltip';
-import { formatMonthDay } from '../../util/format-month-day.util';
+import { getRepeatCfgTooltipText } from './get-repeat-cfg-tooltip-text.util';
 
 @Component({
   selector: 'scheduled-list-page',
@@ -138,17 +138,12 @@ export class ScheduledListPageComponent {
   }
 
   getTooltipText(repeatCfg: TaskRepeatCfg): string {
-    const locale = this._dateTimeFormatService.currentLocale();
-    const nextDate = this.getNextOccurrence(repeatCfg);
-    const nextFormatted = nextDate ? formatMonthDay(new Date(nextDate), locale) : '';
-    const effectiveLastDay = getEffectiveLastTaskCreationDay(repeatCfg);
-    const lastFormatted = effectiveLastDay
-      ? formatMonthDay(new Date(effectiveLastDay), locale)
-      : '';
-
-    const next = this._translateService.instant(T.SCHEDULE.NEXT);
-    const last = this._translateService.instant(T.SCHEDULE.LAST);
-
-    return `${next} ${nextFormatted}, ${last} ${lastFormatted}`;
+    return getRepeatCfgTooltipText(
+      this.getNextOccurrence(repeatCfg),
+      getEffectiveLastTaskCreationDay(repeatCfg),
+      this._dateTimeFormatService.currentLocale(),
+      this._translateService.instant(T.SCHEDULE.NEXT),
+      this._translateService.instant(T.SCHEDULE.LAST),
+    );
   }
 }

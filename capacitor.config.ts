@@ -33,7 +33,7 @@ const config: CapacitorConfig = {
       // vars on API >= 35, and passes native env(safe-area-inset-*) through on
       // WebView >= 140. The WebView <140 / API <35 tail gets neither and falls
       // back to env() (plus the native keyboard shim in CapacitorMainActivity).
-      // See docs/plans/2026-06-22-android-systembars-migration-corrected.md.
+      // See docs/android-edge-to-edge-keyboard.md.
       insetsHandling: 'css',
       // Initial bar icon style before the theme service boots; runtime updates
       // go through StatusBar.setStyle / NavigationBar (global-theme.service.ts).

@@ -107,6 +107,32 @@ export const LOCK_ACQUISITION_TIMEOUT_MS = 30000;
 export const COMPACTION_THRESHOLD = 500;
 
 /**
+ * Total op-log size (in ops) above which a compaction is triggered once at
+ * startup. Safety net for the COMPACTION_THRESHOLD in-memory counter, which only
+ * fires within a single session — users whose sessions stay below it never prune
+ * across restarts and accumulate ops indefinitely. Sits well above a heavy user's
+ * healthy ~7-day steady state so that for a normally-synced log compaction's prune
+ * drops the count back below the threshold and it won't re-fire next boot.
+ *
+ * Metric choice: total op count, NOT `lastSeq - stateCache.lastAppliedOpSeq` (the
+ * fix #8336 proposed). The hydrator already persists a fresh snapshot whenever a
+ * boot replays >10 tail ops, so that delta re-zeroes nearly every boot without
+ * anything ever being pruned — it tracks snapshot staleness, while total count
+ * tracks the actual symptom: un-pruned log growth.
+ *
+ * Note: compaction only prunes *synced* ops past the retention window. A log that
+ * has never synced therefore holds nothing prunable, and the trigger skips it
+ * outright (hasSyncedOps() gate) instead of paying a pointless full pass every
+ * boot. The residual case is a client WITH synced history but a large unsynced
+ * backlog (offline / sync-stalled): it can stay above the threshold and re-fire
+ * every boot. Safe but not free: each re-fire is a full background compaction pass
+ * (state-cache snapshot write + op scan) that prunes little or nothing, once per
+ * boot — accepted, since it also keeps the boot snapshot fresh and pruning resumes
+ * as soon as the backlog syncs. See OperationLogCompactionService.
+ */
+export const STARTUP_COMPACTION_OP_THRESHOLD = 5000;
+
+/**
  * Maximum consecutive compaction failures before notifying the user.
  * After this many failures, a warning is shown to prompt user action.
  */

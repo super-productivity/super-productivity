@@ -1,23 +1,29 @@
 /**
- * Integration test for the multi-entity conflict-detection raw SQL (#8334).
+ * Integration tests for the conflict-detection raw SQL (#8334, #9194).
  *
- * Runs the ACTUAL `detectConflict` / `prefetchLatestEntityOpsForBatch` functions
+ * Runs the ACTUAL `detectConflict` function
  * (not a copy of the SQL, not a mock) against a REAL PostgreSQL database. Unit
  * tests mock `$queryRaw` and can only verify the JS transformation around the
- * query — this verifies the literal SQL: the `entity_ids || ARRAY[entity_id]`
- * unnest, the `&&` / `= ANY` prefilter, the `DISTINCT ON` latest-per-entity pick,
- * and the empty-array → scalar fallback for pre-migration rows.
+ * query — this verifies the literal SQL: the scalar branch `UNION ALL` the array
+ * branch (#9503 replaced the single `entity_ids || ARRAY[entity_id]` unnest and its
+ * `&&` / `= ANY` prefilter with these two separately-indexed branches), the
+ * `DISTINCT ON` latest-per-entity pick, and the empty-array → scalar fallback for
+ * pre-migration rows.
  *
- * The decisive case is "divergent scalar": a stored op whose scalar `entity_id`
+ * The decisive #8334 case is "divergent scalar": a stored op whose scalar `entity_id`
  * is NOT a member of its own `entity_ids`. The previous mutually-exclusive
  * `CASE WHEN cardinality(entity_ids) > 0 THEN entity_ids ELSE ARRAY[entity_id]`
- * dropped that scalar from the batch lookup, so a later concurrent op touching it
- * was wrongly accepted (silent data loss). The union covers it.
+ * dropped that scalar from the multi-entity lookup, so a later concurrent op touching it
+ * was wrongly accepted (silent data loss). The union covers it. The #9194 case
+ * also verifies the single-entity array winner and compound Prisma lookup against
+ * real PostgreSQL rather than the PGlite transaction shim.
  *
  * Prerequisites (same as snapshot-vector-clock-sql.integration.spec.ts):
  *   - PostgreSQL running (see docker-compose.yaml), schema applied (prisma db push)
  *   - DATABASE_URL set, e.g.
  *       postgresql://supersync:superpassword@localhost:55432/supersync_db
+ *   (the db has no fixed host port — `npm run supersync:db` publishes it on
+ *    55432 and applies the schema)
  *
  * Run with (uses vitest.integration.config.ts — no mocked-Prisma setupFiles):
  *   DATABASE_URL=postgresql://... npx vitest run --config vitest.integration.config.ts \
@@ -30,17 +36,13 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { PrismaClient, Prisma } from '@prisma/client';
-import {
-  detectConflict,
-  prefetchLatestEntityOpsForBatch,
-  getEntityConflictKey,
-} from '../../src/sync/conflict';
+import { detectConflict } from '../../src/sync/conflict';
 import { Operation, VectorClock } from '../../src/sync/sync.types';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const describeWithDb = DATABASE_URL ? describe : describe.skip;
 
-describeWithDb('Multi-entity conflict detection SQL (PostgreSQL) (#8334)', () => {
+describeWithDb('Conflict detection SQL (PostgreSQL)', () => {
   let prisma: PrismaClient;
   const TEST_USER_ID = 99998; // Unlikely to collide with real data
   const TEST_EMAIL = `test-conflict-sql-${Date.now()}@test.local`;
@@ -143,9 +145,38 @@ describeWithDb('Multi-entity conflict detection SQL (PostgreSQL) (#8334)', () =>
     expect(result.conflictType).toBe('concurrent');
   });
 
+  it('detects a single-entity conflict through a stored entity_ids member', async () => {
+    await insertOp({
+      serverSeq: 1,
+      clientId: 'A',
+      entityId: 'task-scalar',
+      entityIds: ['task-scalar', 'task-array-only'],
+      vectorClock: { A: 1 },
+    });
+
+    const incomingOp: Operation = {
+      id: `incoming-single-B-${Date.now()}`,
+      clientId: 'B',
+      actionType: '[Task] Update',
+      opType: 'UPD',
+      entityType: 'TASK',
+      entityId: 'task-array-only',
+      payload: {},
+      vectorClock: { B: 1 },
+      timestamp: Date.now(),
+      schemaVersion: 1,
+    };
+
+    const result = await detectConflict(TEST_USER_ID, incomingOp, tx());
+
+    expect(result.hasConflict).toBe(true);
+    expect(result.conflictType).toBe('concurrent');
+    expect(result.existingClock).toEqual({ A: 1 });
+  });
+
   it('detects a conflict on a stored op whose scalar entity_id is NOT in its entity_ids (the union fix)', async () => {
     // Divergent scalar: entity_id='task-z' is absent from entity_ids=['task-a'].
-    // The old mutually-exclusive CASE dropped task-z from the batch lookup.
+    // The old mutually-exclusive CASE dropped task-z from the multi-entity lookup.
     await insertOp({
       serverSeq: 1,
       clientId: 'A',
@@ -256,49 +287,6 @@ describeWithDb('Multi-entity conflict detection SQL (PostgreSQL) (#8334)', () =>
     expect(result.conflictType).toBe('concurrent');
   });
 
-  // The same fix applies to the batch lookup `prefetchLatestEntityOpsForBatch`,
-  // which folds a legacy misc row into the `tasks` conflict key. Cover both
-  // directions of the split-boundary gate on that path too.
-  it('prefetch does not fold a post-split (v3) misc write into the tasks key', async () => {
-    await insertConfigOp({
-      entityId: 'misc',
-      clientId: 'A',
-      schemaVersion: 3,
-      vectorClock: { A: 1 },
-    });
-
-    const latestByEntity = await prefetchLatestEntityOpsForBatch(
-      TEST_USER_ID,
-      [{ entityType: 'GLOBAL_CONFIG', entityId: 'tasks' }],
-      tx(),
-    );
-
-    // Pre-fix (`< CURRENT_SCHEMA_VERSION`) folded the v3 misc row into the tasks
-    // key; post-fix (`< split v2`) excludes it, so tasks has no aliased op.
-    expect(
-      latestByEntity.get(getEntityConflictKey('GLOBAL_CONFIG', 'tasks')),
-    ).toBeUndefined();
-  });
-
-  it('prefetch still folds a legacy pre-split (v1) misc write into the tasks key', async () => {
-    await insertConfigOp({
-      entityId: 'misc',
-      clientId: 'A',
-      schemaVersion: 1,
-      vectorClock: { A: 1 },
-    });
-
-    const latestByEntity = await prefetchLatestEntityOpsForBatch(
-      TEST_USER_ID,
-      [{ entityType: 'GLOBAL_CONFIG', entityId: 'tasks' }],
-      tx(),
-    );
-
-    const row = latestByEntity.get(getEntityConflictKey('GLOBAL_CONFIG', 'tasks'));
-    expect(row).toBeDefined();
-    expect(row?.clientId).toBe('A');
-  });
-
   it('falls back to the scalar entity_id for pre-migration rows (empty entity_ids)', async () => {
     await insertOp({
       serverSeq: 1,
@@ -403,26 +391,5 @@ describeWithDb('Multi-entity conflict detection SQL (PostgreSQL) (#8334)', () =>
       await prisma.operation.deleteMany({ where: { userId: OTHER_USER_ID } });
       await prisma.user.deleteMany({ where: { id: OTHER_USER_ID } });
     }
-  });
-
-  it('prefetchLatestEntityOpsForBatch covers a divergent scalar entity_id', async () => {
-    await insertOp({
-      serverSeq: 1,
-      clientId: 'A',
-      entityId: 'task-z',
-      entityIds: ['task-a'],
-      vectorClock: { A: 1 },
-    });
-
-    const latestByEntity = await prefetchLatestEntityOpsForBatch(
-      TEST_USER_ID,
-      [{ entityType: 'TASK', entityId: 'task-z' }],
-      tx(),
-    );
-
-    // Pre-fix this map was empty (task-z invisible); the union exposes it.
-    const row = latestByEntity.get(getEntityConflictKey('TASK', 'task-z'));
-    expect(row).toBeDefined();
-    expect(row?.clientId).toBe('A');
   });
 });

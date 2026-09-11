@@ -1,9 +1,9 @@
-import { signal } from '@angular/core';
+import { signal, WritableSignal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Location } from '@angular/common';
 import { MatDialog, MatDialogState } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { DialogFullscreenMarkdownComponent } from '../../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { DateAdapter } from '@angular/material/core';
 import { PlannerActions } from '../../planner/store/planner.actions';
@@ -16,7 +16,12 @@ import { ProjectService } from '../../project/project.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { TaskAttachmentService } from '../task-attachment/task-attachment.service';
 import { TaskFocusService } from '../task-focus.service';
-import { DEFAULT_TASK, HideSubTasksMode, TaskWithSubTasks } from '../task.model';
+import {
+  DEFAULT_TASK,
+  HideSubTasksMode,
+  TaskDetailTargetPanel,
+  TaskWithSubTasks,
+} from '../task.model';
 import { TaskService } from '../task.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskComponent } from './task.component';
@@ -25,13 +30,17 @@ import { TranslateService } from '@ngx-translate/core';
 import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
 import { PlannerService } from '../../planner/planner.service';
 import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
+import { TaskDuplicateService } from '../task-duplicate.service';
+import { TaskMultiSelectService } from '../task-multi-select.service';
 
 describe('TaskComponent shortcut handling', () => {
   let fixture: import('@angular/core/testing').ComponentFixture<TaskComponent>;
   let component: TaskComponent;
   let taskServiceSpy: jasmine.SpyObj<TaskService>;
+  let taskDuplicateServiceSpy: jasmine.SpyObj<TaskDuplicateService>;
   let addSubtaskInputServiceSpy: jasmine.SpyObj<AddSubtaskInputService>;
   let storeSpy: jasmine.SpyObj<Store>;
+  let activeWorkContext$: BehaviorSubject<{ isEnableBacklog: boolean }>;
 
   const createSubTask = (title: string): TaskWithSubTasks =>
     ({
@@ -58,6 +67,11 @@ describe('TaskComponent shortcut handling', () => {
     }) as TaskWithSubTasks;
 
   beforeEach(async () => {
+    // Default to a project context that has a backlog; the move-to-backlog specs
+    // flip this to cover Today and tag views.
+    activeWorkContext$ = new BehaviorSubject<{ isEnableBacklog: boolean }>({
+      isEnableBacklog: true,
+    });
     taskServiceSpy = jasmine.createSpyObj<TaskService>(
       'TaskService',
       [
@@ -77,6 +91,7 @@ describe('TaskComponent shortcut handling', () => {
         'getByIdWithSubTaskData$',
         'focusTaskById',
         'scheduleTask',
+        'markIssueUpdatesAsRead',
       ],
       {
         currentTaskId: signal<string | null>(null),
@@ -96,6 +111,10 @@ describe('TaskComponent shortcut handling', () => {
         subTaskIds: [],
       } as unknown as TaskWithSubTasks),
     );
+    taskDuplicateServiceSpy = jasmine.createSpyObj<TaskDuplicateService>(
+      'TaskDuplicateService',
+      ['duplicate'],
+    );
     addSubtaskInputServiceSpy = jasmine.createSpyObj<AddSubtaskInputService>(
       'AddSubtaskInputService',
       ['requestOpen', 'consume'],
@@ -109,7 +128,29 @@ describe('TaskComponent shortcut handling', () => {
     await TestBed.configureTestingModule({
       imports: [TaskComponent],
       providers: [
+        {
+          provide: TaskMultiSelectService,
+          useValue: {
+            selectedIds: signal(new Set<string>()),
+            anchorId: signal(null),
+            count: signal(0),
+            isActive: signal(false),
+            menuOpenRequest: signal(null),
+            has: () => false,
+            toggle: () => {},
+            selectRange: () => {},
+            remove: () => {},
+            removeWhenUnrendered: () => {},
+            clear: () => {},
+            requestMenuOpen: () => {},
+            isBulkFeedbackSuppressed: signal(false),
+            isSelecting: signal(false),
+            isTouchSelectionMode: signal(false),
+          },
+        },
+
         { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskDuplicateService, useValue: taskDuplicateServiceSpy },
         {
           provide: TaskRepeatCfgService,
           useValue: jasmine.createSpyObj('TaskRepeatCfgService', [
@@ -191,6 +232,7 @@ describe('TaskComponent shortcut handling', () => {
           provide: WorkContextService,
           useValue: {
             isTodayList: signal(false),
+            activeWorkContext$,
           },
         },
         {
@@ -212,6 +254,62 @@ describe('TaskComponent shortcut handling', () => {
     fixture.componentRef.setInput('task', createSubTask(''));
     fixture.componentRef.setInput('isInSubTaskList', true);
     fixture.componentRef.setInput('isBacklog', false);
+  });
+
+  describe('touch selection mode', () => {
+    let multiSelect: {
+      isTouchSelectionMode: WritableSignal<boolean>;
+      toggle: jasmine.Spy;
+    };
+
+    // TestBed mounts the component on a <div>, so make the target resolve
+    // `closest('task')` to that host; every other selector stays real.
+    const clickHost = (target: HTMLElement): MouseEvent => {
+      const host = fixture.nativeElement as HTMLElement;
+      host.appendChild(target);
+      const realClosest = target.closest.bind(target);
+      target.closest = ((selector: string) =>
+        selector === 'task' ? host : realClosest(selector)) as Element['closest'];
+      const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+      target.dispatchEvent(ev);
+      return ev;
+    };
+
+    beforeEach(() => {
+      multiSelect = TestBed.inject(
+        TaskMultiSelectService,
+      ) as unknown as typeof multiSelect;
+      multiSelect.toggle = jasmine.createSpy('toggle');
+      multiSelect.isTouchSelectionMode.set(true);
+      fixture.detectChanges();
+    });
+
+    it('a plain tap on the row toggles it in the selection', () => {
+      const ev = clickHost(document.createElement('span'));
+      expect(multiSelect.toggle).toHaveBeenCalledWith('sub-1');
+      expect(ev.defaultPrevented).toBeTrue();
+    });
+
+    it('a tap on a real control keeps its own behaviour', () => {
+      const ev = clickHost(document.createElement('button'));
+      expect(multiSelect.toggle).not.toHaveBeenCalled();
+      expect(ev.defaultPrevented).toBeFalse();
+    });
+
+    it('a plain tap does nothing outside the mode', () => {
+      multiSelect.isTouchSelectionMode.set(false);
+      clickHost(document.createElement('span'));
+      expect(multiSelect.toggle).not.toHaveBeenCalled();
+    });
+  });
+
+  it('delegates duplication of the current task', () => {
+    const task = createTopLevelTask('Task to duplicate');
+    fixture.componentRef.setInput('task', task);
+
+    component.duplicateTask();
+
+    expect(taskDuplicateServiceSpy.duplicate).toHaveBeenCalledOnceWith(task);
   });
 
   it('does not delete an empty subtask on Escape', () => {
@@ -635,75 +733,258 @@ describe('TaskComponent shortcut handling', () => {
     }));
   });
 
-  describe('moveToToday overdue branch (#8851)', () => {
+  describe('scheduleForToday — Shift+T (#9563)', () => {
+    // Must match the GlobalTrackingIntervalService.todayDateStr signal above,
+    // which is what isScheduledToday() reads.
+    const TODAY = '2026-05-05';
     let dateService: jasmine.SpyObj<DateService>;
     let projectService: jasmine.SpyObj<ProjectService>;
+
+    const setTask = (task: Partial<TaskWithSubTasks>): void => {
+      fixture.componentRef.setInput('task', {
+        ...createTopLevelTask('Task'),
+        dueDay: undefined,
+        dueWithTime: undefined,
+        ...task,
+      });
+      storeSpy.dispatch.calls.reset();
+      projectService.moveTaskToTodayList.calls.reset();
+    };
+
+    const expectScheduledForToday = (): void =>
+      expect(storeSpy.dispatch).toHaveBeenCalledOnceWith(
+        TaskSharedActions.planTasksForToday({
+          taskIds: ['top-1'],
+          today: TODAY,
+          startOfNextDayDiffMs: 0,
+          // computed key: a quoted 'top-1' trips the naming-convention rule
+          parentTaskMap: { ['top-1']: undefined },
+        }),
+      );
 
     beforeEach(() => {
       dateService = TestBed.inject(DateService) as jasmine.SpyObj<DateService>;
       projectService = TestBed.inject(ProjectService) as jasmine.SpyObj<ProjectService>;
       (dateService as any).todayStr = jasmine
         .createSpy('todayStr')
-        .and.returnValue('2026-06-01');
+        .and.returnValue(TODAY);
       (dateService as any).getStartOfNextDayDiffMs = jasmine
         .createSpy('getStartOfNextDayDiffMs')
         .and.returnValue(0);
     });
 
-    it('schedules an overdue task for today instead of a position-only move', () => {
-      fixture.componentRef.setInput('task', {
-        ...createTopLevelTask('Overdue'),
-        dueDay: '2026-05-30',
-      });
-      storeSpy.dispatch.calls.reset();
+    it('schedules an unscheduled task for today', () => {
+      // The #9563/#9567 regression: this did only a backlog→regular move, which
+      // the project reducer no-ops for a task already in the regular list — so
+      // the shortcut did nothing at all.
+      setTask({});
 
-      component.moveToToday();
+      component.scheduleForToday();
 
-      expect(storeSpy.dispatch).toHaveBeenCalledWith(
-        TaskSharedActions.planTasksForToday({
-          taskIds: ['top-1'],
-          today: '2026-06-01',
-          startOfNextDayDiffMs: 0,
-          parentTaskMap: { ['top-1']: undefined },
-        }),
-      );
+      expectScheduledForToday();
+    });
+
+    it('schedules an overdue task for today (#8851)', () => {
+      setTask({ dueDay: '2026-04-30' });
+
+      component.scheduleForToday();
+
+      expectScheduledForToday();
+    });
+
+    it('never moves the task between the backlog and the regular list (#8592)', () => {
+      // #8592 reported Shift+T (advertised in the "Move to regular list" menu
+      // entry) changing the schedule as a side effect of a list move. The two
+      // intents stay separate: this shortcut schedules and never repositions.
+      setTask({});
+
+      component.scheduleForToday();
+
       expect(projectService.moveTaskToTodayList).not.toHaveBeenCalled();
+      expect(projectService.moveTaskToBacklog).not.toHaveBeenCalled();
     });
 
-    it('keeps the position-only move for a non-overdue task (#8592)', () => {
-      fixture.componentRef.setInput('task', {
-        ...createTopLevelTask('Not overdue'),
-        dueDay: undefined,
-        dueWithTime: undefined,
-      });
-      storeSpy.dispatch.calls.reset();
+    it('leaves a task already scheduled for today untouched', () => {
+      setTask({ dueDay: TODAY });
 
-      component.moveToToday();
+      component.scheduleForToday();
 
-      expect(projectService.moveTaskToTodayList).toHaveBeenCalledWith(
-        'top-1',
-        'project-1',
-      );
       expect(storeSpy.dispatch).not.toHaveBeenCalled();
     });
 
-    it('keeps the position-only move for a done task with a stale past dueDay', () => {
-      // A done task can sit in the backlog with an old dueDay; it must take the
-      // backlog→regular position-only move, not be re-added to Today.
-      fixture.componentRef.setInput('task', {
-        ...createTopLevelTask('Done + overdue'),
-        isDone: true,
-        dueDay: '2026-05-30',
+    it('keeps the reminder of a task due at a time today', () => {
+      // planTasksForToday clears remindAt unconditionally, so re-planning a task
+      // that is already on Today would silently drop its reminder.
+      // isToday is installed as a property on the DateService mock, so it has
+      // to be redefined rather than assigned.
+      Object.defineProperty(dateService, 'isToday', {
+        value: () => true,
+        configurable: true,
       });
-      storeSpy.dispatch.calls.reset();
+      setTask({ dueWithTime: 1746453600000, remindAt: 1746452000000 });
 
-      component.moveToToday();
+      component.scheduleForToday();
 
-      expect(projectService.moveTaskToTodayList).toHaveBeenCalledWith(
-        'top-1',
-        'project-1',
-      );
       expect(storeSpy.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('does not put a done task on Today', () => {
+      // Completion never synthesizes a dueDay; done tasks reach Today's Done
+      // list via isDone. Dating one inflates the daily summary's done count.
+      setTask({ isDone: true, dueDay: '2026-04-30' });
+
+      component.scheduleForToday();
+
+      expect(storeSpy.dispatch).not.toHaveBeenCalled();
+    });
+
+    describe('scheduleForTodayWithFocus', () => {
+      it('keeps focus on the task instead of advancing to the next one', fakeAsync(() => {
+        // Both reports describe the caret moving on to the next task, because
+        // this used to call focusNext() unconditionally. Scheduling does not
+        // remove the row from a normal list, so focus must stay on the task;
+        // advancing is only the delayed fallback for a row that disappeared
+        // (the overdue panels).
+        // Asserted through the focus methods rather than document.activeElement:
+        // the TestBed host is a <div>, so focusSelfOrNextIfNotPossible's
+        // `tagName === 'task'` check can never pass here.
+        const focusSelfSpy = spyOn(component, 'focusSelf');
+        const focusNextSpy = spyOn(component, 'focusNext');
+        setTask({});
+
+        component.scheduleForTodayWithFocus();
+
+        expect(focusSelfSpy).toHaveBeenCalled();
+        expect(focusNextSpy).not.toHaveBeenCalled();
+        tick(200); // flush the fallback timer
+      }));
+
+      it('still schedules the task', fakeAsync(() => {
+        (fixture.nativeElement as HTMLElement).tabIndex = 0;
+        setTask({});
+
+        component.scheduleForTodayWithFocus();
+        tick(200);
+
+        expectScheduledForToday();
+      }));
+    });
+  });
+
+  describe('moveToBacklogWithFocus — Shift+B (#9374)', () => {
+    let projectService: jasmine.SpyObj<ProjectService>;
+
+    beforeEach(() => {
+      projectService = TestBed.inject(ProjectService) as jasmine.SpyObj<ProjectService>;
+      fixture.componentRef.setInput('task', createTopLevelTask('Move me'));
+      fixture.componentRef.setInput('isInSubTaskList', false);
+    });
+
+    it('moves the task when the active context has a backlog', () => {
+      activeWorkContext$.next({ isEnableBacklog: true });
+
+      component.moveToBacklogWithFocus();
+
+      expect(projectService.moveTaskToBacklog).toHaveBeenCalledWith('top-1', 'project-1');
+    });
+
+    it('does nothing in a context without a backlog, like the context menu', () => {
+      activeWorkContext$.next({ isEnableBacklog: false });
+
+      component.moveToBacklogWithFocus();
+
+      expect(projectService.moveTaskToBacklog).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('detail panel toggle button (#9850)', () => {
+    const setTask = (overrides: Partial<TaskWithSubTasks>): void => {
+      fixture.componentRef.setInput('task', {
+        ...createTopLevelTask('Task'),
+        ...overrides,
+      });
+      fixture.componentRef.setInput('isInSubTaskList', false);
+      fixture.detectChanges();
+    };
+    const selectedTaskId = (): WritableSignal<string | null> =>
+      taskServiceSpy.selectedTaskId as unknown as WritableSignal<string | null>;
+    const isXs = (): WritableSignal<boolean> =>
+      TestBed.inject(LayoutService).isXs as unknown as WritableSignal<boolean>;
+
+    it('opens the notes section directly when the task has notes', () => {
+      setTask({ notes: 'some notes' });
+
+      component.onToggleDetailPanelBtnClick();
+
+      expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(
+        'top-1',
+        TaskDetailTargetPanel.Notes,
+      );
+    });
+
+    it('opens the notes section on mobile, where the bug was reported', () => {
+      isXs().set(true);
+      setTask({ notes: 'some notes' });
+
+      component.onToggleDetailPanelBtnClick();
+
+      expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(
+        'top-1',
+        TaskDetailTargetPanel.Notes,
+      );
+    });
+
+    it('prefers the notes section for an issue-linked task that has notes', () => {
+      setTask({ notes: 'some notes', issueId: 'GH-1', issueType: 'GITHUB' });
+
+      component.onToggleDetailPanelBtnClick();
+
+      expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(
+        'top-1',
+        TaskDetailTargetPanel.Notes,
+      );
+    });
+
+    it('opens the default panel for an issue-linked task without notes', () => {
+      setTask({ notes: '', issueId: 'GH-1', issueType: 'GITHUB' });
+
+      component.onToggleDetailPanelBtnClick();
+
+      expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(
+        'top-1',
+        TaskDetailTargetPanel.Default,
+      );
+    });
+
+    it('opens the default panel and clears the badge in the issue-updated state', () => {
+      setTask({ notes: 'some notes', issueId: 'GH-1', issueWasUpdated: true });
+
+      component.onToggleDetailPanelBtnClick();
+
+      expect(taskServiceSpy.markIssueUpdatesAsRead).toHaveBeenCalledWith('top-1');
+      expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(
+        'top-1',
+        TaskDetailTargetPanel.Default,
+      );
+    });
+
+    it('closes the panel when it is already open for this task', () => {
+      setTask({ notes: 'some notes' });
+      selectedTaskId().set('top-1');
+
+      component.onToggleDetailPanelBtnClick();
+
+      expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(null);
+    });
+
+    it('closes the panel on mobile where the icon stays "chat" while open', () => {
+      isXs().set(true);
+      setTask({ notes: 'some notes' });
+      selectedTaskId().set('top-1');
+
+      component.onToggleDetailPanelBtnClick();
+
+      expect(taskServiceSpy.setSelectedId).toHaveBeenCalledWith(null);
     });
   });
 });

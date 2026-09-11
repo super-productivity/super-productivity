@@ -1,26 +1,85 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Fastify, { FastifyInstance } from 'fastify';
 import helmet from '@fastify/helmet';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   escapeHtml,
   sanitizeRequestUrlForLog,
   SERVER_HELMET_CONFIG,
+  SERVER_TRUST_PROXY,
 } from '../src/server';
 
+const currentDir = dirname(fileURLToPath(import.meta.url));
+
+const extractCaddyBlock = (caddyfile: string, openingPattern: RegExp): string => {
+  const opening = openingPattern.exec(caddyfile);
+  if (!opening) {
+    throw new Error(`Missing Caddy block: ${openingPattern}`);
+  }
+
+  const openingBrace = caddyfile.indexOf('{', opening.index);
+  let depth = 0;
+  for (let index = openingBrace; index < caddyfile.length; index++) {
+    if (caddyfile[index] === '{') {
+      depth++;
+    } else if (caddyfile[index] === '}') {
+      depth--;
+      if (depth === 0) {
+        return caddyfile.slice(opening.index, index + 1);
+      }
+    }
+  }
+
+  throw new Error(`Unclosed Caddy block: ${openingPattern}`);
+};
+
+const getCaddyLogBlocks = (): { runtime: string; access: string } => {
+  const caddyfile = readFileSync(join(currentDir, '../Caddyfile'), 'utf8');
+  const activeCaddyfile = caddyfile.replace(/#.*$/gm, '');
+
+  return {
+    runtime: extractCaddyBlock(activeCaddyfile, /^ {4}log default\s*\{/m),
+    access: extractCaddyBlock(activeCaddyfile, /^ {4}log\s*\{/m),
+  };
+};
+
 describe('Server Security Configuration', () => {
-  describe('request URL log sanitization', () => {
-    it('should redact sensitive query params without removing non-sensitive context', () => {
+  describe('request log sanitization', () => {
+    it('should omit every query value from application error logs', () => {
       expect(
         sanitizeRequestUrlForLog(
           '/api/sync/ws?token=secret-jwt&clientId=B_AEh6&limit=10',
         ),
-      ).toBe('/api/sync/ws?token=redacted&clientId=B_AEh6&limit=10');
+      ).toBe('/api/sync/ws?redacted');
     });
 
-    it('should redact sensitive query params case-insensitively', () => {
-      expect(sanitizeRequestUrlForLog('/reset-password?resetPasswordToken=secret')).toBe(
-        '/reset-password?resetPasswordToken=redacted',
-      );
+    it('should omit encoded, mixed-case, and alternate secret names', () => {
+      expect(
+        sanitizeRequestUrlForLog(
+          '/api/login?access%5Ftoken=secret&ToKeN=other&ApiKey=third',
+        ),
+      ).toBe('/api/login?redacted');
+    });
+
+    it('should omit query strings from both access logs and proxy error logs', () => {
+      const logBlocks = getCaddyLogBlocks();
+
+      expect(logBlocks.runtime).toContain('request>uri regexp "[?].*$" "?REDACTED"');
+      expect(logBlocks.access).toContain('request>uri regexp "[?].*$" "?REDACTED"');
+      expect(logBlocks.runtime).toContain('wrap json');
+      expect(logBlocks.access).toContain('wrap console');
+    });
+
+    it('should prevent token-bearing page URLs from reaching proxy logs as referrers', () => {
+      const caddyfile = readFileSync(join(currentDir, '../Caddyfile'), 'utf8');
+      const activeCaddyfile = caddyfile.replace(/#.*$/gm, '');
+
+      expect(activeCaddyfile).toMatch(/Referrer-Policy\s+no-referrer/);
+      const logBlocks = getCaddyLogBlocks();
+      expect(logBlocks.runtime).toMatch(/request>headers>Referer\s+delete/);
+      expect(logBlocks.access).toMatch(/request>headers>Referer\s+delete/);
     });
   });
 
@@ -85,6 +144,19 @@ describe('Server Security Configuration', () => {
 
       expect(response.headers['x-content-type-options']).toBe('nosniff');
     });
+
+    it('should prevent token-bearing page URLs from being sent as referrers', async () => {
+      await app.register(helmet, SERVER_HELMET_CONFIG);
+      app.get('/test', async () => ({ status: 'ok' }));
+      await app.ready();
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/test',
+      });
+
+      expect(response.headers['referrer-policy']).toBe('no-referrer');
+    });
   });
 
   describe('HTML Escape Function', () => {
@@ -140,6 +212,55 @@ describe('Server Security Configuration', () => {
       expect(escaped).toBe('&quot; onmouseover=&quot;alert(1)&quot;');
       // The key protection is that " is escaped to &quot;
       expect(escaped).not.toContain('"');
+    });
+  });
+
+  // Pins the trustProxy contract: req.ip is the @fastify/rate-limit key, so if a
+  // dependency bump silently changes which peers are trusted, every client either
+  // collapses into one rate-limit bucket or gains the ability to spoof its IP.
+  // fastify 5.12.1 disabled the previous `trustProxy: 1` this way (GHSA-3m5p-2c4r-xxw2).
+  describe('trusted proxy configuration', () => {
+    let app: FastifyInstance;
+
+    beforeEach(async () => {
+      app = Fastify({ trustProxy: SERVER_TRUST_PROXY });
+      app.get('/test', async (req) => ({ ip: req.ip }));
+      await app.ready();
+    });
+
+    afterEach(async () => {
+      if (app) {
+        await app.close();
+      }
+    });
+
+    const getIpForPeer = async (remoteAddress: string): Promise<string> => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/test',
+        remoteAddress,
+        headers: { 'x-forwarded-for': '203.0.113.9' },
+      });
+      return (JSON.parse(response.body) as { ip: string }).ip;
+    };
+
+    // Every place the reverse proxy can sit: loopback for host networking or a
+    // same-pod sidecar, 172.16/12 for the docker bridge, 10/8 for a k8s pod
+    // network, 192.168/16 for a bare-metal LAN.
+    it.each(['127.0.0.1', '::1', '172.17.0.1', '10.42.0.7', '192.168.1.10'])(
+      'should resolve the forwarded client IP for proxy at %s',
+      async (remoteAddress) => {
+        expect(await getIpForPeer(remoteAddress)).toBe('203.0.113.9');
+      },
+    );
+
+    it('should ignore X-Forwarded-For from a peer outside the trusted ranges', async () => {
+      // A client reaching the origin directly must not be able to spoof its IP.
+      expect(await getIpForPeer('203.0.113.7')).toBe('203.0.113.7');
+    });
+
+    it('should not use the hop-count form disabled by GHSA-3m5p-2c4r-xxw2', () => {
+      expect(typeof SERVER_TRUST_PROXY).not.toBe('number');
     });
   });
 });

@@ -1,4 +1,5 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import { openRecurDialog, saveRecurDialog } from '../../utils/recurring-task-helpers';
 
 /**
  * Bug: https://github.com/super-productivity/super-productivity/issues/4559
@@ -47,17 +48,10 @@ test.describe('Recurring task - missed scheduled day (#4559)', () => {
     await expect(task).toBeVisible({ timeout: 10000 });
 
     await taskPage.openTaskDetail(task);
-    const recurItem = page
-      .locator('task-detail-item')
-      .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
-    await expect(recurItem).toBeVisible({ timeout: 5000 });
-    await recurItem.click();
-
     // 3. Pick the "Every month on the first day" quick setting and save.
     //    The regex avoids "first Monday" (Q_MONTHLY_NTH_WEEKDAY) — only
     //    Q_MONTHLY_FIRST_DAY contains the literal "first day".
-    const repeatDialog = page.locator('mat-dialog-container');
-    await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
+    const repeatDialog = await openRecurDialog(page);
 
     const quickSettingSelect = repeatDialog.locator('mat-select').first();
     await quickSettingSelect.click();
@@ -65,10 +59,7 @@ test.describe('Recurring task - missed scheduled day (#4559)', () => {
     await expect(firstDayOption).toBeVisible({ timeout: 5000 });
     await firstDayOption.click();
 
-    const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
-    await expect(saveBtn).toBeEnabled({ timeout: 5000 });
-    await saveBtn.click();
-    await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
+    await saveRecurDialog(page);
     await page.keyboard.press('Escape');
 
     // 4. Mark the Jun 1 instance done so the cfg's lastTaskCreationDay is

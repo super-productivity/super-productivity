@@ -573,6 +573,12 @@ function getRunningIconPath(progress?: number): string {
 
 let curIco: string | undefined;
 
+// macOS draws a menu bar image at its native point size (16pt is Electron's
+// recommendation). The static stopped/running icons are rendered at 24px so
+// GNOME doesn't upscale them (#8484) while the progress-animation frames are
+// 16px, so without normalizing the icon shrinks the moment tracking starts.
+const MAC_TRAY_ICON_SIZE = 16;
+
 // GNOME AppIndicator can fall back to a generic "three dots" icon for
 // sandboxed Electron apps when given only a file path. Passing a NativeImage
 // keeps the actual pixel data attached to the tray item.
@@ -584,13 +590,19 @@ const getTrayImage = (icoPath: string): string | Electron.NativeImage => {
     return icoPath;
   }
 
-  const image = nativeImage.createFromPath(icoPath);
+  let image = nativeImage.createFromPath(icoPath);
   if (image.isEmpty()) {
     log('Tray icon NativeImage is empty, falling back to icon path:', icoPath);
     return icoPath;
   }
 
   if (IS_MAC) {
+    const { width, height } = image.getSize();
+    if (width !== MAC_TRAY_ICON_SIZE || height !== MAC_TRAY_ICON_SIZE) {
+      // resize() re-derives every scale factor from the source, so the @2x
+      // representation survives and the icon stays crisp on retina displays.
+      image = image.resize({ width: MAC_TRAY_ICON_SIZE, height: MAC_TRAY_ICON_SIZE });
+    }
     image.setTemplateImage(true);
   }
 

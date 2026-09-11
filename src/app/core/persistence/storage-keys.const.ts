@@ -104,6 +104,10 @@ export enum LS {
   TASK_VIEW_CUSTOMIZER_BY_CONTEXT = 'SUP_TASK_VIEW_CUSTOMIZER_BY_CONTEXT',
 }
 
+// Prefix for device-local, never-synced note drafts (see LocalDraftService).
+// Full key: `${LS_LOCAL_DRAFT_PREFIX}${entityType}:${entityId}`.
+export const LS_LOCAL_DRAFT_PREFIX = 'SUP_LOCAL_DRAFT_';
+
 // SESSION STORAGE
 export enum SS {
   NOTE_TMP = 'NOTE_TMP_EDIT',

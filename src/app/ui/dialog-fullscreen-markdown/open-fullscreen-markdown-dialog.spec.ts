@@ -23,7 +23,7 @@ describe('openFullscreenMarkdownDialog', () => {
 
     dialogRef = {
       afterClosed: () => afterClosed$.asObservable(),
-      componentInstance: { close: closeSpy } as never,
+      componentInstance: { close: closeSpy, isDiscardConfirmOpen: false } as never,
       getState: () => dialogState,
     };
     matDialog = jasmine.createSpyObj('MatDialog', ['open']);
@@ -70,6 +70,29 @@ describe('openFullscreenMarkdownDialog', () => {
     open();
     navigate();
     dialogState = MatDialogState.CLOSING;
+
+    navigate();
+
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // The discard confirmation opens ON TOP of this dialog, which stays OPEN
+  // behind it. close() with no args is the SAVE path, so acting on a back press
+  // here would save the content the user just asked to throw away.
+  it('does not close through the save path while the discard confirmation is open', () => {
+    open();
+    (dialogRef.componentInstance as any).isDiscardConfirmOpen = true;
+
+    navigate();
+
+    expect(closeSpy).not.toHaveBeenCalled();
+  });
+
+  it('resumes closing on a navigation once the discard confirmation has been answered', () => {
+    open();
+    (dialogRef.componentInstance as any).isDiscardConfirmOpen = true;
+    navigate();
+    (dialogRef.componentInstance as any).isDiscardConfirmOpen = false;
 
     navigate();
 

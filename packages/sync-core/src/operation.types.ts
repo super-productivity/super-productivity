@@ -250,6 +250,16 @@ export interface LwwUpdatePayload<
    * non-project-move LWW updates; consumers fall back to receiving-state repair.
    */
   projectMoveFootprint?: readonly string[];
+  /**
+   * `patch` deltas only: keys of `actionPayload` whose value is a field CLEAR
+   * (`undefined`). JSON serialization drops undefined-valued keys (#9776), so
+   * without this out-of-band list a cleared field in a disjoint-merge delta
+   * silently vanishes on the wire and receivers skip the clear. Consumers
+   * restore `undefined` for these keys before applying (see convertOpToAction).
+   * Older clients ignore the key and degrade to the pre-#9776 no-op clear —
+   * same envelope pattern as `projectMoveFootprint`, no schema bump needed.
+   */
+  clearedFields?: readonly string[];
 }
 
 /**

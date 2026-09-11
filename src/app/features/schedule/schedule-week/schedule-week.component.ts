@@ -23,7 +23,7 @@ import { ScheduleEventComponent } from '../schedule-event/schedule-event.compone
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { MatIcon } from '@angular/material/icon';
 import { T } from '../../../t.const';
-import { isTouchActive } from '../../../util/input-intent';
+import { dragDelayForTouch, isTouchActive } from '../../../util/input-intent';
 import { MatTooltip } from '@angular/material/tooltip';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
@@ -43,7 +43,6 @@ const MIN_ROW_HEIGHT_PX = 5;
 const MAX_ROW_HEIGHT_PX = 24;
 const ROW_HEIGHT_STEP_PX = 1;
 const MOBILE_ROW_HEIGHT_FACTOR = DEFAULT_MOBILE_ROW_HEIGHT_PX / DEFAULT_ROW_HEIGHT_PX;
-const TOUCH_DRAG_START_DELAY_MS = 75;
 
 interface ScheduleTaskDataLike {
   id?: string;
@@ -105,11 +104,13 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly isShiftNoScheduleMode = this._service.isShiftMode;
 
   FH = FH;
-  protected readonly isTouchActive = isTouchActive;
   SVEType: typeof SVEType = SVEType;
   T: typeof T = T;
   protected readonly isDraggableSE = isDraggableSE;
-  protected readonly touchDragStartDelayMs = TOUCH_DRAG_START_DELAY_MS;
+  // Touch drags must wait out the app-wide long press. A shorter delay turns any
+  // deliberate (= slow) vertical swipe that starts on an event into a task move,
+  // which makes a densely filled schedule unscrollable on mobile (#9675).
+  protected readonly dragDelayForTouch = dragDelayForTouch;
 
   rowsByNr = Array.from({ length: D_HOURS * FH }, (_, index) => index).filter(
     (_, index) => index % FH === 0,

@@ -36,10 +36,13 @@
   }
 }
 
+.wrap {
+  flex-grow: 1;
+  min-width: 0;
+}
+
 .title {
   font-size: var(--planner-font-size-mobile);
-  flex-shrink: 1;
-  min-width: 0;
   overflow: hidden;
   overflow-wrap: anywhere;
 

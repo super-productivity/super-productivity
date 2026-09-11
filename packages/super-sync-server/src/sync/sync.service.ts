@@ -7,6 +7,8 @@ import {
   DEFAULT_SYNC_CONFIG,
   VectorClock,
   SYNC_ERROR_CODES,
+  createStateReplacementRequiredResults,
+  SyncDeviceInfo,
 } from './sync.types';
 import { Logger } from '../logger';
 import { Prisma } from '@prisma/client';
@@ -24,40 +26,57 @@ import {
   type SnapshotDedupResponse,
 } from './services';
 import type { ValidationResult } from './services/validation.service';
-const getPrismaP2002TargetTokens = (
-  err: Prisma.PrismaClientKnownRequestError,
-): string[] => {
-  const target = err.meta?.target;
-  if (Array.isArray(target)) return target.map(String);
-  if (typeof target === 'string') return [target];
-  return [];
-};
 
-const isRetryableOperationUniqueViolation = (err: unknown): boolean => {
-  if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') {
-    return false;
+/**
+ * Newest operation that replaced the user's full state, for the stale-cursor
+ * upload guard.
+ *
+ * Prefer a retained SYNC_IMPORT/BACKUP_IMPORT, then fall back to the newest
+ * causal REPAIR. The fallback is load-bearing: deletion can prune an import out
+ * from under a later REPAIR — quota recovery
+ * (`deleteOldestRestorePointAndOps`, which deletes up to and including the
+ * OLDEST restore point) and the daily old-ops sweep (which deletes everything
+ * below the NEWEST causal boundary) both do it. Without the fallback the
+ * remaining REPAIR is invisible here, the guard resolves to "none", and the
+ * caller PERSISTS that as 0 — permanently disarming the guard for that account
+ * and letting a client whose cursor predates the replacement upload deltas
+ * built on superseded state.
+ *
+ * The second query only runs for the rare account holding no import at all, so
+ * the ordinary upload path still costs a single indexed lookup.
+ *
+ * The REPAIR is a STAND-IN for a pruned import, not a boundary in its own
+ * right. The fence enforces IMPORT semantics: a client below a SYNC_IMPORT /
+ * BACKUP_IMPORT must download it so `SyncImportFilterService` drops its
+ * concurrent ops. A causal REPAIR is borrowed only as the nearest higher seq
+ * that still forces that download once the import row itself is gone. Its own
+ * client contract is the opposite — a REPAIR is automatic, and concurrent work
+ * replays on top of it instead of being dropped.
+ *
+ * That is why the accepted-op write in `uploadOps` records SYNC_IMPORT /
+ * BACKUP_IMPORT and NOT an accepted REPAIR: at that moment no import row has
+ * been pruned yet, so there is no missing fence to reconstruct. Writer and
+ * resolver answering differently is the design, not an asymmetry to close
+ * (#9703, #9755).
+ */
+const resolveRetainedReplacementSeq = async (
+  db: Prisma.TransactionClient,
+  userId: number,
+): Promise<number | null> => {
+  const retainedImport = await db.operation.findFirst({
+    where: { userId, opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT'] } },
+    orderBy: { serverSeq: 'desc' },
+    select: { serverSeq: true },
+  });
+  if (retainedImport) {
+    return retainedImport.serverSeq;
   }
-
-  const targetTokens = getPrismaP2002TargetTokens(err);
-  if (targetTokens.length === 0) return true;
-
-  const normalizedTargets = targetTokens.map((target) =>
-    target.toLowerCase().replace(/"/g, ''),
-  );
-  const targetSet = new Set(normalizedTargets);
-
-  return (
-    normalizedTargets.some(
-      (target) =>
-        target.includes('operations_pkey') ||
-        target.includes('operation_pkey') ||
-        target.includes('operations_id') ||
-        target.includes('operation_id'),
-    ) ||
-    targetSet.has('id') ||
-    (targetSet.has('user_id') && targetSet.has('server_seq')) ||
-    (targetSet.has('userid') && targetSet.has('serverseq'))
-  );
+  const retainedCausalRepair = await db.operation.findFirst({
+    where: { userId, opType: 'REPAIR', repairBaseServerSeq: { not: null } },
+    orderBy: { serverSeq: 'desc' },
+    select: { serverSeq: true },
+  });
+  return retainedCausalRepair?.serverSeq ?? null;
 };
 
 class CleanSlateUploadRejectedError extends Error {
@@ -141,6 +160,7 @@ export class SyncService {
     requestStartOccupiedIds?: ReadonlySet<string>,
     repairBaseServerSeq?: number,
     allowLegacyRepairWithoutBase: boolean = false,
+    lastKnownServerSeq?: number,
   ): Promise<UploadResult[]> {
     if (isCleanSlate && ops.length === 0) {
       return [];
@@ -198,22 +218,70 @@ export class SyncService {
       // Use transaction to acquire write lock and ensure atomicity
       await prisma.$transaction(
         async (tx) => {
-          if (containsRepair && !isLegacyRepairUpload) {
-            // Serialize the causal precondition and the later insert through the
-            // same per-user sequence row. A concurrent upload either commits
-            // first (making this base stale) or waits and lands after REPAIR.
+          const needsSyncStateLock =
+            shouldCleanSlate ||
+            lastKnownServerSeq !== undefined ||
+            (containsRepair && !isLegacyRepairUpload);
+          let currentServerSeq = 0;
+          if (needsSyncStateLock) {
+            // Serialize state replacements, cursor checks, and later inserts on
+            // the same per-user row. Whichever request acquires this lock first
+            // defines the safe order seen by every other server instance.
             await tx.userSyncState.upsert({
               where: { userId },
               create: { userId, lastSeq: 0 },
               update: {},
             });
-            const rows = await tx.$queryRaw<Array<{ lastSeq: number }>>`
-              SELECT last_seq AS "lastSeq"
+            const rows = await tx.$queryRaw<
+              Array<{
+                lastSeq: number;
+                latestStateReplacementSeq: number | null;
+              }>
+            >`
+              SELECT
+                last_seq AS "lastSeq",
+                latest_state_replacement_seq AS "latestStateReplacementSeq"
               FROM user_sync_state
               WHERE user_id = ${userId}
               FOR UPDATE
             `;
-            const currentServerSeq = rows[0]?.lastSeq ?? 0;
+            currentServerSeq = rows[0]?.lastSeq ?? 0;
+            let latestStateReplacementSeq = rows[0]?.latestStateReplacementSeq ?? null;
+            if (latestStateReplacementSeq === null) {
+              // The column is intentionally not backfilled during migration:
+              // the supported Compose deploy keeps the old process serving
+              // while migrations run. Resolve retained replacements lazily
+              // after the new process owns the write path, then persist the
+              // answer for subsequent uploads.
+              const retainedReplacementSeq = await resolveRetainedReplacementSeq(
+                tx,
+                userId,
+              );
+              // Zero is a resolved "no retained replacement" sentinel. Keeping
+              // null exclusively for unresolved upgrade rows avoids repeating
+              // this indexed lookup on every upload for ordinary accounts.
+              latestStateReplacementSeq = retainedReplacementSeq ?? 0;
+              await tx.userSyncState.update({
+                where: { userId },
+                data: { latestStateReplacementSeq },
+              });
+              uploadDbRoundtrips++;
+            }
+            if (
+              lastKnownServerSeq !== undefined &&
+              latestStateReplacementSeq !== null &&
+              lastKnownServerSeq < latestStateReplacementSeq
+            ) {
+              Logger.warn(
+                `[user:${userId}] Rejecting upload from stale state replacement cursor ` +
+                  `(client=${lastKnownServerSeq}, required=${latestStateReplacementSeq})`,
+              );
+              results.push(...createStateReplacementRequiredResults(ops));
+              return;
+            }
+          }
+
+          if (containsRepair && !isLegacyRepairUpload) {
             if (
               repairBaseServerSeq === undefined ||
               repairBaseServerSeq !== currentServerSeq
@@ -267,6 +335,7 @@ export class SyncService {
                 snapshotAt: null,
                 latestFullStateSeq: null,
                 latestFullStateVectorClock: Prisma.DbNull,
+                latestStateReplacementSeq: null,
               },
             });
 
@@ -288,70 +357,89 @@ export class SyncService {
           let acceptedDeltaBytes = 0;
           let unserializableAccepted = 0;
 
-          if (this.config.batchUpload) {
-            const batchResult = await this.operationUploadService.processOperationBatch(
-              userId,
-              clientId,
-              ops,
-              now,
-              tx,
-              prevalidatedResults,
-              requestStartOccupiedIds,
-            );
-            results.push(...batchResult.results);
-            acceptedDeltaBytes = batchResult.acceptedDeltaBytes;
-            unserializableAccepted = batchResult.unserializableAccepted;
-            uploadDbRoundtrips += batchResult.dbRoundtrips;
-          } else {
-            // Ensure user has sync state row (init if needed)
-            // We assume user exists in `users` table because of foreign key,
-            // but if `uploadOps` is called, authentication should have verified user existence.
-            // However, `user_sync_state` might not exist yet.
+          // Ensure user has sync state row (init if needed)
+          // We assume user exists in `users` table because of foreign key,
+          // but if `uploadOps` is called, authentication should have verified user existence.
+          // However, `user_sync_state` might not exist yet.
+          if (!needsSyncStateLock) {
             await tx.userSyncState.upsert({
               where: { userId },
               create: { userId, lastSeq: 0 },
               update: {}, // No-op update to ensure it exists
             });
             uploadDbRoundtrips++;
+          }
 
-            const firstOperationById = new Map<
-              string,
-              { op: Operation; originalTimestamp: number }
-            >();
+          const firstOperationById = new Map<
+            string,
+            { op: Operation; originalTimestamp: number }
+          >();
 
-            for (const op of ops) {
-              const firstRequestOperation = firstOperationById.get(op.id);
-              if (!firstRequestOperation) {
-                firstOperationById.set(op.id, {
-                  op,
-                  originalTimestamp: op.timestamp,
-                });
-              }
-              const validation =
-                prevalidatedResults.get(op) ??
-                this.validationService.validateOp(op, clientId);
-              prevalidatedResults.set(op, validation);
+          for (const op of ops) {
+            const firstRequestOperation = firstOperationById.get(op.id);
+            if (!firstRequestOperation) {
+              firstOperationById.set(op.id, {
+                op,
+                originalTimestamp: op.timestamp,
+              });
+            }
+            const validation =
+              prevalidatedResults.get(op) ??
+              this.validationService.validateOp(op, clientId);
+            prevalidatedResults.set(op, validation);
 
-              const { result, storageBytes, fallback } =
-                await this.operationUploadService.processOperation(
-                  userId,
-                  clientId,
-                  op,
-                  now,
-                  tx,
-                  validation,
-                  requestStartOccupiedIds?.has(op.id),
-                  firstRequestOperation,
-                );
-              results.push(result);
-              if (result.accepted) {
-                // Reuse the size computed in processOperation instead of
-                // re-measuring (the payload can be multi-MB).
-                acceptedDeltaBytes += storageBytes;
-                if (fallback) unserializableAccepted += 1;
-              }
+            const { result, storageBytes, fallback } =
+              await this.operationUploadService.processOperation(
+                userId,
+                clientId,
+                op,
+                now,
+                tx,
+                validation,
+                requestStartOccupiedIds?.has(op.id),
+                firstRequestOperation,
+              );
+            results.push(result);
+            if (result.accepted) {
+              // Reuse the size computed in processOperation instead of
+              // re-measuring (the payload can be multi-MB).
+              acceptedDeltaBytes += storageBytes;
+              if (fallback) unserializableAccepted += 1;
             }
           }
+
+          // Only an import moves the fence. An accepted causal REPAIR is
+          // deliberately NOT recorded here: the fence carries import semantics
+          // (the client drops concurrent ops at one), while a repair replays
+          // concurrent work on top. `resolveRetainedReplacementSeq` treats a
+          // REPAIR as a boundary only as a stand-in for an import row that
+          // pruning already deleted — a case that cannot exist at this point in
+          // an upload. See that resolver's comment before widening this (#9703).
+          let latestAcceptedStateReplacementSeq: number | undefined;
+          for (let index = 0; index < ops.length; index++) {
+            const op = ops[index];
+            const result = results[index];
+            if (
+              result?.accepted &&
+              result.serverSeq !== undefined &&
+              (op.opType === 'SYNC_IMPORT' || op.opType === 'BACKUP_IMPORT')
+            ) {
+              latestAcceptedStateReplacementSeq = Math.max(
+                latestAcceptedStateReplacementSeq ?? 0,
+                result.serverSeq,
+              );
+            }
+          }
+          if (latestAcceptedStateReplacementSeq !== undefined) {
+            await tx.userSyncState.update({
+              where: { userId },
+              data: {
+                latestStateReplacementSeq: latestAcceptedStateReplacementSeq,
+              },
+            });
+            uploadDbRoundtrips++;
+          }
+
           if (unserializableAccepted > 0) {
             Logger.warn(
               `computeOpsStorageBytes: ${unserializableAccepted} unserializable op(s) ` +
@@ -401,8 +489,6 @@ export class SyncService {
           });
           uploadDbRoundtrips++;
 
-          if (this.config.batchUpload && acceptedDeltaBytes === 0) return;
-
           // W1: write the storage counter as the LAST statement before COMMIT
           // so the row-level write lock on `users` is held for only the
           // commit round-trip, not for the entire 60s transaction window.
@@ -433,9 +519,8 @@ export class SyncService {
           // Default Prisma timeout (5s) is too short for these. Use 60s to match generateSnapshot.
           timeout: 60000,
           // FIX 1.6: Set explicit isolation level for strict consistency.
-          // The serial path also performs the legacy post-sequence conflict re-check.
-          // The batch path serializes accepted writers through the shared
-          // user_sync_state.last_seq row update; see ARCHITECTURE-DECISIONS.md.
+          // Accepted writers serialize through the shared
+          // user_sync_state.last_seq row update; see ARCHITECTURE-DECISIONS.md #4.
           isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
         },
       );
@@ -458,7 +543,6 @@ export class SyncService {
         rejected: results.length - accepted,
         txDurationMs: Date.now() - txStartedAt,
         dbRoundtrips: uploadDbRoundtrips,
-        batchUpload: this.config.batchUpload,
       });
     } catch (err) {
       if (err instanceof CleanSlateUploadRejectedError) {
@@ -476,7 +560,6 @@ export class SyncService {
       // PostgreSQL uses 40001 (serialization_failure) and 40P01 (deadlock_detected)
       const isSerializationFailure =
         (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') ||
-        (this.config.batchUpload && isRetryableOperationUniqueViolation(err)) ||
         errorMessage.includes('40001') ||
         errorMessage.includes('40P01') ||
         errorMessage.toLowerCase().includes('serialization') ||
@@ -539,6 +622,23 @@ export class SyncService {
       limit,
       includeSnapshotMetadata,
     );
+  }
+
+  /**
+   * Keeps the device row alive for the device list. Called from the download
+   * ROUTE only — not from `getOpsSinceWithSeq`, whose other callers (the
+   * upload handler's piggyback and dedup-retry reads) run right after the
+   * upload transaction already upserted `lastSeenAt`, so a touch there is a
+   * guaranteed-suppressed extra statement per upload. Fire-and-forget and
+   * deliberately outside any transaction: this is advisory metadata for a UI
+   * list and must never fail, slow, or lengthen the lock window of a sync.
+   */
+  touchDevice(userId: number, clientId: string): void {
+    void this.deviceService
+      .touchDevice(userId, clientId)
+      .catch((err) =>
+        Logger.debug(`[user:${userId}] touchDevice failed: ${(err as Error)?.message}`),
+      );
   }
 
   async getLatestSeq(userId: number): Promise<number> {
@@ -639,6 +739,18 @@ export class SyncService {
     );
   }
 
+  async getLatestStateReplacementSeq(userId: number): Promise<number | null> {
+    const syncState = await prisma.userSyncState.findUnique({
+      where: { userId },
+      select: { latestStateReplacementSeq: true },
+    });
+    const latestStateReplacementSeq = syncState?.latestStateReplacementSeq;
+    if (typeof latestStateReplacementSeq === 'number') {
+      return latestStateReplacementSeq;
+    }
+    return resolveRetainedReplacementSeq(prisma, userId);
+  }
+
   cacheOpsRequestResults(
     userId: number,
     requestId: string,
@@ -688,10 +800,6 @@ export class SyncService {
 
   // === Storage Quota ===
   // Delegated to StorageQuotaService
-
-  async assertPayloadBytesBackfillComplete(): Promise<void> {
-    return this.storageQuotaService.assertPayloadBytesBackfillComplete();
-  }
 
   async checkStorageQuota(
     userId: number,
@@ -758,6 +866,42 @@ export class SyncService {
   }
 
   /**
+   * Delete pending passkey registrations whose verification token expired
+   * before `beforeTime`. Expiry is otherwise only enforced at read time
+   * (verifyEmail), so rows for abandoned registration attempts — including
+   * their credential public keys — would linger forever.
+   */
+  async deleteExpiredPendingPasskeyRegistrations(beforeTime: number): Promise<number> {
+    const result = await prisma.pendingPasskeyRegistration.deleteMany({
+      where: { verificationTokenExpiresAt: { lt: BigInt(beforeTime) } },
+    });
+    return result.count;
+  }
+
+  /**
+   * Delete unverified users created before `createdBefore` with no registration
+   * still in flight: no pending passkey registration row and no unexpired
+   * verification token (re-registering refreshes the token on the same row).
+   * Verified users can never match, and unverified users are denied auth, so
+   * nothing of value is lost when their related rows (operations, devices,
+   * sync state, passkeys, pending registrations) cascade on delete.
+   */
+  async deleteAbandonedUnverifiedUsers(createdBefore: number): Promise<number> {
+    const result = await prisma.user.deleteMany({
+      where: {
+        isVerified: 0,
+        createdAt: { lt: new Date(createdBefore) },
+        pendingPasskeyRegistrations: { none: {} },
+        OR: [
+          { verificationTokenExpiresAt: null },
+          { verificationTokenExpiresAt: { lt: BigInt(Date.now()) } },
+        ],
+      },
+    });
+    return result.count;
+  }
+
+  /**
    * Delete ALL sync data for a user. Used for encryption password changes.
    * Deletes operations, devices, and resets sync state.
    */
@@ -772,8 +916,7 @@ export class SyncService {
       // Delete sync state entirely, resetting lastSeq to 0.
       // Unlike uploadOps clean slate (which preserves lastSeq), account reset
       // intentionally wipes everything. Clients detect the wipe via latestSeq=0
-      // and trigger a full state re-upload. This is correct because account reset
-      // (e.g., encryption password change) requires ALL clients to re-sync.
+      // and trigger a full state re-upload.
       await tx.userSyncState.deleteMany({ where: { userId } });
 
       // Reset storage usage
@@ -796,6 +939,10 @@ export class SyncService {
   async getOnlineDeviceCount(userId: number): Promise<number> {
     return this.deviceService.getOnlineDeviceCount(userId);
   }
+
+  async listDevices(userId: number): Promise<SyncDeviceInfo[]> {
+    return this.deviceService.listDevices(userId);
+  }
 }
 
 // Singleton instance
@@ -808,7 +955,7 @@ export const getSyncService = (): SyncService => {
   return syncServiceInstance;
 };
 
-export const initSyncService = (config?: Partial<SyncConfig>): SyncService => {
-  syncServiceInstance = new SyncService(config);
+export const initSyncService = (): SyncService => {
+  syncServiceInstance = new SyncService();
   return syncServiceInstance;
 };

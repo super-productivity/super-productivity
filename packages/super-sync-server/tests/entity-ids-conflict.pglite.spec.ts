@@ -1,24 +1,32 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
+import { Prisma } from '@prisma/client';
+import { detectConflict, detectConflictForEntities } from '../src/sync/conflict';
+import { isEntityArrayBranchQuery } from './sync.service.test-state';
+import type { Operation, VectorClock } from '../src/sync/sync.types';
+
+const USER_ID = 1;
+const OTHER_USER_ID = 2;
+const TASK_UPDATE_ACTION = '[Task] Update';
+const TASK_TIME_DELTA_ACTION = '[TimeTracking] Sync time spent';
 
 /**
  * Real-Postgres regression for #8334's multi-entity conflict-detection SQL.
  *
  * The mock-based specs (issue-8334-detect-conflict.spec.ts, conflict-detection.spec.ts)
- * reproduce the Prisma filter semantics by hand and can NOT catch a bug in the raw
- * `unnest(CASE ...)` SQL that detectConflictForEntities / prefetchLatestEntityOpsForBatch
- * actually send to Postgres. This spec runs that SQL against an in-process Postgres
+ * reproduce the Prisma filter semantics by hand and can NOT catch a bug in the raw SQL
+ * that detectConflictForEntities actually sends to
+ * Postgres. This spec runs that SQL against an in-process Postgres
  * (PGlite — no Docker, no DATABASE_URL) so it runs in the normal `npm test` CI job.
  *
- * The SQL below is copied verbatim from packages/super-sync-server/src/sync/conflict.ts
- * (only the Prisma.sql `${}` interpolations are rewritten as `$n` placeholders). If you
- * change the query shape there, update it here — the two are intentionally kept in sync
- * by hand (the source keeps the SQL inline so the conflict-detection.spec mock's
- * positional params stay stable).
+ * A small transaction adapter renders the production Prisma tagged template through
+ * Prisma.sql, including nested Prisma.Sql / Prisma.join fragments, then executes its
+ * PostgreSQL text and bound values in PGlite. There is no second copy of the query.
  *
- * Load-bearing detail: the unnest folds the scalar `entity_id` INTO the `entity_ids`
- * set with a UNION (`o.entity_ids || ...ARRAY[entity_id]`), NOT a mutually-exclusive
- * `CASE WHEN cardinality(entity_ids) > 0 THEN entity_ids ELSE ARRAY[entity_id]`. The
+ * Load-bearing detail: the queries cover the scalar `entity_id` AND the `entity_ids` set
+ * as a UNION — since #9503 that is a scalar branch `UNION ALL` an array branch, before
+ * it a single `o.entity_ids || ...ARRAY[entity_id]` unnest. Either way it must NOT be a
+ * mutually-exclusive `CASE WHEN cardinality(entity_ids) > 0 THEN ... ELSE ...`. The
  * old CASE form dropped the scalar whenever entity_ids was non-empty, so an op whose
  * scalar entity_id is NOT a member of its own entity_ids (the dedup-off-scalar case)
  * was invisible — a later concurrent op touching that scalar was wrongly accepted
@@ -26,6 +34,38 @@ import { PGlite } from '@electric-sql/pglite';
  */
 describe('#8334 multi-entity conflict SQL (PGlite)', () => {
   let db: PGlite;
+  let transaction: Prisma.TransactionClient;
+
+  const createTransaction = (): Prisma.TransactionClient => {
+    const adapter = {
+      $queryRaw: async <T>(
+        strings: TemplateStringsArray,
+        ...values: Array<Prisma.Sql | Prisma.Sql['values'][number]>
+      ): Promise<T> => {
+        const query = Prisma.sql(strings, ...values);
+        return (await db.query(query.text, query.values)).rows as T;
+      },
+    };
+
+    return adapter as unknown as Prisma.TransactionClient;
+  };
+
+  const incomingOp = (
+    overrides: Partial<
+      Pick<Operation, 'clientId' | 'actionType' | 'entityType' | 'vectorClock'>
+    > = {},
+  ): Operation => ({
+    id: 'incoming',
+    clientId: 'B',
+    actionType: TASK_UPDATE_ACTION,
+    opType: 'UPD',
+    entityType: 'TASK',
+    payload: {},
+    vectorClock: { B: 1 },
+    timestamp: 1,
+    schemaVersion: 1,
+    ...overrides,
+  });
 
   // Mirrors the two migrations: the entity_ids text[] column + the GIN index, plus
   // the pre-existing btree that the scalar fallback relies on. Building the GIN index
@@ -36,7 +76,8 @@ describe('#8334 multi-entity conflict SQL (PGlite)', () => {
         id          text PRIMARY KEY,
         user_id     integer NOT NULL,
         client_id   text NOT NULL,
-        server_seq  bigint NOT NULL,
+        server_seq  integer NOT NULL,
+        action_type text NOT NULL,
         entity_type text NOT NULL,
         entity_id   text,
         entity_ids  text[] NOT NULL DEFAULT '{}',
@@ -52,19 +93,23 @@ describe('#8334 multi-entity conflict SQL (PGlite)', () => {
     id: string;
     serverSeq: number;
     clientId: string;
+    userId?: number;
+    actionType?: string;
     entityType?: string;
     entityId: string | null;
     entityIds?: string[];
-    vectorClock?: Record<string, number>;
+    vectorClock?: VectorClock;
   }): Promise<void> => {
     await db.query(
       `INSERT INTO operations
-         (id, user_id, client_id, server_seq, entity_type, entity_id, entity_ids, vector_clock)
-       VALUES ($1, 1, $2, $3, $4, $5, $6, $7)`,
+         (id, user_id, client_id, server_seq, action_type, entity_type, entity_id, entity_ids, vector_clock)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         op.id,
+        op.userId ?? USER_ID,
         op.clientId,
         op.serverSeq,
+        op.actionType ?? TASK_UPDATE_ACTION,
         op.entityType ?? 'TASK',
         op.entityId,
         op.entityIds ?? [],
@@ -73,97 +118,10 @@ describe('#8334 multi-entity conflict SQL (PGlite)', () => {
     );
   };
 
-  type LatestRow = {
-    entityId: string;
-    clientId: string;
-    serverSeq: number;
-    vectorClock: Record<string, number>;
-  };
-
-  // detectConflictForEntities() — single-entity-type batch lookup.
-  const detectForEntities = async (
-    entityType: string,
-    ids: string[],
-  ): Promise<LatestRow[]> => {
-    const res = await db.query<LatestRow>(
-      `SELECT DISTINCT ON (eid)
-          eid AS "entityId",
-          o.client_id AS "clientId",
-          o.server_seq AS "serverSeq",
-          o.vector_clock AS "vectorClock"
-       FROM operations o
-       CROSS JOIN LATERAL unnest(
-         o.entity_ids || CASE WHEN o.entity_id IS NULL THEN '{}'::text[] ELSE ARRAY[o.entity_id] END
-       ) AS eid
-       WHERE o.user_id = 1
-         AND o.entity_type = $1
-         AND (o.entity_ids && $2::text[] OR o.entity_id = ANY($2::text[]))
-         AND eid = ANY($2::text[])
-       ORDER BY eid, o.server_seq DESC`,
-      [entityType, ids],
-    );
-    return res.rows;
-  };
-
-  // detectConflictForEntity() — single entity, Prisma `OR: [{entityId}, {entityIds:{has}}]`
-  // which Prisma renders as `entity_id = $1 OR entity_ids @> ARRAY[$1]`.
-  const detectForEntity = async (
-    entityType: string,
-    id: string,
-  ): Promise<LatestRow | null> => {
-    const res = await db.query<LatestRow>(
-      `SELECT o.entity_id AS "entityId",
-              o.client_id AS "clientId",
-              o.server_seq AS "serverSeq",
-              o.vector_clock AS "vectorClock"
-       FROM operations o
-       WHERE o.user_id = 1
-         AND o.entity_type = $1
-         AND (o.entity_id = $2 OR o.entity_ids @> ARRAY[$2]::text[])
-       ORDER BY o.server_seq DESC
-       LIMIT 1`,
-      [entityType, id],
-    );
-    return res.rows[0] ?? null;
-  };
-
-  // prefetchLatestEntityOpsForBatch() — multi-entity-TYPE batch via a JOIN over
-  // (entity_type, entity_id) pairs.
-  const prefetchForPairs = async (
-    pairs: Array<{ entityType: string; entityId: string }>,
-  ): Promise<Array<LatestRow & { entityType: string }>> => {
-    const valuesSql = pairs.map((_p, i) => `($${i * 2 + 1}, $${i * 2 + 2})`).join(', ');
-    const idArrayParam = `$${pairs.length * 2 + 1}`;
-    const params: unknown[] = [];
-    for (const p of pairs) {
-      params.push(p.entityType, p.entityId);
-    }
-    params.push(pairs.map((p) => p.entityId));
-    const res = await db.query<LatestRow & { entityType: string }>(
-      `SELECT DISTINCT ON (o.entity_type, eid)
-          o.entity_type AS "entityType",
-          eid AS "entityId",
-          o.client_id AS "clientId",
-          o.server_seq AS "serverSeq",
-          o.vector_clock AS "vectorClock"
-       FROM operations o
-       CROSS JOIN LATERAL unnest(
-         o.entity_ids || CASE WHEN o.entity_id IS NULL THEN '{}'::text[] ELSE ARRAY[o.entity_id] END
-       ) AS eid
-       JOIN (VALUES ${valuesSql}) AS touched(entity_type, entity_id)
-         ON touched.entity_type = o.entity_type
-        AND touched.entity_id = eid
-       WHERE o.user_id = 1
-         AND (o.entity_ids && ${idArrayParam}::text[] OR o.entity_id = ANY(${idArrayParam}::text[]))
-       ORDER BY o.entity_type, eid, o.server_seq DESC`,
-      params,
-    );
-    return res.rows;
-  };
-
   beforeAll(async () => {
     db = new PGlite();
     await db.waitReady;
+    transaction = createTransaction();
   });
 
   afterAll(async () => {
@@ -175,7 +133,7 @@ describe('#8334 multi-entity conflict SQL (PGlite)', () => {
     await createSchema();
   });
 
-  describe('detectConflictForEntities (batch unnest SQL)', () => {
+  describe('detectConflictForEntities (batch scalar + array branch SQL)', () => {
     it('finds a stored multi-entity op via its NON-FIRST entity (the #8334 bug)', async () => {
       // op A touches task-1 + task-2; scalar entity_id is task-1.
       await insertOp({
@@ -184,197 +142,233 @@ describe('#8334 multi-entity conflict SQL (PGlite)', () => {
         clientId: 'A',
         entityId: 'task-1',
         entityIds: ['task-1', 'task-2'],
+        vectorClock: { A: 1 },
       });
 
-      const rows = await detectForEntities('TASK', ['task-2']);
+      const result = await detectConflictForEntities(
+        USER_ID,
+        incomingOp(),
+        ['task-2', 'task-unmatched'],
+        transaction,
+      );
 
       // Before the fix, task-2 was invisible (only the scalar task-1 was stored), so a
       // stale write to task-2 found no prior writer and was wrongly accepted.
-      expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({ entityId: 'task-2', clientId: 'A', serverSeq: 1 });
+      expect(result).toMatchObject({
+        hasConflict: true,
+        conflictType: 'concurrent',
+        existingClock: { A: 1 },
+      });
     });
 
-    it('returns the LATEST op per entity (DISTINCT ON ... ORDER BY server_seq DESC)', async () => {
+    it('skips a clean latest op and reports a later entity conflict', async () => {
+      // The old row conflicts with the incoming C clock; the latest row is its
+      // equal-clock retry from the same client. The second entity is concurrent,
+      // so omitting clientId, selecting the old task-1 row, or returning the clean
+      // task-1 result early changes the verdict.
       await insertOp({
-        id: 'opA',
+        id: 'old',
         serverSeq: 1,
         clientId: 'A',
         entityId: 'task-1',
-        entityIds: ['task-1', 'task-2'],
+        vectorClock: { A: 1 },
       });
-      // A newer single-entity write to task-1.
-      await insertOp({ id: 'opC', serverSeq: 3, clientId: 'A', entityId: 'task-1' });
+      await insertOp({
+        id: 'latest',
+        serverSeq: 3,
+        clientId: 'C',
+        entityId: 'task-1',
+        vectorClock: { C: 1 },
+      });
+      await insertOp({
+        id: 'later-conflict',
+        serverSeq: 4,
+        clientId: 'D',
+        entityId: 'task-2',
+        vectorClock: { D: 1 },
+      });
 
-      const rows = await detectForEntities('TASK', ['task-1']);
+      const result = await detectConflictForEntities(
+        USER_ID,
+        incomingOp({ clientId: 'C', vectorClock: { C: 1 } }),
+        ['task-1', 'task-2'],
+        transaction,
+      );
 
-      expect(rows).toHaveLength(1);
-      expect(rows[0].serverSeq).toBe(3);
+      expect(result).toMatchObject({
+        hasConflict: true,
+        conflictType: 'concurrent',
+        existingClock: { D: 1 },
+      });
     });
 
     it('falls back to the scalar entity_id for a pre-migration row (entity_ids = {})', async () => {
-      await insertOp({ id: 'opB', serverSeq: 2, clientId: 'A', entityId: 'task-3' });
-
-      const rows = await detectForEntities('TASK', ['task-3']);
-
-      expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({ entityId: 'task-3', serverSeq: 2 });
-    });
-
-    it('does not match an unrelated entity', async () => {
       await insertOp({
-        id: 'opA',
-        serverSeq: 1,
-        clientId: 'A',
-        entityId: 'task-1',
-        entityIds: ['task-1', 'task-2'],
-      });
-
-      expect(await detectForEntities('TASK', ['task-9'])).toHaveLength(0);
-    });
-
-    it('ignores a full-state op (entity_id NULL, entity_ids {}) without erroring', async () => {
-      // SYNC_IMPORT / BACKUP_IMPORT / REPAIR ops have no entity. The unnest hits the
-      // ARRAY[entity_id] branch with a NULL element — it must yield no match, not throw.
-      await insertOp({ id: 'opFull', serverSeq: 1, clientId: 'A', entityId: null });
-
-      expect(await detectForEntities('TASK', ['task-1'])).toHaveLength(0);
-    });
-
-    it('matches an entity stored only in entity_ids when the scalar differs (dedup-off-scalar)', async () => {
-      // getStoredEntityIds persists [task-A] even though length === 1 because it differs
-      // from the scalar entity_id (task-Z). Without entity_ids, task-A would be invisible.
-      await insertOp({
-        id: 'opD',
-        serverSeq: 1,
-        clientId: 'A',
-        entityId: 'task-Z',
-        entityIds: ['task-A'],
-      });
-
-      const rows = await detectForEntities('TASK', ['task-A']);
-
-      expect(rows).toHaveLength(1);
-      expect(rows[0].entityId).toBe('task-A');
-    });
-
-    it('finds the op via its DIVERGENT scalar entity_id (not a member of entity_ids) — the #8334 silent-data-loss case', async () => {
-      // Same dedup-off-scalar op as above, but now query for the SCALAR task-Z, which is
-      // NOT a member of entity_ids (['task-A']). The old mutually-exclusive CASE form used
-      // entity_ids alone (cardinality > 0) and dropped the scalar, so task-Z found no prior
-      // writer and a stale concurrent write to it was wrongly accepted. The UNION fold keeps
-      // the scalar visible. This is the case the dedup-off-scalar test above does NOT cover.
-      await insertOp({
-        id: 'opD',
-        serverSeq: 1,
-        clientId: 'A',
-        entityId: 'task-Z',
-        entityIds: ['task-A'],
-      });
-
-      const rows = await detectForEntities('TASK', ['task-Z']);
-
-      expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({ entityId: 'task-Z', clientId: 'A', serverSeq: 1 });
-    });
-
-    it('resolves every requested id to its own latest op in one batch', async () => {
-      await insertOp({
-        id: 'opA',
-        serverSeq: 1,
-        clientId: 'A',
-        entityId: 'task-1',
-        entityIds: ['task-1', 'task-2'],
-      });
-      await insertOp({ id: 'opB', serverSeq: 2, clientId: 'A', entityId: 'task-3' });
-      await insertOp({ id: 'opC', serverSeq: 3, clientId: 'A', entityId: 'task-1' });
-
-      const rows = await detectForEntities('TASK', ['task-1', 'task-2', 'task-3']);
-      const byEntity = Object.fromEntries(rows.map((r) => [r.entityId, r.serverSeq]));
-
-      expect(byEntity).toEqual({ 'task-1': 3, 'task-2': 1, 'task-3': 2 });
-    });
-  });
-
-  describe('detectConflictForEntity (Prisma OR / entity_ids @> ARRAY[id])', () => {
-    it('finds a multi-entity op via its non-first entity', async () => {
-      await insertOp({
-        id: 'opA',
-        serverSeq: 1,
-        clientId: 'A',
-        entityId: 'task-1',
-        entityIds: ['task-1', 'task-2'],
-      });
-
-      const row = await detectForEntity('TASK', 'task-2');
-
-      expect(row).not.toBeNull();
-      expect(row?.clientId).toBe('A');
-    });
-
-    it('returns null for an unrelated entity', async () => {
-      await insertOp({
-        id: 'opA',
-        serverSeq: 1,
-        clientId: 'A',
-        entityId: 'task-1',
-        entityIds: ['task-1', 'task-2'],
-      });
-
-      expect(await detectForEntity('TASK', 'task-9')).toBeNull();
-    });
-  });
-
-  describe('prefetchLatestEntityOpsForBatch (JOIN-over-pairs unnest SQL)', () => {
-    it('matches each (type,id) pair against the op entity set without crossing types', async () => {
-      await insertOp({
-        id: 'opA',
-        serverSeq: 1,
-        clientId: 'A',
-        entityType: 'TASK',
-        entityId: 'task-1',
-        entityIds: ['task-1', 'task-2'],
-      });
-      // Same id string but a different entity type must NOT match the TASK pair.
-      await insertOp({
-        id: 'opP',
+        id: 'opB',
         serverSeq: 2,
         clientId: 'A',
-        entityType: 'PROJECT',
-        entityId: 'task-2',
+        entityId: 'task-3',
+        vectorClock: { A: 2 },
       });
 
-      const rows = await prefetchForPairs([
-        { entityType: 'TASK', entityId: 'task-2' },
-        { entityType: 'PROJECT', entityId: 'task-2' },
-      ]);
-
-      const byKey = Object.fromEntries(
-        rows.map((r) => [`${r.entityType}:${r.entityId}`, r.serverSeq]),
+      const result = await detectConflictForEntities(
+        USER_ID,
+        incomingOp(),
+        ['task-3', 'task-unmatched'],
+        transaction,
       );
-      expect(byKey).toEqual({ 'TASK:task-2': 1, 'PROJECT:task-2': 2 });
+
+      expect(result).toMatchObject({
+        hasConflict: true,
+        conflictType: 'concurrent',
+        existingClock: { A: 2 },
+      });
     });
 
-    it('matches a (type, divergent-scalar) pair not present in entity_ids — the #8334 silent-data-loss case', async () => {
-      // The prefetch path got the same scalar-UNION fix as detectConflictForEntities and
-      // can drift independently; pin the divergent scalar here too. task-Z is the scalar but
-      // not a member of entity_ids (['task-A']); the old CASE form dropped it.
+    it('finds a DIVERGENT scalar entity_id not present in entity_ids', async () => {
+      // The old mutually-exclusive CASE unnested ['task-A'] and dropped task-Z.
       await insertOp({
         id: 'opD',
         serverSeq: 1,
         clientId: 'A',
-        entityType: 'TASK',
         entityId: 'task-Z',
         entityIds: ['task-A'],
+        vectorClock: { A: 1 },
       });
 
-      const rows = await prefetchForPairs([{ entityType: 'TASK', entityId: 'task-Z' }]);
+      const result = await detectConflictForEntities(
+        USER_ID,
+        incomingOp(),
+        ['task-Z', 'task-unmatched'],
+        transaction,
+      );
 
-      expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({
-        entityType: 'TASK',
-        entityId: 'task-Z',
-        serverSeq: 1,
+      expect(result).toMatchObject({
+        hasConflict: true,
+        conflictType: 'concurrent',
+        existingClock: { A: 1 },
       });
     });
+
+    it('isolates rows by user and entity type', async () => {
+      await insertOp({
+        id: 'other-user-task',
+        serverSeq: 10,
+        clientId: 'A',
+        userId: OTHER_USER_ID,
+        entityId: 'shared-id',
+        vectorClock: { A: 1 },
+      });
+      await insertOp({
+        id: 'same-user-project',
+        serverSeq: 11,
+        clientId: 'A',
+        entityType: 'PROJECT',
+        entityId: 'shared-id',
+        vectorClock: { A: 1 },
+      });
+
+      const result = await detectConflictForEntities(
+        USER_ID,
+        incomingOp(),
+        ['shared-id', 'task-unmatched'],
+        transaction,
+      );
+
+      expect(result).toEqual({ hasConflict: false });
+    });
+
+    it('isolates by user and entity type in the ARRAY branch too', async () => {
+      // The test above stores its foreign rows with entity_ids = '{}', so they are only
+      // ever reachable via the scalar branch and the array branch's WHERE never has to
+      // reject anything. Since #9503 the array branch matches by entity id across ALL
+      // users inside a MATERIALIZED CTE and re-applies user_id / entity_type afterwards,
+      // so it needs its own isolation case: without it, dropping either predicate leaks
+      // another tenant's vector clock and every spec still passes.
+      await insertOp({
+        id: 'other-user-array',
+        serverSeq: 20,
+        clientId: 'Z',
+        userId: OTHER_USER_ID,
+        entityId: 'other-primary',
+        entityIds: ['other-primary', 'shared-id'],
+        vectorClock: { Z: 1 },
+      });
+      await insertOp({
+        id: 'same-user-project-array',
+        serverSeq: 21,
+        clientId: 'Y',
+        entityType: 'PROJECT',
+        entityId: 'project-primary',
+        entityIds: ['project-primary', 'shared-id'],
+        vectorClock: { Y: 1 },
+      });
+
+      const result = await detectConflictForEntities(
+        USER_ID,
+        incomingOp(),
+        ['shared-id', 'task-unmatched'],
+        transaction,
+      );
+
+      expect(result).toEqual({ hasConflict: false });
+    });
+
+    it('uses the selected actionType when resolving concurrent timer deltas', async () => {
+      await insertOp({
+        id: 'timer-delta',
+        serverSeq: 1,
+        clientId: 'A',
+        actionType: TASK_TIME_DELTA_ACTION,
+        entityId: 'task-1',
+        vectorClock: { A: 1 },
+      });
+
+      const result = await detectConflictForEntities(
+        USER_ID,
+        incomingOp({ actionType: TASK_TIME_DELTA_ACTION }),
+        ['task-1', 'task-unmatched'],
+        transaction,
+      );
+
+      expect(result).toEqual({ hasConflict: false });
+    });
+  });
+
+  // The tx mocks (sync.service.test-state, conflict-detection.spec, sync.service.spec)
+  // route raw queries by sniffing the tagged template's LITERALS. Nothing but a comment
+  // kept those predicates mutually exclusive, and #9503 already broke one of them. A mock
+  // that answers a query it never modelled returns "no conflict", which is silent data
+  // loss dressed as a passing suite — so pin the partition itself.
+  it('each raw conflict template matches exactly one tx-mock discriminator', async () => {
+    const seen: string[] = [];
+    const capturingTx = {
+      $queryRaw: async (strings: TemplateStringsArray): Promise<unknown[]> => {
+        seen.push(strings.join(''));
+        return [];
+      },
+      operation: {
+        findFirst: async (): Promise<null> => null,
+        findUnique: async (): Promise<null> => null,
+      },
+    } as unknown as Prisma.TransactionClient;
+
+    // The single-entity array branch, then the multi-entity batch template.
+    await detectConflict(
+      USER_ID,
+      { ...incomingOp(), entityId: 'solo' } as Operation,
+      capturingTx,
+    );
+    await detectConflictForEntities(USER_ID, incomingOp(), ['a', 'b'], capturingTx);
+
+    const discriminators = [
+      isEntityArrayBranchQuery,
+      (sql: string): boolean => sql.includes('scalar_hits'),
+    ];
+
+    expect(seen).toHaveLength(2);
+    for (const sql of seen) {
+      expect(discriminators.filter((matches) => matches(sql))).toHaveLength(1);
+    }
   });
 });

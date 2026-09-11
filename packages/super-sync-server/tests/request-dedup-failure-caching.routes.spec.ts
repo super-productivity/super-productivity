@@ -75,6 +75,10 @@ const userId = 1;
 const clientId = 'retrying-client';
 const QUOTA = 100 * 1024 * 1024;
 
+// Uploads must pass the encrypted-only ingress gate: flag true + a payload
+// with the ciphertext transport shape (canonical base64, >= 28 bytes).
+const ENCRYPTED_PAYLOAD = Buffer.alloc(44, 7).toString('base64');
+
 const createOp = (): unknown => ({
   id: 'op-1',
   clientId,
@@ -82,7 +86,8 @@ const createOp = (): unknown => ({
   opType: 'CRT',
   entityType: 'TASK',
   entityId: 'task-1',
-  payload: { title: 'Test Task' },
+  payload: ENCRYPTED_PAYLOAD,
+  isPayloadEncrypted: true,
   vectorClock: {},
   timestamp: Date.now(),
   schemaVersion: 1,
@@ -150,7 +155,8 @@ describe('Request dedup — transaction-failure results are not cached (#8332)',
       url: '/api/sync/snapshot',
       headers: { authorization: `Bearer ${authToken}` },
       payload: {
-        state: { TASK: {} },
+        state: ENCRYPTED_PAYLOAD,
+        isPayloadEncrypted: true,
         clientId,
         reason: 'recovery',
         vectorClock: { [clientId]: 1 },

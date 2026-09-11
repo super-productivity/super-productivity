@@ -1,6 +1,4 @@
 import { effect, inject, Injectable, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
 import { PluginLog } from '../core/log';
 import { GlobalConfigService } from '../features/config/global-config.service';
 import { DEFAULT_LANGUAGE } from '../core/locale.constants';
@@ -18,7 +16,6 @@ interface PluginTranslations {
   providedIn: 'root',
 })
 export class PluginI18nService {
-  private readonly _http = inject(HttpClient);
   private readonly _globalConfigService = inject(GlobalConfigService);
 
   // Map of pluginId -> translations by language
@@ -37,43 +34,6 @@ export class PluginI18nService {
         PluginLog.log(`[PluginI18n] Language initialized/updated to: ${lng}`);
       }
     });
-  }
-
-  /**
-   * Load translation files for a plugin from a file path
-   */
-  async loadPluginTranslationsFromPath(
-    pluginId: string,
-    pluginPath: string,
-    languages: string[],
-  ): Promise<void> {
-    const translations: PluginTranslations = {};
-
-    for (const lang of languages) {
-      const translationPath = `${pluginPath}/i18n/${lang}.json`;
-
-      try {
-        const content = await firstValueFrom(
-          this._http.get<Record<string, unknown>>(translationPath),
-        );
-        translations[lang] = content;
-        PluginLog.log(`[PluginI18n] Loaded ${lang} translations for ${pluginId}`);
-      } catch (error) {
-        PluginLog.err(
-          `[PluginI18n] Failed to load ${lang} translations for ${pluginId}:`,
-          error,
-        );
-      }
-    }
-
-    // Warn if English translations missing
-    if (!translations['en'] && languages.includes('en')) {
-      PluginLog.err(
-        `[PluginI18n] Missing English (en) translations for ${pluginId} - translations will fall back to keys`,
-      );
-    }
-
-    this._translations.set(pluginId, translations);
   }
 
   /**

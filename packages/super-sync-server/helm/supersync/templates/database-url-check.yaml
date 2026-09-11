@@ -1,0 +1,62 @@
+{{- if not .Values.postgresql.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-database-url-check" (include "supersync.fullname" . | trunc 44 | trimSuffix "-") }}
+  labels:
+    {{- include "supersync.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: database-url-check
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: validate-database-url
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ['node', '-e']
+          args:
+            - |
+              try {
+                const url = new URL(process.env.DATABASE_URL);
+                const valid = ['connection_limit', 'pool_timeout'].every((name) => {
+                  const values = url.searchParams.getAll(name);
+                  const value = values[0];
+                  return values.length === 1 && /^[1-9][0-9]*$/.test(value) &&
+                    Number.isSafeInteger(Number(value));
+                });
+                if (!valid) throw new Error();
+              } catch {
+                console.error(
+                  'DATABASE_URL must include exactly one positive connection_limit and pool_timeout value each.',
+                );
+                process.exit(1);
+              }
+          env:
+            - name: DATABASE_URL
+              {{- if .Values.externalDatabase.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalDatabase.existingSecret }}
+                  key: DATABASE_URL
+              {{- else }}
+              value: {{ .Values.externalDatabase.url | quote }}
+              {{- end }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+{{- end }}

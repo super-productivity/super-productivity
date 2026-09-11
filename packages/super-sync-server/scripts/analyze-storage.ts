@@ -21,9 +21,18 @@
  */
 
 import { Prisma } from '@prisma/client';
-import { prisma, disconnectDb } from '../src/db';
+import { prisma, disconnectDb, reportMonitoringError } from './monitoring-db';
+import {
+  OPERATION_BYTES,
+  OPS_PER_USER,
+  newestOpsPerUser,
+  resolveOperationScope,
+} from './monitoring-scope';
 import * as fs from 'fs';
 import * as path from 'path';
+
+/** Operations read when a report is scoped to a single user via `--user`. */
+const USER_FOCUS_OPS = 10000;
 
 // ============================================================================
 // Utility Functions
@@ -65,29 +74,43 @@ const saveToFile = (filename: string, data: any): string => {
 const analyzeOperationSizes = async (userId?: number): Promise<void> => {
   console.log('\n=== Operation Size Distribution ===\n');
 
-  const userWhere = userId
-    ? Prisma.sql`WHERE user_id = ${userId}`
-    : Prisma.empty;
-  const userAnd = userId
-    ? Prisma.sql`AND user_id = ${userId}`
-    : Prisma.empty;
+  const scope = userId ? undefined : await resolveOperationScope();
+  console.log(
+    scope?.description ??
+      `Based on up to ${USER_FOCUS_OPS} newest operations for this user.`,
+  );
+  if (scope && scope.userIds.length === 0) {
+    console.log('No active users found.');
+    return;
+  }
+  const scopedOperations = scope
+    ? newestOpsPerUser(scope.userIds, Prisma.sql`${OPERATION_BYTES} AS operation_bytes`)
+    : Prisma.sql`
+        SELECT ${OPERATION_BYTES} AS operation_bytes
+        FROM operations
+        WHERE user_id = ${userId}
+        ORDER BY server_seq DESC
+        LIMIT ${USER_FOCUS_OPS}
+      `;
 
   // Get percentile distribution
   const sizeDistribution: any[] = await prisma.$queryRaw`
+    WITH sampled_operations AS MATERIALIZED (
+      ${scopedOperations}
+    )
     SELECT
-      percentile_cont(0.10) WITHIN GROUP (ORDER BY pg_column_size(payload)) as p10,
-      percentile_cont(0.25) WITHIN GROUP (ORDER BY pg_column_size(payload)) as p25,
-      percentile_cont(0.50) WITHIN GROUP (ORDER BY pg_column_size(payload)) as p50,
-      percentile_cont(0.75) WITHIN GROUP (ORDER BY pg_column_size(payload)) as p75,
-      percentile_cont(0.90) WITHIN GROUP (ORDER BY pg_column_size(payload)) as p90,
-      percentile_cont(0.95) WITHIN GROUP (ORDER BY pg_column_size(payload)) as p95,
-      percentile_cont(0.99) WITHIN GROUP (ORDER BY pg_column_size(payload)) as p99,
-      MIN(pg_column_size(payload)) as min_size,
-      MAX(pg_column_size(payload)) as max_size,
-      AVG(pg_column_size(payload)) as avg_size,
+      percentile_cont(0.10) WITHIN GROUP (ORDER BY operation_bytes) as p10,
+      percentile_cont(0.25) WITHIN GROUP (ORDER BY operation_bytes) as p25,
+      percentile_cont(0.50) WITHIN GROUP (ORDER BY operation_bytes) as p50,
+      percentile_cont(0.75) WITHIN GROUP (ORDER BY operation_bytes) as p75,
+      percentile_cont(0.90) WITHIN GROUP (ORDER BY operation_bytes) as p90,
+      percentile_cont(0.95) WITHIN GROUP (ORDER BY operation_bytes) as p95,
+      percentile_cont(0.99) WITHIN GROUP (ORDER BY operation_bytes) as p99,
+      MIN(operation_bytes) as min_size,
+      MAX(operation_bytes) as max_size,
+      AVG(operation_bytes) as avg_size,
       COUNT(*) as total_ops
-    FROM operations
-    ${userWhere}
+    FROM sampled_operations
   `;
 
   const stats = sizeDistribution[0];
@@ -107,22 +130,24 @@ const analyzeOperationSizes = async (userId?: number): Promise<void> => {
   // Size buckets
   console.log('\nSize Distribution:');
   const buckets: any[] = await prisma.$queryRaw`
+    WITH sampled_operations AS MATERIALIZED (
+      ${scopedOperations}
+    )
     SELECT
       CASE
-        WHEN pg_column_size(payload) < 512 THEN '0-512B'
-        WHEN pg_column_size(payload) < 1024 THEN '512B-1KB'
-        WHEN pg_column_size(payload) < 5120 THEN '1KB-5KB'
-        WHEN pg_column_size(payload) < 10240 THEN '5KB-10KB'
-        WHEN pg_column_size(payload) < 51200 THEN '10KB-50KB'
-        WHEN pg_column_size(payload) < 102400 THEN '50KB-100KB'
+        WHEN operation_bytes < 512 THEN '0-512B'
+        WHEN operation_bytes < 1024 THEN '512B-1KB'
+        WHEN operation_bytes < 5120 THEN '1KB-5KB'
+        WHEN operation_bytes < 10240 THEN '5KB-10KB'
+        WHEN operation_bytes < 51200 THEN '10KB-50KB'
+        WHEN operation_bytes < 102400 THEN '50KB-100KB'
         ELSE '100KB+'
       END as size_bucket,
       COUNT(*) as count,
-      SUM(pg_column_size(payload)) as total_bytes
-    FROM operations
-    ${userWhere}
+      SUM(operation_bytes) as total_bytes
+    FROM sampled_operations
     GROUP BY size_bucket
-    ORDER BY MIN(pg_column_size(payload))
+    ORDER BY MIN(operation_bytes)
   `;
 
   console.table(
@@ -141,21 +166,31 @@ const analyzeOperationSizes = async (userId?: number): Promise<void> => {
 const analyzeOperationTimeline = async (userId?: number): Promise<void> => {
   console.log('\n=== Operation Timeline Analysis ===\n');
 
-  const userAnd = userId
-    ? Prisma.sql`AND user_id = ${userId}`
-    : Prisma.empty;
+  const thirtyDaysAgo = BigInt(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const scope = userId ? undefined : await resolveOperationScope(thirtyDaysAgo);
+  console.log(
+    scope?.description ??
+      `Based on up to ${OPS_PER_USER} newest operations for this user.`,
+  );
+  const monitoredUsers = scope ? scope.userIds : [userId as number];
+  if (monitoredUsers.length === 0) {
+    console.log('No active users found.');
+    return;
+  }
 
   // Operations per day
   console.log('Operations per Day (last 30 days):');
   const perDay: any[] = await prisma.$queryRaw`
+    WITH recent_ops AS MATERIALIZED (
+      ${newestOpsPerUser(monitoredUsers, Prisma.sql`received_at, client_id, payload_bytes`)}
+    )
     SELECT
       DATE(to_timestamp(received_at / 1000)) as date,
       COUNT(*) as ops_count,
       COUNT(DISTINCT client_id) as unique_devices,
-      SUM(pg_column_size(payload)) as total_bytes
-    FROM operations
-    WHERE received_at > EXTRACT(EPOCH FROM NOW() - INTERVAL '30 days') * 1000
-    ${userAnd}
+      SUM(payload_bytes) as total_bytes
+    FROM recent_ops
+    WHERE received_at > ${thirtyDaysAgo}
     GROUP BY DATE(to_timestamp(received_at / 1000))
     ORDER BY date DESC
     LIMIT 30
@@ -177,13 +212,15 @@ const analyzeOperationTimeline = async (userId?: number): Promise<void> => {
   // Operations per hour (last 24 hours)
   console.log('\nOperations per Hour (last 24 hours):');
   const perHour: any[] = await prisma.$queryRaw`
+    WITH recent_ops AS MATERIALIZED (
+      ${newestOpsPerUser(monitoredUsers, Prisma.sql`received_at, payload_bytes`)}
+    )
     SELECT
       DATE_TRUNC('hour', to_timestamp(received_at / 1000)) as hour,
       COUNT(*) as ops_count,
-      AVG(pg_column_size(payload)) as avg_size
-    FROM operations
+      AVG(payload_bytes) as avg_size
+    FROM recent_ops
     WHERE received_at > EXTRACT(EPOCH FROM NOW() - INTERVAL '24 hours') * 1000
-    ${userAnd}
     GROUP BY hour
     ORDER BY hour DESC
     LIMIT 24
@@ -206,22 +243,43 @@ const analyzeOperationTimeline = async (userId?: number): Promise<void> => {
 const analyzeOperationTypes = async (userId?: number): Promise<void> => {
   console.log('\n=== Operation Type Analysis ===\n');
 
-  const userWhere = userId
-    ? Prisma.sql`WHERE user_id = ${userId}`
-    : Prisma.empty;
+  const scope = userId ? undefined : await resolveOperationScope();
+  console.log(
+    scope?.description ??
+      `Based on up to ${USER_FOCUS_OPS} newest operations for this user.`,
+  );
+  if (scope && scope.userIds.length === 0) {
+    console.log('No active users found.');
+    return;
+  }
+  const typeColumns = Prisma.sql`
+          op_type, entity_type, action_type, user_id,
+          ${OPERATION_BYTES} AS operation_bytes
+        `;
+  const scopedOperations = scope
+    ? newestOpsPerUser(scope.userIds, typeColumns)
+    : Prisma.sql`
+        SELECT ${typeColumns}
+        FROM operations
+        WHERE user_id = ${userId}
+        ORDER BY server_seq DESC
+        LIMIT ${USER_FOCUS_OPS}
+      `;
 
   // By opType
   console.log('By Operation Type:');
   const byOpType: any[] = await prisma.$queryRaw`
+    WITH sampled_operations AS MATERIALIZED (
+      ${scopedOperations}
+    )
     SELECT
       op_type,
       COUNT(*) as count,
-      SUM(pg_column_size(payload)) as total_bytes,
-      AVG(pg_column_size(payload)) as avg_bytes,
-      MAX(pg_column_size(payload)) as max_bytes,
+      SUM(operation_bytes) as total_bytes,
+      AVG(operation_bytes) as avg_bytes,
+      MAX(operation_bytes) as max_bytes,
       COUNT(DISTINCT user_id) as unique_users
-    FROM operations
-    ${userWhere}
+    FROM sampled_operations
     GROUP BY op_type
     ORDER BY total_bytes DESC
   `;
@@ -240,13 +298,15 @@ const analyzeOperationTypes = async (userId?: number): Promise<void> => {
   // By entityType
   console.log('\nBy Entity Type:');
   const byEntityType: any[] = await prisma.$queryRaw`
+    WITH sampled_operations AS MATERIALIZED (
+      ${scopedOperations}
+    )
     SELECT
       entity_type,
       COUNT(*) as count,
-      SUM(pg_column_size(payload)) as total_bytes,
-      AVG(pg_column_size(payload)) as avg_bytes
-    FROM operations
-    ${userWhere}
+      SUM(operation_bytes) as total_bytes,
+      AVG(operation_bytes) as avg_bytes
+    FROM sampled_operations
     GROUP BY entity_type
     ORDER BY total_bytes DESC
   `;
@@ -263,13 +323,15 @@ const analyzeOperationTypes = async (userId?: number): Promise<void> => {
   // By actionType (top 10)
   console.log('\nBy Action Type (Top 10):');
   const byActionType: any[] = await prisma.$queryRaw`
+    WITH sampled_operations AS MATERIALIZED (
+      ${scopedOperations}
+    )
     SELECT
       action_type,
       COUNT(*) as count,
-      SUM(pg_column_size(payload)) as total_bytes,
-      AVG(pg_column_size(payload)) as avg_bytes
-    FROM operations
-    ${userWhere}
+      SUM(operation_bytes) as total_bytes,
+      AVG(operation_bytes) as avg_bytes
+    FROM sampled_operations
     GROUP BY action_type
     ORDER BY total_bytes DESC
     LIMIT 10
@@ -289,9 +351,32 @@ const analyzeOperationTypes = async (userId?: number): Promise<void> => {
  * Find and analyze the largest operations
  */
 const analyzeLargeOperations = async (limit = 20): Promise<void> => {
-  console.log(`\n=== Top ${limit} Largest Operations ===\n`);
+  console.log(`\n=== Top ${limit} Largest Operations in Recent Sample ===\n`);
+  const scope = await resolveOperationScope();
+  console.log(scope.description);
+  if (scope.userIds.length === 0) {
+    console.log('No active users found.');
+    return;
+  }
 
+  // `users` is joined outside the LIMIT so it costs `limit` primary-key lookups
+  // rather than a full scan of every account hashed against the whole sample.
   const largeOps: any[] = await prisma.$queryRaw`
+    WITH sampled_operations AS MATERIALIZED (
+      ${newestOpsPerUser(
+        scope.userIds,
+        Prisma.sql`
+          id, user_id, op_type, action_type, entity_type, entity_id,
+          ${OPERATION_BYTES} AS operation_bytes,
+          received_at, is_payload_encrypted
+        `,
+      )}
+    ), largest AS (
+      SELECT *
+      FROM sampled_operations
+      ORDER BY operation_bytes DESC
+      LIMIT ${limit}
+    )
     SELECT
       o.id,
       o.user_id,
@@ -300,13 +385,12 @@ const analyzeLargeOperations = async (limit = 20): Promise<void> => {
       o.action_type,
       o.entity_type,
       o.entity_id,
-      pg_column_size(o.payload) as payload_bytes,
+      o.operation_bytes AS payload_bytes,
       o.received_at,
       o.is_payload_encrypted
-    FROM operations o
+    FROM largest o
     JOIN users u ON o.user_id = u.id
-    ORDER BY pg_column_size(o.payload) DESC
-    LIMIT ${limit};
+    ORDER BY o.operation_bytes DESC;
   `;
 
   console.table(
@@ -378,7 +462,21 @@ const analyzeLargeOperations = async (limit = 20): Promise<void> => {
 const detectRapidFire = async (thresholdPerSecond = 5): Promise<void> => {
   console.log(`\n=== Rapid Fire Detection (>${thresholdPerSecond} ops/second) ===\n`);
 
+  const sevenDaysAgo = BigInt(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const scope = await resolveOperationScope(sevenDaysAgo);
+  console.log(scope.description);
+  if (scope.userIds.length === 0) {
+    console.log('No active users found.');
+    return;
+  }
+
   const rapidFire: any[] = await prisma.$queryRaw`
+    WITH recent_ops AS MATERIALIZED (
+      ${newestOpsPerUser(
+        scope.userIds,
+        Prisma.sql`user_id, client_id, received_at, op_type, entity_type`,
+      )}
+    )
     SELECT
       user_id,
       client_id,
@@ -386,7 +484,8 @@ const detectRapidFire = async (thresholdPerSecond = 5): Promise<void> => {
       COUNT(*) as ops_in_second,
       array_agg(DISTINCT op_type) as op_types,
       array_agg(DISTINCT entity_type) as entity_types
-    FROM operations
+    FROM recent_ops
+    WHERE received_at > ${sevenDaysAgo}
     GROUP BY user_id, client_id, second
     HAVING COUNT(*) > ${thresholdPerSecond}
     ORDER BY ops_in_second DESC
@@ -420,12 +519,13 @@ const detectRapidFire = async (thresholdPerSecond = 5): Promise<void> => {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10);
 
+  const offenders = await prisma.user.findMany({
+    where: { id: { in: userIncidents.map(([userId]) => userId) } },
+    select: { id: true, email: true },
+  });
+  const emailById = new Map(offenders.map((user) => [user.id, user.email]));
   for (const [userId, count] of userIncidents) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true },
-    });
-    console.log(`  User ${userId} (${user?.email}): ${count} incidents`);
+    console.log(`  User ${userId} (${emailById.get(userId)}): ${count} incidents`);
   }
 };
 
@@ -453,13 +553,12 @@ const analyzeSnapshots = async (): Promise<void> => {
   console.log(`  Max size: ${formatBytes(Number(stats.max_snapshot_size || 0))}`);
   console.log(`  Total size: ${formatBytes(Number(stats.total_snapshot_size || 0))}`);
 
-  // Correlation with operation count
-  console.log('\nSnapshot Size vs Operation Count:');
+  console.log('\nLargest Snapshots:');
   const correlation: any[] = await prisma.$queryRaw`
     SELECT
       u.id,
       u.email,
-      (SELECT COUNT(*) FROM operations o WHERE o.user_id = u.id) as op_count,
+      s.last_seq,
       LENGTH(s.snapshot_data) as snapshot_size,
       s.last_snapshot_seq
     FROM users u
@@ -472,9 +571,9 @@ const analyzeSnapshots = async (): Promise<void> => {
   console.table(
     correlation.map((c) => ({
       User: `${c.id} (${c.email})`,
-      Ops: Number(c.op_count),
+      LatestSeq: Number(c.last_seq),
       SnapshotSize: formatBytes(Number(c.snapshot_size)),
-      LastSeq: Number(c.last_snapshot_seq),
+      SnapshotSeq: Number(c.last_snapshot_seq),
     })),
   );
 };
@@ -696,6 +795,13 @@ Commands:
   export-ops --user <id> [--limit <n>]    Export operations to JSON (default: 1000)
   compare-users <id1> <id2>               Compare two users' patterns
 
+Environment:
+  MONITOR_SCOPE_USERS   Users sampled by the all-user operation reports (default 200).
+                        Each reads the newest ${OPS_PER_USER} operations of that many most
+                        recently active users, so this is what bounds their cost.
+                        Lower it if a report hits the database statement_timeout.
+                        Honoured by \`npm run monitor:all\` too.
+
 Examples:
   npm run analyze-storage -- operation-sizes --user 29
   npm run analyze-storage -- large-ops --limit 50
@@ -790,8 +896,8 @@ const main = async (): Promise<void> => {
         showHelp();
     }
   } catch (error) {
-    console.error('Error:', error);
-    process.exit(1);
+    reportMonitoringError('Error:', error);
+    process.exitCode = 1;
   } finally {
     await disconnectDb();
   }

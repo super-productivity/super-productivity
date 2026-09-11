@@ -3,7 +3,10 @@ import { TestBed } from '@angular/core/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { of } from 'rxjs';
-import { ServerMigrationService } from './server-migration.service';
+import {
+  ServerMigrationService,
+  ServerMigrationOutcome,
+} from './server-migration.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { VectorClockService } from './vector-clock.service';
 import { ValidateStateService } from '../validation/validate-state.service';
@@ -24,6 +27,14 @@ import { LockService } from './lock.service';
 import { OperationWriteFlushService } from './operation-write-flush.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
 import { OperationCaptureService } from '../capture/operation-capture.service';
+import {
+  AppDataComplete,
+  MODEL_CONFIGS,
+  withDefaultModelSlices,
+} from '../model/model-config';
+import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
+import { initialSimpleCounterState } from '../../features/simple-counter/store/simple-counter.reducer';
+import { deepEqual } from '@sp/sync-core';
 
 describe('ServerMigrationService', () => {
   let service: ServerMigrationService;
@@ -325,9 +336,10 @@ describe('ServerMigrationService', () => {
         } as any),
       );
 
-      await service.handleServerMigration(defaultProvider);
+      const outcome = await service.handleServerMigration(defaultProvider);
 
       expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(outcome).toEqual({ kind: 'skipped', reason: 'empty_state' });
     });
 
     it('should skip if state only has system tags', async () => {
@@ -376,10 +388,76 @@ describe('ServerMigrationService', () => {
         } as any),
       );
 
-      const createdOpId = await service.handleServerMigration(defaultProvider);
+      const outcome = await service.handleServerMigration(defaultProvider);
 
       expect(opLogStoreSpy.append).toHaveBeenCalled();
-      expect(createdOpId).toBe(opLogStoreSpy.append.calls.mostRecent().args[0].id);
+      expect(outcome).toEqual({
+        kind: 'created',
+        opId: opLogStoreSpy.append.calls.mostRecent().args[0].id,
+      });
+    });
+
+    describe('outcome (#9932)', () => {
+      it('is reused_pending when an unsynced server-migration import is already queued', async () => {
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([createMigrationEntry()]);
+
+        const outcome = await service.handleServerMigration(defaultProvider);
+
+        expect(outcome).toEqual({ kind: 'reused_pending' });
+        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      });
+
+      it('never reports reused_pending for a FORCE_UPLOAD even when a migration import is pending', async () => {
+        opLogStoreSpy.getOpsAfterSeq.and.resolveTo([createMigrationEntry()]);
+
+        const outcome = await service.handleServerMigration(defaultProvider, {
+          skipServerEmptyCheck: true,
+          syncImportReason: 'FORCE_UPLOAD',
+        });
+
+        expect(outcome.kind).toBe('created');
+        expect(opLogStoreSpy.append).toHaveBeenCalled();
+      });
+
+      // The invariant the widened gate rests on: hasMeaningfulStateData must stay a
+      // SUBSET of this service's own hasServerMigrationStateData. If it ever went
+      // wider, the gate would trigger seeding that then skips as `empty_state`,
+      // and the client would re-run the whole decision on every sync forever.
+      // Archive-only state is the case #9932 widened the gate to cover, so it is
+      // the one that has to ship here.
+      it('creates a SYNC_IMPORT for archive-only state, so the widened gate can never seed nothing', async () => {
+        stateSnapshotServiceSpy.getStateSnapshotAsync.and.resolveTo({
+          task: { ids: [], entities: {} },
+          project: {
+            ids: [INBOX_PROJECT.id],
+            entities: { [INBOX_PROJECT.id]: INBOX_PROJECT },
+          },
+          tag: { ids: Array.from(SYSTEM_TAG_IDS), entities: {} },
+          note: { ids: [], entities: {} },
+          taskRepeatCfg: { ids: [], entities: {} },
+          timeTracking: { project: {}, tag: {} },
+          archiveYoung: {
+            task: {
+              ids: ['archived-1'],
+              entities: { 'archived-1': { id: 'archived-1' } },
+            },
+            timeTracking: { project: {}, tag: {} },
+            lastTimeTrackingFlush: 0,
+          },
+          archiveOld: {
+            task: { ids: [], entities: {} },
+            timeTracking: { project: {}, tag: {} },
+          },
+        } as unknown as AppStateSnapshot);
+
+        const outcome = await service.handleServerMigration(defaultProvider);
+
+        expect(outcome.kind).toBe('created');
+        expect(opLogStoreSpy.append).toHaveBeenCalled();
+        expect(opLogStoreSpy.append.calls.mostRecent().args[0].opType).toBe(
+          OpType.SyncImport,
+        );
+      });
     });
 
     it('should proceed if non-entity sync state differs from defaults', async () => {
@@ -411,12 +489,89 @@ describe('ServerMigrationService', () => {
         error: 'Validation failed',
       } as any);
 
-      await service.handleServerMigration(defaultProvider);
+      const outcome = await service.handleServerMigration(defaultProvider);
 
       expect(opLogStoreSpy.append).not.toHaveBeenCalled();
       expect(snackServiceSpy.open).toHaveBeenCalledWith(
         jasmine.objectContaining({ type: 'ERROR' }),
       );
+      expect(outcome).toEqual({ kind: 'skipped', reason: 'validation_failed' });
+    });
+
+    describe('validation-failed snack throttling (#9921)', () => {
+      const failValidation = (): void => {
+        validateStateServiceSpy.validateAndRepair.and.resolveTo({
+          isValid: false,
+          wasRepaired: false,
+          error: 'Validation failed',
+        } as any);
+      };
+
+      it('shows the snack once per session for the automatic server-migration path', async () => {
+        failValidation();
+
+        await service.handleServerMigration(defaultProvider);
+        await service.handleServerMigration(defaultProvider);
+        await service.handleServerMigration(defaultProvider, {
+          syncImportReason: 'SERVER_MIGRATION',
+        });
+
+        expect(snackServiceSpy.open).toHaveBeenCalledTimes(1);
+        expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      });
+
+      it('always shows the snack for a user-driven force upload and does not consume the automatic notice', async () => {
+        failValidation();
+
+        await service.handleServerMigration(defaultProvider, {
+          skipServerEmptyCheck: true,
+          syncImportReason: 'FORCE_UPLOAD',
+        });
+        await service.handleServerMigration(defaultProvider, {
+          skipServerEmptyCheck: true,
+          syncImportReason: 'FORCE_UPLOAD',
+        });
+        await service.handleServerMigration(defaultProvider);
+
+        expect(snackServiceSpy.open).toHaveBeenCalledTimes(3);
+      });
+
+      it('reports again when the user confirms a migration to a non-empty server', async () => {
+        failValidation();
+        await service.handleServerMigration(defaultProvider);
+        expect(snackServiceSpy.open).toHaveBeenCalledTimes(1);
+
+        const provider = createMockSyncProvider();
+        (provider.getLastServerSeq as jasmine.Spy).and.returnValue(Promise.resolve(0));
+        (provider.downloadOps as jasmine.Spy).and.returnValue(
+          Promise.resolve({ ops: [], latestSeq: 5, hasMore: false }),
+        );
+        opLogStoreSpy.hasSyncedOps.and.returnValue(Promise.resolve(true));
+        matDialogSpy.open.and.returnValue({
+          afterClosed: () => of(true),
+        } as MatDialogRef<unknown>);
+
+        await service.checkAndHandleMigration(provider);
+
+        expect(snackServiceSpy.open).toHaveBeenCalledTimes(2);
+      });
+
+      it('notifies again once a SYNC_IMPORT was created in between', async () => {
+        failValidation();
+        await service.handleServerMigration(defaultProvider);
+
+        validateStateServiceSpy.validateAndRepair.and.resolveTo({
+          isValid: true,
+          wasRepaired: false,
+        } as any);
+        await service.handleServerMigration(defaultProvider);
+        expect(opLogStoreSpy.append).toHaveBeenCalledTimes(1);
+
+        failValidation();
+        await service.handleServerMigration(defaultProvider);
+
+        expect(snackServiceSpy.open).toHaveBeenCalledTimes(2);
+      });
     });
 
     it('should use repaired state and dispatch to store if repair occurred', async () => {
@@ -474,9 +629,10 @@ describe('ServerMigrationService', () => {
     it('should abort if no client ID is available', async () => {
       clientIdProviderSpy.loadClientId.and.returnValue(Promise.resolve(null));
 
-      await service.handleServerMigration(defaultProvider);
+      const outcome = await service.handleServerMigration(defaultProvider);
 
       expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(outcome).toEqual({ kind: 'skipped', reason: 'no_client_id' });
     });
 
     it('should proceed if state has tasks', async () => {
@@ -741,10 +897,11 @@ describe('ServerMigrationService', () => {
         Promise.resolve({ ops: [], latestSeq: 5, hasMore: false }),
       );
 
-      await service.handleServerMigration(defaultProvider);
+      const outcome = await service.handleServerMigration(defaultProvider);
 
       // Should not create SYNC_IMPORT because server is no longer empty
       expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+      expect(outcome).toEqual({ kind: 'skipped', reason: 'server_not_empty' });
     });
 
     it('should proceed if server is still empty during double-check', async () => {
@@ -825,5 +982,160 @@ describe('ServerMigrationService', () => {
     // Note: Test for non-operation-sync-capable providers removed.
     // The check for operation-sync capability is now done at a higher level
     // (sync.service.ts), so handleServerMigration expects OperationSyncCapable.
+  });
+  /**
+   * Reproduction specs for the #9256 recovery dead-end. DOCUMENTS CURRENT
+   * BEHAVIOUR — these pass on master.
+   *
+   * Every spec below whose name starts with "known defect" asserts the broken
+   * outcome. When the corresponding fix lands they go RED by design: DELETE
+   * them, do not repair their assertions.
+   *
+   * `handleServerMigration` gates the full-state SYNC_IMPORT on
+   * `hasServerMigrationStateData` (server-migration.service.ts:28), whose call
+   * site is commented "Skip if local state is effectively empty". It is
+   * `hasMeaningfulStateData` (a task / non-INBOX project / non-system tag /
+   * note) OR "any other MODEL_CONFIGS key differs from its default".
+   *
+   * The second arm is satisfied for every real client, by TWO INDEPENDENT
+   * causes. Both are pinned below, because a fix for either one alone leaves
+   * the guard unable to skip:
+   *
+   * 1. `globalConfig`. `SyncConfig` lives in GlobalConfigState and defaults to
+   *    `{ isEnabled: false, syncProvider: null, ... }`
+   *    (default-global-config.const.ts:234-242). Every path that reaches this
+   *    code has sync configured, so this slice always differs. This is the
+   *    cause that operates on a FRESH INSTALL — the #9256 client — see (2).
+   *
+   * 2. `simpleCounter`, via a sync-core `deepEqual` defect. Its `seen` WeakSet
+   *    is shared across the whole traversal, never unwound, and fed from both
+   *    sides, so a DAG (one object referenced twice — not a cycle) trips the
+   *    circular-reference bail. `initialSimpleCounterState` is such a DAG: the
+   *    three DEFAULT_SIMPLE_COUNTERS are built by spreading
+   *    EMPTY_SIMPLE_COUNTER, and a shallow spread copies the REFERENCE to
+   *    `streakWeekDays`/`countOnDay`. See the DAG spec in
+   *    packages/sync-core/tests/conflict-resolution.spec.ts.
+   *
+   *    This cause is inert on a fresh install and only on a fresh install:
+   *    the hydrator returns without dispatching `loadAllData`
+   *    ("Fresh install detected. No data to load."), so the store slice is
+   *    still the module-level `initialSimpleCounterState` object, and
+   *    `deepEqual` short-circuits on `a === b` before consulting `seen`
+   *    (conflict-resolution.ts:221). StateSnapshotService returns live store
+   *    references, never clones (state-snapshot.service.ts:81). Once a client
+   *    has hydrated at least once, the slice is a different object and the DAG
+   *    defect fires.
+   *
+   * Why that matters for FORCE_UPLOAD specifically: it is the reason
+   * `skipServerEmptyCheck` is set, i.e. the server holds data this SYNC_IMPORT
+   * will replace, and `operation-log-upload.service.ts:302` additionally marks
+   * a FORCE_UPLOAD SYNC_IMPORT `isCleanSlate`, which makes the server
+   * `deleteMany` the user's operations outright rather than supersede them
+   * (super-sync-server sync.service.ts:315-337). It is what the "Overwrite
+   * Server & Other Devices" button of the Decryption Failed dialog invokes
+   * (dialog-handle-decrypt-error.component.ts:53).
+   *
+   * Scope and limits, stated so these are not read as more than they are:
+   * - The overwrite is CONSENTED, not silent: three confirmations precede it
+   *   (the dialog's `DECRYPT_OVERWRITE`, `C.FORCE_UPLOAD` in
+   *   sync-wrapper.service.ts:1343, and the button is disabled without a
+   *   password). The defect is that the one code-level check meant to refuse
+   *   an overwrite from a client with nothing of its own cannot fire.
+   *   NOTE: since e83c1213f the two recovery dialogs refuse such a client at
+   *   the dialog layer (SyncLocalStateService.hasNothingWorthUploading), so
+   *   that button is no longer an unguarded entry point. The
+   *   hasServerMigrationStateData arm described here is still unable to skip;
+   *   these specs pin that predicate, not the dialog guard.
+   * - SERVER_MIGRATION is not inherently safe either: `checkAndHandleMigration`
+   *   (server-migration.service.ts:125-137) also passes `skipServerEmptyCheck`
+   *   against a NON-empty server after its own confirm dialog. It does require
+   *   `hasSyncedOps()`, which a never-synced client fails, and it does not set
+   *   the clean-slate flag.
+   * - These are unit specs over the guard. `validateAndRepair` is stubbed to a
+   *   pass-through by the harness above and the snapshot is injected, so they
+   *   pin the predicate, not a full end-to-end overwrite.
+   */
+  describe('#9256 reproduction: FORCE_UPLOAD from a client with no data of its own', () => {
+    // withDefaultModelSlices structuredClones any slice it fills in and returns
+    // a real AppDataComplete, so an omitted key gets a CLONE (compared
+    // structurally) while an explicitly passed one keeps its identity — which
+    // is exactly the fresh-install vs hydrated distinction above.
+    const snapshot = (overrides: object = {}): AppDataComplete =>
+      withDefaultModelSlices(overrides);
+
+    // A fresh install: nothing has replaced the store slices, so they are still
+    // the module-level defaults by reference.
+    const freshInstallSlices = {
+      simpleCounter: MODEL_CONFIGS.simpleCounter.defaultData,
+    };
+
+    const forceUpload = (): Promise<ServerMigrationOutcome> =>
+      service.handleServerMigration(defaultProvider, {
+        skipServerEmptyCheck: true,
+        syncImportReason: 'FORCE_UPLOAD',
+      });
+
+    it('known defect (delete when deepEqual is fixed): pins the DAG defect on the real simpleCounter default', () => {
+      const counters = initialSimpleCounterState.entities;
+      // The aliasing: a shallow spread of EMPTY_SIMPLE_COUNTER shares these.
+      expect(counters['STANDING_DESK_ID']!.streakWeekDays).toBe(
+        counters['COFFEE_COUNTER']!.streakWeekDays,
+      );
+
+      // Reference identity short-circuits before `seen` is consulted...
+      expect(deepEqual(initialSimpleCounterState, initialSimpleCounterState)).toBe(true);
+      // ...but a structurally identical copy does not.
+      expect(
+        deepEqual(structuredClone(initialSimpleCounterState), initialSimpleCounterState),
+      ).toBe(false);
+    });
+
+    it('known defect (delete when the empty-state guard is fixed): proceeds for a fresh install whose only divergence is the sync config', async () => {
+      stateSnapshotServiceSpy.getStateSnapshotAsync.and.resolveTo(
+        snapshot({
+          ...freshInstallSlices,
+          globalConfig: {
+            ...DEFAULT_GLOBAL_CONFIG,
+            sync: { ...DEFAULT_GLOBAL_CONFIG.sync, syncProvider: 'SuperSync' },
+          },
+        }),
+      );
+
+      await forceUpload();
+
+      expect(opLogStoreSpy.append).toHaveBeenCalled();
+      const appendedOp = opLogStoreSpy.append.calls.mostRecent().args[0];
+      expect(appendedOp.opType).toBe(OpType.SyncImport);
+      expect(appendedOp.syncImportReason).toBe('FORCE_UPLOAD');
+    });
+
+    it('skips the same fresh install once the sync config is back at its default', async () => {
+      // Isolates cause 1. Identical to the spec above except that no sync
+      // provider is configured — which no client reaching this code can be.
+      stateSnapshotServiceSpy.getStateSnapshotAsync.and.resolveTo(
+        snapshot(freshInstallSlices),
+      );
+
+      await forceUpload();
+
+      // Note the skip is not a good outcome either: handleServerMigration
+      // reports skipped/empty_state, which forceUploadLocalState turns into
+      // ForceUploadFailedError (it requires kind 'created') and a
+      // FORCE_UPLOAD_FAILED snack — another dead end, just a non-destructive one.
+      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+    });
+
+    it('known defect (delete when deepEqual is fixed): proceeds for a hydrated client with default config and no user data', async () => {
+      // Isolates cause 2: every slice is a clone (as after any loadAllData) and
+      // globalConfig is at its default, so simpleCounter alone carries the guard.
+      stateSnapshotServiceSpy.getStateSnapshotAsync.and.resolveTo(snapshot());
+
+      await forceUpload();
+
+      expect(opLogStoreSpy.append).toHaveBeenCalled();
+      expect(opLogStoreSpy.append.calls.mostRecent().args[0].opType).toBe(
+        OpType.SyncImport,
+      );
+    });
   });
 });

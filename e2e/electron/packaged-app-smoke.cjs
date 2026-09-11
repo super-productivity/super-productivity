@@ -157,10 +157,28 @@ const run = async () => {
       timeout: 20_000,
     });
 
+    const overlayMessage = 'Packaged # path & fragment = decoded';
+    const overlayPagePromise = page.context().waitForEvent('page', {
+      timeout: 20_000,
+    });
+    await page.evaluate((msg) => {
+      window.ea.showFullScreenBlocker({
+        msg,
+        takeABreakCfg: {
+          motivationalImgs: [],
+          timedFullScreenBlockerDuration: 60_000,
+        },
+      });
+    }, overlayMessage);
+    const overlayPage = await overlayPagePromise;
+    await overlayPage.waitForLoadState('domcontentloaded');
+    await expect(overlayPage.locator('#msg')).toHaveText(overlayMessage);
+    expect(overlayPage.url()).toContain('%23%20packaged%20app');
+
     if (pageErrors.length) {
       throw new Error(`Renderer page errors:\n${pageErrors.join('\n')}`);
     }
-    console.log('Packaged Electron task-create-and-reload smoke passed.');
+    console.log('Packaged Electron task-create, reload, and overlay smoke passed.');
   } finally {
     await browser?.close().catch(() => undefined);
     await stopChild(child);

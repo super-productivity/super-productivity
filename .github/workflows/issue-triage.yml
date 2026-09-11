@@ -1,0 +1,225 @@
+name: Issue Triage
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  triage:
+    # The maintainer's own issues are already triaged.
+    if: github.event.issue.user.login != 'johannesjo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout prompts and scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Load-bearing, not cosmetic: the default writes the job token into
+          # .git/config as a base64 auth header, inside the directory the
+          # Copilot CLI runs in and can read.
+          persist-credentials: false
+          sparse-checkout: |
+            .github/prompts
+            .github/scripts
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      # Pinned deliberately: this is the one unpinned executable in a job that
+      # holds an issues:write token, and the package publishes near-daily.
+      - name: Install Copilot CLI
+        run: npm install -g @github/copilot@1.0.83
+
+      # Issue text goes to files rather than into a script: title and body are
+      # attacker-controlled on a public repo, and `${{ }}` inside a `run:` would
+      # execute them. triage.js is copied out of the workspace before any
+      # inference runs so that the code later executed with the issues:write
+      # token can never be one the model edited — irrelevant today (the CLI gets
+      # no tools) but load-bearing the day someone grants copilot-allow-tools.
+      - name: Stage issue text and helpers
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/triage"
+          printf '%s' "$ISSUE_TITLE" > "${RUNNER_TEMP}/triage/title.txt"
+          printf '%s' "$ISSUE_BODY" > "${RUNNER_TEMP}/triage/body.txt"
+          cp .github/scripts/triage.js "${RUNNER_TEMP}/triage/triage.js"
+
+      # Every inference step is continue-on-error with its own timeout: an
+      # outage, an exhausted credit balance, a retired model or a hung CLI must
+      # degrade to the plain autoresponse, never leave the reporter with no
+      # reply. Leave copilot-allow-tools unset — granting `write` would let
+      # injected issue text edit the checkout.
+      #
+      # COPILOT_GITHUB_TOKEN is a personal fine-grained PAT holding only the
+      # "Copilot Requests" account permission and no repository access, so the
+      # worst a prompt injection can do with it is spend credits. Billing to the
+      # org via copilot-requests: write would need Copilot Business on the org.
+      - name: Classify issue
+        id: classify
+        continue-on-error: true
+        timeout-minutes: 3
+        uses: actions/ai-inference@2c43c91ae16266ca159d311430343c67a5ffa222 # v3
+        with:
+          prompt-file: .github/prompts/issue-triage.prompt.yml
+          # Cheapest model on the Pro plan (~15x below the CLI's Sonnet default)
+          # and enough for fixed-shape extraction. A retirement fails the run
+          # after the reply is posted, so it is noticed rather than silent.
+          model: gpt-5.6-luna
+          file_input: |
+            title: ${{ runner.temp }}/triage/title.txt
+            body: ${{ runner.temp }}/triage/body.txt
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+
+      # Retrieval runs before ranking so the model can only choose among issues
+      # that provably exist. Asking it to recall issue numbers unaided produces
+      # confident, plausible, wrong references.
+      - name: Find candidate issues
+        id: search
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          CLASSIFY_RESPONSE: ${{ steps.classify.outputs.response }}
+          CLASSIFY_OUTCOME: ${{ steps.classify.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const { parseModelJson, buildSearchQueries } = require(
+              `${process.env.RUNNER_TEMP}/triage/triage.js`,
+            );
+
+            // A permanently broken token degrades silently and looks identical
+            // to a well-written issue, so say so in the log.
+            if (process.env.CLASSIFY_OUTCOME !== 'success') {
+              core.warning('Classification step failed; posting the plain autoresponse.');
+            }
+
+            const queries = buildSearchQueries(parseModelJson(process.env.CLASSIFY_RESPONSE));
+            const { owner, repo } = context.repo;
+            const candidates = new Map();
+
+            for (const [index, query] of queries.entries()) {
+              try {
+                const found = await github.rest.search.issuesAndPullRequests({
+                  q: `repo:${owner}/${repo} is:issue ${query}`,
+                  per_page: 8,
+                });
+                for (const item of found.data.items) {
+                  if (item.number !== context.issue.number) {
+                    candidates.set(item.number, {
+                      state: item.state,
+                      line: `#${item.number} [${item.state}] ${item.title}`,
+                    });
+                  }
+                }
+              } catch (err) {
+                // Never log the query itself: it is model-authored, and these
+                // logs are public.
+                core.warning(`Issue search ${index + 1}/${queries.length} failed: ${err.message}`);
+              }
+            }
+
+            // State travels with the number so a closed match is not pitched as
+            // somewhere to go add details and a thumbs-up.
+            const found = [...candidates].map(([number, { state }]) => ({ number, state }));
+            core.setOutput('candidates', JSON.stringify(found));
+            core.setOutput('count', found.length);
+            core.info(`Retrieved ${found.length} candidates from ${queries.length} queries.`);
+            fs.writeFileSync(
+              `${process.env.RUNNER_TEMP}/triage/candidates.txt`,
+              [...candidates.values()].map(({ line }) => line).join('\n'),
+            );
+
+      - name: Rank candidates
+        id: rank
+        if: steps.search.outputs.count > 0
+        continue-on-error: true
+        timeout-minutes: 3
+        uses: actions/ai-inference@2c43c91ae16266ca159d311430343c67a5ffa222 # v3
+        with:
+          prompt-file: .github/prompts/issue-duplicates.prompt.yml
+          model: gpt-5.6-luna
+          file_input: |
+            title: ${{ runner.temp }}/triage/title.txt
+            body: ${{ runner.temp }}/triage/body.txt
+            candidates: ${{ runner.temp }}/triage/candidates.txt
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+
+      # !cancelled() rather than always(): the reporter must get a reply even if
+      # an earlier step threw, but a cancelled run should stop.
+      - name: Apply labels and reply
+        if: ${{ !cancelled() }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          CLASSIFY_RESPONSE: ${{ steps.classify.outputs.response }}
+          CLASSIFY_OUTCOME: ${{ steps.classify.outcome }}
+          RANK_RESPONSE: ${{ steps.rank.outputs.response }}
+          CANDIDATES: ${{ steps.search.outputs.candidates }}
+        with:
+          script: |
+            const { parseModelJson, pickLabels, pickRelated, buildComment } = require(
+              `${process.env.RUNNER_TEMP}/triage/triage.js`,
+            );
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const triage = parseModelJson(process.env.CLASSIFY_RESPONSE);
+            const { labels, missing } = pickLabels(triage);
+
+            if (labels.length) {
+              try {
+                await github.rest.issues.addLabels({ owner, repo, issue_number, labels });
+              } catch (err) {
+                core.warning(`Could not apply labels: ${err.message}`);
+              }
+            }
+
+            let latestTag = null;
+            try {
+              latestTag = (await github.rest.repos.getLatestRelease({ owner, repo })).data.tag_name;
+            } catch (err) {
+              core.warning(`Could not read the latest release: ${err.message}`);
+            }
+
+            let candidates = [];
+            try {
+              candidates = JSON.parse(process.env.CANDIDATES || '[]');
+            } catch (err) {
+              core.warning(`Could not read retrieved candidates: ${err.message}`);
+            }
+
+            const body = buildComment({
+              type: triage?.type,
+              missing,
+              reportedVersion: triage?.reportedVersion,
+              latestTag,
+              related: pickRelated(process.env.RANK_RESPONSE, candidates),
+            });
+
+            try {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            } catch (err) {
+              // Deleted, locked or blocked between trigger and reply: a
+              // non-event, not something to page the maintainer about.
+              core.warning(`Could not post the triage comment: ${err.message}`);
+            }
+
+            // Fail only after the reply is posted: a broken Copilot setup
+            // (expired PAT, exhausted credits, retired CLI) would otherwise
+            // degrade to the plain autoresponse on every issue with nothing but
+            // a warning on a green run, and nobody reads green runs.
+            if (process.env.CLASSIFY_OUTCOME !== 'success') {
+              core.setFailed(
+                'Classification failed; the plain autoresponse was posted instead. ' +
+                  'If this repeats, check that the COPILOT_GITHUB_TOKEN secret exists, ' +
+                  'has not expired and still has the "Copilot Requests" permission.',
+              );
+            }

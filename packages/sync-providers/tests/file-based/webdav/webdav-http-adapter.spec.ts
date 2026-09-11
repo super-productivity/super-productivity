@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NOOP_SYNC_LOGGER, type SyncLogger } from '@sp/sync-core';
 import { WebDavHttpAdapter } from '../../../src/file-based/webdav/webdav-http-adapter';
+import { WebDavHttpHeader } from '../../../src/file-based/webdav/webdav.const';
 import {
   AuthFailSPError,
   HttpNotOkAPIError,
+  NetworkUnavailableSPError,
   PotentialCorsError,
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
@@ -14,6 +16,7 @@ import type { ProviderPlatformInfo, WebFetchFactory } from '../../../src/platfor
 
 const makeDeps = (overrides: {
   isNativePlatform?: boolean;
+  isElectron?: boolean;
   fetchImpl?: typeof fetch;
   nativeHttp?: NativeHttpExecutor;
   logger?: SyncLogger;
@@ -27,6 +30,7 @@ const makeDeps = (overrides: {
     isNativePlatform: overrides.isNativePlatform ?? false,
     isAndroidWebView: false,
     isIosNative: false,
+    isElectron: overrides.isElectron ?? false,
   },
   webFetch: () => overrides.fetchImpl ?? (globalThis.fetch as typeof fetch),
   nativeHttp: overrides.nativeHttp ?? vi.fn(),
@@ -64,33 +68,67 @@ describe('WebDavHttpAdapter', () => {
       );
     });
 
-    it('sends no-cache request headers on the native path (#7144)', async () => {
-      // Regression guard: iOS URLSession / upstream proxies otherwise serve a
-      // stale sync-data.json, which hides remote changes and defeats the
-      // content-hash conflict check, causing silent overwrite/data loss.
-      const nativeHttp = vi.fn().mockResolvedValue({
-        status: 200,
-        headers: {},
-        data: 'native-body',
-      });
-      const adapter = new WebDavHttpAdapter(
-        makeDeps({ isNativePlatform: true, nativeHttp }),
-      );
+    it.each(['GET', 'PUT'])(
+      'sends no-cache headers without an Electron marker on native %s (#7144)',
+      async (method) => {
+        // Regression guard: iOS URLSession / upstream proxies otherwise serve a
+        // stale sync-data.json, which hides remote changes and defeats the
+        // content-hash conflict check, causing silent overwrite/data loss.
+        const nativeHttp = vi.fn().mockResolvedValue({
+          status: 200,
+          headers: {},
+          data: 'native-body',
+        });
+        const adapter = new WebDavHttpAdapter(
+          makeDeps({ isNativePlatform: true, nativeHttp }),
+        );
 
-      await adapter.request({
-        url: 'https://dav.example.com/sync/file',
-        method: 'GET',
-        headers: { Authorization: 'Basic abc' },
-      });
+        await adapter.request({
+          url: 'https://dav.example.com/sync/file',
+          method,
+          headers: { Authorization: 'Basic abc' },
+        });
 
-      const sentHeaders = (
-        nativeHttp.mock.calls[0][0] as { headers: Record<string, string> }
-      ).headers;
-      expect(sentHeaders['Cache-Control']).toBe('no-cache, no-store');
-      expect(sentHeaders['Pragma']).toBe('no-cache');
-      // Caller headers are preserved.
-      expect(sentHeaders['Authorization']).toBe('Basic abc');
-    });
+        const sentHeaders = (
+          nativeHttp.mock.calls[0][0] as { headers: Record<string, string> }
+        ).headers;
+        expect(sentHeaders['Cache-Control']).toBe('no-cache, no-store');
+        expect(sentHeaders['Pragma']).toBe('no-cache');
+        expect(sentHeaders['X-SuperProductivity-WebDAV-Upload']).toBeUndefined();
+        // Caller headers are preserved.
+        expect(sentHeaders['Authorization']).toBe('Basic abc');
+      },
+    );
+
+    it.each([
+      [true, 'PUT', '1'],
+      [true, 'GET', null],
+      [false, 'PUT', null],
+    ])(
+      'marks only Electron WebDAV PUTs (electron=%s, method=%s)',
+      async (isElectron, method, marker) => {
+        const fetchImpl = vi.fn().mockResolvedValue(okFetchResponse());
+        const adapter = new WebDavHttpAdapter(
+          makeDeps({
+            isElectron,
+            fetchImpl: fetchImpl as unknown as typeof fetch,
+          }),
+        );
+        const headers = {
+          Authorization: 'Basic abc',
+          [WebDavHttpHeader.IF_MATCH]: '"rev"',
+        };
+        await adapter.request({ url: 'https://dav.example.com/file', method, headers });
+        const sent = new Headers((fetchImpl.mock.calls[0][1] as RequestInit).headers);
+        expect(sent.get('X-SuperProductivity-WebDAV-Upload')).toBe(marker);
+        expect(sent.get('Authorization')).toBe('Basic abc');
+        expect(sent.get('If-Match')).toBe('"rev"');
+        expect(headers).toEqual({
+          Authorization: 'Basic abc',
+          [WebDavHttpHeader.IF_MATCH]: '"rev"',
+        });
+      },
+    );
 
     it('uses fetch when not native', async () => {
       const fetchImpl = vi.fn().mockResolvedValue(okFetchResponse(200, 'web-body'));
@@ -209,6 +247,65 @@ describe('WebDavHttpAdapter', () => {
       await expect(
         adapter.request({ url: 'https://dav.example.com/x', method: 'GET' }),
       ).rejects.toBeInstanceOf(HttpNotOkAPIError);
+    });
+
+    /**
+     * #9985: the desktop app injects `Access-Control-Allow-{Origin,Headers,
+     * Methods}: *` on every response and forces preflights to 200 (see
+     * `electron/main-window.ts`), so CORS can never be the cause there. Blaming
+     * it sent a user chasing a dead end while the real failure was a truncated
+     * response (`net::ERR_CONTENT_LENGTH_MISMATCH`) from a misbehaving server.
+     */
+    it('never blames CORS on Electron, where CORS is disabled app-wide', async () => {
+      const fetchImpl = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isElectron: true, fetchImpl: fetchImpl as unknown as typeof fetch }),
+      );
+
+      const err = await adapter
+        .request({ url: 'https://dav.example.com/x', method: 'GET' })
+        .catch((e) => e);
+
+      expect(err).not.toBeInstanceOf(PotentialCorsError);
+      expect(err).toBeInstanceOf(NetworkUnavailableSPError);
+    });
+
+    it('keeps the CORS hint on the web build, where CORS is real', async () => {
+      const fetchImpl = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isElectron: false, fetchImpl: fetchImpl as unknown as typeof fetch }),
+      );
+
+      await expect(
+        adapter.request({ url: 'https://dav.example.com/x', method: 'GET' }),
+      ).rejects.toBeInstanceOf(PotentialCorsError);
+    });
+
+    it('leaks no credentials or path through the Electron network error', async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockRejectedValue(
+          new TypeError(
+            'NetworkError when attempting to fetch resource at https://user:pass@dav.example.com/x?token=secret',
+          ),
+        );
+      const adapter = new WebDavHttpAdapter(
+        makeDeps({ isElectron: true, fetchImpl: fetchImpl as unknown as typeof fetch }),
+      );
+
+      const err = await adapter
+        .request({
+          url: 'https://user:pass@dav.example.com/x?token=secret',
+          method: 'GET',
+        })
+        .catch((e) => e);
+
+      const msg = (err as Error).message ?? '';
+      expect(msg).not.toContain('user:pass');
+      expect(msg).not.toContain('secret');
+      // NetworkUnavailableSPError is documented as safe to render verbatim, so
+      // the user's private WebDAV host must not ride along in the message.
+      expect(msg).not.toContain('dav.example.com');
     });
 
     it('PotentialCorsError carries only the scrubbed URL, never the raw error', async () => {

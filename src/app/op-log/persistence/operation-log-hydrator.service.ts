@@ -10,6 +10,8 @@ import {
   SchemaMigrationService,
 } from './schema-migration.service';
 import { OperationLogSnapshotService } from './operation-log-snapshot.service';
+import { TabSeqFrontierService } from './tab-seq-frontier.service';
+import { OperationLogCompactionService } from './operation-log-compaction.service';
 import { OperationLogRecoveryService } from './operation-log-recovery.service';
 import { SyncHydrationService } from './sync-hydration.service';
 import { ArchiveMigrationService } from './archive-migration.service';
@@ -33,6 +35,8 @@ import { bulkApplyOperations } from '../apply/bulk-hydration.action';
 import { AppDataComplete } from '../model/model-config';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { IS_ELECTRON } from '../../app.constants';
+import { detectChannel, getAppVersionStr } from '../../util/get-app-version-str';
+import { buildIdbOpenErrorMessage } from './idb-open-error-message';
 import {
   BulkReplayReducerFailure,
   runWithBulkReplayFailureCollector,
@@ -74,9 +78,11 @@ export class OperationLogHydratorService {
   private hydrationStateService = inject(HydrationStateService);
   private injector = inject(Injector);
   private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
+  private tabSeqFrontier = inject(TabSeqFrontierService);
 
   // Extracted services
   private snapshotService = inject(OperationLogSnapshotService);
+  private compactionService = inject(OperationLogCompactionService);
   private recoveryService = inject(OperationLogRecoveryService);
   private syncHydrationService = inject(SyncHydrationService);
   private archiveMigrationService = inject(ArchiveMigrationService);
@@ -107,26 +113,30 @@ export class OperationLogHydratorService {
     // worth extra plumbing to suppress; only the every-boot re-migration it
     // prevents matters.
     //
-    // Nor is this strictly "once per schema bump per device": sync-hydration
-    // persists its state cache WITHOUT a schemaVersion, which reads back as v1
-    // and migrates on the next boot. That omission is deliberate and
-    // load-bearing — downloaded snapshot data is never schema-migrated anywhere
-    // else on the client (migrateStateIfNeeded has exactly one call site, on the
-    // local state_cache) and the SYNC_IMPORT op carrying it is stamped
-    // CURRENT_SCHEMA_VERSION, so op migration skips it too. Do NOT "fix" that
-    // writer by stamping a version: it would freeze old-schema remote data into
-    // a cache Checkpoint B then trusts unvalidated. Convergence only stamps a
-    // version AFTER the migration chain has actually run, which is safe.
+    // Version stamping (#8770): convergence writes its snapshot AFTER the
+    // migration chain has run, so stamping CURRENT_SCHEMA_VERSION is safe —
+    // see the invariant on saveStateCache(). (The last writer that persisted
+    // downloaded state unversioned was removed in 6073c2cce4; downloaded full
+    // state now only arrives as a SYNC_IMPORT op, never written to the cache
+    // directly.)
     let snapshotPersistedDuringHydration = false;
+    // Set only when the try block below ran to completion; gates the startup
+    // compaction check after the finally so recovery/aborted boots never prune.
+    let hydrationCompletedNormally = false;
 
     try {
+      // #9084: held for the whole run so compaction cannot capture the gap
+      // between the loadAllData dispatch and the tail replay — see the guard
+      // in OperationLogCompactionService._doCompact. Inside the try so a
+      // throw still reaches the recovery path below; the finally always
+      // clears it.
+      this.hydrationStateService.setHydrationInProgress(true);
+
       // PERF: Parallel startup operations - all access different IndexedDB stores
       // and don't depend on each other's results, so they can run concurrently.
-      const [pendingRemoteOps, , hasBackup] = await Promise.all([
+      const [pendingRemoteOps, hasBackup] = await Promise.all([
         // Check for pending remote ops from crashed sync (touches 'ops' store)
         this.recoveryService.recoverPendingRemoteOps(),
-        // Legacy migration placeholder - kept for future DB migrations if needed
-        this._runLegacyMigrationIfNeeded(),
         // A.7.12: Check for interrupted migration (touches 'state_cache' store)
         this.opLogStore.hasStateCacheBackup(),
       ]);
@@ -305,9 +315,6 @@ export class OperationLogHydratorService {
           await this._replayAllOpsFromScratch(pendingRemoteOps);
       }
 
-      // Legacy cleanup placeholder - kept for future maintenance operations if needed
-      await this._runLegacyCleanupIfNeeded();
-
       // Retry any failed remote ops from previous conflict resolution attempts
       // Now that state is fully hydrated, dependencies might be resolved
       await this.retryFailedRemoteOps();
@@ -380,6 +387,7 @@ export class OperationLogHydratorService {
       // tab session gets the auto-reload treatment again rather than going straight
       // to the manual recovery dialog.
       sessionStorage.removeItem(IDB_OPEN_ERROR_RELOAD_KEY);
+      hydrationCompletedNormally = true;
     } catch (e) {
       OpLog.err('OperationLogHydratorService: Error during hydration', e);
 
@@ -410,6 +418,21 @@ export class OperationLogHydratorService {
         });
         throw recoveryErr;
       }
+    } finally {
+      this.hydrationStateService.setHydrationInProgress(false);
+    }
+
+    // #8336 safety net: must run AFTER the finally above has dropped the
+    // hydration-in-progress flag (the #9084 guard skips compaction while it
+    // is up), and only after a fully successful run so recovery boots never
+    // prune; fallback boots are additionally covered by the #9140 guard.
+    // Fire-and-forget: hydrateStore() gates app boot, so nothing here may
+    // block or reject it. compactIfBloated never rejects by contract; the
+    // catch is a belt for that contract.
+    if (hydrationCompletedNormally) {
+      this.compactionService.compactIfBloated().catch((e) => {
+        OpLog.err('OperationLogHydratorService: startup compaction check failed', e);
+      });
     }
   }
 
@@ -488,11 +511,22 @@ export class OperationLogHydratorService {
     lastAppliedOpSeq: number,
     pendingRemoteOps: OperationLogEntry[],
   ): Promise<boolean> {
-    const tailOps = (await this.opLogStore.getOpsAfterSeq(lastAppliedOpSeq)).filter(
+    const allTailEntries = await this.opLogStore.getOpsAfterSeq(lastAppliedOpSeq);
+    // #9438: every entry read here is covered by this hydration pass —
+    // including reducer-rejected ones, which replay deliberately skips
+    // forever. Ops a concurrent tab appends AFTER this read lie beyond this
+    // frontier, which is what arms the snapshot/compaction guard against
+    // anchoring past them.
+    const coveredSeq =
+      allTailEntries.length > 0
+        ? allTailEntries[allTailEntries.length - 1].seq
+        : lastAppliedOpSeq;
+    const tailOps = allTailEntries.filter(
       (entry) => entry.reducerRejectedAt === undefined,
     );
 
     if (tailOps.length === 0) {
+      this.tabSeqFrontier.establishFrontier(coveredSeq);
       return false;
     }
 
@@ -533,6 +567,7 @@ export class OperationLogHydratorService {
           appDataComplete: appData as unknown as AppDataComplete,
         }),
       );
+      this.tabSeqFrontier.establishFrontier(coveredSeq);
       // No snapshot save needed - full state ops already contain complete state
       // Snapshot will be saved after next batch of regular operations
       return false;
@@ -562,6 +597,10 @@ export class OperationLogHydratorService {
       localClientId,
       pendingRemoteOps.filter((entry) => tailOpIds.has(entry.op.id)),
     );
+
+    // #9438: establish BEFORE the async validation below so a concurrent
+    // tab's append during it cannot end up inside the save's anchor.
+    this.tabSeqFrontier.establishFrontier(coveredSeq);
 
     // CHECKPOINT C: Validate state after replaying tail operations.
     // If invalid, we keep the data on screen but skip the snapshot save so
@@ -612,9 +651,12 @@ export class OperationLogHydratorService {
     // legacy data. Replay ALL operations from the beginning of the log.
     // Status-blind except for durable reducer rejections — see the replay
     // policy note on _replayTailOps.
-    const allOps = (await this.opLogStore.getOpsAfterSeq(0)).filter(
-      (entry) => entry.reducerRejectedAt === undefined,
-    );
+    const allEntries = await this.opLogStore.getOpsAfterSeq(0);
+    // #9438: see _replayTailOps — the frontier covers everything read here,
+    // reducer-rejected entries included. Not established in fallback mode
+    // (partial state; the #9140 guards keep every save path skipped there).
+    const coveredSeq = allEntries.length > 0 ? allEntries[allEntries.length - 1].seq : 0;
+    const allOps = allEntries.filter((entry) => entry.reducerRejectedAt === undefined);
 
     if (allOps.length === 0) {
       if (fallbackCause !== undefined) {
@@ -627,6 +669,7 @@ export class OperationLogHydratorService {
       OpLog.normal(
         'OperationLogHydratorService: Fresh install detected. No data to load.',
       );
+      this.tabSeqFrontier.establishFrontier(coveredSeq);
       return false;
     }
 
@@ -657,6 +700,9 @@ export class OperationLogHydratorService {
           appDataComplete: appData as unknown as AppDataComplete,
         }),
       );
+      if (fallbackCause === undefined) {
+        this.tabSeqFrontier.establishFrontier(coveredSeq);
+      }
       // No snapshot save needed - full state ops already contain complete state
       OpLog.normal('OperationLogHydratorService: Full replay complete.');
       return false;
@@ -695,6 +741,10 @@ export class OperationLogHydratorService {
       );
       return false;
     }
+
+    // #9438: establish BEFORE the async validation below so a concurrent
+    // tab's append during it cannot end up inside the save's anchor.
+    this.tabSeqFrontier.establishFrontier(coveredSeq);
 
     // CHECKPOINT C: Validate state after replaying all operations.
     // If invalid, we still proceed but skip the snapshot save so we don't
@@ -932,25 +982,6 @@ export class OperationLogHydratorService {
   }
 
   /**
-   * Handles hydration after a remote sync download.
-   * Delegates to SyncHydrationService.
-   *
-   * @param downloadedMainModelData - Entity models from remote meta file.
-   *   These are NOT stored in IndexedDB (only archives are) so must be passed explicitly.
-   * @param remoteVectorClock - Vector clock from the downloaded snapshot.
-   *   Merged into the SYNC_IMPORT's clock to prevent mutual discarding during provider switch.
-   */
-  async hydrateFromRemoteSync(
-    downloadedMainModelData?: Record<string, unknown>,
-    remoteVectorClock?: Record<string, number>,
-  ): Promise<void> {
-    return this.syncHydrationService.hydrateFromRemoteSync(
-      downloadedMainModelData,
-      remoteVectorClock,
-    );
-  }
-
-  /**
    * Validates a state object during hydration without attempting repair.
    *
    * Repair is intentionally not run here: it requires a native `confirm()` dialog
@@ -989,14 +1020,6 @@ export class OperationLogHydratorService {
       currentState as unknown as Record<string, unknown>,
       context,
     );
-  }
-
-  /**
-   * Legacy cleanup placeholder.
-   * Kept for future maintenance operations if needed.
-   */
-  private async _runLegacyCleanupIfNeeded(): Promise<void> {
-    // No-op: placeholder for future cleanup operations
   }
 
   /**
@@ -1105,14 +1128,6 @@ export class OperationLogHydratorService {
   }
 
   /**
-   * Legacy migration placeholder.
-   * Kept for future DB migrations if needed.
-   */
-  private async _runLegacyMigrationIfNeeded(): Promise<void> {
-    // No-op: placeholder for future migrations
-  }
-
-  /**
    * Shows a helpful error dialog when IndexedDB fails to open.
    * Provides platform-specific guidance for "backing store" errors.
    * Also logs full error details to console for debugging.
@@ -1120,20 +1135,10 @@ export class OperationLogHydratorService {
    * @see https://github.com/johannesjo/super-productivity/issues/6255
    */
   private _showIndexedDBOpenError(error: IndexedDBOpenError): void {
-    // Log full error details to console for debugging (can be copied by users)
-    OpLog.err(
-      'IndexedDB open failed after all retries. Original error:',
-      error.originalError,
-    );
-
-    const originalMsg =
-      error.originalError instanceof Error
-        ? error.originalError.message
-        : String(error.originalError);
-
-    // Hoist platform detection — used in both branches below to avoid computing twice
-    const isFlatpak = IS_ELECTRON && window.ea?.isFlatpak?.();
-    const isSnap = !isFlatpak && IS_ELECTRON && window.ea?.isSnap?.();
+    // Log full error details to console for debugging (can be copied by users).
+    // Deliberately does not mention retries — the barrier path stops as soon as
+    // it is hit (#9187); `error.message` names which case this is.
+    OpLog.err('IndexedDB open failed. Original error:', error.originalError);
 
     // For backing-store errors (common during Linux session startup with autostart),
     // auto-reload once after the user dismisses the dialog. By the time the dialog
@@ -1156,34 +1161,15 @@ export class OperationLogHydratorService {
       }
     }
 
-    // Second failure, or non-backing-store error: show full manual recovery instructions.
-    let message =
-      'Database Error - Cannot Load Data\n\n' +
-      'Super Productivity cannot open its database. ' +
-      'This may be caused by:\n\n' +
-      '- Low disk space\n' +
-      '- Temporary file lock (try closing other tabs)\n' +
-      '- Storage corruption\n\n';
-
-    if (error.isBackingStoreError) {
-      message +=
-        'Recovery steps:\n' +
-        '1. Close ALL browser tabs and windows\n' +
-        '2. Restart the app\n' +
-        (isFlatpak
-          ? '3. If using Linux Flatpak with autostart, try disabling autostart and launching manually\n'
-          : isSnap
-            ? '3. If using Linux Snap, try: snap set core experimental.refresh-app-awareness=true\n'
-            : '3. If using Linux with autostart, try disabling autostart and launching manually\n') +
-        '4. If issue persists, check available disk space\n\n';
-    }
-
-    message +=
-      'If the problem continues after restart, your browser storage may need to be cleared.\n\n' +
-      `Technical details: ${originalMsg}\n\n` +
-      '(Check browser console for full error details)';
-
-    alertDialog(message);
+    // `getAppVersionStr()` rather than the bare version: its channel suffix
+    // (e.g. `18.15.1P` vs `18.15.1W`) is what tells a user WHICH of two copies
+    // they just launched — the central question in a downgrade (#9187).
+    alertDialog(
+      buildIdbOpenErrorMessage(error, {
+        channel: detectChannel(),
+        appVersion: getAppVersionStr(),
+      }),
+    );
   }
 
   /**

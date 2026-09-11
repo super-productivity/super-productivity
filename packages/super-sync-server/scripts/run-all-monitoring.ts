@@ -33,6 +33,7 @@ interface MonitoringCommand {
   command: string;
   description: string;
   skipInQuick?: boolean;
+  skipInUserFocus?: boolean;
 }
 
 // ============================================================================
@@ -51,19 +52,20 @@ const getMonitoringCommands = (userId?: number): MonitoringCommand[] => {
     },
     {
       name: 'Active Users',
-      command: cmd('monitor', 'active-users'),
-      description: 'Active user counts and recent activity',
-      skipInQuick: true,
+      command: cmd('monitor', 'active-users-quick'),
+      description: 'Active users by device heartbeat',
+      skipInUserFocus: true,
     },
     {
       name: 'User Storage',
       command: cmd('monitor', 'usage'),
       description: 'Top 20 users by storage usage',
+      skipInUserFocus: true,
     },
     {
       name: 'Recent Operations',
       command: cmd('monitor', `ops ${userFlag}`),
-      description: 'Recent operations analysis',
+      description: 'Recent operations analysis (bounded per-user sample)',
     },
 
     // Storage Analysis - Quick checks
@@ -81,16 +83,19 @@ const getMonitoringCommands = (userId?: number): MonitoringCommand[] => {
       name: 'Largest Operations',
       command: cmd('analyze-storage', 'large-ops --limit 20'),
       description: 'Find and analyze largest operations',
+      skipInUserFocus: true,
     },
     {
       name: 'Rapid Fire Detection',
       command: cmd('analyze-storage', 'rapid-fire --threshold 5'),
       description: 'Detect potential sync loops',
+      skipInUserFocus: true,
     },
     {
       name: 'Snapshot Analysis',
       command: cmd('analyze-storage', 'snapshot-analysis'),
       description: 'Analyze snapshot usage patterns',
+      skipInUserFocus: true,
     },
 
     // Deep Analysis (skip in quick mode)
@@ -107,14 +112,45 @@ const getMonitoringCommands = (userId?: number): MonitoringCommand[] => {
 // Runner
 // ============================================================================
 
-const runCommand = async (cmd: MonitoringCommand): Promise<string> => {
+interface MonitoringCommandResult {
+  name: string;
+  output: string;
+  success: boolean;
+}
+
+interface MonitoringRunResult {
+  failed: number;
+  failedNames: string[];
+  results: MonitoringCommandResult[];
+}
+
+interface CommandExecutionOptions {
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  maxBuffer: number;
+}
+
+type CommandExecutor = (
+  command: string,
+  options: CommandExecutionOptions,
+) => Promise<{ stdout: string; stderr: string }>;
+
+const executeCommand: CommandExecutor = async (command, options) => {
+  const { stdout, stderr } = await execAsync(command, options);
+  return { stdout, stderr };
+};
+
+const runCommand = async (
+  cmd: MonitoringCommand,
+  executor: CommandExecutor,
+): Promise<MonitoringCommandResult> => {
   console.log(`\n${'='.repeat(80)}`);
   console.log(`Running: ${cmd.name}`);
   console.log(`Description: ${cmd.description}`);
   console.log('='.repeat(80));
 
   try {
-    const { stdout, stderr } = await execAsync(cmd.command, {
+    const { stdout, stderr } = await executor(cmd.command, {
       cwd: process.cwd(),
       env: { ...process.env, FORCE_COLOR: '1' },
       maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
@@ -125,18 +161,29 @@ const runCommand = async (cmd: MonitoringCommand): Promise<string> => {
     }
 
     console.log(stdout);
-    return stdout;
-  } catch (error: any) {
-    const errorMsg = `Error running ${cmd.name}: ${error.message}`;
+    return { name: cmd.name, output: stdout, success: true };
+  } catch (error: unknown) {
+    const execError = error as { message?: string; stdout?: string; stderr?: string };
+    const errorMessage = execError.message ?? String(error);
+    const stderr = typeof execError.stderr === 'string' ? execError.stderr.trim() : '';
+    const errorDetail =
+      stderr && !errorMessage.includes(stderr)
+        ? `${errorMessage}\n${stderr}`
+        : errorMessage;
+    const errorMsg = `Error running ${cmd.name}: ${errorDetail}`;
     console.error(errorMsg);
-    if (error.stdout) console.log(error.stdout);
-    if (error.stderr) console.error(error.stderr);
-    return errorMsg;
+    if (execError.stdout) console.log(execError.stdout);
+    const output = [execError.stdout, errorMsg]
+      .filter((part): part is string => Boolean(part))
+      .join('\n');
+    return { name: cmd.name, output, success: false };
   }
 };
 
-const main = async (): Promise<void> => {
-  const args = process.argv.slice(2);
+export const runMonitoringSuite = async (
+  args = process.argv.slice(2),
+  executor: CommandExecutor = executeCommand,
+): Promise<MonitoringRunResult> => {
   const saveOutput = args.includes('--save');
   const quickMode = args.includes('--quick');
   const userIdArg = args.indexOf('--user');
@@ -153,18 +200,24 @@ const main = async (): Promise<void> => {
   console.log('');
 
   const commands = getMonitoringCommands(userId);
-  const commandsToRun = quickMode ? commands.filter((cmd) => !cmd.skipInQuick) : commands;
+  const scopedCommands = userId
+    ? commands.filter((command) => !command.skipInUserFocus)
+    : commands;
+  const commandsToRun = quickMode
+    ? scopedCommands.filter((command) => !command.skipInQuick)
+    : scopedCommands;
 
-  const outputs: string[] = [];
+  const results: MonitoringCommandResult[] = [];
 
   // Run all commands
   for (const cmd of commandsToRun) {
-    const output = await runCommand(cmd);
-    outputs.push(`\n${'='.repeat(80)}\n${cmd.name}\n${'='.repeat(80)}\n${output}`);
+    results.push(await runCommand(cmd, executor));
   }
 
   // Summary
   const duration = Date.now() - startTime;
+  const failedNames = results.filter((result) => !result.success).map(({ name }) => name);
+  const resultSummary = { failed: failedNames.length, failedNames };
   const summary = `
 ${'='.repeat(80)}
 MONITORING SUMMARY
@@ -172,6 +225,9 @@ ${'='.repeat(80)}
 Completed: ${new Date().toLocaleString()}
 Duration: ${(duration / 1000).toFixed(1)}s
 Commands Run: ${commandsToRun.length}
+Commands Failed: ${resultSummary.failed}${
+    resultSummary.failed > 0 ? ` (${resultSummary.failedNames.join(', ')})` : ''
+  }
 ${userId ? `User Focus: ${userId}` : 'All Users'}
 ${'='.repeat(80)}
 `;
@@ -199,7 +255,10 @@ ${'='.repeat(80)}
       `Duration: ${(duration / 1000).toFixed(1)}s`,
       userId ? `User: ${userId}` : 'Scope: All Users',
       '',
-      ...outputs,
+      ...results.map(
+        (result) =>
+          `\n${'='.repeat(80)}\n${result.name}\n${'='.repeat(80)}\n${result.output}`,
+      ),
       summary,
     ].join('\n');
 
@@ -208,10 +267,19 @@ ${'='.repeat(80)}
     console.log(`Size: ${(fullReport.length / 1024).toFixed(1)} KB\n`);
   }
 
-  console.log('✅ Monitoring complete!\n');
+  if (resultSummary.failed > 0) {
+    process.exitCode = 1;
+    console.log('❌ Monitoring incomplete; see failed commands above.\n');
+  } else {
+    console.log('✅ Monitoring complete!\n');
+  }
+
+  return { ...resultSummary, results };
 };
 
-main().catch((error) => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+if (require.main === module) {
+  runMonitoringSuite().catch((error) => {
+    console.error('Fatal error:', error);
+    process.exit(1);
+  });
+}

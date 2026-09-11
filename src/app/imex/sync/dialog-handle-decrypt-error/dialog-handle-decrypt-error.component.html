@@ -48,7 +48,7 @@
         color="warn"
         type="button"
         (click)="updatePWAndForceUpload()"
-        [disabled]="!passwordVal"
+        [disabled]="!passwordVal || isForceUploadPending()"
       >
         <mat-icon>cloud_upload</mat-icon>
         {{ T.F.SYNC.D_DECRYPT_ERROR.BTN_OVER_WRITE_REMOTE | translate }}

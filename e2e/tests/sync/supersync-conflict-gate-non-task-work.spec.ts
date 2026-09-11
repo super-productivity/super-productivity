@@ -202,11 +202,7 @@ test.describe('@supersync incoming SYNC_IMPORT preserves non-task local work', (
 
       // Resolving with "Use My Data" keeps B's local work; the point of the test
       // is that B was given the choice at all.
-      await clientB.sync.syncImportUseLocalBtn.click();
-      await clientB.sync.syncImportConflictDialog.waitFor({
-        state: 'hidden',
-        timeout: 10000,
-      });
+      await clientB.sync.chooseSyncImportUseLocal();
       await clientB.sync.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
 
       // The dialog itself is not the guarantee: prove the exact pending counter

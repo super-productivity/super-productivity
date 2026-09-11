@@ -21,6 +21,12 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { MetricService } from '../../metric/metric.service';
 import { DialogViewArchivedTaskComponent } from '../../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 import { WorklogTaskRowComponent } from '../worklog-task-row/worklog-task-row.component';
+import { WorklogDay } from '../worklog.model';
+
+export const sortWorklogDays = (
+  a: KeyValue<string, WorklogDay>,
+  b: KeyValue<string, WorklogDay>,
+): number => a.value.dateStr.localeCompare(b.value.dateStr);
 
 @Component({
   selector: 'worklog-week',
@@ -53,9 +59,7 @@ export class WorklogWeekComponent {
   T: typeof T = T;
   keys: (o: Record<string, unknown>) => string[] = Object.keys;
 
-  sortDays<T extends KeyValue<string, V>, V = unknown>(a: T, b: T): number {
-    return b.key < a.key ? 1 : -1;
-  }
+  sortDays = sortWorklogDays;
 
   async exportData(): Promise<void> {
     const now = new Date();

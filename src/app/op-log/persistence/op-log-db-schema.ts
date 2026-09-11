@@ -75,7 +75,6 @@ export const OP_LOG_DB_SCHEMA: OpLogDbSchema = {
     { name: STORE_NAMES.VECTOR_CLOCK },
     { name: STORE_NAMES.ARCHIVE_YOUNG, keyPath: 'id' },
     { name: STORE_NAMES.ARCHIVE_OLD, keyPath: 'id' },
-    { name: STORE_NAMES.PROFILE_DATA, keyPath: 'id' },
     // keyless singleton: clientId stored under SINGLETON_KEY
     { name: STORE_NAMES.CLIENT_ID },
     // keyless singleton metadata records, written with explicit keys

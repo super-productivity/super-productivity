@@ -11,6 +11,14 @@ type TaskStateSnapshot = {
   timeEstimate?: number | null;
 };
 
+/**
+ * The suite runs in Europe/Berlin (e2e/global-setup.ts) at whatever wall-clock
+ * time CI fires, so a test can straddle local midnight: a task created at
+ * 23:59:5x is stored under the previous day while the assertion a second later
+ * resolves to the next one (run 33808991651). Callers therefore sample this
+ * once before creating the task and once at assertion time and accept either
+ * side of the rollover.
+ */
 const getDbDateStr = async (page: Page, offsetDays = 0): Promise<string> =>
   page.evaluate((offset) => {
     const date = new Date();
@@ -134,6 +142,7 @@ test.describe('Scheduled Task Operations', () => {
 
     // Create task with @today short syntax
     const taskTitle = `${testPrefix}-Scheduled Task`;
+    const dueDayBeforeAdd = await getDbDateStr(page);
     await workViewPage.addTask(`${taskTitle} @today`);
 
     // Verify task is visible
@@ -141,9 +150,9 @@ test.describe('Scheduled Task Operations', () => {
     await expect(task).toBeVisible({ timeout: 10000 });
     await expect(task.locator('task-title')).not.toContainText('@today');
 
-    const expectedDueDay = await getDbDateStr(page);
     const taskState = await expectTaskTitleWithoutShortSyntax(page, taskTitle, '@today');
-    expect(taskState.dueDay).toBe(expectedDueDay);
+    const dueDayAfterAdd = await getDbDateStr(page);
+    expect([dueDayBeforeAdd, dueDayAfterAdd]).toContain(taskState.dueDay);
   });
 
   test('should create task with time estimate using short syntax', async ({
@@ -229,18 +238,19 @@ test.describe('Scheduled Task Operations', () => {
     // used because it waits for the new task in the today list and tomorrow's
     // task does not show up there.
     const taskTitle = `${testPrefix}-Tomorrow Task`;
+    const dueDayBeforeAdd = await getDbDateStr(page, 1);
     await addTaskWithoutWaitingForTodayList(page, `${taskTitle} @tomorrow`);
 
-    const expectedDueDay = await getDbDateStr(page, 1);
     await expect
       .poll(async () => (await getTaskStateByTitle(page, taskTitle))?.dueDay ?? '')
-      .toBe(expectedDueDay);
+      .toMatch(DB_DATE_RE);
     const taskState = await expectTaskTitleWithoutShortSyntax(
       page,
       taskTitle,
       '@tomorrow',
     );
-    expect(taskState.dueDay).toMatch(DB_DATE_RE);
+    const dueDayAfterAdd = await getDbDateStr(page, 1);
+    expect([dueDayBeforeAdd, dueDayAfterAdd]).toContain(taskState.dueDay);
 
     // Navigate back to work view to verify app is responsive
     await page.goto('/#/tag/TODAY/tasks');
@@ -258,6 +268,7 @@ test.describe('Scheduled Task Operations', () => {
     await workViewPage.waitForTaskList();
 
     // Create multiple tasks with different schedules/estimates
+    const dueDayBeforeAdd = await getDbDateStr(page);
     await workViewPage.addTask(`${testPrefix}-Task1 @today 30m`);
     await workViewPage.addTask(`${testPrefix}-Task2 @today 1h`);
 
@@ -270,23 +281,24 @@ test.describe('Scheduled Task Operations', () => {
     await expect(task1.locator('task-title')).not.toContainText(/@today|30m/);
     await expect(task2.locator('task-title')).not.toContainText(/@today|1h/);
 
-    const expectedDueDay = await getDbDateStr(page);
     const task1State = await expectTaskTitleWithoutShortSyntax(
       page,
       `${testPrefix}-Task1`,
       '@today',
     );
-    expect(task1State.title).not.toContain('30m');
-    expect(task1State.dueDay).toBe(expectedDueDay);
-    expect(task1State.timeEstimate).toBe(THIRTY_MINUTES);
-
     const task2State = await expectTaskTitleWithoutShortSyntax(
       page,
       `${testPrefix}-Task2`,
       '@today',
     );
+    const dueDayAfterAdd = await getDbDateStr(page);
+
+    expect(task1State.title).not.toContain('30m');
+    expect([dueDayBeforeAdd, dueDayAfterAdd]).toContain(task1State.dueDay);
+    expect(task1State.timeEstimate).toBe(THIRTY_MINUTES);
+
     expect(task2State.title).not.toContain('1h');
-    expect(task2State.dueDay).toBe(expectedDueDay);
+    expect([dueDayBeforeAdd, dueDayAfterAdd]).toContain(task2State.dueDay);
     expect(task2State.timeEstimate).toBe(ONE_HOUR);
   });
 });

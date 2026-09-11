@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>SP minified-build smoke</title>
+  </head>
+  <body>
+    <!--
+      Stand-in for the Angular app, copied into assets/public by CI so the
+      minified APK has something to load. Its only job is to reach the plugin
+      bridge the way the real app does, then say so in logcat.
+
+      LocalNotifications.checkPermissions() is deliberate: that exact call is
+      what killed the process in #9785. R8 folded PluginHandle.pluginAnnotation
+      to null, which compiled Plugin.getPermissionStates() down to `throw null`,
+      so the first permission call from JS took the process with it about three
+      seconds after launch. Nothing static catches that — the build is clean and
+      mapping.txt looks fine.
+
+      Markers go through console.log, which Capacitor logs under the
+      Capacitor/Console tag; android/run-android-checks.sh greps for them. That
+      only works because CI also installs capacitor.config.json from this
+      directory: Capacitor ties console logging to FLAG_DEBUGGABLE by default,
+      and the r8Test APK is release-configured.
+    -->
+    <script>
+      const report = (message) => console.log('SP_SMOKE ' + message);
+
+      window.addEventListener('error', (event) =>
+        report('FAIL window-error ' + (event.message || 'unknown')),
+      );
+      window.addEventListener('unhandledrejection', (event) =>
+        report('FAIL unhandled-rejection ' + (event.reason?.message || event.reason)),
+      );
+
+      (async () => {
+        try {
+          const plugins = window.Capacitor?.Plugins;
+          if (!plugins) {
+            report('FAIL no-capacitor-bridge');
+            return;
+          }
+          // Proves the bridge round-trips at all before the permission call, so
+          // a failure below is about permissions and not about the bridge.
+          await plugins.App.getState();
+          // The app's own @JavascriptInterface bridge, kept by a rule of its
+          // own. A stripped or renamed getVersion throws here rather than
+          // failing silently the way it would in the real app.
+          const version = window.SUPAndroid.getVersion();
+          const permissions = await plugins.LocalNotifications.checkPermissions();
+          report('OK display=' + permissions?.display + ' bridge=' + version);
+        } catch (error) {
+          report('FAIL ' + (error?.message || String(error)));
+        }
+      })();
+    </script>
+  </body>
+</html>

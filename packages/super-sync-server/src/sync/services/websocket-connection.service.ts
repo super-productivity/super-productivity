@@ -1,5 +1,6 @@
 import { WebSocket } from 'ws';
 import { Logger } from '../../logger';
+import { DEVICE_TOUCH_THROTTLE_MS } from '../sync.types';
 
 interface ConnectedClient {
   ws: WebSocket;
@@ -8,6 +9,13 @@ interface ConnectedClient {
   lastPong: number;
   /** Wall-clock ms when this socket was accepted (used for the storm summary). */
   connectedAt: number;
+  /**
+   * Wall-clock ms of the last device touch issued for this socket. Purely an
+   * in-memory throttle so a long-lived connection costs ~one write per
+   * DEVICE_TOUCH_THROTTLE_MS rather than one per heartbeat tick; the statement
+   * itself is throttled again in SQL, so a stale value here is harmless.
+   */
+  lastTouchedAt: number;
   /**
    * Wall-clock ms at which the reconnect cooldown expires. Set on accept and
    * extended forward on each refused challenger so a sustained storm cannot
@@ -25,6 +33,36 @@ interface ConnectedClient {
    * because the count remains observably truthful for the life of the object.
    */
   summaryLogged: boolean;
+  /** Start of the current presence rate-limit window (wall-clock ms). */
+  presenceWindowStart: number;
+  /** Presence messages accepted in the current window. */
+  presenceMsgCount: number;
+}
+
+/**
+ * Last-known ephemeral tracking-presence state of one user. The payload is an
+ * opaque string minted by the producing client (E2E-encrypted when the user
+ * has encryption on) — the server relays and caches it without ever parsing
+ * it. Kept in memory only; dropped when the user's last socket closes.
+ */
+interface UserPresence {
+  /** Opaque payload string from the producing client. Never parsed here. */
+  payload: string;
+  /**
+   * Server-assigned monotonic ordinal (per user). Clients order presence
+   * states by this instead of client wall clocks, which skew.
+   */
+  ordinal: number;
+  /** clientId of the socket that produced this state. */
+  producerClientId: string;
+  /** Wall-clock ms when the state was received. */
+  updatedAt: number;
+  /**
+   * False once the producing socket has closed. A disconnected producer is
+   * NOT the same as "stopped" (it may keep tracking offline) — viewers use
+   * this to render the state as possibly stale.
+   */
+  producerConnected: boolean;
 }
 
 /**
@@ -33,10 +71,21 @@ interface ConnectedClient {
  * Sends lightweight notifications when new operations are available,
  * prompting clients to download via the existing HTTP endpoint.
  * Does NOT stream operation payloads over WebSocket.
+ *
+ * Also relays ephemeral tracking-presence messages between a user's devices
+ * (`presence_state` / `presence_cmd`) with an in-memory last-state cache —
+ * payloads stay opaque to the server and nothing touches the database.
  */
 export class WebSocketConnectionService {
   private connections = new Map<number, Set<ConnectedClient>>();
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private presenceByUser = new Map<number, UserPresence>();
+  /**
+   * Injected rather than imported so this service stays free of persistence:
+   * it knows when a client is demonstrably alive, not how a device row is
+   * written. Fire-and-forget by contract — the callee must not reject.
+   */
+  private touchDevice: ((userId: number, clientId: string) => void) | null = null;
 
   /** 30s ping interval - keeps connection alive through proxies (most: 60-120s timeout) */
   private static readonly PING_INTERVAL_MS = 30_000;
@@ -50,6 +99,36 @@ export class WebSocketConnectionService {
   private static readonly REPLACED_CLOSE_CODE = 4009;
   /** Close code sent to a challenger socket refused during the reconnect cooldown */
   private static readonly RECONNECT_COOLDOWN_CLOSE_CODE = 4008;
+  /**
+   * Close code sent to every socket of a user whose tokens were just revoked.
+   * Wire contract: 4003 is the auth-failure code — it must stay in step with
+   * the upgrade rejection in `websocket.routes.ts` and the client's
+   * `AUTH_FAILURE_CLOSE_CODE` (`super-sync-websocket.service.ts`), which
+   * treats it as terminal (no auto-reconnect; the next sync reconnects).
+   */
+  private static readonly TOKEN_REVOKED_CLOSE_CODE = 4003;
+  /**
+   * Upper bound for a relayed presence payload. Presence states are tiny
+   * (session id + task id + labels); anything larger is dropped as abuse.
+   * Must stay <= the route-level `maxPayload` in server.ts, which errors the
+   * whole socket instead of dropping just the message.
+   */
+  private static readonly MAX_PRESENCE_PAYLOAD_BYTES = 8_192;
+  /**
+   * Presence relay rate limit per connection. A well-behaved producer sends
+   * transitions plus a 60s heartbeat (~1/min, short takeover bursts), so this
+   * is generous — anything sustained above it is a client bug or abuse, and
+   * relaying it would amplify to every sibling socket.
+   */
+  private static readonly PRESENCE_RATE_WINDOW_MS = 10_000;
+  private static readonly PRESENCE_RATE_MAX_PER_WINDOW = 15;
+  /**
+   * Don't send cached presence to newly connecting sockets once it is older
+   * than the viewers' own hide window (PRESENCE_HIDE_STALE_AFTER_MS client-
+   * side) — clients stamp snapshots with their local receive time, so an
+   * old snapshot would otherwise revive as "fresh" on every reconnect.
+   */
+  private static readonly PRESENCE_SNAPSHOT_MAX_AGE_MS = 30 * 60_000;
   /**
    * Sliding-window cooldown. While a still-OPEN incumbent's `cooldownUntil` is
    * in the future, a new socket from the same clientId is refused (the
@@ -153,11 +232,26 @@ export class WebSocketConnectionService {
       userId,
       lastPong: nowMs,
       connectedAt: nowMs,
+      lastTouchedAt: nowMs,
       cooldownUntil: nowMs + WebSocketConnectionService.RECONNECT_COOLDOWN_MS,
       refusedChallengers: 0,
       summaryLogged: false,
+      presenceWindowStart: nowMs,
+      presenceMsgCount: 0,
     };
     userSet.add(client);
+
+    const presence = this.presenceByUser.get(userId);
+    if (presence && presence.producerClientId === clientId) {
+      // The presence producer coming back (reconnect after a network blip or
+      // socket eviction) restores the connected flag so viewers stop rendering
+      // its state as stale; the broadcast goes out immediately rather than
+      // waiting up to a heartbeat interval for the producer's next state.
+      if (!presence.producerConnected) {
+        presence.producerConnected = true;
+        this._relayPresence(userId, clientId, this._presenceStateMsg(presence));
+      }
+    }
 
     // Send connected message
     this._sendMessage(ws, {
@@ -165,6 +259,19 @@ export class WebSocketConnectionService {
       userId,
       timestamp: Date.now(),
     });
+
+    // Send the cached presence snapshot so a device connecting mid-session
+    // immediately sees what another device is tracking. Skipped for the
+    // producer itself — its own next state transition/heartbeat is fresher —
+    // and for entries the viewer would hide as stale anyway.
+    if (
+      presence &&
+      presence.producerClientId !== clientId &&
+      Date.now() - presence.updatedAt <
+        WebSocketConnectionService.PRESENCE_SNAPSHOT_MAX_AGE_MS
+    ) {
+      this._sendMessage(ws, this._presenceStateMsg(presence));
+    }
 
     ws.on('pong', () => {
       client.lastPong = Date.now();
@@ -175,6 +282,8 @@ export class WebSocketConnectionService {
         const msg = JSON.parse(data.toString());
         if (msg.type === 'pong') {
           client.lastPong = Date.now();
+        } else if (msg.type === 'presence_state' || msg.type === 'presence_cmd') {
+          this._handlePresenceMessage(client, msg.type, msg.payload);
         }
       } catch (err) {
         Logger.debug(`[ws:user:${userId}:${clientId}] Non-JSON message received`, err);
@@ -208,6 +317,7 @@ export class WebSocketConnectionService {
         this.connections.delete(userId);
       }
     }
+    this._onPresenceProducerMaybeGone(userId, client.clientId);
     // Storm summary: the first refusal logged a WARN; the rest were silent.
     // When the incumbent finally goes away, log the cumulative count so the
     // operator sees the scale of the storm without per-attempt log spam.
@@ -302,8 +412,151 @@ export class WebSocketConnectionService {
     }
   }
 
-  startHeartbeat(): void {
+  /**
+   * Handles an incoming ephemeral presence message from one of a user's
+   * devices. `presence_state` is cached (last-state-wins, server-assigned
+   * ordinal) and relayed to the user's other sockets; `presence_cmd` (e.g. a
+   * remote stop request) is relayed without caching. Payloads are opaque
+   * strings — E2E-encrypted when the user has encryption on — and are never
+   * parsed or persisted server-side.
+   */
+  private _handlePresenceMessage(
+    client: ConnectedClient,
+    type: 'presence_state' | 'presence_cmd',
+    payload: unknown,
+  ): void {
+    if (typeof payload !== 'string' || payload.length === 0) {
+      return;
+    }
+    if (
+      Buffer.byteLength(payload, 'utf8') >
+      WebSocketConnectionService.MAX_PRESENCE_PAYLOAD_BYTES
+    ) {
+      Logger.warn(
+        `[ws:user:${client.userId}:${client.clientId}] Oversized ${type} payload dropped`,
+      );
+      return;
+    }
+
+    const now = Date.now();
+    if (
+      now - client.presenceWindowStart >
+      WebSocketConnectionService.PRESENCE_RATE_WINDOW_MS
+    ) {
+      client.presenceWindowStart = now;
+      client.presenceMsgCount = 0;
+    }
+    if (
+      ++client.presenceMsgCount > WebSocketConnectionService.PRESENCE_RATE_MAX_PER_WINDOW
+    ) {
+      if (
+        client.presenceMsgCount ===
+        WebSocketConnectionService.PRESENCE_RATE_MAX_PER_WINDOW + 1
+      ) {
+        Logger.warn(
+          `[ws:user:${client.userId}:${client.clientId}] Presence rate limit hit — dropping ${type}`,
+        );
+      }
+      return;
+    }
+
+    if (type === 'presence_state') {
+      const prev = this.presenceByUser.get(client.userId);
+      const presence: UserPresence = {
+        payload,
+        ordinal: (prev?.ordinal ?? 0) + 1,
+        producerClientId: client.clientId,
+        updatedAt: Date.now(),
+        producerConnected: true,
+      };
+      this.presenceByUser.set(client.userId, presence);
+      this._relayPresence(
+        client.userId,
+        client.clientId,
+        this._presenceStateMsg(presence),
+      );
+    } else {
+      this._relayPresence(client.userId, client.clientId, {
+        type: 'presence_cmd',
+        payload,
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  /** The one wire shape a cached presence state is announced with. */
+  private _presenceStateMsg(p: UserPresence): Record<string, unknown> {
+    return {
+      type: 'presence_state',
+      payload: p.payload,
+      ordinal: p.ordinal,
+      producerConnected: p.producerConnected,
+      timestamp: p.updatedAt,
+    };
+  }
+
+  private _relayPresence(
+    userId: number,
+    excludeClientId: string,
+    message: Record<string, unknown>,
+  ): void {
+    const userSet = this.connections.get(userId);
+    if (!userSet) {
+      return;
+    }
+    // Serialized once — the identical string goes to every sibling socket.
+    const str = JSON.stringify(message);
+    for (const c of userSet) {
+      if (c.clientId !== excludeClientId && c.ws.readyState === WebSocket.OPEN) {
+        try {
+          c.ws.send(str);
+        } catch (err) {
+          Logger.debug(`[ws] Failed to send message`, err);
+        }
+      }
+    }
+  }
+
+  /**
+   * Called after a socket is removed. If it was the presence producer's last
+   * socket, the cached state is flagged `producerConnected: false` and the
+   * flag is broadcast, so viewers can render the state as possibly stale —
+   * a disconnected producer may still be tracking offline, so the state
+   * itself is kept. The whole cache entry is dropped once the user has no
+   * sockets left (bounds memory to actively connected users; the producer
+   * re-announces on its next heartbeat anyway).
+   */
+  private _onPresenceProducerMaybeGone(userId: number, clientId: string): void {
+    const presence = this.presenceByUser.get(userId);
+    if (!presence) {
+      return;
+    }
+    if (!this.connections.has(userId)) {
+      this.presenceByUser.delete(userId);
+      return;
+    }
+    if (presence.producerClientId !== clientId || !presence.producerConnected) {
+      return;
+    }
+    // The producer may have just RE-connected: eviction removes the old
+    // socket while a live replacement with the same clientId exists.
+    let stillConnected = false;
+    for (const c of this.connections.get(userId) ?? []) {
+      if (c.clientId === clientId) {
+        stillConnected = true;
+        break;
+      }
+    }
+    if (stillConnected) {
+      return;
+    }
+    presence.producerConnected = false;
+    this._relayPresence(userId, clientId, this._presenceStateMsg(presence));
+  }
+
+  startHeartbeat(touchDevice?: (userId: number, clientId: string) => void): void {
     if (this.heartbeatInterval) return;
+    this.touchDevice = touchDevice ?? null;
 
     this.heartbeatInterval = setInterval(() => {
       const now = Date.now();
@@ -322,6 +575,18 @@ export class WebSocketConnectionService {
             );
             toRemove.push({ userId, client });
             continue;
+          }
+
+          // A socket that still answers pings is in active use, so keep its device
+          // row fresh: a connection held open past the retention window without
+          // uploading would otherwise be pruned mid-use. Touching only on accept
+          // would not cover that case.
+          if (
+            this.touchDevice &&
+            now - client.lastTouchedAt >= DEVICE_TOUCH_THROTTLE_MS
+          ) {
+            client.lastTouchedAt = now;
+            this.touchDevice(userId, client.clientId);
           }
 
           // Send app-level ping
@@ -359,6 +624,32 @@ export class WebSocketConnectionService {
     this.pendingNotifications.clear();
   }
 
+  /**
+   * Closes every live socket of one user. Called on token revocation
+   * (`POST /api/replace-token`, passkey recovery): sockets are authenticated
+   * only at upgrade and kept alive by the heartbeat, so without this a
+   * revoked device would keep receiving op notifications indefinitely.
+   *
+   * Deliberately no caller exemption: a socket's clientId is a self-declared
+   * query param, never bound to its token, so sparing a caller-named socket
+   * would let a stolen-token client exempt itself by claiming that id. The
+   * revoking caller's socket closes too and reconnects with its fresh token
+   * on the next sync cycle.
+   */
+  closeForUser(userId: number): void {
+    const userSet = this.connections.get(userId);
+    if (!userSet) {
+      return;
+    }
+    // removeConnection mutates the set — iterate a copy.
+    for (const client of [...userSet]) {
+      this.removeConnection(userId, client, {
+        code: WebSocketConnectionService.TOKEN_REVOKED_CLOSE_CODE,
+        reason: 'Token revoked',
+      });
+    }
+  }
+
   /** Close all connections gracefully */
   closeAll(): void {
     for (const [, userSet] of this.connections) {
@@ -371,6 +662,7 @@ export class WebSocketConnectionService {
       }
     }
     this.connections.clear();
+    this.presenceByUser.clear();
   }
 
   /** Get total connection count (for monitoring/health) */

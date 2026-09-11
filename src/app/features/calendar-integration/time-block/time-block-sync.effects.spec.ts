@@ -136,6 +136,69 @@ describe('TimeBlockSyncEffects', () => {
     flush();
   }));
 
+  it('does not create a time-block mirror for a task imported from the same provider (#9206)', fakeAsync(() => {
+    const task = createTask('task-1', {
+      issueId: 'primary::event-1',
+      issueProviderId: provider.id,
+      issueType: 'plugin:google-calendar',
+    });
+    getByIdOnce$Spy.and.returnValue(of(task));
+
+    actions$.next(
+      TaskSharedActions.scheduleTaskWithTime({
+        task,
+        dueWithTime: task.dueWithTime!,
+        isMoveToBacklog: false,
+      }),
+    );
+    tick(COALESCE_MS);
+
+    expect(upsertEventSpy).not.toHaveBeenCalled();
+    expect(deleteEventSpy).not.toHaveBeenCalled();
+    flush();
+  }));
+
+  it('still creates a time block for a task imported from a different provider', fakeAsync(() => {
+    const task = createTask('task-1', {
+      issueId: 'other-calendar::event-1',
+      issueProviderId: 'ip-2',
+      issueType: 'plugin:google-calendar',
+    });
+    getByIdOnce$Spy.and.returnValue(of(task));
+
+    actions$.next(
+      TaskSharedActions.scheduleTaskWithTime({
+        task,
+        dueWithTime: task.dueWithTime!,
+        isMoveToBacklog: false,
+      }),
+    );
+    tick(COALESCE_MS);
+
+    expect(upsertEventSpy).toHaveBeenCalledTimes(1);
+    flush();
+  }));
+
+  it('still deletes a legacy mirror when a same-provider task is deleted', fakeAsync(() => {
+    const deleteSub = effects.deleteOnTaskDelete$.subscribe();
+    const task = {
+      ...createTask('task-1', {
+        issueId: 'primary::event-1',
+        issueProviderId: provider.id,
+        issueType: 'plugin:google-calendar',
+      }),
+      subTasks: [],
+    };
+
+    actions$.next(TaskSharedActions.deleteTask({ task }));
+    flushMicrotasks();
+
+    expect(deleteEventSpy).toHaveBeenCalledTimes(1);
+    expect(deleteEventSpy.calls.mostRecent().args[0]).toBe(task.id);
+    deleteSub.unsubscribe();
+    flush();
+  }));
+
   it('coalesces independently per task', fakeAsync(() => {
     actions$.next(
       TaskSharedActions.updateTask({ task: { id: 'task-1', changes: { title: 'A' } } }),
@@ -375,6 +438,36 @@ describe('TimeBlockSyncEffects', () => {
     expect(deleteEventSpy).toHaveBeenCalledTimes(1);
     backfillSub.unsubscribe();
     deleteSub.unsubscribe();
+    flush();
+  }));
+
+  it('does not backfill a time-block mirror for a same-provider task', fakeAsync(() => {
+    const backfillSub = effects.backfillOnAutoTimeBlockEnabled$.subscribe();
+    const oneHourMs = 60 * 60 * 1000;
+    const dueWithTime = Date.now() + oneHourMs;
+    const task = createTask('task-1', {
+      dueWithTime,
+      issueId: 'primary::event-1',
+      issueProviderId: provider.id,
+      issueType: 'plugin:google-calendar',
+    }) as TaskWithDueTime;
+    store.overrideSelector(selectAllTasksWithDueTimeSorted, [task]);
+    store.refreshState();
+    getByIdOnce$Spy.and.returnValue(of(task));
+
+    actions$.next(
+      IssueProviderActions.updateIssueProvider({
+        issueProvider: {
+          id: provider.id,
+          changes: { pluginConfig: { isAutoTimeBlock: true } },
+        },
+      }),
+    );
+    flushMicrotasks();
+
+    expect(getByIdOnce$Spy).toHaveBeenCalledWith(task.id);
+    expect(upsertEventSpy).not.toHaveBeenCalled();
+    backfillSub.unsubscribe();
     flush();
   }));
 

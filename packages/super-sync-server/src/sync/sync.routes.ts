@@ -7,6 +7,7 @@ import {
   UploadOpsRequest,
   DownloadOpsResponse,
   SyncStatusResponse,
+  SyncDevicesResponse,
   SYNC_ERROR_CODES,
 } from './sync.types';
 import { normalizeContentEncoding } from './compressed-body-parser';
@@ -130,6 +131,12 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         const { sinceSeq, limit = 500, excludeClient } = parseResult.data;
         const syncService = getSyncService();
 
+        // `excludeClient` is the caller's own id (it means "don't echo my ops
+        // back"), so a caller that omits it simply isn't recorded.
+        if (excludeClient) {
+          syncService.touchDevice(userId, excludeClient);
+        }
+
         Logger.debug(
           `[user:${userId}] Download request: sinceSeq=${sinceSeq}, limit=${limit}`,
         );
@@ -246,6 +253,35 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         return reply.send(response);
       } catch (err) {
         Logger.error(`Get status error: ${errorMessage(err)}`);
+        return reply.status(500).send({ error: 'Internal server error' });
+      }
+    },
+  );
+
+  // GET /api/sync/devices - List the devices syncing this account
+  fastify.get(
+    '/devices',
+    {
+      config: {
+        rateLimit: {
+          max: 30,
+          timeWindow: '1 minute',
+        },
+      },
+    },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const userId = getAuthUser(req).userId;
+        const syncService = getSyncService();
+
+        const devices = await syncService.listDevices(userId);
+
+        Logger.debug(`[user:${userId}] Devices: ${devices.length}`);
+
+        const response: SyncDevicesResponse = { devices };
+        return reply.send(response);
+      } catch (err) {
+        Logger.error(`Get devices error: ${errorMessage(err)}`);
         return reply.status(500).send({ error: 'Internal server error' });
       }
     },

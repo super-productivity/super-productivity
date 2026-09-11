@@ -35,13 +35,26 @@ import { isSingleEmoji } from '../../../../util/extract-first-emoji';
 import { DEFAULT_PROJECT_ICON, INBOX_PROJECT } from '../../../project/project.const';
 import { Project } from '../../../project/project.model';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
-import { RepeatQuickSetting } from '../../../task-repeat-cfg/task-repeat-cfg.model';
+import {
+  RepeatCycleOption,
+  RepeatQuickSetting,
+} from '../../../task-repeat-cfg/task-repeat-cfg.model';
 import { buildRepeatQuickSettingOptions } from '../../../task-repeat-cfg/dialog-edit-task-repeat-cfg/build-repeat-quick-setting-options';
 import { DateService } from '../../../../core/date/date.service';
 import { MenuTreeService } from '../../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../../ui/select-option-row/select-option-row.component';
 
 type MenuType = 'project' | 'tags' | 'estimate' | 'repeat';
+
+// Label for an interval recurrence, which has no entry in the quick-setting
+// list. Only reached for counts >= 2 (an interval of 1 is parsed as the
+// equivalent preset), so the plural wording always fits.
+const INTERVAL_LABEL_KEYS: Record<RepeatCycleOption, string> = {
+  DAILY: T.F.TASK_REPEAT.F.Q_EVERY_X_DAYS,
+  WEEKLY: T.F.TASK_REPEAT.F.Q_EVERY_X_WEEKS,
+  MONTHLY: T.F.TASK_REPEAT.F.Q_EVERY_X_MONTHS,
+  YEARLY: T.F.TASK_REPEAT.F.Q_EVERY_X_YEARS,
+};
 
 @Component({
   selector: 'add-task-bar-actions',
@@ -188,9 +201,25 @@ export class AddTaskBarActionsComponent {
     return estimate ? msToString(estimate) : null;
   });
 
-  repeatQuickOptions = computed(() => {
+  // The day the user chose, which is what every option here re-derives from —
+  // so a label can never name a different weekday than the config it saves
+  // recurs on. Not always the config's `startDate`: submitting a workday
+  // recurrence rolls a weekend day forward to the Monday. That does not break
+  // the guarantee, because the only preset that is rolled is the one whose
+  // label names no weekday ("Workdays"); a preset whose label does name one
+  // derives its own anchor from this date and is never rolled.
+  //
+  // The no-date fallback is the *logical* today, matching the `todayStr()` the
+  // submit path falls back to. A wall-clock `new Date()` would name yesterday's
+  // weekday between midnight and the configured start of the next day, so the
+  // label and the saved config would disagree in exactly that window.
+  private _repeatRefDate = computed(() => {
     const dateStr = this.state().date;
-    const refDate = dateStr ? dateStrToUtcDate(dateStr) : new Date();
+    return dateStr ? dateStrToUtcDate(dateStr) : this._dateService.getLogicalTodayDate();
+  });
+
+  repeatQuickOptions = computed(() => {
+    const refDate = this._repeatRefDate();
     return buildRepeatQuickSettingOptions(
       refDate,
       this._dateTimeFormatService.currentLocale(),
@@ -202,9 +231,22 @@ export class AddTaskBarActionsComponent {
   });
 
   repeatDisplay = computed(() => {
-    const setting = this.state().repeatQuickSetting;
-    if (!setting) return null;
-    return this.repeatQuickOptions().find((o) => o.value === setting)?.label ?? null;
+    const repeat = this.state().repeat;
+    if (!repeat) return null;
+    if (repeat.type === 'INTERVAL') {
+      return this._translateService.instant(INTERVAL_LABEL_KEYS[repeat.repeatCycle], {
+        count: repeat.repeatEvery,
+        // Only read by the weekly label; a weekly cycle always recurs on the
+        // first occurrence's weekday, whether the phrase named it ("@every 2
+        // fridays") or took today's ("@every 2 weeks")
+        weekdayStr: this._repeatRefDate().toLocaleDateString(
+          this._dateTimeFormatService.textLocale(),
+          { weekday: 'long' },
+        ),
+      });
+    }
+    const value = repeat.type === 'DIALOG' ? 'CUSTOM' : repeat.quickSetting;
+    return this.repeatQuickOptions().find((o) => o.value === value)?.label ?? null;
   });
 
   // Emoji detection for project icons
@@ -237,9 +279,11 @@ export class AddTaskBarActionsComponent {
 
     dialogRef.afterClosed().subscribe((result) => {
       if (result && typeof result === 'object' && result.date) {
-        this.stateService.updateDate(getDbDateStr(result.date), result.time);
-        // No UI access to reminder without a time being set
-        this.stateService.updateRemindOption(result.remindOption);
+        this._parserService.applyUserDatePick(
+          getDbDateStr(result.date),
+          result.time ?? null,
+          result.remindOption ?? null,
+        );
       }
       this.refocus.emit();
       window.setTimeout(() => {
@@ -271,8 +315,11 @@ export class AddTaskBarActionsComponent {
     dialogRef.afterClosed().subscribe((result) => {
       if (result && typeof result === 'object') {
         if (result.date) {
-          this.stateService.updateDeadline(getDbDateStr(result.date), result.time);
-          this.stateService.updateDeadlineRemindOption(result.remindOption);
+          this._parserService.applyUserDeadlinePick(
+            getDbDateStr(result.date),
+            result.time ?? null,
+            result.remindOption ?? null,
+          );
         } else if (result.date === null) {
           this.stateService.clearDeadline();
         }
@@ -293,7 +340,7 @@ export class AddTaskBarActionsComponent {
   onEstimateInput(value: string): void {
     const ms = stringToMs(value);
     if (ms > 0) {
-      this.stateService.updateEstimate(ms);
+      this._parserService.applyUserEstimatePick(ms);
       this.estimateChanged.emit(value);
     }
   }
@@ -332,11 +379,20 @@ export class AddTaskBarActionsComponent {
   }
 
   selectRepeatQuickSetting(setting: RepeatQuickSetting): void {
-    this.stateService.updateRepeatSetting(setting);
+    this._parserService.applyUserRepeatPick(
+      setting === 'CUSTOM'
+        ? { type: 'DIALOG' }
+        : { type: 'PRESET', quickSetting: setting },
+    );
   }
 
   clearRepeatSetting(): void {
-    this.stateService.clearRepeatSetting();
+    const currentInput = this.stateService.inputTxt();
+    const cleanedInput = this._parserService.removeShortSyntaxFromInput(
+      currentInput,
+      'repeat',
+    );
+    this.stateService.clearRepeatSetting(cleanedInput);
     this.refocus.emit();
   }
 

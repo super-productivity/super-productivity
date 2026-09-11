@@ -77,7 +77,8 @@ export class AddTasksForTomorrowService {
 
     const tomorrow = this._dateService.getLogicalTomorrowMs();
 
-    const promises = dueRepeatCfgs.sort(sortRepeatableTaskCfgs).map((repeatCfg) => {
+    // copy first: this is memoized selector output other subscribers hold
+    const promises = [...dueRepeatCfgs].sort(sortRepeatableTaskCfgs).map((repeatCfg) => {
       return this._taskRepeatCfgService.createRepeatableTask(repeatCfg, tomorrow);
     });
     await Promise.all(promises);
@@ -163,7 +164,8 @@ export class AddTasksForTomorrowService {
       repeatCfgIds: dueRepeatCfgs?.map((c) => c.id) ?? [],
     });
 
-    const promises = dueRepeatCfgs.sort(sortRepeatableTaskCfgs).map((repeatCfg) => {
+    // copy first: this is memoized selector output other subscribers hold
+    const promises = [...dueRepeatCfgs].sort(sortRepeatableTaskCfgs).map((repeatCfg) => {
       return this._taskRepeatCfgService.createRepeatableTask(repeatCfg, todayTS);
     });
     await Promise.all(promises);

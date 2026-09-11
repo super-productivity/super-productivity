@@ -11,8 +11,10 @@ import {
   output,
   signal,
   viewChild,
+  effect,
 } from '@angular/core';
 import { T } from 'src/app/t.const';
+import { isMultiSelectModifierEvent } from '../../util/is-multi-select-modifier-event';
 import { TranslateModule } from '@ngx-translate/core';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { Log } from '../../core/log';
@@ -97,6 +99,13 @@ export class TaskTitleComponent implements OnDestroy {
 
   private readonly _isFocused = signal(false);
   private readonly _isEditing = signal(false);
+  // Becoming readonly mid-edit removes the textarea without a blur; end the
+  // edit explicitly so the editing state cannot get stuck.
+  private readonly _cancelEditWhenReadonly = effect(() => {
+    if (this.readonly() && this._isEditing()) {
+      this.cancelEditing();
+    }
+  });
   private _focusTimeoutId: number | undefined;
   private _submitTrigger: SubmitTrigger = TaskTitleComponent._DEFAULT_SUBMIT_TRIGGER;
 
@@ -113,6 +122,11 @@ export class TaskTitleComponent implements OnDestroy {
   @HostListener('click', ['$event'])
   onClick(event: MouseEvent): void {
     const target = event.target as HTMLElement | null;
+
+    // Shift / Ctrl / Cmd + click selects the task row; let it bubble untouched.
+    if (!this.isEditing() && isMultiSelectModifierEvent(event)) {
+      return;
+    }
 
     // Let link clicks propagate to the browser but not to parent components
     if (target?.tagName === 'A' || target?.closest('a')) {
@@ -145,7 +159,10 @@ export class TaskTitleComponent implements OnDestroy {
 
   cancelEditing(): void {
     const textarea = this.textarea()?.nativeElement;
-    if (textarea) {
+    // A blur only fires when the textarea actually has focus (focusInput()
+    // focuses on a timeout); otherwise end the edit directly so the editing
+    // state can never get stuck.
+    if (textarea && document.activeElement === textarea) {
       textarea.blur();
     } else {
       this._endEditing();

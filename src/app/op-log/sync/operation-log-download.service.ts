@@ -6,7 +6,7 @@ import {
 } from '@sp/sync-core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { LockService } from './lock.service';
-import { Operation } from '../core/operation.types';
+import { Operation, VectorClock } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import {
   OperationSyncCapable,
@@ -22,12 +22,38 @@ import {
   CLOCK_DRIFT_THRESHOLD_MS,
   DOWNLOAD_PAGE_SIZE,
 } from '../core/operation-log.const';
-import { OperationEncryptionService } from './operation-encryption.service';
+import {
+  OperationDecryptionError,
+  OperationEncryptionService,
+} from './operation-encryption.service';
+import { buildDecryptFailureLogArgs } from './operation-decrypt-failure-log.util';
 import { DecryptNoPasswordError } from '../core/errors/sync-errors';
 import { assertOpsEncryptedWhenExpected } from './assert-ops-encryption-expected';
 import { SuperSyncStatusService } from './super-sync-status.service';
 import { DownloadResult } from '../core/types/sync-results.types';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
+
+/**
+ * True when this client's vector clock already accounts for `op`: an author's
+ * counter is monotonic, so a counter at or below our entry for that author was
+ * processed here before. Missing entries (pruned or import-reset clock) yield
+ * false so the op falls through to the regular filters.
+ */
+const isOpCoveredByLocalClock = (
+  op: Pick<SyncOperation, 'clientId' | 'vectorClock'>,
+  localClock: VectorClock | null,
+): boolean => {
+  if (!localClock || !op.clientId) {
+    return false;
+  }
+  const authorCounter = op.vectorClock?.[op.clientId];
+  const knownCounter = localClock[op.clientId];
+  return (
+    authorCounter !== undefined &&
+    knownCounter !== undefined &&
+    authorCounter <= knownCounter
+  );
+};
 
 // Re-export for consumers that import from this service
 export type { DownloadResult } from '../core/types/sync-results.types';
@@ -149,6 +175,38 @@ export class OperationLogDownloadService implements OnDestroy {
       const clientId = options?.includeOwnAndAppliedOps
         ? null
         : await this.clientIdProvider.loadClientId();
+      // A forced seq-0 download re-fetches everything after the server's latest
+      // full-state op, including ops compaction already pruned from the local
+      // log. Those are invisible to the applied-id filter. Without a second
+      // filter an already-applied SYNC_IMPORT resurfaces as a new incoming
+      // import on every concurrent-rejection retry and raises the conflict
+      // dialog (or, with nothing pending, replaces state wholesale).
+      // An op is treated as re-delivered only when BOTH hold: the persisted
+      // cursor is past it (it was processed here — a schema-version block keeps
+      // the cursor behind the blocked op) AND the local vector clock covers it
+      // (it is reflected in local state — a rebuilt log can sit behind a stale
+      // cursor; and the rejection resolver merges server clocks into the local
+      // clock, so the clock alone could cover a blocked op).
+      // Raw rebuild wants every op, so it keeps this filter off. The provider
+      // gate is an allowlist: only SuperSync hands out a real monotonic server
+      // seq to compare against. File-based providers use synthetic per-download
+      // `serverSeq` values while their cursor is the file's sync version, so the
+      // `<=` check is meaningless there — and the reproduced bug is
+      // SuperSync-only anyway, so a future provider mode must opt in explicitly
+      // rather than inherit a filter nobody reasoned about for it.
+      const isReDeliveryFilterActive =
+        forceFromSeq0 &&
+        !options?.includeOwnAndAppliedOps &&
+        syncProvider.providerMode === 'superSyncOps';
+      // Not const: a gap reset below switches to a new server epoch whose seq
+      // space is unrelated to this cursor, so the filter must be disabled.
+      let deliveredUpToSeq = isReDeliveryFilterActive
+        ? await syncProvider.getLastServerSeq()
+        : 0;
+      const localClock = isReDeliveryFilterActive
+        ? await this.opLogStore.getVectorClock()
+        : null;
+      let reDeliveredCount = 0;
       OpLog.verbose(
         `OperationLogDownloadService: [DEBUG] Starting download. ` +
           `lastServerSeq=${lastServerSeq}, appliedOpIds.size=${appliedOpIds.size}, clientId=${clientId}`,
@@ -165,6 +223,10 @@ export class OperationLogDownloadService implements OnDestroy {
       let sinceSeq = lastServerSeq;
       let hasResetForGap = false;
       let iterationCount = 0;
+      // Run-level password evidence for the failure log: ops decrypted on
+      // earlier pages of THIS run prove the key even when nothing in a later
+      // failing batch decrypts (e.g. a single corrupt op on the final page).
+      let decryptedOpsInEarlierBatches = 0;
 
       while (hasMore) {
         iterationCount++;
@@ -237,12 +299,22 @@ export class OperationLogDownloadService implements OnDestroy {
           hasResetForGap = true;
           allNewOps.length = 0; // Clear any ops we may have accumulated
           allOpClocks.length = 0; // Clear clocks too
+          // The re-delivery filter compares against the OLD server's cursor. A
+          // gap means a reset/replaced server, so the re-fetched ops carry seqs
+          // from a fresh epoch that the old cursor would wrongly cover — and
+          // dropping them here would lose them silently. 0 disables the filter
+          // for the rest of this download (every real serverSeq is >= 1).
+          deliveredUpToSeq = 0;
+          reDeliveredCount = 0; // pre-reset skips belong to the discarded epoch
           snapshotVectorClock = undefined; // Clear snapshot clock to capture fresh one after reset
           snapshotState = undefined; // Clear snapshot state to capture fresh one after reset
           snapshotAppliedOpIds = undefined; // Clear snapshot boundary with the stale state
           remoteLastModified = undefined; // Clear timestamp belonging to the stale state
           sawAnyOps = false; // Reset encryption tracking
           sawEncryptedOp = false;
+          // The re-fetched key may differ (password change clean slate), so
+          // pre-reset decrypts are no evidence for the key used after it.
+          decryptedOpsInEarlierBatches = 0;
 
           // CRITICAL: Re-fetch encryption key after gap detection.
           // Gap usually means server was wiped (e.g., password change clean slate),
@@ -296,9 +368,20 @@ export class OperationLogDownloadService implements OnDestroy {
         }
 
         // Filter already applied ops
-        let syncOps: SyncOperation[] = response.ops
-          .filter((serverOp) => !appliedOpIds.has(serverOp.op.id))
-          .map((serverOp) => serverOp.op);
+        const newServerOps = response.ops.filter((serverOp) => {
+          if (appliedOpIds.has(serverOp.op.id)) {
+            return false;
+          }
+          if (
+            serverOp.serverSeq <= deliveredUpToSeq &&
+            isOpCoveredByLocalClock(serverOp.op, localClock)
+          ) {
+            reDeliveredCount++;
+            return false;
+          }
+          return true;
+        });
+        let syncOps: SyncOperation[] = newServerOps.map((serverOp) => serverOp.op);
 
         // Fail closed on a plaintext op when SuperSync encryption is enabled: the
         // server is all-encrypted once encryption is on (delete + reupload), so an
@@ -307,8 +390,8 @@ export class OperationLogDownloadService implements OnDestroy {
         assertOpsEncryptedWhenExpected(syncOps, isEncryptionExpected);
 
         // Decrypt encrypted operations if we have an encryption key
-        const hasEncryptedOps = syncOps.some((op) => op.isPayloadEncrypted);
-        if (hasEncryptedOps) {
+        const encryptedOpsInPage = syncOps.filter((op) => op.isPayloadEncrypted).length;
+        if (encryptedOpsInPage > 0) {
           if (!encryptKey) {
             // No encryption key available - throw to let the sync wrapper show the
             // password dialog. Severity depends on history: a client that has never
@@ -335,7 +418,22 @@ export class OperationLogDownloadService implements OnDestroy {
           }
 
           // Decrypt encrypted operations - let DecryptError propagate to sync-wrapper handler
-          syncOps = await this.encryptionService.decryptOperations(syncOps, encryptKey);
+          try {
+            syncOps = await this.encryptionService.decryptOperations(syncOps, encryptKey);
+            decryptedOpsInEarlierBatches += encryptedOpsInPage;
+          } catch (error) {
+            if (error instanceof OperationDecryptionError) {
+              OpLog.error(
+                'OperationLogDownloadService: Encrypted operation batch could not be processed.',
+                ...buildDecryptFailureLogArgs(
+                  error.diagnosis,
+                  newServerOps.filter((serverOp) => serverOp.op.isPayloadEncrypted),
+                  decryptedOpsInEarlierBatches,
+                ),
+              );
+            }
+            throw error;
+          }
         }
 
         // Convert to Operation format
@@ -389,6 +487,14 @@ export class OperationLogDownloadService implements OnDestroy {
       // cleans up stale devices after 50 days (STALE_DEVICE_THRESHOLD_MS).
       // Removing ACK simplifies the flow and avoids issues with fresh clients
       // (device not registered until first upload would cause 403 errors).
+
+      if (reDeliveredCount > 0) {
+        OpLog.normal(
+          `OperationLogDownloadService: Skipped ${reDeliveredCount} re-delivered op(s) ` +
+            `behind cursor ${deliveredUpToSeq} and covered by the local vector clock ` +
+            '(compacted out of the local log).',
+        );
+      }
 
       // Server migration detection:
       // If we detected a gap AND the server is empty (no ops to download),

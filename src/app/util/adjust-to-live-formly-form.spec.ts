@@ -139,6 +139,30 @@ describe('adjustToLiveFormlyForm', () => {
 
       expect(result[0].modelOptions?.updateOn).toBe('blur');
     });
+
+    // #9548: committing per keystroke re-created the field mid-edit, so a native
+    // <input type="time"> lost the first digit of the hour ('18' became '08').
+    it('should add blur update behavior to time fields', () => {
+      const items: FormlyFieldConfig[] = [{ key: 'timeField', type: 'time' }];
+
+      const result = adjustToLiveFormlyForm(items);
+
+      expect(result[0].modelOptions?.updateOn).toBe('blur');
+      // the same branch also opts `time` into Enter-to-commit
+      expect(result[0].templateOptions?.keydown).toBeDefined();
+    });
+
+    // #9591: the project/tag background image URL committed per keystroke, and
+    // `updateProject` is op-log captured, so a 60-character URL emitted ~60
+    // persisted and synced ops instead of one.
+    it('should add blur update behavior to image-input fields', () => {
+      const items: FormlyFieldConfig[] = [{ key: 'imageField', type: 'image-input' }];
+
+      const result = adjustToLiveFormlyForm(items);
+
+      expect(result[0].modelOptions?.updateOn).toBe('blur');
+      expect(result[0].templateOptions?.keydown).toBeDefined();
+    });
   });
 
   describe('fieldGroup processing', () => {

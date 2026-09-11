@@ -7,8 +7,11 @@ image:
   repository: ghcr.io/super-productivity/supersync
   # -- Image pull policy
   pullPolicy: IfNotPresent
-  # -- Overrides the image tag. Defaults to the chart appVersion.
-  tag: ""
+  # -- Image tag to deploy. Defaults to "latest" because CI publishes only `latest`
+  # and `master-<sha>` — the chart appVersion has never been published as a tag, so
+  # falling back to it produced ImagePullBackOff on a default install.
+  # Pin this to a specific tag for reproducible deploys.
+  tag: "latest"
 
 # -- Docker registry pull secrets
 imagePullSecrets: []
@@ -45,14 +48,10 @@ supersync:
     oldOpsDeleteBatchSize: 5000
     # -- Max old operations deleted across all users in one cleanup pass.
     oldOpsMaxDeletedPerRun: 25000
-  batchUpload:
-    # -- Enable the batched upload implementation. Requires payloadBytesBackfillComplete=true.
-    enabled: false
-    # -- Set only after running `npm run migrate-payload-bytes` to completion.
-    payloadBytesBackfillComplete: false
   webauthn:
-    # -- WebAuthn relying party display name
-    rpName: "Super Productivity Sync"
+    # -- WebAuthn relying party display name, shown in your users' OS passkey prompt.
+    # Defaults to the relying-party ID when empty — do not ship someone else's brand here.
+    rpName: ""
     # -- WebAuthn relying party ID (e.g. sync.example.com)
     rpId: ""
     # -- WebAuthn origin (e.g. https://sync.example.com)
@@ -86,6 +85,21 @@ supersync:
     addressCountry: ""
     # -- Contact email for privacy policy
     contactEmail: ""
+    # -- Optional: your hosting provider, if a third party processes data on your behalf.
+    # The hosting section is omitted from the policy entirely when this is empty.
+    hostingProvider: ""
+    # -- Optional: the data-protection supervisory authority competent for you.
+    # When empty, the policy points users to the authority for their own residence.
+    supervisoryAuthority: ""
+  # -- Optional region label. "EU" or "EEA" shows the EU-hosting badge on the landing
+  # page; any other value shows no badge.
+  dataRegion: ""
+  # -- Restrict who may register: comma-separated exact addresses and/or *@domain rules.
+  # Empty means anyone who can reach the server may register.
+  allowedEmails: ""
+  # -- Per-user storage quota in bytes for accounts created from now on.
+  # Empty uses the built-in default (104857600 = 100 MB).
+  defaultStorageQuotaBytes: ""
   persistence:
     # -- Enable persistent storage for /app/data
     enabled: true
@@ -108,6 +122,8 @@ postgresql:
   # -- Deploy a PostgreSQL instance alongside SuperSync.
   # Set to false and configure externalDatabase to use an external PostgreSQL.
   enabled: true
+  # -- Maximum Prisma connections when using the bundled 512Mi PostgreSQL.
+  connectionLimit: 20
   image:
     # -- PostgreSQL image repository
     repository: postgres
@@ -144,10 +160,16 @@ postgresql:
 
 # -- External database configuration (used when postgresql.enabled is false)
 externalDatabase:
-  # -- Full PostgreSQL connection URL (e.g. postgresql://user:pass@host:5432/dbname)
+  # -- Full PostgreSQL URL. Must include exactly one positive connection_limit
+  # and pool_timeout value. A pre-upgrade hook validates both before replacing
+  # a running pod, and the migration init container rechecks them, e.g.
+  # postgresql://user:pass@host:5432/dbname?connection_limit=60&pool_timeout=10
+  # The server must be PostgreSQL 14+ on a Linux host: migrations set
+  # client_connection_check_interval, which an older or non-Linux server
+  # rejects at connect (see the server README).
   url: ""
   # -- Use an existing Kubernetes secret for the database URL.
-  # The secret must contain a DATABASE_URL key.
+  # The secret must contain a DATABASE_URL key with the same pool parameters.
   existingSecret: ""
 
 # -- Ingress configuration

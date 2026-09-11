@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { CURRENT_SCHEMA_VERSION } from '../../persistence/schema-migration.service';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
 import { VectorClockService } from '../../sync/vector-clock.service';
 import {
@@ -133,6 +134,7 @@ describe('Vector Clock Sync Integration', () => {
       await opLogStore.setVectorClock({ storeClient: 50 });
 
       await opLogStore.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: {},
         lastAppliedOpSeq: 0,
         vectorClock: { snapshotClient: 100 },
@@ -149,6 +151,7 @@ describe('Vector Clock Sync Integration', () => {
     it('should compute from snapshot when vector_clock store is empty', async () => {
       // Only snapshot exists (simulates pre-upgrade state)
       await opLogStore.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: {},
         lastAppliedOpSeq: 0,
         vectorClock: { snapshotClient: 25 },
@@ -162,6 +165,7 @@ describe('Vector Clock Sync Integration', () => {
     it('should merge snapshot + ops when vector_clock store is empty', async () => {
       // Snapshot with initial clock
       await opLogStore.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: {},
         lastAppliedOpSeq: 0,
         vectorClock: { clientA: 10, clientB: 5 },

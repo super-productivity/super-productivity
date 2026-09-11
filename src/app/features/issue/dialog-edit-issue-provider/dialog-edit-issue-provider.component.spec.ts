@@ -1,5 +1,6 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { T } from '../../../t.const';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
 import { OAuthFlowConfig } from '@super-productivity/plugin-api';
@@ -435,6 +436,50 @@ describe('DialogEditIssueProviderComponent', () => {
       beforeClosed$.next();
       await cleanupPending;
       expect(await loadOAuthTokens('other-provider__oauth')).toBe('connected-credential');
+    });
+  });
+
+  describe('testConnection failure reporting (#9635)', () => {
+    const openedSnack = (): { msg: string; translateParams: { errorMsg: string } } =>
+      (
+        TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>
+      ).open.calls.mostRecent().args[0] as {
+        msg: string;
+        translateParams: { errorMsg: string };
+      };
+
+    it('shows the status code so the user need not open dev tools', async () => {
+      const issueService = TestBed.inject(IssueService) as jasmine.SpyObj<IssueService>;
+      issueService.testConnection.and.rejectWith(
+        new HttpErrorResponse({
+          status: 401,
+          statusText: 'Unauthorized',
+          url: 'https://cal.example.com/x/basic.ics',
+        }),
+      );
+
+      await component.testConnection();
+
+      expect(openedSnack().msg).toBe(T.F.ISSUE.S.CONNECTION_FAILED_WITH_ERROR);
+      expect(openedSnack().translateParams.errorMsg).toContain('401');
+      expect(component.isConnectionWorks()).toBe(false);
+    });
+
+    // iCal/CalDAV URLs routinely embed a secret token and are masked on export;
+    // an error toast gets screenshotted into bug reports, so it must not leak one.
+    it('masks the request URL Angular bakes into the error message', async () => {
+      const issueService = TestBed.inject(IssueService) as jasmine.SpyObj<IssueService>;
+      issueService.testConnection.and.rejectWith(
+        new HttpErrorResponse({
+          status: 0,
+          statusText: 'Unknown Error',
+          url: 'https://cal.example.com/private/SECRET-TOKEN/basic.ics',
+        }),
+      );
+
+      await component.testConnection();
+
+      expect(openedSnack().translateParams.errorMsg).not.toContain('SECRET-TOKEN');
     });
   });
 });

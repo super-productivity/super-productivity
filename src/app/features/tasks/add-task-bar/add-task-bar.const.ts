@@ -1,7 +1,14 @@
 import { INBOX_PROJECT } from '../../project/project.const';
 import { TimeSpentOnDay, TaskReminderOptionId } from '../task.model';
 import { TaskAttachment } from '../task-attachment/task-attachment.model';
-import { RepeatQuickSetting } from '../../task-repeat-cfg/task-repeat-cfg.model';
+import { ShortSyntaxRepeat } from '../short-syntax';
+
+// The recurrence the bar will apply on submit. A preset or an interval creates
+// the config directly; DIALOG is the menu's "Custom recurring config" entry,
+// which defers everything to the repeat dialog and therefore carries no config
+// of its own. Keeping it a separate variant is what lets a syntax-parsed
+// interval be a CUSTOM config without also opening that dialog.
+export type AddTaskBarRepeat = ShortSyntaxRepeat | { type: 'DIALOG' };
 
 export interface AddTaskBarState {
   projectId: string;
@@ -16,7 +23,7 @@ export interface AddTaskBarState {
   cleanText: string | null;
   remindOption: TaskReminderOptionId | null;
   attachments: TaskAttachment[];
-  repeatQuickSetting: RepeatQuickSetting | null;
+  repeat: AddTaskBarRepeat | null;
   deadlineDate?: string | null;
   deadlineTime?: string | null;
   deadlineRemindOption?: TaskReminderOptionId | null;
@@ -48,7 +55,7 @@ export const INITIAL_ADD_TASK_BAR_STATE: AddTaskBarState = {
   cleanText: null,
   remindOption: null,
   attachments: [],
-  repeatQuickSetting: null,
+  repeat: null,
   deadlineDate: null,
   deadlineTime: null,
   deadlineRemindOption: null,
@@ -133,4 +140,19 @@ export const CHRONO_SUGGESTIONS: string[] = [
   'end of week',
   'end of month',
   'end of year',
+
+  // Recurrence
+  'daily',
+  'weekly',
+  'monthly',
+  'yearly',
+  'every day',
+  'every weekday',
+  'every week',
+  'every monday',
+  'every friday',
+  'every month',
+  'every 2 days',
+  'every 2 weeks',
+  'every 2 fridays',
 ];

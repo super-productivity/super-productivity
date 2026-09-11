@@ -1,4 +1,6 @@
-<h1 mat-dialog-title>{{ T.MIGRATE.DIALOG_TITLE | translate }}</h1>
+<h1 mat-dialog-title>
+  {{ (hasError() ? T.MIGRATE.DIALOG_TITLE_ERROR : T.MIGRATE.DIALOG_TITLE) | translate }}
+</h1>
 
 <div mat-dialog-content>
   @if (hasError()) {
@@ -25,12 +27,20 @@
     mat-dialog-actions
     align="end"
   >
+    @if (canStartFresh()) {
+      <button
+        mat-button
+        (click)="startFresh()"
+      >
+        {{ T.MIGRATE.START_FRESH | translate }}
+      </button>
+    }
     <button
       mat-flat-button
       color="primary"
       (click)="acknowledge()"
     >
-      {{ 'G.OK' | translate }}
+      {{ T.G.OK | translate }}
     </button>
   </div>
 }

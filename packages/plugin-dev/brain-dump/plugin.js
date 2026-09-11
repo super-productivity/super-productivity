@@ -435,8 +435,7 @@ async function submitTasks() {
             subTaskData.projectId = projectId;
           }
           // dueDay is intentionally NOT forwarded: sub-tasks inherit the
-          // parent's date in Super Productivity, and the plugin bridge
-          // drops the field for sub-task creation.
+          // parent's date in Super Productivity.
           await PluginAPI.addTask(subTaskData);
         }
       }

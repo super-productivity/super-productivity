@@ -13,6 +13,9 @@
 // text to remove Android references"). Those changes also don't apply to the
 // macOS/iOS builds, so dropping them is correct on both counts.
 //
+// Emoji are stripped for the same reason: App Store Connect rejects some of them
+// outright in "What's New" (see EMOJI_PATTERN).
+//
 // Usage: node tools/prepare-appstore-release-notes.js [outFile] [locale]
 //   outFile  defaults to fastlane/appstore_metadata/<locale>/release_notes.txt
 //   locale   defaults to en-US
@@ -60,7 +63,49 @@ const OTHER_PLATFORM_PATTERNS = [
   /\baur\b/i,
 ];
 
+// App Store Connect rejects individual emoji in "What's New" and names the
+// offender in the error ("What's New in This Version can’t contain the following
+// character(s): 🚨. - /data/attributes/whatsNew"). Apple documents neither which
+// characters are blocked nor when the set changes, so strip pictographs
+// wholesale instead of chasing a blocklist. Emoji reach the notes without anyone
+// writing one deliberately: the bug-report issue template prefixes titles with
+// "🚨 ", and a squash merge carries that into the commit subject the changelog is
+// built from (this sank both Apple release lanes for 18.20.0, via #9530).
+// Deliberately aggressive, mirroring OTHER_PLATFORM_PATTERNS: a missed emoji
+// fails the release, while an over-eager match only costs decoration (©, ® and ™
+// are pictographs too and go with it — they have never appeared in a changelog
+// entry here, and Apple accepts the text either way). The trailing TAG block is
+// the tail of a tag sequence (e.g. the England flag): invisible on its own, so
+// leaving it behind would send Apple an unrenderable character and produce a CI
+// error naming nothing.
+const EMOJI_PATTERN =
+  /[\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Regional_Indicator}\u{FE0E}\u{FE0F}\u{20E3}\u{200D}\u{E0020}-\u{E007F}]/gu;
+
+// Bullet/heading and emphasis markers, i.e. everything that can legitimately
+// precede the text of a line. A line left with only these once its emoji are
+// gone had no prose to begin with. Covers the markers the AI generation path can
+// emit ("+", "_", ">"), not just the "- " the deterministic generator produces.
+const LINE_MARKERS_ONLY = /^[\s*•\-#+_>]*$/;
+
 const isMarkdownHeading = (line) => /^\s*#{1,6}\s/.test(line);
+
+// Remove emoji, then repair the line: close the gap the removed character left
+// ("- 🚨 Fix" -> "- Fix"), and blank out a line that was pure decoration ("- 🎉")
+// so it leaves neither a bare bullet nor content that keeps an otherwise empty
+// heading alive. Runs before stripOtherPlatformLines so dropEmptyHeadings sees
+// the blanked lines.
+const stripEmoji = (markdown) =>
+  markdown
+    .split('\n')
+    .map((line) => {
+      const stripped = line.replace(EMOJI_PATTERN, '');
+      if (stripped === line) {
+        return line;
+      }
+      const collapsed = stripped.replace(/[ \t]{2,}/g, ' ').trimEnd();
+      return LINE_MARKERS_ONLY.test(collapsed) ? '' : collapsed;
+    })
+    .join('\n');
 
 // Drop a section heading that has no content line after it (before the next
 // heading). Single backward pass: walking bottom-up, "did real content follow
@@ -143,7 +188,7 @@ const truncateToMaxChars = (text, maxChars = MAX_CHARS) => {
 };
 
 const buildAppStoreReleaseNotes = (markdown, onDrop) =>
-  truncateToMaxChars(toPlainText(stripOtherPlatformLines(markdown, onDrop)));
+  truncateToMaxChars(toPlainText(stripOtherPlatformLines(stripEmoji(markdown), onDrop)));
 
 const main = () => {
   const locale = process.argv[3] || 'en-US';
@@ -179,9 +224,11 @@ if (require.main === module) {
 }
 
 module.exports = {
+  EMOJI_PATTERN,
   MAX_CHARS,
   OTHER_PLATFORM_PATTERNS,
   buildAppStoreReleaseNotes,
+  stripEmoji,
   stripOtherPlatformLines,
   toPlainText,
   truncateToMaxChars,

@@ -31,32 +31,66 @@
   }
 }
 
-:host-context(.isTouchOnly).global {
+// Pin the floating bar to the bottom whenever touch is the primary input.
+// Keys on `.isTouchPrimary`, not `.isTouchOnly`: Android Chrome advertises a
+// fine pointer, so detect-it classifies phones as `hybrid` rather than
+// `touchOnly` and never sets `.isTouchOnly` on mobile web — which stranded the
+// bar at the top there while the native Android app (touch-only) got the
+// bottom layout. `.isTouchPrimary` covers pure-touch and hybrid-touch devices
+// alike (InputIntentService keeps it in sync with the active input) and matches
+// the autocomplete panel rule further down.
+:host-context(.isTouchPrimary).global {
   top: auto;
-  // Extra gap above the keyboard so the bottom action buttons stay easy to
-  // tap — `--s` alone leaves them flush against the IME's top edge.
-  bottom: calc(var(--keyboard-height) + var(--s2));
+  // Clear whichever bottom obstruction is taller — the keyboard or the system
+  // navigation bar (#9462) — never their sum: where `--keyboard-height` is set
+  // it measures the obscured slice of the viewport, and the IME spans to the
+  // screen edge with the nav bar drawn over it, so the inset is already inside
+  // that number. In practice each platform reports only one of the two anyway
+  // (the Capacitor build zeroes the bottom inset while the IME is up — see
+  // SystemBars.calcSafeAreaInsets — and mobile web never writes
+  // `--keyboard-height` at all: its tracker is gated on IS_TOUCH_ONLY, which
+  // Android Chrome fails, and its keyboard shrinks the layout viewport instead,
+  // #9277), so max() just picks out whichever term is live on the platform at
+  // hand. `--s2` rather than `--s`, which leaves the buttons flush against the
+  // obstruction and awkward to tap.
+  bottom: calc(max(var(--keyboard-height), var(--safe-area-bottom)) + var(--s2));
   transition: bottom var(--transition-duration-m) ease-out;
 }
 
 // Capacitor's native iOS mode shrinks the WebView around the keyboard. Only
 // apply an additional offset when the keyboard still overlays that viewport;
 // using its full height here would move the fixed bar twice (#8778).
-:host-context(.isTouchOnly.isIOS).global {
+//
+// `--keyboard-overlay-offset` is bound on this host by the component from
+// IosKeyboardService, not inherited from `:root` (#9779).
+//
+// Deliberately no `--safe-area-bottom` here, unlike the rule above: on iOS the
+// inset comes from capacitor-plugin-safe-area, which reads the window insets and
+// re-reads them on orientation change only — so it keeps reporting the home
+// indicator while the keyboard is up. Folding it in (even via max()) would float
+// the bar an indicator's height above the keyboard in the common case. Clearing
+// the indicator while the bar is open *without* a keyboard therefore needs a
+// rule gated on `body.isKeyboardVisible`, not a wider max().
+:host-context(.isTouchPrimary.isIOS).global {
   bottom: calc(var(--keyboard-overlay-offset) + var(--s2));
 }
 
 .add-task-container {
+  --mat-button-text-label-text-tracking: var(--letter-spacing-normal);
+
   width: 100%;
   position: relative;
   background-color: var(--bg-lighter);
   color: var(--text-color-most-intense);
 
-  box-shadow: var(--whiteframe-shadow-3dp);
+  // Inline compose bar: a light lift so it still reads as actionable, without
+  // floating at 3dp inside the now-flat lists. The global floating variant keeps
+  // its stronger elevation below.
+  box-shadow: var(--whiteframe-shadow-1dp);
   border-radius: var(--card-border-radius);
 
   &.isGlobalBarVariant {
-    box-shadow: var(--whiteframe-shadow-12dp);
+    box-shadow: var(--whiteframe-shadow-6dp);
   }
 }
 
@@ -87,17 +121,110 @@
     padding: 10px var(--s) 10px var(--s2);
   }
 
+  // Typography shared by the textarea and its highlight overlay — the overlay
+  // mirrors the text to position highlight backgrounds under the real text, so
+  // any metric drift between the two misplaces the highlights.
+  //
+  // A textarea does NOT inherit typography: the UA sheet sets
+  // `font: 400 13.333px monospace`, and the `font` shorthand resets
+  // weight/style/variant/stretch/line-height. The overlay div inherits instead,
+  // so declaring only part of the set lets the two layers drift apart under any
+  // theme that styles the surrounding text. Both layers must therefore declare
+  // the FULL set — keep every property below, and add any new text-metric
+  // property to this block rather than to one layer.
+  %main-input-typography {
+    font-family: var(--font-primary-stack);
+    font-size: 16px;
+    font-weight: 400;
+    font-style: normal;
+    font-variant: normal;
+    font-stretch: normal;
+    line-height: 1.4;
+    letter-spacing: normal;
+    word-spacing: normal;
+    text-transform: none;
+    font-kerning: auto;
+    font-feature-settings: normal;
+    text-indent: 0;
+    tab-size: 8;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    // `inherit`, not a fixed value: the app's RTL comes from `[dir]` on a shared
+    // ancestor (app.component.html), which both layers must keep following. What
+    // this pins is that they follow the SAME source — a theme rule targeting the
+    // textarea alone (`textarea { text-align: center }`) would otherwise move the
+    // glyphs out from under the backgrounds.
+    direction: inherit;
+    text-align: inherit;
+    word-break: inherit;
+  }
+
+  // Positioning context for the textarea + its highlight overlay; sized purely
+  // by the textarea (its only in-flow child).
+  .main-input-stack {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .main-input-highlight {
+    @extend %main-input-typography;
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    user-select: none;
+    // Mirror the textarea's box as well as its typography — padding, border and
+    // box-sizing move the text origin, so a difference shifts every highlight.
+    box-sizing: border-box;
+    padding: 0;
+    border: 0;
+    // Only the highlight backgrounds may show; the visible glyphs are the
+    // textarea's own (rendered on top of this layer)
+    color: transparent;
+
+    // The segment spans must take their text metrics from this overlay, never
+    // from a theme rule. Custom themes are arbitrary CSS and a direct match on
+    // the spans — glass.css does `* { font-family: ... }` — beats inheritance,
+    // desyncing the mirrored text from the textarea. Explicit `inherit` at
+    // component specificity outranks any non-important theme rule on the spans
+    // themselves.
+    span {
+      font: inherit;
+      letter-spacing: inherit;
+      word-spacing: inherit;
+      text-transform: inherit;
+      font-kerning: inherit;
+      font-variant: inherit;
+      font-feature-settings: inherit;
+      // Wrapping and bidi too: `span { white-space: nowrap }` collapses the
+      // mirror to a single line, so every highlight past the first wrap lands on
+      // the wrong text.
+      white-space: inherit;
+      overflow-wrap: inherit;
+      word-break: inherit;
+      direction: inherit;
+      text-align: inherit;
+    }
+
+    .syntax-highlight {
+      border-radius: var(--radius-xs);
+      background: color-mix(in srgb, var(--c-accent) 22%, transparent);
+    }
+  }
+
   .main-input {
+    @extend %main-input-typography;
     display: block;
     width: 100%;
-    font-size: 16px;
     box-sizing: border-box;
     border-style: solid;
     border-width: 0;
     outline: 0;
     // No padding — see .main-input-wrap for why the gutters must live there.
     padding: 0;
-    line-height: 1.4;
     resize: none;
     // cdkTextareaAutosize owns this field's height (it measures the content and
     // pins an exact px height), so the textarea must never paint its own
@@ -109,10 +236,11 @@
     overflow: hidden;
     background: transparent;
     color: inherit;
-    font-family: var(--font-primary-stack);
+    position: relative;
 
     &::placeholder {
-      opacity: 0.6;
+      color: var(--text-color-muted);
+      opacity: 1;
     }
   }
 
@@ -124,14 +252,14 @@
     flex-shrink: 0;
   }
 
-  // The add (+) button and its dashed separator span the full height of the row
+  // The add (+) button and its separators span the full height of the row
   // (which grows with the wrapping input); the icon stays vertically centred.
   .separator-box {
     align-self: stretch;
     display: flex;
     align-items: stretch;
-    border-right: 1px dashed var(--extra-border-color);
-    border-left: 1px dashed var(--extra-border-color);
+    border-right: 1px solid var(--divider-color);
+    border-left: 1px solid var(--divider-color);
 
     // Reserve the button's space while the field is empty without letting it
     // show or take clicks. `visibility:hidden` is not enough here: mat-icon's
@@ -152,23 +280,25 @@
       // via the MDC token (the icon inherits it) rather than a .mat-*/.mdc-*
       // selector override.
       opacity: 1;
-      --mdc-icon-button-icon-color: var(--primary);
-      color: var(--primary);
+      --mdc-icon-button-icon-color: var(--c-primary);
+      color: var(--c-primary);
     }
   }
 
   .switch-add-to-btn {
-    opacity: 0.6;
+    --mat-icon-button-icon-color: var(--text-color-muted);
+
+    transition: color var(--transition-fast);
 
     &:hover,
     &:focus-visible {
-      opacity: 1;
+      --mat-icon-button-icon-color: var(--text-color-most-intense);
     }
   }
 }
 
 // Wraps the two toggles (projected into the create-mode action bar or the search
-// info row) so a dashed divider sits to their right, separating them from the
+// info row) so a divider sits to their right, separating them from the
 // chips / search text that follow. Nesting the button rules here also lifts their
 // specificity above Material's .mat-mdc-icon-button so the size override wins.
 // These rules MUST live in the parent stylesheet: the buttons are projected via
@@ -178,7 +308,7 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  border-right: 1px dashed var(--extra-border-color);
+  border-right: 1px solid var(--divider-color);
   padding-right: var(--s-quarter);
   margin-right: var(--s-quarter);
 
@@ -190,30 +320,41 @@
     flex-shrink: 0;
     align-self: center;
     --mdc-icon-button-state-layer-size: 36px;
+    --mat-icon-button-icon-size: calc(var(--s2) + var(--s-half));
     width: 36px;
     height: 36px;
     padding: 0;
-    opacity: 0.6;
+    --mat-icon-button-icon-color: var(--text-color-muted);
+    transition:
+      color var(--transition-fast),
+      background-color var(--transition-fast);
+
+    mat-icon {
+      width: var(--mat-icon-button-icon-size);
+      height: var(--mat-icon-button-icon-size);
+      font-size: var(--mat-icon-button-icon-size);
+    }
 
     &:hover,
     &:focus-visible {
-      opacity: 1;
+      --mat-icon-button-icon-color: var(--text-color-most-intense);
+
+      background-color: var(--state-hover);
     }
   }
 
   .search-toggle-btn.active,
   .note-toggle-btn.active {
-    opacity: 1;
-    background-color: var(--primary-light);
-    color: var(--primary);
+    --mat-icon-button-icon-color: var(--brand);
+
+    background-color: var(--state-selected);
   }
 
   // A collapsed note still holds its text — keep the icon undimmed and tinted so
   // it's clear a note is attached (distinct from the .active pill shown while the
   // note field is expanded).
   .note-toggle-btn.has-value:not(.active) {
-    opacity: 1;
-    color: var(--primary);
+    --mat-icon-button-icon-color: var(--brand);
   }
 }
 
@@ -223,7 +364,7 @@
   position: relative;
   display: flex;
   align-items: center;
-  border-top: 1px dashed var(--extra-border-color);
+  border-top: 1px solid var(--divider-color);
   overflow-x: auto;
   overflow-y: hidden;
 
@@ -233,7 +374,7 @@
 }
 
 .note-input-section {
-  border-top: 1px dashed var(--extra-border-color);
+  border-top: 1px solid var(--divider-color);
   // Padding lives on the wrapper, not the textarea — same cdkTextareaAutosize
   // reason as .main-input-wrap (padding on the textarea desyncs the measured
   // wrap width from the rendered one and clips the height).
@@ -256,7 +397,8 @@
   line-height: 1.5;
 
   &::placeholder {
-    opacity: 0.6;
+    color: var(--text-color-muted);
+    opacity: 1;
   }
 }
 
@@ -356,10 +498,10 @@
 
       .option-icon {
         flex-shrink: 0;
-        color: var(--text-color-dimmed);
+        color: var(--text-color-muted);
 
         &.archived {
-          color: var(--color-accent);
+          color: var(--c-accent);
         }
       }
 
@@ -371,7 +513,7 @@
       .issue-id {
         flex-shrink: 0;
         font-size: 0.9em;
-        color: var(--text-color-dimmed);
+        color: var(--text-color-muted);
         opacity: 0.7;
       }
     }

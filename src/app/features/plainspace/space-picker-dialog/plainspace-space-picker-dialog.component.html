@@ -19,9 +19,19 @@
   } @else {
     <p>{{ T.PLAINSPACE.SPACE_PICKER.NONE | translate }}</p>
   }
+  <p id="plainspace-disconnect-hint">
+    {{ T.PLAINSPACE.SPACE_PICKER.DISCONNECT_HINT | translate }}
+  </p>
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
+  <button
+    mat-button
+    aria-describedby="plainspace-disconnect-hint"
+    (click)="disconnect()"
+  >
+    {{ T.PLAINSPACE.SPACE_PICKER.DISCONNECT | translate }}
+  </button>
   <button
     mat-button
     (click)="cancel()"

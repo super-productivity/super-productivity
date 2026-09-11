@@ -45,7 +45,7 @@
   display: flex;
   gap: var(--s);
   padding-top: var(--s);
-  border-top: 1px solid rgba(0, 0, 0, 0.12);
+  border-top: 1px solid var(--extra-border-color);
 
   button {
     flex: 1;

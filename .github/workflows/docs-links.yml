@@ -1,0 +1,42 @@
+---
+name: Documentation Links
+
+'on':
+  pull_request:
+    branches: [master, main]
+  push:
+    branches: [master, main]
+
+concurrency:
+  group: documentation-links-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    name: Local links and images
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: 22
+
+      - name: Check documentation links
+        run: |
+          node --test tools/check-doc-links.test.js
+          git ls-files -z -- '*.md' '*.markdown' |
+            xargs -0 -r node tools/check-doc-links.js --docs-only
+          git ls-files -z -- \
+            ':(glob)docs/**/*.html' \
+            ':(glob)packages/**/docs/**/*.html' |
+            xargs -0 -r node tools/check-doc-links.js --docs-only
+          # Separate pass: xargs above may invoke the script per batch, so the
+          # source-comment scan runs once here instead of once per batch.
+          node tools/check-doc-links.js --sources-only

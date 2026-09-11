@@ -4,6 +4,20 @@ How LWW conflict auto-resolutions are recorded (conflict journal), when two
 concurrent edits are kept instead of one discarded (disjoint-field auto-merge),
 and how the user reviews what happened (`/sync-conflicts` page, banner, badge).
 
+> **Current production status:** the journal store and review UI exist, but the
+> main remote-conflict processing path currently sets
+> `disableConflictJournal: true`. Treat the journal as a dormant, best-effort
+> review capability—not as complete evidence of current conflict resolutions.
+> The disjoint-field merge and winner selection remain active independently of
+> journal emission.
+>
+> The journal is also not a no-silent-loss guarantee. The #9073 mitigation turns
+> supported no-pending overlaps with retained local evidence into ordinary LWW
+> conflicts, but the
+> [remaining composition residual](#composition-residual-pre-existing-class)
+> cannot always construct a safe local side. Such a fallback produces neither a
+> conflict object nor a journal row.
+
 Code lives in `src/app/op-log/sync/`:
 
 | Concern                        | Files                                                               |
@@ -17,10 +31,10 @@ Code lives in `src/app/op-log/sync/`:
 
 ## Conflict journal
 
-Every LWW conflict auto-resolution is recorded as a `ConflictJournalEntry` in a
-**standalone IndexedDB database `SUP_CONFLICT_JOURNAL`** — deliberately separate
-from `SUP_OPS` so journaling can never touch op-log schema/versioning or risk
-its data.
+When emission is enabled, an LWW conflict auto-resolution is recorded as a
+`ConflictJournalEntry` in a **standalone IndexedDB database
+`SUP_CONFLICT_JOURNAL`** — deliberately separate from `SUP_OPS` so journaling
+can never touch op-log schema/versioning or risk its data.
 
 Contracts:
 
@@ -36,15 +50,16 @@ Contracts:
   never the sync. One asymmetry: a `merged` entry claims "both sides kept", so
   it is journaled only AFTER the merged op is durably appended — the journal
   can under-report a merge, but never report one that didn't happen.
-- **Device-local, never synced.** Entries capture the discarded (losing) side
-  of a conflict verbatim — exactly the data the op log intentionally dropped.
-  Uploading them would resurrect discarded data; they are also excluded from
-  backups/exports (see wiki `3.06-User-Data`).
+- **Device-local, never synced.** Entries capture field values and opaque action
+  payloads from both sides of a conflict verbatim — including the discarded
+  side that the op log intentionally dropped. Uploading them would resurrect
+  discarded data; they are also excluded from backups/exports (see wiki
+  `3.06-User-Data`).
 - **Cleared on full dataset replacement.** Journal entries describe conflicts
   in the op history; when that history is replaced wholesale the entries are
-  stale (and, across user profiles, a privacy leak).
+  stale and may expose values from a dataset that has been replaced.
   `BackupService.importCompleteBackup` — the chokepoint every replacement path
-  funnels through (profile switch, JSON import, local-backup restore, SuperSync
+  funnels through (JSON import, local-backup restore, SuperSync
   restore) — calls `ConflictJournalService.clearAll()`.
 - **Retention.** Each prune applies whichever bound binds first: entries older
   than 14 days (`JOURNAL_RETENTION_DAYS`), then anything beyond the newest 200
@@ -54,6 +69,21 @@ Contracts:
 JOURNAL_PRUNE_SLACK` (220), then prunes back to the newest 200. So a
   long-running low-volume session (few entries, never crossing the soft cap)
   relies on the next app start to enforce the 14-day age bound.
+
+### Security boundary before re-enabling emission
+
+`SUP_CONFLICT_JOURNAL` is ordinary, plaintext device-local IndexedDB. It does
+not use the sync provider's transport encryption or SuperSync E2EE. Any rows
+already present remain readable in the local browser profile until retention,
+dataset replacement, or an explicit clear removes them.
+
+Because field and action values are stored verbatim, an `ISSUE_PROVIDER`
+conflict can persist API keys, access/refresh tokens, client secrets, or similar
+credentials in that database and expose them through the review UI. Normal
+production emission must remain disabled until secret-aware exclusion or
+redaction is implemented and tested for both adapter-shaped field diffs and
+opaque action payloads. Merely hiding a value in the UI is insufficient; the
+stored journal row itself must not contain the secret.
 
 ### Classification taxonomy
 
@@ -183,17 +213,25 @@ cascade or re-merge on later syncs. Merged resolutions are journaled with
 `winner: 'merged'`, status `info` (nothing was discarded), recording per-field
 which side supplied each value.
 
-**Composition residual (pre-existing class):** the merged op is an ordinary
-partial UPDATE, so it is NOT closed under later whole-op LWW composition. When
-a concurrent third-device op overlapping a merged field crosses paths with the
-merged op after both are synced, `_checkEntityForConflict`'s no-pending-local
-fast path applies whichever op each client receives last, with no reconciling
-snapshot op — clients can permanently diverge on the overlapped field. This
-hole predates the merge feature: two plain concurrent user ops crossing after
-both are synced hit the identical branch (present at the pre-SPAP-14 baseline);
-the merged op is simply one more op subject to it, neither widening nor fixing
-it. Class-level fix ideas — per-field timestamps, a reconciling op on
-concurrent-apply, or carrying parent-op identity so a later conflict can
+### Composition residual (pre-existing class)
+
+The merged op is an ordinary partial UPDATE, so later whole-op LWW composition
+needs another causal reconciliation step. The #9073 no-pending mitigation now
+reconstructs retained, decomposable overlapping sides and routes them through
+deterministic LWW; a local winner emits the normal dominating full-replacement
+operation.
+
+That mitigation is bounded by the evidence and operation shape available on the
+receiver. Arrival-order behavior remains when the concurrent local evidence was
+compacted away or cannot be decomposed safely (multi-entity, local
+delete/archive, and merged/opaque or noise-shaped composition cases). A mixed
+fleet adds another limit: receivers predating replacement-mode LWW apply the
+reconciling full snapshot as a patch and can retain fields that a current client
+clears. Only cases that successfully build a synthetic conflict reach journal
+classification; fallback cases remain invisible to the review UI.
+
+Class-level fixes — per-field timestamps, a guaranteed reconciling operation on
+every concurrent apply, or carrying parent-op identity so later resolution can
 decompose a merge — belong to a follow-up at the op-log level.
 
 ## Review UI (`/sync-conflicts`)

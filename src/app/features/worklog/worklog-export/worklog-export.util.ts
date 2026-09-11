@@ -8,7 +8,11 @@ import { ProjectCopy } from '../../project/project.model';
 import { TagCopy } from '../../tag/tag.model';
 import { WorklogTask } from '../../tasks/task.model';
 import { resolveDisplayTagIds } from '../../tasks/util/resolve-display-tag-ids.util';
-import { WorklogExportSettingsCopy, WorklogGrouping } from '../worklog.model';
+import {
+  WorklogColTypes,
+  WorklogExportSettingsCopy,
+  WorklogGrouping,
+} from '../worklog.model';
 import { Log } from '../../../core/log';
 import {
   ItemsByKey,
@@ -19,6 +23,24 @@ import {
 
 const LINE_SEPARATOR = '\n';
 const EMPTY_VAL = ' - ';
+/**
+ * Leading `= + - @ TAB CR LF` make Excel/LibreOffice evaluate the cell as a
+ * formula, so a task title like `=cmd|' /C calc'!A0` would execute on open
+ * (OWASP CSV injection).
+ */
+const CSV_FORMULA_PREFIX_RE = /^[=+\-@\t\r\n]/;
+const CSV_NEEDS_QUOTING_RE = /[;"\r\n]/;
+
+const escapeCsvField = (value: string | number | undefined): string => {
+  const raw = value === undefined ? '' : String(value);
+  // `-` alone is the zero-duration placeholder of msToString/msToClockString and
+  // not a formula, so it must stay bare — TIME_CLOCK is a default column, and
+  // prefixing would corrupt every zero row of an ordinary export.
+  // The apostrophe makes spreadsheets treat the cell as literal text (they hide
+  // it; plain-text consumers will see it).
+  const field = raw !== '-' && CSV_FORMULA_PREFIX_RE.test(raw) ? `'${raw}` : raw;
+  return CSV_NEEDS_QUOTING_RE.test(field) ? `"${field.replace(/"/g, '""')}"` : field;
+};
 
 /**
  * Depending on groupBy it gets a map of RowItems by groupKeys (date, task.id, date_task.id).
@@ -339,6 +361,43 @@ export const formatRows = (
 };
 
 /**
+ * Deliberately untranslated: the headers are consumed by spreadsheets and
+ * scripts, so they must not vary with the UI language.
+ */
+export const getHeadlineCol = (col: WorklogColTypes): string => {
+  switch (col) {
+    case 'DATE':
+      return 'Date';
+    case 'START':
+      return 'Start';
+    case 'END':
+      return 'End';
+    case 'TITLES':
+      // must differ from TITLES_INCLUDING_SUB: both columns can be exported
+      // together to attribute a sub-task row to its parent task
+      return 'Parent Titles';
+    case 'TITLES_INCLUDING_SUB':
+      return 'Titles';
+    case 'NOTES':
+      return 'Descriptions';
+    case 'PROJECTS':
+      return 'Projects';
+    case 'TAGS':
+      return 'Tags';
+    case 'TIME_MS':
+    case 'TIME_STR':
+    case 'TIME_CLOCK':
+      return 'Worked';
+    case 'ESTIMATE_MS':
+    case 'ESTIMATE_STR':
+    case 'ESTIMATE_CLOCK':
+      return 'Estimate';
+    default:
+      return 'INVALID COL';
+  }
+};
+
+/**
  * Prepares the csv for export
  */
 export const formatText = (
@@ -346,7 +405,7 @@ export const formatText = (
   rows: (string | number | undefined)[][],
 ): string => {
   let txt = '';
-  txt += headlineCols.join(';') + LINE_SEPARATOR;
-  txt += rows.map((cols) => cols.join(';')).join(LINE_SEPARATOR);
+  txt += headlineCols.map(escapeCsvField).join(';') + LINE_SEPARATOR;
+  txt += rows.map((cols) => cols.map(escapeCsvField).join(';')).join(LINE_SEPARATOR);
   return txt;
 };

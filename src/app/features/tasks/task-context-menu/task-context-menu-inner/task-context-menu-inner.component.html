@@ -30,6 +30,7 @@
       tabindex="0"
       (click)="quickAccessBtnClick(1)"
       [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_TODAY | translate"
+      [attr.aria-label]="T.F.TASK.D_SCHEDULE_TASK.QA_TODAY | translate"
     >
       <mat-icon>wb_sunny</mat-icon>
     </button>
@@ -39,6 +40,7 @@
       tabindex="0"
       (click)="quickAccessBtnClick(2)"
       [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_TOMORROW | translate"
+      [attr.aria-label]="T.F.TASK.D_SCHEDULE_TASK.QA_TOMORROW | translate"
     >
       <mat-icon>wb_twilight</mat-icon>
     </button>
@@ -47,6 +49,7 @@
       tabindex="0"
       (click)="quickAccessBtnClick(3)"
       [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_NEXT_WEEK | translate"
+      [attr.aria-label]="T.F.TASK.D_SCHEDULE_TASK.QA_NEXT_WEEK | translate"
     >
       <mat-icon>next_week</mat-icon>
     </button>
@@ -67,6 +70,11 @@
           : (T.F.TASK.CMP.SCHEDULE | translate)) +
         (kb.taskSchedule ? ' [' + kb.taskSchedule + ']' : '')
       "
+      [attr.aria-label]="
+        task.dueWithTime || task.dueDay
+          ? (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+          : (T.F.TASK.CMP.SCHEDULE | translate)
+      "
       (click)="scheduleTask()"
     >
       <mat-icon>today</mat-icon>
@@ -78,12 +86,24 @@
         tabindex="0"
         (click)="unscheduleTask()"
         [matTooltip]="T.F.TASK.CMP.UNSCHEDULE_TASK | translate"
+        [attr.aria-label]="T.F.TASK.CMP.UNSCHEDULE_TASK | translate"
       >
         <mat-icon>event_busy</mat-icon>
       </button>
     }
   </div>
 
+  @if (isTouchActive() && isInTaskRow) {
+    <button
+      (click)="enterSelectionMode()"
+      mat-menu-item
+    >
+      <span class="menuItemLeft">
+        <mat-icon>checklist_rtl</mat-icon>
+        {{ T.F.TASK.MULTI_SELECT.SELECT_ENTRY | translate }}
+      </span>
+    </button>
+  }
   @if (
     isTimeTrackingEnabled() &&
     ((isAdvancedControls() && isTouchActive()) || !isAdvancedControls()) &&
@@ -156,7 +176,7 @@
     </button>
   }
 
-  @if (isAdvancedControls() && !task.parentId && !task.isDone) {
+  @if (isAdvancedControls() && !task.isDone && (!task.parentId || isInSubTaskList)) {
     <button
       (click)="moveToTop()"
       mat-menu-item
@@ -165,6 +185,17 @@
         <mat-icon>arrow_upward</mat-icon>
         {{ T.F.TASK.CMP.MOVE_TO_TOP | translate }}
       </span>
+      <span class="key-i">{{ kb.moveTaskToTop }}</span>
+    </button>
+    <button
+      (click)="moveToBottom()"
+      mat-menu-item
+    >
+      <span class="menuItemLeft">
+        <mat-icon>arrow_downward</mat-icon>
+        {{ T.F.TASK.CMP.MOVE_TO_BOTTOM | translate }}
+      </span>
+      <span class="key-i">{{ kb.moveTaskToBottom }}</span>
     </button>
   }
   @if (isAdvancedControls() && !task.parentId && !task.isDone) {
@@ -190,6 +221,7 @@
         <mat-icon>file_copy</mat-icon>
         {{ T.F.TASK.CMP.DUPLICATE | translate }}
       </span>
+      <span class="key-i">{{ kb.taskDuplicate }}</span>
     </button>
   }
 
@@ -226,7 +258,7 @@
       mat-menu-item
     >
       <span class="menuItemLeft">
-        <mat-icon>arrow_downward</mat-icon>
+        <mat-icon>move_down</mat-icon>
         {{ T.F.TASK.CMP.MOVE_TO_BACKLOG | translate }}
       </span>
       <span class="key-i">{{ kb.moveToBacklog }}</span>
@@ -244,10 +276,12 @@
       mat-menu-item
     >
       <span class="menuItemLeft">
-        <mat-icon>arrow_upward</mat-icon>
+        <mat-icon>move_up</mat-icon>
         {{ T.F.TASK.CMP.MOVE_TO_REGULAR | translate }}
       </span>
-      <span class="key-i">{{ kb.taskScheduleToday }}</span>
+      <!-- No shortcut hint: taskScheduleToday (Shift+T) schedules for today and
+      does NOT move between lists. Advertising it here is what made #8592's
+      reporter expect the two to be equivalent. -->
     </button>
   }
 
@@ -327,10 +361,7 @@
   </button>
 </mat-menu>
 
-<mat-menu
-  #estimateMenu="matMenu"
-  (closed)="focusRelatedTaskOrNext()"
->
+<mat-menu #estimateMenu="matMenu">
   <ng-template matMenuContent>
     @for (option of ESTIMATE_OPTIONS; track option.value) {
       <button
@@ -366,10 +397,7 @@
   </ng-template>
 </mat-menu>
 
-<mat-menu
-  #projectMenu="matMenu"
-  (closed)="focusRelatedTaskOrNext()"
->
+<mat-menu #projectMenu="matMenu">
   <ng-template matMenuContent>
     @if (moveToProjectList$ | async; as list) {
       @for (project of list; track trackByProjectId($index, project)) {
@@ -391,10 +419,7 @@
   </ng-template>
 </mat-menu>
 
-<mat-menu
-  #tagMenu="matMenu"
-  (closed)="focusRelatedTaskOrNext()"
->
+<mat-menu #tagMenu="matMenu">
   <ng-template matMenuContent>
     <div (click)="$event.stopPropagation()">
       @for (tag of toggleTagList(); track tag.id) {

@@ -1,3 +1,5 @@
+@use '../../../../styles/globals' as *;
+
 :host {
   display: block;
   margin-top: var(--s-quarter);
@@ -22,7 +24,9 @@
   background: var(--bg-lightest);
   color: var(--text-color-most-intense);
   font-family: var(--font-primary-stack);
-  font-size: 14px;
+  // Renders in the task detail panel right next to tag-edit, so it hit the same
+  // iOS focus zoom (#9556). line-height stays 40px — only the glyphs grow.
+  @include noIosFocusZoom();
   line-height: 40px;
 
   &:focus {

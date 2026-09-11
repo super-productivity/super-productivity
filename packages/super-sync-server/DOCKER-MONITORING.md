@@ -240,12 +240,25 @@ Run a command with `--save` first:
 
 ## Performance Notes
 
-- **Basic commands** (stats, usage, ops): < 5 seconds
-- **Active users**: 5-15 seconds (multiple aggregate queries)
-- **Quick suite**: ~30 seconds
-- **Full suite**: 1-3 minutes depending on data size
-- **User deep-dive**: 5-15 seconds per user
-- **Export operations**: ~1 second per 1000 operations
+Timings depend on the instance and are not currently measured — the 2026-08-07
+production run took 363.8s and six of ten reports failed outright. What is
+specified is the _shape_ of the cost, not a duration: see
+[How the operations reports stay bounded](scripts/MONITORING-README.md#how-the-operations-reports-stay-bounded).
+
+These scripts run under their own statement timeout (`MONITOR_STATEMENT_TIMEOUT_MS`,
+default 300000ms) rather than the one on the operator's `DATABASE_URL`, which is
+sized for the sync request path. If a report still cancels, raise that first:
+
+```bash
+docker exec -e MONITOR_STATEMENT_TIMEOUT_MS=600000 supersync-server node dist/scripts/run-all-monitoring.js
+```
+
+Then check the `payload_bytes` backfill, and only after that lower
+`MONITOR_SCOPE_USERS`
+(`docker exec -e MONITOR_SCOPE_USERS=25 supersync-server node dist/scripts/run-all-monitoring.js`)
+— see the troubleshooting section of that document. Monitoring connections
+identify themselves as `supersync-monitor`, which is how `health-alert.sh` knows
+not to page about a long-running report.
 
 ## Security Notes
 

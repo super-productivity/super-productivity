@@ -16,14 +16,26 @@
       "MSG": "Uusi versio Super Productivitysta on saatavilla ({{version}})."
     },
     "CONTEXT_MENU": {
-      "CHANGE_BACKGROUND": "Vaihda taustakuva"
+      "CHANGE_BACKGROUND": "Vaihda taustakuva",
+      "CHANGE_PROJECT_SETTINGS": "Muuta projektin asetuksia",
+      "CHANGE_TAG_SETTINGS": "Muuta tunnisteen asetuksia"
     },
     "SKIP_SYNC_WAIT": "Ohita synkronoinnin odotus",
     "UPDATE_CHECK": {
       "ERROR": "Päivitysten tarkistus epäonnistui. Yritä myöhemmin uudelleen.",
       "UP_TO_DATE": "Käytössäsi on uusin versio ({{version}})."
     },
-    "UPDATE_WEB_APP": "Uusi versio saatavilla. Lataa uusi versio?"
+    "UPDATE_WEB_APP": "Uusi versio saatavilla. Lataa uusi versio?",
+    "B_SUPER_SYNC_ENCRYPTION": {
+      "ALREADY_ENCRYPTED": "Tämä tili on jo salattu toisella laitteella. Jatka synkronointia antamalla nykyinen salasanasi.",
+      "ENABLE": "Ota salaus käyttöön",
+      "LATER": "Myöhemmin",
+      "MSG": "SuperSync käyttää päästä päähän -salausta, mutta tämä tili synkronoi edelleen ilman salasanaa. Suojaa tietosi asettamalla salasana — tiedot säilyvät ja ne lähetetään salattuina uudelleen seuraavan synkronoinnin yhteydessä."
+    },
+    "DROP_LINK": {
+      "SNACK": "Tehtävä luotiin pudotetusta linkistä",
+      "TASK_TITLE": "Tarkista {{url}}"
+    }
   },
   "BL": {
     "NO_TASKS": "Taakkaputkessasi ei ole tällä hetkellä tehtäviä"
@@ -37,10 +49,22 @@
     "RELOAD_AFTER_IDB_ERROR": "Tietokantaan ei pääsy :( Mahdollisia syitä ovat sovelluspäivitys taustalla tai vähäinen levytila. Jos asensit sovelluksen Linuxille snap-pakettina, ota myös refresh awareness käyttöön 'snap set core experimental.refresh-app-awareness=true', kunnes he korjaavat ongelman. Paina OK ladataksesi sovelluksen uudelleen (saattaa vaatia sovelluksen manuaalisen uudelleenkäynnistyksen joillain alustoilla).",
     "RESTORE_FILE_BACKUP": "Tietoja ei näytä olevan, mutta varmuuskopioita on saatavilla osoitteessa \"{{dir}}\". Haluatko palauttaa viimeisimmän varmuuskopion ajasta {{from}}?",
     "RESTORE_FILE_BACKUP_ANDROID": "Tietoja ei näytä olevan, mutta varmuuskopio on saatavilla. Haluatko ladata sen?",
-    "RESTORE_STRAY_BACKUP": "Viimeisen synkronoinnin aikana on saattanut tapahtua virhe. Haluatko palauttaa viimeisen varmuuskopion?"
+    "RESTORE_STRAY_BACKUP": "Viimeisen synkronoinnin aikana on saattanut tapahtua virhe. Haluatko palauttaa viimeisen varmuuskopion?",
+    "DELETE_SECTION": "Haluatko varmasti poistaa tämän osion? Sen tehtävät siirretään tehtävälistaan.",
+    "RESTORE_FILE_BACKUP_MOBILE": "Tältä laitteelta ei löytynyt tietoja, mutta palautettavissa on varmuuskopio (tehtäviä: {{tasks}}, projekteja: {{projects}}). Palautetaanko se?",
+    "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "Palautetaanko viimeisin automaattinen varmuuskopio (tehtäviä: {{tasks}}, projekteja: {{projects}})? Tämä korvaa kaikki nykyiset tiedot tällä laitteella ja, jos käytät synkronointia, korvaa muiden laitteidesi tiedot seuraavan synkronoinnin yhteydessä."
   },
   "DATETIME_SCHEDULE": {
-    "PRESS_ENTER_AGAIN": "Paina enter uudelleen tallentaaksesi"
+    "PRESS_ENTER_AGAIN": "Paina enter uudelleen tallentaaksesi",
+    "MONTH": "Kuukausi",
+    "NEXT_24_YEARS": "Seuraavat 24 vuotta",
+    "NEXT_MONTH": "Seuraava kuukausi",
+    "NEXT_YEAR": "Seuraava vuosi",
+    "PREVIOUS_24_YEARS": "Edelliset 24 vuotta",
+    "PREVIOUS_MONTH": "Edellinen kuukausi",
+    "PREVIOUS_YEAR": "Edellinen vuosi",
+    "SWITCH_TO_MULTI_YEAR_VIEW": "Valitse vuosi",
+    "SWITCH_TO_YEAR_VIEW": "Valitse kuukausi"
   },
   "DIALOG_UNSPLASH_PICKER": {
     "BY": "tekijä",
@@ -79,15 +103,23 @@
         "EDIT_ATTACHMENT": "Muokkaa liitettä",
         "LABELS": {
           "IMG": "Kuva",
-          "LINK": "URL-osoite"
+          "LINK": "URL-osoite",
+          "FILE": "Tiedostopolku"
         },
         "SELECT_TYPE": "Valitse tyyppi",
         "TYPES": {
           "FILE": "Tiedosto (avautuu oletusjärjestelmäsovelluksella)",
           "IMG": "Kuva (näytetään pikkukuvana)",
           "LINK": "Linkki (avautuu selaimessa)"
+        },
+        "PLACEHOLDERS": {
+          "FILE": "/path/to/file",
+          "IMG": "https://example.com/image.png",
+          "LINK": "https://example.com"
         }
-      }
+      },
+      "LOCAL_FILE_UNAVAILABLE": "Tämä liite on käytettävissä vain laitteella, jolla se lisättiin.",
+      "COMMAND_UNSUPPORTED": "Komentoliitteet eivät voi enää suorittaa komentoja."
     },
     "BOARDS": {
       "DEFAULT": {
@@ -114,7 +146,29 @@
         "TASK_DONE_STATE": "Tehtävän valmiustila",
         "TASK_DONE_STATE_ALL": "Kaikki",
         "TASK_DONE_STATE_DONE": "Valmis",
-        "TASK_DONE_STATE_UNDONE": "Kesken"
+        "TASK_DONE_STATE_UNDONE": "Kesken",
+        "ONLY_PARENT_TASKS": "Vain päätehtävät",
+        "PROJECT": "Projekti",
+        "PROJECT_ALL": "Kaikki projektit",
+        "SCHEDULED_STATE": "Aikataulutuksen tila",
+        "SCHEDULED_STATE_ALL": "Kaikki",
+        "SCHEDULED_STATE_NOT_SCHEDULED": "Ei aikataulutettu",
+        "SCHEDULED_STATE_SCHEDULED": "Aikataulutettu",
+        "SORT_BY": "Lajitteluperuste",
+        "SORT_BY_CREATED": "Luontiaika",
+        "SORT_BY_DUE": "Eräpäivä",
+        "SORT_BY_MANUAL": "Manuaalinen",
+        "SORT_BY_TIME_ESTIMATE": "Aika-arvio",
+        "SORT_BY_TITLE": "Otsikko",
+        "SORT_DIR": "Lajittelujärjestys",
+        "SORT_DIR_ASC": "Nouseva",
+        "SORT_DIR_DESC": "Laskeva",
+        "TAGS_EXCLUDED_MATCH_ALL": "Sulje pois vain, jos kaikki täsmäävät (AND)",
+        "TAGS_EXCLUDED_MATCH_ANY": "Sulje pois, jos jokin täsmää (OR)",
+        "TAGS_EXCLUDED_MATCH_MODE": "Poissuljettujen tunnisteiden vastaavuus",
+        "TAGS_MATCH_ALL": "Täsmää kaikkiin (AND)",
+        "TAGS_MATCH_ANY": "Täsmää mihin tahansa (OR)",
+        "TAGS_MATCH_MODE": "Vaadittujen tunnisteiden vastaavuus"
       },
       "V": {
         "ADD_NEW_BOARD": "Lisää uusi taulu",
@@ -142,7 +196,9 @@
         "TWO_WAY_SYNC_PUSH_ONLY": "Vain lähetys (kirjoita CalDAV:iin)",
         "TWO_WAY_SYNC_SECTION": "Kaksisuuntainen synkronointi (kokeellinen)",
         "TWO_WAY_SYNC_STATUS": "Tilan synkronointisuunta",
-        "TWO_WAY_SYNC_TITLE": "Otsikon synkronointisuunta"
+        "TWO_WAY_SYNC_TITLE": "Otsikon synkronointisuunta",
+        "IS_ADD_SUB_TASKS": "Tuo myös alitehtävät, kun tehtävä lisätään",
+        "POLL_INTERVAL_MINUTES": "Kyselyväli (minuutteina)"
       },
       "FORM_SECTION": {
         "HELP": "<p>Tässä voit määrittää SuperProductivityn listamaan keskeneräiset CalDav-tehtävät tietyn projektin osalta tehtävänluontipaneelissa päivittäisessä suunnittelinäkymässä. Ne listataan ehdotuksina ja tarjoavat linkin tehtävään sekä lisätietoja siitä.</p> <p>Lisäksi voit automaattisesti lisätä ja synkronoida kaikki keskeneräiset tehtävät taakkaputkeesi.</p><p>Jotta se toimisi nextcloudissa verkkosovelluksessa, sinun on ehkä sallittava \"https://app.super-productivity.com\" nextcloud-sovelluksen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a> kautta.</p>"
@@ -180,7 +236,19 @@
         "EVENTS_STR": "tapahtumaa"
       },
       "S": {
-        "CAL_PROVIDER_ERROR": "Kalenteritarjoajan virhe: {{errTxt}}"
+        "CAL_PROVIDER_ERROR": "Kalenteritarjoajan virhe: {{errTxt}}",
+        "CAL_PROVIDER_NOT_ICAL": "Kalenterin URL-osoite ei palauttanut iCal-tietoja. Jakolinkki on voinut vanhentua tai kumoutua tai se voi vaatia kirjautumisen — kokeile uuden jako-URL-osoitteen luomista.",
+        "EVENT_HIDDEN": "Kalenteritapahtuma piilotettu",
+        "EVENT_MOVED": "Tapahtuma siirretty",
+        "EVENT_RESCHEDULED": "Tapahtuma aikataulutettu uudelleen",
+        "EVENT_DELETED": "Tapahtuma poistettu",
+        "TIME_BLOCK_ERROR": "Aikalohkon synkronointi epäonnistui: {{errTxt}}"
+      },
+      "CONTEXT_MENU": {
+        "CREATE_TASK": "Luo tehtäväksi",
+        "OPEN_IN_CALENDAR": "Avaa kalenterissa",
+        "RESCHEDULE": "Aikatauluta uudelleen",
+        "DELETE_EVENT": "Poista tapahtuma"
       }
     },
     "CONFIG": {
@@ -217,7 +285,15 @@
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
-        "FINISH_DAY_BEFORE_EXIT": "Päivälistallasi on {{nr}} valmista tehtävää, joita ei ole vielä siirretty arkistoon. Haluatko varmasti poistua tallentamatta päivää?"
+        "FINISH_DAY_BEFORE_EXIT": "Päivälistallasi on {{nr}} valmista tehtävää, joita ei ole vielä siirretty arkistoon. Haluatko varmasti poistua tallentamatta päivää?",
+        "DONT_QUIT": "Älä lopeta",
+        "FINISH_DAY": "Päätä päivä",
+        "QUIT": "Lopeta",
+        "TITLE": "Päätä päivä ennen lopettamista?",
+        "UNARCHIVED_TASKS": {
+          "ONE": "Tänään-listallasi on 1 valmis tehtävä, jota ei ole vielä siirretty arkistoon.",
+          "OTHER": "Tänään-listallasi on {{nr}} valmista tehtävää, joita ei ole vielä siirretty arkistoon."
+        }
       }
     },
     "FOCUS_MODE": {
@@ -232,7 +308,8 @@
         "SESSION_RUNNING": "Keskittymististunti on käynnissä",
         "START": "Aloita",
         "TO_FOCUS_OVERLAY": "Keskittymistilan ikkunaan",
-        "END_FOCUS_SESSION": "Lopeta keskittymisjakso"
+        "END_FOCUS_SESSION": "Lopeta keskittymisjakso",
+        "SESSION_OVERTIME": "Istunnon aika ylittyi — pidä tauko, kun olet valmis"
       },
       "BACK_TO_PLANNING": "Takaisin suunnitteluun",
       "BREAK_RELAX_MSG": "Ota hetki rentoutumiseen",
@@ -280,7 +357,27 @@
       "PAUSE_BREAK": "Keskeytä tauko",
       "RESET_CYCLES": "Nollaa jaksolaskuri",
       "RESUME_BREAK": "Jatka taukoa",
-      "SELECT_TASK_FIRST": "Valitse ensin tehtävä aloittaaksesi seurannan"
+      "SELECT_TASK_FIRST": "Valitse ensin tehtävä aloittaaksesi seurannan",
+      "BREAK_TITLE": "Tauko",
+      "BROWSER_TITLE_BREAK": "Tauko",
+      "BROWSER_TITLE_PAUSED": "Keskeytetty",
+      "OVERTIME_MSG": "Aika loppui — pidä tauko, kun olet valmis",
+      "FLOWTIME_SETTINGS": "Flowtime-asetukset",
+      "FLOWTIME_ENABLE_BREAKS": "Ota Flowtime-tauot käyttöön",
+      "FLOWTIME_BREAK_MODE": "Tauon laskentatapa",
+      "FLOWTIME_BREAK_MODE_RATIO": "Suhteeseen perustuva",
+      "FLOWTIME_BREAK_MODE_RULE": "Sääntöihin perustuva",
+      "FLOWTIME_BREAK_PERCENTAGE": "Tauon prosenttiosuus",
+      "FLOWTIME_BREAK_PERCENTAGE_DESC": "Pidä taukoa tämä prosenttiosuus työistunnon kestosta.",
+      "FLOWTIME_BREAK_RULES_DESC": "Säännöt arvioidaan nousevassa järjestyksessä. Jos alueet menevät päällekkäin, käytetään ensimmäistä täsmäävää sääntöä.",
+      "FLOWTIME_ADD_BREAK_RULE": "Lisää taukosääntö",
+      "FLOWTIME_VALIDATION_MIN_MAX": "Enimmäiskeston on oltava vähintään vähimmäiskeston suuruinen",
+      "FLOWTIME_BREAK_RULE_MIN": "Työn vähimmäiskesto (min)",
+      "FLOWTIME_BREAK_RULE_MAX": "Työn enimmäiskesto (min)",
+      "FLOWTIME_BREAK_RULE_DURATION": "Tauon kesto (min)",
+      "SESSION_COMPLETED_BANNER": "Keskittymisjakso päättyi — työskentelit {{duration}}.",
+      "SESSION_COMPLETED_BANNER_ACTION": "Mitä seuraavaksi?",
+      "SESSION_COMPLETED_NOTIFICATION_BODY": "Työskentelit {{duration}}."
     },
     "GITEA": {
       "FORM": {
@@ -291,7 +388,11 @@
         "SCOPE_ALL": "Kaikki",
         "SCOPE_ASSIGNED": "Minulle osoitetut",
         "SCOPE_CREATED": "Minun luomat",
-        "TOKEN": "Käyttöoikeustunnus"
+        "TOKEN": "Käyttöoikeustunnus",
+        "EXCLUDE_LABELS": "Poissuljettavat tunnisteet (valinnainen)",
+        "EXCLUDE_LABELS_DESCRIPTION": "Pilkuilla eroteltu luettelo tunnisteiden nimistä. Ongelmat, joilla on jokin näistä tunnisteista, suljetaan pois.",
+        "FILTER_LABELS": "Suodata tunnisteiden mukaan (valinnainen)",
+        "FILTER_LABELS_DESCRIPTION": "Pilkuilla eroteltu luettelo tunnisteiden nimistä. Vain ongelmat, joilla on kaikki nämä tunnisteet, synkronoidaan. Jätä tyhjäksi, jos haluat synkronoida kaikki rajaukseen sopivat ongelmat."
       },
       "FORM_SECTION": {
         "HELP": "<p>Tässä voit määrittää SuperProductivityn listamaan avoimet Gitea-ongelmat tietystä arkistosta tehtävänluontipaneelissa päivittäisessä suunnittelinäkymässä. Ne listataan ehdotuksina ja tarjoavat linkin ongelmaan sekä lisätietoja siitä.</p> <p>Lisäksi voit automaattisesti lisätä ja tuoda kaikki avoimet ongelmat.</p><p>Käyttörajoitusten ja pääsyn saamiseksi voit antaa käyttöoikeustunnuksen."
@@ -403,7 +504,15 @@
         "CONNECTION_FAILED": "Yhteys epäonnistui",
         "CONNECTION_SUCCESS": "Yhteys toimii!",
         "PLUGIN_NOT_INSTALLED": "Vaadittu lisäosa \"{{pluginName}}\" ei ole asennettu.",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Kaksisuuntaisen synkronoinnin lähetys epäonnistui: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Kaksisuuntaisen synkronoinnin lähetys epäonnistui: {{errorMsg}}",
+        "DELETE_REMOTE_FAILED": "Etäongelman poistaminen epäonnistui",
+        "LOAD_OPTIONS_FAILED": "Kentän {{fieldKey}} vaihtoehtojen lataaminen epäonnistui",
+        "OAUTH_CONNECTED": "OAuth-tili yhdistettiin onnistuneesti.",
+        "OAUTH_DISCONNECTED": "OAuth-tilin yhteys katkaistiin.",
+        "OAUTH_FAILED": "Todennus epäonnistui.",
+        "OAUTH_FAILED_WITH_DETAIL": "Todennus epäonnistui: {{detail}}",
+        "REMOTE_ISSUE_DELETED": "Etäongelma poistettiin. Poistetaanko linkitetty tehtävä \"{{taskTitle}}\"?",
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "Etäongelma poistettiin, mutta tehtävään \"{{taskTitle}}\" on seurattu aikaa. Poistetaanko se silti?"
       },
       "TWO_WAY_SYNC": {
         "OFF": "Pois päältä",
@@ -415,11 +524,40 @@
         "PUSH_ONLY": "Vain lähetys",
         "SECTION": "Kaksisuuntainen synkronointi (kokeellinen)",
         "STATUS": "Tilan synkronointisuunta",
-        "TITLE": "Otsikon synkronointisuunta"
+        "TITLE": "Otsikon synkronointisuunta",
+        "AUTO_CREATE_TAGS": "Luo tunnisteet automaattisesti synkronoiduista etätunnisteista",
+        "AUTO_CREATE_TAGS_DESCRIPTION": "Luo paikalliset tunnisteet automaattisesti, kun etäpalveluntarjoajalta haetaan tuntemattomia tunnisteita.",
+        "DUE_DAY": "Eräpäivä",
+        "DUE_WITH_TIME": "Eräpäivä ja -aika",
+        "TAGS": "Tunnisteiden ja luokkien synkronointisuunta",
+        "TIME_ESTIMATE": "Aika-arvio"
       },
       "DIALOG": {
         "ADVANCED_CONFIG": "Lisäasetukset",
-        "DELETE_CONFIRM": "Haluatko varmasti poistaa tämän tehtävätarjoajan? Poistaminen tarkoittaa, että <strong>kaikki aiemmin tuodut tehtävät menettävät viitteensä</strong>. Tätä ei voi perua!"
+        "DELETE_CONFIRM": "Haluatko varmasti poistaa tämän tehtävätarjoajan? Poistaminen tarkoittaa, että <strong>kaikki aiemmin tuodut tehtävät menettävät viitteensä</strong>. Tätä ei voi perua!",
+        "CONNECTED": "Yhdistetty",
+        "DISCONNECT": "Katkaise yhteys",
+        "EDIT_TITLE": "Muokkaa kohteen {{title}} asetuksia",
+        "LOAD_OPTIONS": "Lataa vaihtoehdot",
+        "LOAD_OPTIONS_FAILED": "Vaihtoehtojen lataaminen epäonnistui",
+        "LOAD_OPTIONS_FIRST": "Lataa vaihtoehdot ensin",
+        "LOADING_OPTIONS": "Ladataan vaihtoehtoja...",
+        "NO_OPTIONS_FOUND_HELP": "Vaihtoehtoja ei löytynyt. Tarkista yhteystiedot ja lataa vaihtoehdot uudelleen.",
+        "OAUTH_UNAVAILABLE_WEB": "Käytettävissä työpöytä- ja mobiilisovelluksissa. Synkronoidut asetukset säilyvät, mutta ajantasaisia tietoja ei voi ladata verkkosovelluksessa.",
+        "OPTIONS_LOADED": "Vaihtoehdot ladattu",
+        "RELOAD_OPTIONS": "Lataa vaihtoehdot uudelleen",
+        "SETUP_TITLE": "Määritä kohteen {{title}} asetukset",
+        "TEST_CONNECTION": "Testaa yhteys"
+      },
+      "DEFAULT_NOTE_LABEL": "Tuotujen tehtävien oletusmuistiinpano",
+      "DEFAULT_TAGS_LABEL": "Tuotujen tehtävien oletustunnisteet",
+      "FORM": {
+        "AUTO_ADD_TO_BACKLOG": "Tuo automaattisesti oletusprojektiin (vaatii oletusprojektin)",
+        "AUTO_POLL": "Tarkista tuotujen kohteiden muutokset ja ilmoita niistä",
+        "POLLING_MODE": "Päivityskyselyn käynnistys",
+        "POLLING_MODE_DESCRIPTION": "Milloin päivitykset tarkistetaan: vain asiaankuuluvan projektin tai tunnisteen ollessa avoinna vai aina taustalla",
+        "POLLING_MODE_WHEN_PROJECT_OPEN": "Kun asiayhteys on avoinna",
+        "POLLING_MODE_ALWAYS": "Aina (taustalla)"
       }
     },
     "ISSUE_PANEL": {
@@ -495,7 +633,9 @@
         "PASSWORD": "Tunnus / Salasana",
         "USE_PAT": "Käytä henkilökohtaista käyttöoikeustunnusta (LEGACY)",
         "USER_NAME": "Sähköposti / Käyttäjänimi",
-        "WONKY_COOKIE_MODE": "Epävakaa evästevaratodennustapa (vain työpöytäsovellus)"
+        "WONKY_COOKIE_MODE": "Epävakaa evästevaratodennustapa (vain työpöytäsovellus)",
+        "ALLOW_FETCH_FALLBACK": "Hae Jira-tiedot suoraan selaimesta (ohita laajennus)",
+        "ALT_PUBLIC_LINK_HOST": "Jira-linkkien vaihtoehtoinen palvelin (esim. julkinen URL, kun API-palvelin on eri; polun etuliite sallitaan)"
       },
       "FORM_SECTION": {
         "ADV_CFG": "Lisäasetukset",
@@ -660,11 +800,17 @@
           "NUMBERED_LIST": "Numeroitu luettelo",
           "QUOTE": "Lainaus",
           "STRIKETHROUGH": "Yliviivaus",
-          "TASK_LIST": "Tehtäväluettelo"
+          "TASK_LIST": "Tehtäväluettelo",
+          "KEYBOARD_SHORTCUTS": "Pikanäppäimet"
         },
         "VIEW_PARSED": "Näytä jäsennettynä (ei muokattavissa olevana) markdownina",
         "VIEW_SPLIT": "Näytä jäsennetty ja jäsentämätön markdown jaettuna näkymässä",
-        "VIEW_TEXT_ONLY": "Näytä jäsentämättömänä tekstinä"
+        "VIEW_TEXT_ONLY": "Näytä jäsentämättömänä tekstinä",
+        "SHORTCUTS": {
+          "DIALOG_TITLE": "Markdown-pikanäppäimet",
+          "COLUMN_ACTION": "Toiminto",
+          "COLUMN_SHORTCUT": "Pikanäppäin"
+        }
       },
       "NOTE_CMP": {
         "DISABLE_PARSE": "Poista markdown-jäsennys käytöstä esikatselussa",
@@ -766,7 +912,9 @@
         "REMOVED_PLAN_DATE": "Poistettiin suunniteltu päivämäärä tehtävältä '{{taskTitle}}'",
         "TASK_ALREADY_PLANNED": "Tehtävä on jo suunniteltu päivämäärälle {{date}}",
         "TASK_PLANNED_FOR": "Tehtävä suunniteltu päivämäärälle <strong>{{date}}</strong>{{extra}}"
-      }
+      },
+      "DAY_LOAD": "Suunniteltu: {{planned}} / Käytettävissä: {{available}}",
+      "PLANNED_LOAD": "Suunniteltu: {{planned}}"
     },
     "POMODORO": {
       "BREAK_IS_DONE": "Keskittymistauko on ohi!"
@@ -806,14 +954,60 @@
         "L_THEME_COLOR": "Teeman väri",
         "TITLE": "Teema",
         "D_BACKGROUND_OVERLAY_OPACITY": "Säädä tätä arvoa tehdäksesi taustasta enemmän tai vähemmän läpinäkyvä. Oletusarvo on 20 %.",
-        "L_BACKGROUND_OVERLAY_OPACITY": "Tummenna/vaalenna taustakuvaa paremman kontrastin saamiseksi"
+        "L_BACKGROUND_OVERLAY_OPACITY": "Tummenna/vaalenna taustakuvaa paremman kontrastin saamiseksi",
+        "D_BACKGROUND_IMAGE_BLUR": "Säädä tätä arvoa taustakuvan sumentamiseksi. Oletusarvo on 0px.",
+        "L_BACKGROUND_IMAGE_BLUR": "Sumenna taustakuvaa",
+        "BTN_SELECT_IMAGE": "Valitse",
+        "S_BACKGROUND_IMAGE_READ_ERROR": "Valittua kuvatiedostoa ei voitu lukea.",
+        "S_BACKGROUND_IMAGE_RESELECT_REQUIRED": "Paikalliset taustakuvatiedostot on valittava uudelleen tietoturvapäivityksen jälkeen.",
+        "S_BACKGROUND_IMAGE_TOO_LARGE": "Valittu kuva on liian suuri. Valitse tiedosto, jonka koko on alle {{maxSizeKb}} KB."
       },
       "S": {
         "ARCHIVED": "Projekti arkistoitu",
         "CREATED": "Luotiin projekti <strong>{{title}}</strong>. Voit valita sen vasemman yläkulman valikosta.",
         "DELETED": "Projekti poistettu",
         "UNARCHIVED": "Projekti palautettu arkistosta",
-        "UPDATED": "Päivitettiin projektin asetukset"
+        "UPDATED": "Päivitettiin projektin asetukset",
+        "REOPENED": "Projekti avattu uudelleen",
+        "SHOW_IN_MENU": "Näytä sivupalkissa",
+        "UNARCHIVED_HIDDEN_FROM_MENU": "Projekti palautettiin, mutta se on edelleen piilotettu sivupalkista"
+      },
+      "D_CONFIRM_ARCHIVE": {
+        "MSG": "Arkistoidaanko projekti \"{{title}}\"? Tehtävät, toistoasetukset ja muistutukset keskeytetään, kunnes palautat projektin.",
+        "OK": "Arkistoi"
+      },
+      "COMPLETE": {
+        "COMPLETED_ON": "Valmistui {{date}}",
+        "REOPEN": "Avaa uudelleen",
+        "NOTICE": "Tämä projekti on valmis.",
+        "ERROR": "Projektin merkitseminen valmiiksi epäonnistui. Yritä uudelleen.",
+        "RESOLVE": {
+          "MSG": "sisältää edelleen {{nr}} keskeneräistä tehtävää. Mitä niille tehdään?",
+          "MSG_ONE": "sisältää edelleen {{nr}} keskeneräisen tehtävän. Mitä sille tehdään?",
+          "MOVE_TO_INBOX": "Siirrä Saapuneisiin",
+          "MARK_DONE": "Merkitse valmiiksi"
+        },
+        "CONFIRM": {
+          "TITLE": "Merkitäänkö projekti valmiiksi?",
+          "MSG": "Merkitäänkö <strong>{{title}}</strong> valmiiksi ja siirretäänkö se arkistoituihin projekteihin?"
+        },
+        "CELEBRATION": {
+          "TITLE": "Projekti valmistui!",
+          "STARTED": "Aloitettu",
+          "FINISHED": "Valmistunut",
+          "DURATION": "Valmistui {{nr}} päivässä",
+          "TASKS_DONE": "Valmiit tehtävät",
+          "TIME_SPENT": "Seurattu aika",
+          "DAYS_WORKED": "Työpäivät",
+          "DONE_BTN": "Sulje"
+        }
+      },
+      "ARCHIVED_NOTICE": "Tämä projekti on arkistoitu.",
+      "ARCHIVED_PROJECTS": {
+        "EMPTY": "Ei arkistoituja projekteja.",
+        "LINK_LABEL": "Arkistoidut projektit",
+        "SEARCH": "Hae arkistoituja projekteja",
+        "UNARCHIVE": "Palauta projekti"
       }
     },
     "PROJECT_FOLDER": {
@@ -833,7 +1027,9 @@
         "PLACEHOLDER": "Valitse kansio"
       },
       "TOOLTIP_CREATE": "Luo projektikansio",
-      "TOOLTIP_VISIBILITY": "Näytä/piilota projektit"
+      "TOOLTIP_VISIBILITY": "Näytä/piilota projektit",
+      "ADD_SUBFOLDER": "Lisää alikansio",
+      "ADD_PROJECT": "Lisää projekti"
     },
     "QUICK_HISTORY": {
       "NO_DATA": "Ei tietoa tältä vuodelta",
@@ -908,12 +1104,36 @@
       "START": "Työpäivän alku",
       "LUNCH_BREAK": "Lounastauko",
       "MONTH": "Kuukausi",
-      "NO_TASKS": "Tällä hetkellä ei ole tehtäviä. Lisää tehtäviä yläpalkin plus (+) -painikkeesta."
+      "NO_TASKS": "Tällä hetkellä ei ole tehtäviä. Lisää tehtäviä yläpalkin plus (+) -painikkeesta.",
+      "CALENDAR_VISIBILITY": "Kalenterin näkyvyys",
+      "CLICK_TO_CREATE_TASK": "luo tehtävä napsauttamalla",
+      "DROP_TASKS_HERE_TO_SCHEDULE": "Aikatauluta tehtävät pudottamalla ne tähän",
+      "EXCESS_TASK_TOOLTIP": "Tämä tehtävä ei mahdu kokonaan tähän päivään.",
+      "EXCESS_TASKS_DAY_TOOLTIP": "{{count}} tehtävää ei mahdu käytettävissä olevaan aikaan",
+      "EXCESS_TASKS_DAY_TOOLTIP_ONE": "1 tehtävä ei mahdu käytettävissä olevaan aikaan",
+      "MORE_EVENTS": {
+        "ONE": "{{count}} tapahtuma lisää",
+        "OTHER": "{{count}} tapahtumaa lisää"
+      },
+      "NEXT_DAY": "Seuraava päivä",
+      "NEXT_MONTH": "Seuraava kuukausi",
+      "NEXT_WEEK": "Seuraava viikko",
+      "PREVIOUS_DAY": "Edellinen päivä",
+      "PREVIOUS_MONTH": "Edellinen kuukausi",
+      "PREVIOUS_WEEK": "Edellinen viikko",
+      "PLAN_TASK_FOR_DAY_PLACEHOLDER": "Suunnittele tehtävä päivälle...",
+      "VIEW_DAY": "Näytä päivä",
+      "VIEW_MONTH": "Näytä kuukausi",
+      "VIEW_WEEK": "Näytä viikko",
+      "SCHEDULE_TASK_PLACEHOLDER": "Aikatauluta tehtävä...",
+      "TOGGLE_DAY_PLANNING_HINT": "Ctrl+1 vaihtaa päivän suunnittelun tilaa",
+      "TOGGLE_TIME_SCHEDULING_HINT": "Ctrl+1 vaihtaa kellonaikojen aikataulutuksen tilaa"
     },
     "SEARCH_BAR": {
       "INFO": "Ala kirjoittamaan etsiäksesi tehtäviä",
       "NO_RESULTS": "Hakutuloksia ei löytynyt",
-      "PLACEHOLDER": "Etsi tehtävää tai tehtävän kuvausta"
+      "PLACEHOLDER": "Etsi tehtävää tai tehtävän kuvausta",
+      "INCLUDE_COMPLETED": "Sisällytä valmiit ja arkistoidut tehtävät"
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {
@@ -966,7 +1186,8 @@
       },
       "BTN_SYNC_NOW": "Synkronoi nyt",
       "C": {
-        "FORCE_UPLOAD": "Pakottamalla tietojesi lataaminen voi johtaa tietojen menetykseen. Jatketaanko?"
+        "FORCE_UPLOAD": "Pakottamalla tietojesi lataaminen voi johtaa tietojen menetykseen. Jatketaanko?",
+        "DECRYPT_OVERWRITE": "Tämä KORVAA palvelimen salatut tiedot tämän laitteen paikallisella kopiolla ja salaa ne uudelleen uudella salasanalla. Kaikilla muilla laitteilla salasana on annettava uudelleen ja korvatut tiedot ladattava palvelimelta. Näiden laitteiden synkronoimattomat muutokset menetetään pysyvästi. Jatketaanko?"
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "Avaa seuraava linkki ja kopioi sieltä saamasi valtuutuskoodi alla olevaan kenttään.",
@@ -974,7 +1195,8 @@
         "L_AUTH_CODE": "Anna valtuutuskoodi",
         "TITLE": "Kirjaudu: {{provider}}",
         "FOLLOW_LINK_MOBILE": "Napauta alla olevaa painiketta valtuuttaaksesi. Sinut ohjataan automaattisesti takaisin sovellukseen.",
-        "WAITING_FOR_AUTH": "Odotetaan todennusta..."
+        "WAITING_FOR_AUTH": "Odotetaan todennusta...",
+        "MANUAL_URL_HINT": "Eikö selain avautunut? Kopioi tämä URL-osoite:"
       },
       "D_CONFLICT": {
         "ADDITIONAL_INFO": "Lisätiedot",
@@ -1002,7 +1224,9 @@
         "VECTOR_COMPARISON_CONCURRENT": "Samanaikainen (Todellinen ristiriita)",
         "VECTOR_COMPARISON_EQUAL": "Yhtä suuri",
         "VECTOR_COMPARISON_LOCAL_GREATER": "Paikallinen > Etä",
-        "VECTOR_COMPARISON_LOCAL_LESS": "Paikallinen < Etä"
+        "VECTOR_COMPARISON_LOCAL_LESS": "Paikallinen < Etä",
+        "CHANGES_UNKNOWN": "tuntematon",
+        "OVERWRITE_WARNING_UNKNOWN": "VAROITUS: Tämä laite ei voi määrittää, kuinka monta synkronoimatonta muutosta kohteen {{targetName}} tiedoissa on, koska aiemmasta synkronoinnista ei ole tietoa. Kohteen {{targetName}} tietojen korvaaminen kohteen {{sourceName}} versiolla voi hylätä muutoksia. Haluatko varmasti jatkaa?"
       },
       "D_DECRYPT_ERROR": {
         "BTN_OVER_WRITE_REMOTE": "Vaihda & Korvaa etä",
@@ -1080,7 +1304,12 @@
           "L_REMOVE_ENCRYPTION": "Tai poista salaus",
           "PASSWORD_MIN_LENGTH": "Salasanan on oltava vähintään 8 merkkiä",
           "PASSWORDS_DONT_MATCH": "Salasanat eivät täsmää",
-          "REMOVE_ENCRYPTION_WARNING": "Salauksen poistaminen lataa tietosi uudelleen ilman salausta. Kaikkien laitteiden asetukset on määritettävä uudelleen."
+          "REMOVE_ENCRYPTION_WARNING": "Salauksen poistaminen lataa tietosi uudelleen ilman salausta. Kaikkien laitteiden asetukset on määritettävä uudelleen.",
+          "ENCRYPTION_SETUP_INTRO": "<strong>Aseta salasana, jotta tiedot salataan ennen lähettämistä</strong>. Näin tiedot eivät koskaan poistu laitteelta salaamattomina. Tämä on valinnaista — voit ottaa salauksen käyttöön tai muuttaa sitä myös myöhemmin.",
+          "SETUP_ENCRYPTION_BTN": "Salaa ja jatka",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Käytä samaa salasanaa kaikilla laitteilla. Jos unohdat sen, salattuja tietoja ei voida palauttaa.",
+          "SETUP_ENCRYPTION_TITLE": "Salataanko ennen ensimmäistä lähetystä?",
+          "SETUP_SKIP_ENCRYPTION_BTN": "Ohita"
         },
         "L_ENABLE_COMPRESSION": "Ota pakkaus käyttöön (nopeampi tietonsiirto)",
         "L_ENABLE_ENCRYPTION": "Ota päätepisteiden välinen salaus käyttöön (kokeellinen) – Tee tiedoistasi käyttömättömät synkronointitarjoajallesi",
@@ -1092,7 +1321,8 @@
         "LOCAL_FILE": {
           "L_SYNC_FOLDER_PATH": "Synkronointikansion polku",
           "INFO_TEXT": "<strong>Varoitus:</strong> <strong>Älä</strong> käytä tiedostojen synkronointityökaluja kuten Syncthing, Resilio tai vastaavia tämän kansion synkronointiin laitteiden välillä — ne <strong>aiheuttavat</strong> tietojen korruptoitumista ja ristiriitoja. Monilaitteinen synkronointi onnistuu WebDAV:n, Dropboxin tai SuperSyncin avulla.",
-          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Tiedoston käyttöoikeus tarvitaan"
+          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Tiedoston käyttöoikeus tarvitaan",
+          "S_COMMIT_FOLDER_ERROR": "Valittua synkronointikansiota ei voitu tallentaa. Se on voitu siirtää tai poistaa — valitse se uudelleen."
         },
         "SUPER_SYNC": {
           "BTN_CHANGE_PASSWORD": "Vaihda salasana",
@@ -1148,7 +1378,8 @@
           "SETUP_DISABLE_SUPERSYNC_BTN": "Poista SuperSync käytöstä",
           "SETUP_ENCRYPTION_BTN": "Aseta salasana",
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "Käytä samaa salasanaa kaikilla laitteilla. Unohdetun salasanan voi nollata korvaamalla etätiedot.",
-          "SETUP_ENCRYPTION_TITLE": "SuperSync: Aseta salasana"
+          "SETUP_ENCRYPTION_TITLE": "SuperSync: Aseta salasana",
+          "E2E_ENCRYPTION_INFO": "SuperSync käyttää päästä päähän -salausta. Tietosi salataan tällä laitteella ennen kuin ne poistuvat siltä käyttäen määrityksen aikana valitsemaasi salasanaa."
         },
         "TITLE": "Synkronointi",
         "WEB_DAV": {
@@ -1197,7 +1428,38 @@
           "WHAT_HAPPENS": "Mitä tapahtuu:"
         },
         "L_MANUAL_SYNC_ONLY": "Synkronoi vain manuaalisesti (poista automaattinen synkronointi käytöstä)",
-        "PASSWORD_SET_INFO": "🔒 Salaussalasana on asetettu."
+        "PASSWORD_SET_INFO": "🔒 Salaussalasana on asetettu.",
+        "BTN_REAUTHENTICATE": "Todenna uudelleen",
+        "REAUTH_SUCCESS": "Uudelleentodennus onnistui. Kirjautumistiedot päivitettiin.",
+        "L_USE_SPLIT_SYNC_FILES": "Surgical sync (kokeellinen) – nopeampi synkronointi jaetun ops/snapshot-tiedostorakenteen avulla. Kun ominaisuus otetaan käyttöön, se on otettava käyttöön myös kaikilla tätä kansiota synkronoivilla laitteilla.",
+        "NEXTCLOUD": {
+          "FILE_USER_NAME_DESCRIPTION": "Nextcloud-käyttäjätunnuksesi — ei sähköpostiosoite tai näyttönimi. Löydät sen avaamalla Nextcloudin Tiedostot-näkymän, napsauttamalla vasemman alakulman asetusten rataskuvaketta ja kopioimalla <user-id>-tunnuksen siellä näkyvästä WebDAV-URL-osoitteesta (.../remote.php/dav/files/<user-id>/).",
+          "L_FILE_USER_NAME": "Käyttäjätunnus",
+          "L_LOGIN_NAME": "Kirjautumisnimi / sähköposti (valinnainen)",
+          "L_SERVER_URL": "Nextcloud-palvelimen URL-osoite",
+          "LOGIN_NAME_DESCRIPTION": "Täytä tämä vain, jos palvelin edellyttää eri kirjautumisnimeä kuin yllä oleva käyttäjätunnus, esimerkiksi sähköpostiosoitetta.",
+          "SERVER_URL_DESCRIPTION": "esim. https://cloud.example.com tai https://example.com/nextcloud",
+          "L_APP_PASSWORD": "Sovellussalasana",
+          "APP_PASSWORD_DESCRIPTION": "Luo salasana kohdassa Nextcloud → Asetukset → Turvallisuus → Sovellussalasanat",
+          "L_DETECT_USER_ID": "Tunnista käyttäjätunnus",
+          "S_DETECT_USER_ID_NEED_LOGIN": "Anna ensin palvelimen URL-osoite, kirjautumistunnuksesi (Käyttäjätunnus tai Kirjautumisnimi / sähköposti) ja sovellussalasanasi.",
+          "S_DETECT_USER_ID_SUCCESS": "Nextcloud-käyttäjätunnuksesi löytyi: {{userId}}. Se täytettiin Käyttäjätunnus-kenttään.",
+          "S_DETECT_USER_ID_FAIL": "Käyttäjätunnustasi ei voitu tunnistaa: {{error}}",
+          "S_TEST_FAIL_USER_NOT_FOUND": "Yhteystesti epäonnistui: käyttäjäkansiota ei löytynyt (404). Kirjautuminen toimii, mutta \"Käyttäjätunnus\"-kentässä on oltava Nextcloud-käyttäjätunnuksesi — ei sähköpostiosoitteesi tai näyttönimesi. Löydät sen avaamalla Nextcloudin Tiedostot-näkymän, napsauttamalla vasemman alakulman asetusten rataskuvaketta ja kopioimalla <user-id>-tunnuksen siellä näkyvästä WebDAV-URL-osoitteesta (.../remote.php/dav/files/<user-id>/). Kohde-URL: {{url}}"
+        },
+        "ONEDRIVE": {
+          "CLIENT_ID_DESCRIPTION": "Microsoft Entra -sovellusrekisteröinnin sovellustunnus (asiakastunnus)",
+          "INFO_TEXT": "Microsoft 365 -todennus käyttää OAuthia. Anna ensin asiakas- ja vuokraajatunnus ja todenna sitten. <strong>Käytätkö omaa Entra-sovellusrekisteröintiä?</strong> Rekisteröi työpöytäversiossa uudelleenohjauksen URI <code>superproductivity://oauth-callback/onedrive</code> kohtaan \"Mobile and desktop applications\", ota \"Allow public client flows\" käyttöön ja myönnä delegoitu <code>Files.ReadWrite.AppFolder</code>-käyttöoikeus. Katso <a href=\"https://github.com/super-productivity/super-productivity/wiki/2.09-Configure-Sync-Backend\" target=\"_blank\" rel=\"noopener\">OneDrive-määritysohje</a>.",
+          "L_CLIENT_ID": "Sovellustunnus (asiakastunnus)",
+          "L_SYNC_FOLDER_PATH": "Synkronointikansion polku",
+          "L_TENANT_ID": "Vuokraajatunnus",
+          "L_USE_CUSTOM_APP": "Käytä omaa Microsoft Entra -sovellusrekisteröintiä",
+          "OFFICIAL_MODE_INFO": "Tässä sovelluksessa käytetään sisäänrakennettua Microsoft 365 -kirjautumista. Vaihda mukautettuun tilaan vain, jos tarvitset oman Entra-sovellusrekisteröinnin.",
+          "PLATFORM_INFO": "OneDrive-synkronointi on käytettävissä vain työpöytä- ja mobiilisovelluksissa, ei selainversiossa.",
+          "SYNC_FOLDER_PATH_DESCRIPTION": "Tallennetaan OneDrive-sovelluskansioosi (esim. super-productivity)",
+          "TENANT_ID_DESCRIPTION": "Käytä arvoa 'common' usean vuokraajan kirjautumiseen",
+          "USE_CUSTOM_APP_DESCRIPTION": "Ota käyttöön, jos haluat antaa oman sovellustunnuksen (asiakastunnuksen)"
+        }
       },
       "S": {
         "ALREADY_IN_SYNC": "Jo synkronoitu",
@@ -1265,7 +1527,29 @@
         "VECTOR_CLOCK_LIMIT_REACHED": "Synkronointi on seurannut {{originalSize}} laitetta/selainta, ylittäen rajan {{maxSize}}. Passiiviset laitemerkinnät karsittiin. Harkitse synkronoinnin nollausta, jos koet ongelmia.",
         "VERSION_TOO_OLD": "Sovellusversiosi on liian vanha synkronoiduille tiedoille. Päivitä!",
         "VERSION_UNSUPPORTED": "Synkronointi ei onnistu: tiedot vaativat uudemman sovellusversion. Päivitä.",
-        "WEB_CRYPTO_NOT_AVAILABLE": "Salaus ei ole käytettävissä tässä laitteessa. Androidilla salaus vaatii suojatun yhteyden (HTTPS), joka ei ole käytettävissä. Poista salaus käytöstä synkronointiasetuksissa tai synkronoi työpöytäselaimesta."
+        "WEB_CRYPTO_NOT_AVAILABLE": "Salaus ei ole käytettävissä tässä laitteessa. Androidilla salaus vaatii suojatun yhteyden (HTTPS), joka ei ole käytettävissä. Poista salaus käytöstä synkronointiasetuksissa tai synkronoi työpöytäselaimesta.",
+        "AUTH_SERVICE_UNAVAILABLE": "Todennuspalvelu ei ole tilapäisesti käytettävissä (HTTP {{status}}). Yritä uudelleen.",
+        "AUTH_SERVICE_UNAVAILABLE_WITH_REFERENCE": "Todennuspalvelu ei ole tilapäisesti käytettävissä (HTTP {{status}}). Yritä uudelleen. Viite: {{reference}}.",
+        "DEFERRED_ACTION_PERMANENT_FAILED": "Muutosta ei voitu tallentaa, ja synkronointi on keskeytetty. Palauta viimeisin tallennettu tila lataamalla sovellus uudelleen.",
+        "ERROR_REMOTE_FILE_CORRUPTED": "Etäsynkronointitietoja ei voi lukea, sillä ne voivat olla vajaita tai vioittuneita. Paikalliset tietosi ovat turvassa. Voit korvata etätiedot paikallisilla tiedoillasi.",
+        "ERROR_REMOTE_FILE_EMPTY": "Etäsynkronointitiedosto on tyhjä. Näin voi käydä keskeytyneen synkronoinnin jälkeen. Korvataanko etätiedot paikallisilla tiedoillasi?",
+        "ERROR_REMOTE_FILE_LOCKED": "Palvelin on lukinnut etäsynkronointitiedoston. Ongelma voi ratketa seuraavalla synkronointiyrityksellä.",
+        "ERROR_SYNC_VERSION_MISMATCH": "Etäsynkronointitiedot käyttävät yhteensopimatonta muotoversiota. Varmista, että kaikilla laitteilla on sama Super Productivity -versio.",
+        "WARN_CLIENT_ID_REGENERATED": "Synkronointilaitteen tunnus oli virheellinen, joten se luotiin uudelleen. Seuraavassa synkronoinnissa voi ilmetä ristiriita.",
+        "FORCE_UPLOAD_FAILED": "Palvelimen tietojen korvaaminen epäonnistui. Paikalliset muutoksesi ovat edelleen käytettävissä.",
+        "HYDRATION_FALLBACK_RECOVERY": "Tallennettujen tietojen lataaminen epäonnistui — näytetään paikallisesta lokista palautettavissa olleet tiedot. Puuttuvat kohteet voi palauttaa täydellä synkronoinnilla tai tuomalla varmuuskopion.",
+        "INCOMPLETE_REMOTE_OPERATIONS": "Ladattuja muutoksia ei voitu ottaa kokonaan käyttöön. Synkronointi keskeytettiin tietojesi suojaamiseksi. Yritä uudelleen käynnistämällä sovellus. Jos ongelma toistuu, palauta varmuuskopio.",
+        "INTEGRITY_TAMPER_DETECTED": "Synkronointi pysäytettiin: palvelimen palauttamat tiedot eivät läpäisseet turvallisuuden eheystarkistusta. Paikalliset tietosi ovat turvassa. Tämä voi tarkoittaa, että synkronointipalvelinta on peukaloitu tai se on määritetty väärin.",
+        "LEGACY_FORMAT_DETECTED": "Synkronointimuoto ei täsmää: etätallennustilan tiedot on viimeksi kirjoitettu sovelluksen vanhemmalla versiolla (v16.x tai vanhempi), joka käyttää eri synkronointimuotoa. Päivitä kaikki laitteesi samaan sovellusversioon. \"Pakota korvaus\" vapauttaa tämän laitteen kirjoittamalla uuden muodon vanhojen tiedostojen rinnalle. Käytä sitä vain, jos yksikään vanhempi laite ei enää synkronoi tähän etäsijaintiin, sillä muuten laitteiden tiedot erkaantuvat huomaamatta toisistaan.",
+        "LOCAL_DATA_REPLACE_UNDO": "Paikalliset tietosi korvattiin palvelimen tiedoilla.",
+        "LOCAL_FILE_RESELECT_REQUIRED": "Paikallista tiedostosynkronointia varten synkronointikansio on valittava uudelleen tietoturvapäivityksen jälkeen. Avaa synkronointiasetukset ja valitse kansio uudelleen.",
+        "NETWORK_ERROR": "Synkronointipyyntö epäonnistui tilapäisen verkko-ongelman vuoksi. Muutoksesi säilyvät paikallisina, ja synkronointia yritetään uudelleen.",
+        "OAUTH_STATE_INVALID": "OAuth state ei täsmää — takaisinkutsu-URL ei vastannut tämän laitteen pyyntöä. Yritä todentaa uudelleen.",
+        "ONEDRIVE_AUTH_FAILED": "OneDrive-kirjautuminen epäonnistui käyttöoikeustunnuksen käsittelyvaiheessa ({{error}}). Tämä tarkoittaa yleensä, ettei Microsoft Entra -sovellusrekisteröintiäsi ole määritetty julkiseksi asiakkaaksi. Katso wikin OneDrive-määritysohje.",
+        "RESTORE_ENCRYPTED": "Palvelinhistoriasta palauttaminen ei ole käytettävissä, kun päästä päähän -salaus on käytössä. Palvelin ei voi lukea salattuja tietojasi aiemman tilan muodostamiseksi.",
+        "SPLIT_FORMAT_ENABLE_SETTING": "Tämä synkronointikansio päivitettiin jaettujen tiedostojen muotoon. Jatka ottamalla Surgical sync käyttöön synkronointiasetuksissa.",
+        "SYNC_DATA_RECOVERED_FROM_BACKUP": "Synkronointitiedot palautettiin varmuuskopiosta, koska päätiedostoa ei voitu lukea.",
+        "SYNC_VALIDATION_FAILED": "Tilan tarkistus epäonnistui synkronoinnin jälkeen. Osa tiedoista voi olla epäjohdonmukaisia."
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "Tyhjennä kaikki",
@@ -1352,7 +1636,64 @@
         "RECOMMEND_SERVER": "Suositus: Hyväksy palvelimen tiedot pysyäksesi synkronoituna toisen laitteen kanssa.",
         "TITLE": "Synkronointiristiriita havaittu",
         "USE_LOCAL": "Käytä omia tietojani",
-        "USE_REMOTE": "Käytä palvelimen tietoja"
+        "USE_REMOTE": "Käytä palvelimen tietoja",
+        "FIRST_SYNC_USE_LOCAL_CONFIRM": "Tätä laitetta ei ole koskaan synkronoitu. \"Käytä omia tietojani\" korvaa palvelimen tiedot pysyvästi tämän laitteen paikallisilla tiedoilla. Tätä ei voi kumota. Jatketaanko?",
+        "FIRST_SYNC_WARNING": "Tätä laitetta ei ole synkronoitu aiemmin, joten \"Käytä omia tietojani\" korvaisi palvelimen nykyiset tiedot tämän laitteen tiedoilla.",
+        "USE_REMOTE_CONFIRM": "Tämä korvaa tämän laitteen tiedot palvelimen tiedoilla. Hylättävien paikallisten muutosten määrä: {{count}}. Jatketaanko?"
+      },
+      "B": {
+        "CONTENT_CONFLICT_RESOLVED": "Kohteen {{taskList}} ristiriitaiset muokkaukset ratkaistiin automaattisesti säilyttämällä uusin versio. Vanhempia muokkauksia on voitu hylätä — tarkista tulos.",
+        "CONTENT_CONFLICT_TITLE_CHANGE": "{{kept}} (hylätty: {{discarded}})",
+        "CONTENT_CONFLICT_UNTITLED": "Nimetön tehtävä"
+      },
+      "CONFLICT_REVIEW": {
+        "PAGE_TITLE": "Synkronointiristiriidat",
+        "PAGE_SUBTITLE": "Synkronoinnin aikana automaattisesti ratkaistut muokkaukset. Tarkista ne ja vaihda tarvittaessa toiseen versioon.",
+        "CONFIG_LINK": "Tarkista synkronointiristiriidat",
+        "BADGE_TOOLTIP": "Tarkistamattomia synkronointiristiriitoja: {{count}}",
+        "BANNER_MSG": "Automaattisesti ratkaistuja synkronointiristiriitoja: {{count}} (etäversion voittoja: {{remoteWins}}, paikallisen version voittoja: {{localWins}})",
+        "BANNER_REVIEW": "Tarkista",
+        "TAB_UNREVIEWED": "Tarkistamattomat ({{count}})",
+        "TAB_HISTORY": "Historia",
+        "EMPTY_UNREVIEWED": "Ei tarkistettavia ristiriitoja.",
+        "EMPTY_HISTORY": "Ei vielä ristiriitahistoriaa.",
+        "GROUP_TASK": "Tehtävät",
+        "GROUP_PROJECT": "Projektit",
+        "GROUP_TAG": "Tunnisteet",
+        "GROUP_NOTE": "Muistiinpanot",
+        "GROUP_OTHER": "Muut",
+        "COL_FIELD": "Kenttä",
+        "COL_LOCAL": "Paikallinen",
+        "COL_REMOTE": "Etä",
+        "COL_CURRENT": "Nykyinen (nyt)",
+        "WINNER_LOCAL": "Paikallinen versio voitti",
+        "WINNER_REMOTE": "Etäversio voitti",
+        "WINNER_MERGED": "Yhdistetty",
+        "REASON_NEWER": "Uudempi muokkaus voitti",
+        "REASON_TIE": "Tasatilanne, etäversio voitti",
+        "REASON_DELETE_WINS": "Poisto voitti",
+        "REASON_DELETE_LOST": "Muokkaus ohitti poiston",
+        "REASON_DISJOINT_MERGE": "Yhdistetty automaattisesti",
+        "REASON_NOISE": "Ei sisältömuutosta",
+        "REASON_CLOCK_CORRUPTION": "Loogisen kellon vioittumista epäillään",
+        "STATUS_UNREVIEWED": "Tarkistamaton",
+        "STATUS_KEPT": "Säilytetty",
+        "STATUS_FLIPPED": "Versio vaihdettu",
+        "STATUS_INFO": "Tieto",
+        "THIS_DEVICE": "Tämä laite",
+        "DEVICE_LABEL": "Laite {{id}}",
+        "MERGED_FIELD_CHIP": "{{field}} ← {{side}}",
+        "SIDE_LOCAL": "paikallinen",
+        "SIDE_REMOTE": "etä",
+        "ACTION_KEEP": "Säilytä",
+        "ACTION_FLIP": "Vaihda versio",
+        "BULK_KEEP_ALL": "Säilytä kaikki",
+        "BULK_FLIP_LOCAL": "Vaihda kaikki → Paikallinen",
+        "BULK_FLIP_REMOTE": "Vaihda kaikki → Etä",
+        "FLIP_UNSUPPORTED": "Version vaihtamista ei vielä tueta tämän tyyppiselle kohteelle.",
+        "FLIP_DONE": "Toinen versio otettiin käyttöön.",
+        "STALE_CONFIRM": "\"{{title}}\" on muuttunut tämän ristiriidan ratkaisemisen jälkeen. Version vaihtaminen korvaa nämä uudemmat muokkaukset. Jatketaanko?",
+        "WINNING_SIDE": "Säilytetty"
       }
     },
     "TAG": {
@@ -1371,7 +1712,8 @@
         "L_COLOR": "Väri (jos määrittelemätön, käytetään teeman pääväriä)",
         "L_ICON": "Kuvake",
         "L_TITLE": "Tunnisteen nimi",
-        "TITLE": "Perusasetukset"
+        "TITLE": "Perusasetukset",
+        "D_COLOR": "Jos väriä ei aseteta, käytetään tunnisteen väriä."
       },
       "S": {
         "UPDATED": "Tunnisteasetukset päivitettiin",
@@ -1397,7 +1739,9 @@
         "NO_PARENT": "Ei kansiota (pääkansio)",
         "PLACEHOLDER": "Valitse kansio"
       },
-      "TOOLTIP_CREATE": "Luo tunnistekansio"
+      "TOOLTIP_CREATE": "Luo tunnistekansio",
+      "ADD_SUBFOLDER": "Lisää alikansio",
+      "ADD_TAG": "Lisää tunniste"
     },
     "TASK": {
       "ADD_TASK_BAR": {
@@ -1424,7 +1768,10 @@
         "REPEAT_BUTTON": "Toisto",
         "TOGGLE_ADD_TO_BACKLOG_TODAY": "Vaihda tehtävän lisäys työjonoon / tämän päivän listaan",
         "TOGGLE_ADD_TOP_OR_BOTTOM": "Vaihda tehtävän lisäys listan alkuun / loppuun",
-        "TOOLTIP_CLEAR_REPEAT": "Poista toiston asetus"
+        "TOOLTIP_CLEAR_REPEAT": "Poista toiston asetus",
+        "NOTE_PLACEHOLDER": "Lisää muistiinpano… (Ctrl+Enter lisää tehtävän)",
+        "TOOLTIP_CLEAR_DEADLINE": "Tyhjennä määräaika",
+        "TOOLTIP_NOTE": "Muistiinpano (Ctrl+2)"
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Lisää liite",
@@ -1446,7 +1793,16 @@
         "DEADLINE_OVERDUE": "Myöhässä!",
         "FROM_PARENT": "(ylemmältä)",
         "ISSUE": "Tehtävälinkki",
-        "REMINDER": "Muistutus"
+        "REMINDER": "Muistutus",
+        "ADD_CHECKLIST_ITEM": "Lisää tarkistuslistan kohta",
+        "CHECKLIST_ACTIONS": "Tarkistuslistan toiminnot",
+        "CHECK_ALL": "Valitse kaikki",
+        "CLEAR_COMPLETED": "Tyhjennä valmiit",
+        "NOTES_OR_CHECKLIST": "Muistiinpanot / tarkistuslista",
+        "UNCHECK_ALL": "Poista kaikkien valinnat",
+        "PASTE_IMAGE_HINT": "Liitä kuva painamalla Ctrl+V",
+        "PASTE_IMAGE_HINT_MAC": "Liitä kuva painamalla Cmd+V",
+        "PASTED_IMAGE_TITLE": "Liitetty kuva"
       },
       "B": {
         "ADD_HALF_HOUR": "Lisää 1/2 tunti",
@@ -1486,7 +1842,16 @@
         "UPDATE_ISSUE_DATA": "Päivitä ongelmatiedot",
         "EDIT_DEADLINE": "Muokkaa määräaikaa",
         "REMOVE_DEADLINE": "Poista määräaika",
-        "SET_DEADLINE": "Aseta määräaika"
+        "SET_DEADLINE": "Aseta määräaika",
+        "ADD_SUB_TASK_PLACEHOLDER": "Lisää alitehtävä...",
+        "CHECKLIST_PROGRESS": "Tarkistuslista: {{done}}/{{total}} valmiina",
+        "CLEAR_ESTIMATE": "Tyhjennä arvio",
+        "CUSTOM_ESTIMATE": "Mukautettu…",
+        "ESTIMATE": "Arvio",
+        "MARK_UNDONE": "Merkitse keskeneräiseksi",
+        "SHOW_HIDDEN_DONE_SUB_TASKS": "+ {{nr}} valmista alitehtävää",
+        "SHOW_HIDDEN_SUB_TASKS": "+ {{nr}} alitehtävää",
+        "TIME_CONFLICT": "Päällekkäinen toisen aikataulutetun tehtävän kanssa"
       },
       "D_CONFIRM_DELETE": {
         "OK": "Poista",
@@ -1539,7 +1904,17 @@
         "DEADLINE_REMINDER": "Määräaikamuistutus",
         "DEADLINE_SECTION": "Määräajat",
         "DUE_SECTION": "Suunnitellut",
-        "TASK_REMINDERS": "Tehtävämuistutukset"
+        "TASK_REMINDERS": "Tehtävämuistutukset",
+        "MARK_AS_DONE": "Merkitse valmiiksi",
+        "MORE_ACTIONS": "Lisää toimintoja",
+        "OR_DIRECTLY_FOR_ALL": "Tai suoraan kaikille:",
+        "SCHEDULE_FOR_TODAY": "Aikatauluta tälle päivälle",
+        "DROP_TIME_KEEP_TODAY": "Poista kellonaika, säilytä Tänään-listalla",
+        "DELETE": "Poista tehtävä",
+        "KEEP_IN_TODAY": "Säilytä Tänään-listalla",
+        "SCHEDULED_FOR": "Suunniteltu ajalle",
+        "SNOOZE_FOR": "Torkuta {{m}} min",
+        "SNOOZE_FOR_SHORT": "{{m}} min"
       },
       "D_SCHEDULE_TASK": {
         "QA_NEXT_MONTH": "Aikatauluta ensi kuukaudeksi",
@@ -1555,7 +1930,11 @@
         "RO_NEVER": "Ei koskaan",
         "RO_START": "kun se alkaa",
         "SCHEDULE": "Aikatauluta",
-        "UNSCHEDULE": "Poista"
+        "UNSCHEDULE": "Poista",
+        "DOES_NOT_REPEAT": "Ei toistu",
+        "INFO_OUTSIDE_WORK_HOURS": "Sijoittuu määritettyjen työaikojesi ulkopuolelle.",
+        "INFO_OVERLAP": "Päällekkäinen toisen aikataulutetun tehtävän kanssa.",
+        "REPEAT": "Toista"
       },
       "D_SELECT_DATE_AND_TIME": {
         "DATE": "Päivämäärä",
@@ -1629,7 +2008,11 @@
         "WEEKLY_CURRENT_WEEKDAY": "Viikottain {{weekdayStr}}",
         "WEEKLY_CURRENT_WEEKDAY_AND_TIME": "Viikottain {{weekdayStr}}, {{timeStr}}",
         "YEARLY_CURRENT_DATE": "Vuosittain {{dayAndMonthStr}}",
-        "YEARLY_CURRENT_DATE_AND_TIME": "Vuosittain {{dayAndMonthStr}}, {{timeStr}}"
+        "YEARLY_CURRENT_DATE_AND_TIME": "Vuosittain {{dayAndMonthStr}}, {{timeStr}}",
+        "MONTHLY_LAST_DAY": "Kuukausittain viimeisenä päivänä",
+        "MONTHLY_LAST_DAY_AND_TIME": "Kuukausittain viimeisenä päivänä, {{timeStr}}",
+        "MONTHLY_NTH_WEEKDAY": "Kuukausittain kuukauden {{ordinalStr}} {{weekdayStr}}",
+        "MONTHLY_NTH_WEEKDAY_AND_TIME": "Kuukausittain kuukauden {{ordinalStr}} {{weekdayStr}}, {{timeStr}}"
       },
       "D_CONFIRM_MOVE_TO_PROJECT": {
         "MSG": "Tälle toistuvalle tehtävälle on luotu {{tasksNr}} instanssia. Haluatko siirtää ne kaikki projektiin \"{{projectName}}\"?",
@@ -1697,9 +2080,33 @@
         "Q_MONTHLY_FIRST_DAY": "Joka kuukauden ensimmäisenä päivänä",
         "Q_MONTHLY_LAST_DAY": "Joka kuukauden viimeisenä päivänä",
         "SKIP_OVERDUE": "Ohita myöhästyneet",
-        "SKIP_OVERDUE_DESCRIPTION": "Kun käytössä, jos sovellus avataan ajoitetun esiintymän jälkeen (esim. viikoittainen tehtävä, joka ei ole tänään), myöhästynyt esiintymä ohitetaan hiljaisesti sen sijaan, että se luotaisiin myöhästyneeksi tehtäväksi"
+        "SKIP_OVERDUE_DESCRIPTION": "Kun käytössä, jos sovellus avataan ajoitetun esiintymän jälkeen (esim. viikoittainen tehtävä, joka ei ole tänään), myöhästynyt esiintymä ohitetaan hiljaisesti sen sijaan, että se luotaisiin myöhästyneeksi tehtäväksi",
+        "MONTHLY_MODE_DAY_OF_MONTH": "Kuukauden päivä",
+        "MONTHLY_MODE_DAY_OF_MONTH_DESCRIPTION": "\"Kuukauden päivä\" käyttää Aloituspäivämäärä-kentässä näkyvää päivää.",
+        "ORD_FIRST": "ensimmäinen",
+        "ORD_FIRST_NTH": "ensimmäinen",
+        "ORD_FOURTH": "neljäs",
+        "ORD_FOURTH_NTH": "neljäs",
+        "ORD_LAST": "viimeinen",
+        "ORD_LAST_NTH": "viimeinen",
+        "ORD_SECOND": "toinen",
+        "ORD_SECOND_NTH": "toinen",
+        "ORD_THIRD": "kolmas",
+        "ORD_THIRD_NTH": "kolmas",
+        "Q_MONTHLY_NTH_WEEKDAY": "Joka kuukauden {{ordinalStr}} {{weekdayStr}}",
+        "SKIP_FOR_DATE": "Ohita päivältä {{date}}",
+        "SKIP_INSTANCE": "Ohita tältä päivältä",
+        "WAIT_FOR_COMPLETION": "Luo seuraava tehtävä vasta valmistumisen jälkeen",
+        "WAIT_FOR_COMPLETION_DESCRIPTION": "Estää useiden odottavien toistuvien tehtävien kasaantumisen. Seuraava esiintymä luodaan vasta, kun nykyinen tehtävä on valmistunut",
+        "WEEK_OF_MONTH": "Kuukausittainen toistotapa",
+        "WEEKDAY": "Viikonpäivä",
+        "WEEKDAY_REQUIRED": "Valitse vähintään yksi viikonpäivä"
       },
-      "SNACK_REPEAT_DIALOG_FAIL": "Toiston asetusikkunaa ei voitu avata. Voit määrittää sen tehtävävalikosta."
+      "SNACK_REPEAT_DIALOG_FAIL": "Toiston asetusikkunaa ei voitu avata. Voit määrittää sen tehtävävalikosta.",
+      "D_SKIP_INSTANCE": {
+        "MSG": "Ohitetaanko toistuva tehtävä päivältä {{date}}? Tämä estää tehtävän luomisen vain kyseisenä päivänä.",
+        "OK": "Ohita"
+      }
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
@@ -1736,13 +2143,25 @@
         "TIME_2HOUR": "> 2 Tuntia",
         "TIME_10MIN": "> 10 Minuuttia",
         "TIME_30MIN": "> 30 Minuuttia",
-        "TIME_SPENT": "Käytetty aika"
+        "TIME_SPENT": "Käytetty aika",
+        "DEADLINE_NEXT_MONTH": "Määräaika ensi kuussa",
+        "DEADLINE_NEXT_WEEK": "Määräaika ensi viikolla",
+        "DEADLINE_THIS_MONTH": "Määräaika tässä kuussa",
+        "DEADLINE_THIS_WEEK": "Määräaika tällä viikolla",
+        "DEADLINE_TODAY": "Määräaika tänään",
+        "DEADLINE_TOMORROW": "Määräaika huomenna",
+        "FILTER_DEADLINE": "Määräaika",
+        "GROUP_DEADLINE": "Määräaika",
+        "GROUP_DEADLINE_NONE": "Ei määräaikaa",
+        "SORT_DEADLINE": "Määräaika"
       }
     },
     "TIME_TRACKING": {
       "B": {
         "ALREADY_DID": "Tein jo",
-        "SNOOZE": "Torkuta {{time}}"
+        "SNOOZE": "Torkuta {{time}}",
+        "BREAK_SNACK": "Nauti tauostasi!",
+        "PAUSE_AND_BREAK": "Keskeytä ja pidä tauko"
       },
       "B_TTR": {
         "ADD_TO_TASK": "Lisää tehtävään",
@@ -1765,7 +2184,22 @@
         "TASK": "Tehtävä",
         "TRACK_TO": "Seuraa kohteeseen",
         "WARN_SIMPLE_COUNTER": "Aikaa lasketaan aktivoiduilla yksinkertaisilla laskuripainikkeilla.",
-        "WARN_SIMPLE_COUNTER_BREAK": "Aikaa lasketaan SILTI aktivoiduilla yksinkertaisilla laskuripainikkeilla."
+        "WARN_SIMPLE_COUNTER_BREAK": "Aikaa lasketaan SILTI aktivoiduilla yksinkertaisilla laskuripainikkeilla.",
+        "ALL_TIME_ASSIGNED": "Kaikki toimettomuusaika on kohdistettu",
+        "BREAK_SUMMARY": "{{time}} lisätään taukoaikaasi.",
+        "CONFIRM_BREAK": "Seuraa taukona",
+        "CONFIRM_CREATE_TASK": "Luo tehtävä ja seuraa",
+        "CONFIRM_SPLIT": "Seuraa kaikki",
+        "CONFIRM_TASK": "Seuraa tehtävälle",
+        "CONFIRM_TRACK": "Seuraa aikaa",
+        "DONT_TRACK": "Älä seuraa",
+        "MODE_BREAK": "Tauolla",
+        "MODE_SPLIT": "Vähän molempia",
+        "MODE_TASK": "Työskentely tehtävän parissa",
+        "TIME_OVER_ASSIGNED": "{{time}} enemmän kuin toimettomuusaikasi",
+        "TIME_UNASSIGNED": "{{time}} vielä kohdistamatta",
+        "USE_REMAINING_TIME": "Kohdista jäljellä oleva aika",
+        "WHAT_WERE_YOU_DOING": "Mitä olit tekemässä?"
       },
       "D_TRACKING_REMINDER": {
         "CREATE_AND_TRACK": "<em>Luo</em> ja seuraa kohteeseen",
@@ -1810,7 +2244,11 @@
         "WEEK_NR": "Viikko {{nr}}",
         "WORKED": "Työskennelty",
         "RESTORE_TASK_FROM_ARCHIVE": "Palauta tehtävä arkistosta",
-        "VIEW_TASK_DETAILS": "Näytä tehtävän tiedot"
+        "VIEW_TASK_DETAILS": "Näytä tehtävän tiedot",
+        "EXPORT_DATA": "Vie tiedot",
+        "WEEK_NR_SHORT": "V{{nr}}",
+        "WEEK_RANGE_TOOLTIP": "{{start}}.–{{end}}., päiviä: {{days}}, aika: {{time}}",
+        "WORK_TIMES": "Työajat"
       },
       "D_CONFIRM_RESTORE": "Haluatko varmasti siirtää tehtävän <strong>\"{{title}}\"</strong> tämän päivän tehtävälistallesi?",
       "D_EXPORT_TITLE": "Työlokin vienti {{start}}–{{end}}",
@@ -1889,6 +2327,12 @@
         "ERR_CREDENTIALS_MISSING": "Syötä ensin Nextcloud-osoite, käyttäjänimi ja salasana.",
         "ERR_LOAD_BOARDS": "Deck-taulujen lataus epäonnistui. Tarkista tunnistetietosi."
       }
+    },
+    "ANDROID": {
+      "FOREGROUND_SERVICE_START_FAILED_FOCUS": "Android esti keskittymistilan pysyvän ilmoituksen. Ajastin jatkaa toimintaansa sovelluksessa, mutta taustahälytykset eivät ehkä ole käytettävissä. Tarkista ilmoituslupa sekä akun ja taustatoiminnan rajoitukset.",
+      "FOREGROUND_SERVICE_START_FAILED_TRACKING": "Android esti ajanseurannan pysyvän ilmoituksen. Aikaa seurataan edelleen sovelluksessa, mutta seurannan palauttaminen taustalla ei ehkä onnistu. Tarkista ilmoituslupa sekä akun ja taustatoiminnan rajoitukset.",
+      "OPEN_NOTIFICATION_SETTINGS": "Avaa asetukset",
+      "WIDGET_TASKS_UPDATED": "Pienoisohjelmasta päivitettyjä tehtäviä: {{count}}"
     }
   },
   "FILE_IMEX": {
@@ -1914,7 +2358,9 @@
     "S_ERR_NETWORK": "Tuonti epäonnistui: Verkkovirhe noudettaessa tietoja URL-osoitteesta",
     "S_IMPORT_FROM_URL_ERR_DECODE": "Virhe: URL-parametria tuontia varten ei voitu purkaa. Varmista, että se on oikein muotoiltu.",
     "URL_PLACEHOLDER": "Anna URL-osoite, josta tuoda",
-    "BTN_COMPRESS_ARCHIVE": "Pakkaa arkisto"
+    "BTN_COMPRESS_ARCHIVE": "Pakkaa arkisto",
+    "IMPORT_FROM_TODOIST": "Tuo Todoistista",
+    "S_ERR_TODOIST_IMPORT_OPEN": "Todoist-tuontia ei voitu avata"
   },
   "G": {
     "ADD": "Lisää",
@@ -1944,7 +2390,7 @@
     "NO_CON": "Olet tällä hetkellä offline-tilassa. Yhdistä internetiin.",
     "NONE": "Ei mitään",
     "OK": "Selvä",
-    "OVERDUE": "Myöhässä",
+    "OVERDUE": "Aiemmilta päiviltä",
     "PROCESSING": "Käsittely",
     "REMOVE": "Poista",
     "SAVE": "Tallenna",
@@ -1959,7 +2405,11 @@
     "PASSWORD_STRENGTH_FAIR": "Kohtalainen",
     "PASSWORD_STRENGTH_STRONG": "Vahva",
     "PASSWORD_STRENGTH_WEAK": "Heikko",
-    "TOGGLE_PASSWORD_VISIBILITY": "Näytä/piilota salasana"
+    "TOGGLE_PASSWORD_VISIBILITY": "Näytä/piilota salasana",
+    "CLEAR": "Tyhjennä",
+    "COMMENT": "Kommentti",
+    "MORE_ACTIONS": "Lisää toimintoja",
+    "OPEN_IN_BROWSER": "Avaa selaimessa"
   },
   "GCF": {
     "APP_FEATURES": {
@@ -1979,20 +2429,39 @@
       "USER_PROFILES": "Käyttäjäprofiilit (Kokeellinen)",
       "USER_PROFILES_HINT": "Mahdollistaa erilaisten käyttäjäprofiilien luomisen ja vaihtamisen, joilla on omat asetukset, tehtävät ja synkronointiasetukset. Profiilin hallintapainike näkyy oikeassa yläkulmassa, kun ominaisuus on käytössä. Huom: Ominaisuuden poistaminen käytöstä piilottaa käyttöliittymän, mutta säilyttää profiilitiedot (Kokeellinen ominaisuus, ei takuita. Varmista varmuuskopiointi).",
       "HABITS": "Tavat",
-      "USER_PROFILES_WARNING": "<strong>Kokeellinen ominaisuus:</strong> Tämä ominaisuus on vielä kehitteillä ja se voidaan poistaa tai muuttaa merkittävästi tulevassa päivityksessä. Käytä omalla vastuullasi ja pidä varmuuskopiot tiedoistasi."
+      "USER_PROFILES_WARNING": "<strong>Kokeellinen ominaisuus:</strong> Tämä ominaisuus on vielä kehitteillä ja se voidaan poistaa tai muuttaa merkittävästi tulevassa päivityksessä. Käytä omalla vastuullasi ja pidä varmuuskopiot tiedoistasi.",
+      "FINISH_DAY": "Päätä päivä",
+      "EXPERIMENTAL_WARNING_TITLE": "Kokeellinen ominaisuus",
+      "EXPERIMENTAL_WARNING_MSG": "Tämä ominaisuus on kokeellinen. Siinä voi olla virheitä, se voi muuttua merkittävästi tai se voidaan poistaa tulevassa päivityksessä. Muista säilyttää varmuuskopiot tiedoistasi.<br/><br/>Haluatko ottaa sen käyttöön?"
     },
     "AUTO_BACKUPS": {
       "HELP": "Tallenna automaattisesti kaikki tiedot sovelluskansioosi, jotta ne ovat valmiina, jos jotain menee pieleen.",
       "LABEL_IS_ENABLED": "Ota automaattiset varmuuskopiot käyttöön",
       "LOCATION_INFO": "Varmuuskopiot tallennetaan:",
-      "TITLE": "Automaattiset varmuuskopiot"
+      "TITLE": "Automaattiset varmuuskopiot",
+      "LAST_BACKUP_INFO": "Viimeisin varmuuskopio: {{date}}",
+      "MAX_BACKUP_FILES": "Varmuuskopiotiedostojen enimmäismäärä",
+      "MAX_BACKUP_FILES_DESCRIPTION": "Vain työpöytäversiossa. Vanhimmat automaattiset varmuuskopiotiedostot poistetaan, kun tämä raja ylittyy.",
+      "RESTORE_LATEST": "Palauta viimeisin automaattinen varmuuskopio",
+      "S_AUTO_RESTORED": "Varmuuskopio palautettiin laitteelta — tehtäviä: {{tasks}}, projekteja: {{projects}}.",
+      "S_NO_BACKUP_AVAILABLE": "Automaattista varmuuskopiota ei ole saatavilla.",
+      "S_RESTORE_SUCCESS": "Varmuuskopio palautettiin onnistuneesti."
     },
     "CALENDARS": {
       "BROWSER_WARNING": "Alkuperäisen rajoitusten vuoksi <b>tämä todennäköisesti EI toimi Super Productivityn selainversiossa.<br /> Ole hyvä <a href=\"https://super-productivity.com/download/\">lataa työpöytäversio</a> käyttääksesi tätä ominaisuutta!</b>",
       "CAL_PATH": "iCal-lähteen URL",
       "CHECK_UPDATES": "Tarkista etäpäivitykset joka X",
       "HELP": "Voit integroida kalenterit saadaksesi muistutuksia ja lisätäksesi niitä tehtävinä Super Productivityyn. Integraatio toimii käyttämällä iCal-muotoa. Jotta tämä toimii, kalenterisi täytyy olla saatavilla joko internetin kautta tai tiedostojärjestelmän kautta.",
-      "SHOW_BANNER_THRESHOLD": "Näytä ilmoitus X ennen tapahtumaa (tyhjä pois käytöstä)"
+      "SHOW_BANNER_THRESHOLD": "Näytä ilmoitus X ennen tapahtumaa (tyhjä pois käytöstä)",
+      "AUTO_IMPORT_FOR_CURRENT_DAY": "Tuo nykyisen päivän tapahtumat automaattisesti tehtäviksi",
+      "CAL_COLOR": "Kalenterin väri",
+      "DISABLE_FOR_WEB_APP": "Poista käytöstä verkko- tai Android-sovelluksessa",
+      "FILTER_EXCLUDE_REGEX": "Sulje pois säännölliseen lausekkeeseen täsmäävät tapahtumat (valinnainen)",
+      "FILTER_EXCLUDE_REGEX_DESCRIPTION": "Tapahtumat, joiden otsikko täsmää tähän säännölliseen lausekkeeseen, piilotetaan. Tätä suodatinta käytetään sisällyttävän suodattimen jälkeen. Esimerkki: Lunch|Daily|Blocker",
+      "FILTER_INCLUDE_REGEX": "Sisällytä säännölliseen lausekkeeseen täsmäävät tapahtumat (valinnainen)",
+      "FILTER_INCLUDE_REGEX_DESCRIPTION": "Vain tapahtumat, joiden otsikko täsmää tähän säännölliseen lausekkeeseen, näytetään. Jätä tyhjäksi sisällyttääksesi kaikki tapahtumat. Esimerkki: meeting|standup",
+      "INVALID_REGEX": "Virheellinen säännöllinen lauseke",
+      "REFERENCE_CALENDAR": "Viitekalenteri (vain näyttö, ei tehtävien luontia)"
     },
     "CLIPBOARD_IMAGES": {
       "SORT_BY": "Lajittele",
@@ -2036,14 +2505,21 @@
       "L_SKIP_PREPARATION_SCREEN": "Ohita valmistelunäyttö (venyttely jne.)",
       "L_START_IN_BACKGROUND": "Aloita keskittymisseanssit vain bannerilla (ei peittoa)",
       "L_SYNC_SESSION_WITH_TRACKING": "Synkronoi keskittymisseanssi aikaseurannan kanssa",
-      "TITLE": "Keskittymistila"
+      "TITLE": "Keskittymistila",
+      "FOCUS_MODE_SOUND_OFF": "Pois",
+      "FOCUS_MODE_SOUND_TICK": "Tikitys",
+      "FOCUS_MODE_SOUND_WHITE_NOISE": "Valkoinen kohina",
+      "L_AUTO_START_FOCUS_ON_PLAY": "Aloita keskittymisjakso, kun aloitan tehtävän ajan seurannan",
+      "L_FOCUS_MODE_SOUND": "Taustaääni keskittymisjaksojen aikana",
+      "L_SHOW_PREPARATION_SCREEN": "Näytä valmistautumisnäkymä ennen jokaista keskittymisjaksoa (raketin lähtölaskenta)"
     },
     "IDLE": {
       "HELP": "<div><p>Kun toimettoman ajan käsittely on käytössä, ikkuna avautuu määritetyn ajan kuluttua tarkistaakseen, haluatko ja mihin tehtävään seurata aikaasi, kun olet ollut toimettomana.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Ota toimettoman ajan käsittely käyttöön",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Käynnistä toimettoman ajan ikkuna vain, kun nykyinen tehtävä on valittu",
       "MIN_IDLE_TIME": "Käynnistä toimettomuus X jälkeen",
-      "TITLE": "Toimettoman ajan käsittely"
+      "TITLE": "Toimettoman ajan käsittely",
+      "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Älä näytä toimettomuusikkunaa keskittymisjaksojen aikana"
     },
     "IMEX": {
       "HELP": "<p>Tässä voit viedä kaikki tietosi <strong>JSON</strong>-muodossa varmuuskopioita varten, mutta myös käyttää niitä eri yhteydessä (esim. saatat haluta viedä projektisi selaimessa ja tuoda ne työpöytäversioon). </p> <p>Tuonti odottaa kelvollista JSONia kopioitavaksi tekstialueelle. <strong>HUOMAA: Kun painat tuonti-painiketta, kaikki nykyiset asetuksesi ja tietosi korvataan!</strong></p>",
@@ -2103,7 +2579,16 @@
       "ZOOM_DEFAULT": "Tarkennus oletus (vain työpöytä)",
       "ZOOM_IN": "Lähennä (vain työpöytä)",
       "ZOOM_OUT": "Loitonna (vain työpöytä)",
-      "TASK_UNSCHEDULE": "Poista tehtävän ajoitus"
+      "TASK_UNSCHEDULE": "Poista tehtävän ajoitus",
+      "GLOBAL_TOGGLE_TASK_WIDGET": "Näytä tai piilota tehtäväpienoisohjelma",
+      "TASK_SCHEDULE_TODAY": "Aikatauluta tehtävä tälle päivälle",
+      "TASK_SCHEDULE_TOMORROW": "Aikatauluta tehtävä huomiselle",
+      "TASK_SCHEDULE_NEXT_WEEK": "Aikatauluta tehtävä ensi viikolle",
+      "TASK_SCHEDULE_NEXT_MONTH": "Aikatauluta tehtävä ensi kuukaudelle",
+      "TASK_SCHEDULE_DEADLINE": "Aseta tehtävän määräaika",
+      "TASK_OPEN_NOTES_PANEL": "Avaa muistiinpano tai tarkistuslista tehtäväpaneelissa",
+      "TASK_OPEN_NOTES_FULLSCREEN": "Avaa muistiinpano tai tarkistuslista koko näytössä",
+      "TOGGLE_SIDE_NAV_MODE": "Vaihda sivupalkki tiiviin ja täyden tilan välillä"
     },
     "LANG": {
       "AR": "Arabia",
@@ -2154,7 +2639,10 @@
       "RO": "Română",
       "RO_MD": "Română (Moldova)",
       "TIME_LOCALE_RO_MD": "Romania (Moldova): 24 tuntia, PP.KK.VVVV",
-      "TIME_LOCALE_RO_RO": "Romania: 24 tuntia, PP.KK.VVVV"
+      "TIME_LOCALE_RO_RO": "Romania: 24 tuntia, PP.KK.VVVV",
+      "TIME_LOCALE_ISO": "ISO 8601: 24 tunnin kello, YYYY-MM-DD",
+      "TIME_LOCALE_PL_PL": "Puolalainen: 24 tunnin kello, DD.MM.YYYY",
+      "VI": "Tiếng Việt"
     },
     "MISC": {
       "DARK_MODE": "Tumma tila",
@@ -2183,7 +2671,21 @@
       "THEME": "Teema",
       "THEME_EXPERIMENTAL": "Teema (kokeellinen)",
       "THEME_SELECT_LABEL": "Valitse teema",
-      "TITLE": "Sekalaista"
+      "TITLE": "Sekalaista",
+      "IS_LOCAL_REST_API_ENABLED": "Ota paikallinen REST API käyttöön (vain työpöytäversiossa)",
+      "IS_LOCAL_REST_API_ENABLED_HINT": "Sallii paikallisten komentosarjojen ohjata käynnissä olevaa sovellusta osoitteen http://127.0.0.1:3876 kautta. Mikä tahansa tällä tietokoneella toimiva sovellus voi tällöin lukea ja muokata tehtäviäsi.",
+      "IS_VERTICAL_ACTION_BAR": "Pystysuuntainen toimintopalkki sivulla (kokeellinen)",
+      "IS_VERTICAL_ACTION_BAR_HINT": "Siirtää ylätunnisteen toimintopainikkeet pystysuuntaiseen palkkiin ikkunan oikeaan reunaan. Vain työpöytäversiossa.",
+      "THEME_INSTALL_BUTTON": "Asenna teema…",
+      "THEME_INSTALL_TOOLTIP": "Lataa CSS-teematiedosto. Teemat muuttavat vain ulkoasua eivätkä koskaan suorita koodia, mutta ne voivat silti vaikuttaa tietojesi esitystapaan. Asenna teemoja vain luottamistasi lähteistä.",
+      "THEME_INSTALLED_WITH_WARNINGS": "Teema asennettiin. Puuttuvat tokenit: {{tokens}}",
+      "THEME_INVALID_CSS_FILE": "Teemaa ei voitu asentaa: virheellinen tai turvaton CSS-tiedosto.",
+      "THEME_REMOVE_BUTTON": "Poista teema",
+      "THEME_REMOVED_TOAST": "Teema poistettiin ja oletus palautettiin.",
+      "WALLPAPER": "Taustakuva",
+      "WALLPAPER_BUTTON": "Aseta taustakuva…",
+      "WALLPAPER_DIALOG_TITLE": "Yleinen taustakuva",
+      "WALLPAPER_HINT": "Näytetään sivuilla, joilla ei ole omaa taustaa (Suunnittelija, Aikataulu, Taulut, Asetukset…). Tunnisteiden ja projektien omat kuvat ohittavat sen."
     },
     "POMODORO": {
       "BREAK_DURATION": "Lyhyiden taukojen kesto",
@@ -2226,7 +2728,8 @@
       "URL_BEHAVIOR_EXTRACT": "Poimi URL liitteisiin",
       "URL_BEHAVIOR_KEEP": "Pidä URL tehtävän otsikossa",
       "URL_BEHAVIOR_KEEP_AND_ATTACH": "Pidä URL otsikossa ja lisää liitteisiin",
-      "URL_BEHAVIOR_LABEL": "URL-käyttäytyminen tehtäviä lisättäessä"
+      "URL_BEHAVIOR_LABEL": "URL-käyttäytyminen tehtäviä lisättäessä",
+      "IS_ENABLE_DEADLINE": "Ota määräajan lyhytsyntaksi käyttöön (!<deadline time>)"
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Ota tauko -muistutuksen ääni",
@@ -2273,6 +2776,17 @@
       "L_IS_TRACKING_REMINDER_SHOW_ON_MOBILE": "Näytä seurannan muistutus mobiilisovelluksessa",
       "L_TRACKING_REMINDER_MIN_TIME": "Aika odottaa ennen seurannan muistutusbannerin näyttämistä",
       "TITLE": "Ajanseuranta"
+    },
+    "FOCUS_MODE_LOCAL": {
+      "HELP": "Nämä asetukset koskevat vain tätä laitetta, eikä niitä synkronoida.",
+      "L_IS_LOOP_BREAK_END_ALARM": "Toista tauon päättymisääntä, kunnes kuittaan tauon (vain tällä laitteella)",
+      "TITLE": "Keskittymistila (tämä laite)"
+    },
+    "TASK_WIDGET": {
+      "TITLE": "Tehtäväpienoisohjelma",
+      "IS_ENABLED": "Ota tehtäväpienoisohjelma käyttöön",
+      "IS_ALWAYS_SHOW": "Näytä tehtäväpienoisohjelma aina (myös pääikkunan ollessa näkyvissä)",
+      "OPACITY": "Tehtäväpienoisohjelman peittävyys"
     }
   },
   "GLOBAL": {
@@ -2361,7 +2875,8 @@
       "REPORT_A_PROBLEM": "Ilmoita ongelmasta",
       "SEND_FEEDBACK": "Lähetä palautetta",
       "START_WELCOME": "Aloita tervetuloa-kierros",
-      "SYNC": "Ohje: Määritä synkronointi"
+      "SYNC": "Ohje: Määritä synkronointi",
+      "CREATE_TASK": "Ohje: Luo tehtävä"
     },
     "METRICS": "Mittarit",
     "NO_TASKS_TO_TRACK": "Lisää ensin tehtävä aloittaaksesi ajan seurannan",
@@ -2394,7 +2909,20 @@
     "PROJECT_SETTINGS": "Projektin asetukset",
     "SHOW_TRACKED_TASK": "Näytä seurattu tehtävä",
     "TASKS": "Tehtävät",
-    "TOGGLE_SHOW_BOOKMARKS": "Näytä/piilota kirjanmerkit"
+    "TOGGLE_SHOW_BOOKMARKS": "Näytä/piilota kirjanmerkit",
+    "ADD_SECTION": "Lisää osio",
+    "ARCHIVE_PROJECT": "Arkistoi projekti",
+    "COMPLETE_PROJECT": "Merkitse projekti valmiiksi",
+    "EML_EMPTY": "Pudotetussa sähköpostiviestissä ei ole lähettäjää eikä aihetta",
+    "EML_PARSE_ERROR": "Sähköpostitiedostoa ei voitu lukea. Se voi olla vioittunut tai sitä ei tueta.",
+    "EML_TOO_LARGE": "Sähköpostitiedosto on liian suuri tuotavaksi.",
+    "SYNC_STATE": {
+      "ERROR": "Synkronointiongelma — yritä uudelleen napsauttamalla",
+      "IN_SYNC": "Ajan tasalla — synkronoi nyt napsauttamalla",
+      "OFFLINE": "Olet offline-tilassa — synkronointi jatkuu, kun muodostat yhteyden uudelleen",
+      "SYNCING": "Synkronoidaan…"
+    },
+    "ARCHIVED_PROJECTS": "Arkistoidut projektit"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Haluatko ladata varmuuskopion vanhoista tiedoistasi (voidaan käyttää Super Productivityn vanhempien versioiden kanssa)?",
@@ -2437,7 +2965,9 @@
       "TASK_SWIPE_RIGHT_TOUCH": "Pyyhkäise tehtävää oikealle merkitäksesi sen tehdyksi",
       "OR_PRESS": "tai paina",
       "SKIP_ARIA": "Sulje vihje"
-    }
+    },
+    "SYNC_CTA": "Käytätkö jo Super Productivitya toisella laitteella?",
+    "SYNC_CTA_LINK": "Määritä synkronointi"
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Lisää tehtäviä tänään",
@@ -2563,7 +3093,17 @@
     "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Tämä lisäosa tarjoaa tehtäväintegraation, joka on käytössä ({{count}} tehtävätarjoajaa). Sen poistaminen käytöstä rikkoo tilapäisesti tehtävien synkronoinnin näille tarjoajille, kunnes lisäosa otetaan uudelleen käyttöön. Haluatko varmasti poistaa käytöstä \"{{name}}\"?",
     "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Yhteisölisäosien listan lataus epäonnistui",
     "INDEX_HTML_NOT_LOADED": "Lisäosan index.html ei latautunut",
-    "LANGUAGES": "Kielet:"
+    "LANGUAGES": "Kielet:",
+    "ALLOWED_HOSTS": "Verkon käyttöoikeus",
+    "AUTHORED_BY": "tekijä: {{author}}",
+    "ICON_TOO_LARGE": "Lisäosan kuvake on liian suuri (enintään {{maxSize}}KB)",
+    "INDEX_HTML_TOO_LARGE": "Lisäosan index.html on liian suuri (enintään {{maxSize}}KB)",
+    "NODE_EXECUTION_PERMISSION_DENIED": "Node.js-koodin suorittamiseen ei myönnetty lupaa",
+    "NODE_EXECUTION_BUILT_IN_ONLY": "Node.js-koodin suorittaminen on tällä hetkellä mahdollista vain sisäänrakennetuissa työpöytälisäosissa.",
+    "PLUGIN_ID_RESERVED": "Lisäosan tunnus \"{{pluginId}}\" on varattu sisäänrakennetulle lisäosalle",
+    "SETUP_ISSUE_PROVIDER": "Määritä Tehtävien tarjoajapaneelissa",
+    "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Node.js-suoritussiltaan ei voitu muodostaa yhteyttä. Kokeile poistaa lisäosa käytöstä ja ottaa se uudelleen käyttöön.",
+    "PLUGIN_LOAD_FAILED": "Lisäosan \"{{pluginName}}\" lataaminen epäonnistui: {{error}}"
   },
   "PM": {
     "TITLE": "Projektin mittarit",
@@ -2590,7 +3130,15 @@
     "TAG_SETTINGS": "Tunnistekohtaiset asetukset",
     "FAILED_TO_COPY_TO_CLIPBOARD": "Leikepöydälle kopiointi epäonnistui",
     "TOGGLE_DARK_MODE": "Vaihda tumma tila",
-    "UPDATE_APP": "Päivitä sovellus"
+    "UPDATE_APP": "Päivitä sovellus",
+    "CLICK_TO_COPY_VERSION": "Kopioi versio napsauttamalla",
+    "SYNC": {
+      "CONFIGURE": "Määritä",
+      "EMPTY_STATE_HINT": "Synkronoi tietosi Dropboxin, WebDAVin, Nextcloudin tai paikallisen tiedoston avulla.",
+      "ENCRYPTED": "Salattu",
+      "NEEDS_AUTH": "Todennus vaaditaan",
+      "SET_UP_SYNC": "Määritä synkronointi"
+    }
   },
   "SCHEDULE": {
     "LAST": "Edellinen:",
@@ -2603,7 +3151,9 @@
     "SCHEDULED_TASKS_WITH_TIME": "Aikataulutetut tehtävät aloitusajalla",
     "NO_DEADLINES": "Tällä hetkellä ei ole tehtäviä määräajoilla. Voit asettaa määräajan tehtävän kontekstivalikosta tai tietopaneelista.",
     "START_TASK": "Aloita tehtävä ja poista muistutus",
-    "TASKS_WITH_DEADLINES": "Tehtävät määräajoilla"
+    "TASKS_WITH_DEADLINES": "Tehtävät määräajoilla",
+    "NO_SCHEDULED_FOR_DAY": "Tietylle päivälle suunniteltuja tehtäviä ei vielä ole. Napsauta tehtävää hiiren kakkospainikkeella ja suunnittele se päivälle valitsemalla \"Aikatauluta\".",
+    "NO_SCHEDULED_WITH_TIME": "Aloitusaikaan aikataulutettuja tehtäviä ei vielä ole. Napsauta tehtävää hiiren kakkospainikkeella ja aseta tarkka aika valitsemalla \"Aikatauluta\"."
   },
   "USER_PROFILES": {
     "ACTIVE": "Aktiivinen",
@@ -2620,7 +3170,8 @@
     "PROFILE_NAME": "Profiilin nimi",
     "PROFILE_NAME_PLACEHOLDER": "esim. Työ, Henkilökohtainen",
     "RENAME": "Nimeä uudelleen",
-    "SAVE": "Tallenna"
+    "SAVE": "Tallenna",
+    "DEPRECATION_WARNING": "Kokeellinen Käyttäjäprofiilit-ominaisuus poistetaan tulevassa päivityksessä. Vie profiilitietosi varmuuskopioksi."
   },
   "V": {
     "E_DATETIME": "Annettu arvo ei ole päivämäärä tai aika!",
@@ -2652,7 +3203,10 @@
     "WITHOUT_BREAK": "Tauoton työskentely:",
     "WORKING_TODAY": "Työskennelty tänään:",
     "WORKING_TODAY_ARCHIVED": "Arkistoituihin tehtäviin käytetty aika tänään",
-    "RECURRING_TASKS": "Toistuvat tehtävät"
+    "RECURRING_TASKS": "Toistuvat tehtävät",
+    "ADD_SECTION_TITLE": "Lisää osio",
+    "SECTION_OPTIONS": "Osion asetukset",
+    "NO_TASKS_IN_MAIN_LIST": "Kaikki tehtävät on järjestetty osioihin"
   },
   "NOTIFICATION": {
     "EXACT_ALARM_DENIED": "Tarkan hälytyksen lupa evätty. Muistutukset voivat viivästyä jopa 15 minuuttia.",
@@ -2681,5 +3235,63 @@
     "SELECT_THEME": "Valitse teema",
     "teal": "sinivihreä",
     "yellow": "keltainen"
+  },
+  "DIALOG_LOGS": {
+    "COPY": "Kopioi",
+    "HINT": "Tämän istunnon lokit. Kopioi lyhyet lokit leikepöydälle virheraporttiin liittämistä varten tai lähetä koko loki jakamalla tiedosto.",
+    "S_COPY_FAILED": "Lokien kopiointi leikepöydälle epäonnistui",
+    "S_SHARE_FAILED": "Lokien jakaminen epäonnistui",
+    "SHARE_FILE": "Jaa tiedosto",
+    "TITLE": "Lokit"
+  },
+  "PLAINSPACE": {
+    "CLAIM": "Varaa itsellesi",
+    "CLAIM_FAILED": "Tehtävän varaaminen epäonnistui — joku muu on voinut juuri varata sen, tai olet offline-tilassa.",
+    "CLAIM_POOL_TITLE": "Varattavissa",
+    "CLAIM_SUCCESS": "Tehtävä varattiin sinulle ja lisättiin listaasi.",
+    "CONNECT": {
+      "CONNECT": "Yhdistä",
+      "CONNECTING": "Yhdistetään…",
+      "INTRO": "Tee projekteissa yhteistyötä muiden kanssa. Sinulle osoitetut tehtävät tuodaan automaattisesti ja pidetään synkronoituina.",
+      "INVALID": "Tunnus ei toiminut. Varmista, että kopioit koko tunnuksen (se alkaa merkkijonolla \"pat_\") ja yritä uudelleen.",
+      "OPEN_LINK": "Avaa Plainspace",
+      "TITLE": "Yhdistä Plainspaceen",
+      "TOKEN_HELP": "Luo API-tunnus Plainspacessa ja liitä se alle.",
+      "TOKEN_LABEL": "API-tunnus",
+      "TOKEN_PLACEHOLDER": "pat_…"
+    },
+    "FORM": {
+      "HOST": "Plainspace-palvelin",
+      "SPACE_ID": "Työtilan tunnus",
+      "SPACE_ID_DESCRIPTION": "Työtila, jonka kanssa tämä palveluntarjoaja synkronoi — liitä työtilan URL-osoitteessa näkyvä tunnus tai lyhytnimi (slug) (plainspace.org/<slug>/…).",
+      "TOKEN": "API-tunnus",
+      "TOKEN_DESCRIPTION": "Henkilökohtainen API-tunnus (alkaa merkkijonolla \"pat_\"). Luo se avaamalla Plainspacessa Space → People → Advanced → API tokens."
+    },
+    "FORM_SECTION": {
+      "HELP": "Yhdistä Plainspace-työtila henkilökohtaisella API-tunnuksella, jotta voit tuoda sinulle osoitetut tehtävät ja varata osoittamattomia tehtäviä.",
+      "TITLE": "Plainspace"
+    },
+    "LOGIN_REQUIRED": "Projektin jakamiseen tarvitaan Plainspace-API-tunnus.",
+    "NO_UNCLAIMED": "Tällä hetkellä ei ole varaamattomia tehtäviä.",
+    "OFFLINE": "Olet offline-tilassa. Plainspace-yhteys vaatii internetyhteyden.",
+    "OPEN_FAILED": "Plainspace-projektia ei voitu avata — tarkista yhteys ja yritä uudelleen.",
+    "OPEN_IN_PLAINSPACE": "Avaa Plainspacessa",
+    "RECURRING": "Toistuva tehtävä",
+    "SHARE_DESCRIPTION": "Luo jaetun Plainspace-työtilan ja linkittää sen tähän projektiin, jotta voit tehdä yhteistyötä muiden kanssa.",
+    "SHARE_FAILED": "Projektia ei voitu jakaa Plainspacessa.",
+    "SHARE_LABEL": "Tee tässä projektissa yhteistyötä Plainspacessa (Beta)",
+    "SHARE_MENU": "Tee yhteistyötä Plainspacessa (Beta)",
+    "SHARE_SUCCESS": "Projekti jaettiin Plainspacessa. Sinulle osoitetut tehtävät tuodaan automaattisesti.",
+    "SPACE_PICKER": {
+      "CREATE_NEW": "Luo uusi työtila",
+      "ERROR": "Plainspaceen ei saatu yhteyttä. Tarkista yhteys ja varmista, että tunnus on edelleen voimassa, ja yritä sitten uudelleen.",
+      "INTRO": "Linkitä olemassa oleva työtila tuodaksesi sinulle osoitetut tehtävät tai luo uusi työtila.",
+      "LINK": "Linkitä työtila",
+      "LOADING": "Ladataan työtilojasi…",
+      "NONE": "Sinulla ei ole vielä työtiloja — aloita luomalla ensimmäinen.",
+      "RECONNECT": "Käytä toista tunnusta",
+      "SELECT_LABEL": "Olemassa oleva työtila",
+      "TITLE": "Valitse Plainspace-työtila"
+    }
   }
 }

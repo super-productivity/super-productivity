@@ -35,10 +35,8 @@ import {
   expandFadeInOnlyAnimation,
 } from '../../../ui/animations/expand.ani';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
-import { swirlAnimation } from '../../../ui/animations/swirl-in-out.ani';
 import { DialogTimeEstimateComponent } from '../dialog-time-estimate/dialog-time-estimate.component';
 import { MatDialog } from '@angular/material/dialog';
-import { DialogEditTaskRepeatCfgComponent } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DialogEditTaskAttachmentComponent } from '../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 import { TaskDetailItemComponent } from './task-additional-info-item/task-detail-item.component';
@@ -47,7 +45,6 @@ import { ICAL_TYPE, JIRA_TYPE } from '../../issue/issue.const';
 import { HISTORY_STATE, IS_ELECTRON } from '../../../app.constants';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { devError } from '../../../util/dev-error';
-import { IS_MOBILE } from '../../../util/is-mobile';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
@@ -95,6 +92,7 @@ import {
   AddSubtaskInputCloseReason,
 } from '../add-subtask-input/add-subtask-input.component';
 import { findNextTaskAfterSubtree } from '../../../util/find-adjacent-focusable';
+import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
 
 @Component({
   selector: 'task-detail-panel',
@@ -106,7 +104,6 @@ import { findNextTaskAfterSubtree } from '../../../util/find-adjacent-focusable'
     expandFadeAnimation,
     expandFadeInOnlyAnimation,
     fadeAnimation,
-    swirlAnimation,
   ],
   imports: [
     TaskTitleComponent,
@@ -129,6 +126,7 @@ import { findNextTaskAfterSubtree } from '../../../util/find-adjacent-focusable'
     TranslatePipe,
     IssueIconPipe,
     AddSubtaskInputComponent,
+    TaskContextMenuComponent,
   ],
 })
 export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -164,6 +162,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   noteWrapperElRef = viewChild<TaskDetailItemComponent>('noteWrapperElRef');
   addSubtaskInput = viewChild(AddSubtaskInputComponent);
   addSubTaskBtn = viewChild<ElementRef<HTMLButtonElement>>('addSubTaskBtn');
+  taskContextMenu = viewChild(TaskContextMenuComponent);
 
   // The detail panel hosts its own inline subtask draft input rather than
   // delegating to the <task> row that renders the parent: in the Planner (and
@@ -187,7 +186,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     selectedItemIndex: signal(0),
     isFocusNotes: signal(false),
     isDragOver: signal(false),
-    isExpandedAttachmentPanel: signal(!IS_MOBILE),
+    isExpandedAttachmentPanel: signal(!this.layoutService.isXs()),
   };
 
   // Observable conversions
@@ -333,7 +332,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   // Panel expansion computed signals
   isExpandedIssuePanel = computed(() => {
-    return !IS_MOBILE && !!this.issueData();
+    return !this.layoutService.isXs() && !!this.issueData();
   });
 
   isExpandedNotesPanel = computed(() => {
@@ -342,7 +341,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     }
 
     const task = this.task();
-    return IS_MOBILE
+    return this.layoutService.isXs()
       ? this.isMarkdownChecklist()
       : !!task.notes || (!task.issueId && !task.attachments?.length);
   });
@@ -383,6 +382,8 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   showTimeEstimate = computed(() => !this.task().subTasks?.length);
 
+  hasTimeData = computed(() => !!(this.task().timeSpent || this.task().timeEstimate));
+
   hasAttachments = computed(() => {
     return this.issueAttachments().length > 0 || this.localAttachments().length > 0;
   });
@@ -395,6 +396,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     const task = this.task();
     if (task.dueDay) return 'today';
     if (task.dueWithTime && !task.remindAt) return 'schedule';
+    if (task.repeatCfgId) return 'repeat';
     return 'alarm';
   });
 
@@ -414,7 +416,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
         ? this.T.F.TASK.ADDITIONAL_INFO.DEADLINE_OVERDUE
         : this.T.F.TASK.ADDITIONAL_INFO.DEADLINE_DUE_BY;
     }
-    return this.T.F.TASK.ADDITIONAL_INFO.DEADLINE;
+    return this.T.F.TASK.CMP.SET_DEADLINE;
   });
 
   // EFFECTS
@@ -614,6 +616,15 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     }
   }
 
+  openTaskMenu(event: MouseEvent): void {
+    const trigger = event.currentTarget;
+    this.taskContextMenu()?.open(
+      event,
+      event.detail === 0,
+      trigger instanceof HTMLElement ? trigger : undefined,
+    );
+  }
+
   estimateTime(): void {
     this._matDialog.open(DialogTimeEstimateComponent, {
       data: { task: this.task() },
@@ -639,16 +650,6 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   removeDeadline(ev: Event): void {
     ev.stopPropagation();
     this._store.dispatch(TaskSharedActions.removeDeadline({ taskId: this.task().id }));
-  }
-
-  editTaskRepeatCfg(): void {
-    this._matDialog.open(DialogEditTaskRepeatCfgComponent, {
-      restoreFocus: true,
-      data: {
-        task: this.task(),
-        targetDate: this.task().dueDay || getDbDateStr(new Date(this.task().created)),
-      },
-    });
   }
 
   addAttachment(): void {

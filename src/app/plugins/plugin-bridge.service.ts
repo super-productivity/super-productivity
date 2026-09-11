@@ -44,7 +44,7 @@ import {
 import { snackCfgToSnackParams } from './plugin-api-mapper';
 import { PluginHooksService } from './plugin-hooks';
 import { TaskService } from '../features/tasks/task.service';
-import { TaskFocusService } from '../features/tasks/task-focus.service';
+import { getDomFocusedTaskId } from '../features/tasks/get-dom-focused-task-id';
 import { addSubTask } from '../features/tasks/store/task.actions';
 import { selectTaskFeatureState } from '../features/tasks/store/task.selectors';
 import { parseTimeSpentChanges } from '../features/tasks/short-syntax';
@@ -55,6 +55,7 @@ import { TaskSharedActions } from '../root-store/meta/task-shared.actions';
 import { nanoid } from 'nanoid';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { ProjectService } from '../features/project/project.service';
+import { INBOX_PROJECT } from '../features/project/project.const';
 import { TagService } from '../features/tag/tag.service';
 import typia from 'typia';
 import { distinctUntilChanged, first, map, take, timeout } from 'rxjs/operators';
@@ -90,6 +91,13 @@ import { ISSUE_PROVIDER_TYPES } from '../features/issue/issue.const';
 import { PluginService } from './plugin.service';
 import { PluginI18nService } from './plugin-i18n.service';
 import { formatDateForPlugin } from './plugin-i18n-date.util';
+
+/**
+ * Relational fields `updateTask` refuses: they are applied to the store as
+ * plain values, so writing them corrupts the parent<->child links rather than
+ * moving a task. Mirrors `REJECTED_TASK_FIELDS` in the local REST API.
+ */
+const REJECTED_UPDATE_FIELDS = ['parentId', 'subTaskIds'] as const;
 
 const toPluginTaskCopy = (
   task: (TaskCopy & { subTasks?: unknown }) | null | undefined,
@@ -141,7 +149,6 @@ export class PluginBridgeService implements OnDestroy {
   private _store = inject(Store);
   private _pluginHooksService = inject(PluginHooksService);
   private _taskService = inject(TaskService);
-  private _taskFocusService = inject(TaskFocusService);
   private _workContextService = inject(WorkContextService);
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
@@ -242,6 +249,7 @@ export class PluginBridgeService implements OnDestroy {
       cfg: Omit<PluginWorkContextHeaderBtnCfg, 'pluginId'>,
     ) => void;
     registerShortcut: (cfg: PluginShortcutCfg) => void;
+    unregisterShortcut: (shortcutId: string) => void;
     showIndexHtmlAsView: () => void;
     showInWorkContext: () => void;
     closeWorkContextView: () => void;
@@ -280,6 +288,7 @@ export class PluginBridgeService implements OnDestroy {
     getSecret: (key: string) => Promise<string | null>;
     deleteSecret: (key: string) => Promise<void>;
     request: <T = unknown>(url: string, options?: PluginRequestOptions) => Promise<T>;
+    deleteProject: (projectId: string) => Promise<void>;
     translate: (key: string, params?: Record<string, string | number>) => string;
     formatDate: (date: Date | string | number, format: PluginDateFormat) => string;
     getCurrentLanguage: () => string;
@@ -305,6 +314,8 @@ export class PluginBridgeService implements OnDestroy {
         cfg: Omit<PluginWorkContextHeaderBtnCfg, 'pluginId'>,
       ) => this._registerWorkContextHeaderButton(pluginId, cfg),
       registerShortcut: (cfg: PluginShortcutCfg) => this._registerShortcut(pluginId, cfg),
+      unregisterShortcut: (shortcutId: string) =>
+        this._unregisterShortcut(pluginId, shortcutId),
       registerConfigHandler: (handler: () => void) =>
         this._configHandlers.set(pluginId, handler),
 
@@ -387,6 +398,12 @@ export class PluginBridgeService implements OnDestroy {
         this._pluginSecretService.deleteSecret(pluginId, key),
       request: <T = unknown>(url: string, options?: PluginRequestOptions): Promise<T> =>
         this.request<T>(url, options, manifest?.allowedHosts, manifest?.permissions),
+
+      // Gated here rather than in PluginAPI: iframe plugins reach the bridge through
+      // plugin-iframe.util's boundMethods lookup, and anything without an entry there
+      // falls through to the bridge method with no plugin context at all.
+      deleteProject: (projectId: string): Promise<void> =>
+        this.deleteProject(projectId, manifest?.permissions),
 
       // i18n
       translate: (key: string, params?: Record<string, string | number>): string =>
@@ -859,12 +876,24 @@ export class PluginBridgeService implements OnDestroy {
     typia.assert<string>(taskId);
     typia.assert<Partial<TaskCopy>>(updates);
 
-    // Validate that referenced project, tags and parent task exist if they are being updated
-    await this._validateTaskReferences(
-      updates.projectId,
-      updates.tagIds,
-      updates.parentId,
-    );
+    // Relational fields are rejected rather than applied: they reach the reducer
+    // as plain values, so setting `parentId` writes a task that no parent lists
+    // in `subTaskIds` — an orphan invisible in both the main list and the
+    // parent, which no repair pass reconciles. Same rule and reason as the local
+    // REST API's REJECTED_TASK_FIELDS on PATCH. Create subtasks via
+    // addTask({ parentId }); restructure existing trees via
+    // batchUpdateForProject, which maintains both sides of the link.
+    const rejectedField = REJECTED_UPDATE_FIELDS.find((field) => field in updates);
+    if (rejectedField) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.FIELD_NOT_UPDATABLE, {
+          field: rejectedField,
+        }),
+      );
+    }
+
+    // Validate that referenced project and tags exist if they are being updated
+    await this._validateTaskReferences(updates.projectId, updates.tagIds);
 
     const { projectId, ...otherUpdates } = updates;
 
@@ -922,6 +951,23 @@ export class PluginBridgeService implements OnDestroy {
       taskData.parentId,
     );
 
+    // One mapping from PluginCreateTaskData to task defaults for both branches:
+    // maintaining it twice is how `dueDay` came to be honoured for main tasks
+    // and silently dropped for subtasks.
+    const additional: Partial<TaskCopy> = {
+      projectId: taskData.projectId || undefined,
+      tagIds: taskData.tagIds || [],
+      notes: taskData.notes || '',
+      timeEstimate: taskData.timeEstimate || 0,
+      isDone: taskData.isDone || false,
+      // The dueDay key must always be present, even when undefined:
+      // createNewTaskWithDefaults only auto-assigns today's date while
+      // `'dueDay' in additional` is false, and a task created through the API
+      // must not inherit a due date from whichever view the user happened to be
+      // on. Matches TaskService.addSubTaskTo().
+      dueDay: taskData.dueDay ?? undefined,
+    };
+
     let createdTask: Task;
     if (taskData.parentId) {
       // For subtasks, we use the addSubTask action to properly update the parent.
@@ -934,11 +980,8 @@ export class PluginBridgeService implements OnDestroy {
       const newTask = this._taskService.createNewTaskWithDefaults({
         title: subTaskTitleProps.title,
         additional: {
-          notes: taskData.notes || '',
-          timeEstimate: taskData.timeEstimate || 0,
-          isDone: (taskData as { isDone?: boolean }).isDone || false,
+          ...additional,
           tagIds: [], // Subtasks don't have tags
-          projectId: taskData.projectId || undefined,
           ...subTaskTitleProps.timeProps,
         },
       });
@@ -960,16 +1003,6 @@ export class PluginBridgeService implements OnDestroy {
       return createdTask.id;
     } else {
       // For main tasks, use the regular add method
-      const additional: Partial<TaskCopy> = {
-        projectId: taskData.projectId || undefined,
-        tagIds: taskData.tagIds || [],
-        notes: taskData.notes || '',
-        timeEstimate: taskData.timeEstimate || 0,
-        isDone: (taskData as { isDone?: boolean }).isDone || false,
-        dueDay: taskData.dueDay ?? undefined,
-      };
-
-      // Add the task using TaskService
       const taskId = this._taskService.add(
         taskData.title,
         false, // isAddToBacklog
@@ -1043,6 +1076,47 @@ export class PluginBridgeService implements OnDestroy {
     this._projectService.update(projectId, updates);
 
     PluginLog.log('PluginBridge: Project updated successfully', { projectId });
+  }
+
+  /**
+   * Delete a project and the tasks it contains
+   */
+  async deleteProject(projectId: string, permissions?: string[]): Promise<void> {
+    typia.assert<string>(projectId);
+
+    // Deleting a project is the only irreversible operation in the plugin API — the
+    // cascade takes the backlog, subtasks and notes with it, there is no
+    // restoreDeletedProject counterpart, and PROJECT_DELETE_WINS_MARKER carries it to
+    // every device. Declaring the capability is install-time disclosure, not
+    // containment, but it is worth having on this method.
+    if (!(permissions ?? []).includes('deleteProject')) {
+      throw new Error(
+        '[PluginBridge] PluginAPI.deleteProject is blocked: this plugin does not declare the "deleteProject" permission. Add "deleteProject" to the manifest "permissions".',
+      );
+    }
+
+    // The Inbox is the fallback target for tasks that belong nowhere, so it is not
+    // a project a caller may remove — the UI does not offer it either.
+    if (projectId === INBOX_PROJECT.id) {
+      throw new Error(this._translateService.instant(T.PLUGINS.CANNOT_DELETE_INBOX));
+    }
+
+    const project = await firstValueFrom(this._projectService.getByIdOnce$(projectId));
+
+    if (!project) {
+      throw new Error(
+        this._translateService.instant(T.PLUGINS.PROJECT_NOT_FOUND, {
+          contextId: projectId,
+        }),
+      );
+    }
+
+    // Delegate to ProjectService so the cascade (tasks, backlog, subtasks, their
+    // time-sync entries, note drafts and the defaultProjectId fallback) stays defined
+    // in one place — the same path the UI's "Delete project" takes.
+    await this._projectService.remove(project);
+
+    PluginLog.log('PluginBridge: Project deleted successfully', { projectId });
   }
 
   /**
@@ -1208,7 +1282,10 @@ export class PluginBridgeService implements OnDestroy {
   }
 
   async getFocusedTask(): Promise<TaskCopy | null> {
-    const focusedTaskId = this._taskFocusService.focusedTaskId();
+    // The DOM decides, not the tracked signal: plugins act on this task (a
+    // shortcut-triggered automation rule may delete or re-tag it), so a stale
+    // id left behind by a view change must not resolve to a live task (#8851).
+    const focusedTaskId = getDomFocusedTaskId();
     if (!focusedTaskId) {
       return null;
     }
@@ -1644,13 +1721,42 @@ export class PluginBridgeService implements OnDestroy {
       pluginId,
     };
 
+    // Re-registering an id replaces the previous entry instead of appending:
+    // plugins re-register when a shortcut's label changes, and the keyboard
+    // settings form keys its items by `plugin_<pluginId>:<id>`, so duplicates
+    // would show up twice there and only the first would ever be executed.
+    const isSameShortcut = (shortcut: PluginShortcutCfg): boolean =>
+      shortcut.pluginId === pluginId && shortcut.id === shortcutWithPluginId.id;
     const currentShortcuts = this.shortcuts();
-    this.shortcuts.set([...currentShortcuts, shortcutWithPluginId]);
+    this.shortcuts.set(
+      currentShortcuts.some(isSameShortcut)
+        ? currentShortcuts.map((shortcut) =>
+            isSameShortcut(shortcut) ? shortcutWithPluginId : shortcut,
+          )
+        : [...currentShortcuts, shortcutWithPluginId],
+    );
 
+    // Labels are user content (a plugin may derive them from task or rule
+    // names) and the log is exportable, so only the ids go in.
     PluginLog.log('PluginBridge: Shortcut registered', {
       pluginId,
-      shortcut: shortcutWithPluginId,
+      shortcutId: shortcutWithPluginId.id,
     });
+  }
+
+  /**
+   * Internal method to remove a single shortcut of a plugin
+   */
+  private _unregisterShortcut(pluginId: string, shortcutId: string): void {
+    const currentShortcuts = this.shortcuts();
+    const nextShortcuts = currentShortcuts.filter(
+      (shortcut) => !(shortcut.pluginId === pluginId && shortcut.id === shortcutId),
+    );
+
+    if (nextShortcuts.length !== currentShortcuts.length) {
+      this.shortcuts.set(nextShortcuts);
+      PluginLog.log('PluginBridge: Shortcut unregistered', { pluginId, shortcutId });
+    }
   }
 
   /**
@@ -1663,12 +1769,10 @@ export class PluginBridgeService implements OnDestroy {
     if (shortcut) {
       try {
         await Promise.resolve(shortcut.onExec());
-        PluginLog.log(
-          `Executed shortcut "${shortcut.label}" from plugin ${shortcut.pluginId}`,
-        );
+        PluginLog.log(`Executed shortcut ${shortcutId}`);
         return true;
       } catch (error) {
-        PluginLog.err(`Failed to execute shortcut "${shortcut.label}":`, error);
+        PluginLog.err(`Failed to execute shortcut ${shortcutId}:`, error);
         return false;
       }
     }
@@ -1751,17 +1855,23 @@ export class PluginBridgeService implements OnDestroy {
       }
     }
 
-    // Validate parent task exists if provided
+    // Validate parent task exists and is not itself a subtask if provided
     if (parentId) {
       const tasks = await this._taskService.allTasks$.pipe(first()).toPromise();
 
-      const parentExists = tasks?.some((task) => task.id === parentId);
-      if (!parentExists) {
+      const parent = tasks?.find((task) => task.id === parentId);
+      if (!parent) {
         errors.push(
           this._translateService.instant(T.PLUGINS.PARENT_TASK_DOES_NOT_EXIST, {
             parentId,
           }),
         );
+      } else if (parent.parentId) {
+        // The task model is two levels deep; the reducer would happily write a
+        // 3-level tree. Mirrors the local REST API's INVALID_PARENT rejection.
+        // Guards addTask only — batchUpdateForProject validates in its own
+        // reducer and still accepts a subtask as parent.
+        errors.push(this._translateService.instant(T.PLUGINS.CANNOT_NEST_SUBTASKS));
       }
     }
 
@@ -1789,7 +1899,7 @@ export class PluginBridgeService implements OnDestroy {
       );
       throw new Error(
         this._translateService.instant(T.PLUGINS.ACTION_TYPE_NOT_ALLOWED, {
-          actionType: action.type,
+          type: action.type,
         }),
       );
     }

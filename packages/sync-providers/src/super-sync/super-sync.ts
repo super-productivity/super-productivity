@@ -33,6 +33,7 @@ import type { SuperSyncResponseValidators } from './response-validators';
 import type { SuperSyncStorage } from './storage';
 import {
   PROVIDER_ID_SUPER_SYNC,
+  type SuperSyncDeviceListResponse,
   type SuperSyncPrivateCfg,
   type SuperSyncWebSocketAccess,
 } from './super-sync.model';
@@ -61,10 +62,18 @@ class SuperSyncHttpStatusError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** Structured server `errorCode` (see SUPER_SYNC_ERROR_CODES), when the
+     * non-2xx body carried one. */
+    readonly code?: string,
   ) {
     super(message);
   }
 }
+
+type ParsedServerErrorDetails = {
+  reason?: string;
+  errorCode?: string;
+};
 
 const defaultDelay = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -191,6 +200,19 @@ export class SuperSyncProvider
     this._cachedServerSeqKey = null;
     this._causalRepairSnapshotsSupported = false;
     await this.privateCfg.setComplete(cfg);
+  }
+
+  /**
+   * Drops every cache derived from the stored credentials so the next read
+   * hits the persistent store. Needed when another browser tab may have
+   * rotated the token on the shared store (sign out other devices): this
+   * tab's cached cfg would keep serving the revoked token — striking out
+   * the auth-failure tolerance and wiping the fresh token — and its cached
+   * seq key would read the wrong cursor slot for the new token.
+   */
+  invalidateCredentialCache(): void {
+    this._cachedServerSeqKey = null;
+    this.privateCfg.invalidateInMemoryCache?.();
   }
 
   async clearAuthCredentials(): Promise<void> {
@@ -434,6 +456,73 @@ export class SuperSyncProvider
     return this._deps.responseValidators.validateRestoreSnapshot(response);
   }
 
+  // === Devices ===
+
+  /** Lists the devices syncing this account, newest activity first. */
+  async getDevices(): Promise<SuperSyncDeviceListResponse> {
+    this._deps.logger.debug(`${this._logLabel}: getDevices`);
+    const cfg = await this._cfgOrError();
+
+    const response = await this._fetchApi<unknown>(cfg, '/api/sync/devices', {
+      method: 'GET',
+    });
+
+    return this._deps.responseValidators.validateDevices(response);
+  }
+
+  /**
+   * Signs every other device out of the account. Server-side this is
+   * `POST /api/replace-token`: the account's `tokenVersion` is bumped —
+   * invalidating all existing tokens, including legacy ones without a
+   * version claim — and a fresh token is returned for this client, which
+   * replaces the stored one so the calling device stays signed in.
+   *
+   * The `lastServerSeq` cursor is keyed on the access token (see
+   * `_getServerSeqKey`), so it is carried over to the new token's key —
+   * same server, same account, same op stream; without this the swap would
+   * force a full re-download from seq 0.
+   *
+   * The server also closes this device's own WebSocket (the revocation
+   * closes every socket of the account — a socket's clientId is
+   * self-declared and unauthenticated, so sparing "the caller's" socket by
+   * id would let a stolen-token client exempt itself by claiming this id).
+   * The next sync cycle reconnects with the fresh token.
+   */
+  async signOutAllOtherDevices(): Promise<void> {
+    this._deps.logger.normal(`${this._logLabel}: signOutAllOtherDevices`);
+    const cfg = await this._cfgOrError();
+    // Read the cursor (and its key, for cleanup) before the POST: once the
+    // server bumps `tokenVersion` the old token is dead, so nothing after
+    // that point should depend on more local steps than strictly needed.
+    const lastServerSeq = await this.getLastServerSeq();
+    const oldSeqKey = await this._getServerSeqKey();
+
+    // An explicit JSON body is required: Fastify rejects a body-less POST
+    // carrying `Content-Type: application/json` (FST_ERR_CTP_EMPTY_JSON_BODY).
+    // noRetry: the endpoint is NOT idempotent. If the bump lands but the
+    // response is lost, a retry re-POSTs with the already-revoked token and
+    // deterministically 401s — worse than surfacing the original failure.
+    const response = await this._fetchApi<unknown>(cfg, '/api/replace-token', {
+      method: 'POST',
+      body: '{}',
+      noRetry: true,
+    });
+    const { token } = this._deps.responseValidators.validateReplaceToken(response);
+
+    // Cursor first, token second: a hard crash between the two writes then
+    // leaves at worst an orphaned storage entry — never a persisted token
+    // without a cursor under its key (which would silently re-download the
+    // full op stream from seq 0 on the next sync).
+    const newSeqKey = this._computeServerSeqKey(cfg.baseUrl, token);
+    this._deps.storage.setLastServerSeq(newSeqKey, lastServerSeq);
+    await this.setPrivateCfg({ ...cfg, accessToken: token });
+    // Guard: if the keys coincide (unchanged token, hash collision) the
+    // removal would delete the cursor just written above.
+    if (oldSeqKey !== newSeqKey) {
+      this._deps.storage.removeLastServerSeq(oldSeqKey);
+    }
+  }
+
   // === WebSocket Parameters ===
 
   /**
@@ -530,15 +619,25 @@ export class SuperSyncProvider
       return this._cachedServerSeqKey;
     }
     const cfg = await this.privateCfg.load();
-    const baseUrl = cfg?.baseUrl || this._deps.defaultBaseUrl;
-    const accessToken = cfg?.accessToken ?? '';
-    const identifier = `${baseUrl}|${accessToken}`;
+    this._cachedServerSeqKey = this._computeServerSeqKey(
+      cfg?.baseUrl,
+      cfg?.accessToken ?? '',
+    );
+    return this._cachedServerSeqKey;
+  }
+
+  /**
+   * Pure key derivation, split from `_getServerSeqKey` so a token swap can
+   * compute the NEW token's key before persisting the token (crash-safety
+   * ordering in `signOutAllOtherDevices`).
+   */
+  private _computeServerSeqKey(baseUrl: string | undefined, accessToken: string): string {
+    const identifier = `${baseUrl || this._deps.defaultBaseUrl}|${accessToken}`;
     const hash = identifier
       .split('')
       .reduce((acc, char) => ((acc << 5) - acc + char.charCodeAt(0)) | 0, 0)
       .toString(16);
-    this._cachedServerSeqKey = `${LAST_SERVER_SEQ_KEY_PREFIX}${hash}`;
-    return this._cachedServerSeqKey;
+    return `${LAST_SERVER_SEQ_KEY_PREFIX}${hash}`;
   }
 
   /**
@@ -548,7 +647,7 @@ export class SuperSyncProvider
    */
   private _checkHttpStatus(status: number, body?: string): void {
     if (status === 401 || status === 403) {
-      const reason = this._extractServerErrorReason(body, status);
+      const { reason } = this._extractServerErrorDetails(body, status);
       throw new AuthFailSPError(reason || `Authentication failed (HTTP ${status})`);
     }
   }
@@ -560,8 +659,11 @@ export class SuperSyncProvider
    * `expired`); we cap at `SERVER_ERROR_REASON_MAX_CHARS` to defend
    * against future contract drift that might embed user content.
    */
-  private _extractServerErrorReason(body?: string, status?: number): string | undefined {
-    if (!body) return undefined;
+  private _extractServerErrorDetails(
+    body?: string,
+    status?: number,
+  ): ParsedServerErrorDetails {
+    if (!body) return {};
     try {
       const parsed = JSON.parse(body) as unknown;
       if (typeof parsed === 'object' && parsed !== null) {
@@ -569,14 +671,24 @@ export class SuperSyncProvider
           'error' in parsed && typeof (parsed as { error: unknown }).error === 'string'
             ? (parsed as { error: string }).error.slice(0, SERVER_ERROR_REASON_MAX_CHARS)
             : undefined;
+        const errorCode =
+          'errorCode' in parsed &&
+          typeof (parsed as { errorCode: unknown }).errorCode === 'string'
+            ? (parsed as { errorCode: string }).errorCode.slice(
+                0,
+                SERVER_ERROR_REASON_MAX_CHARS,
+              )
+            : undefined;
         const retryDelayReason =
           status === 429 ? this._extractRetryDelayReason(parsed) : undefined;
-        return [errorReason, retryDelayReason].filter(Boolean).join(' — ') || undefined;
+        const reason =
+          [errorReason, retryDelayReason].filter(Boolean).join(' — ') || undefined;
+        return { reason, errorCode };
       }
     } catch {
       // Not JSON — ignore
     }
-    return undefined;
+    return {};
   }
 
   private _extractRetryDelayReason(parsed: object): string | undefined {
@@ -628,9 +740,13 @@ export class SuperSyncProvider
     errorCode?: string | number;
   } {
     const syncError = toSyncLogError(error);
+    const code =
+      error instanceof SuperSyncHttpStatusError && error.code !== undefined
+        ? error.code
+        : syncError.code;
     return {
       errorName: syncError.name,
-      ...(syncError.code !== undefined ? { errorCode: syncError.code } : {}),
+      ...(code !== undefined ? { errorCode: code } : {}),
     };
   }
 
@@ -710,21 +826,31 @@ export class SuperSyncProvider
   private async _fetchApi<T>(
     cfg: SuperSyncPrivateCfg,
     path: string,
-    options: RequestInit,
+    options: RequestInit & { noRetry?: boolean; body?: string },
   ): Promise<T> {
     const baseUrl = this._resolveBaseUrl(cfg);
     const url = `${baseUrl}${path}`;
     const sanitizedToken = this._sanitizeToken(cfg.accessToken);
 
     if (this.isNativePlatform) {
-      return this._doNativeFetch<T>(cfg, path, options.method || 'GET');
+      return this._doNativeFetch<T>(
+        cfg,
+        path,
+        options.method || 'GET',
+        options.body === undefined ? undefined : { data: options.body },
+        { noRetry: options.noRetry },
+      );
     }
 
     const headers = new Headers(options.headers as HeadersInit);
     headers.set('Content-Type', 'application/json');
     headers.set('Authorization', `Bearer ${sanitizedToken}`);
 
-    return this._doWebFetch<T>(url, path, headers, { method: options.method || 'GET' });
+    return this._doWebFetch<T>(url, path, headers, {
+      method: options.method || 'GET',
+      body: options.body,
+      noRetry: options.noRetry,
+    });
   }
 
   /**
@@ -793,9 +919,10 @@ export class SuperSyncProvider
     url: string,
     path: string,
     headers: Headers,
-    options: { method: string; body?: BodyInit },
+    options: { method: string; body?: BodyInit; noRetry?: boolean },
   ): Promise<T> {
-    for (let attempt = 0; attempt <= SUPERSYNC_WEB_MAX_RETRIES; attempt++) {
+    const maxRetries = options.noRetry ? 0 : SUPERSYNC_WEB_MAX_RETRIES;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       const startTime = Date.now();
       const controller = new AbortController();
       const timeoutId = setTimeout(
@@ -818,11 +945,15 @@ export class SuperSyncProvider
           clearTimeout(timeoutId);
           // Check for auth failure FIRST before throwing generic error
           this._checkHttpStatus(response.status, errorText);
-          const reason = this._extractServerErrorReason(errorText, response.status);
+          const { reason, errorCode } = this._extractServerErrorDetails(
+            errorText,
+            response.status,
+          );
           const suffix = reason ? ` — ${reason}` : '';
           throw new SuperSyncHttpStatusError(
             `HTTP ${response.status} ${response.statusText}${suffix}`,
             response.status,
+            errorCode,
           );
         }
 
@@ -863,14 +994,14 @@ export class SuperSyncProvider
         }
 
         const isNetworkError = this._isRetryableWebRequestError(error);
-        if (isNetworkError && attempt < SUPERSYNC_WEB_MAX_RETRIES) {
+        if (isNetworkError && attempt < maxRetries) {
           const delayMs = 1000 * (attempt + 1);
           this._deps.logger.warn(
             `${this._logLabel}: transient SuperSync request failure, retrying in ${delayMs}ms`,
             {
               path,
               attempt: attempt + 1,
-              maxRetries: SUPERSYNC_WEB_MAX_RETRIES,
+              maxRetries,
               delayMs,
               durationMs: duration,
               ...this._getSafeErrorLogMeta(error),
@@ -911,6 +1042,7 @@ export class SuperSyncProvider
     path: string,
     method: string,
     requestData?: { data: string; extraHeaders?: Record<string, string> },
+    retryOpts?: { noRetry?: boolean },
   ): Promise<T> {
     const startTime = Date.now();
     const baseUrl = this._resolveBaseUrl(cfg);
@@ -937,6 +1069,7 @@ export class SuperSyncProvider
           executor: this._deps.nativeHttpExecutor,
           logger: this._deps.logger,
           label: this._logLabel,
+          ...(retryOpts?.noRetry ? { maxRetries: 0 } : {}),
         },
       );
 
@@ -947,12 +1080,16 @@ export class SuperSyncProvider
             : JSON.stringify(response.data);
         // Check for auth failure FIRST before throwing generic error
         this._checkHttpStatus(response.status, errorData);
-        const reason = this._extractServerErrorReason(errorData, response.status);
+        const { reason, errorCode } = this._extractServerErrorDetails(
+          errorData,
+          response.status,
+        );
         const suffix = reason ? ` — ${reason}` : '';
         // No `statusText` on CapacitorHttp responses; status-only form.
         throw new SuperSyncHttpStatusError(
           `HTTP ${response.status}${suffix}`,
           response.status,
+          errorCode,
         );
       }
 

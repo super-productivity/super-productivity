@@ -1,10 +1,17 @@
 import { IValidation } from 'typia';
-import type { SyncFilePrefixInvalidPrefixDetails } from '@sp/sync-core';
+import type {
+  SyncFileHeadShape,
+  SyncFilePrefixInvalidPrefixDetails,
+} from '@sp/sync-core';
 import {
   AdditionalLogErrorBase as PackageAdditionalLogErrorBase,
   extractErrorMessage as packageExtractErrorMessage,
 } from '@sp/sync-providers/errors';
 import { FILE_BASED_SYNC_CONSTANTS } from '../../sync-providers/file-based/file-based-sync.types';
+import { KNOWN_ACTION_TYPES } from '../action-types.enum';
+
+/** Upper bound for the entity count reported in a sync diagnostic. */
+const MAX_REPORTED_ENTITY_COUNT = 9999;
 
 // Re-export provider-shared error classes from @sp/sync-providers.
 // Single class definition per error is critical for `instanceof` checks
@@ -43,6 +50,18 @@ const getValidationErrors = (
   }
   return undefined;
 };
+
+/**
+ * Typia's IError carries the offending `value` — a task title, note body,
+ * project name. `additionalLog` on the classes below renders into the global
+ * error alert and the prefilled GitHub issue body, so keep only the
+ * schema-derived parts (rule: never log user content). `path`/`expected` are
+ * what a maintainer needs to locate the failing field anyway.
+ */
+const stripValidationErrorValues = (
+  errors: IValidation.IError[],
+): { path: string; expected: string }[] =>
+  errors.map((e) => ({ path: e.path, expected: e.expected }));
 
 // AdditionalLogErrorBase is provided by @sp/sync-providers (without the
 // previous constructor-time logging side effect). The remaining app-only
@@ -120,6 +139,32 @@ export class ForceUploadFailedError extends Error {
 
 export class ForceUploadPendingOpsError extends Error {
   override name = 'ForceUploadPendingOpsError';
+}
+
+/**
+ * The multi-entity conflict preflight refused to auto-resolve (#9405). The
+ * message is the whole diagnostic: it is shown to the user and written to the
+ * exportable log, so it carries only allowlisted metadata: a fixed code, the
+ * side, an action type that must be a known `ActionType`, and a clamped entity
+ * count. Never widen this to ids, payloads, or titles.
+ */
+export class UnsupportedMultiEntityConflictError extends Error {
+  override name = 'UnsupportedMultiEntityConflictError';
+
+  constructor(side: 'local' | 'remote', actionType: unknown, entityCount: unknown) {
+    const safeActionType =
+      typeof actionType === 'string' && KNOWN_ACTION_TYPES.has(actionType)
+        ? actionType
+        : 'UNKNOWN';
+    const safeEntityCount =
+      typeof entityCount === 'number' && Number.isInteger(entityCount) && entityCount >= 0
+        ? Math.min(entityCount, MAX_REPORTED_ENTITY_COUNT)
+        : 0;
+    super(
+      `SYNC_MULTI_ENTITY_UNSUPPORTED side=${side} actionType=${safeActionType} ` +
+        `entityCount=${safeEntityCount}`,
+    );
+  }
 }
 
 /**
@@ -218,6 +263,32 @@ export class EncryptNoPasswordError extends AdditionalLogErrorBase {
   override name = 'EncryptNoPasswordError';
 }
 
+/**
+ * The remote sync file is PLAINTEXT (its prefix carries no encryption flag) but
+ * local config expects encryption (GHSA-vrc7-775g-ggqc). The prefix flags live
+ * OUTSIDE the AEAD envelope, so a remote attacker (compromised Dropbox/WebDAV
+ * account, or a non-TLS WebDAV MITM) can strip the flag and serve
+ * attacker-authored plaintext. Deciding decrypt-or-not from that
+ * attacker-controlled prefix alone would silently accept the injected data and
+ * drop the E2EE authenticity guarantee, so the download path fails closed with
+ * this error instead — the download-side mirror of EncryptNoPasswordError.
+ * NEVER attach the payload: it is plaintext user (or attacker) content.
+ */
+export class PlaintextWhenEncryptionExpectedError extends AdditionalLogErrorBase<{
+  isCompressed: boolean;
+  modelVersion: number;
+}> {
+  override name = 'PlaintextWhenEncryptionExpectedError';
+
+  constructor(info: { isCompressed: boolean; modelVersion: number }) {
+    super(
+      'Remote sync file is unencrypted but local encryption is enabled — ' +
+        'refusing to accept plaintext (possibly a tampered or downgraded remote).',
+    );
+    this.additionalLog = info;
+  }
+}
+
 export class DecryptError extends AdditionalLogErrorBase {
   override name = 'DecryptError';
 }
@@ -280,9 +351,13 @@ const buildDecompressErrorMessage = (rawMessage: string): string => {
 export class JsonParseError extends Error {
   override name = 'JsonParseError';
   position?: number;
-  dataSample?: string;
 
-  constructor(originalError: unknown, dataStr?: string) {
+  // No raw-data sample: it had zero readers, and holding ±50 chars around the
+  // parse position retains user content (task titles, notes) on an error
+  // object (rule: log history is exportable, never log user content). The
+  // position in the message plus InvalidFilePrefixError's headShape cover the
+  // triage need.
+  constructor(originalError: unknown) {
     // Extract position from SyntaxError message (e.g., "...at position 80999")
     const positionMatch =
       originalError instanceof Error
@@ -296,13 +371,6 @@ export class JsonParseError extends Error {
 
     super(message);
     this.position = position;
-
-    // Extract a sample of the data around the error position for debugging
-    if (dataStr && position !== undefined) {
-      const start = Math.max(0, position - 50);
-      const end = Math.min(dataStr.length, position + 50);
-      this.dataSample = `...${dataStr.substring(start, end)}...`;
-    }
   }
 }
 
@@ -359,7 +427,7 @@ export class ModelValidationError extends Error {
       try {
         const errors = getValidationErrors(params.validationResult);
         if (errors) {
-          const str = JSON.stringify(errors);
+          const str = JSON.stringify(stripValidationErrorValues(errors));
           this.additionalLog = `Model: ${params.id}, Errors: ${str.substring(0, 400)}`;
         }
       } catch {
@@ -380,7 +448,7 @@ export class DataValidationFailedError extends Error {
     try {
       const errors = getValidationErrors(validationResult);
       if (errors) {
-        const str = JSON.stringify(errors);
+        const str = JSON.stringify(stripValidationErrorValues(errors));
         this.additionalLog = str.substring(0, 400);
       }
     } catch {
@@ -414,6 +482,14 @@ export class ModelVersionToImportNewerThanLocalError extends AdditionalLogErrorB
 
 export class InvalidFilePrefixError extends AdditionalLogErrorBase {
   override name = 'InvalidFilePrefixError';
+  /**
+   * Coarse shape of what the body started with instead of the prefix.
+   * `markup` means the download was a RESPONSE page (WebDAV multistatus,
+   * proxy or captive-portal), not the stored file — handlers use this to
+   * withhold the force-overwrite offer, which would clobber a likely-intact
+   * remote file over a transient network problem.
+   */
+  readonly headShape: SyncFileHeadShape;
 
   constructor(details: SyncFilePrefixInvalidPrefixDetails) {
     super({
@@ -421,7 +497,10 @@ export class InvalidFilePrefixError extends AdditionalLogErrorBase {
       expectedPrefix: details.expectedPrefix,
       endSeparator: details.endSeparator,
       inputLength: details.inputLength,
+      prefixAt: details.prefixAt,
+      headShape: details.headShape,
     });
+    this.headShape = details.headShape;
   }
 }
 

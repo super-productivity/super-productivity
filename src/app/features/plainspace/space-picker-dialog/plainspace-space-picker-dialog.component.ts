@@ -90,6 +90,11 @@ export class PlainspaceSpacePickerDialogComponent {
     this._dialogRef.close();
   }
 
+  disconnect(): void {
+    this._accountService.logout();
+    this._dialogRef.close();
+  }
+
   /**
    * Recovery for a stale/revoked token: opens the guided connect dialog (which
    * validates and stores a fresh token), then retries loading the spaces.

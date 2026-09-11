@@ -251,6 +251,10 @@ export class ProjectService {
       const withSubTasks = await firstValueFrom(
         this._taskService.getByIdWithSubTaskData$(task.id),
       );
+      // Skip tasks that vanished from the store mid-loop (#9946).
+      if (!withSubTasks) {
+        continue;
+      }
       this._taskService.moveToProject(withSubTasks, INBOX_PROJECT.id);
       if (task.isDone) {
         this._taskService.setUnDone(task.id);

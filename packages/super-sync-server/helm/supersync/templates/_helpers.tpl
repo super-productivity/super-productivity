@@ -67,3 +67,21 @@ Create the fully qualified name for the PostgreSQL resources.
 {{- define "supersync.postgresql.fullname" -}}
 {{- printf "%s-postgresql" (include "supersync.fullname" .) | trunc 63 | trimSuffix "-" }}
 {{- end }}
+
+{{/*
+Validate and render the built-in database's Prisma connection limit.
+`--reuse-values` can omit new chart defaults; fall back only when the key is
+absent so an explicitly invalid zero still fails validation.
+*/}}
+{{- define "supersync.postgresqlConnectionLimit" -}}
+{{- $postgresql := default (dict) .Values.postgresql -}}
+{{- $value := "20" -}}
+{{- if hasKey $postgresql "connectionLimit" -}}
+{{- $value = toString $postgresql.connectionLimit -}}
+{{- end -}}
+{{- $safeLength := or (lt (len $value) 16) (and (eq (len $value) 16) (le $value "9007199254740991")) -}}
+{{- if not (and (regexMatch "^[1-9][0-9]*$" $value) $safeLength) -}}
+{{- fail "postgresql.connectionLimit must be a positive integer" -}}
+{{- end -}}
+{{- $value -}}
+{{- end }}

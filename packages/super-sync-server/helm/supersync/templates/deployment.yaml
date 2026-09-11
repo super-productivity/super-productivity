@@ -45,6 +45,8 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ['sh', '-c', 'sh scripts/migrate-deploy.sh']
           env:
+            - name: REQUIRE_DATABASE_POOL_LIMITS
+              value: "true"
             {{- if .Values.postgresql.enabled }}
             - name: POSTGRES_USER
               value: {{ .Values.postgresql.username | quote }}
@@ -56,7 +58,7 @@ spec:
                   name: {{ .Values.postgresql.existingSecret | default (include "supersync.postgresql.fullname" .) }}
                   key: POSTGRES_PASSWORD
             - name: DATABASE_URL
-              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "supersync.postgresql.fullname" . }}:5432/$(POSTGRES_DB)"
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "supersync.postgresql.fullname" . }}:5432/$(POSTGRES_DB)?connection_limit={{ include "supersync.postgresqlConnectionLimit" . }}&pool_timeout=10"
             {{- else }}
             - name: DATABASE_URL
               {{- if .Values.externalDatabase.existingSecret }}
@@ -68,6 +70,12 @@ spec:
               value: {{ .Values.externalDatabase.url | quote }}
               {{- end }}
             {{- end }}
+          volumeMounts:
+            # scripts/migrate-deploy.sh calls mktemp, and securityContext defaults to
+            # readOnlyRootFilesystem: true — without a writable /tmp the init container exits
+            # with "mktemp: Read-only file system" before any migration runs.
+            - name: tmp
+              mountPath: /tmp
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
         - name: copy-public
@@ -109,7 +117,7 @@ spec:
                   name: {{ .Values.postgresql.existingSecret | default (include "supersync.postgresql.fullname" .) }}
                   key: POSTGRES_PASSWORD
             - name: DATABASE_URL
-              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "supersync.postgresql.fullname" . }}:5432/$(POSTGRES_DB)"
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "supersync.postgresql.fullname" . }}:5432/$(POSTGRES_DB)?connection_limit={{ include "supersync.postgresqlConnectionLimit" . }}&pool_timeout=10"
             {{- else }}
             - name: DATABASE_URL
               {{- if .Values.externalDatabase.existingSecret }}
@@ -140,9 +148,13 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 5
             failureThreshold: 30
+          # Liveness must not depend on the database: a restart cannot fix a downed
+          # DB, and it would drop every live-sync websocket on the way. Readiness
+          # and startup stay on /health so the pod still leaves the Service
+          # endpoints while the database is unreachable.
           livenessProbe:
             httpGet:
-              path: /health
+              path: /live
               port: http
             periodSeconds: 30
             timeoutSeconds: 5

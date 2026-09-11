@@ -906,6 +906,30 @@ describe('dataRepair()', () => {
     });
   });
 
+  it('should list a promoted missing-parent subtask in its project (#8780)', () => {
+    // A subtask whose parent is gone is promoted to top level by an earlier
+    // repair pass; the project-list pass must run AFTER that so the newly
+    // top-level task ends up reachable in its project instead of nowhere.
+    const taskState = {
+      ...mock.task,
+      ...fakeEntityStateFromArray<Task>([
+        {
+          ...DEFAULT_TASK,
+          id: 'promotedTask',
+          parentId: 'deletedParent',
+          projectId: INBOX_PROJECT.id,
+        },
+      ]),
+    } as any;
+
+    const repaired = dataRepair({ ...mock, task: taskState }).data;
+
+    expect(repaired.task.entities.promotedTask!.parentId).toBeUndefined();
+    expect(repaired.project.entities[INBOX_PROJECT.id]!.taskIds).toContain(
+      'promotedTask',
+    );
+  });
+
   it('should convert orphaned archived subtask to main task by setting parentId to undefined', () => {
     const taskStateBefore = {
       ...mock.task,
@@ -1317,6 +1341,16 @@ describe('dataRepair()', () => {
             ...taskState.entities.TEST,
             // dangling projectId is reassigned to the inbox project
             projectId: INBOX_PROJECT.id,
+          },
+        },
+      },
+      project: {
+        ...mock.project,
+        entities: {
+          ...mock.project.entities,
+          [INBOX_PROJECT.id]: {
+            ...mock.project.entities[INBOX_PROJECT.id]!,
+            taskIds: ['TEST'],
           },
         },
       },

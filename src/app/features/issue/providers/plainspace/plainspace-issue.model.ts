@@ -2,7 +2,7 @@
  * Internal Plainspace issue shape used across the SP provider.
  *
  * The real Plainspace integration API returns an `SPTask`
- * (`GET {host}/api/integration/tasks`, see docs/plainspace-api-extension-plan.md).
+ * (`GET {host}/api/integration/tasks`).
  * `PlainspaceApiService` maps that DTO to this shape, so the rest of the
  * provider depends on one stable interface and the wire format stays isolated to
  * the API service.

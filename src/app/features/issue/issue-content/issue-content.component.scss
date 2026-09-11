@@ -67,7 +67,7 @@
     }
 
     .when {
-      color: var(--palette-text-secondary);
+      color: var(--text-color-muted);
       font-size: 0.875rem;
     }
 
@@ -85,7 +85,7 @@
   margin-top: var(--s3);
   margin-bottom: 12px;
   text-align: center;
-  color: var(--palette-text-secondary);
+  color: var(--text-color-muted);
 }
 
 .load-comments-and-all-data {

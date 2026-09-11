@@ -110,6 +110,63 @@ const mockOpFindFirst = (
       ),
     );
 
+/**
+ * The latest-full-state lookup is no longer a `findFirst`: it is a `$queryRaw` whose
+ * op_type values are SQL LITERALS, because a generic plan cannot prove a partial-index
+ * predicate built from bind parameters, and this statement provably always goes generic
+ * (full reasoning on latestCausalFullStateSql).
+ *
+ * So the mock BRANCHES on the statement rather than resolving one value: `tx.$queryRaw`
+ * also serves unrelated reads in some tests, and handing those rows to the full-state
+ * parser would silently yield a snapshot at `serverSeq: undefined` instead of failing.
+ */
+const FULL_STATE_SQL_MARKER = 'repair_base_server_seq';
+
+const mockTxQueryRaw = (
+  fullStateOp: { serverSeq: number; clientId?: string } | null = null,
+  otherRows: unknown = [],
+): ReturnType<typeof vi.fn> =>
+  vi.fn().mockImplementation((query: unknown) => {
+    const q = query as { sql?: string; strings?: readonly string[] } | undefined;
+    const text = q?.sql ?? (q?.strings ?? []).join('');
+    if (!text.includes(FULL_STATE_SQL_MARKER)) return Promise.resolve(otherRows);
+    return Promise.resolve(
+      fullStateOp
+        ? [
+            {
+              server_seq: fullStateOp.serverSeq,
+              client_id: fullStateOp.clientId ?? 'client-1',
+            },
+          ]
+        : [],
+    );
+  });
+
+/**
+ * The full-state lookup's statement, as PostgreSQL receives it. Text and values are
+ * returned separately because that split IS the assertion: the op_type names must live in
+ * the TEXT, where `operator_predicate_proof` can match them against the partial index's
+ * predicate, and must never appear in `values` — which is exactly where a well-meaning
+ * "parameterize everything" refactor would move them, silently restoring a backward walk
+ * of the user's whole history.
+ */
+const fullStateStatement = (
+  spy: ReturnType<typeof vi.fn>,
+): { text: string; values: unknown[] } => {
+  const textOf = (q: unknown): string => {
+    const sql = q as { sql?: string; strings?: readonly string[] } | undefined;
+    return sql?.sql ?? (sql?.strings ?? []).join('');
+  };
+  const call = spy.mock.calls.find(([q]: unknown[]) =>
+    textOf(q).includes(FULL_STATE_SQL_MARKER),
+  );
+  if (!call) throw new Error('the full-state lookup was never issued');
+  return {
+    text: textOf(call[0]),
+    values: (call[0] as { values?: unknown[] }).values ?? [],
+  };
+};
+
 describe('OperationDownloadService', () => {
   let service: OperationDownloadService;
 
@@ -128,6 +185,7 @@ describe('OperationDownloadService', () => {
     const setupTransactionMock = (mockFn: (tx: any) => Promise<any>) => {
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {
+          $queryRaw: mockTxQueryRaw(null),
           operation: {
             findFirst: vi.fn(),
             findMany: vi.fn(),
@@ -167,6 +225,7 @@ describe('OperationDownloadService', () => {
 
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         capturedTx = {
+          $queryRaw: mockTxQueryRaw(null),
           operation: {
             findFirst: mockOpFindFirst(null, 1),
             findMany: vi.fn().mockResolvedValue([]),
@@ -193,6 +252,7 @@ describe('OperationDownloadService', () => {
 
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         capturedTx = {
+          $queryRaw: mockTxQueryRaw(null),
           operation: {
             findFirst: vi.fn(),
             findMany: vi.fn(),
@@ -224,6 +284,7 @@ describe('OperationDownloadService', () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any, options: any) => {
         capturedOptions = options;
         capturedTx = {
+          $queryRaw: mockTxQueryRaw(null),
           operation: {
             findFirst: vi.fn().mockResolvedValue(null),
             findMany: vi.fn().mockResolvedValue([]),
@@ -250,6 +311,7 @@ describe('OperationDownloadService', () => {
 
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         capturedTx = {
+          $queryRaw: mockTxQueryRaw(null),
           operation: {
             findFirst: vi.fn().mockResolvedValue(null),
             findMany: vi.fn().mockResolvedValue([]),
@@ -263,18 +325,13 @@ describe('OperationDownloadService', () => {
 
       await service.getOpsSinceWithSeq(1, 10);
 
-      expect(capturedTx.operation.findFirst).toHaveBeenCalledWith({
-        where: {
-          userId: 1,
-          serverSeq: { lte: 20 },
-          OR: [
-            { opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT'] } },
-            { opType: 'REPAIR', repairBaseServerSeq: { not: null } },
-          ],
-        },
-        orderBy: { serverSeq: 'desc' },
-        select: { serverSeq: true, clientId: true },
-      });
+      const fullState = fullStateStatement(capturedTx.$queryRaw);
+      expect(fullState.values).toEqual([1, 20]);
+      // Literals, not binds. A generic plan has no Consts to prove the partial
+      // index's predicate against, and this statement always goes generic.
+      expect(fullState.text).toContain("'SYNC_IMPORT'");
+      expect(fullState.text).toContain("'BACKUP_IMPORT'");
+      expect(fullState.text).not.toContain('$3');
       expect(capturedTx.operation.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
@@ -302,6 +359,7 @@ describe('OperationDownloadService', () => {
 
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         capturedTx = {
+          $queryRaw: mockTxQueryRaw(null),
           operation: {
             findFirst: mockOpFindFirst(null, 7),
             findMany: vi.fn().mockResolvedValue([]),
@@ -346,7 +404,7 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
           },
-          $queryRaw: vi.fn(),
+          $queryRaw: mockTxQueryRaw({ serverSeq: 50, clientId: 'snapshot-author' }, []),
         };
         return fn(capturedTx);
       });
@@ -372,6 +430,7 @@ describe('OperationDownloadService', () => {
       vi.mocked(prisma.$transaction).mockImplementation(
         async (fn: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
           fn({
+            $queryRaw: mockTxQueryRaw(null),
             operation: {
               findFirst: vi.fn().mockResolvedValue(null),
               findMany: vi.fn().mockResolvedValue([
@@ -395,6 +454,7 @@ describe('OperationDownloadService', () => {
     it('should detect gap when client is ahead of server', async () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {
+          $queryRaw: mockTxQueryRaw(null),
           operation: {
             findFirst: vi.fn().mockResolvedValue(null),
             findMany: vi.fn().mockResolvedValue([]),
@@ -415,6 +475,7 @@ describe('OperationDownloadService', () => {
       let capturedTx: any;
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         capturedTx = {
+          $queryRaw: mockTxQueryRaw(null),
           operation: {
             findFirst: vi.fn(),
             findMany: vi.fn(),
@@ -436,6 +497,7 @@ describe('OperationDownloadService', () => {
     it('should detect gap when requested seq is purged', async () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {
+          $queryRaw: mockTxQueryRaw(null),
           operation: {
             // No full-state op (desc → null); minSeq is 50 (asc → 50).
             findFirst: mockOpFindFirst(null, 50),
@@ -474,9 +536,9 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 100 }),
           },
-          $queryRaw: vi
-            .fn()
-            .mockResolvedValue([{ client_id: 'snapshot-author', max_counter: 1n }]),
+          $queryRaw: mockTxQueryRaw({ serverSeq: 50, clientId: 'snapshot-author' }, [
+            { client_id: 'snapshot-author', max_counter: 1n },
+          ]),
         };
         return fn(mockTx);
       });
@@ -496,6 +558,7 @@ describe('OperationDownloadService', () => {
 
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {
+          $queryRaw: mockTxQueryRaw(null),
           operation: {
             findFirst: vi.fn().mockResolvedValue(null),
             findMany: vi.fn().mockResolvedValue(mockOps),
@@ -517,6 +580,7 @@ describe('OperationDownloadService', () => {
 
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         capturedTx = {
+          $queryRaw: mockTxQueryRaw(null),
           operation: {
             findFirst: vi.fn().mockResolvedValue(null),
             findMany: vi.fn().mockResolvedValue([]),
@@ -532,18 +596,13 @@ describe('OperationDownloadService', () => {
       expect(
         capturedTx.userSyncState.findUnique.mock.invocationCallOrder[0],
       ).toBeLessThan(capturedTx.operation.findFirst.mock.invocationCallOrder[0]);
-      expect(capturedTx.operation.findFirst).toHaveBeenCalledWith({
-        where: {
-          userId: 1,
-          serverSeq: { lte: 42 },
-          OR: [
-            { opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT'] } },
-            { opType: 'REPAIR', repairBaseServerSeq: { not: null } },
-          ],
-        },
-        orderBy: { serverSeq: 'desc' },
-        select: { serverSeq: true, clientId: true },
-      });
+      const fullState = fullStateStatement(capturedTx.$queryRaw);
+      expect(fullState.values).toEqual([1, 42]);
+      // Literals, not binds. A generic plan has no Consts to prove the partial
+      // index's predicate against, and this statement always goes generic.
+      expect(fullState.text).toContain("'SYNC_IMPORT'");
+      expect(fullState.text).toContain("'BACKUP_IMPORT'");
+      expect(fullState.text).not.toContain('$3');
       expect(capturedTx.operation.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
@@ -585,7 +644,7 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 50 }),
           },
-          $queryRaw: vi.fn().mockResolvedValue([]),
+          $queryRaw: mockTxQueryRaw({ serverSeq: 50 }, []),
         };
         return fn(mockTx);
       });
@@ -603,6 +662,7 @@ describe('OperationDownloadService', () => {
 
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {
+          $queryRaw: mockTxQueryRaw(null),
           operation: {
             findFirst: vi.fn().mockResolvedValue(null),
             findMany: vi.fn().mockResolvedValue(mockOps),
@@ -641,7 +701,7 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
           },
-          $queryRaw: vi.fn().mockResolvedValue([{ client_id: 'a', max_counter: 5n }]),
+          $queryRaw: mockTxQueryRaw(snapshotOp, [{ client_id: 'a', max_counter: 5n }]),
         };
         return fn(capturedTx);
       });
@@ -668,7 +728,7 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
           },
-          $queryRaw: vi.fn().mockResolvedValue([
+          $queryRaw: mockTxQueryRaw(snapshotOp, [
             { client_id: 'client-1', max_counter: 15n },
             { client_id: 'client-2', max_counter: 5n },
             { client_id: 'client-3', max_counter: 8n },
@@ -695,6 +755,7 @@ describe('OperationDownloadService', () => {
     it('should use persisted full-state vector clock when it matches the snapshot op', async () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {
+          $queryRaw: mockTxQueryRaw({ serverSeq: 50, clientId: 'snapshot-author' }),
           operation: {
             findFirst: vi.fn().mockResolvedValue({
               serverSeq: 50,
@@ -731,6 +792,7 @@ describe('OperationDownloadService', () => {
     it('should fall back to aggregate when persisted clock is malformed', async () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {
+          $queryRaw: mockTxQueryRaw({ serverSeq: 50, clientId: 'snapshot-author' }),
           operation: {
             findFirst: vi.fn().mockResolvedValue({
               serverSeq: 50,
@@ -768,6 +830,7 @@ describe('OperationDownloadService', () => {
     it('should fall back to aggregate when latestFullStateSeq does not match the snapshot op', async () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {
+          $queryRaw: mockTxQueryRaw({ serverSeq: 50, clientId: 'snapshot-author' }),
           operation: {
             findFirst: vi.fn().mockResolvedValue({
               serverSeq: 50,
@@ -807,7 +870,7 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
           },
-          $queryRaw: vi.fn().mockResolvedValue([
+          $queryRaw: mockTxQueryRaw({ serverSeq: 10 }, [
             { client_id: 'a', max_counter: 3n },
             { client_id: 'b', max_counter: 5n },
             { client_id: 'c', max_counter: 2n },
@@ -840,7 +903,7 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
           },
-          $queryRaw: vi.fn().mockResolvedValue([]),
+          $queryRaw: mockTxQueryRaw({ serverSeq: 10 }, []),
         };
         return fn(mockTx);
       });
@@ -859,7 +922,7 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
           },
-          $queryRaw: vi.fn().mockResolvedValue([
+          $queryRaw: mockTxQueryRaw({ serverSeq: 10 }, [
             { client_id: 'x', max_counter: 0n },
             { client_id: 'y', max_counter: 1n },
             { client_id: 'z', max_counter: 99999999n },
@@ -891,9 +954,9 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 10 }),
           },
-          $queryRaw: vi
-            .fn()
-            .mockResolvedValue([{ client_id: 'solo-client', max_counter: 42n }]),
+          $queryRaw: mockTxQueryRaw({ serverSeq: 5 }, [
+            { client_id: 'solo-client', max_counter: 42n },
+          ]),
         };
         return fn(mockTx);
       });
@@ -922,7 +985,7 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
           },
-          $queryRaw: vi.fn().mockResolvedValue(clockRows),
+          $queryRaw: mockTxQueryRaw({ serverSeq: 50 }, clockRows),
         };
         return fn(mockTx);
       });
@@ -958,7 +1021,10 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
           },
-          $queryRaw: vi.fn().mockResolvedValue(clockRows),
+          $queryRaw: mockTxQueryRaw(
+            { serverSeq: 50, clientId: 'snapshot-author' },
+            clockRows,
+          ),
         };
         return fn(mockTx);
       });
@@ -984,7 +1050,7 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 70 }),
           },
-          $queryRaw: vi.fn(),
+          $queryRaw: mockTxQueryRaw({ serverSeq: 50 }, []),
         };
         return fn(capturedTx);
       });
@@ -1008,7 +1074,7 @@ describe('OperationDownloadService', () => {
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
           },
-          $queryRaw: vi.fn(),
+          $queryRaw: mockTxQueryRaw(null, []),
         };
         return fn(capturedTx);
       });
@@ -1022,6 +1088,7 @@ describe('OperationDownloadService', () => {
     it('should not optimize when client is already past snapshot', async () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {
+          $queryRaw: mockTxQueryRaw({ serverSeq: 50 }),
           operation: {
             findFirst: vi.fn().mockResolvedValue({ serverSeq: 50 }), // Snapshot at 50
             findMany: vi.fn().mockResolvedValue([createMockOpRow(61)] as any),
@@ -1042,6 +1109,7 @@ describe('OperationDownloadService', () => {
     it('should return latestSeq as 0 when no sync state exists', async () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {
+          $queryRaw: mockTxQueryRaw(null),
           operation: {
             findFirst: vi.fn().mockResolvedValue(null),
             findMany: vi.fn().mockResolvedValue([]),

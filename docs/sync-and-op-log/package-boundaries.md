@@ -53,7 +53,7 @@ Rules:
 `@sp/sync-providers` owns bundled provider implementations and provider-neutral
 contracts:
 
-- Dropbox, WebDAV, Nextcloud, SuperSync, and LocalFile provider classes;
+- Dropbox, OneDrive, WebDAV, Nextcloud, SuperSync, and LocalFile provider classes;
 - file-based sync envelope types and provider response contracts;
 - provider-owned file envelope constants such as `sync-data.json` and
   file-sync version keys;
@@ -67,7 +67,7 @@ by provider implementations but not by the generic engine. Existing examples are
 provider-shared error classes, PKCE, retry predicates, native-HTTP retry, and
 safe log-metadata helpers.
 
-New bundled providers should follow the Dropbox/WebDAV/SuperSync/LocalFile
+New bundled providers should follow the Dropbox/OneDrive/WebDAV/SuperSync/LocalFile
 pattern: put provider-owned protocol logic and provider-neutral contracts in
 `@sp/sync-providers`, then compose app-only credentials, platform bridges,
 validators, OAuth routing, and UI config in thin app-side factories. If a
@@ -104,13 +104,13 @@ Do not import from package internals such as `@sp/sync-core/src/*`,
 the package barrel deliberately and check that it is not app-owned.
 
 The root `@sp/sync-providers` barrel has been removed; consumers MUST import
-from focused subpath barrels: `@sp/sync-providers/dropbox`, `/webdav`,
-`/super-sync`, `/local-file`, `/http`, `/errors`, `/file-based`, `/pkce`,
-`/platform`, `/provider-types`, `/credential-store`, and `/log`. Provider
-classes, provider-owned string constants, and shared privacy-boundary logging
-helpers are exported there, but app enums such as `SyncProviderId` are not.
-Internal helpers such as WebDAV API/adapter classes stay unexported unless a
-second host needs them.
+from focused subpath barrels: `@sp/sync-providers/dropbox`,
+`@sp/sync-providers/onedrive`, `/webdav`, `/super-sync`, `/local-file`, `/http`,
+`/errors`, `/file-based`, `/pkce`, `/platform`, `/provider-types`,
+`/credential-store`, and `/log`. Provider classes, provider-owned string
+constants, and shared privacy-boundary logging helpers are exported there, but
+app enums such as `SyncProviderId` are not. Internal helpers such as WebDAV
+API/adapter classes stay unexported unless a second host needs them.
 
 `@sp/sync-core` still exports deprecated full-state op compatibility defaults
 and host-defined `OpType.SyncImport` / `BackupImport` / `Repair` strings for

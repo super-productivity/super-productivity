@@ -51,8 +51,18 @@
   }
 
   ::ng-deep {
+    // Reserve enough room for a 6-row month at every supported picker width while
+    // keeping the dialog height stable as users navigate between months (#6556,
+    // #9397, #9452). Material calendar rows grow with the picker's width.
     mat-calendar {
-      height: 400px;
+      height: auto;
+      min-height: 416px;
+      aspect-ratio: 25 / 26;
+      // The min-height transfers through the aspect-ratio into a ~400px
+      // intrinsic width, which forces horizontal scrolling in dialogs narrower
+      // than that (360–390px phones). Cap the width; min-height still reserves
+      // the 6-row height on its own.
+      max-width: 100%;
     }
 
     .mat-calendar-header {
@@ -175,10 +185,13 @@
 }
 
 .form-ctrl-wrapper {
-  margin: var(--s2) var(--s2) var(--s2);
+  // No bottom margin: each field already carries ~16px of trailing space, which
+  // matches the gap between the stacked fields. Adding a bottom margin here would
+  // double it, leaving whatever follows (repeat button, dialog actions) sitting
+  // twice as far from the inputs as the inputs sit from each other.
+  margin: 0 var(--s2);
   display: flex;
   flex-direction: column;
-  gap: var(--s);
 
   mat-form-field {
     width: 100%;

@@ -65,6 +65,9 @@ export const wsRoutes = async (fastify: FastifyInstance): Promise<void> => {
         const result = await verifyToken(token);
         if (!result.valid) {
           Logger.warn(`[ws] Connection rejected: ${result.reason}`);
+          // 4003 = auth-failure wire contract; see TOKEN_REVOKED_CLOSE_CODE
+          // (websocket-connection.service.ts) and the client's
+          // AUTH_FAILURE_CLOSE_CODE (super-sync-websocket.service.ts).
           socket.close(4003, 'Invalid token');
           return;
         }

@@ -6,6 +6,7 @@ import {
   OPS_INDEXES,
 } from './db-keys.const';
 import { deleteDB, openDB } from 'idb';
+import { isIdbVersionError } from './op-log-errors.const';
 import { OpType } from '../core/operation.types';
 
 describe('runDbUpgrade', () => {
@@ -29,6 +30,7 @@ describe('runDbUpgrade', () => {
     const stores = preExistingStores || new Map();
 
     const db = {
+      version: DB_VERSION,
       createObjectStore: jasmine
         .createSpy('createObjectStore')
         .and.callFake((name: string, options?: any) => {
@@ -36,6 +38,9 @@ describe('runDbUpgrade', () => {
           stores.set(name, { store, options });
           return store;
         }),
+      deleteObjectStore: jasmine
+        .createSpy('deleteObjectStore')
+        .and.callFake((name: string) => stores.delete(name)),
       _stores: stores,
     };
 
@@ -160,7 +165,7 @@ describe('runDbUpgrade', () => {
 
       // Version 2 upgrade doesn't create any stores (only version 3+ run)
       // Version 3 only adds an index, doesn't create stores
-      // Version 4 creates archive stores, version 5 profile_data,
+      // Version 4 creates archive stores, version 5's legacy profile store,
       // version 6 client_id, version 7 meta.
       expect(db.createObjectStore).toHaveBeenCalledTimes(5);
       expect(db.createObjectStore).not.toHaveBeenCalledWith(
@@ -202,7 +207,7 @@ describe('runDbUpgrade', () => {
 
       runDbUpgrade(db, 4, tx);
 
-      expect(db.createObjectStore).toHaveBeenCalledWith(STORE_NAMES.PROFILE_DATA, {
+      expect(db.createObjectStore).toHaveBeenCalledWith('profile_data', {
         keyPath: 'id',
       });
     });
@@ -313,9 +318,67 @@ describe('runDbUpgrade', () => {
         });
         currentDb.close();
 
-        await expectAsync(openDB(dbName, 9)).toBeRejectedWith(
-          jasmine.objectContaining({ name: 'VersionError' }),
+        // One open, both assertions. On the success path the connection is
+        // closed before being discarded, so a regression that lets the
+        // downgrade through fails on the expectation rather than hanging the
+        // `finally`'s deleteDB on an open handle.
+        const rejection = await openDB(dbName, 9).then(
+          (db) => {
+            db.close();
+            return null;
+          },
+          (e: unknown) => e,
         );
+
+        expect(rejection).toEqual(jasmine.objectContaining({ name: 'VersionError' }));
+        // #9187: the rejection an old reader actually gets must be the one the
+        // user-facing classifier recognises, or the dialog falls back to
+        // "your storage may need to be cleared".
+        //
+        // Scope of this oracle: a real downgrade through `openDB`, but on the
+        // fake-indexeddb engine `src/test.ts` installs — NOT Blink. Verified
+        // separately against Chromium 149, which returns
+        //   name: 'VersionError', instanceof DOMException && instanceof Error,
+        //   message: 'The requested version (7) is less than the existing version (10).'
+        // — byte-identical to the message in the #9187 report.
+        expect(isIdbVersionError(rejection)).toBe(true);
+      } finally {
+        await deleteDB(dbName);
+      }
+    });
+  });
+
+  describe('version 11 profile removal', () => {
+    it('deletes the obsolete profile data store without touching live app data', async () => {
+      const dbName = `SUP_OPS_v11_profile_removal_${Date.now()}_${Math.random()}`;
+
+      try {
+        const v10Db = await openDB(dbName, 10, {
+          upgrade: (db, oldVersion, _newVersion, tx) => runDbUpgrade(db, oldVersion, tx),
+        });
+        expect(Array.from(v10Db.objectStoreNames)).toContain('profile_data');
+        await v10Db.put(STORE_NAMES.STATE_CACHE, {
+          id: 'current',
+          state: { marker: 'live app state' },
+        });
+        await v10Db.put('profile_data', {
+          id: 'inactive-profile',
+          data: { marker: 'retired snapshot' },
+        });
+        v10Db.close();
+
+        const v11Db = await openDB(dbName, 11, {
+          upgrade: (db, oldVersion, _newVersion, tx) => runDbUpgrade(db, oldVersion, tx),
+        });
+
+        expect(Array.from(v11Db.objectStoreNames)).not.toContain('profile_data');
+        expect(Array.from(v11Db.objectStoreNames)).toContain(STORE_NAMES.OPS);
+        expect(Array.from(v11Db.objectStoreNames)).toContain(STORE_NAMES.STATE_CACHE);
+        expect(await v11Db.get(STORE_NAMES.STATE_CACHE, 'current')).toEqual({
+          id: 'current',
+          state: { marker: 'live app state' },
+        });
+        v11Db.close();
       } finally {
         await deleteDB(dbName);
       }
@@ -355,11 +418,13 @@ describe('runDbUpgrade', () => {
         jasmine.anything(),
       );
 
-      // Version 5 store
+      // Version 5 legacy store is created for migration continuity, then
+      // removed by version 11 in the same fresh-install upgrade.
       expect(db.createObjectStore).toHaveBeenCalledWith(
-        STORE_NAMES.PROFILE_DATA,
+        'profile_data',
         jasmine.anything(),
       );
+      expect(db.deleteObjectStore).toHaveBeenCalledWith('profile_data');
 
       // Version 6 store
       expect(db.createObjectStore).toHaveBeenCalledWith(STORE_NAMES.CLIENT_ID);
@@ -367,7 +432,7 @@ describe('runDbUpgrade', () => {
       // Version 7 store
       expect(db.createObjectStore).toHaveBeenCalledWith(STORE_NAMES.META);
 
-      // Total: 9 stores created
+      // Nine historical stores are created; one is removed before commit.
       expect(db.createObjectStore).toHaveBeenCalledTimes(9);
     });
 

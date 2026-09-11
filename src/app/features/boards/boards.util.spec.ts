@@ -11,6 +11,7 @@ import {
   BoardPanelCfgTaskTypeFilter,
 } from './boards.model';
 import { TaskCopy } from '../tasks/task.model';
+import { TODAY_TAG } from '../tag/tag.const';
 
 const basePanel: any = {
   id: 'p1',
@@ -332,6 +333,85 @@ describe('rewriteTagIdsForPanel', () => {
     // Act + Assert — would throw if mutated
     expect(() => rewriteTagIdsForPanel(tags, panel)).not.toThrow();
     expect(tags).toEqual(['x', 'y']);
+  });
+
+  // TODAY_TAG is virtual: membership derives from dueDay/dueWithTime and it must
+  // never land in task.tagIds (ARCHITECTURE-DECISIONS #2). The rewrite therefore
+  // has to agree with `doesTaskMatchPanel`, which can only ever see real tags.
+  describe('TODAY_TAG (virtual)', () => {
+    it('"all" include mode: appends the real required tags but never TODAY_TAG', () => {
+      // Arrange
+      const tags = ['keep'];
+      const panel = mkPanel({ includedTagIds: [TODAY_TAG.id, 'need'] });
+
+      // Act
+      const out = rewriteTagIdsForPanel(tags, panel);
+
+      // Assert
+      expect(out).toEqual(['keep', 'need']);
+    });
+
+    it('"any" include mode: appends the first REAL required tag, not TODAY_TAG', () => {
+      // Arrange
+      const tags = ['keep'];
+      const panel = mkPanel({
+        includedTagIds: [TODAY_TAG.id, 'need'],
+        includedTagsMatch: 'any',
+      });
+
+      // Act
+      const out = rewriteTagIdsForPanel(tags, panel);
+
+      // Assert
+      expect(out).toEqual(['keep', 'need']);
+    });
+
+    it('include mode: adds nothing when TODAY_TAG is the only required tag', () => {
+      // Arrange
+      const tags = ['keep'];
+      const panel = mkPanel({ includedTagIds: [TODAY_TAG.id] });
+
+      // Act
+      const out = rewriteTagIdsForPanel(tags, panel);
+
+      // Assert
+      expect(out).toEqual(['keep']);
+    });
+
+    it('"all" exclude mode: keeps every real tag, because the AND-exclude can never fire', () => {
+      // Arrange — `doesTaskMatchPanel` needs ALL of TODAY/x/y present to exclude,
+      // and TODAY can never be present, so nothing may be stripped here either.
+      const tags = ['x', 'y', 'keep'];
+      const panel = mkPanel({
+        excludedTagIds: [TODAY_TAG.id, 'x', 'y'],
+        excludedTagsMatch: 'all',
+      });
+
+      // Act
+      const out = rewriteTagIdsForPanel(tags, panel);
+
+      // Assert — rewrite agrees with the predicate: no change
+      expect(out).toEqual(['x', 'y', 'keep']);
+      expect(
+        doesTaskMatchPanel(
+          { id: 't', title: '', projectId: 'INBOX', tagIds: out } as TaskCopy,
+          { ...basePanel, ...panel } as BoardPanelCfg,
+          () => false,
+        ),
+      ).toBe(true);
+    });
+
+    it('strips a legacy TODAY_TAG carried in the task’s own tags', () => {
+      // Arrange — corrupt data written by an older build
+      const tags = [TODAY_TAG.id, 'keep'];
+      const panel = mkPanel();
+
+      // Act
+      const out = rewriteTagIdsForPanel(tags, panel);
+
+      // Assert
+      expect(out).toEqual(['keep']);
+    });
   });
 });
 

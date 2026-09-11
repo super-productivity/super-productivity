@@ -12,3 +12,43 @@ backup
 coverage
 e2e-results
 tmp
+
+# --- Build-context exclusions for packages/super-sync-server/Dockerfile ---
+# Both call sites build with the REPO ROOT as context (`context: .` in
+# .github/workflows/supersync-docker.yml, "$REPO_ROOT" in scripts/build-and-push.sh), so
+# this file is the only .dockerignore Docker reads — a package-level one would be ignored.
+# The bare patterns above match at the root only, never at packages/super-sync-server/**.
+#
+# .gitignore has no bearing on a build context, so without these the builder stage sweeps
+# in whatever is on the maintainer's disk. The multi-stage build keeps it out of the
+# published layer today, but that is one COPY edit away from being untrue.
+
+# Secrets and live configuration, anywhere in the tree. `**/.env` does not match
+# `.env.local` / `.env.production`, hence the separate glob.
+**/.env
+**/.env.*
+!**/.env.example
+**/secrets/
+**/tde-keys/
+
+# Never let a local install shadow the image's own `npm ci` result, and keep test
+# artifacts out of the build context entirely.
+**/node_modules
+**/coverage
+**/*.log
+
+# Local server state
+packages/super-sync-server/data/
+packages/super-sync-server/backups/
+packages/super-sync-server/initdb.d/
+packages/super-sync-server/.health-alert/
+
+# Rendered at runtime from the shipped templates. A stale copy would bake one operator's
+# legal identity into the image every other operator pulls.
+packages/super-sync-server/public/privacy.html
+packages/super-sync-server/public/index.html
+packages/super-sync-server/public/terms.html
+
+# Our hosted instance's Terms of Service — names German law, a Leipzig venue and our own
+# contact address. Operators supply their own via <DATA_DIR>/legal/terms.html.
+packages/super-sync-server/legal/

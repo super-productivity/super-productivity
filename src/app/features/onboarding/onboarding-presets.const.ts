@@ -20,7 +20,6 @@ const BASE_FEATURES: AppFeaturesConfig = {
   isSyncIconEnabled: true,
   isSearchEnabled: true,
   isDonatePageEnabled: true,
-  isEnableUserProfiles: false,
   isHabitsEnabled: false,
   isFinishDayEnabled: false,
 };
@@ -67,6 +66,7 @@ export const ONBOARDING_PRESETS: OnboardingPreset[] = [
       isIssuesPanelEnabled: true,
       isProjectNotesEnabled: true,
       isHabitsEnabled: true,
+      isFinishDayEnabled: true,
     },
   },
 ];

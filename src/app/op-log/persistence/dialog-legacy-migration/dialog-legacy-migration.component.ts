@@ -13,6 +13,9 @@ import { T } from '../../../t.const';
 
 export type MigrationStatus = 'preparing' | 'backup' | 'migrating' | 'complete' | 'error';
 
+/** afterClosed() value meaning "boot empty and stop offering the legacy data". */
+export const START_FRESH_RESULT = 'START_FRESH';
+
 @Component({
   selector: 'dialog-legacy-migration',
   templateUrl: './dialog-legacy-migration.component.html',
@@ -36,6 +39,13 @@ export class DialogLegacyMigrationComponent {
   status = signal<MigrationStatus>('preparing');
   error = signal<string | null>(null);
 
+  /**
+   * Whether to offer starting without the legacy data. Set by the caller on the
+   * failed-migration path only; the "database cannot be read" path cannot honour
+   * the choice, so it does not offer it.
+   */
+  canStartFresh = signal(false);
+
   getStatusKey(): string {
     const statusMap: Record<MigrationStatus, string> = {
       preparing: T.MIGRATE.STATUS_PREPARING,
@@ -53,5 +63,9 @@ export class DialogLegacyMigrationComponent {
 
   acknowledge(): void {
     this._dialogRef.close();
+  }
+
+  startFresh(): void {
+    this._dialogRef.close(START_FRESH_RESULT);
   }
 }

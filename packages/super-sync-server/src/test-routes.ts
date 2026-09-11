@@ -5,18 +5,25 @@
  * NEVER enable in production!
  */
 import { FastifyInstance } from 'fastify';
+import { Prisma } from '@prisma/client';
+import { SuperSyncOperationSchema, type SuperSyncOperation } from '@sp/shared-schema';
 import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import { prisma } from './db';
 import { Logger } from './logger';
 import { getJwtSecret, JWT_EXPIRY } from './auth';
 import { authCache } from './auth-cache';
+import { computeOpStorageBytes } from './sync/sync.const';
 
 const BCRYPT_ROUNDS = 12;
 
 interface CreateUserBody {
   email: string;
   password: string;
+}
+
+interface SeedLegacyPlaintextOperationBody {
+  op: unknown;
 }
 
 export const testRoutes = async (fastify: FastifyInstance): Promise<void> => {
@@ -255,6 +262,116 @@ export const testRoutes = async (fastify: FastifyInstance): Promise<void> => {
           error: 'Failed to query ops',
           message: (err as Error).message,
         });
+      }
+    },
+  );
+
+  /**
+   * Insert one legacy plaintext operation directly into the test database.
+   * This bypasses the production encrypted-only ingress gate so E2E tests can
+   * exercise recovery from data that predates that gate.
+   */
+  fastify.post<{
+    Params: { userId: string };
+    Body: SeedLegacyPlaintextOperationBody;
+  }>(
+    '/user/:userId/legacy-plaintext-ops',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          required: ['userId'],
+          properties: {
+            userId: { type: 'string' },
+          },
+        },
+        body: {
+          type: 'object',
+          required: ['op'],
+          properties: {
+            op: { type: 'object' },
+          },
+        },
+      },
+      config: {
+        rateLimit: false,
+      },
+    },
+    async (request, reply) => {
+      const userId = parseInt(request.params.userId, 10);
+      if (isNaN(userId)) {
+        return reply.status(400).send({ error: 'Invalid userId' });
+      }
+
+      const parsedOp = SuperSyncOperationSchema.safeParse(request.body.op);
+      if (!parsedOp.success) {
+        return reply.status(400).send({ error: 'Invalid operation' });
+      }
+
+      const op: SuperSyncOperation = parsedOp.data;
+      if (op.isPayloadEncrypted !== false) {
+        return reply.status(400).send({
+          error: 'Legacy plaintext seed requires isPayloadEncrypted=false',
+        });
+      }
+
+      try {
+        const seededOp = await prisma.$transaction(async (tx) => {
+          const user = await tx.user.findUnique({
+            where: { id: userId },
+            select: { id: true },
+          });
+          if (!user) return null;
+
+          const syncState = await tx.userSyncState.upsert({
+            where: { userId },
+            create: { userId, lastSeq: 1 },
+            update: { lastSeq: { increment: 1 } },
+            select: { lastSeq: true },
+          });
+          const now = Date.now();
+
+          await tx.operation.create({
+            data: {
+              id: op.id,
+              userId,
+              clientId: op.clientId,
+              serverSeq: syncState.lastSeq,
+              actionType: op.actionType,
+              opType: op.opType,
+              entityType: op.entityType,
+              entityId: op.entityId ?? null,
+              entityIds: op.entityIds ?? [],
+              payload: op.payload as Prisma.InputJsonValue,
+              payloadBytes: BigInt(computeOpStorageBytes(op).bytes),
+              vectorClock: op.vectorClock as Prisma.InputJsonValue,
+              schemaVersion: op.schemaVersion,
+              clientTimestamp: BigInt(op.timestamp),
+              receivedAt: BigInt(now),
+              isPayloadEncrypted: false,
+              syncImportReason: op.syncImportReason ?? null,
+              repairBaseServerSeq: op.repairBaseServerSeq ?? null,
+            },
+          });
+
+          return { id: op.id, serverSeq: syncState.lastSeq };
+        });
+
+        if (!seededOp) {
+          return reply.status(404).send({ error: 'User not found' });
+        }
+
+        Logger.info(
+          `[TEST] Seeded legacy plaintext operation ${seededOp.id} at seq ${seededOp.serverSeq} for user ${userId}`,
+        );
+        return reply.status(201).send(seededOp);
+      } catch (err: unknown) {
+        Logger.error('[TEST] Failed to seed legacy plaintext operation', {
+          userId,
+          opId: op.id,
+          errorName: err instanceof Error ? err.name : 'UnknownError',
+        });
+        return reply.status(500).send({ error: 'Failed to seed operation' });
       }
     },
   );

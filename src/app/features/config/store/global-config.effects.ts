@@ -31,8 +31,7 @@ import {
   selectMiscConfig,
 } from './global-config.reducer';
 import { mapKeyboardConfigToQwerty } from '../keyboard-shortcut.util';
-import { AppFeaturesConfig, MiscConfig } from '../global-config.model';
-import { UserProfileService } from '../../user-profile/user-profile.service';
+import { MiscConfig } from '../global-config.model';
 import { AppStateActions } from '../../../root-store/app-state/app-state.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { selectAllTasks } from '../../tasks/store/task.selectors';
@@ -50,7 +49,6 @@ export class GlobalConfigEffects {
   private _dateService = inject(DateService);
   private _snackService = inject(SnackService);
   private _store = inject(Store);
-  private _userProfileService = inject(UserProfileService);
   private _keyboardLayoutService = inject(KeyboardLayoutService);
   private _isElectron = inject(IS_ELECTRON_TOKEN);
   private _isMac = inject(IS_MAC_TOKEN);
@@ -274,59 +272,6 @@ export class GlobalConfigEffects {
           const cfg = appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG;
           // Send initial settings to electron for overlay initialization
           window.ea.sendSettingsUpdate(cfg);
-        }),
-      ),
-    { dispatch: false },
-  );
-
-  // Handle user profiles being enabled/disabled
-  handleUserProfilesToggle = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(updateGlobalConfigSection),
-        filter(({ sectionKey, sectionCfg }) => sectionKey === 'appFeatures'),
-        filter(
-          ({ sectionCfg }) =>
-            sectionCfg &&
-            (sectionCfg as AppFeaturesConfig).isEnableUserProfiles !== undefined,
-        ),
-        tap(({ sectionCfg }) => {
-          const isEnabled = (sectionCfg as AppFeaturesConfig).isEnableUserProfiles;
-          const wasEnabled =
-            typeof localStorage !== 'undefined' &&
-            localStorage.getItem('sp_user_profiles_enabled') === 'true';
-
-          if (isEnabled === wasEnabled) {
-            // No change, skip
-            return;
-          }
-
-          // Update localStorage flag for fast startup check
-          if (typeof localStorage !== 'undefined') {
-            if (isEnabled) {
-              localStorage.setItem('sp_user_profiles_enabled', 'true');
-
-              // When enabling for the first time, trigger migration
-              this._userProfileService
-                .migrateOnFirstEnable()
-                .then(() => {
-                  this._snackService.open({
-                    type: 'SUCCESS',
-                    msg: 'User profiles enabled. Reloading app...',
-                  });
-                  setTimeout(() => window.location.reload(), 1000);
-                })
-                .catch((err) => {
-                  Log.err('Failed to migrate user profiles:', err);
-                  this._snackService.open({
-                    type: 'ERROR',
-                    msg: 'Failed to enable user profiles. Please try again.',
-                  });
-                });
-            } else {
-              localStorage.removeItem('sp_user_profiles_enabled');
-            }
-          }
         }),
       ),
     { dispatch: false },

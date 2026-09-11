@@ -460,7 +460,7 @@ describe('shortSyntaxSharedMetaReducer', () => {
 
   // Virtual tag pattern: TODAY_TAG membership is determined by task.dueDay,
   // NOT by task.tagIds. TODAY_TAG.taskIds only stores ordering.
-  // See: docs/ai/today-tag-architecture.md
+  // See: ARCHITECTURE-DECISIONS.md Decision #2
   describe('applyShortSyntax action - virtual tag pattern consistency', () => {
     it('should update tag.taskIds for ordering but NOT task.tagIds when adding to today', () => {
       const todayStr = getDbDateStr();

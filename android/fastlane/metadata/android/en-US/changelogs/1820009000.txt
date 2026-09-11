@@ -1,0 +1,7 @@
+- resolve remote RoundTimeSpentForDay multi-entity conflicts (#9601) (#9607)
+- stop autosize placeholder measure resetting caret (#9603)
+- commit image-input fields on blur to stop per-keystroke ops (#9596)
+- reset the active context when its project is deleted (#9602)
+- unique icons for move-to-bottom and move-to-backlog (#9555)
+- reveal tasks hidden inside collapsed containers (#8780) (#9595)
+- translate "From previous days" for all locales

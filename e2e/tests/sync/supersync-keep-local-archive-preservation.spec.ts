@@ -143,13 +143,11 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
       await expect(dialog).toBeVisible({ timeout: 30000 });
       console.log('[KeepLocal] Conflict dialog appeared');
 
-      // Click "Use My Data" (keep local/imported)
-      const useMyDataBtn = dialog.getByRole('button', { name: /my data/i });
-      await useMyDataBtn.click();
+      // Click "Use My Data" (keep local/imported). The page object scopes the
+      // native-confirm handler around the click; a raw click would hang on it.
+      await clientB.sync.chooseSyncImportUseLocal();
       console.log('[KeepLocal] Clicked "Use My Data"');
-
-      // Wait for dialog to close and operation to complete
-      await expect(dialog).not.toBeVisible({ timeout: 10000 });
+      await expect(dialog).not.toBeVisible();
       await clientB.page.waitForTimeout(3000);
 
       // ============ PHASE 4: Verify no validation errors ============
@@ -266,10 +264,8 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
       const dialog = clientB.page.locator('dialog-sync-import-conflict');
       await expect(dialog).toBeVisible({ timeout: 30000 });
 
-      const useServerBtn = dialog.getByRole('button', { name: /server/i });
-      await useServerBtn.click();
-
-      await expect(dialog).not.toBeVisible({ timeout: 10000 });
+      await clientB.sync.chooseSyncImportUseRemote();
+      await expect(dialog).not.toBeVisible();
 
       // Wait for sync to complete
       await clientB.sync.waitForSyncToComplete({
@@ -378,10 +374,8 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
       const dialog = clientB.page.locator('dialog-sync-import-conflict');
       await expect(dialog).toBeVisible({ timeout: 30000 });
 
-      const useMyDataBtn = dialog.getByRole('button', { name: /my data/i });
-      await useMyDataBtn.click();
-
-      await expect(dialog).not.toBeVisible({ timeout: 10000 });
+      await clientB.sync.chooseSyncImportUseLocal();
+      await expect(dialog).not.toBeVisible();
       await clientB.page.waitForTimeout(3000);
 
       // ============ PHASE 4: Verify state is not corrupted ============

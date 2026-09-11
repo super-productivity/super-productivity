@@ -51,10 +51,6 @@
   margin-bottom: 0;
 }
 
-//::ng-deep task .box {
-//  background: red !important;
-//}
-
 .box {
   position: absolute;
   left: 0;
@@ -63,9 +59,9 @@
   top: 2px;
   transition: var(--transition-standard);
   transition-property: transform, box-shadow;
-  border: var(--task-border, 1px solid transparent);
+  border: var(--task-border, 1px solid var(--task-border-color));
   border-radius: var(--task-border-radius);
-  box-shadow: var(--task-shadow);
+  box-shadow: none;
 
   background: var(--task-c-bg);
 
@@ -110,15 +106,6 @@
 
   :host:focus .inner-wrapper > & {
     border-radius: var(--task-border-radius);
-    // we don't want focus borders for touch only devices
-    @include noTouchOnly() {
-      border-color: var(--palette-primary-400);
-      border-width: 1px;
-      border-style: solid !important;
-    }
-  }
-
-  :host:focus.mobile-highlight-searched-item .inner-wrapper > & {
     border-color: var(--palette-primary-400);
     border-width: 1px;
     border-style: solid !important;
@@ -141,12 +128,6 @@
   :host.isSelected.isSelected .inner-wrapper > &,
   :host.isSelected.isCurrent.isCurrent.isCurrent.isCurrent & {
     @include mq(xs) {
-      right: -34px;
-    }
-    @include mq(md) {
-      right: -234px;
-    }
-    @include mq(xl) {
       right: calc(-1 * var(--task-border-radius));
     }
   }
@@ -176,13 +157,13 @@
 
   ::ng-deep .box {
     box-shadow: var(--task-shadow-sub-task);
+    border-color: var(--sub-task-border-color);
     border-radius: 0;
     top: -1px;
-
-    @include lightTheme {
-      border-color: var(--extra-border-color);
-      bottom: 0;
-    }
+    // Overlap neighbours by 1px so adjacent subtask borders collapse to a single
+    // hairline. Was light-only (dark relied on a shadow); dark now uses a border
+    // too, so it needs the collapse as well.
+    bottom: 0;
 
     @include darkTheme {
       background: var(--sub-task-c-bg);
@@ -195,16 +176,6 @@
   // _ngcontent attribute across all instances of the same component type.
   // This override is more specific (adds .sub-tasks) so it wins.
   :host:focus & .inner-wrapper > .box {
-    @include noTouchOnly() {
-      border-color: transparent;
-
-      @include lightTheme {
-        border-color: var(--extra-border-color);
-      }
-    }
-  }
-
-  :host:focus.mobile-highlight-searched-item & .inner-wrapper > .box {
     border-color: transparent;
 
     @include lightTheme {
@@ -248,6 +219,12 @@
   flex-grow: 1;
   flex-shrink: 1;
   flex-basis: 70%;
+  // Without this the automatic minimum size keeps the wrapper at its min-content
+  // width, which the nowrap .parent-title carries as the full untruncated parent
+  // name. On narrow screens the wrapper then outgrows .first-line and, because we
+  // center here, the overflow is split evenly left and right — pushing the start
+  // of the title off the left edge (#9750).
+  min-width: 0;
   // we cannot do this since this cuts of the box shadow of the task edit
   //overflow: hidden;
   -webkit-tap-highlight-color: transparent;
@@ -265,4 +242,56 @@
       text-decoration: line-through;
     }
   }
+}
+
+// MULTI-SELECT
+// ------------
+// Part of a multi-selection (see TaskMultiSelectService). Deliberately no
+// checkmark: a check means *done* in this app. The tint plus the leading accent
+// stripe carry the state and stay distinct from the focus ring (border) and
+// the detail-panel highlight (.isSelected shadow).
+:host.isMultiSelected .inner-wrapper > .box {
+  background: color-mix(in srgb, var(--c-accent) 14%, var(--task-c-bg));
+  border-left: 3px solid var(--c-accent);
+}
+
+:host.isMultiSelected.isDone .inner-wrapper > .box {
+  background: color-mix(in srgb, var(--c-accent) 10%, var(--task-c-bg-done));
+}
+
+// Touch selection mode: the leading slot shows an empty ring that fills solid
+// with the accent when selected (no tick inside).
+.select-ring {
+  flex: 0 0 var(--task-icon-size);
+  width: var(--task-icon-size);
+  height: var(--task-icon-size);
+  // Same slot and margin as the done-toggle it replaces (_task-controls.scss)
+  // so the title does not shift when the mode toggles.
+  margin-left: var(--s);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &::before {
+    content: '';
+    width: var(--done-toggle-glyph-size);
+    height: var(--done-toggle-glyph-size);
+    border-radius: 50%;
+    border: var(--s-quarter) solid var(--c-accent);
+    box-sizing: border-box;
+    transition: var(--transition-fast);
+    transition-property: background-color;
+  }
+
+  &.isOn::before {
+    background: var(--c-accent);
+  }
+}
+
+// In touch selection mode a tap anywhere on the row toggles it: row controls
+// (schedule / deadline / attachment / checklist / panel buttons) let the tap
+// fall through to the host. The subtask toggle stays live so nested rows can
+// be reached.
+:host.isTouchSelectionMode .all-controls-wrapper .ico-btn {
+  pointer-events: none;
 }

@@ -7,7 +7,12 @@ import { Log } from '../../core/log';
 import { TaskComponent } from './task/task.component';
 import { TaskContextMenuComponent } from './task-context-menu/task-context-menu.component';
 import { TaskContextMenuInnerComponent } from './task-context-menu/task-context-menu-inner/task-context-menu-inner.component';
+import { KeyboardConfig } from '@sp/keyboard-config';
 import { isInputElement } from '../../util/dom-element';
+import { getDomFocusedTaskId } from './get-dom-focused-task-id';
+import { TaskMultiSelectService } from './task-multi-select.service';
+import { TaskBulkActionService } from './task-bulk-action.service';
+import { taskToMarkdownChecklist } from './task-to-markdown-checklist';
 
 type TaskId = string;
 
@@ -46,6 +51,8 @@ export class TaskShortcutService {
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _taskService = inject(TaskService);
   private readonly _configService = inject(GlobalConfigService);
+  private readonly _multiSelect = inject(TaskMultiSelectService);
+  private readonly _bulkActions = inject(TaskBulkActionService);
   readonly isTimeTrackingEnabled = computed(
     () => this._configService.appFeatures().isTimeTrackingEnabled,
   );
@@ -61,40 +68,27 @@ export class TaskShortcutService {
     if (!cfg) return false;
 
     const keys = cfg.keyboard;
-    let focusedTaskId: TaskId | null = this._taskFocusService.focusedTaskId();
+    const focusedTaskId: TaskId | null = getDomFocusedTaskId();
 
-    // Make the DOM authoritative for task focus (#8851). Two problems this
-    // solves:
-    //  1. Focus-tracking recovery: a `focusout` can clear focusedTaskId without
-    //     a following `focusin` rebinding it (e.g. focus staying on the task
-    //     host after an inline-edit blur, where `.focus()` is a no-op and no new
-    //     focusin fires). If the active element is still inside a <task>, we
-    //     recover the id so shortcuts don't silently drop.
-    //  2. Stale-focus guard: navigating to a view with no live <task> (e.g. the
-    //     Planner overdue list) leaves focusedTaskId pointing at a <task> that
-    //     no longer holds focus. Acting on it would mutate the wrong task. If
-    //     the active element is not inside the <task> matching focusedTaskId,
-    //     drop it.
-    // Only the DOM actively contradicting invalidates focus, so the inline-edit
-    // recovery path above stays intact.
-    const active = document.activeElement as HTMLElement | null;
-    const domFocusedTaskId =
-      (active?.closest('task') as HTMLElement | null)?.getAttribute('data-task-id') ??
-      null;
-    if (domFocusedTaskId) {
-      focusedTaskId = domFocusedTaskId;
-    } else if (focusedTaskId) {
-      focusedTaskId = null;
+    // Multi-selection: Esc clears; Shift+Arrow extends from the focused row;
+    // the bulk-capable task shortcuts act on the whole selection. These run
+    // before the focused-task gate so they also work when focus sits on the
+    // selection bar or a dialog just closed. (ShortcutService already bails
+    // out for inputs and open overlays, so Esc/typing there are untouched.)
+    if (this._handleMultiSelectShortcuts(ev, keys, focusedTaskId)) {
+      return true;
     }
 
     // Schedule for today (Shift+T). This is the one task shortcut wired to work
     // without a live <task> component, so it also fires from views that render
     // <planner-task> (the Planner overdue list). When a real <task> is focused
-    // we still delegate, so the backlog→regular position-only move (#8592/#8603)
-    // and the overdue branch in moveToToday() are preserved. (#8851)
+    // we delegate instead, because that path also keeps keyboard focus sane when
+    // scheduling removes the row from the current list. (#8851)
+    // Neither path changes the task's list position — that stays the context
+    // menu's job, so #8592 keeps holding. (#9563)
     if (checkKeyCombo(ev, keys.taskScheduleToday)) {
       if (focusedTaskId) {
-        this._handleTaskShortcut(focusedTaskId, 'moveToTodayWithFocus');
+        this._handleTaskShortcut(focusedTaskId, 'scheduleForTodayWithFocus');
         ev.preventDefault();
         ev.stopPropagation();
         return true;
@@ -126,9 +120,9 @@ export class TaskShortcutService {
       return false;
     }
 
-    // Ctrl+C / Cmd+C: copy focused task title. Match on `code` (physical
-    // position) so the shortcut still fires on non-Latin layouts, mirroring
-    // how the browser's native copy is bound.
+    // Ctrl+C / Cmd+C: copy the focused task and its sub tasks as a markdown
+    // checklist. Match on `code` (physical position) so the shortcut still
+    // fires on non-Latin layouts, mirroring how native copy is bound.
     if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && ev.code === 'KeyC') {
       const target = ev.target;
       const hasTextSelected = !!window.getSelection()?.toString();
@@ -136,17 +130,12 @@ export class TaskShortcutService {
         !(target instanceof HTMLElement && isInputElement(target)) &&
         !hasTextSelected
       ) {
-        const taskComponent = this._taskFocusService.lastFocusedTaskComponent();
-        // Recovery path (above) can derive focusedTaskId from the DOM before
-        // lastFocusedTaskComponent has caught up — fall through to native copy
-        // rather than copying a stale title.
-        if (taskComponent?.task().id === focusedTaskId) {
-          void navigator.clipboard?.writeText(taskComponent.task().title).catch((err) => {
-            Log.warn('Failed to copy task title to clipboard:', err);
-          });
-          ev.preventDefault();
-          return true;
-        }
+        // Read from the store rather than lastFocusedTaskComponent, which can
+        // lag behind the DOM-derived focusedTaskId — the task under the focus
+        // border must always be the one that lands on the clipboard.
+        this._copyTaskAsMarkdownChecklist(focusedTaskId);
+        ev.preventDefault();
+        return true;
       }
     }
 
@@ -232,6 +221,11 @@ export class TaskShortcutService {
     }
     if (checkKeyCombo(ev, keys.taskAddSubTask)) {
       this._handleTaskShortcut(focusedTaskId, 'addSubTask');
+      ev.preventDefault();
+      return true;
+    }
+    if (checkKeyCombo(ev, keys.taskDuplicate)) {
+      this._handleTaskShortcut(focusedTaskId, 'duplicateTask');
       ev.preventDefault();
       return true;
     }
@@ -347,6 +341,158 @@ export class TaskShortcutService {
     return false;
   }
 
+  private _handleMultiSelectShortcuts(
+    ev: KeyboardEvent,
+    keys: KeyboardConfig,
+    focusedTaskId: TaskId | null,
+  ): boolean {
+    // Selection keys act on the focused main-list row only; detail-panel copies
+    // are never part of the selection (see TaskMultiSelectService.focusedRowId).
+    const selectableRowId = this._multiSelect.focusedRowId();
+
+    if (ev.key === 'Escape' && this._multiSelect.isSelecting()) {
+      this._multiSelect.clear();
+      ev.preventDefault();
+      return true;
+    }
+
+    if (
+      selectableRowId &&
+      ev.shiftKey &&
+      !ev.ctrlKey &&
+      !ev.metaKey &&
+      !ev.altKey &&
+      (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') &&
+      // A user who bound a task shortcut to Shift+Arrow keeps it.
+      !checkKeyCombo(ev, keys.moveTaskUp) &&
+      !checkKeyCombo(ev, keys.moveTaskDown)
+    ) {
+      this._extendSelectionThrottled(ev.key === 'ArrowDown' ? 'down' : 'up');
+      ev.preventDefault();
+      return true;
+    }
+
+    // `X` toggles the focused row in the selection (Linear / Gmail convention).
+    // A user or plugin binding on the same combo keeps precedence.
+    if (
+      selectableRowId &&
+      !ev.repeat &&
+      checkKeyCombo(ev, keys.taskToggleSelect) &&
+      !this._isAnyConfiguredCombo(ev, { ...keys, taskToggleSelect: null })
+    ) {
+      this._multiSelect.toggle(selectableRowId);
+      ev.preventDefault();
+      return true;
+    }
+
+    // Ctrl/Cmd+A on a focused row selects every row of its list. Goes through
+    // checkKeyCombo so the user's keyboard-layout map applies. The global
+    // handler lets Cmd+key through from inputs, so guard against a title edit.
+    if (
+      selectableRowId &&
+      (checkKeyCombo(ev, 'Ctrl+A') || checkKeyCombo(ev, 'Meta+A')) &&
+      !(ev.target instanceof HTMLElement && isInputElement(ev.target)) &&
+      // A user who bound a shortcut to Ctrl/Cmd+A keeps it.
+      !this._isAnyConfiguredCombo(ev, keys)
+    ) {
+      this._multiSelect.selectAllInListOfFocused();
+      ev.preventDefault();
+      return true;
+    }
+
+    if (!this._multiSelect.isActive()) {
+      return false;
+    }
+
+    // A shortcut on a focused row that is *not* part of the selection acts on
+    // that row alone (file-manager rule): drop the selection and fall through.
+    if (focusedTaskId && !this._multiSelect.has(focusedTaskId)) {
+      if (this._isBulkShortcut(ev, keys)) {
+        this._multiSelect.clear();
+      }
+      return false;
+    }
+
+    // Bulk allowlist. Everything else keeps acting on the focused task only.
+    const bulkHandlers: [string | null | undefined, () => unknown][] = [
+      [keys.taskToggleDone, () => this._bulkActions.toggleDone()],
+      [keys.taskDelete, () => this._bulkActions.deleteSelected()],
+      [keys.taskSchedule, () => this._bulkActions.openScheduleDialog()],
+      [keys.taskScheduleDeadline, () => this._bulkActions.openDeadlineDialog()],
+      [keys.taskScheduleToday, () => this._bulkActions.addToToday()],
+      [keys.taskUnschedule, () => this._bulkActions.unschedule()],
+      [keys.moveToBacklog, () => this._bulkActions.moveToBacklog()],
+      [keys.taskMoveToProject, () => this._requestBulkMenu(focusedTaskId)],
+      [keys.taskEditTags, () => this._requestBulkMenu(focusedTaskId)],
+      [keys.taskOpenEstimationDialog, () => this._requestBulkMenu(focusedTaskId)],
+      [keys.taskOpenContextMenu, () => this._requestBulkMenu(focusedTaskId)],
+    ];
+    for (const [combo, handler] of bulkHandlers) {
+      if (combo && checkKeyCombo(ev, combo)) {
+        handler();
+        ev.preventDefault();
+        ev.stopPropagation();
+        return true;
+      }
+    }
+    if (isNativeContextMenuKey(ev)) {
+      this._requestBulkMenu(focusedTaskId);
+      ev.preventDefault();
+      return true;
+    }
+    return false;
+  }
+
+  /** True when any configured combo (task, global or plugin) matches `ev`. */
+  private _isAnyConfiguredCombo(ev: KeyboardEvent, keys: KeyboardConfig): boolean {
+    return Object.values(keys).some(
+      (combo) => typeof combo === 'string' && !!combo && checkKeyCombo(ev, combo),
+    );
+  }
+
+  private _isBulkShortcut(ev: KeyboardEvent, keys: KeyboardConfig): boolean {
+    return (
+      [
+        keys.taskToggleDone,
+        keys.taskDelete,
+        keys.taskSchedule,
+        keys.taskScheduleDeadline,
+        keys.taskScheduleToday,
+        keys.taskUnschedule,
+        keys.moveToBacklog,
+        keys.taskMoveToProject,
+        keys.taskEditTags,
+        keys.taskOpenEstimationDialog,
+        keys.taskOpenContextMenu,
+      ].some((combo) => !!combo && checkKeyCombo(ev, combo)) || isNativeContextMenuKey(ev)
+    );
+  }
+
+  private _lastExtendAt = 0;
+
+  /** Key repeat over a long list would re-check every row per event; ~30/s → 10/s. */
+  private _extendSelectionThrottled(direction: 'up' | 'down'): void {
+    const now = Date.now();
+    if (now - this._lastExtendAt < 100) {
+      return;
+    }
+    this._lastExtendAt = now;
+    this._multiSelect.extendFromFocused(direction);
+  }
+
+  /** Opens the bulk actions menu next to the focused row (or the bar). */
+  private _requestBulkMenu(focusedTaskId: TaskId | null): void {
+    const rowEl = focusedTaskId
+      ? (document.activeElement?.closest('task') as HTMLElement | null)
+      : null;
+    const rect = rowEl?.getBoundingClientRect();
+    this._multiSelect.requestMenuOpen(
+      rect
+        ? { x: rect.left + Math.min(rect.width / 2, 200), y: rect.bottom }
+        : { x: window.innerWidth / 2, y: window.innerHeight - 80 },
+    );
+  }
+
   /**
    * Handles togglePlay shortcut as a fallback when no task is focused.
    *
@@ -380,15 +526,34 @@ export class TaskShortcutService {
   }
 
   /**
-   * Resolves a task id straight from the focused element by walking up to the
-   * nearest host carrying `data-task-id`. Generic over the host selector (works
-   * for both `<task>` and `<planner-task>`) so the id-based shortcut path can
-   * act on a task without a live `<task>` component. (#8851)
+   * Writes the task and its sub tasks to the clipboard as a markdown checklist.
+   */
+  private _copyTaskAsMarkdownChecklist(taskId: TaskId): void {
+    this._taskService
+      .getByIdWithSubTaskData$(taskId)
+      // getByIdWithSubTaskData$ is a `take(1)` store select, so this resolves
+      // synchronously — no cleanup needed.
+      .subscribe((task) => {
+        // The selector returns undefined for an unknown id (#9946).
+        if (!task) {
+          Log.warn('No task data to copy for focused task');
+          return;
+        }
+        void navigator.clipboard
+          ?.writeText(taskToMarkdownChecklist(task))
+          .catch((err) => {
+            Log.warn('Failed to copy task to clipboard:', err);
+          });
+      });
+  }
+
+  /**
+   * Resolves a task id from the focused element, matching `<planner-task>` as
+   * well as `<task>`, so the id-based shortcut path can act on a task without a
+   * live `<task>` component. (#8851)
    */
   private _resolveTaskIdFromDom(): TaskId | null {
-    const active = document.activeElement as HTMLElement | null;
-    const host = active?.closest('[data-task-id]') as HTMLElement | null;
-    return host?.getAttribute('data-task-id') ?? null;
+    return getDomFocusedTaskId('[data-task-id]');
   }
 
   /**
@@ -425,7 +590,7 @@ export class TaskShortcutService {
       (taskComponent[method] as (...args: unknown[]) => unknown)(...args);
       return true;
     } else {
-      Log.warn(`Method ${method} not found on task component`, taskComponent);
+      Log.warn(`Method ${method} not found on task component`);
       return false;
     }
   }
@@ -443,7 +608,7 @@ export class TaskShortcutService {
 
       const contextMenu: TaskContextMenuComponent | undefined =
         taskComponent.taskContextMenu();
-      return contextMenu?.isShowInner ?? false;
+      return contextMenu?.isOpen() ?? false;
     } catch (error) {
       return false;
     }
@@ -459,16 +624,13 @@ export class TaskShortcutService {
       const contextMenu: TaskContextMenuComponent | undefined =
         taskComponent.taskContextMenu();
 
-      // Close the context menu if it's open
-      if (contextMenu && contextMenu.isShowInner) {
-        // Set isShowInner to false to hide the context menu
-        contextMenu.isShowInner = false;
-
-        // Also trigger onClose on the inner component if available
+      if (contextMenu?.isOpen()) {
         const innerComponent: TaskContextMenuInnerComponent | undefined =
           contextMenu.taskContextMenuInner?.();
-        if (innerComponent && typeof innerComponent.onClose === 'function') {
+        if (innerComponent) {
           innerComponent.onClose();
+        } else {
+          contextMenu.onClose();
         }
       }
     } catch (error) {

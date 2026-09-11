@@ -236,8 +236,13 @@ describe('Compaction Integration', () => {
     });
   });
 
-  describe('Compaction preserves unsynced operations', () => {
-    it('should never delete unsynced operations during compaction', async () => {
+  // These cover the terminal markers compaction's delete predicate reads
+  // (syncedAt / rejectedAt), not compaction itself: none of them call
+  // compact(). The predicate itself lives in
+  // operation-log-compaction.service.spec.ts, including the case where a
+  // rejected op becomes eligible once older than the retention window (#8769).
+  describe('Terminal markers the compaction predicate reads', () => {
+    it('should exclude synced ops from the unsynced query', async () => {
       const client = new TestClient('client-test');
 
       // Create operations
@@ -260,17 +265,12 @@ describe('Compaction Integration', () => {
       // Mark only first two as synced
       await storeService.markSynced([allOps[0].seq, allOps[1].seq]);
 
-      // Simulate old appliedAt (older than retention period)
-      // Note: We can't directly modify appliedAt, but we can verify the logic
-      // by checking unsynced ops are preserved
-
-      // Verify unsynced op is preserved
       const unsynced = await storeService.getUnsynced();
       expect(unsynced.length).toBe(1);
       expect(unsynced[0].op.id).toBe(op3.id);
     });
 
-    it('should preserve rejected operations for audit', async () => {
+    it('should keep the row and stamp rejectedAt when an op is rejected', async () => {
       const client = new TestClient('client-test');
 
       const op1 = createTaskOperation(client, 'task-1', OpType.Create, {
@@ -286,7 +286,6 @@ describe('Compaction Integration', () => {
       // Reject op2 (simulating conflict)
       await storeService.markRejected([op2.id]);
 
-      // Verify rejected op is still in log
       const allOps = await storeService.getOpsAfterSeq(0);
       expect(allOps.length).toBe(2);
 

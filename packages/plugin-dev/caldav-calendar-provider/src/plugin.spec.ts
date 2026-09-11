@@ -803,6 +803,32 @@ END:VCALENDAR`;
         // resolves correctly.
         expect(events.length).toBe(8);
       });
+
+      it('caps a high-frequency unbounded RRULE with far-past DTSTART instead of spinning', async () => {
+        // FREQ=MINUTELY anchored two years before the window would step through
+        // ~1.05M pre-window occurrences one-by-one. The pre-window skip branch
+        // (`ms < rangeStartMs → continue`) doesn't count toward the emitted cap,
+        // so without an absolute bound this pins the thread at 100% CPU (the app
+        // freeze). MAX_ITERATIONS_PER_EVENT must stop it.
+        const ics = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:minutely-uid
+DTSTART:20240101T100000Z
+DTEND:20240101T101500Z
+RRULE:FREQ=MINUTELY
+SUMMARY:Runaway Minutely
+END:VEVENT
+END:VCALENDAR`;
+
+        const events = await callBacklog(ics, 'minutely.ics');
+
+        // Pre-fix the iterator reaches the window and emits (100 = the
+        // getNewIssuesForBacklog maxResults cap); with the bound in place it
+        // never gets there, so 0 is proof the cap fired. The generous timeout
+        // is only a backstop against the pre-fix multi-second spin.
+        expect(events.length).toBe(0);
+      }, 10000);
     });
 
     describe('parseCompoundId / toCompoundId (W2 — server-controlled href safety)', () => {

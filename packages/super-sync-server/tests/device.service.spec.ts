@@ -7,7 +7,9 @@ vi.mock('../src/db', () => ({
   prisma: {
     syncDevice: {
       count: vi.fn(),
+      findMany: vi.fn(),
     },
+    $executeRaw: vi.fn(),
     userSyncState: {
       findMany: vi.fn(),
     },
@@ -88,6 +90,32 @@ describe('DeviceService', () => {
       const result = await service.getAllUserIds();
 
       expect(result).toEqual([42]);
+    });
+  });
+
+  describe('listDevices', () => {
+    it('should map BigInt columns to numbers', async () => {
+      vi.mocked(prisma.syncDevice.findMany).mockResolvedValue([
+        { clientId: 'E_abc123', lastSeenAt: BigInt(1700000000000) },
+      ] as any);
+
+      // BigInt would serialise to a JSON error on the wire, so the mapping to
+      // number is the contract this route depends on.
+      expect(await service.listDevices(1)).toEqual([
+        { clientId: 'E_abc123', lastSeenAt: 1700000000000 },
+      ]);
+    });
+  });
+
+  describe('touchDevice', () => {
+    // The throttle lives in the SQL predicate (ON CONFLICT ... WHERE), which a
+    // Prisma mock cannot evaluate — device-touch-sql.pglite.spec.ts exercises
+    // the shipped statement against real Postgres. Here only the plumbing.
+    it('should issue one upsert statement per call', async () => {
+      await service.touchDevice(1, 'E_abc123');
+      await service.touchDevice(2, 'A_xyz789');
+
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(2);
     });
   });
 

@@ -233,6 +233,7 @@ export class ShortSyntaxEffects {
             );
 
             delete finalTaskChanges.hasDeadlineTime;
+            delete finalTaskChanges.dueTimeStr;
 
             // The parser writes an absolute per-day total. Persist any earlier
             // additive timer batch first so replay observes the same order as

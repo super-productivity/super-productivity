@@ -30,6 +30,19 @@ describe('KeyboardInputComponent', () => {
     }
   });
 
+  it('keeps an existing shortcut when Escape cancels input', () => {
+    const component = createComponent('Shift+A');
+    const input = document.createElement('input');
+    const blurSpy = spyOn(input, 'blur');
+    const ev = createKeydown('Escape');
+    Object.defineProperty(ev, 'target', { value: input });
+
+    component.onKeyDown(ev);
+
+    expect(component.formControl.value).toBe('Shift+A');
+    expect(blurSpy).toHaveBeenCalled();
+  });
+
   it('keeps Backspace and Delete assignable when the shortcut is empty', () => {
     for (const code of ['Backspace', 'Delete']) {
       const component = createComponent(null);

@@ -53,7 +53,8 @@ import { PluginLog } from '../../core/log';
       }
 
       .plugin-side-panel-btn.active {
-        background-color: transparent;
+        color: var(--brand);
+        background-color: var(--state-selected);
       }
 
       .plugin-side-panel-btn plugin-icon {
@@ -62,10 +63,11 @@ import { PluginLog } from '../../core/log';
       }
 
       .plugin-side-panel-btn.active plugin-icon {
-        transform: rotate(45deg);
+        transform: none;
       }
 
       .plugin-side-panel-btn.active::after {
+        display: none;
         border-top-left-radius: 4px;
         border-top-right-radius: 4px;
         border-bottom-left-radius: 4px;
@@ -84,7 +86,7 @@ import { PluginLog } from '../../core/log';
       }
 
       .plugin-side-panel-btn:hover:not(.active) {
-        background-color: var(--hover-color, rgba(0, 0, 0, 0.04));
+        background-color: var(--state-hover);
       }
     `,
   ],

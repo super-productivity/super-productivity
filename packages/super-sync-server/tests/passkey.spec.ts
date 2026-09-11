@@ -12,6 +12,11 @@ import type {
   RegistrationResponseJSON,
 } from '@simplewebauthn/server';
 
+const wsMocks = vi.hoisted(() => ({ closeForUser: vi.fn() }));
+vi.mock('../src/sync/services/websocket-connection.service', () => ({
+  getWsConnectionService: () => ({ closeForUser: wsMocks.closeForUser }),
+}));
+
 // Mock prisma - use factory function to avoid hoisting issues
 vi.mock('../src/db', () => {
   const mockPrisma = {
@@ -960,6 +965,9 @@ describe('Passkey Authentication', () => {
       });
       expect(txPasskeyDeleteMany).toHaveBeenCalledWith({ where: { userId: 1 } });
       expect(txPasskeyCreate).toHaveBeenCalledOnce();
+      // Sockets authenticate only at upgrade: without the close, tokens the
+      // recovery just revoked keep receiving op notifications indefinitely.
+      expect(wsMocks.closeForUser).toHaveBeenCalledWith(1);
     });
 
     it('should reject recovery already consumed by another request before replacing passkeys', async () => {

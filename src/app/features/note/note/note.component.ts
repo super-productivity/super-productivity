@@ -14,7 +14,7 @@ import { NoteService } from '../note.service';
 import { MatDialog } from '@angular/material/dialog';
 import { T } from '../../../t.const';
 import { openFullscreenMarkdownDialog } from '../../../ui/dialog-fullscreen-markdown/open-fullscreen-markdown-dialog';
-import { Observable, of, ReplaySubject } from 'rxjs';
+import { firstValueFrom, Observable, of, ReplaySubject } from 'rxjs';
 import { TagComponent, TagComponentTag } from '../../tag/tag/tag.component';
 import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 import { WorkContextType } from '../../work-context/work-context.model';
@@ -37,6 +37,11 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { DEFAULT_PROJECT_COLOR } from '../../work-context/work-context.const';
 import { DEFAULT_PROJECT_ICON } from '../../project/project.const';
 import { ClipboardImageService } from '../../../core/clipboard-image/clipboard-image.service';
+import {
+  getDraftOpenAction,
+  LocalDraftService,
+} from '../../../core/draft/local-draft.service';
+import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
 import { isPathSafeToOpen } from '../../../../../electron/shared-with-frontend/is-external-url-allowed';
 
@@ -68,6 +73,12 @@ export class NoteComponent implements OnChanges {
   private readonly _projectService = inject(ProjectService);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _clipboardImageService = inject(ClipboardImageService);
+  private readonly _localDraftService = inject(LocalDraftService);
+
+  // Note ids whose fullscreen-open lifecycle is currently in flight. Serializes
+  // opens per note so a second click during an async draft-conflict prompt
+  // cannot stack a second editor loaded from the same stale snapshot.
+  private readonly _openingNoteIds = new Set<string>();
 
   note!: Note;
 
@@ -160,6 +171,9 @@ export class NoteComponent implements OnChanges {
       throw new Error('No note');
     }
     this._noteService.remove(this.note);
+    // The note is gone, so no draft under this key can ever be recovered onto
+    // anything again; leaving full note content behind would be worse.
+    this._localDraftService.clearDraft('NOTE', this.note.id);
   }
 
   togglePinToToday(): void {
@@ -171,32 +185,122 @@ export class NoteComponent implements OnChanges {
     });
   }
 
-  editFullscreen(event: MouseEvent): void {
+  async editFullscreen(event: MouseEvent): Promise<void> {
     if ((event as any)?.target?.tagName?.toUpperCase() === 'A') {
       return;
     }
     if (!this.note) {
       throw new Error('No note');
     }
-    // Saves-and-closes on a navigation (resize across the mobile breakpoint,
-    // Android back) instead of dropping the edit — see openFullscreenMarkdownDialog
-    // (#8434).
-    openFullscreenMarkdownDialog(this._matDialog, this._location, {
-      content: this.note.content,
-    })
-      .afterClosed()
-      .subscribe((res) => {
+    const note = this.note;
+    if (this._openingNoteIds.has(note.id)) {
+      return;
+    }
+    this._openingNoteIds.add(note.id);
+    try {
+      let contentToOpen = note.content;
+      const draft = this._localDraftService.loadDraft('NOTE', note.id);
+      if (draft) {
+        const action = getDraftOpenAction(draft, note.content);
+        if (action === 'IGNORE') {
+          // The note already holds the draft text (typically a crash landed
+          // between the save and its cleanup). Consume the leftover so a later
+          // remote edit cannot turn it into a spurious conflict prompt.
+          this._localDraftService.clearDraft('NOTE', note.id);
+        } else if (action === 'RESTORE') {
+          // Crash recovery: seed the editor with the unsaved text. The draft
+          // stays stored until the user saves or discards it below.
+          contentToOpen = draft.content;
+        } else {
+          // The note changed since the draft was created (e.g. through sync).
+          // Never auto-overwrite; let the user decide.
+          const isReviewDraft = await firstValueFrom(
+            this._matDialog
+              .open(DialogConfirmComponent, {
+                restoreFocus: true,
+                data: {
+                  message: T.F.NOTE.D_DRAFT_CONFLICT.MSG,
+                  okTxt: T.F.NOTE.D_DRAFT_CONFLICT.REVIEW_DRAFT,
+                  cancelTxt: T.F.NOTE.D_DRAFT_CONFLICT.KEEP_SAVED,
+                },
+              })
+              .afterClosed(),
+          );
+          if (isReviewDraft === true) {
+            contentToOpen = draft.content;
+          } else if (isReviewDraft === false) {
+            // The user explicitly chose the saved version over the draft.
+            this._localDraftService.clearDraft('NOTE', note.id);
+          } else {
+            // No decision (ESC / backdrop / closeAll). Leave the draft intact
+            // so the prompt reappears, and do not open the editor on a
+            // question the user just dismissed.
+            return;
+          }
+        }
+      }
+
+      // Revalidate after the async prompt: if the note was deleted or changed
+      // underneath it (e.g. through sync), the captured snapshot is stale and
+      // dispatching its content on close would revert the newer content.
+      const current = this.note;
+      if (!current || current.id !== note.id || current.content !== note.content) {
+        return;
+      }
+
+      // Saves-and-closes on a navigation (resize across the mobile breakpoint,
+      // Android back) instead of dropping the edit — see openFullscreenMarkdownDialog
+      // (#8434).
+      const dialogRef = openFullscreenMarkdownDialog(this._matDialog, this._location, {
+        content: contentToOpen,
+        ...(contentToOpen !== note.content ? { originalContent: note.content } : {}),
+      });
+      // Checkpoint the editor contents locally so they survive a crash.
+      const contentChangedSub = dialogRef.componentInstance.contentChanged.subscribe(
+        (content) => {
+          this._localDraftService.saveDraft({
+            entityType: 'NOTE',
+            entityId: note.id,
+            content,
+            baseContent: note.content,
+          });
+        },
+      );
+      dialogRef.afterClosed().subscribe(async (res) => {
+        contentChangedSub.unsubscribe();
         if (!this.note) {
           throw new Error('No note');
         }
         // This removes the project note if the note is made empty and saved by the user.
         if (res?.action === 'DELETE') {
           this._noteService.remove(this.note);
+          this._localDraftService.clearDraft('NOTE', note.id);
           // This updates the note, when the user clicks the "Save" button.
         } else if (typeof res === 'string') {
-          this._noteService.update(this.note.id, { content: res });
+          this._noteService.update(note.id, { content: res });
+          // The dispatch is synchronous, so the store already holds the text;
+          // the draft is consumed. (Should the async op-log write behind the
+          // dispatch fail AND the app crash, the text is lost with the draft —
+          // an accepted double-failure window; every ordinary crash is covered
+          // by the draft staying alive until this very line.)
+          //
+          // Unless the note vanished while the editor was open (deleted on
+          // another device, synced here): updateOne drops the update for a
+          // missing entity and NOTE has no recreate fallback, so the draft is
+          // then the only surviving copy — keep it.
+          const { entities } = await firstValueFrom(this._noteService.state$);
+          if (entities[note.id]) {
+            this._localDraftService.clearDraft('NOTE', note.id);
+          }
+        } else if (res?.action === 'DISCARD') {
+          // Confirmed by the user in the dialog. Any other result (undefined
+          // from a force-close/disposal) leaves the draft for crash recovery.
+          this._localDraftService.clearDraft('NOTE', note.id);
         }
       });
+    } finally {
+      this._openingNoteIds.delete(note.id);
+    }
   }
 
   trackByProjectId(i: number, project: Project): string {

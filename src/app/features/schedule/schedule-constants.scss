@@ -16,6 +16,17 @@ $schedule-day-column-width-desktop: 180px;
 $schedule-day-column-width-tablet: 150px;
 $schedule-day-column-width-mobile: 120px;
 
+// Sticky week header. Used both for the header itself and for the
+// scroll-padding that keeps the scroll target from landing under it.
+$schedule-week-header-height: 32px;
+$schedule-week-header-height-mobile: 22px;
+
+// How much of the schedule stays visible above the scroll target, as a
+// fraction of the scroll viewport. A fixed number of minutes reads very
+// differently on a 950px desktop viewport and a 400px phone one; a fraction
+// is stable across breakpoints and zoom levels. ~1h on a desktop viewport.
+$schedule-scroll-lead: 12%;
+
 // Scrollbar dimensions
 $schedule-scrollbar-height: 8px;
 $schedule-scrollbar-width: 4px;

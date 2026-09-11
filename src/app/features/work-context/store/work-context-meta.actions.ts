@@ -1,4 +1,10 @@
 // Shared actions for tags and projects
+//
+// NOTE on `doneTaskIds`: despite the name, the field carries the ids of the
+// NOT-done tasks in the context (see selectUndoneTaskIdsForActiveContext) —
+// the move-up/down reducers skip neighbors absent from it. These are
+// persistent ops replayed by released clients, so the payload field name is
+// wire-frozen; renaming it would break replay on the shipped fleet.
 import { createAction } from '@ngrx/store';
 import { DropListModelSource } from '../../tasks/task.model';
 import { WorkContextType } from '../work-context.model';
@@ -30,6 +36,7 @@ export const moveTaskUpInTodayList = createAction(
   (taskProps: {
     taskId: string;
     workContextId: string;
+    /** Wire-frozen name: carries the NOT-done ids. See the file header. */
     doneTaskIds: string[];
     workContextType: WorkContextType;
   }) => ({
@@ -48,6 +55,7 @@ export const moveTaskDownInTodayList = createAction(
   (taskProps: {
     taskId: string;
     workContextId: string;
+    /** Wire-frozen name: carries the NOT-done ids. See the file header. */
     doneTaskIds: string[];
     workContextType: WorkContextType;
   }) => ({
@@ -66,6 +74,7 @@ export const moveTaskToTopInTodayList = createAction(
   (taskProps: {
     taskId: string;
     workContextId: string;
+    /** Wire-frozen name: carries the NOT-done ids. See the file header. */
     doneTaskIds: string[];
     workContextType: WorkContextType;
   }) => ({
@@ -84,6 +93,7 @@ export const moveTaskToBottomInTodayList = createAction(
   (taskProps: {
     taskId: string;
     workContextId: string;
+    /** Wire-frozen name: carries the NOT-done ids. See the file header. */
     doneTaskIds: string[];
     workContextType: WorkContextType;
   }) => ({

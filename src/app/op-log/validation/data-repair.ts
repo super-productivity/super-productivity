@@ -112,7 +112,6 @@ export const dataRepair = (
   dataOut = _removeNonExistentProjectIdsFromIssueProviders(dataOut, summary);
   dataOut = _removeNonExistentProjectIdsFromTaskRepeatCfg(dataOut, summary);
   dataOut = _removeNonExistentRepeatCfgIdsFromTasks(dataOut, summary);
-  dataOut = _addOrphanedTasksToProjectLists(dataOut, summary);
   dataOut = _moveArchivedSubTasksToUnarchivedParents(dataOut, summary);
   dataOut = _moveUnArchivedSubTasksToArchivedParents(dataOut, summary);
   dataOut = _cleanupOrphanedSubTasks(dataOut, summary);
@@ -132,6 +131,10 @@ export const dataRepair = (
   dataOut = _removeNonExistentProjectIdsFromTasks(dataOut, summary);
   dataOut = _removeNonExistentTagsFromTasks(dataOut, summary);
   dataOut = _addInboxProjectIdIfNecessary(dataOut, summary);
+  // Earlier repair passes can create new top-level tasks or reassign a dangling
+  // projectId to the Inbox. Reconcile project-list membership after those passes
+  // so the repaired tasks are reachable from their owning project. (#8780)
+  dataOut = _addOrphanedTasksToProjectLists(dataOut, summary);
   dataOut = _repairMenuTree(dataOut, summary);
   dataOut = _repairSections(dataOut, summary);
   dataOut = autoFixTypiaErrors(dataOut, errors);
@@ -494,7 +497,11 @@ const _moveArchivedSubTasksToUnarchivedParents = (
         t.parentId && !youngIdSet.has(t.parentId) && !oldIdSet.has(t.parentId),
     );
 
-  OpLog.log('orphanArchivedYoungSubTasks', orphanArchivedYoungSubTasks);
+  // Ids only: these are TaskCopy objects and the log is exportable (rule #9).
+  OpLog.log('orphanArchivedYoungSubTasks', {
+    count: orphanArchivedYoungSubTasks.length,
+    ids: orphanArchivedYoungSubTasks.map((t: TaskCopy) => t.id),
+  });
   const promotedYoungSubTaskIds: string[] = [];
   // Reconcile orphans in O(n) too (#8540): the per-orphan taskState.ids.includes()
   // and the archive .ids.filter() rebuild were each O(n), so a corruption that
@@ -561,7 +568,11 @@ const _moveArchivedSubTasksToUnarchivedParents = (
         t.parentId && !oldIdSet2.has(t.parentId) && !youngIdSet2.has(t.parentId),
     );
 
-  OpLog.log('orphanArchivedOldSubTasks', orphanArchivedOldSubTasks);
+  // Ids only: these are TaskCopy objects and the log is exportable (rule #9).
+  OpLog.log('orphanArchivedOldSubTasks', {
+    count: orphanArchivedOldSubTasks.length,
+    ids: orphanArchivedOldSubTasks.map((t: TaskCopy) => t.id),
+  });
   const promotedOldSubTaskIds: string[] = [];
   // Same O(n) reconciliation as the young block (#8540). `taskMainIdSet2` snapshots
   // taskState.ids *after* the young block's pushes; removals from archiveOld.ids
@@ -628,7 +639,11 @@ const _moveUnArchivedSubTasksToArchivedParents = (
     .map((id: string) => taskState.entities[id] as TaskCopy)
     .filter((t: TaskCopy) => t.parentId && !taskIdSet.has(t.parentId));
 
-  OpLog.log('orphanUnArchivedSubTasks', orphanUnArchivedSubTasks);
+  // Ids only: these are TaskCopy objects and the log is exportable (rule #9).
+  OpLog.log('orphanUnArchivedSubTasks', {
+    count: orphanUnArchivedSubTasks.length,
+    ids: orphanUnArchivedSubTasks.map((t: TaskCopy) => t.id),
+  });
   const promotedUnArchivedSubTaskIds: string[] = [];
   // Reconcile orphans in O(n) (#8540): the per-orphan archive .ids.includes() and
   // the taskState.ids.filter() rebuild were each O(n), leaving this O(orphans*n)

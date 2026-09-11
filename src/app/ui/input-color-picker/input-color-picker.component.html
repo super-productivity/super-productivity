@@ -3,24 +3,27 @@
 }
 
 <button
-  #trigger
+  #triggerOrigin="cdkOverlayOrigin"
+  cdkOverlayOrigin
   type="button"
   class="color-trigger"
   [style.background-color]="value()"
   (click)="toggle()"
 ></button>
 
-@if (isOpen()) {
-  <div
-    class="backdrop"
-    (click)="isOpen.set(false)"
-  ></div>
-  <div
-    class="color-panel"
-    [style.position]="'fixed'"
-    [style.top]="panelTop"
-    [style.left]="panelLeft"
-  >
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="triggerOrigin"
+  [cdkConnectedOverlayOpen]="isOpen()"
+  [cdkConnectedOverlayPositions]="panelPositions"
+  [cdkConnectedOverlayViewportMargin]="viewportMargin"
+  [cdkConnectedOverlayPush]="true"
+  [cdkConnectedOverlayHasBackdrop]="true"
+  cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+  (backdropClick)="isOpen.set(false)"
+  (detach)="isOpen.set(false)"
+>
+  <div class="color-panel">
     <div class="color-grid">
       @for (color of presetColors; track color) {
         <button
@@ -50,7 +53,7 @@
       </button>
     </div>
   </div>
-}
+</ng-template>
 
 <input
   #nativeInput

@@ -8,19 +8,24 @@
  *
  * No Angular, no I/O — deterministic, so the merge decision and the synthesized
  * changes delta are unit-testable in isolation. Determinism is the whole point:
- * both clients must arrive at the byte-identical merged delta regardless of
- * which one performs the merge (see `synthesizeMergedChanges`).
+ * both clients must arrive at the identical field/value map regardless of
+ * which one performs the merge (key insertion order may differ between the
+ * author and wire shapes of a restored clear — immaterial, since the merged
+ * ops carry separate ids and `updateOne` is order-independent). See
+ * `synthesizeMergedChanges`.
  */
 
 import { OpType } from '../core/operation.types';
 import type { Operation } from '../core/operation.types';
 import {
+  extractActionPayload,
   extractEntityFromPayload,
   extractUpdateChanges,
   isMultiEntityPayload,
 } from '@sp/sync-core';
 import { ConflictJournalFieldDiff, NOISE_FIELDS } from './conflict-journal.model';
 import { isMultiEntityOperation } from '../util/get-op-entity-ids.util';
+import { applyClearedFields } from '../../util/cleared-update-fields';
 
 /** Identity of one side of the conflict for the deterministic noise tiebreak. */
 export interface MergeSideMeta {
@@ -106,10 +111,35 @@ const extractOpChanges = (
   }
   const adapterChanges = extractUpdateChanges(op.payload, payloadKey, entityId);
   const safeAdapterChanges = asSafeUpdateChanges(adapterChanges);
-  if (safeAdapterChanges && Object.keys(safeAdapterChanges).length > 0) {
-    return safeAdapterChanges;
+  if (safeAdapterChanges) {
+    // Field CLEARS travel out-of-band (#9776): the author's op holds
+    // `changes: { field: undefined }` (structured clone keeps it) while the
+    // same op after a JSON wire round-trip holds `changes: {}` plus
+    // `clearedFields: ['field']`. Restoring the cleared keys here makes both
+    // clients extract the IDENTICAL field set — otherwise the author judges
+    // the conflict merge-eligible while the receiver sees an opaque op and
+    // falls back to whole-entity LWW, and the two resolve the same conflict
+    // by different strategies (silent divergence).
+    const restored = applyClearedFields(
+      safeAdapterChanges,
+      readClearedFields(op.payload),
+    );
+    if (Object.keys(restored).length > 0) {
+      return restored;
+    }
   }
   return capturedChanges;
+};
+
+/**
+ * The out-of-band cleared-keys list of a captured single-update action
+ * (`clearedFieldsProps`), living beside the adapter payload inside
+ * `actionPayload`. Junk-tolerant: anything that is not a string array reads as
+ * absent (`applyClearedFields` re-validates each key).
+ */
+const readClearedFields = (payload: unknown): string[] | undefined => {
+  const raw = extractActionPayload(payload)?.['clearedFields'];
+  return Array.isArray(raw) ? (raw as string[]) : undefined;
 };
 
 /**
@@ -185,7 +215,12 @@ export const noiseTiebreakSide = (
  *
  * Field-level conditions only (the caller separately excludes archive plans):
  *  - neither side contains a multi-entity op, because resolving one conflicted
- *    entity would reject the whole original op and drop its sibling updates;
+ *    entity would reject the whole original op and drop its sibling updates.
+ *    LOAD-BEARING beyond that rationale since #9426: for SCOPED_PLAN types the
+ *    sibling loss is now handled, but `_preservePartiallyRejectedLocalBulkPlanOps`
+ *    only sees conflicts routed to the plain-LWW `resolutions` list — a merged
+ *    conflict bypasses it and would starve the scoped replacement. Do not relax
+ *    this condition for those types without moving that grouping too;
  *  - neither side has a DELETE op;
  *  - BOTH sides changed at least one real (non-noise) field — if one side only
  *    bumped noise, nothing real is lost by LWW, so leave it to SPAP-13's `noise`

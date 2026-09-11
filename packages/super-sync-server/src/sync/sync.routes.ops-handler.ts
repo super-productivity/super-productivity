@@ -5,8 +5,10 @@ import { Logger } from '../logger';
 import { getSyncService } from './sync.service';
 import { getWsConnectionService } from './services/websocket-connection.service';
 import {
+  createStateReplacementRequiredResults,
   Operation,
   ServerOperation,
+  STATE_REPLACEMENT_REQUIRED_ERROR,
   SYNC_ERROR_CODES,
   UploadOpsRequest,
   UploadOpsResponse,
@@ -23,6 +25,8 @@ import {
   MAX_DECOMPRESSED_SIZE_OPS,
   MAX_OPS_PER_BATCH,
   sendCompressedBodyParseFailure,
+  sendE2eeRequiredReply,
+  violatesE2eeGate,
 } from './sync.routes.payload';
 import {
   computeOpsStorageBytesExcludingUnstorableIds,
@@ -31,6 +35,15 @@ import {
   sendOpsBatchTooLargeReply,
 } from './sync.routes.quota';
 import { createOpsRequestFingerprint } from './services/request-deduplication.service';
+
+const isStateReplacementFenceRejection = (results: UploadResult[]): boolean =>
+  results.length > 0 &&
+  results.every(
+    (result) =>
+      !result.accepted &&
+      result.errorCode === SYNC_ERROR_CODES.INTERNAL_ERROR &&
+      result.error === STATE_REPLACEMENT_REQUIRED_ERROR,
+  );
 
 export const uploadOpsHandler = async (
   req: FastifyRequest<{ Body: UploadOpsRequest }>,
@@ -109,6 +122,18 @@ export const uploadOpsHandler = async (
       });
     }
 
+    // Encrypted-only ingress gate: every op must be flagged encrypted and
+    // carry the ciphertext transport shape. Reject the whole batch AFTER the
+    // rate limit (floods stay cheap) but BEFORE fingerprinting, dedup, quota
+    // work, and persistence, so a rejected upload leaves no server-side trace.
+    if (ops.some(violatesE2eeGate)) {
+      return sendE2eeRequiredReply(reply, userId, {
+        clientId,
+        surface: 'ops',
+        opsCount: ops.length,
+      });
+    }
+
     // Compute the request fingerprint AFTER the rate-limit gate (a rate-limited
     // client must not burn CPU on it) and BEFORE any processing: uploadOps and
     // the quota prevalidation mutate the parsed ops (e.g. vector-clock
@@ -129,28 +154,46 @@ export const uploadOpsHandler = async (
         requestId,
         () => requestFingerprint,
       );
-      if (cachedResults) {
-        Logger.info(`[user:${userId}] Returning cached results for request ${requestId}`);
-
+      if (cachedResults && lastKnownServerSeq !== undefined) {
         // IMPORTANT: Recompute piggybacked ops using the retry request's lastKnownServerSeq.
         // The original response may have contained newOps that the client missed if the
         // network dropped the response. By using the CURRENT request's lastKnownServerSeq,
         // we ensure the client gets all ops it hasn't seen yet.
-        let newOps: ServerOperation[] | undefined;
-        let latestSeq: number;
-        let hasMorePiggyback = false;
-        const PIGGYBACK_LIMIT = 500;
-
-        if (lastKnownServerSeq !== undefined) {
-          const opsResult = await syncService.getOpsSinceWithSeq(
-            userId,
-            lastKnownServerSeq,
-            clientId,
-            PIGGYBACK_LIMIT,
-            false,
+        const opsResult = await syncService.getOpsSinceWithSeq(
+          userId,
+          lastKnownServerSeq,
+          clientId,
+          500,
+          false,
+        );
+        const latestStateReplacementSeq =
+          await syncService.getLatestStateReplacementSeq(userId);
+        const cachedResultPredatesStateReplacement =
+          latestStateReplacementSeq !== null &&
+          (lastKnownServerSeq < latestStateReplacementSeq ||
+            cachedResults.some(
+              (result) =>
+                result.accepted &&
+                (result.serverSeq === undefined ||
+                  result.serverSeq < latestStateReplacementSeq),
+            ));
+        if (cachedResultPredatesStateReplacement) {
+          // The piggyback read comes first, so a replacement committed before
+          // or during it is visible to this boundary read. A replacement that
+          // commits later is beyond opsResult.latestSeq and will be downloaded
+          // on the next sync.
+          Logger.info(
+            `[user:${userId}] Ignoring cached upload result from before the latest state replacement`,
           );
-          newOps = opsResult.ops;
-          latestSeq = opsResult.latestSeq;
+        } else {
+          Logger.info(
+            `[user:${userId}] Returning cached results for request ${requestId}`,
+          );
+
+          const newOps = opsResult.ops;
+          const latestSeq = opsResult.latestSeq;
+          let hasMorePiggyback = false;
+          const PIGGYBACK_LIMIT = 500;
 
           // Check if there are more ops beyond what we piggybacked
           if (newOps.length === PIGGYBACK_LIMIT) {
@@ -164,16 +207,24 @@ export const uploadOpsHandler = async (
                 (hasMorePiggyback ? ` (has more)` : ''),
             );
           }
-        } else {
-          latestSeq = await syncService.getLatestSeq(userId);
+
+          return reply.send({
+            results: cachedResults,
+            newOps: newOps.length ? newOps : undefined,
+            latestSeq,
+            deduplicated: true,
+            ...(hasMorePiggyback ? { hasMorePiggyback: true } : {}),
+          } as UploadOpsResponse & { deduplicated: boolean });
         }
+      } else if (cachedResults) {
+        Logger.info(`[user:${userId}] Returning cached results for request ${requestId}`);
+
+        const latestSeq = await syncService.getLatestSeq(userId);
 
         return reply.send({
           results: cachedResults,
-          newOps: newOps?.length ? newOps : undefined,
           latestSeq,
           deduplicated: true,
-          ...(hasMorePiggyback ? { hasMorePiggyback: true } : {}),
         } as UploadOpsResponse & { deduplicated: boolean });
       }
     }
@@ -206,7 +257,20 @@ export const uploadOpsHandler = async (
               `charged at APPROX_BYTES_PER_OP for user=${userId} (gate)`,
           );
         }
-        const quotaOk = await enforceStorageQuota(userId, estimatedDelta, reply);
+        const initialQuota = await syncService.checkStorageQuota(userId, estimatedDelta);
+        if (!initialQuota.allowed && lastKnownServerSeq !== undefined) {
+          const latestStateReplacementSeq =
+            await syncService.getLatestStateReplacementSeq(userId);
+          if (
+            latestStateReplacementSeq !== null &&
+            lastKnownServerSeq < latestStateReplacementSeq
+          ) {
+            return createStateReplacementRequiredResults(typedOpsForGate);
+          }
+        }
+        const quotaOk =
+          initialQuota.allowed ||
+          (await enforceStorageQuota(userId, estimatedDelta, reply));
         if (!quotaOk) return null;
 
         // Process operations - cast to Operation[] since Zod validates the structure.
@@ -220,20 +284,21 @@ export const uploadOpsHandler = async (
           ops as unknown as Operation[],
           undefined,
           requestStartOccupiedIds,
+          undefined,
+          false,
+          lastKnownServerSeq,
         );
 
         return uploadResults;
       },
     );
     if (!results) return;
+    const requiresStateReplacementDownload = isStateReplacementFenceRejection(results);
 
     // Cache results for deduplication if requestId was provided.
-    // Skip caching when the whole batch rolled back (INTERNAL_ERROR): nothing
-    // was committed, so the deterministic-requestId retry must re-process
-    // rather than be served the cached transient failure for the dedup TTL
-    // (REQUEST_DEDUP_TTL_MS = 5 min). INTERNAL_ERROR is produced ONLY by
-    // uploadOps' rollback catch (sync.service.ts), which maps the *entire*
-    // batch to it, so a single match means the transaction failed. #8332
+    // Skip caching transient INTERNAL_ERROR results: neither transaction
+    // rollbacks nor state-replacement fence rejections committed this batch,
+    // so deterministic-requestId retries must re-process. #8332
     if (
       requestId &&
       requestFingerprint &&
@@ -266,7 +331,10 @@ export const uploadOpsHandler = async (
       const opsResult = await syncService.getOpsSinceWithSeq(
         userId,
         lastKnownServerSeq,
-        clientId,
+        // The replacement may share this client ID (for example a migration
+        // snapshot). A fenced retry must receive the boundary before its local
+        // cursor can advance, even though ordinary piggybacking excludes self.
+        requiresStateReplacementDownload ? undefined : clientId,
         PIGGYBACK_LIMIT,
         false,
       );

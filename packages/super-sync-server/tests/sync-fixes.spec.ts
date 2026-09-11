@@ -18,27 +18,14 @@ let serverSeqCounter: number;
 let requestCache: Map<string, any>;
 
 // Mock the database module with Prisma mocks
-vi.mock('../src/db', () => {
-  const applySelect = (op: any, select?: Record<string, boolean>) => {
-    if (!op || !select) {
-      return op;
-    }
-
-    return Object.fromEntries(
-      Object.entries(select)
-        .filter(([, shouldSelect]) => shouldSelect)
-        .map(([key]) => [key, op[key]]),
-    );
-  };
-
-  const hasUniqueConflict = (row: any) =>
-    Array.from(testOperations.values()).some(
-      (op) =>
-        op.id === row.id ||
-        (op.userId === row.userId &&
-          row.serverSeq !== undefined &&
-          op.serverSeq === row.serverSeq),
-    );
+vi.mock('../src/db', async () => {
+  const {
+    applyOperationSelect: applySelect,
+    hasOperationUniqueConflict,
+    mockOperationGroupByMaxSeq,
+    mockOperationFindFirstFreshBelowBoundary,
+  } = await import('./sync.service.test-state');
+  const hasUniqueConflict = (row: any) => hasOperationUniqueConflict(testOperations, row);
 
   return {
     prisma: {
@@ -170,14 +157,23 @@ vi.mock('../src/db', () => {
             upsert: vi.fn().mockResolvedValue({}),
             count: vi.fn().mockResolvedValue(1),
           },
-          $queryRaw: vi.fn().mockResolvedValue([]),
+          // maxSeq null mirrors the conflict lookup's entity_ids branch, matching the
+          // findFirst above, which finds no prior op for an entity either.
+          $queryRaw: vi.fn().mockResolvedValue([{ maxSeq: null }]),
           // Upload transaction writes the storage counter atomically via $executeRaw.
           $executeRaw: vi.fn().mockResolvedValue(0),
         };
         return callback(tx);
       }),
       operation: {
-        findFirst: vi.fn(),
+        // No other findFirst shape reaches this mock, so the helper's
+        // "not my query" sentinel collapses straight to null.
+        findFirst: vi
+          .fn()
+          .mockImplementation(
+            async (args: any) =>
+              mockOperationFindFirstFreshBelowBoundary(testOperations, args) ?? null,
+          ),
         findMany: vi.fn().mockImplementation(async (args: any) => {
           const ops = Array.from(testOperations.values());
           return ops
@@ -197,6 +193,11 @@ vi.mock('../src/db', () => {
             .slice(0, args.take || 500);
         }),
         aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
+        groupBy: vi
+          .fn()
+          .mockImplementation(async (args: any) =>
+            mockOperationGroupByMaxSeq(testOperations, args),
+          ),
         findUnique: vi.fn().mockImplementation(async (args: any) => {
           if (args.where?.id) {
             return applySelect(testOperations.get(args.where.id), args.select) || null;
@@ -242,6 +243,11 @@ vi.mock('../src/auth', () => ({
 // Import after mocking
 import { syncRoutes } from '../src/sync/sync.routes';
 import { initSyncService, getSyncService } from '../src/sync/sync.service';
+import { SYNC_ERROR_CODES } from '../src/sync/sync.types';
+
+// Uploads must pass the encrypted-only ingress gate: flag true + a payload
+// with the ciphertext transport shape (canonical base64, >= 28 bytes).
+const ENCRYPTED_PAYLOAD = Buffer.alloc(44, 7).toString('base64');
 
 // Helper to create operation
 const createOp = (
@@ -253,6 +259,7 @@ const createOp = (
     entityType: string;
     entityId: string;
     payload: unknown;
+    isPayloadEncrypted: boolean;
     vectorClock: Record<string, number>;
     timestamp: number;
     schemaVersion: number;
@@ -264,7 +271,8 @@ const createOp = (
   opType: 'CRT',
   entityType: 'TASK',
   entityId: 'task-1',
-  payload: { title: 'Test Task' },
+  payload: ENCRYPTED_PAYLOAD,
+  isPayloadEncrypted: true,
   vectorClock: {},
   timestamp: Date.now(),
   schemaVersion: 1,
@@ -425,7 +433,7 @@ describe('Sync System Fixes', () => {
         url: '/api/sync/snapshot',
         headers: { authorization: `Bearer ${authToken}` },
         payload: {
-          state: 'encrypted-string-here',
+          state: ENCRYPTED_PAYLOAD,
           clientId: 'test-client',
           reason: 'recovery',
           vectorClock: { 'test-client': 1 },
@@ -453,7 +461,10 @@ describe('Sync System Fixes', () => {
       expect(syncImportOp.op.isPayloadEncrypted).toBe(true);
     });
 
-    it('should default isPayloadEncrypted to false when not provided', async () => {
+    it('rejects a snapshot without the encryption flag (E2EE_REQUIRED) and stores nothing', async () => {
+      // Pre-gate behavior was "missing flag defaults to false and is
+      // accepted"; the encrypted-only ingress gate deliberately inverted
+      // that: missing means rejected.
       const snapshotResponse = await app.inject({
         method: 'POST',
         url: '/api/sync/snapshot',
@@ -467,9 +478,10 @@ describe('Sync System Fixes', () => {
         },
       });
 
-      expect(snapshotResponse.statusCode).toBe(200);
+      expect(snapshotResponse.statusCode).toBe(400);
+      expect(snapshotResponse.json().errorCode).toBe(SYNC_ERROR_CODES.E2EE_REQUIRED);
 
-      // Download and verify default
+      // Download and verify the rejected snapshot left no operation behind
       const downloadResponse = await app.inject({
         method: 'GET',
         url: '/api/sync/ops?sinceSeq=0',
@@ -480,7 +492,7 @@ describe('Sync System Fixes', () => {
       const syncImportOp = downloadBody.ops.find(
         (op: { op: { opType: string } }) => op.op.opType === 'SYNC_IMPORT',
       );
-      expect(syncImportOp.op.isPayloadEncrypted).toBe(false);
+      expect(syncImportOp).toBeUndefined();
     });
   });
 
@@ -618,7 +630,8 @@ describe('Sync System Fixes', () => {
               opType: 'CRT',
               entityType: 'TASK',
               entityId,
-              payload: { title: 'Task' },
+              payload: ENCRYPTED_PAYLOAD,
+              isPayloadEncrypted: true,
               vectorClock: { [clientA]: 1 },
               timestamp: Date.now(),
               schemaVersion: 1,

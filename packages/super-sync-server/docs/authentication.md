@@ -1,181 +1,152 @@
 # Authentication Architecture
 
-This document explains the design decisions and security features of the Super Sync Server authentication system.
+SuperSync's production authentication paths are passkeys and emailed magic
+links. Successful authentication issues the same long-lived JWT regardless of
+the login method. Password creation exists only in the guarded test routes; it
+is not a production registration or login flow.
 
-## Overview
+The executable authorities are [`api.ts`](../src/api.ts) for routes and rate
+limits, [`auth.ts`](../src/auth.ts) for email tokens and JWT verification, and
+[`passkey.ts`](../src/passkey.ts) for WebAuthn ceremonies and recovery. Keep
+request and response payload details in those files instead of duplicating them
+here.
 
-The server uses **stateless JWT authentication** with:
+## Stable Endpoint Purposes
 
-- **Token versioning** for revocation (no blacklist needed)
-- **Email verification** for new accounts
-- **Account lockout** protection against brute force
+All paths below are mounted under `/api`.
 
-## Design Decisions
+| Method and path                  | Stable purpose                                                                         |
+| -------------------------------- | -------------------------------------------------------------------------------------- |
+| `POST /register/passkey/options` | Start WebAuthn registration and retain a five-minute process-local challenge           |
+| `POST /register/passkey/verify`  | Verify the ceremony and stage the exact credential pending email verification          |
+| `POST /register/magic-link`      | Create an unverified email-only account and send its verification link                 |
+| `POST /verify-email`             | Consume a verification token and activate the corresponding account or pending passkey |
+| `POST /login/passkey/options`    | Start a WebAuthn authentication ceremony                                               |
+| `POST /login/passkey/verify`     | Verify the passkey and issue a JWT                                                     |
+| `POST /login/magic-link`         | Send an existing verified account a one-time login link                                |
+| `POST /login/magic-link/verify`  | Consume the login token and issue a JWT                                                |
+| `POST /recover/passkey`          | Send a verified passkey account a recovery link                                        |
+| `POST /recover/passkey/options`  | Validate the recovery token and start replacement-passkey registration                 |
+| `POST /recover/passkey/complete` | Replace the account's passkeys and invalidate its existing JWTs                        |
+| `POST /replace-token`            | Increment the authenticated user's token version and return the sole replacement JWT   |
 
-### Why Stateless JWTs (Not Stored in DB)
+Authentication request schemas and neutral error responses are defined beside
+these routes in [`api.ts`](../src/api.ts).
 
-JWTs are issued but never persisted to the database.
+## Account Activation and Login
 
-**Benefits:**
+### Passkey Registration
 
-- No session store needed - scales horizontally without shared state
-- Reduced DB load - no lookup on every authenticated request
-- Simpler architecture - no session cleanup jobs
+The server verifies the WebAuthn registration ceremony but does not immediately
+trust the submitted credential. It stores that credential as a
+`PendingPasskeyRegistration`, bound to the exact email-verification token. When
+that token is consumed, the server atomically verifies the user, deletes any
+other pending or active credentials for that account, and promotes only the
+credential bound to that link. This is the active architecture recorded in
+[ADR #6](../../../ARCHITECTURE-DECISIONS.md#6-passkeys-stay-pending-until-email-verification).
 
-**Trade-off:**
+### Magic-Link Registration and Login
 
-- Cannot revoke individual tokens - only all tokens via version increment
-- Token remains valid until expiry (365 days) unless version bumped
+Magic-link registration creates an unverified account with no password or
+passkey. Email verification activates it. A separate 15-minute login token can
+then be requested and exchanged once for a JWT. Registration, login, and
+recovery responses avoid revealing whether an email address already exists.
 
-### Why Token Versioning (Not Blacklisting)
+### Passkey Login and Recovery
 
-Each user has a `tokenVersion` integer. JWTs include this version, and verification checks it matches the current DB value.
+Passkey login performs a fresh WebAuthn ceremony and then issues a JWT. Passkey
+recovery uses a one-hour emailed bearer token to start a replacement WebAuthn
+ceremony. Successful completion deletes the old passkeys, stores the new one,
+increments `tokenVersion`, and therefore invalidates the account's earlier
+JWTs.
 
-```
-Token issued with version 5 → User changes password → DB version becomes 6 → Token rejected (5 ≠ 6)
-```
+WebAuthn challenges live in a five-minute, process-local map and are consumed by
+the corresponding completion request. Multi-instance deployments consequently
+need shared challenge storage or sticky routing for each complete ceremony.
 
-**Benefits:**
+## JWT Lifecycle, Verification, and Revocation
 
-- O(1) storage per user (single integer vs. unbounded blacklist)
-- No cleanup jobs needed (blacklists grow indefinitely)
-- Instant revocation of ALL tokens with one DB update
+JWTs are signed but are not stored as sessions. Every JWT carries `userId`,
+`email`, and `tokenVersion` and expires after 365 days. The authentication
+method matters only before issuance; passkey and magic-link sessions have the
+same scope and lifetime.
 
-**Trade-off:**
+Token verification checks the signature and then confirms that the account
+still exists, is verified, and has the same `tokenVersion`. To avoid a database
+read on every request, those account fields are cached for 30 seconds in a
+bounded, process-local auth cache. Account deletion, verification, token
+replacement, and recovery invalidate the local cache beside their database
+writes.
 
-- Cannot selectively revoke one device's token
-- All devices must re-authenticate when version changes
+This means revocation is immediate on the process that performs the write, but
+not across independent replicas: another process can continue accepting a
+previously cached token until its entry expires, for at most the remaining
+30-second TTL. A multi-instance deployment must add shared invalidation (or a
+stronger centralized verification design) if it requires immediate global
+revocation. Routing all requests for an account consistently can reduce the
+window but does not replace shared invalidation as a general guarantee.
 
-**When version increments:**
+`POST /api/replace-token` increments `tokenVersion`, invalidating all prior JWTs
+for the account, and returns a new JWT with the new version. Selective
+per-device revocation is not implemented.
 
-- Password change
-- Explicit "log out all devices" action
-- Token replacement (`/api/replace-token`)
+The cache implementation and its single-replica constraint live in
+[`auth-cache.ts`](../src/auth-cache.ts); JWT verification and version writes
+live in [`auth.ts`](../src/auth.ts).
 
-### Why Verification Tokens Are Plain Strings
+## Email Tokens Are Bearer Secrets
 
-Email verification tokens are stored as plain 64-character hex strings (32 random bytes).
+Verification, magic-login, and passkey-recovery tokens are random 32-byte values
+stored as plain strings. They are cryptographically unguessable, time-limited,
+and consumed with guarded database updates so the same token cannot complete
+the flow twice. Current lifetimes are 24 hours for email verification, 15
+minutes for magic login, and one hour for passkey recovery.
 
-**Why this is acceptable:**
+Those limits reduce exposure; they do not make plaintext tokens low-value. A
+magic-login token grants a JWT, and a recovery token can replace the account's
+passkeys. Consuming a passkey-registration verification token activates the
+credential already bound to that token, so an attacker who staged a credential
+they control and then obtains the corresponding email token can gain ongoing
+account access. Database dumps, application logs, and proxy logs containing
+unexpired tokens must therefore be treated as credential exposure.
 
-1. **Cryptographically unguessable** - 256 bits of entropy from `crypto.randomBytes(32)`
-2. **One-time use** - Cleared immediately after successful verification
-3. **Short-lived** - 24-hour expiry
-4. **Low-value target** - Only activates an account, grants no ongoing access
+Plaintext storage is a current known limitation. A stronger design would store
+only token digests and compare the digest of a presented token, preserving
+lookup and one-use semantics without leaving usable bearer values in the
+database.
 
-**Trade-off:**
+## WebSocket Token Transport
 
-- If DB is compromised, attacker could verify pending (unverified) accounts
-- Minimal impact: they still don't know the password
+Authenticated HTTP endpoints receive the JWT in the bearer authorization
+header. The WebSocket handshake uses the same full-access, 365-day JWT from the
+`token` query parameter; it is not a short-lived or WebSocket-scoped credential.
 
-**Alternative considered:** Hashing verification tokens (like password reset tokens in some systems) would add complexity with minimal security benefit for this use case.
+Production deployments must use HTTPS and WSS. Because reverse-proxy access and
+request failure/error logs can record request URIs and headers, every such setup
+must omit sensitive query values and token-bearing `Referer` headers from both
+log paths. Login and recovery pages must emit
+`Referrer-Policy: no-referrer`; otherwise their same-origin script and API
+requests can repeat the credential-bearing page URL in a logged header. The
+[bundled Caddy configuration](../Caddyfile) replaces the complete logged query
+suffix, drops `Referer` from both Caddy log paths, and sets that policy. Custom
+proxy and logging configurations must provide equivalent protection. The
+application error logger independently replaces its complete query suffix, so
+malformed requests cannot bypass the proxy filter through application logs.
 
-### Why bcrypt with 12 Rounds
+## Security Properties and Current Limits
 
-**Why bcrypt:**
+| Concern                      | Current implementation                                                                 |
+| ---------------------------- | -------------------------------------------------------------------------------------- |
+| JWT signing                  | HMAC-SHA256 secret with a minimum length of 32 characters                              |
+| JWT lifetime                 | 365 days for both passkey and magic-link authentication                                |
+| Whole-account revocation     | `tokenVersion` increment, subject to the cross-replica cache window described above    |
+| Passkey verification         | WebAuthn origin, RP ID, challenge, credential signature, and counter checks            |
+| Email enumeration resistance | Neutral registration/login/recovery responses and dummy passkey options                |
+| Email bearer-token entropy   | 32 random bytes                                                                        |
+| WebAuthn challenge storage   | Five-minute process-local map; not multi-instance-safe without affinity/shared storage |
+| Per-device JWT revocation    | Not implemented                                                                        |
+| Refresh-token separation     | Not implemented                                                                        |
 
-- Industry standard, battle-tested
-- Built-in salt generation
-- Resistant to GPU/ASIC attacks (memory-hard)
-
-**Why 12 rounds:**
-
-- ~250ms on modern hardware (balances security and UX)
-- OWASP recommends 10+ rounds
-- Adjustable if hardware improves
-
-## Security Features
-
-| Feature                  | Implementation        | Value               |
-| ------------------------ | --------------------- | ------------------- |
-| Password hashing         | bcrypt                | 12 rounds           |
-| Password minimum         | Zod validation        | 12 characters       |
-| JWT signing              | HMAC-SHA256           | Secret min 32 chars |
-| JWT expiry               | Uniform               | 365 days            |
-| Verification token       | `crypto.randomBytes`  | 32 bytes (256 bits) |
-| Verification expiry      | Time-based            | 24 hours            |
-| Lockout threshold        | Failed attempts       | 5 attempts          |
-| Lockout duration         | Time-based            | 15 minutes          |
-| Timing attack mitigation | Dummy hash comparison | Always compare      |
-
-### Timing Attack Mitigation
-
-Even when a user doesn't exist, the login flow compares the provided password against a dummy hash. This ensures the response time is consistent whether the user exists or not, preventing attackers from enumerating valid emails.
-
-```typescript
-const dummyHash = '$2a$12$R9h/cIPz0gi.URNNX3kh2OPST9/PgBkqquzi.Ss7KIUgO2t0jWMUW';
-const hashToCompare = user ? user.passwordHash : dummyHash;
-await bcrypt.compare(password, hashToCompare);
-```
-
-## Token Lifecycle
-
-```
-┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  Register   │────▶│ Verification     │────▶│ Verified        │
-│  (email +   │     │ Token (24h)      │     │ Account         │
-│  password)  │     │ sent via email   │     │                 │
-└─────────────┘     └──────────────────┘     └────────┬────────┘
-                                                      │
-                                                      ▼
-                                             ┌─────────────────┐
-                                             │  Login          │
-                                             │  (email +       │
-                                             │  password)      │
-                                             └────────┬────────┘
-                                                      │
-                                                      ▼
-                                             ┌─────────────────┐
-                                             │  JWT (365d)     │
-                                             │  contains:      │
-                                             │  - userId       │
-                                             │  - email        │
-                                             │  - tokenVersion │
-                                             └────────┬────────┘
-                                                      │
-                              ┌────────────────────────┴────────────────────────┐
-                              │                                                 │
-                              ▼                                                 ▼
-                    ┌─────────────────┐                               ┌─────────────────┐
-                    │ Token expires   │                               │ Password change │
-                    │ (after expiry)  │                               │ tokenVersion++  │
-                    │                 │                               │                 │
-                    │ User must       │                               │ ALL tokens      │
-                    │ re-login        │                               │ invalidated     │
-                    └─────────────────┘                               └─────────────────┘
-```
-
-## API Reference
-
-See [README.md](../README.md) for endpoint documentation.
-
-**Password requirements:**
-
-- Minimum 12 characters (validated via Zod schema in `api.ts`)
-
-**JWT Secret requirements:**
-
-- Minimum 32 characters
-- Generate with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
-
-## Configuration
-
-All auth-related constants are defined in `src/auth.ts`:
-
-```typescript
-const MIN_JWT_SECRET_LENGTH = 32;
-const BCRYPT_ROUNDS = 12;
-const JWT_EXPIRY = '365d'; // All JWT tokens, regardless of auth method
-const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
-```
-
-To modify these values, edit `src/auth.ts` and rebuild.
-
-## Future Considerations
-
-Features not currently implemented but could be added:
-
-- **2FA/MFA** - TOTP or WebAuthn
-- **Refresh tokens** - Separate short-lived access + long-lived refresh
-- **Per-device token revocation** - Track device IDs in JWT
-- **Rate limiting per-user** - Currently only IP-based for auth endpoints
+Set `JWT_SECRET` to a strong random value of at least 32 characters. WebAuthn
+deployment identity is controlled by `WEBAUTHN_RP_NAME`, `WEBAUTHN_RP_ID`, and
+`WEBAUTHN_ORIGIN`; production origins must use HTTPS.

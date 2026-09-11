@@ -13,6 +13,7 @@ import { OpLogDbAdapter } from './op-log-db-adapter';
 import { OP_LOG_DB_ADAPTER_FACTORY } from './op-log-db-adapter.token';
 import {
   isConnectionClosingError,
+  isIdbVersionError,
   isLockRelatedIdbOpenError,
 } from './op-log-errors.const';
 import { Log } from '../../core/log';
@@ -132,6 +133,11 @@ export class ArchiveStoreService {
       } catch (e) {
         lastError = e;
 
+        // Downgrade barrier: retrying can't change the on-disk version (#9187).
+        if (isIdbVersionError(e)) {
+          break;
+        }
+
         // Non-lock errors fall back to a short retry budget so we don't block
         // the op-log subsystem for 31s before surfacing the error to the user.
         // See OperationLogStoreService._openDbWithRetry for details.
@@ -162,7 +168,8 @@ export class ArchiveStoreService {
     // cause needed for diagnostics (e.g. distinguishing Chromium LevelDB locks
     // from WebKit's iOS "Connection to Indexed Database server lost", #7415).
     const err = new IndexedDBOpenError(lastError);
-    Log.err('[ArchiveStore] IndexedDB open failed after all retries.', err);
+    // See OperationLogStoreService: the barrier path stops retrying (#9187).
+    Log.err('[ArchiveStore] IndexedDB open failed.', err);
     throw err;
   }
 

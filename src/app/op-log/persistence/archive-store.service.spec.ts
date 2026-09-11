@@ -2,7 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { IDBPDatabase, unwrap } from 'idb';
 import { forceCloseDatabase } from 'fake-indexeddb';
 import { ArchiveStoreService } from './archive-store.service';
-import { STORE_NAMES } from './db-keys.const';
+import { DB_NAME, DB_VERSION, STORE_NAMES } from './db-keys.const';
+import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 
 describe('ArchiveStoreService', () => {
   let service: ArchiveStoreService;
@@ -76,6 +77,51 @@ describe('ArchiveStoreService', () => {
       expect((service as any)._db).toBeUndefined();
       expect((service as any)._initPromise).toBeUndefined();
       await expectAsync(service.loadArchiveYoung()).toBeResolved();
+    });
+  });
+
+  // #9187: ArchiveStoreService keeps its own copy of the open-with-retry loop,
+  // and it is a live path (both consumers only skip it for a self-managing
+  // adapter). Driving a REAL downgrade beats spying a seam here — this service
+  // inlines `openDB`, and the actual browser rejection is the better oracle.
+  describe('downgrade barrier', () => {
+    it('fails fast with a classified error when the DB is newer than this build', async () => {
+      // Drop the connection opened by the beforeEach so it cannot block the
+      // upgrade below.
+      ((service as any)._db as IDBPDatabase | undefined)?.close();
+      (service as any)._db = undefined;
+      (service as any)._initPromise = undefined;
+
+      // Push the on-disk version above what the service asks for.
+      await new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION + 1);
+        req.onupgradeneeded = () => {};
+        req.onsuccess = () => {
+          req.result.close();
+          resolve();
+        };
+        req.onerror = () => reject(req.error);
+      });
+
+      const startedAt = Date.now();
+      let caught: unknown;
+      try {
+        await service.loadArchiveYoung();
+      } catch (e) {
+        caught = e;
+      }
+
+      expect(caught).toEqual(jasmine.any(IndexedDBOpenError));
+      expect((caught as IndexedDBOpenError).isVersionError).toBe(true);
+      // Without the fail-fast break this burns the non-lock budget
+      // (1s+2s+4s) and dies on jasmine's 2s timeout before reaching here — so
+      // the elapsed check is a second signal, not the only one. Do NOT
+      // "repair" a slow run by raising DEFAULT_TIMEOUT_INTERVAL.
+      //
+      // 500ms, not 1500ms: the real path is ~1-20ms, and a PARTIAL regression
+      // (break moved one iteration late = one 1000ms backoff) would clear a
+      // 1500ms bound and the 2s timeout both, passing green.
+      expect(Date.now() - startedAt).toBeLessThan(500);
     });
   });
 });

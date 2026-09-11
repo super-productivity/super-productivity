@@ -37,7 +37,6 @@ import {
 import { DateService } from 'src/app/core/date/date.service';
 
 import { EntityState } from '@ngrx/entity';
-import { Action } from '@ngrx/store';
 import { TranslatePipe, TranslateService, TranslateStore } from '@ngx-translate/core';
 
 import { IS_ELECTRON } from '../../app.constants';
@@ -263,8 +262,6 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
     map((cfg) => cfg && cfg.isEnableIdleTimeTracking),
   );
 
-  actionsToExecuteBeforeFinishDay: Action[] = [{ type: 'FINISH_DAY' }];
-
   cfg = toSignal(this.cfg$);
   dailySummaryNoteTxt = linkedSignal(() => this.cfg()?.dailySummaryNote?.txt);
 
@@ -342,7 +339,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
 
   async finishDay(): Promise<void> {
     try {
-      await this._beforeFinishDayService.executeActions();
+      await this._beforeFinishDayService.executeActions(this.dayStr);
       // Wait for any ongoing sync to complete before archiving to avoid DB lock errors.
       // Use a 30-second timeout to prevent hanging indefinitely if sync is stuck.
       await this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$

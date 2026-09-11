@@ -86,7 +86,7 @@ describe('ConflictJournalService (store)', () => {
     expect(service.unreviewedCount()).toBe(0);
   });
 
-  it('clearAll() removes every entry and resets the unreviewed count (profile switch)', async () => {
+  it('clearAll() removes every entry and resets the unreviewed count', async () => {
     await service.record(makeEntry({ id: 'a', status: 'unreviewed' }));
     await service.record(makeEntry({ id: 'b', status: 'kept' }));
     expect(service.unreviewedCount()).toBe(1);
@@ -134,6 +134,9 @@ describe('ConflictJournalService (store)', () => {
       expect(await service.getEntry('flipped-old')).toBeUndefined();
     });
 
+    // ~200 sequential awaited IDB writes per spec below run 1.7–2.4s on loaded
+    // CI mac runners — right at Jasmine's 2s default, which failed the v18.17.0
+    // release build. Hence the explicit 10s timeout on each looping spec.
     it('prunes the oldest overflow beyond JOURNAL_MAX_ENTRIES (the 201st entry)', async () => {
       const now = Date.now();
       // JOURNAL_MAX_ENTRIES + 1 fresh entries, oldest = index 0.
@@ -150,7 +153,7 @@ describe('ConflictJournalService (store)', () => {
       expect(await service.getEntry('entry-0')).toBeUndefined();
       expect((await service.list('history')).length).toBe(JOURNAL_MAX_ENTRIES);
       expect(await service.getEntry(`entry-${JOURNAL_MAX_ENTRIES}`)).toBeTruthy();
-    });
+    }, 10000);
   });
 
   describe('opportunistic retention on record() (SPAP-36)', () => {
@@ -166,7 +169,7 @@ describe('ConflictJournalService (store)', () => {
       // Exactly at the soft cap: nothing pruned mid-session yet.
       expect((await service.list('history')).length).toBe(softCap);
       expect(await service.getEntry('entry-0')).toBeTruthy();
-    });
+    }, 10000);
 
     it('prunes back to JOURNAL_MAX_ENTRIES when record() crosses the soft cap', async () => {
       const now = Date.now();
@@ -183,7 +186,7 @@ describe('ConflictJournalService (store)', () => {
       // Oldest overflow dropped, newest kept.
       expect(await service.getEntry('entry-0')).toBeUndefined();
       expect(await service.getEntry(`entry-${softCap}`)).toBeTruthy();
-    });
+    }, 10000);
   });
 
   describe('failure hardening (never-throw contract)', () => {
@@ -278,15 +281,15 @@ describe('ConflictJournalService (store)', () => {
       // The abort was observed: tx.done was awaited despite the delete failure.
       // Old sequencing would leave it unhandled — doneThen never called.
       expect(doneThen).toHaveBeenCalled();
-    });
+    }, 10000);
   });
 
-  describe('durable clear boundary (privacy fail-safe on profile switch)', () => {
+  describe('durable clear boundary after dataset replacement', () => {
     const MARKER_KEY = 'SUP_CONFLICT_JOURNAL_CLEARED_BEFORE';
 
     afterEach(() => localStorage.removeItem(MARKER_KEY));
 
-    it('hides pre-switch entries and zeroes the badge even when the bulk clear fails', async () => {
+    it('hides prior entries and zeroes the badge even when the bulk clear fails', async () => {
       const now = Date.now();
       await service.record(
         makeEntry({ id: 'stale-a', resolvedAt: now - 1000, status: 'unreviewed' }),
@@ -309,7 +312,7 @@ describe('ConflictJournalService (store)', () => {
       expect(service.unreviewedCount()).toBe(0);
     });
 
-    it('shows only entries recorded after a failed clear (the new profile stays clean)', async () => {
+    it('shows only entries recorded after a failed clear', async () => {
       await service.record(makeEntry({ id: 'pre', resolvedAt: Date.now() - 1000 }));
 
       const db = await service['_ensureDb']();
@@ -347,7 +350,7 @@ describe('ConflictJournalService (store)', () => {
       const marker = Number(localStorage.getItem(MARKER_KEY));
       expect(marker).toBeGreaterThan(0);
 
-      // A conflict recorded by the NEW profile (after the boundary) must NOT be
+      // A conflict recorded after the replacement boundary must NOT be
       // reclaimed by the marker-aware prune — guards against a "prune deletes
       // everything while a marker is set" regression.
       await service.record(makeEntry({ id: 'fresh', resolvedAt: marker + 1000 }));

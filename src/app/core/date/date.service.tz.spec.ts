@@ -144,9 +144,9 @@ describe('DateService — logical clock helpers', () => {
     expect(service.getStartOfNextDayDiffMs()).toBe(0);
   });
 
-  it('setStartOfNextDayDiff() falls back to legacy hour when a time string is invalid', () => {
+  it('setStartOfNextDayDiff() ignores the legacy hour when a time string is invalid', () => {
     service.setStartOfNextDayDiff('24:00', 2);
-    expect(service.getStartOfNextDayDiffMs()).toBe(2 * 60 * 60 * 1000);
+    expect(service.getStartOfNextDayDiffMs()).toBe(0);
   });
 
   it('setStartOfNextDayDiff() falls back to legacy hour when time is undefined', () => {

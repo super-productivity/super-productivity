@@ -47,7 +47,6 @@ export class KeyboardInputComponent extends FieldType<FormlyFieldConfig> {
 
     // Focus out on escape
     if (keyCode === 'Escape') {
-      this.formControl.setValue(null);
       if (ev.target instanceof HTMLElement) ev.target.blur();
     } else if (
       CLEAR_SHORTCUT_KEY_CODES.includes(keyCode) &&

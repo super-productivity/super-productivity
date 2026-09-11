@@ -12,6 +12,7 @@ import { createReducer, on } from '@ngrx/store';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { adapter } from './task-repeat-cfg.selectors';
+import { applyClearedFields } from '../../../util/cleared-update-fields';
 
 export { TASK_REPEAT_CFG_FEATURE_NAME } from './task-repeat-cfg.selectors';
 
@@ -63,8 +64,16 @@ export const taskRepeatCfgReducer = createReducer<TaskRepeatCfgState>(
   on(addTaskRepeatCfgToTask, (state, { taskRepeatCfg }) =>
     adapter.addOne(taskRepeatCfg, state),
   ),
-  on(updateTaskRepeatCfg, (state, { taskRepeatCfg }) =>
-    adapter.updateOne(taskRepeatCfg, state),
+  on(updateTaskRepeatCfg, (state, { taskRepeatCfg, clearedFields }) =>
+    // Restore keys that JSON serialization dropped from a replayed op's
+    // changes (`{ someField: undefined }`) — see issue #9776.
+    adapter.updateOne(
+      {
+        id: taskRepeatCfg.id as string,
+        changes: applyClearedFields(taskRepeatCfg.changes, clearedFields),
+      },
+      state,
+    ),
   ),
   on(upsertTaskRepeatCfg, (state, { taskRepeatCfg }) =>
     adapter.upsertOne(taskRepeatCfg, state),

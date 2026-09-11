@@ -15,6 +15,7 @@ import { WorkContextService } from '../work-context.service';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { selectActiveContextTypeAndId } from './work-context.selectors';
 
 describe('WorkContextEffects', () => {
@@ -245,6 +246,68 @@ describe('WorkContextEffects', () => {
 
       setTimeout(() => {
         expect(emitted).toBe(false);
+        done();
+      }, 50);
+    });
+  });
+
+  describe('resetContextOnDeletedProject$', () => {
+    const deleteProject = (projectId: string): unknown =>
+      TaskSharedActions.deleteProject({ projectId, noteIds: [], allTaskIds: [] });
+
+    it('should switch to TODAY when the deleted project is the active context', (done) => {
+      store.overrideSelector(selectActiveContextTypeAndId, {
+        activeId: 'project-123',
+        activeType: WorkContextType.PROJECT,
+      });
+
+      effects.resetContextOnDeletedProject$.subscribe((action) => {
+        expect(action).toEqual(
+          setActiveWorkContext({
+            activeId: TODAY_TAG.id,
+            activeType: WorkContextType.TAG,
+          }),
+        );
+        done();
+      });
+
+      actions$.next(deleteProject('project-123'));
+    });
+
+    it('should not dispatch when another project is deleted', (done) => {
+      store.overrideSelector(selectActiveContextTypeAndId, {
+        activeId: 'project-123',
+        activeType: WorkContextType.PROJECT,
+      });
+
+      let actionDispatched = false;
+      effects.resetContextOnDeletedProject$.subscribe(() => {
+        actionDispatched = true;
+      });
+
+      actions$.next(deleteProject('some-other-project'));
+
+      setTimeout(() => {
+        expect(actionDispatched).toBe(false);
+        done();
+      }, 50);
+    });
+
+    it('should not dispatch when the active context is a tag', (done) => {
+      store.overrideSelector(selectActiveContextTypeAndId, {
+        activeId: TODAY_TAG.id,
+        activeType: WorkContextType.TAG,
+      });
+
+      let actionDispatched = false;
+      effects.resetContextOnDeletedProject$.subscribe(() => {
+        actionDispatched = true;
+      });
+
+      actions$.next(deleteProject(TODAY_TAG.id));
+
+      setTimeout(() => {
+        expect(actionDispatched).toBe(false);
         done();
       }, 50);
     });

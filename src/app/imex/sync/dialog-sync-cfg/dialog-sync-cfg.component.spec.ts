@@ -651,6 +651,22 @@ describe('DialogSyncCfgComponent', () => {
       expect((component as any)._tmpUpdatedCfg.isEncryptionEnabled).toBeFalse();
     }));
 
+    it('records the provider active when the dialog opens', () => {
+      fixture.destroy();
+      (mockSyncConfigService as any).syncSettingsForm$ = of({
+        ...baseSyncConfig,
+        isEnabled: true,
+        syncProvider: SyncProviderId.WebDAV,
+      });
+
+      fixture = TestBed.createComponent(DialogSyncCfgComponent);
+      component = fixture.componentInstance;
+
+      expect((component as any)._tmpUpdatedCfg._activeProviderId).toBe(
+        SyncProviderId.WebDAV,
+      );
+    });
+
     it('waits for the selected provider config before saving', fakeAsync(() => {
       let resolvePrivateCfg: (value: null) => void = () => undefined;
       const privateCfgPromise = new Promise<null>((resolve) => {

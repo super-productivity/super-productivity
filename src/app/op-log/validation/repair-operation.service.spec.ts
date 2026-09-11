@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { TabSeqFrontierService } from '../persistence/tab-seq-frontier.service';
 import { RepairOperationService } from './repair-operation.service';
 import {
   MixedSourceOperationBatch,
@@ -281,6 +282,26 @@ describe('RepairOperationService', () => {
       );
 
       expect(seq).toBe(77);
+    });
+
+    it('should re-establish the tab seq frontier at the repair seq, clearing prior divergence (#9438)', async () => {
+      // A REPAIR is a full-state baseline: it supersedes earlier ops on
+      // replay and the caller dispatches the repaired state, so a prior
+      // sticky concurrent-tab divergence must not keep saves disabled.
+      const frontier = TestBed.inject(TabSeqFrontierService);
+      frontier.establishFrontier(4);
+      frontier.observeOwnWrite(6); // gap → sticky divergence
+      expect(frontier.hasKnownForeignWrites()).toBe(true);
+
+      mockBatchAppendWithSeq(77);
+      await service.createRepairOperation(
+        mockRepairedState,
+        createRepairSummary(),
+        'test-client',
+      );
+
+      expect(frontier.hasKnownForeignWrites()).toBe(false);
+      expect(frontier.isSaveSafeAt(77)).toBe(true);
     });
 
     it('should throw error if clientId is empty', async () => {

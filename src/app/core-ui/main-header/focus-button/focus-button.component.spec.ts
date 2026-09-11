@@ -1,12 +1,7 @@
-import { TestBed } from '@angular/core/testing';
-import {
-  EnvironmentInjector,
-  runInInjectionContext,
-  signal,
-  Signal,
-  WritableSignal,
-} from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { signal, Signal, WritableSignal } from '@angular/core';
 import { of } from 'rxjs';
+import { TranslateModule } from '@ngx-translate/core';
 
 import { FocusButtonComponent } from './focus-button.component';
 import { FocusModeService } from '../../../features/focus-mode/focus-mode.service';
@@ -30,6 +25,7 @@ interface MockFocusModeService {
 
 describe('FocusButtonComponent', () => {
   let component: FocusButtonComponent;
+  let fixture: ComponentFixture<FocusButtonComponent>;
   let mockFocusMode: MockFocusModeService;
 
   beforeEach(() => {
@@ -62,6 +58,7 @@ describe('FocusButtonComponent', () => {
     const mockDialog = jasmine.createSpyObj('MatDialog', ['open']);
 
     TestBed.configureTestingModule({
+      imports: [FocusButtonComponent, TranslateModule.forRoot()],
       providers: [
         { provide: FocusModeService, useValue: mockFocusMode },
         { provide: MetricService, useValue: mockMetric },
@@ -71,9 +68,15 @@ describe('FocusButtonComponent', () => {
       ],
     });
 
-    runInInjectionContext(TestBed.inject(EnvironmentInjector), () => {
-      component = new FocusButtonComponent();
-    });
+    fixture = TestBed.createComponent(FocusButtonComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it('provides an accessible name for the icon-only focus button', () => {
+    const button = fixture.nativeElement.querySelector('button') as HTMLButtonElement;
+
+    expect(button.getAttribute('aria-label')).toBe('MH.ENTER_FOCUS_MODE');
   });
 
   describe('cycleLabel', () => {

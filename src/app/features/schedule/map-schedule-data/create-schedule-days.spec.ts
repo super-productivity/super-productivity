@@ -43,19 +43,23 @@ describe('createScheduleDays - Task Filtering', () => {
     now = today.getTime();
     realNow = now;
 
-    todayStr = today.toISOString().split('T')[0];
+    // NOTE: date strings must be derived from the LOCAL date (getDbDateStr), not
+    // toISOString() (UTC) — otherwise they shift a day in timezones ahead of UTC
+    // (e.g. Australia/Sydney) and no longer match the local-midnight logic in
+    // createScheduleDays.
+    todayStr = getDbDateStr(today);
 
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrowStr = tomorrow.toISOString().split('T')[0];
+    tomorrowStr = getDbDateStr(tomorrow);
 
     const nextWeek = new Date(today);
     nextWeek.setDate(nextWeek.getDate() + 7);
-    nextWeekStr = nextWeek.toISOString().split('T')[0];
+    nextWeekStr = getDbDateStr(nextWeek);
 
     const futureWeek = new Date(today);
     futureWeek.setDate(futureWeek.getDate() + 14);
-    futureWeekStr = futureWeek.toISOString().split('T')[0];
+    futureWeekStr = getDbDateStr(futureWeek);
   });
 
   describe('Unscheduled tasks (no dueDay, no dueWithTime, no plannedForDay)', () => {
@@ -89,12 +93,7 @@ describe('createScheduleDays - Task Filtering', () => {
 
     it('should NOT appear when viewing next week (outside current week)', () => {
       // Arrange
-      const unscheduledTask: TaskWithoutReminder = {
-        id: 'task1',
-        title: 'Unscheduled Task',
-        timeEstimate: 3600000,
-        timeSpent: 0,
-      } as TaskWithoutReminder;
+      const unscheduledTask = createTestTask('task1', 'Unscheduled Task');
 
       // Viewing a week starting 7 days from now
       const dayDates = [nextWeekStr];
@@ -519,7 +518,7 @@ describe('createScheduleDays - Task Filtering', () => {
       // Viewing two days in next week
       const secondDayNextWeek = parseDbDateStr(nextWeekStr);
       secondDayNextWeek.setDate(secondDayNextWeek.getDate() + 1);
-      const secondDayStr = secondDayNextWeek.toISOString().split('T')[0];
+      const secondDayStr = getDbDateStr(secondDayNextWeek);
 
       const dayDates = [nextWeekStr, secondDayStr];
       const plannerDayMap: PlannerDayMap = {};

@@ -5,7 +5,7 @@
     "url": "https://github.com/dougcooper/sp-reporter",
     "author": "dougcooper",
     "authorUrl": "https://github.com/dougcooper",
-    "stars": 32
+    "stars": 58
   },
   {
     "name": "Archived Tasks Viewer",
@@ -13,7 +13,7 @@
     "url": "https://github.com/baiyina/Archived-Tasks-Viewer",
     "author": "baiyina",
     "authorUrl": "https://github.com/baiyina",
-    "stars": 31
+    "stars": 61
   },
   {
     "name": "QuestArc",
@@ -21,7 +21,7 @@
     "url": "https://codeberg.org/Nexumia/QuestArc",
     "author": "Nexumia",
     "authorUrl": "https://codeberg.org/Nexumia",
-    "stars": 4
+    "stars": 8
   },
   {
     "name": "AutoPlan",
@@ -29,7 +29,7 @@
     "url": "https://codeberg.org/00sapo/sp-autoplan",
     "author": "00sapo",
     "authorUrl": "https://codeberg.org/00sapo",
-    "stars": 28
+    "stars": 13
   },
   {
     "name": "Asana Integration",
@@ -37,7 +37,15 @@
     "url": "https://codeberg.org/sinenomine/sp-asana",
     "author": "sinenomine",
     "authorUrl": "https://codeberg.org/sinenomine",
-    "stars": 0
+    "stars": 2
+  },
+  {
+    "name": "Auto-Fill Time Spent",
+    "shortDescription": "Automatically sets Time Spent equal to Time Estimate when completing a task that has no tracked time. Perfect for off-computer activities.",
+    "url": "https://github.com/MazenMohamed203/auto-fill-time-spent",
+    "author": "MazenMohamed203",
+    "authorUrl": "https://github.com/MazenMohamed203",
+    "stars": 6
   },
   {
     "name": "Obsidian Integration",
@@ -45,7 +53,7 @@
     "url": "https://codeberg.org/sinenomine/sp-obsidian/",
     "author": "sinenomine",
     "authorUrl": "https://codeberg.org/sinenomine",
-    "stars": 5
+    "stars": 10
   },
   {
     "name": "MCP",
@@ -53,7 +61,7 @@
     "url": "https://github.com/organicmoron/SP-MCP",
     "author": "organicmoron",
     "authorUrl": "https://github.com/organicmoron",
-    "stars": 68
+    "stars": 120
   },
   {
     "name": "Super Productivity MCP",
@@ -61,15 +69,15 @@
     "url": "https://github.com/b0x42/Super-Productivity-MCP",
     "author": "b0x42",
     "authorUrl": "https://github.com/b0x42",
-    "stars": 11
+    "stars": 81
   },
   {
     "name": "Dashboard",
-    "shortDescription": "A lightweight dashboard plugin that visualizes time tracked, completed tasks, overdue items, and project breakdowns within a user‑defined date range. It ships as a self-contained HTML/JavaScript widget with no external dependencies and is styled to support light/dark themes.",
-    "url": "https://github.com/dougcooper/sp-dashboard",
-    "author": "dougcooper",
-    "authorUrl": "https://github.com/dougcooper",
-    "stars": 43
+    "shortDescription": "A lightweight dashboard plugin that visualizes time tracked, completed tasks, overdue items, and project/tag breakdowns within a user‑defined date range, with live time tracking and chart share/export. It ships as a self-contained HTML/JavaScript widget with no external dependencies and is styled to support light/dark themes.",
+    "url": "https://github.com/ahanel13/sp-dashboard",
+    "author": "ahanel13",
+    "authorUrl": "https://github.com/ahanel13",
+    "stars": 19
   },
   {
     "name": "Invoicer",
@@ -77,7 +85,7 @@
     "url": "https://github.com/1jamesthompson1/sp-invoicer",
     "author": "1jamesthompson1",
     "authorUrl": "https://github.com/1jamesthompson1",
-    "stars": 11
+    "stars": 24
   },
   {
     "name": "StudyForge Leaderboard",
@@ -93,7 +101,7 @@
     "url": "https://codeberg.org/sinenomine/sp-task-print",
     "author": "sinenomine",
     "authorUrl": "https://codeberg.org/sinenomine/",
-    "stars": 1
+    "stars": 2
   },
   {
     "name": "AI Assistant",
@@ -101,7 +109,7 @@
     "url": "https://github.com/ai-eifying/ai-assistant-plugin",
     "author": "ai-eifying",
     "authorUrl": "https://github.com/ai-eifying",
-    "stars": 4
+    "stars": 33
   },
   {
     "name": "Memos Sync",
@@ -109,7 +117,7 @@
     "url": "https://github.com/giba0/memos-sync",
     "author": "giba0",
     "authorUrl": "https://github.com/giba0",
-    "stars": 2
+    "stars": 7
   },
   {
     "name": "YouTrack Importer for SuperProductivity",
@@ -117,7 +125,7 @@
     "url": "https://github.com/coissay/superProductivity-YoutrackPlugin",
     "author": "coissay",
     "authorUrl": "https://github.com/coissay",
-    "stars": 0
+    "stars": 2
   },
   {
     "name": "Home Assistant Bridge",
@@ -125,7 +133,7 @@
     "url": "https://github.com/jloops412/ha-super-productivity",
     "author": "jloops412",
     "authorUrl": "https://github.com/jloops412",
-    "stars": 0
+    "stars": 14
   },
   {
     "name": "Goals Vision Board",
@@ -133,6 +141,30 @@
     "url": "https://github.com/CuriousChipmunk/vision-board-super-productivity",
     "author": "CuriousChipmunk",
     "authorUrl": "https://github.com/CuriousChipmunk",
+    "stars": 33
+  },
+  {
+    "name": "sync.md Multi",
+    "shortDescription": "Sync multiple SuperProductivity projects with their own markdown files (bidirectional).",
+    "url": "https://codeberg.org/fpindado/sync-md-multi",
+    "author": "Fernando Pindado",
+    "authorUrl": "https://codeberg.org/fpindado",
+    "stars": 2
+  },
+  {
+    "name": "JSON to Tasks",
+    "shortDescription": "Create tasks and subtasks from pasted JSON, with project/tag resolution and optional creation of missing projects and tags.",
+    "url": "https://github.com/nekoritsme/superproductivity-fromjson-totasks",
+    "author": "nekoritsme",
+    "authorUrl": "https://github.com/nekoritsme",
     "stars": 0
+  },
+  {
+    "name": "Joplin Notes Sync",
+    "shortDescription": "One-way sync of project notes (and optional two-way task notes) to Joplin notebooks. Desktop only.",
+    "url": "https://github.com/BigWebstas/SuperProd-Joplin-Sync",
+    "author": "BigWebstas",
+    "authorUrl": "https://github.com/BigWebstas",
+    "stars": 3
   }
 ]

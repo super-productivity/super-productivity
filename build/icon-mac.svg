@@ -1,0 +1,71 @@
+<svg
+  width="1024"
+  height="1024"
+  viewBox="0 0 1024 1024"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <g filter="url(#app-icon-shadow)">
+    <rect
+      x="101"
+      y="101"
+      width="822"
+      height="822"
+      rx="183"
+      fill="#0B77D2"
+    />
+  </g>
+  <path
+    d="M263 528.788L514.234 760.08L761.85 263L496.615 632.602L263 528.788Z"
+    fill="white"
+  />
+  <defs>
+    <filter
+      id="app-icon-shadow"
+      x="79"
+      y="87"
+      width="866"
+      height="866"
+      filterUnits="userSpaceOnUse"
+      color-interpolation-filters="sRGB"
+    >
+      <feFlood
+        flood-opacity="0"
+        result="background"
+      />
+      <feColorMatrix
+        in="SourceAlpha"
+        type="matrix"
+        values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
+        result="source-alpha"
+      />
+      <feMorphology
+        radius="2"
+        operator="dilate"
+        in="SourceAlpha"
+        result="shadow-spread"
+      />
+      <feOffset dy="8" />
+      <feGaussianBlur stdDeviation="10" />
+      <feComposite
+        in2="source-alpha"
+        operator="out"
+      />
+      <feColorMatrix
+        type="matrix"
+        values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.24 0"
+      />
+      <feBlend
+        mode="normal"
+        in2="background"
+        result="shadow"
+      />
+      <feBlend
+        mode="normal"
+        in="SourceGraphic"
+        in2="shadow"
+        result="shape"
+      />
+    </filter>
+  </defs>
+</svg>

@@ -25,18 +25,11 @@
   }
 }
 
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: calc(var(--z-backdrop) - 1);
-}
-
 .color-panel {
   padding: var(--s);
   background: var(--card-bg);
   border-radius: 8px;
   box-shadow: var(--whiteframe-shadow-8dp);
-  z-index: var(--z-backdrop);
 }
 
 .color-grid {

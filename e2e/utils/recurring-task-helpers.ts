@@ -10,15 +10,26 @@ import { expect, Locator, Page } from '@playwright/test';
  * every spec that uses them.
  */
 
-const DIALOG_CONTAINER = 'mat-dialog-container';
+const DIALOG_CONTAINER = 'mat-dialog-container:has(dialog-edit-task-repeat-cfg)';
+const SCHEDULE_DIALOG = 'mat-dialog-container:has(dialog-schedule-task)';
 
-/** Open the recurring-config dialog from the task detail panel's repeat row. */
+/** Open the recurring-config dialog via the task detail panel's schedule row. */
 export const openRecurDialog = async (page: Page): Promise<Locator> => {
-  const recurItem = page
+  const scheduleItem = page
     .locator('task-detail-item')
-    .filter({ has: page.locator('mat-icon', { hasText: /^repeat$/ }) });
-  await expect(recurItem).toBeVisible({ timeout: 5000 });
-  await recurItem.click();
+    .filter({
+      has: page.locator('mat-icon', {
+        hasText: /^(alarm|today|schedule|repeat)$/,
+      }),
+    })
+    .first();
+  await expect(scheduleItem).toBeVisible({ timeout: 5000 });
+  await scheduleItem.click();
+
+  const scheduleDialog = page.locator(SCHEDULE_DIALOG);
+  await scheduleDialog.waitFor({ state: 'visible', timeout: 10000 });
+  await scheduleDialog.locator('.repeat-btn').click();
+
   const dialog = page.locator(DIALOG_CONTAINER);
   await dialog.waitFor({ state: 'visible', timeout: 10000 });
   return dialog;
@@ -45,17 +56,27 @@ export const openRecurDialogFromProjection = async (
 };
 
 /**
- * Set the recurring "Start date" by using the calendar datepicker.
+ * Open the schedule dialog nested inside the recurring-config dialog.
  */
-export const setRecurStartDate = async (page: Page, ddmmyyyy: string): Promise<void> => {
+export const openRecurScheduleDialog = async (page: Page): Promise<Locator> => {
   const dialog = page.locator(DIALOG_CONTAINER).first();
   const scheduleBtn = dialog.locator('.planned-start-date-btn');
   await expect(scheduleBtn).toBeVisible({ timeout: 5000 });
+  const scheduleDialogs = page.locator(SCHEDULE_DIALOG);
+  const previousScheduleDialogCount = await scheduleDialogs.count();
   await scheduleBtn.click();
 
-  const scheduleDialog = page
-    .locator(DIALOG_CONTAINER)
-    .filter({ has: page.locator('datetime-picker') });
+  await expect(scheduleDialogs).toHaveCount(previousScheduleDialogCount + 1, {
+    timeout: 5000,
+  });
+  return scheduleDialogs.nth(previousScheduleDialogCount);
+};
+
+/**
+ * Set the recurring "Start date" by using the calendar datepicker.
+ */
+export const setRecurStartDate = async (page: Page, ddmmyyyy: string): Promise<void> => {
+  const scheduleDialog = await openRecurScheduleDialog(page);
   await scheduleDialog.waitFor({ state: 'visible', timeout: 5000 });
 
   const calendar = scheduleDialog.locator('mat-calendar');
@@ -123,6 +144,12 @@ export const saveRecurDialog = async (page: Page): Promise<void> => {
   await expect(saveBtn).toBeEnabled({ timeout: 5000 });
   await saveBtn.click();
   await dialog.waitFor({ state: 'hidden', timeout: 10000 });
+
+  const scheduleDialog = page.locator(SCHEDULE_DIALOG);
+  if (await scheduleDialog.isVisible()) {
+    await scheduleDialog.locator('[data-test-id="schedule-cancel-btn"]').click();
+    await scheduleDialog.waitFor({ state: 'hidden', timeout: 5000 });
+  }
 };
 
 /**

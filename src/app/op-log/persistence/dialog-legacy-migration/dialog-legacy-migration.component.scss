@@ -8,7 +8,7 @@
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  background: var(--mdc-dialog-subhead-color, rgba(0, 0, 0, 0.04));
+  background: var(--state-hover);
   border-radius: 8px;
 }
 
@@ -17,7 +17,7 @@
 }
 
 .success-icon {
-  color: var(--palette-green-500, #4caf50);
+  color: var(--color-success);
   font-size: 32px;
   width: 32px;
   height: 32px;
@@ -32,7 +32,7 @@
   padding: 1rem;
 
   mat-icon {
-    color: var(--palette-red-500, #f44336);
+    color: var(--color-danger);
     font-size: 48px;
     width: 48px;
     height: 48px;
@@ -40,6 +40,6 @@
 }
 
 .error-message {
-  color: var(--palette-red-700, #d32f2f);
+  color: var(--color-danger);
   line-height: 1.5;
 }

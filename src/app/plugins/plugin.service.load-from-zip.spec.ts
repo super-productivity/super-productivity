@@ -11,6 +11,7 @@ import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/
 import { T } from '../t.const';
 import { PluginCacheService } from './plugin-cache.service';
 import { PluginCleanupService } from './plugin-cleanup.service';
+import { MAX_PLUGIN_TRANSLATIONS_TOTAL_SIZE } from './plugin.const';
 import { PluginHooksService } from './plugin-hooks';
 import { PluginI18nService } from './plugin-i18n.service';
 import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
@@ -181,6 +182,127 @@ describe('PluginService loadPluginFromZip iframe-only plugins', () => {
       undefined,
     );
     expect(service.getPluginIndexHtml(iframeManifest.id)).toBe(indexHtml);
+  });
+
+  it('loads declared translations before executing an uploaded plugin', async () => {
+    const manifest: PluginManifest = {
+      ...iframeManifest,
+      i18n: { languages: ['en', 'de'] },
+    };
+    const indexHtml = '<!doctype html><html><body>Translated plugin UI</body></html>';
+    const translations = {
+      en: JSON.stringify({ GREETING: 'Hello' }),
+      de: JSON.stringify({ GREETING: 'Hallo' }),
+    };
+    const files: Record<string, string> = {};
+    files['manifest.json'] = JSON.stringify(manifest);
+    files['index.html'] = indexHtml;
+    files['i18n/en.json'] = translations.en;
+    files['i18n/de.json'] = translations.de;
+    files['i18n/fr.json'] = JSON.stringify({ GREETING: 'Bonjour' });
+    const file = createZipFile(files);
+    pluginRunner.loadPlugin.and.callFake(
+      async (loadedManifest, _pluginCode, _baseCfg, isEnabled = true) => {
+        expect(pluginI18n.loadPluginTranslationsFromContent).toHaveBeenCalledOnceWith(
+          manifest.id,
+          translations,
+        );
+        return {
+          manifest: loadedManifest,
+          loaded: true,
+          isEnabled,
+        };
+      },
+    );
+
+    await service.loadPluginFromZip(file);
+
+    expect(pluginCache.storePlugin).toHaveBeenCalledOnceWith(
+      manifest.id,
+      JSON.stringify(manifest),
+      '',
+      indexHtml,
+      undefined,
+      translations,
+      undefined,
+    );
+  });
+
+  // Selection semantics (dedupe, unsupported codes, missing files, invalid json) are
+  // covered by read-plugin-translations-from-zip.util.spec.ts, and persistence by
+  // plugin.service.translations-round-trip.spec.ts. Keep this file to what only the
+  // full upload path can show.
+
+  // A failed upload files its error state under a synthetic `error-…` id, so on the
+  // next upload `existingState` is undefined and the teardown that normally unloads
+  // translations never runs. Without an unconditional unload the old version's
+  // strings keep being served while the cache correctly holds none.
+  it('clears translations left by a failed upload when the new zip has none', async () => {
+    const withI18n: PluginManifest = {
+      ...iframeManifest,
+      i18n: { languages: ['en'] },
+    };
+    const indexHtml = '<!doctype html><html><body>Plugin UI</body></html>';
+    const first: Record<string, string> = {};
+    first['manifest.json'] = JSON.stringify(withI18n);
+    first['index.html'] = indexHtml;
+    first['i18n/en.json'] = JSON.stringify({ GREETING: 'Hello' });
+    pluginRunner.loadPlugin.and.rejectWith(new Error('boom'));
+    await expectAsync(service.loadPluginFromZip(createZipFile(first))).toBeRejected();
+    expect(pluginI18n.loadPluginTranslationsFromContent).toHaveBeenCalledWith(
+      withI18n.id,
+      { en: first['i18n/en.json'] },
+    );
+    // The failure left no state under the real id — this is what disables teardown.
+    expect(service.pluginStates().get(withI18n.id)).toBeUndefined();
+
+    pluginI18n.unloadPluginTranslations.calls.reset();
+    pluginRunner.loadPlugin.and.callFake(
+      async (manifest, _code, _cfg, isEnabled = true) => ({
+        manifest,
+        loaded: true,
+        isEnabled,
+      }),
+    );
+
+    const second: Record<string, string> = {};
+    second['manifest.json'] = JSON.stringify(iframeManifest);
+    second['index.html'] = indexHtml;
+    await service.loadPluginFromZip(createZipFile(second));
+
+    expect(pluginI18n.unloadPluginTranslations).toHaveBeenCalledWith(iframeManifest.id);
+    expect(pluginCache.storePlugin).toHaveBeenCalledWith(
+      iframeManifest.id,
+      JSON.stringify(iframeManifest),
+      '',
+      indexHtml,
+      undefined,
+      undefined,
+      undefined,
+    );
+  });
+
+  it('rejects oversized combined translations before caching them', async () => {
+    const languages = ['en', 'de', 'fr', 'es', 'it', 'nl'];
+    const manifest: PluginManifest = {
+      ...iframeManifest,
+      i18n: { languages },
+    };
+    const files: Record<string, string> = {};
+    files['manifest.json'] = JSON.stringify(manifest);
+    files['index.html'] = '<!doctype html><html><body>Plugin UI</body></html>';
+    for (const lang of languages) {
+      files[`i18n/${lang}.json`] = JSON.stringify({
+        BIG: 'x'.repeat(
+          Math.floor(MAX_PLUGIN_TRANSLATIONS_TOTAL_SIZE / languages.length),
+        ),
+      });
+    }
+
+    await expectAsync(
+      service.loadPluginFromZip(createZipFile(files)),
+    ).toBeRejectedWithError(T.PLUGINS.TRANSLATIONS_TOO_LARGE);
+    expect(pluginCache.storePlugin).not.toHaveBeenCalled();
   });
 
   it('rejects a plugin zip without plugin.js when index.html is absent', async () => {

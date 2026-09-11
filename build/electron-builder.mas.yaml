@@ -34,7 +34,11 @@ files:
 directories:
   output: './.tmp/app-builds'
 
+beforePack: ./tools/beforePack.js
+afterPack: ./tools/afterPack.js
+
 mac:
+  icon: build/icon.icns
   target:
     - target: mas
       arch:

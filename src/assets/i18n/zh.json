@@ -943,8 +943,10 @@
           "RE_PLAN_ALL": "全部重新安排"
         }
       },
+      "DAY_LOAD": "已计划：{{planned}} / 可用：{{available}}",
       "EDIT_REPEATED_TASK": "编辑重复任务 '{{taskName}}'",
       "NO_TASKS": "没有任务",
+      "PLANNED_LOAD": "已计划：{{planned}}",
       "PLAN_VIEW": {
         "NO_DEADLINES": "无截止日期",
         "NO_SCHEDULED_ITEMS": "没有计划项目"
@@ -1139,11 +1141,18 @@
       "INSERT_BEFORE": "在之前",
       "LUNCH_BREAK": "午休",
       "MONTH": "月",
+      "MORE_EVENTS": {
+        "ONE": "另有 {{count}} 个事件",
+        "OTHER": "另有 {{count}} 个事件"
+      },
+      "NEXT_DAY": "下一天",
       "NEXT_MONTH": "下个月",
       "NEXT_WEEK": "下周",
+      "PREVIOUS_DAY": "上一天",
       "PREVIOUS_MONTH": "上个月",
       "PREVIOUS_WEEK": "上周",
       "PLAN_TASK_FOR_DAY_PLACEHOLDER": "将任务安排到某天…",
+      "VIEW_DAY": "查看日视图",
       "VIEW_MONTH": "查看月份",
       "VIEW_WEEK": "查看周",
       "NO_TASKS": "当前没有任务。请通过顶部栏的 + 按钮添加一些任务。",
@@ -1484,7 +1493,8 @@
         "LOCAL_FILE": {
           "INFO_TEXT": "本地文件同步功能将数据存储于您设备上的一个文件夹中。<strong>重要提示：</strong>请勿使用Syncthing、Resilio或类似的文件同步工具在不同设备间同步此文件夹——它们可能导致冲突。如需多设备同步，请改用WebDAV、Dropbox或SuperSync。",
           "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "需要文件访问权限",
-          "L_SYNC_FOLDER_PATH": "同步文件夹路径"
+          "L_SYNC_FOLDER_PATH": "同步文件夹路径",
+          "S_COMMIT_FOLDER_ERROR": "无法保存所选的同步文件夹。该文件夹可能已被移动或删除——请重新选择。"
         },
         "PASSWORD_SET_INFO": "🔒加密密码已设置。",
         "SUPER_SYNC": {
@@ -1624,6 +1634,7 @@
         "FORCE_UPLOAD_FAILED": "覆盖服务器数据失败。你的本地更改仍然保留。",
         "FRESH_CLIENT_SYNC_CANCELLED": "初始同步已取消。远程数据未被应用。",
         "HYDRATION_FAILED": "加载数据失败。请重新加载应用。",
+        "HYDRATION_FALLBACK_RECOVERY": "加载已保存的数据失败——当前显示的是从本地日志中恢复的内容。缺失的内容可通过完整同步或导入备份恢复。",
         "IMPORTING": "正在导入数据",
         "INCOMPLETE_CFG": "同步身份验证失败。请检查您的配置！",
         "INCOMPLETE_OP_SYNC": "同步不完整：{{count}} 个操作文件下载失败",
@@ -1766,17 +1777,17 @@
         "TOMORROW": "明天",
         "TOOLTIP_ADD_TASK": "添加任务",
         "TOOLTIP_ADD_TO_BACKLOG": "添加至待办事项",
-        "TOOLTIP_ADD_TO_BOTTOM": "添加至底部 (Ctrl+1)",
+        "TOOLTIP_ADD_TO_BOTTOM": "添加至底部 (Ctrl+3)",
         "TOOLTIP_ADD_TO_TODAY": "添加至今天",
-        "TOOLTIP_ADD_TO_TOP": "添加至顶部 (Ctrl+1)",
+        "TOOLTIP_ADD_TO_TOP": "添加至顶部 (Ctrl+3)",
         "TOOLTIP_CLEAR_DATE": "清除日期",
         "TOOLTIP_CLEAR_DEADLINE": "清除截止日期",
         "TOOLTIP_CLEAR_ESTIMATE": "清除估算",
         "TOOLTIP_CLEAR_REPEAT": "清除重复设置",
         "TOOLTIP_CLEAR_TAGS": "清除标签",
-        "TOOLTIP_DISABLE_SEARCH": "禁用问题搜索 (Ctrl+2)",
-        "TOOLTIP_ENABLE_SEARCH": "启用问题搜索 (Ctrl+2)",
-        "TOOLTIP_NOTE": "笔记（Ctrl+2）"
+        "TOOLTIP_DISABLE_SEARCH": "禁用问题搜索 (Ctrl+1)",
+        "TOOLTIP_ENABLE_SEARCH": "启用问题搜索 (Ctrl+1)",
+        "TOOLTIP_NOTE": "笔记 (Ctrl+2)"
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "添加附件",
@@ -1918,6 +1929,7 @@
         "UNSCHEDULE_ALL": "全部取消计划"
       },
       "D_SCHEDULE_TASK": {
+        "DOES_NOT_REPEAT": "不重复",
         "INFO_OUTSIDE_WORK_HOURS": "超出你设置的工作时间。",
         "INFO_OVERLAP": "与另一个已安排的任务时间重叠。",
         "QA_NEXT_MONTH": "安排至下个月",
@@ -1925,6 +1937,7 @@
         "QA_TODAY": "安排至今天",
         "QA_TOMORROW": "安排至明天",
         "REMIND_AT": "设置提醒时间",
+        "REPEAT": "重复",
         "RO_1H": "开始前1小时",
         "RO_5M": "开始前5分钟",
         "RO_10M": "开始前10分钟",
@@ -2334,7 +2347,7 @@
     "NONE": "无",
     "OK": "确定",
     "OPEN_IN_BROWSER": "在浏览器中打开",
-    "OVERDUE": "逾期",
+    "OVERDUE": "来自前几天",
     "PASSWORD_STRENGTH_FAIR": "一般",
     "PASSWORD_STRENGTH_STRONG": "强",
     "PASSWORD_STRENGTH_WEAK": "弱",
@@ -2664,6 +2677,7 @@
     },
     "SHORT_SYNTAX": {
       "HELP": "<p>在这里，您可以在创建任务时控制短语法选项</p>",
+      "IS_ENABLE_DEADLINE": "启用截止日期短语法（!<截止时间>）",
       "IS_ENABLE_DUE": "启用计划短语法（@<计划时间>）",
       "IS_ENABLE_PROJECT": "启用项目短语法（+<项目名称>）",
       "IS_ENABLE_TAG": "启用标签短语法（#<标签>）",

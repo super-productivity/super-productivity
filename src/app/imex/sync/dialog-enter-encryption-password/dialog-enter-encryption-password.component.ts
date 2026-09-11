@@ -21,6 +21,7 @@ import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confir
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { SyncLog } from '../../../core/log';
+import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.service';
 
 export interface EnterEncryptionPasswordResult {
   password?: string;
@@ -51,6 +52,7 @@ export class DialogEnterEncryptionPasswordComponent {
   private _snackService = inject(SnackService);
   private _matDialog = inject(MatDialog);
   private _providerManager = inject(SyncProviderManager);
+  private _syncLocalStateService = inject(SyncLocalStateService);
   private _matDialogRef =
     inject<
       MatDialogRef<DialogEnterEncryptionPasswordComponent, EnterEncryptionPasswordResult>
@@ -93,24 +95,38 @@ export class DialogEnterEncryptionPasswordComponent {
       return;
     }
 
-    const confirmed = await firstValueFrom(
-      this._matDialog
-        .open(DialogConfirmComponent, {
-          data: {
-            title: T.F.SYNC.D_ENTER_PASSWORD.FORCE_OVERWRITE_TITLE,
-            message: T.F.SYNC.D_ENTER_PASSWORD.FORCE_OVERWRITE_CONFIRM,
-            okTxt: T.F.SYNC.D_ENTER_PASSWORD.BTN_FORCE_OVERWRITE,
-          },
-        })
-        .afterClosed(),
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
+    // Hold the loading flag across the WHOLE flow, not just the first await:
+    // the guard, the confirm and the password change all await, and the button
+    // is only disabled while isLoading(), so releasing it early would let a
+    // second click open a second confirm — i.e. two clean slates.
     this.isLoading.set(true);
     try {
+      // #9256: same trap as the Decryption Failed dialog — "Use Local Data"
+      // runs a clean slate, which makes the server DELETE its operations. A
+      // device that has never synced and holds nothing has nothing to replace
+      // them with, and this dialog is one button from where a user stuck on a
+      // failed decrypt is told to try an older password.
+      if (await this._syncLocalStateService.hasNothingWorthUploading()) {
+        this._syncLocalStateService.warnNothingWorthUploading();
+        return;
+      }
+
+      const confirmed = await firstValueFrom(
+        this._matDialog
+          .open(DialogConfirmComponent, {
+            data: {
+              title: T.F.SYNC.D_ENTER_PASSWORD.FORCE_OVERWRITE_TITLE,
+              message: T.F.SYNC.D_ENTER_PASSWORD.FORCE_OVERWRITE_CONFIRM,
+              okTxt: T.F.SYNC.D_ENTER_PASSWORD.BTN_FORCE_OVERWRITE,
+            },
+          })
+          .afterClosed(),
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
       await this._encryptionPasswordChangeService.changePassword(this.passwordVal, {
         allowUnsyncedOps: true,
       });

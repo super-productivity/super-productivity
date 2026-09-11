@@ -15,9 +15,11 @@ import { Observable } from 'rxjs';
 import { select, Store } from '@ngrx/store';
 import {
   LayoutState,
+  selectActivePluginId,
   selectIsShowAddTaskBar,
   selectIsShowIssuePanel,
   selectIsShowNotes,
+  selectIsShowPluginPanel,
   selectIsShowTaskViewCustomizerPanel,
   selectIsShowScheduleDayPanel,
 } from './store/layout.reducer';
@@ -27,7 +29,10 @@ import { toSignal } from '@angular/core/rxjs-interop';
 
 const XS_BREAKPOINT = 600;
 const XXXS_BREAKPOINT = 398;
-const XS_MEDIA_QUERY = `(max-width: ${XS_BREAKPOINT}px)`;
+const maxWidthMediaQuery = (breakpoint: number): string =>
+  `(max-width: ${breakpoint - 1}px)`;
+const XS_MEDIA_QUERY = maxWidthMediaQuery(XS_BREAKPOINT);
+const XXXS_MEDIA_QUERY = maxWidthMediaQuery(XXXS_BREAKPOINT);
 const initialXsMatch =
   typeof window !== 'undefined' ? window.matchMedia(XS_MEDIA_QUERY).matches : false;
 
@@ -74,7 +79,7 @@ export class LayoutService {
 
   readonly isXxxs = toSignal(
     this._breakPointObserver
-      .observe(`(max-width: ${XXXS_BREAKPOINT}px)`)
+      .observe(XXXS_MEDIA_QUERY)
       .pipe(map((result) => result.matches)),
     { initialValue: false },
   );
@@ -104,6 +109,18 @@ export class LayoutService {
     this._store$.pipe(select(selectIsShowScheduleDayPanel)),
     { initialValue: false },
   );
+
+  // The plugin side panel's open state and which plugin owns it. Exposed for
+  // the header's action-row reveal: a plugin panel's toggle sits at the row's
+  // end exactly like the built-in panel toggles do.
+  readonly isShowPluginPanel = toSignal(
+    this._store$.pipe(select(selectIsShowPluginPanel)),
+    { initialValue: false },
+  );
+
+  readonly activePluginId = toSignal(this._store$.pipe(select(selectActivePluginId)), {
+    initialValue: null,
+  });
 
   // Signal to track if any panel is currently being resized
   readonly isPanelResizing = signal(false);

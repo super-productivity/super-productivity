@@ -1,176 +1,200 @@
 #!/usr/bin/env node
+'use strict';
 
 /**
- * Generate macOS app icon with squircle mask from existing PNG source.
+ * Generate the complete macOS iconset and build/icon.icns.
  *
- * macOS does not automatically apply a squircle mask to .icns icons —
- * the shape must be baked into the image. This script applies Apple's
- * continuous-corner rounded rectangle (the "squircle") to the square
- * source icon and generates build/icon.icns.
+ * Apple defines ten logical representations: five point sizes at 1x and 2x.
+ * On macOS, iconutil compiles the iconset. Pass --compile-only in packaging
+ * jobs to compile the checked-in iconset without needing Sharp.
  *
- * The bezier curve constants are reverse-engineered from iOS
- * UIBezierPath(roundedRect:cornerRadius:) by Liam Rosenfeld.
- * See: https://liamrosenfeld.com/posts/apple_icon_quest/
- *
- * The .icns file is assembled directly from PNG buffers (no native tools needed).
+ * https://developer.apple.com/library/archive/documentation/GraphicsAnimation/Conceptual/HighResolutionOSX/Optimizing/Optimizing.html
+ * https://github.com/super-productivity/super-productivity/issues/6323
  */
 
-let sharp;
-try {
-  sharp = require('sharp');
-} catch {
-  console.log('sharp not found, installing...');
-  require('child_process').execSync('npm install --no-save --no-package-lock sharp', {
-    stdio: 'inherit',
-  });
-  sharp = require('sharp');
-}
-const fs = require('fs');
-const path = require('path');
+const { execFileSync } = require('node:child_process');
+const {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} = require('node:fs');
+const { tmpdir } = require('node:os');
+const { join } = require('node:path');
+const { verifyIcns } = require('./verify-mac-icon');
 
-const SOURCE_PNG = path.join(__dirname, '../build/icons/sq2160x2160.png');
-const OUTPUT_ICNS = path.join(__dirname, '../build/icon.icns');
+const BUILD_DIR = join(__dirname, '..', 'build');
+const SOURCE_SVG = join(BUILD_DIR, 'icon-mac.svg');
+const ICONSET_DIR = join(BUILD_DIR, 'icon.iconset');
+const OUTPUT_ICNS = join(BUILD_DIR, 'icon.icns');
+const SHARP_INSTALL_DIR = join(__dirname, '..', '.tmp', 'mac-icon-tools');
+const SHARP_VERSION = '0.35.3';
+const COMPILE_ONLY = process.argv.includes('--compile-only');
 
-// ICNS OSType codes for PNG-based entries, mapped by pixel size
-// See: https://en.wikipedia.org/wiki/Apple_Icon_Image_format
-const ICNS_TYPES = [
-  { osType: 'ic10', size: 1024 },
-  { osType: 'ic09', size: 512 },
-  { osType: 'ic08', size: 256 },
-  { osType: 'ic07', size: 128 },
-  { osType: 'icp5', size: 32 },
-  { osType: 'icp4', size: 16 },
+const ICONSET_ENTRIES = [
+  { file: 'icon_16x16.png', pixels: 16, osType: 'icp4' },
+  { file: 'icon_16x16@2x.png', pixels: 32, osType: 'ic11' },
+  { file: 'icon_32x32.png', pixels: 32, osType: 'icp5' },
+  { file: 'icon_32x32@2x.png', pixels: 64, osType: 'ic12' },
+  { file: 'icon_128x128.png', pixels: 128, osType: 'ic07' },
+  { file: 'icon_128x128@2x.png', pixels: 256, osType: 'ic13' },
+  { file: 'icon_256x256.png', pixels: 256, osType: 'ic08' },
+  { file: 'icon_256x256@2x.png', pixels: 512, osType: 'ic14' },
+  { file: 'icon_512x512.png', pixels: 512, osType: 'ic09' },
+  { file: 'icon_512x512@2x.png', pixels: 1024, osType: 'ic10' },
 ];
 
-// Apple's corner radius: 185.4px at 824x824, scaled to full canvas
-const CORNER_RADIUS_RATIO = 185.4 / 824;
+const buildPortableIcns = (entries) => {
+  const totalLength = entries.reduce(
+    (length, entry) => length + 8 + entry.data.length,
+    8,
+  );
+  const buffer = Buffer.alloc(totalLength);
+  buffer.write('icns', 0, 4, 'ascii');
+  buffer.writeUInt32BE(totalLength, 4);
 
-/**
- * Generate an SVG path for Apple's continuous-corner rounded rectangle.
- *
- * Unlike a standard SVG rounded rect (which uses circular arcs), this uses
- * cubic bezier curves with continuous curvature — the transition from
- * straight edge to curve is gradual, not abrupt.
- *
- * Constants from UIBezierPath(roundedRect:cornerRadius:) reverse-engineering.
- */
-function continuousRoundedRectSvg(size) {
-  const cr = Math.round(size * CORNER_RADIUS_RATIO);
-
-  // Helper functions matching the Swift implementation
-  const tl = (x, y) => [x * cr, y * cr];
-  const tr = (x, y) => [size - x * cr, y * cr];
-  const br = (x, y) => [size - x * cr, size - y * cr];
-  const bl = (x, y) => [x * cr, size - y * cr];
-
-  const p = (pt) => `${pt[0].toFixed(2)} ${pt[1].toFixed(2)}`;
-
-  // Build SVG path using Apple's continuous-corner bezier curves
-  const d = [
-    `M ${p(tl(1.528665, 0))}`,
-    `L ${p(tr(1.528665, 0))}`,
-    `C ${p(tr(1.08849296, 0))} ${p(tr(0.86840694, 0))} ${p(tr(0.63149379, 0.07491139))}`,
-    `C ${p(tr(0.37282383, 0.16905956))} ${p(tr(0.16905956, 0.37282383))} ${p(tr(0.07491139, 0.63149379))}`,
-    `C ${p(tr(0, 0.86840694))} ${p(tr(0, 1.08849296))} ${p(tr(0, 1.52866498))}`,
-    `L ${p(br(0, 1.528665))}`,
-    `C ${p(br(0, 1.08849296))} ${p(br(0, 0.86840694))} ${p(br(0.07491139, 0.63149379))}`,
-    `C ${p(br(0.16905956, 0.37282383))} ${p(br(0.37282383, 0.16905956))} ${p(br(0.63149379, 0.07491139))}`,
-    `C ${p(br(0.86840694, 0))} ${p(br(1.08849296, 0))} ${p(br(1.52866498, 0))}`,
-    `L ${p(bl(1.528665, 0))}`,
-    `C ${p(bl(1.08849296, 0))} ${p(bl(0.86840694, 0))} ${p(bl(0.63149379, 0.07491139))}`,
-    `C ${p(bl(0.37282383, 0.16905956))} ${p(bl(0.16905956, 0.37282383))} ${p(bl(0.07491139, 0.63149379))}`,
-    `C ${p(bl(0, 0.86840694))} ${p(bl(0, 1.08849296))} ${p(bl(0, 1.52866498))}`,
-    `L ${p(tl(0, 1.528665))}`,
-    `C ${p(tl(0, 1.08849296))} ${p(tl(0, 0.86840694))} ${p(tl(0.07491139, 0.63149379))}`,
-    `C ${p(tl(0.16905956, 0.37282383))} ${p(tl(0.37282383, 0.16905956))} ${p(tl(0.63149379, 0.07491139))}`,
-    `C ${p(tl(0.86840694, 0))} ${p(tl(1.08849296, 0))} ${p(tl(1.52866498, 0))}`,
-    'Z',
-  ].join(' ');
-
-  return `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-  <path d="${d}" fill="white"/>
-</svg>`;
-}
-
-function buildIcns(entries) {
-  // ICNS file format:
-  // Header: 4 bytes magic ('icns') + 4 bytes total file size
-  // Entries: 4 bytes OSType + 4 bytes entry size (including header) + PNG data
-  const HEADER_SIZE = 8;
-  const ENTRY_HEADER_SIZE = 8;
-
-  let totalSize = HEADER_SIZE;
-  for (const entry of entries) {
-    totalSize += ENTRY_HEADER_SIZE + entry.data.length;
-  }
-
-  const buffer = Buffer.alloc(totalSize);
-  let offset = 0;
-
-  // File header
-  buffer.write('icns', offset, 4, 'ascii');
-  offset += 4;
-  buffer.writeUInt32BE(totalSize, offset);
-  offset += 4;
-
-  // Entries
+  let offset = 8;
   for (const entry of entries) {
     buffer.write(entry.osType, offset, 4, 'ascii');
-    offset += 4;
-    buffer.writeUInt32BE(ENTRY_HEADER_SIZE + entry.data.length, offset);
-    offset += 4;
-    entry.data.copy(buffer, offset);
-    offset += entry.data.length;
+    buffer.writeUInt32BE(8 + entry.data.length, offset + 4);
+    entry.data.copy(buffer, offset + 8);
+    offset += 8 + entry.data.length;
   }
 
   return buffer;
-}
+};
 
-async function generateMacIcon() {
-  console.log('Generating macOS app icon with continuous-corner squircle mask...\n');
-
-  if (!fs.existsSync(SOURCE_PNG)) {
-    throw new Error(`Source PNG not found: ${SOURCE_PNG}`);
+const resolveNpmInvocation = ({
+  platform = process.platform,
+  npmExecPath = process.env.npm_execpath,
+  nodeExecutable = process.execPath,
+} = {}) => {
+  // npm is a .cmd shim on Windows, which execFileSync cannot launch directly.
+  if (npmExecPath) {
+    return {
+      command: nodeExecutable,
+      prefixArgs: [npmExecPath],
+    };
   }
-  console.log('Source PNG found:', SOURCE_PNG);
+  if (platform === 'win32') {
+    throw new Error(
+      'npm cannot be located safely on Windows; run npm run generate:mac-icon',
+    );
+  }
+  return {
+    command: 'npm',
+    prefixArgs: [],
+  };
+};
 
-  const entries = [];
+const loadSharp = () => {
+  const installedPackage = join(
+    SHARP_INSTALL_DIR,
+    'node_modules',
+    'sharp',
+    'package.json',
+  );
+  try {
+    const installedVersion = JSON.parse(readFileSync(installedPackage, 'utf8')).version;
+    if (installedVersion === SHARP_VERSION) {
+      return require(join(SHARP_INSTALL_DIR, 'node_modules', 'sharp'));
+    }
+  } catch {
+    // Install below.
+  }
 
-  for (const { osType, size } of ICNS_TYPES) {
-    const svg = continuousRoundedRectSvg(size);
+  console.log(`Installing sharp ${SHARP_VERSION} in .tmp...`);
+  mkdirSync(SHARP_INSTALL_DIR, { recursive: true });
+  const npm = resolveNpmInvocation();
+  execFileSync(
+    npm.command,
+    [
+      ...npm.prefixArgs,
+      'install',
+      '--prefix',
+      SHARP_INSTALL_DIR,
+      '--no-save',
+      '--no-package-lock',
+      `sharp@${SHARP_VERSION}`,
+    ],
+    { stdio: 'inherit' },
+  );
+  const installedVersion = JSON.parse(readFileSync(installedPackage, 'utf8')).version;
+  if (installedVersion !== SHARP_VERSION) {
+    throw new Error(`Expected sharp ${SHARP_VERSION}; installed ${installedVersion}`);
+  }
+  return require(join(SHARP_INSTALL_DIR, 'node_modules', 'sharp'));
+};
 
-    // Resize and apply squircle mask (preserving alpha for transparent edges)
-    // macOS .icns natively supports PNG with alpha — no flatten needed.
-    // See: https://github.com/super-productivity/super-productivity/issues/6323
-    const pngBuffer = await sharp(SOURCE_PNG)
-      .resize(size, size, { fit: 'cover', position: 'center' })
-      .composite([{ input: Buffer.from(svg), blend: 'dest-in' }])
+const generateIconset = async () => {
+  const sharp = loadSharp();
+  mkdirSync(ICONSET_DIR, { recursive: true });
+
+  const renderedEntries = [];
+  for (const entry of ICONSET_ENTRIES) {
+    const data = await sharp(SOURCE_SVG)
+      .resize(entry.pixels, entry.pixels)
+      .ensureAlpha()
       .png()
       .toBuffer();
-
-    entries.push({ osType, data: pngBuffer });
-    console.log(`  Generated ${size}x${size} (${osType}, ${pngBuffer.length} bytes)`);
+    writeFileSync(join(ICONSET_DIR, entry.file), data);
+    renderedEntries.push({ ...entry, data });
+    console.log(`Generated ${entry.file} (${entry.pixels}x${entry.pixels})`);
   }
 
-  // Build and write .icns file
-  console.log('\nAssembling .icns file...');
-  const icnsBuffer = buildIcns(entries);
-  fs.writeFileSync(OUTPUT_ICNS, icnsBuffer);
+  return renderedEntries;
+};
 
-  const stats = fs.statSync(OUTPUT_ICNS);
-  console.log(`Generated: ${OUTPUT_ICNS} (${stats.size} bytes)`);
+const compileWithIconutil = () => {
+  const temporaryDirectory = mkdtempSync(join(tmpdir(), 'sp-mac-icon-'));
+  const temporaryIcon = join(temporaryDirectory, 'icon.icns');
 
-  // Verify the largest entry retains alpha (transparent edges)
-  const metadata = await sharp(entries[0].data).metadata();
-  console.log(`\nVerification (1024px entry):`);
-  console.log(`  Dimensions: ${metadata.width}x${metadata.height}`);
-  console.log(`  Channels: ${metadata.channels} (${metadata.hasAlpha ? 'RGBA' : 'RGB'})`);
-  console.log(`  Has alpha: ${metadata.hasAlpha ? 'YES (correct)' : 'NO (unexpected)'}`);
+  try {
+    execFileSync(
+      '/usr/bin/iconutil',
+      ['--convert', 'icns', '--output', temporaryIcon, ICONSET_DIR],
+      { stdio: 'inherit' },
+    );
+    // Verify the compiled artifact directly. `iconutil --convert iconset`
+    // must NOT be used as a round-trip oracle: it un-premultiplies the
+    // straight-alpha ARGB planes its own compile step wrote, clamping
+    // anti-aliased pixels into garbage (#9481).
+    verifyIcns(readFileSync(temporaryIcon), temporaryIcon, ICONSET_DIR);
+    copyFileSync(temporaryIcon, OUTPUT_ICNS);
+  } finally {
+    rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+};
 
-  console.log('\nDone! macOS squircle icon generated at build/icon.icns');
+const generateMacIcon = async () => {
+  const renderedEntries = COMPILE_ONLY ? undefined : await generateIconset();
+
+  if (process.platform === 'darwin') {
+    compileWithIconutil();
+    console.log(`Verified compiled ${OUTPUT_ICNS} against the source iconset`);
+  } else {
+    if (COMPILE_ONLY) {
+      throw new Error('--compile-only requires macOS and /usr/bin/iconutil');
+    }
+    console.warn(
+      'iconutil is only available on macOS; writing an equivalent ten-slot ICNS.',
+    );
+    writeFileSync(OUTPUT_ICNS, buildPortableIcns(renderedEntries));
+    const chunkTypes = verifyIcns(readFileSync(OUTPUT_ICNS), OUTPUT_ICNS, ICONSET_DIR);
+    console.log(`Verified ${OUTPUT_ICNS}: ${chunkTypes.join(', ')}`);
+  }
+};
+
+if (require.main === module) {
+  generateMacIcon().catch((error) => {
+    console.error(`Failed to generate macOS icon: ${error.message}`);
+    process.exitCode = 1;
+  });
 }
 
-generateMacIcon().catch((error) => {
-  console.error('\nError generating icon:', error.message);
-  process.exit(1);
-});
+module.exports = {
+  generateMacIcon,
+  resolveNpmInvocation,
+};

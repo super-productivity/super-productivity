@@ -10,7 +10,6 @@ import { of } from 'rxjs';
 import { signal } from '@angular/core';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { ShareService } from '../../core/share/share.service';
-import { UserProfileService } from '../../features/user-profile/user-profile.service';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslateService } from '@ngx-translate/core';
 import { LocalBackupService } from '../../imex/local-backup/local-backup.service';
@@ -77,7 +76,6 @@ describe('ConfigPageComponent', () => {
         { provide: PluginBridgeService, useValue: { shortcuts: signal([]) } },
         { provide: SyncWrapperService, useValue: mockSyncWrapperService },
         { provide: ShareService, useValue: {} },
-        { provide: UserProfileService, useValue: {} },
         { provide: MatDialog, useValue: mockMatDialog },
         { provide: LocalBackupService, useValue: mockLocalBackupService },
         {

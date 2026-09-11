@@ -38,6 +38,7 @@ import {
   InvalidDataSPError,
   JsonParseError,
   LegacySyncFormatDetectedError,
+  PlaintextWhenEncryptionExpectedError,
   RemoteFileNotFoundAPIError,
   SplitSyncFormatDetectedError,
   SyncDataCorruptedError,
@@ -1764,7 +1765,13 @@ export class FileBasedSyncAdapterService {
     }
   }
 
-  /** Copies the current `sync-state.json` to its `.bak` (non-fatal). */
+  /**
+   * Copies the current `sync-state.json` to its `.bak` (non-fatal, except that a
+   * plaintext-downgrade rejection rethrows). The download's DECODE is
+   * load-bearing security-wise: it is where a plaintext remote is detected
+   * before compaction writes anything (GHSA-vrc7-775g-ggqc) — do not replace it
+   * with a raw byte-copy.
+   */
   private async _backupStateFile(
     provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
@@ -1774,6 +1781,12 @@ export class FileBasedSyncAdapterService {
     try {
       current = await this._downloadStateFile(provider, cfg, encryptKey);
     } catch (e) {
+      // A plaintext primary while encryption is expected is a downgrade signal,
+      // not a missing/corrupt optional backup source. Let it abort compaction so
+      // the encrypted client cannot silently overwrite the remote state file.
+      if (e instanceof PlaintextWhenEncryptionExpectedError) {
+        throw e;
+      }
       // Non-fatal — e.g. first compaction has no existing state file to back up.
       OpLog.normal('FileBasedSyncAdapter: state-file backup skipped (non-fatal)', e);
       return;
@@ -1848,6 +1861,15 @@ export class FileBasedSyncAdapterService {
           'FileBasedSyncAdapter: immutable snapshot does not match snapshotRef; trying sync-state.json',
         );
       } catch (e) {
+        // Same rule as the fixed-file read below (GHSA-vrc7-775g-ggqc): the
+        // referenced immutable snapshot is a PRIMARY source, so a plaintext one
+        // is a downgrade signal, not ordinary corruption — surface it instead of
+        // silently falling through to sync-state.json. No legitimate flow leaves
+        // the REFERENCED gen snapshot plaintext while local encryption is on
+        // (a real disable rewrites the ops file too, which fails decode first).
+        if (e instanceof PlaintextWhenEncryptionExpectedError) {
+          throw e;
+        }
         OpLog.warn(
           'FileBasedSyncAdapter: immutable snapshot unreadable; trying sync-state.json',
           e,
@@ -1861,6 +1883,12 @@ export class FileBasedSyncAdapterService {
         'FileBasedSyncAdapter: sync-state.json does not match snapshotRef; trying .bak',
       );
     } catch (e) {
+      // Do not treat a plaintext primary as ordinary corruption. Falling back to
+      // an encrypted .bak would hide the downgrade and hydrate data after the
+      // fail-closed decoder explicitly rejected the remote state file.
+      if (e instanceof PlaintextWhenEncryptionExpectedError) {
+        throw e;
+      }
       OpLog.warn('FileBasedSyncAdapter: sync-state.json unreadable; trying .bak', e);
     }
     const bak = await this._recoverStateFromBackup(provider, cfg, encryptKey);
@@ -2395,10 +2423,19 @@ export class FileBasedSyncAdapterService {
         schemaVersion,
         localStateSnapshot,
       );
-      // #9040: write the snapshot to an IMMUTABLE, per-compaction file first. This
-      // is the snapshot the ops pointer references; because its name carries a
-      // random suffix, a concurrent compactor writes a DIFFERENT file and can never
-      // clobber it, so the winning ops pointer can never be stranded.
+      // Preserve the pre-compaction snapshot for snapshotRef-mismatch recovery.
+      // Ordered BEFORE any remote write: reading the old state file is also where
+      // a plaintext remote is detected while encryption is expected
+      // (GHSA-vrc7-775g-ggqc, PlaintextWhenEncryptionExpectedError), and that
+      // rejection must leave the remote byte-for-byte untouched. A crash after
+      // this backup strands nothing: the old ops pointer still references the old
+      // snapshot, which the refreshed .bak matches.
+      await this._backupStateFile(provider, cfg, encryptKey);
+      // #9040: write the snapshot to an IMMUTABLE, per-compaction file before the
+      // fixed copy and the ops pointer. This is the snapshot the ops pointer
+      // references; because its name carries a random suffix, a concurrent
+      // compactor writes a DIFFERENT file and can never clobber it, so the
+      // winning ops pointer can never be stranded.
       const genStateFile = this._genStateFileName(newSyncVersion);
       const stateRev = await this._writeStateFile(
         provider,
@@ -2407,11 +2444,10 @@ export class FileBasedSyncAdapterService {
         stateData,
         genStateFile,
       );
-      // Compat: also refresh the fixed sync-state.json (+ its .bak) so pre-#9040
-      // split clients — which don't read snapshotRef.file — can still hydrate.
-      // This copy stays clobberable, but pre-#9040 clients already carried that
-      // exposure, so it is no regression; post-#9040 clients use snapshotRef.file.
-      await this._backupStateFile(provider, cfg, encryptKey);
+      // Compat: also refresh the fixed sync-state.json so pre-#9040 split clients
+      // — which don't read snapshotRef.file — can still hydrate. This copy stays
+      // clobberable, but pre-#9040 clients already carried that exposure, so it
+      // is no regression; post-#9040 clients use snapshotRef.file.
       await this._writeStateFile(provider, cfg, encryptKey, stateData);
       snapshotRef = {
         syncVersion: newSyncVersion,
@@ -2970,6 +3006,12 @@ export class FileBasedSyncAdapterService {
       // under a wrong/rotated key — silently suppressing the wrong-password
       // dialog and letting the heal upload clobber the encrypted primary (same
       // class as the E2EE-rotation revert).
+      // Intentional defense-in-depth: decompressAndDecryptData below ALSO refuses
+      // via PlaintextWhenEncryptionExpectedError (GHSA-vrc7-775g-ggqc), which this
+      // try/catch would convert to the same null. This explicit check is kept for
+      // its specific "refusing recovery" log and to make the .bak path's
+      // soft-skip an intentional decision — do not remove one guard without the
+      // other.
       if (
         cfg.isEncrypt &&
         !extractSyncFileStateFromPrefix(response.dataStr).isEncrypted

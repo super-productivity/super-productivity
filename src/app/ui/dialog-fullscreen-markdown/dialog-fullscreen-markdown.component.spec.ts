@@ -3,7 +3,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MarkdownModule } from 'ngx-markdown';
-import { EMPTY } from 'rxjs';
+import { EMPTY, of, Subject } from 'rxjs';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
@@ -13,7 +13,11 @@ import { MOD, shortcutLabels } from './markdown-shortcuts.const';
 describe('DialogFullscreenMarkdownComponent', () => {
   let component: DialogFullscreenMarkdownComponent;
   let fixture: ComponentFixture<DialogFullscreenMarkdownComponent>;
-  let dialogData: { content: string; taskId?: string };
+  let dialogData: {
+    content: string;
+    taskId?: string;
+    originalContent?: string;
+  };
   let mockClipboardImageService: jasmine.SpyObj<ClipboardImageService>;
 
   beforeEach(async () => {
@@ -111,6 +115,23 @@ describe('DialogFullscreenMarkdownComponent', () => {
       expect(component.data.content).toBe('- [ ] Task 1\n\n- [ ] Task 2');
       expect(component.contentChanged.emit).not.toHaveBeenCalled();
     });
+  });
+
+  describe('checkpoint cadence', () => {
+    it('emits contentChanged during continuous typing, not only after a pause', fakeAsync(() => {
+      // A crash mid-burst must not lose the whole burst: keystrokes 100 ms
+      // apart (never a 500 ms pause) still have to checkpoint periodically.
+      spyOn(component.contentChanged, 'emit');
+
+      for (let i = 0; i < 20; i++) {
+        component.ngModelChange('typed '.repeat(i + 1));
+        tick(100);
+      }
+
+      expect(component.contentChanged.emit).toHaveBeenCalled();
+
+      tick(500); // drain the trailing window
+    }));
   });
 
   describe('keydownHandler', () => {
@@ -358,6 +379,124 @@ describe('DialogFullscreenMarkdownComponent', () => {
       component.keydownHandler(event);
 
       expect(component.onApplyBold).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('close with discard', () => {
+    it('should close without confirmation when the content is unmodified', () => {
+      const confirmDialogSpy = spyOn(component['_matDialog'], 'open');
+
+      component.close(true);
+
+      expect(confirmDialogSpy).not.toHaveBeenCalled();
+      // The explicit result lets callers tell a user-confirmed discard from
+      // the dialog being disposed some other way (which emits undefined).
+      expect(component._matDialogRef.close).toHaveBeenCalledWith({
+        action: 'DISCARD',
+      });
+    });
+
+    it('should ask for confirmation and close when the user confirms discarding', () => {
+      const confirmDialogSpy = spyOn(component['_matDialog'], 'open').and.returnValue({
+        afterClosed: () => of(true),
+      } as any);
+      component.data.content = 'changed content';
+
+      component.close(true);
+
+      expect(confirmDialogSpy).toHaveBeenCalled();
+      expect(component._matDialogRef.close).toHaveBeenCalledWith({
+        action: 'DISCARD',
+      });
+    });
+
+    it('should keep the dialog open when the user does not confirm discarding', () => {
+      spyOn(component['_matDialog'], 'open').and.returnValue({
+        afterClosed: () => of(false),
+      } as any);
+      component.data.content = 'changed content';
+
+      component.close(true);
+
+      expect(component._matDialogRef.close).not.toHaveBeenCalled();
+    });
+
+    // The flag external closers read (openFullscreenMarkdownDialog's Location
+    // handler) to avoid resolving the opposite of the button the user clicked.
+    it('flags the discard confirmation as open while it awaits an answer, and clears it after', () => {
+      const confirmClosed$ = new Subject<boolean>();
+      spyOn(component['_matDialog'], 'open').and.returnValue({
+        afterClosed: () => confirmClosed$.asObservable(),
+      } as any);
+      component.data.content = 'changed content';
+
+      component.close(true);
+
+      // Drop the flag assignment and this is false while the confirm is up, so
+      // an Android back press saves instead of discarding.
+      expect(component.isDiscardConfirmOpen).toBe(true);
+
+      confirmClosed$.next(false);
+
+      expect(component.isDiscardConfirmOpen).toBe(false);
+    });
+
+    it('leaves the discard-confirm flag down when nothing was modified (no confirm shown)', () => {
+      component.close(true);
+
+      expect(component.isDiscardConfirmOpen).toBe(false);
+    });
+
+    it('should use originalContent as the modification reference when provided', () => {
+      dialogData.originalContent = 'persisted content that differs';
+      const recoveredFixture = TestBed.createComponent(DialogFullscreenMarkdownComponent);
+      const recoveredComponent = recoveredFixture.componentInstance;
+      const confirmDialogSpy = spyOn(
+        recoveredComponent['_matDialog'],
+        'open',
+      ).and.returnValue({
+        afterClosed: () => of(false),
+      } as any);
+
+      // content is untouched but differs from originalContent (recovered draft)
+      recoveredComponent.close(true);
+
+      expect(confirmDialogSpy).toHaveBeenCalled();
+      expect(recoveredComponent._matDialogRef.close).not.toHaveBeenCalled();
+    });
+
+    it('should confirm before discarding modified content for every caller (task notes / inline markdown included)', () => {
+      // The confirm is unconditional: the "Close" action was renamed to the
+      // more final "Discard" for all callers of this shared dialog, so all of
+      // them confirm before discarding modified content. Task notes and inline
+      // markdown keep no crash-safe draft, which is a reason to confirm MORE,
+      // not less (#8932).
+      const confirmDialogSpy = spyOn(component['_matDialog'], 'open').and.returnValue({
+        afterClosed: () => of(true),
+      } as any);
+      component.data.content = 'changed content';
+
+      component.close(true);
+
+      expect(confirmDialogSpy).toHaveBeenCalled();
+      expect(component._matDialogRef.close).toHaveBeenCalledWith({
+        action: 'DISCARD',
+      });
+    });
+  });
+
+  describe('close with save', () => {
+    it('should close with the final content and NOT emit contentChanged on the close path', () => {
+      // The Save path resolves afterClosed with the content; the note's save
+      // handler clears its draft synchronously, so a close-path contentChanged
+      // emit would only race a redundant write.
+      spyOn(component.contentChanged, 'emit');
+      component.data.content = 'final content';
+
+      component.close();
+
+      expect(component._matDialogRef.close).toHaveBeenCalledWith('final content');
+      expect(component.contentChanged.emit).not.toHaveBeenCalled();
     });
   });
 

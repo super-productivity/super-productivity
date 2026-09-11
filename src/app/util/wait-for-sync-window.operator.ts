@@ -14,10 +14,18 @@ const SYNC_WINDOW_TIMEOUT_MS = 30000;
  * ## Why This Exists
  *
  * `skipDuringSyncWindow()` silently drops emissions during hydration/sync.
- * For frequently-emitting sources (e.g., store selectors), that's fine —
- * the next emission will retry. But for sparse, one-shot sources like
- * day-change observables, a dropped emission means the effect never runs
- * for that day (#6192).
+ * For sources that keep re-emitting the same state (a repeating timer tick),
+ * that's fine — the next emission retries. But for sparse or edge-triggered
+ * sources, a dropped emission means the effect never runs at all: for a
+ * day-change observable, not for that day (#6192); for `selectIsIdle`, not for
+ * that idle episode — and there the store stays latched at `isIdle: true`, so
+ * the producer short-circuits and idle handling dies for the session (#9348).
+ *
+ * ⚠️ Do not assume a store selector is safe to drop. `store.select()` ends in
+ * `distinctUntilChanged()`, so a dropped emission is NOT retried until the
+ * value changes again — and the emissions this guard drops are precisely the
+ * ones caused by remote ops, which have already settled by the time the window
+ * closes. Judge the source, not its type.
  *
  * This operator subscribes to `isInSyncWindow$` (a reactive observable
  * derived from Angular signals) and proceeds once the window closes.
@@ -54,18 +62,17 @@ export const waitForSyncWindow = <T>(
     if (!hydrationState.isInSyncWindow()) {
       return of(value);
     }
-    Log.log(`[${context}] Emission during sync window, waiting...`, value);
+    // `value` is the caller's `T` and may be a whole entity — the log is
+    // exportable, and `context` already identifies the stream.
+    Log.log(`[${context}] Emission during sync window, waiting...`);
     return hydrationState.isInSyncWindow$.pipe(
       filter((inWindow) => !inWindow),
       first(),
       timeout(SYNC_WINDOW_TIMEOUT_MS),
-      tap(() => Log.log(`[${context}] Sync window ended, proceeding for:`, value)),
+      tap(() => Log.log(`[${context}] Sync window ended, proceeding`)),
       map(() => value),
       catchError(() => {
-        Log.err(
-          `[${context}] Timed out waiting for sync window, proceeding anyway for:`,
-          value,
-        );
+        Log.err(`[${context}] Timed out waiting for sync window, proceeding anyway`);
         return of(value);
       }),
     );

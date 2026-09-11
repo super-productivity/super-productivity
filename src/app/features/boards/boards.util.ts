@@ -7,6 +7,7 @@ import {
 } from './boards.model';
 import { TaskCopy } from '../tasks/task.model';
 import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
+import { TODAY_TAG } from '../tag/tag.const';
 
 const VALID_SORT_FIELDS: ReadonlySet<BoardSortField> = new Set([
   'dueDate',
@@ -117,6 +118,13 @@ const NO_OP_COMPARATOR = (): number => 0;
  *   - 'all': strip only the FIRST excluded tag when the task has ALL excluded
  *     tags (breaks the AND-exclude condition without over-removing).
  *
+ * TODAY_TAG is virtual: membership derives from dueDay/dueWithTime and it must
+ * never be written to `task.tagIds` (ARCHITECTURE-DECISIONS #2), so the result
+ * never contains it. Only the INCLUDE side ignores it — dropping it from the
+ * EXCLUDE side would let an AND-exclude fire here that `doesTaskMatchPanel` can
+ * never hit (it only ever sees real tags), stripping a real user tag to satisfy
+ * a filter that was already inert.
+ *
  * Duplicates are not de-duplicated here; callers that care should pass the
  * result through `unique()`.
  */
@@ -127,16 +135,18 @@ export const rewriteTagIdsForPanel = (
     'includedTagIds' | 'includedTagsMatch' | 'excludedTagIds' | 'excludedTagsMatch'
   >,
 ): string[] => {
-  let next: string[] = [...currentTagIds];
+  const includedTagIds = panelCfg.includedTagIds?.filter((id) => id !== TODAY_TAG.id);
+  // Also heals a legacy TODAY_TAG that an older build wrote into the task.
+  let next: string[] = currentTagIds.filter((id) => id !== TODAY_TAG.id);
 
-  if (panelCfg.includedTagIds?.length) {
+  if (includedTagIds?.length) {
     if (panelCfg.includedTagsMatch === 'any') {
-      const hasAny = panelCfg.includedTagIds.some((id) => next.includes(id));
+      const hasAny = includedTagIds.some((id) => next.includes(id));
       if (!hasAny) {
-        next = next.concat(panelCfg.includedTagIds[0]);
+        next = next.concat(includedTagIds[0]);
       }
     } else {
-      next = next.concat(panelCfg.includedTagIds);
+      next = next.concat(includedTagIds);
     }
   }
 

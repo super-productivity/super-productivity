@@ -265,7 +265,6 @@ describe('Post-sync validation latch (#7330) — integration', () => {
         await hydrationService.hydrateFromRemoteSync(
           { task: { ids: [], entities: {} } as never },
           { clientRemote: 1 },
-          false,
         );
 
         expect(hydrationLatch.hasFailed()).toBe(true);
@@ -282,7 +281,6 @@ describe('Post-sync validation latch (#7330) — integration', () => {
         await hydrationService.hydrateFromRemoteSync(
           { task: { ids: [], entities: {} } as never },
           { clientRemote: 1 },
-          false,
         );
 
         expect(hydrationLatch.hasFailed()).toBe(false);

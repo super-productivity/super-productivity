@@ -601,6 +601,18 @@ describe('PluginService', () => {
   });
 
   describe('removeUploadedPlugin credential cleanup', () => {
+    it('unloads translations even when the plugin runtime is not loaded', async () => {
+      const pluginI18n = TestBed.inject(
+        PluginI18nService,
+      ) as jasmine.SpyObj<PluginI18nService>;
+
+      await service.removeUploadedPlugin('ghost-plugin');
+
+      expect(pluginI18n.unloadPluginTranslations).toHaveBeenCalledOnceWith(
+        'ghost-plugin',
+      );
+    });
+
     it('purges both secrets and OAuth tokens on uninstall', async () => {
       const secretService = TestBed.inject(PluginSecretService);
       const removeSecretsSpy = spyOn(

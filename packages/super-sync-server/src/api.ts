@@ -24,19 +24,39 @@ import { authenticate, getAuthUser } from './middleware';
 import { Logger } from './logger';
 import { prisma } from './db';
 import { authCache } from './auth-cache';
+import { getWsConnectionService } from './sync/services/websocket-connection.service';
 
 // Zod Schemas
 const VerifyEmailSchema = z.object({
   token: z.string().min(1, 'Token is required'),
 });
 
-// Passkey Schemas
-const PasskeyRegisterOptionsSchema = z.object({
-  email: z.string().email('Invalid email format'),
-  termsAccepted: z.boolean().refine((val) => val === true, {
-    message: 'You must accept the Terms of Service',
-  }),
-});
+// Deliberately does not name the Terms of Service: an instance may publish only a
+// privacy policy, in which case the consent label reads "I agree to the Privacy Policy"
+// and naming a document that is not served would be wrong.
+const TERMS_REQUIRED_MESSAGE = 'You must accept the linked legal documents to register';
+
+/**
+ * Registration body, with consent required only where legal pages exist. The generic image
+ * ships no Terms of Service and publishes no privacy policy until the operator configures
+ * `PRIVACY_*`, so an unconfigured instance must not demand agreement to documents it does
+ * not serve.
+ *
+ * `z.literal(true)` rather than `z.boolean().optional().refine(...)` is load-bearing: in
+ * zod 4 an issue raised by a refinement on an *optional* field is discarded when the key is
+ * absent from the input, so the refinement form accepted `{"email":"..."}` with no consent
+ * at all. A required literal has no such hole — an absent key is a type error, not a
+ * skipped check. Guarded by tests/legal-pages.spec.ts.
+ */
+export const buildRegisterBodySchema = (
+  requireConsent: boolean,
+): z.ZodType<{ email: string; termsAccepted?: boolean }> =>
+  z.object({
+    email: z.string().email('Invalid email format'),
+    termsAccepted: requireConsent
+      ? z.literal(true, { message: TERMS_REQUIRED_MESSAGE })
+      : z.boolean().optional(),
+  });
 
 const PasskeyRegisterVerifySchema = z.object({
   email: z.string().email('Invalid email format'),
@@ -66,13 +86,6 @@ const PasskeyRecoveryCompleteSchema = z.object({
 });
 
 // Magic Link Schemas
-const MagicLinkRegisterSchema = z.object({
-  email: z.string().email('Invalid email format'),
-  termsAccepted: z.boolean().refine((val) => val === true, {
-    message: 'You must accept the Terms of Service',
-  }),
-});
-
 const MagicLinkRequestSchema = z.object({
   email: z.string().email('Invalid email format'),
 });
@@ -82,14 +95,15 @@ const MagicLinkVerifySchema = z.object({
 });
 
 type VerifyEmailBody = z.infer<typeof VerifyEmailSchema>;
-type PasskeyRegisterOptionsBody = z.infer<typeof PasskeyRegisterOptionsSchema>;
+type RegisterBody = { email: string; termsAccepted?: boolean };
+type PasskeyRegisterOptionsBody = RegisterBody;
 type PasskeyRegisterVerifyBody = z.infer<typeof PasskeyRegisterVerifySchema>;
 type PasskeyLoginOptionsBody = z.infer<typeof PasskeyLoginOptionsSchema>;
 type PasskeyLoginVerifyBody = z.infer<typeof PasskeyLoginVerifySchema>;
 type PasskeyRecoveryRequestBody = z.infer<typeof PasskeyRecoveryRequestSchema>;
 type PasskeyRecoveryOptionsBody = z.infer<typeof PasskeyRecoveryOptionsSchema>;
 type PasskeyRecoveryCompleteBody = z.infer<typeof PasskeyRecoveryCompleteSchema>;
-type MagicLinkRegisterBody = z.infer<typeof MagicLinkRegisterSchema>;
+type MagicLinkRegisterBody = RegisterBody;
 type MagicLinkRequestBody = z.infer<typeof MagicLinkRequestSchema>;
 type MagicLinkVerifyBody = z.infer<typeof MagicLinkVerifySchema>;
 
@@ -119,7 +133,18 @@ const getSafeErrorMessage = (err: unknown, fallback: string): string => {
   return fallback;
 };
 
-export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
+export interface ApiRoutesOptions {
+  /** True when this instance publishes a privacy policy, so consent can be demanded. */
+  requireTermsConsent: boolean;
+}
+
+export const apiRoutes = async (
+  fastify: FastifyInstance,
+  opts: ApiRoutesOptions,
+): Promise<void> => {
+  const PasskeyRegisterOptionsSchema = buildRegisterBodySchema(opts.requireTermsConsent);
+  const MagicLinkRegisterSchema = PasskeyRegisterOptionsSchema;
+
   // Moderate rate limiting for email verification (20 attempts per 15 minutes)
   fastify.post<{ Body: VerifyEmailBody }>(
     '/verify-email',
@@ -171,6 +196,14 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
       try {
         const user = getAuthUser(req);
         const result = await replaceToken(user.userId, user.email);
+        // Sockets authenticate only at upgrade, so revoked tokens would keep
+        // receiving op notifications through already-open connections — close
+        // them all, the caller's own socket included: a socket's clientId is
+        // self-declared and unauthenticated, so sparing "the caller's" socket
+        // by id would let a stolen-token client exempt itself by claiming it.
+        // The caller reconnects with its fresh token on the next sync cycle.
+        // Any request body (legacy clients sent their clientId) is ignored.
+        getWsConnectionService().closeForUser(user.userId);
         return reply.send(result);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : 'Unknown error';
@@ -208,6 +241,14 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
         await prisma.user.delete({ where: { id: userId } });
         // AUTH_CACHE_INVALIDATION: account deletion must not leave a ghost-token window.
         authCache.invalidate(userId);
+
+        // The cascade removed this user's sync_devices rows, but an open socket
+        // keeps answering pings, so the dead-connection branch never reaps it.
+        // Its heartbeat touch would then re-INSERT a device row for a user that
+        // no longer exists and trip the FK every throttle window. Closed after
+        // the delete, not before: with the user row already gone no reconnect
+        // can re-authenticate and re-orphan a socket.
+        getWsConnectionService().closeForUser(userId);
 
         Logger.audit({ event: 'USER_ACCOUNT_DELETED', userId });
 

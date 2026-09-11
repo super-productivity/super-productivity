@@ -130,6 +130,42 @@ describe('ClientIdService', () => {
     });
   });
 
+  /**
+   * #9336. v17.0.0–v18.10.0 minted a 4-char random suffix ('B_H8AR', taken
+   * verbatim from #6197); ec16757c82 then widened the generator to 6 AND
+   * narrowed the matching check, so those stored ids read as absent and were
+   * minted over — a silent, permanent vector-clock key rotation (#7732).
+   *
+   * The two sub-windows differ in WHERE the id lives: SUP_OPS gained its
+   * client_id store in v18.7.0, so v17.0.0–v18.6.x devices hold it only in pf.
+   */
+  describe('a clientId minted by an older release (#9336)', () => {
+    const SHIPPED_COMPACT_ID = 'B_H8AR';
+
+    it('resolves it from pf instead of reporting absence', async () => {
+      await seedPf(PF_CLIENT_ID_KEY, SHIPPED_COMPACT_ID);
+
+      expect(await service.loadClientId()).toBe(SHIPPED_COMPACT_ID);
+    });
+
+    it('copies it forward to SUP_OPS rather than minting a replacement', async () => {
+      await seedPf(PF_CLIENT_ID_KEY, SHIPPED_COMPACT_ID);
+
+      expect(await service.getOrGenerateClientId()).toBe(SHIPPED_COMPACT_ID);
+      expect(await readSupOps()).toBe(SHIPPED_COMPACT_ID);
+    });
+
+    // v18.7.0–v18.10.0: the id lives only in SUP_OPS. Asserting the STORED
+    // value is what proves the identity survived — _putClientIdIfAbsent used
+    // to overwrite it in place, which the return value alone would not reveal.
+    it('never overwrites one already stored in SUP_OPS', async () => {
+      await seedSupOps(SHIPPED_COMPACT_ID);
+
+      expect(await service.getOrGenerateClientId()).toBe(SHIPPED_COMPACT_ID);
+      expect(await readSupOps()).toBe(SHIPPED_COMPACT_ID);
+    });
+  });
+
   describe('nothing stored anywhere', () => {
     it('loadClientId() resolves to null', async () => {
       expect(await service.loadClientId()).toBeNull();

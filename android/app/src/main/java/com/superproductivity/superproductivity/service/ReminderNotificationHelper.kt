@@ -88,7 +88,7 @@ object ReminderNotificationHelper {
         useAlarmStyle: Boolean = false,
         isOngoing: Boolean = false
     ) {
-        Log.d(TAG, "Scheduling reminder: id=$notificationId, title=$title, useAlarmStyle=$useAlarmStyle")
+        Log.d(TAG, "Scheduling reminder: id=$notificationId, useAlarmStyle=$useAlarmStyle")
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 

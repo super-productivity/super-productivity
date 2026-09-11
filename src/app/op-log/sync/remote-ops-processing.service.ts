@@ -18,11 +18,7 @@ import { ConflictResolutionService } from './conflict-resolution.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { SyncSessionValidationService } from './sync-session-validation.service';
 import { VectorClockService } from './vector-clock.service';
-import {
-  MIN_SUPPORTED_SCHEMA_VERSION,
-  SchemaMigrationService,
-  getOperationSchemaVersion,
-} from '../persistence/schema-migration.service';
+import { SchemaMigrationService } from '../persistence/schema-migration.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { LOCK_NAMES } from '../core/operation-log.const';
@@ -32,6 +28,8 @@ import { SyncImportFilterService } from './sync-import-filter.service';
 import { OperationWriteFlushService } from './operation-write-flush.service';
 import { processDeferredActionsAfterRemoteApply } from './process-deferred-actions-flush.util';
 import { IncompleteRemoteOperationsError } from '../core/errors/sync-errors';
+import { getRemoteOpBlockReason, RemoteOpBlockReason } from './remote-op-block.util';
+import { RepairSyncContextService } from '../validation/repair-sync-context.service';
 import { selectSyncConfig } from '../../features/config/store/global-config.reducer';
 import {
   applyLocalOnlySyncSettingsToAppData,
@@ -39,6 +37,13 @@ import {
 } from '../../features/config/local-only-sync-settings.util';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
+import { BackupService } from '../backup/backup.service';
+import { RecoveryPointBannerService } from '../../imex/local-backup/recovery-point-banner.service';
+import { countAllTasks } from '../../imex/local-backup/backup-ring.util';
+
+/** The state that ends up applied when a batch carries several full-state ops. */
+const lastFullStateOp = (ops: Operation[]): Operation | undefined =>
+  ops.filter((op) => FULL_STATE_OP_TYPES.has(op.opType)).at(-1);
 
 /**
  * Handles the core pipeline for processing remote operations.
@@ -57,6 +62,7 @@ import { SyncProviderManager } from '../sync-providers/provider-manager.service'
   providedIn: 'root',
 })
 export class RemoteOpsProcessingService {
+  private repairSyncContext = inject(RepairSyncContextService);
   private store = inject(Store);
   private opLogStore = inject(OperationLogStoreService);
   private operationApplier = inject(OperationApplierService);
@@ -72,6 +78,8 @@ export class RemoteOpsProcessingService {
   private writeFlushService = inject(OperationWriteFlushService);
   private hydrationStateService = inject(HydrationStateService);
   private providerManager = inject(SyncProviderManager);
+  private backupService = inject(BackupService);
+  private recoveryPointBanner = inject(RecoveryPointBannerService);
   private injector = inject(Injector);
 
   /** Flag to show version-incompatibility warnings only once per session */
@@ -101,6 +109,12 @@ export class RemoteOpsProcessingService {
     options?: {
       skipConflictDetection?: boolean;
       callerHoldsOperationLogLock?: boolean;
+      /**
+       * The caller already captured a pre-replacement recovery point (raw
+       * rebuild / "Use server data"). A second capture here would move the undo
+       * pointer and break that flow's Undo offer.
+       */
+      skipRecoveryPoint?: boolean;
       ignoredLocalFullStateOpIds?: readonly string[];
       /**
        * Final full-state conflict check. Runs with the operation-log lock held,
@@ -156,34 +170,16 @@ export class RemoteOpsProcessingService {
     const currentVersion = this.schemaMigrationService.getCurrentVersion();
     const migratedOps: Operation[] = [];
     const droppedEntityIds = new Set<string>();
-    let blockReason:
-      | 'VERSION_UNSUPPORTED'
-      | 'VERSION_TOO_NEW'
-      | 'INVALID_SCHEMA_VERSION'
-      | 'MIGRATION_FAILED' = 'MIGRATION_FAILED';
+    let blockReason: RemoteOpBlockReason = 'MIGRATION_FAILED';
     let blockedOp: Operation | null = null;
 
     for (const op of remoteOps) {
-      let opVersion: number;
-      try {
-        opVersion = getOperationSchemaVersion(op as { schemaVersion?: unknown });
-      } catch {
+      // Shared with the pre-processing prefix cut (conflict gate) so nothing
+      // acts on an op this loop will refuse. Reasons are documented there.
+      const preMigrationBlockReason = getRemoteOpBlockReason(op, currentVersion);
+      if (preMigrationBlockReason !== null) {
         blockedOp = op;
-        blockReason = 'INVALID_SCHEMA_VERSION';
-        break;
-      }
-
-      // Op below minimum supported version: no migration path exists.
-      if (opVersion < MIN_SUPPORTED_SCHEMA_VERSION) {
-        blockedOp = op;
-        blockReason = 'VERSION_UNSUPPORTED';
-        break;
-      }
-
-      // Op from a newer schema version: this client cannot interpret it safely.
-      if (opVersion > currentVersion) {
-        blockedOp = op;
-        blockReason = 'VERSION_TOO_NEW';
+        blockReason = preMigrationBlockReason;
         break;
       }
 
@@ -221,6 +217,12 @@ export class RemoteOpsProcessingService {
           'Processing the batch prefix only; cursor must not advance past this op.',
       );
       this._notifyBlockedOp(blockReason);
+      // A REPAIR minted while applying/validating the prefix must not claim
+      // the downloaded cursor as its causal base: that cursor covers the
+      // blocked suffix, which this client never applied. A falsely causal
+      // REPAIR would be auto-accepted by other devices and would let the
+      // upload path advance this client's cursor past the blocked op.
+      this.repairSyncContext.dropBaseServerSeqForCurrentRun();
     }
 
     if (migratedOps.length === 0) {
@@ -317,10 +319,28 @@ export class RemoteOpsProcessingService {
           ) {
             fullStateApplyResult.blockedByLocalConflict = true;
           } else {
+            // The apply below replaces this device's data wholesale, and under
+            // E2EE the server cannot hand it back — keep a local recovery point
+            // first (local-recovery-points.md). A failed capture throws and so
+            // aborts the apply; the ops stay undownloaded and retry next cycle.
+            const recoveryPoint =
+              options?.skipRecoveryPoint || !(await this._hasNewFullStateOp(validOps))
+                ? null
+                : await this.backupService.captureRecoveryPointIfMeaningful(
+                    'REMOTE_IMPORT',
+                  );
             fullStateApplyResult.committedFullStateOpIds =
               await this.applyNonConflictingOps(validOps, true, {
                 skipDeferredActionDrain: true,
               });
+            if (recoveryPoint) {
+              this.recoveryPointBanner.showIfShrunk(
+                recoveryPoint.taskCount,
+                countAllTasks(
+                  extractFullStateFromPayload(lastFullStateOp(validOps)?.payload),
+                ),
+              );
+            }
           }
         } catch (error) {
           hasPrimaryError = true;
@@ -512,13 +532,7 @@ export class RemoteOpsProcessingService {
    * category to avoid snack spam from periodic sync retries (the block persists
    * until an app update or migration fix, and every retry re-hits it).
    */
-  private _notifyBlockedOp(
-    reason:
-      | 'VERSION_UNSUPPORTED'
-      | 'VERSION_TOO_NEW'
-      | 'INVALID_SCHEMA_VERSION'
-      | 'MIGRATION_FAILED',
-  ): void {
+  private _notifyBlockedOp(reason: RemoteOpBlockReason): void {
     if (this.snackService.hasPendingPersistentAction()) {
       // Never replace a visible persistent recovery action (e.g. the USE_REMOTE
       // Undo — the only entry point to the pre-replace backup). The block
@@ -574,6 +588,20 @@ export class RemoteOpsProcessingService {
    *        apply window and drains deferred actions after validation or abort.
    * @throws Re-throws if application fails (ops marked as failed first)
    */
+  /**
+   * A full-state op already in the log is skipped by `appendBatchSkipDuplicates`
+   * and never replaces state, so a re-delivered duplicate (forced download from
+   * seq 0, #9975) must not rotate a real recovery point out of the ring.
+   */
+  private async _hasNewFullStateOp(ops: Operation[]): Promise<boolean> {
+    for (const op of ops) {
+      if (this._isFullStateOperation(op) && !(await this.opLogStore.hasOp(op.id))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   async applyNonConflictingOps(
     ops: Operation[],
     callerHoldsLock: boolean = false,

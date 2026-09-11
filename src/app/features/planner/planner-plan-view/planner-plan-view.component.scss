@@ -31,7 +31,7 @@
     display: block;
     width: 100%;
     max-width: 100%;
-    padding: var(--s2);
+    padding: var(--s-half) var(--s2) var(--s2);
   }
 }
 
@@ -40,7 +40,7 @@
   align-items: center;
   justify-content: center;
   min-width: 260px;
-  padding: 2rem;
+  padding: var(--s4);
 
   @include mq(xs, max) {
     min-width: 100%;

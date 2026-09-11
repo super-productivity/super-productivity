@@ -219,3 +219,87 @@ describe('resolveBackground()', () => {
     });
   });
 });
+
+describe('GlobalThemeService.registerSvgIconFromContent()', () => {
+  interface IconRegistrationHarness {
+    registerSvgIconFromContent(iconName: string, svgContent: string): void;
+    _registeredPluginIcons: Set<string>;
+    _matIconRegistry: { addSvgIconLiteral: jasmine.Spy };
+    _domSanitizer: { bypassSecurityTrustHtml: (value: string) => string };
+  }
+
+  let harness: IconRegistrationHarness;
+
+  beforeEach(() => {
+    harness = Object.create(GlobalThemeService.prototype) as IconRegistrationHarness;
+    harness._registeredPluginIcons = new Set<string>();
+    harness._matIconRegistry = {
+      addSvgIconLiteral: jasmine.createSpy('addSvgIconLiteral'),
+    };
+    harness._domSanitizer = { bypassSecurityTrustHtml: (value: string) => value };
+  });
+
+  /** MatIconRegistry parses the registered literal with `div.innerHTML`. */
+  const renderRegisteredLiteral = (): HTMLDivElement => {
+    const div = document.createElement('div');
+    div.innerHTML = harness._matIconRegistry.addSvgIconLiteral.calls.mostRecent()
+      .args[1] as string;
+    return div;
+  };
+
+  it('registers a benign plugin icon', () => {
+    harness.registerSvgIconFromContent(
+      'plugin-a-icon',
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M1 2"></path></svg>',
+    );
+
+    expect(harness._matIconRegistry.addSvgIconLiteral).toHaveBeenCalledTimes(1);
+    expect(renderRegisteredLiteral().querySelector('path')?.getAttribute('d')).toBe(
+      'M1 2',
+    );
+    expect(harness._registeredPluginIcons.has('plugin-a-icon')).toBe(true);
+  });
+
+  it('does not register content that is not an SVG', () => {
+    harness.registerSvgIconFromContent('plugin-b-icon', '<div>nope</div>');
+
+    expect(harness._matIconRegistry.addSvgIconLiteral).not.toHaveBeenCalled();
+    expect(harness._registeredPluginIcons.has('plugin-b-icon')).toBe(false);
+  });
+
+  it('registers no live markup for a plugin icon that smuggles CDATA', () => {
+    harness.registerSvgIconFromContent(
+      'plugin-c-icon',
+      '<svg xmlns="http://www.w3.org/2000/svg"><desc><![CDATA[><img src=x onerror="window.alert(1)">]]></desc><circle r="4"></circle></svg>',
+    );
+
+    expect(harness._matIconRegistry.addSvgIconLiteral).toHaveBeenCalledTimes(1);
+    const rendered = renderRegisteredLiteral();
+    expect(rendered.querySelector('img')).toBeNull();
+    expect(rendered.querySelector('[onerror]')).toBeNull();
+    expect(rendered.querySelector('circle')?.getAttribute('r')).toBe('4');
+  });
+
+  it('does not register an icon whose content is entirely stripped', () => {
+    harness.registerSvgIconFromContent(
+      'plugin-e-icon',
+      '<svg xmlns="http://www.w3.org/2000/svg"><desc><![CDATA[><img src=x onerror="window.alert(1)">]]></desc></svg>',
+    );
+
+    // Registering an empty literal would make `hasPluginIcon()` true, so callers would pick
+    // this icon name over their own fallback and render nothing.
+    expect(harness._matIconRegistry.addSvgIconLiteral).not.toHaveBeenCalled();
+    expect(harness._registeredPluginIcons.has('plugin-e-icon')).toBe(false);
+  });
+
+  it('strips an event handler from a plugin icon before registering it', () => {
+    harness.registerSvgIconFromContent(
+      'plugin-d-icon',
+      '<svg xmlns="http://www.w3.org/2000/svg" onload="window.alert(1)"><circle r="4"></circle></svg>',
+    );
+
+    const rendered = renderRegisteredLiteral();
+    expect(rendered.querySelector('svg')?.getAttribute('onload')).toBeNull();
+    expect(rendered.querySelector('circle')?.getAttribute('r')).toBe('4');
+  });
+});

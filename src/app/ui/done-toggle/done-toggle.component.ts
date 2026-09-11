@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { isMultiSelectModifierEvent } from '../../util/is-multi-select-modifier-event';
 
 @Component({
   selector: 'done-toggle',
@@ -8,7 +9,7 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
   standalone: true,
   /* eslint-disable @typescript-eslint/naming-convention */
   host: {
-    '(click)': 'toggled.emit(); $event.stopPropagation()',
+    '(click)': 'onClick($event)',
     '(keydown.enter)': 'toggled.emit(); $event.stopPropagation()',
     '(keydown.space)':
       'toggled.emit(); $event.stopPropagation(); $event.preventDefault()',
@@ -27,4 +28,14 @@ export class DoneToggleComponent {
   readonly showDoneAnimation = input<boolean>(false);
   readonly showUndoneAnimation = input<boolean>(false);
   readonly toggled = output<void>();
+
+  onClick(ev: MouseEvent): void {
+    // A modifier click selects the task row instead of toggling done; let it
+    // bubble to the row.
+    if (isMultiSelectModifierEvent(ev)) {
+      return;
+    }
+    this.toggled.emit();
+    ev.stopPropagation();
+  }
 }

@@ -10,7 +10,7 @@ import {
   signal,
 } from '@angular/core';
 import { Log } from '../../../core/log';
-import { from, Observable, of, Subject, timer } from 'rxjs';
+import { from, Observable, of, Subject, Subscription, timer } from 'rxjs';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { TaskService } from '../../tasks/task.service';
 import { debounceTime, switchMap, take } from 'rxjs/operators';
@@ -74,6 +74,13 @@ import { ANI_STANDARD_TIMING } from '../../../ui/animations/animation.const';
 import { FocusModeTaskSelectorComponent } from '../focus-mode-task-selector/focus-mode-task-selector.component';
 import { DialogPomodoroSettingsComponent } from '../dialog-pomodoro-settings/dialog-pomodoro-settings.component';
 import { DialogFlowtimeSettingsComponent } from '../dialog-flowtime-settings/dialog-flowtime-settings.component';
+import {
+  MatMenu,
+  MatMenuContent,
+  MatMenuItem,
+  MatMenuTrigger,
+} from '@angular/material/menu';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 
 @Component({
   selector: 'focus-mode-main',
@@ -112,6 +119,10 @@ import { DialogFlowtimeSettingsComponent } from '../dialog-flowtime-settings/dia
     InputDurationSliderComponent,
     SegmentedButtonGroupComponent,
     FocusModeTaskSelectorComponent,
+    MatMenu,
+    MatMenuContent,
+    MatMenuItem,
+    MatMenuTrigger,
   ],
   host: {
     ['[class.isSessionRunning]']: 'isSessionRunning()',
@@ -135,10 +146,12 @@ export class FocusModeMainComponent {
   private readonly _LAUNCH_DURATION_MS = 800;
   // True while the brief inline rocket launch plays (default, prep screen off).
   readonly isLaunching = signal(false);
+  private _launchSubscription: Subscription | null = null;
 
   readonly simpleCounterService = inject(SimpleCounterService);
   readonly taskService = inject(TaskService);
   readonly focusModeService = inject(FocusModeService);
+  readonly isXs = inject(LayoutService).isXs;
   readonly focusModeConfig = this.focusModeService.focusModeConfig;
 
   readonly FocusModeMode = FocusModeMode;
@@ -161,7 +174,20 @@ export class FocusModeMainComponent {
     ),
   );
 
+  // Picking a task during preparation only stages it for the upcoming Focus
+  // session. Activating it here would start global task tracking before the
+  // user presses Start (#9399).
+  private readonly _pendingTaskId = signal<string | null>(null);
+  private readonly _pendingTask = toSignal(
+    toObservable(this._pendingTaskId).pipe(
+      switchMap((id) => (id ? this.taskService.getByIdLive$(id) : of(null))),
+    ),
+  );
+
   readonly displayedTask = computed(() => {
+    if (this.mainState() !== FocusMainUIState.InProgress && this._pendingTaskId()) {
+      return this._pendingTask() ?? null;
+    }
     const tracked = this.currentTask();
     if (tracked) return tracked;
     if (this.focusModeService.isSessionPaused()) {
@@ -240,7 +266,10 @@ export class FocusModeMainComponent {
   // Play button should be disabled when no task is selected.
   // Sync between focus session and tracking is always on, so starting a session
   // without a task would leave tracking with nothing to bind to.
-  isPlayButtonDisabled = computed(() => !this.currentTask());
+  isPlayButtonDisabled = computed(() => {
+    const task = this.displayedTask();
+    return !task || task.isDone;
+  });
 
   // Mode selector options
   readonly modeOptions = computed<ReadonlyArray<SegmentedButtonOption>>(() => {
@@ -367,8 +396,7 @@ export class FocusModeMainComponent {
   }
 
   @HostListener('drop', ['$event']) onDrop(ev: DragEvent): void {
-    // Drop attaches to the displayedTask (= currentTask, or the paused task
-    // during a paused session) so drops still work mid-pause.
+    // Drop attaches to the tracked, paused, or staged preparation task.
     const t = this.displayedTask();
     if (!t) {
       return;
@@ -396,12 +424,12 @@ export class FocusModeMainComponent {
   }
 
   finishCurrentTask(): void {
-    const sessionRunning = this.isSessionRunning();
+    const isSessionInProgress = this._isInProgress() || this.isSessionRunning();
+    const task = this.displayedTask();
 
     this._store.dispatch(completeTask());
 
-    const t = this.currentTask();
-    const id = t && t.id;
+    const id = task?.id;
     if (id) {
       this._store.dispatch(
         TaskSharedActions.updateTask({
@@ -416,10 +444,12 @@ export class FocusModeMainComponent {
       );
     }
 
-    if (sessionRunning) {
+    if (isSessionInProgress) {
       this.openTaskSelector();
     } else {
+      this._pendingTaskId.set(null);
       this._store.dispatch(selectFocusTask());
+      this.openTaskSelector();
     }
   }
 
@@ -429,9 +459,9 @@ export class FocusModeMainComponent {
 
   updateTaskTitleIfChanged(isChanged: boolean, newTitle: string): void {
     if (isChanged) {
-      const t = this.currentTask();
+      const t = this.displayedTask();
       if (!t) {
-        Log.warn('updateTaskTitleIfChanged: currentTask is null, skipping update');
+        Log.warn('updateTaskTitleIfChanged: displayedTask is null, skipping update');
         return;
       }
       this.taskService.update(t.id, { title: newTitle });
@@ -477,7 +507,8 @@ export class FocusModeMainComponent {
 
     // Sync between focus session and tracking is always on — require a task
     // before starting so tracking has something to bind to.
-    if (!this.currentTask()) {
+    const task = this.displayedTask();
+    if (!task || task.isDone) {
       this.openTaskSelector();
       return;
     }
@@ -489,7 +520,7 @@ export class FocusModeMainComponent {
     }
 
     // Default: play a quick inline rocket launch from the play button, then start.
-    this._launchThenStart();
+    this._launchThenStart(task.id);
   }
 
   onCountdownComplete(): void {
@@ -498,25 +529,26 @@ export class FocusModeMainComponent {
     // Main UI state transitions are now handled by the store
   }
 
-  private _launchThenStart(): void {
+  private _launchThenStart(taskId: string): void {
     // Honor "reduce motion": skip the rocket flourish and its timed delay,
     // starting immediately. Otherwise a motion-sensitive user would just wait
     // out an 800ms delay for an animation they never see.
     if (this._prefersReducedMotion()) {
-      this._dispatchStartSession();
+      this._dispatchStartSession(taskId);
       return;
     }
 
     this.isLaunching.set(true);
-    timer(this._LAUNCH_DURATION_MS)
+    this._launchSubscription = timer(this._LAUNCH_DURATION_MS)
       .pipe(takeUntilDestroyed(this._destroyRef))
       .subscribe(() => {
+        this._launchSubscription = null;
         this.isLaunching.set(false);
-        // The task could have been deselected during the brief launch window.
-        if (!this.currentTask()) {
+        if (!this._isPreparation()) {
+          this._pendingTaskId.set(null);
           return;
         }
-        this._dispatchStartSession();
+        this._dispatchStartSession(taskId);
       });
   }
 
@@ -524,10 +556,19 @@ export class FocusModeMainComponent {
     return !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
   }
 
-  private _dispatchStartSession(): void {
+  private _dispatchStartSession(expectedTaskId?: string): void {
+    const task = this.displayedTask();
+    if (!task || task.isDone || (expectedTaskId && task.id !== expectedTaskId)) {
+      this._pendingTaskId.set(null);
+      this._store.dispatch(selectFocusTask());
+      this.openTaskSelector();
+      return;
+    }
+
     // For Flowtime mode, duration must be 0 to count indefinitely
     const duration = this.mode() === FocusModeMode.Flowtime ? 0 : this.displayDuration();
-    this._store.dispatch(startFocusSession({ duration }));
+    this._store.dispatch(startFocusSession({ duration, taskId: task.id }));
+    this._pendingTaskId.set(null);
   }
 
   pauseSession(): void {
@@ -591,7 +632,14 @@ export class FocusModeMainComponent {
   }
 
   openTaskSelector(): void {
+    this._cancelInlineLaunch();
     this.isTaskSelectorOpen.set(true);
+  }
+
+  private _cancelInlineLaunch(): void {
+    this._launchSubscription?.unsubscribe();
+    this._launchSubscription = null;
+    this.isLaunching.set(false);
   }
 
   closeTaskSelector(): void {
@@ -599,7 +647,11 @@ export class FocusModeMainComponent {
   }
 
   onTaskSelected(taskId: string): void {
-    this.switchToTask(taskId);
+    if (this._isInProgress()) {
+      this.switchToTask(taskId);
+    } else {
+      this._pendingTaskId.set(taskId);
+    }
     this.closeTaskSelector();
   }
 

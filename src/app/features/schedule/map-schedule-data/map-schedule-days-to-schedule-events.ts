@@ -68,6 +68,9 @@ export const mapScheduleDaysToScheduleEvents = (
           style: `grid-column: ${dayIndex + 2};  grid-row: ${startRow} / span ${rowSpan}`,
           data: entry.data,
           plannedForDay: entry.plannedForDay,
+          ...(entry.sourceOccurrenceDate
+            ? { sourceOccurrenceDate: entry.sourceOccurrenceDate }
+            : {}),
           isBeyondBudget: entry.isBeyondBudget,
         });
 

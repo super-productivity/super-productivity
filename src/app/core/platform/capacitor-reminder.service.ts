@@ -59,6 +59,9 @@ export class CapacitorReminderService {
   // Injected (vs reading IS_ANDROID_WEB_VIEW directly) so tests can override
   // it via DI — matches the pattern in `task-reminder.effects.ts`.
   private _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
+  // See requestPermissionsInBackground().
+  private _backgroundPermissionRequest?: Promise<boolean>;
+  private _isBackgroundPermissionRequestSettled = false;
 
   /**
    * Observable that emits when a notification action is performed (iOS).
@@ -309,6 +312,79 @@ export class CapacitorReminderService {
     }
 
     return this._notificationService.getPermissionState();
+  }
+
+  /**
+   * Ask for notification permission at most once per session WITHOUT making the
+   * caller wait for the OS dialog.
+   *
+   * For callers that are about to produce a notification but cannot await a
+   * dialog — the Android foreground-service starts (time tracking, focus mode)
+   * run inside synchronous effect taps. Nothing on those paths requested
+   * POST_NOTIFICATIONS, so on Android 13+ their notifications were silently
+   * suppressed and the app looked broken. See #9648.
+   *
+   * Other paths that CAN prompt (none of which a fresh user necessarily hits
+   * before their first timer): reminder scheduling in
+   * `MobileNotificationEffects`, and `NotifyService.notify()` →
+   * `CapacitorNotificationService.schedule()`, used by the estimate-exceeded
+   * notification and the tracking reminder.
+   *
+   * Consistent with the lazy-prompt design (#8120): starting a timer IS a
+   * contextual first use, not an unprompted launch-time dialog. Callers must
+   * keep it that way — only wire this to genuinely user-initiated starts, never
+   * to a cold-start/recovery path.
+   *
+   * Because the request is not awaited, the caller's startForeground() runs
+   * while the permission is still denied, so Android drops that notification —
+   * and both foreground services render steady-state time via a native
+   * chronometer with NO per-tick update pushes (#8243), so nothing re-posts it
+   * organically. Callers must therefore re-post their own notification when
+   * this resolves true (see the _repost*AfterGrant methods in the Android
+   * effects). Later sessions are unaffected.
+   */
+  requestPermissionsInBackground(): Promise<boolean> {
+    if (!this.isAvailable) {
+      return Promise.resolve(false);
+    }
+
+    // Callers arriving after the request settled posted their notification
+    // with the permission already in its final state — nothing was suppressed,
+    // so never report "newly granted" again (a stale true would trigger a
+    // redundant re-post on every later timer start this session).
+    if (this._isBackgroundPermissionRequestSettled) {
+      return Promise.resolve(false);
+    }
+
+    // Session-scoped: tracking and focus mode can start back-to-back, and a
+    // denial must not re-prompt for the rest of the session. Callers that
+    // arrive while the OS dialog is still open share the pending promise —
+    // their notifications were suppressed too and need the re-post signal.
+    this._backgroundPermissionRequest ??= this._requestAndDetectGrant().finally(() => {
+      this._isBackgroundPermissionRequestSettled = true;
+    });
+    return this._backgroundPermissionRequest;
+  }
+
+  /**
+   * Resolves true ONLY when the permission went from not-granted to granted —
+   * i.e. the caller's notification was suppressed and needs re-posting.
+   *
+   * Already-granted resolves false: nothing was suppressed, so re-posting would
+   * be pointless work (and on Android re-anchors the tracking counter). The
+   * `getPermissionState()` probe carries the #7408 legacy-WebView guard, so the
+   * legacy shell reports 'granted' and never reaches the Capacitor call.
+   */
+  private async _requestAndDetectGrant(): Promise<boolean> {
+    try {
+      if ((await this.getPermissionState()) === 'granted') {
+        return false;
+      }
+      return await this.ensurePermissions();
+    } catch (error) {
+      Log.warn('CapacitorReminderService: background permission request failed', error);
+      return false;
+    }
   }
 
   /**

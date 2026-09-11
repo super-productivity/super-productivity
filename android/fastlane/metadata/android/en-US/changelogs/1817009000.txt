@@ -1,0 +1,3 @@
+New: Search global settings, open the shortcut guide with “?”, use interval recurrences such as “@every 2 weeks,” and create or complete tasks through URL actions.
+
+Improved: Crash-safe project-note drafts, stronger encrypted-sync safeguards and recovery guidance, more reliable conflict handling, calendar and Schedule fixes, safer backups and plugin content, better mobile overlays, plus localization, recurrence, Focus Mode, and CalDAV fixes.

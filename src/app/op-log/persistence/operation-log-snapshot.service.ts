@@ -14,6 +14,7 @@ import { hasMeaningfulStateData } from '../validation/has-meaningful-state-data.
 import { OperationCaptureService } from '../capture/operation-capture.service';
 import { getPhantomChangeRisk } from '../capture/phantom-change-guard.util';
 import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
+import { TabSeqFrontierService } from './tab-seq-frontier.service';
 
 type StateCache = MigratableStateCache;
 
@@ -37,6 +38,7 @@ export class OperationLogSnapshotService {
   private validateStateService = inject(ValidateStateService);
   private operationCapture = inject(OperationCaptureService);
   private writeFlushService = inject(OperationWriteFlushService);
+  private tabSeqFrontier = inject(TabSeqFrontierService);
 
   /**
    * Validates that a snapshot has the expected structure and data.
@@ -135,6 +137,22 @@ export class OperationLogSnapshotService {
         // and lastSeq after — see JSDoc above.
         const currentState = this.stateSnapshotService.getStateSnapshotForOperationLog();
         const lastSeq = await this.opLogStore.getLastSeq();
+
+        // GUARD (#9438): lastSeq is the global max across the SHARED store,
+        // but a concurrent tab's op is counted there while its effect is
+        // absent from this tab's captured state. Anchoring past it would make
+        // the next boot's tail replay silently skip that op. Persist only
+        // when the global max matches the frontier this tab has actually
+        // applied; skipping costs at most a slower next boot.
+        if (!this.tabSeqFrontier.isSaveSafeAt(lastSeq)) {
+          OpLog.warn(
+            'OperationLogSnapshotService: Skipping snapshot save — the op log ' +
+              'contains writes from a concurrent tab that are not in this ' +
+              "tab's state (#9438)",
+            { lastSeq, frontier: this.tabSeqFrontier.frontierSeq },
+          );
+          return false;
+        }
 
         // GUARD (#7892): never cache an empty/degraded state over a good one.
         // The snapshot is only a load-time cache — the op-log is the source of

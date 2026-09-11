@@ -101,6 +101,12 @@ object WebViewCompatibilityChecker {
             get() = status == Status.BLOCK
     }
 
+    /**
+     * Reads the WebView provider version. Call from the UI process only: it loads the
+     * Chromium native stack via [WebSettings.getDefaultUserAgent], so a headless caller
+     * (alarm receiver, widget, sync worker) would pay that cost for nothing and risk
+     * leaving a WebView-less process behind. → issues #7229, #7518, and the note in App.
+     */
     fun evaluate(context: Context): Result {
         val resolvedPackageInfo = resolvePackageInfo(context)
         val packageInfo = resolvedPackageInfo?.packageInfo
@@ -203,6 +209,31 @@ object WebViewCompatibilityChecker {
     fun setBlockOverride(context: Context, enabled: Boolean) {
         preferences(context).edit().putBoolean(KEY_BLOCK_OVERRIDE, enabled).commit()
     }
+
+    /**
+     * Builds the BLOCK result for a WebView that refused to initialise, from the
+     * [evaluated] pre-flight result (null when evaluation itself threw).
+     *
+     * Drops the version fields, and `providerPackageIsCurrent` with them: an init failure
+     * is not a version problem, and that version is usually the non-authoritative
+     * PackageManager fallback. Showing it made the screen contradict its own "This is not
+     * an outdated WebView version" copy, and users acted on it by removing their WebView
+     * updates — which resets the Chromium profile and takes the app's local data with it.
+     *
+     * Keeps [Result.providerPackage] as a best-effort target for "Open WebView app
+     * settings" — on this path it is usually the fallback scan's first *installed* match,
+     * which lists Chrome ahead of the non-Google providers. Dropping it would aim that
+     * button at a package that may not be installed, and the details intent resolves
+     * anyway, so it would land on a dead page. The confirmation dialog names it rather
+     * than calling it the active provider. → issues #7229, #7518.
+     */
+    fun initFailureResult(evaluated: Result?): Result = Result(
+        status = Status.BLOCK,
+        majorVersion = null,
+        providerPackage = evaluated?.providerPackage,
+        providerVersionName = null,
+        source = VersionSource.INIT_FAILURE,
+    )
 
     /**
      * Whether the single automatic recovery relaunch allowed per transient WebView

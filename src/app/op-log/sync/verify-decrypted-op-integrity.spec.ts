@@ -1,11 +1,18 @@
-import { assertDecryptedOpMetadataIntegrity } from './verify-decrypted-op-integrity';
+import {
+  assertDecryptedFullStateOpIntegrity,
+  assertDecryptedOpMetadataIntegrity,
+} from './verify-decrypted-op-integrity';
 import { SyncOperation } from '../sync-providers/provider.interface';
 import { OperationIntegrityError } from '../core/errors/sync-errors';
+import { ActionType } from '../core/action-types.enum';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { SINGLETON_ENTITY_ID } from '../core/entity-registry';
+import { OpType } from '../core/operation.types';
+import frozen from '../validation/test-fixtures/frozen-state-v18.15.json';
 
 describe('assertDecryptedOpMetadataIntegrity', () => {
   const LWW_TASK = toLwwUpdateActionType('TASK');
+  const LWW_TIME_TRACKING = toLwwUpdateActionType('TIME_TRACKING');
 
   const createOp = (over: Partial<SyncOperation>): SyncOperation => ({
     id: 'op-1',
@@ -64,6 +71,25 @@ describe('assertDecryptedOpMetadataIntegrity', () => {
         OperationIntegrityError,
       );
     });
+
+    it('throws for an array-entity LWW op whose entityId was retargeted (#9526 lockstep)', () => {
+      // Since the reducer applies array LWW updates by payload identity,
+      // array entities are retargetable and must be in scope of the gate.
+      const op = createOp({
+        actionType: toLwwUpdateActionType('PLUGIN_USER_DATA'),
+        entityType: 'PLUGIN_USER_DATA',
+        entityId: 'victim-plugin',
+      });
+      const authenticatedPayload = {
+        actionPayload: { id: 'real-plugin', data: '{}' },
+        entityChanges: [],
+        lwwUpdateMode: 'replace',
+      };
+
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, authenticatedPayload),
+      ).toThrowError(OperationIntegrityError);
+    });
   });
 
   describe('accepts legitimate ops (no false positives)', () => {
@@ -82,8 +108,12 @@ describe('assertDecryptedOpMetadataIntegrity', () => {
       ).not.toThrow();
     });
 
-    it('ignores singleton entities (no payload.id to compare)', () => {
-      const op = createOp({ entityId: SINGLETON_ENTITY_ID });
+    it('ignores singleton LWW targets even when their conflict id is composite', () => {
+      const op = createOp({
+        actionType: LWW_TIME_TRACKING,
+        entityType: 'TIME_TRACKING',
+        entityId: 'PROJECT:project-1:2026-03-24',
+      });
       expect(() => assertDecryptedOpMetadataIntegrity(op, { foo: 'bar' })).not.toThrow();
     });
 
@@ -91,6 +121,23 @@ describe('assertDecryptedOpMetadataIntegrity', () => {
       const op = createOp({ entityId: undefined });
       expect(() =>
         assertDecryptedOpMetadataIntegrity(op, { id: 'task-123' }),
+      ).not.toThrow();
+    });
+
+    it('passes a genuine array-entity LWW op (payload.id matches entityId)', () => {
+      const op = createOp({
+        actionType: toLwwUpdateActionType('PLUGIN_USER_DATA'),
+        entityType: 'PLUGIN_USER_DATA',
+        entityId: 'sync-md',
+      });
+      const authenticatedPayload = {
+        actionPayload: { id: 'sync-md', data: '{}' },
+        entityChanges: [],
+        lwwUpdateMode: 'replace',
+      };
+
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, authenticatedPayload),
       ).not.toThrow();
     });
   });
@@ -211,5 +258,212 @@ describe('assertDecryptedOpMetadataIntegrity', () => {
         assertDecryptedOpMetadataIntegrity(op, authenticatedPayload),
       ).not.toThrow();
     });
+  });
+
+  describe('Today-list bulk footprint binding (#9426, GHSA-8pxh)', () => {
+    const planOp = (over: Partial<SyncOperation>): SyncOperation =>
+      createOp({
+        actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+        entityId: 'task-1',
+        entityIds: ['task-1', 'task-2'],
+        ...over,
+      });
+    const planPayload = (taskIds: unknown): unknown => ({
+      actionPayload: { taskIds, today: '2026-07-30' },
+      entityChanges: [],
+    });
+
+    it('throws when op.entityIds injects a victim id absent from the authenticated taskIds', () => {
+      const op = planOp({ entityIds: ['task-1', 'task-2', 'victim-task'] });
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, planPayload(['task-1', 'task-2'])),
+      ).toThrowError(OperationIntegrityError);
+    });
+
+    it('throws when the envelope is stripped to look single-entity (undercount)', () => {
+      const op = planOp({ entityIds: undefined });
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, planPayload(['task-1', 'task-2'])),
+      ).toThrowError(OperationIntegrityError);
+    });
+
+    it('throws for a bulk unplan whose envelope diverges from the authenticated taskIds', () => {
+      const op = planOp({
+        actionType: ActionType.TASK_SHARED_REMOVE_FROM_TODAY,
+        entityIds: ['task-1', 'other-task'],
+      });
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, planPayload(['task-1', 'task-2'])),
+      ).toThrowError(OperationIntegrityError);
+    });
+
+    it('throws for a Today drag whose envelope diverges from the authenticated pair', () => {
+      const op = planOp({
+        actionType: ActionType.TASK_SHARED_MOVE_IN_TODAY,
+        entityIds: ['task-1', 'victim-task'],
+      });
+      const payload = {
+        actionPayload: { toTaskId: 'task-1', fromTaskId: 'task-2' },
+        entityChanges: [],
+      };
+      expect(() => assertDecryptedOpMetadataIntegrity(op, payload)).toThrowError(
+        OperationIntegrityError,
+      );
+    });
+
+    it('passes genuine bulk ops for all four action types', () => {
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(planOp({}), planPayload(['task-1', 'task-2'])),
+      ).not.toThrow();
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(
+          planOp({ actionType: ActionType.TASK_SHARED_PLAN_DEADLINE_FOR_TODAY }),
+          planPayload(['task-1', 'task-2']),
+        ),
+      ).not.toThrow();
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(
+          planOp({ actionType: ActionType.TASK_SHARED_REMOVE_FROM_TODAY }),
+          planPayload(['task-1', 'task-2']),
+        ),
+      ).not.toThrow();
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(
+          planOp({ actionType: ActionType.TASK_SHARED_MOVE_IN_TODAY }),
+          {
+            actionPayload: { toTaskId: 'task-1', fromTaskId: 'task-2' },
+            entityChanges: [],
+          },
+        ),
+      ).not.toThrow();
+    });
+
+    it('passes a genuine single-task plan op (entityIds = [id])', () => {
+      const op = planOp({ entityIds: ['task-1'] });
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, planPayload(['task-1'])),
+      ).not.toThrow();
+    });
+
+    it('leaves ops without an authenticated footprint shape untouched (interim tolerance)', () => {
+      const op = planOp({ entityIds: ['task-1', 'anything'] });
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, {
+          actionPayload: { someOtherShape: true },
+          entityChanges: [],
+        }),
+      ).not.toThrow();
+    });
+
+    it('ignores out-of-scope actions that also carry taskIds (e.g. round-time)', () => {
+      const op = planOp({
+        actionType: ActionType.TASK_ROUND_TIME_SPENT,
+        entityIds: ['task-1', 'mismatched-task'],
+      });
+      expect(() =>
+        assertDecryptedOpMetadataIntegrity(op, planPayload(['task-1', 'task-2'])),
+      ).not.toThrow();
+    });
+  });
+});
+
+describe('assertDecryptedFullStateOpIntegrity', () => {
+  // This gate defends the encrypted-download path against an opType-promotion
+  // attack: a compromised server relabels a single-entity op as SYNC_IMPORT so its
+  // decrypted payload is applied as a full-state replacement. It must reject that,
+  // but must NOT reject a legitimate snapshot that merely predates a field a later
+  // version made required (rule 11) — doing so blocks recovery behind a "possible
+  // tampering" error (#9256). frozen-state-v18.15 is a real, validated full-state
+  // snapshot (see frozen-state.spec.ts), reused READ-ONLY here. GHSA-8pxh-mgc7-gp3g.
+  const JIRA_ID = 'ip-JIRA';
+
+  const createFullStateOp = (over: Partial<SyncOperation> = {}): SyncOperation => ({
+    id: 'op-full-1',
+    clientId: 'clientA',
+    actionType: 'LOAD_ALL_DATA',
+    opType: OpType.SyncImport,
+    entityType: 'TASK',
+    entityId: SINGLETON_ENTITY_ID,
+    payload: null,
+    vectorClock: { clientA: 1 },
+    timestamp: 1,
+    schemaVersion: frozen.__frozenAtSchemaVersion,
+    ...over,
+  });
+
+  const validSnapshot = (): Record<string, unknown> =>
+    structuredClone(frozen.state) as unknown as Record<string, unknown>;
+
+  const jiraCfgOf = (snapshot: Record<string, unknown>): Record<string, unknown> =>
+    (snapshot.issueProvider as { entities: Record<string, Record<string, unknown>> })
+      .entities[JIRA_ID];
+
+  it('accepts an untampered, fully-valid full-state snapshot', async () => {
+    await expectAsync(
+      assertDecryptedFullStateOpIntegrity(createFullStateOp(), validSnapshot()),
+    ).toBeResolved();
+  });
+
+  it('accepts a legitimate snapshot missing fields a later version made required (rule 11: JiraCfg.allowFetchFallback/altPublicLinkHost #7628) — regression for #9256', async () => {
+    const snapshot = validSnapshot();
+    const jira = jiraCfgOf(snapshot);
+    // Both required in v18.10 (#7628); a Jira provider configured earlier lacks
+    // them. They are now optional (layer 1), so strict validation passes.
+    delete jira.allowFetchFallback;
+    delete jira.altPublicLinkHost;
+
+    await expectAsync(
+      assertDecryptedFullStateOpIntegrity(createFullStateOp(), snapshot),
+    ).toBeResolved();
+  });
+
+  it('heals a still-required field drifted deep inside a present root instead of rejecting', async () => {
+    const snapshot = validSnapshot();
+    // usePAT stays a REQUIRED boolean (not loosened): strict validation fails, but
+    // the drift is recoverable exactly as the real apply path heals it downstream
+    // (autoFixTypiaErrors boolean->false). Exercises the heal-before-reject path.
+    delete jiraCfgOf(snapshot).usePAT;
+
+    await expectAsync(
+      assertDecryptedFullStateOpIntegrity(createFullStateOp(), snapshot),
+    ).toBeResolved();
+  });
+
+  it('still rejects a promoted single-entity payload (opType-promotion attack)', async () => {
+    // A single-entity LWW payload relabeled SYNC_IMPORT. It is not complete app
+    // data and auto-fix never fabricates the missing top-level sections, so it
+    // stays invalid and is rejected.
+    const promotedSingleEntity = { id: 'task-1', changes: { title: 'x' } };
+    await expectAsync(
+      assertDecryptedFullStateOpIntegrity(createFullStateOp(), promotedSingleEntity),
+    ).toBeRejectedWithError(OperationIntegrityError);
+  });
+
+  it('still rejects a snapshot missing an entire top-level section (healing never manufactures sections)', async () => {
+    const snapshot = validSnapshot();
+    delete snapshot.task;
+    await expectAsync(
+      assertDecryptedFullStateOpIntegrity(createFullStateOp(), snapshot),
+    ).toBeRejectedWithError(OperationIntegrityError);
+  });
+
+  it('still rejects a present-but-mis-typed root (globalConfig: []) — heal must not fabricate a wrong-kind section', async () => {
+    // A present-but-degenerate container yields ONLY nested typia errors (no
+    // bare-root error), so without the container-kind guard autoFixTypiaErrors'
+    // globalConfig catch-all would rebuild the section from defaults and heal a
+    // malformed array-typed root into a "valid" snapshot.
+    const snapshot = validSnapshot();
+    snapshot.globalConfig = [];
+    await expectAsync(
+      assertDecryptedFullStateOpIntegrity(createFullStateOp(), snapshot),
+    ).toBeRejectedWithError(OperationIntegrityError);
+  });
+
+  it('ignores non-full-state ops (out of scope)', async () => {
+    const op = createFullStateOp({ opType: OpType.Update });
+    // A single-entity payload on a non-full-state op must pass untouched.
+    await expectAsync(
+      assertDecryptedFullStateOpIntegrity(op, { id: 'task-1' }),
+    ).toBeResolved();
   });
 });

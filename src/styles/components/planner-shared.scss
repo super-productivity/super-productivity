@@ -30,6 +30,20 @@
   }
 }
 
+// tag chips on planner-style rows (planner-task, planner-repeat-projection,
+// repeat-cfg-preview); we target .tags-container, since we don't want margins
+// for an empty list
+tag-list.planner-tag-list-shared .tags-container {
+  margin-top: var(--s-quarter);
+  margin-bottom: var(--s-quarter);
+}
+
+tag-list.planner-tag-list-shared .tag-title {
+  @include media-queries.mq(xs) {
+    font-size: var(--planner-font-size-smaller) !important;
+  }
+}
+
 .planner-drag-place-holder-shared {
   min-height: var(--planner-item-height);
   margin-bottom: 4px;

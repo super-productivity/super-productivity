@@ -445,7 +445,14 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
   }
 
   private _findScrollContainer(): Element | null {
-    const selectors = ['.side-inner', '.right-panel', '[class*="panel"]'];
+    // In the mobile bottom sheet the scroll container is the sheet's direct
+    // content child, i.e. this component's host element.
+    const selectors = [
+      '.side-inner',
+      '.right-panel',
+      '.bottom-panel-content > *',
+      '[class*="panel"]',
+    ];
     const el = this.scheduleWeekRef.nativeElement;
 
     for (const selector of selectors) {
@@ -457,6 +464,12 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     return null;
   }
 
+  // TODO replace with the schedule view's approach (scrollIntoView plus
+  // scroll-padding on the scroll container, see ScheduleComponent) so there is
+  // one implementation of "scroll to now" instead of two that can drift. This
+  // one is rect-based like the old schedule code was, but its enter animation
+  // (slideInFromRightAni) is translateX only, so it does not hit the transform
+  // overshoot that fix had.
   private _scrollToCurrentTime(): void {
     if (!this.scheduleWeekRef?.nativeElement) {
       Log.warn('[ScheduleDayPanel] No scheduleWeekRef available');

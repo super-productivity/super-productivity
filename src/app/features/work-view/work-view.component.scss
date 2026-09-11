@@ -310,7 +310,7 @@ finish-day-btn,
   ::ng-deep > collapsible > .collapsible-header > button[mat-icon-button] {
     background: transparent;
     box-shadow: none;
-    color: var(--text-color-secondary);
+    color: var(--text-color-muted);
     border: none;
     opacity: 0;
     transition: opacity var(--transition-duration-m) ease;

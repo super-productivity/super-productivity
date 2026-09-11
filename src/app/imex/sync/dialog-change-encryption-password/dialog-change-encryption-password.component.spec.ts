@@ -11,6 +11,8 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { SuperSyncEncryptionToggleService } from '../supersync-encryption-toggle.service';
 import { FileBasedEncryptionService } from '../file-based-encryption.service';
 import { SyncWrapperService } from '../sync-wrapper.service';
+import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.service';
+import { T } from '../../../t.const';
 
 describe('DialogChangeEncryptionPasswordComponent', () => {
   let component: DialogChangeEncryptionPasswordComponent;
@@ -23,9 +25,15 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockEncryptionToggleService: jasmine.SpyObj<SuperSyncEncryptionToggleService>;
   let mockSyncWrapperService: jasmine.SpyObj<SyncWrapperService>;
+  let mockSyncLocalStateService: jasmine.SpyObj<SyncLocalStateService>;
 
   beforeEach(async () => {
     mockDialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
+    mockSyncLocalStateService = jasmine.createSpyObj('SyncLocalStateService', [
+      'hasNothingWorthUploading',
+      'warnNothingWorthUploading',
+    ]);
+    mockSyncLocalStateService.hasNothingWorthUploading.and.resolveTo(false);
     mockEncryptionPasswordChangeService = jasmine.createSpyObj(
       'EncryptionPasswordChangeService',
       ['changePassword'],
@@ -54,6 +62,7 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
       ],
       providers: [
         { provide: MatDialogRef, useValue: mockDialogRef },
+        { provide: SyncLocalStateService, useValue: mockSyncLocalStateService },
         {
           provide: EncryptionPasswordChangeService,
           useValue: mockEncryptionPasswordChangeService,
@@ -216,6 +225,38 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
       component.cancel();
 
       expect(mockDialogRef.close).toHaveBeenCalledWith({ success: false });
+    });
+  });
+
+  describe('empty-device guard (#9256)', () => {
+    it('refuses the op-log clean slate when this device has nothing to upload', async () => {
+      mockSyncLocalStateService.hasNothingWorthUploading.and.resolveTo(true);
+      component.newPassword = 'password123';
+      component.confirmPassword = 'password123';
+
+      await component.confirm();
+
+      // Changing the password here would clean-slate the server from a device
+      // holding nothing. It must refuse, with copy written for THIS dialog.
+      expect(mockSyncLocalStateService.warnNothingWorthUploading).toHaveBeenCalledWith(
+        T.F.SYNC.D_NOTHING_TO_UPLOAD.MESSAGE_CHANGE_PW,
+      );
+      expect(mockEncryptionPasswordChangeService.changePassword).not.toHaveBeenCalled();
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+      expect(component.isLoading()).toBe(false);
+    });
+
+    it('does not consult the guard for file-based providers', async () => {
+      // Those re-encrypt in place; no clean slate, so nothing to protect.
+      component.providerType = 'file-based';
+      component.newPassword = 'password123';
+      component.confirmPassword = 'password123';
+      // The shared beforeEach already makes runWithSyncBlocked pass through.
+      mockFileBasedEncryptionService.changePassword.and.resolveTo();
+
+      await component.confirm();
+
+      expect(mockSyncLocalStateService.hasNothingWorthUploading).not.toHaveBeenCalled();
     });
   });
 });

@@ -14,14 +14,16 @@ import { prisma } from './db';
 import { Logger } from './logger';
 import { randomBytes } from 'crypto';
 import { sendPasskeyRecoveryEmail, sendVerificationEmail } from './email';
+import { getWsConnectionService } from './sync/services/websocket-connection.service';
 import { Prisma } from '@prisma/client';
-import { loadConfigFromEnv } from './config';
+import { loadConfigFromEnv, isConsentRequired } from './config';
 import {
   VERIFICATION_TOKEN_EXPIRY_MS,
   MAX_VERIFICATION_RESEND_COUNT,
   verifyEmail,
 } from './auth';
 import { authCache } from './auth-cache';
+import { getDefaultStorageQuotaBytes } from './sync/services/storage-quota.service';
 
 // Constants
 const CHALLENGE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
@@ -32,8 +34,12 @@ type ChallengeCeremony = 'registration' | 'authentication' | 'recovery';
 
 // WebAuthn configuration from environment
 const getWebAuthnConfig = (): { rpName: string; rpID: string; origin: string } => {
-  const rpName = process.env.WEBAUTHN_RP_NAME || 'Super Productivity Sync';
   const rpID = process.env.WEBAUTHN_RP_ID || 'localhost';
+  // Falls back to the relying-party ID, not our brand: this string is what a self-hoster's
+  // users see in their OS passkey prompt and what their device stores against the
+  // credential. Defaulting it to our product name would record us as the relying party on
+  // instances we do not run.
+  const rpName = process.env.WEBAUTHN_RP_NAME || rpID;
   const origin = process.env.WEBAUTHN_ORIGIN || 'http://localhost:1900';
 
   Logger.info(`WebAuthn config: rpID=${rpID}, origin=${origin}`);
@@ -177,11 +183,17 @@ export const verifyRegistration = async (
 
   const verificationToken = randomBytes(32).toString('hex');
   const tokenExpiresAt = BigInt(Date.now() + VERIFICATION_TOKEN_EXPIRY_MS);
-  const acceptedAt = termsAcceptedAt ? BigInt(termsAcceptedAt) : BigInt(Date.now());
+  // Never invent an acceptance. On an instance that publishes no legal pages there is
+  // nothing to accept, and recording a timestamp would assert a consent the user was never
+  // shown. The column is nullable precisely so "not applicable" is representable.
+  const config = loadConfigFromEnv();
+  const acceptedAt = termsAcceptedAt
+    ? BigInt(termsAcceptedAt)
+    : isConsentRequired(config)
+      ? BigInt(Date.now())
+      : null;
 
   try {
-    const config = loadConfigFromEnv();
-
     // Check if unverified user exists (re-registration attempt)
     const existingUser = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
@@ -219,6 +231,9 @@ export const verifyRegistration = async (
             email: email.toLowerCase(),
             passwordHash: null,
             termsAcceptedAt: acceptedAt,
+            // Set explicitly rather than leaning on the column default, so that
+            // SUPERSYNC_DEFAULT_STORAGE_QUOTA_BYTES actually reaches new accounts.
+            storageQuotaBytes: BigInt(getDefaultStorageQuotaBytes()),
           },
         });
         userId = createdUser.id;
@@ -624,6 +639,10 @@ export const completePasskeyRecovery = async (
   });
   // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
   authCache.invalidate(user.id);
+  // Sockets authenticate only at upgrade — without this, tokens revoked by
+  // the recovery's tokenVersion bump keep receiving op notifications through
+  // already-open connections. Same pairing as POST /api/replace-token.
+  getWsConnectionService().closeForUser(user.id);
 
   Logger.info(`Passkey recovery completed (ID: ${user.id})`);
 

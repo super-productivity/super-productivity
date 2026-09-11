@@ -3,21 +3,28 @@ import {
   Component,
   computed,
   ElementRef,
-  HostListener,
   input,
   output,
   signal,
   viewChild,
 } from '@angular/core';
-import { PRESET_COLORS } from '../../features/work-context/work-context-color';
+import {
+  CdkConnectedOverlay,
+  CdkOverlayOrigin,
+  ConnectedPosition,
+} from '@angular/cdk/overlay';
+import { PRESET_COLORS } from '../work-context-color';
 import { MatIcon } from '@angular/material/icon';
+
+const PANEL_GAP = 4;
+const VIEWPORT_MARGIN = 8;
 
 @Component({
   selector: 'input-color-picker',
   templateUrl: './input-color-picker.component.html',
   styleUrls: ['./input-color-picker.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatIcon],
+  imports: [MatIcon, CdkOverlayOrigin, CdkConnectedOverlay],
 })
 export class InputColorPickerComponent {
   readonly value = input<string>('#000000');
@@ -26,24 +33,30 @@ export class InputColorPickerComponent {
 
   readonly presetColors = PRESET_COLORS;
   readonly nativeInput = viewChild<ElementRef<HTMLInputElement>>('nativeInput');
-  readonly trigger = viewChild<ElementRef<HTMLButtonElement>>('trigger');
   readonly isOpen = signal(false);
   readonly isPresetColor = computed(() => this.presetColors.includes(this.value()));
 
-  panelTop = '';
-  panelLeft = '';
+  readonly viewportMargin = VIEWPORT_MARGIN;
 
-  @HostListener('document:keydown.escape')
-  onEscape(): void {
-    if (this.isOpen()) {
-      this.isOpen.set(false);
-    }
-  }
+  // Below the trigger, flipping above when there is no room.
+  readonly panelPositions: ConnectedPosition[] = [
+    {
+      originX: 'start',
+      originY: 'bottom',
+      overlayX: 'start',
+      overlayY: 'top',
+      offsetY: PANEL_GAP,
+    },
+    {
+      originX: 'start',
+      originY: 'top',
+      overlayX: 'start',
+      overlayY: 'bottom',
+      offsetY: -PANEL_GAP,
+    },
+  ];
 
   toggle(): void {
-    if (!this.isOpen()) {
-      this._updatePanelPosition();
-    }
     this.isOpen.update((v) => !v);
   }
 
@@ -60,25 +73,5 @@ export class InputColorPickerComponent {
   onNativeChange(event: Event): void {
     const el = event.target as HTMLInputElement;
     this.valueChange.emit(el.value);
-  }
-
-  private _updatePanelPosition(): void {
-    const rect = this.trigger()?.nativeElement.getBoundingClientRect();
-    if (!rect) return;
-
-    const panelWidth = 196;
-    const panelHeight = 160;
-    const gap = 4;
-
-    const spaceRight = window.innerWidth - rect.left;
-    const left =
-      spaceRight >= panelWidth ? rect.left : window.innerWidth - panelWidth - 8;
-
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const top =
-      spaceBelow >= panelHeight + gap ? rect.bottom + gap : rect.top - panelHeight - gap;
-
-    this.panelTop = `${top}px`;
-    this.panelLeft = `${left}px`;
   }
 }

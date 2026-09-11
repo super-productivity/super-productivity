@@ -9,7 +9,7 @@
  * - Move handlers below work uniformly for ALL tags including TODAY
  *
  * This pattern keeps move operations (drag/drop, Ctrl+↑/↓) simple.
- * See: docs/ai/today-tag-architecture.md
+ * See: ARCHITECTURE-DECISIONS.md Decision #2
  */
 import { createEntityAdapter, EntityAdapter } from '@ngrx/entity';
 import { Tag, TagState } from '../tag.model';
@@ -64,7 +64,7 @@ export const selectAllTagsWithoutMyDay = createSelector(
  * and is self-healing.
  * Exception: cleanup code that removes stale raw TODAY_TAG ids needs this stored order.
  *
- * See: docs/ai/today-tag-architecture.md
+ * See: ARCHITECTURE-DECISIONS.md Decision #2
  */
 export const selectTodayTagTaskIds = createSelector(
   selectTagFeatureState,
@@ -226,7 +226,7 @@ export const tagReducer = createReducer<TagState>(
   // Move handlers work uniformly for ALL tags, including TODAY_TAG.
   // This is why we keep TODAY_TAG.taskIds separate from planner.days -
   // it allows drag/drop and keyboard shortcuts (Ctrl+↑/↓) to use the same
-  // code path for today as for any other tag. See: docs/ai/today-tag-architecture.md
+  // code path for today as for any other tag. See: ARCHITECTURE-DECISIONS.md Decision #2
   on(
     moveTaskInTodayList,
     (
@@ -261,12 +261,15 @@ export const tagReducer = createReducer<TagState>(
 
   on(
     moveTaskUpInTodayList,
-    (state: TagState, { taskId, workContextId, workContextType, doneTaskIds }) => {
+    (
+      state: TagState,
+      { taskId, workContextId, workContextType, doneTaskIds: undoneTaskIds },
+    ) => {
       if (workContextType !== WORK_CONTEXT_TYPE) {
         return state;
       }
       // Use Set for O(1) lookup instead of O(n) .includes() in callback
-      const doneTaskIdSet = new Set(doneTaskIds);
+      const undoneTaskIdSet = new Set(undoneTaskIds);
       return tagAdapter.updateOne(
         {
           id: workContextId,
@@ -274,7 +277,7 @@ export const tagReducer = createReducer<TagState>(
             taskIds: arrayMoveLeftUntil(
               (state.entities[workContextId] as Tag).taskIds,
               taskId,
-              (id) => !doneTaskIdSet.has(id),
+              (id) => !undoneTaskIdSet.has(id),
             ),
           },
         },
@@ -285,12 +288,15 @@ export const tagReducer = createReducer<TagState>(
 
   on(
     moveTaskDownInTodayList,
-    (state: TagState, { taskId, workContextId, workContextType, doneTaskIds }) => {
+    (
+      state: TagState,
+      { taskId, workContextId, workContextType, doneTaskIds: undoneTaskIds },
+    ) => {
       if (workContextType !== WORK_CONTEXT_TYPE) {
         return state;
       }
       // Use Set for O(1) lookup instead of O(n) .includes() in callback
-      const doneTaskIdSet = new Set(doneTaskIds);
+      const undoneTaskIdSet = new Set(undoneTaskIds);
       return tagAdapter.updateOne(
         {
           id: workContextId,
@@ -298,7 +304,7 @@ export const tagReducer = createReducer<TagState>(
             taskIds: arrayMoveRightUntil(
               (state.entities[workContextId] as Tag).taskIds,
               taskId,
-              (id) => !doneTaskIdSet.has(id),
+              (id) => !undoneTaskIdSet.has(id),
             ),
           },
         },

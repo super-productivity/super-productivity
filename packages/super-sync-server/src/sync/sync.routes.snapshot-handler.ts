@@ -24,6 +24,8 @@ import {
   MAX_COMPRESSED_SIZE_SNAPSHOT,
   MAX_DECOMPRESSED_SIZE_SNAPSHOT,
   sendCompressedBodyParseFailure,
+  sendE2eeRequiredReply,
+  violatesE2eeGate,
 } from './sync.routes.payload';
 import {
   applyStorageUsageDelta,
@@ -112,6 +114,21 @@ export const uploadSnapshotHandler = async (
       snapshotOpType === 'REPAIR' &&
       repairBaseServerSeq === undefined &&
       isCleanSlate === true;
+
+    // Encrypted-only ingress gate: applies to every snapshot op type,
+    // including SYNC_IMPORT, BACKUP_IMPORT, and REPAIR — the legacy plaintext
+    // repair upload is no longer externally reachable. Runs BEFORE
+    // fingerprinting, dedup, quota work, and prepareSnapshotCache, so a
+    // rejected upload leaves no server-side trace and burns no CPU on the
+    // full-state hash or gzip.
+    if (violatesE2eeGate({ isPayloadEncrypted, payload: state })) {
+      return sendE2eeRequiredReply(reply, userId, {
+        clientId,
+        surface: 'snapshot',
+        opsCount: 1,
+      });
+    }
+
     const syncService = getSyncService();
     // Lazy + memoized: fingerprinting stable-stringifies + SHA-256-hashes the
     // full (possibly multi-MB plaintext) snapshot state. It must not run
@@ -236,6 +253,8 @@ export const uploadSnapshotHandler = async (
       vectorClock,
       timestamp: Date.now(),
       schemaVersion: schemaVersion ?? 1,
+      // Always true post-E2EE gate; the `?? false` fallback is dead and goes
+      // with the rest of the plaintext handling in eradication plan Step 3.
       isPayloadEncrypted: isPayloadEncrypted ?? false,
       syncImportReason,
       repairBaseServerSeq,
@@ -347,9 +366,15 @@ export const uploadSnapshotHandler = async (
         // replacement delta; checking only the request body can under-count by
         // nearly 2x because the server stores both the op and snapshot cache.
         if (shouldCleanSlate) {
+          // Encrypted snapshots are never cached (cacheSnapshotIfReplayable
+          // skips them), so their replacement footprint is the op row alone;
+          // charging the phantom cache bytes would 413 near-quota clean-slate
+          // uploads for storage that never materializes.
           const finalStorageBytes =
             estimatedOpStorageBytes +
-            (preparedSnapshot.cacheable ? preparedSnapshot.bytes : 0);
+            (preparedSnapshot.cacheable && !op.isPayloadEncrypted
+              ? preparedSnapshot.bytes
+              : 0);
           const quotaOk = await enforceCleanSlateStorageQuota(
             userId,
             finalStorageBytes,
@@ -357,6 +382,8 @@ export const uploadSnapshotHandler = async (
           );
           if (!quotaOk) return null;
         } else {
+          // Unreachable post-E2EE gate (op.isPayloadEncrypted is always
+          // true here); removed in eradication plan Step 3.
           // Encrypted ops never use the server snapshot cache (server can't
           // decrypt), so the cache delta is exactly zero for them. For
           // unencrypted ops, the eventual cacheSnapshot call either writes

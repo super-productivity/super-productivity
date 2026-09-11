@@ -10,9 +10,13 @@
  *   - PostgreSQL running (see docker-compose.yaml)
  *   - DATABASE_URL set (e.g., postgresql://supersync:superpassword@localhost:55432/supersync_db)
  *   - Schema applied: npx prisma db push
+ *   (`npm run supersync:db` does all three: the db has no fixed host port, so it
+ *    publishes one on 55432 and applies the schema)
  *
- * Run with:
- *   DATABASE_URL=postgresql://... npx vitest run tests/integration/snapshot-vector-clock-sql.integration.spec.ts
+ * Run with (uses vitest.integration.config.ts — the default config EXCLUDES this
+ * file, so omitting --config silently runs zero tests):
+ *   DATABASE_URL=postgresql://... npx vitest run --config vitest.integration.config.ts \
+ *     tests/integration/snapshot-vector-clock-sql.integration.spec.ts
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { PrismaClient } from '@prisma/client';

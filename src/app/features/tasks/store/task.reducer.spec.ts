@@ -186,6 +186,35 @@ describe('Task Reducer', () => {
       expect(result.entities['parent']!.subTaskIds).toEqual(['subTask']);
       expect(result.entities['parent']!.timeEstimate).toBe(2.5 * 60 * 60 * 1000);
     });
+
+    // Both the plugin API and the local REST API forward `dueDay` when creating
+    // a subtask. The reducer overrides exactly three fields — parentId, tagIds
+    // and projectId — and must leave everything else intact; without this,
+    // "the caller forwards dueDay" is only ever asserted on the dispatched
+    // action, never on the state that results from it.
+    it('should keep a forwarded dueDay while overriding the inherited fields', () => {
+      const parent = createTask('parent', { projectId: 'parent-project' });
+      const subTask = createTask('subTask', {
+        dueDay: '2026-09-01',
+        tagIds: ['dropped-by-reducer'],
+        projectId: 'replaced-by-reducer',
+      });
+      const state: TaskState = {
+        ...initialTaskState,
+        ids: ['parent'],
+        entities: { parent },
+      };
+
+      const result = taskReducer(
+        state,
+        fromActions.addSubTask({ task: subTask, parentId: 'parent' }),
+      );
+
+      expect(result.entities['subTask']!.dueDay).toBe('2026-09-01');
+      expect(result.entities['subTask']!.parentId).toBe('parent');
+      expect(result.entities['subTask']!.tagIds).toEqual([]);
+      expect(result.entities['subTask']!.projectId).toBe('parent-project');
+    });
   });
 
   describe('moveSubTask (anchor-based)', () => {
@@ -590,6 +619,54 @@ describe('Task Reducer', () => {
       expect(state.lastCurrentTaskId).toBe('task1');
     });
 
+    // setCurrentTask is not a persistent action, so any task-entity write here
+    // would never reach the op log and would silently diverge other devices
+    // (#9904). Re-opening a started done task is emitted as its own updateTask
+    // op by TaskInternalEffects.reopenStartedDoneTask$ instead.
+    it('should not touch isDone/doneOn when starting a done task', () => {
+      const doneTask = createTask('task2', { isDone: true, doneOn: 1234 });
+      const state = taskReducer(
+        { ...stateWithTasks, entities: { ...stateWithTasks.entities, task2: doneTask } },
+        fromActions.setCurrentTask({ id: 'task2' }),
+      );
+
+      expect(state.currentTaskId).toBe('task2');
+      expect(state.entities['task2']).toBe(doneTask);
+    });
+
+    it('should start the first undone subtask when starting a parent', () => {
+      const doneSub = createTask('subTask1', { parentId: 'task1', isDone: true });
+      const state = taskReducer(
+        {
+          ...stateWithTasks,
+          entities: { ...stateWithTasks.entities, subTask1: doneSub },
+        },
+        fromActions.setCurrentTask({ id: 'task1' }),
+      );
+
+      expect(state.currentTaskId).toBe('subTask2');
+    });
+
+    it('should start the first subtask without re-opening it when all subtasks are done', () => {
+      const doneSub1 = createTask('subTask1', { parentId: 'task1', isDone: true });
+      const doneSub2 = createTask('subTask2', { parentId: 'task1', isDone: true });
+      const state = taskReducer(
+        {
+          ...stateWithTasks,
+          entities: {
+            ...stateWithTasks.entities,
+            subTask1: doneSub1,
+            subTask2: doneSub2,
+          },
+        },
+        fromActions.setCurrentTask({ id: 'task1' }),
+      );
+
+      expect(state.currentTaskId).toBe('subTask1');
+      expect(state.entities['subTask1']).toBe(doneSub1);
+      expect(state.entities['subTask2']).toBe(doneSub2);
+    });
+
     it('should preserve lastCurrentTaskId on a no-op unsetCurrentTask', () => {
       const pausedState: TaskState = {
         ...stateWithTasks,
@@ -623,6 +700,25 @@ describe('Task Reducer', () => {
 
       // The removed tasks should be moved to the beginning while maintaining their relative order
       expect(state.ids).toEqual(['task2', 'task4', 'task1', 'task3']);
+      // Ordering-only invariant (#9426): conflict resolution rejects
+      // conflicted rows of this action outright, which is lossless only while
+      // the handler never touches task entities. If this fails, remove the
+      // action from ORDERING_ONLY_MULTI_ACTIONS in conflict-resolution.service.ts
+      // (or give it a preserve path) BEFORE shipping the reducer change.
+      expect(state.entities).toBe(stateWithOrderedTasks.entities);
+    });
+
+    it('must not handle moveTaskInTodayTagList at all (ordering-only invariant #9426)', () => {
+      // The task feature reducer currently has NO handler for this action; a
+      // future one that touches entities would invalidate the ordering-only
+      // rejection in conflict resolution. Same remediation as above.
+      const action = TaskSharedActions.moveTaskInTodayTagList({
+        toTaskId: 'task1',
+        fromTaskId: 'task2',
+      });
+      const state = taskReducer(stateWithTasks, action);
+
+      expect(state).toBe(stateWithTasks);
     });
 
     it('should ignore all invalid IDs and leave state unchanged', () => {
@@ -1111,6 +1207,23 @@ describe('Task Reducer', () => {
   // -----------------------------------------------------------------------
 
   describe('loadAllData - timeSpentOnDay normalization', () => {
+    it('should default calendar event dismissals missing from older persisted state', () => {
+      const appDataComplete = {
+        task: {
+          ids: [],
+          entities: {},
+          currentTaskId: null,
+          selectedTaskId: null,
+          lastCurrentTaskId: null,
+          isDataLoaded: false,
+        },
+      } as any;
+
+      const result = taskReducer(initialTaskState, loadAllData({ appDataComplete }));
+
+      expect(result.dismissedCalendarAutoImportEventIdsByProvider).toEqual({});
+    });
+
     it('should normalize tasks with undefined timeSpentOnDay to {} on load', () => {
       const taskWithUndefined = createTask('t1', { timeSpentOnDay: undefined as any });
       const appDataComplete = {
@@ -1215,6 +1328,35 @@ describe('Task Reducer', () => {
     });
   });
 
+  describe('roundTimeSpentForDay - unknown task ids (remote replay, #9601)', () => {
+    // A remote/replayed rounding op may list tasks this client has archived or
+    // deleted meanwhile. The whole op must not abort — remaining tasks round.
+    it('should skip unknown task ids and round the remaining ones', () => {
+      const state: TaskState = {
+        ...initialTaskState,
+        ids: ['t1'],
+        entities: {
+          t1: createTask('t1', {
+            subTaskIds: [],
+            timeSpentOnDay: { '2026-04-02': 70000 },
+          }),
+        },
+      };
+      const action = fromActions.roundTimeSpentForDay({
+        day: '2026-04-02',
+        taskIds: ['archived-elsewhere', 't1'],
+        isRoundUp: true,
+        roundTo: '5M',
+        projectId: undefined,
+      });
+
+      expect(() => taskReducer(state, action)).not.toThrow();
+      const result = taskReducer(state, action);
+      expect(result.entities['t1']!.timeSpentOnDay['2026-04-02']).toBe(300000);
+      expect(result.ids).toEqual(['t1']);
+    });
+  });
+
   // Regression: subtask collapse state (_hideSubTasksMode) must survive a restart.
   // It only persists if the action that writes it is captured to the op-log,
   // which requires isPersistent metadata. `updateTaskUi` carries an absolute
@@ -1277,6 +1419,48 @@ describe('Task Reducer', () => {
       const replayed = taskReducer(stateShown, replayAction);
 
       expect(replayed.entities.task1?._hideSubTasksMode).toBe(HideSubTasksMode.HideAll);
+    });
+
+    // Issue #9776: the EXPAND direction. Collapse round-trips fine (a real enum
+    // value), but "shown" is `undefined`, and JSON.stringify silently drops the
+    // key from the op payload — the expand then replays as a no-op on every
+    // other device, which stays collapsed forever. The action creator therefore
+    // lists cleared keys out-of-band in `clearedFields` (a string[] that
+    // survives JSON) and the reducer restores them before applying the update.
+    it('should round-trip clearing _hideSubTasksMode (expand) through capture, serialization and replay', () => {
+      const stateCollapsed: TaskState = {
+        ...initialTaskState,
+        ids: ['task1'],
+        entities: {
+          task1: createTask('task1', { _hideSubTasksMode: HideSubTasksMode.HideAll }),
+        },
+      };
+
+      const action = fromActions.updateTaskUi({
+        task: { id: 'task1', changes: { _hideSubTasksMode: undefined } },
+      });
+
+      // Mirror the capture effect exactly: everything except type/meta becomes
+      // the op's actionPayload (operation-log.effects.ts).
+      const { type, meta, ...rawActionPayload } = action;
+      const op: Operation = {
+        id: 'op-9776',
+        actionType: type as ActionType,
+        opType: meta.opType,
+        entityType: meta.entityType,
+        entityId: meta.entityId as string,
+        payload: { actionPayload: rawActionPayload, entityChanges: [] },
+        clientId: 'clientA',
+        vectorClock: { clientA: 1 },
+        timestamp: 0,
+        schemaVersion: 1,
+      };
+
+      const wireOp = JSON.parse(JSON.stringify(op)) as Operation;
+      const replayAction = convertOpToAction(wireOp);
+      const replayed = taskReducer(stateCollapsed, replayAction);
+
+      expect(replayed.entities.task1?._hideSubTasksMode).toBeUndefined();
     });
   });
 });

@@ -14,6 +14,7 @@ let mockNow = 0;
 let mockIsMinimizeToTray = false;
 let mockEnsureIndicator = false;
 let mockIsMac = false;
+let mockWasMaximizedBeforeHide = false;
 
 const installMocks = () => {
   Module._load = function patchedLoad(request, parent, isMain) {
@@ -26,8 +27,10 @@ const installMocks = () => {
     if (request === './main-window') {
       return {
         getWin: () => null,
-        getWasMaximizedBeforeHide: () => false,
-        setWasMaximizedBeforeHide: () => {},
+        getWasMaximizedBeforeHide: () => mockWasMaximizedBeforeHide,
+        setWasMaximizedBeforeHide: (value) => {
+          mockWasMaximizedBeforeHide = value;
+        },
       };
     }
     if (request === './task-widget/task-widget') {
@@ -71,31 +74,40 @@ const makeWin = (state) => {
   const calls = [];
   const win = {
     calls,
-    _state: { ...state },
+    _state: { maximized: false, ...state },
     isVisible: () => win._state.visible,
     isMinimized: () => win._state.minimized,
     isFocused: () => win._state.focused,
-    isMaximized: () => false,
+    isMaximized: () => win._state.maximized,
     isDestroyed: () => false,
     minimize: () => {
       calls.push('minimize');
-      win._state = { visible: false, minimized: true, focused: false };
+      win._state = { ...win._state, visible: false, minimized: true, focused: false };
     },
     hide: () => {
       calls.push('hide');
-      win._state = { visible: false, minimized: false, focused: false };
+      win._state = { ...win._state, visible: false, minimized: false, focused: false };
     },
     blur: () => calls.push('blur'),
-    restore: () => calls.push('restore'),
+    restore: () => {
+      calls.push('restore');
+      // Windows emits unmaximize synchronously, and main-window clears the saved flag.
+      if (win._state.maximized) mockWasMaximizedBeforeHide = false;
+      win._state = { ...win._state, maximized: false, minimized: false };
+    },
     show: () => {
       calls.push('show');
-      win._state = { visible: true, minimized: false, focused: false };
+      win._state = { ...win._state, visible: true, minimized: false, focused: false };
     },
     focus: () => {
       calls.push('focus');
       win._state = { ...win._state, focused: true };
     },
-    maximize: () => calls.push('maximize'),
+    maximize: () => {
+      calls.push('maximize');
+      win._state = { ...win._state, maximized: true };
+      mockWasMaximizedBeforeHide = true;
+    },
     webContents: { isDestroyed: () => true, focus: () => {} },
   };
   return win;
@@ -106,6 +118,7 @@ test.beforeEach(() => {
   mockIsMinimizeToTray = false;
   mockEnsureIndicator = false;
   mockIsMac = false;
+  mockWasMaximizedBeforeHide = false;
   Date.now = () => mockNow;
 });
 
@@ -183,7 +196,7 @@ test('a visible-but-unfocused window is brought to front, never hidden', () => {
 
   toggleWindowVisibility(win);
 
-  assert.deepEqual(win.calls, ['focus'], 'should focus, not hide');
+  assert.deepEqual(win.calls, ['restore', 'show'], 'should bring to front, not hide');
 });
 
 test('macless minimize-to-tray hides to tray only when the indicator exists', () => {
@@ -195,6 +208,75 @@ test('macless minimize-to-tray hides to tray only when the indicator exists', ()
   toggleWindowVisibility(win);
 
   assert.deepEqual(win.calls, ['blur', 'hide']);
+});
+
+test('showOrFocus restores and shows even when isVisible() stays true for a hidden window (#8448)', () => {
+  const { showOrFocus } = loadModule();
+  // Simulates GNOME/Wayland occasionally reporting isVisible()=true for a window
+  // that is actually still hidden/minimized on screen.
+  const win = makeWin({ visible: true, minimized: true, focused: false });
+
+  showOrFocus(win);
+
+  assert.deepEqual(win.calls, ['restore', 'show']);
+});
+
+test('showOrFocus restores and shows a genuinely hidden window', () => {
+  const { showOrFocus } = loadModule();
+  const win = makeWin({ visible: false, minimized: true, focused: false });
+
+  showOrFocus(win);
+
+  assert.deepEqual(win.calls, ['restore', 'show']);
+});
+
+test('showOrFocus keeps a visible maximized window maximized without restoring it', () => {
+  mockWasMaximizedBeforeHide = true;
+  const { showOrFocus } = loadModule();
+  const win = makeWin({
+    visible: true,
+    minimized: false,
+    focused: false,
+    maximized: true,
+  });
+
+  showOrFocus(win);
+
+  assert.deepEqual(win.calls, ['show', 'maximize']);
+  assert.equal(win.isMaximized(), true);
+});
+
+test('showOrFocus preserves a hidden maximized window when restore clears the saved flag', () => {
+  mockWasMaximizedBeforeHide = true;
+  const { showOrFocus } = loadModule();
+  const win = makeWin({
+    visible: false,
+    minimized: false,
+    focused: false,
+    maximized: true,
+  });
+
+  showOrFocus(win);
+
+  assert.deepEqual(win.calls, ['restore', 'show', 'maximize']);
+  assert.equal(win.isMaximized(), true);
+});
+
+test('showOrFocus restores a minimized maximized window even when visibility is stale', () => {
+  mockWasMaximizedBeforeHide = true;
+  const { showOrFocus } = loadModule();
+  const win = makeWin({
+    visible: true,
+    minimized: true,
+    focused: false,
+    maximized: true,
+  });
+
+  showOrFocus(win);
+
+  assert.deepEqual(win.calls, ['restore', 'show', 'maximize']);
+  assert.equal(win.isMinimized(), false);
+  assert.equal(win.isMaximized(), true);
 });
 
 test('minimize-to-tray falls back to minimize when the tray is unavailable (#7282)', () => {

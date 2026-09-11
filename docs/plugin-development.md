@@ -54,7 +54,9 @@ iframe plugin can ship only `manifest.json` and `index.html` when the manifest s
   "version": "1.0.0",
   "description": "My first Super Productivity plugin",
   "manifestVersion": 1,
-  "minSupVersion": "14.0.0"
+  "minSupVersion": "14.0.0",
+  "hooks": [],
+  "permissions": []
 }
 ```
 
@@ -88,24 +90,12 @@ PluginAPI.registerHeaderButton({
 
 The `manifest.json` file is required for all plugins and defines the plugin's metadata and configuration.
 
-### Manifest Fields
-
-| Field             | Type     | Required | Description                                                                            |
-| ----------------- | -------- | -------- | -------------------------------------------------------------------------------------- |
-| `id`              | string   | ✓        | Unique identifier for your plugin (use kebab-case)                                     |
-| `name`            | string   | ✓        | Display name shown to users                                                            |
-| `version`         | string   | ✓        | Semantic version (e.g., "1.0.0")                                                       |
-| `description`     | string   | ✓        | Brief description of what your plugin does                                             |
-| `manifestVersion` | number   | ✓        | Currently must be `1`                                                                  |
-| `minSupVersion`   | string   | ✓        | Minimum Super Productivity version required                                            |
-| `author`          | string   |          | Plugin author name                                                                     |
-| `homepage`        | string   |          | Plugin website or repository URL                                                       |
-| `icon`            | string   |          | Path to icon file (SVG recommended)                                                    |
-| `iFrame`          | boolean  |          | Whether plugin uses iframe UI (default: false)                                         |
-| `sidePanel`       | boolean  |          | Show plugin in side panel (default: false), requires `iFrame:true`                     |
-| `permissions`     | string[] |          | The permissions the plugin needs                                                       |
-| `hooks`           | string[] |          | App events to listen to                                                                |
-| `uiKit`           | boolean  |          | Enable UI Kit CSS reset for iframe plugins (default: true). Set to `false` to disable. |
+Use
+[`PluginManifest`](../packages/plugin-api/src/types.ts)
+as the authoritative field contract. In particular, `hooks` and `permissions`
+are required arrays (use `[]` when unused), while `description` is optional.
+Do not rely on the installer's deliberately minimal runtime checks to infer the
+TypeScript contract.
 
 ### Complete Manifest Example
 
@@ -117,8 +107,6 @@ The `manifest.json` file is required for all plugins and defines the plugin's me
   "description": "An advanced plugin with UI and hooks",
   "manifestVersion": 1,
   "minSupVersion": "14.0.2",
-  "author": "John Doe",
-  "homepage": "https://github.com/johndoe/my-plugin",
   "icon": "icon.svg",
   "iFrame": true,
   "sidePanel": false,
@@ -163,7 +151,9 @@ PluginAPI.registerHook(PluginAPI.Hooks.TASK_COMPLETE, (taskId) => {
 
 ### 2. HTML/Iframe Plugins (`index.html`)
 
-Plugins that render custom UI in a sandboxed iframe.
+Plugins that render custom UI in an iframe. The iframe sandbox attribute limits
+some browser capabilities, but `allow-same-origin` means it is not a security
+boundary from the host app.
 
 **Use when:**
 
@@ -174,11 +164,13 @@ Iframe-only plugins do not need a `plugin.js` file if all plugin behavior lives 
 `index.html`. Super Productivity automatically adds the default menu or side-panel entry
 from the manifest when the plugin is loaded.
 
-**Important:** Iframe plugins are served from a sandboxed blob document and talk to
-the host only through the filtered Plugin API message bridge. Inline CSS, JavaScript,
-and small assets directly in `index.html`; arbitrary extra files from the ZIP are not
-served to the iframe. External URLs can work when the app/runtime CSP allows them, but
-they are not part of the portable plugin contract.
+**Important:** Iframe plugins are served through `srcdoc` and receive a filtered
+Plugin API message bridge as their supported interface. Because the iframe is
+same-origin, plugin code can also reach the parent directly; do not treat the
+bridge as enforced isolation. Inline CSS, JavaScript, and small assets directly
+in `index.html`; arbitrary extra files from the ZIP are not served to the iframe.
+External URLs can work when the app/runtime CSP allows them, but they are not part
+of the portable plugin contract.
 
 **Example index.html:**
 
@@ -314,6 +306,7 @@ Iframe plugins automatically receive:
 - `getAllProjects()` - Get all projects
 - `addProject(project)` - Create new project
 - `updateProject(projectId, updates)` - Update project
+- `deleteProject(projectId)` - Delete a project **and the tasks it contains** (backlog and subtasks included), the same cascade the UI's "Delete project" applies. Deleting the Inbox is rejected, and if the deleted project is the active one the app falls back to the Today context.
 
 #### Tags
 
@@ -422,6 +415,18 @@ the dialog without clicking a button, it resolves with `undefined`. The legacy
 `content`, `okBtnLabel`, and `cancelBtnLabel` fields are still accepted, but new
 plugins should use `htmlContent` and `buttons`.
 
+The host sanitizes `htmlContent` before rendering it, rebuilding the markup from
+an allowlist. Semantic HTML, native form controls (including their `id`s and
+values), `class`, `data-*`, `aria-*`, and inline layout styles are preserved.
+Removed are scripts, event-handler attributes, unsafe URLs, inline `<svg>`, and
+any `style` attribute containing `url(`, since dialog layout never needs to load
+a resource. Elements outside the allowlist are unwrapped, so their text stays
+visible while the tag itself is dropped.
+
+Escape untrusted values before interpolating them into the HTML string: the
+sanitizer is a safety net for the host, not a substitute for escaping in your
+plugin. Use `content` when plain text is sufficient.
+
 ### Registration Methods (plugin.js only)
 
 #### Header Button
@@ -465,13 +470,20 @@ PluginAPI.registerSidePanelButton({
 
 ```javascript
 PluginAPI.registerShortcut({
-  keys: 'ctrl+shift+p',
+  id: 'my-shortcut', // optional, derived from the label when omitted
   label: 'My Plugin Shortcut',
-  action: () => {
+  onExec: () => {
     console.log('Shortcut triggered');
   },
 });
+
+// Removes it again.
+PluginAPI.unregisterShortcut('my-shortcut');
 ```
+
+Plugins do not pick the key combination: the shortcut shows up under **Plugin
+Shortcuts** in the keyboard settings, where the user assigns one. The binding is
+stored per shortcut id, so keep the id stable across app starts.
 
 #### Hooks
 
@@ -519,8 +531,8 @@ PluginAPI.registerHook(PluginAPI.Hooks.ACTION, (action) => {
 You can persist data that will also be synced via the `persistDataSynced` and
 `loadSyncedData` APIs. Host-side `plugin.js` code can use `localStorage` for
 data that should stay local. Iframe plugins should prefer the synced
-persistence APIs because sandboxed iframe origins may not have reliable access
-to browser storage.
+persistence APIs because direct iframe browser storage is not part of the
+portable plugin contract and can vary by runtime.
 
 ```javascript
 // Save plugin data
@@ -628,7 +640,8 @@ issued by the Electron **main** process after a native consent dialog and is bou
 plugin id. For uploaded plugins the app cannot verify the manifest, so the dialog flags
 the plugin as unverified third-party code with full machine access that Super Productivity
 cannot sandbox, and defaults to **Deny** — only allow plugins whose source you trust. If
-the user denies, the plugin stays enabled but its node calls fail until it is re-enabled.
+the user denies, the plugin returns to a disabled state; enabling it again reopens the
+prompt.
 
 Consent handling differs by plugin type:
 
@@ -783,9 +796,9 @@ The iframe can use the injected task/project/tag APIs, dialog and notification A
 navigation helpers, persistence helpers, counters, action dispatch, `registerHook()`,
 and `registerWorkContextHeaderButton()`. Callback-heavy registration methods such as
 `registerHeaderButton()`, `registerMenuEntry()`, `registerSidePanelButton()`,
-`registerShortcut()`, and `registerConfigHandler()` must be registered from
-host-side `plugin.js` code. APIs not injected into the iframe are unavailable, even if
-they exist on the host-side plugin bridge.
+`registerShortcut()`/`unregisterShortcut()`, and `registerConfigHandler()` must be
+called from host-side `plugin.js` code. APIs not injected into the iframe are
+unavailable, even if they exist on the host-side plugin bridge.
 
 `executeNodeScript()` is proxied through the host bridge for iframe plugins when
 the desktop app grants the plugin `nodeExecution` permission.
@@ -804,7 +817,7 @@ the desktop app grants the plugin `nodeExecution` permission.
 
 ### 1. Local Development
 
-1. Use "Load Plugin from Folder" to test your plugin
+1. Build the plugin ZIP and upload it from **Settings** → **Plugins**
 2. Open DevTools (F12 or Ctrl+Shift+i) to see console logs
 3. Use the API Test Plugin as reference
 
@@ -870,7 +883,10 @@ async function testAPI() {
 If you create a useful plugin, consider:
 
 1. Posting on reddit or GitHub discussions about it
-2. Submitting a PR to add it to the community plugins list (coming soon)
+2. Submitting a PR adding it to [community-plugins.json](../src/assets/community-plugins.json)
+
+   Document installation as: download the release ZIP, then Settings → Plugins → Choose Plugin File.
+   Uploading a ZIP is the only install path — there is no "load from folder" option.
 
 Happy plugin development! 🚀
 

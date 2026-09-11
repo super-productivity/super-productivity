@@ -17,6 +17,7 @@ import { PluginCacheService } from './plugin-cache.service';
 import {
   MAX_PLUGIN_CODE_SIZE,
   MAX_PLUGIN_MANIFEST_SIZE,
+  MAX_PLUGIN_TRANSLATIONS_TOTAL_SIZE,
   MAX_PLUGIN_ZIP_SIZE,
 } from './plugin.const';
 import { take } from 'rxjs/operators';
@@ -37,6 +38,11 @@ import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/
 import { SnackService } from '../core/snack/snack.service';
 import { pingWithRetry } from './util/ping-with-retry.util';
 import { PluginBridgeService } from './plugin-bridge.service';
+import { sanitizeSvgIconContent } from '../util/sanitize-svg-icon.util';
+import {
+  logSkippedPluginTranslations,
+  readPluginTranslationsFromZip,
+} from './util/read-plugin-translations-from-zip.util';
 
 // Each plugin's `id` (from its manifest.json, distinct from the asset path
 // here) becomes the entityId prefix for all data it persists via
@@ -279,13 +285,6 @@ export class PluginService implements OnDestroy {
         }
       }
     }
-  }
-
-  private async _loadBuiltInPlugins(): Promise<void> {
-    const pluginPaths = [...BUNDLED_PLUGIN_PATHS];
-
-    // KISS: No preloading - just load plugins directly
-    await this._loadPluginsFromPaths(pluginPaths, 'built-in');
   }
 
   private async _discoverUploadedPlugins(): Promise<void> {
@@ -804,187 +803,6 @@ export class PluginService implements OnDestroy {
     }
   }
 
-  private async _loadUploadedPlugins(): Promise<void> {
-    try {
-      const cachedPlugins = await this._pluginCacheService.getAllPlugins();
-
-      const promises = cachedPlugins.map(async (cachedPlugin) => {
-        try {
-          PluginLog.log(`Loading cached plugin: ${cachedPlugin.id}`);
-          // Set the path for reload functionality
-          this._pluginPaths.set(cachedPlugin.id, `uploaded://${cachedPlugin.id}`);
-
-          // Load the cached plugin
-          await this._loadUploadedPlugin(cachedPlugin.id);
-          // The plugin instance is already added to _loadedPlugins in _loadUploadedPlugin if loaded successfully
-        } catch (error) {
-          PluginLog.err(`Failed to load cached plugin ${cachedPlugin.id}:`, error);
-          // Continue loading other plugins even if one fails
-        }
-      });
-
-      await Promise.allSettled(promises);
-    } catch (error) {
-      PluginLog.err('Failed to load cached plugins:', error);
-      // Don't throw - this shouldn't prevent other plugins from loading
-    }
-  }
-
-  /**
-   * Load plugins from multiple paths with error handling
-   */
-  private async _loadPluginsFromPaths(
-    pluginPaths: string[],
-    type: 'built-in' | 'uploaded',
-  ): Promise<void> {
-    const promises = pluginPaths.map(async (pluginPath) => {
-      try {
-        const pluginInstance = await this._loadPlugin(pluginPath);
-        // Add all plugin instances to the loaded plugins list so they show up in the management UI
-        // Note: _loadPlugin already adds loaded plugins to _loadedPlugins, so we only need to add disabled ones
-        if (!pluginInstance.loaded && !pluginInstance.isEnabled) {
-          this._loadedPlugins.push(pluginInstance);
-        }
-        // Store the path for built-in plugins to enable reload functionality
-        // This ensures that built-in plugins can be reloaded just like uploaded ones
-        if (pluginInstance.manifest && pluginInstance.manifest.id) {
-          this._pluginPaths.set(pluginInstance.manifest.id, pluginPath);
-        }
-        PluginLog.log(`${type} plugin loaded successfully from ${pluginPath}`);
-      } catch (error) {
-        PluginLog.err(`Failed to load ${type} plugin from ${pluginPath}:`, error);
-        // Continue loading other plugins even if one fails
-      }
-    });
-
-    await Promise.allSettled(promises);
-  }
-
-  private async _loadPlugin(pluginPath: string): Promise<PluginInstance> {
-    try {
-      // Use the loader service for lazy loading
-      const assets = await this._pluginLoader.loadPluginAssets(pluginPath);
-      const { manifest, code: pluginCode, indexHtml, icon, translations } = assets;
-      if (pluginPath.startsWith('uploaded://')) {
-        this._assertUploadedPluginAllowed(manifest);
-      }
-
-      // Store assets if loaded
-      if (indexHtml) {
-        this._pluginIndexHtml.set(manifest.id, indexHtml);
-      }
-      if (icon) {
-        this._pluginIcons.set(manifest.id, icon);
-        this._registerPluginIcon(manifest.id, icon);
-        this._pluginIconsSignal.set(new Map(this._pluginIcons));
-      }
-
-      // Load translations into i18n service
-      if (translations && Object.keys(translations).length > 0) {
-        this._pluginI18nService.loadPluginTranslationsFromContent(
-          manifest.id,
-          translations,
-        );
-      }
-
-      // Check if plugin should be loaded based on persisted enabled state
-      const isPluginEnabled = await this._pluginMetaPersistenceService.isPluginEnabled(
-        manifest.id,
-      );
-
-      // Validate manifest and code
-      const manifestValidation = validatePluginManifest(manifest);
-      if (!manifestValidation.isValid) {
-        throw new Error(
-          this._translateService.instant(T.PLUGINS.VALIDATION_FAILED, {
-            errors: manifestValidation.errors.join(', '),
-          }),
-        );
-      }
-
-      // Check for dangerous permissions
-      if (this._pluginSecurity.hasElevatedPermissions(manifest)) {
-        if (!IS_ELECTRON) {
-          // In web version, create a disabled placeholder for nodeExecution plugins
-          const placeholderInstance: PluginInstance = {
-            manifest,
-            loaded: false,
-            isEnabled: false,
-            error: this._translateService.instant(T.PLUGINS.NODE_ONLY_DESKTOP),
-          };
-          this._pluginPaths.set(manifest.id, pluginPath); // Store the path for potential reload
-          PluginLog.log(
-            `Plugin ${manifest.id} requires desktop version, creating placeholder`,
-          );
-          return placeholderInstance;
-        }
-
-        // Skip consent check during startup - will be checked when plugin is activated
-        // This prevents showing multiple dialogs at once during app startup
-      }
-
-      // Analyze plugin code (informational only - KISS approach)
-      const codeAnalysis = this._pluginSecurity.analyzePluginCode(pluginCode, manifest);
-      if (codeAnalysis.warnings.length > 0) {
-        PluginLog.err(`Plugin ${manifest.id} warnings:`, codeAnalysis.warnings);
-      }
-      if (codeAnalysis.info.length > 0) {
-        PluginLog.info(`Plugin ${manifest.id} info:`, codeAnalysis.info);
-      }
-
-      // If plugin is disabled, create a placeholder instance without loading code
-      if (!isPluginEnabled) {
-        const placeholderInstance: PluginInstance = {
-          manifest,
-          loaded: false,
-          isEnabled: false,
-          error: undefined,
-        };
-        this._pluginPaths.set(manifest.id, pluginPath); // Store the path for potential reload
-        PluginLog.log(`Plugin ${manifest.id} is disabled, skipping load`);
-        return placeholderInstance;
-      }
-
-      // Load the plugin
-      const baseCfg = this._getBaseCfg();
-      const pluginInstance = await this._pluginRunner.loadPlugin(
-        manifest,
-        pluginCode,
-        baseCfg,
-        true, // Plugin is enabled if we reach this point
-      );
-
-      if (pluginInstance.loaded) {
-        // Check if plugin is already in the list to prevent duplicates
-        const existingIndex = this._loadedPlugins.findIndex(
-          (p) => p.manifest.id === manifest.id,
-        );
-        if (existingIndex === -1) {
-          this._loadedPlugins.push(pluginInstance);
-        } else {
-          // Replace existing instance
-          this._loadedPlugins[existingIndex] = pluginInstance;
-        }
-        this._pluginPaths.set(manifest.id, pluginPath); // Store the path
-
-        // Mark plugin as enabled in memory only during startup to avoid sync conflicts
-        // The enabled state will be persisted later when user explicitly enables/disables plugins
-        this._ensurePluginEnabledInMemory(manifest.id);
-
-        await this._fireOnReadyWithCleanup(pluginInstance);
-
-        PluginLog.log(`Plugin ${manifest.id} loaded successfully`);
-      } else {
-        PluginLog.err(`Plugin ${manifest.id} failed to load:`, pluginInstance.error);
-      }
-
-      return pluginInstance;
-    } catch (error) {
-      PluginLog.err(`Failed to load plugin from ${pluginPath}:`, error);
-      throw error;
-    }
-  }
-
   private _getBaseCfg(): PluginBaseCfg {
     let platform: PluginBaseCfg['platform'] = 'web';
     if (IS_ELECTRON) {
@@ -1234,16 +1052,6 @@ export class PluginService implements OnDestroy {
     await this._pluginHooks.dispatchHookToPlugin(pluginId, hookName, payload);
   }
 
-  async loadPluginFromPath(pluginPath: string): Promise<PluginInstance> {
-    const pluginInstance = await this._loadPlugin(pluginPath);
-
-    if (pluginInstance.loaded) {
-      this._loadedPlugins.push(pluginInstance);
-    }
-
-    return pluginInstance;
-  }
-
   async loadPluginFromZip(file: File): Promise<PluginInstance> {
     PluginLog.log('Starting plugin load from ZIP', {
       size: file.size,
@@ -1322,6 +1130,13 @@ export class PluginService implements OnDestroy {
           }),
         );
       }
+      // Surface non-fatal manifest problems the way the path-based loader does.
+      // These include "English (en) not in i18n.languages" and unsupported language
+      // codes — both direct causes of translate() silently returning keys (#9459).
+      // warn, matching PluginLoaderService's level for the identical strings.
+      for (const warning of manifestValidation.warnings) {
+        PluginLog.warn(`Plugin ${manifest.id}: ${warning}`);
+      }
       this._assertUploadedPluginAllowed(manifest);
 
       // Extract index.html if it exists (optional) and iFrame is true
@@ -1360,6 +1175,32 @@ export class PluginService implements OnDestroy {
         throw new Error(this._translateService.instant(T.PLUGINS.INDEX_HTML_NOT_LOADED));
       }
 
+      // Extract only translations declared by the manifest. Uploaded plugins use a
+      // virtual cache path, so these files cannot be fetched after the ZIP is discarded.
+      let translations: Record<string, string> | undefined;
+      // Guard the way the path-based loader does: a non-object `i18n` is falsy but
+      // not nullish, so `i18n?.languages.length` would throw a raw TypeError.
+      if (manifest.i18n?.languages && manifest.i18n.languages.length > 0) {
+        const result = readPluginTranslationsFromZip(
+          extractedFiles,
+          manifest.i18n.languages,
+          MAX_PLUGIN_TRANSLATIONS_TOTAL_SIZE,
+        );
+        if (result.isOverLimit) {
+          throw new Error(
+            this._translateService.instant(T.PLUGINS.TRANSLATIONS_TOO_LARGE, {
+              maxSize: (MAX_PLUGIN_TRANSLATIONS_TOTAL_SIZE / 1024 / 1024).toFixed(1),
+            }),
+          );
+        }
+        // Never skip silently: a declared language that loads nothing is exactly the
+        // "translate() just returns the key" mystery reported in #9459.
+        logSkippedPluginTranslations(manifest.id, result.skipped);
+        if (Object.keys(result.translations).length > 0) {
+          translations = result.translations;
+        }
+      }
+
       // Extract icon if specified in manifest
       let iconContent: string | null = null;
       if (manifest.icon && extractedFiles[manifest.icon]) {
@@ -1372,11 +1213,13 @@ export class PluginService implements OnDestroy {
             }),
           );
         }
-        iconContent = new TextDecoder().decode(iconBytes);
-        // Basic SVG validation
-        if (!iconContent.includes('<svg') || !iconContent.includes('</svg>')) {
-          PluginLog.err(`Plugin icon ${manifest.icon} does not appear to be a valid SVG`);
-          iconContent = null;
+        // Sanitize before caching, so anything installed from here on is stored clean.
+        // Icons cached before this existed are still raw, so both sinks sanitize as well.
+        iconContent = sanitizeSvgIconContent(new TextDecoder().decode(iconBytes));
+        if (!iconContent) {
+          PluginLog.err(
+            `Plugin icon ${manifest.icon} could not be sanitized into a renderable SVG icon`,
+          );
         }
       }
 
@@ -1444,9 +1287,15 @@ export class PluginService implements OnDestroy {
         pluginCode,
         indexHtml || undefined,
         iconContent || undefined,
-        undefined,
+        translations,
         configSchema,
       );
+
+      // An upload always fully replaces this id's translations. The teardown above
+      // only runs when a prior state exists, and a failed upload leaves none (its
+      // error state is filed under a synthetic `error-…` id), so without this a
+      // re-upload that drops a language would keep serving the old version's strings.
+      this._pluginI18nService.unloadPluginTranslations(manifest.id);
 
       // Store index.html content if it exists
       if (indexHtml) {
@@ -1532,6 +1381,17 @@ export class PluginService implements OnDestroy {
 
         PluginLog.log(`Uploaded plugin ${manifest.id} is disabled, skipping load`);
         return placeholderInstance;
+      }
+
+      // Register translations immediately before executing the plugin, so its own
+      // init can call translate(). Deliberately below the placeholder returns above:
+      // a plugin that never runs needs nothing registered, and activating it later
+      // reloads these from the cache anyway.
+      if (translations) {
+        this._pluginI18nService.loadPluginTranslationsFromContent(
+          manifest.id,
+          translations,
+        );
       }
 
       // Load the plugin
@@ -1638,6 +1498,8 @@ export class PluginService implements OnDestroy {
       // Unload and unregister the plugin
       this.unloadPlugin(pluginId);
     }
+    // Disabled and failed plugins can still have translations registered from their ZIP.
+    this._pluginI18nService.unloadPluginTranslations(pluginId);
 
     // Purge local-only credentials (secrets + OAuth tokens) FIRST so they
     // never outlive their plugin — even if a later cleanup step throws.
@@ -1840,106 +1702,6 @@ export class PluginService implements OnDestroy {
     return instance !== null && instance.loaded;
   }
 
-  private async _loadUploadedPlugin(pluginId: string): Promise<PluginInstance> {
-    try {
-      // Use the loader service for uploaded plugins
-      const assets = await this._pluginLoader.loadUploadedPluginAssets(pluginId);
-      const { manifest, code: pluginCode, indexHtml, icon, translations } = assets;
-      if (manifest.id !== pluginId) {
-        throw new Error(`Cached plugin ${pluginId} manifest id mismatch`);
-      }
-      this._assertUploadedPluginAllowed(manifest);
-
-      // Store assets if loaded
-      if (indexHtml) {
-        this._pluginIndexHtml.set(manifest.id, indexHtml);
-      }
-      if (icon) {
-        this._pluginIcons.set(manifest.id, icon);
-        this._registerPluginIcon(manifest.id, icon);
-        this._pluginIconsSignal.set(new Map(this._pluginIcons));
-      }
-
-      // Load translations into i18n service
-      if (translations && Object.keys(translations).length > 0) {
-        this._pluginI18nService.loadPluginTranslationsFromContent(
-          manifest.id,
-          translations,
-        );
-      }
-
-      // Validate manifest
-      const manifestValidation = validatePluginManifest(manifest);
-      if (!manifestValidation.isValid) {
-        throw new Error(
-          this._translateService.instant(T.PLUGINS.VALIDATION_FAILED, {
-            errors: manifestValidation.errors.join(', '),
-          }),
-        );
-      }
-
-      // Analyze plugin code (informational only - KISS approach)
-      const codeAnalysis = this._pluginSecurity.analyzePluginCode(pluginCode, manifest);
-      if (codeAnalysis.warnings.length > 0) {
-        PluginLog.err(`Plugin ${manifest.id} warnings:`, codeAnalysis.warnings);
-      }
-      if (codeAnalysis.info.length > 0) {
-        PluginLog.info(`Plugin ${manifest.id} info:`, codeAnalysis.info);
-      }
-
-      // Check if plugin is enabled
-      const isPluginEnabled = await this._pluginMetaPersistenceService.isPluginEnabled(
-        manifest.id,
-      );
-
-      // If plugin is disabled, create a placeholder instance without loading code
-      if (!isPluginEnabled) {
-        const placeholderInstance: PluginInstance = {
-          manifest,
-          loaded: false,
-          isEnabled: false,
-          error: undefined,
-        };
-        PluginLog.log(`Uploaded plugin ${manifest.id} is disabled, skipping reload`);
-        return placeholderInstance;
-      }
-
-      // Load the plugin
-      const baseCfg = this._getBaseCfg();
-      const pluginInstance = await this._pluginRunner.loadPlugin(
-        manifest,
-        pluginCode,
-        baseCfg,
-        true, // Plugin is enabled if we reach this point
-      );
-
-      if (pluginInstance.loaded) {
-        // Check if plugin is already in the list to prevent duplicates
-        const existingIndex = this._loadedPlugins.findIndex(
-          (p) => p.manifest.id === manifest.id,
-        );
-        if (existingIndex === -1) {
-          this._loadedPlugins.push(pluginInstance);
-        } else {
-          // Replace existing instance
-          this._loadedPlugins[existingIndex] = pluginInstance;
-        }
-        await this._fireOnReadyWithCleanup(pluginInstance);
-        PluginLog.log(`Uploaded plugin ${manifest.id} reloaded successfully`);
-      } else {
-        PluginLog.err(
-          `Uploaded plugin ${manifest.id} failed to reload:`,
-          pluginInstance.error,
-        );
-      }
-
-      return pluginInstance;
-    } catch (error) {
-      PluginLog.err(`Failed to reload uploaded plugin ${pluginId}:`, error);
-      throw error;
-    }
-  }
-
   private async _ensureNodeExecutionGrant(manifest: PluginManifest): Promise<boolean> {
     if (!this._isElectronRuntime() || !manifest.permissions?.includes('nodeExecution')) {
       return true;
@@ -2115,18 +1877,6 @@ export class PluginService implements OnDestroy {
   /**
    * Clean up all resources when service is destroyed
    */
-  /**
-   * Ensure plugin is marked as enabled in memory only during startup.
-   * This avoids pfapi writes during initialization that could cause sync conflicts.
-   */
-  private _ensurePluginEnabledInMemory(pluginId: string): void {
-    // We only need to track this in memory for startup purposes
-    // The actual persistence will happen when user explicitly enables/disables plugins
-    PluginLog.log(
-      `Plugin ${pluginId} marked as enabled in memory (no pfapi write during startup)`,
-    );
-  }
-
   ngOnDestroy(): void {
     PluginLog.log('PluginService: Cleaning up all resources');
 

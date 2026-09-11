@@ -368,12 +368,35 @@ export const getPayloadKey = (entityType: EntityType): string | undefined =>
   getPayloadKeyFromRegistry(ENTITY_CONFIGS, entityType);
 
 /**
- * Sentinel `entityId` value used for singleton entities (`globalConfig`,
- * `metric`, etc.). These have no per-entity primary key, so the op-log
- * uses `'*'` to denote "the one and only" instance.
+ * Whether an LWW action payload's top-level `id` selects the state that the
+ * LWW meta-reducer applies. Adapter- and array-backed entities are addressed
+ * by that field (arrays since #9526: items are found by `id` in the feature
+ * array); singleton actions target their registered feature state as a whole.
  *
- * Used wherever singleton ops need to be distinguished from adapter ops,
- * e.g. when conditionally injecting `id` into LWW payloads.
+ * Lockstep contract: `assertDecryptedOpMetadataIntegrity` uses this to decide
+ * which encrypted LWW ops must carry an authenticated `payload.id` matching
+ * `op.entityId` (GHSA-8pxh-mgc7-gp3g) — widening the reducer's id-addressed
+ * patterns without widening this helper would reopen the retarget hole.
+ */
+export const isLwwPayloadIdCanonical = (entityType: string | undefined): boolean => {
+  const pattern =
+    entityType !== undefined
+      ? ENTITY_CONFIGS[entityType as EntityType]?.storagePattern
+      : undefined;
+  return pattern === 'adapter' || pattern === 'array';
+};
+
+/**
+ * Sentinel `entityId` value denoting "the one and only" instance of an entity
+ * that has no per-entity primary key.
+ *
+ * This is an operation-address sentinel, NOT a storage-pattern check — and in
+ * practice no shipped singleton producer emits it: GLOBAL_CONFIG addresses ops
+ * by section key (`'misc'`, `'sync'`, …), MENU_TREE by `'projectTree'` /
+ * `'tagTree'` / folderId, TIME_TRACKING by a composite `TYPE:id:date` conflict
+ * key. All of them still target their feature state as a whole in the LWW
+ * reducer. Use `isLwwPayloadIdCanonical` to ask "does payload.id address the
+ * state?"; use this only to recognize the whole-state address form.
  */
 export const SINGLETON_ENTITY_ID = '*' as const;
 

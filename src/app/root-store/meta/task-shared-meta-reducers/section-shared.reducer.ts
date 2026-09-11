@@ -18,6 +18,18 @@ import { Task } from '../../../features/tasks/task.model';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { moveItemAfterAnchor } from '../../../features/work-context/store/work-context-meta.helper';
+import {
+  moveTaskDownInTodayList,
+  moveTaskToBottomInTodayList,
+  moveTaskToTopInTodayList,
+  moveTaskUpInTodayList,
+} from '../../../features/work-context/store/work-context-meta.actions';
+import {
+  arrayMoveLeftUntil,
+  arrayMoveRightUntil,
+  arrayMoveToEnd,
+  arrayMoveToStart,
+} from '../../../util/array-move';
 import { canApplyConvertToSubTask } from '../../../features/tasks/util/can-convert-task-to-sub-task';
 import {
   collectTaskAndSubTaskIds,
@@ -36,6 +48,8 @@ interface ExtendedState extends RootState {
 }
 
 type Handler = (state: ExtendedState, action: Action) => ExtendedState;
+
+type SectionTaskOrderUpdater = (taskIds: string[]) => string[];
 
 /**
  * Walk `taskIds` once removing entries in `removedSet`. Returns `null`
@@ -80,6 +94,36 @@ const cleanupSectionTaskIds = (
 
   if (!updates.length) return sectionState;
   return sectionAdapter.updateMany(updates, sectionState);
+};
+
+/**
+ * Reorder a task inside the section that owns it for the active work context.
+ * The same persistent work-context action then continues through the normal
+ * project/tag reducer, keeping both order stores in one replay-atomic op.
+ */
+const reorderTaskInContextSections = (
+  sectionState: SectionState,
+  workContextType: WorkContextType,
+  workContextId: string,
+  taskId: string,
+  updateOrder: SectionTaskOrderUpdater,
+): SectionState => {
+  const updates: Update<Section>[] = [];
+
+  for (const id of sectionState.ids) {
+    const section = sectionState.entities[id];
+    if (!section) continue;
+    if (section.contextType !== workContextType) continue;
+    if (section.contextId !== workContextId) continue;
+    if (!section.taskIds.includes(taskId)) continue;
+
+    const taskIds = updateOrder(section.taskIds);
+    if (taskIds !== section.taskIds) {
+      updates.push({ id: section.id, changes: { taskIds } });
+    }
+  }
+
+  return updates.length ? sectionAdapter.updateMany(updates, sectionState) : sectionState;
 };
 
 /**
@@ -208,6 +252,24 @@ const handleTaskRemoval = (
     cleanupSectionTaskIds(state[SECTION_FEATURE_NAME], affectedIds),
   );
 };
+
+const handleSectionTaskReorder = (
+  state: ExtendedState,
+  workContextType: WorkContextType,
+  workContextId: string,
+  taskId: string,
+  updateOrder: SectionTaskOrderUpdater,
+): ExtendedState =>
+  withSectionStateUpdate(
+    state,
+    reorderTaskInContextSections(
+      state[SECTION_FEATURE_NAME],
+      workContextType,
+      workContextId,
+      taskId,
+      updateOrder,
+    ),
+  );
 
 /**
  * Task is moving from its current project to `targetProjectId`. Strip
@@ -526,6 +588,62 @@ const ACTION_HANDLERS: Record<string, Handler> = {
       return state;
     }
     return handleTaskRemoval(state, [taskId]);
+  },
+  [moveTaskUpInTodayList.type]: (state, action) => {
+    const {
+      taskId,
+      workContextType,
+      workContextId,
+      doneTaskIds: undoneTaskIds,
+    } = action as ReturnType<typeof moveTaskUpInTodayList>;
+    return handleSectionTaskReorder(
+      state,
+      workContextType,
+      workContextId,
+      taskId,
+      (taskIds) =>
+        arrayMoveLeftUntil(taskIds, taskId, (id) => !undoneTaskIds.includes(id)),
+    );
+  },
+  [moveTaskDownInTodayList.type]: (state, action) => {
+    const {
+      taskId,
+      workContextType,
+      workContextId,
+      doneTaskIds: undoneTaskIds,
+    } = action as ReturnType<typeof moveTaskDownInTodayList>;
+    return handleSectionTaskReorder(
+      state,
+      workContextType,
+      workContextId,
+      taskId,
+      (taskIds) =>
+        arrayMoveRightUntil(taskIds, taskId, (id) => !undoneTaskIds.includes(id)),
+    );
+  },
+  [moveTaskToTopInTodayList.type]: (state, action) => {
+    const { taskId, workContextType, workContextId } = action as ReturnType<
+      typeof moveTaskToTopInTodayList
+    >;
+    return handleSectionTaskReorder(
+      state,
+      workContextType,
+      workContextId,
+      taskId,
+      (taskIds) => arrayMoveToStart(taskIds, taskId),
+    );
+  },
+  [moveTaskToBottomInTodayList.type]: (state, action) => {
+    const { taskId, workContextType, workContextId } = action as ReturnType<
+      typeof moveTaskToBottomInTodayList
+    >;
+    return handleSectionTaskReorder(
+      state,
+      workContextType,
+      workContextId,
+      taskId,
+      (taskIds) => arrayMoveToEnd(taskIds, taskId),
+    );
   },
   [SectionActions.removeTaskFromSection.type]: (state, action) => {
     const { workContextType, workContextId, taskId, workContextAfterTaskId } =

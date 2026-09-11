@@ -16,6 +16,17 @@ const allMigrationSql = (): string =>
     .join('\n');
 
 describe('performance migrations', () => {
+  it('adds the durable state-replacement boundary without a blocking backfill', () => {
+    const migrationSql = readMigration('20260727000000_add_state_replacement_seq');
+
+    expect(migrationSql).toMatch(
+      /ALTER TABLE "user_sync_state"\s+ADD COLUMN "latest_state_replacement_seq" INTEGER/i,
+    );
+    expect(migrationSql).not.toMatch(/\bUPDATE\b/i);
+    expect(migrationSql).not.toMatch(/\bDROP\s+TABLE\b/i);
+    expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
+  });
+
   it('adds the entity sequence index without a blocking or destructive migration', () => {
     const migrationSql = readFileSync(
       join(
@@ -65,6 +76,68 @@ describe('performance migrations', () => {
     expect(migrationSql).not.toMatch(/\bDROP\s+TABLE\b/i);
     expect(migrationSql).not.toMatch(/\bALTER\s+TABLE\b/i);
     expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
+  });
+
+  it('drops the unused (user_id, client_id) index as a single native-apply statement', () => {
+    const migrationSql = readMigration(
+      '20260828000000_drop_unused_operations_user_id_client_id_index',
+    );
+
+    expect(migrationSql).toContain(
+      'DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_client_id_idx"',
+    );
+    // The received_at index is load-bearing for the old-ops fresh-prefix probe
+    // plan and must never be dropped here.
+    expect(migrationSql).not.toContain('"operations_user_id_received_at_idx"');
+    // Single statement so `prisma migrate deploy` applies it natively without
+    // the out-of-band CONCURRENTLY recovery.
+    const sqlWithoutComments = migrationSql
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('--'))
+      .join('\n');
+    expect(sqlWithoutComments.match(/;/g)).toHaveLength(1);
+    expect(migrationSql).not.toMatch(/\bCREATE\b/i);
+    expect(migrationSql).not.toMatch(/\bDROP\s+TABLE\b/i);
+    expect(migrationSql).not.toMatch(/\bALTER\s+TABLE\b/i);
+    expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
+  });
+
+  it('tunes operations autovacuum as a single unlocked native-apply statement', () => {
+    const migrationSql = readMigration('20260828000003_tune_operations_autovacuum');
+    // Compared as ONE exact normalized statement rather than as a set of
+    // substring matches. Two reasons this file needs the stricter form:
+    // its rationale names all three reloptions in prose, so matching the raw
+    // text stays green with the ALTER commented out; and a loose
+    // `SET \(.*autovacuum_vacuum_scale_factor` lets `.*` swallow a `toast.`
+    // prefix — which is the exact footgun the comment warns about, since one
+    // toast.autovacuum_* option breaks the parent-value fallback for every
+    // field. An exact match also pins the single-statement shape that lets
+    // `prisma migrate deploy` apply it natively.
+    const normalizedSql = migrationSql
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('--'))
+      .join('\n')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    expect(normalizedSql).toBe(
+      'ALTER TABLE "operations" SET (autovacuum_vacuum_insert_scale_factor = 0.02);',
+    );
+    // Both omissions are decisions, not oversights, and the exact match above
+    // already fails if someone adds either back — these say WHY, so the failure
+    // reads as a question rather than a stale fixture.
+    //
+    // analyze: ANALYZE samples a fixed 30,000 random blocks that no
+    // page-skipping reduces, so tightening it multiplies the worst-shaped I/O
+    // on an IOPS-capped host.
+    expect(normalizedSql).not.toMatch(/autovacuum_analyze_scale_factor/i);
+    // dead-tuple: measured with VACUUM (VERBOSE), an insert-triggered pass
+    // reports `index scans: 0` while a post-DELETE pass walks all 8 indexes
+    // (~3 GB). On a growing append-only table the insert trigger always fires
+    // first, so lowering this factor buys nothing until the table stops
+    // growing — and then buys 10x more full index passes.
+    expect(normalizedSql).not.toMatch(/autovacuum_vacuum_scale_factor/i);
   });
 
   it('adds partial encrypted-op sequence index concurrently', () => {
@@ -163,6 +236,69 @@ describe('performance migrations', () => {
     expect(migrationSql).not.toMatch(/\bALTER\s+TABLE\b/i);
     expect(migrationSql).not.toMatch(/\bDROP\s+TABLE\b/i);
     expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
+    // This migration is already applied in production. Changing it to set the
+    // reloption or clean the pending list would break its Prisma checksum.
+    expect(migrationSql).not.toMatch(/\bALTER\s+INDEX\b|\bfastupdate\b/i);
+    expect(migrationSql).not.toMatch(/\bgin_clean_pending_list\b/i);
+  });
+
+  it('disables entity_ids GIN fastupdate in a lock-bounded forward migration', () => {
+    const migrationSql = readMigration(
+      '20260720000000_disable_operation_entity_ids_gin_fastupdate',
+    );
+    const lockTimeout = migrationSql.match(
+      /\bSET\s+LOCAL\s+lock_timeout\s*=\s*'(\d+)(ms|s)'\s*;/i,
+    );
+    const alterIndex = migrationSql.match(
+      /\bALTER\s+INDEX\s+"operations_entity_ids_gin"\s+SET\s*\(\s*fastupdate\s*=\s*off\s*\)\s*;/i,
+    );
+    const lockTimeoutMs =
+      Number(lockTimeout?.[1]) * (lockTimeout?.[2].toLowerCase() === 's' ? 1000 : 1);
+
+    expect(lockTimeout).not.toBeNull();
+    expect(lockTimeoutMs).toBeGreaterThan(0);
+    expect(lockTimeoutMs).toBeLessThanOrEqual(5000);
+    expect(alterIndex).not.toBeNull();
+    expect(alterIndex?.index ?? -1).toBeGreaterThan(lockTimeout?.index ?? -1);
+    expect(migrationSql).not.toMatch(/\bgin_clean_pending_list\b|\bVACUUM\b/i);
+    expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
+  });
+
+  it('cleans the entity_ids GIN pending list only after the ALTER migration commits', () => {
+    const alterMigrationName =
+      '20260720000000_disable_operation_entity_ids_gin_fastupdate';
+    const cleanupMigrationName =
+      '20260720000001_clean_operation_entity_ids_gin_pending_list';
+    const cleanupSql = readMigration(cleanupMigrationName);
+    const statementTimeout = cleanupSql.match(
+      /\bSET\s+LOCAL\s+statement_timeout\s*=\s*'(\d+)(ms|s)'\s*;/i,
+    );
+    const statementTimeoutMs =
+      Number(statementTimeout?.[1]) *
+      (statementTimeout?.[2].toLowerCase() === 's' ? 1000 : 1);
+
+    // Prisma wraps each migration independently, so the consecutive directory
+    // is a separate transaction and cannot extend the ALTER's exclusive lock.
+    // Ordered against the real migration directory — comparing the two literals
+    // above to each other would be a tautology that nothing could ever fail.
+    const migrationNames = readdirSync(migrationsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+    expect(migrationNames).toContain(alterMigrationName);
+    expect(migrationNames.indexOf(cleanupMigrationName)).toBeGreaterThan(
+      migrationNames.indexOf(alterMigrationName),
+    );
+    const cleanup = cleanupSql.match(
+      /\bSELECT\s+(?:pg_catalog\.)?gin_clean_pending_list\s*\([^)]*operations_entity_ids_gin[^)]*\)\s*;/i,
+    );
+    expect(statementTimeout).not.toBeNull();
+    expect(statementTimeoutMs).toBeGreaterThan(0);
+    expect(statementTimeoutMs).toBeLessThanOrEqual(300_000);
+    expect(cleanup).not.toBeNull();
+    expect(cleanup?.index ?? -1).toBeGreaterThan(statementTimeout?.index ?? -1);
+    expect(cleanupSql).not.toMatch(/\bALTER\s+INDEX\b|\bfastupdate\b|\bVACUUM\b/i);
+    expect(cleanupSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
   });
 
   it('runs migrations before replacing the app during compose deploys', () => {
@@ -183,6 +319,18 @@ describe('performance migrations', () => {
     );
     const helmDeployment = readFileSync(
       join(currentDir, '../helm/supersync/templates/deployment.yaml'),
+      'utf8',
+    );
+    const helmValues = readFileSync(
+      join(currentDir, '../helm/supersync/values.yaml'),
+      'utf8',
+    );
+    const helmHelpers = readFileSync(
+      join(currentDir, '../helm/supersync/templates/_helpers.tpl'),
+      'utf8',
+    );
+    const helmDatabaseUrlCheck = readFileSync(
+      join(currentDir, '../helm/supersync/templates/database-url-check.yaml'),
       'utf8',
     );
     const dockerWorkflow = readFileSync(
@@ -255,6 +403,8 @@ describe('performance migrations', () => {
     expect(deployScript).toContain('prisma migrate deploy timed out');
     expect(deployScript).toContain('database migrations failed (exit $MIGRATE_STATUS)');
     expect(deployScript).toContain(externalDbStartCommand);
+    expect(deployScript).toContain('awk -v script="$script_path"');
+    expect(deployScript).toContain('$command_index == script');
     expect(deployScript).toContain('RUN_MIGRATIONS_ON_STARTUP');
     expect(deployScript.indexOf(migrationCommand)).toBeLessThan(
       deployScript.indexOf(startCommand),
@@ -265,6 +415,7 @@ describe('performance migrations', () => {
     expect(dockerfile).toContain('sh scripts/migrate-deploy.sh');
     expect(dockerfile).toContain('NODE_OPTIONS=--max-old-space-size=576');
     expect(composeBuildFile).toContain('VCS_REF: ${SUPERSYNC_BUILD_SHA:-local}');
+    expect(composeBuildFile).toContain('MIGRATE_RECOVERY_BUILD_LOCAL=true');
     expect(buildAndPushScript).toContain('supersync_image_source_revision()');
     expect(buildAndPushScript).toContain('assert_clean_supersync_image_inputs');
     expect(buildAndPushScript).toContain('git -C "$REPO_ROOT" log -1 --format=%H');
@@ -283,32 +434,123 @@ describe('performance migrations', () => {
     expect(dockerWorkflow).toContain('VCS_REF=${{ steps.source-ref.outputs.revision }}');
     expect(dockerWorkflow).not.toContain('labels: ${{ steps.meta.outputs.labels }}');
     expect(helmDeployment).toContain('sh scripts/migrate-deploy.sh');
+    expect(
+      helmDeployment.match(/include "supersync\.postgresqlConnectionLimit" \./g),
+    ).toHaveLength(2);
+    expect(helmHelpers).toContain(
+      'postgresql.connectionLimit must be a positive integer',
+    );
+    expect(helmValues).toContain('connectionLimit: 20');
+    expect(helmDeployment).not.toContain('regexMatch');
+    expect(helmDeployment.match(/REQUIRE_DATABASE_POOL_LIMITS/g)).toHaveLength(1);
+    expect(helmDeployment.indexOf('REQUIRE_DATABASE_POOL_LIMITS')).toBeLessThan(
+      helmDeployment.indexOf('{{- if .Values.postgresql.enabled }}'),
+    );
+    expect(helmDatabaseUrlCheck).toContain('"helm.sh/hook": pre-upgrade');
+    expect(helmDatabaseUrlCheck).toContain("command: ['node', '-e']");
+    expect(helmDatabaseUrlCheck).toContain('Number.isSafeInteger');
+    expect(helmDatabaseUrlCheck).not.toContain('migrate-deploy.sh');
+    expect(helmDatabaseUrlCheck).not.toContain('activeDeadlineSeconds');
+    expect(helmDatabaseUrlCheck).toContain('.Values.externalDatabase.existingSecret');
+    expect(helmDatabaseUrlCheck).toContain(
+      'include "supersync.fullname" . | trunc 44 | trimSuffix "-"',
+    );
+    expect(helmDatabaseUrlCheck).toContain(
+      'app.kubernetes.io/component: database-url-check',
+    );
+    expect(helmDatabaseUrlCheck).not.toContain('supersync.selectorLabels');
+    expect(runtimeMigrateScript).toContain(
+      'DATABASE_URL must include exactly one positive connection_limit and pool_timeout value each',
+    );
+    expect(runtimeMigrateScript).toContain(
+      '-f docker-compose.yml -f docker-compose.build.yml',
+    );
+    expect(
+      runtimeMigrateScript.match(/MIGRATE_STEP_TIMEOUT=\$STEP_TIMEOUT/g),
+    ).toHaveLength(3);
     // Architectural invariant (the actual bug class): the generic runtime
     // script must NOT hardcode any migration name or index DDL — that lockstep
     // coupling is what went stale and broke the production deploy. Behavioral
     // coverage of the recovery logic lives in migrate-deploy-script.spec.ts.
     expect(runtimeMigrateScript).toContain('npx prisma migrate deploy');
     expect(runtimeMigrateScript).not.toMatch(/_INDEX_MIGRATION=/);
-    expect(runtimeMigrateScript).not.toContain(
-      'operations_user_id_server_seq_encrypted_idx',
-    );
-    expect(runtimeMigrateScript).not.toContain(
-      'operations_payload_bytes_unbackfilled_idx',
-    );
-    expect(runtimeMigrateScript).not.toContain(
-      'operations_user_id_full_state_server_seq_idx',
-    );
+    // Derived from the migrations themselves rather than a hand-kept denylist —
+    // the old three-name list passed vacuously when a NEW name was hardcoded.
+    const migrationSql = allMigrationSql();
+    const indexNames = [
+      ...migrationSql.matchAll(
+        /\b(?:CREATE|ALTER|DROP)\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+(?:NOT\s+)?EXISTS\s+)?"([^"]+)"/gi,
+      ),
+    ].map((match) => match[1]);
+    // Sentinel: the name this script must never mention again. Guards against
+    // the extraction silently degrading to a handful of matches and passing.
+    expect(indexNames).toContain('operations_entity_ids_gin');
+    expect(indexNames.length).toBeGreaterThan(15);
+    expect(indexNames.filter((name) => runtimeMigrateScript.includes(name))).toEqual([]);
+    // Reloption keywords are not index names, so the derived list cannot see a
+    // hardcode like `fastupdate` — check the ones the migrations actually set.
+    // EVERY option in the list, not just the first: the earlier form stopped at
+    // `SET\s*\(\s*([a-z_]+)`, so in `SET (a = 1, b = 2)` it never saw `b` and
+    // the script was free to hardcode it. That blind spot was live.
+    const reloptions = [
+      ...migrationSql.matchAll(
+        /\bALTER\s+(?:INDEX|TABLE)\s+(?:IF\s+EXISTS\s+)?"[^"]+"\s+SET\s*\(([^)]*)\)/gi,
+      ),
+    ].flatMap((match) => [...match[1].matchAll(/([a-z_]+)\s*=/gi)].map((o) => o[1]));
+    // Same sentinel role as above: a regex that quietly stopped matching would
+    // otherwise leave `[].filter(...)` green.
+    expect(reloptions).toContain('fastupdate');
+    expect(reloptions).toContain('autovacuum_vacuum_insert_scale_factor');
+    expect(reloptions.filter((name) => runtimeMigrateScript.includes(name))).toEqual([]);
+    // No migration directory name either.
+    expect(runtimeMigrateScript).not.toMatch(/\b20\d{12}_[a-z]/);
     expect(composeFile).toContain(
       'RUN_MIGRATIONS_ON_STARTUP=${RUN_MIGRATIONS_ON_STARTUP:-false}',
     );
-    expect(composeFile).toContain(
-      'SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=${SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE:-false}',
-    );
+    expect(composeFile).toContain('REQUIRE_DATABASE_POOL_LIMITS=true');
+    expect(composeFile).toContain('MIGRATE_RECOVERY_RUNTIME=compose');
+    expect(composeFile).toContain('connection_limit=60&pool_timeout=10');
     expect(composeFile).toContain(
       'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "SELECT 1"',
     );
     expect(composeFile).toContain('aliases:');
     expect(composeFile).toContain('- db');
+  });
+
+  it('mounts a writable /tmp into the migrate-db initContainer so migrate-deploy.sh runs under readOnlyRootFilesystem', () => {
+    const helmDeployment = readFileSync(
+      join(currentDir, '../helm/supersync/templates/deployment.yaml'),
+      'utf8',
+    );
+    const helmValues = readFileSync(
+      join(currentDir, '../helm/supersync/values.yaml'),
+      'utf8',
+    );
+
+    const migrateDbStart = helmDeployment.indexOf('- name: migrate-db');
+    expect(migrateDbStart).toBeGreaterThan(-1);
+    // The migrate-db initContainer block ends at the next list item at the
+    // same indent (the following initContainer).
+    const nextContainer = helmDeployment.indexOf(
+      '\n        - name: ',
+      migrateDbStart + 1,
+    );
+    expect(nextContainer).toBeGreaterThan(migrateDbStart);
+    const migrateDbBlock = helmDeployment.slice(migrateDbStart, nextContainer);
+
+    // migrate-deploy.sh writes a temp log via `mktemp` under /tmp and runs
+    // with `set -eu`, so a read-only /tmp aborts the install before any
+    // migration runs. /tmp must therefore be backed by a writable volume
+    // mounted into THIS initContainer.
+    expect(migrateDbBlock).toContain('sh scripts/migrate-deploy.sh');
+    expect(migrateDbBlock).toContain('volumeMounts:');
+    expect(migrateDbBlock).toMatch(/- name: tmp\s+mountPath: \/tmp/);
+    // ...and the mounted volume must actually be declared as a writable
+    // emptyDir at the pod level.
+    expect(helmDeployment).toMatch(/- name: tmp\s+emptyDir:/);
+    // The mount is required precisely because the shared securityContext
+    // applied to this initContainer sets a read-only root filesystem.
+    expect(helmValues).toContain('readOnlyRootFilesystem: true');
   });
 
   it('backfills operation payload bytes with per-user batched updates', () => {

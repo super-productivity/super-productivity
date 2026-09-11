@@ -357,20 +357,19 @@ export class ConflictJournalService {
   }
 
   /**
-   * Deletes EVERY journal entry. Called on user-profile transitions: profiles
-   * are "complete, isolated instances", and the journal is a device-local
-   * side-store the profile switch's backup/import cycle does not otherwise
-   * touch — without this, the next profile would see the previous profile's
-   * entity titles/values and could Flip against the wrong dataset.
+   * Deletes EVERY journal entry after a complete dataset replacement. The
+   * journal is a device-local side-store the replacement does not otherwise
+   * touch; keeping it could expose stale entity titles/values and allow a Flip
+   * against the wrong dataset.
    *
-   * Same swallow-errors contract as `record()`: the caller (profile switch)
-   * must not fail after the dataset has already been replaced.
+   * Same swallow-errors contract as `record()`: the caller must not fail after
+   * the dataset has already been replaced.
    */
   async clearAll(): Promise<void> {
     // Persist a durable invalidation boundary FIRST, in localStorage — which does
     // not depend on the (possibly unhealthy) journal IndexedDB. If the bulk clear
     // below fails, the read paths hide every entry resolved before this instant,
-    // so the next profile can never see the previous dataset's titles/values.
+    // so the replacement dataset can never see the previous titles/values.
     const clearedBefore = Date.now();
     this._setClearedBefore(clearedBefore);
     try {

@@ -12,6 +12,7 @@ import { truncate } from '../../../../util/truncate';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { isCaldavEnabled } from './is-caldav-enabled.util';
 import { CALDAV_POLL_INTERVAL } from './caldav.const';
+import { issueValuesEqual } from '../../two-way-sync/compute-push-decisions';
 
 @Injectable({
   providedIn: 'root',
@@ -91,6 +92,10 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
       issueLastUpdated: issueData.etag_hash,
       notes: issueData.note,
       related_to: issueData.related_to,
+      // normalized to a boolean in _mapTask; without it a server-side
+      // STATUS:COMPLETED never ticks the task done (Plainspace and
+      // Nextcloud Deck map their equivalents the same way)
+      isDone: issueData.completed,
       ...startFields,
       ...dueFields,
       issueLastSyncedValues: this._caldavSyncAdapter.extractSyncValues(
@@ -116,13 +121,12 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
     const issue = await firstValueFrom(
       this._caldavClientService.getById$(task.issueId, cfg),
     );
+    const taskChanges = this._getRefreshTaskChanges(task, issue, cfg);
 
-    const wasUpdated = issue.etag_hash !== task.issueLastUpdated;
-
-    if (wasUpdated) {
+    if (taskChanges) {
       return {
         taskChanges: {
-          ...this.getAddTaskData(issue),
+          ...taskChanges,
           issueWasUpdated: true,
         },
         issue,
@@ -143,31 +147,43 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
     }
 
     const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
+    // Query and match by the VTODO UID (task.issueId) — task.id is SP's own
+    // nanoid and never matches a server-side UID, so keying on it made this
+    // batch poll return no updates at all.
     const issues: CaldavIssue[] = await firstValueFrom(
       this._caldavClientService.getByIds$(
-        tasks.map((t) => t.id),
+        tasks
+          .map((task) => task.issueId)
+          .filter((issueId): issueId is string => !!issueId),
         cfg,
       ),
     );
     const issueMap = new Map(issues.map((item) => [item.id, item]));
+    const updates: {
+      task: Task;
+      taskChanges: Partial<Task>;
+      issue: CaldavIssue;
+    }[] = [];
 
-    return tasks
-      .filter(
-        (task) =>
-          issueMap.has(task.id) &&
-          issueMap.get(task.id)?.etag_hash !== task.issueLastUpdated,
-      )
-      .map((task) => {
-        const issue = issueMap.get(task.id) as CaldavIssue;
-        return {
+    for (const task of tasks) {
+      const issue = task.issueId ? issueMap.get(task.issueId) : undefined;
+      if (!issue) {
+        continue;
+      }
+      const taskChanges = this._getRefreshTaskChanges(task, issue, cfg);
+      if (taskChanges) {
+        updates.push({
           task,
           taskChanges: {
-            ...this.getAddTaskData(issue),
+            ...taskChanges,
             issueWasUpdated: true,
           },
           issue,
-        };
-      });
+        });
+      }
+    }
+
+    return updates;
   }
 
   async getNewIssuesToAddToBacklog(
@@ -219,6 +235,63 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
     const taskPromise = firstValueFrom(this._caldavClientService.getOpenTasks$(cfg));
     this._openTasksCache.set(issueProviderId, { taskPromise, ts: Date.now() });
     return taskPromise;
+  }
+
+  private _getRefreshTaskChanges(
+    task: Task,
+    issue: CaldavIssue,
+    cfg: CaldavCfg,
+  ): Partial<Task> | null {
+    const wasUpdated = issue.etag_hash !== task.issueLastUpdated;
+    const taskChanges: Record<PropertyKey, unknown> = wasUpdated
+      ? { ...this.getAddTaskData(issue) }
+      : {};
+    const issueValues = issue as unknown as Record<string, unknown>;
+    const lastSyncedValues = task.issueLastSyncedValues ?? {};
+    const syncConfig = this._caldavSyncAdapter.getSyncConfig(cfg);
+    const context = { issueId: issue.id };
+    let hasPullOnlyMismatch = false;
+
+    for (const mapping of this._caldavSyncAdapter.getFieldMappings()) {
+      const direction = syncConfig[mapping.taskField] ?? mapping.defaultDirection;
+      const canPull = direction === 'pullOnly' || direction === 'both';
+
+      if (!canPull) {
+        delete taskChanges[mapping.taskField];
+        continue;
+      }
+
+      const remoteTaskValue = mapping.toTaskValue(
+        issueValues[mapping.issueField],
+        context,
+      );
+      // A VTODO-wide ETag can change for an unrelated field. In "both" mode,
+      // preserve pending local edits unless this specific remote field changed.
+      const shouldPullAfterEtagChange =
+        direction === 'pullOnly' ||
+        !Object.prototype.hasOwnProperty.call(lastSyncedValues, mapping.issueField) ||
+        !issueValuesEqual(
+          issueValues[mapping.issueField],
+          lastSyncedValues[mapping.issueField],
+        );
+      if (wasUpdated) {
+        if (shouldPullAfterEtagChange) {
+          taskChanges[mapping.taskField] = remoteTaskValue;
+        } else {
+          delete taskChanges[mapping.taskField];
+        }
+      } else if (
+        // Older refreshes could advance the ETag without applying mapped values.
+        // Heal provider-owned fields, but preserve possible unpushed edits in "both".
+        direction === 'pullOnly' &&
+        remoteTaskValue !== task[mapping.taskField]
+      ) {
+        taskChanges[mapping.taskField] = remoteTaskValue;
+        hasPullOnlyMismatch = true;
+      }
+    }
+
+    return wasUpdated || hasPullOnlyMismatch ? (taskChanges as Partial<Task>) : null;
   }
 
   protected _apiGetById$(

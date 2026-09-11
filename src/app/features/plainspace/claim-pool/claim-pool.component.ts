@@ -14,8 +14,7 @@ import { PlainspaceClaimPoolService } from '../plainspace-claim-pool.service';
  *
  * Deliberately a lightweight, standalone component (not the hot-path
  * `TaskComponent`): these are foreign tasks until claimed and must never be
- * edited/scheduled or written into the SP task store. See
- * docs/plainspace-integration-plan.md.
+ * edited/scheduled or written into the SP task store.
  */
 @Component({
   selector: 'plainspace-claim-pool',

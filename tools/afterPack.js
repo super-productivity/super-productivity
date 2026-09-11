@@ -1,11 +1,19 @@
-// Post-pack hook for Linux builds.
+// Post-pack checks and platform-specific packaging adjustments.
 //
-// Renames the main Electron binary to `superproductivity-bin` and installs
-// a shell wrapper at the original name. The wrapper forces
-// --class=superproductivity for stable desktop-file matching and forces
-// --ozone-platform=x11 when running in our Snap sandbox on a Wayland session.
-// Non-Snap launches (AppImage, .deb, .rpm) and X11 sessions only receive the
-// stable class flag.
+// macOS: verifies the actual icon copied into every packaged .app.
+//
+// Linux: renames the main Electron binary to `superproductivity-bin` and installs
+// a shell wrapper at the original name. The wrapper's only job is forcing
+// --ozone-platform=x11 when running in our Snap sandbox on a Wayland session;
+// non-Snap launches (AppImage, .deb, .rpm) and X11 sessions pass straight
+// through.
+//
+// The rename used to leak into the window identity: through Electron 41 a
+// native-Wayland session took its `app_id` from this binary's basename, which is
+// what #9450 reported. Electron 42+ derives both the Wayland `app_id` and the X11
+// WM_CLASS from the XDG app id instead, which electron/start-app.ts pins
+// explicitly, so the rename is now invisible to the shell. See
+// tools/verify-linux-wm-class.test.js.
 //
 // Context: field reports on issue #7270 (v18.2.4/v18.2.5) show that
 // app.commandLine.appendSwitch('ozone-platform','x11') from inside the
@@ -14,7 +22,7 @@
 // Mesa path before the switch is honored, which segfaults under Mesa ABI
 // drift. Injecting the flag via argv before Electron starts bypasses this.
 //
-// See docs/research/snap-wayland-gpu-fix-research.md §18.
+// See docs/research/snap-wayland-gpu-fix-research.md.
 
 const { promises: fs } = require('fs');
 const { join } = require('path');
@@ -30,10 +38,40 @@ const WAYLAND_IDLE_HELPER_SRC = join(
   'wayland-idle-helper',
 );
 const WAYLAND_IDLE_HELPER_DEST = 'wayland-idle-helper';
+const MAC_ICON_SOURCE = join(__dirname, '..', 'build', 'icon.icns');
 
 const isTruthyEnv = (value) => value === '1' || value?.toLowerCase() === 'true';
 
+const verifyPackagedMacIcon = async (context) => {
+  const appName = context.packager.appInfo.productFilename;
+  const iconPath = join(
+    context.appOutDir,
+    `${appName}.app`,
+    'Contents',
+    'Resources',
+    'icon.icns',
+  );
+  const [sourceIcon, packagedIcon] = await Promise.all([
+    fs.readFile(MAC_ICON_SOURCE),
+    fs.readFile(iconPath),
+  ]);
+  if (!sourceIcon.equals(packagedIcon)) {
+    throw new Error(
+      `[afterPack] Packaged macOS icon ${iconPath} does not match ${MAC_ICON_SOURCE}`,
+    );
+  }
+
+  console.log(`[afterPack] Verified packaged macOS icon matches its source`);
+};
+
 async function afterPack(context) {
+  if (
+    context.electronPlatformName === 'darwin' ||
+    context.electronPlatformName === 'mas'
+  ) {
+    await verifyPackagedMacIcon(context);
+    return;
+  }
   if (context.electronPlatformName !== 'linux') return;
 
   const { appOutDir } = context;
@@ -118,3 +156,7 @@ async function afterPack(context) {
 }
 
 module.exports = afterPack;
+// Exposed for tools/verify-linux-wm-class.test.js. electron-builder resolves the
+// hook via the default function export, so extra properties on it are inert.
+module.exports.BIN_NAME = BIN_NAME;
+module.exports.RENAMED = RENAMED;

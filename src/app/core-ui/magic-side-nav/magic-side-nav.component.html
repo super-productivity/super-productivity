@@ -23,6 +23,7 @@
   <div
     class="nav-backdrop-mobile"
     (click)="toggleMobileNav()"
+    aria-hidden="true"
     [@mobileBackdrop]
   ></div>
 }
@@ -39,12 +40,38 @@
     [class.animate]="animateWidth()"
     [class.resizing]="isResizing()"
     [style.width.px]="sidenavWidth()"
-    role="navigation"
+    [attr.aria-label]="T.MH.PROJECT_MENU | translate"
+    [cdkTrapFocus]="isMobile()"
+    [cdkTrapFocusAutoCapture]="isMobile()"
     (keydown)="onNavKeyDown($event)"
     (swiperight)="onMobileNavSwipeRight()"
     swipeGesture
     [swipeEnabled]="swipeEnabled()"
   >
+    @if (isMobile()) {
+      <button
+        class="mobile-menu-close"
+        type="button"
+        (click)="toggleMobileNav()"
+        [attr.aria-label]="T.G.CLOSE | translate"
+        cdkFocusInitial
+      >
+        <span>{{ T.G.CLOSE | translate }}</span>
+        <svg
+          aria-hidden="true"
+          focusable="false"
+          width="20"
+          height="20"
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M4 4l12 12M16 4L4 16" />
+        </svg>
+      </button>
+    }
+
     <!-- Desktop Toggle Button (inside sidenav) -->
     @if (!isMobile()) {
       <button

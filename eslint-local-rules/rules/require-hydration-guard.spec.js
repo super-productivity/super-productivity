@@ -38,6 +38,20 @@ ruleTester.run('require-hydration-guard', rule, {
       `,
     },
 
+    // Selector with waitForSyncWindow guard (defers instead of dropping, #9348)
+    // - should NOT flag
+    {
+      code: `
+        createEffect(() =>
+          this._store$.select(mySelector).pipe(
+            distinctUntilChanged(),
+            waitForSyncWindow(this._hydrationStateService, 'myEffect$'),
+            tap(() => this.doSomething())
+          )
+        )
+      `,
+    },
+
     // Selector with skipDuringSync guard (deprecated alias) - should NOT flag
     {
       code: `

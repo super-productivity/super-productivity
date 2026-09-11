@@ -20,6 +20,7 @@ import com.superproductivity.superproductivity.service.BackgroundSyncCredentialS
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
 import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
+import com.superproductivity.superproductivity.service.RemoteTrackingNotificationHelper
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.widget.ReminderDoneQueue
@@ -234,6 +235,26 @@ class JavaScriptInterface(
             """{"taskId":"$taskId","elapsedMs":$elapsedMs}"""
         } else {
             "null"
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun updateRemoteTrackingNotification(
+        title: String,
+        text: String,
+        showStopAction: Boolean
+    ) {
+        safeCall("Failed to update remote tracking notification") {
+            RemoteTrackingNotificationHelper.show(activity, title, text, showStopAction)
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun cancelRemoteTrackingNotification() {
+        safeCall("Failed to cancel remote tracking notification") {
+            RemoteTrackingNotificationHelper.cancel(activity)
         }
     }
 
@@ -497,6 +518,21 @@ class JavaScriptInterface(
         safeCall("Failed to clear SuperSync credentials") {
             BackgroundSyncCredentialStore.clear(activity)
             SyncReminderScheduler.cancel(activity)
+        }
+    }
+
+    /**
+     * Mirrors the SuperSync E2EE password so background reminder sync can
+     * decrypt op payloads (encrypted end-to-end since #8670). Separate method
+     * from [setSuperSyncCredentials] so an old JS bundle paired with a new APK
+     * (and vice versa) keeps working. Empty string clears the password.
+     * NEVER log the password.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setSuperSyncEncryptionPassword(password: String) {
+        safeCall("Failed to set SuperSync encryption password") {
+            BackgroundSyncCredentialStore.setEncryptionPassword(activity, password)
         }
     }
 

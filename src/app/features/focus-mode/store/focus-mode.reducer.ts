@@ -91,13 +91,21 @@ export const focusModeReducer = createReducer(
   on(a.hideFocusOverlay, (state) => ({
     ...state,
     isOverlayShown: false,
+    // The preparation task is local to the overlay. Closing before the session
+    // starts cancels the countdown so reopening cannot continue without it.
+    mainState:
+      state.mainState === FocusMainUIState.Countdown && state.timer.purpose === null
+        ? FocusMainUIState.Preparation
+        : state.mainState,
   })),
 
   // Screen navigation
   on(a.selectFocusTask, (state) => ({
     ...state,
+    timer: createIdleTimer(),
     currentScreen: FocusScreen.Main,
     mainState: FocusMainUIState.Preparation,
+    _isOvertimeEnabled: false,
   })),
 
   on(a.selectFocusDuration, (state) => ({

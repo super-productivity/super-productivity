@@ -19,6 +19,8 @@
 - [[2.08-Choose-Sync-Backend]]
 - [[2.09-Configure-Sync-Backend]]
 - [[2.19-Sync-Proton-Drive-via-rclone]]
+- [[2.20-Import-from-Todoist]]
+- [[2.21-Manage-Plugins]]
 - [[2.13-Run-with-Docker]]
 
 ### Contributing to Super-Productivity
@@ -85,5 +87,4 @@
 - [[4.18-Reflection]]
 - [[4.19-Metrics]]
 - [[4.20-Task-Archiving]]
-- [[4.22-Quick-History]]
 - [[4.21-Worklog]]

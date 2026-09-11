@@ -1,6 +1,11 @@
 import { ConfigFormSection, IdleConfig } from '../global-config.model';
 import { T } from '../../../t.const';
 import { HelperClasses } from '../../../app.constants';
+import {
+  IDLE_MIN_IDLE_TIME_MS,
+  IDLE_PING_INTERVAL_MS,
+} from '../../../../../electron/shared-with-frontend/idle.const';
+import { msToString } from '../../../ui/duration/ms-to-string.pipe';
 
 export const IDLE_FORM_CFG: ConfigFormSection<IdleConfig> = {
   title: T.GCF.IDLE.TITLE,
@@ -32,8 +37,13 @@ export const IDLE_FORM_CFG: ConfigFormSection<IdleConfig> = {
       hideExpression: '!model.isEnableIdleTimeTracking',
       templateOptions: {
         required: true,
+        min: IDLE_MIN_IDLE_TIME_MS,
         label: T.GCF.IDLE.MIN_IDLE_TIME,
-        description: T.G.DURATION_DESCRIPTION,
+        description: T.GCF.IDLE.MIN_IDLE_TIME_DESCRIPTION,
+        descriptionTranslateParams: {
+          min: msToString(IDLE_MIN_IDLE_TIME_MS, true, true),
+          interval: msToString(IDLE_PING_INTERVAL_MS, true, true),
+        },
       },
     },
     {

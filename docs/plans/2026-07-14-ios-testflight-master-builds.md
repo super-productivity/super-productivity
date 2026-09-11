@@ -158,7 +158,7 @@ push:
   tags: ['v*']
 ```
 
-Update `docs/build-and-publish-notes.md`, `docs/apple-release-automation.md`, and
+Update `docs/release-and-publishing.md`, `docs/apple-release-automation.md`, and
 `.github/SECURITY-SETUP.md` with the routing table, internal-only boundary,
 credentials, version/build formulas, coalescing, timeout recovery, and rollback.
 

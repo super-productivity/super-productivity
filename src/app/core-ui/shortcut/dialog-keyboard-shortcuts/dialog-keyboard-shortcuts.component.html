@@ -1,0 +1,46 @@
+<h1 mat-dialog-title>{{ T.GCF.KEYBOARD.TITLE | translate }}</h1>
+
+<mat-dialog-content
+  class="keyboard-shortcuts-dialog-content"
+  tabindex="0"
+>
+  <table class="shortcuts-table">
+    <thead>
+      <tr>
+        <th scope="col">{{ T.GCF.KEYBOARD.COLUMN_ACTION | translate }}</th>
+        <th scope="col">{{ T.GCF.KEYBOARD.COLUMN_SHORTCUT | translate }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of rows(); track $index) {
+        @if (row.heading) {
+          <tr>
+            <th
+              class="group-heading"
+              colspan="2"
+              scope="colgroup"
+            >
+              {{ row.heading | translate }}
+            </th>
+          </tr>
+        } @else {
+          <tr>
+            <td class="action-name">{{ row.label | translate }}</td>
+            <td class="shortcut-cell">
+              <kbd class="shortcut-key">{{ row.combo }}</kbd>
+            </td>
+          </tr>
+        }
+      }
+    </tbody>
+  </table>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    mat-button
+    mat-dialog-close
+  >
+    {{ T.G.CLOSE | translate }}
+  </button>
+</mat-dialog-actions>

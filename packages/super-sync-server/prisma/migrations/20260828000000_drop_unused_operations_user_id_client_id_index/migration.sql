@@ -1,0 +1,12 @@
+-- Remove write amplification on the hottest table for an index no query can
+-- use. Downloads only exclude by client_id (clientId not-equals), which cannot
+-- seek this btree. Duplicate checks hit the (user_id, server_seq) unique key.
+-- Conflict detection uses (user_id, entity_type, entity_id, server_seq).
+-- Device lookups by client_id go to sync_devices, not operations.
+-- (user_id, received_at) is deliberately KEPT: the old-ops fresh-prefix probe
+-- orders by received_at to hold its measured 9-buffer plan (PR #9733, guarded
+-- by tests/integration/old-ops-probe-plan.integration.spec.ts).
+-- Reinstating is cheap if a future query filters operations by client_id.
+-- Single statement so prisma migrate deploy applies it natively without the
+-- out-of-band CONCURRENTLY recovery.
+DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_client_id_idx";

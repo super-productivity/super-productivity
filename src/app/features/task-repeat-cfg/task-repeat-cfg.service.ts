@@ -39,7 +39,10 @@ import {
   selectAllUnprocessedTaskRepeatCfgs,
   selectTaskRepeatCfgsForExactDay,
 } from './store/task-repeat-cfg.selectors';
-import { getRepeatableTaskId } from './get-repeatable-task-id.util';
+import {
+  getRepeatableSubTaskId,
+  getRepeatableTaskId,
+} from './get-repeatable-task-id.util';
 import { getDeadlineAutoPlanFields } from '../tasks/util/get-deadline-auto-plan-fields';
 
 @Injectable({
@@ -80,21 +83,23 @@ export class TaskRepeatCfgService {
     taskId: string,
     projectId: string | null,
     taskRepeatCfg: Omit<TaskRepeatCfgCopy, 'id'>,
-  ): void {
+  ): string {
     // Note: First occurrence calculation and lastTaskCreationDay update
     // is handled by the updateTaskAfterMakingItRepeatable$ effect (#5594)
+    const repeatCfgId = nanoid();
     this._store$.dispatch(
       addTaskRepeatCfgToTask({
         taskRepeatCfg: {
           ...taskRepeatCfg,
           projectId,
-          id: nanoid(),
+          id: repeatCfgId,
         },
         taskId,
         startTime: taskRepeatCfg.startTime,
         remindAt: taskRepeatCfg.remindAt,
       }),
     );
+    return repeatCfgId;
   }
 
   deleteTaskRepeatCfg(id: string): void {
@@ -350,9 +355,12 @@ export class TaskRepeatCfgService {
       taskRepeatCfg.subTaskTemplates &&
       taskRepeatCfg.subTaskTemplates.length > 0
     ) {
-      for (const subTask of taskRepeatCfg.subTaskTemplates) {
+      taskRepeatCfg.subTaskTemplates.forEach((subTask, i) => {
         const newSubTask = this._taskService.createNewTaskWithDefaults({
           title: subTask.title,
+          // Deterministic, so a second creation run for the same day is a
+          // no-op instead of a second set of subtasks (#9728).
+          id: getRepeatableSubTaskId(task.id, i),
           additional: {
             notes: subTask.notes ?? '',
             timeEstimate: subTask.timeEstimate ?? 0,
@@ -368,7 +376,7 @@ export class TaskRepeatCfgService {
             parentId: task.id,
           }),
         );
-      }
+      });
     }
 
     return createNewActions;

@@ -7,10 +7,30 @@ export interface NewOpsNotification {
   latestSeq: number;
 }
 
+/**
+ * Ephemeral tracking-presence message relayed by the server between this
+ * user's devices. `payload` is the opaque string minted by the producing
+ * client (E2E-encrypted when encryption is on) — parsing/decrypting is the
+ * TrackingPresenceService's job, not this transport's.
+ */
+export type PresenceWsMessage =
+  | {
+      kind: 'state';
+      payload: string;
+      /** Server-assigned per-user ordinal. */
+      ordinal: number;
+      /** False when the producing device's socket is gone. */
+      producerConnected: boolean;
+    }
+  | { kind: 'cmd'; payload: string };
+
 interface WsMessage {
   type: string;
   latestSeq?: number;
   timestamp?: number;
+  payload?: unknown;
+  ordinal?: number;
+  producerConnected?: boolean;
 }
 
 const MIN_RECONNECT_DELAY_MS = 1000;
@@ -19,7 +39,12 @@ const MAX_RECONNECT_ATTEMPTS = 50;
 const JITTER_FACTOR = 0.1;
 /** Must be greater than server ping interval (30s) */
 const HEARTBEAT_TIMEOUT_MS = 45_000;
-/** Close code indicating auth failure - do not reconnect */
+/**
+ * Close code indicating auth failure - do not reconnect. Wire contract: the
+ * server sends 4003 both on upgrade rejection (`websocket.routes.ts`) and on
+ * token revocation (`TOKEN_REVOKED_CLOSE_CODE` in
+ * `websocket-connection.service.ts`) — keep the three sites in step.
+ */
 const AUTH_FAILURE_CLOSE_CODE = 4003;
 /** Close code indicating the server-side per-user connection limit is reached */
 const TOO_MANY_CONNECTIONS_CLOSE_CODE = 4008;
@@ -45,6 +70,10 @@ export class SuperSyncWebSocketService implements OnDestroy {
   private _newOpsNotification$ = new Subject<NewOpsNotification>();
   readonly newOpsNotification$: Observable<NewOpsNotification> =
     this._newOpsNotification$.asObservable();
+
+  private _presenceMessage$ = new Subject<PresenceWsMessage>();
+  readonly presenceMessage$: Observable<PresenceWsMessage> =
+    this._presenceMessage$.asObservable();
 
   private _ws: WebSocket | null = null;
   private _reconnectAttempts = 0;
@@ -106,6 +135,7 @@ export class SuperSyncWebSocketService implements OnDestroy {
   ngOnDestroy(): void {
     this.disconnect();
     this._newOpsNotification$.complete();
+    this._presenceMessage$.complete();
   }
 
   private _startConnect(baseUrl: string, accessToken: string): Promise<void> {
@@ -239,7 +269,31 @@ export class SuperSyncWebSocketService implements OnDestroy {
       case 'connected':
         SyncLog.log(`SuperSyncWebSocketService: Server confirmed connection`);
         break;
+      case 'presence_state':
+        if (typeof msg.payload === 'string' && typeof msg.ordinal === 'number') {
+          this._presenceMessage$.next({
+            kind: 'state',
+            payload: msg.payload,
+            ordinal: msg.ordinal,
+            producerConnected: msg.producerConnected !== false,
+          });
+        }
+        break;
+      case 'presence_cmd':
+        if (typeof msg.payload === 'string') {
+          this._presenceMessage$.next({ kind: 'cmd', payload: msg.payload });
+        }
+        break;
     }
+  }
+
+  /**
+   * Sends an ephemeral presence message to the server for relay to this
+   * user's other devices. Fire-and-forget: silently dropped when the socket
+   * is not open — callers check `isConnected` first to skip the encoding.
+   */
+  sendPresence(type: 'presence_state' | 'presence_cmd', payload: string): void {
+    this._sendMessage({ type, payload });
   }
 
   private _sendMessage(msg: Record<string, unknown>): void {

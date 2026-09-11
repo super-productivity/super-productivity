@@ -22,7 +22,7 @@ jobs:
       plugins: ${{ steps.detect.outputs.plugins }}
       has-changes: ${{ steps.detect.outputs.has-changes }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -33,22 +33,32 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          # Plugins that have an `npm test` script configured.
-          PLUGINS=(automations azure-devops-issue-provider caldav-calendar-provider clickup-issue-provider google-calendar-provider sync-md todoist-import)
+          # Derive runnable suites from package manifests so new plugin tests
+          # cannot be omitted from CI.
+          PACKAGE_JSONS=(packages/plugin-dev/*/package.json)
+          jq empty "${PACKAGE_JSONS[@]}"
+          mapfile -t PLUGINS < <(
+            for package_json in "${PACKAGE_JSONS[@]}"; do
+              if jq -e '.scripts.test? | type == "string" and length > 0' "$package_json" > /dev/null; then
+                plugin_dir="${package_json%/package.json}"
+                printf '%s\n' "${plugin_dir##*/}"
+              fi
+            done
+          )
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             CHANGED=$(printf '%s\n' "${PLUGINS[@]}")
           else
             # Three-dot: changes on the PR branch only, ignoring commits that
             # landed on master after the PR forked.
-            DIFF=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
-            # Shared package change → run every plugin's tests.
-            if printf '%s\n' "$DIFF" | grep -qE '^packages/(plugin-api|vite-plugin)/'; then
+            DIFF=$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")
+            # Shared package or workflow change → run every plugin's tests.
+            if grep -qE '^packages/(plugin-api|vite-plugin)/|^\.github/workflows/plugin-tests\.yml$' <<< "$DIFF"; then
               CHANGED=$(printf '%s\n' "${PLUGINS[@]}")
             else
               CHANGED=""
               for p in "${PLUGINS[@]}"; do
-                if printf '%s\n' "$DIFF" | grep -q "^packages/plugin-dev/$p/"; then
+                if grep -q "^packages/plugin-dev/$p/" <<< "$DIFF"; then
                   CHANGED="${CHANGED}${p}"$'\n'
                 fi
               done
@@ -74,10 +84,10 @@ jobs:
       matrix:
         plugin: ${{ fromJson(needs.detect-changes.outputs.plugins) }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           persist-credentials: false
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: 22
       # work around for npm installs from git+https://github.com/johannesjo/J2M.git

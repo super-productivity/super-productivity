@@ -1,5 +1,4 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { PluginI18nService } from './plugin-i18n.service';
 import { GlobalConfigService } from '../features/config/global-config.service';
 
@@ -12,7 +11,6 @@ describe('PluginI18nService', () => {
     });
 
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
       providers: [
         PluginI18nService,
         { provide: GlobalConfigService, useValue: globalConfigSpy },

@@ -6,6 +6,7 @@ import {
   EMERGENCY_COMPACTION_RETENTION_MS,
   LOCK_NAMES,
   SLOW_COMPACTION_THRESHOLD_MS,
+  STARTUP_COMPACTION_OP_THRESHOLD,
 } from '../core/operation-log.const';
 import { OperationLogStoreService } from './operation-log-store.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
@@ -18,6 +19,7 @@ import { OperationCaptureService } from '../capture/operation-capture.service';
 import { getPhantomChangeRisk } from '../capture/phantom-change-guard.util';
 import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
+import { TabSeqFrontierService } from './tab-seq-frontier.service';
 
 /**
  * Manages the compaction (garbage collection) of the operation log.
@@ -36,9 +38,60 @@ export class OperationLogCompactionService {
   private operationCapture = inject(OperationCaptureService);
   private writeFlushService = inject(OperationWriteFlushService);
   private hydrationState = inject(HydrationStateService);
+  private tabSeqFrontier = inject(TabSeqFrontierService);
 
   async compact(): Promise<boolean> {
     return this._doCompact(COMPACTION_RETENTION_MS, false);
+  }
+
+  /**
+   * Startup safety net for op-log growth (#8336): threshold compaction is
+   * driven by an in-memory counter that resets every restart (the persisted
+   * counter is never incremented in production), so sessions that stay under
+   * COMPACTION_THRESHOLD never prune and the log grows unbounded across
+   * restarts. Checks the actual op count and runs a compaction when the log
+   * is genuinely large AND holds something prunable.
+   *
+   * Called (fire-and-forget, never awaited on the boot path) by
+   * OperationLogHydratorService AFTER hydrateStore()'s finally has dropped the
+   * hydration-in-progress flag — the #9084 guard skips any compaction started
+   * while it is up.
+   *
+   * Fully self-contained: never rejects — failures are logged and swallowed,
+   * never escalated to the COMPACTION_FAILED snack/reload prompt (interrupting
+   * startup with a reload dialog is worse UX than a silent retry on the next
+   * boot). Known gap: a restart-heavy user (the very population this targets)
+   * whose compaction keeps failing won't be notified, since they may never
+   * cross COMPACTION_THRESHOLD in-session to reach the escalating path.
+   * Accepted — the swallow is safe (the log grows but stays correct) and the
+   * check re-runs every boot.
+   */
+  async compactIfBloated(): Promise<void> {
+    try {
+      const opCount = await this.opLogStore.countOps();
+      if (opCount <= STARTUP_COMPACTION_OP_THRESHOLD) {
+        return;
+      }
+      // Compaction can only ever prune synced ops (the rejected-op branch of
+      // the delete predicate is likewise reached via sync flows), so a log
+      // that has never synced holds nothing prunable — without this gate a
+      // local-only client past the threshold would pay a full snapshot write
+      // + op-store scan on EVERY boot and delete nothing, forever.
+      if (!(await this.opLogStore.hasSyncedOps())) {
+        OpLog.normal(
+          `OperationLogCompactionService: op-log has ${opCount} ops but none are ` +
+            'synced — skipping startup compaction (nothing is prunable)',
+        );
+        return;
+      }
+      OpLog.normal(
+        `OperationLogCompactionService: op-log has ${opCount} ops ` +
+          `(> ${STARTUP_COMPACTION_OP_THRESHOLD}) — triggering startup compaction`,
+      );
+      await this.compact();
+    } catch (e) {
+      OpLog.warn('OperationLogCompactionService: startup compaction attempt failed', e);
+    }
   }
 
   /**
@@ -68,6 +121,19 @@ export class OperationLogCompactionService {
     if (this.operationCapture.hasUnrecoveredPersistFailure()) {
       OpLog.warn(
         'OperationLogCompactionService: Skipping compaction — an unrecovered persist failure left live state ahead of the op log (#8751)',
+      );
+      return false;
+    }
+    // Same fast-path rationale for the sticky #9438 divergence flag: it only
+    // clears on re-hydration/baseline install, compact() re-fires after every
+    // write once the counter sits at the threshold, and each attempt would
+    // otherwise pay the flush + cross-tab lock + state capture below before
+    // the in-lock guard skips anyway. The scalar frontier check stays in-lock
+    // (it needs getLastSeq()); only the sticky half can be hoisted. Emergency
+    // compaction is exempt from the #9438 guard, so it must not bail here.
+    if (!isEmergency && this.tabSeqFrontier.hasKnownForeignWrites()) {
+      OpLog.warn(
+        'OperationLogCompactionService: Skipping compaction — sticky concurrent-tab divergence (#9438)',
       );
       return false;
     }
@@ -133,6 +199,27 @@ export class OperationLogCompactionService {
         return false;
       }
 
+      // GUARD (#9084): hydration dispatches the snapshot's loadAllData and
+      // only later replays the tail ops on top of it (await boundaries, no
+      // lock in between). Compacting inside that gap would cache state
+      // missing the tail ops' effects under a lastAppliedOpSeq that covers
+      // them — and prune the very ops the next boot needs to recover them.
+      // The guards above don't see this: the tail ops are already terminal
+      // ('applied' in their original session), nothing pending or deferred.
+      // Reachable via re-entrant hydration (PluginAPI.reInitData()) in a
+      // session past the compaction threshold, or the legacy-snapshot
+      // compact() in RemoteOpsProcessingService; on a cold boot repair
+      // effects are held off by skipDuringSyncWindow() until after
+      // hydrateStore() resolves. Skipping is always safe: the op-log stays
+      // the source of truth and the next over-threshold write retriggers
+      // compaction once hydration completes.
+      if (this.hydrationState.isHydrationInProgress()) {
+        OpLog.warn(
+          `OperationLogCompactionService: Skipping ${label}compaction — hydration replay in progress (#9084)`,
+        );
+        return false;
+      }
+
       // 1. Get current state from NgRx store
       const currentState = this.stateSnapshot.getStateSnapshotForOperationLog();
       this.checkCompactionTimeout(startTime, `${label}state snapshot`);
@@ -164,6 +251,28 @@ export class OperationLogCompactionService {
       // 3. Get lastSeq IMMEDIATELY before writing cache to minimize race window
       // This ensures new ops written after this point have seq > lastSeq
       const lastSeq = await this.opLogStore.getLastSeq();
+
+      // GUARD (#9438): lastSeq is the global max across the SHARED store — a
+      // concurrent tab's op is counted there while its effect is absent from
+      // this tab's state. Anchoring the cache past it would make the next
+      // boot's tail replay silently skip that op (and step 7 would prune ops
+      // behind the false anchor). Emergency compaction is exempt so quota
+      // recovery cannot wedge on a diverged tab — a real trade-off: a
+      // diverged emergency compact could still write the stale anchor this
+      // guard prevents (permanent op skip, NOT the bounded re-replay window
+      // the bare-lock note below accepts). Today that is unreachable in the
+      // quota path (the #8751 phantom guard skips deterministically there —
+      // see the reachability note in operation-log.effects.ts); re-evaluate
+      // this exemption if emergency compaction ever becomes completable.
+      if (!isEmergency && !this.tabSeqFrontier.isSaveSafeAt(lastSeq)) {
+        OpLog.warn(
+          'OperationLogCompactionService: Skipping compaction — the op log ' +
+            "contains writes from a concurrent tab that are not in this tab's " +
+            'state (#9438)',
+          { lastSeq, frontier: this.tabSeqFrontier.frontierSeq },
+        );
+        return false;
+      }
 
       // 4. Extract entity keys for conflict detection after compaction
       // This allows us to distinguish between entities that existed at snapshot time

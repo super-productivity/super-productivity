@@ -465,17 +465,26 @@ async function loginWithPasskey() {
   }
 }
 
+/**
+ * The consent checkbox is only rendered when this instance publishes legal pages. The
+ * generic image ships no Terms of Service, so on an unconfigured instance there is
+ * nothing to consent to: return undefined and omit the field from the request entirely.
+ */
+function readTermsAccepted() {
+  return document.getElementById('register-terms')?.checked;
+}
+
 async function registerWithPasskey() {
   const email = document.getElementById('register-email').value;
-  const termsAccepted = document.getElementById('register-terms').checked;
+  const termsAccepted = readTermsAccepted();
 
   if (!email) {
     showMessage('Please enter your email address', 'error');
     return;
   }
 
-  if (!termsAccepted) {
-    showMessage('You must accept the Terms of Service', 'error');
+  if (termsAccepted === false) {
+    showMessage('You must accept the linked legal documents to register', 'error');
     return;
   }
 
@@ -487,6 +496,8 @@ async function registerWithPasskey() {
     const optionsRes = await fetch(`${API_BASE}/register/passkey/options`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      // JSON.stringify omits undefined-valued properties, so an instance with no legal
+      // pages simply sends { email }.
       body: JSON.stringify({ email, termsAccepted }),
     });
 
@@ -552,15 +563,15 @@ async function registerWithPasskey() {
 
 async function registerWithMagicLink() {
   const email = document.getElementById('register-email').value;
-  const termsAccepted = document.getElementById('register-terms').checked;
+  const termsAccepted = readTermsAccepted();
 
   if (!email) {
     showMessage('Please enter your email address', 'error');
     return;
   }
 
-  if (!termsAccepted) {
-    showMessage('You must accept the Terms of Service', 'error');
+  if (termsAccepted === false) {
+    showMessage('You must accept the linked legal documents to register', 'error');
     return;
   }
 
@@ -571,6 +582,8 @@ async function registerWithMagicLink() {
     const res = await fetch(`${API_BASE}/register/magic-link`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      // JSON.stringify omits undefined-valued properties, so an instance with no legal
+      // pages simply sends { email }.
       body: JSON.stringify({ email, termsAccepted }),
     });
 

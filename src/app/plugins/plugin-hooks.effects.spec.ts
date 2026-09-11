@@ -21,6 +21,7 @@ import { PluginUserData } from './plugin-persistence.model';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
 import { selectLocalizationConfig } from '../features/config/store/global-config.reducer';
 import { LanguageCode } from '../core/locale.constants';
+import { BeforeFinishDayService } from '../features/before-finish-day/before-finish-day.service';
 
 describe('PluginHooksEffects', () => {
   let effects: PluginHooksEffects;
@@ -581,6 +582,35 @@ describe('PluginHooksEffects', () => {
         sub.unsubscribe();
         done();
       }, 0);
+    });
+  });
+
+  describe('finishDay hook (#9214)', () => {
+    // NOT todayStr(): daily-summary.component.html has a second Finish Day
+    // button for `!isForToday`, so the day being finished is often not today.
+    it('fires FINISH_DAY with the day actually being finished', async () => {
+      pluginServiceMock.dispatchHook.and.returnValue(Promise.resolve());
+
+      const result =
+        await TestBed.inject(BeforeFinishDayService).executeActions('2026-09-03');
+
+      expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
+        PluginHooks.FINISH_DAY,
+        { date: '2026-09-03' },
+      );
+      expect(result).toBe('SUCCESS');
+    });
+
+    // dispatchHook cannot actually reject (PluginHooksService swallows handler
+    // errors behind a timeout), so this pins the contract the effect relies on:
+    // even a rejecting dispatch must not propagate out of finishing the day.
+    it('does not block finishing the day when a plugin throws', async () => {
+      pluginServiceMock.dispatchHook.and.returnValue(Promise.reject(new Error('boom')));
+
+      const result =
+        await TestBed.inject(BeforeFinishDayService).executeActions('2026-09-03');
+
+      expect(result).toBe('ERROR');
     });
   });
 });

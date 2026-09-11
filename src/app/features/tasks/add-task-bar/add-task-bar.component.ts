@@ -1,4 +1,5 @@
 import {
+  afterRenderEffect,
   AfterViewInit,
   ChangeDetectionStrategy,
   Component,
@@ -44,7 +45,8 @@ import {
   timeout,
   withLatestFrom,
 } from 'rxjs/operators';
-import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
+import { IosKeyboardService } from '../../../core/theme/ios-keyboard.service';
 import { BehaviorSubject, combineLatest, from, Observable } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
@@ -61,6 +63,8 @@ import { truncate } from '../../../util/truncate';
 import { SnackService } from '../../../core/snack/snack.service';
 import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { AddTaskBarParserService } from './add-task-bar-parser.service';
+import { rollWeekendDateForRepeat } from './roll-weekend-date-for-repeat';
+import { ShortSyntaxSegment, splitTextByRanges } from '../short-syntax-ranges';
 import { AddTaskBarActionsComponent } from './add-task-bar-actions/add-task-bar-actions.component';
 import { MarkdownPasteService } from '../markdown-paste.service';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
@@ -72,6 +76,7 @@ import { MentionConfigService } from '../mention-config.service';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DEFAULT_TASK_REPEAT_CFG } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { getQuickSettingUpdates } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-quick-setting-updates';
+import { getIntervalRepeatUpdates } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-interval-repeat-updates';
 import { getDefaultSkipOverdue } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/get-default-skip-overdue';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ShortSyntaxTag, shortSyntaxToTags } from './short-syntax-to-tags';
@@ -86,6 +91,12 @@ import { DateService } from '../../../core/date/date.service';
 import { MenuTreeService } from '../../menu-tree/menu-tree.service';
 import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-option-row.component';
 
+export interface TaskAddEvent {
+  taskId: string;
+  isAddToBottom: boolean;
+  isNewTask: boolean;
+}
+
 @Component({
   selector: 'add-task-bar',
   templateUrl: './add-task-bar.component.html',
@@ -93,6 +104,15 @@ import { SelectOptionRowComponent } from '../../../ui/select-option-row/select-o
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [blendInOutAnimation, expandFadeAnimation],
   standalone: true,
+  /* eslint-disable @typescript-eslint/naming-convention*/
+  host: {
+    // The global bar is fixed and outside the CDK overlay layer, so it gets its
+    // iOS keyboard offset here rather than from <html> (see IosKeyboardService
+    // for why nothing is written there). Null leaves the `:root` default.
+    '[style.--keyboard-overlay-offset]':
+      'isGlobalBarVariant() ? iosKeyboardService.keyboardOverlayOffset() : null',
+  },
+  /* eslint-enable @typescript-eslint/naming-convention*/
   imports: [
     FormsModule,
     CdkTextareaAutosize,
@@ -132,6 +152,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly _dateService = inject(DateService);
   private readonly _menuTreeService = inject(MenuTreeService);
   readonly stateService = inject(AddTaskBarStateService);
+  readonly iosKeyboardService = inject(IosKeyboardService);
 
   T = T;
 
@@ -147,7 +168,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   planForDay = input<string>();
 
   // Outputs
-  afterTaskAdd = output<{ taskId: string; isAddToBottom: boolean }>();
+  afterTaskAdd = output<TaskAddEvent>();
   closed = output<void>();
   done = output<void>();
 
@@ -268,8 +289,63 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   // View children
   inputEl = viewChild<ElementRef<HTMLTextAreaElement>>('inputEl');
   noteEl = viewChild<ElementRef<HTMLTextAreaElement>>('noteEl');
+  highlightEl = viewChild<ElementRef<HTMLElement>>('highlightEl');
   taskAutoCompleteEl = viewChild<MatAutocomplete>('taskAutoCompleteEl');
   actionsComponent = viewChild(AddTaskBarActionsComponent);
+
+  // Segments of the raw input for the highlight overlay behind the textarea.
+  // Ranges are pinned to the text they were parsed from (the parse is async),
+  // so they are only ever applied to that exact text or to the part of a newer
+  // text they cannot have moved in.
+  highlightSegments = computed<ShortSyntaxSegment[]>(() => {
+    const txt = this.stateService.inputTxt();
+    if (!txt || this.isSearchMode()) {
+      return [];
+    }
+    const highlight = this.stateService.syntaxHighlight();
+    if (!highlight || highlight.ranges.length === 0) {
+      return [{ text: txt, type: null }];
+    }
+    if (highlight.forText === txt) {
+      return splitTextByRanges(txt, highlight.ranges);
+    }
+    // The parse is async, so every keystroke renders once with ranges from the
+    // previous text. Dropping them all blanks the highlights for a frame
+    // (visible flicker), so keep the ones the edit cannot have moved: those
+    // that end inside the unchanged common prefix. A highlight is then never
+    // mispositioned, only at most one keystroke stale.
+    let common = 0;
+    const max = Math.min(highlight.forText.length, txt.length);
+    while (common < max && highlight.forText[common] === txt[common]) {
+      common++;
+    }
+    const stillValid = highlight.ranges.filter((r) => r.end <= common);
+    return stillValid.length
+      ? splitTextByRanges(txt, stillValid)
+      : [{ text: txt, type: null }];
+  });
+
+  // The overlay must track the textarea's scroll position (cdkTextareaAutosize
+  // caps growth at 4 rows, after which the field scrolls)
+  syncHighlightScroll(): void {
+    const inputElement = this.inputEl()?.nativeElement;
+    const overlay = this.highlightEl()?.nativeElement;
+    if (inputElement && overlay) {
+      overlay.scrollTop = inputElement.scrollTop;
+    }
+  }
+
+  // Once the field scrolls, the textarea's caret-scroll happens before the
+  // overlay re-renders, so the (scroll)-listener alone would clamp against
+  // still-short overlay content — re-sync after each segments render.
+  private readonly _overlayScrollSyncEffect = afterRenderEffect(() => {
+    this.highlightSegments();
+    this.syncHighlightScroll();
+  });
+
+  // Injected rather than read from the constant so the two focus paths below
+  // are reachable from tests (see IS_ANDROID_WEB_VIEW_TOKEN).
+  private readonly _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
 
   private _focusTimeout?: number;
   private _autocompleteTimeout?: number;
@@ -478,10 +554,29 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         }
       }
 
+      // One day for the whole submit. A Monday-to-Friday schedule has no
+      // weekend occurrence, so a weekend day is one the task never starts on:
+      // the occurrence engine moves it to the following Monday off the config's
+      // weekday flags (getFirstRepeatOccurrence), while the weekend day stays
+      // behind in the config's `startDate` — where the repeat dialog re-derives
+      // every later quick setting from it, turning "weekly on current weekday"
+      // into a Saturday recurrence.
+      //
+      // Rolled here rather than on the date chip, so the day the user picked
+      // stays the day the bar shows and the repeat menu's labels are built
+      // from. Computed once, so the task's due day and the config's start date
+      // cannot disagree across a logical-day rollover between two `todayStr()`
+      // calls. The effects would correct the due day anyway; writing it here
+      // just spares the user a task that first appears on the Saturday.
+      const startDay = rollWeekendDateForRepeat(
+        state.date || this._dateService.todayStr(),
+        state.repeat,
+      );
+
       if (state.date) {
         // Parse date components to create date in local timezone
         // This avoids timezone issues when parsing date strings like "2024-01-15"
-        const [year, month, day] = state.date.split('-').map(Number);
+        const [year, month, day] = startDay.split('-').map(Number);
         const date = new Date(year, month - 1, day);
 
         if (state.time) {
@@ -491,12 +586,12 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           taskData.dueWithTime = date.getTime();
           taskData.hasPlannedTime = true;
         } else {
-          taskData.dueDay = state.date;
+          taskData.dueDay = startDay;
         }
-      } else if (state.repeatQuickSetting && state.repeatQuickSetting !== 'CUSTOM') {
-        // When a repeat preset is selected without an explicit date, set dueDay to today
+      } else if (state.repeat && state.repeat.type !== 'DIALOG') {
+        // When a recurrence is set without an explicit date, set dueDay to today
         // so the first task instance appears as today's occurrence instead of staying in inbox
-        taskData.dueDay = this._dateService.todayStr();
+        taskData.dueDay = startDay;
       } else {
         // Explicitly set dueDay to undefined when no date is selected
         // This prevents automatic assignment of today's date in TODAY context
@@ -520,9 +615,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       // effect already handles scheduling via scheduleTaskWithTime, so calling both
       // would cause double-scheduling.
       const isTimedRepeatTask =
-        !!state.repeatQuickSetting &&
-        state.repeatQuickSetting !== 'CUSTOM' &&
-        !!state.time;
+        !!state.repeat && state.repeat.type !== 'DIALOG' && !!state.time;
       if (taskData.dueWithTime && !isTimedRepeatTask) {
         this._taskService
           .getByIdOnce$(taskId)
@@ -538,20 +631,31 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       }
 
       // Create repeat config if a repeat setting was selected
-      if (state.repeatQuickSetting) {
-        if (state.repeatQuickSetting === 'CUSTOM') {
+      if (state.repeat) {
+        const repeat = state.repeat;
+        if (repeat.type === 'DIALOG') {
           this._openRepeatDialogForTask(taskId, resolvedRemindOption);
         } else {
-          const startDate = state.date || this._dateService.todayStr();
-          const referenceDate = dateStrToUtcDate(startDate);
-          const quickSettingUpdates =
-            getQuickSettingUpdates(state.repeatQuickSetting, referenceDate) || {};
+          const referenceDate = dateStrToUtcDate(startDay);
+          // An interval ("@every 2 days") has no preset to expand — it maps to a
+          // CUSTOM config carrying the cycle and interval directly.
+          const repeatUpdates =
+            repeat.type === 'INTERVAL'
+              ? getIntervalRepeatUpdates(
+                  repeat.repeatCycle,
+                  repeat.repeatEvery,
+                  referenceDate,
+                )
+              : {
+                  quickSetting: repeat.quickSetting,
+                  ...getQuickSettingUpdates(repeat.quickSetting, referenceDate),
+                };
           const newRepeatCfg = {
             ...DEFAULT_TASK_REPEAT_CFG,
-            startDate,
-            ...quickSettingUpdates,
+            startDate: startDay,
+            ...repeatUpdates,
             title,
-            quickSetting: state.repeatQuickSetting,
+            notes: taskData.notes,
             tagIds: taskData.tagIds ?? [],
             defaultEstimate: state.estimate || 0,
             startTime: state.time || undefined,
@@ -566,7 +670,11 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
         }
       }
 
-      this.afterTaskAdd.emit({ taskId, isAddToBottom: this.isAddToBottom() });
+      this.afterTaskAdd.emit({
+        taskId,
+        isAddToBottom: this.isAddToBottom(),
+        isNewTask: true,
+      });
       this._resetAfterAdd();
     } finally {
       this._isAddingTask = false;
@@ -577,10 +685,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     // Clicking the + button moves focus onto the button, which then vanishes
     // once the input clears — refocus the input so the next task can be typed
     // right away. (The Enter-key submit path never loses input focus.)
-    // Skip the refocus for CUSTOM repeat: addTask() opens the repeat-config
-    // dialog asynchronously, and refocusing would steal focus from it.
-    const willOpenRepeatDialog =
-      this.stateService.state().repeatQuickSetting === 'CUSTOM';
+    // Skip the refocus for the custom-config entry: addTask() opens the
+    // repeat-config dialog asynchronously, and refocusing would steal focus
+    // from it.
+    const willOpenRepeatDialog = this.stateService.state().repeat?.type === 'DIALOG';
     void this.addTask().finally(() => {
       if (!willOpenRepeatDialog) {
         this.focusInput();
@@ -610,7 +718,9 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     const planForDay = this.planForDay();
     let didPlanForDay = false;
 
-    if (suggestion.taskId && suggestion.isFromOtherContextAndTagOnlySearch) {
+    if (suggestion.taskId && this.isNoDefaults() && !suggestion.isArchivedTask) {
+      taskId = suggestion.taskId;
+    } else if (suggestion.taskId && suggestion.isFromOtherContextAndTagOnlySearch) {
       if (planForDay) {
         await this._planTaskForCurrentDay(suggestion.taskId);
         didPlanForDay = true;
@@ -671,6 +781,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       this.afterTaskAdd.emit({
         taskId,
         isAddToBottom: false,
+        isNewTask: !suggestion.taskId,
       });
     }
 
@@ -912,31 +1023,46 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       window.clearTimeout(this._focusTimeout);
     }
 
+    const focus = (): void => {
+      const inputElement = this.inputEl()?.nativeElement;
+      if (!inputElement) {
+        return;
+      }
+      inputElement.focus();
+      if (selectAll) {
+        inputElement.select();
+      }
+    };
+
     document.body.focus();
     this.inputEl()?.nativeElement.focus();
-    window.setTimeout(() => this.inputEl()?.nativeElement.focus());
 
-    // Set new timeout
-    if (IS_ANDROID_WEB_VIEW) {
+    if (this._isAndroidWebView) {
+      // Unchanged: this web view needs the repeated blur → focus cycle to raise
+      // the IME reliably, and it has no iOS focusin scroll handler to disturb.
+      window.setTimeout(() => this.inputEl()?.nativeElement.focus());
       this._focusTimeout = window.setTimeout(() => {
         document.body.focus();
-        this.inputEl()?.nativeElement.focus();
-        if (selectAll) {
-          this.inputEl()?.nativeElement.select();
-        }
+        focus();
         this._focusTimeout = undefined;
       }, 200);
-    } else {
-      this._focusTimeout = window.setTimeout(() => {
-        const inputElement = this.inputEl()?.nativeElement;
-        if (inputElement) {
-          inputElement.focus();
-          if (selectAll) {
-            inputElement.select();
-          }
-        }
-      }, 50);
+      return;
     }
+
+    if (selectAll) {
+      this.inputEl()?.nativeElement.select();
+    }
+    // A web view can drop a focus() issued while the bar is still animating in,
+    // so retry once — but only when the field really did not take focus:
+    // re-focusing an already-focused input re-fires the global focusin handler,
+    // which re-runs its scroll-into-view in the middle of the iOS keyboard
+    // animation, one of the sources of the jumping in #9779.
+    this._focusTimeout = window.setTimeout(() => {
+      this._focusTimeout = undefined;
+      if (document.activeElement !== this.inputEl()?.nativeElement) {
+        focus();
+      }
+    }, 50);
   }
 
   toggleNote(): void {

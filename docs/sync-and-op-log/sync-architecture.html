@@ -1,0 +1,2777 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1"
+    />
+    <meta
+      name="color-scheme"
+      content="light"
+    />
+    <meta
+      name="description"
+      content="A maintainer field guide to Super Productivity's operation-log sync architecture."
+    />
+    <title>Sync architecture maintainer field guide</title>
+    <link
+      rel="icon"
+      href="data:,"
+    />
+    <style>
+      /*
+       * This file is intentionally standalone and does not load the Angular app
+       * bundle, so its portable documentation palette is defined locally. Every
+       * component below consumes these semantic tokens rather than raw values.
+       */
+      :root {
+        --canvas: #f2efe7;
+        --surface: #fffdf7;
+        --surface-alt: #e8edf0;
+        --ink: #16212a;
+        --ink-soft: #46545f;
+        --line: #aeb8bd;
+        --line-strong: #61717b;
+        --blue: #155f8f;
+        --blue-soft: #d8e8f1;
+        --green: #236748;
+        --green-soft: #dcebe2;
+        --amber: #8b5b00;
+        --amber-soft: #f4e6bd;
+        --red: #8b302b;
+        --red-soft: #f3dfdc;
+        --purple: #5d4b85;
+        --purple-soft: #e8e2f2;
+        --shadow: 0 10px 28px rgb(22 33 42 / 8%);
+        --mono: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+        --sans:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          sans-serif;
+        --space-1: 0.25rem;
+        --space-2: 0.5rem;
+        --space-3: 0.75rem;
+        --space-4: 1rem;
+        --space-5: 1.5rem;
+        --space-6: 2rem;
+        --space-7: 3rem;
+        --space-8: 4rem;
+        --focus-width: 3px;
+        --focus-offset: 3px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(rgb(22 33 42 / 4%) 1px, transparent 1px),
+          linear-gradient(90deg, rgb(22 33 42 / 4%) 1px, transparent 1px), var(--canvas);
+        background-size: 24px 24px;
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 1rem;
+        line-height: 1.55;
+      }
+
+      a {
+        color: var(--blue);
+        text-decoration-thickness: 0.1em;
+        text-underline-offset: 0.18em;
+      }
+
+      a:hover {
+        text-decoration-thickness: 0.16em;
+      }
+
+      a:focus-visible,
+      summary:focus-visible,
+      .table-wrap:focus-visible {
+        outline: var(--focus-width) solid var(--amber);
+        outline-offset: var(--focus-offset);
+      }
+
+      code,
+      pre {
+        font-family: var(--mono);
+      }
+
+      code {
+        overflow-wrap: anywhere;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      .skip-link {
+        position: fixed;
+        z-index: 3;
+        top: var(--space-3);
+        left: var(--space-3);
+        padding: var(--space-2) var(--space-4);
+        transform: translateY(-180%);
+        border: 2px solid var(--ink);
+        background: var(--surface);
+        color: var(--ink);
+        font-weight: 700;
+      }
+
+      .skip-link:focus {
+        transform: translateY(0);
+      }
+
+      .shell {
+        width: min(1180px, calc(100% - 2rem));
+        margin-inline: auto;
+      }
+
+      .masthead {
+        padding: var(--space-8) 0 var(--space-6);
+        border-bottom: 3px solid var(--ink);
+      }
+
+      .kicker,
+      .section-kicker,
+      .card-label,
+      .status-pill,
+      .legend-label,
+      .step-no {
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .kicker,
+      .section-kicker {
+        color: var(--blue);
+      }
+
+      .kicker {
+        margin: 0 0 var(--space-4);
+      }
+
+      h1 {
+        max-width: 14ch;
+        margin: 0;
+        font-size: clamp(2.75rem, 7vw, 5.8rem);
+        line-height: 0.94;
+        letter-spacing: -0.055em;
+      }
+
+      .lede {
+        max-width: 76ch;
+        margin: var(--space-5) 0 0;
+        color: var(--ink-soft);
+        font-size: clamp(1.05rem, 2vw, 1.28rem);
+      }
+
+      .status-strip,
+      .legend,
+      .plain-list {
+        padding: 0;
+        list-style: none;
+      }
+
+      .status-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        margin: var(--space-6) 0 0;
+      }
+
+      .status-pill {
+        min-height: 2rem;
+        padding: 0.35rem 0.65rem;
+        border: 1px solid var(--line-strong);
+        background: var(--surface);
+      }
+
+      .status-pill.core {
+        border-color: var(--green);
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .status-pill.guard {
+        border-color: var(--amber);
+        background: var(--amber-soft);
+        color: var(--amber);
+      }
+
+      .status-pill.boundary {
+        border-color: var(--purple);
+        background: var(--purple-soft);
+        color: var(--purple);
+      }
+
+      .contents {
+        position: sticky;
+        z-index: 2;
+        top: 0;
+        border-bottom: 1px solid var(--line-strong);
+        background: rgb(255 253 247 / 94%);
+        backdrop-filter: blur(8px);
+      }
+
+      .contents ul {
+        display: flex;
+        justify-content: space-between;
+        gap: var(--space-2);
+        margin: 0;
+        padding: var(--space-2) 0;
+        overflow-x: auto;
+        list-style: none;
+        scrollbar-width: thin;
+      }
+
+      .contents a {
+        display: inline-flex;
+        min-height: 2.75rem;
+        align-items: center;
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      main {
+        padding-bottom: var(--space-8);
+      }
+
+      section {
+        padding: var(--space-7) 0;
+        border-bottom: 1px solid var(--line-strong);
+        scroll-margin-top: 4.5rem;
+      }
+
+      .section-head {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(15rem, 1fr);
+        gap: var(--space-5);
+        align-items: end;
+        margin-bottom: var(--space-6);
+      }
+
+      .section-kicker {
+        margin: 0 0 var(--space-2);
+      }
+
+      h2 {
+        margin: 0;
+        font-size: clamp(1.9rem, 4vw, 3rem);
+        line-height: 1.05;
+        letter-spacing: -0.035em;
+      }
+
+      h3,
+      h4 {
+        margin-top: 0;
+        line-height: 1.25;
+      }
+
+      h3 {
+        font-size: 1.05rem;
+      }
+
+      h4 {
+        font-size: 0.95rem;
+      }
+
+      p:last-child,
+      ul:last-child,
+      ol:last-child {
+        margin-bottom: 0;
+      }
+
+      .section-summary {
+        margin: 0;
+        color: var(--ink-soft);
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2) var(--space-5);
+        margin: 0 0 var(--space-5);
+        color: var(--ink-soft);
+        font-size: 0.9rem;
+      }
+
+      .legend li {
+        display: flex;
+        gap: var(--space-2);
+        align-items: baseline;
+      }
+
+      .legend-label.core {
+        color: var(--green);
+      }
+
+      .legend-label.deep {
+        color: var(--purple);
+      }
+
+      .legend-label.source {
+        color: var(--blue);
+      }
+
+      .route-note {
+        margin: 0 0 var(--space-6);
+        padding: var(--space-3) var(--space-4);
+        border-left: 0.3rem solid var(--green);
+        background: var(--green-soft);
+      }
+
+      .route-note strong {
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .spine-flow {
+        margin-bottom: var(--space-4);
+      }
+
+      .local-link-note {
+        margin: 0 0 var(--space-6);
+        color: var(--ink-soft);
+        font-size: 0.88rem;
+      }
+
+      .card-grid,
+      .truth-grid,
+      .provider-grid,
+      .source-grid {
+        display: grid;
+        gap: var(--space-4);
+      }
+
+      .card-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .truth-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .provider-grid,
+      .source-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .card,
+      .panel,
+      .provider-card,
+      .source-card {
+        border: 1px solid var(--line);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .card,
+      .provider-card,
+      .source-card {
+        padding: var(--space-4);
+      }
+
+      .card-label {
+        display: block;
+        margin-bottom: var(--space-2);
+        color: var(--blue);
+      }
+
+      .card p,
+      .provider-card p,
+      .source-card p {
+        color: var(--ink-soft);
+      }
+
+      .card.local,
+      .provider-card.local {
+        border-top: 4px solid var(--green);
+      }
+
+      .card.remote,
+      .provider-card.remote {
+        border-top: 4px solid var(--blue);
+      }
+
+      .card.guard,
+      .provider-card.guard {
+        border-top: 4px solid var(--amber);
+      }
+
+      .card.special,
+      .provider-card.special {
+        border-top: 4px solid var(--purple);
+      }
+
+      .system-map {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 3rem minmax(0, 1.15fr) 3rem minmax(0, 1fr);
+        gap: var(--space-3);
+        align-items: stretch;
+      }
+
+      .map-column {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        border: 2px solid var(--line-strong);
+        background: var(--surface);
+      }
+
+      .map-column > header {
+        padding: var(--space-3) var(--space-4);
+        border-bottom: 1px solid var(--line);
+        background: var(--surface-alt);
+      }
+
+      .map-column > header p,
+      .map-column > header h3 {
+        margin: 0;
+      }
+
+      .map-column > header p {
+        margin-top: var(--space-1);
+        color: var(--ink-soft);
+        font-size: 0.85rem;
+      }
+
+      .map-stack {
+        display: grid;
+        gap: var(--space-3);
+        padding: var(--space-4);
+      }
+
+      .map-node {
+        padding: var(--space-3);
+        border: 1px solid var(--line);
+        background: var(--surface);
+      }
+
+      .map-node strong,
+      .map-node span {
+        display: block;
+      }
+
+      .map-node span {
+        margin-top: var(--space-1);
+        color: var(--ink-soft);
+        font-size: 0.83rem;
+      }
+
+      .map-node.live {
+        border-left: 4px solid var(--green);
+      }
+
+      .map-node.move {
+        border-left: 4px solid var(--blue);
+      }
+
+      .map-node.special {
+        border-left: 4px solid var(--purple);
+      }
+
+      .map-arrow {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: var(--blue);
+        font-family: var(--mono);
+        font-size: 1.7rem;
+        font-weight: 800;
+      }
+
+      .arrow-glyph {
+        display: inline-block;
+        line-height: 1;
+      }
+
+      .map-arrow small {
+        position: absolute;
+        transform: translateY(2.1rem);
+        color: var(--ink-soft);
+        font-size: 0.62rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: var(--space-3);
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .flow > li {
+        position: relative;
+        min-width: 0;
+        padding: var(--space-4);
+        border: 1px solid var(--line);
+        background: var(--surface);
+      }
+
+      .flow > li:not(:last-child)::after {
+        position: absolute;
+        z-index: 1;
+        top: 50%;
+        right: calc(var(--space-3) * -1 - 0.45rem);
+        width: 0.65rem;
+        height: 0.65rem;
+        border-top: 2px solid var(--blue);
+        border-right: 2px solid var(--blue);
+        content: '';
+        transform: translateY(-50%) rotate(45deg);
+      }
+
+      .step-no {
+        display: block;
+        margin-bottom: var(--space-2);
+        color: var(--blue);
+      }
+
+      .flow h3,
+      .flow p {
+        margin: 0;
+      }
+
+      .flow p {
+        margin-top: var(--space-2);
+        color: var(--ink-soft);
+        font-size: 0.88rem;
+      }
+
+      .callout {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: var(--space-3);
+        margin-top: var(--space-5);
+        padding: var(--space-4);
+        border: 1px solid var(--line-strong);
+        background: var(--surface);
+      }
+
+      .callout-mark {
+        display: grid;
+        width: 1.75rem;
+        height: 1.75rem;
+        place-items: center;
+        border: 2px solid currentColor;
+        border-radius: 50%;
+        color: var(--blue);
+        font-family: var(--mono);
+        font-weight: 800;
+      }
+
+      .callout.warning {
+        border-color: var(--amber);
+        background: var(--amber-soft);
+      }
+
+      .callout.warning .callout-mark {
+        color: var(--amber);
+      }
+
+      .callout.danger {
+        border-color: var(--red);
+        background: var(--red-soft);
+      }
+
+      .callout.danger .callout-mark {
+        color: var(--red);
+      }
+
+      .callout.special {
+        border-color: var(--purple);
+        background: var(--purple-soft);
+      }
+
+      .callout.special .callout-mark {
+        color: var(--purple);
+      }
+
+      .callout h3,
+      .callout p {
+        margin: 0;
+      }
+
+      .callout p {
+        margin-top: var(--space-1);
+      }
+
+      details {
+        margin-top: var(--space-4);
+        border: 1px solid var(--line-strong);
+        background: var(--surface);
+      }
+
+      summary {
+        min-height: 3rem;
+        padding: var(--space-3) var(--space-4);
+        cursor: pointer;
+        color: var(--purple);
+        font-family: var(--mono);
+        font-size: 0.82rem;
+        font-weight: 700;
+      }
+
+      details[open] summary {
+        border-bottom: 1px solid var(--line);
+        background: var(--purple-soft);
+      }
+
+      .detail-body {
+        padding: var(--space-4);
+      }
+
+      .detail-body > :first-child {
+        margin-top: 0;
+      }
+
+      .table-wrap {
+        max-width: 100%;
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--surface);
+      }
+
+      th,
+      td {
+        padding: var(--space-3);
+        border: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: var(--surface-alt);
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .sequence {
+        position: relative;
+        display: grid;
+        gap: var(--space-3);
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .sequence::before {
+        position: absolute;
+        top: 1.5rem;
+        bottom: 1.5rem;
+        left: 1.45rem;
+        width: 2px;
+        background: var(--line-strong);
+        content: '';
+      }
+
+      .sequence > li {
+        position: relative;
+        display: grid;
+        grid-template-columns: 3rem minmax(0, 1fr) auto;
+        gap: var(--space-3);
+        align-items: start;
+        padding: var(--space-4);
+        border: 1px solid var(--line);
+        background: var(--surface);
+      }
+
+      .sequence-marker {
+        z-index: 1;
+        display: grid;
+        width: 1.9rem;
+        height: 1.9rem;
+        place-items: center;
+        border: 2px solid var(--blue);
+        border-radius: 50%;
+        background: var(--surface);
+        color: var(--blue);
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        font-weight: 800;
+      }
+
+      .sequence h3,
+      .sequence p {
+        margin: 0;
+      }
+
+      .sequence p {
+        margin-top: var(--space-1);
+        color: var(--ink-soft);
+      }
+
+      .state-badge {
+        padding: var(--space-1) var(--space-2);
+        border: 1px solid var(--line-strong);
+        color: var(--ink-soft);
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        font-weight: 700;
+        white-space: nowrap;
+        text-transform: uppercase;
+      }
+
+      .state-badge.durable {
+        border-color: var(--green);
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .state-badge.gate {
+        border-color: var(--amber);
+        background: var(--amber-soft);
+        color: var(--amber);
+      }
+
+      .state-badge.special {
+        border-color: var(--purple);
+        background: var(--purple-soft);
+        color: var(--purple);
+      }
+
+      footer {
+        padding: var(--space-5) 0 var(--space-7);
+        color: var(--ink-soft);
+        font-family: var(--mono);
+        font-size: 0.78rem;
+      }
+
+      @media (max-width: 980px) {
+        .contents ul {
+          justify-content: flex-start;
+          gap: var(--space-5);
+        }
+
+        .contents a {
+          font-size: 0.8rem;
+        }
+
+        .section-head,
+        .system-map {
+          grid-template-columns: 1fr;
+        }
+
+        .section-head {
+          align-items: start;
+        }
+
+        .card-grid,
+        .truth-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .map-arrow {
+          min-height: 3.5rem;
+          gap: var(--space-1);
+        }
+
+        .map-arrow .arrow-glyph {
+          transform: rotate(90deg);
+        }
+
+        .map-arrow small {
+          position: static;
+          display: block;
+          transform: none;
+        }
+
+        .flow {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .flow > li::after {
+          display: none;
+        }
+      }
+
+      @media (max-width: 680px) {
+        .masthead {
+          padding-top: var(--space-7);
+        }
+
+        h1 {
+          font-size: clamp(2.65rem, 15vw, 4rem);
+        }
+
+        .card-grid,
+        .truth-grid,
+        .provider-grid,
+        .source-grid,
+        .flow {
+          grid-template-columns: 1fr;
+        }
+
+        .sequence > li {
+          grid-template-columns: 3rem minmax(0, 1fr);
+        }
+
+        .state-badge {
+          grid-column: 2;
+          justify-self: start;
+        }
+
+        section {
+          padding: var(--space-6) 0;
+        }
+      }
+
+      @media print {
+        body {
+          background: var(--surface);
+          font-size: 10pt;
+        }
+
+        .contents,
+        .skip-link {
+          display: none;
+        }
+
+        .masthead,
+        section {
+          padding-block: var(--space-5);
+        }
+
+        .card,
+        .panel,
+        .provider-card,
+        .source-card {
+          box-shadow: none;
+          break-inside: avoid;
+        }
+
+        .flow > li,
+        .sequence > li,
+        .callout,
+        details,
+        tr {
+          break-inside: avoid;
+        }
+
+        details:not([open]) > :not(summary) {
+          display: block;
+        }
+
+        details:not([open])::details-content {
+          content-visibility: visible !important;
+        }
+
+        a {
+          color: var(--ink);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      class="skip-link"
+      href="#main-content"
+      >Skip to the architecture map</a
+    >
+
+    <header class="masthead">
+      <div class="shell">
+        <p class="kicker">Super Productivity / operation log / maintainer overview</p>
+        <h1>Sync architecture field guide</h1>
+        <p class="lede">
+          Follow one task edit across two devices, through one conflict and one restart.
+          Read the six-step trace at the start for the five-minute model. The broad tour,
+          deep mechanics, and executable owners continue below it.
+        </p>
+        <ul
+          class="status-strip"
+          aria-label="Guide invariants and scope"
+        >
+          <li class="status-pill core">One replay-atomic transition → one operation</li>
+          <li class="status-pill core">Download → apply → upload</li>
+          <li class="status-pill guard">Cursor advances after durable apply</li>
+          <li class="status-pill guard">Server sequence ≠ causality</li>
+          <li class="status-pill boundary">Overview, not protocol specification</li>
+        </ul>
+      </div>
+    </header>
+
+    <nav
+      class="contents"
+      aria-label="Field guide sections"
+    >
+      <div class="shell">
+        <ul>
+          <li><a href="#map">01 / system map</a></li>
+          <li><a href="#representations">02 / representations</a></li>
+          <li><a href="#local-intent">03 / local intent</a></li>
+          <li><a href="#transport">04 / transports</a></li>
+          <li><a href="#remote-apply">05 / remote apply</a></li>
+          <li><a href="#causality">06 / causality</a></li>
+          <li><a href="#boundaries">07 / boundaries</a></li>
+          <li><a href="#restart">08 / restart</a></li>
+          <li><a href="#sources">09 / source map</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <main
+      id="main-content"
+      class="shell"
+      tabindex="-1"
+    >
+      <section
+        id="map"
+        aria-labelledby="map-title"
+      >
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">01 / five-minute route</p>
+            <h2 id="map-title">Why the system has this shape</h2>
+          </div>
+          <p class="section-summary">
+            The operation log is the smallest shared mechanism that works offline, crosses
+            multiple transports, and can reason about concurrent edits while the remote
+            side remains unable—or untrusted—to merge user data.
+          </p>
+        </div>
+
+        <ul
+          class="legend"
+          aria-label="Reading-depth legend"
+        >
+          <li><span class="legend-label core">Core</span> six-step trace below</li>
+          <li><span class="legend-label deep">Deep</span> expandable mechanics</li>
+          <li>
+            <span class="legend-label source">Source</span> executable or canonical owner
+          </li>
+        </ul>
+
+        <p class="route-note">
+          <strong id="spine-title">Five-minute spine:</strong> read only this six-step
+          trace for the basic model. Stop after step 06, or follow its links into the
+          broad tour and disclosures.
+        </p>
+
+        <ol
+          class="flow spine-flow"
+          aria-labelledby="spine-title"
+        >
+          <li>
+            <span class="step-no">01 / device A</span>
+            <h3><a href="#local-intent">Edit and capture</a></h3>
+            <p>
+              A title edit reduces into live state immediately. Capture then appends one
+              replayable operation and its vector clock to <code>SUP_OPS</code>.
+            </p>
+          </li>
+          <li>
+            <span class="step-no">02 / device B</span>
+            <h3><a href="#causality">Edit independently</a></h3>
+            <p>
+              Before seeing A's title edit, B completes the same task offline and captures
+              its own operation. Neither device's clock includes the other edit.
+            </p>
+          </li>
+          <li>
+            <span class="step-no">03 / transport</span>
+            <h3><a href="#transport">Download first</a></h3>
+            <p>
+              A's next cycle downloads first, then uploads its title operation. B's later
+              cycle downloads that unseen operation before uploading B's completion.
+              SuperSync pages operations; file providers adapt shared envelopes.
+            </p>
+          </li>
+          <li>
+            <span class="step-no">04 / resolver</span>
+            <h3><a href="#causality">Classify intent</a></h3>
+            <p>
+              Before reducer apply, the incoming title is compared with B's local
+              frontier. Vector clocks prove concurrency; safe disjoint fields merge before
+              semantic precedence or deterministic LWW.
+            </p>
+          </li>
+          <li>
+            <span class="step-no">05 / durable settle</span>
+            <h3><a href="#remote-apply">Apply and converge</a></h3>
+            <p>
+              The resolved work is staged, reduced, and durably checkpointed before the
+              cursor advances. A synthetic winner covers both histories and re-uploads in
+              the bounded current-cycle loop.
+            </p>
+          </li>
+          <li>
+            <span class="step-no">06 / restart</span>
+            <h3><a href="#restart">Recover the projection</a></h3>
+            <p>
+              Startup selects a usable cache, reconstructs its tail, and resumes pending
+              checkpoints. The cache accelerates recovery; retained evidence makes it
+              safe.
+            </p>
+          </li>
+        </ol>
+
+        <p class="local-link-note">
+          <strong>Local deep links:</strong> Markdown opens as source text in a browser.
+          Link labels quote or name the target heading; use Find to jump to it.
+        </p>
+
+        <div class="card-grid">
+          <article class="card local">
+            <span class="card-label">Constraint 01</span>
+            <h3>Offline first</h3>
+            <p>Edits need durable causal identity before another device is reachable.</p>
+          </article>
+          <article class="card remote">
+            <span class="card-label">Constraint 02</span>
+            <h3>Two remote shapes</h3>
+            <p>SuperSync exchanges operations; file providers emulate that contract.</p>
+          </article>
+          <article class="card special">
+            <span class="card-label">Constraint 03</span>
+            <h3>Opaque payloads</h3>
+            <p>
+              E2EE means the server can order and compare metadata, not merge content.
+            </p>
+          </article>
+          <article class="card guard">
+            <span class="card-label">Constraint 04</span>
+            <h3>Classify before overwrite</h3>
+            <p>
+              Concurrent intent should be classified before choosing a deterministic
+              winner;
+              <a href="./conflict-journal-and-review.md"
+                >known residuals (“Composition residual”)</a
+              >
+              stay explicit.
+            </p>
+          </article>
+        </div>
+
+        <div
+          class="system-map"
+          role="group"
+          aria-label="High-level sync topology"
+        >
+          <article class="map-column">
+            <header>
+              <h3>Device A</h3>
+              <p>Originating client</p>
+            </header>
+            <div class="map-stack">
+              <div class="map-node live">
+                <strong>Local user intent</strong>
+                <span>Persistent NgRx action + reducer pass</span>
+              </div>
+              <div class="map-node live">
+                <strong>Live projection</strong>
+                <span>NgRx state used by the running UI</span>
+              </div>
+              <div class="map-node move">
+                <strong>SUP_OPS</strong>
+                <span
+                  >Durable operation, clocks, checkpoints, snapshot cache, archives</span
+                >
+              </div>
+            </div>
+          </article>
+
+          <div
+            class="map-arrow"
+            role="img"
+            aria-label="Device A sends operations through the sync port to the transport boundary"
+          >
+            <span
+              class="arrow-glyph"
+              aria-hidden="true"
+              >→</span
+            >
+            <small aria-hidden="true">sync port</small>
+          </div>
+
+          <article class="map-column">
+            <header>
+              <h3>Transport boundary</h3>
+              <p>One client contract, two storage protocols</p>
+            </header>
+            <div class="map-stack">
+              <div class="map-node move">
+                <strong>SuperSync</strong>
+                <span
+                  >Server sequence, paged operations, causal full-state boundaries, opaque
+                  ciphertext</span
+                >
+              </div>
+              <div class="map-node special">
+                <strong>File providers</strong>
+                <span>Shared v2 monolith or opt-in v3 split-envelope formats</span>
+              </div>
+              <div class="map-node">
+                <strong>@sp/sync-core</strong>
+                <span
+                  >Framework-neutral clocks, planning, replay, and conflict
+                  primitives</span
+                >
+              </div>
+            </div>
+          </article>
+
+          <div
+            class="map-arrow"
+            role="img"
+            aria-label="The transport delivers remote operations to Device B"
+          >
+            <span
+              class="arrow-glyph"
+              aria-hidden="true"
+              >→</span
+            >
+            <small aria-hidden="true">remote op</small>
+          </div>
+
+          <article class="map-column">
+            <header>
+              <h3>Device B</h3>
+              <p>Receiving client</p>
+            </header>
+            <div class="map-stack">
+              <div class="map-node move">
+                <strong>Migrate and classify</strong>
+                <span>Compatibility, imports, causality, conflict policy</span>
+              </div>
+              <div class="map-node live">
+                <strong>Crash-safe apply</strong>
+                <span>Pending → reducers → archive side effects → applied</span>
+              </div>
+              <div class="map-node live">
+                <strong>Same reducers, same synced state</strong>
+                <span
+                  >Reducer replay rebuilds the synced projection; guarded shortcuts and
+                  recovery live in <a href="#restart">restart</a>; ordinary effects stay
+                  local</span
+                >
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="callout special">
+          <span
+            class="callout-mark"
+            aria-hidden="true"
+            >i</span
+          >
+          <div>
+            <h3>Authority boundary</h3>
+            <p>
+              This page owns the whole-system mental model. Exact contributor rules,
+              clocks, conflict policy, package ownership, encryption behavior, wire
+              formats, and schema compatibility remain owned by their linked documents and
+              code.
+            </p>
+          </div>
+        </div>
+
+        <details>
+          <summary>
+            Deep / why not synchronize whole state or use server timestamps?
+          </summary>
+          <div class="detail-body">
+            <p>
+              Whole-state replacement cannot reconstruct independent offline intent, and
+              wall clocks cannot prove causality. A trusted server-side merge is also
+              unavailable to file providers and incompatible with opaque encrypted
+              payloads. The rejected alternatives and their trade-offs live in
+              <a href="./operation-log-architecture.md"
+                >Operation Log Architecture — “Why This Architecture: Rejected
+                Alternatives”</a
+              >.
+            </p>
+          </div>
+        </details>
+      </section>
+
+      <section
+        id="representations"
+        aria-labelledby="representations-title"
+      >
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">02 / facet: local persistence</p>
+            <h2 id="representations-title">Three representations, three jobs</h2>
+          </div>
+          <p class="section-summary">
+            “The state” is overloaded. The running projection, durable history, and
+            restart baseline are related but not interchangeable; most recovery bugs begin
+            by treating them as one thing.
+          </p>
+        </div>
+
+        <div class="truth-grid">
+          <article class="card local">
+            <span class="card-label">Live / NgRx</span>
+            <h3>Runtime projection</h3>
+            <p>
+              Reducers update the state the UI reads. It is authoritative for the running
+              session, but memory alone is neither restart-safe nor syncable.
+            </p>
+          </article>
+          <article class="card remote">
+            <span class="card-label">Durable / ops</span>
+            <h3>Operation history</h3>
+            <p>
+              <code>SUP_OPS.ops</code> stores local and remote operations, source,
+              synchronization markers, and crash-recovery application status.
+            </p>
+          </article>
+          <article class="card guard">
+            <span class="card-label">Restart / state_cache</span>
+            <h3>Replay accelerator</h3>
+            <p>
+              A structurally usable snapshot plus its last applied sequence and vector
+              clock avoids replaying the entire retained log on every start.
+            </p>
+          </article>
+        </div>
+
+        <details>
+          <summary>Adjacent stores and remote copies</summary>
+          <div class="detail-body truth-grid">
+            <article class="card special">
+              <span class="card-label">Projection / archives</span>
+              <h3>Archive stores</h3>
+              <p>
+                Young and old archive object stores live inside <code>SUP_OPS</code>.
+                Remote archive effects are deterministic, explicit, and retryable.
+              </p>
+            </article>
+            <article class="card remote">
+              <span class="card-label">Remote / provider</span>
+              <h3>Delivery substrate</h3>
+              <p>
+                SuperSync retains ordered operations, including causal full-state
+                boundaries; file providers also carry snapshot baselines. Neither is the
+                running UI state.
+              </p>
+            </article>
+            <article class="card local">
+              <span class="card-label">Dormant capability / journal</span>
+              <h3>Conflict review store</h3>
+              <p>
+                <code>SUP_CONFLICT_JOURNAL</code> is separate, device-local, best effort,
+                and never allowed to influence conflict outcomes. The main remote-conflict
+                path currently disables emission, so it is not complete evidence.
+              </p>
+            </article>
+          </div>
+        </details>
+
+        <div class="callout warning">
+          <span
+            class="callout-mark"
+            aria-hidden="true"
+            >!</span
+          >
+          <div>
+            <h3>This is not a conventional write-ahead log</h3>
+            <p>
+              The reducer runs first; operation capture and durable append follow
+              asynchronously. A failed append can therefore leave live state ahead of
+              disk. The pending-write counter and divergence guard suppress snapshotting
+              until a reload can restore a trustworthy projection.
+            </p>
+          </div>
+        </div>
+
+        <details>
+          <summary>Deep / persistence and compaction safety</summary>
+          <div class="detail-body">
+            <ol>
+              <li>
+                Treat <code>state_cache</code> as a screened replay baseline, never as a
+                second source of truth.
+              </li>
+              <li>
+                Keep pending or archive-pending remote work durable until its reducer and
+                side-effect checkpoints finish in order.
+              </li>
+              <li>
+                Save a new snapshot only when state is valid and no persistence divergence
+                or hydration fallback makes the projection suspect.
+              </li>
+              <li>
+                Prune only old terminal operations already represented by the snapshot;
+                retain the tail needed for conflict frontiers.
+              </li>
+            </ol>
+            <p>
+              The guarded direct-load, migration, replay, and fallback cases are
+              centralized in <a href="#restart">restart recovery</a>.
+            </p>
+            <p>
+              Sources:
+              <a href="../../src/app/op-log/persistence/op-log-db-schema.ts"
+                >database schema</a
+              >,
+              <a href="../../src/app/op-log/persistence/operation-log-hydrator.service.ts"
+                >hydrator</a
+              >,
+              <a
+                href="../../src/app/op-log/persistence/operation-log-compaction.service.ts"
+                >compaction</a
+              >, and
+              <a href="./conflict-journal-and-review.md">conflict journal contract</a>.
+            </p>
+          </div>
+        </details>
+      </section>
+
+      <section
+        id="local-intent"
+        aria-labelledby="local-intent-title"
+      >
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">03 / device A</p>
+            <h2 id="local-intent-title">
+              One replay-atomic transition becomes one operation
+            </h2>
+          </div>
+          <p class="section-summary">
+            A persistent action is both the reducer instruction and the replay contract.
+            Consequences that must replay atomically happen inside the same reducer pass.
+            A broader UI workflow may deliberately compose independent actions when their
+            normal side effects and conflict boundaries matter.
+          </p>
+        </div>
+
+        <ol
+          class="flow"
+          aria-label="Local operation capture sequence"
+        >
+          <li>
+            <span class="step-no">01 / dispatch</span>
+            <h3>Persistent action</h3>
+            <p>The UI expresses one replay-atomic transition with entity metadata.</p>
+          </li>
+          <li>
+            <span class="step-no">02 / reduce</span>
+            <h3>State changes</h3>
+            <p>NgRx and task-shared meta-reducers run synchronously.</p>
+          </li>
+          <li>
+            <span class="step-no">03 / count</span>
+            <h3>Capture pending</h3>
+            <p>The capture meta-reducer records work after reducers return.</p>
+          </li>
+          <li>
+            <span class="step-no">04 / build</span>
+            <h3>Create operation</h3>
+            <p>The effect adds identity, timestamp, schema, and vector clock.</p>
+          </li>
+          <li>
+            <span class="step-no">05 / commit</span>
+            <h3>Append + clock</h3>
+            <p>
+              The operation and durable clock advance atomically in <code>SUP_OPS</code>.
+            </p>
+          </li>
+          <li>
+            <span class="step-no">06 / ready</span>
+            <h3>Pending upload</h3>
+            <p>The write counter clears; the operation is available to sync.</p>
+          </li>
+        </ol>
+
+        <div class="provider-grid">
+          <article class="provider-card local">
+            <span class="card-label">Atomic pattern</span>
+            <h3>Reducer cascade → one operation</h3>
+            <p>
+              Deleting a tag and removing it from its tasks belongs in one meta-reducer
+              pass. Replaying the original action reproduces the same complete transition.
+            </p>
+          </article>
+          <article class="provider-card guard">
+            <span class="card-label">Footgun</span>
+            <h3>Effect fan-out → several operations</h3>
+            <p>
+              Follow-up dispatches used only to implement one replay-atomic transition
+              introduce partial states and can re-fire during replay unless the action
+              boundary is correctly filtered.
+            </p>
+            <p>
+              Deliberate workflow composition is different: independent actions may keep
+              their normal local effects and entity-specific conflict boundaries. Project
+              completion is the canonical example; see
+              <a href="../../ARCHITECTURE-DECISIONS.md">ADR #5: Project completion</a>.
+            </p>
+          </article>
+        </div>
+
+        <div class="callout danger">
+          <span
+            class="callout-mark"
+            aria-hidden="true"
+            >!</span
+          >
+          <div>
+            <h3>Reducers replay; ordinary effects do not</h3>
+            <p>
+              Ordinary remote and replayed operations pass through reducers to rebuild
+              state; <a href="#restart">restart recovery</a> owns the guarded shortcut and
+              fallback rules. Effects inject <code>LOCAL_ACTIONS</code> so replay cannot
+              repeat UI side effects or emit phantom operations. Selector-driven mutating
+              effects additionally need a sync-window guard chosen by the source's retry
+              semantics.
+            </p>
+          </div>
+        </div>
+
+        <details>
+          <summary>Deep / the contributor decision table</summary>
+          <div
+            class="detail-body table-wrap"
+            tabindex="0"
+            role="region"
+            aria-label="Contributor sync decision table; scroll horizontally if needed"
+          >
+            <table>
+              <thead>
+                <tr>
+                  <th>When adding…</th>
+                  <th>Required shape</th>
+                  <th>Why</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>An action-based effect</td>
+                  <td>Inject <code>LOCAL_ACTIONS</code></td>
+                  <td>
+                    Remote and replayed actions have already produced their effects.
+                  </td>
+                </tr>
+                <tr>
+                  <td>A repeating/level selector effect</td>
+                  <td>
+                    Prefer an action; otherwise drop unsafe-window emissions with
+                    <code>skipDuringSyncWindow()</code>
+                  </td>
+                  <td>The next equivalent emission safely retries the work.</td>
+                </tr>
+                <tr>
+                  <td>A sparse/edge-triggered selector effect</td>
+                  <td>
+                    Capture the edge and its required state, then defer it with
+                    <code>waitForSyncWindow()</code>
+                  </td>
+                  <td>
+                    A dropped <code>distinctUntilChanged()</code> edge may never re-emit;
+                    the wait is fail-open after 30 seconds.
+                  </td>
+                </tr>
+                <tr>
+                  <td>One replay-atomic transition changing several entities</td>
+                  <td>Use a meta-reducer, not effect fan-out</td>
+                  <td>One reducer pass is captured as one replayable operation.</td>
+                </tr>
+                <tr>
+                  <td>A loop dispatching many operations</td>
+                  <td>Yield once after the loop</td>
+                  <td>
+                    The asynchronous capture pipeline must observe each intermediate
+                    state.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p>
+              Choose drop versus defer from the source, not merely from the fact that it
+              is a selector. Before waiting, map or combine the edge with all state
+              required to handle it; after the window closes, process that captured
+              snapshot instead of trying to reconstruct an already-passed edge from live
+              state.
+            </p>
+            <p>
+              <strong><code>waitForSyncWindow()</code> is not a hard lock.</strong> After
+              30 seconds it logs a timeout and emits even if the sync window remains open.
+              Use it to preserve recoverable sparse triggers during ordinary short syncs.
+              If a mutation must never overlap replay, prefer a
+              <code>LOCAL_ACTIONS</code>-driven effect or a fail-closed boundary.
+            </p>
+            <p>
+              Canonical contract:
+              <a href="./contributor-sync-model.md">The Contributor Sync Model</a>.
+              Executable owners:
+              <a href="../../src/app/op-log/capture/operation-capture.meta-reducer.ts"
+                >capture meta-reducer</a
+              >,
+              <a href="../../src/app/op-log/capture/operation-log.effects.ts"
+                >persistence effect</a
+              >, and
+              <a href="../../src/app/util/local-actions.token.ts">LOCAL_ACTIONS</a>,
+              <a href="../../src/app/util/wait-for-sync-window.operator.ts"
+                >wait-for-sync-window operator</a
+              >.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Deep / local input that lands during remote apply</summary>
+          <div class="detail-body">
+            <p>
+              The reducer still accepts the user's action, but immediate operation capture
+              is deferred. After remote clocks and reducers are durably settled, buffered
+              actions are drained and receive clocks based on the new remote frontier.
+              This prevents a genuine local edit from being dropped while avoiding an
+              operation that is obsolete at birth.
+            </p>
+          </div>
+        </details>
+      </section>
+
+      <section
+        id="transport"
+        aria-labelledby="transport-title"
+      >
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">04 / sync cycle</p>
+            <h2 id="transport-title">One orchestration contract, two transports</h2>
+          </div>
+          <p class="section-summary">
+            The app synchronizes through an operation-oriented provider port. SuperSync
+            implements it directly; file providers are adapted to it. The ordinary cycle
+            downloads and settles remote work before uploading local work.
+          </p>
+        </div>
+
+        <ol
+          class="flow"
+          aria-label="Ordinary sync cycle"
+        >
+          <li>
+            <span class="step-no">01 / claim</span>
+            <h3>Own the cycle</h3>
+            <p>One top-level cycle runs in this tab.</p>
+          </li>
+          <li>
+            <span class="step-no">02 / capture</span>
+            <h3>Provider + epoch</h3>
+            <p>Resolve both together after async setup work.</p>
+          </li>
+          <li>
+            <span class="step-no">03 / flush</span>
+            <h3>Finish local writes</h3>
+            <p>Conflict checks need every accepted local action.</p>
+          </li>
+          <li>
+            <span class="step-no">04 / download</span>
+            <h3>Apply remote first</h3>
+            <p>Catch up, resolve, and durably advance the cursor.</p>
+          </li>
+          <li>
+            <span class="step-no">05 / upload</span>
+            <h3>Send pending local</h3>
+            <p>Accepted operations receive remote acknowledgment.</p>
+          </li>
+          <li>
+            <span class="step-no">06 / settle</span>
+            <h3>Re-upload winners</h3>
+            <p>Synthetic dominating operations propagate the chosen resolution.</p>
+          </li>
+        </ol>
+
+        <div class="provider-grid">
+          <article class="provider-card remote">
+            <span class="card-label">Transport A / SuperSync</span>
+            <h3>Ordered operation relay</h3>
+            <p>
+              PostgreSQL assigns a per-user server sequence for delivery and cursoring.
+              Upload conflict checks compare causal metadata before storage. A causal
+              full-state operation lets late clients fast-forward and authorizes pruning
+              only the prefix before that boundary; without one, old history remains.
+            </p>
+            <ul>
+              <li>WebSocket messages trigger downloads; HTTP moves data.</li>
+              <li>Encrypted payloads remain opaque to the server.</li>
+              <li>
+                The optional snapshot cache is not part of normal sync downloads; the
+                server can use it to generate historical restore state returned to a
+                client.
+              </li>
+              <li>Server sequence establishes delivery order, not causality.</li>
+            </ul>
+          </article>
+
+          <article class="provider-card local">
+            <span class="card-label">Transport B / file v2</span>
+            <h3>Shared monolithic envelope</h3>
+            <p>
+              <code>sync-data.json</code> combines state, archives, vector clock, and a
+              bounded recent-operation window. Dropbox, WebDAV/Nextcloud, OneDrive, and
+              LocalFile share this adapter format, but not the same physical write
+              guarantee.
+            </p>
+            <ul>
+              <li>
+                Dropbox and OneDrive can enforce compare-and-swap through their provider
+                APIs.
+              </li>
+              <li>
+                WebDAV/Nextcloud is atomic only with a strong ETag; weak or missing ETags
+                fall back to a best-effort content check before PUT.
+              </li>
+              <li>
+                LocalFile uses a best-effort read/check/write sequence and is
+                single-writer/backup-only.
+              </li>
+            </ul>
+          </article>
+
+          <article class="provider-card special">
+            <span class="card-label">Transport B / file v3 opt-in</span>
+            <h3>Split logical commit point</h3>
+            <p>
+              <code>sync-ops.json</code> is the small logical commit point. Normal
+              compaction can reference a generation snapshot containing state and
+              archives, so ordinary op-only sync avoids rewriting the heavy snapshot.
+              Explicit snapshot and recovery paths can still use fixed
+              <code>sync-state.json</code>.
+            </p>
+            <ul>
+              <li>Compaction writes the snapshot before publishing its pointer.</li>
+              <li>A v3 tombstone prevents older v2 clients from diverging.</li>
+              <li>
+                Backup files and migration markers make interrupted writes recoverable.
+              </li>
+              <li>Pointer publication has the same backend-specific CAS limits as v2.</li>
+            </ul>
+          </article>
+
+          <article class="provider-card guard">
+            <span class="card-label">Shared client contract</span>
+            <h3>Same incremental path; separate baselines</h3>
+            <p>
+              Both transports expose download, upload, snapshot, cursor, and reset
+              operations through the same client port. Incremental operations share
+              migration, conflict, and reducer replay. Fresh file bootstrap and gap
+              recovery instead atomically install a snapshot baseline, reject superseded
+              pending local ops, and deliberately create no <code>SYNC_IMPORT</code>.
+            </p>
+          </article>
+        </div>
+
+        <div class="callout special">
+          <span
+            class="callout-mark"
+            aria-hidden="true"
+            >↯</span
+          >
+          <div>
+            <h3>Do not collapse three different races into “conflict resolution”</h3>
+            <ul>
+              <li>
+                On download, the client compares entity frontiers and resolves concurrent
+                operations.
+              </li>
+              <li>
+                On SuperSync upload, the server can reject an operation and return the
+                competing operation; the client then creates any dominating replacement.
+              </li>
+              <li>
+                At file commit, Dropbox/OneDrive and strong-ETag WebDAV/Nextcloud enforce
+                CAS, so a revision mismatch aborts the envelope write and requires a fresh
+                download before retry. Weak/missing-ETag WebDAV and LocalFile only perform
+                best-effort checks that cannot close the read/write race.
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout warning">
+          <span
+            class="callout-mark"
+            aria-hidden="true"
+            >!</span
+          >
+          <div>
+            <h3>The file adapter does not merge at the provider</h3>
+            <p>
+              The adapter reads a provider revision and builds the next envelope locally,
+              but physical CAS depends on the backend. Dropbox/OneDrive APIs and
+              strong-ETag WebDAV/Nextcloud can close the race; weak or missing ETags and
+              LocalFile use a separate best-effort read/check/write sequence. LocalFile is
+              therefore single-writer/backup-only. The envelope's
+              <code>syncVersion</code> is not a provider revision or ETag.
+            </p>
+          </div>
+        </div>
+
+        <details>
+          <summary>Deep / transport owners and privacy boundary</summary>
+          <div class="detail-body">
+            <p>
+              Orchestration lives in
+              <a href="../../src/app/imex/sync/sync-wrapper.service.ts"
+                ><code>SyncWrapperService</code></a
+              >. Provider adaptation and fencing live in
+              <a href="../../src/app/op-log/sync-providers/wrapped-provider.service.ts"
+                ><code>WrappedProviderService</code></a
+              >. File envelopes and durable names live in
+              <a href="../../packages/sync-providers/src/file-based-sync-data.ts"
+                ><code>@sp/sync-providers</code></a
+              >. The detailed ownership contract is
+              <a href="./package-boundaries.md">Sync Package Boundaries</a>. SuperSync's
+              transport, retention, and trust boundaries are detailed in the
+              <a href="../../packages/super-sync-server/docs/architecture.md"
+                >SuperSync Server Architecture</a
+              >.
+            </p>
+            <p>
+              SuperSync can read routing and conflict metadata needed to operate the
+              protocol. With E2EE enabled it cannot inspect operation or snapshot content;
+              see
+              <a href="./supersync-encryption-architecture.md"
+                >SuperSync End-to-End Encryption Architecture</a
+              >.
+            </p>
+            <p>
+              File providers can optionally encrypt each whole file envelope. That choice
+              is stored independently in each provider's private configuration and does
+              not inherit SuperSync's encryption setting. See the
+              <a href="./supersync-scenarios.md">provider/account-switch test index</a>
+              and its executable owner,
+              <a href="../../src/app/op-log/sync-providers/wrapped-provider.service.ts"
+                ><code>WrappedProviderService</code></a
+              >.
+            </p>
+          </div>
+        </details>
+      </section>
+
+      <section
+        id="remote-apply"
+        aria-labelledby="remote-apply-title"
+      >
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">05 / device B</p>
+            <h2 id="remote-apply-title">Remote apply is a recovery state machine</h2>
+          </div>
+          <p class="section-summary">
+            Downloading bytes is not acknowledgment. An operation becomes cursor-safe only
+            after compatibility, conflict policy, durable checkpoints, reducers, and
+            required archive side effects succeed. Archive failure keeps the cursor fixed
+            and leaves durable retry evidence.
+          </p>
+        </div>
+
+        <ol
+          class="sequence"
+          aria-label="Remote operation processing state machine"
+        >
+          <li>
+            <span class="sequence-marker">01</span>
+            <div>
+              <h3>Migrate the incoming prefix</h3>
+              <p>
+                Receiver-side migrations run before interpretation. A too-new operation
+                blocks itself and the suffix so the cursor cannot skip unknown semantics.
+              </p>
+            </div>
+            <span class="state-badge gate">compatibility gate</span>
+          </li>
+          <li>
+            <span class="sequence-marker">02</span>
+            <div>
+              <h3>Apply full-state filtering rules</h3>
+              <p>
+                Explicit imports discard invalidated history; causal repair uses a
+                narrower policy. Ordinary operations continue to entity conflict
+                detection.
+              </p>
+            </div>
+            <span class="state-badge special">causal boundary</span>
+          </li>
+          <li>
+            <span class="sequence-marker">03</span>
+            <div>
+              <h3>Classify conflicts against local frontiers</h3>
+              <p>
+                Pending writes are flushed first. Vector clocks identify causal
+                successors, duplicates, stale operations, and genuine concurrency.
+              </p>
+            </div>
+            <span class="state-badge gate">decision</span>
+          </li>
+          <li>
+            <span class="sequence-marker">04</span>
+            <div>
+              <h3>Append accepted remote operations as pending</h3>
+              <p>
+                Duplicate IDs are skipped atomically; every newly accepted row exists on
+                disk before reducer application begins.
+              </p>
+            </div>
+            <span class="state-badge durable">durable</span>
+          </li>
+          <li>
+            <span class="sequence-marker">05</span>
+            <div>
+              <h3>Durably merge incoming clocks</h3>
+              <p>
+                The receiving frontier advances before the reducer window, so deferred
+                local actions can later receive clocks based on committed knowledge.
+              </p>
+            </div>
+            <span class="state-badge durable">durable</span>
+          </li>
+          <li>
+            <span class="sequence-marker">06</span>
+            <div>
+              <h3>Bulk-apply through reducers</h3>
+              <p>
+                The original actions replay in order through the same reducers while
+                ordinary local-only effects remain filtered out.
+              </p>
+            </div>
+            <span class="state-badge">projection</span>
+          </li>
+          <li>
+            <span class="sequence-marker">07</span>
+            <div>
+              <h3>Checkpoint reducer success</h3>
+              <p>
+                Successful rows become <code>archive_pending</code>; reducer failures are
+                quarantined. The checkpoint commits before archive work starts.
+              </p>
+            </div>
+            <span class="state-badge durable">durable</span>
+          </li>
+          <li>
+            <span class="sequence-marker">08</span>
+            <div>
+              <h3>Run deterministic archive side effects</h3>
+              <p>
+                Completed rows become <code>applied</code>. An attempted failure becomes
+                <code>failed</code>, unattempted successors remain
+                <code>archive_pending</code>, and the apply call aborts for retry.
+              </p>
+            </div>
+            <span class="state-badge durable">terminal</span>
+          </li>
+          <li>
+            <span class="sequence-marker">09</span>
+            <div>
+              <h3>Advance the provider cursor</h3>
+              <p>
+                The cursor advances only after the downloaded page applies successfully. A
+                failure leaves it unchanged. A crash after apply but before this write
+                causes a harmless redownload whose operation IDs deduplicate.
+              </p>
+            </div>
+            <span class="state-badge gate">acknowledge</span>
+          </li>
+        </ol>
+
+        <details>
+          <summary>Deep / what each crash window does on restart</summary>
+          <div
+            class="detail-body table-wrap"
+            tabindex="0"
+            role="region"
+            aria-label="Crash recovery table; scroll horizontally if needed"
+          >
+            <table>
+              <thead>
+                <tr>
+                  <th>Crash window</th>
+                  <th>Durable evidence</th>
+                  <th>Recovery</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>After pending append, before reducers</td>
+                  <td><code>pending</code> operation row</td>
+                  <td>Startup replays reducers for the same row.</td>
+                </tr>
+                <tr>
+                  <td>After reducer checkpoint, before archive completion</td>
+                  <td><code>archive_pending</code></td>
+                  <td>Startup reruns only the idempotent archive side effect.</td>
+                </tr>
+                <tr>
+                  <td>During one archive side effect</td>
+                  <td>
+                    <code>failed</code> attempted row; <code>archive_pending</code>
+                    successors; unchanged cursor
+                  </td>
+                  <td>
+                    The cycle aborts; startup or a retry resumes ordered archive work.
+                  </td>
+                </tr>
+                <tr>
+                  <td>After apply, before cursor write</td>
+                  <td><code>applied</code> rows and operation IDs</td>
+                  <td>Redownload; append skips duplicates; cursor catches up.</td>
+                </tr>
+              </tbody>
+            </table>
+            <p>
+              Executable ordering:
+              <a href="../../packages/sync-core/src/remote-apply.ts"
+                ><code>applyRemoteOperations()</code></a
+              >. Host orchestration:
+              <a href="../../src/app/op-log/sync/remote-ops-processing.service.ts"
+                ><code>RemoteOpsProcessingService</code></a
+              >. Archive contract:
+              <a href="../../src/app/op-log/apply/archive-operation-handler.service.ts"
+                ><code>ArchiveOperationHandler</code></a
+              >.
+            </p>
+          </div>
+        </details>
+
+        <div class="callout danger">
+          <span
+            class="callout-mark"
+            aria-hidden="true"
+            >!</span
+          >
+          <div>
+            <h3>Never draw the cursor beside “download”</h3>
+            <p>
+              Advancing it before durable application turns a crash into permanent data
+              loss: the provider believes the client has consumed operations that no local
+              recovery row can replay.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="causality"
+        aria-labelledby="causality-title"
+      >
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">06 / two devices, one conflict</p>
+            <h2 id="causality-title">Sequence orders delivery; clocks prove causality</h2>
+          </div>
+          <p class="section-summary">
+            A server sequence answers “what should this client download next?” A vector
+            clock answers “had this operation seen the other one?” Conflict detection uses
+            the second question; wall-clock time only helps choose a deterministic
+            outcome.
+          </p>
+        </div>
+
+        <div class="truth-grid">
+          <article class="card remote">
+            <span class="card-label">Delivery / serverSeq</span>
+            <h3>Total order at SuperSync</h3>
+            <p>
+              A per-user sequence supports pages, cursors, causal full-state boundaries,
+              and bounded prefix retention. File providers have no server-assigned
+              operation cursor. Their adapter exposes envelope <code>syncVersion</code> as
+              a synthetic transport watermark/<code>latestSeq</code> for catch-up and gap
+              detection. It is not the provider revision/ETag and does not prove
+              per-operation ordering.
+            </p>
+          </article>
+          <article class="card local">
+            <span class="card-label">Knowledge / vector clock</span>
+            <h3>Partial causal order</h3>
+            <p>
+              Each client counter records which histories an operation includes.
+              Comparison yields before, after, equal, or concurrent.
+            </p>
+          </article>
+          <article class="card guard">
+            <span class="card-label">Entity / frontier</span>
+            <h3>Conflict comparison base</h3>
+            <p>
+              Retained operations plus the snapshot clock conservatively reconstruct the
+              newest causal knowledge for an entity.
+            </p>
+          </article>
+        </div>
+
+        <div class="provider-grid">
+          <article class="provider-card local">
+            <span class="card-label">Device A / title edit</span>
+            <h3><code>&#123; A: 2, B: 1 &#125;</code></h3>
+            <p>
+              Device A has seen B's first operation, then changes the task title while
+              offline.
+            </p>
+          </article>
+          <article class="provider-card remote">
+            <span class="card-label">Device B / completion edit</span>
+            <h3><code>&#123; A: 1, B: 2 &#125;</code></h3>
+            <p>
+              Device B has seen A's first operation, then marks the same task done while
+              offline.
+            </p>
+          </article>
+        </div>
+
+        <div class="callout special">
+          <span
+            class="callout-mark"
+            aria-hidden="true"
+            >↯</span
+          >
+          <div>
+            <h3>Neither clock contains the other: the edits are concurrent</h3>
+            <p>
+              Because title and completion are disjoint eligible fields, the client can
+              synthesize one partial update that preserves both. If the edits overlap or
+              cannot be decomposed safely, the policy continues through explicit
+              precedence and deterministic LWW.
+            </p>
+          </div>
+        </div>
+
+        <div class="card-grid">
+          <article class="card local">
+            <span class="card-label">Policy 01</span>
+            <h3>Merge safe disjoint fields</h3>
+            <p>
+              Eligible single-entity updates with known, non-overlapping deltas produce a
+              deterministic, byte-stable <code>changes</code> payload. Each resolving
+              client still creates its own operation identity and clock.
+            </p>
+          </article>
+          <article class="card special">
+            <span class="card-label">Policy 02</span>
+            <h3>Apply semantic precedence</h3>
+            <p>
+              Archive operations and marked project deletions follow their explicit
+              delete/archive-wins rules instead of generic timestamps.
+            </p>
+          </article>
+          <article class="card guard">
+            <span class="card-label">Policy 03</span>
+            <h3>Fall back to deterministic LWW</h3>
+            <p>
+              The newest operation timestamp wins; an exact millisecond tie uses stable
+              client-ID ordering so both devices choose identically.
+            </p>
+          </article>
+          <article class="card remote">
+            <span class="card-label">Policy 04</span>
+            <h3>Dominate and propagate</h3>
+            <p>
+              A local or merged winner becomes a new operation whose clock covers both
+              histories, then re-uploads through the ordinary protocol.
+            </p>
+          </article>
+        </div>
+
+        <div class="callout warning">
+          <span
+            class="callout-mark"
+            aria-hidden="true"
+            >!</span
+          >
+          <div>
+            <h3>Vector clocks detect conflicts; timestamps resolve some conflicts</h3>
+            <p>
+              Comparing timestamps first would silently order genuinely independent work.
+              Likewise, pruning an incoming clock before server comparison can erase the
+              edge needed to prove that a retry dominates the operation it replaces. The
+              resolver heals supported no-pending crossings, but cases with compacted-away
+              evidence or atomic operations it cannot decompose remain
+              <a href="./conflict-journal-and-review.md"
+                >documented “Composition residual” cases</a
+              >.
+            </p>
+          </div>
+        </div>
+
+        <details>
+          <summary>Deep / the clocks and orders that are easy to confuse</summary>
+          <div
+            class="detail-body table-wrap"
+            tabindex="0"
+            role="region"
+            aria-label="Vector clock roles; scroll horizontally if needed"
+          >
+            <table>
+              <thead>
+                <tr>
+                  <th>Clock/order</th>
+                  <th>Job</th>
+                  <th>Not this</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Per-operation vector clock</td>
+                  <td>Causal history known when this operation was created</td>
+                  <td>A wall-clock timestamp</td>
+                </tr>
+                <tr>
+                  <td>Durable client vector clock</td>
+                  <td>Everything this client has committed locally</td>
+                  <td>An entity-specific winner</td>
+                </tr>
+                <tr>
+                  <td>Entity frontier</td>
+                  <td>Newest retained causal knowledge relevant to one entity</td>
+                  <td>A separately stored clock per entity</td>
+                </tr>
+                <tr>
+                  <td>SuperSync server sequence</td>
+                  <td>Delivery order and cursor progress</td>
+                  <td>Proof that one edit observed another</td>
+                </tr>
+                <tr>
+                  <td>File adapter <code>syncVersion</code> / <code>latestSeq</code></td>
+                  <td>Synthetic envelope watermark for catch-up and gap detection</td>
+                  <td>A provider revision/ETag or proof of per-operation ordering</td>
+                </tr>
+              </tbody>
+            </table>
+            <p>
+              Canonical clock lifecycle and pruning invariants:
+              <a href="./vector-clocks.md">Vector Clocks Architecture</a>. Generic
+              comparison and planning:
+              <a href="../../packages/sync-core/src/vector-clock.ts"
+                ><code>vector-clock.ts</code></a
+              >
+              and
+              <a href="../../packages/sync-core/src/conflict-resolution.ts"
+                ><code>conflict-resolution.ts</code></a
+              >.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Deep / conflict evidence and manual review</summary>
+          <div class="detail-body">
+            <p>
+              The device-local journal and review UI are observe-only capabilities:
+              recording never affects the winner and is intentionally not atomic with the
+              op log. The main production remote-resolution path currently disables
+              journal emission, so the journal must not be treated as a complete audit
+              trail. Where entries exist, “flip” dispatches a new ordinary edit when the
+              discarded delta can be reapplied safely. See
+              <a href="./conflict-journal-and-review.md"
+                >Conflict Journal, Disjoint-Field Auto-Merge &amp; Review UI</a
+              >.
+            </p>
+          </div>
+        </details>
+      </section>
+
+      <section
+        id="boundaries"
+        aria-labelledby="boundaries-title"
+      >
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">07 / facet: exceptional operations</p>
+            <h2 id="boundaries-title">Replace, repair, or abort—never blur them</h2>
+          </div>
+          <p class="section-summary">
+            Full-state operations and provider configuration changes cross wider causal
+            boundaries than ordinary entity edits. They deliberately use different
+            filtering and fencing rules rather than pretending to be large updates.
+          </p>
+        </div>
+
+        <div class="card-grid">
+          <article class="card special">
+            <span class="card-label">Explicit boundary</span>
+            <h3>SYNC_IMPORT / BACKUP_IMPORT</h3>
+            <p>
+              Replace the synced projection as a clean slate while preserving device-local
+              sync configuration. Causally older and genuinely concurrent operations that
+              never observed the import are intentionally dropped.
+            </p>
+          </article>
+          <article class="card local">
+            <span class="card-label">Causal maintenance</span>
+            <h3>REPAIR</h3>
+            <p>
+              Modern causal repairs can name the server prefix their snapshot includes;
+              their narrower policy preserves or repositions concurrent suffix work rather
+              than treating it as a user-requested reset. Legacy or unscoped repairs lack
+              that marker and require special prefix positioning.
+            </p>
+          </article>
+          <article class="card guard">
+            <span class="card-label">Compatibility boundary</span>
+            <h3>Receiver migration</h3>
+            <p>
+              Operations migrate before conflict checks. An unknown newer schema blocks
+              the batch at that operation and freezes cursor progress until an updated
+              client can interpret it.
+            </p>
+          </article>
+          <article class="card remote">
+            <span class="card-label">Configuration boundary</span>
+            <h3>Provider epoch</h3>
+            <p>
+              Provider, account, folder, or encryption changes invalidate old in-flight
+              work. Normal target changes install the new configuration/provider, then
+              bump the epoch; destructive remote writes use the stronger block-and-drain
+              sequence below. Epoch assertions make stale continuations abort benignly
+              across awaits.
+            </p>
+          </article>
+        </div>
+
+        <ol
+          class="flow"
+          aria-label="Destructive sync exclusion sequence"
+        >
+          <li>
+            <span class="step-no">01 / block</span>
+            <h3>Stop new cycles</h3>
+            <p>Raise the synchronous gate before waiting on any existing work.</p>
+          </li>
+          <li>
+            <span class="step-no">02 / bump</span>
+            <h3>Invalidate immediately</h3>
+            <p>Bump the epoch so stale continuations fail at their next fence.</p>
+          </li>
+          <li>
+            <span class="step-no">03 / drain</span>
+            <h3>Drain all old work</h3>
+            <p>Wait for the main cycle and guarded side-channel cycles to settle.</p>
+          </li>
+          <li>
+            <span class="step-no">04 / mutate</span>
+            <h3>Run destructive work</h3>
+            <p>
+              Change encryption state, force-upload, or perform the other fenced remote
+              mutation.
+            </p>
+          </li>
+          <li>
+            <span class="step-no">05 / retry</span>
+            <h3>Fresh cycle starts</h3>
+            <p>
+              After unblocking, download from the new target before sending local work.
+            </p>
+          </li>
+        </ol>
+
+        <div class="callout danger">
+          <span
+            class="callout-mark"
+            aria-hidden="true"
+            >!</span
+          >
+          <div>
+            <h3>A schema bump is not a compatibility shield</h3>
+            <p>
+              Some released clients apply newer operations unmigrated; newer receivers
+              correctly block but are then fenced until update. New semantics must degrade
+              safely for the released fleet through payload markers or envelopes. Bump
+              only when a transformation or hard semantic barrier genuinely requires it.
+            </p>
+          </div>
+        </div>
+
+        <details>
+          <summary>Deep / the three coordination layers</summary>
+          <div
+            class="detail-body table-wrap"
+            tabindex="0"
+            role="region"
+            aria-label="Sync coordination layers; scroll horizontally if needed"
+          >
+            <table>
+              <thead>
+                <tr>
+                  <th>Layer</th>
+                  <th>Protects</th>
+                  <th>Cannot replace</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>SyncCycleGuardService</code></td>
+                  <td>
+                    One top-level sync cycle per tab, including ordinary cursor
+                    persistence
+                  </td>
+                  <td>Cross-tab storage serialization</td>
+                </tr>
+                <tr>
+                  <td>Named operation-log locks</td>
+                  <td>
+                    Atomic storage, apply, archive, and compaction critical sections
+                  </td>
+                  <td>Recalling provider requests already in flight</td>
+                </tr>
+                <tr>
+                  <td>Provider epoch + target generation</td>
+                  <td>Work made stale by configuration changes across awaits</td>
+                  <td>Draining bytes already being sent</td>
+                </tr>
+              </tbody>
+            </table>
+            <p>
+              Sources:
+              <a href="../../src/app/op-log/sync/sync-cycle-guard.service.ts"
+                >cycle guard</a
+              >, <a href="../../src/app/op-log/sync/lock.service.ts">named locks</a>,
+              <a href="../../src/app/op-log/sync-providers/provider-manager.service.ts"
+                >provider manager</a
+              >, and
+              <a href="../../src/app/op-log/sync-providers/wrapped-provider.service.ts"
+                >per-cycle provider proxy</a
+              >.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Deep / full-state filtering and schema policy</summary>
+          <div class="detail-body">
+            <p>
+              The exact import comparison table and repair exceptions live in
+              <a href="../../src/app/op-log/sync/sync-import-filter.service.ts"
+                ><code>SyncImportFilterService</code></a
+              >
+              and
+              <a href="../../packages/sync-core/src/sync-import-filter.ts"
+                ><code>@sp/sync-core</code></a
+              >. The released-fleet warning and current hard boundary live beside
+              <a href="../../packages/shared-schema/src/schema-version.ts"
+                ><code>CURRENT_SCHEMA_VERSION</code></a
+              >
+              and in the
+              <a href="./operation-log-architecture.md"
+                >“Bump Policy — a bump does not protect the released fleet”</a
+              >.
+            </p>
+          </div>
+        </details>
+      </section>
+
+      <section
+        id="restart"
+        aria-labelledby="restart-title"
+      >
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">08 / close the loop</p>
+            <h2 id="restart-title">One restart tests every durability promise</h2>
+          </div>
+          <p class="section-summary">
+            Startup chooses the best trustworthy baseline, reconstructs its remaining
+            tail, applies the path-specific trust or validation rule, and resumes
+            interrupted remote checkpoints before a reconstructed projection may become a
+            new baseline.
+          </p>
+        </div>
+
+        <ol
+          class="flow"
+          aria-label="Startup hydration and recovery sequence"
+        >
+          <li>
+            <span class="step-no">01 / open</span>
+            <h3>Initialize storage</h3>
+            <p>Open the adapter and inspect durable operation status.</p>
+          </li>
+          <li>
+            <span class="step-no">02 / baseline</span>
+            <h3>Screen snapshot</h3>
+            <p>
+              Check structure and schema compatibility before trusting
+              <code>state_cache</code>.
+            </p>
+          </li>
+          <li>
+            <span class="step-no">03 / project</span>
+            <h3>Load live state</h3>
+            <p>Hydrate the snapshot or begin from the initial projection.</p>
+          </li>
+          <li>
+            <span class="step-no">04 / tail</span>
+            <h3>Direct-load or migrate + replay</h3>
+            <p>
+              Load the final operation directly when it carries full state and no pending
+              reducer work remains. Otherwise migrate replayable operations and bulk-apply
+              the result; migration may transform, split, or drop obsolete rows.
+            </p>
+          </li>
+          <li>
+            <span class="step-no">05 / recover</span>
+            <h3>Finish checkpoints</h3>
+            <p>
+              Resume pending reducer or archive work without redoing completed effects.
+            </p>
+          </li>
+          <li>
+            <span class="step-no">06 / trust</span>
+            <h3>Gate the next baseline</h3>
+            <p>
+              Trust a matching-schema cache on its fast path; validate directly loaded,
+              migrated, or replayed results before saving a reconstructed replacement.
+            </p>
+          </li>
+        </ol>
+
+        <div class="callout warning">
+          <span
+            class="callout-mark"
+            aria-hidden="true"
+            >!</span
+          >
+          <div>
+            <h3>A snapshot is an accelerator, not permission to discard recovery data</h3>
+            <p>
+              If an intact snapshot is unreadable to this build and only a compacted tail
+              survives, replay may produce a useful partial projection—but it must not
+              overwrite the last complete snapshot or prune the remaining operations.
+              Compaction stays disabled until a clean boot restores confidence.
+            </p>
+          </div>
+        </div>
+
+        <div class="provider-grid">
+          <article class="provider-card local">
+            <span class="card-label">Normal restart</span>
+            <h3>Snapshot + tail</h3>
+            <p>
+              Load a structurally usable cache, reconstruct the retained tail with the
+              guarded path above, finish checkpoints, then continue capture and sync.
+            </p>
+          </article>
+          <article class="provider-card guard">
+            <span class="card-label">Fallback restart</span>
+            <h3>Replay without destroying evidence</h3>
+            <p>
+              With no usable cache, reconstruct from retained history when it is
+              sufficient. A degraded fallback stays visibly degraded and cannot compact
+              over better data.
+            </p>
+          </article>
+        </div>
+
+        <details>
+          <summary>Deep / startup recovery cases</summary>
+          <div
+            class="detail-body table-wrap"
+            tabindex="0"
+            role="region"
+            aria-label="Startup recovery cases; scroll horizontally if needed"
+          >
+            <table>
+              <thead>
+                <tr>
+                  <th>Evidence on disk</th>
+                  <th>Startup behavior</th>
+                  <th>Safety property</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    Usable cache + tail ending in full state; no pending reducer work
+                  </td>
+                  <td>Load the full state directly</td>
+                  <td>Safe shortcut without replay</td>
+                </tr>
+                <tr>
+                  <td>Usable cache + replayable tail</td>
+                  <td>
+                    Migrate, possibly drop obsolete operations, and bulk-replay the result
+                  </td>
+                  <td>Current reducers see every remaining transition in order</td>
+                </tr>
+                <tr>
+                  <td>No snapshot + complete retained history</td>
+                  <td>
+                    Load full state if it is last and safe, or migrate and replay from
+                    sequence zero
+                  </td>
+                  <td>History reconstructs the projection</td>
+                </tr>
+                <tr>
+                  <td>Pending remote row</td>
+                  <td>Replay reducer and continue checkpoint state machine</td>
+                  <td>A crash cannot acknowledge un-applied data</td>
+                </tr>
+                <tr>
+                  <td><code>archive_pending</code> or retryable failure</td>
+                  <td>Resume idempotent archive work in order</td>
+                  <td>Reducers are not double-applied</td>
+                </tr>
+                <tr>
+                  <td>Unhydratable snapshot + insufficient compacted tail</td>
+                  <td>Fail visibly or enter guarded fallback; preserve the snapshot</td>
+                  <td>Partial recovery cannot overwrite the last complete copy</td>
+                </tr>
+              </tbody>
+            </table>
+            <p>
+              Sources:
+              <a href="../../src/app/op-log/persistence/operation-log-hydrator.service.ts"
+                ><code>OperationLogHydratorService</code></a
+              >,
+              <a href="../../src/app/op-log/persistence/operation-log-recovery.service.ts"
+                ><code>OperationLogRecoveryService</code></a
+              >, and
+              <a href="../../src/app/op-log/persistence/operation-log-snapshot.service.ts"
+                ><code>OperationLogSnapshotService</code></a
+              >.
+            </p>
+          </div>
+        </details>
+      </section>
+
+      <section
+        id="sources"
+        aria-labelledby="sources-title"
+      >
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">09 / reference: executable ownership</p>
+            <h2 id="sources-title">Where each contract lives</h2>
+          </div>
+          <p class="section-summary">
+            This map is intentionally stable and coarse. When implementation detail and an
+            illustration disagree, follow the narrow contract, its executable owner, and
+            focused tests—not a copied endpoint table or historical flowchart.
+          </p>
+        </div>
+
+        <div class="source-grid">
+          <article class="source-card">
+            <span class="card-label">Contributor invariant</span>
+            <h3>Actions, effects, and atomic intent</h3>
+            <ul>
+              <li><a href="./contributor-sync-model.md">Contributor Sync Model</a></li>
+              <li>
+                <a href="../../src/app/util/local-actions.token.ts"
+                  ><code>LOCAL_ACTIONS</code></a
+                >
+              </li>
+              <li>
+                <a href="../../src/app/op-log/capture/operation-capture.meta-reducer.ts"
+                  >capture boundary</a
+                >
+              </li>
+            </ul>
+          </article>
+
+          <article class="source-card">
+            <span class="card-label">Local durability</span>
+            <h3>Storage, hydration, and compaction</h3>
+            <ul>
+              <li>
+                <a href="../../src/app/op-log/persistence/operation-log-store.service.ts"
+                  >operation-log store</a
+                >
+              </li>
+              <li>
+                <a
+                  href="../../src/app/op-log/persistence/operation-log-hydrator.service.ts"
+                  >hydrator</a
+                >
+              </li>
+              <li>
+                <a
+                  href="../../src/app/op-log/persistence/operation-log-compaction.service.ts"
+                  >compaction</a
+                >
+              </li>
+            </ul>
+          </article>
+
+          <article class="source-card">
+            <span class="card-label">Cycle and providers</span>
+            <h3>Orchestration and transport adaptation</h3>
+            <ul>
+              <li>
+                <a href="../../src/app/imex/sync/sync-wrapper.service.ts">sync wrapper</a>
+              </li>
+              <li>
+                <a href="../../src/app/op-log/sync/operation-log-sync.service.ts"
+                  >operation sync</a
+                >
+              </li>
+              <li>
+                <a href="../../packages/sync-providers/src/file-based-sync-data.ts"
+                  >file envelope contract</a
+                >
+              </li>
+            </ul>
+          </article>
+
+          <article class="source-card">
+            <span class="card-label">Replay and conflict</span>
+            <h3>Remote apply, clocks, and winner planning</h3>
+            <ul>
+              <li>
+                <a href="../../packages/sync-core/src/remote-apply.ts"
+                  >generic remote apply</a
+                >
+              </li>
+              <li><a href="./vector-clocks.md">vector-clock contract</a></li>
+              <li>
+                <a href="./conflict-journal-and-review.md">conflict policy and review</a>
+              </li>
+            </ul>
+          </article>
+
+          <article class="source-card">
+            <span class="card-label">Exceptional state</span>
+            <h3>Imports, repairs, and schema compatibility</h3>
+            <ul>
+              <li>
+                <a href="../../packages/sync-core/src/sync-import-filter.ts"
+                  >full-state filtering</a
+                >
+              </li>
+              <li>
+                <a href="../../packages/shared-schema/src/schema-version.ts"
+                  >schema boundary and released-fleet warning</a
+                >
+              </li>
+              <li>
+                <a href="./operation-log-architecture.md"
+                  >“Bump Policy — a bump does not protect the released fleet”</a
+                >
+              </li>
+            </ul>
+          </article>
+
+          <article class="source-card">
+            <span class="card-label">Boundaries and trust</span>
+            <h3>Packages, server, and encryption</h3>
+            <ul>
+              <li><a href="./package-boundaries.md">package ownership</a></li>
+              <li>
+                <a href="../../packages/super-sync-server/docs/architecture.md"
+                  >server architecture</a
+                >
+              </li>
+              <li>
+                <a href="../../packages/super-sync-server/src/sync/sync.service.ts"
+                  >server sync transaction</a
+                >
+              </li>
+              <li>
+                <a href="./supersync-encryption-architecture.md">E2EE architecture</a>
+              </li>
+            </ul>
+          </article>
+
+          <article class="source-card">
+            <span class="card-label">Load-bearing rationale</span>
+            <h3>Why the design is constrained this way</h3>
+            <ul>
+              <li>
+                <a href="./operation-log-architecture.md"
+                  >“Why This Architecture: Rejected Alternatives”</a
+                >
+              </li>
+              <li>
+                <a href="../../ARCHITECTURE-DECISIONS.md"
+                  >ADR #3: sync package boundary direction</a
+                >
+              </li>
+              <li>
+                <a href="../../ARCHITECTURE-DECISIONS.md"
+                  >ADR #4: upload conflict safety via the lastSeq row lock under
+                  RepeatableRead</a
+                >
+              </li>
+            </ul>
+          </article>
+
+          <article class="source-card">
+            <span class="card-label">Executable scenarios</span>
+            <h3>Tests that prove the difficult paths</h3>
+            <ul>
+              <li>
+                <a href="../../src/app/op-log/testing/integration/"
+                  >client integration scenarios</a
+                >
+              </li>
+              <li>
+                <a href="../../packages/sync-core/tests/">sync-core behavior</a>
+              </li>
+              <li>
+                <a href="../../packages/super-sync-server/tests/integration/"
+                  >real server/database races</a
+                >
+              </li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="callout special">
+          <span
+            class="callout-mark"
+            aria-hidden="true"
+            >✓</span
+          >
+          <div>
+            <h3>Documentation ownership rule</h3>
+            <p>
+              Update this HTML when the whole-system mental model changes. Update a narrow
+              contract beside its implementation when an algorithm, payload, endpoint,
+              constant, or failure policy changes. Link across the boundary; do not copy
+              the volatile detail back into this overview.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="shell">
+      Maintainer overview · Open locally · Code and linked contract documents are
+      authoritative
+    </footer>
+  </body>
+</html>

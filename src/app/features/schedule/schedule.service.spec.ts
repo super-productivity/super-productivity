@@ -2,6 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { ScheduleService } from './schedule.service';
 import { DateService } from '../../core/date/date.service';
+import { getDbDateStr } from '../../util/get-db-date-str';
+import { findSpringForwardSunday } from '../tasks/dst.test-helper';
 import { provideMockStore } from '@ngrx/store/testing';
 import { selectTimelineTasks } from '../work-context/store/work-context.selectors';
 import { selectTaskRepeatCfgsWithAndWithoutStartTime } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
@@ -87,6 +89,67 @@ describe('ScheduleService', () => {
       const lastDay = new Date(result[4]);
       expect(lastDay.getMonth()).toBe(1); // February
     });
+
+    it('should keep the window consecutive across a spring-forward day', () => {
+      // Same hazard as the planner window: +24h ms stepping from a
+      // late-evening anchor skips the 23h transition day.
+      const gap = findSpringForwardSunday(2026);
+      if (!gap) {
+        return;
+      }
+      jasmine.clock().install();
+      try {
+        const saturday = new Date(gap.sunday);
+        saturday.setDate(saturday.getDate() - 1);
+        saturday.setHours(23, 30, 0, 0);
+        jasmine.clock().mockDate(saturday);
+        const result = service.getDaysToShow(3, null);
+        expect(result[0]).toBe(getDbDateStr(saturday));
+        expect(result[1]).toBe(getDbDateStr(gap.sunday));
+      } finally {
+        jasmine.clock().uninstall();
+      }
+    });
+
+    it('should not mutate a provided reference date', () => {
+      const referenceDate = new Date(2028, 5, 15, 10, 0);
+      const before = referenceDate.getTime();
+      service.getDaysToShow(7, referenceDate);
+      expect(referenceDate.getTime()).toBe(before);
+    });
+
+    it('should start on the logical today between midnight and the start-of-next-day offset', () => {
+      // 00:30 on Jan 15 with a 04:00 start-of-next-day is logically still Jan
+      // 14; a window anchored on the raw clock would drop (logical) today's
+      // column right after midnight while todayStr() still names it.
+      jasmine.clock().install();
+      try {
+        jasmine.clock().mockDate(new Date(2026, 0, 15, 0, 30));
+        dateService.setStartOfNextDayDiff('04:00');
+        const result = service.getDaysToShow(3, null);
+        expect(result[0]).toBe('2026-01-14');
+        expect(result[1]).toBe('2026-01-15');
+      } finally {
+        jasmine.clock().uninstall();
+      }
+    });
+  });
+
+  describe('getDayClass', () => {
+    it('should ring the logical today between midnight and the start-of-next-day offset', () => {
+      // Same clock setup as the window specs: at 00:30 with a 04:00 offset the
+      // ring must sit on Jan 14, the column todayStr() names and the window
+      // anchor produces, not on calendar-today.
+      jasmine.clock().install();
+      try {
+        jasmine.clock().mockDate(new Date(2026, 0, 15, 0, 30));
+        dateService.setStartOfNextDayDiff('04:00');
+        expect(service.getDayClass('2026-01-14')).toContain('today');
+        expect(service.getDayClass('2026-01-15')).not.toContain('today');
+      } finally {
+        jasmine.clock().uninstall();
+      }
+    });
   });
 
   describe('getMonthDaysToShow', () => {
@@ -95,6 +158,21 @@ describe('ScheduleService', () => {
       const firstDayOfWeek = 1; // Monday
       const result = service.getMonthDaysToShow(numberOfWeeks, firstDayOfWeek);
       expect(result.length).toBe(numberOfWeeks * 7);
+    });
+
+    it('should show the logical month between midnight and the start-of-next-day offset', () => {
+      // 00:30 on Feb 1 with a 04:00 start-of-next-day is logically still Jan
+      // 31, so the grid must be January's (starting Mon Dec 29), not
+      // February's (starting Mon Jan 26).
+      jasmine.clock().install();
+      try {
+        jasmine.clock().mockDate(new Date(2026, 1, 1, 0, 30));
+        dateService.setStartOfNextDayDiff('04:00');
+        const result = service.getMonthDaysToShow(5, 1, null);
+        expect(result[0]).toBe('2025-12-29');
+      } finally {
+        jasmine.clock().uninstall();
+      }
     });
 
     it('should start with the configured first day of week when firstDayOfWeek is Monday (1)', () => {
@@ -225,6 +303,46 @@ describe('ScheduleService', () => {
       const lastDay = new Date(result[result.length - 1]);
       // With 5 weeks starting from late December, we should reach into February
       expect(lastDay.getMonth()).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('createScheduleDaysComputed', () => {
+    it('anchors now into the displayed day when the wall clock has passed it', () => {
+      // The day panel shows logical today, which respects the start-of-next-day
+      // offset. Between midnight and that offset the wall clock is already past
+      // that day's end, and an unanchored now pushes every entry out of the only
+      // rendered day.
+      const dayStr = '2026-01-20';
+      const clock = new Date(2026, 0, 21, 3, 0).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      const buildSpy = spyOn(service, 'buildScheduleDays').and.returnValue([]);
+
+      service.createScheduleDaysComputed(signal([dayStr]))();
+
+      const params = buildSpy.calls.mostRecent().args[0];
+      expect(params.now).toBe(new Date(2026, 0, 20, 0, 0, 0, 0).getTime());
+      expect(params.realNow).toBe(clock);
+    });
+
+    it('keeps the live clock while it still sits inside the displayed day', () => {
+      const dayStr = '2026-01-20';
+      const clock = new Date(2026, 0, 20, 9, 30).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      const buildSpy = spyOn(service, 'buildScheduleDays').and.returnValue([]);
+
+      service.createScheduleDaysComputed(signal([dayStr]))();
+
+      expect(buildSpy.calls.mostRecent().args[0].now).toBe(clock);
+    });
+
+    it('falls back to the wall clock when no day is displayed', () => {
+      const clock = new Date(2026, 0, 20, 9, 30).getTime();
+      spyOn(Date, 'now').and.callFake(() => clock);
+      const buildSpy = spyOn(service, 'buildScheduleDays').and.returnValue([]);
+
+      service.createScheduleDaysComputed(signal([]))();
+
+      expect(buildSpy.calls.mostRecent().args[0].now).toBe(clock);
     });
   });
 

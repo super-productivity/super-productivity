@@ -97,18 +97,16 @@
           </div>
         </div>
         <div class="col">
-          @if (isWorklogExport()) {
-            <mat-form-field class="md-block">
-              <label>{{ T.F.WORKLOG.EXPORT.SEPARATE_TASKS_BY | translate }}</label>
-              <input
-                (change)="onOptionsChange()"
-                [(ngModel)]="options.separateTasksBy"
-                matInput
-                name="separateTasksBy"
-                type="text"
-              />
-            </mat-form-field>
-          }
+          <mat-form-field class="md-block">
+            <label>{{ T.F.WORKLOG.EXPORT.SEPARATE_TASKS_BY | translate }}</label>
+            <input
+              (change)="onOptionsChange()"
+              [(ngModel)]="options.separateTasksBy"
+              matInput
+              name="separateTasksBy"
+              type="text"
+            />
+          </mat-form-field>
         </div>
         <div class="col">
           <mat-form-field>

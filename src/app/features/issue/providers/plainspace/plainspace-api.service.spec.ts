@@ -101,24 +101,34 @@ describe('PlainspaceApiService', () => {
     expect(await p).toBeNull();
   });
 
-  it('patchTask$ PATCHes the given fields and maps scheduledAt back', async () => {
-    const p = firstValueFrom(
-      service.patchTask$(
-        'a',
-        { done: true, scheduledAt: '2026-01-02T09:00:00.000Z' },
-        cfg,
-      ),
-    );
+  it('patchTask$ PATCHes completion and maps its confirmation', async () => {
+    const p = firstValueFrom(service.patchTask$('a', { done: true }, cfg));
     const req = httpMock.expectOne(`${BASE}/tasks/a`);
     expect(req.request.method).toBe('PATCH');
-    expect(req.request.body).toEqual({
-      done: true,
-      scheduledAt: '2026-01-02T09:00:00.000Z',
-    });
-    req.flush({ task: spTask('a', 'space-1', true, '2026-01-02T09:00:00.000Z') });
+    expect(req.request.body).toEqual({ done: true });
+    req.flush({ task: spTask('a', 'space-1', true) });
     const issue = await p;
     expect(issue?.isDone).toBe(true);
-    expect(issue?.scheduledAt).toBe('2026-01-02T09:00:00.000Z');
+  });
+
+  it('patchTask$ reports a failed completion update as null', async () => {
+    const p = firstValueFrom(service.patchTask$('a', { done: true }, cfg));
+    httpMock
+      .expectOne(`${BASE}/tasks/a`)
+      .flush('boom', { status: 500, statusText: 'Server Error' });
+    expect(await p).toBeNull();
+  });
+
+  it('patchTask$ accepts a minimal completion confirmation', async () => {
+    const p = firstValueFrom(service.patchTask$('a', { done: true }, cfg));
+    httpMock.expectOne(`${BASE}/tasks/a`).flush({ task: { id: 'a', done: true } });
+    expect(await p).toEqual({ id: 'a', isDone: true });
+  });
+
+  it('patchTask$ rejects a malformed completion confirmation', async () => {
+    const p = firstValueFrom(service.patchTask$('a', { done: true }, cfg));
+    httpMock.expectOne(`${BASE}/tasks/a`).flush({ task: { id: 'a', done: 'yes' } });
+    expect(await p).toBeNull();
   });
 
   it('getSpaces$ maps the account spaces from /me', async () => {
@@ -208,14 +218,37 @@ describe('PlainspaceApiService', () => {
     // httpMock.verify() in afterEach asserts no /me call was made.
   });
 
-  it('createSpace$ returns the new project id', async () => {
+  it('creates a space, keeps its UUID for the provider, and resolves its slug for opening', async () => {
     const p = firstValueFrom(service.createSpace$('My Space', cfg));
     const req = httpMock.expectOne(`${BASE}/spaces`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ name: 'My Space' });
-    req.flush({ project: { id: 'proj-new' }, url: 'x', memberId: 'm' });
-    expect((await p).id).toBe('proj-new');
+    const project = { id: 'proj-new', name: 'My Space', slug: 'new-space-slug' };
+    const url = 'https://plainspace.org/new-space-slug';
+    req.flush({ project, url, memberId: 'm' });
+    const created = await p;
+    expect(created.id).toBe(project.id);
+
+    const openedUrl = firstValueFrom(
+      service.getSpaceUrl$({ ...cfg, spaceId: created.id }),
+    );
+    httpMock.expectOne(`${BASE}/me`).flush({
+      email: 'me@example.com',
+      projects: [{ ...project, memberDisplayName: 'Me', role: 'admin' }],
+    });
+    expect(await openedUrl).toBe(url);
   });
+
+  for (const status of [401, 429, 500]) {
+    it(`propagates space creation errors (${status}) so the share flow can report them`, async () => {
+      const created = firstValueFrom(service.createSpace$('My Space', cfg));
+      httpMock
+        .expectOne(`${BASE}/spaces`)
+        .flush({ error: 'Cannot create space' }, { status, statusText: 'API error' });
+
+      await expectAsync(created).toBeRejected();
+    });
+  }
 
   it('createTask$ POSTs { spaceId, title } and maps the created task', async () => {
     const p = firstValueFrom(service.createTask$('Buy milk', cfg));

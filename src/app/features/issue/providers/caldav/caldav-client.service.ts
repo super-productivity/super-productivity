@@ -189,6 +189,19 @@ export class CaldavClientService {
     return await calendar.calendarQuery([query]);
   }
 
+  // RFC 5545 lists COMPLETED, STATUS, and PERCENT-COMPLETE as independent
+  // optional VTODO properties — a server may send any one of them alone to
+  // mark a todo done, so the COMPLETED timestamp alone misses STATUS-only
+  // todos. The poll mapping and the push dirty-check must agree on this,
+  // else reopening a STATUS-only completed todo never reaches the server.
+  private static _isTodoCompleted(todo: any): boolean {
+    return (
+      !!todo.getFirstPropertyValue('completed') ||
+      todo.getFirstPropertyValue('status') === CaldavIssueStatus.COMPLETED ||
+      +(todo.getFirstPropertyValue('percent-complete') as string) === 100
+    );
+  }
+
   private static async _mapTask(task: CalDavTaskData): Promise<CaldavIssue> {
     const ICAL = await loadIcalModule();
     const jCal = ICAL.parse(task.data);
@@ -205,10 +218,14 @@ export class CaldavClientService {
 
     const dtstart = todo.getFirstPropertyValue('dtstart') as any;
     const due = todo.getFirstPropertyValue('due') as any;
+    const status =
+      (todo.getFirstPropertyValue('status') as CaldavIssueStatus) || undefined;
+    const percentComplete =
+      +(todo.getFirstPropertyValue('percent-complete') as string) || undefined;
 
     return {
       id: todo.getFirstPropertyValue('uid') as string,
-      completed: !!todo.getFirstPropertyValue('completed'),
+      completed: CaldavClientService._isTodoCompleted(todo),
       item_url: task.url,
       summary: (todo.getFirstPropertyValue('summary') as string) || '',
       start: dtstart?.toJSDate().getTime(),
@@ -216,10 +233,9 @@ export class CaldavClientService {
       due: due?.toJSDate().getTime(),
       isDueAllDay: due ? due.isDate === true : undefined,
       note: (todo.getFirstPropertyValue('description') as string) || undefined,
-      status: (todo.getFirstPropertyValue('status') as CaldavIssueStatus) || undefined,
+      status,
       priority: +(todo.getFirstPropertyValue('priority') as string) || undefined,
-      percent_complete:
-        +(todo.getFirstPropertyValue('percent-complete') as string) || undefined,
+      percent_complete: percentComplete,
       location: todo.getFirstPropertyValue('location') as string,
       labels: categories,
       etag_hash: this._hashEtag(task.etag),
@@ -675,7 +691,7 @@ export class CaldavClientService {
     const now = ICAL.Time.now();
     let changeObserved = false;
 
-    const oldCompleted = !!todo.getFirstPropertyValue('completed');
+    const oldCompleted = CaldavClientService._isTodoCompleted(todo);
     if (updates.completed !== undefined && updates.completed !== oldCompleted) {
       if (updates.completed) {
         todo.updatePropertyWithValue('completed', now);

@@ -28,7 +28,6 @@ import {
   animationFrameScheduler,
   from,
   fromEvent,
-  interval,
   Observable,
   ReplaySubject,
   Subscription,
@@ -36,7 +35,7 @@ import {
   zip,
 } from 'rxjs';
 import { TaskWithSubTasks } from '../tasks/task.model';
-import { delay, filter, map, observeOn, startWith, switchMap } from 'rxjs/operators';
+import { delay, filter, map, observeOn, switchMap } from 'rxjs/operators';
 import { of } from 'rxjs';
 import { fadeAnimation } from '../../ui/animations/fade.ani';
 import { T } from '../../t.const';
@@ -79,6 +78,12 @@ import { CalendarIntegrationService } from '../calendar-integration/calendar-int
 import { PlannerCalendarEventComponent } from '../planner/planner-calendar-event/planner-calendar-event.component';
 import { ScheduleCalendarMapEntry } from '../schedule/schedule.model';
 import { getLaterTodayCalendarEvents } from './get-later-today-calendar-events';
+import {
+  getEndOfTodayTime,
+  isLaterTodayEntryUpcoming,
+} from '../tasks/util/later-today-window';
+import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
+import { fastArrayCompare } from '../../util/fast-array-compare';
 import { CollapsibleComponent } from '../../ui/collapsible/collapsible.component';
 import { SnackService } from '../../core/snack/snack.service';
 import { GlobalConfigService } from '../config/global-config.service';
@@ -165,6 +170,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _dateService = inject(DateService);
   private _pluginBridge = inject(PluginBridgeService);
   private _calendarIntegrationService = inject(CalendarIntegrationService);
+  private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   protected readonly dragDelayForTouch = dragDelayForTouch;
 
   isProjectContext = toSignal(this.workContextService.isActiveWorkContextProject$, {
@@ -207,9 +213,10 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   overdueTasks = toSignal(this._store.select(selectOverdueTasksWithSubTasks), {
     initialValue: [],
   });
-  laterTodayTasks = toSignal(this._store.select(selectLaterTodayTasksWithSubTasks), {
-    initialValue: [],
-  });
+  private _laterTodayTaskCandidates = toSignal(
+    this._store.select(selectLaterTodayTasksWithSubTasks),
+    { initialValue: [] as TaskWithSubTasks[] },
+  );
   // Calendar events are not in the store — sourced live (cached + polled,
   // shareReplay/refCount) from the calendar integration. Shown as read-only
   // outlines in the "Later Today" section, mirroring the planner.
@@ -227,21 +234,42 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     this._store.select(selectStartOfNextDayDiffMs),
     { initialValue: 0 },
   );
-  // Re-evaluate the now/end-of-today window on a coarse tick so events drop out
-  // of "Later Today" once they start, without waiting for the next calendar
-  // poll (iCal polls up to every 2h). Mirrors ScheduleService.scheduleRefreshTick.
-  private _refreshTick = toSignal(interval(2 * 60 * 1000).pipe(startWith(0)), {
-    initialValue: 0,
-  });
-  laterTodayCalendarEvents = computed(() => {
-    this._refreshTick();
-    return getLaterTodayCalendarEvents(
-      this._calendarEventEntries(),
-      this._todayStr(),
-      this._startOfNextDayDiffMs(),
-      Date.now(),
-    );
-  });
+  // Re-evaluate the now/end-of-today window on a coarse tick so tasks and events
+  // drop out of "Later Today" once they start. Nothing is dispatched when a start
+  // time passes, so without this both lists would keep showing an appointment
+  // that is already running (and the main list would keep hiding it).
+  private _refreshTick = toSignal(this._globalTrackingIntervalService.minuteTick$);
+  // `equal: fastArrayCompare` keeps the array ref stable across ticks that
+  // change nothing, so OnPush children are not re-rendered every minute.
+  laterTodayCalendarEvents = computed(
+    () => {
+      this._refreshTick();
+      return getLaterTodayCalendarEvents(
+        this._calendarEventEntries(),
+        this._todayStr(),
+        this._startOfNextDayDiffMs(),
+        Date.now(),
+      );
+    },
+    { equal: fastArrayCompare },
+  );
+  // The selector's cutoff is only as fresh as the last task-state change, so
+  // re-apply it here against the current clock. It can only ever include too
+  // much, which makes this filter enough to keep the panel exact.
+  laterTodayTasks = computed(
+    () => {
+      this._refreshTick();
+      const endOfTodayTime = getEndOfTodayTime(
+        this._todayStr(),
+        this._startOfNextDayDiffMs(),
+      );
+      const now = Date.now();
+      return this._laterTodayTaskCandidates().filter((task) =>
+        isLaterTodayEntryUpcoming(task, now, endOfTodayTime),
+      );
+    },
+    { equal: fastArrayCompare },
+  );
   undoneTasks = input.required<TaskWithSubTasks[]>();
   customizedUndoneTasks = toSignal(
     this.customizerService.customizeUndoneTasks(this.workContextService.undoneTasks$),
@@ -491,6 +519,13 @@ export class WorkViewComponent implements OnInit, OnDestroy {
           this._pendingFocusItemTaskId = params.focusItem;
           this._focusItemInWorkViewWhenReady(params.focusItem);
         } else {
+          // Cancel the chain too, not just the marker: a still-running loop
+          // would keep expanding containers for a task the user has navigated
+          // away from (e.g. the backlog shortcut drops `focusItem`).
+          if (this._pendingFocusItemTimeout) {
+            window.clearTimeout(this._pendingFocusItemTimeout);
+            this._pendingFocusItemTimeout = undefined;
+          }
           this._pendingFocusItemTaskId = null;
         }
         // NOTE: otherwise this is not triggered right away
@@ -692,13 +727,132 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     }
 
     if (retriesLeft <= 0) {
+      // Give up for good: leaving the id pending would let the `splitTopEl`
+      // setter replay the whole loop on every later context change, re-opening
+      // containers the user has since collapsed by hand.
+      this._pendingFocusItemTaskId = null;
       return;
     }
+
+    // A collapsed container unmounts its whole task-list, so retrying alone
+    // would poll for a row that can never appear. Below the give-up guard: on
+    // the final attempt there is no retry left to use the expansion, and
+    // expanding then would only persist a collapse change the user never sees
+    // resolved. Idempotent — an already-expanded container no longer matches.
+    this._expandCollapsedContainerFor(taskId);
 
     this._pendingFocusItemTimeout = window.setTimeout(() => {
       this._pendingFocusItemTimeout = undefined;
       this._focusItemInWorkViewWhenReady(taskId, retriesLeft - 1);
     }, WorkViewComponent._FOCUS_ITEM_RETRY_DELAY);
+  }
+
+  /**
+   * Opens whichever collapsed container holds the target task, if any.
+   *
+   * `collapsible` renders its content behind `@if (isExpanded)`, so a collapsed
+   * container leaves the task with no DOM node at all and the retry loop above
+   * can never succeed — it just expires silently. Runs on every failed attempt
+   * because the grouped/section data can arrive after the first one; it never
+   * re-opens a container it already opened, since only containers still listed
+   * as collapsed are candidates. (#8780)
+   */
+  private _expandCollapsedContainerFor(taskId: string): void {
+    // A plugin embed replaces the entire task list, but `#splitTopEl` sits
+    // OUTSIDE that `@if` — so the loop keeps its container, runs its full budget
+    // and would expand containers that are not rendered at all, including a
+    // synced `updateSection` for a section nobody can see.
+    if (this.pluginEmbedId()) {
+      return;
+    }
+
+    if (this._expandCollapsedUndoneContainerFor(taskId)) {
+      return;
+    }
+
+    // The done/overdue/later panels are siblings of the undone list, not
+    // alternatives to it, so they are checked whatever it renders. Nothing here
+    // is synced — but the collapse state is still a preference the user set, so
+    // each check mirrors the panel's own `@if`. That matters because the overdue
+    // and later-today lists are GLOBAL while their panels are Today-only: plain
+    // membership would flip a Today panel from a project page that never shows it.
+    //
+    // These lists DO overlap: `_hasTaskInList` matches nested subtasks too, and
+    // every selector attaches the full, unfiltered subtask family — so an undone
+    // overdue subtask of a done parent sits in `doneTasks` (nested under its
+    // parent) AND in `overdueTasks` (top-level). The `else if` therefore picks a
+    // winner rather than stating an impossibility, and opening only the first
+    // match is correct: the row is rendered in that panel too.
+    if (this.isDoneHidden() && this._hasTaskInList(this.doneTasks(), taskId)) {
+      this.isDoneHidden.set(false);
+    } else if (
+      this.isShowOverduePanel() &&
+      this.isOverdueHidden() &&
+      this._hasTaskInList(this.overdueTasks(), taskId)
+    ) {
+      this.isOverdueHidden.set(false);
+    } else if (
+      this.isOnTodayList() &&
+      this.isLaterTodayHidden() &&
+      this._hasTaskInList(this.laterTodayTasks(), taskId)
+    ) {
+      this.isLaterTodayHidden.set(false);
+    }
+  }
+
+  /**
+   * The undone list renders as EITHER groups, sections or a flat list, so this
+   * half must follow the template's `@if` chain: expanding a section is a synced
+   * write, and firing it for a section that is not on screen would push a
+   * pointless op to every device. Returns whether it opened something.
+   */
+  private _expandCollapsedUndoneContainerFor(taskId: string): boolean {
+    // Same order as the template's `@if` chain: `grouped` first, sections only
+    // when there is no grouping. Testing `isCustomized()` first would diverge
+    // while the customizer is switched off — that signal flips synchronously
+    // while the grouped list lags by an animation frame, so the view would still
+    // be showing groups when this decided to expand a section.
+    const grouped = this.customizedUndoneTasks().grouped;
+    if (grouped) {
+      const collapsedGroupIds = this.customizerService.collapsedGroupIds();
+      // Iterate the record's OWN keys rather than indexing it by the collapsed
+      // ids: group keys are user-authored project/tag titles, so a stale id like
+      // `constructor` would otherwise resolve off Object.prototype.
+      const groupKey = Object.keys(grouped).find(
+        (key) =>
+          collapsedGroupIds.includes(key) && this._hasTaskInList(grouped[key], taskId),
+      );
+      if (!groupKey) {
+        return false;
+      }
+      // Never log groupKey: it is a project/tag TITLE, and log history is
+      // exportable. Its index is enough to read a reporter's trace. (rule 9)
+      recordSearchNavDebug('workView:expandCollapsedGroup', {
+        taskId,
+        groupIndex: Object.keys(grouped).indexOf(groupKey),
+      });
+      this.customizerService.toggleGroupExpansion(groupKey);
+      return true;
+    }
+
+    // `grouped` is also undefined for a sort-only/filter-only customization, and
+    // on the first attempt of a grouped view (the list is deferred by a frame).
+    // Neither renders sections.
+    if (this.customizerService.isCustomized()) {
+      return false;
+    }
+
+    const bySection = this.undoneTasksBySection();
+    for (const section of this.sections()) {
+      if (section.isExpanded) {
+        continue;
+      }
+      if (this._hasTaskInList(bySection.dict[section.id], taskId)) {
+        this.sectionService.updateSection(section.id, { isExpanded: true });
+        return true;
+      }
+    }
+    return false;
   }
 
   private _getRelativeTopWithinContainer(
@@ -728,7 +882,10 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     taskList: TaskWithSubTasks[] | null | undefined,
     taskId: string,
   ): boolean {
-    if (!taskList || !taskList.length) {
+    // Array check, not just truthiness: callers index plain object literals by
+    // a key that may be stale, and an inherited Object.prototype member would
+    // otherwise reach the `for…of` below and throw.
+    if (!Array.isArray(taskList) || !taskList.length) {
       return false;
     }
 

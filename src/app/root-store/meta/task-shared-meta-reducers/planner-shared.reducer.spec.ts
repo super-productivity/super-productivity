@@ -409,7 +409,7 @@ describe('plannerSharedMetaReducer', () => {
 
     // Virtual tag pattern tests: TODAY_TAG membership is determined by task.dueDay,
     // NOT by task.tagIds. TODAY_TAG should NEVER be in task.tagIds.
-    // See: docs/ai/today-tag-architecture.md
+    // See: ARCHITECTURE-DECISIONS.md Decision #2
     describe('virtual tag pattern: task.tagIds cleanup (TODAY should NEVER be in tagIds)', () => {
       it('should NOT add TODAY to task.tagIds when planning for today (virtual tag pattern)', () => {
         const todayStr = getDbDateStr();

@@ -7,7 +7,10 @@ import { EntityState } from '@ngrx/entity';
 // Import the unified Project type from plugin-api
 import { Project as PluginProject } from '@super-productivity/plugin-api';
 
-export type RoundTimeOption = '5M' | 'QUARTER' | 'HALF' | 'HOUR' | null | undefined;
+// Lives in util/ so pure rounding helpers (round-time, round-duration) can
+// consume it without importing from features/ (layer boundary). Re-exported
+// here to keep the canonical import site stable for feature code.
+export type { RoundTimeOption } from '../../util/round-time-option.model';
 
 export interface ProjectBasicCfg {
   title: string;

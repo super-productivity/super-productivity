@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 // Active tests for setCounter fix (issue #5812)
-import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { selectTaskByIdWithSubTaskData } from '../features/tasks/store/task.selectors';
 import { of } from 'rxjs';
 import { PluginBridgeService } from './plugin-bridge.service';
+import { PluginShortcutCfg } from '@super-productivity/plugin-api';
 import { selectAllSimpleCounters } from '../features/simple-counter/store/simple-counter.reducer';
 import {
   updateSimpleCounter,
@@ -20,7 +21,6 @@ import { NotifyService } from '../core/notify/notify.service';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { PluginHooksService } from './plugin-hooks';
 import { TaskService } from '../features/tasks/task.service';
-import { TaskFocusService } from '../features/tasks/task-focus.service';
 import { DEFAULT_TASK, TaskWithSubTasks } from '../features/tasks/task.model';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { ProjectService } from '../features/project/project.service';
@@ -41,6 +41,9 @@ import { Log } from '../core/log';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
 import { PluginDialogComponent } from './ui/plugin-dialog/plugin-dialog.component';
 import { T } from '../t.const';
+import { INBOX_PROJECT } from '../features/project/project.const';
+import { Project } from '../features/project/project.model';
+import { PluginManifest } from '@super-productivity/plugin-api';
 
 describe('PluginBridgeService - Counter Methods', () => {
   let service: PluginBridgeService;
@@ -278,6 +281,60 @@ describe('PluginBridgeService - Counter Methods', () => {
     });
   });
 
+  describe('shortcuts', () => {
+    const shortcut = (
+      pluginId: string,
+      id: string,
+      label: string,
+    ): PluginShortcutCfg => ({
+      pluginId,
+      id,
+      label,
+      onExec: () => {},
+    });
+
+    it('replaces an existing shortcut when the same id is registered again', () => {
+      const bound = service.createBoundMethods('test-plugin');
+
+      bound.registerShortcut(shortcut('test-plugin', 'rule-1', 'Old label'));
+      bound.registerShortcut(shortcut('test-plugin', 'rule-1', 'New label'));
+
+      expect(service.shortcuts().length).toBe(1);
+      expect(service.shortcuts()[0].label).toBe('New label');
+    });
+
+    it('keeps shortcuts of other plugins with the same id', () => {
+      service
+        .createBoundMethods('test-plugin')
+        .registerShortcut(shortcut('test-plugin', 'rule-1', 'Mine'));
+      service
+        .createBoundMethods('other-plugin')
+        .registerShortcut(shortcut('other-plugin', 'rule-1', 'Theirs'));
+
+      expect(service.shortcuts().length).toBe(2);
+    });
+
+    it('unregisters a single shortcut of a plugin', () => {
+      const bound = service.createBoundMethods('test-plugin');
+      bound.registerShortcut(shortcut('test-plugin', 'rule-1', 'One'));
+      bound.registerShortcut(shortcut('test-plugin', 'rule-2', 'Two'));
+
+      bound.unregisterShortcut('rule-1');
+
+      expect(service.shortcuts().map((s) => s.id)).toEqual(['rule-2']);
+    });
+
+    it('does not unregister the same id of another plugin', () => {
+      service
+        .createBoundMethods('test-plugin')
+        .registerShortcut(shortcut('test-plugin', 'rule-1', 'Mine'));
+
+      service.createBoundMethods('other-plugin').unregisterShortcut('rule-1');
+
+      expect(service.shortcuts().length).toBe(1);
+    });
+  });
+
   describe('reInitData', () => {
     it('should delegate to DataInitService.reInit', async () => {
       await service.reInitData();
@@ -290,8 +347,14 @@ describe('PluginBridgeService - Counter Methods', () => {
 describe('PluginBridgeService - dispatchAction privacy (#7619)', () => {
   let service: PluginBridgeService;
   let store: MockStore;
+  let translateService: jasmine.SpyObj<TranslateService>;
 
   beforeEach(() => {
+    translateService = jasmine.createSpyObj<TranslateService>('TranslateService', [
+      'instant',
+    ]);
+    translateService.instant.and.returnValue('Action type is not allowed');
+
     TestBed.configureTestingModule({
       providers: [
         PluginBridgeService,
@@ -308,7 +371,7 @@ describe('PluginBridgeService - dispatchAction privacy (#7619)', () => {
         { provide: PluginConfigService, useValue: {} },
         { provide: TaskArchiveService, useValue: {} },
         { provide: Router, useValue: {} },
-        { provide: TranslateService, useValue: {} },
+        { provide: TranslateService, useValue: translateService },
         { provide: SyncWrapperService, useValue: {} },
         { provide: GlobalThemeService, useValue: {} },
         { provide: PluginIssueProviderRegistryService, useValue: {} },
@@ -351,6 +414,19 @@ describe('PluginBridgeService - dispatchAction privacy (#7619)', () => {
 
     expect(Log.exportLogHistory()).toContain(updateGlobalConfigSection.type);
   });
+
+  it('uses the English placeholder contract for rejected action types', () => {
+    const bound = service.createBoundMethods('test-plugin');
+    const type = '[Forbidden] Test Action';
+
+    expect(() => bound.dispatchAction({ type })).toThrowError(
+      'Action type is not allowed',
+    );
+    expect(translateService.instant).toHaveBeenCalledOnceWith(
+      T.PLUGINS.ACTION_TYPE_NOT_ALLOWED,
+      { type },
+    );
+  });
 });
 
 describe('PluginBridgeService - iframe task selection methods', () => {
@@ -370,6 +446,32 @@ describe('PluginBridgeService - iframe task selection methods', () => {
 
   let service: PluginBridgeService;
   let taskService: jasmine.SpyObj<TaskService>;
+  let taskEl: HTMLElement | null = null;
+  let activeElementStubbed = false;
+
+  // getFocusedTask() reads the DOM, so a focused <task> has to actually exist.
+  // activeElement is stubbed rather than set via el.focus() — headless Chrome
+  // only updates it when the test iframe has window focus, which is not
+  // guaranteed inside a large suite (same pattern as task-shortcut.service.spec).
+  const focusTaskEl = (taskId: string): void => {
+    taskEl = document.createElement('task');
+    taskEl.setAttribute('data-task-id', taskId);
+    document.body.appendChild(taskEl);
+    Object.defineProperty(document, 'activeElement', {
+      configurable: true,
+      get: () => taskEl,
+    });
+    activeElementStubbed = true;
+  };
+
+  afterEach(() => {
+    taskEl?.remove();
+    taskEl = null;
+    if (activeElementStubbed) {
+      delete (document as unknown as { activeElement?: unknown }).activeElement;
+      activeElementStubbed = false;
+    }
+  });
 
   beforeEach(() => {
     taskService = jasmine.createSpyObj<TaskService>('TaskService', ['getByIdOnce$'], {
@@ -387,12 +489,6 @@ describe('PluginBridgeService - iframe task selection methods', () => {
         { provide: MatDialog, useValue: {} },
         { provide: PluginHooksService, useValue: {} },
         { provide: TaskService, useValue: taskService },
-        {
-          provide: TaskFocusService,
-          useValue: {
-            focusedTaskId: signal<string | null>(focusedTask.id),
-          },
-        },
         { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
         { provide: ProjectService, useValue: {} },
         { provide: TagService, useValue: {} },
@@ -414,6 +510,7 @@ describe('PluginBridgeService - iframe task selection methods', () => {
   });
 
   it('exposes selected and focused task readers on iframe bound methods', async () => {
+    focusTaskEl(focusedTask.id);
     const bound = service.createBoundMethods('iframe-plugin');
 
     const selectedResult = await bound.getSelectedTask();
@@ -427,6 +524,7 @@ describe('PluginBridgeService - iframe task selection methods', () => {
   });
 
   it('returns null for stale focused task ids', async () => {
+    focusTaskEl(focusedTask.id);
     taskService.getByIdOnce$.and.returnValue(
       of(undefined as unknown as TaskWithSubTasks),
     );
@@ -434,6 +532,67 @@ describe('PluginBridgeService - iframe task selection methods', () => {
 
     await expectAsync(bound.getFocusedTask()).toBeResolvedTo(null);
     expect(taskService.getByIdOnce$).toHaveBeenCalledOnceWith(focusedTask.id);
+  });
+
+  // Focus tracking can keep pointing at a task that no longer holds focus after
+  // a view change; acting on it would mutate the wrong task (#8851).
+  it('returns null when no task row is focused', async () => {
+    const bound = service.createBoundMethods('iframe-plugin');
+
+    await expectAsync(bound.getFocusedTask()).toBeResolvedTo(null);
+    expect(taskService.getByIdOnce$).not.toHaveBeenCalled();
+  });
+});
+
+// #9946: deleteTask is the one live entry point that can hand an unknown id to
+// TaskService.remove(). The selector used to answer with a truthy id-less stub,
+// so this guard did nothing and the delete wiped every top-level task.
+describe('PluginBridgeService - deleteTask() with an unknown id', () => {
+  let service: PluginBridgeService;
+  let taskService: jasmine.SpyObj<TaskService>;
+  let store: MockStore;
+
+  beforeEach(() => {
+    taskService = jasmine.createSpyObj<TaskService>('TaskService', ['remove'], {
+      allTasks$: of([]),
+      selectedTask$: of(null),
+    });
+
+    TestBed.configureTestingModule({
+      providers: [
+        PluginBridgeService,
+        provideMockStore(),
+        { provide: SnackService, useValue: {} },
+        { provide: NotifyService, useValue: {} },
+        { provide: MatDialog, useValue: {} },
+        { provide: PluginHooksService, useValue: {} },
+        { provide: TaskService, useValue: taskService },
+        { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
+        { provide: ProjectService, useValue: {} },
+        { provide: TagService, useValue: {} },
+        { provide: PluginUserPersistenceService, useValue: {} },
+        { provide: PluginConfigService, useValue: {} },
+        { provide: TaskArchiveService, useValue: {} },
+        { provide: Router, useValue: {} },
+        { provide: TranslateService, useValue: { instant: () => 'Task not found' } },
+        { provide: SyncWrapperService, useValue: {} },
+        { provide: GlobalThemeService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: {} },
+        { provide: DataInitService, useValue: {} },
+      ],
+    });
+
+    service = TestBed.inject(PluginBridgeService);
+    store = TestBed.inject(MockStore);
+  });
+
+  it('throws and removes nothing', async () => {
+    store.overrideSelector(selectTaskByIdWithSubTaskData, undefined);
+
+    await expectAsync(service.deleteTask('NO_SUCH_TASK')).toBeRejected();
+    expect(taskService.remove).not.toHaveBeenCalled();
   });
 });
 
@@ -859,6 +1018,104 @@ describe('PluginBridgeService - getAppState credential redaction', () => {
     expect(snapshot.projects['p-1'].title).toBe('Work');
     expect((snapshot.globalConfig.misc as Record<string, unknown>).isDarkMode).toBe(
       false,
+    );
+  });
+});
+
+describe('PluginBridgeService - deleteProject', () => {
+  let service: PluginBridgeService;
+  let projectServiceSpy: jasmine.SpyObj<ProjectService>;
+
+  const mockProject = { id: 'project-1', title: 'Work' } as Project;
+
+  beforeEach(() => {
+    projectServiceSpy = jasmine.createSpyObj('ProjectService', [
+      'getByIdOnce$',
+      'remove',
+    ]);
+    projectServiceSpy.getByIdOnce$.and.returnValue(of(mockProject));
+    projectServiceSpy.remove.and.resolveTo();
+
+    TestBed.configureTestingModule({
+      providers: [
+        PluginBridgeService,
+        provideMockStore(),
+        { provide: SnackService, useValue: {} },
+        { provide: NotifyService, useValue: {} },
+        { provide: MatDialog, useValue: {} },
+        { provide: PluginHooksService, useValue: {} },
+        { provide: TaskService, useValue: {} },
+        { provide: WorkContextService, useValue: { activeWorkContext$: of(null) } },
+        { provide: ProjectService, useValue: projectServiceSpy },
+        { provide: TagService, useValue: {} },
+        { provide: PluginUserPersistenceService, useValue: {} },
+        { provide: PluginConfigService, useValue: {} },
+        { provide: TaskArchiveService, useValue: {} },
+        { provide: Router, useValue: {} },
+        {
+          provide: TranslateService,
+          useValue: { instant: (key: string): string => key },
+        },
+        { provide: SyncWrapperService, useValue: {} },
+        { provide: GlobalThemeService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: {} },
+        { provide: DataInitService, useValue: {} },
+      ],
+    });
+
+    service = TestBed.inject(PluginBridgeService);
+  });
+
+  it('deletes via ProjectService so the cascade stays in one place', async () => {
+    await service.deleteProject('project-1', ['deleteProject']);
+
+    expect(projectServiceSpy.remove).toHaveBeenCalledOnceWith(mockProject);
+  });
+
+  it('refuses to delete the Inbox', async () => {
+    await expectAsync(
+      service.deleteProject(INBOX_PROJECT.id, ['deleteProject']),
+    ).toBeRejectedWithError(T.PLUGINS.CANNOT_DELETE_INBOX);
+
+    expect(projectServiceSpy.remove).not.toHaveBeenCalled();
+  });
+
+  it('throws for an unknown project instead of removing nothing silently', async () => {
+    projectServiceSpy.getByIdOnce$.and.returnValue(of(undefined as unknown as Project));
+
+    await expectAsync(
+      service.deleteProject('does-not-exist', ['deleteProject']),
+    ).toBeRejectedWithError(T.PLUGINS.PROJECT_NOT_FOUND);
+
+    expect(projectServiceSpy.remove).not.toHaveBeenCalled();
+  });
+
+  it('rejects a plugin that does not declare the deleteProject permission', async () => {
+    await expectAsync(service.deleteProject('project-1')).toBeRejectedWithError(
+      /does not declare the "deleteProject" permission/,
+    );
+
+    expect(projectServiceSpy.remove).not.toHaveBeenCalled();
+  });
+
+  it('passes the manifest permissions through the bound method', async () => {
+    const granted = service.createBoundMethods('plugin-a', {
+      permissions: ['deleteProject'],
+    } as PluginManifest);
+    await granted.deleteProject('project-1');
+
+    expect(projectServiceSpy.remove).toHaveBeenCalledOnceWith(mockProject);
+
+    // Same call shape, manifest without the capability: the bridge must still refuse,
+    // which is what keeps iframe plugins (routed through boundMethods) gated.
+    const ungranted = service.createBoundMethods('plugin-b', {
+      permissions: [],
+    } as unknown as PluginManifest);
+
+    await expectAsync(ungranted.deleteProject('project-1')).toBeRejectedWithError(
+      /does not declare the "deleteProject" permission/,
     );
   });
 });

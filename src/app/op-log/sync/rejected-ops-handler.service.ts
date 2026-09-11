@@ -208,7 +208,13 @@ export class RejectedOpsHandlerService {
       // - Op doesn't exist (was somehow removed)
       // - Op is already synced (was accepted after all)
       // - Op is already rejected (conflict resolution already handled it)
-      if (!entry || entry.syncedAt || entry.rejectedAt) {
+      if (
+        !entry ||
+        entry.source !== 'local' ||
+        entry.syncedAt !== undefined ||
+        entry.rejectedAt !== undefined ||
+        entry.reducerRejectedAt !== undefined
+      ) {
         continue;
       }
 
@@ -423,6 +429,7 @@ export class RejectedOpsHandlerService {
         this._rollbackResolutionAttempts(opsToResolve);
         return { kind: 'cancelled' };
       }
+      mergedOpsCreated += downloadResult.localWinOpsCreated ?? 0;
 
       // Helper to check which ops are still pending, preserving existingClock from rejection
       const getStillPendingOps = async (): Promise<
@@ -435,7 +442,12 @@ export class RejectedOpsHandlerService {
         }> = [];
         for (const { opId, op, existingClock } of opsToResolve) {
           const entry = await this.opLogStore.getOpById(opId);
-          if (entry && !entry.syncedAt && !entry.rejectedAt) {
+          if (
+            entry?.source === 'local' &&
+            entry.syncedAt === undefined &&
+            entry.rejectedAt === undefined &&
+            entry.reducerRejectedAt === undefined
+          ) {
             pending.push({ opId, op, existingClock });
           }
         }
@@ -454,7 +466,7 @@ export class RejectedOpsHandlerService {
       // If download got new ops, conflict detection already happened in _processRemoteOps
       // If download got nothing (newOpsCount === 0), we need to resolve locally
       if (downloadResult.newOpsCount === 0) {
-        const stillPendingOps = await getStillPendingOps();
+        let stillPendingOps = await getStillPendingOps();
 
         if (stillPendingOps.length > 0) {
           // Normal download returned 0 ops but concurrent ops still pending.
@@ -469,6 +481,18 @@ export class RejectedOpsHandlerService {
           if (forceDownloadResult.kind === 'cancelled') {
             this._rollbackResolutionAttempts(opsToResolve);
             return { kind: 'cancelled' };
+          }
+          mergedOpsCreated += forceDownloadResult.localWinOpsCreated ?? 0;
+
+          // The forced download can itself resolve the conflict and retire the
+          // original op. Never pass the stale pre-download list to the resolver.
+          stillPendingOps = await getStillPendingOps();
+          if (stillPendingOps.length === 0) {
+            return {
+              kind: 'completed',
+              mergedOpsCreated,
+              retryExceededCount: opsExceededRetries.length,
+            };
           }
 
           // Use the clocks from force download to resolve superseded ops

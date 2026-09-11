@@ -106,6 +106,17 @@ describe('RejectedOpsHandlerService', () => {
       expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
     });
 
+    it('should skip reducer-rejected ops', async () => {
+      const op = createOp({ id: 'op-1' });
+      opLogStoreSpy.getOpById.and.returnValue(
+        Promise.resolve({ ...mockEntry(op), reducerRejectedAt: Date.now() }),
+      );
+
+      await service.handleRejectedOps([{ opId: 'op-1', error: 'test error' }]);
+
+      expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+    });
+
     it('should skip ops that no longer exist', async () => {
       opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(undefined));
 
@@ -795,6 +806,90 @@ describe('RejectedOpsHandlerService', () => {
         // Should have called twice: normal then forced
         expect(downloadCallback).toHaveBeenCalledTimes(2);
         expect(downloadCallback).toHaveBeenCalledWith({ forceFromSeq0: true });
+      });
+
+      it('should not resolve an op already retired by the forced download', async () => {
+        const op = createOp({ id: 'op-1' });
+        let rejectedAt: number | undefined;
+        opLogStoreSpy.getOpById.and.callFake(async () => ({
+          ...mockEntry(op),
+          rejectedAt,
+        }));
+        downloadCallback.and.callFake(async (options) => {
+          if (options?.forceFromSeq0) {
+            rejectedAt = Date.now();
+            return {
+              kind: 'completed',
+              newOpsCount: 1,
+              localWinOpsCreated: 1,
+              allOpClocks: [{ remoteClient: 2 }],
+            };
+          }
+          return { kind: 'completed', newOpsCount: 0 };
+        });
+
+        const result = await service.handleRejectedOps(
+          [{ opId: 'op-1', error: 'concurrent', errorCode: 'CONFLICT_CONCURRENT' }],
+          downloadCallback,
+        );
+
+        expect(
+          supersededOperationResolverSpy.resolveSupersededLocalOps,
+        ).not.toHaveBeenCalled();
+        expect(result).toEqual({
+          kind: 'completed',
+          mergedOpsCreated: 1,
+          permanentRejectionCount: 0,
+        });
+      });
+
+      it('should resolve only ops that remain pending after the forced download', async () => {
+        const resolvedOp = createOp({ id: 'op-1', entityId: 'resolved-entity' });
+        const pendingOp = createOp({ id: 'op-2', entityId: 'pending-entity' });
+        let resolvedRejectedAt: number | undefined;
+        opLogStoreSpy.getOpById.and.callFake(async (opId: string) => {
+          if (opId === resolvedOp.id) {
+            return { ...mockEntry(resolvedOp), rejectedAt: resolvedRejectedAt };
+          }
+          if (opId === pendingOp.id) {
+            return mockEntry(pendingOp);
+          }
+          return undefined;
+        });
+        downloadCallback.and.callFake(async (options) => {
+          if (options?.forceFromSeq0) {
+            resolvedRejectedAt = Date.now();
+            return {
+              kind: 'completed',
+              newOpsCount: 1,
+              allOpClocks: [{ remoteClient: 2 }],
+            };
+          }
+          return { kind: 'completed', newOpsCount: 0 };
+        });
+        supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
+
+        const result = await service.handleRejectedOps(
+          [resolvedOp, pendingOp].map((op) => ({
+            opId: op.id,
+            error: 'concurrent',
+            errorCode: 'CONFLICT_CONCURRENT',
+          })),
+          downloadCallback,
+        );
+
+        expect(
+          supersededOperationResolverSpy.resolveSupersededLocalOps,
+        ).toHaveBeenCalledOnceWith(
+          [{ opId: pendingOp.id, op: pendingOp, existingClock: undefined }],
+          [{ remoteClient: 2 }],
+          undefined,
+        );
+        expect(result).toEqual({
+          kind: 'completed',
+          mergedOpsCreated: 1,
+          permanentRejectionCount: 0,
+        });
       });
 
       it('should use superseded operation resolver when force download returns clocks', async () => {

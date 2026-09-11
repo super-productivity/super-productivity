@@ -109,6 +109,42 @@ describe('hasFocusNotificationStateChanged (notification reconciliation, #7856)'
   });
 });
 
+describe('hasFocusNotificationStateChanged (task reconciliation, #9399)', () => {
+  it('pushes immediately when the current task changes without a timer change', () => {
+    const timer = workTimer(0);
+
+    expect(
+      hasFocusNotificationStateChanged(
+        timer,
+        timer,
+        { id: 'task-a', title: 'Task A' },
+        { id: 'task-b', title: 'Task B' },
+      ),
+    ).toBe(true);
+  });
+
+  it('pushes immediately when the current task title changes', () => {
+    const timer = workTimer(0);
+
+    expect(
+      hasFocusNotificationStateChanged(
+        timer,
+        timer,
+        { id: 'task-a', title: 'Old title' },
+        { id: 'task-a', title: 'New title' },
+      ),
+    ).toBe(true);
+  });
+
+  it('still throttles a normal tick when the current task is unchanged', () => {
+    const task = { id: 'task-a', title: 'Task A' };
+
+    expect(
+      hasFocusNotificationStateChanged(workTimer(60_000), workTimer(61_000), task, task),
+    ).toBe(false);
+  });
+});
+
 // handleNativeTimerComplete$ acts on a native completion only while the matching
 // session is still active. The work-session guard is what prevents a double
 // completion when a resume tick (#7856) already finished the session before the

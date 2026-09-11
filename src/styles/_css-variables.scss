@@ -75,10 +75,14 @@
   // SystemBars WebView bands. Caveat: on the narrow API >= 35 / WebView < 140
   // band the shared source can double-count vs SystemBars' native padding (a
   // cosmetic gap, not an overlap — see the device-matrix risks in
-  // docs/plans/2026-06-22-android-systembars-migration-corrected.md).
+  // docs/android-edge-to-edge-keyboard.md).
   --bottom-nav-safe-area: calc(var(--safe-area-bottom) / 2);
 
-  // Keyboard height (set dynamically via JS)
+  // Keyboard geometry. Android / mobile web write `--keyboard-height` here from
+  // JS (GlobalThemeService). On iOS these are fallbacks only: the live values
+  // go on `.cdk-overlay-container` and the global add-task bar's host, never on
+  // :root, where a write restyles the whole task list (#9779) — see
+  // IosKeyboardService, which also hands the app shell its height directly.
   --keyboard-height: 0px;
   --keyboard-overlay-offset: 0px;
   --visual-viewport-height: 100vh;
@@ -89,6 +93,8 @@
   --s: 8px;
   --s-quarter: 2px;
   --s-half: 4px;
+  // Glyph inside the done toggle and the multi-select ring that replaces it.
+  --done-toggle-glyph-size: 22px;
 
   // -----------------------------
   // Fonts
@@ -196,6 +202,7 @@
   --z-onboarding-presets: 999;
   --z-mobile-bottom-nav: 50;
   --z-right-panel: 44;
+  --z-multi-select-bar: 45;
   --z-right-panel-resize-handle: 65;
   --z-right-panel-edge-handle: 66;
   --z-vertical-action-bar: 70;
@@ -390,7 +397,9 @@ body {
   // Ink (foreground)
   --ink-strong: rgb(0, 0, 0);
   --ink: rgb(44, 44, 44);
-  --ink-muted: rgba(44, 44, 44, 0.6);
+  // 0.66 remains visibly secondary while meeting WCAG AA against the default
+  // light surfaces (including white cards).
+  --ink-muted: rgba(44, 44, 44, 0.66);
   // RGB triplet (no `rgb()` wrapper) — keystone for `rgba(var(--ink-on-channel), α)` overlays.
   --ink-on-channel: 0, 0, 0;
 
@@ -501,6 +510,10 @@ body.isDarkTheme {
   --text-color: var(--ink);
   --text-color-muted: var(--ink-muted);
   --text-color-most-intense: var(--ink-strong);
+  // Keep links recognizably branded while anchoring arbitrary project palettes
+  // in mode-safe ink for normal-text contrast.
+  --link-color: color-mix(in srgb, var(--brand) 42%, var(--ink-strong));
+  --task-detail-value-color: var(--text-color-muted);
 
   // Borders / separators / scrim (Cat A)
   --separator-color: var(--separator);
@@ -513,10 +526,11 @@ body.isDarkTheme {
   --task-c-bg: var(--surface-2);
   --task-c-current-bg: var(--surface-3);
   --task-c-drag-drop-bg: var(--surface-3);
+  --task-border-color: var(--divider-color);
 
   // Task shadows (Cat A — same in both modes)
   --task-shadow: rgba(0, 0, 0, 0.16) 0px 1px 4px;
-  --task-current-shadow: var(--whiteframe-shadow-4dp);
+  --task-current-shadow: var(--whiteframe-shadow-1dp);
 
   // Chips / progress (Cat A)
   --chip-outline-color: rgba(125, 125, 125, 0.4);
@@ -617,10 +631,11 @@ body {
   --sub-task-c-bg-done: var(--task-c-bg);
   --task-c-bg-done: var(--task-c-bg);
   --sub-task-c-bg-in-selected: var(--task-c-bg);
+  --sub-task-border-color: var(--extra-border-color);
 
   // Task shadows (Cat B)
   --task-shadow-sub-task: none;
-  --task-selected-shadow: var(--whiteframe-shadow-3dp);
+  --task-selected-shadow: var(--whiteframe-shadow-1dp);
 
   // Scrollbar colors (Cat B)
   --scrollbar-thumb: rgba(136, 136, 136, 0.4);
@@ -649,11 +664,7 @@ body {
   --hover-controls-border: 1px solid;
   --hover-controls-border-opacity: 0.5;
 
-  // Task detail item (Cat B; `--task-detail-value-color` is broken — out of scope)
-  --task-detail-value-color: rgba(
-    var(--palette-foreground-secondary-text),
-    var(--palette-foreground-secondary-text-alpha, 1)
-  );
+  // Task detail item (Cat B)
   --task-detail-bg: var(--card-bg);
   --task-detail-bg-hover: #eeeeee;
 
@@ -698,10 +709,12 @@ body.isDarkTheme {
   --sub-task-c-bg-done: var(--dark2);
   --task-c-bg-done: var(--dark1);
   --sub-task-c-bg-in-selected: var(--dark10);
+  // Dark subtasks separate via a hairline border (like light), not a resting shadow.
+  --sub-task-border-color: var(--extra-border-color);
 
   // Task shadows (Cat B)
-  --task-shadow-sub-task: var(--task-shadow);
-  --task-selected-shadow: var(--whiteframe-shadow-4dp);
+  --task-shadow-sub-task: none;
+  --task-selected-shadow: var(--whiteframe-shadow-1dp);
 
   // Scrollbar colors (Cat B)
   --scrollbar-thumb: rgba(150, 150, 150, 0.3);
@@ -730,8 +743,7 @@ body.isDarkTheme {
   --hover-controls-border: none;
   --hover-controls-border-opacity: 0;
 
-  // Task detail item (Cat B; broken token kept as-is per scope)
-  --task-detail-value-color: rgba(255, 255, 255, 0.7);
+  // Task detail item (Cat B)
   --task-detail-bg: var(--dark8);
   --task-detail-bg-hover: var(--dark12);
 
@@ -749,10 +761,7 @@ body.isDarkTheme {
 }
 
 // -----------------------------
-// State-token demo migrations (this PR — scope per plan §3):
-//   * src/app/features/user-profile/dialog-user-profile-management — `:hover`
-//     overlay + `.active-profile` selected lift now consume `--state-hover` /
-//     `--state-selected`.
+// State-token demo migration (this PR — scope per plan §3):
 //   * src/app/imex/sync/dialog-restore-point — `:hover` overlay + `.selected`
 //     lift now consume `--state-hover` / `--state-selected`.
 // Bulk migration of remaining ~34 ad-hoc rgba state-overlay callsites is a

@@ -36,6 +36,13 @@ export interface SyncProviderBase<
    * hook. See issue #7616.
    */
   clearAuthCredentials?(): Promise<void>;
+  /**
+   * Drops caches derived from the stored credentials so the next read hits
+   * the persistent store. Implement when the provider caches credential
+   * state that another context sharing the store (a second browser tab)
+   * can change underneath it — e.g. SuperSync's token-derived cursor key.
+   */
+  invalidateCredentialCache?(): void;
 }
 
 export interface FileRevResponse {
@@ -123,6 +130,7 @@ export interface OpUploadResponse {
   newOps?: ServerSyncOperation[];
   latestSeq: number;
   hasMorePiggyback?: boolean;
+  deduplicated?: boolean;
 }
 
 export interface OpDownloadResponseBase {
@@ -133,7 +141,7 @@ export interface OpDownloadResponseBase {
   snapshotVectorClock?: VectorClock;
   serverTime?: number;
   capabilities?: {
-    causalRepairSnapshots?: true;
+    causalRepairSnapshots?: boolean;
   };
 }
 

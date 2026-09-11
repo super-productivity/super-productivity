@@ -56,7 +56,9 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
       case 'GITLAB':
         return issueProvider.project;
       case 'CALDAV':
-        return issueProvider.caldavUrl;
+        // resourceName is a required field the user filled in themselves, so it
+        // reads better than the raw URL (#9144).
+        return issueProvider.resourceName || issueProvider.caldavUrl;
       case 'ICAL':
         return sanitizeIcalUrlForDisplay(issueProvider.icalUrl);
       case 'REDMINE':
@@ -115,7 +117,7 @@ export const getIssueProviderInitials = (
         ?.substring(0, 2)
         ?.toUpperCase();
     case 'CALDAV':
-      return issueProvider.caldavUrl
+      return (issueProvider.resourceName || issueProvider.caldavUrl)
         ?.replace('https://', '')
         ?.replace('http://', '')
         ?.substring(0, 2)

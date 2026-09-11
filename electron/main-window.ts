@@ -5,13 +5,12 @@ import {
   BrowserWindowConstructorOptions,
   ipcMain,
   Menu,
-  MenuItemConstructorOptions,
   nativeTheme,
   shell,
 } from 'electron';
 import { errorHandlerWithFrontendInform } from './error-handler-with-frontend-inform';
 import * as path from 'path';
-import { join, normalize } from 'path';
+import { pathToFileURL } from 'node:url';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { isExternalUrlSchemeAllowed } from './shared-with-frontend/is-external-url-allowed';
 import { isLocalFileUrl, openLocalPath } from './open-url';
@@ -27,6 +26,7 @@ import {
 } from './task-widget/task-widget';
 import { ensureIndicator } from './indicator';
 import { getIsMinimizeToTray, getIsQuiting, setIsQuiting } from './shared-state';
+import { createMenuTemplate } from './menu';
 import { loadSimpleStoreAll } from './simple-store';
 import { SimpleStoreKey } from './shared-with-frontend/simple-store.const';
 import { markGpuStartupSuccess } from './gpu-startup-guard';
@@ -255,6 +255,26 @@ export const createWindow = async ({
     ) {
       removeKeyInAnyCase(requestHeaders, 'User-Agent');
     }
+    // WebDavHttpAdapter marks desktop uploads because renderer fetch refuses to
+    // set Connection itself. Consume the marker here; it must not reach the
+    // server. The literal below mirrors that adapter's ELECTRON_UPLOAD_HEADER
+    // and is pinned to it by electron/webdav-connection.test.cjs — the two
+    // build targets cannot import each other.
+    const webdavUploadHeader = Object.keys(requestHeaders).find(
+      (key) => key.toLowerCase() === 'x-superproductivity-webdav-upload',
+    );
+    if (webdavUploadHeader) {
+      delete requestHeaders[webdavUploadHeader];
+      // #9985: avoid verifying on a PUT connection retaining the old file.
+      // HTTP/1.1 only — Connection is a connection-specific header that RFC 9113
+      // forbids over HTTP/2, so any conformant client drops it there. The
+      // WebdavApi verification retry budget is the cross-protocol safety net;
+      // the reported STRATO HiDrive failure was reproduced over HTTP/1.1.
+      if (details.method === 'PUT') {
+        removeKeyInAnyCase(requestHeaders, 'Connection');
+        requestHeaders.Connection = 'close';
+      }
+    }
     applyJiraImageAuth(details.url, requestHeaders, details.resourceType);
     callback({ requestHeaders });
   });
@@ -316,7 +336,8 @@ export const createWindow = async ({
     ? customUrl
     : IS_DEV
       ? 'http://localhost:4200'
-      : `file://${normalize(join(__dirname, '../.tmp/angular-dist/browser/index.html'))}`;
+      : pathToFileURL(path.join(__dirname, '../.tmp/angular-dist/browser/index.html'))
+          .href;
 
   // Capture the loaded URL so the navigation guard (initWinEventListeners →
   // will-navigate) can compare against the actual app origin, not a derived
@@ -576,36 +597,22 @@ function initWinEventListeners(app: Electron.App): void {
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function createMenu(quitApp: () => void): void {
   // Create application menu to enable copy & pasting on MacOS
-  const menuTpl: MenuItemConstructorOptions[] = [
-    {
-      label: 'Super Productivity',
-      submenu: [
-        { role: 'about', label: 'About Super Productivity' },
-        { type: 'separator' },
-        { role: 'hide', label: 'Hide Super Productivity' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        {
-          label: 'Quit',
-          accelerator: 'CmdOrCtrl+Q',
-          click: () => closeWinAndQuit(quitApp),
-        },
-      ],
+  const menuTpl = createMenuTemplate({
+    // hide() keeps the app running in the dock; clicking the dock icon
+    // re-shows via the 'activate' handler (showOrFocus)
+    onCloseWindow: (focusedWindow) => {
+      // only act when the main window itself is key; focusedWindow can be
+      // undefined during macOS menu tracking — treat that as "not ours"
+      if (!focusedWindow || focusedWindow !== mainWin) {
+        return;
+      }
+      if (!mainWin.isDestroyed() && mainWin.isVisible()) {
+        setWasMaximizedBeforeHide(mainWin.isMaximized());
+        mainWin.hide();
+      }
     },
-    {
-      label: 'Edit',
-      submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
-        { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'selectAll' },
-      ],
-    },
-  ];
+    onQuit: () => closeWinAndQuit(quitApp),
+  });
 
   // we need to set a menu to get copy & paste working for mac os x
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTpl));

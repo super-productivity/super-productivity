@@ -98,6 +98,7 @@ describe('FocusMode Flowtime behavior', () => {
     let effects: FocusModeEffects;
     const takeABreakServiceMock = {
       otherNoBreakTIme$: new BehaviorSubject<number>(0),
+      resetTimer: jasmine.createSpy('resetTimer'),
     };
 
     beforeEach(() => {
@@ -334,6 +335,7 @@ describe('FocusMode Flowtime behavior', () => {
     };
     const takeABreakServiceMock = {
       otherNoBreakTIme$: new BehaviorSubject<number>(0),
+      resetTimer: jasmine.createSpy('resetTimer'),
     };
 
     beforeEach(() => {
@@ -443,6 +445,7 @@ describe('FocusMode Flowtime behavior', () => {
     let getStrategySpy: jasmine.Spy;
     const takeABreakServiceMock = {
       otherNoBreakTIme$: new BehaviorSubject<number>(0),
+      resetTimer: jasmine.createSpy('resetTimer'),
     };
 
     beforeEach(() => {

@@ -1,0 +1,177 @@
+name: Android Native Tests
+
+# Keep this workflow present on every PR so it can be a required check. The
+# expensive setup and tests are skipped when no Android-affecting files changed.
+on:
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-native-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-native-tests:
+    name: Android Native Tests (JVM + Emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect Android-affecting changes
+        id: changes
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${PR_HEAD:-}" ]; then
+            echo "Manual run — running Android tests."
+            echo "android=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BASE_TIP="$(git rev-parse HEAD^1)"
+          MERGE_BASE="$(git merge-base "${BASE_TIP}" "${PR_HEAD}")"
+          CHANGED_FILES="$(git diff --name-only --no-renames "${MERGE_BASE}" "${PR_HEAD}")"
+          echo "Changed files:"
+          echo "${CHANGED_FILES}"
+
+          android=false
+          # packages/sync-core is included because the Kotlin op-payload
+          # decryptor must stay wire-compatible with its encrypt() — the live
+          # round-trip test below is what catches drift on sync-core PRs.
+          ANDROID_PATTERN='^(android/|packages/sync-core/|tools/generate-android-crypto-fixtures\.mjs$|capacitor\.config\.ts$|package(-lock)?\.json$|\.github/workflows/android-tests\.yml$)'
+          if grep -Eq "${ANDROID_PATTERN}" <<< "${CHANGED_FILES}"; then android=true; fi
+
+          echo "→ android=${android}"
+          echo "android=${android}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        if: steps.changes.outputs.android == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java
+        if: steps.changes.outputs.android == 'true'
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        if: steps.changes.outputs.android == 'true'
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Setup Android SDK
+        if: steps.changes.outputs.android == 'true'
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
+
+      # Work around npm installs from git+https://github.com/johannesjo/J2M.git.
+      - name: Reconfigure git to use HTTP authentication
+        if: steps.changes.outputs.android == 'true'
+        run: >
+          git config --global url."https://github.com/".insteadOf
+          ssh://git@github.com/
+
+      - name: Install npm packages
+        if: steps.changes.outputs.android == 'true'
+        run: npm i
+
+      - name: Prepare Capacitor Android project
+        if: steps.changes.outputs.android == 'true'
+        run: |
+          mkdir -p android/app/src/main/assets/public
+          npx cap update android
+          # After cap update, so nothing it writes into assets can clobber them.
+          # Stand-in for the Angular app: the minified launch smoke needs a page
+          # that reaches the plugin bridge. Nothing else in CI builds the web app.
+          # The config next to it turns Capacitor logging on — see its _comment;
+          # without it the r8Test APK swallows the markers the smoke greps for.
+          cp android/smoke-page/index.html android/app/src/main/assets/public/index.html
+          cp android/smoke-page/capacitor.config.json android/app/src/main/assets/capacitor.config.json
+
+      # Fresh ciphertexts from the real sync-core encrypt() (built by npm i),
+      # decrypted by LiveJsEncryptRoundTripTest — fails the PR that changes
+      # the KDF parameters or wire format.
+      - name: Generate live crypto fixtures from sync-core
+        if: steps.changes.outputs.android == 'true'
+        run: node tools/generate-android-crypto-fixtures.mjs
+
+      - name: Run Android JVM tests
+        if: steps.changes.outputs.android == 'true'
+        working-directory: android
+        env:
+          LIVE_CRYPTO_FIXTURES: ${{ github.workspace }}/android/app/build/live-crypto-fixtures.tsv
+        run: ./gradlew :app:testPlayDebugUnitTest :app:testFdroidDebugUnitTest
+
+      - name: Enable KVM
+        if: steps.changes.outputs.android == 'true'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Android instrumentation tests and minified launch smoke
+        if: steps.changes.outputs.android == 'true'
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          working-directory: ./android
+          # One emulator session for both halves: the instrumented suite on
+          # debug, then a launch smoke against the minified r8Test APK, which is
+          # the only thing in CI that exercises R8. play, not fdroid: play is the
+          # flavor that ships to the Play internal track on every master push.
+          #
+          # A script file, not an inline block: this action runs the `script:`
+          # input one line per `sh -c`, so variables, `set -u` and multi-line
+          # `if` do not survive between lines.
+          script: ./run-android-checks.sh
+
+      # Second emulator, one API level below where SystemBars takes over: the
+      # API 34 google_apis image ships a bundled WebView below 140 that never
+      # auto-updates, which is the only way CI reaches the API 30-34 /
+      # WebView < 140 band of #9316 — the band the native IME shim exists for
+      # and that the API 35 run above cannot exercise (the shim is a no-op
+      # there by construction). Only the IME shim test runs here.
+      - name: Run IME inset shim check on API 34 (old bundled WebView)
+        if: steps.changes.outputs.android == 'true'
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          avd-name: test-api34
+          working-directory: ./android
+          script: ./run-android-ime-check.sh
+
+      # cancelled(), not just failure(): a job that exceeds timeout-minutes
+      # concludes as cancelled, which is exactly the run whose artifacts we
+      # need. Skipped on green so a full logcat is not uploaded every PR.
+      - name: Upload instrumentation test results and diagnostics
+        if: (failure() || cancelled()) && steps.changes.outputs.android == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-instrumentation-diagnostics-${{ github.run_id }}
+          path: |
+            android/app/build/reports/androidTests/connected/
+            android/app/build/outputs/androidTest-results/connected/
+            android/build/instrumentation-diagnostics/
+            android/app/build/outputs/mapping/
+          if-no-files-found: ignore
+          retention-days: 14

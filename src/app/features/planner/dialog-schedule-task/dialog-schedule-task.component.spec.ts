@@ -23,6 +23,7 @@ import {
 import { TaskCopy, TaskReminderOptionId, TaskWithDueTime } from '../../tasks/task.model';
 import { ReminderService } from '../../reminder/reminder.service';
 import { PlannerActions } from '../store/planner.actions';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
 import { ScheduleConfig } from '../../config/global-config.model';
@@ -161,6 +162,51 @@ describe('DialogScheduleTaskComponent', () => {
     component.selectedDate = testDate;
     await component.submit();
     expect(dialogRefSpy.close).toHaveBeenCalledWith(true);
+  });
+
+  it('should reflow three intact action buttons without horizontal overflow', () => {
+    component.plannedDayForTask = '2026-07-24';
+    fixture.detectChanges();
+
+    const actions: HTMLElement | null =
+      fixture.nativeElement.querySelector('mat-dialog-actions');
+    expect(actions).not.toBeNull();
+    if (!actions) {
+      return;
+    }
+
+    const actionButtons: HTMLElement[] = Array.from(
+      actions.querySelectorAll<HTMLElement>('button'),
+    );
+    const actionLabels = actions.querySelectorAll<HTMLElement>('.action-label');
+
+    expect(actionButtons.length).toBe(3);
+    expect(actionButtons[0].dataset.testId).toBe('schedule-cancel-btn');
+    expect(actionButtons[1].getAttribute('color')).toBe('warn');
+    expect(actionButtons[2].dataset.testId).toBe('schedule-submit-btn');
+    actionButtons.forEach((button) => {
+      expect(button.parentElement).toBe(actions);
+    });
+    expect(actionLabels.length).toBe(3);
+    actionLabels.forEach((label) => {
+      expect(getComputedStyle(label).whiteSpace).toBe('nowrap');
+    });
+
+    // Karma doesn't load the app-level Material layout styles. Reproduce the
+    // dialog action container's production flex rules to exercise this markup.
+    actions.style.display = 'flex';
+    actions.style.flexWrap = 'wrap';
+    actions.style.justifyContent = 'flex-end';
+    actions.style.width = '280px';
+    const actionsRect = actions.getBoundingClientRect();
+    const buttonRects = actionButtons.map((button) => button.getBoundingClientRect());
+
+    expect(new Set(buttonRects.map(({ top }) => top)).size).toBeGreaterThan(1);
+    buttonRects.forEach(({ left, right }) => {
+      expect(left).toBeGreaterThanOrEqual(actionsRect.left);
+      expect(right).toBeLessThanOrEqual(actionsRect.right);
+    });
+    expect(getComputedStyle(actions).rowGap).toBe('12px');
   });
 
   describe('schedule hints', () => {
@@ -391,6 +437,51 @@ describe('DialogScheduleTaskComponent', () => {
         }),
       );
       expect(dialogRefSpy.close).toHaveBeenCalledWith(true);
+    });
+
+    // Issue #9776: updateTask({ changes: { remindAt: undefined } }) loses the
+    // key at JSON.stringify, so the clear never replayed on other devices.
+    // dismissReminderOnly clears remindAt inside its reducer (replay-safe).
+    it('should dispatch dismissReminderOnly (not a lossy updateTask) when "Do not remind" is picked', async () => {
+      const today = new Date();
+      const mockTask = {
+        id: 'taskWithReminder',
+        title: 'Task With Reminder',
+        tagIds: [] as string[],
+        projectId: 'DEFAULT',
+        timeSpentOnDay: {},
+        attachments: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        isDone: false,
+        created: 1640995200000,
+        subTaskIds: [],
+        dueWithTime: today.getTime(),
+        dueDay: getDbDateStr(today),
+        remindAt: today.getTime(),
+      } as unknown as TaskCopy;
+
+      const dispatchSpy = spyOn(store, 'dispatch');
+
+      component.task = mockTask;
+      component.data = { task: mockTask } as any;
+      component.selectedDate = new Date(today);
+      component.selectedTime = null;
+      component.selectedReminderCfgId = TaskReminderOptionId.DoNotRemind;
+
+      await component.submit();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        TaskSharedActions.dismissReminderOnly({ id: 'taskWithReminder' }),
+      );
+      const updateTaskCalls = dispatchSpy.calls
+        .allArgs()
+        .filter(
+          (args) =>
+            (args[0] as unknown as { type: string }).type ===
+            TaskSharedActions.updateTask.type,
+        );
+      expect(updateTaskCalls).toEqual([]);
     });
   });
 

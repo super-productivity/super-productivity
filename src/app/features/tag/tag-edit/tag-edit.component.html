@@ -1,4 +1,7 @@
-<mat-chip-grid #chipListElRef>
+<mat-chip-grid
+  #chipListElRef
+  [attr.aria-label]="T.F.TAG.D_EDIT.LABEL | translate"
+>
   @for (modelItem of tagItems(); track modelItem.id) {
     <mat-chip-row
       (removed)="remove(modelItem.id)"
@@ -22,7 +25,7 @@
     [matChipInputFor]="chipListElRef"
     [matChipInputSeparatorKeyCodes]="separatorKeysCodes"
     (keydown)="onKeydown($event)"
-    [placeholder]="'+ Add Tag'"
+    [placeholder]="T.F.TAG.D_EDIT.PLACEHOLDER | translate"
   />
 </mat-chip-grid>
 <mat-autocomplete

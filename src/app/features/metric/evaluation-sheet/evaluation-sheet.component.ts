@@ -159,12 +159,7 @@ export class EvaluationSheetComponent {
     const totalMinutes = this.totalWorkMinutes();
     const energyCheckin = this.metricForDay()?.energyCheckin ?? undefined;
 
-    return calculateSustainabilityScore(
-      focusedMinutes,
-      totalMinutes,
-      600, // workloadLinearZeroAt: 10h → score 0
-      energyCheckin,
-    );
+    return calculateSustainabilityScore(focusedMinutes, totalMinutes, energyCheckin);
   });
 
   readonly dailyStateInfo = computed(() => {

@@ -23,7 +23,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { MarkdownComponent } from 'ngx-markdown';
 import { TranslatePipe } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
-import { debounceTime } from 'rxjs/operators';
+import { auditTime, debounceTime } from 'rxjs/operators';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { T } from '../../t.const';
 import { isSmallScreen } from '../../util/is-small-screen';
@@ -46,6 +46,7 @@ import {
   insertTable,
 } from '../inline-markdown/markdown-toolbar.util';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
+import { DialogConfirmComponent } from '../dialog-confirm/dialog-confirm.component';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
 import { toggleChecklistItemAtIndex } from '../../features/markdown-checklist/checklist-operations';
@@ -91,7 +92,15 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   private readonly _cdr = inject(ChangeDetectorRef);
   private readonly _dateService = inject(DateService);
   _matDialogRef = inject<MatDialogRef<DialogFullscreenMarkdownComponent>>(MatDialogRef);
-  data: { content: string; taskId?: string } = inject(MAT_DIALOG_DATA) || { content: '' };
+  data: {
+    content: string;
+    taskId?: string;
+    originalContent?: string;
+  } = inject(MAT_DIALOG_DATA) || { content: '' };
+  // Reference for the discard confirmation. `originalContent` wins when the
+  // dialog is seeded with recovered draft content that differs from the
+  // persisted entity content.
+  protected _initialContent: string = this.data.originalContent ?? this.data.content;
 
   T: typeof T = T;
   viewMode: ViewMode = isSmallScreen() ? 'TEXT_ONLY' : 'SPLIT';
@@ -109,6 +118,14 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   resolvedContent = signal<string>('');
   // Plain property for markdown component compatibility
   resolvedContentData: string | undefined;
+  /**
+   * True while the discard confirmation is up. This dialog stays OPEN behind
+   * that confirm, so anything closing it on an external signal must stand down
+   * until the user has answered — see openFullscreenMarkdownDialog, whose
+   * Location handler would otherwise close through the SAVE path, the exact
+   * opposite of the Discard the user just clicked (#8982 review).
+   */
+  isDiscardConfirmOpen = false;
 
   constructor() {
     // Set initial content synchronously for immediate rendering
@@ -134,9 +151,13 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
       this._cdr.markForCheck();
     });
 
-    // Auto-save with debounce
+    // Checkpoint cadence: auditTime, not debounceTime — with a debounce,
+    // continuous typing resets the timer on every keystroke and a crash
+    // mid-burst would lose the whole burst. auditTime keeps emitting the
+    // latest value every 500 ms while typing goes on. The draft checkpoint
+    // is this output's only consumer.
     this._contentChanges$
-      .pipe(debounceTime(500), takeUntilDestroyed(this._destroyRef))
+      .pipe(auditTime(500), takeUntilDestroyed(this._destroyRef))
       .subscribe((value) => {
         this.contentChanged.emit(value);
       });
@@ -306,9 +327,17 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   }
 
   close(isSkipSave: boolean = false): void {
-    // When the "Close" button is hit by the user, the note is closed without saving.
+    // When the "Discard" button is hit by the user, the note is closed without saving
+    // (after confirmation if the content was modified). The explicit result lets
+    // callers tell a user-confirmed discard from the dialog being disposed some
+    // other way (e.g. MatDialog.closeAll()), which emits undefined — the note's
+    // crash-safe draft handling clears its draft only on the former.
     if (isSkipSave) {
-      this._matDialogRef.close();
+      // Confirm before discarding modified content, for every caller of this
+      // shared dialog. The "Close" action was renamed to "Discard" (more final),
+      // so confirming is the matching guard. _confirmDiscardIfNeeded no-ops when
+      // nothing was modified, so an unmodified close still closes instantly.
+      this._confirmDiscardIfNeeded(() => this._matDialogRef.close({ action: 'DISCARD' }));
       // When the note is made empty manually by the user and the "Save" button is hit, the note is automatically deleted instead of being left blank.
     } else if (!this.data?.content && this.data.content.trim().length < 1) {
       this._matDialogRef.close({ action: 'DELETE' });
@@ -316,6 +345,32 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
     } else {
       this._matDialogRef.close(this.data?.content);
     }
+  }
+
+  protected _confirmDiscardIfNeeded(onDiscard: () => void): void {
+    if ((this.data?.content || '') === this._initialContent) {
+      onDiscard();
+      return;
+    }
+    this.isDiscardConfirmOpen = true;
+    this._matDialog
+      .open(DialogConfirmComponent, {
+        restoreFocus: true,
+        data: {
+          message: T.F.NOTE.D_FULLSCREEN.CONFIRM_DISCARD_MSG,
+          okTxt: T.G.DISCARD,
+        },
+      })
+      .afterClosed()
+      .subscribe((isConfirm: boolean) => {
+        // Cleared on every outcome, including the confirm being disposed by a
+        // navigation (it keeps MatDialog's default closeOnNavigation) — the
+        // editor stays open and usable in that case.
+        this.isDiscardConfirmOpen = false;
+        if (isConfirm) {
+          onDiscard();
+        }
+      });
   }
 
   onViewModeChange(): void {

@@ -66,10 +66,11 @@ describe('Security Fixes', () => {
       delete process.env.CORS_ORIGINS;
 
       const config = loadConfigFromEnv();
-      expect(config.cors.allowedOrigins).toEqual([
-        'https://app.super-productivity.com',
-        /^https:\/\/[a-zA-Z0-9-]+\.super-productivity-preview\.pages\.dev$/,
-      ]);
+      // Self-hosted instances inherit this default with `credentials: true`, so it must
+      // name only the stable app origin. The Cloudflare preview wildcard that used to be
+      // here granted credentialed cross-origin access to our preview infrastructure from
+      // every server we do not run; it now belongs in our own deployment's CORS_ORIGINS.
+      expect(config.cors.allowedOrigins).toEqual(['https://app.super-productivity.com']);
     });
   });
 

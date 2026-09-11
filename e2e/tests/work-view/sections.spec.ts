@@ -9,9 +9,9 @@ import { expect, test } from '../../fixtures/test.fixture';
  */
 test.describe('Sections', () => {
   /**
-   * Create a fresh project and navigate to it. Avoids
-   * `createAndGoToTestProject()` which hits a strict-mode `.nav-children`
-   * violation when both Projects and Tags trees are expanded.
+   * Create a fresh project and navigate to it. Takes a per-test project name,
+   * which `createAndGoToTestProject()` does not offer. (Its strict-mode
+   * `.nav-children` violation is fixed, so it is no longer a reason to avoid it.)
    */
   const setupTestProject = async (
     workViewPage: import('../../pages/work-view.page').WorkViewPage,
@@ -46,7 +46,9 @@ test.describe('Sections', () => {
   const clickAddSection = async (
     page: import('@playwright/test').Page,
   ): Promise<void> => {
-    await page.getByRole('menuitem', { name: 'Add Section' }).click();
+    const menu = page.getByRole('menu');
+    await expect(menu).not.toHaveClass(/mat-menu-panel-animating/);
+    await menu.getByRole('menuitem', { name: 'Add Section' }).click();
   };
 
   /** Fill the dialog-prompt input and submit. */
@@ -221,7 +223,7 @@ test.describe('Sections', () => {
     await wrapper.waitFor({ state: 'visible', timeout: 5000 });
     await wrapper.dispatchEvent('contextmenu');
 
-    await page.getByRole('menuitem', { name: 'Add Section' }).click();
+    await clickAddSection(page);
     await submitPromptDialog(page, 'Right-Click Section');
 
     await expect(sectionByTitle(page, 'Right-Click Section')).toBeVisible();

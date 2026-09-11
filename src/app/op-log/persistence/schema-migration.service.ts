@@ -76,7 +76,7 @@ export interface MigratableStateCache {
  *    - Drop op if migration returns null
  * 3. Apply migrated ops to migrated state
  *
- * @see docs/ai/sync/operation-log-architecture.md A.7
+ * @see docs/sync-and-op-log/operation-log-architecture.md A.7
  */
 @Injectable({ providedIn: 'root' })
 export class SchemaMigrationService {
@@ -101,8 +101,12 @@ export class SchemaMigrationService {
   /**
    * Migrates a state cache to the current schema version if needed.
    * Returns the migrated cache, or the original if no migration was needed.
+   * The result always carries the version the chain produced, which is what
+   * makes it safe to persist via `saveStateCache()` (#8770).
    */
-  migrateStateIfNeeded(cache: MigratableStateCache): MigratableStateCache {
+  migrateStateIfNeeded(
+    cache: MigratableStateCache,
+  ): MigratableStateCache & { schemaVersion: number } {
     // Handle old caches that don't have schemaVersion
     const currentVersion = cache.schemaVersion ?? 1;
 

@@ -94,6 +94,46 @@ describe('DialogFlowtimeSettingsComponent', () => {
       expect(savedConfig.breakRules[1].minDuration).toBe(30 * 60000);
     });
 
+    // Rows added via "Add" are seeded from `props.defaultValue`. Formly's clone()
+    // copies accessor descriptors verbatim, so without an own-value copy every
+    // added row proxies the same storage and edits bleed across rows (#8501).
+    it('keeps rows added via "Add" independent when edited', () => {
+      const clickAdd = (): void => {
+        fixture.nativeElement.querySelector('.footer button').click();
+        fixture.detectChanges();
+      };
+      const inputs = (): HTMLInputElement[] =>
+        Array.from(fixture.nativeElement.querySelectorAll('.list-wrapper input'));
+
+      clickAdd();
+      clickAdd();
+      clickAdd();
+
+      const els = inputs();
+      expect(els.length).withContext('4 rows x 3 inputs').toBe(12);
+
+      [1, 2, 3, 4].forEach((n, row) => {
+        const rowOffset = row * 3;
+        [0, 1, 2].forEach((col) => {
+          const input = els[rowOffset + col];
+          input.value = String(n);
+          input.dispatchEvent(new Event('input'));
+        });
+        fixture.detectChanges();
+      });
+
+      component.save();
+
+      expect(
+        globalConfigServiceMock.updateSection.calls.mostRecent().args[1].breakRules,
+      ).toEqual([
+        { minDuration: 60000, maxDuration: 60000, breakDuration: 60000 },
+        { minDuration: 120000, maxDuration: 120000, breakDuration: 120000 },
+        { minDuration: 180000, maxDuration: 180000, breakDuration: 180000 },
+        { minDuration: 240000, maxDuration: 240000, breakDuration: 240000 },
+      ]);
+    });
+
     it('should clamp maxDuration to minDuration if invalid', () => {
       component.model.set({
         ...component.model(),

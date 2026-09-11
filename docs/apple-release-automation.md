@@ -1,5 +1,8 @@
 # Apple (iOS & macOS) release automation
 
+See the [release and publishing runbook](release-and-publishing.md) for version
+preparation, the draft-release gate, and non-Apple distribution channels.
+
 Pushing a final version tag (`vX.Y.Z`) builds, signs, uploads **and submits**
 the iOS and macOS App Store builds for review, set to release automatically once
 Apple approves them. The only step that is not automated is Apple's human

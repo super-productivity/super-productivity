@@ -228,43 +228,6 @@ describe('loadConfigFromEnv - CORS_ORIGINS parsing', () => {
   });
 });
 
-describe('loadConfigFromEnv - SuperSync rollout flags', () => {
-  beforeEach(() => {
-    resetEnv();
-  });
-
-  afterEach(() => {
-    resetEnv();
-  });
-
-  it('should keep batch uploads disabled by default', async () => {
-    const { loadConfigFromEnv } = await importConfig();
-    const config = loadConfigFromEnv();
-
-    expect(config.batchUpload).toBe(false);
-  });
-
-  it('should enable batch uploads only after the payload byte backfill completed', async () => {
-    process.env.SUPERSYNC_BATCH_UPLOAD = 'true';
-    process.env.SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE = 'true';
-
-    const { loadConfigFromEnv } = await importConfig();
-    const config = loadConfigFromEnv();
-
-    expect(config.batchUpload).toBe(true);
-  });
-
-  it('should reject batch uploads before the payload byte backfill completed', async () => {
-    process.env.SUPERSYNC_BATCH_UPLOAD = 'true';
-
-    const { loadConfigFromEnv } = await importConfig();
-
-    expect(() => loadConfigFromEnv()).toThrow(
-      'SUPERSYNC_BATCH_UPLOAD=true requires SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=true',
-    );
-  });
-});
-
 describe('loadConfigFromEnv - server bind address', () => {
   beforeEach(() => {
     resetEnv();
@@ -333,37 +296,28 @@ describe('DEFAULT_CORS_ORIGINS', () => {
     resetEnv();
   });
 
-  it('should match valid preview deployment URLs', async () => {
+  it('should default to the stable app origin only', async () => {
     const { loadConfigFromEnv } = await importConfig();
     const config = loadConfigFromEnv();
-    const pattern = config.cors.allowedOrigins![1] as RegExp;
 
-    expect(pattern.test('https://f5382282.super-productivity-preview.pages.dev')).toBe(
-      true,
-    );
-    expect(pattern.test('https://abc-123.super-productivity-preview.pages.dev')).toBe(
-      true,
-    );
+    expect(config.cors.allowedOrigins).toEqual(['https://app.super-productivity.com']);
   });
 
-  it('should reject domain confusion attacks', async () => {
+  // Every self-hosted instance inherits this default with `credentials: true`. A pattern
+  // here grants credentialed cross-origin access to infrastructure the operator does not
+  // control, so the default must stay free of wildcards. Preview origins belong in our
+  // own deployment's CORS_ORIGINS. (Wildcard PARSING is still supported and covered by
+  // the parseCorsOrigin tests above — this guards only what ships as the default.)
+  it('should not ship any wildcard or preview origin as a default', async () => {
     const { loadConfigFromEnv } = await importConfig();
     const config = loadConfigFromEnv();
-    const pattern = config.cors.allowedOrigins![1] as RegExp;
 
-    expect(pattern.test('https://evil.com.super-productivity-preview.pages.dev')).toBe(
-      false,
-    );
-    expect(pattern.test('https://a.b.super-productivity-preview.pages.dev')).toBe(false);
-  });
-
-  it('should reject URLs with paths', async () => {
-    const { loadConfigFromEnv } = await importConfig();
-    const config = loadConfigFromEnv();
-    const pattern = config.cors.allowedOrigins![1] as RegExp;
-
-    expect(pattern.test('https://abc.super-productivity-preview.pages.dev/path')).toBe(
-      false,
-    );
+    const origins = config.cors.allowedOrigins!;
+    expect(origins.some((origin) => origin instanceof RegExp)).toBe(false);
+    expect(
+      origins.some(
+        (origin) => typeof origin === 'string' && origin.includes('preview.pages.dev'),
+      ),
+    ).toBe(false);
   });
 });

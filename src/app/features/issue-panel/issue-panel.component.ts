@@ -6,7 +6,6 @@ import {
   Signal,
   signal,
 } from '@angular/core';
-import { IssuePanelIntroComponent } from './issue-panel-intro/issue-panel-intro.component';
 import { MatTab, MatTabContent, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -39,7 +38,6 @@ import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider
 @Component({
   selector: 'issue-panel',
   imports: [
-    IssuePanelIntroComponent,
     MatTabGroup,
     MatTab,
     MatTabLabel,
@@ -69,7 +67,6 @@ export class IssuePanelComponent {
 
   dragStartDelay = { touch: 300, mouse: 0 };
   selectedTabIndex = signal(0);
-  isShowIntro = signal(false);
   issueProviders = toSignal(this._store.select(selectIssueProvidersWithDisabledLast));
 
   issueProvidersMapped: Signal<

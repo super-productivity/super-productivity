@@ -6,6 +6,7 @@ import {
   OperationLogEntry,
   VectorClock,
   isFullStateOpType,
+  isGenesisEntityType,
   FULL_STATE_OP_TYPES,
 } from '../core/operation.types';
 import { StorageQuotaExceededError } from '../core/errors/sync-errors';
@@ -24,7 +25,6 @@ import {
   RAW_REBUILD_RECOVERY_META_KEY,
   OPS_INDEXES,
   ArchiveStoreEntry,
-  ProfileDataStoreEntry,
 } from './db-keys.const';
 import {
   buildFullStateOpsMeta,
@@ -34,11 +34,24 @@ import {
 import {
   DUPLICATE_OPERATION_ERROR_MSG,
   OPERATION_LOG_STORE_NOT_INITIALIZED,
+  isIdbVersionError,
   isLockRelatedIdbOpenError,
 } from './op-log-errors.const';
 import { runDbUpgrade } from './db-upgrade';
 import { OpLogDbAdapter, OpLogTx } from './op-log-db-adapter';
 import { OP_LOG_DB_ADAPTER_FACTORY } from './op-log-db-adapter.token';
+import {
+  clearImportBackupTx,
+  ImportBackupCaptureMeta,
+  ImportBackupEntry,
+  ImportBackupMeta,
+  ImportBackupRef,
+  listImportBackupsTx,
+  pruneImportBackupRingTx,
+  loadImportBackupByIdTx,
+  loadImportBackupTx,
+  saveImportBackupTx,
+} from './import-backup-ring.util';
 import { Log } from '../../core/log';
 import {
   IDB_OPEN_RETRIES,
@@ -50,13 +63,13 @@ import {
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 import { limitVectorClockSize, vectorClockToString } from '../../core/util/vector-clock';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
+import { TabSeqFrontierService } from './tab-seq-frontier.service';
 import { CompactOperation } from './compact/compact-operation.types';
 import {
   isCompactOperation,
   decodeOperation,
   encodeOperation,
 } from './compact/operation-codec.service';
-import { uuidv7 } from '../../util/uuid-v7';
 import { LockService } from '../sync/lock.service';
 
 /**
@@ -80,14 +93,13 @@ export interface MixedSourceWrittenOperation {
   source: 'local' | 'remote';
 }
 
-export interface ImportBackupRef {
-  backupId: string;
-  savedAt: number;
-}
-
-export interface ImportBackupEntry extends ImportBackupRef {
-  state: unknown;
-}
+export type {
+  ImportBackupRef,
+  ImportBackupEntry,
+  ImportBackupMeta,
+  ImportBackupReason,
+  ImportBackupCaptureMeta,
+} from './import-backup-ring.util';
 
 /**
  * Shape stored in the `state_cache` store (keyPath `id`).
@@ -106,6 +118,13 @@ interface StateCacheEntry {
   schemaVersion?: number;
   compactionCounter?: number;
   snapshotEntityKeys?: string[];
+}
+
+interface ReplayAnchorSnapshot {
+  state: unknown;
+  vectorClock: VectorClock;
+  compactedAt: number;
+  schemaVersion?: number;
 }
 
 export interface RawRebuildIncompleteEntry {
@@ -266,13 +285,15 @@ interface OpLogDB extends DBSchema {
       snapshotEntityKeys?: string[]; // Entity keys that existed at compaction time
     };
   };
+  /** Undo pointer + metadata ring + full snapshots; see import-backup-ring.util.ts */
   [STORE_NAMES.IMPORT_BACKUP]: {
     key: string;
     value: {
       id: string;
-      state: unknown;
-      savedAt: number;
+      state?: unknown;
+      savedAt?: number;
       backupId?: string;
+      entries?: ImportBackupMeta[];
     };
   };
   /**
@@ -301,14 +322,6 @@ interface OpLogDB extends DBSchema {
     value: ArchiveStoreEntry;
   };
   /**
-   * Stores profile data (CompleteBackup) for user profile switching.
-   * Moved from localStorage to avoid 5-10 MB quota limits.
-   */
-  [STORE_NAMES.PROFILE_DATA]: {
-    key: string; // profile ID
-    value: ProfileDataStoreEntry;
-  };
-  /**
    * Stores the sync clientId (device identity). Consolidated from legacy 'pf'
    * in version 6 so destructive-flow rotation joins the atomic transaction in
    * runDestructiveStateReplacement. See issue #7732.
@@ -335,6 +348,30 @@ type OpLogStoreName = (typeof STORE_NAMES)[keyof typeof STORE_NAMES];
  * past the durable value. Makes counter reuse/regression unrepresentable
  * regardless of what the caller derived its proposed clock from (#8939).
  */
+/**
+ * Bounds a clock that has just been rebased on the durable clock.
+ *
+ * `pruneClockForStorage` runs before the transaction opens, so a disjoint
+ * bounded durable clock unioned with a bounded proposed clock can exceed
+ * MAX_VECTOR_CLOCK_SIZE again (20 + 20 = 40). Re-bound after the rebase,
+ * preserving the same authors `pruneClockForStorage` does. Synchronous so it
+ * is safe to call while an IndexedDB transaction is open.
+ */
+const boundRebasedClock = (
+  clock: VectorClock,
+  currentClientId: string | null,
+  importAuthorId: string | undefined,
+): VectorClock => {
+  // No client ID -> no pruning at all (never prune with the author id alone).
+  if (!currentClientId) {
+    return clock;
+  }
+  return limitVectorClockSize(
+    clock,
+    importAuthorId ? [currentClientId, importAuthorId] : [currentClientId],
+  );
+};
+
 const rebaseLocalClockOnDurable = (
   durableClock: VectorClock,
   proposedClock: VectorClock,
@@ -365,6 +402,14 @@ const rebaseLocalClockOnDurable = (
 export class OperationLogStoreService implements RemoteOperationApplyStorePort<Operation> {
   private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
   private readonly _lockService = inject(LockService);
+  // #9438 INVARIANT: every method that adds rows to STORE_NAMES.OPS must
+  // report the committed seqs after its transaction commits — observeOwnWrite
+  // for plain appends, establishFrontier only when the method also installs
+  // the state cache the live store will match. A missed observe makes the
+  // next observed write look like a foreign gap and silently disables
+  // snapshot saves + compaction for the session (all platforms) — see the
+  // TabSeqFrontierService doc.
+  private readonly _tabSeqFrontier = inject(TabSeqFrontierService);
   private _db?: IDBPDatabase<OpLogDB>;
   private _initPromise?: Promise<void>;
   // Phase A migration seam: methods migrated off direct `idb` route through
@@ -463,6 +508,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       } catch (e) {
         lastError = e;
 
+        // Downgrade barrier: the on-disk version can't change while we run, so
+        // every retry fails identically. Surface it now (#9187).
+        if (isIdbVersionError(e)) {
+          break;
+        }
+
         // Classify the error on the first failure. If it doesn't look
         // lock-related, shrink the retry budget so we fail fast and let the
         // hydrator surface the error instead of hanging for the full window.
@@ -495,7 +546,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     // carries the formatted original detail, so logging the wrapper exposes
     // everything we need.
     const err = new IndexedDBOpenError(lastError);
-    Log.err('[OpLogStore] IndexedDB open failed after all retries.', err);
+    // Deliberately does not mention retries: the barrier path stops as soon as
+    // it is hit. `err.message` already names which case this is (#9187).
+    Log.err('[OpLogStore] IndexedDB open failed.', err);
     throw err;
   }
 
@@ -733,22 +786,125 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   ): Promise<number> {
     await this._ensureInit();
     try {
-      if (isFullStateOpType(op.opType)) {
-        return await this._adapter.transaction(
-          [STORE_NAMES.OPS, STORE_NAMES.META],
-          'readwrite',
-          async (tx) => {
-            const entry = this._buildStoredEntry(op, source, options);
-            const seq = await tx.add(STORE_NAMES.OPS, entry);
-            await this._recordFullStateOpInTx(tx, entry.op, seq);
-            return seq;
-          },
+      const seq = isFullStateOpType(op.opType)
+        ? await this._adapter.transaction(
+            [STORE_NAMES.OPS, STORE_NAMES.META],
+            'readwrite',
+            async (tx) => {
+              const entry = this._buildStoredEntry(op, source, options);
+              const writtenSeq = await tx.add(STORE_NAMES.OPS, entry);
+              await this._recordFullStateOpInTx(tx, entry.op, writtenSeq);
+              return writtenSeq;
+            },
+          )
+        : await this._adapter.add(
+            STORE_NAMES.OPS,
+            this._buildStoredEntry(op, source, options),
+          );
+      this._tabSeqFrontier.observeOwnWrite(seq);
+      return seq;
+    } catch (e) {
+      this._handleAppendError(e);
+    }
+  }
+
+  /**
+   * Atomically appends an operation and installs its matching replay anchor.
+   * The snapshot frontier and working clock cannot move independently from
+   * the operation, so a concurrent tab's later append remains replayable and
+   * its clock advancement cannot be overwritten by a follow-up write.
+   */
+  async appendOperationAndSnapshot(
+    op: Operation,
+    source: 'local' | 'remote',
+    snapshot: ReplayAnchorSnapshot,
+  ): Promise<number> {
+    const vectorClock = await this.pruneClockForStorage(snapshot.vectorClock);
+    // Resolved out here: both lookups are async and must not run while the
+    // IndexedDB transaction below is open.
+    const currentClientId = await this.clientIdProvider.loadClientId();
+    const importAuthorId = (await this.getLatestFullStateOp())?.clientId;
+    return this._appendOperationAndSnapshot(op, source, snapshot, vectorClock, true, {
+      currentClientId,
+      importAuthorId,
+    });
+  }
+
+  private async _appendOperationAndSnapshot(
+    op: Operation,
+    source: 'local' | 'remote',
+    snapshot: ReplayAnchorSnapshot,
+    vectorClock: VectorClock,
+    rebaseOnDurable = false,
+    rebaseAuthors?: {
+      currentClientId: string | null;
+      importAuthorId: string | undefined;
+    },
+  ): Promise<number> {
+    await this._ensureInit();
+    const storeNames: OpLogStoreName[] = [
+      STORE_NAMES.OPS,
+      STORE_NAMES.STATE_CACHE,
+      STORE_NAMES.VECTOR_CLOCK,
+    ];
+    if (isFullStateOpType(op.opType)) {
+      storeNames.push(STORE_NAMES.META);
+    }
+    let committedClock = vectorClock;
+    try {
+      const seq = await this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
+        let operationToStore = op;
+        if (rebaseOnDurable) {
+          const currentClockEntry = await tx.get<VectorClockEntry>(
+            STORE_NAMES.VECTOR_CLOCK,
+            SINGLETON_KEY,
+          );
+          const durableClock = currentClockEntry?.clock ?? {};
+          const bound = (clock: VectorClock): VectorClock =>
+            boundRebasedClock(
+              clock,
+              rebaseAuthors?.currentClientId ?? null,
+              rebaseAuthors?.importAuthorId,
+            );
+          operationToStore = {
+            ...op,
+            vectorClock: bound(
+              rebaseLocalClockOnDurable(durableClock, op.vectorClock, op.clientId),
+            ),
+          };
+          committedClock = bound(
+            rebaseLocalClockOnDurable(durableClock, vectorClock, op.clientId),
+          );
+        }
+        const entry = this._buildStoredEntry(operationToStore, source);
+        const writtenSeq = await tx.add(STORE_NAMES.OPS, entry);
+        await this._recordFullStateOpInTx(tx, entry.op, writtenSeq);
+        await tx.put(STORE_NAMES.STATE_CACHE, {
+          id: SINGLETON_KEY,
+          state: snapshot.state,
+          lastAppliedOpSeq: writtenSeq,
+          vectorClock: committedClock,
+          compactedAt: snapshot.compactedAt,
+          ...(snapshot.schemaVersion === undefined
+            ? {}
+            : { schemaVersion: snapshot.schemaVersion }),
+        } satisfies StateCacheEntry);
+        await tx.put(
+          STORE_NAMES.VECTOR_CLOCK,
+          {
+            clock: committedClock,
+            lastUpdate: snapshot.compactedAt,
+          } satisfies VectorClockEntry,
+          SINGLETON_KEY,
         );
-      }
-      return await this._adapter.add(
-        STORE_NAMES.OPS,
-        this._buildStoredEntry(op, source, options),
-      );
+        return writtenSeq;
+      });
+      this._vectorClockCache = { ...committedClock };
+      this._invalidateUnsyncedCache();
+      // The cache installed above IS the state the caller hydrates from, so
+      // the tab's applied frontier is exactly this seq (#9438).
+      this._tabSeqFrontier.establishFrontier(seq);
+      return seq;
     } catch (e) {
       this._handleAppendError(e);
     }
@@ -764,42 +920,13 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     op: Operation,
     state: unknown,
   ): Promise<number> {
-    await this._ensureInit();
-    const now = Date.now();
-    try {
-      const seq = await this._adapter.transaction(
-        [STORE_NAMES.OPS, STORE_NAMES.STATE_CACHE, STORE_NAMES.VECTOR_CLOCK],
-        'readwrite',
-        async (tx) => {
-          const writtenSeq = await tx.add(
-            STORE_NAMES.OPS,
-            this._buildStoredEntry(op, 'local'),
-          );
-          await tx.put(STORE_NAMES.STATE_CACHE, {
-            id: SINGLETON_KEY,
-            state,
-            lastAppliedOpSeq: writtenSeq,
-            vectorClock: op.vectorClock,
-            compactedAt: now,
-            schemaVersion: op.schemaVersion,
-          } satisfies StateCacheEntry);
-          await tx.put(
-            STORE_NAMES.VECTOR_CLOCK,
-            {
-              clock: op.vectorClock,
-              lastUpdate: now,
-            } satisfies VectorClockEntry,
-            SINGLETON_KEY,
-          );
-          return writtenSeq;
-        },
-      );
-      this._vectorClockCache = { ...op.vectorClock };
-      this._invalidateUnsyncedCache();
-      return seq;
-    } catch (e) {
-      this._handleAppendError(e);
-    }
+    const snapshot = {
+      state,
+      vectorClock: op.vectorClock,
+      compactedAt: Date.now(),
+      schemaVersion: op.schemaVersion,
+    };
+    return this._appendOperationAndSnapshot(op, 'local', snapshot, op.vectorClock);
   }
 
   async appendBatch(
@@ -813,16 +940,24 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       if (ops.some((op) => isFullStateOpType(op.opType))) {
         storeNames.push(STORE_NAMES.META);
       }
-      return await this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
-        const seqs: number[] = [];
-        for (const op of ops) {
-          const entry = this._buildStoredEntry(op, source, options);
-          const seq = await tx.add(STORE_NAMES.OPS, entry);
-          await this._recordFullStateOpInTx(tx, entry.op, seq);
-          seqs.push(seq);
-        }
-        return seqs;
-      });
+      const seqs = await this._adapter.transaction(
+        storeNames,
+        'readwrite',
+        async (tx) => {
+          const writtenSeqs: number[] = [];
+          for (const op of ops) {
+            const entry = this._buildStoredEntry(op, source, options);
+            const seq = await tx.add(STORE_NAMES.OPS, entry);
+            await this._recordFullStateOpInTx(tx, entry.op, seq);
+            writtenSeqs.push(seq);
+          }
+          return writtenSeqs;
+        },
+      );
+      for (const seq of seqs) {
+        this._tabSeqFrontier.observeOwnWrite(seq);
+      }
+      return seqs;
     } catch (e) {
       this._handleAppendError(e);
     }
@@ -917,7 +1052,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
           let preAppendLastSeq = 0;
           await tx.iterate<StoredOperationLogEntry>(
             STORE_NAMES.OPS,
-            { direction: 'prev' },
+            { direction: 'prev', limit: 1 },
             (_value, key) => {
               if (typeof key !== 'number') {
                 throw new Error('Operation sequence key is not numeric');
@@ -1003,13 +1138,21 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
             } satisfies ArchiveStoreEntry);
           }
 
-          return { seqs, writtenOps, skippedCount };
+          return { seqs, writtenOps, skippedCount, snapshotFrontier };
         }),
       );
 
       this._vectorClockCache = { ...prunedVectorClock };
       this._invalidateAppliedAndUnsyncedCaches();
-      return result;
+      // The committed baseline replaces this tab's live state (dispatched by
+      // the caller inside the same locked section), so its frontier is the
+      // tab's applied frontier (#9438).
+      this._tabSeqFrontier.establishFrontier(result.snapshotFrontier);
+      return {
+        seqs: result.seqs,
+        writtenOps: result.writtenOps,
+        skippedCount: result.skippedCount,
+      };
     } catch (e) {
       this._handleAppendError(e);
     }
@@ -1055,7 +1198,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
           let preAppendLastSeq = 0;
           await tx.iterate<StoredOperationLogEntry>(
             STORE_NAMES.OPS,
-            { direction: 'prev' },
+            { direction: 'prev', limit: 1 },
             (_value, key) => {
               if (typeof key !== 'number') {
                 throw new Error('Operation sequence key is not numeric');
@@ -1110,6 +1253,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         );
       }
 
+      for (const seq of seqs) {
+        this._tabSeqFrontier.observeOwnWrite(seq);
+      }
       return { seqs, writtenOps, skippedCount };
     } catch (e) {
       if (e instanceof DOMException && e.name === 'QuotaExceededError') {
@@ -1127,13 +1273,18 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
    *
    * Batch order is durable sequence order. Conflict resolution relies on this
    * to persist remote loser rows before the local compensations that supersede
-   * them, without exposing a crash point between the two groups.
+   * them, without exposing a crash point between the two groups. Superseded
+   * predecessor IDs can be rejected in that same transaction. Missing or
+   * inactive IDs abort the commit so callers cannot mistake a partial recovery
+   * for success.
    */
   async appendMixedSourceBatchSkipDuplicates(
     batches: readonly MixedSourceOperationBatch[],
+    options?: { rejectOpIds?: readonly string[] },
   ): Promise<{ written: MixedSourceWrittenOperation[]; skippedCount: number }> {
     const nonEmptyBatches = batches.filter((batch) => batch.ops.length > 0);
-    if (nonEmptyBatches.length === 0) {
+    const rejectOpIds = [...new Set(options?.rejectOpIds ?? [])];
+    if (nonEmptyBatches.length === 0 && rejectOpIds.length === 0) {
       return { written: [], skippedCount: 0 };
     }
 
@@ -1158,9 +1309,37 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     const written: MixedSourceWrittenOperation[] = [];
     let skippedCount = 0;
     let committedClock: VectorClock | undefined;
+    const committedAt = Date.now();
 
     try {
       await this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
+        const entriesToReject: StoredOperationLogEntry[] = [];
+        for (const opId of rejectOpIds) {
+          const entry = await tx.getFromIndex<StoredOperationLogEntry>(
+            STORE_NAMES.OPS,
+            OPS_INDEXES.BY_ID,
+            opId,
+          );
+          if (!entry) {
+            throw new Error(`Cannot atomically reject missing operation ${opId}`);
+          }
+          if (
+            entry.source !== 'local' ||
+            entry.syncedAt !== undefined ||
+            entry.rejectedAt !== undefined ||
+            entry.reducerRejectedAt !== undefined
+          ) {
+            throw new Error(
+              `Cannot atomically reject operation ${opId} because it is not an active pending local operation`,
+            );
+          }
+          entriesToReject.push(entry);
+        }
+        for (const entry of entriesToReject) {
+          entry.rejectedAt = committedAt;
+          await tx.put(STORE_NAMES.OPS, entry);
+        }
+
         const currentClockEntry = hasLocalOps
           ? await tx.get<VectorClockEntry>(STORE_NAMES.VECTOR_CLOCK, SINGLETON_KEY)
           : undefined;
@@ -1207,7 +1386,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
           committedClock = runningClock;
           await tx.put(
             STORE_NAMES.VECTOR_CLOCK,
-            { clock: runningClock, lastUpdate: Date.now() } satisfies VectorClockEntry,
+            { clock: runningClock, lastUpdate: committedAt } satisfies VectorClockEntry,
             SINGLETON_KEY,
           );
         }
@@ -1218,6 +1397,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
     if (committedClock) {
       this._vectorClockCache = { ...committedClock };
+    }
+    if (rejectOpIds.length > 0) {
+      this._invalidateUnsyncedCache();
+    }
+    for (const writtenOp of written) {
+      this._tabSeqFrontier.observeOwnWrite(writtenOp.seq);
     }
     return { written, skippedCount };
   }
@@ -1353,11 +1538,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     await this._ensureInit();
     let storedEntries: StoredOperationLogEntry[];
     try {
-      // Exact compound-key match expressed as a degenerate [k, k] range.
       storedEntries = await this._adapter.getAllFromIndex<StoredOperationLogEntry>(
         STORE_NAMES.OPS,
         OPS_INDEXES.BY_SOURCE_AND_STATUS,
-        { lower: ['remote', 'pending'], upper: ['remote', 'pending'] },
+        ['remote', 'pending'],
       );
     } catch (e) {
       // Fallback for databases created before version 3 index migration
@@ -1823,15 +2007,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         this._adapter.getAllFromIndex<StoredOperationLogEntry>(
           STORE_NAMES.OPS,
           OPS_INDEXES.BY_SOURCE_AND_STATUS,
-          {
-            lower: ['remote', 'archive_pending'],
-            upper: ['remote', 'archive_pending'],
-          },
+          ['remote', 'archive_pending'],
         ),
         this._adapter.getAllFromIndex<StoredOperationLogEntry>(
           STORE_NAMES.OPS,
           OPS_INDEXES.BY_SOURCE_AND_STATUS,
-          { lower: ['remote', 'failed'], upper: ['remote', 'failed'] },
+          ['remote', 'failed'],
         ),
       ]);
       storedEntries = [...archivePendingEntries, ...failedEntries];
@@ -1900,8 +2081,8 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       // Pure read on the hottest path (getUnsynced/getAppliedOpIds); readonly
       // so it takes no exclusive write lock. On IndexedDB it runs concurrently
       // with appends; on the single-connection SQLite backend it queues in the
-      // shared serializer but holds it only for one SELECT (no BEGIN…COMMIT).
-      { direction: 'prev', mode: 'readonly' },
+      // shared serializer for one `SELECT … LIMIT 1` (no BEGIN…COMMIT).
+      { direction: 'prev', mode: 'readonly', limit: 1 },
       (_value, key) => {
         lastSeq = key as number;
         return 'stop';
@@ -1911,20 +2092,45 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   }
 
   /**
-   * Checks if there are any operations that have been synced to the server.
-   * Used to distinguish between:
-   * - Fresh client (only local ops, never synced) → NOT a server migration
-   * - Client that previously synced (has synced ops) → Server migration scenario
-   *
-   * NOTE: Excludes MIGRATION and RECOVERY entity types from the check.
-   * These are special ops created during local migration from legacy data and
-   * don't represent real sync history with a remote server. Including them
-   * would incorrectly trigger server migration when multiple clients with
-   * legacy data join a new sync group.
+   * First (lowest-seq) entry, or undefined when empty. Decodes one row (#9921);
+   * `limit: 1` pushes the bound into the adapter so SQLite emits `LIMIT 1`
+   * instead of materializing the table before the visitor stops (#9932).
+   */
+  async getFirstOpEntry(): Promise<OperationLogEntry | undefined> {
+    await this._ensureInit();
+    let firstEntry: OperationLogEntry | undefined;
+    await this._adapter.iterate<StoredOperationLogEntry>(
+      STORE_NAMES.OPS,
+      { mode: 'readonly', limit: 1 },
+      (value) => {
+        firstEntry = decodeStoredEntry(value);
+        return 'stop';
+      },
+    );
+    return firstEntry;
+  }
+
+  /**
+   * Returns the total number of operations currently in the op-log store.
+   * Backed by the adapter's `count()` — a single native count query (an engine-side
+   * key walk on IndexedDB, COUNT(*) on SQLite), milliseconds even at 100k+ ops — so
+   * it is fine to call on every startup. Used to detect an op-log that has grown
+   * large enough to warrant compaction (see STARTUP_COMPACTION_OP_THRESHOLD).
+   */
+  async countOps(): Promise<number> {
+    await this._ensureInit();
+    return this._adapter.count(STORE_NAMES.OPS);
+  }
+
+  /**
+   * Whether any op was ever synced with a server: false for a fresh client
+   * (local ops only), true for one that synced before (server-migration case).
+   * Genesis ops (isGenesisEntityType) don't count — they come from the local
+   * legacy migration, and counting them would trigger server migration when
+   * several legacy clients join a new sync group.
    */
   async hasSyncedOps(): Promise<boolean> {
     await this._ensureInit();
-    // Use the bySyncedAt index to find synced ops, but exclude MIGRATION/RECOVERY
     let foundRealSyncedOp = false;
     await this._adapter.iterate<StoredOperationLogEntry>(
       STORE_NAMES.OPS,
@@ -1934,8 +2140,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         const op = value.op;
         // Handle both compact format ('e') and full format ('entityType')
         const entityType = isCompactOperation(op) ? op.e : (op as Operation).entityType;
-        // Skip MIGRATION and RECOVERY entity types - they're not real sync history
-        if (entityType !== 'MIGRATION' && entityType !== 'RECOVERY') {
+        if (!isGenesisEntityType(entityType)) {
           foundRealSyncedOp = true;
           return 'stop';
         }
@@ -1950,7 +2155,12 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     lastAppliedOpSeq: number;
     vectorClock: VectorClock;
     compactedAt: number;
-    schemaVersion?: number;
+    // Required so no writer can forget it (#8770). Version-stamping
+    // invariant: only stamp the version the migration chain actually
+    // produced for `state` — never CURRENT_SCHEMA_VERSION onto data of
+    // unverified schema (that freezes it under a label Checkpoint B then
+    // trusts unvalidated on every later boot).
+    schemaVersion: number;
     snapshotEntityKeys?: string[];
   }): Promise<void> {
     await this._ensureInit();
@@ -2053,6 +2263,18 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   // ============================================================
   // Persistent Compaction Counter
   // ============================================================
+  //
+  // SUPERSEDED / removal candidate: this persisted counter was meant to carry the
+  // "ops since last compaction" count across restarts, but `incrementCompactionCounter`
+  // has no production callers (it is never persisted as non-zero, and every
+  // `saveStateCache` put wipes the field), so `getCompactionCounter` effectively
+  // always returns 0. Cross-restart op-log growth is now bounded by the startup
+  // op-count check in OperationLogCompactionService.compactIfBloated(), invoked by
+  // the hydrator after each successful boot (STARTUP_COMPACTION_OP_THRESHOLD).
+  // The mid-session trigger uses only the in-memory counter in OperationLogEffects.
+  // Removing this plumbing is a worthwhile follow-up but is deferred: `getCompactionCounter`
+  // currently doubles as the seed seam for the effect's compaction-threshold unit
+  // tests, so removal needs those tests migrated first.
 
   /**
    * Gets the current compaction counter value.
@@ -2144,7 +2366,6 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       STORE_NAMES.VECTOR_CLOCK,
       STORE_NAMES.ARCHIVE_YOUNG,
       STORE_NAMES.ARCHIVE_OLD,
-      STORE_NAMES.PROFILE_DATA,
       STORE_NAMES.CLIENT_ID,
       STORE_NAMES.META,
     ];
@@ -2155,96 +2376,61 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     });
     this._invalidateAppliedAndUnsyncedCaches();
     this._vectorClockCache = null;
+    this._tabSeqFrontier.resetToUnestablished();
   }
 
   // ============================================================
-  // Import Backup (pre-import state preservation)
+  // Import Backup (pre-replacement recovery ring)
   // ============================================================
 
+  private _importBackupTx<T>(
+    mode: 'readonly' | 'readwrite',
+    fn: (tx: OpLogTx) => Promise<T>,
+  ): Promise<T> {
+    return this._adapter.transaction([STORE_NAMES.IMPORT_BACKUP], mode, fn);
+  }
+
   /**
-   * Saves a backup of the current state before an import operation.
-   * This allows manual recovery if the import causes issues.
-   *
-   * Migrated to route through `_adapter` (Phase A). Behavior is identical:
-   * the adapter operates on the same connection adopted in `init()`.
+   * Captures the current state before a destructive replacement (import, force
+   * download, remote full-state op) so the user can recover from it. Rotates the
+   * ring and points the Undo slot at the new snapshot.
    */
-  async saveImportBackup(state: unknown): Promise<ImportBackupRef> {
+  async saveImportBackup(
+    state: unknown,
+    meta?: ImportBackupCaptureMeta,
+  ): Promise<ImportBackupRef> {
     await this._ensureInit();
-    const savedAt = Date.now();
-    const backupId = uuidv7();
-    await this._adapter.put(STORE_NAMES.IMPORT_BACKUP, {
-      id: SINGLETON_KEY,
-      state,
-      savedAt,
-      backupId,
-    });
-    return { backupId, savedAt };
+    return this._importBackupTx('readwrite', (tx) => saveImportBackupTx(tx, state, meta));
   }
 
-  /**
-   * Loads the import backup, if one exists.
-   */
+  /** Loads the snapshot the Undo slot points at, if any. */
   async loadImportBackup(): Promise<ImportBackupEntry | null> {
     await this._ensureInit();
-    return this._adapter.transaction(
-      [STORE_NAMES.IMPORT_BACKUP],
-      'readwrite',
-      async (tx) => {
-        const backup = await tx.get<{
-          state: unknown;
-          savedAt: number;
-          backupId?: string;
-        }>(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
-        if (!backup) {
-          return null;
-        }
-
-        // Lazily give pre-token backup rows an opaque identity. From this read
-        // onward even a same-millisecond slot replacement cannot masquerade as
-        // the backup offered by a durable Undo marker.
-        const backupId = backup.backupId ?? uuidv7();
-        if (backup.backupId === undefined) {
-          await tx.put(STORE_NAMES.IMPORT_BACKUP, {
-            id: SINGLETON_KEY,
-            ...backup,
-            backupId,
-          });
-        }
-        return { state: backup.state, savedAt: backup.savedAt, backupId };
-      },
-    );
+    return this._importBackupTx('readwrite', loadImportBackupTx);
   }
 
-  /**
-   * Clears the import backup.
-   */
+  async loadImportBackupById(backupId: string): Promise<ImportBackupEntry | null> {
+    await this._ensureInit();
+    return this._importBackupTx('readonly', (tx) => loadImportBackupByIdTx(tx, backupId));
+  }
+
+  /** Ring metadata, newest first; never loads snapshot state. */
+  async listImportBackups(): Promise<ImportBackupMeta[]> {
+    await this._ensureInit();
+    return this._importBackupTx('readonly', listImportBackupsTx);
+  }
+
+  /** Keeps `keep` snapshots, prioritizing the newest pre-replacement capture. */
+  async pruneImportBackups(keep: number): Promise<number> {
+    return this._importBackupTx('readwrite', (tx) => pruneImportBackupRingTx(tx, keep));
+  }
+
+  /** Retires the Undo slot (only if it still matches `expectedBackupId`). */
   async clearImportBackup(expectedBackupId?: string): Promise<void> {
     await this._ensureInit();
-    await this._adapter.transaction(
-      [STORE_NAMES.IMPORT_BACKUP],
-      'readwrite',
-      async (tx) => {
-        if (expectedBackupId !== undefined) {
-          const current = await tx.get<{ backupId?: string }>(
-            STORE_NAMES.IMPORT_BACKUP,
-            SINGLETON_KEY,
-          );
-          if (current?.backupId !== expectedBackupId) {
-            return;
-          }
-        }
-        await tx.delete(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
-      },
+    await this._importBackupTx('readwrite', (tx) =>
+      clearImportBackupTx(tx, expectedBackupId),
     );
-  }
-
-  /**
-   * Checks if an import backup exists.
-   */
-  async hasImportBackup(): Promise<boolean> {
-    await this._ensureInit();
-    const backup = await this._adapter.get(STORE_NAMES.IMPORT_BACKUP, SINGLETON_KEY);
-    return !!backup;
   }
 
   /**
@@ -2267,6 +2453,8 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       },
     );
     this._invalidateAppliedAndUnsyncedCaches();
+    // Frontier seqs are meaningless after an ops wipe (#9438).
+    this._tabSeqFrontier.resetToUnestablished();
   }
 
   /**
@@ -2371,6 +2559,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
       this._invalidateAppliedAndUnsyncedCaches();
       this._vectorClockCache = { ...opts.vectorClock };
+      // Ops were wiped and the remote replay has not run yet — the frontier is
+      // unknown until the follow-up hydration/baseline commit (#9438).
+      this._tabSeqFrontier.resetToUnestablished();
     } catch (e) {
       if (e instanceof DOMException && e.name === 'QuotaExceededError') {
         throw new StorageQuotaExceededError();
@@ -2748,27 +2939,33 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       if (isFullStateOpType(op.opType)) {
         storeNames.push(STORE_NAMES.META);
       }
-      return await this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
-        // 1. Append operation to ops store (encoded to compact format)
-        const entry = this._buildStoredEntry(op, source, options);
-        const seq = await tx.add(STORE_NAMES.OPS, entry);
-        await this._recordFullStateOpInTx(tx, entry.op, seq);
+      const writtenSeq = await this._adapter.transaction(
+        storeNames,
+        'readwrite',
+        async (tx) => {
+          // 1. Append operation to ops store (encoded to compact format)
+          const entry = this._buildStoredEntry(op, source, options);
+          const seq = await tx.add(STORE_NAMES.OPS, entry);
+          await this._recordFullStateOpInTx(tx, entry.op, seq);
 
-        // 2. Update vector clock to match the operation's clock (only for
-        // local ops). The op.vectorClock already contains the incremented
-        // value from the caller; we store it as the current clock so
-        // subsequent operations can build on it.
-        if (source === 'local') {
-          await tx.put(
-            STORE_NAMES.VECTOR_CLOCK,
-            { clock: op.vectorClock, lastUpdate: Date.now() },
-            SINGLETON_KEY,
-          );
-          this._vectorClockCache = op.vectorClock;
-        }
+          // 2. Update vector clock to match the operation's clock (only for
+          // local ops). The op.vectorClock already contains the incremented
+          // value from the caller; we store it as the current clock so
+          // subsequent operations can build on it.
+          if (source === 'local') {
+            await tx.put(
+              STORE_NAMES.VECTOR_CLOCK,
+              { clock: op.vectorClock, lastUpdate: Date.now() },
+              SINGLETON_KEY,
+            );
+            this._vectorClockCache = op.vectorClock;
+          }
 
-        return seq;
-      });
+          return seq;
+        },
+      );
+      this._tabSeqFrontier.observeOwnWrite(writtenSeq);
+      return writtenSeq;
     } catch (e) {
       this._handleAppendError(e);
     }
@@ -2847,6 +3044,9 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
 
     this._vectorClockCache = committedClock ?? null;
     this._invalidateUnsyncedCache();
+    // The repaired state written above becomes this tab's live state, with
+    // the replacement op as its replay anchor (#9438).
+    this._tabSeqFrontier.establishFrontier(seq);
     return seq;
   }
 
@@ -2909,7 +3109,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       // tests (#7709) spy on the shared connection's `transaction` and poison
       // `opsStore.add`; that still fires here because the adapter operates on
       // that same adopted connection.
-      await this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, () =>
+      const committedSeq = await this._lockService.request(LOCK_NAMES.TASK_ARCHIVE, () =>
         this._adapter.transaction(storeNames, 'readwrite', async (tx) => {
           if (opts.requiredImportBackupId !== undefined) {
             const currentBackup = await tx.get<{ backupId?: string }>(
@@ -2981,12 +3181,17 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
               lastModified: compactedAt,
             });
           }
+
+          return seq;
         }),
       );
 
       // Reached only on a committed transaction.
       this._invalidateAppliedAndUnsyncedCaches();
       this._vectorClockCache = newVectorClock;
+      // The committed baseline becomes this tab's live state (the caller
+      // dispatches it), anchored at the SYNC_IMPORT op's seq (#9438).
+      this._tabSeqFrontier.establishFrontier(committedSeq);
       // The clientId rotated atomically with the stores above. Invalidate the
       // ClientIdService cache so the next read sees the rotated value. On
       // abort the transaction() above throws, so this is not reached and the
@@ -2998,47 +3203,6 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       }
       throw e;
     }
-  }
-  // ============================================================
-  // Profile Data Storage
-  // ============================================================
-
-  /**
-   * Saves profile data (CompleteBackup) for a specific profile.
-   */
-  async saveProfileData(
-    profileId: string,
-    data: ProfileDataStoreEntry['data'],
-  ): Promise<void> {
-    await this._ensureInit();
-    await this._adapter.put(STORE_NAMES.PROFILE_DATA, {
-      id: profileId,
-      data,
-      lastModified: Date.now(),
-    });
-  }
-
-  /**
-   * Loads profile data (CompleteBackup) for a specific profile.
-   * Returns null if no data exists for the given profile ID.
-   */
-  async loadProfileData(
-    profileId: string,
-  ): Promise<ProfileDataStoreEntry['data'] | null> {
-    await this._ensureInit();
-    const entry = await this._adapter.get<ProfileDataStoreEntry>(
-      STORE_NAMES.PROFILE_DATA,
-      profileId,
-    );
-    return entry?.data ?? null;
-  }
-
-  /**
-   * Deletes profile data for a specific profile.
-   */
-  async deleteProfileData(profileId: string): Promise<void> {
-    await this._ensureInit();
-    await this._adapter.delete(STORE_NAMES.PROFILE_DATA, profileId);
   }
 }
 

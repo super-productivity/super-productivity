@@ -20,6 +20,7 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatDivider } from '@angular/material/divider';
 import { FileBasedEncryptionService } from '../file-based-encryption.service';
 import { SyncWrapperService } from '../sync-wrapper.service';
+import { SyncLocalStateService } from '../../../op-log/sync/sync-local-state.service';
 
 export interface ChangeEncryptionPasswordResult {
   success: boolean;
@@ -62,6 +63,7 @@ export class DialogChangeEncryptionPasswordComponent {
   private _fileBasedEncryptionService = inject(FileBasedEncryptionService);
   private _encryptionToggleService = inject(SuperSyncEncryptionToggleService);
   private _syncWrapperService = inject(SyncWrapperService);
+  private _syncLocalStateService = inject(SyncLocalStateService);
   private _snackService = inject(SnackService);
   private _matDialogRef =
     inject<
@@ -102,6 +104,21 @@ export class DialogChangeEncryptionPasswordComponent {
     this.isLoading.set(true);
 
     try {
+      // #9256: the op-log path below runs a clean slate, which makes the server
+      // DELETE its operations. A device that has never synced and holds nothing
+      // would replace the user's only copy with an empty one. File-based
+      // providers re-encrypt in place and are not affected.
+      if (
+        this.providerType !== 'file-based' &&
+        (await this._syncLocalStateService.hasNothingWorthUploading())
+      ) {
+        this._syncLocalStateService.warnNothingWorthUploading(
+          T.F.SYNC.D_NOTHING_TO_UPLOAD.MESSAGE_CHANGE_PW,
+        );
+        this.isLoading.set(false);
+        return;
+      }
+
       if (this.providerType === 'file-based') {
         await this._syncWrapperService.runWithSyncBlocked(() =>
           this._fileBasedEncryptionService.changePassword(this.newPassword),

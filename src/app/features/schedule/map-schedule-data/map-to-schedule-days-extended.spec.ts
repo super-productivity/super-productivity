@@ -156,6 +156,7 @@ describe('mapToScheduleDays()', () => {
           start: 1722841200000,
           type: 'ScheduledRepeatProjection',
           plannedForDay: '2024-08-05',
+          sourceOccurrenceDate: '2024-08-05',
         },
         {
           data: {

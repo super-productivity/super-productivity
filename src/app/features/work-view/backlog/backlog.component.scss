@@ -11,7 +11,9 @@
     min-height: 50px;
   }
 
-  background: var(--palette-primary-200);
+  // Neutral zone: drop the primary-blue tint. The faint darkening overlay below
+  // (::before) still marks the backlog as a distinct area without a color of its own.
+  background: var(--bg);
 
   &:before {
     position: absolute;
@@ -33,14 +35,14 @@
     top: 0;
     left: 0;
     z-index: var(--z-right-panel);
-    box-shadow:
-      inset 0 10px 20px rgba(0, 0, 0, 0.19),
-      inset 0 6px 6px rgba(0, 0, 0, 0.23);
+    // Flat: a hairline top divider replaces the heavy recessed "well" shadow — the
+    // backlog still reads as a distinct zone via its tint, without deep inset chrome.
+    box-shadow: inset 0 1px 0 var(--separator-color);
   }
 }
 
 body.isDarkTheme :host {
-  background: var(--palette-primary-900);
+  background: var(--bg);
 
   &:before {
     background: var(--c-dark-50);

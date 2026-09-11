@@ -135,7 +135,17 @@ export class TagEffects {
           ),
         ),
         filter(({ nullTasks }) => nullTasks.length > 0),
-        tap((arg) => Log.log('Error INFO Today:', arg)),
+        tap(({ allTasks, activeId }) =>
+          Log.log('Error INFO Today:', {
+            activeId,
+            taskCount: allTasks.length,
+            // Positions, not ids: a bug report needs to show WHICH entries the
+            // dialog is about to delete, and `exportLogHistory` caps each arg at
+            // 400 chars — an id list truncates at ~15 tasks, losing the tail
+            // where the corrupt entries accumulate.
+            nullIndices: allTasks.flatMap((t, i) => (t ? [] : [i])),
+          }),
+        ),
         tap(({ activeId, allTasks }) => {
           const allIds = allTasks.map((t) => t && t.id);
           const r = confirmDialog(
@@ -236,7 +246,7 @@ export class TagEffects {
    * or post-sync cooldown period.
    *
    * @see selectTodayTagRepair - detects inconsistencies between TODAY_TAG.taskIds and task.dueDay
-   * @see docs/ai/today-tag-architecture.md
+   * @see ARCHITECTURE-DECISIONS.md Decision #2
    */
   repairTodayTagConsistency$: Observable<unknown> = createEffect(() =>
     this._store$.select(selectTodayTagRepair).pipe(
