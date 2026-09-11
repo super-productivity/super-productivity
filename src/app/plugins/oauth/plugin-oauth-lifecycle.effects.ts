@@ -68,7 +68,7 @@ export class PluginOAuthLifecycleEffects {
                     if (
                       !this._hydrationState.isHydrationFallbackActive() &&
                       bootIds.length === 1 &&
-                      sameIds(bootIds, currentIds)
+                      currentIds.includes(bootIds[0])
                     ) {
                       await this._pluginOAuthBridge.migrateLegacyOAuthTokenToScopedKey(
                         GOOGLE_CALENDAR_PLUGIN_ID,

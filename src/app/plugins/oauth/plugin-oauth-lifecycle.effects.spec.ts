@@ -237,6 +237,37 @@ describe('PluginOAuthLifecycleEffects', () => {
     );
   });
 
+  it('preserves the boot account when first sync adds a different Google provider', async () => {
+    store.dispatch(
+      IssueProviderActions.addIssueProvider({ issueProvider: provider('a') }),
+    );
+    hydration.startApplyingRemoteOps();
+    TestBed.tick();
+    ready$.next(true);
+    store.dispatch(
+      bulkApplyOperations({
+        operations: [
+          operation(
+            IssueProviderActions.addIssueProvider({ issueProvider: provider('b') }),
+            OpType.Create,
+            'b',
+          ),
+        ],
+      }),
+    );
+    await run(() => {
+      hydration.endApplyingRemoteOps();
+      TestBed.tick();
+    });
+    expect(await bridge.getOAuthToken(GOOGLE_CALENDAR_PLUGIN_ID, undefined, 'a')).toBe(
+      'account-a-access',
+    );
+    expect(
+      await bridge.getOAuthToken(GOOGLE_CALENDAR_PLUGIN_ID, undefined, 'b'),
+    ).toBeNull();
+    expect(await loadOAuthTokens(legacyKey)).toBeNull();
+  });
+
   it('cleans locally deleted credentials without clearing surviving accounts', async () => {
     await boot(['a']);
     await saveOAuthTokens(
