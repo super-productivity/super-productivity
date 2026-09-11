@@ -4,25 +4,19 @@
 @use '../../menu-item-styles';
 
 .quick-access {
-  display: flex;
-  justify-content: space-evenly;
-  @include extraBorder('-bottom');
-  height: 48px;
+  @include quickAccessRow();
+  // Five actions in a ~245px menu panel leave ~49px each, which breaks labels
+  // mid-word. Wrap to three per line instead so every label fits unbroken.
+  flex-wrap: wrap;
+}
 
-  > button {
-    height: 48px;
-    min-width: 40px;
-    flex-grow: 1;
-    border-radius: var(--card-border-radius) !important;
+.quick-access-btn {
+  @include quickAccessBtn();
+  flex: 1 0 30%;
+}
 
-    ::ng-deep .mat-mdc-button-persistent-ripple {
-      border-radius: var(--card-border-radius) !important;
-    }
-  }
-
-  button + button {
-    border-left: 1px solid var(--extra-border-color) !important;
-  }
+.quick-access-label {
+  @include quickAccessLabel();
 }
 
 .label {
