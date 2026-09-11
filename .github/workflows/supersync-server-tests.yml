@@ -75,6 +75,23 @@ jobs:
             echo 'connectionLimit=0 unexpectedly passed Helm validation' >&2
             exit 1
           fi
+          # A blank required secret must fail the render, not reach a pod. Both the
+          # empty-string and the YAML-null spelling: `key:` with no value is nil.
+          for blank in '--set postgresql.password=' '--set postgresql.password=null'; do
+            if helm template supersync helm/supersync \
+              --set supersync.secret.jwtSecret=01234567890123456789012345678901 \
+              $blank >/dev/null 2>&1; then
+              echo "blank postgresql.password ($blank) unexpectedly passed Helm validation" >&2
+              exit 1
+            fi
+          done
+          # An external database with neither url nor existingSecret must fail too.
+          if helm template supersync helm/supersync \
+            --set supersync.secret.jwtSecret=01234567890123456789012345678901 \
+            --set postgresql.enabled=false >/dev/null 2>&1; then
+            echo 'externalDatabase with no url or existingSecret unexpectedly passed' >&2
+            exit 1
+          fi
           # Liveness must stay off the DB-gated endpoint; readiness and startup keep it.
           rendered=$(helm template "${chart_args[@]}")
           printf '%s\n' "$rendered" | grep -A3 'livenessProbe:' | grep -q 'path: /live'
