@@ -190,15 +190,16 @@ the description “Build and distribute this PR through public iOS TestFlight.�
 1. Create and protect the `ios-testflight` environment before merging the
    workflows.
 2. Merge the workflows to `master`. Old feature branches do not need to contain
-   them: the unsigned builder restores the version helper from its exact trusted
-   base commit, and the publisher always runs from the default branch.
+   them: the unsigned builder takes the version helper and version inputs from
+   `master`, and the publisher always runs from the default branch.
 3. Apply `ios-test-flight` to a same-repo PR targeting `master`.
 4. Wait for **iOS TestFlight Build on Label** to produce the unsigned archive.
 5. Open **iOS TestFlight Publish**. Its validation job recomputes the expected
-   marketing version from the greater of the trusted base package version and
-   stable tags merged into that base, then increments the patch. The build number
+   marketing version from the greater of `master`'s `package.json` version and
+   stable tags merged into `master`, then increments the patch. The build number
    is the source workflow's `run_number.run_attempt` and is checked in both app
-   targets.
+   targets. A newer `master` that changes this version train fails validation, so
+   a stale build is never signed.
 6. Review the PR and exact SHA shown in the protected publish job name, then
    approve the `ios-testflight` deployment.
 7. Follow the build under App Store Connect → TestFlight. After upload, the

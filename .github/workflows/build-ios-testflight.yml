@@ -61,13 +61,18 @@ jobs:
           persist-credentials: false
 
       - name: Restore trusted version helper
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          # Old PR branches predate the helper. Use the exact base commit from
-          # the label event, never a moving branch name or a PR-provided copy.
-          git checkout "$BASE_SHA" -- tools/ios-testflight-version.js
-          git show "$BASE_SHA:package.json" > "$RUNNER_TEMP/base-package.json"
+          # The PR's frozen base commit can predate this helper, and the PR's own
+          # copy is untrusted. Take the helper and the version inputs from the
+          # default branch, which is where this workflow is defined.
+          if ! TRUSTED_SHA=$(git rev-parse --verify --quiet origin/master); then
+            git fetch --force --tags origin master
+            TRUSTED_SHA=$(git rev-parse FETCH_HEAD)
+          fi
+          git cat-file -e "$TRUSTED_SHA:tools/ios-testflight-version.js"
+          git checkout "$TRUSTED_SHA" -- tools/ios-testflight-version.js
+          git show "$TRUSTED_SHA:package.json" > "$RUNNER_TEMP/trusted-package.json"
+          echo "TRUSTED_SHA=$TRUSTED_SHA" >> "$GITHUB_ENV"
 
       - name: Select Xcode 26.2
         run: |
@@ -108,10 +113,8 @@ jobs:
         run: npm run env
 
       - name: Set TestFlight version
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          VERSION=$(node tools/ios-testflight-version.js "$RUNNER_TEMP/base-package.json" "$BASE_SHA")
+          VERSION=$(node tools/ios-testflight-version.js "$RUNNER_TEMP/trusted-package.json" "$TRUSTED_SHA")
           BUILD_NUMBER="${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
           echo "Setting iOS TestFlight version to $VERSION (build $BUILD_NUMBER)"
 

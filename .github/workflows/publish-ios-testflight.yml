@@ -27,7 +27,6 @@ jobs:
       requested: ${{ steps.request.outputs.requested }}
       pr_number: ${{ steps.source.outputs.pr_number }}
       head_sha: ${{ steps.source.outputs.head_sha }}
-      base_sha: ${{ steps.source.outputs.base_sha }}
 
     steps:
       - name: Check out trusted publisher code
@@ -116,7 +115,6 @@ jobs:
 
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
-          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
 
   validate:
     needs: discover
@@ -155,7 +153,6 @@ jobs:
         env:
           SOURCE_RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
           SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
-          EXPECTED_BASE_SHA: ${{ needs.discover.outputs.base_sha }}
         run: |
           set -euo pipefail
           RAW="$RUNNER_TEMP/raw"
@@ -199,8 +196,11 @@ jobs:
                       raise SystemExit(f'Unsafe archive symlink: {path} -> {target}')
           PY
 
-          git show "$EXPECTED_BASE_SHA:package.json" > "$RUNNER_TEMP/base-package.json"
-          EXPECTED_VERSION=$(node tools/ios-testflight-version.js "$RUNNER_TEMP/base-package.json" "$EXPECTED_BASE_SHA")
+          # Recompute from this trusted default-branch checkout, never from
+          # PR-controlled or frozen-base data. A newer master that changes the
+          # version train intentionally fails validation so a stale build is
+          # never signed.
+          EXPECTED_VERSION=$(node tools/ios-testflight-version.js package.json HEAD)
           EXPECTED_BUILD="${SOURCE_RUN_NUMBER}.${SOURCE_RUN_ATTEMPT}"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PLIST")" = com.super-productivity.app
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PLIST")" = "$EXPECTED_VERSION"
@@ -224,7 +224,7 @@ jobs:
       - name: Upload validated archive
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ios-testflight-validated-${{ github.run_id }}
+          name: ios-testflight-validated-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/App.xcarchive.tar.gz
           if-no-files-found: error
           retention-days: 7
@@ -264,7 +264,7 @@ jobs:
       - name: Download validated archive
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
         with:
-          name: ios-testflight-validated-${{ github.run_id }}
+          name: ios-testflight-validated-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/validated
 
       - name: Verify and unpack validated archive
