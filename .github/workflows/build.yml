@@ -4,6 +4,17 @@ on:
     branches: [master, release/*, test/git-actions]
     tags:
       - v*
+  # Finish the Windows half of a release whose tag run already burned its
+  # windows-bin job. Runs windows-bin alone, from the branch dispatched (so it
+  # picks up build fixes the tag predates) and attaches to the existing draft
+  # release for `release_tag`. Never moves or re-pushes the tag: that would
+  # re-fire the iOS and Android release workflows, which have already run.
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag of the existing DRAFT release to sign and attach Windows binaries to (e.g. v19.0.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -71,6 +82,9 @@ jobs:
 
   linux-bin-and-snap-release:
     runs-on: ubuntu-latest
+    # The only job here without a tag gate, so it would otherwise run on a
+    # Windows-only dispatch and spend ~40 minutes rebuilding what already shipped.
+    if: github.event_name != 'workflow_dispatch'
     env:
       SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
@@ -542,7 +556,12 @@ jobs:
   windows-bin:
     needs: [create-release]
     runs-on: windows-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    # create-release is skipped on a dispatch run, and a plain `if` would skip
+    # this job with it -- a status function is required to opt out of that.
+    if: >-
+      !cancelled()
+      && (needs.create-release.result == 'success' || needs.create-release.result == 'skipped')
+      && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
     permissions:
       contents: write
       actions: read # Required by SignPath action
@@ -550,8 +569,37 @@ jobs:
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
+      # The release these binaries belong to: the pushed tag, or the one the
+      # dispatch names. github.ref_name is the branch on a dispatch run, so the
+      # publish step cannot fall back to it.
+      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
 
     steps:
+      # A dispatch run has no create-release job to make the draft, so the draft
+      # must already exist. Check before the build rather than after signing:
+      # a wrong tag would otherwise create a stray release, or push assets onto
+      # a published one, having already spent SignPath quota.
+      - name: Verify the target draft release exists
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$RELEASE_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::release_tag must look like v1.2.3 (got '$RELEASE_TAG')"
+            exit 1
+          fi
+          if ! IS_DRAFT=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft); then
+            echo "::error::no release found for $RELEASE_TAG"
+            exit 1
+          fi
+          if [ "$IS_DRAFT" != "true" ]; then
+            echo "::error::$RELEASE_TAG is already published -- refusing to push assets onto a live release"
+            exit 1
+          fi
+          echo "$RELEASE_TAG is a draft; proceeding"
+
       # required because setting via env.TZ does not work on windows
       - name: Set timezone to Europe Standard Time
         uses: szenius/set-timezone@1f9716b0f7120e344f0c62bb7b1ee98819aefd42 # v2.0
@@ -562,6 +610,29 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           persist-credentials: false
+
+      # Every other platform's binaries for this tag were built from the tag. This
+      # job builds from the dispatched ref instead, which is only sound while that
+      # ref differs from the tag by release tooling alone -- otherwise Windows
+      # users get app code no other platform shipped for this version.
+      - name: Verify the dispatched ref matches the tag's app code
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          echo "Commits on top of $RELEASE_TAG:"
+          git log --oneline "$RELEASE_TAG..HEAD" || true
+          DRIFT=$(git diff --name-only "$RELEASE_TAG" HEAD -- . \
+            ':(exclude).github/**' ':(exclude)tools/**' ':(exclude)docs/**' \
+            ':(exclude)e2e/**' ':(exclude)*.md')
+          if [ -n "$DRIFT" ]; then
+            echo "::error::the dispatched ref changes app code relative to $RELEASE_TAG:"
+            printf '%s\n' "$DRIFT"
+            echo "::error::dispatch from a branch off $RELEASE_TAG carrying only the release-tooling fix"
+            exit 1
+          fi
+          echo "no app-code drift from $RELEASE_TAG"
 
       - name: Setup Electron build environment
         uses: ./.github/actions/setup-electron-build
@@ -751,5 +822,6 @@ jobs:
           # or latest.yml means a published Windows release whose updater feed
           # is broken -- fail the job instead of shipping it.
           fail_on_unmatched_files: true
+          tag_name: ${{ env.RELEASE_TAG }}
           draft: true
-          prerelease: ${{ contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+          prerelease: ${{ contains(env.RELEASE_TAG, 'RC') || contains(env.RELEASE_TAG, 'beta') || contains(env.RELEASE_TAG, 'alpha') }}
