@@ -16,6 +16,7 @@ describe('PluginRunner', () => {
   let mockCleanupService: jasmine.SpyObj<PluginCleanupService>;
   let mockI18nService: jasmine.SpyObj<PluginI18nService>;
   let registerSidePanelButtonSpy: jasmine.Spy;
+  let registerTaskContextMenuEntrySpy: jasmine.Spy;
 
   const mockManifest: PluginManifest = {
     id: 'test-plugin',
@@ -42,8 +43,10 @@ describe('PluginRunner', () => {
     ]);
     // createBoundMethods should return an empty object (no additional bound methods)
     registerSidePanelButtonSpy = jasmine.createSpy('registerSidePanelButton');
+    registerTaskContextMenuEntrySpy = jasmine.createSpy('registerTaskContextMenuEntry');
     mockPluginBridge.createBoundMethods.and.returnValue({
       registerSidePanelButton: registerSidePanelButtonSpy,
+      registerTaskContextMenuEntry: registerTaskContextMenuEntrySpy,
     } as any);
     mockPluginBridge.pingNodeBridge.and.resolveTo(false);
 
@@ -216,6 +219,42 @@ describe('PluginRunner', () => {
       const result = service.unloadPlugin('unknown-plugin');
 
       expect(result).toBe(false);
+    });
+
+    it('cleans up task context menu registrations through the bridge when unloading', async () => {
+      const manifest = { ...mockManifest };
+      await service.loadPlugin(
+        manifest,
+        `plugin.registerTaskContextMenuEntry({
+          id: 'action',
+          label: 'Run action',
+          onClick: () => undefined,
+        });`,
+        mockBaseCfg,
+      );
+      expect(registerTaskContextMenuEntrySpy).toHaveBeenCalledTimes(1);
+
+      service.unloadPlugin(manifest.id);
+
+      expect(mockPluginBridge.unregisterPluginHooks).toHaveBeenCalledWith(manifest.id);
+    });
+
+    it('cleans up every bridge registration when activation fails', async () => {
+      const manifest = { ...mockManifest };
+
+      await service.loadPlugin(
+        manifest,
+        `plugin.registerTaskContextMenuEntry({
+          id: 'action',
+          label: 'Run action',
+          onClick: () => undefined,
+        });
+        throw new Error('activation failed');`,
+        mockBaseCfg,
+      );
+
+      expect(registerTaskContextMenuEntrySpy).toHaveBeenCalledTimes(1);
+      expect(mockPluginBridge.unregisterPluginHooks).toHaveBeenCalledWith(manifest.id);
     });
   });
 
