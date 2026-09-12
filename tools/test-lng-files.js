@@ -4,6 +4,7 @@ const { readdirSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
 
 const BASE_PATH = join(__dirname, '..', 'src', 'assets', 'i18n');
+const BASELINE_PATH = join(__dirname, 'test-lng-files.baseline.json');
 const EXAMPLE_LIMIT = 3;
 const LOG_VALUE_LIMIT = 120;
 const INVISIBLE_LOG_CHARACTERS =
@@ -54,8 +55,10 @@ const collectPlaceholders = (value) =>
 // Brace syntax that cannot interpolate cleanly: a run of 3+ braces
 // ("{{{name}}"), unbalanced "{{"/"}}" pairs ("{{name}"), or balanced pairs
 // that ngx-translate's placeholder matcher does not consume ("{{  name  }}").
-// Missing expected placeholders are informational because translated prose may omit a value.
-// When English defines placeholders, a translation-only name is unsafe: callers
+// A translation that drops a placeholder English declares silently loses the
+// value the call site passes (#10006); it is an error unless listed in the
+// baseline, which may only shrink. When English defines placeholders, a
+// translation-only name is unsafe: callers
 // supplying the English parameter names cannot resolve it, so ngx-translate
 // leaves the placeholder visible in the rendered text.
 const findBraceDefect = (value) => {
@@ -77,10 +80,12 @@ const getValueAtPath = (object, dottedKey) =>
 // Only keys present in both files are compared: a missing key falls back to
 // the English value (already reported as drift), and an unnecessary key is
 // never rendered.
-const comparePlaceholders = (reference, translation, sharedKeys) => {
+const comparePlaceholders = (reference, translation, sharedKeys, baselineKeys) => {
   const placeholderMismatches = [];
+  const droppedPlaceholderKeys = [];
   const unexpectedPlaceholderKeys = [];
   const malformedKeys = [];
+  const baseline = new Set(baselineKeys);
 
   for (const key of sharedKeys) {
     const translationValue = getValueAtPath(translation, key);
@@ -91,6 +96,14 @@ const comparePlaceholders = (reference, translation, sharedKeys) => {
     const translationPlaceholders = collectPlaceholders(translationValue);
     if (referencePlaceholders.join('\n') !== translationPlaceholders.join('\n')) {
       placeholderMismatches.push(key);
+    }
+
+    if (
+      referencePlaceholders.some(
+        (placeholder) => !translationPlaceholders.includes(placeholder),
+      )
+    ) {
+      droppedPlaceholderKeys.push(key);
     }
 
     // Deliberately only when en.json defines placeholders. Whether a
@@ -109,7 +122,16 @@ const comparePlaceholders = (reference, translation, sharedKeys) => {
     }
   }
 
-  return { placeholderMismatches, unexpectedPlaceholderKeys, malformedKeys };
+  const dropped = new Set(droppedPlaceholderKeys);
+
+  return {
+    placeholderMismatches,
+    droppedPlaceholderKeys,
+    newDroppedPlaceholderKeys: droppedPlaceholderKeys.filter((key) => !baseline.has(key)),
+    staleBaselineKeys: [...baseline].filter((key) => !dropped.has(key)).sort(),
+    unexpectedPlaceholderKeys,
+    malformedKeys,
+  };
 };
 
 const readTranslationFile = (directory, file) => {
@@ -124,7 +146,17 @@ const readTranslationFile = (directory, file) => {
   }
 };
 
-const inspectTranslationDirectory = (directory) => {
+const readBaselineFile = (filePath) => {
+  try {
+    return JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch (error) {
+    if (error && error.code === 'ENOENT') return {};
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Unable to parse baseline: ${message} (${filePath})`);
+  }
+};
+
+const inspectTranslationDirectory = (directory, baseline = {}) => {
   const reference = readTranslationFile(directory, 'en.json');
   const referenceKeys = collectLeafKeys(reference);
   const referenceKeySet = new Set(referenceKeys);
@@ -143,13 +175,18 @@ const inspectTranslationDirectory = (directory) => {
       return {
         file,
         ...compareKeyLists(referenceKeys, referenceKeySet, translationKeys),
-        ...comparePlaceholders(reference, translation, sharedKeys),
+        ...comparePlaceholders(reference, translation, sharedKeys, baseline[file] ?? []),
       };
     });
+  const fileNames = new Set(files.map((file) => file.file));
+  const staleBaselineFiles = Object.keys(baseline)
+    .filter((file) => !fileNames.has(file))
+    .sort();
 
   return {
     referenceKeyCount: referenceKeys.length,
     files,
+    staleBaselineFiles,
     totalMissing: files.reduce((total, file) => total + file.missingKeys.length, 0),
     totalUnnecessary: files.reduce(
       (total, file) => total + file.unnecessaryKeys.length,
@@ -164,8 +201,21 @@ const inspectTranslationDirectory = (directory) => {
       0,
     ),
     totalMalformed: files.reduce((total, file) => total + file.malformedKeys.length, 0),
+    totalNewDroppedPlaceholders: files.reduce(
+      (total, file) => total + file.newDroppedPlaceholderKeys.length,
+      0,
+    ),
+    totalStaleBaseline:
+      files.reduce((total, file) => total + file.staleBaselineKeys.length, 0) +
+      staleBaselineFiles.reduce((total, file) => total + baseline[file].length, 0),
   };
 };
+
+const hasBlockingDefects = (report) =>
+  report.totalUnexpectedPlaceholders > 0 ||
+  report.totalMalformed > 0 ||
+  report.totalNewDroppedPlaceholders > 0 ||
+  report.totalStaleBaseline > 0;
 
 const formatLogValue = (value) => {
   const characters = [...String(value)];
@@ -193,6 +243,8 @@ const printReport = (report) => {
     const missing = file.missingKeys.length;
     const unnecessary = file.unnecessaryKeys.length;
     const mismatched = file.placeholderMismatches.length;
+    const dropped = file.newDroppedPlaceholderKeys.length;
+    const stale = file.staleBaselineKeys.length;
     const unexpected = file.unexpectedPlaceholderKeys.length;
     const malformed = file.malformedKeys.length;
 
@@ -200,6 +252,8 @@ const printReport = (report) => {
       missing === 0 &&
       unnecessary === 0 &&
       mismatched === 0 &&
+      dropped === 0 &&
+      stale === 0 &&
       unexpected === 0 &&
       malformed === 0
     ) {
@@ -211,6 +265,8 @@ const printReport = (report) => {
       `${formatLogValue(file.file)}: ${missing} missing${formatExamples(file.missingKeys)}; ` +
         `${unnecessary} not in en.json${formatExamples(file.unnecessaryKeys)}; ` +
         `${mismatched} placeholder mismatches${formatExamples(file.placeholderMismatches)}; ` +
+        `${dropped} dropped placeholders not in baseline${formatExamples(file.newDroppedPlaceholderKeys)}; ` +
+        `${stale} stale baseline entries${formatExamples(file.staleBaselineKeys)}; ` +
         `${unexpected} unexpected placeholders${formatExamples(file.unexpectedPlaceholderKeys)}; ` +
         `${malformed} broken braces${formatExamples(file.malformedKeys)}`,
     );
@@ -221,17 +277,36 @@ const printReport = (report) => {
       `(${report.referenceKeyCount} keys): ${report.totalMissing} missing, ` +
       `${report.totalUnnecessary} not in en.json, ` +
       `${report.totalPlaceholderMismatches} placeholder mismatches, ` +
+      `${report.totalNewDroppedPlaceholders} dropped placeholders not in baseline, ` +
+      `${report.totalStaleBaseline} stale baseline entries, ` +
       `${report.totalUnexpectedPlaceholders} unexpected placeholders, ` +
       `${report.totalMalformed} broken braces.`,
   );
   console.log(
-    'Key differences and missing-only placeholder mismatches are informational; ' +
+    'Key differences and baselined placeholder mismatches are informational; ' +
       'missing translations use the English fallback.',
   );
+  if (report.staleBaselineFiles.length > 0) {
+    console.log(
+      `Baseline lists files that do not exist${formatExamples(report.staleBaselineFiles)}.`,
+    );
+  }
   if (report.totalUnexpectedPlaceholders > 0 || report.totalMalformed > 0) {
     console.error(
       'Unexpected placeholder names in an English placeholder contract and ' +
         'broken braces render literally; fix them.',
+    );
+  }
+  if (report.totalNewDroppedPlaceholders > 0) {
+    console.error(
+      'A translation drops a placeholder that en.json declares, so the value the ' +
+        'call site passes is lost; add it back to the translation.',
+    );
+  }
+  if (report.totalStaleBaseline > 0) {
+    console.error(
+      'The baseline lists entries that no longer drop a placeholder; remove them ' +
+        `from ${BASELINE_PATH} (the baseline may only shrink).`,
     );
   }
 };
@@ -242,9 +317,12 @@ const printError = (error) => {
 
 if (require.main === module) {
   try {
-    const report = inspectTranslationDirectory(BASE_PATH);
+    const report = inspectTranslationDirectory(
+      BASE_PATH,
+      readBaselineFile(BASELINE_PATH),
+    );
     printReport(report);
-    if (report.totalUnexpectedPlaceholders > 0 || report.totalMalformed > 0) {
+    if (hasBlockingDefects(report)) {
       process.exitCode = 1;
     }
   } catch (error) {
@@ -258,6 +336,7 @@ module.exports = {
   collectPlaceholders,
   compareTranslationKeys,
   findBraceDefect,
+  hasBlockingDefects,
   inspectTranslationDirectory,
   printError,
   printReport,
