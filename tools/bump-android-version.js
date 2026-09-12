@@ -27,7 +27,4 @@ gradleFileContent = gradleFileContent.replace(
 fs.writeFileSync(gradleFilePath, gradleFileContent, 'utf8');
 
 console.log(`Updated build.gradle to version ${version}`);
-generateReleaseNotes({ version, isPreRelease, versionCode }).catch((err) => {
-  console.error(err.message);
-  process.exit(1);
-});
+generateReleaseNotes({ version, isPreRelease, versionCode });

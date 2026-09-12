@@ -195,9 +195,9 @@ const silenceWarnings = async (run) => {
 };
 
 const releases = [
-  { tag_name: 'v19.0.0', draft: true, prerelease: false },
-  { tag_name: 'v18.22.0', draft: true, prerelease: false },
-  { tag_name: 'v18.22.0-RC.1', draft: false, prerelease: true },
+  { tag_name: 'v19.0.0', draft: true, prerelease: false }, // tagged, never published
+  { tag_name: 'v18.22.1', draft: false, prerelease: true }, // stable-shaped tag, flagged
+  { tag_name: 'v18.22.0-RC.1', draft: false, prerelease: false }, // pre-release tag, unflagged
   { tag_name: 'v18.21.1', draft: false, prerelease: false },
 ];
 
@@ -210,7 +210,7 @@ test('bases the notes on the last published release, not the newest tag', () => 
   // A pre-release may base on a published pre-release.
   assert.equal(
     __test.pickPublishedBaseTag({ releases, version: '19.0.0-RC.1', stableOnly: false }),
-    'v18.22.0-RC.1',
+    'v18.22.1',
   );
   // Nothing published yet, or only the version being released.
   assert.equal(
@@ -246,6 +246,12 @@ test('falls back to the newest tag when published releases are unreadable', asyn
     'v19.0.0',
   );
   assert.equal(await resolve(async () => ({ ok: false, status: 403 })), 'v19.0.0');
+});
+
+test('reads commits with a two-dot range so a divergent base still works', () => {
+  // Three dots would add the commits only the base side has.
+  assert.deepEqual(__test.toCommitRangeArgs('v18.21.1'), ['v18.21.1..HEAD']);
+  assert.deepEqual(__test.toCommitRangeArgs(undefined), ['-20']);
 });
 
 test('treats npm version commits as noise, not release notes', () => {

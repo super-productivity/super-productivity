@@ -23,11 +23,11 @@ jobs:
           GH_REF_NAME: ${{ github.ref_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Same resolver the generated notes use, so the changelog link and the
-          # notes always span the same range: the last release that was actually
-          # published, not merely the newest tag. A tag left behind by an
-          # abandoned or still-draft release would silently shorten both.
-          PREV_TAG=$(node tools/release-notes.js base-tag)
+          # The base `tools/release-notes.js` resolved when it generated these
+          # notes, committed alongside them. Read rather than re-resolved, so the
+          # changelog link and the contributor list cannot span a different range
+          # than the notes above them.
+          PREV_TAG=$(cat build/release-notes-base.txt 2>/dev/null || true)
 
           # Contributor attribution was lost when curated notes replaced GitHub's
           # auto-generated ones; pull the generated notes only to extract it.
