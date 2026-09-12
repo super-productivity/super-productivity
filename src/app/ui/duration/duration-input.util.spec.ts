@@ -135,14 +135,14 @@ describe('processDurationInput', () => {
       expect(result.shouldUpdate).toBe(false);
     });
 
-    it('should treat plain numbers up to and including 8 as hours', () => {
+    it('should treat plain integers as minutes', () => {
       const result = processDurationInput('8');
       expect(result.isValid).toBe(true);
-      expect(result.milliseconds).toBe(8 * 60 * 60 * 1000);
+      expect(result.milliseconds).toBe(8 * 60 * 1000);
       expect(result.shouldUpdate).toBe(true);
     });
 
-    it('should treat plain numbers larger than 8 as minutes', () => {
+    it('should treat larger plain integers as minutes', () => {
       const result = processDurationInput('15');
       expect(result.isValid).toBe(true);
       expect(result.milliseconds).toBe(15 * 60 * 1000);
