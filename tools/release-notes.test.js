@@ -1,7 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { __test, getAndroidVersionInfo } = require('./release-notes');
+const {
+  __test,
+  getAndroidVersionInfo,
+  resolveReleaseBaseTag,
+} = require('./release-notes');
 
 const parse = (subject) => __test.parseCommitSubject(subject);
 
@@ -177,5 +181,160 @@ test('prompts during npm version only and defaults to AI on enter', () => {
       prompt: () => '',
     }),
     null,
+  );
+});
+
+const withSilencedWarnings = async (run) => {
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  try {
+    return await run();
+  } finally {
+    console.warn = originalWarn;
+  }
+};
+
+const publishedReleases = [
+  { tag_name: 'v19.0.0', draft: true, prerelease: false },
+  { tag_name: 'v18.22.0', draft: true, prerelease: false },
+  { tag_name: 'v18.22.0-RC.1', draft: false, prerelease: true },
+  { tag_name: 'v18.21.1', draft: false, prerelease: false },
+  { tag_name: 'v18.21.0', draft: false, prerelease: false },
+];
+
+test('picks the newest published release tag and skips drafts', () => {
+  assert.equal(
+    __test.pickPublishedBaseTag({
+      releases: publishedReleases,
+      version: '19.0.1',
+      stableOnly: true,
+      isUsableTag: () => true,
+    }),
+    'v18.21.1',
+  );
+});
+
+test('picks a published pre-release as base for a pre-release version', () => {
+  assert.equal(
+    __test.pickPublishedBaseTag({
+      releases: publishedReleases,
+      version: '19.0.0-RC.1',
+      stableOnly: false,
+      isUsableTag: () => true,
+    }),
+    'v18.22.0-RC.1',
+  );
+});
+
+test('skips the version being released and tags missing from the current history', () => {
+  assert.equal(
+    __test.pickPublishedBaseTag({
+      releases: publishedReleases,
+      version: '18.21.1',
+      stableOnly: true,
+      isUsableTag: () => true,
+    }),
+    'v18.21.0',
+  );
+
+  assert.equal(
+    __test.pickPublishedBaseTag({
+      releases: publishedReleases,
+      version: '19.0.1',
+      stableOnly: true,
+      isUsableTag: (tag) => tag === 'v18.21.0',
+    }),
+    'v18.21.0',
+  );
+
+  assert.equal(
+    __test.pickPublishedBaseTag({
+      releases: [{ tag_name: 'v19.0.0', draft: true, prerelease: false }],
+      version: '19.0.1',
+      stableOnly: true,
+      isUsableTag: () => true,
+    }),
+    undefined,
+  );
+});
+
+test('resolves the release notes base from published releases', async () => {
+  const baseTag = await withSilencedWarnings(() =>
+    resolveReleaseBaseTag({
+      version: '19.0.1',
+      stableOnly: true,
+      env: { GITHUB_REPOSITORY: 'super-productivity/super-productivity' },
+      fetchImpl: async () => ({ ok: true, json: async () => publishedReleases }),
+      isUsableTag: () => true,
+      getFallbackTag: () => 'v19.0.0',
+      timeoutMs: 50,
+    }),
+  );
+
+  assert.equal(baseTag, 'v18.21.1');
+});
+
+test('falls back to the latest tag when published releases are unreadable', async () => {
+  const unreachable = await withSilencedWarnings(() =>
+    resolveReleaseBaseTag({
+      version: '19.0.1',
+      stableOnly: true,
+      env: { GITHUB_REPOSITORY: 'super-productivity/super-productivity' },
+      fetchImpl: async () => {
+        throw new Error('network down');
+      },
+      isUsableTag: () => true,
+      getFallbackTag: () => 'v19.0.0',
+      timeoutMs: 50,
+    }),
+  );
+  assert.equal(unreachable, 'v19.0.0');
+
+  const rateLimited = await withSilencedWarnings(() =>
+    resolveReleaseBaseTag({
+      version: '19.0.1',
+      stableOnly: true,
+      env: { GITHUB_REPOSITORY: 'super-productivity/super-productivity' },
+      fetchImpl: async () => ({ ok: false, status: 403 }),
+      isUsableTag: () => true,
+      getFallbackTag: () => 'v19.0.0',
+      timeoutMs: 50,
+    }),
+  );
+  assert.equal(rateLimited, 'v19.0.0');
+});
+
+test('prefers an explicit release notes base over any lookup', async () => {
+  const baseTag = await withSilencedWarnings(() =>
+    resolveReleaseBaseTag({
+      version: '19.0.1',
+      stableOnly: true,
+      env: {
+        GITHUB_REPOSITORY: 'super-productivity/super-productivity',
+        SP_RELEASE_NOTES_BASE_TAG: 'v18.21.1',
+      },
+      fetchImpl: async () => {
+        throw new Error('must not be called');
+      },
+      getFallbackTag: () => 'v19.0.0',
+    }),
+  );
+
+  assert.equal(baseTag, 'v18.21.1');
+});
+
+test('reads the repository slug from the environment', () => {
+  assert.equal(
+    __test.getRepoSlug({ GITHUB_REPOSITORY: 'super-productivity/super-productivity' }),
+    'super-productivity/super-productivity',
+  );
+});
+
+test('treats npm version commits as noise, not release notes', () => {
+  assert.deepEqual(
+    ['19.0.1', 'v18.22.0', '19.1.0-RC.2', 'fix(sync): keep section order'].map(
+      __test.isVersionBumpSubject,
+    ),
+    [true, true, true, false],
   );
 });

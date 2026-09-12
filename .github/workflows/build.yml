@@ -23,11 +23,11 @@ jobs:
           GH_REF_NAME: ${{ github.ref_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if echo "$GH_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            PREV_TAG=$(git tag --merged HEAD --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -v "^${GH_REF_NAME}$" | sed -n '1p')
-          else
-            PREV_TAG=$(git tag --merged HEAD --sort=-v:refname | grep '^v' | grep -v "^${GH_REF_NAME}$" | sed -n '1p')
-          fi
+          # Same resolver the generated notes use, so the changelog link and the
+          # notes always span the same range: the last release that was actually
+          # published, not merely the newest tag. A tag left behind by an
+          # abandoned or still-draft release would silently shorten both.
+          PREV_TAG=$(node tools/release-notes.js base-tag)
 
           # Contributor attribution was lost when curated notes replaced GitHub's
           # auto-generated ones; pull the generated notes only to extract it.

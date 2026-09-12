@@ -2,7 +2,7 @@
 
 > **Status:** Maintained
 >
-> **Last verified against workflows:** 2026-07-29
+> **Last verified against workflows:** 2026-09-12
 
 The GitHub Actions workflows are the executable source of truth. Update this
 runbook in the same change whenever their triggers, channels, artifacts, or secret
@@ -36,10 +36,32 @@ The `version` lifecycle updates the Android version, generates
 `build/release-notes.md`, writes the versioned Google Play changelog, stages the
 changes, and creates the npm version commit and tag.
 
+### The release-notes base
+
+Notes span from the **last published GitHub release** to `HEAD`, not from the
+newest tag: a version whose draft release was abandoned, deleted, or left
+unpublished still leaves its tag behind, and basing the notes on that tag drops
+everything the unpublished versions contained. For a final version the base is
+the last published non-prerelease; for a pre-release it is the last published
+release of either kind. `.github/workflows/build.yml` resolves the base through
+the same `node tools/release-notes.js base-tag` command, so the notes and the
+release body's Full Changelog link always span the same range.
+
+Resolution needs the GitHub releases API. When it is unreachable, the generator
+warns and falls back to the newest matching tag — which is the case that
+produces short notes. If you see that warning, check which release actually
+shipped and regenerate with an explicit base:
+
+```bash
+SP_RELEASE_NOTES_BASE_TAG=v18.21.1 npm run release-notes:generate
+```
+
 Before pushing anything:
 
 1. Review the version commit and tag.
-2. Read `build/release-notes.md` for accuracy and user-data/privacy leaks.
+2. Read `build/release-notes.md` for accuracy and user-data/privacy leaks, and
+   confirm the resolved base in the `npm version` output is the version users
+   last received.
 3. For a final release, confirm the generated Android changelog exists under
    `android/fastlane/metadata/android/en-US/changelogs/`.
 4. Run the relevant release-note tests:
