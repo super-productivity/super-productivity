@@ -6,6 +6,11 @@
       "MSG": "Super ProductivityをPWAとしてインストールしますか？"
     },
     "B_OFFLINE": "インターネットに接続していません。課題プロバイダーデータの同期と要求は機能しません。",
+    "B_RECOVERY_POINT": {
+      "BROWSE": "バックアップを見る",
+      "DISMISS": "新しいデータを保持",
+      "MSG": "同期によって、このデバイスのデータがはるかに小さいデータセットに置き換えられました（タスク {{before}} 件 → {{after}} 件）。以前のデータは復元ポイントとして保存されています。"
+    },
     "B_SYNC_SAFETY": {
       "DISMISS": "後で",
       "MSG": "Super Productivity をしばらくご利用いただいています。同期を設定して、データをバックアップし、すべてのデバイスで安全に保ちましょう。",
@@ -42,13 +47,15 @@
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "ショー・イシュー・パネル",
-    "SHOW_NOTES": "ショープロジェクトノート"
+    "SHOW_NOTES": "ショープロジェクトノート",
+    "SHOW_SCHEDULE": "スケジュール"
   },
   "CONFIRM": {
     "AUTO_FIX": "データが破損しているようです。自動修復を試しますか？その結果、データが部分的に失われる可能性があります。",
     "RELOAD_AFTER_IDB_ERROR": "データベースにアクセスできません:(考えられる原因は、バックグラウンドでのアプリの更新またはディスク容量の不足です。[OK]を押してアプリをリロードします（一部のプラットフォームではアプリを手動で再起動する必要がある場合があります）。",
     "RESTORE_FILE_BACKUP": "データがないようですが、「{{dir}}」で利用可能なバックアップがあります。 {{from}}から最新のバックアップを復元しますか？",
     "RESTORE_FILE_BACKUP_ANDROID": "データがないようですが、利用可能なバックアップがあります。ロードしますか？",
+    "RESTORE_FILE_BACKUP_WITH_COUNTS": "データが見つかりませんが、「{{dir}}」にバックアップがあります。{{from}} の最新バックアップを復元しますか？（タスク: {{tasks}}、プロジェクト: {{projects}}）",
     "RESTORE_STRAY_BACKUP": "最後の同期中に、エラーが発生した可能性があります。最後のバックアップを復元しますか？",
     "DELETE_SECTION": "このセクションを削除しますか？含まれるタスクはタスクリストに移動されます。",
     "RESTORE_FILE_BACKUP_MOBILE": "このデバイスにデータが見つかりませんでしたが、復元可能なバックアップがあります（タスク: {{tasks}}、プロジェクト: {{projects}}）。復元しますか？",
@@ -485,6 +492,7 @@
         "WORKLOG": "ワークログ"
       },
       "S": {
+        "CONNECTION_FAILED_WITH_ERROR": "接続に失敗しました: {{errorMsg}}",
         "ERR_GENERIC": "{{issueProviderName}} エラー： {{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}：クライアント側のネットワークエラーが原因でリクエストが失敗しました",
         "ERR_NOT_CONFIGURED": "{{issueProviderName}}：適切に構成されていません",
@@ -779,7 +787,13 @@
       }
     },
     "NOTE": {
+      "D_DRAFT_CONFLICT": {
+        "KEEP_SAVED": "保存済みのバージョンを保持",
+        "MSG": "このノートの下書きが復元されましたが、その間にノートが変更されました（同期などによる）。復元された下書きをエディターで確認しますか、それとも保存済みのバージョンを保持してこの下書きを今後表示しないようにしますか？",
+        "REVIEW_DRAFT": "下書きを確認"
+      },
       "D_FULLSCREEN": {
+        "CONFIRM_DISCARD_MSG": "保存していない変更があります。破棄しますか？",
         "VIEW_PARSED": "解析された（編集不可能な）マークダウンとして表示する",
         "VIEW_SPLIT": "解析されたマークダウンと解析されていないマークダウンを分割表示する",
         "VIEW_TEXT_ONLY": "解析されていないテキストとして表示",
@@ -1179,6 +1193,7 @@
       "A": {
         "REMOTE_MODEL_VERSION_NEWER": "リモートモデルのバージョンは、ローカルのものよりも新しいです。ローカルアプリを最新バージョンに更新してください。"
       },
+      "BTN_SHOW_DEVICES": "接続中のデバイスを表示",
       "BTN_SYNC_NOW": "今すぐ同期",
       "C": {
         "FORCE_UPLOAD": "とにかくローカルデータをアップロードしますか？",
@@ -1232,6 +1247,25 @@
         "P3_PW_CHANGED": "<strong>他のデバイスでパスワードを変更した場合</strong>、新しいパスワードを入力して「リモートを上書き」をクリックしてください。ローカルデータがサーバーにアップロードされます。",
         "TITLE": "復号に失敗"
       },
+      "D_DEVICES": {
+        "BTN_SIGN_OUT_OTHERS": "他のデバイスからサインアウト",
+        "ERROR_LOADING": "接続中のデバイスを読み込めませんでした",
+        "ERROR_SIGN_OUT": "他のデバイスのサインアウトに失敗しました。リクエストの途中で接続が切れた場合でも処理が完了している可能性があります。その場合は、このデバイスにも新しいトークンが必要です。",
+        "LAST_SEEN": "最終同期: {{date}}",
+        "NO_DEVICES": "このアカウントで同期したデバイスはまだありません。",
+        "PLATFORM_ANDROID": "Android",
+        "PLATFORM_BROWSER": "ブラウザ",
+        "PLATFORM_DESKTOP": "デスクトップ",
+        "PLATFORM_IOS": "iOS",
+        "PLATFORM_UNKNOWN": "不明なデバイス",
+        "REMOVE_HINT": "Super Sync はデバイス単位ではなくアカウント単位でアクセスを許可するため、デバイスを個別に削除することはできません。紛失・売却したデバイスを遮断するには、他のすべてのデバイスをサインアウトしてください。このデバイスはサインインしたままになります。",
+        "SIGN_OUT_CONFIRM_MSG": "他のすべてのデバイスが Super Sync からサインアウトされ、同期を停止します。このデバイスはサインインしたままです。デバイスを再接続するには、サーバーのページでサインインし、新しいトークンをそのデバイスの同期設定に貼り付けてください。サインアウト中にそのデバイスで行った変更は保持され、その後アップロードされます。",
+        "SIGN_OUT_CONFIRM_OK": "サインアウト",
+        "SIGN_OUT_CONFIRM_TITLE": "他のすべてのデバイスをサインアウトしますか？",
+        "SIGN_OUT_SUCCESS": "他のすべてのデバイスをサインアウトしました",
+        "THIS_DEVICE": "（このデバイス）",
+        "TITLE": "接続中のデバイス"
+      },
       "D_INCOMPLETE_SYNC": {
         "BTN_CLOSE_APP": "アプリを閉じる",
         "BTN_DOWNLOAD_BACKUP": "ローカルバックアップのダウンロード",
@@ -1249,6 +1283,11 @@
       "D_INITIAL_CFG": {
         "SAVE_AND_ENABLE": "Sync の保存と有効化",
         "TITLE": "Sync の設定"
+      },
+      "D_NOTHING_TO_UPLOAD": {
+        "MESSAGE": "何も変更されていません。同期サーバー上のデータはそのまま残っています。\n\nこのデバイスは一度も同期を完了しておらず、アプリが認識できるデータのコピーを持っていません。上書きしていた場合、サーバー上のすべてが空のデバイスで置き換えられ、それは元に戻せません。\n\nここで暗号化パスワードをもう一度試してみてください。以前のパスワードで通ることがよくあります。思い出せない場合は、このデバイスとサーバーをそのままにして、上書きせずに問題を報告してください。履歴はサーバーに残っています。\n\n本当に同期サーバーを消去してやり直したい場合は、このウィンドウを閉じて、設定 → 同期とバックアップ → 同期 の「強制上書き」を使用してください。",
+        "MESSAGE_CHANGE_PW": "何も変更されていません。同期サーバー上のデータはそのまま残っています。\n\n暗号化パスワードを変更すると、このデバイスのデータが再アップロードされ、サーバー上のデータが置き換えられます。このデバイスは一度も同期を完了しておらず、アプリが認識できるデータのコピーを持っていないため、サーバー上のコピーが失われます。\n\nすでにデータを持ち、同期に成功しているデバイスからパスワードを変更してください。",
+        "TITLE": "同期済みのデータは変更されていません"
       },
       "FORM": {
         "L_ENABLE_COMPRESSION": "圧縮を有効にする（データ転送の高速化）",
@@ -1395,19 +1434,23 @@
           "L_CHANGE_ENCRYPTION_PASSWORD": "暗号化パスワードを変更",
           "L_CONFIRM_PASSWORD": "パスワードの確認",
           "L_ENABLE_E2E_ENCRYPTION": "エンドツーエンド暗号化を有効にする",
+          "L_ENABLE_TRACKING_PRESENCE": "進行中の計測を他のデバイスに表示する（実験的）",
           "L_NEW_PASSWORD": "新しい暗号化パスワード",
+          "L_PRESENCE_DEVICE_NAME": "他のデバイスでのこのデバイス名",
           "L_REMOVE_ENCRYPTION": "または暗号化を解除",
           "L_SERVER_URL": "サーバーURL",
           "LOGIN_INSTRUCTIONS": "下のボタンをクリックしてサーバーログインページを開きます。ログイン後、アクセストークンをコピーしてここに貼り付けてください。",
           "PASSWORD_MIN_LENGTH": "パスワードは8文字以上である必要があります",
           "PASSWORDS_DONT_MATCH": "パスワードが一致しません",
+          "PRESENCE_DEVICE_NAME_DESCRIPTION": "他のデバイスの計測中チップに表示されます（例:「仕事用ノート PC」）。デスクトップが 2 台ある場合の区別に使えます。計測状態とともに送信されます（同期の暗号化が有効な場合は暗号化されます）。空欄にすると、プレースホルダーとして表示されているプラットフォーム名が使われます。",
           "REMOVE_ENCRYPTION_WARNING": "暗号化を解除すると、サーバー上のすべてのデータが削除され、暗号化なしでデータが再アップロードされます。すべてのデバイスで再設定が必要です。",
           "SERVER_URL_DESCRIPTION": "公式サーバーを使用する場合はそのままにするか、カスタムサーバーURLを入力してください",
           "SETUP_DISABLE_SUPERSYNC_BTN": "SuperSyncを無効にする",
           "SETUP_ENCRYPTION_BTN": "パスワードを設定",
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "すべてのデバイスで同じパスワードを使用してください。忘れたパスワードはリモートデータの上書きでリセットできます。",
           "SETUP_ENCRYPTION_TITLE": "SuperSync: パスワードを設定",
-          "E2E_ENCRYPTION_INFO": "SuperSync はエンドツーエンド暗号化を使用します。セットアップ時に選んだパスワードを使用して、データはこのデバイスから送信される前に暗号化されます。"
+          "E2E_ENCRYPTION_INFO": "SuperSync はエンドツーエンド暗号化を使用します。セットアップ時に選んだパスワードを使用して、データはこのデバイスから送信される前に暗号化されます。",
+          "TRACKING_PRESENCE_DESCRIPTION": "このアカウントが現在計測中のタスクを、接続している他のデバイスに表示し、そこから停止できるようにします。表示専用で、サーバーに保存されることはありません（サーバーのメモリ上を一時的に経由します。エンドツーエンド暗号化が有効な場合、サーバーからは内容を読み取れません）。"
         },
         "NEXTCLOUD": {
           "L_SERVER_URL": "NextcloudサーバーURL",
@@ -1447,7 +1490,9 @@
         "BTN_FORCE_OVERWRITE": "強制上書き",
         "ERROR_CORS": "WebDAV同期エラー:ネットワークリクエストが失敗しました。\n\nこれはCORSの問題かもしれません。以下を必ず確認してください:\n・WebDAVサーバーはクロスオリジンリクエストを許可しています\n• サーバーURLが正確かつアクセス可能です\n・インターネット接続が正常に動作しています",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "リモート・データは現在書き込まれています",
+        "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "同期サーバーが同期データではなく Web ページを返しました（ログイン、プロキシ、エラーページなど）。リモートのデータはおそらく無事です。サーバー URL、認証情報、ネットワークを確認してから再試行してください。問題が続く場合は、同期設定 →「強制上書き」でリモートを上書きできます。",
         "INCOMPLETE_CFG": "同期の認証に失敗しました。設定を確認してください！",
+        "REMOTE_NOT_ENCRYPTED": "同期されたデータが暗号化されていませんが、このデバイスでは暗号化が有効なため拒否されました。他のデバイスで暗号化をオフにした場合は、続行するにはここでも同期設定で無効にしてください。",
         "SUCCESS_DOWNLOAD": "リモートからの同期データ",
         "SUCCESS_VIA_BUTTON": "データが正常に同期されました",
         "UNKNOWN_ERROR": "同期中に不明なエラーが発生しました。コンソールを確認してください。",
@@ -1502,6 +1547,7 @@
         "STORAGE_RECOVERED_AFTER_COMPACTION": "ストレージが不足していました。古いデータのクリーンアップに成功しました。",
         "TIMEOUT_ERROR": "同期操作がタイムアウトしました。{{suggestion}}",
         "TOO_MANY_OPS_TO_DOWNLOAD": "ダウンロードする同期操作が多すぎます。一部の変更が欠落している可能性があります。",
+        "UNSUPPORTED_MULTI_ENTITY_CONFLICT": "データ損失を避けるため、安全のために同期を停止しました。次のコードを報告してください: {{details}}",
         "UPLOAD_ERROR": "不明なアップロードエラー (設定は正しいですか？): {{err}}",
         "UPLOAD_OPS_REJECTED": "{{count}}件の操作がサーバーに永久に拒否され、同期されません。",
         "VECTOR_CLOCK_LIMIT_REACHED": "同期が{{originalSize}}台のデバイス/ブラウザーを追跡しており、{{maxSize}}の制限を超えています。非アクティブなデバイスエントリーが削除されました。問題が発生した場合は同期のリセットを検討してください。",
@@ -1701,7 +1747,8 @@
       "D_EDIT": {
         "ADD": "「{{title}}」のタグを追加",
         "EDIT": "「{{title}}」のタグを編集",
-        "LABEL": "タグ"
+        "LABEL": "タグ",
+        "PLACEHOLDER": "+ タグを追加"
       },
       "FORM_BASIC": {
         "L_COLOR": "色（未定義のプライマリテーマの色が使用されている場合）",
@@ -1772,6 +1819,7 @@
         "ADD_ATTACHMENT": "添付ファイルを追加する",
         "ADD_SUB_TASK": "サブタスクを追加",
         "ATTACHMENTS": "添付ファイル {{nr}}",
+        "CHECKLIST": "チェックリスト",
         "DUE": "で予定されている。",
         "LOCAL_ATTACHMENTS": "ローカル添付",
         "NOTES": "メモ",
@@ -1779,6 +1827,7 @@
         "REPEAT": "繰り返す",
         "SCHEDULE_TASK": "タスクのスケジュール",
         "SUB_TASKS": "サブタスク（{{nr}}）",
+        "SUB_TASKS_EMPTY": "サブタスク",
         "TIME": "時間",
         "TITLE_PLACEHOLDER": "タイトルを入力",
         "COMPLETED_ON": "完了日",
@@ -1818,6 +1867,7 @@
         "FOCUS_SESSION": "フォーカス・セッション開始",
         "MARK_DONE": "完了としてマーク",
         "MOVE_TO_BACKLOG": "バックログに移動",
+        "MOVE_TO_BOTTOM": "一番下に移動",
         "MOVE_TO_OTHER_PROJECT": "他のプロジェクトに移動",
         "MOVE_TO_REGULAR": "今日のリストに移動",
         "MOVE_TO_TOP": "リストの一番上に移動する",
@@ -1930,20 +1980,94 @@
         "TINE_SPENT": "消費時間",
         "TITLE": "他の日に追加"
       },
+      "MULTI_SELECT": {
+        "ACTIONS": "操作",
+        "CLEAR": "選択を解除",
+        "D_CONFIRM_DELETE": {
+          "MSG": {
+            "ONE": "タスク {{count}} 件を削除しますか？そのサブタスクも削除されます。",
+            "OTHER": "タスク {{count}} 件を削除しますか？サブタスクも削除されます。"
+          },
+          "OK": "削除"
+        },
+        "S": {
+          "DEADLINE_REMOVED": {
+            "ONE": "{{count}} 件のタスクから期限を削除しました",
+            "OTHER": "{{count}} 件のタスクから期限を削除しました"
+          },
+          "DEADLINE_SET": {
+            "ONE": "{{count}} 件のタスクの期限を {{date}} に設定しました",
+            "OTHER": "{{count}} 件のタスクの期限を {{date}} に設定しました"
+          },
+          "DONE": {
+            "ONE": "{{count}} 件のタスクを完了にしました",
+            "OTHER": "{{count}} 件のタスクを完了にしました"
+          },
+          "ESTIMATE_CLEARED": {
+            "ONE": "{{count}} 件のタスクの見積もりを消去しました",
+            "OTHER": "{{count}} 件のタスクの見積もりを消去しました"
+          },
+          "ESTIMATE_SET": {
+            "ONE": "{{count}} 件のタスクを {{estimate}} と見積もりました",
+            "OTHER": "{{count}} 件のタスクを {{estimate}} と見積もりました"
+          },
+          "MOVED_TO_BACKLOG": {
+            "ONE": "{{count}} 件のタスクをバックログに移動しました",
+            "OTHER": "{{count}} 件のタスクをバックログに移動しました",
+            "PARTIAL": "{{total}} 件中 {{count}} 件のタスクをバックログに移動しました（サブタスクは親タスクに従います）"
+          },
+          "MOVED_TO_PROJECT": {
+            "ONE": "{{count}} 件のタスクを「{{projectTitle}}」に移動しました",
+            "OTHER": "{{count}} 件のタスクを「{{projectTitle}}」に移動しました",
+            "PARTIAL": "{{total}} 件中 {{count}} 件のタスクを「{{projectTitle}}」に移動しました（サブタスクは親タスクに従います）"
+          },
+          "MOVED_TO_REGULAR": {
+            "ONE": "{{count}} 件のタスクを通常のリストに移動しました",
+            "OTHER": "{{count}} 件のタスクを通常のリストに移動しました",
+            "PARTIAL": "{{total}} 件中 {{count}} 件のタスクを通常のリストに移動しました（サブタスクは親タスクに従います）"
+          },
+          "NOTHING_TO_DO": "選択したタスクに変更する項目はありません",
+          "SCHEDULED": {
+            "ONE": "{{count}} 件のタスクを {{date}} に予定しました",
+            "OTHER": "{{count}} 件のタスクを {{date}} に予定しました"
+          },
+          "UNDONE": {
+            "ONE": "{{count}} 件のタスクを未完了にしました",
+            "OTHER": "{{count}} 件のタスクを未完了にしました"
+          },
+          "UNSCHEDULED": {
+            "ONE": "{{count}} 件のタスクの予定を解除しました",
+            "OTHER": "{{count}} 件のタスクの予定を解除しました"
+          }
+        },
+        "SELECTED_COUNT": "{{count}} 件選択中",
+        "SELECT_ENTRY": "複数のタスクを選択…",
+        "TASKS_TITLE": {
+          "ONE": "タスク {{count}} 件",
+          "OTHER": "タスク {{count}} 件"
+        }
+      },
       "N": {
         "ESTIMATE_EXCEEDED": "時間見積もりを超えました！",
         "ESTIMATE_EXCEEDED_BODY": "\"{{title}}\"の予想時間を超えました。"
       },
       "S": {
+        "ADDED_VIA_APP_URI": "タスク「{{title}}」を追加しました",
+        "AMBIGUOUS_MATCH_VIA_APP_URI": "「{{title}}」に一致するタスクが複数あります。もっと具体的に指定してください",
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "繰り返しタスクの短い構文でプロジェクトを割り当てられない！",
+        "COMPLETED_VIA_APP_URI": "タスク「{{title}}」を完了しました",
         "CREATED_FOR_PROJECT": "タスク「{{taskTitle}}」をプロジェクト「{{projectTitle}}」に移動",
         "DELETED": "削除されたタスク \"{{title}}\"",
+        "EMPTY_TITLE_VIA_APP_URI": "タスクのタイトルが空だったため、タスクは追加されませんでした",
         "FOUND_MOVE_FROM_BACKLOG": "既存のタスク <strong>{{title}}</strong> を今日のタスクリストに移動しました",
         "FOUND_MOVE_FROM_OTHER_LIST": "タスク <strong>{{title}}</strong> を <strong>{{contextTitle}}</strong> から現在のリストに追加しました",
         "FOUND_RESTORE_FROM_ARCHIVE": "アーカイブからの発行に関連する復元されたタスク <strong>{{title}}</strong> ",
         "GO_TO_TASK": "タスクに取りかかってください",
+        "INPUT_TOO_LONG_VIA_APP_URI": "タスクのタイトルまたはメモが長すぎます",
         "MOVED_TO_ARCHIVE": "アーカイブに {{nr}} タスクを移動",
         "MOVED_TO_PROJECT": "タスク「{{taskTitle}}」をプロジェクト「{{projectTitle}}」に移動",
+        "NOT_FOUND_VIA_APP_URI": "「{{title}}」に一致するタスクが見つかりませんでした",
+        "PROJECT_NOT_FOUND_VIA_APP_URI": "プロジェクトが見つかりません。タスク「{{title}}」は追加されませんでした",
         "REMINDER_ADDED": "スケジュール済みタスク \"{{title}}\"",
         "REMINDER_DELETED": "タスクの通知を削除しました",
         "REMINDER_UPDATED": "タスク \"{{title}}\"の通知を更新しました",
@@ -1966,10 +2090,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "時間を追加",
-        "QA_NEXT_MONTH": "来月",
-        "QA_NEXT_WEEK": "来週",
-        "QA_TODAY": "今日",
-        "QA_TOMORROW": "明日",
         "REMIND_AT": "リマインド時刻",
         "REMOVE_DEADLINE": "期限を削除",
         "RO_1H": "1時間前",
@@ -2051,6 +2171,10 @@
         "NOTES": "デフォルト・ノート",
         "Q_CUSTOM": "カスタム繰り返し設定",
         "Q_DAILY": "毎日",
+        "Q_EVERY_X_DAYS": "{{count}} 日ごと",
+        "Q_EVERY_X_MONTHS": "{{count}} か月ごと",
+        "Q_EVERY_X_WEEKS": "{{count}} 週間ごとの{{weekdayStr}}",
+        "Q_EVERY_X_YEARS": "{{count}} 年ごと",
         "Q_MONDAY_TO_FRIDAY": "毎週月曜日から金曜日",
         "Q_MONTHLY_CURRENT_DATE": "毎月 {{dateDayStr}}日に",
         "Q_WEEKLY_CURRENT_WEEKDAY": "毎週 {{weekdayStr}}日",
@@ -2218,6 +2342,24 @@
         "WARNING": "この操作は取り消せません。続行する前にバックアップがあることを確認してください！"
       }
     },
+    "TRACKING_PRESENCE": {
+      "CHIP": {
+        "FALLBACK_TASK": "最近開始したタスク",
+        "FOCUS": "フォーカスセッション · サイクル {{cycle}}",
+        "LAST_SEEN": "最終確認 {{time}}",
+        "PAUSED_ON": "{{device}} で一時停止中",
+        "SINCE": "{{time}} から",
+        "STOP": "{{device}} の計測を停止",
+        "STOPPED_ON": "{{device}} で停止しました",
+        "TRACKING_ON": "{{device}} で計測中",
+        "WAS_TRACKING_ON": "{{device}} で計測していました"
+      },
+      "S": {
+        "MOVED_TO": "計測が {{device}} に移りました",
+        "STOPPED_FROM": "{{device}} から計測を停止しました",
+        "TRACK_HERE_AGAIN": "ここで再び計測する"
+      }
+    },
     "VOICE_REMINDER": {
       "FORM": {
         "HELP": "タスクの時間を追跡する際、設定されたフレーズをXごとに繰り返す。",
@@ -2365,6 +2507,7 @@
     "COMPLETE": "完成",
     "CONFIRM": "確認する",
     "DELETE": "削除",
+    "DISCARD": "破棄",
     "DISMISS": "やめる",
     "DO_IT": "やれ！",
     "DURATION_DESCRIPTION": "例：\"5h 23m \"で5時間23分",
@@ -2378,6 +2521,8 @@
     "MINUTES": "{{m}} 分",
     "MOVE_BACKWARD": "後方に移動",
     "MOVE_FORWARD": "前進",
+    "NEXT_MONTH": "来月",
+    "NEXT_WEEK": "来週",
     "NO_CON": "現在オフラインです。インターネットに再接続してください。",
     "NONE": "無し",
     "OK": "OK",
@@ -2386,7 +2531,9 @@
     "SAVE": "保存する",
     "SUBMIT": "投稿する",
     "TITLE": "タイトル",
+    "TODAY": "今日",
     "TODAY_TAG_TITLE": "今日",
+    "TOMORROW": "明日",
     "UNDO": "元に戻す",
     "WITHOUT_PROJECT": "プロジェクトなし",
     "YESTERDAY": "昨日",
@@ -2408,6 +2555,27 @@
   },
   "GCF": {
     "AUTO_BACKUPS": {
+      "BROWSE": "バックアップを見る",
+      "D_LIST": {
+        "BTN_RESTORE": "復元",
+        "CONFIRM_MSG": "<strong>{{timestamp}}</strong> のバックアップ（タスク {{tasks}} 件）を復元しますか？<br><br>この操作はこのデバイスの<strong>現在のデータをすべて置き換えます</strong>。同期が有効な場合は他のデバイスにも反映されます。現在のデータは事前に復元ポイントとして保存されます。",
+        "CONFIRM_TITLE": "復元の確認",
+        "DATE_UNKNOWN": "日付不明",
+        "EMPTY": "このデバイスにはまだバックアップがありません。復元ポイントは、同期やインポートがデータを置き換える前に自動的に作成されます。",
+        "ERROR_LOADING": "バックアップを読み込めませんでした",
+        "ERROR_RESTORE": "バックアップを復元できませんでした",
+        "INTRO": "このデバイスに保存されているすべてのバックアップです。内容を見るには 1 つ選択してください。",
+        "KIND_FILE": "自動バックアップファイル",
+        "LOADING": "バックアップを読み込み中...",
+        "PARTIAL": "このデバイスの一部のバックアップを読み取れませんでした。以下に表示されているものだけが利用できます。",
+        "REASON_FORCE_DOWNLOAD": "復元ポイント:「サーバーのデータを使用」の前",
+        "REASON_LOCAL_IMPORT": "復元ポイント: インポートまたは復元の前",
+        "REASON_REMOTE_IMPORT": "復元ポイント: 同期がローカルデータを置き換える前",
+        "SLOT_LATEST": "最新の自動バックアップ",
+        "SLOT_PREVIOUS": "前回の自動バックアップ",
+        "TASK_COUNT": "タスク {{tasks}} 件",
+        "TITLE": "このデバイスのバックアップ"
+      },
       "HELP": "問題が発生した場合に備えて、すべてのデータをアプリフォルダに自動保存して準備します。",
       "LABEL_IS_ENABLED": "自動バックアップを有効にする",
       "LOCATION_INFO": "バックアップは次の場所に保存されます：",
@@ -2461,6 +2629,7 @@
       "IS_ENABLE_IDLE_TIME_TRACKING": "アイドル時間処理を有効にする",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "現在のタスクが選択されている場合にのみアイドル時間ダイアログを起動する",
       "MIN_IDLE_TIME": "アイドル状態になるまでの時間",
+      "MIN_IDLE_TIME_DESCRIPTION": "例:「5h 23m」。{{min}} 以上である必要があります。これより短い待機時間は報告されません。待機状態は {{interval}} ごとに確認されます。",
       "TITLE": "アイドル処理",
       "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "フォーカスモードのセッション中はアイドルダイアログを表示しない"
     },
@@ -2474,6 +2643,8 @@
       "ADD_NEW_TASK": "新しいタスクを追加する",
       "APP_WIDE_SHORTCUTS": "グローバルショートカット（アプリケーション全体）",
       "COLLAPSE_SUB_TASKS": "サブタスクを折りたたむ",
+      "COLUMN_ACTION": "操作",
+      "COLUMN_SHORTCUT": "ショートカット",
       "EXPAND_SUB_TASKS": "サブタスクを展開",
       "GLOBAL_ADD_NOTE": "新しいメモを追加",
       "GLOBAL_ADD_TASK": "新しいタスクを追加する",
@@ -2497,11 +2668,13 @@
       "SAVE_NOTE": "メモを保存",
       "SELECT_NEXT_TASK": "次のタスクを選択",
       "SELECT_PREVIOUS_TASK": "前のタスクを選択",
+      "SHOW_HELP": "キーボードショートカット一覧を表示",
       "SHOW_SEARCH_BAR": "検索バーを表示する",
       "SYSTEM_SHORTCUTS": "グローバルショートカット（システム全体）",
       "TASK_ADD_ATTACHMENT": "ファイルまたはリンクを添付",
       "TASK_ADD_SUB_TASK": "サブタスクを追加",
       "TASK_DELETE": "タスクを削除",
+      "TASK_DUPLICATE": "タスクを複製",
       "TASK_EDIT_TAGS": "タグを編集",
       "TASK_EDIT_TITLE": "タイトルを編集",
       "TASK_MOVE_TO_PROJECT": "プロジェクトメニューへの移動タスクを開く",
@@ -2512,6 +2685,7 @@
       "TASK_SHORTCUTS_INFO": "次のショートカットは、現在選択されているタスク（タブまたはマウスで選択）に適用されます。",
       "TASK_TOGGLE_DETAIL_PANEL_OPEN": "追加の仕事情報を表示/隠す",
       "TASK_TOGGLE_DONE": "完了を切り替える",
+      "TASK_TOGGLE_SELECT": "複数選択にタスクを追加／解除",
       "TITLE": "キーボードショートカット",
       "TOGGLE_BACKLOG": "タスクバックログの表示/非表示",
       "TOGGLE_ISSUE_PANEL": "課題パネルの表示／非表示",
@@ -2606,6 +2780,10 @@
       "IS_OVERLAY_INDICATOR_ENABLED": "オーバーレイインジケーターウィンドウを有効にする(デスクトップLinux/gnome)",
       "IS_SHOW_TIP_LONGER": "アプリの起動時に生産性のヒントを少し長く表示する",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "トレイ/ステータスメニューに現在のカウントダウンを表示する(デスクトップMacのみ)",
+      "LOCAL_REST_API_TOKEN": "アクセストークン",
+      "LOCAL_REST_API_TOKEN_ERROR": "アクセストークンを保存できなかったため、API は動作していません。Super Productivity がデータフォルダーに書き込めるか確認してから、「再生成」でやり直してください。",
+      "LOCAL_REST_API_TOKEN_REGENERATE": "アクセストークンを再生成",
+      "LOCAL_REST_API_TOKEN_REGENERATE_ERROR": "新しいアクセストークンを保存できませんでした。以前のトークンは引き続き有効です。",
       "START_OF_NEXT_DAY": "翌日の開始時間",
       "START_OF_NEXT_DAY_HINT": "いつ（時間単位）から翌日が始まったかをカウントする。デフォルトは0時で、0となる。",
       "THEME": "テーマ",
@@ -2919,8 +3097,11 @@
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "レガシーデータのバックアップをダウンロードしますか(古いバージョンのSuper Productivityで使用できます)?",
     "DETECTED_LEGACY": "レガシーデータを検出しました。私たちはあなたのためにそれを移行します!",
+    "DIALOG_TITLE_ERROR": "移行に失敗しました",
     "E_MIGRATION_FAILED": "移行に失敗しました。エラーあり:",
+    "E_MIGRATION_FAILED_MSG": "以前のデータを移行できませんでした。データはこのデバイスに残っており、変更されていません。バックアップファイルのダウンロードも案内されています。再起動しても同じ問題が起きるため、代わりに空のアプリで続行し、後からそのバックアップをインポートできます。その後、アプリがこの古いデータについて尋ねることはありません。",
     "E_RESTART_FAILED": "自動再起動に失敗しました。アプリを手動で再起動してください。",
+    "START_FRESH": "古いデータを使わずに続行",
     "SUCCESS": "移行はすべて完了しました!今すぐアプリを再起動しています...",
     "DIALOG_MESSAGE": "同期の信頼性向上のため、データの保存方法を更新しています。バックアップは自動的にダウンロードされます。",
     "DIALOG_TITLE": "データを移行中",
@@ -3006,6 +3187,8 @@
     "ACTION_TYPE_NOT_ALLOWED": "アクションタイプ「{{type}}」は許可されていません",
     "ALREADY_INITIALIZED": "プラグインはすでに初期化されています",
     "CANCEL": "キャンセル",
+    "CANNOT_DELETE_INBOX": "受信トレイのプロジェクトは削除できません",
+    "CANNOT_NEST_SUBTASKS": "サブタスクを入れ子にできません: 親タスク自体がサブタスクです",
     "CAPABILITIES": {
       "ACCESS_FILES": "システム上のファイルへのアクセスと改変",
       "RUN_COMMANDS": "システムコマンドの実行",
@@ -3029,6 +3212,7 @@
     "FAILED_TO_LOAD_CONFIG": "プラグイン設定の読み込みに失敗しました",
     "FAILED_TO_REMOVE": "プラグインの削除に失敗しました",
     "FAILED_TO_SAVE_CONFIG": "プラグイン設定の保存に失敗しました",
+    "FIELD_NOT_UPDATABLE": "「{{field}}」は updateTask では設定できません。親タスクの変更はサポートされていません。サブタスクは addTask({ parentId }) で作成するか、batchUpdateForProject で構成を変更してください",
     "FILE_TOO_LARGE": "ファイルが大きすぎます({{fileSize}}MB)。最大サイズは {{maxSize}}MBです",
     "GO_BACK": "戻ってください",
     "GRANT_PERMISSION": "許可を付与する",
@@ -3080,6 +3264,7 @@
     "INDEX_HTML_NOT_LOADED": "プラグインindex.htmlが読み込まれませんでした",
     "LANGUAGES": "言語:",
     "TOGGLE_PLUGIN": "{{pluginName}}を切り替え",
+    "TRANSLATIONS_TOO_LARGE": "プラグインの翻訳が合計で大きすぎます（最大 {{maxSize}}MB）",
     "TRUST_WARNING": "このプラグインを信頼できる場合のみ権限を付与してください",
     "TYPE": "タイプ: {{type}}",
     "UNABLE_TO_PERSIST_DATA": "プラグインストレージにデータを保存できません",
@@ -3107,6 +3292,8 @@
     "PRIVACY_POLICY": "プライベートポリシー",
     "PROJECT_SETTINGS": "プロジェクト固有の設定",
     "PROVIDE_FEEDBACK": "フィードバックを提供します",
+    "SEARCH_NO_RESULTS": "該当する設定が見つかりません",
+    "SEARCH_PLACEHOLDER": "設定を検索",
     "SYNC_EXPORT": "同期とエクスポート",
     "TAG_SETTINGS": "タグ固有の設定",
     "FAILED_TO_COPY_TO_CLIPBOARD": "クリップボードへのコピーに失敗しました",
@@ -3284,6 +3471,8 @@
     "SHARE_SUCCESS": "プロジェクトを Plainspace で共有しました。自分に割り当てられたタスクは自動的にインポートされます。",
     "SPACE_PICKER": {
       "CREATE_NEW": "新しいスペースを作成",
+      "DISCONNECT": "アカウントの接続を解除",
+      "DISCONNECT_HINT": "接続を解除すると、保存されたアカウントがこのデバイスから削除されます。既存のプロジェクト連携は同期を続けます。停止するには、課題プロバイダーパネルで該当する Plainspace 連携をそれぞれ開き、歯車アイコン →「削除」を選んでください。",
       "ERROR": "Plainspace に接続できませんでした。接続とトークンが引き続き有効であることを確認して、もう一度お試しください。",
       "INTRO": "既存のスペースをリンクして自分に割り当てられたタスクをインポートするか、新しいスペースを作成してください。",
       "LINK": "スペースをリンク",

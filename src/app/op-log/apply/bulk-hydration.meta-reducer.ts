@@ -11,7 +11,7 @@ import {
 import { OpLog } from '../../core/log';
 import { runWithBulkReplayLoggingSuppressed } from '../../util/bulk-replay-log-guard';
 import { reportBulkReplayReducerFailure } from './bulk-replay-failure-collector';
-import { isFullStateOpType } from '../core/operation.types';
+import { isFullStateOpType, isGenesisEntityType } from '../core/operation.types';
 
 /**
  * Meta-reducer that applies multiple operations in a single reducer pass.
@@ -54,6 +54,7 @@ export const bulkOperationsMetaReducer = <T>(
         operations,
         localClientId,
         atomicReplayGroups = [],
+        isReplayFromEmptyBaseline = false,
       } = action as ReturnType<typeof bulkApplyOperations>;
 
       // Apply every op in one synchronous reducer pass. Suppress the action
@@ -122,6 +123,51 @@ export const bulkOperationsMetaReducer = <T>(
           let currentState = state;
           let shouldReplayWithoutFailedOperations = false;
           for (const op of candidateOps) {
+            // #9863: the client's OWN genesis op (legacy `pf` → op-log
+            // migration, disaster recovery) carries the complete pre-migration
+            // state and is the only place in the log that does. Replaying it
+            // as the inert no-op it must remain for every OTHER client would
+            // rebuild the store with post-migration data only — and the
+            // corrupt-snapshot path then persists that truncated state. Gate
+            // strictly on a KNOWN matching clientId: an unknown localClientId
+            // keeps the op inert (the pre-fix behaviour) rather than risking a
+            // foreign genesis op replacing this device's state mid-log.
+            //
+            // It must also be the FIRST op of a batch that the caller declared
+            // as replayed from an empty baseline. The genesis op is the state at
+            // the moment this client's log began, so it can only stand in for
+            // the history when nothing precedes it — neither an earlier op in
+            // the batch nor state hydrated before the batch. Pre-#9921 clients
+            // uploaded their genesis op like any other op, so a server history
+            // can read [other device's ops…, own genesis, own ops…]; a
+            // USE_REMOTE raw rebuild replays that order from seq 0 and a
+            // full-state replay mid-batch would discard everything the other
+            // device did before this one joined. File providers still upload
+            // it, and their USE_REMOTE hydrates a snapshot first and replays
+            // the suffix on top — a leading own genesis there must stay inert.
+            // Every replay-from-scratch path hands the whole history to one
+            // dispatch (no chunking), so batch position is log position there.
+            // Otherwise it stays inert — the pre-#10052 behaviour — and is
+            // logged so the loss is diagnosable.
+            const isOwnGenesisOp =
+              !!localClientId &&
+              op.clientId === localClientId &&
+              isGenesisEntityType(op.entityType);
+            const isLeadingOwnGenesisOp =
+              isOwnGenesisOp && isReplayFromEmptyBaseline && operations[0]?.id === op.id;
+            if (isOwnGenesisOp && !isLeadingOwnGenesisOp) {
+              OpLog.warn(
+                'bulkOperationsMetaReducer: own genesis op is not the first op of a ' +
+                  'replay from an empty baseline — replaying it as inert; its ' +
+                  'pre-migration state is not restored',
+                {
+                  opId: op.id,
+                  entityType: op.entityType,
+                  isFirstInBatch: operations[0]?.id === op.id,
+                  isReplayFromEmptyBaseline,
+                },
+              );
+            }
             try {
               const isLww = hasArchives && isLwwUpdateActionType(op.actionType);
               const recreatesEntityAfterDelete =
@@ -150,7 +196,9 @@ export const bulkOperationsMetaReducer = <T>(
                     archivingOrDeletingEntityIds,
                   )
                 : op;
-              const opAction = convertOpToAction(opForApply);
+              const opAction = convertOpToAction(opForApply, {
+                replayAsFullState: isLeadingOwnGenesisOp,
+              });
               // Mark ops authored by a DIFFERENT client so reducers can preserve
               // per-device "local-only" settings against remote overwrites — while
               // replaying the device's OWN ops faithfully.
@@ -179,7 +227,7 @@ export const bulkOperationsMetaReducer = <T>(
               currentState = reducer(currentState, finalAction);
             } catch (error) {
               const isNewFailure = reportFailure(op, error);
-              if (isFullStateOpType(op.opType)) {
+              if (isFullStateOpType(op.opType) || isLeadingOwnGenesisOp) {
                 // A full-state operation replaces the entire model. Continuing
                 // from the pre-import state would expose a projection that never
                 // existed in the log, so discard the speculative batch.

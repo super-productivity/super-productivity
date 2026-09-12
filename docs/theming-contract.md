@@ -4,7 +4,7 @@ Public contract for authoring custom themes for Super Productivity. This documen
 
 ## TL;DR
 
-Drop a CSS file with at minimum these four declarations into Settings → Theme → "Install theme…":
+Drop a CSS file with at minimum these four declarations into Settings → Theme → "Install theme":
 
 ```css
 body {
@@ -121,7 +121,7 @@ The validator's warning pass is **presence-only** in v1: it does not parse selec
 1. Pick the closest shipped theme as a starting point: `src/assets/themes/{arc,catppuccin-mocha,cybr,dark-base,dracula,everforest,glass,lines,liquid-glass,nord-polar-night,nord-snow-storm,plainspace,rainbow,velvet,zen}.css`.
 2. Copy it to a new file. Rename `.css` to whatever you want — the picker uses the filename slug as the theme id.
 3. Edit the primitive declarations under `body` and `body.isDarkTheme`. Start with `--surface-1`, `--surface-2`, `--ink`, `--ink-on-channel`. Leave everything else default.
-4. Drop the file into Settings → Theme → "Install theme…". The file lives in IndexedDB; nothing leaves your machine.
+4. Drop the file into Settings → Theme → "Install theme". The file lives in IndexedDB; nothing leaves your machine.
 
 ## Examples
 

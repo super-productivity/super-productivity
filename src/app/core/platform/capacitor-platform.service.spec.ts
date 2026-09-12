@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { CapacitorPlatformService } from './capacitor-platform.service';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 
 describe('CapacitorPlatformService', () => {
   let service: CapacitorPlatformService;
@@ -55,6 +56,35 @@ describe('CapacitorPlatformService', () => {
       expect(service.capabilities.backgroundTracking).toBe(false);
       expect(service.capabilities.localFileSync).toBe(false);
       expect(service.capabilities.webdavSync).toBe(true);
+    });
+  });
+
+  describe('isLegacyAndroidWebView', () => {
+    const setup = (isAndroidWebView: boolean): CapacitorPlatformService => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          CapacitorPlatformService,
+          { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: isAndroidWebView },
+        ],
+      });
+      return TestBed.inject(CapacitorPlatformService);
+    };
+
+    // Karma runs without a Capacitor bridge, so `SUPAndroid` alone is exactly
+    // the legacy shell (`MODE_ONLINE` in LaunchDecider.kt).
+    it('should be true in the SUPAndroid WebView without a Capacitor bridge', () => {
+      expect(setup(true).isLegacyAndroidWebView).toBe(true);
+    });
+
+    it('should be false without SUPAndroid', () => {
+      expect(setup(false).isLegacyAndroidWebView).toBe(false);
+    });
+
+    it('should still report isNative for the legacy shell', () => {
+      // Guards the ordering assumption in NotifyService: the legacy check must
+      // come first, because `isNative` is true here too.
+      expect(setup(true).isNative).toBe(true);
     });
   });
 });

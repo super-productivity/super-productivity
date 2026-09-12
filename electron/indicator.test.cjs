@@ -419,3 +419,88 @@ test('tray title shows the task title when countdown display is disabled', () =>
   assert.equal(traySetTitleCalls.at(-1), 'Write release notes');
   assert.equal(traySetToolTipCalls.at(-1), 'Write release notes');
 });
+
+// Both writers fire every second while a focus session runs with the overlay
+// hidden: CURRENT_TASK_UPDATED carries task progress, SET_PROGRESS_BAR carries
+// the session's. When both reached the icon it flipped between the two frames
+// twice a second — the blink reported in #9944. Values differ on purpose here:
+// identical ones would be swallowed by setTrayIcon's path dedupe and the test
+// would pass even with two writers.
+test('tray icon has a single writer per tick while the focus overlay is hidden', () => {
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: 'darwin',
+  });
+  const { initIndicator } = loadIndicatorModule();
+
+  initIndicator({
+    showApp: () => {},
+    quitApp: () => {},
+    ICONS_FOLDER: '/icons/',
+    forceDarkTray: false,
+    app: { on: () => {} },
+  });
+
+  const currentTaskUpdated = ipcHandlers.get('CURRENT_TASK_UPDATED');
+  const setProgressBar = ipcHandlers.get('SET_PROGRESS_BAR');
+  const task = {
+    id: 'T1',
+    title: 'Task',
+    timeSpent: 30 * 60000,
+    timeEstimate: 60 * 60000,
+  };
+
+  traySetImageCalls = [];
+  for (let i = 0; i < 3; i++) {
+    task.timeSpent += 1000;
+    // task-electron.effects: isFocusModeEnabled === isOverlayShown === false
+    currentTaskUpdated({}, { ...task }, false, 0, false, 0, 'Pomodoro');
+    // focus-mode.effects: session progress, unrelated to the task estimate
+    setProgressBar({}, { progress: 0.2, progressBarMode: 'normal' });
+  }
+
+  const iconPaths = traySetImageCalls.map((image) => image.iconPath);
+  assert.deepEqual(iconPaths, ['/icons/indicator/running-anim-l/8.png']);
+});
+
+// The mirror case: with the overlay shown CURRENT_TASK_UPDATED stands down, so
+// the icon has to follow SET_PROGRESS_BAR. During a Flowtime session that
+// message carries the *task* progress (the session owns no progress of its
+// own), which is what keeps the ring rendering instead of the plain icon.
+test('tray icon follows SET_PROGRESS_BAR while the focus overlay is shown', () => {
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: 'darwin',
+  });
+  const { initIndicator } = loadIndicatorModule();
+
+  initIndicator({
+    showApp: () => {},
+    quitApp: () => {},
+    ICONS_FOLDER: '/icons/',
+    forceDarkTray: false,
+    app: { on: () => {} },
+  });
+
+  const currentTaskUpdated = ipcHandlers.get('CURRENT_TASK_UPDATED');
+  const setProgressBar = ipcHandlers.get('SET_PROGRESS_BAR');
+
+  // isFocusModeEnabled === isOverlayShown === true
+  currentTaskUpdated(
+    {},
+    { id: 'T1', title: 'Task', timeSpent: 30 * 60000, timeEstimate: 60 * 60000 },
+    false,
+    0,
+    true,
+    0,
+    'Flowtime',
+  );
+  traySetImageCalls = [];
+  setProgressBar({}, { progress: 0.5, progressBarMode: 'normal' });
+
+  assert.equal(traySetImageCalls.length, 1);
+  assert.match(
+    traySetImageCalls.at(-1).iconPath,
+    /\/icons\/indicator\/running-anim-l\/8\.png$/,
+  );
+});

@@ -6,6 +6,11 @@
       "MSG": "Wilt u Super Productivity als PWA installeren?"
     },
     "B_OFFLINE": "Je hebt geen verbinding met internet. Het synchroniseren en opvragen van probleemprovidergegevens werkt niet.",
+    "B_RECOVERY_POINT": {
+      "BROWSE": "Back-ups bekijken",
+      "DISMISS": "Nieuwe gegevens behouden",
+      "MSG": "De synchronisatie heeft de gegevens op dit apparaat zojuist vervangen door een veel kleinere dataset (van {{before}} naar {{after}} taken). De vorige gegevens zijn bewaard als herstelpunt."
+    },
     "B_SYNC_SAFETY": {
       "DISMISS": "Niet nu",
       "MSG": "Je gebruikt Super Productivity al een tijdje. Stel synchronisatie in om een back-up van je gegevens te maken en ze veilig te houden op al je apparaten.",
@@ -42,13 +47,15 @@
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "Probleempaneel weergeven",
-    "SHOW_NOTES": "Projectnotities weergeven"
+    "SHOW_NOTES": "Projectnotities weergeven",
+    "SHOW_SCHEDULE": "Planning"
   },
   "CONFIRM": {
     "AUTO_FIX": "Uw gegevens lijken beschadigd te zijn. Wilt u proberen het automatisch op te lossen? Dit kan leiden tot gedeeltelijk gegevensverlies.",
     "RELOAD_AFTER_IDB_ERROR": "Kan geen toegang krijgen tot de database :( Mogelijke oorzaken zijn een app-update van de app op de achtergrond of weinig schijfruimte. Druk op OK om de app opnieuw te laden (op sommige platforms kan het nodig zijn de app handmatig opnieuw te starten).",
     "RESTORE_FILE_BACKUP": "Er lijken GEEN GEGEVENS te zijn, maar er zijn back-ups beschikbaar op \"{{dir}}\". Wilt u de nieuwste back-up van {{from}}herstellen?",
     "RESTORE_FILE_BACKUP_ANDROID": "Er lijken GEEN GEGEVENS te zijn, maar er is een back-up beschikbaar. Wil je hem laden?",
+    "RESTORE_FILE_BACKUP_WITH_COUNTS": "Er lijken GEEN GEGEVENS te zijn, maar er zijn back-ups beschikbaar in \"{{dir}}\". Wil je de laatste back-up van {{from}} herstellen (taken: {{tasks}}, projecten: {{projects}})?",
     "RESTORE_STRAY_BACKUP": "Tijdens de laatste synchronisatie is er mogelijk een fout opgetreden. Wilt u de laatste back-up herstellen?",
     "DELETE_SECTION": "Weet je zeker dat je deze sectie wilt verwijderen? Taken erin worden verplaatst naar de takenlijst.",
     "RESTORE_FILE_BACKUP_MOBILE": "Er zijn geen gegevens gevonden op dit apparaat, maar er is een back-up beschikbaar om te herstellen (taken: {{tasks}}, projecten: {{projects}}). Wil je deze herstellen?",
@@ -507,6 +514,7 @@
         "WORKLOG": "Werklog"
       },
       "S": {
+        "CONNECTION_FAILED_WITH_ERROR": "Verbinding mislukt: {{errorMsg}}",
         "ERR_GENERIC": "{{issueProviderName}} Fout: {{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}: Verzoek is mislukt vanwege een netwerkfout aan de clientzijde",
         "ERR_NOT_CONFIGURED": "{{issueProviderName}}: Niet goed geconfigureerd",
@@ -811,7 +819,13 @@
       }
     },
     "NOTE": {
+      "D_DRAFT_CONFLICT": {
+        "KEEP_SAVED": "Opgeslagen versie behouden",
+        "MSG": "Er is een concept van deze notitie hersteld, maar de notitie is intussen gewijzigd (bijvoorbeeld door synchronisatie). Wil je het herstelde concept in de editor bekijken, of de opgeslagen versie behouden en dit concept niet meer aanbieden?",
+        "REVIEW_DRAFT": "Concept bekijken"
+      },
       "D_FULLSCREEN": {
+        "CONFIRM_DISCARD_MSG": "Je hebt niet-opgeslagen wijzigingen. Weggooien?",
         "TOOLBAR": {
           "BOLD": "Vet",
           "BULLET_LIST": "Opsommingstekenslijst",
@@ -1211,6 +1225,7 @@
       "A": {
         "REMOTE_MODEL_VERSION_NEWER": "De versie van het externe model is nieuwer dan de lokale. Werk uw lokale app bij naar de nieuwste versie!"
       },
+      "BTN_SHOW_DEVICES": "Verbonden apparaten tonen",
       "BTN_SYNC_NOW": "Nu synchroniseren",
       "C": {
         "FORCE_UPLOAD": "Lokale gegevens toch uploaden?",
@@ -1264,6 +1279,25 @@
         "P3_PW_CHANGED": "Als je je <strong>wachtwoord op een ander apparaat hebt gewijzigd</strong>, voer dan je nieuwe wachtwoord in en klik op \"Externe gegevens overschrijven\". Dit uploadt je lokale gegevens naar de server.",
         "TITLE": "Ontsleuteling mislukt"
       },
+      "D_DEVICES": {
+        "BTN_SIGN_OUT_OTHERS": "Andere apparaten afmelden",
+        "ERROR_LOADING": "Verbonden apparaten konden niet worden geladen",
+        "ERROR_SIGN_OUT": "Het afmelden van de andere apparaten is mislukt. Als de verbinding halverwege het verzoek wegviel, kan het toch zijn gelukt — dan heeft ook dit apparaat een nieuw token nodig.",
+        "LAST_SEEN": "Laatste synchronisatie: {{date}}",
+        "NO_DEVICES": "Er heeft nog geen apparaat met dit account gesynchroniseerd.",
+        "PLATFORM_ANDROID": "Android",
+        "PLATFORM_BROWSER": "Browser",
+        "PLATFORM_DESKTOP": "Desktop",
+        "PLATFORM_IOS": "iOS",
+        "PLATFORM_UNKNOWN": "Onbekend apparaat",
+        "REMOVE_HINT": "Super Sync verleent toegang per account, niet per apparaat, dus apparaten kunnen niet afzonderlijk worden verwijderd. Om een verloren of verkocht apparaat af te sluiten, meld je alle andere apparaten af — dit apparaat blijft aangemeld.",
+        "SIGN_OUT_CONFIRM_MSG": "Alle andere apparaten worden afgemeld bij Super Sync en stoppen met synchroniseren. Dit apparaat blijft aangemeld. Om een apparaat opnieuw te verbinden, meld je je aan op de pagina van de server en plak je het nieuwe token in de synchronisatie-instellingen van dat apparaat — wijzigingen die er tijdens de afmelding zijn gemaakt, blijven behouden en worden daarna geüpload.",
+        "SIGN_OUT_CONFIRM_OK": "Afmelden",
+        "SIGN_OUT_CONFIRM_TITLE": "Alle andere apparaten afmelden?",
+        "SIGN_OUT_SUCCESS": "Alle andere apparaten zijn afgemeld",
+        "THIS_DEVICE": "(dit apparaat)",
+        "TITLE": "Verbonden apparaten"
+      },
       "D_INCOMPLETE_SYNC": {
         "BTN_CLOSE_APP": "App sluiten",
         "BTN_DOWNLOAD_BACKUP": "Lokale back-up downloaden",
@@ -1281,6 +1315,11 @@
       "D_INITIAL_CFG": {
         "SAVE_AND_ENABLE": "Opslaan & Synchronisatie Inschakelen",
         "TITLE": "Synchronisatie Configureren"
+      },
+      "D_NOTHING_TO_UPLOAD": {
+        "MESSAGE": "Er is niets gewijzigd — de gegevens op je synchronisatieserver staan er nog.\n\nDit apparaat heeft nog nooit een synchronisatie afgerond en bevat dus geen kopie van je gegevens die de app kan zien. Overschrijven zou alles op de server hebben vervangen door een leeg apparaat, en dat kan niet ongedaan worden gemaakt.\n\nProbeer hier je versleutelingswachtwoord opnieuw — vaak werkt een ouder wachtwoord. Als je het je niet herinnert, laat dit apparaat en de server dan precies zoals ze zijn en meld het probleem in plaats van te overschrijven; je geschiedenis staat nog op de server.\n\nWil je de synchronisatieserver echt wissen en opnieuw beginnen, sluit dan dit venster en gebruik Overschrijven forceren in Instellingen → Synchronisatie en back-up → Synchronisatie.",
+        "MESSAGE_CHANGE_PW": "Er is niets gewijzigd — de gegevens op je synchronisatieserver staan er nog.\n\nHet wijzigen van het versleutelingswachtwoord uploadt de gegevens van dit apparaat opnieuw en vervangt wat er op de server staat. Dit apparaat heeft nog nooit een synchronisatie afgerond en bevat geen kopie van je gegevens die de app kan zien; de kopie op de server zou verloren gaan.\n\nWijzig het wachtwoord vanaf een apparaat dat je gegevens al heeft en met succes heeft gesynchroniseerd.",
+        "TITLE": "Je gesynchroniseerde gegevens zijn niet gewijzigd"
       },
       "D_RESTORE": {
         "BTN_RESTORE": "Herstellen",
@@ -1360,8 +1399,11 @@
         "SUPER_SYNC": {
           "BTN_CHANGE_PASSWORD": "Wachtwoord wijzigen",
           "L_CONFIRM_PASSWORD": "Bevestig wachtwoord",
+          "L_ENABLE_TRACKING_PRESENCE": "Lopende tijdregistratie tonen op andere apparaten (experimenteel)",
+          "L_PRESENCE_DEVICE_NAME": "Naam van dit apparaat op andere apparaten",
           "PASSWORD_MIN_LENGTH": "Wachtwoord moet minimaal 8 tekens zijn",
           "PASSWORDS_DONT_MATCH": "Wachtwoorden komen niet overeen",
+          "PRESENCE_DEVICE_NAME_DESCRIPTION": "Wordt getoond in de tijdregistratie-chip op je andere apparaten, bijv. \"Werklaptop\", zodat twee desktops uit elkaar te houden zijn. Wordt samen met de registratiestatus verzonden (versleuteld als synchronisatieversleuteling aan staat). Laat leeg om de platformnaam te gebruiken die als tijdelijke tekst wordt getoond.",
           "SETUP_ENCRYPTION_BTN": "Stel wachtwoord in",
           "ACCESS_TOKEN_DESCRIPTION": "Plak het token dat je hebt gekopieerd van de serverloginpagina",
           "BTN_DISABLE_ENCRYPTION": "Versleuteling uitschakelen",
@@ -1412,7 +1454,8 @@
           "SETUP_DISABLE_SUPERSYNC_BTN": "SuperSync uitschakelen",
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "Gebruik hetzelfde wachtwoord op alle apparaten. Een vergeten wachtwoord kan worden gereset door externe gegevens te overschrijven.",
           "SETUP_ENCRYPTION_TITLE": "SuperSync: Wachtwoord instellen",
-          "E2E_ENCRYPTION_INFO": "SuperSync gebruikt end-to-endversleuteling. Je gegevens worden op dit apparaat versleuteld voordat ze het verlaten, met een wachtwoord dat je tijdens de configuratie kiest."
+          "E2E_ENCRYPTION_INFO": "SuperSync gebruikt end-to-endversleuteling. Je gegevens worden op dit apparaat versleuteld voordat ze het verlaten, met een wachtwoord dat je tijdens de configuratie kiest.",
+          "TRACKING_PRESENCE_DESCRIPTION": "Spiegelt naar je andere verbonden apparaten welke taak dit account momenteel bijhoudt en laat je die van daaruit stoppen. Alleen ter weergave — wordt nooit op de server opgeslagen, al gaat het kort door het geheugen van de server (onleesbaar voor de server als end-to-end-versleuteling aan staat)."
         },
         "TITLE": "Synchroniseren",
         "WEB_DAV": {
@@ -1503,7 +1546,9 @@
         "ERROR_PERMISSION": "Bestandstoegang geweigerd. Controleer uw bestandsysteemrechten.",
         "ERROR_PERMISSION_FLATPAK": "Bestandstoegang geweigerd. Verleen bestandsysteemrechten via Flatseal of gebruik een pad binnen ~\\/var\\/app\\/",
         "ERROR_PERMISSION_SNAP": "Bestandstoegang geweigerd. Voer 'snap connect super-productivity:home' uit of gebruik een pad binnen ~\\/snap\\/super-productivity\\/common\\/",
+        "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "De synchronisatieserver antwoordde met een webpagina in plaats van je synchronisatiegegevens (bijv. een inlog-, proxy- of foutpagina). Je externe gegevens zijn waarschijnlijk intact — controleer de server-URL, inloggegevens en netwerk en probeer het opnieuw. Blijft het probleem bestaan, dan kun je de externe gegevens overschrijven via Synchronisatie-instellingen → Overschrijven forceren.",
         "INCOMPLETE_CFG": "Verificatie voor synchronisatie is mislukt. Controleer uw configuratie!",
+        "REMOTE_NOT_ENCRYPTED": "De gesynchroniseerde gegevens zijn niet versleuteld, terwijl versleuteling op dit apparaat is ingeschakeld, dus zijn ze geweigerd. Als je versleuteling op een ander apparaat hebt uitgeschakeld, schakel die dan ook hier uit in de synchronisatie-instellingen om verder te gaan.",
         "SUCCESS_DOWNLOAD": "Gesynchroniseerde gegevens van op afstand",
         "SUCCESS_VIA_BUTTON": "Gegevens succesvol gesynchroniseerd",
         "UNKNOWN_ERROR": "Onbekende fout tijdens het synchroniseren. Controleer de console.",
@@ -1555,6 +1600,7 @@
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Opslag was bijna vol. Oude gegevens succesvol opgeschoond.",
         "TIMEOUT_ERROR": "Synchronisatiebewerking time-out. {{suggestion}}",
         "TOO_MANY_OPS_TO_DOWNLOAD": "Te veel synchronisatiebewerkingen om te downloaden. Sommige wijzigingen ontbreken mogelijk.",
+        "UNSUPPORTED_MULTI_ENTITY_CONFLICT": "De synchronisatie is voor de veiligheid gestopt om gegevensverlies te voorkomen. Meld deze code: {{details}}",
         "UPLOAD_ERROR": "Onbekende uploadfout (instellingen correct?): {{err}}",
         "UPLOAD_OPS_REJECTED": "{{count}} bewerking(en) zijn permanent geweigerd door de server en worden niet gesynchroniseerd.",
         "VECTOR_CLOCK_LIMIT_REACHED": "Synchronisatie heeft {{originalSize}} apparaten/browsers bijgehouden, waarmee de limiet van {{maxSize}} is overschreden. Inactieve apparaatgegevens zijn opgeschoond. Overweeg een synchronisatiereset als je problemen ervaart.",
@@ -1733,7 +1779,8 @@
       "D_EDIT": {
         "ADD": "Tags toevoegen voor \"{{title}}\"",
         "EDIT": "Bewerk tags voor \"{{title}}\"",
-        "LABEL": "Tags"
+        "LABEL": "Tags",
+        "PLACEHOLDER": "+ Label toevoegen"
       },
       "FORM_BASIC": {
         "L_COLOR": "Kleur (als ongedefinieerde primaire themakleur wordt gebruikt)",
@@ -1804,6 +1851,7 @@
         "ADD_ATTACHMENT": "Voeg bijlage toe",
         "ADD_SUB_TASK": "Subtaak toevoegen",
         "ATTACHMENTS": "Bijlagen ({{nr}})",
+        "CHECKLIST": "Checklist",
         "DEADLINE": "Deadline",
         "DUE": "Gepland op",
         "LOCAL_ATTACHMENTS": "Lokale bijlagen",
@@ -1813,6 +1861,7 @@
         "REPEAT": "Herhaling",
         "SCHEDULE_TASK": "Taak plannen",
         "SUB_TASKS": "Subtaken ({{nr}})",
+        "SUB_TASKS_EMPTY": "Subtaken",
         "TIME": "Tijd",
         "TITLE_PLACEHOLDER": "Voer een titel in",
         "COMPLETED_ON": "Voltooid op",
@@ -1850,6 +1899,7 @@
         "FOCUS_SESSION": "Start focus sessie",
         "MARK_DONE": "Markeer als voltooid",
         "MOVE_TO_BACKLOG": "Verplaats naar backlog",
+        "MOVE_TO_BOTTOM": "Naar onderen verplaatsen",
         "MOVE_TO_OTHER_PROJECT": "Verplaats naar een ander project",
         "MOVE_TO_REGULAR": "Verplaats naar de lijst van vandaag",
         "MOVE_TO_TOP": "Naar boven gaan",
@@ -1893,10 +1943,6 @@
         "OK": "Labels maken"
       },
       "D_DEADLINE": {
-        "QA_NEXT_MONTH": "Volgende maand",
-        "QA_NEXT_WEEK": "Volgende week",
-        "QA_TODAY": "Vandaag",
-        "QA_TOMORROW": "Morgen",
         "RO_NEVER": "Nooit",
         "ADD_TIME": "Tijd toevoegen",
         "REMIND_AT": "Herinneren om",
@@ -1983,20 +2029,94 @@
         "TINE_SPENT": "Tijd besteed",
         "TITLE": "Toevoegen voor dag"
       },
+      "MULTI_SELECT": {
+        "ACTIONS": "Acties",
+        "CLEAR": "Selectie wissen",
+        "D_CONFIRM_DELETE": {
+          "MSG": {
+            "ONE": "<strong>{{count}}</strong> taak verwijderen? De subtaken worden ook verwijderd.",
+            "OTHER": "<strong>{{count}}</strong> taken verwijderen? Subtaken worden ook verwijderd."
+          },
+          "OK": "Verwijderen"
+        },
+        "S": {
+          "DEADLINE_REMOVED": {
+            "ONE": "Deadline verwijderd van {{count}} taak",
+            "OTHER": "Deadline verwijderd van {{count}} taken"
+          },
+          "DEADLINE_SET": {
+            "ONE": "Deadline van {{count}} taak ingesteld op {{date}}",
+            "OTHER": "Deadline van {{count}} taken ingesteld op {{date}}"
+          },
+          "DONE": {
+            "ONE": "{{count}} taak gemarkeerd als voltooid",
+            "OTHER": "{{count}} taken gemarkeerd als voltooid"
+          },
+          "ESTIMATE_CLEARED": {
+            "ONE": "Schatting gewist van {{count}} taak",
+            "OTHER": "Schatting gewist van {{count}} taken"
+          },
+          "ESTIMATE_SET": {
+            "ONE": "{{count}} taak geschat op {{estimate}}",
+            "OTHER": "{{count}} taken geschat op {{estimate}}"
+          },
+          "MOVED_TO_BACKLOG": {
+            "ONE": "{{count}} taak verplaatst naar de backlog",
+            "OTHER": "{{count}} taken verplaatst naar de backlog",
+            "PARTIAL": "{{count}} van {{total}} taken verplaatst naar de backlog (subtaken volgen hun hoofdtaak)"
+          },
+          "MOVED_TO_PROJECT": {
+            "ONE": "{{count}} taak verplaatst naar \"{{projectTitle}}\"",
+            "OTHER": "{{count}} taken verplaatst naar \"{{projectTitle}}\"",
+            "PARTIAL": "{{count}} van {{total}} taken verplaatst naar \"{{projectTitle}}\" (subtaken volgen hun hoofdtaak)"
+          },
+          "MOVED_TO_REGULAR": {
+            "ONE": "{{count}} taak verplaatst naar de gewone lijst",
+            "OTHER": "{{count}} taken verplaatst naar de gewone lijst",
+            "PARTIAL": "{{count}} van {{total}} taken verplaatst naar de gewone lijst (subtaken volgen hun hoofdtaak)"
+          },
+          "NOTHING_TO_DO": "Er is niets te wijzigen voor de geselecteerde taken",
+          "SCHEDULED": {
+            "ONE": "{{count}} taak gepland voor {{date}}",
+            "OTHER": "{{count}} taken gepland voor {{date}}"
+          },
+          "UNDONE": {
+            "ONE": "{{count}} taak gemarkeerd als niet voltooid",
+            "OTHER": "{{count}} taken gemarkeerd als niet voltooid"
+          },
+          "UNSCHEDULED": {
+            "ONE": "Planning verwijderd van {{count}} taak",
+            "OTHER": "Planning verwijderd van {{count}} taken"
+          }
+        },
+        "SELECTED_COUNT": "{{count}} geselecteerd",
+        "SELECT_ENTRY": "Meerdere taken selecteren…",
+        "TASKS_TITLE": {
+          "ONE": "{{count}} taak",
+          "OTHER": "{{count}} taken"
+        }
+      },
       "N": {
         "ESTIMATE_EXCEEDED": "Tijdschatting overschreden!",
         "ESTIMATE_EXCEEDED_BODY": "Je hebt je geschatte tijd voor \"{{title}}\" overschreden."
       },
       "S": {
+        "ADDED_VIA_APP_URI": "Taak \"{{title}}\" toegevoegd",
+        "AMBIGUOUS_MATCH_VIA_APP_URI": "Meerdere taken passen bij \"{{title}}\" — wees specifieker",
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Kan project niet toewijzen via korte syntaxis voor herhaalbare taken!",
+        "COMPLETED_VIA_APP_URI": "Taak \"{{title}}\" voltooid",
         "CREATED_FOR_PROJECT": "Taak \"{{taskTitle}}\" verplaatst naar project \"{{projectTitle}}\"",
         "DELETED": "Taak \"{{title}}\" verwijderd",
+        "EMPTY_TITLE_VIA_APP_URI": "De taaktitel was leeg, er is geen taak toegevoegd",
         "FOUND_MOVE_FROM_BACKLOG": "Taak <strong>{{title}}</strong> verplaatst van backlog naar de takenlijst van vandaag",
         "FOUND_MOVE_FROM_OTHER_LIST": "Taak <strong>{{title}}</strong> van <strong>{{contextTitle}}</strong> toegevoegd aan huidige lijst",
         "FOUND_RESTORE_FROM_ARCHIVE": "Herstelde taak <strong>{{title}}</strong> gerelateerd aan probleem uit archief",
         "GO_TO_TASK": "Ga naar taak",
+        "INPUT_TOO_LONG_VIA_APP_URI": "Taaktitel of notities te lang",
         "MOVED_TO_ARCHIVE": "Verplaatste {{nr}} taken naar archief",
         "MOVED_TO_PROJECT": "Taak \"{{taskTitle}}\" verplaatst naar project \"{{projectTitle}}\"",
+        "NOT_FOUND_VIA_APP_URI": "Geen passende taak gevonden voor \"{{title}}\"",
+        "PROJECT_NOT_FOUND_VIA_APP_URI": "Project niet gevonden — taak \"{{title}}\" is niet toegevoegd",
         "REMINDER_ADDED": "Geplande taak \"{{title}}\"",
         "REMINDER_DELETED": "Herinnering voor taak verwijderd",
         "REMINDER_UPDATED": "Herinnering voor taak \"{{title}}\" bijgewerkt",
@@ -2083,6 +2203,10 @@
         "NOTES": "Standaard notities",
         "Q_CUSTOM": "Aangepaste herhalingsconfiguratie",
         "Q_DAILY": "Iedere dag",
+        "Q_EVERY_X_DAYS": "Elke {{count}} dagen",
+        "Q_EVERY_X_MONTHS": "Elke {{count}} maanden",
+        "Q_EVERY_X_WEEKS": "Elke {{count}} weken op {{weekdayStr}}",
+        "Q_EVERY_X_YEARS": "Elke {{count}} jaar",
         "Q_MONDAY_TO_FRIDAY": "Iedere maandag tot vrijdag",
         "Q_MONTHLY_CURRENT_DATE": "Elke maand op de {{dateDayStr}}e",
         "Q_WEEKLY_CURRENT_WEEKDAY": "Iedere week op {{weekdayStr}}",
@@ -2250,6 +2374,24 @@
         "WARNING": "Deze bewerking kan niet ongedaan worden gemaakt. Zorg ervoor dat je een backup hebt voordat je doorgaat!"
       }
     },
+    "TRACKING_PRESENCE": {
+      "CHIP": {
+        "FALLBACK_TASK": "een recent gestarte taak",
+        "FOCUS": "Focussessie · cyclus {{cycle}}",
+        "LAST_SEEN": "laatst gezien {{time}}",
+        "PAUSED_ON": "Gepauzeerd op {{device}}",
+        "SINCE": "sinds {{time}}",
+        "STOP": "Tijdregistratie op {{device}} stoppen",
+        "STOPPED_ON": "Gestopt op {{device}}",
+        "TRACKING_ON": "Tijdregistratie loopt op {{device}}",
+        "WAS_TRACKING_ON": "Tijdregistratie liep op {{device}}"
+      },
+      "S": {
+        "MOVED_TO": "Tijdregistratie verplaatst naar {{device}}",
+        "STOPPED_FROM": "Tijdregistratie gestopt vanaf {{device}}",
+        "TRACK_HERE_AGAIN": "Hier weer registreren"
+      }
+    },
     "VOICE_REMINDER": {
       "FORM": {
         "HELP": "Herhaalt de geconfigureerde zin elke X bij het bijhouden van de tijd voor een taak.",
@@ -2372,6 +2514,7 @@
     "CONFIRM": "Bevestigen",
     "CONTINUE": "Doorgaan",
     "DELETE": "Verwijderen",
+    "DISCARD": "Weggooien",
     "DISMISS": "Afwijzen",
     "DO_IT": "Doe het!",
     "DUPLICATE": "Duplicaat",
@@ -2387,6 +2530,8 @@
     "MOVE_BACKWARD": "Terug Bewegen",
     "MOVE_FORWARD": "Vooruit Bewegen",
     "NEXT": "Volgende",
+    "NEXT_MONTH": "Volgende maand",
+    "NEXT_WEEK": "Volgende week",
     "NO_CON": "Je bent momenteel offline. Maak opnieuw verbinding met internet.",
     "NONE": "Geen",
     "OK": "OK",
@@ -2400,7 +2545,9 @@
     "SHARE": "Delen",
     "SUBMIT": "Stuur  in",
     "TITLE": "Titel",
+    "TODAY": "Vandaag",
     "TODAY_TAG_TITLE": "Vandaag",
+    "TOMORROW": "Morgen",
     "UNDO": "Ongedaan maken",
     "WITHOUT_PROJECT": "Zonder project",
     "YESTERDAY": "Gisteren",
@@ -2435,6 +2582,27 @@
       "EXPERIMENTAL_WARNING_MSG": "Deze functie is experimenteel. Er kunnen bugs zijn, ze kan aanzienlijk veranderen of in een toekomstige update worden verwijderd. Zorg dat je back-ups van je gegevens bewaart.<br/><br/>Wil je dit inschakelen?"
     },
     "AUTO_BACKUPS": {
+      "BROWSE": "Back-ups bekijken",
+      "D_LIST": {
+        "BTN_RESTORE": "Herstellen",
+        "CONFIRM_MSG": "De back-up van <strong>{{timestamp}}</strong> ({{tasks}} taken) herstellen?<br><br>Dit <strong>vervangt al je huidige gegevens</strong> op dit apparaat en, als synchronisatie aan staat, ook op je andere apparaten. De huidige gegevens worden eerst als herstelpunt bewaard.",
+        "CONFIRM_TITLE": "Herstellen bevestigen",
+        "DATE_UNKNOWN": "Datum onbekend",
+        "EMPTY": "Nog geen back-ups op dit apparaat. Herstelpunten worden automatisch gemaakt voordat synchronisatie of een import je gegevens vervangt.",
+        "ERROR_LOADING": "Back-ups konden niet worden geladen",
+        "ERROR_RESTORE": "Back-up kon niet worden hersteld",
+        "INTRO": "Alle back-ups die op dit apparaat zijn opgeslagen. Selecteer er een om te zien wat erin zit.",
+        "KIND_FILE": "Automatisch back-upbestand",
+        "LOADING": "Back-ups laden...",
+        "PARTIAL": "Sommige back-ups op dit apparaat konden niet worden gelezen. Alleen de hieronder vermelde zijn beschikbaar.",
+        "REASON_FORCE_DOWNLOAD": "Herstelpunt: vóór \"Servergegevens gebruiken\"",
+        "REASON_LOCAL_IMPORT": "Herstelpunt: vóór import of herstel",
+        "REASON_REMOTE_IMPORT": "Herstelpunt: voordat synchronisatie de lokale gegevens verving",
+        "SLOT_LATEST": "Laatste automatische back-up",
+        "SLOT_PREVIOUS": "Vorige automatische back-up",
+        "TASK_COUNT": "{{tasks}} taken",
+        "TITLE": "Back-ups op dit apparaat"
+      },
       "HELP": "Sla alle gegevens automatisch op in uw app-map om deze gereed te hebben voor het geval er iets misgaat.",
       "LABEL_IS_ENABLED": "Schakel automatische back-ups in",
       "LOCATION_INFO": "Back-ups worden opgeslagen in:",
@@ -2518,6 +2686,7 @@
       "IS_ENABLE_IDLE_TIME_TRACKING": "Inactieve tijdafhandeling inschakelen",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Activeer alleen een inactieve tijdsvenster wanneer een huidige taak is geselecteerd",
       "MIN_IDLE_TIME": "Activeer inactief na X",
+      "MIN_IDLE_TIME_DESCRIPTION": "Bijv. \"5h 23m\". Moet minstens {{min}} zijn; kortere inactieve periodes worden nooit gemeld. Inactiviteit wordt elke {{interval}} gecontroleerd.",
       "TITLE": "Idle Handling",
       "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Dialoogvenster voor inactiviteit onderdrukken tijdens focusmodussessies"
     },
@@ -2531,6 +2700,8 @@
       "ADD_NEW_TASK": "Nieuwe taak toevoegen",
       "APP_WIDE_SHORTCUTS": "Globale snelkoppelingen (toepassingsbreed)",
       "COLLAPSE_SUB_TASKS": "Subtaken samenvouwen",
+      "COLUMN_ACTION": "Actie",
+      "COLUMN_SHORTCUT": "Sneltoets",
       "EXPAND_SUB_TASKS": "Vouw subtaken uit",
       "GLOBAL_ADD_NOTE": "Nieuwe notitie toevoegen",
       "GLOBAL_ADD_TASK": "Nieuwe taak toevoegen",
@@ -2554,11 +2725,13 @@
       "SAVE_NOTE": "Notitie opslaan",
       "SELECT_NEXT_TASK": "Selecteer de volgende taak",
       "SELECT_PREVIOUS_TASK": "Selecteer vorige taak",
+      "SHOW_HELP": "Overzicht van sneltoetsen tonen",
       "SHOW_SEARCH_BAR": "Toon zoekbalk",
       "SYSTEM_SHORTCUTS": "Globale snelkoppelingen (systeembreed)",
       "TASK_ADD_ATTACHMENT": "Voeg bestand of link toe",
       "TASK_ADD_SUB_TASK": "Subtaak toevoegen",
       "TASK_DELETE": "Taak verwijderen",
+      "TASK_DUPLICATE": "Taak dupliceren",
       "TASK_EDIT_TAGS": "Bewerk-tags",
       "TASK_EDIT_TITLE": "Titel bewerken",
       "TASK_MOVE_TO_PROJECT": "Verplaats taak naar projectmenu openen",
@@ -2569,6 +2742,7 @@
       "TASK_SHORTCUTS_INFO": "De volgende sneltoetsen zijn van toepassing op de momenteel geselecteerde taak (geselecteerd via tab of muis).",
       "TASK_TOGGLE_DETAIL_PANEL_OPEN": "Extra taakinformatie tonen / verbergen",
       "TASK_TOGGLE_DONE": "Toggle Gereed",
+      "TASK_TOGGLE_SELECT": "Taak toevoegen aan/verwijderen uit meervoudige selectie",
       "TITLE": "Toetsenbord sneltoetsen",
       "TOGGLE_BACKLOG": "Backlog weergeven / verbergen",
       "TOGGLE_ISSUE_PANEL": "Issuepaneel weergeven/verbergen",
@@ -2666,6 +2840,10 @@
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Toon huidige countdown in de tray / statusmenu (alleen desktop mac)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Gebruik aangepaste titelbalk (alleen Windows/Linux)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Herstart vereist om effect te hebben",
+      "LOCAL_REST_API_TOKEN": "Toegangstoken",
+      "LOCAL_REST_API_TOKEN_ERROR": "Het toegangstoken kon niet worden opgeslagen, dus de API draait niet. Controleer of Super Productivity naar zijn gegevensmap kan schrijven en gebruik daarna Opnieuw genereren om het nog eens te proberen.",
+      "LOCAL_REST_API_TOKEN_REGENERATE": "Toegangstoken opnieuw genereren",
+      "LOCAL_REST_API_TOKEN_REGENERATE_ERROR": "Het nieuwe toegangstoken kon niet worden opgeslagen. Het vorige token is nog geldig.",
       "START_OF_NEXT_DAY": "Starttijd van de volgende dag",
       "START_OF_NEXT_DAY_HINT": "vanaf wanneer (in uur) je wilt tellen dat de volgende dag is begonnen. standaard is middernacht wat 0 is.",
       "THEME": "Thema",
@@ -2927,8 +3105,11 @@
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Wilt u een back-up downloaden van uw verouderde gegevens (kan worden gebruikt met oudere versies van Super Productivity)?",
     "DETECTED_LEGACY": "Verouderde gegevens gedetecteerd. Wij migreren het voor u!",
+    "DIALOG_TITLE_ERROR": "Migratie mislukt",
     "E_MIGRATION_FAILED": "Migratie mislukt! met fout:",
+    "E_MIGRATION_FAILED_MSG": "Je oude gegevens konden niet worden gemigreerd. Ze staan nog op dit apparaat en zijn niet gewijzigd, en er is een back-upbestand aangeboden om te downloaden. Opnieuw starten loopt tegen hetzelfde probleem aan, dus je kunt in plaats daarvan met een lege app verdergaan en die back-up daarna importeren. De app vraagt dan niet meer naar deze oude gegevens.",
     "E_RESTART_FAILED": "Automatisch opnieuw opstarten is mislukt. Start de app handmatig opnieuw!",
+    "START_FRESH": "Doorgaan zonder oude gegevens",
     "STATUS_COMPLETE": "Migratie Voltooid!",
     "SUCCESS": "Migratie helemaal klaar! App nu opnieuw opstarten...",
     "DIALOG_MESSAGE": "We werken bij hoe je gegevens worden opgeslagen voor betere synchronisatiebetrouwbaarheid. Een backup wordt automatisch gedownload.",
@@ -3014,6 +3195,8 @@
     "ACTION_TYPE_NOT_ALLOWED": "Actietype '{{type}}' is niet toegestaan",
     "ALREADY_INITIALIZED": "Plugin is al geïnitialiseerd",
     "CANCEL": "Annuleren",
+    "CANNOT_DELETE_INBOX": "Het project Inbox kan niet worden verwijderd",
+    "CANNOT_NEST_SUBTASKS": "Subtaken kunnen niet worden genest: de hoofdtaak is zelf een subtaak",
     "CAPABILITIES": {
       "ACCESS_FILES": "Toegang tot en wijziging van bestanden op uw systeem",
       "RUN_COMMANDS": "Voer systeemopdrachten uit",
@@ -3037,6 +3220,7 @@
     "FAILED_TO_LOAD_CONFIG": "Kon pluginconfiguratie niet laden",
     "FAILED_TO_REMOVE": "Kon plugin niet verwijderen",
     "FAILED_TO_SAVE_CONFIG": "Kon pluginconfiguratie niet opslaan",
+    "FIELD_NOT_UPDATABLE": "\"{{field}}\" kan niet worden ingesteld via updateTask — een andere hoofdtaak toewijzen wordt niet ondersteund. Maak subtaken met addTask({ parentId }) of herstructureer via batchUpdateForProject",
     "FILE_TOO_LARGE": "Bestand te groot ({{fileSize}}MB). Maximale grootte is {{maxSize}}MB",
     "GO_BACK": "Ga terug",
     "GRANT_PERMISSION": "Toestemming verlenen",
@@ -3085,6 +3269,7 @@
     "TASKS_NOT_IN_PROJECT": "Een of meer taken zijn niet in project '{{contextId}}'",
     "TASKS_NOT_SUBTASKS": "Een of meer taken zijn geen subtaken van '{{contextId}}'",
     "TOGGLE_PLUGIN": "Schakel {{pluginName}} in/uit",
+    "TRANSLATIONS_TOO_LARGE": "De plug-invertalingen zijn in totaal te groot (max. {{maxSize}} MB)",
     "TRUST_WARNING": "Verleen alleen toestemming als u deze plugin vertrouwt",
     "TYPE": "Type: {{type}}",
     "UNABLE_TO_PERSIST_DATA": "Kan gegevens niet opslaan in pluginopslag",
@@ -3118,6 +3303,8 @@
     "PROJECT_SETTINGS": "Projectspecifieke instellingen",
     "PROVIDE_FEEDBACK": "Geef feedback",
     "RELOAD": "Opnieuw laden",
+    "SEARCH_NO_RESULTS": "Geen instellingen gevonden",
+    "SEARCH_PLACEHOLDER": "Instellingen zoeken",
     "SYNC_EXPORT": "Synchroniseren en exporteren",
     "TABS": {
       "GENERAL": "Algemeen",
@@ -3284,6 +3471,8 @@
     "SHARE_SUCCESS": "Project gedeeld op Plainspace. Taken die aan jou zijn toegewezen, worden automatisch geïmporteerd.",
     "SPACE_PICKER": {
       "CREATE_NEW": "Nieuwe space maken",
+      "DISCONNECT": "Account loskoppelen",
+      "DISCONNECT_HINT": "Bij het loskoppelen wordt het opgeslagen account van dit apparaat verwijderd. Bestaande projectintegraties blijven synchroniseren. Om die te stoppen, open je elke betreffende Plainspace-integratie in het paneel met issue-providers en kies je het tandwielpictogram → Verwijderen.",
       "ERROR": "Plainspace kon niet worden bereikt. Controleer je verbinding en of je token nog geldig is. Probeer het daarna opnieuw.",
       "INTRO": "Koppel een bestaande space om de aan jou toegewezen taken te importeren, of maak een nieuwe.",
       "LINK": "Space koppelen",

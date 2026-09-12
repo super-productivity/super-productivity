@@ -36,6 +36,7 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { LanguageService } from 'src/app/core/language/language.service';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
+import { parseDbDateStr } from '../../util/parse-db-date-str';
 
 const GROUP_OPTIONS_NO_PROJECT = OPTIONS.group.list.filter(
   (opt) => opt.type !== GROUP_OPTION_TYPE.project,
@@ -642,11 +643,24 @@ export class TaskViewCustomizerService {
       t: TaskWithSubTasks,
     ) => [string | undefined | null, number | undefined | null],
   ): TaskWithSubTasks[] {
+    const toDate = (
+      day: string | undefined | null,
+      withTime: number | undefined | null,
+    ): Date | null => {
+      if (day) {
+        // A date-only value means "by the end of that day" for sorting (#9828).
+        const date = parseDbDateStr(day);
+        date.setHours(23, 59, 59, 999);
+        return date;
+      }
+      return withTime ? new Date(withTime) : null;
+    };
+
     return tasks.sort((a, b) => {
       const [dayA, withTimeA] = getFields(a);
       const [dayB, withTimeB] = getFields(b);
-      const dateA = dayA ? new Date(dayA) : withTimeA ? new Date(withTimeA) : null;
-      const dateB = dayB ? new Date(dayB) : withTimeB ? new Date(withTimeB) : null;
+      const dateA = toDate(dayA, withTimeA);
+      const dateB = toDate(dayB, withTimeB);
 
       if (dateA === null && dateB === null) return 0;
       if (dateA === null) return 1 * factor;

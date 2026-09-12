@@ -10,6 +10,29 @@ const BAR = 'task-multi-select-bar .bar';
 const DONE_TASKS = '.task-list-inner[data-id="DONE"] > task.isDone';
 
 test.describe('Task multi-select (desktop)', () => {
+  // The checkbox is its own click target, so it needs its own opt-in
+  // (`done-toggle [isMultiSelectAware]`). Without it a modifier click there
+  // completes the task instead of selecting it, and nothing else notices:
+  // every other case in this file clicks the row's title area.
+  test('Ctrl+click on the done toggle selects the task instead of completing it', async ({
+    page,
+    workViewPage,
+    taskPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const title = `${testPrefix}-Toggle Select`;
+    await workViewPage.addTask(title);
+    const task = taskPage.getTaskByText(title);
+    const bar = page.locator(BAR);
+
+    await task.locator('done-toggle').click({ modifiers: ['Control'] });
+
+    await expect(bar).toContainText('1 selected');
+    await expect(task).toHaveClass(/isMultiSelected/);
+    await expect(task).not.toHaveClass(/isDone/);
+  });
+
   test('Ctrl+click and Shift+click build a selection that D completes at once', async ({
     page,
     workViewPage,

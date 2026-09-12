@@ -32,6 +32,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { AsyncPipe } from '@angular/common';
 import { TagComponent } from '../../features/tag/tag/tag.component';
 import { sortByTitle } from '../../util/sort-by-title';
+import { ChipAutocompleteKeysDirective } from '../chip-autocomplete-keys/chip-autocomplete-keys.directive';
 
 const DEFAULT_SEPARATOR_KEY_CODES: number[] = [ENTER, COMMA];
 
@@ -65,6 +66,7 @@ interface Suggestion {
     TranslatePipe,
     AsyncPipe,
     TagComponent,
+    ChipAutocompleteKeysDirective,
   ],
 })
 export class ChipListInputComponent {
@@ -137,11 +139,7 @@ export class ChipListInputComponent {
 
   selected(event: MatAutocompleteSelectedEvent): void {
     this._add(event.option.value);
-    const inputEl = this.inputEl();
-    if (inputEl) {
-      inputEl.nativeElement.value = '';
-    }
-    this.inputCtrl.setValue(null);
+    this._clearInput();
   }
 
   onInputKeydown(ev: KeyboardEvent): void {
@@ -151,6 +149,22 @@ export class ChipListInputComponent {
     } else {
       this.separatorKeysCodes = DEFAULT_SEPARATOR_KEY_CODES;
     }
+  }
+
+  acceptSuggestion(id: string): void {
+    this._add(id);
+  }
+
+  commitText(text: string): void {
+    this._addByTitle(text);
+  }
+
+  private _clearInput(): void {
+    const inputEl = this.inputEl();
+    if (inputEl) {
+      inputEl.nativeElement.value = '';
+    }
+    this.inputCtrl.setValue(null);
   }
 
   private _updateModelItems(modelIds: string[]): void {

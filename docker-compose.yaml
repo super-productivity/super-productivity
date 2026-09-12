@@ -22,8 +22,12 @@ services:
     #
     # Don't pin DB_PORT in an env file: every checkout sharing that file gets
     # the same fixed port back, and with it the collision.
+    # Loopback-bound for the same reason as supersync below: the credentials
+    # above are committed to a public repo, and postgres superuser access means
+    # code execution (COPY ... FROM PROGRAM) on the compose network. The one
+    # host consumer, `npm run supersync:db`, connects to localhost.
     ports:
-      - '${DB_PORT:-0}:5432'
+      - '127.0.0.1:${DB_PORT:-0}:5432'
     volumes:
       - db_data:/var/lib/postgresql/data
     # Gate on supersync_db existing AND accepting queries from the app user.
@@ -56,9 +60,20 @@ services:
     build:
       context: .
       dockerfile: packages/super-sync-server/Dockerfile.test
-    env_file: .env
+    # Optional: the E2E stack supplies every var it needs below, but a local
+    # .env may override them. Compose resolves env_file for ALL services at
+    # project load, so a required one breaks `docker compose up app webdav`
+    # for self-hosters who never created it.
+    env_file:
+      - path: .env
+        required: false
+    # Loopback-bound on purpose: TEST_MODE exposes unauthenticated /api/test/*
+    # routes (cleanup wipes every user and operation) with rate limiting off.
+    # Docker's iptables rules bypass ufw/firewalld, so a bare '1900:1900' hands
+    # that to the whole LAN. Mirrors the production compose in
+    # packages/super-sync-server, which binds 127.0.0.1 for the same reason.
     ports:
-      - '1900:1900'
+      - '127.0.0.1:1900:1900'
     cap_drop:
       - ALL
     security_opt:

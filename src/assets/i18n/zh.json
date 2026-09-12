@@ -6,6 +6,11 @@
       "MSG": "您想要将超级生产力安装为 PWA 吗？"
     },
     "B_OFFLINE": "您已断开互联网连接。同步和请求问题提供者数据将无法工作。",
+    "B_RECOVERY_POINT": {
+      "BROWSE": "浏览备份",
+      "DISMISS": "保留新数据",
+      "MSG": "同步刚刚用一个小得多的数据集替换了本设备上的数据（任务从 {{before}} 个变为 {{after}} 个）。之前的数据已保存为恢复点。"
+    },
     "B_SUPER_SYNC_ENCRYPTION": {
       "ALREADY_ENCRYPTED": "此账户已在另一台设备上启用加密。请输入现有密码以继续同步。",
       "ENABLE": "启用加密",
@@ -41,7 +46,8 @@
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "显示问题看板",
-    "SHOW_NOTES": "显示项目备注"
+    "SHOW_NOTES": "显示项目备注",
+    "SHOW_SCHEDULE": "日程"
   },
   "CONFIRM": {
     "DELETE_SECTION": "确定要删除此分区吗？其中的任务将被移到任务列表。",
@@ -50,6 +56,7 @@
     "RESTORE_FILE_BACKUP_ANDROID": "似乎没有数据，但有备份可用。您想要加载它吗？",
     "RESTORE_FILE_BACKUP_MOBILE": "此设备上未找到数据，但有一份备份可供恢复（任务：{{tasks}}，项目：{{projects}}）。是否恢复？",
     "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "是否恢复最新的自动备份（任务：{{tasks}}，项目：{{projects}}）？这会替换此设备上的全部现有数据；如果你使用同步，下次同步时还会覆盖其他设备上的数据。",
+    "RESTORE_FILE_BACKUP_WITH_COUNTS": "似乎没有任何数据，但在“{{dir}}”中有可用的备份。要恢复 {{from}} 的最新备份吗（任务：{{tasks}}，项目：{{projects}}）？",
     "RESTORE_STRAY_BACKUP": "在上次同步期间可能出现了一些错误。您想要恢复上次备份吗？"
   },
   "DATETIME_SCHEDULE": {
@@ -516,6 +523,7 @@
       "S": {
         "AUTO_CREATE_FAILED": "自动创建问题失败：{{errorMsg}}",
         "CONNECTION_FAILED": "连接失败",
+        "CONNECTION_FAILED_WITH_ERROR": "连接失败：{{errorMsg}}",
         "CONNECTION_SUCCESS": "连接成功！",
         "ERR_GENERIC": "{{issueProviderName}} 错误: {{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}: 由于客户端网络错误请求失败",
@@ -825,7 +833,13 @@
       }
     },
     "NOTE": {
+      "D_DRAFT_CONFLICT": {
+        "KEEP_SAVED": "保留已保存的版本",
+        "MSG": "已恢复这条笔记的草稿，但笔记在此期间发生了变化（例如通过同步）。要在编辑器中查看恢复的草稿，还是保留已保存的版本并不再提示该草稿？",
+        "REVIEW_DRAFT": "查看草稿"
+      },
       "D_FULLSCREEN": {
+        "CONFIRM_DISCARD_MSG": "你有未保存的更改。要放弃吗？",
         "TOOLBAR": {
           "BOLD": "粗体",
           "BULLET_LIST": "无序列表",
@@ -1226,6 +1240,7 @@
         "CONTENT_CONFLICT_UNTITLED": "无标题任务"
       },
       "BTN_RESTORE_FROM_HISTORY": "从历史记录恢复",
+      "BTN_SHOW_DEVICES": "显示已连接的设备",
       "BTN_SYNC_NOW": "立即同步",
       "C": {
         "FORCE_UPLOAD": "强制上传您的数据可能会导致数据丢失。继续？",
@@ -1337,6 +1352,25 @@
         "PASSWORD": "密码",
         "TITLE": "解密失败"
       },
+      "D_DEVICES": {
+        "BTN_SIGN_OUT_OTHERS": "退出其他设备",
+        "ERROR_LOADING": "无法加载已连接的设备",
+        "ERROR_SIGN_OUT": "退出其他设备失败。如果请求中途断开连接，操作仍可能已生效——那样的话本设备也需要重新签发的令牌。",
+        "LAST_SEEN": "上次同步：{{date}}",
+        "NO_DEVICES": "尚无设备与此账户同步过。",
+        "PLATFORM_ANDROID": "Android",
+        "PLATFORM_BROWSER": "浏览器",
+        "PLATFORM_DESKTOP": "桌面端",
+        "PLATFORM_IOS": "iOS",
+        "PLATFORM_UNKNOWN": "未知设备",
+        "REMOVE_HINT": "Super Sync 按账户而非按设备授予访问权限，因此无法单独移除设备。要切断丢失或已出售的设备，请退出所有其他设备——本设备将保持登录。",
+        "SIGN_OUT_CONFIRM_MSG": "所有其他设备都会退出 Super Sync 并停止同步。本设备保持登录。要重新连接某台设备，请在服务器页面登录，并把新令牌粘贴到该设备的同步设置中——退出期间在该设备上所做的更改会被保留，并在之后上传。",
+        "SIGN_OUT_CONFIRM_OK": "退出",
+        "SIGN_OUT_CONFIRM_TITLE": "要退出所有其他设备吗？",
+        "SIGN_OUT_SUCCESS": "已退出所有其他设备",
+        "THIS_DEVICE": "（本设备）",
+        "TITLE": "已连接的设备"
+      },
       "D_ENTER_PASSWORD": {
         "BTN_FORCE_OVERWRITE": "强制覆盖服务器",
         "BTN_SAVE_AND_SYNC": "保存并同步",
@@ -1359,6 +1393,11 @@
       "D_LOCAL_DATA_REPLACE_CONFIRM": {
         "MESSAGE": "您有 {{count}} 个未同步的本地更改将被远程数据替换。是否要继续？",
         "TITLE": "替换本地数据？"
+      },
+      "D_NOTHING_TO_UPLOAD": {
+        "MESSAGE": "没有进行任何更改——你同步服务器上的数据依然存在。\n\n本设备从未完成过同步，因此没有应用能看到的数据副本。覆盖会把服务器上的所有内容替换为一台空设备，而且无法撤销。\n\n请在此重新尝试你的加密密码——旧密码往往可用。如果你记不起来，请让本设备和服务器保持原样，并报告问题而不要覆盖；你的历史记录仍在服务器上。\n\n如果你确实想清空同步服务器并重新开始，请关闭此窗口，然后使用 设置 → 同步与备份 → 同步 中的“强制覆盖”。",
+        "MESSAGE_CHANGE_PW": "没有进行任何更改——你同步服务器上的数据依然存在。\n\n更改加密密码会重新上传本设备的数据并替换服务器上的内容。本设备从未完成过同步，因此没有应用能看到的数据副本，服务器上的副本将会丢失。\n\n请在已经拥有你的数据并成功同步过的设备上更改密码。",
+        "TITLE": "你同步的数据未被改动"
       },
       "D_PERMISSION": {
         "DISABLE_SYNC": "禁用同步",
@@ -1540,18 +1579,22 @@
           "L_CHANGE_ENCRYPTION_PASSWORD": "更改加密密码",
           "L_CONFIRM_PASSWORD": "确认密码",
           "L_ENABLE_E2E_ENCRYPTION": "启用端到端加密",
+          "L_ENABLE_TRACKING_PRESENCE": "在其他设备上显示正在进行的计时（实验性）",
           "L_NEW_PASSWORD": "新加密密码",
+          "L_PRESENCE_DEVICE_NAME": "本设备在其他设备上显示的名称",
           "L_REMOVE_ENCRYPTION": "或移除加密",
           "L_SERVER_URL": "服务器 URL",
           "LOGIN_INSTRUCTIONS": "点击下方按钮打开服务器登录页面。登录后，复制您的访问令牌并粘贴到此处。",
           "PASSWORD_MIN_LENGTH": "密码长度至少为 8 个字符",
           "PASSWORDS_DONT_MATCH": "密码不匹配",
+          "PRESENCE_DEVICE_NAME_DESCRIPTION": "显示在你其他设备的计时标签中，例如“工作笔记本”，以便区分两台台式机。会随计时状态一起发送（开启同步加密时为加密发送）。留空则使用占位符中显示的平台名称。",
           "REMOVE_ENCRYPTION_WARNING": "移除加密将删除所有服务器数据，并重新上传您的数据（无加密）。所有设备都需要重新配置。",
           "SERVER_URL_DESCRIPTION": "使用官方服务器请保持默认，或输入自定义服务器 URL",
           "SETUP_DISABLE_SUPERSYNC_BTN": "禁用 SuperSync",
           "SETUP_ENCRYPTION_BTN": "设置密码",
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "在所有设备上使用相同的密码。忘记的密码可以通过覆盖远程数据来重置。",
-          "SETUP_ENCRYPTION_TITLE": "SuperSync：设置密码"
+          "SETUP_ENCRYPTION_TITLE": "SuperSync：设置密码",
+          "TRACKING_PRESENCE_DESCRIPTION": "把此账户当前正在计时的任务同步显示到你其他已连接的设备，并允许从那里停止计时。仅用于显示——绝不会保存在服务器上，只会短暂经过服务器内存（开启端到端加密时服务器无法读取）。"
         },
         "NEXTCLOUD": {
           "FILE_USER_NAME_DESCRIPTION": "你的 Nextcloud 用户 ID，而不是电子邮箱或显示名称。查找方法：在 Nextcloud 中打开“文件”，点击左下角的设置齿轮，然后从显示的 WebDAV URL（.../remote.php/dav/files/<user-id>/）中复制 <user-id>。",
@@ -1627,7 +1670,10 @@
         "ERROR_REMOTE_FILE_CORRUPTED": "远程同步数据不可读（可能被截断或损坏）。你的本地数据是安全的。你可以用本地数据覆盖远程数据。",
         "ERROR_REMOTE_FILE_EMPTY": "远程同步文件为空。这可能发生在同步中断之后。要用本地数据覆盖远程数据吗？",
         "ERROR_REMOTE_FILE_LOCKED": "远程同步文件被服务器锁定。下次尝试同步时可能会解决。",
+        "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "同步服务器返回的是一个网页而不是你的同步数据（例如登录页、代理页或错误页）。你的远程数据很可能完好——请检查服务器地址、凭据和网络，然后重试。如果问题持续，可以通过 同步设置 → 强制覆盖 覆盖远程数据。",
         "ERROR_SYNC_VERSION_MISMATCH": "远程同步数据使用不兼容的格式版本。请确保所有设备运行相同版本的 Super Productivity。",
+        "REMOTE_NOT_ENCRYPTED": "同步的数据未加密，但本设备启用了加密，因此被拒绝。如果你在其他设备上关闭了加密，请在此处的同步设置中也关闭它以继续。",
+        "UNSUPPORTED_MULTI_ENTITY_CONFLICT": "为避免数据丢失，同步出于安全考虑已停止。请报告此代码：{{details}}",
         "WARN_CLIENT_ID_REGENERATED": "同步设备 ID 无效，已重新生成。下次同步时可能会发生同步冲突。",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "同步时出错。无法读取远程数据。可能是您启用了加密，而您的本地密码与用于加密远程数据的密码不匹配？",
         "FINISH_DAY_SYNC_ERROR": "在结束一天时发生同步错误。请重试。",
@@ -1722,7 +1768,8 @@
       "D_EDIT": {
         "ADD": "为 \"{{title}}\" 添加标签",
         "EDIT": "为 \"{{title}}\" 编辑标签",
-        "LABEL": "标签"
+        "LABEL": "标签",
+        "PLACEHOLDER": "+ 添加标签"
       },
       "FORM_BASIC": {
         "D_COLOR": "未设置时，默认使用主题的主色。",
@@ -1792,10 +1839,12 @@
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "添加附件",
         "ADD_CHECKLIST_ITEM": "添加检查清单项",
+        "CHECKLIST": "清单",
         "CHECKLIST_ACTIONS": "检查清单操作",
         "CHECK_ALL": "全部勾选",
         "CLEAR_COMPLETED": "清除已完成项",
         "NOTES_OR_CHECKLIST": "笔记/检查清单",
+        "SUB_TASKS_EMPTY": "子任务",
         "UNCHECK_ALL": "取消全部勾选",
         "PASTE_IMAGE_HINT": "按 Ctrl+V 粘贴图片",
         "PASTE_IMAGE_HINT_MAC": "按 Cmd+V 粘贴图片",
@@ -1846,6 +1895,7 @@
         "MARK_DONE": "标记为完成",
         "MARK_UNDONE": "标记为未完成",
         "MOVE_TO_BACKLOG": "移至待办列表",
+        "MOVE_TO_BOTTOM": "移到底部",
         "MOVE_TO_OTHER_PROJECT": "移至其他项目",
         "MOVE_TO_REGULAR": "移至常规列表",
         "MOVE_TO_TOP": "移至顶部",
@@ -1883,10 +1933,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "添加时间",
-        "QA_NEXT_MONTH": "下个月",
-        "QA_NEXT_WEEK": "下周",
-        "QA_TODAY": "今天",
-        "QA_TOMORROW": "明天",
         "REMIND_AT": "提醒时间",
         "REMOVE_DEADLINE": "移除截止日期",
         "RO_1H": "1 小时前",
@@ -1968,22 +2014,96 @@
         "TINE_SPENT": "花费时间",
         "TITLE": "为当天添加"
       },
+      "MULTI_SELECT": {
+        "ACTIONS": "操作",
+        "CLEAR": "清除选择",
+        "D_CONFIRM_DELETE": {
+          "MSG": {
+            "ONE": "要删除 <strong>{{count}}</strong> 个任务吗？其子任务也会被删除。",
+            "OTHER": "要删除 <strong>{{count}}</strong> 个任务吗？子任务也会被删除。"
+          },
+          "OK": "删除"
+        },
+        "S": {
+          "DEADLINE_REMOVED": {
+            "ONE": "已移除 {{count}} 个任务的截止日期",
+            "OTHER": "已移除 {{count}} 个任务的截止日期"
+          },
+          "DEADLINE_SET": {
+            "ONE": "已将 {{count}} 个任务的截止日期设为 {{date}}",
+            "OTHER": "已将 {{count}} 个任务的截止日期设为 {{date}}"
+          },
+          "DONE": {
+            "ONE": "已将 {{count}} 个任务标记为已完成",
+            "OTHER": "已将 {{count}} 个任务标记为已完成"
+          },
+          "ESTIMATE_CLEARED": {
+            "ONE": "已清除 {{count}} 个任务的预估时间",
+            "OTHER": "已清除 {{count}} 个任务的预估时间"
+          },
+          "ESTIMATE_SET": {
+            "ONE": "已将 {{count}} 个任务预估为 {{estimate}}",
+            "OTHER": "已将 {{count}} 个任务预估为 {{estimate}}"
+          },
+          "MOVED_TO_BACKLOG": {
+            "ONE": "已将 {{count}} 个任务移到待办清单",
+            "OTHER": "已将 {{count}} 个任务移到待办清单",
+            "PARTIAL": "已将 {{total}} 个任务中的 {{count}} 个移到待办清单（子任务随其父任务一起移动）"
+          },
+          "MOVED_TO_PROJECT": {
+            "ONE": "已将 {{count}} 个任务移到“{{projectTitle}}”",
+            "OTHER": "已将 {{count}} 个任务移到“{{projectTitle}}”",
+            "PARTIAL": "已将 {{total}} 个任务中的 {{count}} 个移到“{{projectTitle}}”（子任务随其父任务一起移动）"
+          },
+          "MOVED_TO_REGULAR": {
+            "ONE": "已将 {{count}} 个任务移到常规列表",
+            "OTHER": "已将 {{count}} 个任务移到常规列表",
+            "PARTIAL": "已将 {{total}} 个任务中的 {{count}} 个移到常规列表（子任务随其父任务一起移动）"
+          },
+          "NOTHING_TO_DO": "所选任务没有需要更改的内容",
+          "SCHEDULED": {
+            "ONE": "已将 {{count}} 个任务安排在 {{date}}",
+            "OTHER": "已将 {{count}} 个任务安排在 {{date}}"
+          },
+          "UNDONE": {
+            "ONE": "已将 {{count}} 个任务标记为未完成",
+            "OTHER": "已将 {{count}} 个任务标记为未完成"
+          },
+          "UNSCHEDULED": {
+            "ONE": "已取消 {{count}} 个任务的安排",
+            "OTHER": "已取消 {{count}} 个任务的安排"
+          }
+        },
+        "SELECTED_COUNT": "已选择 {{count}} 个",
+        "SELECT_ENTRY": "选择多个任务…",
+        "TASKS_TITLE": {
+          "ONE": "{{count}} 个任务",
+          "OTHER": "{{count}} 个任务"
+        }
+      },
       "N": {
         "ESTIMATE_EXCEEDED": "超出时间估计！",
         "ESTIMATE_EXCEEDED_BODY": "您超出了 \"{{title}}\" 的估计时间。"
       },
       "S": {
+        "ADDED_VIA_APP_URI": "已添加任务“{{title}}”",
+        "AMBIGUOUS_MATCH_VIA_APP_URI": "有多个任务与“{{title}}”匹配——请更具体一些",
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "无法通过重复任务的简短语法分配项目！",
+        "COMPLETED_VIA_APP_URI": "已完成任务“{{title}}”",
         "CREATED_FOR_PROJECT": "已为项目“{{projectTitle}}”创建任务“{{taskTitle}}”",
         "DEADLINE_REMOVED": "截止日期已移除",
         "DEADLINE_SET": "截止日期已设置为 {{date}}",
         "DELETED": "已删除任务“{{title}}”",
+        "EMPTY_TITLE_VIA_APP_URI": "任务标题为空，未添加任何任务",
         "FOUND_MOVE_FROM_BACKLOG": "已将任务 <strong>{{title}}</strong> 从待办清单移至今日任务列表",
         "FOUND_MOVE_FROM_OTHER_LIST": "已将任务 <strong>{{title}}</strong> 从 <strong>{{contextTitle}}</strong> 添加到当前列表",
         "FOUND_RESTORE_FROM_ARCHIVE": "已从归档中恢复与问题相关的任务 <strong>{{title}}</strong>",
         "GO_TO_TASK": "前往任务",
+        "INPUT_TOO_LONG_VIA_APP_URI": "任务标题或备注过长",
         "MOVED_TO_ARCHIVE": "已将 {{nr}} 个任务移至归档",
         "MOVED_TO_PROJECT": "已将任务“{{taskTitle}}”移至项目“{{projectTitle}}”",
+        "NOT_FOUND_VIA_APP_URI": "未找到与“{{title}}”匹配的任务",
+        "PROJECT_NOT_FOUND_VIA_APP_URI": "未找到项目——任务“{{title}}”未被添加",
         "REMINDER_ADDED": "已安排 <strong>{{title}}</strong> 于 <strong>{{date}}</strong>",
         "REMINDER_DELETED": "已删除任务提醒",
         "REMINDER_UPDATED": "已更新任务“{{title}}”的提醒",
@@ -2080,6 +2200,10 @@
         "ORD_THIRD_NTH": "第三个",
         "Q_CUSTOM": "自定义重复配置",
         "Q_DAILY": "每天",
+        "Q_EVERY_X_DAYS": "每 {{count}} 天",
+        "Q_EVERY_X_MONTHS": "每 {{count}} 个月",
+        "Q_EVERY_X_WEEKS": "每 {{count}} 周的{{weekdayStr}}",
+        "Q_EVERY_X_YEARS": "每 {{count}} 年",
         "Q_MONDAY_TO_FRIDAY": "每周一至周五",
         "Q_MONTHLY_CURRENT_DATE": "每月{{dateDayStr}}号",
         "Q_MONTHLY_FIRST_DAY": "每月第一天",
@@ -2224,6 +2348,24 @@
         "UNTRACKED_TIME": "未跟踪时间："
       }
     },
+    "TRACKING_PRESENCE": {
+      "CHIP": {
+        "FALLBACK_TASK": "最近开始的任务",
+        "FOCUS": "专注时段 · 第 {{cycle}} 轮",
+        "LAST_SEEN": "最后活动于 {{time}}",
+        "PAUSED_ON": "已在 {{device}} 上暂停",
+        "SINCE": "自 {{time}} 起",
+        "STOP": "停止 {{device}} 上的计时",
+        "STOPPED_ON": "已在 {{device}} 上停止",
+        "TRACKING_ON": "正在 {{device}} 上计时",
+        "WAS_TRACKING_ON": "之前在 {{device}} 上计时"
+      },
+      "S": {
+        "MOVED_TO": "计时已转移到 {{device}}",
+        "STOPPED_FROM": "已从 {{device}} 停止计时",
+        "TRACK_HERE_AGAIN": "在此重新计时"
+      }
+    },
     "WORKLOG": {
       "CMP": {
         "DAYS_WORKED": "工作天数：",
@@ -2326,6 +2468,7 @@
     "CONFIRM": "确认",
     "CONTINUE": "继续",
     "DELETE": "删除",
+    "DISCARD": "放弃",
     "DISMISS": "忽略",
     "DO_IT": "做吧！",
     "DONT_SHOW_AGAIN": "不再显示",
@@ -2343,6 +2486,8 @@
     "MOVE_BACKWARD": "向后移动",
     "MOVE_FORWARD": "向前移动",
     "NEXT": "下一个",
+    "NEXT_MONTH": "下个月",
+    "NEXT_WEEK": "下周",
     "NO_CON": "您当前处于离线状态。请重新连接到互联网。",
     "NONE": "无",
     "OK": "确定",
@@ -2357,8 +2502,10 @@
     "SHARE": "共享",
     "SUBMIT": "提交",
     "TITLE": "标题",
+    "TODAY": "今天",
     "TODAY_TAG_TITLE": "今天",
     "TOGGLE_PASSWORD_VISIBILITY": "切换密码可见性",
+    "TOMORROW": "明天",
     "UNDO": "撤销",
     "WITHOUT_PROJECT": "无项目",
     "YESTERDAY": "昨天"
@@ -2387,6 +2534,27 @@
       "EXPERIMENTAL_WARNING_MSG": "此功能为实验性功能。它可能存在错误、发生重大变化，或在未来更新中被移除。请务必保留数据备份。<br/><br/>要启用它吗？"
     },
     "AUTO_BACKUPS": {
+      "BROWSE": "浏览备份",
+      "D_LIST": {
+        "BTN_RESTORE": "恢复",
+        "CONFIRM_MSG": "要恢复 <strong>{{timestamp}}</strong> 的备份（{{tasks}} 个任务）吗？<br><br>此操作会<strong>替换本设备上你当前的全部数据</strong>；如果启用了同步，也会替换其他设备上的数据。当前数据会先保存为恢复点。",
+        "CONFIRM_TITLE": "确认恢复",
+        "DATE_UNKNOWN": "日期未知",
+        "EMPTY": "本设备上还没有备份。在同步或导入替换你的数据之前，系统会自动创建恢复点。",
+        "ERROR_LOADING": "无法加载备份",
+        "ERROR_RESTORE": "无法恢复备份",
+        "INTRO": "本设备上存储的所有备份。选择一个即可查看其内容。",
+        "KIND_FILE": "自动备份文件",
+        "LOADING": "正在加载备份...",
+        "PARTIAL": "本设备上的部分备份无法读取。仅下列备份可用。",
+        "REASON_FORCE_DOWNLOAD": "恢复点：在“使用服务器数据”之前",
+        "REASON_LOCAL_IMPORT": "恢复点：在导入或恢复之前",
+        "REASON_REMOTE_IMPORT": "恢复点：在同步替换本地数据之前",
+        "SLOT_LATEST": "最新的自动备份",
+        "SLOT_PREVIOUS": "上一次自动备份",
+        "TASK_COUNT": "{{tasks}} 个任务",
+        "TITLE": "本设备上的备份"
+      },
       "HELP": "自动将所有数据保存到您的应用文件夹，以防出现问题。",
       "LABEL_IS_ENABLED": "启用自动备份",
       "LAST_BACKUP_INFO": "上次备份：{{date}}",
@@ -2478,6 +2646,7 @@
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "仅当选择了当前任务时才触发空闲时间对话框",
       "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "专注期间不显示空闲时间对话框",
       "MIN_IDLE_TIME": "在 X 后触发空闲",
+      "MIN_IDLE_TIME_DESCRIPTION": "例如“5h 23m”。必须至少为 {{min}}；更短的空闲时段绝不会被报告。空闲状态每 {{interval}} 检查一次。",
       "TITLE": "空闲处理"
     },
     "IMEX": {
@@ -2490,6 +2659,8 @@
       "ADD_NEW_TASK": "添加新任务",
       "APP_WIDE_SHORTCUTS": "全局快捷键（应用范围）",
       "COLLAPSE_SUB_TASKS": "折叠子任务",
+      "COLUMN_ACTION": "操作",
+      "COLUMN_SHORTCUT": "快捷键",
       "EXPAND_SUB_TASKS": "展开子任务",
       "GLOBAL_ADD_NOTE": "添加新备注",
       "GLOBAL_ADD_TASK": "添加新任务",
@@ -2512,11 +2683,13 @@
       "PLUGIN_SHORTCUTS": "插件快捷键",
       "SELECT_NEXT_TASK": "选择下一个任务",
       "SELECT_PREVIOUS_TASK": "选择上一个任务",
+      "SHOW_HELP": "显示键盘快捷键速查表",
       "SHOW_SEARCH_BAR": "显示搜索栏",
       "SYSTEM_SHORTCUTS": "全局快捷键（系统范围）",
       "TASK_ADD_ATTACHMENT": "附加文件或链接",
       "TASK_ADD_SUB_TASK": "添加子任务",
       "TASK_DELETE": "删除任务",
+      "TASK_DUPLICATE": "复制任务",
       "TASK_EDIT_TAGS": "编辑标签",
       "TASK_EDIT_TITLE": "编辑标题",
       "TASK_MOVE_TO_PROJECT": "打开将任务移至项目菜单",
@@ -2534,6 +2707,7 @@
       "TASK_OPEN_NOTES_PANEL": "在任务面板中打开笔记/检查清单",
       "TASK_OPEN_NOTES_FULLSCREEN": "全屏打开备注/清单",
       "TASK_TOGGLE_DONE": "切换完成",
+      "TASK_TOGGLE_SELECT": "将任务加入／移出多选",
       "TASK_UNSCHEDULE": "取消任务安排",
       "TITLE": "键盘快捷键",
       "TOGGLE_BACKLOG": "显示/隐藏任务待办事项",
@@ -2626,6 +2800,10 @@
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "需要重启方可生效",
       "IS_VERTICAL_ACTION_BAR": "侧边垂直操作栏（实验性）",
       "IS_VERTICAL_ACTION_BAR_HINT": "将页眉操作按钮移到窗口右侧的垂直栏中。仅限桌面版。",
+      "LOCAL_REST_API_TOKEN": "访问令牌",
+      "LOCAL_REST_API_TOKEN_ERROR": "无法保存访问令牌，因此 API 未运行。请检查 Super Productivity 是否能写入其数据文件夹，然后使用“重新生成”重试。",
+      "LOCAL_REST_API_TOKEN_REGENERATE": "重新生成访问令牌",
+      "LOCAL_REST_API_TOKEN_REGENERATE_ERROR": "无法保存新的访问令牌。之前的令牌仍然有效。",
       "START_OF_NEXT_DAY": "下一天的开始时间",
       "START_OF_NEXT_DAY_HINT": "从何时（小时）开始计算下一天已经开始。默认是午夜，即 0。",
       "THEME": "主题",
@@ -2863,8 +3041,11 @@
     "DETECTED_LEGACY": "检测到旧版数据。我们将为您自动迁移！",
     "DIALOG_MESSAGE": "我们正在更新数据存储方式以提升同步可靠性。系统将自动下载备份。",
     "DIALOG_TITLE": "正在迁移您的数据",
+    "DIALOG_TITLE_ERROR": "迁移失败",
     "E_MIGRATION_FAILED": "迁移失败，错误信息：",
+    "E_MIGRATION_FAILED_MSG": "无法迁移你的旧数据。数据仍在本设备上且未被更改，同时已提供备份文件供下载。重新启动会遇到同样的问题，因此你可以改为使用空白应用继续，之后再导入该备份。此后应用不会再询问这些旧数据。",
     "E_RESTART_FAILED": "自动重启失败，请手动重启应用！",
+    "START_FRESH": "不使用旧数据继续",
     "STATUS_BACKUP": "正在创建数据备份...",
     "STATUS_COMPLETE": "迁移完成！",
     "STATUS_MIGRATING": "正在迁移数据...",
@@ -2989,6 +3170,8 @@
     "SHARE_SUCCESS": "项目已在 Plainspace 上共享。分配给你的任务会自动导入。",
     "SPACE_PICKER": {
       "CREATE_NEW": "创建新空间",
+      "DISCONNECT": "断开账户连接",
+      "DISCONNECT_HINT": "断开连接会从本设备移除已保存的账户。现有的项目集成仍会继续同步。要停止它们，请在问题提供方面板中打开每个相关的 Plainspace 集成，并选择其齿轮图标 → 删除。",
       "ERROR": "无法连接 Plainspace。请检查网络连接，并确认令牌仍然有效，然后重试。",
       "INTRO": "关联现有空间以导入分配给你的任务，或创建一个新空间。",
       "LINK": "关联空间",
@@ -3004,6 +3187,8 @@
     "ALLOWED_HOSTS": "网络访问权限",
     "ALREADY_INITIALIZED": "插件已初始化",
     "AUTHORED_BY": "作者：{{author}}",
+    "CANNOT_DELETE_INBOX": "收件箱项目无法删除",
+    "CANNOT_NEST_SUBTASKS": "无法嵌套子任务：父任务本身就是子任务",
     "CHOOSE_PLUGIN_FILE": "选择插件文件",
     "CLEAR_PLUGIN_CACHE": "清除插件缓存",
     "CODE_TOO_LARGE": "插件代码过大（最大 {{maxSize}} MB）",
@@ -3024,6 +3209,7 @@
     "FAILED_TO_LOAD_CONFIG": "加载插件配置失败",
     "FAILED_TO_REMOVE": "移除插件失败",
     "FAILED_TO_SAVE_CONFIG": "保存插件配置失败",
+    "FIELD_NOT_UPDATABLE": "“{{field}}”无法通过 updateTask 设置——不支持更改父任务。请使用 addTask({ parentId }) 创建子任务，或通过 batchUpdateForProject 重新组织结构",
     "FILE_TOO_LARGE": "文件过大（{{fileSize}} MB），最大允许 {{maxSize}} MB",
     "GO_BACK": "返回",
     "HOOKS": "钩子",
@@ -3075,6 +3261,7 @@
     "TASKS_NOT_IN_PROJECT": "一个或多个任务不在项目“{{contextId}}”中",
     "TASKS_NOT_SUBTASKS": "一个或多个任务并非“{{contextId}}”的子任务",
     "TOGGLE_PLUGIN": "切换 {{pluginName}}",
+    "TRANSLATIONS_TOO_LARGE": "插件翻译的总体积过大（最大 {{maxSize}}MB）",
     "TYPE": "类型：{{type}}",
     "UNABLE_TO_PERSIST_DATA": "无法将数据持久化到插件存储",
     "UNKNOWN_ERROR": "发生未知错误",
@@ -3102,6 +3289,8 @@
     "PROJECT_SETTINGS": "项目特定设置",
     "PROVIDE_FEEDBACK": "提供反馈",
     "RELOAD": "重新加载",
+    "SEARCH_NO_RESULTS": "未找到设置",
+    "SEARCH_PLACEHOLDER": "搜索设置",
     "SYNC": {
       "CONFIGURE": "配置",
       "EMPTY_STATE_HINT": "使用 Dropbox、WebDAV、Nextcloud 或本地文件同步你的数据。",

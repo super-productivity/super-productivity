@@ -1075,19 +1075,20 @@ describe('ServerMigrationService', () => {
         syncImportReason: 'FORCE_UPLOAD',
       });
 
-    it('known defect (delete when deepEqual is fixed): pins the DAG defect on the real simpleCounter default', () => {
+    it('compares the real (aliased) simpleCounter default equal to a clone of it', () => {
       const counters = initialSimpleCounterState.entities;
       // The aliasing: a shallow spread of EMPTY_SIMPLE_COUNTER shares these.
+      // deepEqual used to read the second visit to `streakWeekDays` as a
+      // circular reference, so a hydrated client's cloned slices never matched
+      // the module-level defaults and every FORCE_UPLOAD minted a SYNC_IMPORT.
       expect(counters['STANDING_DESK_ID']!.streakWeekDays).toBe(
         counters['COFFEE_COUNTER']!.streakWeekDays,
       );
 
-      // Reference identity short-circuits before `seen` is consulted...
       expect(deepEqual(initialSimpleCounterState, initialSimpleCounterState)).toBe(true);
-      // ...but a structurally identical copy does not.
       expect(
         deepEqual(structuredClone(initialSimpleCounterState), initialSimpleCounterState),
-      ).toBe(false);
+      ).toBe(true);
     });
 
     it('known defect (delete when the empty-state guard is fixed): proceeds for a fresh install whose only divergence is the sync config', async () => {
@@ -1125,17 +1126,17 @@ describe('ServerMigrationService', () => {
       expect(opLogStoreSpy.append).not.toHaveBeenCalled();
     });
 
-    it('known defect (delete when deepEqual is fixed): proceeds for a hydrated client with default config and no user data', async () => {
+    it('skips for a hydrated client with default config and no user data', async () => {
       // Isolates cause 2: every slice is a clone (as after any loadAllData) and
-      // globalConfig is at its default, so simpleCounter alone carries the guard.
+      // globalConfig is at its default, so simpleCounter alone carries the
+      // guard. With deepEqual reading aliased defaults correctly, the clone now
+      // matches and the empty-state guard skips instead of overwriting the
+      // server from a device holding nothing (#9256).
       stateSnapshotServiceSpy.getStateSnapshotAsync.and.resolveTo(snapshot());
 
       await forceUpload();
 
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
-      expect(opLogStoreSpy.append.calls.mostRecent().args[0].opType).toBe(
-        OpType.SyncImport,
-      );
+      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
     });
   });
 });

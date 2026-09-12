@@ -6,6 +6,11 @@
       "MSG": "Bạn có muốn cài đặt Super Productivity dưới dạng PWA (Ứng dụng web tiến bộ) không?"
     },
     "B_OFFLINE": "Bạn đang ngoại tuyến. Đồng bộ và yêu cầu dữ liệu từ nhà cung cấp sự cố sẽ không hoạt động.",
+    "B_RECOVERY_POINT": {
+      "BROWSE": "Duyệt các bản sao lưu",
+      "DISMISS": "Giữ dữ liệu mới",
+      "MSG": "Đồng bộ vừa thay thế dữ liệu trên thiết bị này bằng một tập dữ liệu nhỏ hơn nhiều (từ {{before}} xuống {{after}} nhiệm vụ). Dữ liệu trước đó đã được giữ lại làm điểm khôi phục."
+    },
     "B_SUPER_SYNC_ENCRYPTION": {
       "ALREADY_ENCRYPTED": "Tài khoản này đã được mã hóa trên một thiết bị khác. Hãy nhập mật khẩu hiện có để tiếp tục đồng bộ.",
       "ENABLE": "Bật mã hóa",
@@ -41,7 +46,8 @@
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "Bảng nhà cung cấp sự cố",
-    "SHOW_NOTES": "Ghi chú dự án"
+    "SHOW_NOTES": "Ghi chú dự án",
+    "SHOW_SCHEDULE": "Lịch trình"
   },
   "CONFIRM": {
     "AUTO_FIX": "Dữ liệu của bạn có vẻ bị hỏng (\"{{validityError}}\"). Bạn có muốn thử tự động sửa không? Điều này có thể dẫn đến mất dữ liệu một phần.",
@@ -51,6 +57,7 @@
     "RESTORE_FILE_BACKUP_ANDROID": "Có vẻ như KHÔNG CÓ DỮ LIỆU, nhưng có bản sao lưu. Bạn có muốn tải không?",
     "RESTORE_FILE_BACKUP_MOBILE": "Không tìm thấy dữ liệu trên thiết bị này, nhưng có bản sao lưu để khôi phục (công việc: {{tasks}}, dự án: {{projects}}). Khôi phục bản sao lưu này?",
     "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "Khôi phục bản sao lưu tự động mới nhất (công việc: {{tasks}}, dự án: {{projects}})? Thao tác này sẽ thay thế toàn bộ dữ liệu hiện tại trên thiết bị này và, nếu bạn dùng đồng bộ, sẽ ghi đè dữ liệu trên các thiết bị khác vào lần đồng bộ tiếp theo.",
+    "RESTORE_FILE_BACKUP_WITH_COUNTS": "Có vẻ như KHÔNG CÓ DỮ LIỆU, nhưng có các bản sao lưu tại \"{{dir}}\". Bạn có muốn khôi phục bản sao lưu mới nhất từ {{from}} không (nhiệm vụ: {{tasks}}, dự án: {{projects}})?",
     "RESTORE_STRAY_BACKUP": "Trong lần đồng bộ cuối có thể đã xảy ra lỗi. Bạn có muốn khôi phục bản sao lưu cuối cùng không?"
   },
   "DATETIME_SCHEDULE": {
@@ -520,6 +527,7 @@
       "S": {
         "AUTO_CREATE_FAILED": "Tự động tạo sự cố thất bại: {{errorMsg}}",
         "CONNECTION_FAILED": "Kết nối thất bại",
+        "CONNECTION_FAILED_WITH_ERROR": "Kết nối thất bại: {{errorMsg}}",
         "CONNECTION_SUCCESS": "Kết nối hoạt động!",
         "ERR_GENERIC": "Lỗi {{issueProviderName}}: {{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}: Yêu cầu thất bại do lỗi mạng phía client",
@@ -829,7 +837,13 @@
       }
     },
     "NOTE": {
+      "D_DRAFT_CONFLICT": {
+        "KEEP_SAVED": "Giữ phiên bản đã lưu",
+        "MSG": "Một bản nháp của ghi chú này đã được khôi phục, nhưng ghi chú đã thay đổi trong lúc đó (ví dụ do đồng bộ). Bạn muốn xem lại bản nháp đã khôi phục trong trình soạn thảo, hay giữ phiên bản đã lưu và không đề xuất bản nháp này nữa?",
+        "REVIEW_DRAFT": "Xem lại bản nháp"
+      },
       "D_FULLSCREEN": {
+        "CONFIRM_DISCARD_MSG": "Bạn có thay đổi chưa lưu. Bỏ các thay đổi này?",
         "TOOLBAR": {
           "BOLD": "Đậm",
           "BULLET_LIST": "Danh sách gạch đầu dòng",
@@ -1235,6 +1249,7 @@
         "CONTENT_CONFLICT_UNTITLED": "Công việc không có tiêu đề"
       },
       "BTN_RESTORE_FROM_HISTORY": "Khôi phục từ lịch sử",
+      "BTN_SHOW_DEVICES": "Hiện thiết bị đã kết nối",
       "BTN_SYNC_NOW": "Đồng bộ ngay",
       "C": {
         "FORCE_UPLOAD": "Ghi đè dữ liệu máy chủ bằng bản sao cục bộ. Mọi thay đổi chưa đồng bộ sẽ mất vĩnh viễn. Tiếp tục?",
@@ -1346,6 +1361,25 @@
         "PASSWORD": "Mật khẩu",
         "TITLE": "Cấu hình đồng bộ"
       },
+      "D_DEVICES": {
+        "BTN_SIGN_OUT_OTHERS": "Đăng xuất các thiết bị khác",
+        "ERROR_LOADING": "Không tải được danh sách thiết bị đã kết nối",
+        "ERROR_SIGN_OUT": "Đăng xuất các thiết bị khác thất bại. Nếu kết nối bị ngắt giữa chừng, thao tác vẫn có thể đã có hiệu lực — khi đó thiết bị này cũng cần một token mới.",
+        "LAST_SEEN": "Đồng bộ lần cuối: {{date}}",
+        "NO_DEVICES": "Chưa có thiết bị nào đồng bộ với tài khoản này.",
+        "PLATFORM_ANDROID": "Android",
+        "PLATFORM_BROWSER": "Trình duyệt",
+        "PLATFORM_DESKTOP": "Máy tính",
+        "PLATFORM_IOS": "iOS",
+        "PLATFORM_UNKNOWN": "Thiết bị không xác định",
+        "REMOVE_HINT": "Super Sync cấp quyền truy cập theo tài khoản chứ không theo thiết bị, nên không thể gỡ từng thiết bị riêng lẻ. Để chặn một thiết bị bị mất hoặc đã bán, hãy đăng xuất tất cả thiết bị khác — thiết bị này vẫn giữ đăng nhập.",
+        "SIGN_OUT_CONFIRM_MSG": "Tất cả thiết bị khác sẽ bị đăng xuất khỏi Super Sync và ngừng đồng bộ. Thiết bị này vẫn giữ đăng nhập. Để kết nối lại một thiết bị, hãy đăng nhập trên trang của máy chủ và dán token mới vào cài đặt đồng bộ của thiết bị đó — những thay đổi thực hiện trên thiết bị đó trong lúc đăng xuất vẫn được giữ và sẽ tải lên sau đó.",
+        "SIGN_OUT_CONFIRM_OK": "Đăng xuất",
+        "SIGN_OUT_CONFIRM_TITLE": "Đăng xuất tất cả thiết bị khác?",
+        "SIGN_OUT_SUCCESS": "Đã đăng xuất tất cả thiết bị khác",
+        "THIS_DEVICE": "(thiết bị này)",
+        "TITLE": "Thiết bị đã kết nối"
+      },
       "D_ENTER_PASSWORD": {
         "BTN_FORCE_OVERWRITE": "Buộc ghi đè",
         "BTN_SAVE_AND_SYNC": "Lưu & đồng bộ",
@@ -1382,6 +1416,11 @@
       "D_LOCAL_DATA_REPLACE_CONFIRM": {
         "MESSAGE": "Máy chủ chứa dữ liệu mã hóa. Nhập mật khẩu để giải mã.",
         "TITLE": "Cấu hình đồng bộ"
+      },
+      "D_NOTHING_TO_UPLOAD": {
+        "MESSAGE": "Không có gì bị thay đổi — dữ liệu trên máy chủ đồng bộ của bạn vẫn còn đó.\n\nThiết bị này chưa bao giờ hoàn tất một lần đồng bộ, nên nó không giữ bản sao dữ liệu nào mà ứng dụng có thể thấy. Việc ghi đè sẽ thay thế mọi thứ trên máy chủ bằng một thiết bị trống, và điều đó không thể hoàn tác.\n\nHãy thử lại mật khẩu mã hóa của bạn ở đây — mật khẩu cũ thường vẫn dùng được. Nếu bạn không nhớ, hãy giữ nguyên thiết bị này và máy chủ đúng như hiện tại rồi báo cáo vấn đề thay vì ghi đè; lịch sử của bạn vẫn nằm trên máy chủ.\n\nNếu bạn thực sự muốn xóa máy chủ đồng bộ và bắt đầu lại, hãy đóng cửa sổ này và dùng Buộc ghi đè trong Cài đặt → Đồng bộ & Sao lưu → Đồng bộ.",
+        "MESSAGE_CHANGE_PW": "Không có gì bị thay đổi — dữ liệu trên máy chủ đồng bộ của bạn vẫn còn đó.\n\nViệc đổi mật khẩu mã hóa sẽ tải lại dữ liệu của thiết bị này và thay thế dữ liệu trên máy chủ. Thiết bị này chưa bao giờ hoàn tất một lần đồng bộ, nên nó không giữ bản sao dữ liệu nào mà ứng dụng có thể thấy, và bản sao trên máy chủ sẽ bị mất.\n\nHãy đổi mật khẩu từ một thiết bị đã có dữ liệu của bạn và đã đồng bộ thành công.",
+        "TITLE": "Dữ liệu đã đồng bộ của bạn không bị đụng đến"
       },
       "D_PERMISSION": {
         "DISABLE_SYNC": "Tắt đồng bộ",
@@ -1563,18 +1602,22 @@
           "L_CHANGE_ENCRYPTION_PASSWORD": "Đổi mật khẩu mã hóa",
           "L_CONFIRM_PASSWORD": "Xác nhận mật khẩu",
           "L_ENABLE_E2E_ENCRYPTION": "Mã hóa đầu cuối",
+          "L_ENABLE_TRACKING_PRESENCE": "Hiện việc theo dõi thời gian đang chạy trên các thiết bị khác (thử nghiệm)",
           "L_NEW_PASSWORD": "Mật khẩu mã hóa mới",
+          "L_PRESENCE_DEVICE_NAME": "Tên của thiết bị này trên các thiết bị khác",
           "L_REMOVE_ENCRYPTION": "Hoặc xóa mã hóa",
           "L_SERVER_URL": "URL máy chủ",
           "LOGIN_INSTRUCTIONS": "Mở máy chủ, sao chép token.",
           "PASSWORD_MIN_LENGTH": "Mật khẩu ít nhất 8 ký tự",
           "PASSWORDS_DONT_MATCH": "Mật khẩu không khớp",
+          "PRESENCE_DEVICE_NAME_DESCRIPTION": "Hiển thị trong nhãn theo dõi thời gian trên các thiết bị khác của bạn, ví dụ \"Laptop công việc\", để phân biệt hai máy tính để bàn. Được gửi kèm trạng thái theo dõi (được mã hóa khi bật mã hóa đồng bộ). Để trống để dùng tên nền tảng hiển thị sẵn.",
           "REMOVE_ENCRYPTION_WARNING": "Xóa dữ liệu máy chủ và tải lại không mã hóa.",
           "SERVER_URL_DESCRIPTION": "Mô tả",
           "SETUP_DISABLE_SUPERSYNC_BTN": "Tắt SuperSync",
           "SETUP_ENCRYPTION_BTN": "Đặt mật khẩu",
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "Dùng cùng mật khẩu mọi thiết bị.",
-          "SETUP_ENCRYPTION_TITLE": "SuperSync: Đặt mật khẩu"
+          "SETUP_ENCRYPTION_TITLE": "SuperSync: Đặt mật khẩu",
+          "TRACKING_PRESENCE_DESCRIPTION": "Phản chiếu sang các thiết bị đã kết nối khác nhiệm vụ mà tài khoản này đang theo dõi thời gian, và cho phép bạn dừng nó từ đó. Chỉ để hiển thị — không bao giờ lưu trên máy chủ, dù có đi qua bộ nhớ máy chủ trong chốc lát (máy chủ không đọc được khi bật mã hóa đầu cuối)."
         },
         "NEXTCLOUD": {
           "FILE_USER_NAME_DESCRIPTION": "ID người dùng Nextcloud của bạn — không phải email hoặc tên hiển thị. Để tìm ID, hãy mở Files trong Nextcloud, nhấp biểu tượng bánh răng cài đặt (góc dưới bên trái), rồi sao chép <user-id> từ URL WebDAV được hiển thị tại đó (.../remote.php/dav/files/<user-id>/).",
@@ -1652,7 +1695,10 @@
         "ERROR_REMOTE_FILE_CORRUPTED": "Dữ liệu từ xa hỏng. Dữ liệu cục bộ an toàn.",
         "ERROR_REMOTE_FILE_EMPTY": "Tệp từ xa trống.",
         "ERROR_REMOTE_FILE_LOCKED": "Tệp từ xa bị khóa.",
+        "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "Máy chủ đồng bộ trả về một trang web thay vì dữ liệu đồng bộ của bạn (ví dụ trang đăng nhập, proxy hoặc trang lỗi). Dữ liệu từ xa của bạn nhiều khả năng vẫn nguyên vẹn — hãy kiểm tra URL máy chủ, thông tin đăng nhập và mạng, rồi thử lại. Nếu vấn đề vẫn tiếp diễn, bạn có thể ghi đè dữ liệu từ xa qua Cài đặt đồng bộ → Buộc ghi đè.",
         "ERROR_SYNC_VERSION_MISMATCH": "Không tương thích phiên bản.",
+        "REMOTE_NOT_ENCRYPTED": "Dữ liệu đã đồng bộ không được mã hóa, nhưng thiết bị này đang bật mã hóa nên dữ liệu bị từ chối. Nếu bạn đã tắt mã hóa trên thiết bị khác, hãy tắt cả ở đây trong cài đặt Đồng bộ để tiếp tục.",
+        "UNSUPPORTED_MULTI_ENTITY_CONFLICT": "Đồng bộ đã dừng vì lý do an toàn nhằm tránh mất dữ liệu. Vui lòng báo cáo mã này: {{details}}",
         "WARN_CLIENT_ID_REGENERATED": "ID thiết bị đã tạo lại.",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Không đọc được dữ liệu từ xa.",
         "FINISH_DAY_SYNC_ERROR": "Lỗi đồng bộ khi kết thúc ngày.",
@@ -1748,7 +1794,8 @@
       "D_EDIT": {
         "ADD": "Thêm nhãn cho \"{{title}}\"",
         "EDIT": "Chỉnh sửa nhãn cho \"{{title}}\"",
-        "LABEL": "Nhãn"
+        "LABEL": "Nhãn",
+        "PLACEHOLDER": "+ Thêm thẻ"
       },
       "FORM_BASIC": {
         "D_COLOR": "Mặc định là màu nhãn.",
@@ -1818,10 +1865,12 @@
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Tệp đính kèm",
         "ADD_CHECKLIST_ITEM": "Thêm mục vào danh sách kiểm tra",
+        "CHECKLIST": "Danh sách kiểm",
         "CHECKLIST_ACTIONS": "Thao tác với danh sách kiểm tra",
         "CHECK_ALL": "Đánh dấu tất cả",
         "CLEAR_COMPLETED": "Xóa các mục đã hoàn thành",
         "NOTES_OR_CHECKLIST": "Ghi chú / Danh sách kiểm tra",
+        "SUB_TASKS_EMPTY": "Nhiệm vụ con",
         "UNCHECK_ALL": "Bỏ đánh dấu tất cả",
         "PASTE_IMAGE_HINT": "Ctrl+V để dán ảnh",
         "PASTE_IMAGE_HINT_MAC": "Cmd+V để dán ảnh",
@@ -1872,6 +1921,7 @@
         "MARK_DONE": "Đánh dấu hoàn thành",
         "MARK_UNDONE": "Đánh dấu là chưa hoàn thành",
         "MOVE_TO_BACKLOG": "Chuyển vào tồn đọng",
+        "MOVE_TO_BOTTOM": "Chuyển xuống cuối",
         "MOVE_TO_OTHER_PROJECT": "Chuyển dự án",
         "MOVE_TO_REGULAR": "Chuyển vào danh sách thường",
         "MOVE_TO_TOP": "Lên đầu",
@@ -1903,12 +1953,12 @@
         "MSG": "Tạo nhãn mới {{tagsTxt}}?",
         "OK": "Tạo nhãn"
       },
+      "D_CONFIRM_SHORT_SYNTAX_NEW_TAGS": {
+        "MSG": "Bạn có muốn tạo các thẻ mới {{tagsTxt}} không?",
+        "OK": "Tạo thẻ"
+      },
       "D_DEADLINE": {
         "ADD_TIME": "Thêm giờ",
-        "QA_NEXT_MONTH": "Tháng sau",
-        "QA_NEXT_WEEK": "Tuần sau",
-        "QA_TODAY": "Hôm nay",
-        "QA_TOMORROW": "Ngày mai",
         "REMIND_AT": "Nhắc lúc",
         "REMOVE_DEADLINE": "Xóa hạn",
         "RO_1H": "1 giờ trước",
@@ -1994,22 +2044,96 @@
         "TINE_SPENT": "Đã dùng",
         "TITLE": "Thời lượng"
       },
+      "MULTI_SELECT": {
+        "ACTIONS": "Hành động",
+        "CLEAR": "Bỏ chọn",
+        "D_CONFIRM_DELETE": {
+          "MSG": {
+            "ONE": "Xóa <strong>{{count}}</strong> nhiệm vụ? Các nhiệm vụ con của nó cũng bị xóa.",
+            "OTHER": "Xóa <strong>{{count}}</strong> nhiệm vụ? Các nhiệm vụ con cũng bị xóa."
+          },
+          "OK": "Xóa"
+        },
+        "S": {
+          "DEADLINE_REMOVED": {
+            "ONE": "Đã gỡ hạn chót khỏi {{count}} nhiệm vụ",
+            "OTHER": "Đã gỡ hạn chót khỏi {{count}} nhiệm vụ"
+          },
+          "DEADLINE_SET": {
+            "ONE": "Đã đặt hạn chót của {{count}} nhiệm vụ thành {{date}}",
+            "OTHER": "Đã đặt hạn chót của {{count}} nhiệm vụ thành {{date}}"
+          },
+          "DONE": {
+            "ONE": "Đã đánh dấu {{count}} nhiệm vụ là hoàn thành",
+            "OTHER": "Đã đánh dấu {{count}} nhiệm vụ là hoàn thành"
+          },
+          "ESTIMATE_CLEARED": {
+            "ONE": "Đã xóa ước lượng của {{count}} nhiệm vụ",
+            "OTHER": "Đã xóa ước lượng của {{count}} nhiệm vụ"
+          },
+          "ESTIMATE_SET": {
+            "ONE": "Đã ước lượng {{count}} nhiệm vụ là {{estimate}}",
+            "OTHER": "Đã ước lượng {{count}} nhiệm vụ là {{estimate}}"
+          },
+          "MOVED_TO_BACKLOG": {
+            "ONE": "Đã chuyển {{count}} nhiệm vụ vào backlog",
+            "OTHER": "Đã chuyển {{count}} nhiệm vụ vào backlog",
+            "PARTIAL": "Đã chuyển {{count}} trong {{total}} nhiệm vụ vào backlog (nhiệm vụ con đi theo nhiệm vụ cha)"
+          },
+          "MOVED_TO_PROJECT": {
+            "ONE": "Đã chuyển {{count}} nhiệm vụ sang \"{{projectTitle}}\"",
+            "OTHER": "Đã chuyển {{count}} nhiệm vụ sang \"{{projectTitle}}\"",
+            "PARTIAL": "Đã chuyển {{count}} trong {{total}} nhiệm vụ sang \"{{projectTitle}}\" (nhiệm vụ con đi theo nhiệm vụ cha)"
+          },
+          "MOVED_TO_REGULAR": {
+            "ONE": "Đã chuyển {{count}} nhiệm vụ sang danh sách thường",
+            "OTHER": "Đã chuyển {{count}} nhiệm vụ sang danh sách thường",
+            "PARTIAL": "Đã chuyển {{count}} trong {{total}} nhiệm vụ sang danh sách thường (nhiệm vụ con đi theo nhiệm vụ cha)"
+          },
+          "NOTHING_TO_DO": "Không có gì để thay đổi ở các nhiệm vụ đã chọn",
+          "SCHEDULED": {
+            "ONE": "Đã lên lịch {{count}} nhiệm vụ vào {{date}}",
+            "OTHER": "Đã lên lịch {{count}} nhiệm vụ vào {{date}}"
+          },
+          "UNDONE": {
+            "ONE": "Đã đánh dấu {{count}} nhiệm vụ là chưa hoàn thành",
+            "OTHER": "Đã đánh dấu {{count}} nhiệm vụ là chưa hoàn thành"
+          },
+          "UNSCHEDULED": {
+            "ONE": "Đã hủy lịch của {{count}} nhiệm vụ",
+            "OTHER": "Đã hủy lịch của {{count}} nhiệm vụ"
+          }
+        },
+        "SELECTED_COUNT": "Đã chọn {{count}}",
+        "SELECT_ENTRY": "Chọn nhiều nhiệm vụ…",
+        "TASKS_TITLE": {
+          "ONE": "{{count}} nhiệm vụ",
+          "OTHER": "{{count}} nhiệm vụ"
+        }
+      },
       "N": {
         "ESTIMATE_EXCEEDED": "Quá ước tính cho \"{{title}}\"",
         "ESTIMATE_EXCEEDED_BODY": "Vượt ước tính cho \"{{title}}\"."
       },
       "S": {
+        "ADDED_VIA_APP_URI": "Đã thêm nhiệm vụ \"{{title}}\"",
+        "AMBIGUOUS_MATCH_VIA_APP_URI": "Có nhiều nhiệm vụ khớp với \"{{title}}\" — hãy cụ thể hơn",
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Không thể gán dự án qua cú pháp ngắn cho việc định kỳ!",
+        "COMPLETED_VIA_APP_URI": "Đã hoàn thành nhiệm vụ \"{{title}}\"",
         "CREATED_FOR_PROJECT": "Đã tạo \"{{taskTitle}}\" cho \"{{projectTitle}}\"",
         "DEADLINE_REMOVED": "Đã xóa hạn",
         "DEADLINE_SET": "Đã đặt hạn {{date}}",
         "DELETED": "Đã xóa \"{{title}}\"",
+        "EMPTY_TITLE_VIA_APP_URI": "Tiêu đề nhiệm vụ trống, không có nhiệm vụ nào được thêm",
         "FOUND_MOVE_FROM_BACKLOG": "Đã chuyển <strong>\"{{title}}\"</strong> từ tồn đọng",
         "FOUND_MOVE_FROM_OTHER_LIST": "Đã thêm <strong>\"{{title}}\"</strong> từ <strong>{{contextTitle}}</strong>",
         "FOUND_RESTORE_FROM_ARCHIVE": "Đã khôi phục <strong>\"{{title}}\"</strong> từ lưu trữ",
         "GO_TO_TASK": "Đến việc",
+        "INPUT_TOO_LONG_VIA_APP_URI": "Tiêu đề hoặc ghi chú của nhiệm vụ quá dài",
         "MOVED_TO_ARCHIVE": "Đã lưu trữ {{nr}} việc",
         "MOVED_TO_PROJECT": "Đã chuyển \"{{taskTitle}}\" vào \"{{projectTitle}}\"",
+        "NOT_FOUND_VIA_APP_URI": "Không tìm thấy nhiệm vụ nào khớp với \"{{title}}\"",
+        "PROJECT_NOT_FOUND_VIA_APP_URI": "Không tìm thấy dự án — nhiệm vụ \"{{title}}\" chưa được thêm",
         "REMINDER_ADDED": "Đã lên lịch <strong>\"{{title}}\"</strong> lúc <strong>{{date}}</strong>",
         "REMINDER_DELETED": "Đã xóa nhắc",
         "REMINDER_UPDATED": "Đã cập nhật nhắc cho \"{{title}}\"",
@@ -2053,7 +2177,8 @@
         "YEARLY_CURRENT_DATE_AND_TIME": "Hàng năm {{dayAndMonthStr}}, {{timeStr}}"
       },
       "D_CONFIRM_MOVE_TO_PROJECT": {
-        "MSG": "Chuyển {{tasksNr}} phiên vào \"{{projectName}}\"?"
+        "MSG": "Chuyển {{tasksNr}} phiên vào \"{{projectName}}\"?",
+        "OK": "Cập nhật tất cả các lần lặp"
       },
       "D_CONFIRM_REMOVE": {
         "MSG": "Xóa cấu hình lặp sẽ chuyển các phiên trước thành việc thường.",
@@ -2105,6 +2230,10 @@
         "ORD_THIRD_NTH": "thứ ba",
         "Q_CUSTOM": "Tùy chỉnh",
         "Q_DAILY": "Hàng ngày",
+        "Q_EVERY_X_DAYS": "Mỗi {{count}} ngày",
+        "Q_EVERY_X_MONTHS": "Mỗi {{count}} tháng",
+        "Q_EVERY_X_WEEKS": "Mỗi {{count}} tuần vào {{weekdayStr}}",
+        "Q_EVERY_X_YEARS": "Mỗi {{count}} năm",
         "Q_MONDAY_TO_FRIDAY": "T2-T6 hàng tuần",
         "Q_MONTHLY_CURRENT_DATE": "Ngày {{dateDayStr}} hàng tháng",
         "Q_MONTHLY_FIRST_DAY": "Ngày đầu tháng",
@@ -2254,6 +2383,24 @@
         "UNTRACKED_TIME": "Chưa theo dõi:"
       }
     },
+    "TRACKING_PRESENCE": {
+      "CHIP": {
+        "FALLBACK_TASK": "một nhiệm vụ vừa bắt đầu gần đây",
+        "FOCUS": "Phiên tập trung · chu kỳ {{cycle}}",
+        "LAST_SEEN": "thấy lần cuối {{time}}",
+        "PAUSED_ON": "Đang tạm dừng trên {{device}}",
+        "SINCE": "từ {{time}}",
+        "STOP": "Dừng theo dõi trên {{device}}",
+        "STOPPED_ON": "Đã dừng trên {{device}}",
+        "TRACKING_ON": "Đang theo dõi trên {{device}}",
+        "WAS_TRACKING_ON": "Đã từng theo dõi trên {{device}}"
+      },
+      "S": {
+        "MOVED_TO": "Việc theo dõi đã chuyển sang {{device}}",
+        "STOPPED_FROM": "Việc theo dõi đã được dừng từ {{device}}",
+        "TRACK_HERE_AGAIN": "Theo dõi lại tại đây"
+      }
+    },
     "WORKLOG": {
       "CMP": {
         "DAYS_WORKED": "Ngày đã làm:",
@@ -2356,6 +2503,7 @@
     "CONFIRM": "Xác nhận",
     "CONTINUE": "Tiếp tục",
     "DELETE": "Xóa",
+    "DISCARD": "Bỏ",
     "DISMISS": "Bỏ qua",
     "DO_IT": "Thực hiện!",
     "DONT_SHOW_AGAIN": "Không hiển thị lại",
@@ -2373,6 +2521,8 @@
     "MOVE_BACKWARD": "Di chuyển lùi",
     "MOVE_FORWARD": "Di chuyển tiến",
     "NEXT": "Tiếp theo",
+    "NEXT_MONTH": "Tháng sau",
+    "NEXT_WEEK": "Tuần sau",
     "NO_CON": "Bạn hiện đang ngoại tuyến. Vui lòng kết nối lại internet.",
     "NONE": "Không",
     "OK": "OK",
@@ -2387,8 +2537,10 @@
     "SHARE": "Chia sẻ",
     "SUBMIT": "Gửi",
     "TITLE": "Tiêu đề",
+    "TODAY": "Hôm nay",
     "TODAY_TAG_TITLE": "Hôm nay",
     "TOGGLE_PASSWORD_VISIBILITY": "Bật/tắt hiển thị mật khẩu",
+    "TOMORROW": "Ngày mai",
     "UNDO": "Hoàn tác",
     "WITHOUT_PROJECT": "Không có dự án",
     "YESTERDAY": "Hôm qua"
@@ -2417,6 +2569,27 @@
       "EXPERIMENTAL_WARNING_MSG": "Tính năng này đang ở giai đoạn thử nghiệm. Nó có thể có lỗi, thay đổi đáng kể hoặc bị xóa trong bản cập nhật tương lai. Hãy đảm bảo giữ bản sao lưu dữ liệu của bạn.<br/><br/>Bạn có muốn bật nó không?"
     },
     "AUTO_BACKUPS": {
+      "BROWSE": "Duyệt các bản sao lưu",
+      "D_LIST": {
+        "BTN_RESTORE": "Khôi phục",
+        "CONFIRM_MSG": "Khôi phục bản sao lưu từ <strong>{{timestamp}}</strong> ({{tasks}} nhiệm vụ)?<br><br>Thao tác này <strong>thay thế toàn bộ dữ liệu hiện tại của bạn</strong> trên thiết bị này và, nếu bật đồng bộ, trên các thiết bị khác. Dữ liệu hiện tại sẽ được giữ lại trước làm điểm khôi phục.",
+        "CONFIRM_TITLE": "Xác nhận khôi phục",
+        "DATE_UNKNOWN": "Không rõ ngày",
+        "EMPTY": "Chưa có bản sao lưu nào trên thiết bị này. Điểm khôi phục được tạo tự động trước khi đồng bộ hoặc một lần nhập thay thế dữ liệu của bạn.",
+        "ERROR_LOADING": "Không tải được các bản sao lưu",
+        "ERROR_RESTORE": "Không khôi phục được bản sao lưu",
+        "INTRO": "Tất cả bản sao lưu được lưu trên thiết bị này. Chọn một bản để xem nội dung.",
+        "KIND_FILE": "Tệp sao lưu tự động",
+        "LOADING": "Đang tải các bản sao lưu...",
+        "PARTIAL": "Một số bản sao lưu trên thiết bị này không đọc được. Chỉ những bản liệt kê bên dưới là dùng được.",
+        "REASON_FORCE_DOWNLOAD": "Điểm khôi phục: trước \"Dùng dữ liệu máy chủ\"",
+        "REASON_LOCAL_IMPORT": "Điểm khôi phục: trước khi nhập hoặc khôi phục",
+        "REASON_REMOTE_IMPORT": "Điểm khôi phục: trước khi đồng bộ thay thế dữ liệu cục bộ",
+        "SLOT_LATEST": "Bản sao lưu tự động mới nhất",
+        "SLOT_PREVIOUS": "Bản sao lưu tự động trước đó",
+        "TASK_COUNT": "{{tasks}} nhiệm vụ",
+        "TITLE": "Bản sao lưu trên thiết bị này"
+      },
       "HELP": "Tự động lưu tất cả dữ liệu vào thư mục ứng dụng của bạn để sẵn sàng nếu có sự cố.",
       "LABEL_IS_ENABLED": "Bật sao lưu tự động",
       "LAST_BACKUP_INFO": "Bản sao lưu gần nhất: {{date}}",
@@ -2509,6 +2682,7 @@
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Chỉ kích hoạt hộp thoại thời gian rảnh khi công việc hiện tại được chọn",
       "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Ẩn hộp thoại thời gian rảnh trong các phiên chế độ tập trung",
       "MIN_IDLE_TIME": "Kích hoạt rảnh sau X",
+      "MIN_IDLE_TIME_DESCRIPTION": "Ví dụ \"5h 23m\". Phải ít nhất là {{min}}; các khoảng nghỉ ngắn hơn không bao giờ được báo cáo. Trạng thái nghỉ được kiểm tra mỗi {{interval}}.",
       "TITLE": "Xử lý thời gian rảnh"
     },
     "IMEX": {
@@ -2521,6 +2695,8 @@
       "ADD_NEW_TASK": "Thêm công việc mới",
       "APP_WIDE_SHORTCUTS": "Phím tắt chung (toàn ứng dụng)",
       "COLLAPSE_SUB_TASKS": "Thu gọn công việc con",
+      "COLUMN_ACTION": "Hành động",
+      "COLUMN_SHORTCUT": "Phím tắt",
       "EXPAND_SUB_TASKS": "Mở rộng công việc con",
       "GLOBAL_ADD_NOTE": "Thêm ghi chú mới",
       "GLOBAL_ADD_TASK": "Thêm công việc mới",
@@ -2545,11 +2721,13 @@
       "SAVE_NOTE": "Lưu ghi chú",
       "SELECT_NEXT_TASK": "Chọn công việc tiếp theo",
       "SELECT_PREVIOUS_TASK": "Chọn công việc trước đó",
+      "SHOW_HELP": "Hiện bảng tra phím tắt",
       "SHOW_SEARCH_BAR": "Hiển thị thanh tìm kiếm",
       "SYSTEM_SHORTCUTS": "Phím tắt toàn cục (toàn hệ thống)",
       "TASK_ADD_ATTACHMENT": "Đính kèm tệp hoặc liên kết",
       "TASK_ADD_SUB_TASK": "Thêm công việc con",
       "TASK_DELETE": "Xóa công việc",
+      "TASK_DUPLICATE": "Nhân bản nhiệm vụ",
       "TASK_EDIT_TAGS": "Chỉnh sửa nhãn",
       "TASK_EDIT_TITLE": "Chỉnh sửa tiêu đề",
       "TASK_MOVE_TO_PROJECT": "Mở menu di chuyển công việc đến dự án",
@@ -2567,6 +2745,7 @@
       "TASK_OPEN_NOTES_PANEL": "Mở ghi chú/danh sách kiểm tra trong bảng công việc",
       "TASK_OPEN_NOTES_FULLSCREEN": "Mở ghi chú/danh sách kiểm tra toàn màn hình",
       "TASK_TOGGLE_DONE": "Bật/tắt trạng thái hoàn thành công việc",
+      "TASK_TOGGLE_SELECT": "Thêm/bỏ nhiệm vụ khỏi vùng chọn nhiều",
       "TASK_UNSCHEDULE": "Hủy lên lịch công việc",
       "TITLE": "Phím tắt bàn phím",
       "TOGGLE_BACKLOG": "Hiện/ẩn tồn đọng dự án",
@@ -2659,6 +2838,10 @@
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Yêu cầu khởi động lại để có hiệu lực.",
       "IS_VERTICAL_ACTION_BAR": "Thanh thao tác dọc ở bên cạnh (thử nghiệm)",
       "IS_VERTICAL_ACTION_BAR_HINT": "Di chuyển các nút thao tác ở đầu trang vào một dải dọc ở cạnh phải cửa sổ. Chỉ dành cho máy tính.",
+      "LOCAL_REST_API_TOKEN": "Token truy cập",
+      "LOCAL_REST_API_TOKEN_ERROR": "Không lưu được token truy cập, nên API không chạy. Hãy kiểm tra xem Super Productivity có ghi được vào thư mục dữ liệu của nó không, rồi dùng Tạo lại để thử lại.",
+      "LOCAL_REST_API_TOKEN_REGENERATE": "Tạo lại token truy cập",
+      "LOCAL_REST_API_TOKEN_REGENERATE_ERROR": "Không lưu được token truy cập mới. Token trước đó vẫn còn hiệu lực.",
       "START_OF_NEXT_DAY": "Thời gian bắt đầu của ngày tiếp theo",
       "START_OF_NEXT_DAY_HINT": "Thời gian ngày của bạn bắt đầu (Định dạng: HH:mm, ví dụ: 02:30)",
       "THEME": "Chủ đề",
@@ -2907,8 +3090,11 @@
     "DETECTED_LEGACY": "Đã phát hiện dữ liệu cũ. Chúng tôi sẽ di chuyển nó cho bạn!",
     "DIALOG_MESSAGE": "Chúng tôi đang cập nhật cách lưu trữ dữ liệu để cải thiện độ tin cậy đồng bộ. Một bản sao lưu sẽ được tải xuống tự động.",
     "DIALOG_TITLE": "Đang di chuyển dữ liệu",
+    "DIALOG_TITLE_ERROR": "Di chuyển dữ liệu thất bại",
     "E_MIGRATION_FAILED": "Di chuyển thất bại với lỗi:",
+    "E_MIGRATION_FAILED_MSG": "Không thể di chuyển dữ liệu cũ của bạn. Dữ liệu vẫn nằm trên thiết bị này và chưa bị thay đổi, đồng thời một tệp sao lưu đã được cung cấp để tải về. Khởi động lại sẽ gặp đúng vấn đề này, nên bạn có thể tiếp tục với ứng dụng trống rồi nhập bản sao lưu đó sau. Ứng dụng sẽ không hỏi lại về dữ liệu cũ này nữa.",
     "E_RESTART_FAILED": "Khởi động lại tự động thất bại. Vui lòng khởi động lại ứng dụng thủ công!",
+    "START_FRESH": "Tiếp tục mà không dùng dữ liệu cũ",
     "STATUS_BACKUP": "Đang tạo bản sao lưu dữ liệu...",
     "STATUS_COMPLETE": "Di chuyển hoàn tất!",
     "STATUS_MIGRATING": "Đang di chuyển dữ liệu...",
@@ -3033,6 +3219,8 @@
     "SHARE_SUCCESS": "Đã chia sẻ dự án trên Plainspace. Các công việc được giao cho bạn sẽ tự động được nhập.",
     "SPACE_PICKER": {
       "CREATE_NEW": "Tạo không gian mới",
+      "DISCONNECT": "Ngắt kết nối tài khoản",
+      "DISCONNECT_HINT": "Ngắt kết nối sẽ xóa tài khoản đã lưu khỏi thiết bị này. Các tích hợp dự án hiện có vẫn tiếp tục đồng bộ. Để dừng chúng, hãy mở từng tích hợp Plainspace liên quan trong bảng nhà cung cấp nhiệm vụ và chọn biểu tượng bánh răng → Xóa.",
       "ERROR": "Không thể kết nối với Plainspace. Hãy kiểm tra kết nối và đảm bảo token vẫn còn hợp lệ, rồi thử lại.",
       "INTRO": "Liên kết một không gian hiện có để nhập các công việc được giao cho bạn, hoặc tạo không gian mới.",
       "LINK": "Liên kết không gian",
@@ -3048,6 +3236,8 @@
     "ALLOWED_HOSTS": "Quyền truy cập mạng",
     "ALREADY_INITIALIZED": "Plugin đã được khởi tạo",
     "CANCEL": "Hủy",
+    "CANNOT_DELETE_INBOX": "Không thể xóa dự án Hộp thư đến",
+    "CANNOT_NEST_SUBTASKS": "Không thể lồng nhiệm vụ con: nhiệm vụ cha bản thân nó đã là nhiệm vụ con",
     "CAPABILITIES": {
       "ACCESS_FILES": "Truy cập và sửa đổi tệp trên hệ thống của bạn",
       "RUN_COMMANDS": "Thực thi lệnh hệ thống",
@@ -3074,6 +3264,7 @@
     "FAILED_TO_LOAD_CONFIG": "Tải cấu hình plugin thất bại",
     "FAILED_TO_REMOVE": "Xóa plugin thất bại",
     "FAILED_TO_SAVE_CONFIG": "Lưu cấu hình plugin thất bại",
+    "FIELD_NOT_UPDATABLE": "\"{{field}}\" không thể đặt qua updateTask — không hỗ trợ đổi nhiệm vụ cha. Hãy tạo nhiệm vụ con bằng addTask({ parentId }), hoặc tái cấu trúc qua batchUpdateForProject",
     "FILE_TOO_LARGE": "Tệp quá lớn ({{fileSize}}MB). Kích thước tối đa là {{maxSize}}MB",
     "GO_BACK": "Quay lại",
     "GRANT_PERMISSION": "Cấp quyền",
@@ -3129,6 +3320,7 @@
     "TASKS_NOT_IN_PROJECT": "Một hoặc nhiều công việc không thuộc dự án \"{{contextId}}\"",
     "TASKS_NOT_SUBTASKS": "Một hoặc nhiều công việc không phải là công việc con của \"{{contextId}}\"",
     "TOGGLE_PLUGIN": "Bật/tắt {{pluginName}}",
+    "TRANSLATIONS_TOO_LARGE": "Tổng dung lượng bản dịch của plugin quá lớn (tối đa {{maxSize}} MB)",
     "TRUST_WARNING": "Chỉ cấp quyền nếu bạn tin tưởng plugin này",
     "TYPE": "Loại: {{type}}",
     "UNABLE_TO_PERSIST_DATA": "Không thể lưu trữ dữ liệu vào bộ nhớ plugin",
@@ -3157,6 +3349,8 @@
     "PROJECT_SETTINGS": "Cài đặt cụ thể dự án",
     "PROVIDE_FEEDBACK": "Gửi phản hồi",
     "RELOAD": "Tải lại",
+    "SEARCH_NO_RESULTS": "Không tìm thấy cài đặt nào",
+    "SEARCH_PLACEHOLDER": "Tìm trong cài đặt",
     "SYNC": {
       "CONFIGURE": "Cấu hình",
       "EMPTY_STATE_HINT": "Đồng bộ dữ liệu của bạn với Dropbox, WebDAV, Nextcloud hoặc tệp cục bộ.",

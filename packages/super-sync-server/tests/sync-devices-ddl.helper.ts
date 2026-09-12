@@ -11,6 +11,7 @@ export const SYNC_DEVICES_DDL = `
     user_id        integer NOT NULL,
     device_name    text,
     user_agent     text,
+    app_version    text,
     last_seen_at   bigint NOT NULL,
     last_acked_seq integer NOT NULL DEFAULT 0,
     created_at     bigint NOT NULL,

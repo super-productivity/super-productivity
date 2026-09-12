@@ -6,6 +6,11 @@
       "MSG": "您想將 Super Productivity 安裝為 PWA 嗎？"
     },
     "B_OFFLINE": "您已斷開與網際網路的連接。同步和資料請求將失效。",
+    "B_RECOVERY_POINT": {
+      "BROWSE": "瀏覽備份",
+      "DISMISS": "保留新資料",
+      "MSG": "同步剛才用小得多的資料集取代了本裝置上的資料（任務從 {{before}} 個變為 {{after}} 個）。先前的資料已保存為還原點。"
+    },
     "B_SYNC_SAFETY": {
       "DISMISS": "暫不",
       "MSG": "您已經使用 Super Productivity 一段時間了。設定同步以備份您的資料，並在所有裝置上保持安全。",
@@ -42,13 +47,15 @@
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "顯示議題面板",
-    "SHOW_NOTES": "顯示專案筆記"
+    "SHOW_NOTES": "顯示專案筆記",
+    "SHOW_SCHEDULE": "行程"
   },
   "CONFIRM": {
     "AUTO_FIX": "您的資料似乎已損壞（\"{{validityError}}\"）。您想嘗試自動修復它嗎？這可能會導致部分資料丟失。",
     "RELOAD_AFTER_IDB_ERROR": "資料庫錯誤 - 應用程式即將重新啟動\n\nSuper Productivity 無法儲存資料！這通常是由以下原因造成的：\n• 硬碟空間不足（最常見）\n• 應用程式在背景更新\n• Linux Snap 使用者：請執行 'snap set core experimental.refresh-app-awareness=true'\n\n您最近的變更可能尚未儲存。如果硬碟空間不足，請釋放空間。關閉此對話方塊後應用程式將重新啟動。",
     "RESTORE_FILE_BACKUP": "似乎沒有資料，但是\"{{dir}}\"處有可用的備份。您是否要從 {{from}} 恢復最新備份？",
     "RESTORE_FILE_BACKUP_ANDROID": "似乎沒有資料，但是有可用備份。是否要從備份載入？",
+    "RESTORE_FILE_BACKUP_WITH_COUNTS": "似乎沒有任何資料，但在「{{dir}}」中有可用的備份。要還原 {{from}} 的最新備份嗎（任務：{{tasks}}，專案：{{projects}}）？",
     "RESTORE_STRAY_BACKUP": "在上次同步期間，可能有一些錯誤。您要還原上一個備份嗎？",
     "DELETE_SECTION": "確定要刪除此區段嗎？其中的任務會移到任務清單。",
     "RESTORE_FILE_BACKUP_MOBILE": "此裝置上找不到資料，但有可還原的備份（任務：{{tasks}}，專案：{{projects}}）。要還原嗎？",
@@ -514,6 +521,7 @@
       "S": {
         "AUTO_CREATE_FAILED": "自動建立議題失敗：{{errorMsg}}",
         "CONNECTION_FAILED": "連線失敗",
+        "CONNECTION_FAILED_WITH_ERROR": "連線失敗：{{errorMsg}}",
         "CONNECTION_SUCCESS": "連線成功！",
         "ERR_GENERIC": "{{issueProviderName}} 錯誤：{{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}：由於客戶端網路錯誤，請求失敗",
@@ -816,7 +824,13 @@
       }
     },
     "NOTE": {
+      "D_DRAFT_CONFLICT": {
+        "KEEP_SAVED": "保留已儲存的版本",
+        "MSG": "已還原這則筆記的草稿，但筆記在這段期間有所變更（例如透過同步）。要在編輯器中檢視還原的草稿，還是保留已儲存的版本並不再提示此草稿？",
+        "REVIEW_DRAFT": "檢視草稿"
+      },
       "D_FULLSCREEN": {
+        "CONFIRM_DISCARD_MSG": "你有未儲存的變更。要捨棄嗎？",
         "TOOLBAR": {
           "BOLD": "粗體",
           "BULLET_LIST": "項目符號清單",
@@ -1217,6 +1231,7 @@
         "REMOTE_MODEL_VERSION_NEWER": "遠端資料模型版本比本地版本更新。請將您的應用程式更新到最新版本！"
       },
       "BTN_RESTORE_FROM_HISTORY": "從歷史記錄還原",
+      "BTN_SHOW_DEVICES": "顯示已連線的裝置",
       "BTN_SYNC_NOW": "立即同步",
       "C": {
         "FORCE_UPLOAD": "強制上傳您的資料可能導致資料遺失。您確定要繼續嗎？",
@@ -1279,6 +1294,25 @@
         "PASSWORD": "密碼",
         "TITLE": "解密失敗"
       },
+      "D_DEVICES": {
+        "BTN_SIGN_OUT_OTHERS": "登出其他裝置",
+        "ERROR_LOADING": "無法載入已連線的裝置",
+        "ERROR_SIGN_OUT": "登出其他裝置失敗。如果請求中途連線中斷，操作仍可能已生效——那樣的話本裝置也需要重新核發的權杖。",
+        "LAST_SEEN": "上次同步：{{date}}",
+        "NO_DEVICES": "尚未有裝置與此帳戶同步過。",
+        "PLATFORM_ANDROID": "Android",
+        "PLATFORM_BROWSER": "瀏覽器",
+        "PLATFORM_DESKTOP": "桌面版",
+        "PLATFORM_IOS": "iOS",
+        "PLATFORM_UNKNOWN": "未知裝置",
+        "REMOVE_HINT": "Super Sync 是以帳戶而非裝置授予存取權，因此無法單獨移除裝置。若要阻斷遺失或已售出的裝置，請登出所有其他裝置——本裝置會維持登入。",
+        "SIGN_OUT_CONFIRM_MSG": "所有其他裝置都會登出 Super Sync 並停止同步。本裝置維持登入。若要重新連接某台裝置，請在伺服器頁面登入，並將新權杖貼到該裝置的同步設定中——登出期間在該裝置上所做的變更會保留，並在之後上傳。",
+        "SIGN_OUT_CONFIRM_OK": "登出",
+        "SIGN_OUT_CONFIRM_TITLE": "要登出所有其他裝置嗎？",
+        "SIGN_OUT_SUCCESS": "已登出所有其他裝置",
+        "THIS_DEVICE": "（本裝置）",
+        "TITLE": "已連線的裝置"
+      },
       "D_ENTER_PASSWORD": {
         "BTN_FORCE_OVERWRITE": "使用本地資料",
         "BTN_SAVE_AND_SYNC": "儲存並同步",
@@ -1315,6 +1349,11 @@
       "D_LOCAL_DATA_REPLACE_CONFIRM": {
         "MESSAGE": "您有 {{count}} 個未同步的本地變更將被遠端資料取代。是否要繼續？",
         "TITLE": "取代本地資料？"
+      },
+      "D_NOTHING_TO_UPLOAD": {
+        "MESSAGE": "沒有做任何變更——你同步伺服器上的資料依然存在。\n\n本裝置從未完成過同步，因此沒有應用程式看得到的資料副本。覆寫會把伺服器上的所有內容換成一台空裝置，而且無法復原。\n\n請在此重新輸入你的加密密碼試試——舊密碼往往可用。如果你想不起來，請讓本裝置與伺服器維持原狀，並回報問題而不要覆寫；你的歷史紀錄仍在伺服器上。\n\n如果你確實想清空同步伺服器並重新開始，請關閉此視窗，然後使用 設定 → 同步與備份 → 同步 中的「強制覆寫」。",
+        "MESSAGE_CHANGE_PW": "沒有做任何變更——你同步伺服器上的資料依然存在。\n\n變更加密密碼會重新上傳本裝置的資料並取代伺服器上的內容。本裝置從未完成過同步，因此沒有應用程式看得到的資料副本，伺服器上的副本將會遺失。\n\n請在已擁有你的資料並成功同步過的裝置上變更密碼。",
+        "TITLE": "你同步的資料未被更動"
       },
       "D_PERMISSION": {
         "DISABLE_SYNC": "停用同步",
@@ -1493,19 +1532,23 @@
           "L_CHANGE_ENCRYPTION_PASSWORD": "變更加密密碼",
           "L_CONFIRM_PASSWORD": "確認密碼",
           "L_ENABLE_E2E_ENCRYPTION": "啟用端對端加密",
+          "L_ENABLE_TRACKING_PRESENCE": "在其他裝置上顯示進行中的計時（實驗性）",
           "L_NEW_PASSWORD": "新加密密碼",
+          "L_PRESENCE_DEVICE_NAME": "本裝置在其他裝置上顯示的名稱",
           "L_REMOVE_ENCRYPTION": "或移除加密",
           "L_SERVER_URL": "伺服器 URL",
           "LOGIN_INSTRUCTIONS": "點擊下方按鈕開啟伺服器登入頁面。登入後，複製您的存取權杖並貼在此處。",
           "PASSWORD_MIN_LENGTH": "密碼至少需要 8 個字元",
           "PASSWORDS_DONT_MATCH": "密碼不符",
+          "PRESENCE_DEVICE_NAME_DESCRIPTION": "顯示在你其他裝置的計時標籤中，例如「工作筆電」，以便區分兩台桌機。會隨計時狀態一併傳送（啟用同步加密時為加密傳送）。留空則使用預留位置中顯示的平台名稱。",
           "REMOVE_ENCRYPTION_WARNING": "移除加密將刪除所有伺服器資料並以未加密方式重新上傳您的資料。所有裝置都需要重新設定。",
           "SERVER_URL_DESCRIPTION": "維持不變以使用官方伺服器，或輸入自訂伺服器 URL",
           "SETUP_DISABLE_SUPERSYNC_BTN": "停用 SuperSync",
           "SETUP_ENCRYPTION_BTN": "設定密碼",
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "在所有裝置上使用相同的密碼。忘記的密碼可以透過覆寫遠端資料來重設。",
           "SETUP_ENCRYPTION_TITLE": "SuperSync：設定密碼",
-          "E2E_ENCRYPTION_INFO": "SuperSync 使用端對端加密。資料離開此裝置前，會使用您在設定時選擇的密碼進行加密。"
+          "E2E_ENCRYPTION_INFO": "SuperSync 使用端對端加密。資料離開此裝置前，會使用您在設定時選擇的密碼進行加密。",
+          "TRACKING_PRESENCE_DESCRIPTION": "將此帳戶目前正在計時的任務顯示到你其他已連線的裝置，並可從那裡停止計時。僅供顯示——絕不會保存在伺服器上，只會短暫經過伺服器記憶體（啟用端對端加密時伺服器無法讀取）。"
         },
         "TITLE": "同步",
         "WEB_DAV": {
@@ -1582,6 +1625,7 @@
         "ERROR_PERMISSION": "檔案存取被拒。請檢查您的檔案系統權限。",
         "ERROR_PERMISSION_FLATPAK": "檔案存取被拒。請透過 Flatseal 授予檔案系統權限，或使用 ~/.var/app/ 內的路徑",
         "ERROR_PERMISSION_SNAP": "檔案存取被拒。請執行 'snap connect super-productivity:home' 或使用 ~/snap/super-productivity/common/ 內的路徑",
+        "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "同步伺服器回傳的是網頁而不是你的同步資料（例如登入頁、代理伺服器頁或錯誤頁）。你的遠端資料很可能完好——請檢查伺服器網址、憑證與網路，然後再試一次。若問題持續，可透過 同步設定 → 強制覆寫 覆寫遠端資料。",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "同步時發生錯誤。無法讀取遠端資料。也許您啟用了加密，但您的本地密碼與用於加密遠端資料的密碼不符？",
         "FINISH_DAY_SYNC_ERROR": "結束一天時發生同步錯誤。請重試。",
         "FRESH_CLIENT_SYNC_CANCELLED": "初始同步已取消。遠端資料未被套用。",
@@ -1605,6 +1649,7 @@
         "PARTIAL_APPLY_FAILURE": "某些同步操作無法套用。資料已經過驗證。",
         "PERSIST_FAILED": "儲存變更失敗。狀態可能不一致——請重新載入。",
         "REMOTE_DATA_TOO_OLD": "遠端資料太舊無法處理。請更新您的遠端應用程式。",
+        "REMOTE_NOT_ENCRYPTED": "同步的資料未加密，但本裝置已啟用加密，因此遭到拒絕。如果你在其他裝置上關閉了加密，請在此處的同步設定中也一併關閉以繼續。",
         "REPLAY_LOCAL_OPS_FAILED": "匯入後重播本地操作失敗。某些近期變更可能已遺失。資料已經過驗證。",
         "RESTORE_ERROR": "還原資料失敗",
         "RESTORE_SUCCESS": "資料還原成功",
@@ -1616,6 +1661,7 @@
         "TIMEOUT_ERROR": "同步操作逾時。{{suggestion}}",
         "TOO_MANY_OPS_TO_DOWNLOAD": "同步操作太多無法下載。某些變更可能遺失。",
         "UNKNOWN_ERROR": "同步時發生未知錯誤：{{err}}",
+        "UNSUPPORTED_MULTI_ENTITY_CONFLICT": "為避免資料遺失，同步基於安全考量已停止。請回報此代碼：{{details}}",
         "UPLOAD_ERROR": "未知上傳錯誤（設定正確嗎？）：{{err}}",
         "UPLOAD_OPS_REJECTED": "{{count}} 個操作被伺服器永久拒絕且不會被同步。",
         "VECTOR_CLOCK_LIMIT_REACHED": "同步已追蹤 {{originalSize}} 個裝置/瀏覽器，超過 {{maxSize}} 的限制。非活躍裝置的紀錄已被清除。如果您遇到問題，請考慮重設同步。",
@@ -1738,7 +1784,8 @@
       "D_EDIT": {
         "ADD": "為「{{title}}」新增標籤",
         "EDIT": "編輯「{{title}}」的標籤",
-        "LABEL": "標籤"
+        "LABEL": "標籤",
+        "PLACEHOLDER": "+ 新增標籤"
       },
       "FORM_BASIC": {
         "L_COLOR": "顏色（預設使用主體色）",
@@ -1809,6 +1856,7 @@
         "ADD_ATTACHMENT": "附件",
         "ADD_SUB_TASK": "新增子工作",
         "ATTACHMENTS": "附件（{{nr}}）",
+        "CHECKLIST": "檢核清單",
         "COMPLETED_ON": "完成於",
         "CREATED_ON": "建立於",
         "DEADLINE": "截止日期",
@@ -1824,6 +1872,7 @@
         "REPEAT": "重複",
         "SCHEDULE_TASK": "排程工作",
         "SUB_TASKS": "子工作（{{nr}}）",
+        "SUB_TASKS_EMPTY": "子任務",
         "TIME": "時長",
         "TITLE_PLACEHOLDER": "輸入標題",
         "ADD_CHECKLIST_ITEM": "新增檢查清單項目",
@@ -1856,6 +1905,7 @@
         "FOCUS_SESSION": "開始專注時段",
         "MARK_DONE": "標記為已完成",
         "MOVE_TO_BACKLOG": "移至待辦事項",
+        "MOVE_TO_BOTTOM": "移到底部",
         "MOVE_TO_OTHER_PROJECT": "移至專案",
         "MOVE_TO_REGULAR": "移至一般清單",
         "MOVE_TO_TOP": "移至頂部",
@@ -1899,10 +1949,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "新增時間",
-        "QA_NEXT_MONTH": "下個月",
-        "QA_NEXT_WEEK": "下週",
-        "QA_TODAY": "今天",
-        "QA_TOMORROW": "明天",
         "REMIND_AT": "提醒時間",
         "REMOVE_DEADLINE": "移除截止日期",
         "RO_1H": "1 小時前",
@@ -1988,22 +2034,96 @@
         "TINE_SPENT": "花費的時間",
         "TITLE": "新增當天工作"
       },
+      "MULTI_SELECT": {
+        "ACTIONS": "操作",
+        "CLEAR": "清除選取",
+        "D_CONFIRM_DELETE": {
+          "MSG": {
+            "ONE": "要刪除 <strong>{{count}}</strong> 個任務嗎？其子任務也會一併刪除。",
+            "OTHER": "要刪除 <strong>{{count}}</strong> 個任務嗎？子任務也會一併刪除。"
+          },
+          "OK": "刪除"
+        },
+        "S": {
+          "DEADLINE_REMOVED": {
+            "ONE": "已移除 {{count}} 個任務的截止日期",
+            "OTHER": "已移除 {{count}} 個任務的截止日期"
+          },
+          "DEADLINE_SET": {
+            "ONE": "已將 {{count}} 個任務的截止日期設為 {{date}}",
+            "OTHER": "已將 {{count}} 個任務的截止日期設為 {{date}}"
+          },
+          "DONE": {
+            "ONE": "已將 {{count}} 個任務標記為已完成",
+            "OTHER": "已將 {{count}} 個任務標記為已完成"
+          },
+          "ESTIMATE_CLEARED": {
+            "ONE": "已清除 {{count}} 個任務的預估時間",
+            "OTHER": "已清除 {{count}} 個任務的預估時間"
+          },
+          "ESTIMATE_SET": {
+            "ONE": "已將 {{count}} 個任務預估為 {{estimate}}",
+            "OTHER": "已將 {{count}} 個任務預估為 {{estimate}}"
+          },
+          "MOVED_TO_BACKLOG": {
+            "ONE": "已將 {{count}} 個任務移到待辦清單",
+            "OTHER": "已將 {{count}} 個任務移到待辦清單",
+            "PARTIAL": "已將 {{total}} 個任務中的 {{count}} 個移到待辦清單（子任務會隨其父任務一起移動）"
+          },
+          "MOVED_TO_PROJECT": {
+            "ONE": "已將 {{count}} 個任務移到「{{projectTitle}}」",
+            "OTHER": "已將 {{count}} 個任務移到「{{projectTitle}}」",
+            "PARTIAL": "已將 {{total}} 個任務中的 {{count}} 個移到「{{projectTitle}}」（子任務會隨其父任務一起移動）"
+          },
+          "MOVED_TO_REGULAR": {
+            "ONE": "已將 {{count}} 個任務移到一般清單",
+            "OTHER": "已將 {{count}} 個任務移到一般清單",
+            "PARTIAL": "已將 {{total}} 個任務中的 {{count}} 個移到一般清單（子任務會隨其父任務一起移動）"
+          },
+          "NOTHING_TO_DO": "所選任務沒有需要變更的內容",
+          "SCHEDULED": {
+            "ONE": "已將 {{count}} 個任務排定在 {{date}}",
+            "OTHER": "已將 {{count}} 個任務排定在 {{date}}"
+          },
+          "UNDONE": {
+            "ONE": "已將 {{count}} 個任務標記為未完成",
+            "OTHER": "已將 {{count}} 個任務標記為未完成"
+          },
+          "UNSCHEDULED": {
+            "ONE": "已取消 {{count}} 個任務的排程",
+            "OTHER": "已取消 {{count}} 個任務的排程"
+          }
+        },
+        "SELECTED_COUNT": "已選取 {{count}} 個",
+        "SELECT_ENTRY": "選取多個任務…",
+        "TASKS_TITLE": {
+          "ONE": "{{count}} 個任務",
+          "OTHER": "{{count}} 個任務"
+        }
+      },
       "N": {
         "ESTIMATE_EXCEEDED": "超出預估時間！",
         "ESTIMATE_EXCEEDED_BODY": "您超出了「{{title}}」的預計時間。"
       },
       "S": {
+        "ADDED_VIA_APP_URI": "已新增任務「{{title}}」",
+        "AMBIGUOUS_MATCH_VIA_APP_URI": "有多個任務符合「{{title}}」——請更明確一些",
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "無法透過短語法為循環工作指派專案！",
+        "COMPLETED_VIA_APP_URI": "已完成任務「{{title}}」",
         "CREATED_FOR_PROJECT": "已為專案「{{projectTitle}}」建立工作「{{taskTitle}}」",
         "DEADLINE_REMOVED": "截止日期已移除",
         "DEADLINE_SET": "截止日期已設定為 {{date}}",
         "DELETED": "已刪除工作「{{title}}」",
+        "EMPTY_TITLE_VIA_APP_URI": "任務標題為空，未新增任何任務",
         "FOUND_MOVE_FROM_BACKLOG": "將工作<strong>「{{title}}」</strong>從待辦事項移至今日工作列表",
         "FOUND_MOVE_FROM_OTHER_LIST": "已將工作<strong>「{{title}}」</strong>從<strong>{{contextTitle}}</strong>新增到當前列表",
         "FOUND_RESTORE_FROM_ARCHIVE": "已從封存中還原與議題相關的工作<strong>「{{title}}」</strong>",
         "GO_TO_TASK": "前往工作",
+        "INPUT_TOO_LONG_VIA_APP_URI": "任務標題或備註過長",
         "MOVED_TO_ARCHIVE": "已將 {{nr}} 個工作移至封存",
         "MOVED_TO_PROJECT": "已將工作「{{taskTitle}}」移至專案「{{projectTitle}}」",
+        "NOT_FOUND_VIA_APP_URI": "找不到符合「{{title}}」的任務",
+        "PROJECT_NOT_FOUND_VIA_APP_URI": "找不到專案——任務「{{title}}」未新增",
         "REMINDER_ADDED": "已排程<strong>「{{title}}」</strong>於 <strong>{{date}}</strong>",
         "REMINDER_DELETED": "已刪除工作提醒",
         "REMINDER_UPDATED": "已更新工作「{{title}}」的提醒",
@@ -2088,6 +2208,10 @@
         "NOTES": "預設筆記",
         "Q_CUSTOM": "自訂重複組態",
         "Q_DAILY": "每天",
+        "Q_EVERY_X_DAYS": "每 {{count}} 天",
+        "Q_EVERY_X_MONTHS": "每 {{count}} 個月",
+        "Q_EVERY_X_WEEKS": "每 {{count}} 週的{{weekdayStr}}",
+        "Q_EVERY_X_YEARS": "每 {{count}} 年",
         "Q_MONDAY_TO_FRIDAY": "每週一至週五",
         "Q_MONTHLY_CURRENT_DATE": "每月 {{dateDayStr}} 日",
         "Q_MONTHLY_FIRST_DAY": "每月第一天",
@@ -2255,6 +2379,24 @@
         "UNTRACKED_TIME": "未追蹤時間："
       }
     },
+    "TRACKING_PRESENCE": {
+      "CHIP": {
+        "FALLBACK_TASK": "最近開始的任務",
+        "FOCUS": "專注時段 · 第 {{cycle}} 輪",
+        "LAST_SEEN": "最後活動於 {{time}}",
+        "PAUSED_ON": "已在 {{device}} 上暫停",
+        "SINCE": "自 {{time}} 起",
+        "STOP": "停止 {{device}} 上的計時",
+        "STOPPED_ON": "已在 {{device}} 上停止",
+        "TRACKING_ON": "正在 {{device}} 上計時",
+        "WAS_TRACKING_ON": "先前在 {{device}} 上計時"
+      },
+      "S": {
+        "MOVED_TO": "計時已轉移到 {{device}}",
+        "STOPPED_FROM": "已從 {{device}} 停止計時",
+        "TRACK_HERE_AGAIN": "在此重新計時"
+      }
+    },
     "VOICE_REMINDER": {
       "FORM": {
         "HELP": "在追蹤工作時間時，每隔 X 時間重複設定好的短語。",
@@ -2372,6 +2514,7 @@
     "CONFIRM": "確認",
     "CONTINUE": "繼續",
     "DELETE": "刪除",
+    "DISCARD": "捨棄",
     "DISMISS": "關閉",
     "DO_IT": "執行！",
     "DONT_SHOW_AGAIN": "不再顯示",
@@ -2388,6 +2531,8 @@
     "MOVE_BACKWARD": "向後移動",
     "MOVE_FORWARD": "向前移動",
     "NEXT": "下一步",
+    "NEXT_MONTH": "下個月",
+    "NEXT_WEEK": "下週",
     "NO_CON": "您目前已離線。請重新連線至網際網路。",
     "NONE": "無",
     "OK": "確定",
@@ -2401,8 +2546,10 @@
     "SHARE": "分享",
     "SUBMIT": "送出",
     "TITLE": "標題",
+    "TODAY": "今天",
     "TODAY_TAG_TITLE": "今天",
     "TOGGLE_PASSWORD_VISIBILITY": "切換密碼可見性",
+    "TOMORROW": "明天",
     "UNDO": "復原",
     "WITHOUT_PROJECT": "無專案",
     "YESTERDAY": "昨天",
@@ -2435,6 +2582,27 @@
       "EXPERIMENTAL_WARNING_MSG": "此功能為實驗性功能。它可能有錯誤、發生重大變更，或在未來更新中移除。請務必保留資料備份。<br/><br/>要啟用它嗎？"
     },
     "AUTO_BACKUPS": {
+      "BROWSE": "瀏覽備份",
+      "D_LIST": {
+        "BTN_RESTORE": "還原",
+        "CONFIRM_MSG": "要還原 <strong>{{timestamp}}</strong> 的備份（{{tasks}} 個任務）嗎？<br><br>此操作會<strong>取代本裝置上你目前的所有資料</strong>；若已啟用同步，也會取代其他裝置上的資料。目前的資料會先保存為還原點。",
+        "CONFIRM_TITLE": "確認還原",
+        "DATE_UNKNOWN": "日期不明",
+        "EMPTY": "本裝置上還沒有備份。在同步或匯入取代你的資料之前，系統會自動建立還原點。",
+        "ERROR_LOADING": "無法載入備份",
+        "ERROR_RESTORE": "無法還原備份",
+        "INTRO": "本裝置上儲存的所有備份。選擇一個即可檢視其內容。",
+        "KIND_FILE": "自動備份檔案",
+        "LOADING": "正在載入備份...",
+        "PARTIAL": "本裝置上有部分備份無法讀取。僅下列備份可用。",
+        "REASON_FORCE_DOWNLOAD": "還原點：在「使用伺服器資料」之前",
+        "REASON_LOCAL_IMPORT": "還原點：在匯入或還原之前",
+        "REASON_REMOTE_IMPORT": "還原點：在同步取代本機資料之前",
+        "SLOT_LATEST": "最新的自動備份",
+        "SLOT_PREVIOUS": "上一次自動備份",
+        "TASK_COUNT": "{{tasks}} 個任務",
+        "TITLE": "本裝置上的備份"
+      },
       "HELP": "自動將所有資料儲存到您的應用程式資料夾，以便在出問題時可以使用。",
       "LABEL_IS_ENABLED": "啟用自動備份",
       "LOCATION_INFO": "備份儲存位置：",
@@ -2518,6 +2686,7 @@
       "IS_ENABLE_IDLE_TIME_TRACKING": "啟用閒置時間處理",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "僅在選擇當前工作時觸發閒置時間對話方塊",
       "MIN_IDLE_TIME": "在 X 後觸發閒置",
+      "MIN_IDLE_TIME_DESCRIPTION": "例如「5h 23m」。必須至少為 {{min}}；更短的閒置時段絕不會被回報。閒置狀態每 {{interval}} 檢查一次。",
       "TITLE": "閒置處理",
       "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "專注模式時段期間不顯示閒置對話方塊"
     },
@@ -2531,6 +2700,8 @@
       "ADD_NEW_TASK": "新增工作",
       "APP_WIDE_SHORTCUTS": "全域快捷鍵（應用程式範圍）",
       "COLLAPSE_SUB_TASKS": "摺疊子工作",
+      "COLUMN_ACTION": "操作",
+      "COLUMN_SHORTCUT": "快速鍵",
       "EXPAND_SUB_TASKS": "展開子工作",
       "GLOBAL_ADD_NOTE": "新增筆記",
       "GLOBAL_ADD_TASK": "新增工作",
@@ -2554,11 +2725,13 @@
       "SAVE_NOTE": "儲存筆記",
       "SELECT_NEXT_TASK": "選擇下一個工作",
       "SELECT_PREVIOUS_TASK": "選擇上一個工作",
+      "SHOW_HELP": "顯示鍵盤快速鍵速查表",
       "SHOW_SEARCH_BAR": "顯示搜尋列",
       "SYSTEM_SHORTCUTS": "全域快捷鍵（系統範圍）",
       "TASK_ADD_ATTACHMENT": "附加檔案或連結",
       "TASK_ADD_SUB_TASK": "新增子工作",
       "TASK_DELETE": "刪除工作",
+      "TASK_DUPLICATE": "複製任務",
       "TASK_EDIT_TAGS": "編輯標籤",
       "TASK_EDIT_TITLE": "編輯標題",
       "TASK_MOVE_TO_PROJECT": "開啟移動工作至專案選單",
@@ -2569,6 +2742,7 @@
       "TASK_SHORTCUTS_INFO": "以下快捷鍵適用於當前選擇的工作（透過 Tab 或滑鼠選擇）。",
       "TASK_TOGGLE_DETAIL_PANEL_OPEN": "顯示/隱藏其他工作資訊",
       "TASK_TOGGLE_DONE": "切換完成狀態",
+      "TASK_TOGGLE_SELECT": "將任務加入／移出多選",
       "TASK_UNSCHEDULE": "取消排程任務",
       "TITLE": "鍵盤快捷鍵",
       "TOGGLE_BACKLOG": "顯示/隱藏待辦事項",
@@ -2666,6 +2840,10 @@
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "在系統匣/狀態選單中顯示當前倒數計時（僅限 macOS）",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "使用自訂標題列（僅限 Windows/Linux）",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "需要重新啟動才能生效。",
+      "LOCAL_REST_API_TOKEN": "存取權杖",
+      "LOCAL_REST_API_TOKEN_ERROR": "無法儲存存取權杖，因此 API 未執行。請確認 Super Productivity 能寫入其資料資料夾，然後使用「重新產生」再試一次。",
+      "LOCAL_REST_API_TOKEN_REGENERATE": "重新產生存取權杖",
+      "LOCAL_REST_API_TOKEN_REGENERATE_ERROR": "無法儲存新的存取權杖。先前的權杖仍然有效。",
       "START_OF_NEXT_DAY": "下一天的開始時間",
       "START_OF_NEXT_DAY_HINT": "您希望從哪個時間（小時）開始計算下一天已開始。預設為午夜，即 0。",
       "THEME": "主題",
@@ -2929,8 +3107,11 @@
     "DETECTED_LEGACY": "偵測到舊版資料。我們將為您進行遷移！",
     "DIALOG_MESSAGE": "我們正在更新資料儲存方式以提高同步可靠性。備份將自動下載。",
     "DIALOG_TITLE": "正在遷移您的資料",
+    "DIALOG_TITLE_ERROR": "移轉失敗",
     "E_MIGRATION_FAILED": "遷移失敗，錯誤：",
+    "E_MIGRATION_FAILED_MSG": "無法移轉你的舊資料。資料仍在本裝置上且未變更，同時已提供備份檔案供下載。重新啟動會遇到相同的問題，因此你可以改用空白的應用程式繼續，之後再匯入該備份。此後應用程式不會再詢問這些舊資料。",
     "E_RESTART_FAILED": "自動重新啟動失敗。請手動重新啟動應用程式！",
+    "START_FRESH": "不使用舊資料繼續",
     "STATUS_BACKUP": "正在建立資料備份...",
     "STATUS_COMPLETE": "遷移完成！",
     "STATUS_MIGRATING": "正在遷移資料...",
@@ -3055,6 +3236,8 @@
     "SHARE_SUCCESS": "專案已在 Plainspace 上分享。指派給您的任務會自動匯入。",
     "SPACE_PICKER": {
       "CREATE_NEW": "建立新空間",
+      "DISCONNECT": "中斷帳戶連接",
+      "DISCONNECT_HINT": "中斷連接會從本裝置移除已儲存的帳戶。現有的專案整合仍會繼續同步。若要停止，請在問題提供者面板中開啟每個相關的 Plainspace 整合，並選擇其齒輪圖示 → 刪除。",
       "ERROR": "無法連線 Plainspace。請檢查網路連線並確認權杖仍然有效，然後再試一次。",
       "INTRO": "連結現有空間以匯入指派給您的任務，或建立一個新空間。",
       "LINK": "連結空間",
@@ -3069,6 +3252,8 @@
     "ACTION_TYPE_NOT_ALLOWED": "不允許動作類型「{{type}}」",
     "ALREADY_INITIALIZED": "外掛程式已初始化",
     "CANCEL": "取消",
+    "CANNOT_DELETE_INBOX": "收件匣專案無法刪除",
+    "CANNOT_NEST_SUBTASKS": "無法巢狀化子任務：父任務本身就是子任務",
     "CAPABILITIES": {
       "ACCESS_FILES": "存取和修改系統上的檔案",
       "RUN_COMMANDS": "執行系統命令",
@@ -3094,6 +3279,7 @@
     "FAILED_TO_LOAD_CONFIG": "載入外掛程式組態失敗",
     "FAILED_TO_REMOVE": "移除外掛程式失敗",
     "FAILED_TO_SAVE_CONFIG": "儲存外掛程式組態失敗",
+    "FIELD_NOT_UPDATABLE": "「{{field}}」無法透過 updateTask 設定——不支援變更父任務。請使用 addTask({ parentId }) 建立子任務，或透過 batchUpdateForProject 重新組織結構",
     "FILE_TOO_LARGE": "檔案太大（{{fileSize}}MB）。最大大小為 {{maxSize}}MB",
     "GO_BACK": "返回",
     "GRANT_PERMISSION": "授予權限",
@@ -3143,6 +3329,7 @@
     "TASKS_NOT_IN_PROJECT": "一或多個工作不在專案「{{contextId}}」中",
     "TASKS_NOT_SUBTASKS": "一或多個工作不是「{{contextId}}」的子工作",
     "TOGGLE_PLUGIN": "切換 {{pluginName}}",
+    "TRANSLATIONS_TOO_LARGE": "外掛翻譯的總容量過大（最大 {{maxSize}}MB）",
     "TRUST_WARNING": "僅在您信任此外掛程式時才授予權限",
     "TYPE": "類型：{{type}}",
     "UNABLE_TO_PERSIST_DATA": "無法將資料持久化至外掛程式儲存",
@@ -3178,6 +3365,8 @@
     "PROJECT_SETTINGS": "專案特定設定",
     "PROVIDE_FEEDBACK": "提供意見回饋",
     "RELOAD": "重新載入",
+    "SEARCH_NO_RESULTS": "找不到設定",
+    "SEARCH_PLACEHOLDER": "搜尋設定",
     "SYNC_EXPORT": "同步與匯出",
     "TABS": {
       "GENERAL": "一般",

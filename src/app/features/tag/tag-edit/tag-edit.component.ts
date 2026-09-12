@@ -34,6 +34,7 @@ import { TagComponent } from '../tag/tag.component';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TODAY_TAG } from '../tag.const';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ChipAutocompleteKeysDirective } from '../../../ui/chip-autocomplete-keys/chip-autocomplete-keys.directive';
 
 interface Suggestion {
   id: string;
@@ -59,6 +60,7 @@ const DEFAULT_SEPARATOR_KEY_CODES: number[] = [ENTER, COMMA];
     ReactiveFormsModule,
     MatOption,
     TranslatePipe,
+    ChipAutocompleteKeysDirective,
   ],
   templateUrl: './tag-edit.component.html',
   styleUrl: './tag-edit.component.scss',
@@ -172,6 +174,18 @@ export class TagEditComponent {
 
   selected(event: MatAutocompleteSelectedEvent): void {
     this._add(event.option.value);
+    this._clearInput();
+  }
+
+  acceptSuggestion(id: string): void {
+    this._add(id);
+  }
+
+  commitText(text: string): void {
+    this._addByTitle(text);
+  }
+
+  private _clearInput(): void {
     const inputEl = this.inputEl();
     if (inputEl) {
       inputEl.nativeElement.value = '';

@@ -6,6 +6,11 @@
       "MSG": "Želiš instalirati Super Productivity kao PWA (Progressive Web App)?"
     },
     "B_OFFLINE": "Nemaš vezu s internetom. Sinkronizacija i dohvaćanje podataka od usluge za praćenje problema neće raditi.",
+    "B_RECOVERY_POINT": {
+      "BROWSE": "Pregledaj sigurnosne kopije",
+      "DISMISS": "Zadrži nove podatke",
+      "MSG": "Sinkronizacija je upravo zamijenila podatke na ovom uređaju znatno manjim skupom (s {{before}} na {{after}} zadataka). Prethodni podaci sačuvani su kao točka oporavka."
+    },
     "B_SYNC_SAFETY": {
       "DISMISS": "Ne sada",
       "MSG": "Već neko vrijeme koristiš Super Productivity. Postavi sinkronizaciju kako bi sigurnosno kopirao svoje podatke i čuvao ih sigurnima na svim uređajima.",
@@ -41,7 +46,8 @@
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "Ploča usluge za praćenje problema",
-    "SHOW_NOTES": "Bilješke projekta"
+    "SHOW_NOTES": "Bilješke projekta",
+    "SHOW_SCHEDULE": "Raspored"
   },
   "CONFIRM": {
     "AUTO_FIX": "Izgleda da su podaci oštećeni (\"{{validityError}}\"). Želiš li pokušati automatski popraviti? Može doći do djelomičnog gubitka podataka.",
@@ -49,6 +55,7 @@
     "RELOAD_AFTER_IDB_ERROR": "Greška baze podataka – aplikacija će se ponovo pokrenuti\n\nSuper Productivity ne može spremiti podatke! Uobičajeni razlozi su:\n• Nedovoljno memorije na disku (najčešće)\n• Aplikacija se aktualizira u pozadini\n• Linux Snap korisnici: pokreni 'snap set core experimental.refresh-app-awareness=true'\n\nNedavne promjene možda nisu spremljene. Oslobodi memoriju ako je nema dovoljno. Aplikacija će se ponovo pokrenuti nakon što zatvoriš ovaj prozor.",
     "RESTORE_FILE_BACKUP": "Izgleda da NEMA PODATAKA, ali postoji sigurnosna kopija na \"{{dir}}\". Želiš li obnoviti sa zadnjom sigurnosnom kopijom od {{from}}?",
     "RESTORE_FILE_BACKUP_ANDROID": "Izgleda da NEMA PODATAKA, ali postoji sigurnosna kopija. Želiš li je učitati?",
+    "RESTORE_FILE_BACKUP_WITH_COUNTS": "Čini se da NEMA PODATAKA, ali u \"{{dir}}\" postoje sigurnosne kopije. Želiš li vratiti najnoviju kopiju od {{from}} (zadaci: {{tasks}}, projekti: {{projects}})?",
     "RESTORE_STRAY_BACKUP": "Tijekom zadnje sinkronizacije je možda došlo do greške. Želiš li obnoviti sa zadnjom sigurnosnom kopijom?",
     "RESTORE_FILE_BACKUP_MOBILE": "Na ovom uređaju nisu pronađeni podaci, ali dostupna je sigurnosna kopija za obnavljanje (zadaci: {{tasks}}, projekti: {{projects}}). Želiš li je obnoviti?",
     "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "Želiš li obnoviti najnoviju automatsku sigurnosnu kopiju (zadaci: {{tasks}}, projekti: {{projects}})? Time se zamjenjuju svi trenutačni podaci na ovom uređaju, a ako koristiš sinkronizaciju, pri sljedećoj se sinkronizaciji prepisuju i podaci na drugim uređajima."
@@ -513,6 +520,7 @@
       "S": {
         "AUTO_CREATE_FAILED": "Automatsko stvaranje nije uspjelo: {{errorMsg}}",
         "CONNECTION_FAILED": "Povezivanje nije uspjelo",
+        "CONNECTION_FAILED_WITH_ERROR": "Povezivanje nije uspjelo: {{errorMsg}}",
         "CONNECTION_SUCCESS": "Povezivanje radi!",
         "ERR_GENERIC": "{{issueProviderName}} greška: {{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}: zahtjev nije uspio zbog mrežne greške",
@@ -822,7 +830,13 @@
       }
     },
     "NOTE": {
+      "D_DRAFT_CONFLICT": {
+        "KEEP_SAVED": "Zadrži spremljenu verziju",
+        "MSG": "Vraćena je skica ove bilješke, ali se bilješka u međuvremenu promijenila (npr. sinkronizacijom). Želiš li pregledati vraćenu skicu u uređivaču ili zadržati spremljenu verziju i više ne nuditi ovu skicu?",
+        "REVIEW_DRAFT": "Pregledaj skicu"
+      },
       "D_FULLSCREEN": {
+        "CONFIRM_DISCARD_MSG": "Imaš nespremljene promjene. Odbaciti ih?",
         "TOOLBAR": {
           "BOLD": "Podebljano",
           "BULLET_LIST": "popis s točkama",
@@ -1223,6 +1237,7 @@
         "REMOTE_MODEL_VERSION_NEWER": "Udaljena verzija je novija od lokalne. Aktualiziraj aplikaciju!"
       },
       "BTN_RESTORE_FROM_HISTORY": "Obnovi iz povijesti",
+      "BTN_SHOW_DEVICES": "Prikaži povezane uređaje",
       "BTN_SYNC_NOW": "Sinkroniziraj sada",
       "C": {
         "FORCE_UPLOAD": "Forsirani prijenos može prouzročiti gubitak podataka. Stvarno želiš nastaviti?",
@@ -1285,6 +1300,25 @@
         "PASSWORD": "Lozinka",
         "TITLE": "Dešifriranje nije uspjelo"
       },
+      "D_DEVICES": {
+        "BTN_SIGN_OUT_OTHERS": "Odjavi ostale uređaje",
+        "ERROR_LOADING": "Povezane uređaje nije moguće učitati",
+        "ERROR_SIGN_OUT": "Odjava ostalih uređaja nije uspjela. Ako je veza prekinuta usred zahtjeva, možda je ipak izvršena — tada i ovaj uređaj treba novi token.",
+        "LAST_SEEN": "Zadnja sinkronizacija: {{date}}",
+        "NO_DEVICES": "Nijedan se uređaj još nije sinkronizirao s ovim računom.",
+        "PLATFORM_ANDROID": "Android",
+        "PLATFORM_BROWSER": "Preglednik",
+        "PLATFORM_DESKTOP": "Računalo",
+        "PLATFORM_IOS": "iOS",
+        "PLATFORM_UNKNOWN": "Nepoznat uređaj",
+        "REMOVE_HINT": "Super Sync dodjeljuje pristup po računu, a ne po uređaju, pa se uređaji ne mogu uklanjati pojedinačno. Da bi onemogućio izgubljen ili prodan uređaj, odjavi sve ostale uređaje — ovaj uređaj ostaje prijavljen.",
+        "SIGN_OUT_CONFIRM_MSG": "Svi ostali uređaji odjavljuju se iz Super Synca i prestaju se sinkronizirati. Ovaj uređaj ostaje prijavljen. Za ponovno povezivanje uređaja prijavi se na stranici poslužitelja i zalijepi novi token u njegove postavke sinkronizacije — promjene napravljene na njemu dok je bio odjavljen ostaju sačuvane i prenose se nakon toga.",
+        "SIGN_OUT_CONFIRM_OK": "Odjavi",
+        "SIGN_OUT_CONFIRM_TITLE": "Odjaviti sve ostale uređaje?",
+        "SIGN_OUT_SUCCESS": "Svi ostali uređaji su odjavljeni",
+        "THIS_DEVICE": "(ovaj uređaj)",
+        "TITLE": "Povezani uređaji"
+      },
       "D_ENTER_PASSWORD": {
         "BTN_FORCE_OVERWRITE": "Koristi lokalne podatke",
         "BTN_SAVE_AND_SYNC": "Spremi i sinkroniziraj",
@@ -1321,6 +1355,11 @@
       "D_LOCAL_DATA_REPLACE_CONFIRM": {
         "MESSAGE": "Imaš {{count}} lokalnih promjena koje nisu sinkronizirane. Zamijenit će se udaljanim podacima. Nastaviti?",
         "TITLE": "Zamijeniti lokalne podatke?"
+      },
+      "D_NOTHING_TO_UPLOAD": {
+        "MESSAGE": "Ništa nije promijenjeno — podaci na tvom poslužitelju za sinkronizaciju i dalje su ondje.\n\nOvaj uređaj nikada nije dovršio sinkronizaciju, pa nema nijednu kopiju tvojih podataka koju aplikacija može vidjeti. Prepisivanje bi zamijenilo sve na poslužitelju praznim uređajem, a to se ne može poništiti.\n\nPokušaj ovdje ponovno sa svojom lozinkom za šifriranje — često pomaže starija lozinka. Ako je se ne sjećaš, ostavi ovaj uređaj i poslužitelj točno onakvima kakvi jesu i prijavi problem umjesto da prepisuješ; tvoja povijest i dalje je na poslužitelju.\n\nAko doista želiš izbrisati poslužitelj za sinkronizaciju i početi ispočetka, zatvori ovaj prozor i upotrijebi Prisilno prepisivanje u Postavke → Sinkronizacija i sigurnosne kopije → Sinkronizacija.",
+        "MESSAGE_CHANGE_PW": "Ništa nije promijenjeno — podaci na tvom poslužitelju za sinkronizaciju i dalje su ondje.\n\nPromjena lozinke za šifriranje ponovno prenosi podatke s ovog uređaja i zamjenjuje ono što je na poslužitelju. Ovaj uređaj nikada nije dovršio sinkronizaciju, pa nema nijednu kopiju tvojih podataka koju aplikacija može vidjeti, a kopija s poslužitelja bi se izgubila.\n\nPromijeni lozinku s uređaja koji već ima tvoje podatke i koji se uspješno sinkronizirao.",
+        "TITLE": "Tvoji sinkronizirani podaci nisu dirani"
       },
       "D_PERMISSION": {
         "DISABLE_SYNC": "Isključi sinkronizaciju",
@@ -1498,19 +1537,23 @@
           "L_CHANGE_ENCRYPTION_PASSWORD": "Promijeni lozinku",
           "L_CONFIRM_PASSWORD": "Potvrdi lozinku",
           "L_ENABLE_E2E_ENCRYPTION": "Uključi end-to-end šifriranje",
+          "L_ENABLE_TRACKING_PRESENCE": "Prikaži mjerenje vremena u tijeku na drugim uređajima (eksperimentalno)",
           "L_NEW_PASSWORD": "Nova lozinka",
+          "L_PRESENCE_DEVICE_NAME": "Naziv ovog uređaja na drugim uređajima",
           "L_REMOVE_ENCRYPTION": "Ili ukloni šifriranje",
           "L_SERVER_URL": "URL servera",
           "LOGIN_INSTRUCTIONS": "Klikni dolje, prijavi se i kopiraj token.",
           "PASSWORD_MIN_LENGTH": "Lozinka mora sadržati barem 8 znakova",
           "PASSWORDS_DONT_MATCH": "Lozinke se ne poklapaju",
+          "PRESENCE_DEVICE_NAME_DESCRIPTION": "Prikazuje se u oznaci mjerenja vremena na tvojim drugim uređajima, npr. „Poslovni laptop”, kako bi se razlikovala dva računala. Šalje se zajedno sa stanjem mjerenja (šifrirano kada je uključeno šifriranje sinkronizacije). Ostavi prazno da bi se upotrijebio naziv platforme prikazan kao rezervirano mjesto.",
           "REMOVE_ENCRYPTION_WARNING": "Uklonit će šifriranje i prenijet će podatke bez zaštite.",
           "SERVER_URL_DESCRIPTION": "Ostavi kako je za javni server ili postavi URL prilagođenog servera",
           "SETUP_DISABLE_SUPERSYNC_BTN": "Isključi SuperSync",
           "SETUP_ENCRYPTION_BTN": "Postavi lozinku",
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "Koristi istu lozinku svugdje.",
           "SETUP_ENCRYPTION_TITLE": "SuperSync: Postavi lozinku",
-          "E2E_ENCRYPTION_INFO": "SuperSync koristi end-to-end šifriranje. Tvoji se podaci šifriraju na ovom uređaju prije nego što ga napuste, pomoću lozinke koju odabereš tijekom postavljanja."
+          "E2E_ENCRYPTION_INFO": "SuperSync koristi end-to-end šifriranje. Tvoji se podaci šifriraju na ovom uređaju prije nego što ga napuste, pomoću lozinke koju odabereš tijekom postavljanja.",
+          "TRACKING_PRESENCE_DESCRIPTION": "Prenosi na tvoje druge povezane uređaje koji zadatak ovaj račun trenutačno mjeri i omogućuje da ga odande zaustaviš. Samo za prikaz — nikada se ne sprema na poslužitelj, iako nakratko prolazi kroz njegovu memoriju (nečitljivo poslužitelju kada je uključeno end-to-end šifriranje)."
         },
         "NEXTCLOUD": {
           "L_SERVER_URL": "Nextcloud URL",
@@ -1588,7 +1631,10 @@
         "ERROR_REMOTE_FILE_CORRUPTED": "Udaljeni podaci sinkronizacije nisu čitljivi (možda su skraćeni ili oštećeni). Tvoji lokalni podaci su sigurni. Udaljene podatke možeš prepisati sa svojim lokalnim podacima.",
         "ERROR_REMOTE_FILE_EMPTY": "Udaljena datoteka sinkronizacije je prazna. To se može dogoditi nakon prekinute sinkronizacije. Želiš li prepisati udaljene podatke s lokalnim podacima?",
         "ERROR_REMOTE_FILE_LOCKED": "Udaljena datoteka sinkronizacije je zaključana od strane servera. To se može riješiti pri sljedećem pokušaju sinkronizacije.",
+        "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "Poslužitelj za sinkronizaciju odgovorio je web-stranicom umjesto tvojim podacima za sinkronizaciju (npr. stranicom za prijavu, proxyja ili pogreške). Udaljeni podaci vjerojatno su netaknuti — provjeri URL poslužitelja, vjerodajnice i mrežu pa pokušaj ponovno. Ako se problem nastavi, udaljene podatke možeš prepisati preko Postavke sinkronizacije → Prisilno prepisivanje.",
         "ERROR_SYNC_VERSION_MISMATCH": "Udaljeni podaci sinkronizacije koriste nekompatibilnu verziju formata. Provjeri da svi uređaji koriste istu Super Productivity verziju.",
+        "REMOTE_NOT_ENCRYPTED": "Sinkronizirani podaci nisu šifrirani, a na ovom je uređaju šifriranje uključeno, pa su odbijeni. Ako si šifriranje isključio na drugom uređaju, isključi ga i ovdje u postavkama sinkronizacije da bi nastavio.",
+        "UNSUPPORTED_MULTI_ENTITY_CONFLICT": "Sinkronizacija je zaustavljena radi sigurnosti kako bi se izbjegao gubitak podataka. Prijavi ovaj kod: {{details}}",
         "WARN_CLIENT_ID_REGENERATED": "ID uređaja za sinkronizaciju nije bio valjan i ponovo je generiran. Pri sljedećoj sinkronizaciji može doći do konflikta.",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Greška tijekom sinkronizacije. Nije moguće pročitati udaljene podatke. Možda si uključio/la šifriranje, a lokalna lozinka se ne podudara?",
         "FINISH_DAY_SYNC_ERROR": "Greška sinkronizacije pri završetku dana. Pokušaj ponovo.",
@@ -1741,7 +1787,8 @@
       "D_EDIT": {
         "ADD": "Dodaj oznake za \"{{title}}\"",
         "EDIT": "Uredi oznake za \"{{title}}\"",
-        "LABEL": "Oznake"
+        "LABEL": "Oznake",
+        "PLACEHOLDER": "+ Dodaj oznaku"
       },
       "FORM_BASIC": {
         "L_COLOR": "Boja oznake",
@@ -1812,6 +1859,7 @@
         "ADD_ATTACHMENT": "Privitci",
         "ADD_SUB_TASK": "Dodaj podzadatak",
         "ATTACHMENTS": "Privitci ({{nr}})",
+        "CHECKLIST": "Kontrolni popis",
         "COMPLETED_ON": "Završeno",
         "CREATED_ON": "Stvoreno",
         "DEADLINE": "Rok",
@@ -1827,6 +1875,7 @@
         "REPEAT": "Ponavljanje",
         "SCHEDULE_TASK": "Odredi termin za zadatak",
         "SUB_TASKS": "Podzadaci ({{nr}})",
+        "SUB_TASKS_EMPTY": "Podzadaci",
         "TIME": "Trajanje",
         "TITLE_PLACEHOLDER": "Unesi naslov",
         "ADD_CHECKLIST_ITEM": "Dodaj stavku kontrolnog popisa",
@@ -1862,6 +1911,7 @@
         "FOCUS_SESSION": "Pokreni fokus sesiju",
         "MARK_DONE": "Označi kao završeno",
         "MOVE_TO_BACKLOG": "Premjesti u backlog",
+        "MOVE_TO_BOTTOM": "Pomakni na dno",
         "MOVE_TO_OTHER_PROJECT": "Premjesti u projekt",
         "MOVE_TO_REGULAR": "Premjesti u regularni popis",
         "MOVE_TO_TOP": "Premjesti na vrh",
@@ -1902,10 +1952,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "Dodaj vrijeme",
-        "QA_NEXT_MONTH": "Sljedeći mjesec",
-        "QA_NEXT_WEEK": "Sljedeći tjedan",
-        "QA_TODAY": "Danas",
-        "QA_TOMORROW": "Sutra",
         "REMIND_AT": "Podsjeti u",
         "REMOVE_DEADLINE": "Ukloni rok",
         "RO_1H": "1 sat prije",
@@ -1991,22 +2037,96 @@
         "TINE_SPENT": "Utrošeno vrijeme",
         "TITLE": "Dodaj za dan"
       },
+      "MULTI_SELECT": {
+        "ACTIONS": "Radnje",
+        "CLEAR": "Poništi odabir",
+        "D_CONFIRM_DELETE": {
+          "MSG": {
+            "ONE": "Izbrisati <strong>{{count}}</strong> zadatak? Brišu se i njegovi podzadaci.",
+            "OTHER": "Izbrisati zadataka: <strong>{{count}}</strong>? Brišu se i podzadaci."
+          },
+          "OK": "Izbriši"
+        },
+        "S": {
+          "DEADLINE_REMOVED": {
+            "ONE": "Uklonjen rok s {{count}} zadatka",
+            "OTHER": "Uklonjen rok sa zadataka: {{count}}"
+          },
+          "DEADLINE_SET": {
+            "ONE": "Rok {{count}} zadatka postavljen na {{date}}",
+            "OTHER": "Rok postavljen na {{date}} za zadataka: {{count}}"
+          },
+          "DONE": {
+            "ONE": "Označen {{count}} zadatak kao dovršen",
+            "OTHER": "Označeno kao dovršeno — zadataka: {{count}}"
+          },
+          "ESTIMATE_CLEARED": {
+            "ONE": "Obrisana procjena za {{count}} zadatak",
+            "OTHER": "Obrisana procjena za zadataka: {{count}}"
+          },
+          "ESTIMATE_SET": {
+            "ONE": "{{count}} zadatak procijenjen na {{estimate}}",
+            "OTHER": "Procijenjeno na {{estimate}} — zadataka: {{count}}"
+          },
+          "MOVED_TO_BACKLOG": {
+            "ONE": "Premješten {{count}} zadatak u zaostatak",
+            "OTHER": "Premješteno u zaostatak — zadataka: {{count}}",
+            "PARTIAL": "Premješteno u zaostatak {{count}} od {{total}} zadataka (podzadaci prate nadređeni zadatak)"
+          },
+          "MOVED_TO_PROJECT": {
+            "ONE": "Premješten {{count}} zadatak u \"{{projectTitle}}\"",
+            "OTHER": "Premješteno u \"{{projectTitle}}\" — zadataka: {{count}}",
+            "PARTIAL": "Premješteno u \"{{projectTitle}}\" {{count}} od {{total}} zadataka (podzadaci prate nadređeni zadatak)"
+          },
+          "MOVED_TO_REGULAR": {
+            "ONE": "Premješten {{count}} zadatak na uobičajeni popis",
+            "OTHER": "Premješteno na uobičajeni popis — zadataka: {{count}}",
+            "PARTIAL": "Premješteno na uobičajeni popis {{count}} od {{total}} zadataka (podzadaci prate nadređeni zadatak)"
+          },
+          "NOTHING_TO_DO": "Za odabrane zadatke nema što mijenjati",
+          "SCHEDULED": {
+            "ONE": "Zakazan {{count}} zadatak za {{date}}",
+            "OTHER": "Zakazano za {{date}} — zadataka: {{count}}"
+          },
+          "UNDONE": {
+            "ONE": "Označen {{count}} zadatak kao nedovršen",
+            "OTHER": "Označeno kao nedovršeno — zadataka: {{count}}"
+          },
+          "UNSCHEDULED": {
+            "ONE": "Poništeno zakazivanje {{count}} zadatka",
+            "OTHER": "Poništeno zakazivanje za zadataka: {{count}}"
+          }
+        },
+        "SELECTED_COUNT": "Odabrano: {{count}}",
+        "SELECT_ENTRY": "Odaberi više zadataka…",
+        "TASKS_TITLE": {
+          "ONE": "{{count}} zadatak",
+          "OTHER": "Zadataka: {{count}}"
+        }
+      },
       "N": {
         "ESTIMATE_EXCEEDED": "Procjena vremena premašena!",
         "ESTIMATE_EXCEEDED_BODY": "Prekoračio/la si procijenjeno vrijeme za \"{{title}}\"."
       },
       "S": {
+        "ADDED_VIA_APP_URI": "Dodan zadatak \"{{title}}\"",
+        "AMBIGUOUS_MATCH_VIA_APP_URI": "Više zadataka odgovara izrazu \"{{title}}\" — budi precizniji",
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Ne možeš dodati projekt kratkom sintaksom za ponavljajuće zadatke!",
+        "COMPLETED_VIA_APP_URI": "Dovršen zadatak \"{{title}}\"",
         "CREATED_FOR_PROJECT": "Stvoren je zadatak \"{{taskTitle}}\" za projekt \"{{projectTitle}}\"",
         "DEADLINE_REMOVED": "Rok uklonjen",
         "DEADLINE_SET": "Rok postavljen za {{date}}",
         "DELETED": "Izbrisan je zadatak \"{{title}}\"",
+        "EMPTY_TITLE_VIA_APP_URI": "Naslov zadatka bio je prazan, nijedan zadatak nije dodan",
         "FOUND_MOVE_FROM_BACKLOG": "Premješten zadatak <strong>\"{{title}}\"</strong> iz backlog-a u Danas",
         "FOUND_MOVE_FROM_OTHER_LIST": "Dodano zadatak <strong>\"{{title}}\"</strong> iz <strong>{{contextTitle}}</strong> u trenutni popis",
         "FOUND_RESTORE_FROM_ARCHIVE": "Vraćen zadatak <strong>\"{{title}}\"</strong> iz arhive",
         "GO_TO_TASK": "Idi na zadatak",
+        "INPUT_TOO_LONG_VIA_APP_URI": "Naslov ili bilješke zadatka predugi su",
         "MOVED_TO_ARCHIVE": "Premješteno {{nr}} zadataka u arhivu",
         "MOVED_TO_PROJECT": "Premješten zadatak \"{{taskTitle}}\" u projekt \"{{projectTitle}}\"",
+        "NOT_FOUND_VIA_APP_URI": "Nije pronađen nijedan zadatak koji odgovara izrazu \"{{title}}\"",
+        "PROJECT_NOT_FOUND_VIA_APP_URI": "Projekt nije pronađen — zadatak \"{{title}}\" nije dodan",
         "REMINDER_ADDED": "<strong>\"{{title}}\"</strong> planiran za <strong>{{date}}</strong>",
         "REMINDER_DELETED": "Izbrisan je podsjetnik za zadatak",
         "REMINDER_UPDATED": "Aktualiziran je podsjetnik za zadatak \"{{title}}\"",
@@ -2097,6 +2217,10 @@
         "ORD_THIRD": "treći",
         "Q_CUSTOM": "Prilagođena konfiguracija ponavljanja",
         "Q_DAILY": "Svaki dan",
+        "Q_EVERY_X_DAYS": "Svakih {{count}} dana",
+        "Q_EVERY_X_MONTHS": "Svakih {{count}} mjeseci",
+        "Q_EVERY_X_WEEKS": "Svakih {{count}} tjedana u {{weekdayStr}}",
+        "Q_EVERY_X_YEARS": "Svakih {{count}} godina",
         "Q_MONDAY_TO_FRIDAY": "Svaki ponedjeljak do petka",
         "Q_MONTHLY_CURRENT_DATE": "Svaki mjesec na dan {{dateDayStr}}",
         "Q_MONTHLY_FIRST_DAY": "Svaki mjesec na prvi dan",
@@ -2252,6 +2376,24 @@
         "UNTRACKED_TIME": "Nepraćeno vrijeme:"
       }
     },
+    "TRACKING_PRESENCE": {
+      "CHIP": {
+        "FALLBACK_TASK": "nedavno pokrenut zadatak",
+        "FOCUS": "Sesija fokusa · ciklus {{cycle}}",
+        "LAST_SEEN": "zadnji put viđeno {{time}}",
+        "PAUSED_ON": "Pauzirano na {{device}}",
+        "SINCE": "od {{time}}",
+        "STOP": "Zaustavi mjerenje vremena na {{device}}",
+        "STOPPED_ON": "Zaustavljeno na {{device}}",
+        "TRACKING_ON": "Mjerenje vremena na {{device}}",
+        "WAS_TRACKING_ON": "Mjerenje vremena bilo je na {{device}}"
+      },
+      "S": {
+        "MOVED_TO": "Mjerenje vremena premješteno na {{device}}",
+        "STOPPED_FROM": "Mjerenje vremena zaustavljeno s uređaja {{device}}",
+        "TRACK_HERE_AGAIN": "Ponovno mjeri ovdje"
+      }
+    },
     "WORKLOG": {
       "CMP": {
         "DAYS_WORKED": "Dani, odrađeno:",
@@ -2359,6 +2501,7 @@
     "CONFIRM": "Potvrdi",
     "CONTINUE": "Nastavi",
     "DELETE": "Izbriši",
+    "DISCARD": "Odbaci",
     "DISMISS": "Odbaci",
     "DO_IT": "Učini!",
     "DONT_SHOW_AGAIN": "Ne prikazuj ponovno",
@@ -2375,6 +2518,8 @@
     "MOVE_BACKWARD": "Pomakni unazad",
     "MOVE_FORWARD": "Pomakni naprijed",
     "NEXT": "Sljedeće",
+    "NEXT_MONTH": "Sljedeći mjesec",
+    "NEXT_WEEK": "Sljedeći tjedan",
     "NO_CON": "Trenutačno si offline. Poveži se na internet.",
     "NONE": "Nema",
     "OK": "U redu",
@@ -2389,8 +2534,10 @@
     "SHARE": "Dijeli",
     "SUBMIT": "Pošalji",
     "TITLE": "Naslov",
+    "TODAY": "Danas",
     "TODAY_TAG_TITLE": "Danas",
     "TOGGLE_PASSWORD_VISIBILITY": "Prikaži/sakrij lozinku",
+    "TOMORROW": "Sutra",
     "UNDO": "Poništi",
     "WITHOUT_PROJECT": "Bez projekta",
     "YESTERDAY": "Jučer",
@@ -2421,6 +2568,27 @@
       "EXPERIMENTAL_WARNING_MSG": "Ova je funkcija eksperimentalna. Može sadržavati greške, značajno se promijeniti ili biti uklonjena u budućim verzijama. Spremi sigurnosnu kopiju podataka.<br/><br/>Želiš li je uključiti?"
     },
     "AUTO_BACKUPS": {
+      "BROWSE": "Pregledaj sigurnosne kopije",
+      "D_LIST": {
+        "BTN_RESTORE": "Vrati",
+        "CONFIRM_MSG": "Vratiti sigurnosnu kopiju od <strong>{{timestamp}}</strong> (zadataka: {{tasks}})?<br><br>Time se <strong>zamjenjuju svi tvoji trenutačni podaci</strong> na ovom uređaju i, ako je sinkronizacija uključena, na tvojim drugim uređajima. Trenutačni podaci prethodno se čuvaju kao točka oporavka.",
+        "CONFIRM_TITLE": "Potvrdi vraćanje",
+        "DATE_UNKNOWN": "Datum nepoznat",
+        "EMPTY": "Na ovom uređaju još nema sigurnosnih kopija. Točke oporavka stvaraju se automatski prije nego što sinkronizacija ili uvoz zamijene tvoje podatke.",
+        "ERROR_LOADING": "Sigurnosne kopije nije moguće učitati",
+        "ERROR_RESTORE": "Sigurnosnu kopiju nije moguće vratiti",
+        "INTRO": "Sve sigurnosne kopije pohranjene na ovom uređaju. Odaberi jednu da vidiš što sadrži.",
+        "KIND_FILE": "Datoteka automatske sigurnosne kopije",
+        "LOADING": "Učitavanje sigurnosnih kopija...",
+        "PARTIAL": "Neke sigurnosne kopije na ovom uređaju nije bilo moguće pročitati. Dostupne su samo one navedene u nastavku.",
+        "REASON_FORCE_DOWNLOAD": "Točka oporavka: prije „Upotrijebi podatke s poslužitelja”",
+        "REASON_LOCAL_IMPORT": "Točka oporavka: prije uvoza ili vraćanja",
+        "REASON_REMOTE_IMPORT": "Točka oporavka: prije nego što je sinkronizacija zamijenila lokalne podatke",
+        "SLOT_LATEST": "Zadnja automatska sigurnosna kopija",
+        "SLOT_PREVIOUS": "Prethodna automatska sigurnosna kopija",
+        "TASK_COUNT": "Zadataka: {{tasks}}",
+        "TITLE": "Sigurnosne kopije na ovom uređaju"
+      },
       "HELP": "Automatski sprema sve podatke u tvoju mapu aplikacije kao sigurnost ako se dogodi greška.",
       "LABEL_IS_ENABLED": "Aktiviraj automatske sigurnosne kopije",
       "LOCATION_INFO": "Sigurnosne kopije se spremaju u:",
@@ -2507,6 +2675,7 @@
       "IS_ENABLE_IDLE_TIME_TRACKING": "Aktiviraj upravljanje neaktivnošću",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Otvaraj dijalog samo kada je trenutni zadatak odabran",
       "MIN_IDLE_TIME": "Pokreni dijalog nakon X",
+      "MIN_IDLE_TIME_DESCRIPTION": "Npr. \"5h 23m\". Mora biti barem {{min}}; kraća razdoblja neaktivnosti nikada se ne prijavljuju. Neaktivnost se provjerava svakih {{interval}}.",
       "TITLE": "Upravljanje neaktivnošću",
       "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Ne prikazuj dijalog neaktivnosti tijekom sesija modusa fokusa"
     },
@@ -2520,6 +2689,8 @@
       "ADD_NEW_TASK": "Dodaj novi zadatak",
       "APP_WIDE_SHORTCUTS": "Globalni prečaci (aplikacija)",
       "COLLAPSE_SUB_TASKS": "Skupi podzadatke",
+      "COLUMN_ACTION": "Radnja",
+      "COLUMN_SHORTCUT": "Prečac",
       "EXPAND_SUB_TASKS": "Proširi podzadatke",
       "GLOBAL_ADD_NOTE": "Dodaj novu bilješku",
       "GLOBAL_ADD_TASK": "Dodaj novi zadatak",
@@ -2543,11 +2714,13 @@
       "SAVE_NOTE": "Spremi bilješku",
       "SELECT_NEXT_TASK": "Odaberi sljedeći zadatak",
       "SELECT_PREVIOUS_TASK": "Odaberi prethodni zadatak",
+      "SHOW_HELP": "Prikaži pregled tipkovnih prečaca",
       "SHOW_SEARCH_BAR": "Prikaži traku za pretraživanje",
       "SYSTEM_SHORTCUTS": "Globalni prečaci (sustav)",
       "TASK_ADD_ATTACHMENT": "Dodaj datoteku ili poveznicu",
       "TASK_ADD_SUB_TASK": "Dodaj podzadatak",
       "TASK_DELETE": "Izbriši zadatak",
+      "TASK_DUPLICATE": "Dupliciraj zadatak",
       "TASK_EDIT_TAGS": "Uredi oznake",
       "TASK_EDIT_TITLE": "Uredi naslov",
       "TASK_MOVE_TO_PROJECT": "Otvori izbornik za premještanje zadatka u projekt",
@@ -2559,6 +2732,7 @@
       "TASK_TOGGLE_DETAIL_PANEL_OPEN": "Prikaži/sakrij dodatne informacije o zadatku",
       "TASK_OPEN_NOTES_FULLSCREEN": "Otvori bilješku/popis zadataka u cjeloekranskom prikazu",
       "TASK_TOGGLE_DONE": "Uključi/Isključi status zadatka kao završen",
+      "TASK_TOGGLE_SELECT": "Dodaj/ukloni zadatak iz višestrukog odabira",
       "TASK_UNSCHEDULE": "Ukloni termin zadatka",
       "TITLE": "Tipkovnički prečaci",
       "TOGGLE_BACKLOG": "Prikaži/sakrij backlog zadataka",
@@ -2656,6 +2830,10 @@
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Prikaži trenutačno odbrojavanje u tray / statusnom izborniku (samo macOS)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Koristi prilagođenu traku naslova (Windows/Linux samo)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Potrebno je ponovno pokretanje da bi promjena stupila na snagu.",
+      "LOCAL_REST_API_TOKEN": "Pristupni token",
+      "LOCAL_REST_API_TOKEN_ERROR": "Pristupni token nije bilo moguće spremiti, pa API nije pokrenut. Provjeri može li Super Productivity pisati u svoju mapu s podacima, a zatim pokušaj ponovno preko Generiraj ponovno.",
+      "LOCAL_REST_API_TOKEN_REGENERATE": "Generiraj pristupni token ponovno",
+      "LOCAL_REST_API_TOKEN_REGENERATE_ERROR": "Novi pristupni token nije bilo moguće spremiti. Prethodni token i dalje vrijedi.",
       "START_OF_NEXT_DAY": "Vrijeme početka sljedećeg dana",
       "START_OF_NEXT_DAY_HINT": "Vrijeme (sat) od kojeg želiš da se smatra da je počeo sljedeći dan. Zadano je ponoć, tj. 0.",
       "THEME": "Tema",
@@ -2911,8 +3089,11 @@
     "DETECTED_LEGACY": "Otkriveni stari podaci. Mi ćemo ih migrirati za vas!",
     "DIALOG_MESSAGE": "Aktualiziramo način spremanja tvojih podataka radi bolje pouzdanosti sinkronizacije. Sigurnosna kopija će se automatski preuzeti.",
     "DIALOG_TITLE": "Migracija tvojih podataka",
+    "DIALOG_TITLE_ERROR": "Migracija nije uspjela",
     "E_MIGRATION_FAILED": "Migracija nije uspjela s greškom:",
+    "E_MIGRATION_FAILED_MSG": "Tvoje stare podatke nije bilo moguće migrirati. I dalje su na ovom uređaju i nisu promijenjeni, a ponuđena je datoteka sigurnosne kopije za preuzimanje. Ponovno pokretanje naići će na isti problem, pa umjesto toga možeš nastaviti s praznom aplikacijom i poslije uvesti tu kopiju. Aplikacija te tada više neće pitati za ove stare podatke.",
     "E_RESTART_FAILED": "Automatsk ponovno pokretanje nije uspjelo. Ponovo pokrenuti aplikaciju ručno!",
+    "START_FRESH": "Nastavi bez starih podataka",
     "STATUS_BACKUP": "Stvaranje sigurnosne kopije tvojih podataka...",
     "STATUS_COMPLETE": "Migracija je završena!",
     "STATUS_MIGRATING": "Migracija podataka...",
@@ -3001,6 +3182,8 @@
     "ACTION_TYPE_NOT_ALLOWED": "Vrsta radnje \"{{type}}\" nije dozvoljena",
     "ALREADY_INITIALIZED": "Dodatak je već inicijaliziran",
     "CANCEL": "Odustani",
+    "CANNOT_DELETE_INBOX": "Projekt Pristigla pošta ne može se izbrisati",
+    "CANNOT_NEST_SUBTASKS": "Podzadatke nije moguće ugnijezditi: nadređeni zadatak i sam je podzadatak",
     "CAPABILITIES": {
       "ACCESS_FILES": "Pristupi i promijeni datoteke na tvom sustavu",
       "RUN_COMMANDS": "Izvrši sustavske naredbe",
@@ -3026,6 +3209,7 @@
     "FAILED_TO_LOAD_CONFIG": "Neuspjelo učitavanje konfiguracije dodatka",
     "FAILED_TO_REMOVE": "Neuspjelo uklanjanje dodatka",
     "FAILED_TO_SAVE_CONFIG": "Neuspjelo spremanje konfiguracije dodatka",
+    "FIELD_NOT_UPDATABLE": "\"{{field}}\" nije moguće postaviti putem updateTask — promjena nadređenog zadatka nije podržana. Podzadatke stvaraj pomoću addTask({ parentId }) ili strukturu promijeni putem batchUpdateForProject",
     "FILE_TOO_LARGE": "Datoteka je prevelika ({{fileSize}} MB). Maksimalna veličina je {{maxSize}} MB",
     "GO_BACK": "Idi natrag",
     "GRANT_PERMISSION": "Dozvoli",
@@ -3077,6 +3261,7 @@
     "TASKS_NOT_IN_PROJECT": "Jedan ili više zadataka nije u projektu \"{{contextId}}\"",
     "TASKS_NOT_SUBTASKS": "Jedan ili više zadataka nije podzadaci od \"{{contextId}}\"",
     "TOGGLE_PLUGIN": "Uključi/Isključi {{pluginName}}",
+    "TRANSLATIONS_TOO_LARGE": "Prijevodi dodatka ukupno su preveliki (najviše {{maxSize}} MB)",
     "TRUST_WARNING": "Dozvoli samo ako vjeruješ ovom dodatku",
     "TYPE": "Vrsta: {{type}}",
     "UNABLE_TO_PERSIST_DATA": "Nije moguće spremiti podatke u spremište dodataka",
@@ -3110,6 +3295,8 @@
     "PROJECT_SETTINGS": "Postavke projekta",
     "PROVIDE_FEEDBACK": "Pošalji povratne informacije",
     "RELOAD": "Ponovo učitaj",
+    "SEARCH_NO_RESULTS": "Nisu pronađene postavke",
+    "SEARCH_PLACEHOLDER": "Pretraži postavke",
     "SYNC": {
       "CONFIGURE": "Konfiguriraj",
       "EMPTY_STATE_HINT": "Sinkroniziraj svoje podatke s Dropboxom, WebDAV-om, Nextcloudom ili lokalnom datotekom.",
@@ -3256,6 +3443,8 @@
     "SHARE_SUCCESS": "Projekt je podijeljen na Plainspaceu. Zadaci koji su ti dodijeljeni automatski će se uvesti.",
     "SPACE_PICKER": {
       "CREATE_NEW": "Stvori novi prostor",
+      "DISCONNECT": "Odspoji račun",
+      "DISCONNECT_HINT": "Odspajanjem se spremljeni račun uklanja s ovog uređaja. Postojeće integracije projekata nastavljaju se sinkronizirati. Da bi ih zaustavio, otvori svaku odgovarajuću Plainspace integraciju u ploči davatelja zadataka i odaberi ikonu zupčanika → Izbriši.",
       "ERROR": "Plainspace nije dostupan. Provjeri vezu i je li token još valjan, a zatim pokušaj ponovo.",
       "INTRO": "Poveži postojeći prostor za uvoz zadataka koji su ti dodijeljeni ili stvori novi.",
       "LINK": "Poveži prostor",

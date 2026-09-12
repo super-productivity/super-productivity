@@ -6,6 +6,11 @@
       "MSG": "Vill du installera Super Productivity som en PWA?"
     },
     "B_OFFLINE": "Du är bortkopplad från internet. Synkronisering och begäran om data från ärendeleverantören fungerar inte.",
+    "B_RECOVERY_POINT": {
+      "BROWSE": "Bläddra bland säkerhetskopior",
+      "DISMISS": "Behåll nya data",
+      "MSG": "Synkroniseringen ersatte just data på den här enheten med en betydligt mindre datamängd (från {{before}} till {{after}} uppgifter). Föregående data sparades som en återställningspunkt."
+    },
     "B_SUPER_SYNC_ENCRYPTION": {
       "ALREADY_ENCRYPTED": "Det här kontot är redan krypterat på en annan enhet. Ange ditt befintliga lösenord för att fortsätta synkronisera.",
       "ENABLE": "Aktivera kryptering",
@@ -41,7 +46,8 @@
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "Visa ärendepanelen",
-    "SHOW_NOTES": "Visa projektanteckningar"
+    "SHOW_NOTES": "Visa projektanteckningar",
+    "SHOW_SCHEDULE": "Schema"
   },
   "CONFIRM": {
     "DELETE_SECTION": "Vill du verkligen ta bort den här sektionen? Uppgifterna i den flyttas till uppgiftslistan.",
@@ -50,6 +56,7 @@
     "RESTORE_FILE_BACKUP_ANDROID": "Det verkar inte finnas några data, men det finns en säkerhetskopia tillgänglig. Vill du ladda den?",
     "RESTORE_FILE_BACKUP_MOBILE": "Inga data hittades på den här enheten, men det finns en säkerhetskopia att återställa (uppgifter: {{tasks}}, projekt: {{projects}}). Vill du återställa den?",
     "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "Vill du återställa den senaste automatiska säkerhetskopian (uppgifter: {{tasks}}, projekt: {{projects}})? Detta ersätter alla aktuella data på den här enheten och, om du använder synkronisering, skriver över dina andra enheter vid nästa synkronisering.",
+    "RESTORE_FILE_BACKUP_WITH_COUNTS": "Det verkar inte finnas några data, men det finns säkerhetskopior i \"{{dir}}\". Vill du återställa den senaste säkerhetskopian från {{from}} (uppgifter: {{tasks}}, projekt: {{projects}})?",
     "RESTORE_STRAY_BACKUP": "Under den senaste synkroniseringen kan det ha uppstått ett fel. Vill du återställa från den senaste säkerhetskopian?"
   },
   "DATETIME_SCHEDULE": {
@@ -516,6 +523,7 @@
       "S": {
         "AUTO_CREATE_FAILED": "Automatiskt skapande av ärende misslyckades: {{errorMsg}}",
         "CONNECTION_FAILED": "Anslutning misslyckades",
+        "CONNECTION_FAILED_WITH_ERROR": "Anslutningen misslyckades: {{errorMsg}}",
         "CONNECTION_SUCCESS": "Anslutningen fungerar!",
         "ERR_GENERIC": "{{issueProviderName}} Fel: {{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}: Begäran misslyckades på grund av ett nätverksfel på klientsidan.",
@@ -825,7 +833,13 @@
       }
     },
     "NOTE": {
+      "D_DRAFT_CONFLICT": {
+        "KEEP_SAVED": "Behåll sparad version",
+        "MSG": "Ett utkast av den här anteckningen återställdes, men anteckningen har ändrats under tiden (till exempel via synkronisering). Vill du granska det återställda utkastet i redigeraren, eller behålla den sparade versionen och inte längre få det här utkastet föreslaget?",
+        "REVIEW_DRAFT": "Granska utkast"
+      },
       "D_FULLSCREEN": {
+        "CONFIRM_DISCARD_MSG": "Du har osparade ändringar. Vill du kasta dem?",
         "TOOLBAR": {
           "BOLD": "Fet",
           "BULLET_LIST": "Punktlista",
@@ -1226,6 +1240,7 @@
         "CONTENT_CONFLICT_UNTITLED": "Namnlös uppgift"
       },
       "BTN_RESTORE_FROM_HISTORY": "Återställ från historik",
+      "BTN_SHOW_DEVICES": "Visa anslutna enheter",
       "BTN_SYNC_NOW": "Synkronisera nu",
       "C": {
         "FORCE_UPLOAD": "Om du tvingar fram en uppladdning av dina data kan det leda till dataförlust. Vill du fortsätta?",
@@ -1337,6 +1352,25 @@
         "PASSWORD": "Lösenord",
         "TITLE": "Dekryptering misslyckades"
       },
+      "D_DEVICES": {
+        "BTN_SIGN_OUT_OTHERS": "Logga ut andra enheter",
+        "ERROR_LOADING": "Det gick inte att läsa in anslutna enheter",
+        "ERROR_SIGN_OUT": "Utloggningen av de andra enheterna misslyckades. Om anslutningen bröts mitt i begäran kan den ändå ha gått igenom — då behöver även den här enheten en nyutfärdad token.",
+        "LAST_SEEN": "Senaste synkronisering: {{date}}",
+        "NO_DEVICES": "Ingen enhet har synkroniserat med det här kontot ännu.",
+        "PLATFORM_ANDROID": "Android",
+        "PLATFORM_BROWSER": "Webbläsare",
+        "PLATFORM_DESKTOP": "Dator",
+        "PLATFORM_IOS": "iOS",
+        "PLATFORM_UNKNOWN": "Okänd enhet",
+        "REMOVE_HINT": "Super Sync ger åtkomst per konto, inte per enhet, så enheter kan inte tas bort var för sig. För att stänga ute en borttappad eller såld enhet loggar du ut alla andra enheter — den här enheten förblir inloggad.",
+        "SIGN_OUT_CONFIRM_MSG": "Alla andra enheter loggas ut från Super Sync och slutar synkronisera. Den här enheten förblir inloggad. För att ansluta en enhet igen loggar du in på serverns sida och klistrar in den nya token i enhetens synkroniseringsinställningar — ändringar som gjorts på den under tiden den var utloggad behålls och laddas upp därefter.",
+        "SIGN_OUT_CONFIRM_OK": "Logga ut",
+        "SIGN_OUT_CONFIRM_TITLE": "Vill du logga ut alla andra enheter?",
+        "SIGN_OUT_SUCCESS": "Alla andra enheter loggades ut",
+        "THIS_DEVICE": "(den här enheten)",
+        "TITLE": "Anslutna enheter"
+      },
       "D_ENTER_PASSWORD": {
         "BTN_FORCE_OVERWRITE": "Använd lokala data",
         "BTN_SAVE_AND_SYNC": "Spara och synkronisera",
@@ -1359,6 +1393,11 @@
       "D_LOCAL_DATA_REPLACE_CONFIRM": {
         "MESSAGE": "Du har {{count}} osynkroniserade lokala ändringar som kommer att ersättas av fjärrdata. Vill du fortsätta?",
         "TITLE": "Ersätta lokala data?"
+      },
+      "D_NOTHING_TO_UPLOAD": {
+        "MESSAGE": "Ingenting ändrades — data på din synkroniseringsserver finns kvar.\n\nDen här enheten har aldrig slutfört en synkronisering, så den har ingen kopia av dina data som appen kan se. En överskrivning hade ersatt allt på servern med en tom enhet, och det går inte att ångra.\n\nProva ditt krypteringslösenord här igen — ofta fungerar ett äldre lösenord. Om du inte kommer ihåg det, lämna den här enheten och servern precis som de är och rapportera problemet i stället för att skriva över; din historik finns kvar på servern.\n\nOm du verkligen vill radera synkroniseringsservern och börja om stänger du det här fönstret och använder Tvinga överskrivning under Inställningar → Synkronisering och säkerhetskopiering → Synkronisering.",
+        "MESSAGE_CHANGE_PW": "Ingenting ändrades — data på din synkroniseringsserver finns kvar.\n\nAtt byta krypteringslösenord laddar upp den här enhetens data på nytt och ersätter det som finns på servern. Den här enheten har aldrig slutfört en synkronisering, så den har ingen kopia av dina data som appen kan se, och serverkopian skulle gå förlorad.\n\nByt lösenord från en enhet som redan har dina data och har synkroniserat korrekt.",
+        "TITLE": "Dina synkroniserade data rördes inte"
       },
       "D_PERMISSION": {
         "DISABLE_SYNC": "Inaktivera synkronisering",
@@ -1540,18 +1579,22 @@
           "L_CHANGE_ENCRYPTION_PASSWORD": "Ändra krypteringslösenord",
           "L_CONFIRM_PASSWORD": "Bekräfta lösenord",
           "L_ENABLE_E2E_ENCRYPTION": "Aktivera ände-till-ände-kryptering",
+          "L_ENABLE_TRACKING_PRESENCE": "Visa pågående tidtagning på andra enheter (experimentell)",
           "L_NEW_PASSWORD": "Nytt krypteringslösenord",
+          "L_PRESENCE_DEVICE_NAME": "Den här enhetens namn på andra enheter",
           "L_REMOVE_ENCRYPTION": "Eller ta bort kryptering",
           "L_SERVER_URL": "Server-URL",
           "LOGIN_INSTRUCTIONS": "Klicka på knappen nedan för att öppna serverns inloggningssida. Efter inloggning, kopiera din åtkomsttoken och klistra in den här.",
           "PASSWORD_MIN_LENGTH": "Lösenordet måste vara minst 8 tecken",
           "PASSWORDS_DONT_MATCH": "Lösenorden matchar inte",
+          "PRESENCE_DEVICE_NAME_DESCRIPTION": "Visas i tidtagningsmärket på dina andra enheter, t.ex. ”Jobbdator”, så att två stationära datorer kan skiljas åt. Skickas tillsammans med tidtagningsstatusen (krypterat när synkroniseringskryptering är på). Lämna tomt för att använda plattformsnamnet som visas som platshållare.",
           "REMOVE_ENCRYPTION_WARNING": "Att ta bort kryptering raderar alla serverdata och laddar upp dina data igen utan kryptering. Alla enheter måste konfigureras om.",
           "SERVER_URL_DESCRIPTION": "Lämna som den är för den officiella servern, eller ange en anpassad server-URL",
           "SETUP_DISABLE_SUPERSYNC_BTN": "Inaktivera SuperSync",
           "SETUP_ENCRYPTION_BTN": "Ange lösenord",
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "Använd samma lösenord på alla enheter. Ett glömt lösenord kan återställas genom att skriva över fjärrdata.",
-          "SETUP_ENCRYPTION_TITLE": "SuperSync: Ange lösenord"
+          "SETUP_ENCRYPTION_TITLE": "SuperSync: Ange lösenord",
+          "TRACKING_PRESENCE_DESCRIPTION": "Speglar till dina andra anslutna enheter vilken uppgift det här kontot tar tid på just nu och låter dig stoppa den därifrån. Endast för visning — sparas aldrig på servern, även om den kortvarigt passerar serverns minne (oläslig för servern när totalsträckskryptering är på)."
         },
         "NEXTCLOUD": {
           "FILE_USER_NAME_DESCRIPTION": "Ditt Nextcloud-användar-ID, inte din e-postadress eller ditt visningsnamn. Du hittar det genom att öppna Filer i Nextcloud, klicka på inställningskugghjulet längst ner till vänster och kopiera <user-id> från WebDAV-URL:en som visas där (.../remote.php/dav/files/<user-id>/).",
@@ -1627,7 +1670,10 @@
         "ERROR_REMOTE_FILE_CORRUPTED": "Fjärrsynkroniseringsdata går inte att läsa (möjligen trunkerade eller skadade). Dina lokala data är säkra. Du kan skriva över fjärrdata med dina lokala data.",
         "ERROR_REMOTE_FILE_EMPTY": "Fjärrsynkroniseringsfilen är tom. Det kan hända efter en avbruten synkronisering. Vill du skriva över fjärrdata med dina lokala data?",
         "ERROR_REMOTE_FILE_LOCKED": "Fjärrsynkroniseringsfilen är låst av servern. Det kan lösa sig vid nästa synkroniseringsförsök.",
+        "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "Synkroniseringsservern svarade med en webbsida i stället för dina synkroniseringsdata (t.ex. en inloggnings-, proxy- eller felsida). Dina fjärrdata är troligen intakta — kontrollera serverns URL, inloggningsuppgifter och nätverk och försök igen. Om problemet kvarstår kan du skriva över fjärrdata via Synkroniseringsinställningar → Tvinga överskrivning.",
         "ERROR_SYNC_VERSION_MISMATCH": "Fjärrsynkroniseringsdata använder en inkompatibel formatversion. Se till att alla enheter kör samma version av Super Productivity.",
+        "REMOTE_NOT_ENCRYPTED": "De synkroniserade data är inte krypterade, men kryptering är aktiverad på den här enheten, så de avvisades. Om du stängde av krypteringen på en annan enhet stänger du av den även här i synkroniseringsinställningarna för att fortsätta.",
+        "UNSUPPORTED_MULTI_ENTITY_CONFLICT": "Synkroniseringen stoppades av säkerhetsskäl för att undvika dataförlust. Rapportera den här koden: {{details}}",
         "WARN_CLIENT_ID_REGENERATED": "Synkroniseringsenhetens ID var ogiltigt och har skapats om. En synkroniseringskonflikt kan uppstå vid nästa synkronisering.",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Fel vid synkronisering. Kan inte läsa fjärrdata. Kanske du aktiverade kryptering och det lokala lösenordet inte matchar det som användes för att kryptera fjärrdata?",
         "FINISH_DAY_SYNC_ERROR": "Synkroniseringsfel vid avslutning av dagen. Försök igen.",
@@ -1723,7 +1769,8 @@
       "D_EDIT": {
         "ADD": "Lägg till taggar för \"{{title}}\"",
         "EDIT": "Redigera taggar för \"{{title}}\"",
-        "LABEL": "Taggar"
+        "LABEL": "Taggar",
+        "PLACEHOLDER": "+ Lägg till tagg"
       },
       "FORM_BASIC": {
         "D_COLOR": "Om inget anges används taggfärgen som standard.",
@@ -1794,10 +1841,12 @@
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Lägg till bilaga",
         "ADD_CHECKLIST_ITEM": "Lägg till punkt i checklistan",
+        "CHECKLIST": "Checklista",
         "CHECKLIST_ACTIONS": "Checklisteåtgärder",
         "CHECK_ALL": "Markera alla",
         "CLEAR_COMPLETED": "Rensa slutförda",
         "NOTES_OR_CHECKLIST": "Anteckningar/checklista",
+        "SUB_TASKS_EMPTY": "Deluppgifter",
         "UNCHECK_ALL": "Avmarkera alla",
         "PASTE_IMAGE_HINT": "Ctrl+V för att klistra in bild",
         "PASTE_IMAGE_HINT_MAC": "Cmd+V för att klistra in bild",
@@ -1848,6 +1897,7 @@
         "MARK_DONE": "Markera som klar",
         "MARK_UNDONE": "Markera som inte slutförd",
         "MOVE_TO_BACKLOG": "Flytta till backlog",
+        "MOVE_TO_BOTTOM": "Flytta längst ned",
         "MOVE_TO_OTHER_PROJECT": "Flytta till projekt",
         "MOVE_TO_REGULAR": "Flytta till vanlig lista",
         "MOVE_TO_TOP": "Flytta till toppen",
@@ -1885,10 +1935,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "Lägg till tid",
-        "QA_NEXT_MONTH": "Nästa månad",
-        "QA_NEXT_WEEK": "Nästa vecka",
-        "QA_TODAY": "Idag",
-        "QA_TOMORROW": "Imorgon",
         "REMIND_AT": "Påminn kl",
         "REMOVE_DEADLINE": "Ta bort deadline",
         "RO_1H": "1 timme före",
@@ -1970,22 +2016,96 @@
         "TINE_SPENT": "Tid som spenderats",
         "TITLE": "Lägg till för dagen"
       },
+      "MULTI_SELECT": {
+        "ACTIONS": "Åtgärder",
+        "CLEAR": "Rensa markering",
+        "D_CONFIRM_DELETE": {
+          "MSG": {
+            "ONE": "Ta bort <strong>{{count}}</strong> uppgift? Dess deluppgifter tas också bort.",
+            "OTHER": "Ta bort <strong>{{count}}</strong> uppgifter? Deluppgifter tas också bort."
+          },
+          "OK": "Ta bort"
+        },
+        "S": {
+          "DEADLINE_REMOVED": {
+            "ONE": "Tog bort deadline från {{count}} uppgift",
+            "OTHER": "Tog bort deadline från {{count}} uppgifter"
+          },
+          "DEADLINE_SET": {
+            "ONE": "Satte deadline för {{count}} uppgift till {{date}}",
+            "OTHER": "Satte deadline för {{count}} uppgifter till {{date}}"
+          },
+          "DONE": {
+            "ONE": "Markerade {{count}} uppgift som klar",
+            "OTHER": "Markerade {{count}} uppgifter som klara"
+          },
+          "ESTIMATE_CLEARED": {
+            "ONE": "Rensade uppskattningen för {{count}} uppgift",
+            "OTHER": "Rensade uppskattningen för {{count}} uppgifter"
+          },
+          "ESTIMATE_SET": {
+            "ONE": "Uppskattade {{count}} uppgift till {{estimate}}",
+            "OTHER": "Uppskattade {{count}} uppgifter till {{estimate}}"
+          },
+          "MOVED_TO_BACKLOG": {
+            "ONE": "Flyttade {{count}} uppgift till backloggen",
+            "OTHER": "Flyttade {{count}} uppgifter till backloggen",
+            "PARTIAL": "Flyttade {{count}} av {{total}} uppgifter till backloggen (deluppgifter följer sin överordnade uppgift)"
+          },
+          "MOVED_TO_PROJECT": {
+            "ONE": "Flyttade {{count}} uppgift till \"{{projectTitle}}\"",
+            "OTHER": "Flyttade {{count}} uppgifter till \"{{projectTitle}}\"",
+            "PARTIAL": "Flyttade {{count}} av {{total}} uppgifter till \"{{projectTitle}}\" (deluppgifter följer sin överordnade uppgift)"
+          },
+          "MOVED_TO_REGULAR": {
+            "ONE": "Flyttade {{count}} uppgift till den vanliga listan",
+            "OTHER": "Flyttade {{count}} uppgifter till den vanliga listan",
+            "PARTIAL": "Flyttade {{count}} av {{total}} uppgifter till den vanliga listan (deluppgifter följer sin överordnade uppgift)"
+          },
+          "NOTHING_TO_DO": "Det finns inget att ändra för de markerade uppgifterna",
+          "SCHEDULED": {
+            "ONE": "Schemalade {{count}} uppgift till {{date}}",
+            "OTHER": "Schemalade {{count}} uppgifter till {{date}}"
+          },
+          "UNDONE": {
+            "ONE": "Markerade {{count}} uppgift som inte klar",
+            "OTHER": "Markerade {{count}} uppgifter som inte klara"
+          },
+          "UNSCHEDULED": {
+            "ONE": "Tog bort schemaläggningen för {{count}} uppgift",
+            "OTHER": "Tog bort schemaläggningen för {{count}} uppgifter"
+          }
+        },
+        "SELECTED_COUNT": "{{count}} markerade",
+        "SELECT_ENTRY": "Markera flera uppgifter…",
+        "TASKS_TITLE": {
+          "ONE": "{{count}} uppgift",
+          "OTHER": "{{count}} uppgifter"
+        }
+      },
       "N": {
         "ESTIMATE_EXCEEDED": "Tidsuppskattningen överskridits!",
         "ESTIMATE_EXCEEDED_BODY": "Du överskred din beräknade tid för \"{{title}}\"."
       },
       "S": {
+        "ADDED_VIA_APP_URI": "Lade till uppgiften \"{{title}}\"",
+        "AMBIGUOUS_MATCH_VIA_APP_URI": "Flera uppgifter matchar \"{{title}}\" — var mer specifik",
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Det går inte att tilldela projekt via kort syntax för upprepbara uppgifter!",
+        "COMPLETED_VIA_APP_URI": "Slutförde uppgiften \"{{title}}\"",
         "CREATED_FOR_PROJECT": "Skapade uppgift \"{{taskTitle}}\" för projektet \"{{projectTitle}}\"",
         "DEADLINE_REMOVED": "Deadline borttagen",
         "DEADLINE_SET": "Deadline satt till {{date}}",
         "DELETED": "Raderade uppgiften \"{{title}}\"",
+        "EMPTY_TITLE_VIA_APP_URI": "Uppgiftens titel var tom, ingen uppgift lades till",
         "FOUND_MOVE_FROM_BACKLOG": "Flyttade uppgiften <strong>{{title}}</strong> från backlog till dagens uppgiftslista",
         "FOUND_MOVE_FROM_OTHER_LIST": "Lagd till uppgift <strong>{{title}}</strong> från <strong>{{contextTitle}}</strong> till aktuell lista",
         "FOUND_RESTORE_FROM_ARCHIVE": "Återställd uppgift <strong>{{title}}</strong> relaterat till ärende från arkivet",
         "GO_TO_TASK": "Gå till uppgift",
+        "INPUT_TOO_LONG_VIA_APP_URI": "Uppgiftens titel eller anteckningar är för långa",
         "MOVED_TO_ARCHIVE": "Flyttade {{nr}} uppgifter till arkivet",
         "MOVED_TO_PROJECT": "Flyttade uppgiften \"{{taskTitle}}\" till projektet \"{{projectTitle}}\"",
+        "NOT_FOUND_VIA_APP_URI": "Ingen matchande uppgift hittades för \"{{title}}\"",
+        "PROJECT_NOT_FOUND_VIA_APP_URI": "Projektet hittades inte — uppgiften \"{{title}}\" lades inte till",
         "REMINDER_ADDED": "Schemalagd <strong>{{title}}</strong> vid <strong>{{date}}</strong>",
         "REMINDER_DELETED": "Raderade påminnelse för uppgift",
         "REMINDER_UPDATED": "Uppdaterade påminnelse för uppgiften \"{{title}}\"",
@@ -2082,6 +2202,10 @@
         "ORD_THIRD_NTH": "den tredje förekomsten",
         "Q_CUSTOM": "Anpassad upprepningskonfiguration",
         "Q_DAILY": "Varje dag",
+        "Q_EVERY_X_DAYS": "Var {{count}}:e dag",
+        "Q_EVERY_X_MONTHS": "Var {{count}}:e månad",
+        "Q_EVERY_X_WEEKS": "Var {{count}}:e vecka på {{weekdayStr}}",
+        "Q_EVERY_X_YEARS": "Vart {{count}}:e år",
         "Q_MONDAY_TO_FRIDAY": "Varje måndag till fredag",
         "Q_MONTHLY_CURRENT_DATE": "Varje månad på {{dateDayStr}}th",
         "Q_MONTHLY_FIRST_DAY": "Varje månad på första dagen",
@@ -2226,6 +2350,24 @@
         "UNTRACKED_TIME": "Ospårad tid:"
       }
     },
+    "TRACKING_PRESENCE": {
+      "CHIP": {
+        "FALLBACK_TASK": "en nyligen startad uppgift",
+        "FOCUS": "Fokuspass · cykel {{cycle}}",
+        "LAST_SEEN": "senast sedd {{time}}",
+        "PAUSED_ON": "Pausad på {{device}}",
+        "SINCE": "sedan {{time}}",
+        "STOP": "Stoppa tidtagningen på {{device}}",
+        "STOPPED_ON": "Stoppad på {{device}}",
+        "TRACKING_ON": "Tar tid på {{device}}",
+        "WAS_TRACKING_ON": "Tog tid på {{device}}"
+      },
+      "S": {
+        "MOVED_TO": "Tidtagningen flyttades till {{device}}",
+        "STOPPED_FROM": "Tidtagningen stoppades från {{device}}",
+        "TRACK_HERE_AGAIN": "Ta tid här igen"
+      }
+    },
     "WORKLOG": {
       "CMP": {
         "DAYS_WORKED": "Arbetade dagar:",
@@ -2328,6 +2470,7 @@
     "CONFIRM": "Bekräfta",
     "CONTINUE": "Fortsätt",
     "DELETE": "Radera",
+    "DISCARD": "Kasta",
     "DISMISS": "Avvisa",
     "DO_IT": "Gör det!",
     "DONT_SHOW_AGAIN": "Visa inte igen",
@@ -2345,6 +2488,8 @@
     "MOVE_BACKWARD": "Flytta bakåt",
     "MOVE_FORWARD": "Gå vidare",
     "NEXT": "Nästa",
+    "NEXT_MONTH": "Nästa månad",
+    "NEXT_WEEK": "Nästa vecka",
     "NO_CON": "Du är för närvarande offline. Anslut till internet igen.",
     "NONE": "Ingen",
     "OK": "Okej",
@@ -2359,8 +2504,10 @@
     "SHARE": "Dela",
     "SUBMIT": "Skicka",
     "TITLE": "Titel",
+    "TODAY": "Idag",
     "TODAY_TAG_TITLE": "Idag",
     "TOGGLE_PASSWORD_VISIBILITY": "Visa/dölj lösenord",
+    "TOMORROW": "Imorgon",
     "UNDO": "Ångra",
     "WITHOUT_PROJECT": "Utan projekt",
     "YESTERDAY": "Igår"
@@ -2389,6 +2536,27 @@
       "EXPERIMENTAL_WARNING_MSG": "Den här funktionen är experimentell. Den kan innehålla fel, förändras mycket eller tas bort i en framtida uppdatering. Se till att säkerhetskopiera dina data.<br/><br/>Vill du aktivera den?"
     },
     "AUTO_BACKUPS": {
+      "BROWSE": "Bläddra bland säkerhetskopior",
+      "D_LIST": {
+        "BTN_RESTORE": "Återställ",
+        "CONFIRM_MSG": "Vill du återställa säkerhetskopian från <strong>{{timestamp}}</strong> ({{tasks}} uppgifter)?<br><br>Detta <strong>ersätter alla dina nuvarande data</strong> på den här enheten och, om synkronisering är aktiverad, på dina andra enheter. Nuvarande data sparas först som en återställningspunkt.",
+        "CONFIRM_TITLE": "Bekräfta återställning",
+        "DATE_UNKNOWN": "Datum okänt",
+        "EMPTY": "Inga säkerhetskopior på den här enheten ännu. Återställningspunkter skapas automatiskt innan synkronisering eller en import ersätter dina data.",
+        "ERROR_LOADING": "Det gick inte att läsa in säkerhetskopiorna",
+        "ERROR_RESTORE": "Det gick inte att återställa säkerhetskopian",
+        "INTRO": "Alla säkerhetskopior som lagras på den här enheten. Välj en för att se vad den innehåller.",
+        "KIND_FILE": "Automatisk säkerhetskopiefil",
+        "LOADING": "Läser in säkerhetskopior...",
+        "PARTIAL": "Vissa säkerhetskopior på den här enheten kunde inte läsas. Endast de som listas nedan är tillgängliga.",
+        "REASON_FORCE_DOWNLOAD": "Återställningspunkt: före ”Använd serverns data”",
+        "REASON_LOCAL_IMPORT": "Återställningspunkt: före import eller återställning",
+        "REASON_REMOTE_IMPORT": "Återställningspunkt: innan synkroniseringen ersatte lokala data",
+        "SLOT_LATEST": "Senaste automatiska säkerhetskopia",
+        "SLOT_PREVIOUS": "Föregående automatiska säkerhetskopia",
+        "TASK_COUNT": "{{tasks}} uppgifter",
+        "TITLE": "Säkerhetskopior på den här enheten"
+      },
       "HELP": "Spara automatiskt all data i din appmapp så att den finns tillgänglig om något skulle gå fel.",
       "LABEL_IS_ENABLED": "Aktivera automatiska säkerhetskopieringar",
       "LAST_BACKUP_INFO": "Senaste säkerhetskopian: {{date}}",
@@ -2480,6 +2648,7 @@
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Aktivera endast dialogrutan för inaktiv tid när en aktuell uppgift är vald",
       "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Visa inte inaktivitetsdialogrutan under sessioner i fokusläge",
       "MIN_IDLE_TIME": "Aktivera viloläge efter X",
+      "MIN_IDLE_TIME_DESCRIPTION": "T.ex. \"5h 23m\". Måste vara minst {{min}}; kortare inaktiva perioder rapporteras aldrig. Inaktivitet kontrolleras var {{interval}}.",
       "TITLE": "Tomgångshantering"
     },
     "IMEX": {
@@ -2492,6 +2661,8 @@
       "ADD_NEW_TASK": "Lägg till ny uppgift",
       "APP_WIDE_SHORTCUTS": "Globala genvägar (gäller hela programmet)",
       "COLLAPSE_SUB_TASKS": "Dölj underuppgifter",
+      "COLUMN_ACTION": "Åtgärd",
+      "COLUMN_SHORTCUT": "Kortkommando",
       "EXPAND_SUB_TASKS": "Expandera deluppgifter",
       "GLOBAL_ADD_NOTE": "Lägg till ny anteckning",
       "GLOBAL_ADD_TASK": "Lägg till ny uppgift",
@@ -2514,11 +2685,13 @@
       "PLUGIN_SHORTCUTS": "Plugin-genvägar",
       "SELECT_NEXT_TASK": "Välj nästa uppgift",
       "SELECT_PREVIOUS_TASK": "Välj föregående uppgift",
+      "SHOW_HELP": "Visa lathund för kortkommandon",
       "SHOW_SEARCH_BAR": "Visa sökfält",
       "SYSTEM_SHORTCUTS": "Globala genvägar (systemomfattande)",
       "TASK_ADD_ATTACHMENT": "Bifoga fil eller länk",
       "TASK_ADD_SUB_TASK": "Lägg till deluppgift",
       "TASK_DELETE": "Ta bort uppgift",
+      "TASK_DUPLICATE": "Duplicera uppgift",
       "TASK_EDIT_TAGS": "Redigera taggar",
       "TASK_EDIT_TITLE": "Redigera titel",
       "TASK_MOVE_TO_PROJECT": "Öppna flytta uppgift till projektmenyn",
@@ -2536,6 +2709,7 @@
       "TASK_OPEN_NOTES_PANEL": "Öppna anteckning/checklista i uppgiftspanelen",
       "TASK_OPEN_NOTES_FULLSCREEN": "Öppna anteckning/checklista i helskärm",
       "TASK_TOGGLE_DONE": "Växla Klar",
+      "TASK_TOGGLE_SELECT": "Lägg till/ta bort uppgift i flermarkering",
       "TASK_UNSCHEDULE": "Avplanera uppgift",
       "TITLE": "Tangentbordsgenvägar",
       "TOGGLE_BACKLOG": "Visa/dölj uppgiftsbacklog",
@@ -2628,6 +2802,10 @@
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Kräver omstart för att träda i kraft.",
       "IS_VERTICAL_ACTION_BAR": "Vertikalt åtgärdsfält på sidan (experimentellt)",
       "IS_VERTICAL_ACTION_BAR_HINT": "Flyttar knapparna i sidhuvudet till en vertikal remsa vid fönstrets högra kant. Endast skrivbord.",
+      "LOCAL_REST_API_TOKEN": "Åtkomsttoken",
+      "LOCAL_REST_API_TOKEN_ERROR": "Åtkomsttoken kunde inte sparas, så API:et körs inte. Kontrollera att Super Productivity kan skriva till sin datamapp och använd sedan Generera om för att försöka igen.",
+      "LOCAL_REST_API_TOKEN_REGENERATE": "Generera om åtkomsttoken",
+      "LOCAL_REST_API_TOKEN_REGENERATE_ERROR": "Den nya åtkomsttoken kunde inte sparas. Den tidigare token gäller fortfarande.",
       "START_OF_NEXT_DAY": "Starttid nästa dag",
       "START_OF_NEXT_DAY_HINT": "från vilken tidpunkt (i timmar) du vill räkna att nästa dag har börjat. Standardinställningen är midnatt, vilket är 0.",
       "THEME": "Tema",
@@ -2866,8 +3044,11 @@
     "DETECTED_LEGACY": "Vi har hittat gamla data. Vi flyttar dem åt dig!",
     "DIALOG_MESSAGE": "Vi uppdaterar hur dina data lagras för förbättrad synkroniseringspålitlighet. En säkerhetskopia laddas ner automatiskt.",
     "DIALOG_TITLE": "Migrerar dina data",
+    "DIALOG_TITLE_ERROR": "Migreringen misslyckades",
     "E_MIGRATION_FAILED": "Migreringen misslyckades! Fel:",
+    "E_MIGRATION_FAILED_MSG": "Dina gamla data kunde inte migreras. De finns kvar på den här enheten och har inte ändrats, och en säkerhetskopiefil erbjöds för nedladdning. En omstart stöter på samma problem, så du kan i stället fortsätta med en tom app och importera säkerhetskopian efteråt. Appen frågar då inte om dessa gamla data igen.",
     "E_RESTART_FAILED": "Automatisk omstart misslyckades. Starta om appen manuellt!",
+    "START_FRESH": "Fortsätt utan gamla data",
     "STATUS_BACKUP": "Skapar säkerhetskopia av dina data...",
     "STATUS_COMPLETE": "Migrering slutförd!",
     "STATUS_MIGRATING": "Migrerar data...",
@@ -2997,6 +3178,8 @@
     "SHARE_SUCCESS": "Projektet delades på Plainspace. Uppgifter som tilldelas dig importeras automatiskt.",
     "SPACE_PICKER": {
       "CREATE_NEW": "Skapa nytt space",
+      "DISCONNECT": "Koppla från konto",
+      "DISCONNECT_HINT": "Att koppla från tar bort det sparade kontot från den här enheten. Befintliga projektintegrationer fortsätter att synkronisera. För att stoppa dem öppnar du varje aktuell Plainspace-integration i panelen för ärendeleverantörer och väljer dess kugghjulsikon → Ta bort.",
       "ERROR": "Det gick inte att nå Plainspace. Kontrollera anslutningen och att din token fortfarande är giltig och försök igen.",
       "INTRO": "Länka ett befintligt space för att importera uppgifter som tilldelats dig, eller skapa ett nytt.",
       "LINK": "Länka space",
@@ -3012,6 +3195,8 @@
     "ALLOWED_HOSTS": "Nätverksåtkomst",
     "ALREADY_INITIALIZED": "Plugin är redan initialiserat",
     "AUTHORED_BY": "av {{author}}",
+    "CANNOT_DELETE_INBOX": "Projektet Inkorg kan inte tas bort",
+    "CANNOT_NEST_SUBTASKS": "Det går inte att nästla deluppgifter: den överordnade uppgiften är själv en deluppgift",
     "CHOOSE_PLUGIN_FILE": "Välj plugin-fil",
     "CLEAR_PLUGIN_CACHE": "Rensa plugin-cache",
     "CODE_TOO_LARGE": "Plugin-koden är för stor (max {{maxSize}}MB)",
@@ -3032,6 +3217,7 @@
     "FAILED_TO_LOAD_CONFIG": "Det gick inte att ladda plugin-konfigurationen",
     "FAILED_TO_REMOVE": "Det gick inte att ta bort plugin-programmet",
     "FAILED_TO_SAVE_CONFIG": "Det gick inte att spara plugin-konfigurationen",
+    "FIELD_NOT_UPDATABLE": "\"{{field}}\" kan inte anges via updateTask — att byta överordnad uppgift stöds inte. Skapa deluppgifter med addTask({ parentId }), eller strukturera om via batchUpdateForProject",
     "FILE_TOO_LARGE": "Filen är för stor ({{fileSize}}MB). Maximal storlek är {{maxSize}}MB",
     "GO_BACK": "Gå tillbaka",
     "HOOKS": "Krokar",
@@ -3083,6 +3269,7 @@
     "TASKS_NOT_IN_PROJECT": "En eller flera uppgifter finns inte i projektet '{{contextId}}'",
     "TASKS_NOT_SUBTASKS": "En eller flera uppgifter är inte underordnade uppgifter till '{{contextId}}'.",
     "TOGGLE_PLUGIN": "Växla {{pluginName}}",
+    "TRANSLATIONS_TOO_LARGE": "Insticksmodulens översättningar är totalt för stora (max {{maxSize}} MB)",
     "TYPE": "Typ: {{type}}",
     "UNABLE_TO_PERSIST_DATA": "Det går inte att spara data i plugin-lagringen.",
     "UNKNOWN_ERROR": "Ett okänt fel uppstod",
@@ -3110,6 +3297,8 @@
     "PROJECT_SETTINGS": "Projektspecifika inställningar",
     "PROVIDE_FEEDBACK": "Ge feedback",
     "RELOAD": "Ladda om",
+    "SEARCH_NO_RESULTS": "Inga inställningar hittades",
+    "SEARCH_PLACEHOLDER": "Sök inställningar",
     "SYNC": {
       "CONFIGURE": "Konfigurera",
       "EMPTY_STATE_HINT": "Synkronisera dina data med Dropbox, WebDAV, Nextcloud eller en lokal fil.",

@@ -6,6 +6,11 @@
       "MSG": "PWA로 Super Productivity를 설치하시겠습니까?"
     },
     "B_OFFLINE": "인터넷 연결이 끊어졌습니다. 이슈 제공자 데이터 동기화 및 요청이 작동하지 않습니다.",
+    "B_RECOVERY_POINT": {
+      "BROWSE": "백업 둘러보기",
+      "DISMISS": "새 데이터 유지",
+      "MSG": "동기화가 방금 이 기기의 데이터를 훨씬 작은 데이터 세트로 교체했습니다(작업 {{before}}개 → {{after}}개). 이전 데이터는 복구 지점으로 보관되었습니다."
+    },
     "B_SUPER_SYNC_ENCRYPTION": {
       "ALREADY_ENCRYPTED": "이 계정은 이미 다른 기기에서 암호화되어 있습니다. 동기화를 계속하려면 기존 비밀번호를 입력하세요.",
       "ENABLE": "암호화 활성화",
@@ -51,6 +56,7 @@
     "RESTORE_FILE_BACKUP_ANDROID": "데이터가 없는 것 같지만 사용 가능한 백업이 있습니다. 로드하시겠습니까?",
     "RESTORE_FILE_BACKUP_MOBILE": "이 기기에서 데이터를 찾지 못했지만 복원할 수 있는 백업이 있습니다(작업: {{tasks}}, 프로젝트: {{projects}}). 복원하시겠습니까?",
     "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "최신 자동 백업을 복원하시겠습니까(작업: {{tasks}}, 프로젝트: {{projects}})? 이 기기의 현재 모든 데이터가 대체되며, 동기화를 사용하는 경우 다음 동기화 때 다른 기기의 데이터도 덮어씁니다.",
+    "RESTORE_FILE_BACKUP_WITH_COUNTS": "데이터가 전혀 없는 것 같지만 \"{{dir}}\"에 백업이 있습니다. {{from}}의 최신 백업을 복원할까요(작업: {{tasks}}, 프로젝트: {{projects}})?",
     "RESTORE_STRAY_BACKUP": "마지막 동기화 중에 오류가 발생했을 수 있습니다. 마지막 백업을 복원 하시겠습니까?"
   },
   "DATETIME_SCHEDULE": {
@@ -517,6 +523,7 @@
       "S": {
         "AUTO_CREATE_FAILED": "이슈 자동 생성 실패: {{errorMsg}}",
         "CONNECTION_FAILED": "연결 실패",
+        "CONNECTION_FAILED_WITH_ERROR": "연결 실패: {{errorMsg}}",
         "CONNECTION_SUCCESS": "연결 성공!",
         "ERR_GENERIC": "{{issueProviderName}} 오류입니다: {{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}: 클라이언트 측 네트워크 오류로 인해 요청이 실패했습니다.",
@@ -1387,6 +1394,11 @@
         "MESSAGE": "동기화되지 않은 로컬 변경 사항 {{count}}개가 원격 데이터로 대체됩니다. 계속하시겠습니까?",
         "TITLE": "로컬 데이터를 대체하시겠습니까?"
       },
+      "D_NOTHING_TO_UPLOAD": {
+        "MESSAGE": "아무것도 변경되지 않았습니다. 동기화 서버의 데이터는 그대로 있습니다.\n\n이 기기는 동기화를 완료한 적이 없어서 앱이 볼 수 있는 데이터 사본을 가지고 있지 않습니다. 덮어썼다면 서버의 모든 내용이 빈 기기로 교체되었을 것이고, 이는 되돌릴 수 없습니다.\n\n여기서 암호화 비밀번호를 다시 시도해 보세요. 예전 비밀번호가 맞는 경우가 많습니다. 기억나지 않는다면 이 기기와 서버를 지금 상태 그대로 두고, 덮어쓰지 말고 문제를 신고해 주세요. 기록은 여전히 서버에 있습니다.\n\n정말로 동기화 서버를 지우고 처음부터 시작하려면 이 창을 닫고 설정 → 동기화 및 백업 → 동기화에서 강제 덮어쓰기를 사용하세요.",
+        "MESSAGE_CHANGE_PW": "아무것도 변경되지 않았습니다. 동기화 서버의 데이터는 그대로 있습니다.\n\n암호화 비밀번호를 변경하면 이 기기의 데이터를 다시 업로드하여 서버에 있는 내용을 대체합니다. 이 기기는 동기화를 완료한 적이 없어서 앱이 볼 수 있는 데이터 사본이 없으며, 서버의 사본이 사라지게 됩니다.\n\n이미 데이터를 가지고 있고 동기화에 성공한 기기에서 비밀번호를 변경하세요.",
+        "TITLE": "동기화된 데이터는 변경되지 않았습니다"
+      },
       "D_PERMISSION": {
         "DISABLE_SYNC": "동기화 비활성화",
         "PERM_FILE": "권한 부여",
@@ -1568,6 +1580,8 @@
           "L_CONFIRM_PASSWORD": "비밀번호 확인",
           "L_ENABLE_E2E_ENCRYPTION": "종단간 암호화 활성화",
           "L_ENABLE_TRACKING_PRESENCE": "다른 기기에 실시간 시간 추적 표시(실험적)",
+          "L_PRESENCE_DEVICE_NAME": "다른 기기에 표시될 이 기기의 이름",
+          "PRESENCE_DEVICE_NAME_DESCRIPTION": "다른 기기의 시간 추적 칩에 표시됩니다(예: \"업무용 노트북\"). 데스크톱 두 대를 구분하는 데 유용합니다. 추적 상태와 함께 전송됩니다(동기화 암호화가 켜져 있으면 암호화되어 전송). 비워 두면 자리 표시자로 표시된 플랫폼 이름이 사용됩니다.",
           "TRACKING_PRESENCE_DESCRIPTION": "이 계정으로 다른 기기에서 현재 추적 중인 작업을 표시하고, 원격으로 추적을 중지할 수 있습니다. 이는 단순 표시용 정보이며 서버에 저장되지 않습니다. 서버 메모리를 거쳐 일시적으로 전달되지만, 종단 간 암호화가 켜져 있으면 서버는 그 내용을 알 수 없습니다.",
           "L_NEW_PASSWORD": "새 암호화 비밀번호",
           "L_REMOVE_ENCRYPTION": "또는 암호화 제거",
@@ -1828,6 +1842,7 @@
         "CHECK_ALL": "모두 체크",
         "CLEAR_COMPLETED": "완료 항목 지우기",
         "NOTES_OR_CHECKLIST": "노트/체크리스트",
+        "SUB_TASKS_EMPTY": "하위 작업",
         "UNCHECK_ALL": "모두 체크 해제",
         "PASTE_IMAGE_HINT": "Ctrl+V로 이미지 붙여넣기",
         "PASTE_IMAGE_HINT_MAC": "Cmd+V로 이미지 붙여넣기",
@@ -1917,10 +1932,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "시간 추가",
-        "QA_NEXT_MONTH": "다음 달",
-        "QA_NEXT_WEEK": "다음 주",
-        "QA_TODAY": "오늘",
-        "QA_TOMORROW": "내일",
         "REMIND_AT": "알림 시간",
         "REMOVE_DEADLINE": "마감일 제거",
         "RO_1H": "1시간 전",
@@ -2001,6 +2012,73 @@
         "HELP": "예:<br>30m = 30분<br>2h = 2시간<br>2h 30m = 2시간 30분<br>1.5h = 1시간 30분<br>03:15 = 3시간 15분",
         "TINE_SPENT": "소요 시간",
         "TITLE": "오늘 추가"
+      },
+      "MULTI_SELECT": {
+        "ACTIONS": "작업",
+        "CLEAR": "선택 해제",
+        "D_CONFIRM_DELETE": {
+          "MSG": {
+            "ONE": "작업 <strong>{{count}}</strong>개를 삭제할까요? 하위 작업도 함께 삭제됩니다.",
+            "OTHER": "작업 <strong>{{count}}</strong>개를 삭제할까요? 하위 작업도 함께 삭제됩니다."
+          },
+          "OK": "삭제"
+        },
+        "S": {
+          "DEADLINE_REMOVED": {
+            "ONE": "작업 {{count}}개의 마감일을 제거했습니다",
+            "OTHER": "작업 {{count}}개의 마감일을 제거했습니다"
+          },
+          "DEADLINE_SET": {
+            "ONE": "작업 {{count}}개의 마감일을 {{date}}(으)로 설정했습니다",
+            "OTHER": "작업 {{count}}개의 마감일을 {{date}}(으)로 설정했습니다"
+          },
+          "DONE": {
+            "ONE": "작업 {{count}}개를 완료로 표시했습니다",
+            "OTHER": "작업 {{count}}개를 완료로 표시했습니다"
+          },
+          "ESTIMATE_CLEARED": {
+            "ONE": "작업 {{count}}개의 예상 시간을 지웠습니다",
+            "OTHER": "작업 {{count}}개의 예상 시간을 지웠습니다"
+          },
+          "ESTIMATE_SET": {
+            "ONE": "작업 {{count}}개를 {{estimate}}(으)로 예상했습니다",
+            "OTHER": "작업 {{count}}개를 {{estimate}}(으)로 예상했습니다"
+          },
+          "MOVED_TO_BACKLOG": {
+            "ONE": "작업 {{count}}개를 백로그로 옮겼습니다",
+            "OTHER": "작업 {{count}}개를 백로그로 옮겼습니다",
+            "PARTIAL": "작업 {{total}}개 중 {{count}}개를 백로그로 옮겼습니다(하위 작업은 상위 작업을 따릅니다)"
+          },
+          "MOVED_TO_PROJECT": {
+            "ONE": "작업 {{count}}개를 \"{{projectTitle}}\"(으)로 옮겼습니다",
+            "OTHER": "작업 {{count}}개를 \"{{projectTitle}}\"(으)로 옮겼습니다",
+            "PARTIAL": "작업 {{total}}개 중 {{count}}개를 \"{{projectTitle}}\"(으)로 옮겼습니다(하위 작업은 상위 작업을 따릅니다)"
+          },
+          "MOVED_TO_REGULAR": {
+            "ONE": "작업 {{count}}개를 일반 목록으로 옮겼습니다",
+            "OTHER": "작업 {{count}}개를 일반 목록으로 옮겼습니다",
+            "PARTIAL": "작업 {{total}}개 중 {{count}}개를 일반 목록으로 옮겼습니다(하위 작업은 상위 작업을 따릅니다)"
+          },
+          "NOTHING_TO_DO": "선택한 작업에서 변경할 것이 없습니다",
+          "SCHEDULED": {
+            "ONE": "작업 {{count}}개를 {{date}}(으)로 예약했습니다",
+            "OTHER": "작업 {{count}}개를 {{date}}(으)로 예약했습니다"
+          },
+          "UNDONE": {
+            "ONE": "작업 {{count}}개를 미완료로 표시했습니다",
+            "OTHER": "작업 {{count}}개를 미완료로 표시했습니다"
+          },
+          "UNSCHEDULED": {
+            "ONE": "작업 {{count}}개의 예약을 취소했습니다",
+            "OTHER": "작업 {{count}}개의 예약을 취소했습니다"
+          }
+        },
+        "SELECTED_COUNT": "{{count}}개 선택됨",
+        "SELECT_ENTRY": "여러 작업 선택…",
+        "TASKS_TITLE": {
+          "ONE": "작업 {{count}}개",
+          "OTHER": "작업 {{count}}개"
+        }
       },
       "N": {
         "ESTIMATE_EXCEEDED": "예상 시간을 초과했습니다!",
@@ -2407,6 +2485,8 @@
     "MOVE_BACKWARD": "뒤로 이동",
     "MOVE_FORWARD": "앞으로 나아가기",
     "NEXT": "다음",
+    "NEXT_MONTH": "다음 달",
+    "NEXT_WEEK": "다음 주",
     "NO_CON": "현재 오프라인 상태입니다. 인터넷에 다시 연결하십시오.",
     "NONE": "없음",
     "OK": "승인",
@@ -2421,8 +2501,10 @@
     "SHARE": "공유",
     "SUBMIT": "제출하기",
     "TITLE": "제목",
+    "TODAY": "오늘",
     "TODAY_TAG_TITLE": "오늘",
     "TOGGLE_PASSWORD_VISIBILITY": "비밀번호 표시 전환",
+    "TOMORROW": "내일",
     "UNDO": "취소",
     "WITHOUT_PROJECT": "프로젝트없이",
     "YESTERDAY": "어제"
@@ -2450,6 +2532,27 @@
       "EXPERIMENTAL_WARNING_MSG": "이 기능은 실험적입니다. 버그가 있거나 크게 변경되거나 향후 업데이트에서 제거될 수 있습니다. 데이터 백업을 꼭 유지하세요.<br/><br/>활성화할까요?"
     },
     "AUTO_BACKUPS": {
+      "BROWSE": "백업 둘러보기",
+      "D_LIST": {
+        "BTN_RESTORE": "복원",
+        "CONFIRM_MSG": "<strong>{{timestamp}}</strong>의 백업(작업 {{tasks}}개)을 복원할까요?<br><br>이 작업은 이 기기의 <strong>현재 데이터 전체를 대체</strong>하며, 동기화가 켜져 있으면 다른 기기에서도 대체됩니다. 현재 데이터는 먼저 복구 지점으로 보관됩니다.",
+        "CONFIRM_TITLE": "복원 확인",
+        "DATE_UNKNOWN": "날짜 알 수 없음",
+        "EMPTY": "이 기기에는 아직 백업이 없습니다. 복구 지점은 동기화나 가져오기가 데이터를 대체하기 전에 자동으로 만들어집니다.",
+        "ERROR_LOADING": "백업을 불러오지 못했습니다",
+        "ERROR_RESTORE": "백업을 복원하지 못했습니다",
+        "INTRO": "이 기기에 저장된 모든 백업입니다. 하나를 선택하면 내용을 볼 수 있습니다.",
+        "KIND_FILE": "자동 백업 파일",
+        "LOADING": "백업을 불러오는 중...",
+        "PARTIAL": "이 기기의 일부 백업을 읽지 못했습니다. 아래 목록에 있는 것만 사용할 수 있습니다.",
+        "REASON_FORCE_DOWNLOAD": "복구 지점: \"서버 데이터 사용\" 이전",
+        "REASON_LOCAL_IMPORT": "복구 지점: 가져오기 또는 복원 이전",
+        "REASON_REMOTE_IMPORT": "복구 지점: 동기화가 로컬 데이터를 대체하기 이전",
+        "SLOT_LATEST": "최신 자동 백업",
+        "SLOT_PREVIOUS": "이전 자동 백업",
+        "TASK_COUNT": "작업 {{tasks}}개",
+        "TITLE": "이 기기의 백업"
+      },
       "HELP": "문제가 발생할 경우에 대비해 모든 데이터를 앱 폴더에 자동으로 저장합니다.",
       "LABEL_IS_ENABLED": "자동 백업 사용",
       "LAST_BACKUP_INFO": "마지막 백업: {{date}}",
@@ -2584,6 +2687,7 @@
       "TASK_ADD_ATTACHMENT": "파일 또는 링크 첨부",
       "TASK_ADD_SUB_TASK": "하위 작업 추가",
       "TASK_DELETE": "작업 삭제",
+      "TASK_DUPLICATE": "작업 복제",
       "TASK_EDIT_TAGS": "태그 편집",
       "TASK_EDIT_TITLE": "제목 수정",
       "TASK_MOVE_TO_PROJECT": "프로젝트 메뉴로 이동 작업 열기",
@@ -2601,6 +2705,7 @@
       "TASK_OPEN_NOTES_PANEL": "작업 패널에서 노트/체크리스트 열기",
       "TASK_OPEN_NOTES_FULLSCREEN": "노트/체크리스트를 전체 화면으로 열기",
       "TASK_TOGGLE_DONE": "완료 여부 토글",
+      "TASK_TOGGLE_SELECT": "다중 선택에 작업 추가/제거",
       "TASK_UNSCHEDULE": "작업 일정 해제",
       "TITLE": "키보드 단축키",
       "TOGGLE_BACKLOG": "프로젝트 백로그 표시/숨기기",
@@ -3063,6 +3168,8 @@
     "SHARE_SUCCESS": "프로젝트를 Plainspace에 공유했습니다. 나에게 할당된 작업을 자동으로 가져옵니다.",
     "SPACE_PICKER": {
       "CREATE_NEW": "새 Space 만들기",
+      "DISCONNECT": "계정 연결 해제",
+      "DISCONNECT_HINT": "연결을 해제하면 저장된 계정이 이 기기에서 제거됩니다. 기존 프로젝트 통합은 계속 동기화됩니다. 이를 중지하려면 이슈 제공자 패널에서 해당 Plainspace 통합을 각각 열고 톱니바퀴 아이콘 → 삭제를 선택하세요.",
       "ERROR": "Plainspace에 연결할 수 없습니다. 연결 상태와 토큰의 유효성을 확인한 후 다시 시도하세요.",
       "INTRO": "기존 Space를 연결하여 나에게 할당된 작업을 가져오거나 새 Space를 만드세요.",
       "LINK": "Space 연결",
@@ -3078,6 +3185,7 @@
     "ALLOWED_HOSTS": "네트워크 접근",
     "ALREADY_INITIALIZED": "플러그인이 이미 초기화되었습니다",
     "AUTHORED_BY": "작성자: {{author}}",
+    "CANNOT_DELETE_INBOX": "받은 편지함 프로젝트는 삭제할 수 없습니다",
     "CANNOT_NEST_SUBTASKS": "하위 작업을 중첩할 수 없습니다. 선택한 상위 작업이 이미 다른 작업의 하위 작업입니다",
     "CHOOSE_PLUGIN_FILE": "플러그인 파일 선택",
     "CLEAR_PLUGIN_CACHE": "플러그인 캐시 삭제",

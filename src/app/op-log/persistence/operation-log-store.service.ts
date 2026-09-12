@@ -2421,8 +2421,10 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   }
 
   /** Keeps `keep` snapshots, prioritizing the newest pre-replacement capture. */
-  async pruneImportBackups(keep: number): Promise<number> {
-    return this._importBackupTx('readwrite', (tx) => pruneImportBackupRingTx(tx, keep));
+  async pruneImportBackups(keep: number, protectBackupId?: string): Promise<number> {
+    return this._importBackupTx('readwrite', (tx) =>
+      pruneImportBackupRingTx(tx, keep, protectBackupId),
+    );
   }
 
   /** Retires the Undo slot (only if it still matches `expectedBackupId`). */

@@ -5,6 +5,7 @@ import {
   saveRecurDialog,
   setRecurStartDate,
 } from '../../utils/recurring-task-helpers';
+import { calendarNextMonthBtn } from '../../utils/element-helpers';
 
 /**
  * Bug: https://github.com/super-productivity/super-productivity/issues/6860
@@ -55,7 +56,7 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     await expect(calendar).toBeVisible({ timeout: 5000 });
 
     // Navigate to next month and select the first available day
-    const nextMonthBtn = scheduleDialog.getByRole('button', { name: /next month/i });
+    const nextMonthBtn = calendarNextMonthBtn(scheduleDialog);
     await nextMonthBtn.click();
 
     const firstDay = scheduleDialog

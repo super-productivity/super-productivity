@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { computed, Signal, signal } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
-import { of } from 'rxjs';
+import { defer, Observable, of } from 'rxjs';
 import { TaskBulkActionService } from './task-bulk-action.service';
 import { TaskService } from './task.service';
 import { TaskMultiSelectService } from './task-multi-select.service';
@@ -27,6 +27,11 @@ describe('TaskBulkActionService', () => {
   let matDialog: { open: jasmine.Spy };
   let snackService: { open: jasmine.Spy };
   let moveToProjectService: { moveToProject: jasmine.Spy };
+  let projectService: {
+    getByIdOnce$: () => Observable<{ id: string; title: string }>;
+    moveTaskToBacklog: jasmine.Spy;
+    moveTaskToTodayList: jasmine.Spy;
+  };
   let entities: ReturnType<typeof signal<Record<string, Task>>>;
   let selectedIds: ReturnType<typeof signal<ReadonlySet<string>>>;
   let multiSelect: {
@@ -41,6 +46,7 @@ describe('TaskBulkActionService', () => {
   };
   let dialogResult: unknown;
   let isConfirmBeforeDelete: boolean;
+  let isEnableBacklog: boolean;
 
   const t = (id: string, overrides: Partial<Task> = {}): Task => ({
     ...DEFAULT_TASK,
@@ -66,6 +72,7 @@ describe('TaskBulkActionService', () => {
     selectedIds = signal<ReadonlySet<string>>(new Set());
     dialogResult = true;
     isConfirmBeforeDelete = true;
+    isEnableBacklog = true;
 
     taskService = jasmine.createSpyObj<TaskService>('TaskService', [
       'setDone',
@@ -94,6 +101,11 @@ describe('TaskBulkActionService', () => {
         .and.callFake(() => ({ afterClosed: () => of(dialogResult) })),
     };
     snackService = { open: jasmine.createSpy('open') };
+    projectService = {
+      getByIdOnce$: () => of({ id: 'p2', title: 'Project 2' }),
+      moveTaskToBacklog: jasmine.createSpy('moveTaskToBacklog'),
+      moveTaskToTodayList: jasmine.createSpy('moveTaskToTodayList'),
+    };
     moveToProjectService = {
       moveToProject: jasmine.createSpy('moveToProject').and.resolveTo(true),
     };
@@ -124,11 +136,7 @@ describe('TaskBulkActionService', () => {
         { provide: TaskMoveToProjectService, useValue: moveToProjectService },
         {
           provide: ProjectService,
-          useValue: {
-            getByIdOnce$: () => of({ id: 'p2', title: 'Project 2' }),
-            moveTaskToBacklog: jasmine.createSpy('moveTaskToBacklog'),
-            moveTaskToTodayList: jasmine.createSpy('moveTaskToTodayList'),
-          },
+          useValue: projectService,
         },
         { provide: MatDialog, useValue: matDialog },
         { provide: SnackService, useValue: snackService },
@@ -150,7 +158,13 @@ describe('TaskBulkActionService', () => {
             }),
           },
         },
-        { provide: WorkContextService, useValue: { flatDoneTodayNr$: of(0) } },
+        {
+          provide: WorkContextService,
+          useValue: {
+            flatDoneTodayNr$: of(0),
+            activeWorkContext$: defer(() => of({ isEnableBacklog })),
+          },
+        },
         { provide: TranslateService, useValue: { currentLang: 'en', defaultLang: 'en' } },
         { provide: TranslateStore, useValue: { getTranslations: () => ({}) } },
         { provide: LocaleDatePipe, useValue: { transform: () => 'DATE' } },
@@ -451,6 +465,23 @@ describe('TaskBulkActionService', () => {
     });
   });
 
+  describe('moveToBacklog in a context without a backlog', () => {
+    it('does nothing, like the single-task shortcut (#9374)', async () => {
+      // Today and tag views have no backlog of their own: the bar hides the
+      // button (isShowBacklogBtns) and the single-task shortcut bails on
+      // isEnableBacklog, but the bulk KEYBOARD path reached this unguarded and
+      // emitted one op per task against each task's own project - invisible in
+      // the view the user was looking at, and replicated to every device.
+      isEnableBacklog = false;
+      select([t('a'), t('b')]);
+
+      await service.moveToBacklog();
+
+      expect(projectService.moveTaskToBacklog).not.toHaveBeenCalled();
+      expect(snackService.open).not.toHaveBeenCalled();
+    });
+  });
+
   describe('scheduleFor', () => {
     it('plans day-only picks per task and routes today to the bulk action', async () => {
       select([
@@ -505,6 +536,28 @@ describe('TaskBulkActionService', () => {
         remindOption: null,
       });
       expect(taskService.scheduleTask).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('openDeadlineDialog', () => {
+    it("reports a removal when the dialog's Remove button closes with a null date", async () => {
+      // DialogDeadlineComponent.remove() closes with {date: null, ...}, which is
+      // a removal, not a set. Reporting DEADLINE_SET renders "Set the deadline
+      // of N tasks to " with an empty date, and counts tasks that had none.
+      select([t('a', { deadlineDay: '2026-09-10' }), t('b')]);
+      dialogResult = { date: null, time: null, remindOption: null };
+
+      await service.openDeadlineDialog();
+
+      expect(dispatchedTypes()).toEqual([TaskSharedActions.removeDeadline.type]);
+      const snackArg = snackService.open.calls.mostRecent().args[0] as {
+        msg: string;
+        translateParams: { count: number; date?: string };
+      };
+      expect(snackArg.msg).toContain('DEADLINE_REMOVED');
+      expect(snackArg.msg).not.toContain('DEADLINE_SET');
+      // Only the task that actually had a deadline is counted.
+      expect(snackArg.translateParams.count).toBe(1);
     });
   });
 

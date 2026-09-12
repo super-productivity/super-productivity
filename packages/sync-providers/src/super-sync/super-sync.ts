@@ -101,6 +101,14 @@ export interface SuperSyncDeps {
    * Optional override for tests to avoid real web-request retry waits.
    */
   webRequestRetryDelay?: (ms: number) => Promise<void>;
+  /**
+   * Bare semver of the running app (`18.22.0`, no channel suffix), sent as the
+   * `appVersion` download query parameter so the server can tell which
+   * accounts still have clients that treat REPAIR as a reset (#9962). A query
+   * parameter, not a header: older servers strip it as an unknown key, and a
+   * browser client needs no new CORS allowance. Omitted → not sent.
+   */
+  appVersion?: string;
 }
 
 /**
@@ -293,6 +301,9 @@ export class SuperSyncProvider
     }
     if (limit !== undefined) {
       params.set('limit', String(limit));
+    }
+    if (this._deps.appVersion) {
+      params.set('appVersion', this._deps.appVersion);
     }
 
     const response = await this._fetchApi<unknown>(

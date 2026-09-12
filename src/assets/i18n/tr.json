@@ -6,6 +6,11 @@
       "MSG": "Süper Verimliliği PWA olarak kurmak ister misiniz?"
     },
     "B_OFFLINE": "İnternet bağlantınız kesildi. Verileri senkronize etmek ve sağlayıcıdan sorunları istemek işe yaramaz.",
+    "B_RECOVERY_POINT": {
+      "BROWSE": "Yedekleri incele",
+      "DISMISS": "Yeni verileri koru",
+      "MSG": "Eşitleme az önce bu cihazdaki verileri çok daha küçük bir veri kümesiyle değiştirdi ({{before}} görevden {{after}} göreve). Önceki veriler kurtarma noktası olarak saklandı."
+    },
     "B_SUPER_SYNC_ENCRYPTION": {
       "ALREADY_ENCRYPTED": "Bu hesap başka bir cihazda zaten şifrelenmiş. Senkronizasyonu sürdürmek için mevcut şifrenizi girin.",
       "ENABLE": "Şifrelemeyi etkinleştir",
@@ -51,6 +56,7 @@
     "RESTORE_FILE_BACKUP_ANDROID": "HİÇ VERİ yok gibi görünüyor, ancak bir yedek mevcut. Yüklemek istiyor musun?",
     "RESTORE_FILE_BACKUP_MOBILE": "Bu cihazda hiçbir veri bulunamadı, ancak geri yüklenebilecek bir yedekleme mevcut (görevler: {{tasks}}, projeler: {{projects}}). Geri yüklensin mi?",
     "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "En son otomatik yedeklemeyi geri yükle (görevler: {{tasks}}, projeler: {{projects}})? Bu, bu cihazdaki tüm mevcut verilerin yerini alır ve eşitleme kullanıyorsanız, bir sonraki eşitlemede diğer cihazlarınızın üzerine yazar.",
+    "RESTORE_FILE_BACKUP_WITH_COUNTS": "Görünüşe göre HİÇ VERİ YOK, ancak \"{{dir}}\" konumunda yedekler mevcut. {{from}} tarihli en son yedeği geri yüklemek ister misin (görevler: {{tasks}}, projeler: {{projects}})?",
     "RESTORE_STRAY_BACKUP": "Son senkronizasyon sırasında bazı hatalar olabilir. Son yedeği geri yüklemek istiyor musunuz?"
   },
   "DATETIME_SCHEDULE": {
@@ -517,6 +523,7 @@
       "S": {
         "AUTO_CREATE_FAILED": "Otomatik sorun oluşturma başarısız: {{errorMsg}}",
         "CONNECTION_FAILED": "Bağlantı başarısız",
+        "CONNECTION_FAILED_WITH_ERROR": "Bağlantı başarısız: {{errorMsg}}",
         "CONNECTION_SUCCESS": "Bağlantı çalışıyor!",
         "ERR_GENERIC": "{{issueProviderName}} Hata: {{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}: İstemci tarafı ağ hatası nedeniyle istek başarısız oldu",
@@ -1387,6 +1394,11 @@
         "MESSAGE": "{{count}} senkronize edilmemiş yerel değişikliğiniz var ve bunlar uzak verilerle değiştirilecek. Devam etmek istiyor musunuz?",
         "TITLE": "Yerel Verileri Değiştir?"
       },
+      "D_NOTHING_TO_UPLOAD": {
+        "MESSAGE": "Hiçbir şey değişmedi — eşitleme sunucundaki veriler hâlâ orada.\n\nBu cihaz hiçbir zaman bir eşitlemeyi tamamlamadı, bu yüzden uygulamanın görebileceği bir veri kopyası içermiyor. Üzerine yazmak, sunucudaki her şeyi boş bir cihazla değiştirirdi ve bu geri alınamaz.\n\nŞifreleme parolanı burada tekrar dene — genellikle eski bir parola işe yarar. Hatırlamıyorsan bu cihazı ve sunucuyu tam olduğu gibi bırak ve üzerine yazmak yerine sorunu bildir; geçmişin hâlâ sunucuda.\n\nEşitleme sunucusunu gerçekten silip baştan başlamak istiyorsan bu pencereyi kapat ve Ayarlar → Eşitleme ve Yedekleme → Eşitleme bölümündeki Zorla Üzerine Yaz seçeneğini kullan.",
+        "MESSAGE_CHANGE_PW": "Hiçbir şey değişmedi — eşitleme sunucundaki veriler hâlâ orada.\n\nŞifreleme parolasını değiştirmek bu cihazın verilerini yeniden yükler ve sunucudakinin yerine geçer. Bu cihaz hiçbir zaman bir eşitlemeyi tamamlamadı, bu yüzden uygulamanın görebileceği bir veri kopyası içermiyor ve sunucudaki kopya kaybolurdu.\n\nParolayı, verilerine zaten sahip olan ve başarıyla eşitlenmiş bir cihazdan değiştir.",
+        "TITLE": "Eşitlenmiş verilerine dokunulmadı"
+      },
       "D_PERMISSION": {
         "DISABLE_SYNC": "Senkronizasyonu devre dışı bırak",
         "PERM_FILE": "İzin ver",
@@ -1568,6 +1580,8 @@
           "L_CONFIRM_PASSWORD": "Parolayı Onayla",
           "L_ENABLE_E2E_ENCRYPTION": "Uçtan uca şifrelemeyi etkinleştir",
           "L_ENABLE_TRACKING_PRESENCE": "Diğer cihazlarda canlı takibi göster (deneysel)",
+          "L_PRESENCE_DEVICE_NAME": "Bu cihazın diğer cihazlardaki adı",
+          "PRESENCE_DEVICE_NAME_DESCRIPTION": "Diğer cihazlarındaki zaman takibi rozetinde gösterilir, örneğin \"İş dizüstü\", böylece iki masaüstü birbirinden ayırt edilebilir. Takip durumuyla birlikte gönderilir (eşitleme şifrelemesi açıkken şifreli olarak). Yer tutucu olarak gösterilen platform adını kullanmak için boş bırak.",
           "TRACKING_PRESENCE_DESCRIPTION": "Bu hesabın şu anda hangi görevi takip ettiğini bağlı diğer cihazlarınıza yansıtır ve oradan durdurmanıza olanak tanır. Sadece görüntüleme amaçlıdır — sunucuda hiçbir şey saklanmaz.",
           "L_NEW_PASSWORD": "Yeni Şifreleme Parolası",
           "L_REMOVE_ENCRYPTION": "Veya Şifrelemeyi Kaldır",
@@ -1655,6 +1669,7 @@
         "ERROR_REMOTE_FILE_CORRUPTED": "Uzak senkronizasyon verileri okunamıyor (büyük olasılıkla kesilmiş veya bozulmuş). Yerel verileriniz güvende. Uzak verilerin üzerine yerel verilerinizle yazabilirsiniz.",
         "ERROR_REMOTE_FILE_EMPTY": "Uzak eşitleme dosyası boş. Bu, kesintiye uğramış bir eşitlemeden sonra olabilir. Uzaktaki verilerin üzerine yerel verileriniz yazılsın mı?",
         "ERROR_REMOTE_FILE_LOCKED": "Uzak eşitleme dosyası sunucu tarafından kilitli. Bu durum bir sonraki eşitleme denemesinde çözülebilir.",
+        "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "Eşitleme sunucusu, eşitleme verilerin yerine bir web sayfasıyla yanıt verdi (örneğin bir oturum açma, vekil sunucu veya hata sayfası). Uzak verilerin büyük olasılıkla sağlam — sunucu adresini, kimlik bilgilerini ve ağı kontrol edip tekrar dene. Sorun devam ederse uzak verileri Eşitleme Ayarları → Zorla Üzerine Yaz ile değiştirebilirsin.",
         "ERROR_SYNC_VERSION_MISMATCH": "Uzak senkronizasyon verileri uyumsuz bir format sürümü kullanıyor. Tüm cihazların aynı Super Productivity sürümünü çalıştırdığından emin olun.",
         "WARN_CLIENT_ID_REGENERATED": "Senkronizasyon cihaz kimliği geçersizdi ve yeniden oluşturuldu. Bir sonraki senkronizasyonda bir senkronizasyon çakışması oluşabilir.",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Senkronize ederken hata. Uzak veri okunamıyor. Belki şifrelemeyi etkinleştirdiniz ve yerel parolanız uzak veriyi şifrelemek için kullanılanla eşleşmiyor?",
@@ -1827,6 +1842,7 @@
         "CHECK_ALL": "Tümünü işaretle",
         "CLEAR_COMPLETED": "Tamamlananları temizle",
         "NOTES_OR_CHECKLIST": "Notlar / Kontrol Listesi",
+        "SUB_TASKS_EMPTY": "Alt görevler",
         "UNCHECK_ALL": "Tüm işaretleri kaldır",
         "PASTE_IMAGE_HINT": "Resmi yapıştırmak için Ctrl+V",
         "PASTE_IMAGE_HINT_MAC": "Resmi yapıştırmak için Cmd+V",
@@ -1916,10 +1932,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "Saat ekle",
-        "QA_NEXT_MONTH": "Gelecek ay",
-        "QA_NEXT_WEEK": "Gelecek hafta",
-        "QA_TODAY": "Bugün",
-        "QA_TOMORROW": "Yarın",
         "REMIND_AT": "Hatırlatma zamanı",
         "REMOVE_DEADLINE": "Son tarihi kaldır",
         "RO_1H": "1 saat önce",
@@ -2000,6 +2012,73 @@
         "HELP": "Örnekler:<br> 30m => 30 dakika<br> 2h => 2 saat<br> 2h 30m => 2 saat ve 30 dakika<br> 1.5h => 1 saat ve 30 dakika<br> 03:15 => 3 saat ve 15 dakika",
         "TINE_SPENT": "Harcanan zaman",
         "TITLE": "Güne Ekle"
+      },
+      "MULTI_SELECT": {
+        "ACTIONS": "Eylemler",
+        "CLEAR": "Seçimi temizle",
+        "D_CONFIRM_DELETE": {
+          "MSG": {
+            "ONE": "<strong>{{count}}</strong> görev silinsin mi? Alt görevleri de silinir.",
+            "OTHER": "<strong>{{count}}</strong> görev silinsin mi? Alt görevler de silinir."
+          },
+          "OK": "Sil"
+        },
+        "S": {
+          "DEADLINE_REMOVED": {
+            "ONE": "{{count}} görevin son teslim tarihi kaldırıldı",
+            "OTHER": "{{count}} görevin son teslim tarihi kaldırıldı"
+          },
+          "DEADLINE_SET": {
+            "ONE": "{{count}} görevin son teslim tarihi {{date}} olarak ayarlandı",
+            "OTHER": "{{count}} görevin son teslim tarihi {{date}} olarak ayarlandı"
+          },
+          "DONE": {
+            "ONE": "{{count}} görev tamamlandı olarak işaretlendi",
+            "OTHER": "{{count}} görev tamamlandı olarak işaretlendi"
+          },
+          "ESTIMATE_CLEARED": {
+            "ONE": "{{count}} görevin tahmini süresi temizlendi",
+            "OTHER": "{{count}} görevin tahmini süresi temizlendi"
+          },
+          "ESTIMATE_SET": {
+            "ONE": "{{count}} görev {{estimate}} olarak tahmin edildi",
+            "OTHER": "{{count}} görev {{estimate}} olarak tahmin edildi"
+          },
+          "MOVED_TO_BACKLOG": {
+            "ONE": "{{count}} görev backlog'a taşındı",
+            "OTHER": "{{count}} görev backlog'a taşındı",
+            "PARTIAL": "{{total}} görevden {{count}} tanesi backlog'a taşındı (alt görevler üst görevlerini izler)"
+          },
+          "MOVED_TO_PROJECT": {
+            "ONE": "{{count}} görev \"{{projectTitle}}\" projesine taşındı",
+            "OTHER": "{{count}} görev \"{{projectTitle}}\" projesine taşındı",
+            "PARTIAL": "{{total}} görevden {{count}} tanesi \"{{projectTitle}}\" projesine taşındı (alt görevler üst görevlerini izler)"
+          },
+          "MOVED_TO_REGULAR": {
+            "ONE": "{{count}} görev normal listeye taşındı",
+            "OTHER": "{{count}} görev normal listeye taşındı",
+            "PARTIAL": "{{total}} görevden {{count}} tanesi normal listeye taşındı (alt görevler üst görevlerini izler)"
+          },
+          "NOTHING_TO_DO": "Seçili görevlerde değiştirilecek bir şey yok",
+          "SCHEDULED": {
+            "ONE": "{{count}} görev {{date}} için planlandı",
+            "OTHER": "{{count}} görev {{date}} için planlandı"
+          },
+          "UNDONE": {
+            "ONE": "{{count}} görev tamamlanmadı olarak işaretlendi",
+            "OTHER": "{{count}} görev tamamlanmadı olarak işaretlendi"
+          },
+          "UNSCHEDULED": {
+            "ONE": "{{count}} görevin planlaması kaldırıldı",
+            "OTHER": "{{count}} görevin planlaması kaldırıldı"
+          }
+        },
+        "SELECTED_COUNT": "{{count}} seçildi",
+        "SELECT_ENTRY": "Birden fazla görev seç…",
+        "TASKS_TITLE": {
+          "ONE": "{{count}} görev",
+          "OTHER": "{{count}} görev"
+        }
       },
       "N": {
         "ESTIMATE_EXCEEDED": "Zaman tahmini aşıldı!",
@@ -2406,6 +2485,8 @@
     "MOVE_BACKWARD": "Geri Hareket Et",
     "MOVE_FORWARD": "İleri Hareket Et",
     "NEXT": "Sonraki",
+    "NEXT_MONTH": "Gelecek ay",
+    "NEXT_WEEK": "Gelecek hafta",
     "NO_CON": "Şu anda çevrimdışısınız. Lütfen internete tekrar bağlanın.",
     "NONE": "Yok",
     "OK": "Tamam",
@@ -2420,8 +2501,10 @@
     "SHARE": "Paylaş",
     "SUBMIT": "Gönder",
     "TITLE": "Başlık",
+    "TODAY": "Bugün",
     "TODAY_TAG_TITLE": "Bugün",
     "TOGGLE_PASSWORD_VISIBILITY": "Şifre görünürlüğünü değiştir",
+    "TOMORROW": "Yarın",
     "UNDO": "Geri Al",
     "WITHOUT_PROJECT": "Proje Olmadan",
     "YESTERDAY": "Dün"
@@ -2449,6 +2532,27 @@
       "EXPERIMENTAL_WARNING_MSG": "Bu özellik deneyseldir. Hatalar içerebilir, önemli ölçüde değişebilir veya gelecekteki bir güncellemede kaldırılabilir. Verilerinizin yedeklerini aldığınızdan emin olun.<br/><br/>Etkinleştirmek istiyor musunuz?"
     },
     "AUTO_BACKUPS": {
+      "BROWSE": "Yedekleri incele",
+      "D_LIST": {
+        "BTN_RESTORE": "Geri yükle",
+        "CONFIRM_MSG": "<strong>{{timestamp}}</strong> tarihli yedek ({{tasks}} görev) geri yüklensin mi?<br><br>Bu işlem bu cihazdaki <strong>tüm mevcut verilerinin</strong> ve eşitleme açıksa diğer cihazlarındaki verilerin <strong>yerine geçer</strong>. Mevcut veriler önce kurtarma noktası olarak saklanır.",
+        "CONFIRM_TITLE": "Geri Yüklemeyi Onayla",
+        "DATE_UNKNOWN": "Tarih bilinmiyor",
+        "EMPTY": "Bu cihazda henüz yedek yok. Kurtarma noktaları, eşitleme veya bir içe aktarma verilerinin yerine geçmeden önce otomatik olarak oluşturulur.",
+        "ERROR_LOADING": "Yedekler yüklenemedi",
+        "ERROR_RESTORE": "Yedek geri yüklenemedi",
+        "INTRO": "Bu cihazda saklanan tüm yedekler. İçeriğini görmek için birini seç.",
+        "KIND_FILE": "Otomatik yedek dosyası",
+        "LOADING": "Yedekler yükleniyor...",
+        "PARTIAL": "Bu cihazdaki bazı yedekler okunamadı. Yalnızca aşağıda listelenenler kullanılabilir.",
+        "REASON_FORCE_DOWNLOAD": "Kurtarma noktası: \"Sunucu verilerini kullan\" işleminden önce",
+        "REASON_LOCAL_IMPORT": "Kurtarma noktası: içe aktarma veya geri yüklemeden önce",
+        "REASON_REMOTE_IMPORT": "Kurtarma noktası: eşitleme yerel verilerin yerine geçmeden önce",
+        "SLOT_LATEST": "En son otomatik yedek",
+        "SLOT_PREVIOUS": "Önceki otomatik yedek",
+        "TASK_COUNT": "{{tasks}} görev",
+        "TITLE": "Bu cihazdaki yedekler"
+      },
       "HELP": "Bir şeyler ters gittiğinde, hazır olması için tüm verileri otomatik olarak uygulama klasörünüze kaydedin.",
       "LABEL_IS_ENABLED": "Otomatik yedeklemeyi etkinleştir",
       "LAST_BACKUP_INFO": "Son yedekleme: {{date}}",
@@ -2583,6 +2687,7 @@
       "TASK_ADD_ATTACHMENT": "Dosya veya bağlantı ekle",
       "TASK_ADD_SUB_TASK": "Alt Görev ekle",
       "TASK_DELETE": "Görevi Sil",
+      "TASK_DUPLICATE": "Görevi çoğalt",
       "TASK_EDIT_TAGS": "Etiketleri düzenle",
       "TASK_EDIT_TITLE": "Başlığı Düzenle",
       "TASK_MOVE_TO_PROJECT": "Görevi proje menüsüne taşı",
@@ -2600,6 +2705,7 @@
       "TASK_OPEN_NOTES_PANEL": "Görev panelinde notu/listeyi aç",
       "TASK_OPEN_NOTES_FULLSCREEN": "Notu/listeyi tam ekranda aç",
       "TASK_TOGGLE_DONE": "Geçiş Yapıldı",
+      "TASK_TOGGLE_SELECT": "Görevi çoklu seçime ekle/çıkar",
       "TASK_UNSCHEDULE": "Görevi Zamanlamayı Kaldır",
       "TITLE": "Klavye kısayolları",
       "TOGGLE_BACKLOG": "Görev Listesini Göster/Gizle",
@@ -2933,8 +3039,11 @@
     "DETECTED_LEGACY": "Algılanan eski veriler. Sizin için taşıyacağız!",
     "DIALOG_MESSAGE": "Gelişmiş senkronizasyon güvenilirliği için verilerinizin saklanma şeklini güncelliyoruz. Yedek otomatik olarak indirilecektir.",
     "DIALOG_TITLE": "Verileriniz Taşınıyor",
+    "DIALOG_TITLE_ERROR": "Geçiş Başarısız",
     "E_MIGRATION_FAILED": "Geçiş başarısız oldu! Hatalı:",
+    "E_MIGRATION_FAILED_MSG": "Eski verilerin aktarılamadı. Hâlâ bu cihazdalar ve değiştirilmediler; ayrıca indirilmek üzere bir yedek dosyası sunuldu. Yeniden başlatmak aynı sorunla karşılaşır, bu yüzden bunun yerine boş bir uygulamayla devam edip o yedeği sonradan içe aktarabilirsin. Uygulama bundan sonra bu eski verileri bir daha sormaz.",
     "E_RESTART_FAILED": "Otomatik yeniden başlatma başarısız oldu. Lütfen uygulamayı manuel olarak yeniden başlatın!",
+    "START_FRESH": "Eski veriler olmadan devam et",
     "STATUS_BACKUP": "Verilerinizin yedeği oluşturuluyor...",
     "STATUS_COMPLETE": "Taşıma tamamlandı!",
     "STATUS_MIGRATING": "Veriler taşınıyor...",
@@ -3059,6 +3168,8 @@
     "SHARE_SUCCESS": "Proje Plainspace'te paylaşıldı. Size atanan görevler otomatik olarak içe aktarılacaktır.",
     "SPACE_PICKER": {
       "CREATE_NEW": "Yeni alan oluştur",
+      "DISCONNECT": "Hesabın bağlantısını kes",
+      "DISCONNECT_HINT": "Bağlantıyı kesmek, kayıtlı hesabı bu cihazdan kaldırır. Mevcut proje entegrasyonları eşitlenmeye devam eder. Bunları durdurmak için sorun sağlayıcı panelinde ilgili her Plainspace entegrasyonunu aç ve dişli simgesi → Sil'i seç.",
       "ERROR": "Plainspace'e ulaşılamadı. Bağlantınızı ve tokenin hala geçerli olduğunu kontrol edin, ardından tekrar deneyin.",
       "INTRO": "Size atanan görevleri içe aktarmak için mevcut bir alanı bağlayın veya yeni bir tane oluşturun.",
       "LINK": "Alanı bağla",
@@ -3074,6 +3185,7 @@
     "ALLOWED_HOSTS": "Ağ erişimi",
     "ALREADY_INITIALIZED": "Eklenti zaten başlatıldı",
     "AUTHORED_BY": "{{author}} tarafından",
+    "CANNOT_DELETE_INBOX": "Gelen Kutusu projesi silinemez",
     "CANNOT_NEST_SUBTASKS": "Alt görevler iç içe yerleştirilemiyor: ana görevin kendisi bir alt görev",
     "CHOOSE_PLUGIN_FILE": "Eklenti Dosyası Seç",
     "CLEAR_PLUGIN_CACHE": "Eklenti Önbelleğini Temizle",

@@ -260,7 +260,7 @@ export const TaskSharedActions = createActionGroup({
       } satisfies PersistentActionMeta,
     }),
 
-    dismissReminderOnly: (taskProps: { id: string }) => ({
+    dismissReminderOnly: (taskProps: { id: string; isSkipSnack?: boolean }) => ({
       ...taskProps,
       meta: {
         isPersistent: true,
@@ -278,6 +278,7 @@ export const TaskSharedActions = createActionGroup({
       deadlineRemindAt?: number;
       autoPlanToday?: string;
       autoPlanStartOfNextDayDiffMs?: number;
+      isSkipSnack?: boolean;
     }) => ({
       ...taskProps,
       meta: {
@@ -303,7 +304,7 @@ export const TaskSharedActions = createActionGroup({
       } satisfies PersistentActionMeta,
     }),
 
-    removeDeadline: (taskProps: { taskId: string }) => ({
+    removeDeadline: (taskProps: { taskId: string; isSkipSnack?: boolean }) => ({
       ...taskProps,
       meta: {
         isPersistent: true,

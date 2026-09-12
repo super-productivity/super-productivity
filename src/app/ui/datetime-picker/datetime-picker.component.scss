@@ -118,23 +118,68 @@
 
 .quick-access {
   display: flex;
-  justify-content: space-evenly;
   @include extraBorder('-bottom');
-  height: 48px;
-
-  > button {
-    height: 48px;
-    flex-grow: 1;
-    border-radius: var(--card-border-radius) !important;
-
-    ::ng-deep .mat-mdc-button-persistent-ripple {
-      border-radius: var(--card-border-radius) !important;
-    }
-  }
 
   button + button {
-    @include extraBorder('-left');
+    // Logical, not physical: in RTL a border-left would land on the row's
+    // outer edge and drop the separator between the first two buttons.
+    @include extraBorder('-inline-start');
   }
+}
+
+.quick-access-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-quarter);
+  // Equal share of the row regardless of label length, so a long locale
+  // wraps inside its own button instead of squeezing its neighbours.
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: var(--s6);
+  padding: var(--s-half) var(--s-quarter);
+  border: 0;
+  background: transparent;
+  // A plain button does not inherit the app font — the UA stylesheet would
+  // render these four labels in Arial while the rest of the picker uses the
+  // theme font.
+  font: inherit;
+  color: var(--text-color);
+  border-radius: var(--card-border-radius);
+  cursor: pointer;
+  transition: background-color var(--transition-duration-s) ease;
+
+  // Touch has no hover, so :active carries the tap feedback the Material
+  // ripple used to provide.
+  -webkit-tap-highlight-color: transparent;
+
+  &:hover,
+  &:active {
+    background-color: var(--calendar-hover-bg);
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    // Inset — a positive offset would be clipped by the row's bottom border.
+    outline-offset: calc(-1 * var(--focus-ring-offset));
+  }
+
+  mat-icon {
+    // Matched set — the glyph must equal its box or it decenters.
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    color: var(--text-color-muted);
+  }
+}
+
+.quick-access-label {
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tight);
+  text-align: center;
+  // Long locales ("Nächsten Monat") wrap to a second line rather than overflow.
+  overflow-wrap: anywhere;
 }
 
 :host ::ng-deep mat-month-view .mat-calendar-body-today {

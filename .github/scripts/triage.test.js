@@ -27,12 +27,18 @@ test('parseModelJson returns null rather than throwing on unusable output', () =
 
 test('pickLabels keeps only labels that exist in the repo', () => {
   const { labels, missing } = pickLabels({
-    type: 'bug',
+    type: 'question',
     platforms: ['android', 'firefox'],
     missing: ['version'],
   });
-  assert.deepEqual(labels, ['bug', 'android', 'firefox', 'needs clarification']);
+  assert.deepEqual(labels, ['question', 'android', 'firefox', 'needs clarification']);
   assert.deepEqual(missing, ['version']);
+});
+
+test('pickLabels does not label bug/enhancement -- the issue type covers those', () => {
+  for (const type of ['bug', 'enhancement', 'unclear']) {
+    assert.deepEqual(pickLabels({ type }).labels, [], `expected no label for ${type}`);
+  }
 });
 
 test('pickLabels drops labels the model invented', () => {
@@ -96,10 +102,13 @@ test('pickLabels ignores inherited Object properties', () => {
     labels: ['android'],
     missing: [],
   });
-  assert.deepEqual(pickLabels({ type: 'bug', missing: ['toString', 'hasOwnProperty'] }), {
-    labels: ['bug'],
-    missing: [],
-  });
+  assert.deepEqual(
+    pickLabels({ type: 'question', missing: ['toString', 'hasOwnProperty'] }),
+    {
+      labels: ['question'],
+      missing: [],
+    },
+  );
 });
 
 test('buildComment cannot be made to render a prototype member', () => {

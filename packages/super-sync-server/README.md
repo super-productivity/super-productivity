@@ -243,7 +243,8 @@ npx prisma generate
 
 # Set up .env
 cp env.example .env
-# Edit .env to point to your PostgreSQL instance (DATABASE_URL)
+# Edit .env: point DATABASE_URL at your PostgreSQL instance, and set JWT_SECRET
+# and POSTGRES_PASSWORD — both ship empty and the server refuses to start without them
 
 # Push schema to DB
 npx prisma db push
@@ -480,6 +481,13 @@ limitations do not apply. Process restarts still clear in-memory coordination.
 ## Security Notes
 
 - **Set JWT_SECRET** to a secure random value in production (min 32 characters).
+- **If you deployed before env.example stopped shipping a placeholder, check your
+  `.env` now.** Earlier versions shipped
+  `JWT_SECRET=your-secure-jwt-secret-minimum-32-characters`, which is 32+ chars and
+  so passed validation. If your `.env` still contains it, your token signing key is
+  public: anyone can mint a token for any user. Replace it
+  (`openssl rand -base64 32`) and restart. Rotating invalidates every issued token,
+  so all users must log in again.
 - **Treat email verification, login, and recovery links as credentials.** Their
   tokens are currently stored in plaintext. Expiry prevents use but is not a
   general automatic-deletion boundary: records are cleared when their flow

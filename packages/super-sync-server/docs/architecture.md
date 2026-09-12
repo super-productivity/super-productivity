@@ -101,9 +101,11 @@ This serialization mechanism is a load-bearing decision; see
   data deletion can remove them.
 - `user_sync_state` owns `lastSeq`, the optional compressed snapshot cache, the
   latest causal full-state marker, and the latest explicit state-replacement
-  boundary. `sync_devices` is used only for per-device identity/metadata and
-  last-seen tracking. Its `lastAckedSeq` field is dormant legacy schema state:
-  current sync and retention code neither advances nor reads it.
+  boundary. `sync_devices` is used only for per-device identity/metadata,
+  last-seen tracking, and the client-reported `app_version` (a bare semver,
+  never exposed) that feeds the checkpoint gate below. Its `lastAckedSeq`
+  field is dormant legacy schema state: current sync and retention code
+  neither advances nor reads it.
 - Normal sync bootstraps from operation rows. `GET /ops` can fast-forward to the
   latest causal full-state operation; clients do not download the server's
   cached snapshot blob.
@@ -129,10 +131,15 @@ This serialization mechanism is a load-bearing decision; see
   recovery uses a
   separate bounded cleanup policy.
 - Routine incremental sync does not create periodic full-state boundaries.
-  Adding a client cadence requires a compatibility design (#9962): released
-  v18.14.0 clients accept schema-4 operations but treat `REPAIR` as a reset and
-  discard concurrent edits. Reusing current repair semantics alone cannot safely
-  enable automatic checkpoints for accounts with those clients.
+  Adding a client cadence requires a compatibility design (#9962): every
+  release before v18.21.2 treats `REPAIR` as a reset and discards concurrent
+  edits. Reusing current repair semantics alone cannot safely enable automatic
+  checkpoints for accounts with those clients. The prerequisite is in place:
+  clients report their version on download, `sync_devices.app_version` stores
+  it, and `checkpoint-gate.ts` decides per account whether every device seen
+  inside retention is at or above the cut (a device with no reported version
+  counts as old). The daily cleanup logs the fleet-wide roll-up as
+  `Cleanup [checkpoint-gate]`; no client uploads checkpoints yet.
 - Server-generated restore is unavailable when the required replay range
   contains encrypted operations.
 

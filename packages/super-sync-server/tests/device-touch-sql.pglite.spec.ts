@@ -50,6 +50,7 @@ type Row = {
   user_id: number;
   last_seen_at: bigint | string | number;
   created_at: bigint | string | number;
+  app_version: string | null;
 };
 
 describe('DeviceService.touchDevice (real Postgres)', () => {
@@ -117,6 +118,68 @@ describe('DeviceService.touchDevice (real Postgres)', () => {
     expect(num(rows[0].last_seen_at)).toBe(later);
     // createdAt is the device's first-seen stamp and must survive refreshes.
     expect(num(rows[0].created_at)).toBe(1_000_000);
+  });
+
+  describe('app_version (#9962)', () => {
+    it('stores the reported version on insert and leaves it NULL when none is reported', async () => {
+      vi.setSystemTime(1_000_000);
+      await service.touchDevice(7, 'E_abc123', '18.22.0');
+      await service.touchDevice(7, 'A_xyz789');
+
+      const rows = await readAll();
+      expect(rows.map((r) => [r.client_id, r.app_version])).toEqual([
+        ['A_xyz789', null],
+        ['E_abc123', '18.22.0'],
+      ]);
+    });
+
+    it('never overwrites a known version with NULL (WebSocket heartbeat touches carry none)', async () => {
+      vi.setSystemTime(1_000_000);
+      await service.touchDevice(7, 'E_abc123', '18.22.0');
+
+      const later = 1_000_000 + DEVICE_TOUCH_THROTTLE_MS + 1;
+      vi.setSystemTime(later);
+      await service.touchDevice(7, 'E_abc123');
+
+      const rows = await readAll();
+      expect(rows[0].app_version).toBe('18.22.0');
+      expect(num(rows[0].last_seen_at)).toBe(later);
+    });
+
+    it('records a changed version immediately, bypassing the throttle', async () => {
+      vi.setSystemTime(1_000_000);
+      await service.touchDevice(7, 'E_abc123', '18.21.1');
+
+      const soon = 1_000_000 + 1;
+      vi.setSystemTime(soon);
+      await new DeviceService().touchDevice(7, 'E_abc123', '18.22.0');
+
+      const rows = await readAll();
+      expect(rows[0].app_version).toBe('18.22.0');
+      expect(num(rows[0].last_seen_at)).toBe(soon);
+    });
+
+    it('backfills a version onto a row that had none, bypassing the throttle', async () => {
+      vi.setSystemTime(1_000_000);
+      await service.touchDevice(7, 'E_abc123');
+
+      vi.setSystemTime(1_000_000 + 1);
+      await service.touchDevice(7, 'E_abc123', '18.22.0');
+
+      const rows = await readAll();
+      expect(rows[0].app_version).toBe('18.22.0');
+    });
+
+    it('still writes nothing for an unchanged version inside the throttle window', async () => {
+      vi.setSystemTime(1_000_000);
+      await service.touchDevice(7, 'E_abc123', '18.22.0');
+
+      vi.setSystemTime(1_000_000 + DEVICE_TOUCH_THROTTLE_MS - 1);
+      await service.touchDevice(7, 'E_abc123', '18.22.0');
+
+      const rows = await readAll();
+      expect(num(rows[0].last_seen_at)).toBe(1_000_000);
+    });
   });
 
   it('keeps devices and accounts separate', async () => {

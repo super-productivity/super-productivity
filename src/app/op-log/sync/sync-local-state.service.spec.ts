@@ -156,6 +156,24 @@ describe('SyncLocalStateService', () => {
       expect(opLogStoreSpy.getFirstOpEntry).not.toHaveBeenCalled();
     });
 
+    it('ignores a full-state op the processing loop will never reach (#8764)', async () => {
+      // The gate this defers to only inspects `takeInterpretableOpPrefix`, so a
+      // full-state op sitting BEHIND an uninterpretable op is invisible to it.
+      // Seeing it here too would leave neither side prompting, and a
+      // never-synced genesis client silently merges remote data over its own.
+      const futureVocabularyOp = {
+        ...regularOp.op,
+        id: 'future-vocabulary',
+        opType: 'FUTURE_OP' as unknown as OpType,
+      };
+      expect(
+        await service.isFreshOrNeverSyncedGenesisClient([
+          futureVocabularyOp,
+          syncImport.op,
+        ]),
+      ).toBe(true);
+    });
+
     it('is false for a client with ordinary history', async () => {
       opLogStoreSpy.getFirstOpEntry.and.resolveTo(regularOp);
       expect(await service.isFreshOrNeverSyncedGenesisClient([regularOp.op])).toBe(false);

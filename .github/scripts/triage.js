@@ -11,7 +11,10 @@
 const AUTORESPONSE =
   "Thank you very much for opening up this issue! I am currently a bit overwhelmed by the many requests that arrive each week, so please forgive me, if I fail to respond personally. I am still very likely to at least skim read your request and I'll probably try to fix all (real) bugs if possible and I will likely review every single PR being made (please, give me a heads up if you intent to do so) and I will try to work on popular requests (please upvote via thumbs up on the original issue) whenever possible, but trying to respond to every single issue over the last years has been kind of draining and I need to adjust my approach for this project to remain fun for me and to make any progress with actually coding new stuff. Thanks for your understanding!";
 
-const TYPE_LABELS = { bug: 'bug', enhancement: 'enhancement', question: 'question' };
+// `bug`/`enhancement` would duplicate the GitHub issue type the templates already
+// set (Bug/Feature), so only `question` — which no template produces — still earns
+// a label. `type` itself is kept: it drives the stale-version check.
+const TYPE_LABELS = { question: 'question' };
 const PLATFORM_LABELS = ['android', 'windows', 'firefox'];
 
 const MISSING_ASKS = {

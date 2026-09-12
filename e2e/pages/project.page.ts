@@ -1,5 +1,6 @@
 import { expect, Locator, Page } from '@playwright/test';
 import { BasePage } from './base.page';
+import { fillMarkdownEditor, markdownEditor } from '../utils/markdown-editor';
 
 export const isProjectTasksRoute = (url: string): boolean =>
   /\/#\/project\/[^/]+\/tasks(?:[/?#]|$)/.test(url);
@@ -578,25 +579,13 @@ export class ProjectPage extends BasePage {
       timeout: 10000,
     });
 
-    // Try different selectors for the textarea
-    let noteTextarea = this.page.locator('dialog-fullscreen-markdown textarea').first();
-    let textareaVisible = await noteTextarea
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
-
-    if (!textareaVisible) {
-      // Try alternative selector
-      noteTextarea = this.page.locator('textarea').first();
-      textareaVisible = await noteTextarea
-        .isVisible({ timeout: 2000 })
-        .catch(() => false);
+    const dialog = this.page.locator('dialog-fullscreen-markdown');
+    const noteEditor = markdownEditor(dialog);
+    if (!(await noteEditor.isVisible({ timeout: 2000 }).catch(() => false))) {
+      throw new Error('Note dialog markdown editor not found');
     }
 
-    if (!textareaVisible) {
-      throw new Error('Note dialog textarea not found after trying multiple approaches');
-    }
-
-    await noteTextarea.fill(noteContent);
+    await fillMarkdownEditor(dialog, noteContent);
 
     // Click the save button - try multiple selectors
     let saveBtn = this.page.locator('#T-save-note');
@@ -612,7 +601,7 @@ export class ProjectPage extends BasePage {
       await saveBtn.click();
     } else {
       // Fallback: press Enter to save
-      await noteTextarea.press('Control+Enter');
+      await noteEditor.press('Control+Enter');
     }
 
     // Wait for dialog to close

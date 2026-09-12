@@ -992,6 +992,9 @@
       "D_DELETE": {
         "MSG": "Are you sure you want to delete the project \"{{title}}\"?"
       },
+      "D_RENAME": {
+        "PLACEHOLDER": "Enter project name"
+      },
       "COMPLETE": {
         "COMPLETED_ON": "Completed {{date}}",
         "REOPEN": "Reopen",
@@ -1764,6 +1767,9 @@
       "D_DELETE": {
         "CONFIRM_MSG": "Do you really want to delete the tag \"{{tagName}}\"? It will be removed from all tasks. This cannot be undone!"
       },
+      "D_RENAME": {
+        "PLACEHOLDER": "Enter tag name"
+      },
       "D_EDIT": {
         "ADD": "Add tags for \"{{title}}\"",
         "EDIT": "Edit tags for \"{{title}}\"",
@@ -1837,7 +1843,6 @@
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Links & Files",
-        "ADD_CHECKLIST_ITEM": "Add checklist item",
         "CHECKLIST_ACTIONS": "Checklist actions",
         "CHECK_ALL": "Check all",
         "CLEAR_COMPLETED": "Clear completed",
@@ -1866,7 +1871,8 @@
         "SUB_TASKS": "Subtasks ({{nr}})",
         "SUB_TASKS_EMPTY": "Subtasks",
         "TIME": "Duration",
-        "TITLE_PLACEHOLDER": "Enter a title"
+        "TITLE_PLACEHOLDER": "Enter a title",
+        "OPEN_IN_FULLSCREEN": "Open in fullscreen"
       },
       "B": {
         "ADD_ALL_TO_TODAY": "Add all to today",
@@ -1932,10 +1938,6 @@
       },
       "D_DEADLINE": {
         "ADD_TIME": "Add time",
-        "QA_NEXT_MONTH": "Next month",
-        "QA_NEXT_WEEK": "Next week",
-        "QA_TODAY": "Today",
-        "QA_TOMORROW": "Tomorrow",
         "REMIND_AT": "Remind at",
         "REMOVE_DEADLINE": "Remove deadline",
         "RO_1H": "1 hour before",
@@ -2489,6 +2491,8 @@
     "MOVE_BACKWARD": "Move backward",
     "MOVE_FORWARD": "Move forward",
     "NEXT": "Next",
+    "NEXT_MONTH": "Next month",
+    "NEXT_WEEK": "Next week",
     "NO_CON": "You are currently offline. Please reconnect to the internet.",
     "NONE": "None",
     "OK": "Ok",
@@ -2499,12 +2503,15 @@
     "PASSWORD_STRENGTH_WEAK": "Weak",
     "PROCESSING": "Processing",
     "REMOVE": "Remove",
+    "RENAME": "Rename",
     "SAVE": "Save",
     "SHARE": "Share",
     "SUBMIT": "Submit",
     "TITLE": "Title",
+    "TODAY": "Today",
     "TODAY_TAG_TITLE": "Today",
     "TOGGLE_PASSWORD_VISIBILITY": "Toggle password visibility",
+    "TOMORROW": "Tomorrow",
     "UNDO": "Undo",
     "WITHOUT_PROJECT": "Without Project",
     "YESTERDAY": "Yesterday"
@@ -2770,6 +2777,7 @@
       "ZH_TW": "中文(繁體)"
     },
     "MISC": {
+      "APPEARANCE": "Appearance",
       "DARK_MODE": "Dark Mode",
       "DARK_MODE_ARIA_LABEL": "Dark mode selection",
       "DARK_MODE_DARK": "Dark",
@@ -2802,7 +2810,7 @@
       "START_OF_NEXT_DAY_HINT": "The time when your day starts (Format: HH:mm, e.g. 02:30)",
       "THEME": "Theme",
       "THEME_EXPERIMENTAL": "Theme (experimental)",
-      "THEME_INSTALL_BUTTON": "Install theme…",
+      "THEME_INSTALL_BUTTON": "Install theme",
       "THEME_INSTALL_TOOLTIP": "Upload a CSS theme file. Themes only change visuals — never run code — but they can still affect how your data is rendered. Only install themes from sources you trust.",
       "THEME_INSTALLED_WITH_WARNINGS": "Theme installed. Missing tokens: {{tokens}}",
       "THEME_INVALID_CSS_FILE": "Could not install theme: invalid or unsafe CSS file.",
@@ -2811,7 +2819,7 @@
       "THEME_SELECT_LABEL": "Select Theme",
       "TITLE": "Misc Settings",
       "WALLPAPER": "Wallpaper",
-      "WALLPAPER_BUTTON": "Set wallpaper…",
+      "WALLPAPER_BUTTON": "Set wallpaper",
       "WALLPAPER_DIALOG_TITLE": "Global wallpaper",
       "WALLPAPER_HINT": "Shown on pages without their own background (Planner, Schedule, Boards, Settings…). Tags and projects with their own image override it."
     },
@@ -2845,7 +2853,8 @@
       "LUNCH_BREAK_START_END_DESCRIPTION": "e.g. 13:00",
       "MONTH": "Month",
       "TITLE": "Schedule",
-      "WORK_START_END_DESCRIPTION": "e.g. 17:00"
+      "WORK_END_DESCRIPTION": "e.g. 17:00",
+      "WORK_START_DESCRIPTION": "e.g. 9:00"
     },
     "SHORT_SYNTAX": {
       "HELP": "<p>Here you can control short syntax options when creating a task</p>",
@@ -3133,12 +3142,13 @@
       "CONNECT": "Connect",
       "CONNECTING": "Connecting…",
       "INTRO": "Collaborate on projects with others. Tasks assigned to you import automatically and stay in sync.",
-      "INVALID": "That token didn't work. Make sure you copied the whole token (it starts with \"pat_\") and try again.",
+      "INVALID": "Plainspace rejected that token. It may be expired or revoked — create a new one and paste it again.",
       "OPEN_LINK": "Open Plainspace",
       "TITLE": "Connect to Plainspace",
       "TOKEN_HELP": "Create an API token on Plainspace, then paste it below.",
       "TOKEN_LABEL": "API token",
-      "TOKEN_PLACEHOLDER": "pat_…"
+      "TOKEN_PLACEHOLDER": "pat_…",
+      "UNREACHABLE": "Couldn't reach Plainspace. Check your internet connection and the host, then try again."
     },
     "FORM": {
       "HOST": "Plainspace host",

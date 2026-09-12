@@ -3,7 +3,6 @@ import {
   ChangeDetectorRef,
   Component,
   computed,
-  effect,
   ElementRef,
   HostBinding,
   inject,
@@ -22,14 +21,11 @@ import { MatIcon } from '@angular/material/icon';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
-import { MarkdownComponent } from 'ngx-markdown';
-import { IS_ELECTRON } from '../../app.constants';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { isMarkdownChecklist } from '../../features/markdown-checklist/is-markdown-checklist';
 import {
   removeCheckedChecklistItems,
   setAllChecklistItemsChecked,
-  toggleChecklistItemAtIndex,
 } from '../../features/markdown-checklist/checklist-operations';
 import { T } from '../../t.const';
 import { fadeInAnimation } from '../animations/fade.ani';
@@ -38,18 +34,16 @@ import { ClipboardImageService } from '../../core/clipboard-image/clipboard-imag
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { ResolveClipboardImagesDirective } from '../../core/clipboard-image/resolve-clipboard-images.directive';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
+import type { EditorView, KeyBinding } from '@codemirror/view';
+import { LiveMarkdownEditorComponent } from './live-markdown/live-markdown-editor.component';
 import { Store } from '@ngrx/store';
 import { Location } from '@angular/common';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { Log } from '../../core/log';
-import { handleListKeydown } from './markdown-toolbar.util';
+import { handleListKeydown, applyTaskList } from './markdown-toolbar.util';
 import { DateService } from '../../core/date/date.service';
 
 const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
-
-// A pointer that moves more than this between mousedown and click is treated as
-// a drag-select rather than a click, so it must not flip the note into edit mode.
-const DRAG_THRESHOLD_PX = 5;
 
 @Component({
   selector: 'inline-markdown',
@@ -59,7 +53,6 @@ const DRAG_THRESHOLD_PX = 5;
   animations: [fadeInAnimation],
   imports: [
     FormsModule,
-    MarkdownComponent,
     MatIconButton,
     MatTooltip,
     MatIcon,
@@ -68,6 +61,7 @@ const DRAG_THRESHOLD_PX = 5;
     MatMenuTrigger,
     TranslatePipe,
     ResolveClipboardImagesDirective,
+    LiveMarkdownEditorComponent,
   ],
 })
 export class InlineMarkdownComponent implements OnInit, OnDestroy {
@@ -81,20 +75,26 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   private _location = inject(Location);
   private _dateService = inject(DateService);
   private _currentPastePlaceholder: string | null = null;
+
+  /**
+   * Pasted images are stored behind `indexeddb://` (or, in Electron, a
+   * `file:///…/clipboard-images/` path) and have to be read back before they can
+   * load. Anything else — a plain http(s) image — is used unchanged.
+   */
+  readonly resolveImageSrc = async (src: string): Promise<string> =>
+    (await this._clipboardImageService.resolveClipboardImageUrl(src)) ?? src;
+
+  /**
+   * Last document the live editor reported; null until it reports one. A signal
+   * because the checklist toolbar has to notice a list being typed, before the
+   * blur that writes it back to `modelCopy`.
+   */
+  private readonly _liveDoc = signal<string | null>(null);
   private _isFullscreenDialogOpen = false;
   private _isDestroyed = false;
-  private _resolveGeneration = 0;
-  private _mousedownX = 0;
-  private _mousedownY = 0;
-  private _hasSelectionOnMousedown = false;
 
   readonly isLock = input<boolean>(false);
   readonly isShowControls = input<boolean>(false);
-  // When true, the rendered preview is shown in read mode but hidden while
-  // editing, so the editor is a plain textarea (no dimmed live preview below).
-  // Used by the compact focus-mode notes panel; the detail panel keeps the
-  // live preview.
-  readonly isHidePreviewWhileEditing = input<boolean>(false);
   readonly isShowChecklistToggle = input<boolean>(false);
   readonly isDefaultText = input<boolean>(false);
   // The default/placeholder text currently shown when there are no real notes.
@@ -111,53 +111,55 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   readonly keyboardUnToggle = output<Event>();
   readonly wrapperEl = viewChild<ElementRef>('wrapperEl');
   readonly textareaEl = viewChild<ElementRef>('textareaEl');
-  readonly previewEl = viewChild<MarkdownComponent>('previewEl');
+  readonly liveEditorEl = viewChild<LiveMarkdownEditorComponent>('liveEditorEl');
+
+  /**
+   * Escape and Ctrl+Enter leave the notes field, as they did on the textarea
+   * path (keypressHandler): blurring commits the note, and `keyboardUnToggle`
+   * is what hands focus back to the task detail panel. Without these the only
+   * way out of the editor by keyboard is Tab.
+   */
+  readonly liveEditorKeymap: readonly KeyBinding[] = [
+    { key: 'Escape', run: (view) => this._leaveLiveEditor(view) },
+    { key: 'Mod-Enter', run: (view) => this._leaveLiveEditor(view) },
+  ];
 
   isHideOverflow = signal(false);
   isChecklistMode = signal(false);
   isShowEdit = signal(false);
+  // Set when a parent asks for focus before the deferred editor chunk has
+  // loaded; the editor picks it up via [autoFocus] once it mounts.
+  isPendingLiveFocus = signal(false);
   modelCopy = signal<string | undefined>(undefined);
-  resolvedModel = signal<string | undefined>(undefined);
-  // Plain property for markdown component compatibility
-  resolvedMarkdownData: string | undefined;
 
   isMarkdownFormattingEnabled = computed(() => {
     const tasks = this._globalConfigService.tasks();
     return tasks?.isMarkdownFormattingInNotesEnabled ?? true;
   });
 
-  isTurnOffMarkdownParsing = computed(() => !this.isMarkdownFormattingEnabled());
-
-  // The rendered preview shows in read mode, and also below the textarea while
-  // editing (live preview) — unless the consumer opts out via
-  // isHidePreviewWhileEditing (the compact focus-mode panel does, to stay a
-  // single view). Hidden entirely when markdown parsing is off.
-  isShowPreview = computed(
-    () =>
-      !this.isTurnOffMarkdownParsing() &&
-      !(this.isHidePreviewWhileEditing() && this.isShowEdit()),
-  );
+  // Obsidian-style editor (#9910): renders and edits in one view, so it fully
+  // replaces the read preview here. Whenever markdown is parsed at all, this is
+  // how notes are edited — with formatting off the user asked for plain text
+  // and gets a plain textarea.
+  isLiveMarkdownEditor = computed(() => this.isMarkdownFormattingEnabled());
 
   // True when the current notes are a markdown checklist — gates the checklist
   // bulk actions (check all / uncheck all / clear completed) in the UI.
+  // Reads the live document first: notes only write back to `modelCopy` on
+  // blur, so keying off it alone hid the checklist actions for the whole time
+  // you were actually typing the checklist.
   isCurrentlyChecklist = computed(
     () =>
       this.isShowChecklistToggle() &&
       this.isMarkdownFormattingEnabled() &&
-      isMarkdownChecklist(this.modelCopy() || ''),
+      isMarkdownChecklist(this._liveDoc() ?? this.modelCopy() ?? ''),
   );
 
   readonly T = T;
   private _hideOverFlowTimeout: number | undefined;
 
   constructor() {
-    this.resizeParsedToFit();
-
-    // Sync signal to plain property for markdown component
-    effect(() => {
-      this.resolvedMarkdownData = this.resolvedModel();
-      this._cd.markForCheck();
-    });
+    this.resizeToFit();
   }
 
   @HostBinding('class.isFocused') get isFocused(): boolean {
@@ -175,28 +177,15 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   @Input() set model(v: string) {
     this._model = v || '';
     this.modelCopy.set(v || '');
-
-    this._resolveGeneration++;
-    if (v) {
-      if (this._clipboardImageService.hasResolvableImages(v)) {
-        // Has clipboard images whose URLs must be resolved to blob: URLs first;
-        // defer the render until then so we don't flash a broken image.
-        this._updateResolvedModel(v);
-      } else {
-        // Nothing to resolve: render the parsed markdown on the first paint
-        // instead of a tick later, which briefly showed the raw notes as plain
-        // text before the async (no-op) resolution settled.
-        this.resolvedModel.set(v);
-        this.resolvedMarkdownData = v;
-      }
-    } else {
-      this.resolvedModel.set('');
-      this.resolvedMarkdownData = '';
-    }
+    // Drop what the live editor last reported: on a task switch this setter
+    // runs before the editor has been handed the new document, and a destroy
+    // landing in that window would otherwise commit the PREVIOUS task's notes
+    // onto this one.
+    this._liveDoc.set(null);
 
     if (!this.isShowEdit()) {
       window.setTimeout(() => {
-        this.resizeParsedToFit();
+        this.resizeToFit();
       });
     }
 
@@ -211,6 +200,13 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   // TODO: Skipped for migration because:
   //  Accessor inputs cannot be migrated as they are too complex.
   @Input() set isFocus(val: boolean) {
+    if (this.isLiveMarkdownEditor()) {
+      if (val) {
+        this.isPendingLiveFocus.set(true);
+        this.liveEditorEl()?.focus();
+      }
+      return;
+    }
     if (!this.isShowEdit() && val) {
       this._toggleShowEdit();
     }
@@ -220,10 +216,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     if (this.isLock()) {
       this._toggleShowEdit();
     } else {
-      this.resizeParsedToFit();
-    }
-    if (IS_ELECTRON) {
-      this._makeLinksWorkForElectron();
+      this.resizeToFit();
     }
   }
 
@@ -233,7 +226,23 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       window.clearTimeout(this._hideOverFlowTimeout);
     }
 
-    if (this.isShowEdit() && !this._isFullscreenDialogOpen) {
+    if (this._isFullscreenDialogOpen) {
+      return;
+    }
+    if (this.isLiveMarkdownEditor()) {
+      // The blur that would normally commit can arrive AFTER Angular has torn
+      // this component down — closing the detail panel destroys it on
+      // mousedown, and the browser fires blur at the removed element
+      // afterwards, where the emit is dropped. So commit from here, where the
+      // output is still alive, using the doc `docChanged` last recorded (the
+      // editor's own view is already destroyed by this point).
+      const liveDoc = this._liveDoc();
+      if (liveDoc !== null && liveDoc !== this.model) {
+        this.changed.emit(liveDoc);
+      }
+      return;
+    }
+    if (this.isShowEdit()) {
       const textareaEl = this.textareaEl();
       if (textareaEl) {
         const currentValue = textareaEl.nativeElement.value;
@@ -261,20 +270,20 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   }
 
   private _applyChecklistTransform(transform: (notes: string) => string): void {
-    // Read the freshest content: the textarea when editing, else the model.
+    // Read the freshest content: whichever editor is mounted, else the model.
     const textareaEl = this.textareaEl();
-    const current = textareaEl ? textareaEl.nativeElement.value : this._model || '';
+    const current = this._currentText();
     const next = transform(current);
     if (next === current) {
       return;
     }
-    // The `model` setter syncs `modelCopy` and re-resolves the rendered markdown.
+    // The `model` setter syncs `modelCopy`, which is what the editors read.
     this.model = next;
     if (textareaEl) {
       textareaEl.nativeElement.value = next;
     }
     this.changed.emit(next);
-    window.setTimeout(() => this.resizeParsedToFit());
+    window.setTimeout(() => this.resizeToFit());
   }
 
   keypressHandler(ev: KeyboardEvent): void {
@@ -325,56 +334,30 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
         get: () => this._currentPastePlaceholder,
         set: (val) => (this._currentPastePlaceholder = val),
       },
-      getContent: () => this._model || '',
+      getContent: () => this._currentText(),
       setContent: (content) => {
         this.modelCopy.set(content);
         this._model = content;
         this.changed.emit(content);
       },
-      getTextarea: () => this.textareaEl()?.nativeElement || null,
+      getTextarea: () => this.liveEditorEl() ?? this.textareaEl()?.nativeElement ?? null,
       getTaskId: () => this.taskId() || null,
-      onPasteComplete: async (content) => {
-        this.resizeTextareaToFit();
-        await this._updateResolvedModel(content);
+      onPasteComplete: async () => {
+        if (!this.liveEditorEl()) {
+          this.resizeTextareaToFit();
+        }
       },
     });
   }
 
-  previewMousedown($event: MouseEvent): void {
-    if ($event.button !== 0) {
-      return;
-    }
-    this._mousedownX = $event.clientX ?? 0;
-    this._mousedownY = $event.clientY ?? 0;
-    this._hasSelectionOnMousedown = !!window.getSelection()?.toString();
-  }
-
-  clickPreview($event: MouseEvent): void {
-    const target = $event.target as HTMLElement;
-    if (target.tagName === 'A') {
-      // Let links work normally
-      return;
-    }
-
-    // Only the checkbox icon and the item's text label toggle the item. Clicks
-    // on the empty rest of the row fall through to opening the editor.
-    const hit = target.closest('.checkbox, .checkbox-label') as HTMLElement | null;
-    const wrapper = hit?.closest('.checkbox-wrapper') as HTMLElement | null;
-    if (wrapper) {
-      this._handleCheckboxClick(wrapper);
-      return;
-    }
-
-    const dx = ($event.clientX ?? 0) - this._mousedownX;
-    const dy = ($event.clientY ?? 0) - this._mousedownY;
-    const isDrag = Math.hypot(dx, dy) > DRAG_THRESHOLD_PX;
-    const hasCurrentSelection = !!window.getSelection()?.toString();
-
-    if (this._hasSelectionOnMousedown || hasCurrentSelection || isDrag) {
-      return;
-    }
-
-    this._toggleShowEdit();
+  /**
+   * Blur commits the note through the normal path; the emitted Event is only a
+   * signal — the one consumer (`task-detail-panel`) ignores its payload.
+   */
+  private _leaveLiveEditor(view: EditorView): boolean {
+    view.contentDOM.blur();
+    this.keyboardUnToggle.emit(new Event('keyboardUnToggle'));
+    return true;
   }
 
   untoggleShowEdit(): void {
@@ -382,7 +365,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       return;
     }
     if (!this.isLock()) {
-      this.resizeParsedToFit();
+      this.resizeToFit();
       this.isShowEdit.set(false);
     }
     const textareaEl = this.textareaEl();
@@ -395,6 +378,47 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       this.model = this.modelCopy() || '';
       this.changed.emit(this.modelCopy() as string);
     }
+  }
+
+  /** Commit a change made in the live editor (emitted on blur, like the textarea). */
+  onLiveEditorChanged(value: string): void {
+    this._liveDoc.set(value);
+    this.modelCopy.set(value);
+    this.model = value;
+    this.changed.emit(value);
+  }
+
+  /**
+   * Every keystroke, but deliberately NOT a save: it only records what the
+   * editor currently holds so `ngOnDestroy` has something to commit. The real
+   * save still happens on blur, so a note is still one op per edit session
+   * rather than one per keystroke.
+   */
+  onLiveEditorDocChanged(value: string): void {
+    this._liveDoc.set(value);
+  }
+
+  onLiveEditorFocused(): void {
+    this.isPendingLiveFocus.set(false);
+    this.isShowEdit.set(true);
+    this.focused.emit(new FocusEvent('focus'));
+  }
+
+  onLiveEditorBlurred(): void {
+    if (!this.isLock()) {
+      this.isShowEdit.set(false);
+    }
+    this.setBlur(new FocusEvent('blur'));
+  }
+
+  /** Freshest text, from whichever editor is mounted. */
+  private _currentText(): string {
+    const liveEditorEl = this.liveEditorEl();
+    if (liveEditorEl) {
+      return liveEditorEl.value;
+    }
+    const textareaEl = this.textareaEl();
+    return textareaEl ? textareaEl.nativeElement.value : this._model || '';
   }
 
   resizeTextareaToFit(): void {
@@ -415,14 +439,15 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   openFullScreen(): void {
     this._isFullscreenDialogOpen = true;
     const taskId = this.taskId();
-    // Read directly from textarea since modelCopy may be stale (one-way ngModel binding)
-    const textareaEl = this.textareaEl();
-    const currentContent = textareaEl ? textareaEl.nativeElement.value : this.modelCopy();
+    // Read straight from the live editor / textarea: modelCopy lags behind
+    // (one-way ngModel binding, and the live editor only commits on blur — which
+    // the toolbar button suppresses via mousedown.preventDefault).
+    const currentContent = this._currentText();
     // Saves-and-closes on a navigation (resize crossing the mobile breakpoint,
     // Android back) instead of dropping the edit — see openFullscreenMarkdownDialog
     // (#8434).
     const dialogRef = openFullscreenMarkdownDialog(this._matDialog, this._location, {
-      content: currentContent ?? '',
+      content: currentContent,
       taskId,
     });
 
@@ -483,26 +508,17 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     });
   }
 
-  resizeParsedToFit(): void {
+  /**
+   * The live editor sizes itself; only the plain textarea (markdown formatting
+   * off) needs measuring, and only once it is in the DOM.
+   */
+  resizeToFit(): void {
     this._hideOverflow();
 
     setTimeout(() => {
-      const previewEl = this.previewEl();
-      if (!previewEl) {
-        if (this.textareaEl()) {
-          this.resizeTextareaToFit();
-        }
-        return;
+      if (this.textareaEl()) {
+        this.resizeTextareaToFit();
       }
-      const wrapperEl = this.wrapperEl();
-      if (!wrapperEl) {
-        throw new Error('Wrapper el not visible');
-      }
-      previewEl.element.nativeElement.style.height = 'auto';
-      // NOTE: somehow this pixel seem to help
-      wrapperEl.nativeElement.style.height =
-        previewEl.element.nativeElement.offsetHeight + 'px';
-      previewEl.element.nativeElement.style.height = '';
     });
   }
 
@@ -522,15 +538,24 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     ev.stopPropagation();
 
     const textareaEl = this.textareaEl();
+    const liveEditorEl = this.liveEditorEl();
     let cursorPos: number | undefined;
+    let selectionEnd: number | undefined;
     let currentText: string;
 
-    // Read current content from textarea if available, otherwise from modelCopy.
+    // Read the live content, not modelCopy: the toolbar button suppresses its
+    // own mousedown to keep focus, so the editor has NOT committed on blur and
+    // modelCopy still holds the pre-edit note. Reading it would throw away
+    // everything typed since the last blur.
     // Check textareaEl directly (not isShowEdit) because blur may have
     // set isShowEdit=false while the textarea is still in the DOM.
-    if (textareaEl) {
+    if (liveEditorEl) {
+      currentText = liveEditorEl.value;
+      cursorPos = liveEditorEl.selectionStart;
+    } else if (textareaEl) {
       currentText = textareaEl.nativeElement.value;
       cursorPos = textareaEl.nativeElement.selectionStart;
+      selectionEnd = textareaEl.nativeElement.selectionEnd ?? cursorPos;
     } else {
       currentText = this.modelCopy() || '';
     }
@@ -561,9 +586,19 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     }
 
     let cleaned: string;
-    let adjustedCursorPos: number | undefined;
+    let adjustedSelectionStart: number | undefined;
+    let adjustedSelectionEnd: number | undefined;
 
-    if (cursorPos !== undefined) {
+    let isChecklist = true;
+
+    if (cursorPos !== undefined && cursorPos !== selectionEnd) {
+      // Convert selected text to checklist items
+      const result = applyTaskList(currentText, cursorPos, selectionEnd!);
+      cleaned = result.text;
+      adjustedSelectionStart = result.selectionStart;
+      adjustedSelectionEnd = result.selectionEnd;
+      isChecklist = cleaned.includes('- [ ]') || cleaned.includes('- [x]');
+    } else if (cursorPos !== undefined) {
       // Path A: Textarea visible — insert after cursor's current line
       let lineEnd = cursorPos;
       while (lineEnd < currentText.length && currentText[lineEnd] !== '\n') {
@@ -578,7 +613,8 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       const cleanedBeforeCursor = beforeCursor
         .replace(/\n\n- \[/g, '\n- [')
         .replace(/^\n/g, '');
-      adjustedCursorPos = Math.min(cleanedBeforeCursor.length, cleaned.length);
+      adjustedSelectionStart = Math.min(cleanedBeforeCursor.length, cleaned.length);
+      adjustedSelectionEnd = adjustedSelectionStart;
     } else {
       // Path B: Preview mode — append to end
       const appended = currentText + INSERT_TEXT;
@@ -588,13 +624,13 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     // Update model with FINAL value and emit to parent.
     // This ensures Angular CD won't reset modelCopy to a stale pre-insertion value.
     this.model = cleaned;
-    this.isChecklistMode.set(true);
+    this.isChecklistMode.set(isChecklist);
     this.changed.emit(cleaned);
 
     if (cursorPos !== undefined) {
       // Ensure editor stays open (blur may have set isShowEdit=false)
       this.isShowEdit.set(true);
-      this._setTextareaState(adjustedCursorPos!);
+      this._setTextareaState(adjustedSelectionStart!, adjustedSelectionEnd);
     } else {
       this._toggleShowEdit(cleaned.length);
       this.modelCopy.set(cleaned);
@@ -604,6 +640,14 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   private _toggleShowEdit(cursorPos?: number): void {
     this.isShowEdit.set(true);
     this.modelCopy.set(this.model || '');
+    if (this.isLiveMarkdownEditor()) {
+      this.isPendingLiveFocus.set(true);
+      this.liveEditorEl()?.focus();
+      if (cursorPos !== undefined) {
+        this._setTextareaState(cursorPos);
+      }
+      return;
+    }
     setTimeout(() => {
       const textareaEl = this.textareaEl();
       if (!textareaEl) {
@@ -618,13 +662,24 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     });
   }
 
-  private _setTextareaState(cursorPos: number): void {
+  private _setTextareaState(selectionStart: number, selectionEnd?: number): void {
     setTimeout(() => {
+      const liveEditorEl = this.liveEditorEl();
+      if (liveEditorEl) {
+        // Deferred like the textarea path: the model write above only reaches
+        // the editor's document once the effect has run.
+        liveEditorEl.focus();
+        liveEditorEl.setSelectionRange(selectionStart, selectionEnd ?? selectionStart);
+        return;
+      }
       const textareaEl = this.textareaEl();
       if (textareaEl) {
         textareaEl.nativeElement.value = this.modelCopy();
         textareaEl.nativeElement.focus();
-        textareaEl.nativeElement.setSelectionRange(cursorPos, cursorPos);
+        textareaEl.nativeElement.setSelectionRange(
+          selectionStart,
+          selectionEnd ?? selectionStart,
+        );
         this.resizeTextareaToFit();
       }
     });
@@ -670,52 +725,5 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       this.isHideOverflow.set(false);
       this._cd.detectChanges();
     }, HIDE_OVERFLOW_TIMEOUT_DURATION);
-  }
-
-  private _makeLinksWorkForElectron(): void {
-    const wrapperEl = this.wrapperEl();
-    if (!wrapperEl) {
-      throw new Error('Wrapper el not visible');
-    }
-    wrapperEl.nativeElement.addEventListener('click', (ev: MouseEvent) => {
-      const target = ev.target as HTMLElement;
-      if (target.tagName && target.tagName.toLowerCase() === 'a') {
-        const href = target.getAttribute('href');
-        if (href !== null) {
-          ev.preventDefault();
-          window.ea.openExternalUrl(href);
-        }
-      }
-    });
-  }
-
-  private _handleCheckboxClick(targetEl: HTMLElement): void {
-    const allCheckboxes =
-      this.previewEl()?.element.nativeElement.querySelectorAll('.checkbox-wrapper');
-    const checkIndex = Array.from(allCheckboxes || []).findIndex((el) => el === targetEl);
-    if (checkIndex === -1 || !this._model) {
-      return;
-    }
-    const next = toggleChecklistItemAtIndex(this._model, checkIndex);
-    if (next !== this._model) {
-      this.modelCopy.set(next);
-      this.model = next;
-      this.changed.emit(next);
-    }
-  }
-
-  private async _updateResolvedModel(content: string | undefined): Promise<void> {
-    if (!content) {
-      this.resolvedModel.set('');
-      this._cd.markForCheck();
-      return;
-    }
-
-    // Capture generation to detect if model changed during async resolution
-    const gen = this._resolveGeneration;
-    // First resolve all URLs in the markdown
-    const resolved = await this._clipboardImageService.resolveMarkdownImages(content);
-    if (gen !== this._resolveGeneration) return;
-    this.resolvedModel.set(resolved);
   }
 }

@@ -37,22 +37,52 @@ describe('PlainspaceAccountService', () => {
     expect(req.request.headers.get('Authorization')).toBe('Bearer pat_x');
     req.flush({ email: 'me@example.com', projects: [] });
 
-    expect(await p).toBe(true);
+    expect(await p).toBe('ok');
     expect(service.isLoggedIn()).toBe(true);
     expect(service.token()).toBe('pat_x');
     expect(service.account()?.email).toBe('me@example.com');
     expect(localStorage.getItem(LS.PLAINSPACE_ACCOUNT)).toContain('pat_x');
   });
 
-  it('connect returns false and stays logged out on an invalid token', async () => {
+  it('connect reports invalid-token and stays logged out on a rejected token', async () => {
     const p = service.connect('bad');
     httpMock
       .expectOne(ME_URL)
       .flush({ error: 'nope' }, { status: 401, statusText: 'Unauthorized' });
 
-    expect(await p).toBe(false);
+    expect(await p).toBe('invalid-token');
     expect(service.isLoggedIn()).toBe(false);
     expect(localStorage.getItem(LS.PLAINSPACE_ACCOUNT)).toBeNull();
+  });
+
+  // #9988: a host we never reached must not be reported as a bad token.
+  it('connect reports unreachable when the request never gets an answer', async () => {
+    const p = service.connect('pat_x');
+    httpMock.expectOne(ME_URL).error(new ProgressEvent('error'), { status: 0 });
+
+    expect(await p).toBe('unreachable');
+    expect(service.isLoggedIn()).toBe(false);
+  });
+
+  // Regression guard: `me` is null for an empty body, and reading `me.email`
+  // threw, leaving the connect dialog stuck on its spinner (#9988 follow-up).
+  it('connect reports unreachable (no throw) when the body is empty', async () => {
+    const p = service.connect('pat_x');
+    httpMock.expectOne(ME_URL).flush(null, { status: 204, statusText: 'No Content' });
+
+    await expectAsync(p).toBeResolvedTo('unreachable');
+    expect(service.isLoggedIn()).toBe(false);
+    expect(localStorage.getItem(LS.PLAINSPACE_ACCOUNT)).toBeNull();
+  });
+
+  it('connect reports unreachable on a server error', async () => {
+    const p = service.connect('pat_x');
+    httpMock
+      .expectOne(ME_URL)
+      .flush('boom', { status: 500, statusText: 'Internal Server Error' });
+
+    expect(await p).toBe('unreachable');
+    expect(service.isLoggedIn()).toBe(false);
   });
 
   it('logout clears the account and storage', async () => {
@@ -94,7 +124,7 @@ describe('PlainspaceAccountService', () => {
     service.logout();
     pendingRequest.flush({ email: 'me@example.com', projects: [] });
 
-    expect(await reconnecting).toBe(false);
+    expect(await reconnecting).toBe('aborted');
     expect(service.account()).toBeNull();
     expect(service.isLoggedIn()).toBe(false);
     expect(localStorage.getItem(LS.PLAINSPACE_ACCOUNT)).toBeNull();
@@ -109,10 +139,10 @@ describe('PlainspaceAccountService', () => {
 
     const connecting = service.connect('pat_new');
     httpMock.expectOne(ME_URL).flush({ email: 'new@example.com', projects: [] });
-    expect(await connecting).toBe(true);
+    expect(await connecting).toBe('ok');
     oldRequest.flush({ email: 'old@example.com', projects: [] });
 
-    expect(await pending).toBe(false);
+    expect(await pending).toBe('aborted');
     expect(service.token()).toBe('pat_new');
     expect(service.account()?.email).toBe('new@example.com');
     const restarted = TestBed.runInInjectionContext(() => new PlainspaceAccountService());

@@ -6,6 +6,7 @@ import { MarkdownModule } from 'ngx-markdown';
 import { EMPTY, of, Subject } from 'rxjs';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
+import { GlobalConfigService } from '../../features/config/global-config.service';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { DialogFullscreenMarkdownComponent } from './dialog-fullscreen-markdown.component';
 import { MOD, shortcutLabels } from './markdown-shortcuts.const';
@@ -51,6 +52,17 @@ describe('DialogFullscreenMarkdownComponent', () => {
         { provide: ClipboardImageService, useValue: mockClipboardImageService },
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardPasteHandlerService, useValue: {} },
+        // Formatting off keeps these specs on the plain-textarea editor; the
+        // live markdown editor (#9910) is covered by its own specs and an e2e.
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            misc: jasmine.createSpy().and.returnValue({}),
+            tasks: jasmine
+              .createSpy()
+              .and.returnValue({ isMarkdownFormattingInNotesEnabled: false }),
+          },
+        },
       ],
     }).compileComponents();
 

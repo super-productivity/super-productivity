@@ -1,4 +1,10 @@
-import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
+import {
+  ComponentFixture,
+  DeferBlockState,
+  fakeAsync,
+  TestBed,
+  tick,
+} from '@angular/core/testing';
 import { MatDialog, MatDialogState } from '@angular/material/dialog';
 import { MarkdownModule } from 'ngx-markdown';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -12,6 +18,8 @@ import { TranslateModule } from '@ngx-translate/core';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { Log } from '../../core/log';
 import { Location } from '@angular/common';
+import { EditorView } from '@codemirror/view';
+import { undo } from '@codemirror/commands';
 
 describe('InlineMarkdownComponent', () => {
   let component: InlineMarkdownComponent;
@@ -19,10 +27,23 @@ describe('InlineMarkdownComponent', () => {
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockClipboardImageService: jasmine.SpyObj<ClipboardImageService>;
+  /**
+   * Markdown formatting now decides which editor mounts: on → the live markdown
+   * editor (#9910), off → a plain textarea. Most specs here drive the component
+   * API directly and do not care; the ones that reach into the rendered DOM set
+   * this before the first `detectChanges`, since the config spy is a plain
+   * function and the `computed` over it caches on first read.
+   */
+  let isMarkdownFormattingOn: boolean;
 
   beforeEach(async () => {
+    isMarkdownFormattingOn = true;
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
-      tasks: jasmine.createSpy().and.returnValue({ isTurnOffMarkdown: false }),
+      tasks: jasmine.createSpy().and.callFake(() => ({
+        isTurnOffMarkdown: false,
+        isMarkdownFormattingInNotesEnabled: isMarkdownFormattingOn,
+      })),
+      misc: jasmine.createSpy().and.returnValue({}),
     });
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
     mockClipboardImageService = jasmine.createSpyObj('ClipboardImageService', [
@@ -57,7 +78,154 @@ describe('InlineMarkdownComponent', () => {
     component = fixture.componentInstance;
   });
 
+  /**
+   * The shipped path: markdown formatting is on by default, so the live editor
+   * is what real users get. It sits behind `@defer (on immediate)`, which never
+   * renders on its own in TestBed — each spec renders the block explicitly.
+   */
+  describe('live markdown editor', () => {
+    const editorView = (): EditorView =>
+      EditorView.findFromDOM(fixture.nativeElement.querySelector('.cm-content'))!;
+
+    const mountLiveEditor = async (model: string): Promise<void> => {
+      component.model = model;
+      fixture.detectChanges();
+      const [deferBlock] = await fixture
+        .whenStable()
+        .then(() => fixture.getDeferBlocks());
+      await deferBlock.render(DeferBlockState.Complete);
+    };
+
+    it('mounts the live editor instead of the textarea', async () => {
+      await mountLiveEditor('# A heading');
+
+      expect(component.liveEditorEl()).toBeTruthy();
+      expect(component.textareaEl()).toBeUndefined();
+      // The document keeps the raw markdown; only the view hides the marker.
+      expect(component.liveEditorEl()!.value).toBe('# A heading');
+      expect(
+        fixture.nativeElement.querySelector('.cm-content').textContent,
+      ).not.toContain('#');
+    });
+
+    for (const nextNotes of ['Task B notes', 'Task A notes, edited']) {
+      it(`isolates undo when switching tasks to ${nextNotes}`, async () => {
+        fixture.componentRef.setInput('taskId', 'task-a');
+        await mountLiveEditor('Task A notes');
+        const view = editorView();
+        view.dispatch({ changes: { from: view.state.doc.length, insert: ', edited' } });
+        component.onLiveEditorChanged(view.state.doc.toString());
+        fixture.detectChanges();
+
+        fixture.componentRef.setInput('taskId', 'task-b');
+        component.model = nextNotes;
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        expect(undo(editorView())).toBe(false);
+        expect(editorView().state.doc.toString()).toBe(nextNotes);
+      });
+    }
+
+    it('preserves undo after saving an edit on the same task', async () => {
+      fixture.componentRef.setInput('taskId', 'task-a');
+      await mountLiveEditor('Original notes');
+      const view = editorView();
+      view.dispatch({ changes: { from: view.state.doc.length, insert: ', edited' } });
+      component.onLiveEditorChanged(view.state.doc.toString());
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(undo(editorView())).toBe(true);
+      expect(editorView().state.doc.toString()).toBe('Original notes');
+    });
+
+    it('places typing after the first checklist marker', async () => {
+      fixture.componentRef.setInput('isDefaultText', true);
+      fixture.componentRef.setInput('defaultText', 'Default notes');
+      fixture.componentRef.setInput('isShowChecklistToggle', true);
+      await mountLiveEditor('Default notes');
+
+      component.toggleChecklistMode(new Event('click'));
+      fixture.detectChanges();
+      // Selection restoration follows the model update on the next timer turn;
+      // zoneless whenStable() does not wait for that timer.
+      await new Promise<void>((resolve) => setTimeout(resolve));
+      await fixture.whenStable();
+      const view = editorView();
+      view.dispatch(view.state.replaceSelection('milk'));
+
+      expect(view.state.doc.toString()).toBe('- [ ] milk');
+    });
+
+    // Typing must not save: a note is one op per edit session, not per keystroke.
+    it("does not commit while typing, and commits on the editor's own change", async () => {
+      await mountLiveEditor('before');
+      spyOn(component.changed, 'emit');
+
+      component.onLiveEditorDocChanged('while typing');
+      expect(component.changed.emit).not.toHaveBeenCalled();
+
+      component.onLiveEditorChanged('committed');
+      expect(component.changed.emit).toHaveBeenCalledWith('committed');
+    });
+
+    // Closing the detail panel destroys this component on mousedown and the
+    // editor's blur lands afterwards, where the emit is dropped — so the last
+    // typed document has to be committed from ngOnDestroy.
+    it('commits the last typed document on destroy', async () => {
+      await mountLiveEditor('before');
+      spyOn(component.changed, 'emit');
+
+      component.onLiveEditorDocChanged('typed but never blurred');
+      component.ngOnDestroy();
+
+      expect(component.changed.emit).toHaveBeenCalledWith('typed but never blurred');
+    });
+
+    // ...but only for the task it was typed into. Switching tasks re-uses this
+    // component instance, and a stale doc would be written onto the next task.
+    it('drops the typed document when the model switches to another note', async () => {
+      await mountLiveEditor('task A notes');
+      component.onLiveEditorDocChanged('task A notes, edited');
+      spyOn(component.changed, 'emit');
+
+      component.model = 'task B notes';
+      component.ngOnDestroy();
+
+      expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+
+    // The checklist toolbar is the one control editing the document from
+    // outside the editor: it has to see a checklist while it is still being
+    // typed, not only after the blur that commits it.
+    it('offers the checklist actions for a checklist that is still being typed', async () => {
+      fixture.componentRef.setInput('isShowChecklistToggle', true);
+      await mountLiveEditor('not a checklist yet');
+      expect(component.isCurrentlyChecklist()).toBe(false);
+
+      component.onLiveEditorDocChanged('- [ ] one');
+
+      expect(component.isCurrentlyChecklist()).toBe(true);
+    });
+
+    // The transforms read the mounted editor, not the last committed copy.
+    it("applies a checklist transform to the editor's current document", async () => {
+      await mountLiveEditor('- [ ] one\n- [ ] two');
+      spyOn(component.changed, 'emit');
+
+      component.checkAllChecklistItems();
+
+      expect(component.changed.emit).toHaveBeenCalledWith('- [x] one\n- [x] two');
+    });
+  });
+
   describe('keypressHandler', () => {
+    // The plain-text editor: reachable when markdown formatting is off.
+    beforeEach(() => {
+      isMarkdownFormattingOn = false;
+    });
+
     let mockTextareaEl: {
       nativeElement: {
         selectionEnd: number;
@@ -121,7 +289,8 @@ describe('InlineMarkdownComponent', () => {
   });
 
   describe('long note wrapping', () => {
-    it('should wrap long words while editing and previewing notes', fakeAsync(() => {
+    it('should wrap long words in the plain-text editor', fakeAsync(() => {
+      isMarkdownFormattingOn = false;
       const longToken = 'AVeryLongUnbrokenWordThatShouldWrapInsideTheEditor';
       component.model = `[${longToken}](https://example.com/${longToken})`;
       component['isShowEdit'].set(true);
@@ -131,120 +300,28 @@ describe('InlineMarkdownComponent', () => {
       const textarea = fixture.nativeElement.querySelector(
         'textarea.markdown-unparsed',
       ) as HTMLTextAreaElement;
-      const preview = fixture.nativeElement.querySelector(
-        'markdown.markdown-parsed',
-      ) as HTMLElement;
-      const previewLink = fixture.nativeElement.querySelector(
-        'markdown.markdown-parsed a',
-      ) as HTMLAnchorElement;
 
       expect(window.getComputedStyle(textarea).overflowWrap).toBe('anywhere');
       expect(window.getComputedStyle(textarea).whiteSpace).toBe('pre-wrap');
-      expect(window.getComputedStyle(preview).overflowWrap).toBe('anywhere');
-      expect(window.getComputedStyle(previewLink).overflowWrap).toBe('anywhere');
     }));
   });
 
-  describe('checklist glyph selectability', () => {
-    it('keeps the checkbox glyph unselectable while its label stays copyable', fakeAsync(() => {
-      component.model = 'placeholder';
-      fixture.detectChanges();
-      tick();
-      fixture.detectChanges();
-      tick();
-
-      const preview = fixture.nativeElement.querySelector(
-        'markdown.markdown-parsed',
-      ) as HTMLElement;
-      expect(preview).toBeTruthy();
-
-      // The custom checklist renderer (marked-options-factory) emits a Material
-      // Icons ligature span whose textContent is the glyph name. The unit-test
-      // module doesn't wire that renderer, so emulate its output to verify the
-      // stylesheet keeps the glyph out of the clipboard while the label is kept
-      // selectable.
-      preview.innerHTML =
-        '<li class="checkbox-wrapper undone">' +
-        '<span class="checkbox material-icons">check_box_outline_blank</span> ' +
-        '<span class="checkbox-label">buy milk</span></li>';
-      fixture.detectChanges();
-
-      const glyph = preview.querySelector('.checkbox') as HTMLElement;
-      const label = preview.querySelector('.checkbox-label') as HTMLElement;
-      expect(window.getComputedStyle(glyph).userSelect).toBe('none');
-      expect(window.getComputedStyle(label).userSelect).toBe('text');
-    }));
-  });
-
-  describe('XSS sanitization (GHSA-4rrp-xhp8-hf4p)', () => {
-    it('should not render an executable event handler from a malicious note', fakeAsync(() => {
-      component.model = '<img src=x onerror="alert(document.domain)">';
-      fixture.detectChanges();
-      tick();
-      fixture.detectChanges();
-      tick();
-
-      const preview = fixture.nativeElement.querySelector(
-        'markdown.markdown-parsed',
-      ) as HTMLElement;
-      expect(preview).toBeTruthy();
-      expect(preview.innerHTML).not.toContain('onerror');
-      // The sanitizer keeps the (now inert) <img>, just without the handler.
-      const img = preview.querySelector('img');
-      if (img) {
-        expect(img.getAttribute('onerror')).toBeNull();
-      }
-    }));
-
-    it('should still render a normal note (sanitizer does not break rendering)', fakeAsync(() => {
-      component.model = '**bold** and [link](https://example.com)';
-      fixture.detectChanges();
-      tick();
-      fixture.detectChanges();
-      tick();
-
-      const preview = fixture.nativeElement.querySelector(
-        'markdown.markdown-parsed',
-      ) as HTMLElement;
-      expect(preview.querySelector('strong')?.textContent).toBe('bold');
-      expect(preview.querySelector('a')?.getAttribute('href')).toBe(
-        'https://example.com',
-      );
-    }));
-  });
-
-  describe('isHidePreviewWhileEditing', () => {
-    const queryPreview = (): HTMLElement | null =>
-      fixture.nativeElement.querySelector('markdown.markdown-parsed');
-
-    it('keeps the live preview while editing by default (detail-panel behavior)', () => {
-      component.model = 'hello';
-      fixture.detectChanges();
-      component['isShowEdit'].set(true);
-      fixture.detectChanges();
-      expect(queryPreview()).toBeTruthy();
-    });
-
-    it('shows the rendered preview in read mode even when opted in', () => {
-      fixture.componentRef.setInput('isHidePreviewWhileEditing', true);
-      component.model = 'hello';
-      fixture.detectChanges();
-      component['isShowEdit'].set(false);
-      fixture.detectChanges();
-      expect(queryPreview()).toBeTruthy();
-    });
-
-    it('hides the preview while editing when opted in (focus-mode single view)', () => {
-      fixture.componentRef.setInput('isHidePreviewWhileEditing', true);
-      component.model = 'hello';
-      fixture.detectChanges();
-      component['isShowEdit'].set(true);
-      fixture.detectChanges();
-      expect(queryPreview()).toBeNull();
-    });
-  });
+  // The rendered-preview assertions that lived here (checkbox glyph
+  // selectability, XSS sanitization, isHidePreviewWhileEditing, clickPreview,
+  // _handleCheckboxClick) went with the preview itself: this component mounts
+  // the live markdown editor whenever markdown is parsed at all, and a plain
+  // textarea otherwise, so there was no configuration left that rendered one.
+  // The contracts they covered live on: sanitization end-to-end against the
+  // real marked + DomSanitizer pipeline in `src/app/ui/markdown-sanitization.spec.ts`
+  // (GHSA-4rrp-xhp8-hf4p), and checkbox toggling in
+  // `src/app/features/markdown-checklist/checklist-operations.spec.ts`.
 
   describe('ngOnDestroy', () => {
+    // The plain-text editor: reachable when markdown formatting is off.
+    beforeEach(() => {
+      isMarkdownFormattingOn = false;
+    });
+
     it('should emit changed event with current value when in edit mode and value has changed', () => {
       // Arrange
       const originalValue = 'original text';
@@ -363,435 +440,49 @@ describe('InlineMarkdownComponent', () => {
     });
   });
 
-  describe('_handleCheckboxClick', () => {
-    let mockPreviewEl: { element: { nativeElement: HTMLElement } };
-
-    beforeEach(() => {
-      mockPreviewEl = {
-        element: {
-          nativeElement: document.createElement('div'),
-        },
-      };
-      spyOn(component, 'previewEl').and.returnValue(mockPreviewEl as any);
-      spyOn(component.changed, 'emit');
-    });
-
-    it('should toggle first checkbox in simple checklist', () => {
-      // Arrange
-      component.model = '- [ ] Task 1\n- [ ] Task 2';
-      fixture.detectChanges();
-
-      // Create mock checkbox wrappers
-      const wrapper1 = document.createElement('li');
-      wrapper1.className = 'checkbox-wrapper';
-      wrapper1.innerHTML =
-        '<span class="checkbox material-icons">check_box_outline_blank</span>Task 1';
-
-      const wrapper2 = document.createElement('li');
-      wrapper2.className = 'checkbox-wrapper';
-      wrapper2.innerHTML =
-        '<span class="checkbox material-icons">check_box_outline_blank</span>Task 2';
-
-      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
-      mockPreviewEl.element.nativeElement.appendChild(wrapper2);
-
-      // Act
-      component['_handleCheckboxClick'](wrapper1);
-
-      // Assert
-      expect(component.changed.emit).toHaveBeenCalledWith('- [x] Task 1\n- [ ] Task 2');
-    });
-
-    it('should toggle checkbox after blank line', () => {
-      // Arrange - this is the bug scenario from issue #5950
-      component.model = '- [ ] Task 1\n\n- [ ] Task 2';
-      fixture.detectChanges();
-
-      // Create mock checkbox wrappers (blank line doesn't create a wrapper)
-      const wrapper1 = document.createElement('li');
-      wrapper1.className = 'checkbox-wrapper';
-      wrapper1.innerHTML =
-        '<span class="checkbox material-icons">check_box_outline_blank</span>Task 1';
-
-      const wrapper2 = document.createElement('li');
-      wrapper2.className = 'checkbox-wrapper';
-      wrapper2.innerHTML =
-        '<span class="checkbox material-icons">check_box_outline_blank</span>Task 2';
-
-      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
-      mockPreviewEl.element.nativeElement.appendChild(wrapper2);
-
-      // Act - click the second checkbox (Task 2)
-      component['_handleCheckboxClick'](wrapper2);
-
-      // Assert - Task 2 should be toggled, not Task 1
-      expect(component.changed.emit).toHaveBeenCalledWith('- [ ] Task 1\n\n- [x] Task 2');
-    });
-
-    it('should toggle checkbox with multiple blank lines', () => {
-      // Arrange
-      component.model = '- [ ] Task 1\n\n\n- [ ] Task 2\n\n- [ ] Task 3';
-      fixture.detectChanges();
-
-      const wrapper1 = document.createElement('li');
-      wrapper1.className = 'checkbox-wrapper';
-      wrapper1.innerHTML =
-        '<span class="checkbox material-icons">check_box_outline_blank</span>Task 1';
-
-      const wrapper2 = document.createElement('li');
-      wrapper2.className = 'checkbox-wrapper';
-      wrapper2.innerHTML =
-        '<span class="checkbox material-icons">check_box_outline_blank</span>Task 2';
-
-      const wrapper3 = document.createElement('li');
-      wrapper3.className = 'checkbox-wrapper';
-      wrapper3.innerHTML =
-        '<span class="checkbox material-icons">check_box_outline_blank</span>Task 3';
-
-      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
-      mockPreviewEl.element.nativeElement.appendChild(wrapper2);
-      mockPreviewEl.element.nativeElement.appendChild(wrapper3);
-
-      // Act - click the third checkbox (Task 3)
-      component['_handleCheckboxClick'](wrapper3);
-
-      // Assert
-      expect(component.changed.emit).toHaveBeenCalledWith(
-        '- [ ] Task 1\n\n\n- [ ] Task 2\n\n- [x] Task 3',
-      );
-    });
-
-    it('should uncheck a checked checkbox', () => {
-      // Arrange
-      component.model = '- [x] Task 1\n- [ ] Task 2';
-      fixture.detectChanges();
-
-      const wrapper1 = document.createElement('li');
-      wrapper1.className = 'checkbox-wrapper';
-      wrapper1.innerHTML = '<span class="checkbox material-icons">check_box</span>Task 1';
-
-      const wrapper2 = document.createElement('li');
-      wrapper2.className = 'checkbox-wrapper';
-      wrapper2.innerHTML =
-        '<span class="checkbox material-icons">check_box_outline_blank</span>Task 2';
-
-      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
-      mockPreviewEl.element.nativeElement.appendChild(wrapper2);
-
-      // Act
-      component['_handleCheckboxClick'](wrapper1);
-
-      // Assert
-      expect(component.changed.emit).toHaveBeenCalledWith('- [ ] Task 1\n- [ ] Task 2');
-    });
-
-    it('should toggle the right item when a non-task "- [" bullet precedes it', () => {
-      // Regression: a markdown link bullet contains "- [" but is NOT a checklist
-      // item. The old loose filter counted it, shifting the source index so the
-      // real item's checkbox toggled the wrong line (i.e. did nothing).
-      component.model = '- [Open docs](https://example.com)\n- [ ] Real task';
-      fixture.detectChanges();
-
-      // Only the real task renders a checkbox-wrapper; the link bullet does not.
-      const wrapper = document.createElement('li');
-      wrapper.className = 'checkbox-wrapper';
-      wrapper.innerHTML =
-        '<span class="checkbox material-icons">check_box_outline_blank</span>' +
-        '<span class="checkbox-label">Real task</span>';
-      mockPreviewEl.element.nativeElement.appendChild(wrapper);
-
-      // Act
-      component['_handleCheckboxClick'](wrapper);
-
-      // Assert - the real task is toggled, the link bullet is left untouched
-      expect(component.changed.emit).toHaveBeenCalledWith(
-        '- [Open docs](https://example.com)\n- [x] Real task',
-      );
-    });
-  });
-
-  describe('clickPreview', () => {
-    let mockPreviewEl: { element: { nativeElement: HTMLElement } };
-
-    beforeEach(() => {
-      mockPreviewEl = {
-        element: {
-          nativeElement: document.createElement('div'),
-        },
-      };
-      spyOn(component, 'previewEl').and.returnValue(mockPreviewEl as any);
-      spyOn(component.changed, 'emit');
-    });
-
-    it('should handle checkbox click when checkbox is wrapped in <p> tag (loose list)', () => {
-      // Arrange - simulates loose list HTML: <li class="checkbox-wrapper"><p><span class="checkbox">...</span>Task</p></li>
-      component.model = '- [ ] Task 1\n\n- [ ] Task 2';
-      fixture.detectChanges();
-
-      // Build DOM structure for loose list (with <p> wrapper)
-      const wrapper1 = document.createElement('li');
-      wrapper1.className = 'checkbox-wrapper undone';
-      const p1 = document.createElement('p');
-      const checkbox1 = document.createElement('span');
-      checkbox1.className = 'checkbox material-icons';
-      checkbox1.textContent = 'check_box_outline_blank';
-      p1.appendChild(checkbox1);
-      p1.appendChild(document.createTextNode('Task 1'));
-      wrapper1.appendChild(p1);
-
-      const wrapper2 = document.createElement('li');
-      wrapper2.className = 'checkbox-wrapper undone';
-      const p2 = document.createElement('p');
-      const checkbox2 = document.createElement('span');
-      checkbox2.className = 'checkbox material-icons';
-      checkbox2.textContent = 'check_box_outline_blank';
-      p2.appendChild(checkbox2);
-      p2.appendChild(document.createTextNode('Task 2'));
-      wrapper2.appendChild(p2);
-
-      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
-      mockPreviewEl.element.nativeElement.appendChild(wrapper2);
-
-      // Act - simulate clicking the second checkbox
-      const mockEvent = {
-        target: checkbox2,
-      } as unknown as MouseEvent;
-      component.clickPreview(mockEvent);
-
-      // Assert - Task 2 should be toggled
-      expect(component.changed.emit).toHaveBeenCalledWith('- [ ] Task 1\n\n- [x] Task 2');
-    });
-
-    it('should toggle checkbox when clicking on the label text (not just the checkbox icon)', () => {
-      // Arrange
-      component.model = '- [ ] Task 1\n- [ ] Task 2';
-      fixture.detectChanges();
-
-      // Build DOM structure
-      const wrapper1 = document.createElement('li');
-      wrapper1.className = 'checkbox-wrapper undone';
-      const checkbox1 = document.createElement('span');
-      checkbox1.className = 'checkbox material-icons';
-      checkbox1.textContent = 'check_box_outline_blank';
-      const textNode1 = document.createTextNode('Task 1');
-      wrapper1.appendChild(checkbox1);
-      wrapper1.appendChild(textNode1);
-
-      const wrapper2 = document.createElement('li');
-      wrapper2.className = 'checkbox-wrapper undone';
-      const checkbox2 = document.createElement('span');
-      checkbox2.className = 'checkbox material-icons';
-      checkbox2.textContent = 'check_box_outline_blank';
-      const textSpan2 = document.createElement('span');
-      textSpan2.className = 'checkbox-label';
-      textSpan2.textContent = 'Task 2';
-      wrapper2.appendChild(checkbox2);
-      wrapper2.appendChild(textSpan2);
-
-      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
-      mockPreviewEl.element.nativeElement.appendChild(wrapper2);
-
-      // Act - simulate clicking on the text span (not the checkbox icon)
-      const mockEvent = {
-        target: textSpan2,
-      } as unknown as MouseEvent;
-      component.clickPreview(mockEvent);
-
-      // Assert - Task 2 should be toggled
-      expect(component.changed.emit).toHaveBeenCalledWith('- [ ] Task 1\n- [x] Task 2');
-    });
-
-    it('should NOT toggle when clicking the empty row area, only open the editor', () => {
-      // Arrange
-      component.model = '- [ ] Task 1';
-      fixture.detectChanges();
-
-      const wrapper1 = document.createElement('li');
-      wrapper1.className = 'checkbox-wrapper undone';
-      const checkbox1 = document.createElement('span');
-      checkbox1.className = 'checkbox material-icons';
-      checkbox1.textContent = 'check_box_outline_blank';
-      const label1 = document.createElement('span');
-      label1.className = 'checkbox-label';
-      label1.textContent = 'Task 1';
-      wrapper1.appendChild(checkbox1);
-      wrapper1.appendChild(label1);
-
-      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
-      spyOn<any>(component, '_toggleShowEdit');
-
-      // Act - click the wrapper itself (the dead space beside the label)
-      const mockEvent = {
-        target: wrapper1,
-      } as unknown as MouseEvent;
-      component.clickPreview(mockEvent);
-
-      // Assert - no toggle, editor opens instead
-      expect(component.changed.emit).not.toHaveBeenCalled();
-      expect(component['_toggleShowEdit']).toHaveBeenCalled();
-    });
-
-    it('should not toggle checkbox when clicking on a link', () => {
-      // Arrange
-      component.model = '- [ ] Task with [link](http://example.com)';
-      fixture.detectChanges();
-
-      const wrapper1 = document.createElement('li');
-      wrapper1.className = 'checkbox-wrapper undone';
-      const checkbox1 = document.createElement('span');
-      checkbox1.className = 'checkbox material-icons';
-      checkbox1.textContent = 'check_box_outline_blank';
-      const link = document.createElement('a');
-      link.href = 'http://example.com';
-      link.textContent = 'link';
-      wrapper1.appendChild(checkbox1);
-      wrapper1.appendChild(document.createTextNode('Task with '));
-      wrapper1.appendChild(link);
-
-      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
-
-      // Act - simulate clicking on the link
-      const mockEvent = {
-        target: link,
-      } as unknown as MouseEvent;
-      component.clickPreview(mockEvent);
-
-      // Assert - checkbox should NOT be toggled (link should work normally)
-      expect(component.changed.emit).not.toHaveBeenCalled();
-    });
-
-    it('should toggle edit mode when clicking outside checkbox-wrapper', () => {
-      // Arrange
-      component.model = 'Some regular text';
-      fixture.detectChanges();
-
-      const paragraph = document.createElement('p');
-      paragraph.textContent = 'Some regular text';
-      mockPreviewEl.element.nativeElement.appendChild(paragraph);
-
-      spyOn<any>(component, '_toggleShowEdit');
-
-      // Act - simulate clicking on regular text
-      const mockEvent = {
-        target: paragraph,
-      } as unknown as MouseEvent;
-      component.clickPreview(mockEvent);
-
-      // Assert
-      expect(component['_toggleShowEdit']).toHaveBeenCalled();
-      expect(component.changed.emit).not.toHaveBeenCalled();
-    });
-
-    it('should NOT enter edit mode if selection exists on click', () => {
-      // Arrange
-      component.model = 'Some regular text';
-      fixture.detectChanges();
-
-      const paragraph = document.createElement('p');
-      paragraph.textContent = 'Some regular text';
-      mockPreviewEl.element.nativeElement.appendChild(paragraph);
-
-      spyOn<any>(component, '_toggleShowEdit');
-      spyOn(window, 'getSelection').and.returnValue({
-        toString: () => 'Some',
-      } as any);
-
-      // Act
-      const mockEvent = {
-        target: paragraph,
-        clientX: 10,
-        clientY: 10,
-      } as unknown as MouseEvent;
-      component.clickPreview(mockEvent);
-
-      // Assert
-      expect(component['_toggleShowEdit']).not.toHaveBeenCalled();
-    });
-
-    it('should NOT enter edit mode if it was a drag (drag distance > 5)', () => {
-      // Arrange
-      component.model = 'Some regular text';
-      fixture.detectChanges();
-
-      const paragraph = document.createElement('p');
-      paragraph.textContent = 'Some regular text';
-      mockPreviewEl.element.nativeElement.appendChild(paragraph);
-
-      spyOn<any>(component, '_toggleShowEdit');
-      spyOn(window, 'getSelection').and.returnValue({
-        toString: () => '',
-      } as any);
-
-      // Act - simulate mousedown then click-drag
-      component.previewMousedown({ button: 0, clientX: 10, clientY: 10 } as MouseEvent);
-
-      const mockEvent = {
-        target: paragraph,
-        clientX: 20,
-        clientY: 20,
-      } as unknown as MouseEvent;
-      component.clickPreview(mockEvent);
-
-      // Assert
-      expect(component['_toggleShowEdit']).not.toHaveBeenCalled();
-    });
-
-    it('should NOT enter edit mode if there was an active selection on mousedown', () => {
-      // Arrange
-      component.model = 'Some regular text';
-      fixture.detectChanges();
-
-      const paragraph = document.createElement('p');
-      paragraph.textContent = 'Some regular text';
-      mockPreviewEl.element.nativeElement.appendChild(paragraph);
-
-      spyOn<any>(component, '_toggleShowEdit');
-      const getSelectionSpy = spyOn(window, 'getSelection');
-
-      // Selection exists on mousedown, but is cleared on mouseup/click
-      getSelectionSpy.and.returnValue({ toString: () => 'Some' } as any);
-      component.previewMousedown({ button: 0, clientX: 10, clientY: 10 } as MouseEvent);
-
-      getSelectionSpy.and.returnValue({ toString: () => '' } as any);
-
-      // Act
-      const mockEvent = {
-        target: paragraph,
-        clientX: 10,
-        clientY: 10,
-      } as unknown as MouseEvent;
-      component.clickPreview(mockEvent);
-
-      // Assert
-      expect(component['_toggleShowEdit']).not.toHaveBeenCalled();
-    });
-  });
-
   describe('toggleChecklistMode', () => {
-    it('should preserve unsaved textarea content when adding checklist item while focused', () => {
-      // Arrange
-      const originalValue = 'original text';
-      const unsavedValue = 'unsaved typed content';
-      spyOn(component.changed, 'emit');
+    // The plain-text editor: reachable when markdown formatting is off.
+    beforeEach(() => {
+      isMarkdownFormattingOn = false;
+    });
 
-      component.model = originalValue;
+    const setupMockTextarea = (
+      text: string,
+      selectionStart = 0,
+      selectionEnd: number = selectionStart,
+    ): any => {
+      component.model = text;
       fixture.detectChanges();
-
       component['isShowEdit'].set(true);
 
       const mockTextareaEl = {
         nativeElement: {
-          value: unsavedValue,
-          selectionStart: unsavedValue.length,
-          focus: () => {},
-          setSelectionRange: () => {},
+          value: text,
+          selectionStart,
+          selectionEnd,
+          focus: jasmine.createSpy('focus'),
+          setSelectionRange: jasmine.createSpy('setSelectionRange'),
           style: {},
+          scrollHeight: 100,
+          offsetHeight: 100,
         },
       };
       spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
       spyOn(component, 'wrapperEl').and.returnValue({
         nativeElement: { style: {} },
       } as any);
+
+      return mockTextareaEl;
+    };
+
+    it('should preserve unsaved textarea content when adding checklist item while focused', () => {
+      // Arrange
+      const originalValue = 'original text';
+      const unsavedValue = 'unsaved typed content';
+      spyOn(component.changed, 'emit');
+
+      const mockTextareaEl = setupMockTextarea(originalValue, unsavedValue.length);
+      mockTextareaEl.nativeElement.value = unsavedValue;
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -810,25 +501,7 @@ describe('InlineMarkdownComponent', () => {
       // Arrange
       const value = 'same text';
       spyOn(component.changed, 'emit');
-
-      component.model = value;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value,
-          selectionStart: value.length,
-          focus: () => {},
-          setSelectionRange: () => {},
-          style: {},
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(value, value.length);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -957,26 +630,7 @@ describe('InlineMarkdownComponent', () => {
     it('should insert checklist item after cursor line, not at end', () => {
       // Arrange
       const text = '- [ ] First\n- [ ] Second\n- [ ] Third';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 5, // middle of "First" line
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 5);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -992,26 +646,7 @@ describe('InlineMarkdownComponent', () => {
     it('should insert between grouped checklists without affecting other groups', () => {
       // Arrange
       const text = '## Group 1\n- [ ] A\n- [ ] B\n\n## Group 2\n- [ ] C';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 17, // on "A" line
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 17);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1027,26 +662,7 @@ describe('InlineMarkdownComponent', () => {
     it('should insert after first line when cursor is at position 0', () => {
       // Arrange
       const text = '- [ ] Only item';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 0,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 0);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1060,26 +676,7 @@ describe('InlineMarkdownComponent', () => {
     it('should append to end when cursor is at end of text', () => {
       // Arrange
       const text = '- [ ] First\n- [ ] Second';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: text.length,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, text.length);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1093,26 +690,7 @@ describe('InlineMarkdownComponent', () => {
     it('should adjust cursor position after double-newline cleanup', () => {
       // Arrange — text with double newline before a checklist item
       const text = '- [ ] A\n\n- [ ] B';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 16, // on "B" line
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 16);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1129,27 +707,10 @@ describe('InlineMarkdownComponent', () => {
       // Arrange: simulates blur firing between mousedown and click events,
       // where isShowEdit becomes false but the textarea is still in the DOM
       const text = '- [ ] asdasd\n\n# some text after';
-      component.model = text;
-      fixture.detectChanges();
+      setupMockTextarea(text, 12);
 
       // isShowEdit was set to false by blur, but textarea still exists in DOM
       component['isShowEdit'].set(false);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 12, // end of "asdasd"
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1188,26 +749,7 @@ describe('InlineMarkdownComponent', () => {
     it('should position cursor at end of inserted item via setSelectionRange', fakeAsync(() => {
       // Arrange
       const text = '- [ ] First\n- [ ] Second';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 5, // middle of "First" line
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      const mockTextareaEl = setupMockTextarea(text, 5);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1224,26 +766,7 @@ describe('InlineMarkdownComponent', () => {
     it('should handle empty non-default text while editing', () => {
       // Arrange
       const text = '';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 0,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 0);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1257,28 +780,8 @@ describe('InlineMarkdownComponent', () => {
     it('should handle isDefaultText while editing (textarea exists)', () => {
       // Arrange
       spyOn(component.changed, 'emit');
-
-      component.model = '';
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: '',
-          selectionStart: 0,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
+      setupMockTextarea('', 0);
       spyOn(component, 'isDefaultText').and.returnValue(true);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1294,26 +797,7 @@ describe('InlineMarkdownComponent', () => {
     it('should insert at cursor on line with trailing newline', () => {
       // Arrange — text ends with a newline, cursor at the empty last line
       const text = '- [ ] Item\n';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 11, // after the trailing newline
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 11);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1327,26 +811,7 @@ describe('InlineMarkdownComponent', () => {
     it('should set isChecklistMode to true after insertion from textarea', () => {
       // Arrange
       const text = '- [ ] A\n- [ ] B';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: text.length,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, text.length);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1380,27 +845,7 @@ describe('InlineMarkdownComponent', () => {
     it('should produce exact output when inserting after middle item of checklist', () => {
       // Arrange
       const text = '- [ ] A\n- [ ] B\n- [ ] C';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      // Cursor at end of "B" line (position: "- [ ] A\n- [ ] B".length = 15)
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 15,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 15);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1414,26 +859,7 @@ describe('InlineMarkdownComponent', () => {
     it('should produce exact output when inserting into text with mixed content', () => {
       // Arrange
       const text = 'Some notes\n- [ ] Task';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: text.length,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, text.length);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1446,26 +872,8 @@ describe('InlineMarkdownComponent', () => {
 
     it('should update model when textarea value differs from model', () => {
       // Arrange
-      component.model = 'old';
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: 'new',
-          selectionStart: 3,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      const mockTextareaEl = setupMockTextarea('old', 3);
+      mockTextareaEl.nativeElement.value = 'new';
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1479,27 +887,8 @@ describe('InlineMarkdownComponent', () => {
     it('should not lose new checklist item when model setter is called after emit (Angular CD simulation)', () => {
       // Arrange
       const text = '- [ ] Existing';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
       spyOn(component.changed, 'emit');
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: text.length,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, text.length);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1518,27 +907,8 @@ describe('InlineMarkdownComponent', () => {
     it('should add exactly one checklist item on each repeated click', () => {
       // Arrange
       const initialText = '- [ ] Item 1';
-      component.model = initialText;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
       spyOn(component.changed, 'emit');
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: initialText,
-          selectionStart: initialText.length,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      const mockTextareaEl = setupMockTextarea(initialText, initialText.length);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1556,6 +926,7 @@ describe('InlineMarkdownComponent', () => {
       // Click 2 — update textarea mock to reflect current state
       mockTextareaEl.nativeElement.value = component.modelCopy()!;
       mockTextareaEl.nativeElement.selectionStart = component.modelCopy()!.length;
+      mockTextareaEl.nativeElement.selectionEnd = component.modelCopy()!.length;
 
       component.toggleChecklistMode(mockEvent);
       const afterClick2 = component.modelCopy()!;
@@ -1595,27 +966,8 @@ describe('InlineMarkdownComponent', () => {
     it('should emit changed exactly once from textarea path', () => {
       // Arrange
       const text = '- [ ] Item';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
       spyOn(component.changed, 'emit');
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: text.length,
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, text.length);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1649,26 +1001,7 @@ describe('InlineMarkdownComponent', () => {
     it('should insert between newline-separated items when cursor is on the newline', () => {
       // Arrange
       const text = '- [ ] A\n- [ ] B';
-      component.model = text;
-      fixture.detectChanges();
-
-      component['isShowEdit'].set(true);
-
-      const mockTextareaEl = {
-        nativeElement: {
-          value: text,
-          selectionStart: 7, // at the '\n' between A and B
-          focus: jasmine.createSpy('focus'),
-          setSelectionRange: jasmine.createSpy('setSelectionRange'),
-          style: {},
-          scrollHeight: 100,
-          offsetHeight: 100,
-        },
-      };
-      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
-      spyOn(component, 'wrapperEl').and.returnValue({
-        nativeElement: { style: {} },
-      } as any);
+      setupMockTextarea(text, 7);
 
       const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
@@ -1678,217 +1011,102 @@ describe('InlineMarkdownComponent', () => {
       // Assert — new item inserted between A and B
       expect(component.modelCopy()).toBe('- [ ] A\n- [ ] \n- [ ] B');
     });
-  });
 
-  describe('model setter race condition', () => {
-    it('should not show stale notes when switching from a task with notes to one without', async () => {
-      // Arrange: notes with a clipboard image take the async resolution path, and
-      // make resolveMarkdownImages hang so the old content resolves late.
-      const notesWithImage = 'Task A ![x](indexeddb://clipboard-images/abc)';
-      let resolveDelayed!: (value: string) => void;
-      mockClipboardImageService.resolveMarkdownImages.and.returnValue(
-        new Promise<string>((resolve) => {
-          resolveDelayed = resolve;
-        }),
+    it('should insert empty checklist item after cursor line when selectionStart equals selectionEnd', fakeAsync(() => {
+      // Arrange — collapsed cursor in the middle of a line
+      const text = '- [ ] First\n- [ ] Second';
+      const mockTextareaEl = setupMockTextarea(text, 5, 5);
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+      tick();
+
+      // Assert — empty item inserted after "First" line, selection placed at end of inserted item
+      expect(component.modelCopy()).toBe('- [ ] First\n- [ ] \n- [ ] Second');
+      expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(18, 18);
+    }));
+
+    it('should convert selected text to checklist items and preserve selection range', fakeAsync(() => {
+      // Arrange
+      const text = 'Folge 1: 17. Dezember\nFolge 2: 24. Dezember\nFolge 3: 31. Dezember';
+      const mockTextareaEl = setupMockTextarea(text, 0, text.length);
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+      tick();
+
+      // Assert — selected text converted to checklist items and selection range preserved
+      const expectedText =
+        '- [ ] Folge 1: 17. Dezember\n- [ ] Folge 2: 24. Dezember\n- [ ] Folge 3: 31. Dezember';
+      expect(component.modelCopy()).toBe(expectedText);
+      expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(
+        0,
+        expectedText.length,
       );
+    }));
 
-      // Act: set model to a task with notes, then immediately clear it
-      component.model = notesWithImage;
-      component.model = '';
+    it('should convert partially selected text to checklist items and preserve selection range', fakeAsync(() => {
+      // Arrange
+      const text = 'Line 1\nLine 2\nLine 3\nLine 4';
+      const mockTextareaEl = setupMockTextarea(text, 7, 20); // "Line 2\nLine 3"
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
-      // Now the delayed promise resolves with the old content
-      resolveDelayed(notesWithImage);
-      await Promise.resolve();
+      // Act
+      component.toggleChecklistMode(mockEvent);
+      tick();
 
-      // Assert: resolvedModel should remain empty (not stale Task A content)
-      expect(component.resolvedModel()).toBe('');
-    });
-  });
+      // Assert — only selected lines converted and selection range covers converted block
+      const expectedText = 'Line 1\n- [ ] Line 2\n- [ ] Line 3\nLine 4';
+      expect(component.modelCopy()).toBe(expectedText);
+      expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(7, 32);
+    }));
 
-  describe('synchronous render', () => {
-    it('should render plain-text notes on the first paint without an async hop', () => {
-      // Notes without clipboard images must not flash as raw text: the parsed
-      // markdown data has to be available synchronously (no await), and the
-      // async image resolver must not be invoked at all.
-      component.model = '# Hello\nworld';
+    it('should toggle checklist prefix when selected text already has checklist items and preserve selection range', fakeAsync(() => {
+      // Arrange
+      const text = '- [ ] Item 1\n- [ ] Item 2\n- [ ] Item 3';
+      const mockTextareaEl = setupMockTextarea(text, 0, text.length);
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
-      expect(component.resolvedMarkdownData).toBe('# Hello\nworld');
-      expect(component.resolvedModel()).toBe('# Hello\nworld');
-      expect(mockClipboardImageService.resolveMarkdownImages).not.toHaveBeenCalled();
-    });
+      // Act
+      component.toggleChecklistMode(mockEvent);
+      tick();
 
-    it('should defer rendering until images resolve when notes contain clipboard images', () => {
-      const notesWithImage = '![x](indexeddb://clipboard-images/abc)';
-      component.model = notesWithImage;
-
-      // Not yet resolved synchronously — the async path owns the rendered data.
-      expect(component.resolvedMarkdownData).toBeUndefined();
-      expect(mockClipboardImageService.resolveMarkdownImages).toHaveBeenCalledWith(
-        notesWithImage,
+      // Assert — checklist items toggled to plain bullets and selection preserved
+      const expectedText = '- Item 1\n- Item 2\n- Item 3';
+      expect(component.modelCopy()).toBe(expectedText);
+      expect(component.isChecklistMode()).toBe(false);
+      expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(
+        0,
+        expectedText.length,
       );
-    });
-  });
+    }));
 
-  describe('_handleCheckboxClick edge cases', () => {
-    let mockPreviewEl: { element: { nativeElement: HTMLElement } };
-
-    beforeEach(() => {
-      mockPreviewEl = {
-        element: {
-          nativeElement: document.createElement('div'),
-        },
-      };
-      spyOn(component, 'previewEl').and.returnValue(mockPreviewEl as any);
+    it('should convert selected text when isDefaultText is true and textarea has non-empty text (issue #6015 regression)', fakeAsync(() => {
+      // Arrange — task with no saved notes (isDefaultText = true), user pasted text in textarea without blurring
+      const text = 'Pasted task 1\nPasted task 2';
+      const mockTextareaEl = setupMockTextarea('', 0, text.length);
+      mockTextareaEl.nativeElement.value = text;
+      spyOn(component, 'isDefaultText').and.returnValue(true);
+      spyOn(component, 'defaultText').and.returnValue('');
       spyOn(component.changed, 'emit');
-    });
 
-    it('should preserve blank lines when toggling checkboxes', () => {
-      // Arrange
-      component.model = '- [ ] Task 1\n\n- [ ] Task 2\n\n- [ ] Task 3';
-      fixture.detectChanges();
-
-      const wrapper1 = document.createElement('li');
-      wrapper1.className = 'checkbox-wrapper';
-      const wrapper2 = document.createElement('li');
-      wrapper2.className = 'checkbox-wrapper';
-      const wrapper3 = document.createElement('li');
-      wrapper3.className = 'checkbox-wrapper';
-
-      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
-      mockPreviewEl.element.nativeElement.appendChild(wrapper2);
-      mockPreviewEl.element.nativeElement.appendChild(wrapper3);
-
-      // Act - toggle Task 2
-      component['_handleCheckboxClick'](wrapper2);
-
-      // Assert - blank lines should be preserved
-      expect(component.changed.emit).toHaveBeenCalledWith(
-        '- [ ] Task 1\n\n- [x] Task 2\n\n- [ ] Task 3',
-      );
-    });
-
-    it('should ignore regular text containing task-like brackets', () => {
-      // Arrange
-      component.model = '- [ ] Task 1\n\nNote: use - [flags] here\n\n- [ ] Task 2';
-      fixture.detectChanges();
-
-      const wrapper1 = document.createElement('li');
-      wrapper1.className = 'checkbox-wrapper';
-      const wrapper2 = document.createElement('li');
-      wrapper2.className = 'checkbox-wrapper';
-
-      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
-      mockPreviewEl.element.nativeElement.appendChild(wrapper2);
-
-      // Act - toggle Task 2
-      component['_handleCheckboxClick'](wrapper2);
-
-      // Assert - regular text with "- [" should not offset the checkbox mapping
-      expect(component.changed.emit).toHaveBeenCalledWith(
-        '- [ ] Task 1\n\nNote: use - [flags] here\n\n- [x] Task 2',
-      );
-    });
-
-    it('should handle mixed checked and unchecked items', () => {
-      // Arrange
-      component.model = '- [x] Done\n- [ ] Todo\n- [x] Also Done';
-      fixture.detectChanges();
-
-      const wrapper1 = document.createElement('li');
-      wrapper1.className = 'checkbox-wrapper';
-      const wrapper2 = document.createElement('li');
-      wrapper2.className = 'checkbox-wrapper';
-      const wrapper3 = document.createElement('li');
-      wrapper3.className = 'checkbox-wrapper';
-
-      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
-      mockPreviewEl.element.nativeElement.appendChild(wrapper2);
-      mockPreviewEl.element.nativeElement.appendChild(wrapper3);
-
-      // Act - toggle the middle item (Todo -> Done)
-      component['_handleCheckboxClick'](wrapper2);
-
-      // Assert
-      expect(component.changed.emit).toHaveBeenCalledWith(
-        '- [x] Done\n- [x] Todo\n- [x] Also Done',
-      );
-    });
-
-    it('should handle checklist with text before it', () => {
-      // Arrange
-      component.model = 'Some intro text\n\n- [ ] Task 1\n- [ ] Task 2';
-      fixture.detectChanges();
-
-      const wrapper1 = document.createElement('li');
-      wrapper1.className = 'checkbox-wrapper';
-      const wrapper2 = document.createElement('li');
-      wrapper2.className = 'checkbox-wrapper';
-
-      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
-      mockPreviewEl.element.nativeElement.appendChild(wrapper2);
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
 
       // Act
-      component['_handleCheckboxClick'](wrapper1);
+      component.toggleChecklistMode(mockEvent);
+      tick();
 
-      // Assert
-      expect(component.changed.emit).toHaveBeenCalledWith(
-        'Some intro text\n\n- [x] Task 1\n- [ ] Task 2',
+      // Assert — converts the pasted selection rather than replacing everything with "- [ ] "
+      const expectedText = '- [ ] Pasted task 1\n- [ ] Pasted task 2';
+      expect(component.modelCopy()).toBe(expectedText);
+      expect(component.changed.emit).toHaveBeenCalledWith(expectedText);
+      expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(
+        0,
+        expectedText.length,
       );
-    });
-
-    it('should handle checklist with text after it', () => {
-      // Arrange
-      component.model = '- [ ] Task 1\n- [ ] Task 2\n\nSome outro text';
-      fixture.detectChanges();
-
-      const wrapper1 = document.createElement('li');
-      wrapper1.className = 'checkbox-wrapper';
-      const wrapper2 = document.createElement('li');
-      wrapper2.className = 'checkbox-wrapper';
-
-      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
-      mockPreviewEl.element.nativeElement.appendChild(wrapper2);
-
-      // Act
-      component['_handleCheckboxClick'](wrapper2);
-
-      // Assert
-      expect(component.changed.emit).toHaveBeenCalledWith(
-        '- [ ] Task 1\n- [x] Task 2\n\nSome outro text',
-      );
-    });
-
-    it('should not emit if model is undefined', () => {
-      // Arrange
-      component.model = '';
-      fixture.detectChanges();
-
-      const wrapper1 = document.createElement('li');
-      wrapper1.className = 'checkbox-wrapper';
-      mockPreviewEl.element.nativeElement.appendChild(wrapper1);
-
-      // Act
-      component['_handleCheckboxClick'](wrapper1);
-
-      // Assert
-      expect(component.changed.emit).not.toHaveBeenCalled();
-    });
-
-    it('should not emit if clicked element is not found in DOM', () => {
-      // Arrange
-      component.model = '- [ ] Task 1';
-      fixture.detectChanges();
-
-      // Create a wrapper that's NOT in the previewEl
-      const orphanWrapper = document.createElement('li');
-      orphanWrapper.className = 'checkbox-wrapper';
-
-      // Act
-      component['_handleCheckboxClick'](orphanWrapper);
-
-      // Assert
-      expect(component.changed.emit).not.toHaveBeenCalled();
-    });
+    }));
   });
 
   describe('checklist actions', () => {

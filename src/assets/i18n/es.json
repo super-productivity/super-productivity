@@ -6,6 +6,11 @@
       "MSG": "¿Quieres instalar Super Productivity como una PWA?"
     },
     "B_OFFLINE": "Estás desconectado de internet. La sincronización y la solicitud de datos al proveedor de incidencias no funcionarán.",
+    "B_RECOVERY_POINT": {
+      "BROWSE": "Explorar copias de seguridad",
+      "DISMISS": "Mantener los datos nuevos",
+      "MSG": "La sincronización acaba de reemplazar los datos de este dispositivo por un conjunto mucho más pequeño (de {{before}} a {{after}} tareas). Los datos anteriores se conservaron como punto de recuperación."
+    },
     "B_SUPER_SYNC_ENCRYPTION": {
       "ALREADY_ENCRYPTED": "Esta cuenta ya está cifrada en otro dispositivo. Introduce tu contraseña actual para seguir sincronizando.",
       "ENABLE": "Activar cifrado",
@@ -42,7 +47,8 @@
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "Mostrar panel de incidencias",
-    "SHOW_NOTES": "Mostrar notas del proyecto"
+    "SHOW_NOTES": "Mostrar notas del proyecto",
+    "SHOW_SCHEDULE": "Agenda"
   },
   "CONFIRM": {
     "AUTO_FIX": "Tus datos parecen estar dañados (\"{{validityError}}\"). ¿Quieres intentar arreglarlos automáticamente? Esto podría resultar en una pérdida parcial de datos.",
@@ -51,6 +57,7 @@
     "RESTORE_FILE_BACKUP_ANDROID": "Parece que NO HAY DATOS, pero hay una copia de seguridad disponible. ¿Quieres cargarla?",
     "RESTORE_FILE_BACKUP_MOBILE": "No se encontraron datos en este dispositivo, pero hay una copia de seguridad disponible para restaurar (tareas: {{tasks}}, proyectos: {{projects}}). ¿Quieres restaurarla?",
     "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "¿Quieres restaurar la copia de seguridad automática más reciente (tareas: {{tasks}}, proyectos: {{projects}})? Esto reemplazará todos los datos actuales de este dispositivo y, si usas la sincronización, sobrescribirá los datos de tus otros dispositivos en la próxima sincronización.",
+    "RESTORE_FILE_BACKUP_WITH_COUNTS": "Parece que NO HAY DATOS, pero hay copias de seguridad disponibles en \"{{dir}}\". ¿Quieres restaurar la copia más reciente del {{from}} (tareas: {{tasks}}, proyectos: {{projects}})?",
     "RESTORE_STRAY_BACKUP": "Durante la última sincronización pudo haber algún error. ¿Quieres restaurar la última copia de seguridad?",
     "DELETE_SECTION": "¿Seguro que quieres eliminar esta sección? Las tareas que contiene se moverán a la lista de tareas."
   },
@@ -518,6 +525,7 @@
         "WORKLOG": "Registro de trabajo"
       },
       "S": {
+        "CONNECTION_FAILED_WITH_ERROR": "Error de conexión: {{errorMsg}}",
         "ERR_GENERIC": "Error de {{issueProviderName}}: {{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}: La solicitud falló debido a un error de red del lado del cliente",
         "ERR_NOT_CONFIGURED": "{{issueProviderName}}: No configurado correctamente",
@@ -822,7 +830,13 @@
       }
     },
     "NOTE": {
+      "D_DRAFT_CONFLICT": {
+        "KEEP_SAVED": "Mantener la versión guardada",
+        "MSG": "Se ha recuperado un borrador de esta nota, pero la nota ha cambiado mientras tanto (por ejemplo, por la sincronización). ¿Quieres revisar el borrador recuperado en el editor o mantener la versión guardada y dejar de ofrecer este borrador?",
+        "REVIEW_DRAFT": "Revisar borrador"
+      },
       "D_FULLSCREEN": {
+        "CONFIRM_DISCARD_MSG": "Tienes cambios sin guardar. ¿Descartarlos?",
         "TOOLBAR": {
           "BOLD": "Negrita",
           "BULLET_LIST": "Lista con viñetas",
@@ -1223,6 +1237,7 @@
       "A": {
         "REMOTE_MODEL_VERSION_NEWER": "La versión del modelo remoto es más reciente que la local. ¡Actualice su aplicación local a la versión más reciente!"
       },
+      "BTN_SHOW_DEVICES": "Mostrar dispositivos conectados",
       "BTN_SYNC_NOW": "Sincronizar Ahora",
       "C": {
         "FORCE_UPLOAD": "Forzar una subida de tus datos podría llevar a la pérdida de datos. ¿Continuar?",
@@ -1334,6 +1349,25 @@
         "P3_PW_CHANGED": "Si <strong>cambió su contraseña en otro dispositivo</strong>, ingrese su nueva contraseña y haga clic en \"Sobrescribir remoto\". Esto subirá sus datos locales al servidor.",
         "TITLE": "Error de descifrado"
       },
+      "D_DEVICES": {
+        "BTN_SIGN_OUT_OTHERS": "Cerrar sesión en otros dispositivos",
+        "ERROR_LOADING": "No se pudieron cargar los dispositivos conectados",
+        "ERROR_SIGN_OUT": "No se pudo cerrar la sesión en los otros dispositivos. Si la conexión se interrumpió a mitad de la petición, puede que aun así haya surtido efecto; en ese caso este dispositivo también necesita un token nuevo.",
+        "LAST_SEEN": "Última sincronización: {{date}}",
+        "NO_DEVICES": "Todavía no se ha sincronizado ningún dispositivo con esta cuenta.",
+        "PLATFORM_ANDROID": "Android",
+        "PLATFORM_BROWSER": "Navegador",
+        "PLATFORM_DESKTOP": "Escritorio",
+        "PLATFORM_IOS": "iOS",
+        "PLATFORM_UNKNOWN": "Dispositivo desconocido",
+        "REMOVE_HINT": "Super Sync concede el acceso por cuenta, no por dispositivo, por lo que los dispositivos no se pueden quitar de forma individual. Para bloquear un dispositivo perdido o vendido, cierra la sesión en todos los demás dispositivos: este seguirá con la sesión iniciada.",
+        "SIGN_OUT_CONFIRM_MSG": "Se cerrará la sesión de Super Sync en todos los demás dispositivos y dejarán de sincronizarse. Este dispositivo seguirá con la sesión iniciada. Para volver a conectar un dispositivo, inicia sesión en la página del servidor y pega el nuevo token en sus ajustes de sincronización; los cambios hechos en él mientras estuvo desconectado se conservan y se suben después.",
+        "SIGN_OUT_CONFIRM_OK": "Cerrar sesión",
+        "SIGN_OUT_CONFIRM_TITLE": "¿Cerrar sesión en todos los demás dispositivos?",
+        "SIGN_OUT_SUCCESS": "Se cerró la sesión en todos los demás dispositivos",
+        "THIS_DEVICE": "(este dispositivo)",
+        "TITLE": "Dispositivos conectados"
+      },
       "D_ENTER_PASSWORD": {
         "BTN_FORCE_OVERWRITE": "Usar datos locales",
         "BTN_SAVE_AND_SYNC": "Guardar y sincronizar",
@@ -1370,6 +1404,11 @@
       "D_LOCAL_DATA_REPLACE_CONFIRM": {
         "MESSAGE": "Tiene {{count}} cambios locales no sincronizados que serán reemplazados por datos remotos. ¿Desea continuar?",
         "TITLE": "¿Reemplazar datos locales?"
+      },
+      "D_NOTHING_TO_UPLOAD": {
+        "MESSAGE": "No se ha cambiado nada: los datos de tu servidor de sincronización siguen ahí.\n\nEste dispositivo nunca ha terminado una sincronización, así que no contiene ninguna copia de tus datos que la aplicación pueda ver. Sobrescribir habría reemplazado todo lo que hay en el servidor por un dispositivo vacío, y eso no se puede deshacer.\n\nVuelve a probar aquí tu contraseña de cifrado: a menudo funciona una contraseña anterior. Si no la recuerdas, deja este dispositivo y el servidor exactamente como están e informa del problema en vez de sobrescribir; tu historial sigue en el servidor.\n\nSi de verdad quieres borrar el servidor de sincronización y empezar de cero, cierra esta ventana y usa Forzar sobrescritura en Ajustes → Sincronización y copias de seguridad → Sincronización.",
+        "MESSAGE_CHANGE_PW": "No se ha cambiado nada: los datos de tu servidor de sincronización siguen ahí.\n\nCambiar la contraseña de cifrado vuelve a subir los datos de este dispositivo y reemplaza lo que hay en el servidor. Este dispositivo nunca ha terminado una sincronización, así que no contiene ninguna copia de tus datos que la aplicación pueda ver, y se perdería la copia del servidor.\n\nCambia la contraseña desde un dispositivo que ya tenga tus datos y se haya sincronizado correctamente.",
+        "TITLE": "Tus datos sincronizados no se han tocado"
       },
       "D_RESTORE": {
         "BTN_RESTORE": "Restaurar",
@@ -1541,12 +1580,15 @@
           "L_CHANGE_ENCRYPTION_PASSWORD": "Cambiar contraseña de cifrado",
           "L_CONFIRM_PASSWORD": "Confirmar contraseña",
           "L_ENABLE_E2E_ENCRYPTION": "Habilitar cifrado de extremo a extremo",
+          "L_ENABLE_TRACKING_PRESENCE": "Mostrar el seguimiento en curso en otros dispositivos (experimental)",
           "L_NEW_PASSWORD": "Nueva contraseña de cifrado",
+          "L_PRESENCE_DEVICE_NAME": "Nombre de este dispositivo en los demás dispositivos",
           "L_REMOVE_ENCRYPTION": "O eliminar cifrado",
           "L_SERVER_URL": "URL del Servidor",
           "LOGIN_INSTRUCTIONS": "Haz clic abajo para abrir la página de login. Tras iniciar sesión, copia tu token de acceso y pégalo aquí.",
           "PASSWORD_MIN_LENGTH": "La contraseña debe tener al menos 8 caracteres",
           "PASSWORDS_DONT_MATCH": "Las contraseñas no coinciden",
+          "PRESENCE_DEVICE_NAME_DESCRIPTION": "Se muestra en el indicador de seguimiento en curso de tus otros dispositivos, p. ej. «Portátil del trabajo», para poder distinguir dos equipos de escritorio. Se envía junto con el estado del seguimiento (cifrado si el cifrado de sincronización está activado). Déjalo vacío para usar el nombre de plataforma que aparece como marcador de posición.",
           "REMOVE_ENCRYPTION_WARNING": "Eliminar el cifrado borrará todos los datos del servidor y resubirá tus datos sin cifrar. Todos los dispositivos necesitarán reconfigurarse.",
           "SERVER_URL_DESCRIPTION": "Deja tal cual para el servidor oficial, o introduce una URL personalizada",
           "SETUP_ENCRYPTION_BTN": "Establecer contraseña",
@@ -1554,7 +1596,8 @@
           "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync cifra sus datos con contraseña antes de que salgan de su dispositivo</strong>, haciendo que el uso indebido o la filtración de sus datos privados sea prácticamente imposible.",
           "SETUP_DISABLE_SUPERSYNC_BTN": "Desactivar SuperSync",
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "Use la misma contraseña en todos los dispositivos. Una contraseña olvidada se puede restablecer sobrescribiendo los datos remotos.",
-          "SETUP_ENCRYPTION_TITLE": "SuperSync: Establecer contraseña"
+          "SETUP_ENCRYPTION_TITLE": "SuperSync: Establecer contraseña",
+          "TRACKING_PRESENCE_DESCRIPTION": "Refleja en tus otros dispositivos conectados qué tarea está registrando esta cuenta en este momento y te permite detenerla desde allí. Solo para visualización: nunca se guarda en el servidor, aunque se retransmite brevemente en la memoria del servidor (opaco para el servidor si el cifrado de extremo a extremo está activado)."
         },
         "ONEDRIVE": {
           "CLIENT_ID_DESCRIPTION": "ID de aplicación (cliente) del registro de tu aplicación de Microsoft Entra",
@@ -1629,6 +1672,7 @@
         "ERROR_PERMISSION": "Acceso al archivo denegado. Por favor, verifique los permisos del sistema de archivos.",
         "ERROR_PERMISSION_FLATPAK": "Acceso al archivo denegado. Conceda permiso al sistema de archivos mediante Flatseal o use una ruta dentro de ~\\/var\\/app\\/",
         "ERROR_PERMISSION_SNAP": "Acceso al archivo denegado. Ejecute 'snap connect super-productivity:home' o use una ruta dentro de ~\\/snap\\/super-productivity\\/common\\/",
+        "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "El servidor de sincronización respondió con una página web en lugar de tus datos de sincronización (p. ej. una página de inicio de sesión, de proxy o de error). Es probable que tus datos remotos estén intactos: comprueba la URL del servidor, las credenciales y la red, y vuelve a intentarlo. Si el problema continúa, puedes sobrescribir los datos remotos en Ajustes de sincronización → Forzar sobrescritura.",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Error al sincronizar. No se pueden leer datos remotos. ¿Quizás habilitaste el cifrado y tu contraseña local no coincide con la remota?",
         "FINISH_DAY_SYNC_ERROR": "Error de sincronización al finalizar el día. Inténtalo de nuevo.",
         "FORCE_UPLOAD_FAILED": "No se pudieron sobrescribir los datos del servidor. Tus cambios locales siguen disponibles.",
@@ -1657,6 +1701,7 @@
         "PARTIAL_APPLY_FAILURE": "Algunas operaciones de sincronización fallaron al aplicarse. Los datos han sido validados.",
         "PERSIST_FAILED": "Fallo al guardar cambios. El estado puede ser inconsistente - por favor recarga.",
         "REMOTE_DATA_TOO_OLD": "Los datos remotos son demasiado antiguos. Por favor actualiza tu app remota.",
+        "REMOTE_NOT_ENCRYPTED": "Los datos sincronizados no están cifrados, pero el cifrado está activado en este dispositivo, así que se han rechazado. Si desactivaste el cifrado en otro dispositivo, desactívalo también aquí en los ajustes de sincronización para continuar.",
         "REPLAY_LOCAL_OPS_FAILED": "Fallo al reproducir operaciones locales tras importar. Algunos cambios recientes pueden perderse. Datos validados.",
         "RESTORE_ENCRYPTED": "No se puede restaurar desde el historial del servidor cuando el cifrado de extremo a extremo está activado. El servidor no puede leer tus datos cifrados para reconstruir un estado anterior.",
         "RESTORE_ERROR": "Error al restaurar datos",
@@ -1670,6 +1715,7 @@
         "TIMEOUT_ERROR": "La operación de sincronización expiró. {{suggestion}}",
         "TOO_MANY_OPS_TO_DOWNLOAD": "Demasiadas operaciones para descargar. Algunos cambios podrían faltar.",
         "UNKNOWN_ERROR": "Error de Sincronización Desconocido: {{err}}",
+        "UNSUPPORTED_MULTI_ENTITY_CONFLICT": "La sincronización se detuvo por seguridad para evitar la pérdida de datos. Informa de este código: {{details}}",
         "UPLOAD_ERROR": "Error de subida desconocido (¿Ajustes correctos?): {{err}}",
         "UPLOAD_OPS_REJECTED": "{{count}} operación(es) fueron rechazadas permanentemente por el servidor y no se sincronizarán.",
         "VECTOR_CLOCK_LIMIT_REACHED": "La sincronización ha rastreado {{originalSize}} dispositivos/navegadores, excediendo el límite de {{maxSize}}. Las entradas de dispositivos inactivos fueron eliminadas. Considere restablecer la sincronización si experimenta problemas.",
@@ -1745,7 +1791,8 @@
       "D_EDIT": {
         "ADD": "Añadir etiquetas para \"{{title}}\"",
         "EDIT": "Editar etiquetas para \"{{title}}\"",
-        "LABEL": "Etiquetas"
+        "LABEL": "Etiquetas",
+        "PLACEHOLDER": "+ Añadir etiqueta"
       },
       "FORM_BASIC": {
         "L_COLOR": "Color (si no se define se usa el color primario del tema)",
@@ -1815,10 +1862,12 @@
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Añadir adjunto",
         "ADD_CHECKLIST_ITEM": "Añadir elemento a la lista de comprobación",
+        "CHECKLIST": "Lista de comprobación",
         "CHECKLIST_ACTIONS": "Acciones de la lista de comprobación",
         "CHECK_ALL": "Marcar todo",
         "CLEAR_COMPLETED": "Borrar elementos completados",
         "NOTES_OR_CHECKLIST": "Notas / Lista de comprobación",
+        "SUB_TASKS_EMPTY": "Subtareas",
         "UNCHECK_ALL": "Desmarcar todo",
         "PASTE_IMAGE_HINT": "Ctrl+V para pegar una imagen",
         "PASTE_IMAGE_HINT_MAC": "Cmd+V para pegar una imagen",
@@ -1864,6 +1913,7 @@
         "MARK_DONE": "Marcar como hecha",
         "MARK_UNDONE": "Marcar como no completada",
         "MOVE_TO_BACKLOG": "Mover al backlog",
+        "MOVE_TO_BOTTOM": "Mover al final",
         "MOVE_TO_OTHER_PROJECT": "Mover a Proyecto",
         "MOVE_TO_REGULAR": "Mover a lista regular",
         "MOVE_TO_TOP": "Mover al Principio",
@@ -1905,10 +1955,6 @@
         "OK": "Crear etiquetas"
       },
       "D_DEADLINE": {
-        "QA_NEXT_MONTH": "Próximo mes",
-        "QA_NEXT_WEEK": "Próxima semana",
-        "QA_TODAY": "Hoy",
-        "QA_TOMORROW": "Mañana",
         "RO_NEVER": "Nunca",
         "ADD_TIME": "Agregar hora",
         "REMIND_AT": "Recordar a las",
@@ -1995,20 +2041,94 @@
         "TINE_SPENT": "Tiempo Dedicado",
         "TITLE": "Añadir para Día"
       },
+      "MULTI_SELECT": {
+        "ACTIONS": "Acciones",
+        "CLEAR": "Borrar selección",
+        "D_CONFIRM_DELETE": {
+          "MSG": {
+            "ONE": "¿Eliminar <strong>{{count}}</strong> tarea? También se eliminan sus subtareas.",
+            "OTHER": "¿Eliminar <strong>{{count}}</strong> tareas? También se eliminan las subtareas."
+          },
+          "OK": "Eliminar"
+        },
+        "S": {
+          "DEADLINE_REMOVED": {
+            "ONE": "Se quitó la fecha límite de {{count}} tarea",
+            "OTHER": "Se quitó la fecha límite de {{count}} tareas"
+          },
+          "DEADLINE_SET": {
+            "ONE": "Fecha límite de {{count}} tarea establecida en {{date}}",
+            "OTHER": "Fecha límite de {{count}} tareas establecida en {{date}}"
+          },
+          "DONE": {
+            "ONE": "{{count}} tarea marcada como completada",
+            "OTHER": "{{count}} tareas marcadas como completadas"
+          },
+          "ESTIMATE_CLEARED": {
+            "ONE": "Se borró la estimación de {{count}} tarea",
+            "OTHER": "Se borró la estimación de {{count}} tareas"
+          },
+          "ESTIMATE_SET": {
+            "ONE": "{{count}} tarea estimada en {{estimate}}",
+            "OTHER": "{{count}} tareas estimadas en {{estimate}}"
+          },
+          "MOVED_TO_BACKLOG": {
+            "ONE": "{{count}} tarea movida al backlog",
+            "OTHER": "{{count}} tareas movidas al backlog",
+            "PARTIAL": "{{count}} de {{total}} tareas movidas al backlog (las subtareas acompañan a su tarea principal)"
+          },
+          "MOVED_TO_PROJECT": {
+            "ONE": "{{count}} tarea movida a \"{{projectTitle}}\"",
+            "OTHER": "{{count}} tareas movidas a \"{{projectTitle}}\"",
+            "PARTIAL": "{{count}} de {{total}} tareas movidas a \"{{projectTitle}}\" (las subtareas acompañan a su tarea principal)"
+          },
+          "MOVED_TO_REGULAR": {
+            "ONE": "{{count}} tarea movida a la lista normal",
+            "OTHER": "{{count}} tareas movidas a la lista normal",
+            "PARTIAL": "{{count}} de {{total}} tareas movidas a la lista normal (las subtareas acompañan a su tarea principal)"
+          },
+          "NOTHING_TO_DO": "No hay nada que cambiar en las tareas seleccionadas",
+          "SCHEDULED": {
+            "ONE": "{{count}} tarea programada para {{date}}",
+            "OTHER": "{{count}} tareas programadas para {{date}}"
+          },
+          "UNDONE": {
+            "ONE": "{{count}} tarea marcada como no completada",
+            "OTHER": "{{count}} tareas marcadas como no completadas"
+          },
+          "UNSCHEDULED": {
+            "ONE": "Se canceló la programación de {{count}} tarea",
+            "OTHER": "Se canceló la programación de {{count}} tareas"
+          }
+        },
+        "SELECTED_COUNT": "{{count}} seleccionadas",
+        "SELECT_ENTRY": "Seleccionar varias tareas…",
+        "TASKS_TITLE": {
+          "ONE": "{{count}} tarea",
+          "OTHER": "{{count}} tareas"
+        }
+      },
       "N": {
         "ESTIMATE_EXCEEDED": "¡Estimación de tiempo excedida!",
         "ESTIMATE_EXCEEDED_BODY": "Has excedido tu tiempo estimado para \"{{title}}\"."
       },
       "S": {
+        "ADDED_VIA_APP_URI": "Tarea \"{{title}}\" añadida",
+        "AMBIGUOUS_MATCH_VIA_APP_URI": "Varias tareas coinciden con \"{{title}}\": sé más específico",
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "¡No se puede asignar proyecto vía sintaxis corta para tareas repetibles!",
+        "COMPLETED_VIA_APP_URI": "Tarea \"{{title}}\" completada",
         "CREATED_FOR_PROJECT": "Tarea creada \"{{taskTitle}}\" para proyecto \"{{projectTitle}}\"",
         "DELETED": "Tarea eliminada \"{{title}}\"",
+        "EMPTY_TITLE_VIA_APP_URI": "El título de la tarea estaba vacío, no se añadió ninguna tarea",
         "FOUND_MOVE_FROM_BACKLOG": "Se movió la tarea <strong>{{title}}</strong> del backlog a la lista de tareas de hoy",
         "FOUND_MOVE_FROM_OTHER_LIST": "Se añadió la tarea <strong>{{title}}</strong> de <strong>{{contextTitle}}</strong> a la lista actual",
         "FOUND_RESTORE_FROM_ARCHIVE": "Tarea <strong>{{title}}</strong> restaurada relacionada con incidencia desde el archivo",
         "GO_TO_TASK": "Ir a la Tarea",
+        "INPUT_TOO_LONG_VIA_APP_URI": "El título o las notas de la tarea son demasiado largos",
         "MOVED_TO_ARCHIVE": "Movidas {{nr}} tareas al archivo",
         "MOVED_TO_PROJECT": "Tarea movida \"{{taskTitle}}\" al proyecto \"{{projectTitle}}\"",
+        "NOT_FOUND_VIA_APP_URI": "No se encontró ninguna tarea que coincida con \"{{title}}\"",
+        "PROJECT_NOT_FOUND_VIA_APP_URI": "Proyecto no encontrado: la tarea \"{{title}}\" no se añadió",
         "REMINDER_ADDED": "Programada <strong>{{title}}</strong> el <strong>{{date}}</strong>",
         "REMINDER_DELETED": "Recordatorio eliminado para tarea",
         "REMINDER_UPDATED": "Recordatorio actualizado para tarea \"{{title}}\"",
@@ -2097,6 +2217,10 @@
         "ORD_THIRD_NTH": "tercer",
         "Q_CUSTOM": "Configuración de repetición personalizada",
         "Q_DAILY": "Todos los días",
+        "Q_EVERY_X_DAYS": "Cada {{count}} días",
+        "Q_EVERY_X_MONTHS": "Cada {{count}} meses",
+        "Q_EVERY_X_WEEKS": "Cada {{count}} semanas el {{weekdayStr}}",
+        "Q_EVERY_X_YEARS": "Cada {{count}} años",
         "Q_MONDAY_TO_FRIDAY": "De lunes a viernes",
         "Q_MONTHLY_CURRENT_DATE": "Cada mes el {{dateDayStr}}",
         "Q_WEEKLY_CURRENT_WEEKDAY": "Cada semana el {{weekdayStr}}",
@@ -2262,6 +2386,24 @@
         "UNTRACKED_TIME": "Tiempo no rastreado:"
       }
     },
+    "TRACKING_PRESENCE": {
+      "CHIP": {
+        "FALLBACK_TASK": "una tarea iniciada recientemente",
+        "FOCUS": "Sesión de enfoque · ciclo {{cycle}}",
+        "LAST_SEEN": "visto por última vez {{time}}",
+        "PAUSED_ON": "En pausa en {{device}}",
+        "SINCE": "desde {{time}}",
+        "STOP": "Detener el seguimiento en {{device}}",
+        "STOPPED_ON": "Detenido en {{device}}",
+        "TRACKING_ON": "Registrando en {{device}}",
+        "WAS_TRACKING_ON": "Se estaba registrando en {{device}}"
+      },
+      "S": {
+        "MOVED_TO": "El seguimiento se ha movido a {{device}}",
+        "STOPPED_FROM": "Seguimiento detenido desde {{device}}",
+        "TRACK_HERE_AGAIN": "Volver a registrar aquí"
+      }
+    },
     "VOICE_REMINDER": {
       "FORM": {
         "HELP": "Repite la frase configurada cada X cuando se rastrea tiempo en una tarea.",
@@ -2374,6 +2516,7 @@
     "CONFIRM": "Confirmar",
     "CONTINUE": "Continuar",
     "DELETE": "Borrar",
+    "DISCARD": "Descartar",
     "DISMISS": "Descartar",
     "DO_IT": "¡Hazlo!",
     "DUPLICATE": "Duplicar",
@@ -2390,6 +2533,8 @@
     "MOVE_BACKWARD": "Mover hacia atrás",
     "MOVE_FORWARD": "Mover hacia adelante",
     "NEXT": "Siguiente",
+    "NEXT_MONTH": "Próximo mes",
+    "NEXT_WEEK": "Próxima semana",
     "NO_CON": "Actualmente estás desconectado. Por favor reconecta a internet.",
     "NONE": "Ninguno",
     "OK": "Ok",
@@ -2403,7 +2548,9 @@
     "SHARE": "Compartir",
     "SUBMIT": "Enviar",
     "TITLE": "Título",
+    "TODAY": "Hoy",
     "TODAY_TAG_TITLE": "Hoy",
+    "TOMORROW": "Mañana",
     "UNDO": "Deshacer",
     "WITHOUT_PROJECT": "Sin Proyecto",
     "YESTERDAY": "Ayer",
@@ -2436,6 +2583,27 @@
       "EXPERIMENTAL_WARNING_MSG": "Esta función es experimental. Puede tener errores, cambiar significativamente o eliminarse en una actualización futura. Asegúrate de mantener copias de seguridad de tus datos.<br/><br/>¿Quieres activarla?"
     },
     "AUTO_BACKUPS": {
+      "BROWSE": "Explorar copias de seguridad",
+      "D_LIST": {
+        "BTN_RESTORE": "Restaurar",
+        "CONFIRM_MSG": "¿Restaurar la copia de seguridad del <strong>{{timestamp}}</strong> ({{tasks}} tareas)?<br><br>Esto <strong>reemplaza todos tus datos actuales</strong> en este dispositivo y, si la sincronización está activada, también en tus otros dispositivos. Antes se conservan los datos actuales como punto de recuperación.",
+        "CONFIRM_TITLE": "Confirmar restauración",
+        "DATE_UNKNOWN": "Fecha desconocida",
+        "EMPTY": "Todavía no hay copias de seguridad en este dispositivo. Los puntos de recuperación se crean automáticamente antes de que la sincronización o una importación reemplacen tus datos.",
+        "ERROR_LOADING": "No se pudieron cargar las copias de seguridad",
+        "ERROR_RESTORE": "No se pudo restaurar la copia de seguridad",
+        "INTRO": "Todas las copias de seguridad guardadas en este dispositivo. Selecciona una para ver lo que contiene.",
+        "KIND_FILE": "Archivo de copia de seguridad automática",
+        "LOADING": "Cargando copias de seguridad...",
+        "PARTIAL": "Algunas copias de seguridad de este dispositivo no se pudieron leer. Solo están disponibles las que se muestran a continuación.",
+        "REASON_FORCE_DOWNLOAD": "Punto de recuperación: antes de «Usar los datos del servidor»",
+        "REASON_LOCAL_IMPORT": "Punto de recuperación: antes de importar o restaurar",
+        "REASON_REMOTE_IMPORT": "Punto de recuperación: antes de que la sincronización reemplazara los datos locales",
+        "SLOT_LATEST": "Última copia de seguridad automática",
+        "SLOT_PREVIOUS": "Copia de seguridad automática anterior",
+        "TASK_COUNT": "{{tasks}} tareas",
+        "TITLE": "Copias de seguridad en este dispositivo"
+      },
       "HELP": "Guarda automáticamente todos los datos en la carpeta de tu aplicación para tenerlos listos en caso de que algo salga mal.",
       "LABEL_IS_ENABLED": "Habilitar copias de seguridad automáticas",
       "LAST_BACKUP_INFO": "Última copia de seguridad: {{date}}",
@@ -2520,6 +2688,7 @@
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Solo activar diálogo de tiempo inactivo cuando hay una tarea actual seleccionada",
       "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Ocultar el diálogo de inactividad durante las sesiones del modo de concentración",
       "MIN_IDLE_TIME": "Activar inactividad después de X",
+      "MIN_IDLE_TIME_DESCRIPTION": "P. ej. \"5h 23m\". Debe ser al menos {{min}}; los periodos de inactividad más cortos nunca se notifican. La inactividad se comprueba cada {{interval}}.",
       "TITLE": "Manejo de Inactividad"
     },
     "IMEX": {
@@ -2532,6 +2701,8 @@
       "ADD_NEW_TASK": "Añadir Nueva Tarea",
       "APP_WIDE_SHORTCUTS": "Atajos Globales (toda la aplicación)",
       "COLLAPSE_SUB_TASKS": "Colapsar Subtareas",
+      "COLUMN_ACTION": "Acción",
+      "COLUMN_SHORTCUT": "Atajo",
       "EXPAND_SUB_TASKS": "Expandir Subtareas",
       "GLOBAL_ADD_NOTE": "Añadir nueva nota",
       "GLOBAL_ADD_TASK": "Añadir nueva tarea",
@@ -2556,11 +2727,13 @@
       "SAVE_NOTE": "Guardar nota",
       "SELECT_NEXT_TASK": "Seleccionar tarea siguiente",
       "SELECT_PREVIOUS_TASK": "Seleccionar tarea previa",
+      "SHOW_HELP": "Mostrar la hoja de atajos de teclado",
       "SHOW_SEARCH_BAR": "Mostrar barra de búsqueda",
       "SYSTEM_SHORTCUTS": "Atajos globales (en todo el sistema)",
       "TASK_ADD_ATTACHMENT": "Adjuntar archivo o enlace",
       "TASK_ADD_SUB_TASK": "Agregar subtarea",
       "TASK_DELETE": "Eliminar tarea",
+      "TASK_DUPLICATE": "Duplicar tarea",
       "TASK_EDIT_TAGS": "Editar etiquetas",
       "TASK_EDIT_TITLE": "Editar Título",
       "TASK_MOVE_TO_PROJECT": "Abrir mover tarea al menú del proyecto",
@@ -2576,6 +2749,7 @@
       "TASK_SHORTCUTS_INFO": "Los siguientes atajos se aplican a la tarea seleccionada actual (seleccionada a través de una pestaña o con el ratón).",
       "TASK_TOGGLE_DETAIL_PANEL_OPEN": "Mostrar/Ocultar información adicional de la tarea",
       "TASK_TOGGLE_DONE": "Alternar Hecho",
+      "TASK_TOGGLE_SELECT": "Añadir o quitar la tarea de la selección múltiple",
       "TITLE": "Atajos de teclado",
       "TOGGLE_BACKLOG": "Mostrar/Ocultar backlog de la tarea",
       "TOGGLE_ISSUE_PANEL": "Mostrar/Ocultar panel de incidencias",
@@ -2669,6 +2843,10 @@
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Requiere reinicio para surtir efecto",
       "IS_VERTICAL_ACTION_BAR": "Barra de acciones vertical en el lateral (experimental)",
       "IS_VERTICAL_ACTION_BAR_HINT": "Mueve los botones de acción del encabezado a una franja vertical en el borde derecho de la ventana. Solo para escritorio.",
+      "LOCAL_REST_API_TOKEN": "Token de acceso",
+      "LOCAL_REST_API_TOKEN_ERROR": "No se pudo guardar el token de acceso, por lo que la API no está en marcha. Comprueba que Super Productivity pueda escribir en su carpeta de datos y usa Regenerar para volver a intentarlo.",
+      "LOCAL_REST_API_TOKEN_REGENERATE": "Regenerar token de acceso",
+      "LOCAL_REST_API_TOKEN_REGENERATE_ERROR": "No se pudo guardar el nuevo token de acceso. El token anterior sigue siendo válido.",
       "START_OF_NEXT_DAY": "Hora de inicio del siguiente día",
       "START_OF_NEXT_DAY_HINT": "desde cuándo (en hora) quieres contar que ha comenzado el siguiente día. predeterminado es medianoche que es 0.",
       "THEME": "Tema",
@@ -2928,8 +3106,11 @@
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "¿Quieres descargar una copia de seguridad de tus datos heredados (se puede usar con versiones anteriores de Super Productivity)?",
     "DETECTED_LEGACY": "Datos heredados detectados. ¡Los migraremos por ti!",
+    "DIALOG_TITLE_ERROR": "Error en la migración",
     "E_MIGRATION_FAILED": "¡Falló la migración! con Error:",
+    "E_MIGRATION_FAILED_MSG": "No se pudieron migrar tus datos antiguos. Siguen en este dispositivo y no se han modificado, y se ofreció un archivo de copia de seguridad para descargar. Reiniciar dará el mismo problema, así que puedes continuar con la aplicación vacía e importar después esa copia de seguridad. La aplicación ya no volverá a preguntar por estos datos antiguos.",
     "E_RESTART_FAILED": "El reinicio automático falló. ¡Por favor reinicia la aplicación manualmente!",
+    "START_FRESH": "Continuar sin los datos antiguos",
     "SUCCESS": "¡Migración terminada! Reiniciando aplicación ahora...",
     "DIALOG_MESSAGE": "Estamos actualizando cómo se almacenan sus datos para mejorar la confiabilidad de la sincronización. Se descargará un respaldo automáticamente.",
     "DIALOG_TITLE": "Migrando sus datos",
@@ -3051,6 +3232,8 @@
     "SHARE_SUCCESS": "Proyecto compartido en Plainspace. Las tareas que se te asignen se importarán automáticamente.",
     "SPACE_PICKER": {
       "CREATE_NEW": "Crear un espacio",
+      "DISCONNECT": "Desconectar cuenta",
+      "DISCONNECT_HINT": "Al desconectar se elimina la cuenta guardada de este dispositivo. Las integraciones de proyecto existentes siguen sincronizándose. Para detenerlas, abre cada integración de Plainspace en el panel de proveedores de incidencias y elige su icono de engranaje → Eliminar.",
       "ERROR": "No se pudo acceder a Plainspace. Comprueba la conexión y que el token siga siendo válido e inténtalo de nuevo.",
       "INTRO": "Vincula un espacio existente para importar las tareas que se te asignen o crea uno nuevo.",
       "LINK": "Vincular espacio",
@@ -3066,6 +3249,8 @@
     "ALLOWED_HOSTS": "Acceso a la red",
     "ALREADY_INITIALIZED": "El plugin ya está inicializado",
     "CANCEL": "Cancelar",
+    "CANNOT_DELETE_INBOX": "El proyecto Bandeja de entrada no se puede eliminar",
+    "CANNOT_NEST_SUBTASKS": "No se pueden anidar subtareas: la tarea principal es a su vez una subtarea",
     "CAPABILITIES": {
       "ACCESS_FILES": "Acceder y modificar archivos en tu sistema",
       "RUN_COMMANDS": "Ejecutar comandos del sistema",
@@ -3090,6 +3275,7 @@
     "FAILED_TO_LOAD_CONFIG": "Error al cargar configuración del plugin",
     "FAILED_TO_REMOVE": "Error al eliminar plugin",
     "FAILED_TO_SAVE_CONFIG": "Error al guardar configuración del plugin",
+    "FIELD_NOT_UPDATABLE": "\"{{field}}\" no se puede establecer con updateTask; cambiar la tarea principal no es compatible. Crea subtareas con addTask({ parentId }) o reestructura con batchUpdateForProject",
     "FILE_TOO_LARGE": "Archivo demasiado grande ({{fileSize}}MB). El tamaño máximo es {{maxSize}}MB",
     "GO_BACK": "Volver",
     "GRANT_PERMISSION": "Conceder Permiso",
@@ -3141,6 +3327,7 @@
     "TASKS_NOT_IN_PROJECT": "Una o más tareas no están en el proyecto '{{contextId}}'",
     "TASKS_NOT_SUBTASKS": "Una o más tareas no son subtareas de '{{contextId}}'",
     "TOGGLE_PLUGIN": "Alternar {{pluginName}}",
+    "TRANSLATIONS_TOO_LARGE": "Las traducciones del plugin son demasiado grandes en total (máx. {{maxSize}} MB)",
     "TRUST_WARNING": "Solo concede permiso si confías en este plugin",
     "TYPE": "Tipo: {{type}}",
     "UNABLE_TO_PERSIST_DATA": "No se pueden persistir datos en el almacenamiento del plugin",
@@ -3171,6 +3358,8 @@
     "PROJECT_SETTINGS": "Ajustes específicos del proyecto",
     "PROVIDE_FEEDBACK": "Enviar comentarios",
     "RELOAD": "Recargar",
+    "SEARCH_NO_RESULTS": "No se encontraron ajustes",
+    "SEARCH_PLACEHOLDER": "Buscar ajustes",
     "SYNC_EXPORT": "Sincronizar y exportar",
     "TABS": {
       "GENERAL": "General",

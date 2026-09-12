@@ -208,17 +208,52 @@ class ImeInsetShimInstrumentedTest {
         }
     }
 
-    private fun showIme(activity: CapacitorMainActivity, webView: WebView) {
+    /** Focuses the field and asks for the IME. Returns whether an input connection existed. */
+    private fun showIme(activity: CapacitorMainActivity, webView: WebView): Boolean {
         // View focus first, then the editable inside it, then the request: a
         // programmatic focus() without a user gesture does not raise the IME by
         // itself, and show(ime()) needs an editor attached to the focused view.
         onMainSync { webView.requestFocus() }
         evaluateJavaScript(webView, "document.getElementById('field').focus(); 'focused'")
+        // The JS focus returning is not enough: the input connection only exists
+        // once the renderer has reported the focused editable back to the browser
+        // process, which is asynchronous and can lag seconds on a loaded emulator.
+        // A request issued before then is dropped outright — "Ignoring
+        // showSoftInput() as view ... is not served", the whole failure in run
+        // 33975587718 — so wait for the connection instead of racing it.
+        val served = awaitServedView(activity, webView)
         onMainSync {
             WindowInsetsControllerCompat(activity.window, webView)
                 .show(WindowInsetsCompat.Type.ime())
         }
+        return served
     }
+
+    /**
+     * Waits until the IME has an input connection to [webView], i.e. a show
+     * request would reach the IME instead of being ignored. Reports a miss
+     * rather than failing on it, so that a genuine never-opens failure still
+     * fails on the geometry with the full reading rather than dying here.
+     */
+    private fun awaitServedView(
+        activity: CapacitorMainActivity,
+        webView: WebView,
+        timeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS,
+    ): Boolean {
+        val deadline = SystemClock.elapsedRealtime() + TimeUnit.SECONDS.toMillis(timeoutSeconds)
+        do {
+            if (onMainSync { inputMethodManager(activity).isActive(webView) }) return true
+            // Coarser than POLL_MS: isActive() can hit system_server synchronously,
+            // and this wait exists for the case where that server is already the
+            // slow part. Detection latency does not matter at this granularity.
+            SystemClock.sleep(SERVED_POLL_MS)
+        } while (SystemClock.elapsedRealtime() < deadline)
+        Log.i(TAG, "WebView still has no input connection after ${timeoutSeconds}s")
+        return false
+    }
+
+    private fun inputMethodManager(activity: CapacitorMainActivity): InputMethodManager =
+        activity.getSystemService(InputMethodManager::class.java)
 
     private fun hideIme(activity: CapacitorMainActivity, webView: WebView) {
         evaluateJavaScript(webView, "document.getElementById('field').blur(); 'blurred'")
@@ -238,16 +273,25 @@ class ImeInsetShimInstrumentedTest {
             it.keyboardOpenPerListener
         }
         if (first != null) return first
-        Log.i(TAG, "IME not open after show(ime()); retrying via InputMethodManager")
+        // Re-enter the whole sequence rather than re-issuing show() alone: what
+        // the retry is really for is the second wait for an input connection,
+        // since the likeliest reason the first request did nothing is that there
+        // was none yet. (The JS focus it repeats is a no-op while the field still
+        // holds focus — the focusing steps return early and the renderer re-reports
+        // nothing — so the wait, not the focus, is what makes this retry worth a try.)
+        Log.i(TAG, "IME not open after show(ime()); retrying the request and the wait")
+        val served = showIme(activity, webView)
         onMainSync {
-            activity.getSystemService(InputMethodManager::class.java)
+            inputMethodManager(activity)
                 .showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT)
         }
         return awaitGeometry(
             activity,
             webView,
             "the IME to open (visible frame must drop by more than 15% of the root height; " +
-                "on an emulator make sure `settings put secure show_ime_with_hard_keyboard 1` ran)",
+                "WebView had an input connection: $served — false means the request was " +
+                "very likely dropped before reaching the IME; on an emulator make sure " +
+                "`settings put secure show_ime_with_hard_keyboard 1` ran)",
         ) { it.keyboardOpenPerListener }
     }
 
@@ -350,6 +394,7 @@ class ImeInsetShimInstrumentedTest {
         const val DEFAULT_TIMEOUT_SECONDS = 10L
         const val SHOW_IME_FIRST_TRY_SECONDS = 5L
         const val POLL_MS = 50L
+        const val SERVED_POLL_MS = 200L
         const val SETTLE_MS = 300L
         // Sub-pixel rounding between the visible frame and the view bottom.
         const val TOLERANCE_PX = 2

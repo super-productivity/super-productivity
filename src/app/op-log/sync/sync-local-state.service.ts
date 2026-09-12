@@ -10,6 +10,7 @@ import {
   hasMeaningfulStateData,
 } from '../validation/has-meaningful-state-data.util';
 import { isExampleTaskCreateOp } from '../validation/is-example-task-op.util';
+import { takeInterpretableOpPrefix } from './remote-op-block.util';
 import {
   isFullStateOpType,
   isGenesisEntityType,
@@ -96,7 +97,14 @@ export class SyncLocalStateService {
     if (await this.isWhollyFreshClient()) {
       return true;
     }
-    if (incomingOps.some((op) => isFullStateOpType(op.opType))) {
+    // Must read the SAME prefix as the gate it defers to
+    // (`SyncImportConflictGateService.checkIncomingFullStateConflict`): a
+    // full-state op behind an uninterpretable one is never reached by
+    // `processRemoteOps`, so the gate does not prompt for it. Scanning the full
+    // batch here would leave neither side prompting (#8764).
+    if (
+      takeInterpretableOpPrefix(incomingOps).some((op) => isFullStateOpType(op.opType))
+    ) {
       return false;
     }
     return this.isNeverSyncedGenesisClient();

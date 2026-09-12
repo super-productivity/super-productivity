@@ -6,6 +6,11 @@
       "MSG": "Voulez-vous installer Super Productivity en tant que PWA ?"
     },
     "B_OFFLINE": "Vous êtes déconnecté d'Internet. La synchronisation et la demande des données du fournisseur de problèmes ne fonctionneront pas.",
+    "B_RECOVERY_POINT": {
+      "BROWSE": "Parcourir les sauvegardes",
+      "DISMISS": "Conserver les nouvelles données",
+      "MSG": "La synchronisation vient de remplacer les données de cet appareil par un jeu de données bien plus petit (de {{before}} à {{after}} tâches). Les données précédentes ont été conservées comme point de restauration."
+    },
     "B_SUPER_SYNC_ENCRYPTION": {
       "ALREADY_ENCRYPTED": "Ce compte est déjà chiffré sur un autre appareil. Saisissez votre mot de passe actuel pour poursuivre la synchronisation.",
       "ENABLE": "Activer le chiffrement",
@@ -42,7 +47,8 @@
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "Afficher le panneau des problèmes",
-    "SHOW_NOTES": "Afficher les notes du projet"
+    "SHOW_NOTES": "Afficher les notes du projet",
+    "SHOW_SCHEDULE": "Planning"
   },
   "CONFIRM": {
     "AUTO_FIX": "Vos données semblent endommagées. Voulez-vous essayer de le réparer automatiquement? Cela peut entraîner une perte de données partielle.",
@@ -51,6 +57,7 @@
     "RESTORE_FILE_BACKUP_ANDROID": "Il semble qu'il n'y ait PAS DE DONNÉES, mais une sauvegarde est disponible. Voulez-vous le charger ?",
     "RESTORE_FILE_BACKUP_MOBILE": "Aucune donnée n'a été trouvée sur cet appareil, mais une sauvegarde peut être restaurée (tâches : {{tasks}}, projets : {{projects}}). La restaurer ?",
     "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "Restaurer la dernière sauvegarde automatique (tâches : {{tasks}}, projets : {{projects}}) ? Cette opération remplace toutes les données actuelles de cet appareil et, si vous utilisez la synchronisation, écrase les données de vos autres appareils lors de la prochaine synchronisation.",
+    "RESTORE_FILE_BACKUP_WITH_COUNTS": "Il semble n'y avoir AUCUNE DONNÉE, mais des sauvegardes sont disponibles dans « {{dir}} ». Veux-tu restaurer la dernière sauvegarde du {{from}} (tâches : {{tasks}}, projets : {{projects}}) ?",
     "RESTORE_STRAY_BACKUP": "Lors de la dernière synchronisation, une erreur s'est peut-être produite. Voulez-vous restaurer la dernière sauvegarde?",
     "DELETE_SECTION": "Voulez-vous vraiment supprimer cette section ? Les tâches qu'elle contient seront déplacées vers la liste des tâches."
   },
@@ -513,6 +520,7 @@
         "WORKLOG": "Journal de travail"
       },
       "S": {
+        "CONNECTION_FAILED_WITH_ERROR": "Échec de la connexion : {{errorMsg}}",
         "ERR_GENERIC": "{{issueProviderName}} Erreur : {{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}: la demande a échoué en raison d'une erreur réseau côté client",
         "ERR_NOT_CONFIGURED": "{{issueProviderName}}: pas correctement configuré",
@@ -817,7 +825,13 @@
       }
     },
     "NOTE": {
+      "D_DRAFT_CONFLICT": {
+        "KEEP_SAVED": "Conserver la version enregistrée",
+        "MSG": "Un brouillon de cette note a été récupéré, mais la note a changé entre-temps (par exemple via la synchronisation). Veux-tu examiner le brouillon récupéré dans l'éditeur, ou conserver la version enregistrée et ne plus proposer ce brouillon ?",
+        "REVIEW_DRAFT": "Examiner le brouillon"
+      },
       "D_FULLSCREEN": {
+        "CONFIRM_DISCARD_MSG": "Tu as des modifications non enregistrées. Les abandonner ?",
         "TOOLBAR": {
           "BOLD": "Gras",
           "BULLET_LIST": "Liste à puces",
@@ -1223,6 +1237,7 @@
         "CONTENT_CONFLICT_TITLE_CHANGE": "{{kept}} (ignoré : {{discarded}})",
         "CONTENT_CONFLICT_UNTITLED": "Tâche sans titre"
       },
+      "BTN_SHOW_DEVICES": "Afficher les appareils connectés",
       "BTN_SYNC_NOW": "Synchroniser maintenant",
       "C": {
         "FORCE_UPLOAD": "Télécharger quand même des données locales?",
@@ -1325,6 +1340,25 @@
         "P3_PW_CHANGED": "Si vous avez <strong>changé votre mot de passe sur un autre appareil</strong>, saisissez votre nouveau mot de passe et cliquez sur \"Écraser les données distantes\". Cela enverra vos données locales au serveur.",
         "TITLE": "Échec du déchiffrement"
       },
+      "D_DEVICES": {
+        "BTN_SIGN_OUT_OTHERS": "Déconnecter les autres appareils",
+        "ERROR_LOADING": "Impossible de charger les appareils connectés",
+        "ERROR_SIGN_OUT": "La déconnexion des autres appareils a échoué. Si la connexion a été coupée en cours de requête, l'opération a peut-être tout de même abouti — dans ce cas, cet appareil a lui aussi besoin d'un nouveau jeton.",
+        "LAST_SEEN": "Dernière synchronisation : {{date}}",
+        "NO_DEVICES": "Aucun appareil ne s'est encore synchronisé avec ce compte.",
+        "PLATFORM_ANDROID": "Android",
+        "PLATFORM_BROWSER": "Navigateur",
+        "PLATFORM_DESKTOP": "Bureau",
+        "PLATFORM_IOS": "iOS",
+        "PLATFORM_UNKNOWN": "Appareil inconnu",
+        "REMOVE_HINT": "Super Sync accorde l'accès par compte, pas par appareil : les appareils ne peuvent donc pas être supprimés individuellement. Pour couper l'accès à un appareil perdu ou vendu, déconnecte tous les autres appareils — celui-ci reste connecté.",
+        "SIGN_OUT_CONFIRM_MSG": "Tous les autres appareils sont déconnectés de Super Sync et cessent de se synchroniser. Cet appareil reste connecté. Pour reconnecter un appareil, connecte-toi sur la page du serveur et colle le nouveau jeton dans ses paramètres de synchronisation — les modifications qui y ont été faites pendant la déconnexion sont conservées et envoyées ensuite.",
+        "SIGN_OUT_CONFIRM_OK": "Déconnecter",
+        "SIGN_OUT_CONFIRM_TITLE": "Déconnecter tous les autres appareils ?",
+        "SIGN_OUT_SUCCESS": "Tous les autres appareils ont été déconnectés",
+        "THIS_DEVICE": "(cet appareil)",
+        "TITLE": "Appareils connectés"
+      },
       "D_INCOMPLETE_SYNC": {
         "BTN_CLOSE_APP": "Femer l'application",
         "BTN_DOWNLOAD_BACKUP": "Télécharger une sauvegarde locale",
@@ -1342,6 +1376,11 @@
       "D_INITIAL_CFG": {
         "SAVE_AND_ENABLE": "Enregistrer et activer la synchronisation",
         "TITLE": "Configurer la synchronisation"
+      },
+      "D_NOTHING_TO_UPLOAD": {
+        "MESSAGE": "Rien n'a été modifié — les données de ton serveur de synchronisation sont toujours là.\n\nCet appareil n'a jamais terminé de synchronisation : il ne contient donc aucune copie de tes données visible par l'application. Écraser aurait remplacé tout ce qui se trouve sur le serveur par un appareil vide, et c'est irréversible.\n\nRéessaie ici avec ton mot de passe de chiffrement — un ancien mot de passe fonctionne souvent. Si tu ne t'en souviens pas, laisse cet appareil et le serveur exactement en l'état et signale le problème plutôt que d'écraser ; ton historique est toujours sur le serveur.\n\nSi tu veux vraiment effacer le serveur de synchronisation et repartir de zéro, ferme cette fenêtre et utilise Forcer l'écrasement dans Paramètres → Synchronisation et sauvegarde → Synchronisation.",
+        "MESSAGE_CHANGE_PW": "Rien n'a été modifié — les données de ton serveur de synchronisation sont toujours là.\n\nChanger le mot de passe de chiffrement renvoie les données de cet appareil et remplace ce qui se trouve sur le serveur. Cet appareil n'a jamais terminé de synchronisation : il ne contient aucune copie de tes données visible par l'application, et la copie du serveur serait perdue.\n\nChange le mot de passe depuis un appareil qui possède déjà tes données et s'est synchronisé avec succès.",
+        "TITLE": "Tes données synchronisées n'ont pas été modifiées"
       },
       "D_RESTORE": {
         "BTN_RESTORE": "Restaurer",
@@ -1426,8 +1465,11 @@
           "E2E_ENCRYPTION_INFO": "SuperSync utilise un chiffrement de bout en bout. Vos données sont chiffrées sur cet appareil avant de le quitter, à l'aide du mot de passe choisi lors de la configuration.",
           "L_ACCESS_TOKEN": "Jeton d'accès",
           "L_CONFIRM_PASSWORD": "Confirmer le mot de passe",
+          "L_ENABLE_TRACKING_PRESENCE": "Afficher le suivi en cours sur les autres appareils (expérimental)",
+          "L_PRESENCE_DEVICE_NAME": "Nom de cet appareil sur les autres appareils",
           "PASSWORD_MIN_LENGTH": "Le mot de passe doit comporter au moins 8 caractères",
           "PASSWORDS_DONT_MATCH": "Les mots de passe ne correspondent pas",
+          "PRESENCE_DEVICE_NAME_DESCRIPTION": "Affiché dans la pastille de suivi en cours sur tes autres appareils, par ex. « Portable du travail », afin de distinguer deux ordinateurs de bureau. Envoyé avec l'état du suivi (chiffré si le chiffrement de la synchronisation est activé). Laisse vide pour utiliser le nom de plateforme affiché en tant qu'exemple.",
           "SETUP_ENCRYPTION_BTN": "Définir le mot de passe",
           "ACCESS_TOKEN_DESCRIPTION": "Collez le jeton copié depuis la page de connexion du serveur",
           "BTN_DISABLE_ENCRYPTION": "Désactiver le chiffrement",
@@ -1476,7 +1518,8 @@
           "SERVER_URL_DESCRIPTION": "Laissez tel quel pour le serveur officiel, ou saisissez une URL de serveur personnalisée",
           "SETUP_DISABLE_SUPERSYNC_BTN": "Désactiver SuperSync",
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "Utilisez le même mot de passe sur tous les appareils. Un mot de passe oublié peut être réinitialisé en écrasant les données distantes.",
-          "SETUP_ENCRYPTION_TITLE": "SuperSync : Définir le mot de passe"
+          "SETUP_ENCRYPTION_TITLE": "SuperSync : Définir le mot de passe",
+          "TRACKING_PRESENCE_DESCRIPTION": "Reflète sur tes autres appareils connectés la tâche que ce compte chronomètre actuellement et permet de l'arrêter depuis ceux-ci. Affichage uniquement — jamais conservé sur le serveur, bien que brièvement relayé dans sa mémoire (illisible pour le serveur si le chiffrement de bout en bout est activé)."
         },
         "ONEDRIVE": {
           "CLIENT_ID_DESCRIPTION": "ID d'application (client) de votre inscription d'application Microsoft Entra",
@@ -1567,6 +1610,7 @@
         "ERROR_PERMISSION": "Accès au fichier refusé. Veuillez vérifier les permissions de votre système de fichiers.",
         "ERROR_PERMISSION_FLATPAK": "Accès au fichier refusé. Accordez la permission du système de fichiers via Flatseal ou utilisez un chemin à l'intérieur de ~ / .var / app /",
         "ERROR_PERMISSION_SNAP": "Accès au fichier refusé. Exécutez 'snap connect super-productivity:home' ou utilisez un chemin à l'intérieur de ~\\/snap\\/super-productivity\\/common\\/",
+        "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "Le serveur de synchronisation a répondu par une page web au lieu de tes données de synchronisation (par ex. une page de connexion, de proxy ou d'erreur). Tes données distantes sont probablement intactes — vérifie l'URL du serveur, tes identifiants et le réseau, puis réessaie. Si le problème persiste, tu peux écraser les données distantes via Paramètres de synchronisation → Forcer l'écrasement.",
         "FORCE_UPLOAD_FAILED": "Impossible d'écraser les données du serveur. Vos modifications locales restent disponibles.",
         "HYDRATION_FALLBACK_RECOVERY": "Échec du chargement des données enregistrées — affichage des éléments récupérés depuis le journal local. Les éléments manquants peuvent être récupérés par une synchronisation complète ou l'importation d'une sauvegarde.",
         "INCOMPLETE_CFG": "L'authentification pour la synchronisation a échoué. Veuillez vérifier votre configuration!",
@@ -1577,6 +1621,7 @@
         "NETWORK_ERROR": "La demande de synchronisation a échoué en raison d'un problème réseau temporaire. Vos modifications restent locales et la synchronisation réessaiera automatiquement.",
         "OAUTH_STATE_INVALID": "L'état OAuth ne correspond pas — l'URL de rappel ne correspond pas à la demande de cet appareil. Veuillez vous authentifier à nouveau.",
         "ONEDRIVE_AUTH_FAILED": "La connexion à OneDrive a échoué à l'étape du jeton ({{error}}). Cela signifie généralement que votre inscription d'application Microsoft Entra n'est pas configurée comme client public. Consultez le guide de configuration de OneDrive dans le wiki.",
+        "REMOTE_NOT_ENCRYPTED": "Les données synchronisées ne sont pas chiffrées, alors que le chiffrement est activé sur cet appareil : elles ont donc été refusées. Si tu as désactivé le chiffrement sur un autre appareil, désactive-le aussi ici dans les paramètres de synchronisation pour continuer.",
         "RESTORE_ENCRYPTED": "La restauration depuis l'historique du serveur n'est pas disponible lorsque le chiffrement de bout en bout est activé. Le serveur ne peut pas lire vos données chiffrées pour reconstituer un état antérieur.",
         "SPLIT_FORMAT_ENABLE_SETTING": "Ce dossier de synchronisation a été converti au format de fichiers séparés. Activez la synchronisation segmentée dans les paramètres de synchronisation pour continuer.",
         "SUCCESS_DOWNLOAD": "Données synchronisées depuis le distant",
@@ -1631,6 +1676,7 @@
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Le stockage était presque plein. Les anciennes données ont été nettoyées avec succès.",
         "TIMEOUT_ERROR": "L'opération de synchronisation a expiré. {{suggestion}}",
         "TOO_MANY_OPS_TO_DOWNLOAD": "Trop d'opérations de synchronisation à télécharger. Certaines modifications pourraient manquer.",
+        "UNSUPPORTED_MULTI_ENTITY_CONFLICT": "La synchronisation a été arrêtée par sécurité afin d'éviter une perte de données. Merci de signaler ce code : {{details}}",
         "UPLOAD_ERROR": "Erreur d'envoi inconnue (paramètres corrects ?) : {{err}}",
         "UPLOAD_OPS_REJECTED": "{{count}} opération(s) ont été définitivement rejetées par le serveur et ne seront pas synchronisées.",
         "VECTOR_CLOCK_LIMIT_REACHED": "La synchronisation a suivi {{originalSize}} appareils/navigateurs, dépassant la limite de {{maxSize}}. Les entrées d'appareils inactifs ont été supprimées. Envisagez une réinitialisation de la synchronisation si vous rencontrez des problèmes.",
@@ -1740,7 +1786,8 @@
       "D_EDIT": {
         "ADD": "Ajouter des balises pour \"{{title}}\"",
         "EDIT": "Modifier les balises pour \"{{title}}\"",
-        "LABEL": "Mots clés"
+        "LABEL": "Mots clés",
+        "PLACEHOLDER": "+ Ajouter une étiquette"
       },
       "FORM_BASIC": {
         "L_COLOR": "Couleur (si une couleur de thème principale non définie est utilisée)",
@@ -1810,10 +1857,12 @@
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Ajouter une pièce jointe",
         "ADD_CHECKLIST_ITEM": "Ajouter un élément à la liste de contrôle",
+        "CHECKLIST": "Liste de contrôle",
         "CHECKLIST_ACTIONS": "Actions de la liste de contrôle",
         "CHECK_ALL": "Tout cocher",
         "CLEAR_COMPLETED": "Supprimer les éléments terminés",
         "NOTES_OR_CHECKLIST": "Notes / Liste de contrôle",
+        "SUB_TASKS_EMPTY": "Sous-tâches",
         "UNCHECK_ALL": "Tout décocher",
         "PASTE_IMAGE_HINT": "Ctrl+V pour coller une image",
         "PASTE_IMAGE_HINT_MAC": "Cmd+V pour coller une image",
@@ -1860,6 +1909,7 @@
         "MARK_DONE": "Marquer comme terminée",
         "MARK_UNDONE": "Marquer comme non terminée",
         "MOVE_TO_BACKLOG": "Déplacer dans le backlog",
+        "MOVE_TO_BOTTOM": "Déplacer tout en bas",
         "MOVE_TO_OTHER_PROJECT": "Déplacer vers un autre projet",
         "MOVE_TO_REGULAR": "Déplacer vers la liste quotidienne",
         "MOVE_TO_TOP": "Déplacer en haut de la liste",
@@ -1900,10 +1950,6 @@
         "OK": "Créer les balises"
       },
       "D_DEADLINE": {
-        "QA_NEXT_MONTH": "Mois prochain",
-        "QA_NEXT_WEEK": "Semaine prochaine",
-        "QA_TODAY": "Aujourd'hui",
-        "QA_TOMORROW": "Demain",
         "RO_NEVER": "Jamais",
         "ADD_TIME": "Ajouter une heure",
         "REMIND_AT": "Rappeler à",
@@ -1990,20 +2036,94 @@
         "TINE_SPENT": "Temps passé",
         "TITLE": "Ajouter pour le jour"
       },
+      "MULTI_SELECT": {
+        "ACTIONS": "Actions",
+        "CLEAR": "Effacer la sélection",
+        "D_CONFIRM_DELETE": {
+          "MSG": {
+            "ONE": "Supprimer <strong>{{count}}</strong> tâche ? Ses sous-tâches sont également supprimées.",
+            "OTHER": "Supprimer <strong>{{count}}</strong> tâches ? Les sous-tâches sont également supprimées."
+          },
+          "OK": "Supprimer"
+        },
+        "S": {
+          "DEADLINE_REMOVED": {
+            "ONE": "Échéance retirée de {{count}} tâche",
+            "OTHER": "Échéance retirée de {{count}} tâches"
+          },
+          "DEADLINE_SET": {
+            "ONE": "Échéance de {{count}} tâche fixée au {{date}}",
+            "OTHER": "Échéance de {{count}} tâches fixée au {{date}}"
+          },
+          "DONE": {
+            "ONE": "{{count}} tâche marquée comme terminée",
+            "OTHER": "{{count}} tâches marquées comme terminées"
+          },
+          "ESTIMATE_CLEARED": {
+            "ONE": "Estimation effacée pour {{count}} tâche",
+            "OTHER": "Estimation effacée pour {{count}} tâches"
+          },
+          "ESTIMATE_SET": {
+            "ONE": "{{count}} tâche estimée à {{estimate}}",
+            "OTHER": "{{count}} tâches estimées à {{estimate}}"
+          },
+          "MOVED_TO_BACKLOG": {
+            "ONE": "{{count}} tâche déplacée vers le backlog",
+            "OTHER": "{{count}} tâches déplacées vers le backlog",
+            "PARTIAL": "{{count}} tâches sur {{total}} déplacées vers le backlog (les sous-tâches suivent leur tâche parente)"
+          },
+          "MOVED_TO_PROJECT": {
+            "ONE": "{{count}} tâche déplacée vers « {{projectTitle}} »",
+            "OTHER": "{{count}} tâches déplacées vers « {{projectTitle}} »",
+            "PARTIAL": "{{count}} tâches sur {{total}} déplacées vers « {{projectTitle}} » (les sous-tâches suivent leur tâche parente)"
+          },
+          "MOVED_TO_REGULAR": {
+            "ONE": "{{count}} tâche déplacée vers la liste normale",
+            "OTHER": "{{count}} tâches déplacées vers la liste normale",
+            "PARTIAL": "{{count}} tâches sur {{total}} déplacées vers la liste normale (les sous-tâches suivent leur tâche parente)"
+          },
+          "NOTHING_TO_DO": "Rien à modifier pour les tâches sélectionnées",
+          "SCHEDULED": {
+            "ONE": "{{count}} tâche planifiée pour {{date}}",
+            "OTHER": "{{count}} tâches planifiées pour {{date}}"
+          },
+          "UNDONE": {
+            "ONE": "{{count}} tâche marquée comme non terminée",
+            "OTHER": "{{count}} tâches marquées comme non terminées"
+          },
+          "UNSCHEDULED": {
+            "ONE": "Planification annulée pour {{count}} tâche",
+            "OTHER": "Planification annulée pour {{count}} tâches"
+          }
+        },
+        "SELECTED_COUNT": "{{count}} sélectionnée(s)",
+        "SELECT_ENTRY": "Sélectionner plusieurs tâches…",
+        "TASKS_TITLE": {
+          "ONE": "{{count}} tâche",
+          "OTHER": "{{count}} tâches"
+        }
+      },
       "N": {
         "ESTIMATE_EXCEEDED": "Estimation du temps dépassée !",
         "ESTIMATE_EXCEEDED_BODY": "Vous avez dépassé votre temps estimé pour \"{{title}}\"."
       },
       "S": {
+        "ADDED_VIA_APP_URI": "Tâche « {{title}} » ajoutée",
+        "AMBIGUOUS_MATCH_VIA_APP_URI": "Plusieurs tâches correspondent à « {{title}} » — sois plus précis",
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Impossible d'attribuer le projet via une courte syntaxe pour les tâches répétées !",
+        "COMPLETED_VIA_APP_URI": "Tâche « {{title}} » terminée",
         "CREATED_FOR_PROJECT": "Tâche \"{{taskTitle}}\" déplacée vers le projet \"{{projectTitle}}\"",
         "DELETED": "Tâche supprimée \"{{title}}\"",
+        "EMPTY_TITLE_VIA_APP_URI": "Le titre de la tâche était vide, aucune tâche n'a été ajoutée",
         "FOUND_MOVE_FROM_BACKLOG": "Déplacement de la tâche existante <strong>{{title}}</strong> vers la liste des tâches du jour",
         "FOUND_MOVE_FROM_OTHER_LIST": "Tâche <strong>{{title}}</strong> ajoutée de <strong>{{contextTitle}}</strong> à la liste actuelle",
         "FOUND_RESTORE_FROM_ARCHIVE": "Tâche <strong>{{title}}</strong> restaurée en lien avec le ticket de l'archive",
         "GO_TO_TASK": "Aller à la tâche",
+        "INPUT_TOO_LONG_VIA_APP_URI": "Titre ou notes de la tâche trop longs",
         "MOVED_TO_ARCHIVE": "Déplacé {{nr}} tâches vers l'archive",
         "MOVED_TO_PROJECT": "Tâche \"{{taskTitle}}\" déplacée vers le projet \"{{projectTitle}}\"",
+        "NOT_FOUND_VIA_APP_URI": "Aucune tâche correspondant à « {{title}} » n'a été trouvée",
+        "PROJECT_NOT_FOUND_VIA_APP_URI": "Projet introuvable — la tâche « {{title}} » n'a pas été ajoutée",
         "REMINDER_ADDED": "Tâche planifiée \"{{title}}\"",
         "REMINDER_DELETED": "Rappel supprimé pour la tâche",
         "REMINDER_UPDATED": "Rappel mis à jour pour la tâche \"{{title}}\"",
@@ -2096,6 +2216,10 @@
         "ORD_THIRD_NTH": "troisième",
         "Q_CUSTOM": "Configuration de répétition customisée",
         "Q_DAILY": "Chaque jour",
+        "Q_EVERY_X_DAYS": "Tous les {{count}} jours",
+        "Q_EVERY_X_MONTHS": "Tous les {{count}} mois",
+        "Q_EVERY_X_WEEKS": "Toutes les {{count}} semaines le {{weekdayStr}}",
+        "Q_EVERY_X_YEARS": "Tous les {{count}} ans",
         "Q_MONDAY_TO_FRIDAY": "Chaque semaine du lundi au vendredi",
         "Q_MONTHLY_CURRENT_DATE": "Chaque mois le {{dateDayStr}}",
         "Q_WEEKLY_CURRENT_WEEKDAY": "Chaque semaine le {{weekdayStr}}",
@@ -2257,6 +2381,24 @@
         "WARNING": "Cette opération est irréversible. Assurez-vous d'avoir une sauvegarde avant de continuer !"
       }
     },
+    "TRACKING_PRESENCE": {
+      "CHIP": {
+        "FALLBACK_TASK": "une tâche démarrée récemment",
+        "FOCUS": "Session de concentration · cycle {{cycle}}",
+        "LAST_SEEN": "vu pour la dernière fois {{time}}",
+        "PAUSED_ON": "En pause sur {{device}}",
+        "SINCE": "depuis {{time}}",
+        "STOP": "Arrêter le suivi sur {{device}}",
+        "STOPPED_ON": "Arrêté sur {{device}}",
+        "TRACKING_ON": "Suivi en cours sur {{device}}",
+        "WAS_TRACKING_ON": "Suivi en cours sur {{device}} précédemment"
+      },
+      "S": {
+        "MOVED_TO": "Le suivi est passé sur {{device}}",
+        "STOPPED_FROM": "Suivi arrêté depuis {{device}}",
+        "TRACK_HERE_AGAIN": "Reprendre le suivi ici"
+      }
+    },
     "VOICE_REMINDER": {
       "FORM": {
         "HELP": "Répète la phrase configurée tous les X lors du suivi du temps d'une tâche.",
@@ -2374,6 +2516,7 @@
     "CONFIRM": "Confirmer",
     "CONTINUE": "Continuer",
     "DELETE": "Effacer",
+    "DISCARD": "Abandonner",
     "DISMISS": "Ignorer",
     "DO_IT": "Fais le !",
     "DUPLICATE": "Dupliquer",
@@ -2390,6 +2533,8 @@
     "MOVE_BACKWARD": "Reculer",
     "MOVE_FORWARD": "Avancer",
     "NEXT": "Suivant",
+    "NEXT_MONTH": "Mois prochain",
+    "NEXT_WEEK": "Semaine prochaine",
     "NO_CON": "Vous êtes actuellement hors ligne. Veuillez vous reconnecter à Internet.",
     "NONE": "Aucun",
     "OK": "Ok",
@@ -2403,7 +2548,9 @@
     "SHARE": "Partager",
     "SUBMIT": "Soumettre",
     "TITLE": "Titre",
+    "TODAY": "Aujourd'hui",
     "TODAY_TAG_TITLE": "Aujourd'hui",
+    "TOMORROW": "Demain",
     "UNDO": "annuler",
     "WITHOUT_PROJECT": "Sans projet",
     "YESTERDAY": "Hier",
@@ -2436,6 +2583,27 @@
       "EXPERIMENTAL_WARNING_MSG": "Cette fonctionnalité est expérimentale. Elle peut contenir des bugs, changer considérablement ou être supprimée dans une future mise à jour. Veillez à conserver des sauvegardes de vos données.<br/><br/>Voulez-vous l'activer ?"
     },
     "AUTO_BACKUPS": {
+      "BROWSE": "Parcourir les sauvegardes",
+      "D_LIST": {
+        "BTN_RESTORE": "Restaurer",
+        "CONFIRM_MSG": "Restaurer la sauvegarde du <strong>{{timestamp}}</strong> ({{tasks}} tâches) ?<br><br>Cela <strong>remplace toutes tes données actuelles</strong> sur cet appareil et, si la synchronisation est activée, sur tes autres appareils. Les données actuelles sont d'abord conservées comme point de restauration.",
+        "CONFIRM_TITLE": "Confirmer la restauration",
+        "DATE_UNKNOWN": "Date inconnue",
+        "EMPTY": "Aucune sauvegarde sur cet appareil pour l'instant. Les points de restauration sont créés automatiquement avant qu'une synchronisation ou un import ne remplace tes données.",
+        "ERROR_LOADING": "Impossible de charger les sauvegardes",
+        "ERROR_RESTORE": "Impossible de restaurer la sauvegarde",
+        "INTRO": "Toutes les sauvegardes stockées sur cet appareil. Sélectionnes-en une pour voir ce qu'elle contient.",
+        "KIND_FILE": "Fichier de sauvegarde automatique",
+        "LOADING": "Chargement des sauvegardes…",
+        "PARTIAL": "Certaines sauvegardes de cet appareil n'ont pas pu être lues. Seules celles listées ci-dessous sont disponibles.",
+        "REASON_FORCE_DOWNLOAD": "Point de restauration : avant « Utiliser les données du serveur »",
+        "REASON_LOCAL_IMPORT": "Point de restauration : avant un import ou une restauration",
+        "REASON_REMOTE_IMPORT": "Point de restauration : avant que la synchronisation ne remplace les données locales",
+        "SLOT_LATEST": "Dernière sauvegarde automatique",
+        "SLOT_PREVIOUS": "Sauvegarde automatique précédente",
+        "TASK_COUNT": "{{tasks}} tâches",
+        "TITLE": "Sauvegardes sur cet appareil"
+      },
       "HELP": "Sauvegardez automatiquement toutes les données dans votre dossier d'applications afin de les retrouver en cas de problème.",
       "LABEL_IS_ENABLED": "Activer les sauvegardes automatiques",
       "LAST_BACKUP_INFO": "Dernière sauvegarde : {{date}}",
@@ -2525,6 +2693,7 @@
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Déclenchez uniquement la boîte de dialogue d'inactivité lorsqu'une tâche en cours est sélectionnée",
       "IS_SUPPRESS_IDLE_DURING_FOCUS_MODE": "Ne pas afficher la boîte de dialogue d'inactivité pendant les sessions du mode Concentration",
       "MIN_IDLE_TIME": "Déclenchement d'inactivité après X",
+      "MIN_IDLE_TIME_DESCRIPTION": "Par ex. « 5h 23m ». Doit valoir au moins {{min}} ; les périodes d'inactivité plus courtes ne sont jamais signalées. L'inactivité est vérifiée toutes les {{interval}}.",
       "TITLE": "Gestion de l'inactivité"
     },
     "IMEX": {
@@ -2537,6 +2706,8 @@
       "ADD_NEW_TASK": "Ajouter une nouvelle tâche",
       "APP_WIDE_SHORTCUTS": "Raccourcis globaux (sur toute l'application)",
       "COLLAPSE_SUB_TASKS": "Réduire les sous-tâches",
+      "COLUMN_ACTION": "Action",
+      "COLUMN_SHORTCUT": "Raccourci",
       "EXPAND_SUB_TASKS": "Développer les sous-tâches",
       "GLOBAL_ADD_NOTE": "Ajouter une nouvelle note",
       "GLOBAL_ADD_TASK": "Ajouter une nouvelle tâche",
@@ -2561,11 +2732,13 @@
       "SAVE_NOTE": "Sauvegarder la note",
       "SELECT_NEXT_TASK": "Sélectionner la tâche suivante",
       "SELECT_PREVIOUS_TASK": "Sélectionner la tâche précédente",
+      "SHOW_HELP": "Afficher l'aide-mémoire des raccourcis clavier",
       "SHOW_SEARCH_BAR": "Afficher la barre de recherche",
       "SYSTEM_SHORTCUTS": "Raccourcis globaux (à l'échelle du système)",
       "TASK_ADD_ATTACHMENT": "Joindre un fichier ou un lien",
       "TASK_ADD_SUB_TASK": "Ajouter une sous-tâche",
       "TASK_DELETE": "Supprimer la tâche",
+      "TASK_DUPLICATE": "Dupliquer la tâche",
       "TASK_EDIT_TAGS": "Modifier les balises",
       "TASK_EDIT_TITLE": "Modifier le titre",
       "TASK_MOVE_TO_PROJECT": "Ouvrir la tâche de déplacement vers le menu du projet",
@@ -2582,6 +2755,7 @@
       "TASK_TOGGLE_DETAIL_PANEL_OPEN": "Afficher / masquer les informations supplémentaires de la tâche",
       "TASK_OPEN_NOTES_PANEL": "Ouvrir la note ou la liste de contrôle dans le panneau de la tâche",
       "TASK_TOGGLE_DONE": "Marquer Terminé",
+      "TASK_TOGGLE_SELECT": "Ajouter/retirer la tâche de la sélection multiple",
       "TASK_UNSCHEDULE": "Déprogrammer la tâche",
       "TITLE": "Raccourcis clavier",
       "TOGGLE_BACKLOG": "Afficher / masquer le backlog",
@@ -2674,6 +2848,10 @@
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Nécessite un redémarrage pour prendre effet",
       "IS_VERTICAL_ACTION_BAR": "Barre d'actions verticale sur le côté (expérimentale)",
       "IS_VERTICAL_ACTION_BAR_HINT": "Déplace les boutons d'action de l'en-tête dans une bande verticale sur le bord droit de la fenêtre. Version de bureau uniquement.",
+      "LOCAL_REST_API_TOKEN": "Jeton d'accès",
+      "LOCAL_REST_API_TOKEN_ERROR": "Le jeton d'accès n'a pas pu être enregistré, l'API n'est donc pas active. Vérifie que Super Productivity peut écrire dans son dossier de données, puis utilise Régénérer pour réessayer.",
+      "LOCAL_REST_API_TOKEN_REGENERATE": "Régénérer le jeton d'accès",
+      "LOCAL_REST_API_TOKEN_REGENERATE_ERROR": "Le nouveau jeton d'accès n'a pas pu être enregistré. Le jeton précédent reste valide.",
       "START_OF_NEXT_DAY": "Heure de début le jour suivant",
       "START_OF_NEXT_DAY_HINT": "À partir de quelle heure souhaitez-vous considérer que le jour suivant commence. Par défaut, minuit correspond à 0 heure.",
       "THEME": "Thème",
@@ -2928,8 +3106,11 @@
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Voulez-vous télécharger une sauvegarde de vos données héritées (peut être utilisée avec des versions antérieures de Super Productivity) ?",
     "DETECTED_LEGACY": "Données héritées détectées. Nous allons les migrer pour vous !",
+    "DIALOG_TITLE_ERROR": "Échec de la migration",
     "E_MIGRATION_FAILED": "Échec de la migration ! avec l'erreur :",
+    "E_MIGRATION_FAILED_MSG": "Tes anciennes données n'ont pas pu être migrées. Elles sont toujours sur cet appareil et n'ont pas été modifiées, et un fichier de sauvegarde a été proposé au téléchargement. Un redémarrage rencontrera le même problème : tu peux donc continuer avec une application vide et importer cette sauvegarde ensuite. L'application ne posera alors plus de question sur ces anciennes données.",
     "E_RESTART_FAILED": "Échec du redémarrage automatique. Veuillez redémarrer l'application manuellement !",
+    "START_FRESH": "Continuer sans les anciennes données",
     "STATUS_PREPARING": "Préparation de la migration...",
     "SUCCESS": "Migration terminée ! Redémarrage de l'application maintenant...",
     "DIALOG_MESSAGE": "Nous mettons à jour le stockage de vos données pour une meilleure fiabilité de synchronisation. Une sauvegarde sera téléchargée automatiquement.",
@@ -3051,6 +3232,8 @@
     "SHARE_SUCCESS": "Projet partagé sur Plainspace. Les tâches qui vous sont attribuées seront importées automatiquement.",
     "SPACE_PICKER": {
       "CREATE_NEW": "Créer un nouvel espace",
+      "DISCONNECT": "Déconnecter le compte",
+      "DISCONNECT_HINT": "La déconnexion supprime le compte enregistré de cet appareil. Les intégrations de projet existantes continuent de se synchroniser. Pour les arrêter, ouvre chaque intégration Plainspace concernée dans le panneau des fournisseurs de tickets et choisis son icône d'engrenage → Supprimer.",
       "ERROR": "Impossible de joindre Plainspace. Vérifiez votre connexion et la validité de votre jeton, puis réessayez.",
       "INTRO": "Liez un espace existant pour importer les tâches qui vous sont attribuées, ou créez-en un nouveau.",
       "LINK": "Lier l'espace",
@@ -3066,6 +3249,8 @@
     "ALLOWED_HOSTS": "Accès au réseau",
     "ALREADY_INITIALIZED": "Le plugin est déjà initialisé",
     "CANCEL": "Annuler",
+    "CANNOT_DELETE_INBOX": "Le projet Boîte de réception ne peut pas être supprimé",
+    "CANNOT_NEST_SUBTASKS": "Impossible d'imbriquer les sous-tâches : la tâche parente est elle-même une sous-tâche",
     "CAPABILITIES": {
       "ACCESS_FILES": "Accéder et modifier les fichiers sur votre système",
       "RUN_COMMANDS": "Exécuter des commandes système",
@@ -3090,6 +3275,7 @@
     "FAILED_TO_LOAD_CONFIG": "Échec du chargement de la configuration du plugin",
     "FAILED_TO_REMOVE": "Échec de la suppression du plugin",
     "FAILED_TO_SAVE_CONFIG": "Échec de l'enregistrement de la configuration du plugin",
+    "FIELD_NOT_UPDATABLE": "« {{field}} » ne peut pas être défini via updateTask — le changement de tâche parente n'est pas pris en charge. Crée les sous-tâches avec addTask({ parentId }), ou restructure via batchUpdateForProject",
     "FILE_TOO_LARGE": "Fichier trop volumineux ({{fileSize}} Mo). La taille maximale est de {{maxSize}} Mo",
     "GO_BACK": "Revenir en arrière",
     "GRANT_PERMISSION": "Accorder la permission",
@@ -3142,6 +3328,7 @@
     "TASKS_NOT_IN_PROJECT": "Une ou plusieurs tâches ne sont pas dans le projet '{{contextId}}'",
     "TASKS_NOT_SUBTASKS": "Une ou plusieurs tâches ne sont pas des sous-tâches de '{{contextId}}'",
     "TOGGLE_PLUGIN": "Basculer {{pluginName}}",
+    "TRANSLATIONS_TOO_LARGE": "Les traductions du plugin sont trop volumineuses au total (max. {{maxSize}} Mo)",
     "TRUST_WARNING": "N'accordez la permission que si vous faites confiance à ce plugin",
     "TYPE": "Type : {{type}}",
     "UNABLE_TO_PERSIST_DATA": "Impossible de sauvegarder les données dans le stockage du plugin",
@@ -3171,6 +3358,8 @@
     "PROJECT_SETTINGS": "Paramètres spécifiques au projet",
     "PROVIDE_FEEDBACK": "Fournir une réponse",
     "RELOAD": "Recharger",
+    "SEARCH_NO_RESULTS": "Aucun paramètre trouvé",
+    "SEARCH_PLACEHOLDER": "Rechercher dans les paramètres",
     "SYNC_EXPORT": "Synchroniser et exporter",
     "TABS": {
       "GENERAL": "Général",

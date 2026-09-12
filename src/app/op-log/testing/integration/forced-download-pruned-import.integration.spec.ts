@@ -57,10 +57,12 @@ import { CLIENT_ID_PROVIDER } from '../../util/client-id.provider';
  * 1. An installed client applies another device's SYNC_IMPORT plus follow-up ops.
  * 2. The 7-day retention window elapses; real compaction prunes them, so the
  *    applied-id filter no longer knows the import.
- * 3. A forced seq-0 download (concurrent-rejection retry, provider switch)
+ * 3. The concurrent-rejection retry's forced seq-0 download (`isReDeliveryRetry`)
  *    re-delivers the import. It must NOT resurface as a new incoming import
  *    while local work is pending — that is the sync-import conflict dialog
- *    from the field report, whose every answer destroys data.
+ *    from the field report, whose every answer destroys data. A provider
+ *    switch also forces seq 0 but is deliberately NOT filtered: its whole
+ *    point is a fresh state comparison that reaches the conflict gate.
  *
  * The second case guards the filter's false-positive edge: an op the local
  * clock covers only because the rejection resolver merged its clock, but
@@ -455,6 +457,7 @@ describe('Forced seq-0 download after compaction pruned an applied SYNC_IMPORT (
 
     const outcome = await syncService.downloadRemoteOps(provider, {
       forceFromSeq0: true,
+      isReDeliveryRetry: true,
     });
 
     // Server re-delivered 1..4 (fast-forwarded to the import); 1..3 are behind
@@ -488,6 +491,7 @@ describe('Forced seq-0 download after compaction pruned an applied SYNC_IMPORT (
 
     const outcome = await syncService.downloadRemoteOps(provider, {
       forceFromSeq0: true,
+      isReDeliveryRetry: true,
     });
 
     // Behind-cursor ops are skipped; the blocked op is above the cursor and delivered.

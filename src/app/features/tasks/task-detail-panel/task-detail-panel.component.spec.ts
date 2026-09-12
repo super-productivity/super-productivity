@@ -60,8 +60,13 @@ describe('TaskDetailPanelComponent', () => {
     });
     const mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       cfg: jasmine.createSpy().and.returnValue({ keyboard: {} }),
-      tasks: jasmine.createSpy().and.returnValue({}),
+      // Formatting off keeps these specs on the plain-textarea notes path; the
+      // live markdown editor (#9910) has its own specs and an e2e.
+      tasks: jasmine
+        .createSpy()
+        .and.returnValue({ isMarkdownFormattingInNotesEnabled: false }),
       clipboardImages: jasmine.createSpy().and.returnValue(null),
+      misc: jasmine.createSpy().and.returnValue({}),
     });
     const mockIssueService = jasmine.createSpyObj(
       'IssueService',
@@ -323,6 +328,63 @@ describe('TaskDetailPanelComponent', () => {
       expect(component.showScheduleIcon()).toBe('today');
     });
   });
+
+  describe('title editor sizing (#9641)', () => {
+    // task-title sizes its edit box from an invisible .height-measure span and
+    // overlays an absolutely positioned, overflow:hidden textarea on it. If the
+    // panel styles the textarea differently from the measurer, the text wraps
+    // to more lines than the box is tall, and because focusing moves the caret
+    // to the end the textarea scrolls down — hiding the start of a long title
+    // with no way to scroll back.
+    const LONG_TITLE =
+      'Test1 Test2 Test3 Test4 Test Test Test Test Test Test Test Test Test Test Test Test';
+
+    const startEditingTitle = (): { textarea: HTMLElement; measurer: HTMLElement } => {
+      const titleEl = fixture.nativeElement.querySelector('task-title') as HTMLElement;
+      titleEl.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      fixture.detectChanges();
+
+      const textarea = titleEl.querySelector('textarea') as HTMLElement | null;
+      const measurer = titleEl.querySelector('.height-measure') as HTMLElement | null;
+      expect(textarea).toBeTruthy();
+      expect(measurer).toBeTruthy();
+      return { textarea: textarea as HTMLElement, measurer: measurer as HTMLElement };
+    };
+
+    beforeEach(() => {
+      componentRef.setInput('task', { ...MOCK_TASK, title: LONG_TITLE });
+      // Phone-width viewport: a long title has to wrap for the bug to show.
+      fixture.nativeElement.style.width = '360px';
+      fixture.detectChanges();
+    });
+
+    it('renders the title textarea with the same text metrics as its measurer', () => {
+      const { textarea, measurer } = startEditingTitle();
+
+      expect(getComputedStyle(textarea).fontWeight).toBe(
+        getComputedStyle(measurer).fontWeight,
+      );
+    });
+
+    it('does not clip the title textarea below its own content height', () => {
+      const words = LONG_TITLE.split(' ');
+      const clipped: string[] = [];
+
+      for (let wordCount = 4; wordCount <= words.length; wordCount++) {
+        const title = words.slice(0, wordCount).join(' ');
+        componentRef.setInput('task', { ...MOCK_TASK, title });
+        fixture.detectChanges();
+        const { textarea } = startEditingTitle();
+        if (textarea.scrollHeight > textarea.clientHeight) {
+          clipped.push(
+            `${title} (${textarea.scrollHeight}px content in ${textarea.clientHeight}px box)`,
+          );
+        }
+      }
+
+      expect(clipped).toEqual([]);
+    });
+  });
 });
 
 const fakeTask = (id: string): TaskWithSubTasks =>
@@ -362,7 +424,14 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
         { provide: LayoutService, useValue: { isXs: () => false } },
-        { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            cfg: () => ({}),
+            misc: () => ({}),
+            tasks: () => ({ isMarkdownFormattingInNotesEnabled: false }),
+          },
+        },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
           provide: TaskRepeatCfgService,
@@ -448,9 +517,11 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
 });
 
 // Opening the notes panel via a checklist's progress badge routes through
-// TaskDetailTargetPanel.Notes. It must land on the RENDERED checklist (preview),
-// not auto-open the raw-markdown editor: doing both briefly flashed the raw
-// "- [ ] " source before focusItem() blurred the editor back to preview.
+// TaskDetailTargetPanel.Notes. It must not auto-focus the notes editor: doing
+// both briefly flashed the raw "- [ ] " source before focusItem() blurred it
+// back. (These specs run the markdown-formatting-off path, so "not focused"
+// means the preview stays up; on the default path it means the live editor
+// keeps its syntax hidden.)
 describe('TaskDetailPanelComponent notes target does not auto-edit', () => {
   let component: TaskDetailPanelComponent;
   let fixture: ComponentFixture<TaskDetailPanelComponent>;
@@ -478,7 +549,14 @@ describe('TaskDetailPanelComponent notes target does not auto-edit', () => {
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
         { provide: LayoutService, useValue: { isXs: () => false } },
-        { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            cfg: () => ({}),
+            misc: () => ({}),
+            tasks: () => ({ isMarkdownFormattingInNotesEnabled: false }),
+          },
+        },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
           provide: TaskRepeatCfgService,
@@ -577,7 +655,11 @@ describe('TaskDetailPanelComponent add sub-task', () => {
         { provide: LayoutService, useValue: { isXs: () => false } },
         {
           provide: GlobalConfigService,
-          useValue: { cfg: () => ({ keyboard: { taskAddSubTask: 'a' } }) },
+          useValue: {
+            cfg: () => ({ keyboard: { taskAddSubTask: 'a' } }),
+            misc: () => ({}),
+            tasks: () => ({ isMarkdownFormattingInNotesEnabled: false }),
+          },
         },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {

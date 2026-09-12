@@ -31,6 +31,7 @@ export const ALLOWED_EXTERNAL_URL_SCHEMES = [
   'http:',
   'https:',
   'mailto:',
+  'mid:', // RFC 2392 message-id links (mid:<id>@host) — Thunderbird registers this scheme
   'file:',
   'tel:',
   'sms:',

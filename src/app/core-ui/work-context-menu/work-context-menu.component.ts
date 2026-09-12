@@ -158,6 +158,57 @@ export class WorkContextMenuComponent implements OnInit {
     }
   }
 
+  async rename(): Promise<void> {
+    if (this.isForProject) {
+      const project = await firstValueFrom(
+        this._projectService.getByIdOnce$(this.contextId),
+      );
+      if (!project) {
+        return;
+      }
+      const result = await firstValueFrom(
+        this._matDialog
+          .open(DialogPromptComponent, {
+            restoreFocus: true,
+            data: {
+              txtValue: project.title,
+              placeholder: T.F.PROJECT.D_RENAME.PLACEHOLDER,
+            },
+          })
+          .afterClosed(),
+      );
+
+      const trimmed = (result as string | undefined)?.trim();
+      if (!trimmed || trimmed === project.title) {
+        return;
+      }
+      this._projectService.update(this.contextId, { title: trimmed });
+      return;
+    }
+
+    const tag = await firstValueFrom(this._tagService.getTagById$(this.contextId));
+    if (!tag) {
+      return;
+    }
+    const result = await firstValueFrom(
+      this._matDialog
+        .open(DialogPromptComponent, {
+          restoreFocus: true,
+          data: {
+            txtValue: tag.title,
+            placeholder: T.F.TAG.D_RENAME.PLACEHOLDER,
+          },
+        })
+        .afterClosed(),
+    );
+
+    const trimmed = (result as string | undefined)?.trim();
+    if (!trimmed || trimmed === tag.title) {
+      return;
+    }
+    this._tagService.updateTag(this.contextId, { title: trimmed });
+  }
+
   async completeProject(): Promise<void> {
     const project = await firstValueFrom(
       this._projectService.getByIdOnce$(this.contextId),

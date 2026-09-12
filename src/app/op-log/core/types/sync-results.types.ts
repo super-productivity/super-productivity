@@ -266,6 +266,8 @@ export type DownloadResultForRejection =
  */
 export type DownloadCallback = (options?: {
   forceFromSeq0?: boolean;
+  /** See `isReDeliveryRetry` on `OperationLogDownloadService.downloadRemoteOps`. */
+  isReDeliveryRetry?: boolean;
   /** Local full-state boundaries to ignore while processing this recovery download. */
   ignoredLocalFullStateOpIds?: string[];
 }) => Promise<DownloadResultForRejection>;
