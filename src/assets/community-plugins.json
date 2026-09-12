@@ -1,5 +1,13 @@
 [
   {
+    "name": "Reporting Dashboard",
+    "shortDescription": "Visual Dashboard for Time Tracked by Projects. Time Range and Project Selector. PDF Report Generation",
+    "url": "https://github.com/bennidi/sp-dashboard",
+    "author": "dougcooper & claude & bennidi",
+    "authorUrl": "https://github.com/bennidi",
+    "stars": 1
+  },
+  {
     "name": "Date Range Reporter Plugin",
     "shortDescription": "Generates reports of completed tasks and tasks with work logs within a specified date range.",
     "url": "https://github.com/dougcooper/sp-reporter",
