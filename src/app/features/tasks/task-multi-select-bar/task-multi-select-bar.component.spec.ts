@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
@@ -158,4 +158,30 @@ describe('TaskMultiSelectBarComponent', () => {
     fixture.destroy();
     expect(multiSelect.count()).toBe(0);
   });
+
+  for (const tag of ['task', 'planner-task']) {
+    it(`restores menu focus to the live ${tag} when its old host is still rendered`, fakeAsync(() => {
+      const container = document.createElement('div');
+      const oldRow = document.createElement(tag);
+      const liveRow = document.createElement(tag);
+      for (const row of [oldRow, liveRow]) {
+        row.setAttribute('data-task-id', 'a');
+        row.setAttribute('data-task-selectable', 'true');
+        row.tabIndex = 0;
+        container.appendChild(row);
+      }
+      document.body.appendChild(container);
+      try {
+        multiSelect.toggle('a');
+        multiSelect.removeWhenUnrendered('a', oldRow);
+
+        fixture.componentInstance.onMenuClosed();
+
+        expect(document.activeElement).toBe(liveRow);
+        tick();
+      } finally {
+        container.remove();
+      }
+    }));
+  }
 });

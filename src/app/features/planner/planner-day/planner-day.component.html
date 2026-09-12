@@ -62,6 +62,7 @@
         [cdkDragLockAxis]="isXs() ? 'y' : ''"
         [task]="task"
         [day]="day.dayDate"
+        [focusable]="true"
       ></planner-task>
     }
 
@@ -145,6 +146,7 @@
               cdkDrag
               [task]="scheduledItem.task"
               [day]="day.dayDate"
+              [focusable]="true"
               [cdkDragData]="scheduledItem.task"
               [cdkDragStartDelay]="dragDelayForTouch()"
               [cdkDragLockAxis]="isXs() ? 'y' : ''"

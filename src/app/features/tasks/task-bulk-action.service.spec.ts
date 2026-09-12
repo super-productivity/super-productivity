@@ -40,7 +40,7 @@ describe('TaskBulkActionService', () => {
     clear: jasmine.Spy;
     isBulkFeedbackSuppressed: Signal<boolean>;
     setBulkFeedbackSuppressed: (v: boolean) => void;
-    isDestroyedHost: () => boolean;
+    isDestroyedHost: (el: Element) => boolean;
     findLiveRowEl: () => HTMLElement | null;
     isTouchSelectionMode: ReturnType<typeof signal<boolean>>;
   };
@@ -122,7 +122,7 @@ describe('TaskBulkActionService', () => {
       isBulkFeedbackSuppressed: suppressed,
       setBulkFeedbackSuppressed: (v: boolean) =>
         suppressionDepth.update((depth) => (v ? depth + 1 : Math.max(0, depth - 1))),
-      isDestroyedHost: () => false,
+      isDestroyedHost: (_el: Element) => false,
       findLiveRowEl: () => null,
       isTouchSelectionMode: signal(false),
     };
@@ -231,6 +231,34 @@ describe('TaskBulkActionService', () => {
   });
 
   describe('deleteSelected', () => {
+    it('focuses the Planner add button when every selected card is removed', async () => {
+      isConfirmBeforeDelete = false;
+      select([t('only')]);
+      const day = document.createElement('planner-day');
+      day.setAttribute('data-planner-selection-scope', '2026-09-12');
+      const row = document.createElement('planner-task');
+      row.setAttribute('data-task-id', 'only');
+      row.setAttribute('data-task-selectable', 'true');
+      row.tabIndex = 0;
+      const addTask = document.createElement('add-task-inline');
+      const add = document.createElement('button');
+      addTask.appendChild(add);
+      day.append(row, addTask);
+      document.body.appendChild(day);
+      row.focus();
+      let isDestroyed = false;
+      multiSelect.isDestroyedHost = (el: Element) => isDestroyed && el === row;
+      taskService.remove.and.callFake(() => {
+        isDestroyed = true;
+      });
+      spyOn(add, 'focus');
+
+      await service.deleteSelected();
+
+      expect(add.focus).toHaveBeenCalled();
+      day.remove();
+    });
+
     it('confirms, dedupes subtasks of selected parents, and splits lone subtasks off', async () => {
       select([
         t('parent', { subTaskIds: ['sub'] }),
