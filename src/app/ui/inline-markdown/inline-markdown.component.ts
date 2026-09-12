@@ -291,6 +291,13 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
     if ((ev.key === 'Enter' && ev.ctrlKey) || ev.code === 'Escape') {
       this.untoggleShowEdit();
+      // Give the field up before handing focus back, the same way
+      // `_leaveLiveEditor` does. With markdown formatting off the textarea is
+      // mounted unconditionally (see the template's `@else if`), so
+      // `untoggleShowEdit` leaves it on screen AND focused — and the panel's
+      // deferred `focusItem` skips itself while a text field owns focus, so
+      // Escape would strand the caret in the field it was meant to leave.
+      this.textareaEl()?.nativeElement.blur();
       this.keyboardUnToggle.emit(ev);
       return;
     }
