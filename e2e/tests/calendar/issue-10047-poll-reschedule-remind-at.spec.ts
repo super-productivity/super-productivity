@@ -36,25 +36,49 @@ const UID = 'e2e-10047-event';
 const PANEL_BTN = '.e2e-toggle-issue-provider-panel';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const ONE_HOUR_MS = 60 * 60 * 1000;
 
 const pad = (n: number): string => String(n).padStart(2, '0');
 
 const icalDate = (d: Date): string =>
   `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
 
+const icalDateTimeUtc = (d: Date): string =>
+  `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T` +
+  `${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
+
 // Toggled by the test once the task has auto-imported, to simulate the event
 // gaining a start time on the remote calendar.
 let icsPhase: 'allDay' | 'timed' = 'allDay';
+
+/**
+ * The timed DTSTART, frozen on first use so every poll in one run sees the same
+ * remote event and the reschedule is applied exactly once.
+ *
+ * It must be derived from `now` rather than written as a fixed UTC hour: the
+ * suite rotates the wall-clock timezone (`e2e/utils/test-timezone.ts`) so local
+ * time lands near midday, so a literal like `T180000Z` falls on the *next* local
+ * day in the eastern candidates (the run that caught this was Pacific/Guadalcanal,
+ * UTC+11). The task then leaves the Today list and the assertion below cannot
+ * see it — a failure that has nothing to do with the reminder under test.
+ * `now + 1h` stays on today's local date with ~10h of margin to midnight.
+ */
+let timedStart: Date | null = null;
 
 const buildIcal = (): string => {
   const now = new Date();
   const today = icalDate(now);
   const tomorrow = icalDate(new Date(now.getTime() + ONE_DAY_MS));
 
+  timedStart = timedStart ?? new Date(now.getTime() + ONE_HOUR_MS);
+
   const [dtstart, dtend] =
     icsPhase === 'allDay'
       ? [`DTSTART;VALUE=DATE:${today}`, `DTEND;VALUE=DATE:${tomorrow}`]
-      : [`DTSTART:${today}T180000Z`, `DTEND:${today}T190000Z`];
+      : [
+          `DTSTART:${icalDateTimeUtc(timedStart)}`,
+          `DTEND:${icalDateTimeUtc(new Date(timedStart.getTime() + ONE_HOUR_MS))}`,
+        ];
 
   return [
     'BEGIN:VCALENDAR',
@@ -76,6 +100,10 @@ test.describe('Calendar #10047', () => {
     workViewPage,
     taskPage,
   }) => {
+    // Module-level feed state, so reset it for a retry of this same test.
+    icsPhase = 'allDay';
+    timedStart = null;
+
     await page.route(ICAL_URL, (route) =>
       route.fulfill({
         status: 200,
