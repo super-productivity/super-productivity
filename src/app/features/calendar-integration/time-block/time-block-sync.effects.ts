@@ -31,6 +31,7 @@ import { IssueProviderPluginDefinition } from '../../../plugins/issue-provider/p
 import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
 import { T } from '../../../t.const';
 import { Log } from '../../../core/log';
+import { withPluginOAuthTokenKey } from '../../../plugins/oauth/plugin-oauth-token-key.util';
 
 interface TimeBlockContext {
   providerId: string;
@@ -416,14 +417,19 @@ export class TimeBlockSyncEffects {
         const registered = this._pluginRegistry.getProvider(provider.issueProviderKey);
         if (!registered?.definition.timeBlock) return EMPTY;
 
+        const pluginConfig = withPluginOAuthTokenKey(
+          registered.pluginId,
+          provider.pluginConfig,
+          provider.id,
+        );
         const http = this._pluginHttpService.createHttpHelper(
-          () => registered.definition.getHeaders(provider.pluginConfig),
+          () => registered.definition.getHeaders(pluginConfig),
           { allowPrivateNetwork: registered.allowPrivateNetwork },
         );
         return fn({
           providerId: provider.id,
           definition: registered.definition,
-          config: { ...provider.pluginConfig },
+          config: pluginConfig,
           http,
         });
       }),

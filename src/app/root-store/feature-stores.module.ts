@@ -107,6 +107,7 @@ import {
   REMINDER_FEATURE_NAME,
   reminderReducer,
 } from '../features/reminder/store/reminder.reducer';
+import { PluginOAuthLifecycleEffects } from '../plugins/oauth/plugin-oauth-lifecycle.effects';
 @NgModule({
   declarations: [],
   imports: [
@@ -206,7 +207,7 @@ import {
     EffectsModule.forFeature([RedmineEffects]),
     EffectsModule.forFeature([ReminderCountdownEffects]),
     EffectsModule.forFeature([SyncEffects]),
-    EffectsModule.forFeature([PluginHooksEffects]),
+    EffectsModule.forFeature([PluginHooksEffects, PluginOAuthLifecycleEffects]),
   ],
 })
 export class FeatureStoresModule {}

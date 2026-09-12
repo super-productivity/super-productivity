@@ -268,6 +268,7 @@ export class PluginOAuthService {
 
   storeTokens(pluginId: string, tokens: PluginOAuthTokens): void {
     this._tokenStore.set(pluginId, tokens);
+    this._refreshPromises.delete(pluginId);
   }
 
   hasTokens(pluginId: string): boolean {
@@ -276,6 +277,15 @@ export class PluginOAuthService {
 
   clearTokens(pluginId: string): void {
     this._tokenStore.delete(pluginId);
+    this._refreshPromises.delete(pluginId);
+  }
+
+  clearTokensByPrefix(prefix: string): void {
+    for (const key of this._tokenStore.keys()) {
+      if (key.startsWith(prefix)) {
+        this.clearTokens(key);
+      }
+    }
   }
 
   serializeTokens(pluginId: string): string | null {
@@ -303,7 +313,7 @@ export class PluginOAuthService {
         PluginLog.warn(`Stored tokenUrl for plugin ${pluginId} is not HTTPS, discarding`);
         return;
       }
-      this._tokenStore.set(pluginId, tokens);
+      this.storeTokens(pluginId, tokens);
     } catch (e) {
       PluginLog.warn(`Failed to parse stored OAuth tokens for plugin ${pluginId}`, e);
     }
@@ -326,7 +336,9 @@ export class PluginOAuthService {
     }
 
     const refreshPromise = this._doRefresh(pluginId, tokens).finally(() => {
-      this._refreshPromises.delete(pluginId);
+      if (this._refreshPromises.get(pluginId) === refreshPromise) {
+        this._refreshPromises.delete(pluginId);
+      }
     });
     this._refreshPromises.set(pluginId, refreshPromise);
     return refreshPromise;
@@ -361,6 +373,9 @@ export class PluginOAuthService {
       this.tokensRefreshed$.next(pluginId);
       return refreshed.accessToken;
     } catch (err) {
+      if (this._tokenStore.get(pluginId) !== tokens) {
+        return null;
+      }
       PluginLog.err(`Failed to refresh token for plugin ${pluginId}`, err);
       // Only a real rejection by the authorization server means the refresh token is
       // dead. Dropping credentials on a transient failure (offline, 5xx, proxy error)
