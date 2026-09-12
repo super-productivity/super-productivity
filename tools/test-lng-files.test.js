@@ -15,11 +15,13 @@ const { join } = require('node:path');
 
 const {
   collectLeafKeys,
+  collectPlaceholders,
   compareTranslationKeys,
   hasBlockingDefects,
   inspectTranslationDirectory,
   printError,
   printReport,
+  readBaselineFile,
 } = require('./test-lng-files');
 
 test('unknown-overwrite warnings preserve the safety-critical data labels', () => {
@@ -209,6 +211,7 @@ test('inspectTranslationDirectory flags dropped English placeholders unless they
         failed: 'Validation failed: {{errors}}',
         planned: 'planned for {{date}}',
         range: 'from {{start}} to {{end}}',
+        reminder: 'Scheduled {{title}} at {{date}} in {{project}}',
         renamed: 'Hello {{name}}',
         plain: 'no params',
       },
@@ -218,13 +221,18 @@ test('inspectTranslationDirectory flags dropped English placeholders unless they
         failed: 'Validierung fehlgeschlagen',
         planned: 'geplant',
         range: 'von {{start}}',
+        reminder: 'Geplant',
         renamed: 'Hallo {{translatedName}}',
         plain: 'keine Parameter',
       },
     });
 
     const report = inspectTranslationDirectory(directory, {
-      'xx.json': ['msg.planned'],
+      'xx.json': {
+        'msg.planned': ['date'],
+        'msg.range': ['end'],
+        'msg.reminder': ['date', 'title'],
+      },
     });
     const [file] = report.files;
 
@@ -232,11 +240,12 @@ test('inspectTranslationDirectory flags dropped English placeholders unless they
       'msg.failed',
       'msg.planned',
       'msg.range',
+      'msg.reminder',
       'msg.renamed',
     ]);
     assert.deepEqual(file.newDroppedPlaceholderKeys, [
       'msg.failed',
-      'msg.range',
+      'msg.reminder',
       'msg.renamed',
     ]);
     assert.deepEqual(file.staleBaselineKeys, []);
@@ -257,29 +266,84 @@ test('inspectTranslationDirectory reports baseline entries that no longer drop a
     };
 
     writeJson('en.json', {
-      msg: { planned: 'planned for {{date}}', plain: 'no params' },
+      msg: {
+        planned: 'planned for {{date}}',
+        range: 'from {{start}} to {{end}}',
+        plain: 'no params',
+      },
     });
     writeJson('xx.json', {
-      msg: { planned: 'geplant für {{date}}', plain: 'keine Parameter' },
+      msg: {
+        planned: 'geplant für {{date}}',
+        range: 'von {{start}}',
+        plain: 'keine Parameter',
+      },
     });
     writeJson('yy.json', {
-      msg: { planned: 'prévu pour {{date}}', plain: 'sans paramètres' },
+      msg: {
+        planned: 'prévu pour {{date}}',
+        range: 'de {{start}} à {{end}}',
+        plain: 'sans paramètres',
+      },
     });
 
     const report = inspectTranslationDirectory(directory, {
-      'xx.json': ['msg.planned', 'msg.removedFromEnglish'],
-      'zz.json': ['msg.planned'],
+      'xx.json': {
+        'msg.planned': ['date'],
+        'msg.range': ['end', 'start'],
+        'msg.removedFromEnglish': ['value'],
+      },
+      'zz.json': { 'msg.planned': ['date'] },
     });
 
     assert.deepEqual(report.files[0].staleBaselineKeys, [
       'msg.planned',
+      'msg.range',
       'msg.removedFromEnglish',
     ]);
+    assert.deepEqual(report.files[0].newDroppedPlaceholderKeys, []);
     assert.deepEqual(report.files[1].staleBaselineKeys, []);
     assert.deepEqual(report.staleBaselineFiles, ['zz.json']);
     assert.equal(report.totalNewDroppedPlaceholders, 0);
-    assert.equal(report.totalStaleBaseline, 3);
+    assert.equal(report.totalStaleBaseline, 4);
     assert.equal(hasBlockingDefects(report), true);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('a baseline entry for a locale file that does not exist blocks even when it lists no keys', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'test-lng-files-'));
+
+  try {
+    writeFileSync(
+      join(directory, 'en.json'),
+      JSON.stringify({ msg: { planned: 'planned for {{date}}' } }),
+    );
+    writeFileSync(
+      join(directory, 'xx.json'),
+      JSON.stringify({ msg: { planned: 'geplant für {{date}}' } }),
+    );
+
+    const report = inspectTranslationDirectory(directory, { 'zz.json': {} });
+
+    assert.deepEqual(report.staleBaselineFiles, ['zz.json']);
+    assert.equal(report.totalStaleBaseline, 0);
+    assert.equal(hasBlockingDefects(report), true);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('readBaselineFile returns an empty baseline when the file is absent and rejects invalid JSON', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'test-lng-files-'));
+
+  try {
+    assert.deepEqual(readBaselineFile(join(directory, 'missing.json')), {});
+
+    const invalid = join(directory, 'invalid.json');
+    writeFileSync(invalid, '{');
+    assert.throws(() => readBaselineFile(invalid), /Unable to parse baseline/u);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -307,11 +371,20 @@ test('hasBlockingDefects is false for a clean report with an empty baseline', ()
   }
 });
 
+// Lower this number when you remove entries from tools/test-lng-files.baseline.json;
+// never raise it. The baseline records translations that already dropped a placeholder
+// when the check was introduced (#10006) and may only shrink.
+const BASELINE_PLACEHOLDER_CEILING = 134;
+
 test('no shipped locale drops an English placeholder outside the baseline, and the baseline only shrinks', () => {
+  const baseline = readBaselineFile(join(__dirname, 'test-lng-files.baseline.json'));
   const report = inspectTranslationDirectory(
     join(__dirname, '..', 'src', 'assets', 'i18n'),
-    JSON.parse(readFileSync(join(__dirname, 'test-lng-files.baseline.json'), 'utf8')),
+    baseline,
   );
+  const baselinedPlaceholders = Object.values(baseline)
+    .flatMap((keys) => Object.values(keys))
+    .reduce((total, names) => total + names.length, 0);
   const newDrops = report.files
     .filter((file) => file.newDroppedPlaceholderKeys.length > 0)
     .map((file) => `${file.file}: ${file.newDroppedPlaceholderKeys.join(', ')}`);
@@ -322,6 +395,10 @@ test('no shipped locale drops an English placeholder outside the baseline, and t
   assert.deepEqual(newDrops, []);
   assert.deepEqual(stale, []);
   assert.deepEqual(report.staleBaselineFiles, []);
+  assert.ok(
+    baselinedPlaceholders <= BASELINE_PLACEHOLDER_CEILING,
+    `baseline grew to ${baselinedPlaceholders} placeholders (ceiling ${BASELINE_PLACEHOLDER_CEILING})`,
+  );
 });
 
 test('every shipped locale keeps the {{errors}} placeholder of PLUGINS.VALIDATION_FAILED', () => {
@@ -331,9 +408,10 @@ test('every shipped locale keeps the {{errors}} placeholder of PLUGINS.VALIDATIO
     .sort()
     .filter(
       (file) =>
-        !JSON.parse(
-          readFileSync(join(i18nDirectory, file), 'utf8'),
-        ).PLUGINS.VALIDATION_FAILED.includes('{{errors}}'),
+        !collectPlaceholders(
+          JSON.parse(readFileSync(join(i18nDirectory, file), 'utf8')).PLUGINS
+            .VALIDATION_FAILED,
+        ).includes('errors'),
     );
 
   assert.deepEqual(offenders, []);
