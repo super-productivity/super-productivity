@@ -29,6 +29,13 @@ describe('TaskMultiSelectService', () => {
           <task data-task-id="b1" tabindex="0"></task>
         </div>
       </task-detail-panel>
+      <planner-day data-planner-selection-scope="2026-09-12">
+        <div><planner-task data-task-id="p1" data-task-selectable="true" tabindex="0"></planner-task></div>
+        <div><planner-task data-task-id="p2" data-task-selectable="true" tabindex="0"></planner-task></div>
+      </planner-day>
+      <planner-day data-planner-selection-scope="2026-09-13">
+        <planner-task data-task-id="p3" data-task-selectable="true" tabindex="0"></planner-task>
+      </planner-day>
     `;
     document.body.appendChild(root);
   };
@@ -45,7 +52,7 @@ describe('TaskMultiSelectService', () => {
   };
 
   const focusRow = (id: string): void => {
-    stubActiveElement(root.querySelector(`task[data-task-id="${id}"]`));
+    stubActiveElement(root.querySelector(`[data-task-id="${id}"]`));
   };
 
   const extend = (direction: 'up' | 'down'): HTMLElement | null => {
@@ -103,6 +110,15 @@ describe('TaskMultiSelectService', () => {
   });
 
   describe('selectRange', () => {
+    it('ranges across all-day and timed Planner rows within one day only', () => {
+      stubActiveElement(root.querySelector('planner-task[data-task-id="p1"]'));
+      service.toggle('p1');
+      service.selectRange('p2');
+      expect(selected()).toEqual(['p1', 'p2']);
+
+      service.selectRange('p3');
+      expect(selected()).toEqual(['p3']);
+    });
     it('selects the target alone when there is no anchor', () => {
       service.selectRange('c');
       expect(selected()).toEqual(['c']);
@@ -178,6 +194,11 @@ describe('TaskMultiSelectService', () => {
   });
 
   describe('selectAllInListOfFocused', () => {
+    it('selects all participating Planner rows in the focused day', () => {
+      focusRow('p2');
+      service.selectAllInListOfFocused();
+      expect(selected()).toEqual(['p1', 'p2']);
+    });
     it('selects the direct rows of the focused list only', () => {
       focusRow('c');
       service.selectAllInListOfFocused();

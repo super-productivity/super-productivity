@@ -24,6 +24,27 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { ProjectService } from '../../project/project.service';
 import { signal } from '@angular/core';
 import { TODAY_TAG } from '../../tag/tag.const';
+import { GlobalConfigService } from '../../config/global-config.service';
+import { DateService } from '../../../core/date/date.service';
+import { DateAdapter } from '@angular/material/core';
+
+const PLANNER_TASK_PROVIDERS = [
+  {
+    provide: GlobalConfigService,
+    useValue: {
+      cfg: () => null,
+      appFeatures: () => ({ isTimeTrackingEnabled: false }),
+    },
+  },
+  {
+    provide: DateService,
+    useValue: { todayStr: () => '2026-09-12' },
+  },
+  {
+    provide: DateAdapter,
+    useValue: { getFirstDayOfWeek: () => 1, getDayOfWeek: () => 1 },
+  },
+];
 
 describe('BoardPanelComponent - Backlog Feature', () => {
   let component: BoardPanelComponent;
@@ -107,6 +128,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
         }),
       ],
       providers: [
+        ...PLANNER_TASK_PROVIDERS,
         provideMockStore({}),
         provideMockActions(() => actions$),
         { provide: Store, useValue: storeMock },
@@ -266,6 +288,7 @@ describe('BoardPanelComponent - Hidden Project Backlog', () => {
         }),
       ],
       providers: [
+        ...PLANNER_TASK_PROVIDERS,
         provideMockStore({}),
         provideMockActions(() => actions$),
         { provide: Store, useValue: storeMock },
@@ -358,6 +381,7 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
         }),
       ],
       providers: [
+        ...PLANNER_TASK_PROVIDERS,
         provideMockStore({}),
         provideMockActions(() => actions$),
         { provide: Store, useValue: storeMock },
@@ -775,6 +799,7 @@ describe('BoardPanelComponent - drop()', () => {
         }),
       ],
       providers: [
+        ...PLANNER_TASK_PROVIDERS,
         provideMockStore({}),
         provideMockActions(() => actions$),
         { provide: Store, useValue: storeMock },

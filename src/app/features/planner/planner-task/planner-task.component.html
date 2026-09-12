@@ -10,6 +10,7 @@
   <div class="task-content">
     <done-toggle
       [isDone]="task().isDone"
+      [isMultiSelectAware]="focusable()"
       [isCurrent]="isCurrent()"
       [showDoneAnimation]="showDoneAnimation()"
       [showUndoneAnimation]="showUndoneAnimation()"

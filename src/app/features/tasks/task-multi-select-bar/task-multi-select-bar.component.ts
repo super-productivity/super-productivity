@@ -187,7 +187,11 @@ export class TaskMultiSelectBarComponent {
     if (!anchorId || isTouchActive() || this._matDialog.openDialogs.length > 0) {
       return;
     }
-    const rowEl = Array.from(document.querySelectorAll<HTMLElement>('task')).find(
+    const rowEl = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        'task, planner-task[data-task-selectable="true"]',
+      ),
+    ).find(
       (el) =>
         el.getAttribute('data-task-id') === anchorId && !el.closest('task-detail-panel'),
     );

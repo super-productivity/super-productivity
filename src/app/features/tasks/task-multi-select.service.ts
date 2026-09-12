@@ -10,7 +10,7 @@ export type MultiSelectDirection = 'up' | 'down';
  * - UI-only: not in NgRx state, never persisted, never synced. Pure state with
  *   no injected dependencies; the app-shell bar component wires the clearing
  *   on route and work-context change (TaskMultiSelectBarComponent).
- * - Only ever holds ids of tasks currently rendered as a `<task>` row; rows
+ * - Only ever holds ids of tasks currently rendered as a participating row; rows
  *   prune themselves on destroy.
  * - Ranges and keyboard extension are scoped to the anchor's list, i.e. the
  *   direct `<task>` children of its `.task-list-inner`, so expanded subtasks
@@ -226,7 +226,7 @@ export class TaskMultiSelectService {
     return this._findRowEl(id);
   }
 
-  /** True for a `<task>` host whose component is already destroyed (animating out). */
+  /** True for a row host whose component is already destroyed (animating out). */
   isDestroyedHost(el: Element): boolean {
     return this._destroyedHosts.has(el);
   }
@@ -314,16 +314,26 @@ export class TaskMultiSelectService {
 
   /** The focused main-list row (detail-panel copies are never selectable). */
   private _focusedRow(): { el: HTMLElement; id: string } | null {
-    const el = document.activeElement?.closest('task') as HTMLElement | null;
+    const el = document.activeElement?.closest(
+      'task, planner-task[data-task-selectable="true"]',
+    ) as HTMLElement | null;
     const id = el?.getAttribute('data-task-id');
-    if (!el || !id || el.closest('task-detail-panel')) {
+    if (!el || !id || this._destroyedHosts.has(el) || el.closest('task-detail-panel')) {
       return null;
     }
     return { el, id };
   }
 
-  /** Direct `<task>` children of the list that contains `el`. */
+  /** Participating rows in the selection scope containing `el`. */
   private _listRowsFor(el: HTMLElement): HTMLElement[] {
+    const plannerScope = el.closest<HTMLElement>('[data-planner-selection-scope]');
+    if (plannerScope) {
+      return Array.from(
+        plannerScope.querySelectorAll<HTMLElement>(
+          'planner-task[data-task-selectable="true"]',
+        ),
+      ).filter((row) => !this._destroyedHosts.has(row));
+    }
     const list = el.parentElement?.closest('.task-list-inner');
     if (!list) {
       return [el];
@@ -342,8 +352,10 @@ export class TaskMultiSelectService {
   }
 
   private _getAllTaskEls(): HTMLElement[] {
-    return Array.from(document.querySelectorAll<HTMLElement>('task')).filter(
-      (el) => !this._destroyedHosts.has(el) && !el.closest('task-detail-panel'),
-    );
+    return Array.from(
+      document.querySelectorAll<HTMLElement>(
+        'task, planner-task[data-task-selectable="true"]',
+      ),
+    ).filter((el) => !this._destroyedHosts.has(el) && !el.closest('task-detail-panel'));
   }
 }
