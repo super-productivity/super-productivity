@@ -354,15 +354,48 @@ export const createWindow = async ({
     if (IS_DEV) {
       mainWin.setTitle('Super Productivity D');
     }
+  });
 
-    // load custom stylesheet if any, and re-apply it whenever the file changes
-    const CSS_FILE_PATH = path.join(app.getPath('userData'), 'styles.css');
-    let insertedCssKey: string | undefined;
-    const applyCustomCss = async (): Promise<void> => {
+  // load custom stylesheet if any, and re-apply it whenever the file changes
+  const CSS_FILE_PATH = path.join(app.getPath('userData'), 'styles.css');
+  // An inserted-stylesheet key is a counter scoped to the renderer process, so
+  // it only means anything for the document it was inserted into: after a
+  // reload the old key is inert, and after a renderer crash the counter starts
+  // over at 1 and a stale key can collide with — and silently remove — a live
+  // sheet (measured against Electron 43). So tag every key with the document it
+  // belongs to, and never touch a key from an earlier one.
+  let documentGeneration = 0;
+  let insertedCssKey: string | undefined;
+  let insertedCssGeneration = -1;
+  const onDidStartNavigation = (
+    _ev: Electron.Event,
+    _url: string,
+    isInPlace: boolean,
+    isMainFrame: boolean,
+  ): void => {
+    if (isMainFrame && !isInPlace) {
+      documentGeneration++;
+    }
+  };
+  mainWin.webContents.on('did-start-navigation', onDidStartNavigation);
+  // Applies are serialized through a promise chain: the key is read before and
+  // written after the `insertCSS` round-trip, which can take seconds while the
+  // renderer is still booting, so two overlapping runs would otherwise capture
+  // the same previous key and leave the sheet inserted in between untracked.
+  let cssApplyQueue: Promise<void> = Promise.resolve();
+  const applyCustomCss = (): Promise<void> => {
+    cssApplyQueue = cssApplyQueue.then(async () => {
+      if (mainWin.isDestroyed() || mainWin.webContents.isDestroyed()) {
+        return;
+      }
       try {
         const styles = readFileSync(CSS_FILE_PATH, { encoding: 'utf8' });
-        const prevKey = insertedCssKey;
+        const isKeyFromCurrentDoc = insertedCssGeneration === documentGeneration;
+        const prevKey = isKeyFromCurrentDoc ? insertedCssKey : undefined;
         insertedCssKey = await mainWin.webContents.insertCSS(styles);
+        // re-read after the await: if a navigation started while we were
+        // inserting, the sheet belongs to the document that is current now
+        insertedCssGeneration = documentGeneration;
         if (prevKey) {
           await mainWin.webContents.removeInsertedCSS(prevKey);
         }
@@ -374,30 +407,33 @@ export const createWindow = async ({
           error('Failed to load custom styles:', cssError);
         }
       }
-    };
-    void applyCustomCss();
+    });
+    return cssApplyQueue;
+  };
+  // covers the initial load as well as every renderer reload (e.g.
+  // `window.ea.reloadMainWin()`), which would otherwise drop the custom CSS
+  mainWin.webContents.on('did-finish-load', () => void applyCustomCss());
 
-    // Watch the folder rather than the file itself: the file may not exist
-    // yet, and editors often save atomically (write temp + rename), which
-    // detaches a watch bound to the original file. Debounced because a
-    // single save usually emits several events.
-    let cssReloadTimer: NodeJS.Timeout | undefined;
-    try {
-      const cssWatcher = watch(app.getPath('userData'), (_ev, fileName) => {
-        if (fileName && path.basename(fileName.toString()) !== 'styles.css') {
-          return;
-        }
-        clearTimeout(cssReloadTimer);
-        cssReloadTimer = setTimeout(() => void applyCustomCss(), 150);
-      });
-      mainWin.webContents.once('destroyed', () => {
-        clearTimeout(cssReloadTimer);
-        cssWatcher.close();
-      });
-    } catch (watchError) {
-      error('Could not watch for custom style changes:', watchError);
-    }
-  });
+  // Watch the folder rather than the file itself: the file may not exist
+  // yet, and editors often save atomically (write temp + rename), which
+  // detaches a watch bound to the original file. Debounced because a
+  // single save usually emits several events.
+  let cssReloadTimer: NodeJS.Timeout | undefined;
+  try {
+    const cssWatcher = watch(app.getPath('userData'), (_ev, fileName) => {
+      if (fileName && path.basename(fileName.toString()) !== 'styles.css') {
+        return;
+      }
+      clearTimeout(cssReloadTimer);
+      cssReloadTimer = setTimeout(() => void applyCustomCss(), 150);
+    });
+    mainWin.webContents.once('destroyed', () => {
+      clearTimeout(cssReloadTimer);
+      cssWatcher.close();
+    });
+  } catch (watchError) {
+    error('Could not watch for custom style changes:', watchError);
+  }
 
   // show gracefully
   mainWin.once('ready-to-show', () => {
