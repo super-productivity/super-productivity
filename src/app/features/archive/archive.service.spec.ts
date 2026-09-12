@@ -3,7 +3,7 @@ import { Store } from '@ngrx/store';
 import { ArchiveService, ARCHIVE_ALL_YOUNG_TO_OLD_THRESHOLD } from './archive.service';
 import { flushYoungToOld } from './store/archive.actions';
 import { TimeTrackingActions } from '../time-tracking/store/time-tracking.actions';
-import { TaskWithSubTasks } from '../tasks/task.model';
+import { HideSubTasksMode, TaskWithSubTasks } from '../tasks/task.model';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { of } from 'rxjs';
 import { ArchiveModel } from './archive.model';
@@ -81,6 +81,19 @@ describe('ArchiveService', () => {
       const saveCall = mockArchiveDbAdapter.saveArchiveYoung.calls.first();
       const savedData = saveCall.args[0];
       expect(savedData.task.ids).toContain('task-1');
+    });
+
+    it('should keep _hideSubTasksMode when archiving so a restored task stays collapsed', async () => {
+      const tasks = [
+        createMockTask('task-1', { _hideSubTasksMode: HideSubTasksMode.HideAll }),
+      ];
+
+      await service.moveTasksToArchiveAndFlushArchiveIfDue(tasks);
+
+      const savedData = mockArchiveDbAdapter.saveArchiveYoung.calls.first().args[0];
+      expect(savedData.task.entities['task-1']!._hideSubTasksMode).toBe(
+        HideSubTasksMode.HideAll,
+      );
     });
 
     it('should serialize concurrent task archive mutations without dropping either task', async () => {
