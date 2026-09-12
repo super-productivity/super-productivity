@@ -52,25 +52,39 @@ const icalDateTimeUtc = (d: Date): string =>
 let icsPhase: 'allDay' | 'timed' = 'allDay';
 
 /**
- * The timed DTSTART, frozen on first use so every poll in one run sees the same
- * remote event and the reschedule is applied exactly once.
+ * The timed DTSTART has to satisfy two things at once:
  *
- * It must be derived from `now` rather than written as a fixed UTC hour: the
- * suite rotates the wall-clock timezone (`e2e/utils/test-timezone.ts`) so local
- * time lands near midday, so a literal like `T180000Z` falls on the *next* local
- * day in the eastern candidates (the run that caught this was Pacific/Guadalcanal,
- * UTC+11). The task then leaves the Today list and the assertion below cannot
- * see it — a failure that has nothing to do with the reminder under test.
- * `now + 1h` stays on today's local date with ~10h of margin to midnight.
+ * - it must fall on **today's local date**. `dueWithTime` beats `dueDay` in
+ *   `selectLaterTodayStructure`, so an event on tomorrow drops the task off the
+ *   Today list and the icon asserted below is simply not on screen — a failure
+ *   that looks exactly like the #10047 regression but is not one. That is the
+ *   bug a literal `T180000Z` had: the suite rotates the wall clock
+ *   (`e2e/utils/test-timezone.ts`) and 18:00Z is the next local day in the three
+ *   eastern candidates (Dhaka, Shanghai, Guadalcanal — a third of all runs, and
+ *   every scheduled one, since the 02:00 UTC cron always picks Guadalcanal).
+ * - it must stay in the **future**, or the derived `remindAt` fires immediately.
+ *
+ * `now + 1h` satisfies both only while local time is before 23:00. The zone
+ * picker keeps local time in [10:00, 14:00), so that always holds in CI — but
+ * `E2E_TZ` pins an arbitrary zone, and there one hour in every 24 puts
+ * `now + 1h` on tomorrow. Clamp to the local day and assert the precondition, so
+ * a run that cannot express this scenario says so instead of failing as a
+ * phantom #10047 regression.
  */
-let timedStart: Date | null = null;
+const buildTimedStart = (now: Date): Date => {
+  const lastMinuteOfLocalDay = new Date(now);
+  lastMinuteOfLocalDay.setHours(23, 59, 0, 0);
+  const oneHourOut = new Date(now.getTime() + ONE_HOUR_MS);
+  return oneHourOut <= lastMinuteOfLocalDay ? oneHourOut : lastMinuteOfLocalDay;
+};
+
+/** Fixed once per run, so both polls in a run see one stable remote event. */
+let timedStart = new Date();
 
 const buildIcal = (): string => {
   const now = new Date();
   const today = icalDate(now);
   const tomorrow = icalDate(new Date(now.getTime() + ONE_DAY_MS));
-
-  timedStart = timedStart ?? new Date(now.getTime() + ONE_HOUR_MS);
 
   const [dtstart, dtend] =
     icsPhase === 'allDay'
@@ -100,9 +114,18 @@ test.describe('Calendar #10047', () => {
     workViewPage,
     taskPage,
   }) => {
-    // Module-level feed state, so reset it for a retry of this same test.
+    // Module-level feed state. Playwright re-imports the spec module for every
+    // retry and every worker (and `retries` is 0 here anyway), so this matters
+    // only if a second test is ever added to this file — two tests in one file
+    // do share a module instance.
     icsPhase = 'allDay';
-    timedStart = null;
+    const now = new Date();
+    timedStart = buildTimedStart(now);
+    expect(
+      timedStart.getDate(),
+      'started too close to local midnight to express this scenario',
+    ).toBe(now.getDate());
+    expect(timedStart.getTime()).toBeGreaterThan(now.getTime());
 
     await page.route(ICAL_URL, (route) =>
       route.fulfill({
