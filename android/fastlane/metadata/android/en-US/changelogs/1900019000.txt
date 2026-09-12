@@ -1,2 +1,1 @@
-Fixed Escape not properly leaving the plain-text notes field.
-Fixed task details stealing focus back from a field you re-entered.
+Notes now edit live in Markdown, with no edit/preview switching. Select multiple tasks for bulk actions, duplicate tasks, and copy tasks as Markdown checklists. Double-click to rename projects, tags and folders. New local recovery points guard against full-state data loss. The tracked task appears in the browser tab title, and Android gains URL-scheme task actions. Includes many sync, privacy, Schedule, tray and mobile keyboard fixes plus completed translations. User Profiles were removed.
