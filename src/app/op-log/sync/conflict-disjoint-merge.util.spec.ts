@@ -37,6 +37,24 @@ const convertToSubTaskOp = (over: Partial<Operation> = {}): Operation =>
     ...over,
   });
 
+/** Production-shaped syncTimeSpent op: additive time delta, entityChanges from the capture extractor. */
+const syncTimeSpentOp = (over: Partial<Operation> = {}): Operation =>
+  op({
+    actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+    payload: {
+      actionPayload: { taskId: 'task-1', date: '2026-09-12', duration: 60000 },
+      entityChanges: [
+        {
+          entityType: 'TASK' as EntityType,
+          entityId: 'task-1',
+          opType: OpType.Update,
+          changes: { taskId: 'task-1', date: '2026-09-12', duration: 60000 },
+        },
+      ],
+    },
+    ...over,
+  });
+
 describe('conflict-disjoint-merge.util', () => {
   describe('mergeChangedFields (non-adapter payloads)', () => {
     it('falls back to capture-time entityChanges when the action payload is not adapter-shaped', () => {
@@ -222,6 +240,33 @@ describe('conflict-disjoint-merge.util', () => {
           entityId: 'task-2',
         }),
       ).toBe(false);
+    });
+  });
+
+  describe('isDisjointMergeEligible (additive time ops)', () => {
+    it('refuses to field-merge a syncTimeSpent delta with a concurrent task edit', () => {
+      // The delta's entityChanges ({ taskId, date, duration }) are not task
+      // fields; a synthesized patch would write them onto the task and drop
+      // the additive time update. Whole-entity LWW is the safe fallback.
+      const eligible = isDisjointMergeEligible({
+        localOps: [syncTimeSpentOp()],
+        remoteOps: [
+          op({ payload: { task: { id: 'task-1', title: 'Remote' } }, clientId: 'B' }),
+        ],
+        payloadKey: 'task',
+        entityId: 'task-1',
+      });
+      expect(eligible).toBe(false);
+    });
+
+    it('refuses the merge when the time delta is on the remote side', () => {
+      const eligible = isDisjointMergeEligible({
+        localOps: [op({ payload: { task: { id: 'task-1', title: 'Local' } } })],
+        remoteOps: [syncTimeSpentOp({ clientId: 'B' })],
+        payloadKey: 'task',
+        entityId: 'task-1',
+      });
+      expect(eligible).toBe(false);
     });
   });
 

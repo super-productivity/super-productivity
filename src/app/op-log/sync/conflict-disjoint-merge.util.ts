@@ -15,7 +15,7 @@
  * `synthesizeMergedChanges`.
  */
 
-import { OpType } from '../core/operation.types';
+import { ActionType, OpType } from '../core/operation.types';
 import type { Operation } from '../core/operation.types';
 import {
   extractActionPayload,
@@ -227,6 +227,9 @@ export const noiseTiebreakSide = (
  *    classification;
  *  - the two sides' non-noise changed-field sets are DISJOINT.
  */
+const isAdditiveTimeOp = (op: Operation): boolean =>
+  op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT;
+
 export const isDisjointMergeEligible = (params: {
   localOps: Operation[];
   remoteOps: Operation[];
@@ -242,6 +245,11 @@ export const isDisjointMergeEligible = (params: {
 
   if (localOps.some((op) => op.opType === OpType.Delete)) return false;
   if (remoteOps.some((op) => op.opType === OpType.Delete)) return false;
+
+  // Task-time sync ops are additive deltas whose entityChanges
+  // ({ taskId, date, duration }) are not task fields; a synthesized patch would
+  // write them onto the task and drop the delta. Fall back to LWW (#8758).
+  if ([...localOps, ...remoteOps].some(isAdditiveTimeOp)) return false;
 
   // A side with opaque ops has real changes the merge could not carry over —
   // synthesizing from the extracted fields alone would drop them (and the two
