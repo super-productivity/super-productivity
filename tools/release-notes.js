@@ -148,167 +148,102 @@ const getRepoSlug = (env = process.env) => {
   try {
     const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], {
       encoding: 'utf8',
-    }).trim();
-    return remoteUrl.match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/)?.[1];
+    });
+    return remoteUrl.trim().match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/)?.[1];
   } catch {
     return undefined;
   }
 };
 
-const isTagMergedIntoHead = (tag) => {
-  try {
-    execFileSync('git', ['merge-base', '--is-ancestor', `${tag}^{commit}`, 'HEAD'], {
-      stdio: 'ignore',
-    });
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const fetchPublishedReleases = async ({
-  repoSlug,
-  env = process.env,
-  fetchImpl = globalThis.fetch,
-  timeoutMs = GITHUB_API_TIMEOUT_MS,
-}) => {
-  const token = env.GITHUB_TOKEN || env.GH_TOKEN;
-  const response = await fetchImpl(
-    `${GITHUB_API_URL}/repos/${repoSlug}/releases?per_page=100`,
-    {
-      headers: {
-        accept: 'application/vnd.github+json',
-        'user-agent': 'super-productivity-release-notes',
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
-      signal: AbortSignal.timeout(timeoutMs),
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(`GitHub API responded with ${response.status}`);
-  }
-
-  return response.json();
-};
-
-// Drafts are excluded: an abandoned or still-unpublished draft still leaves its
-// tag behind, and basing the notes on that tag silently drops everything the
-// unpublished versions contained. This assumes the API's newest-first order
-// (created_at descending) matches version order, which holds for this repo's
-// single-line release flow - a backport published after a newer release would
-// need version sorting instead.
-const pickPublishedBaseTag = ({
-  releases,
-  version,
-  stableOnly,
-  isUsableTag = isTagMergedIntoHead,
-}) =>
+// Drafts are skipped: an abandoned or still-unpublished draft leaves its tag
+// behind, and basing the notes on that tag silently drops everything the
+// unpublished versions contained. Releases come back newest first.
+const pickPublishedBaseTag = ({ releases, version, stableOnly }) =>
   releases
-    .filter((release) => {
-      if (release.draft) {
-        return false;
-      }
-      if (stableOnly && release.prerelease) {
-        return false;
-      }
+    .find((release) => {
       const tag = release.tag_name?.trim();
-      if (!tag || tag === `v${version}`) {
+      if (release.draft || !tag || tag === `v${version}`) {
         return false;
       }
-      return stableOnly ? STABLE_TAG_PATTERN.test(tag) : RELEASE_TAG_PATTERN.test(tag);
+      return stableOnly
+        ? !release.prerelease && STABLE_TAG_PATTERN.test(tag)
+        : RELEASE_TAG_PATTERN.test(tag);
     })
-    .map((release) => release.tag_name.trim())
-    .find((tag) => isUsableTag(tag));
+    ?.tag_name.trim();
 
-// Every message here goes to stderr so that `base-tag` keeps stdout to the tag
-// alone - the release workflow reads it through command substitution.
+// Messages go to stderr so that `base-tag` keeps stdout to the tag alone - the
+// release workflow reads it through command substitution.
 const resolveReleaseBaseTag = async ({
   version,
   stableOnly,
   env = process.env,
   fetchImpl = globalThis.fetch,
-  isUsableTag = isTagMergedIntoHead,
   getFallbackTag = getLatestTag,
-  timeoutMs = GITHUB_API_TIMEOUT_MS,
 } = {}) => {
-  const overrideTag = env.SP_RELEASE_NOTES_BASE_TAG?.trim();
-  if (overrideTag) {
-    console.warn(
-      `Using release notes base from SP_RELEASE_NOTES_BASE_TAG: ${overrideTag}`,
-    );
-    return overrideTag;
-  }
-
-  const repoSlug = getRepoSlug(env);
-  if (repoSlug) {
-    try {
-      const releases = await fetchPublishedReleases({
-        repoSlug,
-        env,
-        fetchImpl,
-        timeoutMs,
-      });
-      const publishedTag = pickPublishedBaseTag({
-        releases,
-        version,
-        stableOnly,
-        isUsableTag,
-      });
-      if (publishedTag) {
-        console.warn(
-          `Using the last published release as release notes base: ${publishedTag}`,
-        );
-        return publishedTag;
-      }
-      console.warn('Found no published GitHub release to use as release notes base');
-    } catch (err) {
-      console.warn(`Could not read published GitHub releases: ${err.message}`);
+  try {
+    const repoSlug = getRepoSlug(env);
+    if (!repoSlug) {
+      throw new Error('could not determine the GitHub repository');
     }
-  } else {
-    console.warn(
-      'Could not determine the GitHub repository to look up published releases',
+
+    const token = env.GITHUB_TOKEN || env.GH_TOKEN;
+    const response = await fetchImpl(
+      `${GITHUB_API_URL}/repos/${repoSlug}/releases?per_page=100`,
+      {
+        headers: {
+          accept: 'application/vnd.github+json',
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS),
+      },
     );
-  }
+    if (!response.ok) {
+      throw new Error(`GitHub API responded with ${response.status}`);
+    }
 
-  const fallbackTag = getFallbackTag({ version, stableOnly });
-  if (!fallbackTag) {
-    console.warn('Found no release notes base tag');
-    return undefined;
-  }
+    const publishedTag = pickPublishedBaseTag({
+      releases: await response.json(),
+      version,
+      stableOnly,
+    });
+    if (!publishedTag) {
+      throw new Error('found no published release to use as base');
+    }
 
-  console.warn(
-    `Falling back to the latest ${stableOnly ? 'stable ' : ''}tag as release notes base: ${fallbackTag}. ` +
-      'A tag whose release was never published would shorten the notes - review them before pushing.',
-  );
-  return fallbackTag;
+    console.warn(`Release notes base: ${publishedTag} (last published release)`);
+    return publishedTag;
+  } catch (err) {
+    const fallbackTag = getFallbackTag({ version, stableOnly });
+    console.warn(
+      `Could not resolve the last published release (${err.message}) - basing the notes on ` +
+        `${fallbackTag || 'the last 20 commits'} instead. A tag whose release never shipped ` +
+        'shortens the notes, so review them before pushing.',
+    );
+    return fallbackTag;
+  }
 };
 
-const getCommitSubjectsSinceBaseTag = (baseTag) => {
-  const readLast20Commits = () =>
-    execFileSync('git', ['log', '-20', '--no-merges', '--pretty=format:%s'], {
-      encoding: 'utf8',
-    })
-      .split('\n')
-      .filter(Boolean);
+const readCommitSubjects = (logArgs) =>
+  execFileSync('git', ['log', ...logArgs, '--no-merges', '--pretty=format:%s'], {
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter(Boolean);
 
+// Two dots, so a base tag that is not an ancestor of HEAD still yields the
+// commits this release adds instead of both sides of the divergence.
+const getCommitSubjectsSinceBaseTag = (baseTag) => {
   if (!baseTag) {
-    console.warn('No release notes base tag - falling back to last 20 commits');
-    return readLast20Commits();
+    return readCommitSubjects(['-20']);
   }
 
   try {
-    return execFileSync(
-      'git',
-      ['log', `${baseTag}...HEAD`, '--no-merges', '--pretty=format:%s'],
-      { encoding: 'utf8' },
-    )
-      .split('\n')
-      .filter(Boolean);
+    return readCommitSubjects([`${baseTag}..HEAD`]);
   } catch (err) {
-    console.warn(`Could not generate changelog since ${baseTag}: ${err.message}`);
-    console.warn('Falling back to last 20 commits');
-    return readLast20Commits();
+    console.warn(
+      `Could not read commits since ${baseTag}: ${err.message} - using last 20`,
+    );
+    return readCommitSubjects(['-20']);
   }
 };
 
@@ -776,7 +711,6 @@ module.exports = {
   preparePlayStoreReleaseNotes,
   resolveReleaseBaseTag,
   __test: {
-    getRepoSlug,
     getUserFacingCommits,
     isVersionBumpSubject,
     normalizePlayStoreText,
