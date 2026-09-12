@@ -514,6 +514,29 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
 
     expect(focusItemSpy).not.toHaveBeenCalled();
   }));
+
+  // Same race for any text field of the panel: with the live notes editor the
+  // user can click into the notes within those ~200ms. Blurring them back to a
+  // <task-detail-item> sends the rest of what they type to the global shortcut
+  // handler, which reads the letters as task shortcuts (#9910).
+  it('does not steal focus from a text field the user is typing in', fakeAsync(() => {
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+
+    const editable = document.createElement('div');
+    editable.contentEditable = 'true';
+    editable.tabIndex = 0;
+    document.body.appendChild(editable);
+    editable.focus();
+
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+
+    tick(200);
+
+    expect(focusItemSpy).not.toHaveBeenCalled();
+    editable.remove();
+  }));
 });
 
 // Opening the notes panel via a checklist's progress badge routes through

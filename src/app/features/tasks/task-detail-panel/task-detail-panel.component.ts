@@ -822,6 +822,16 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       if (this.isAddSubtaskInputVisible()) {
         return;
       }
+      // Same race, one step more general: the user can click into ANY text
+      // field of the panel within those ~200ms. Focusing a panel item blurs it,
+      // and the keystrokes that follow land on a plain <task-detail-item>,
+      // where the global handler reads them as task shortcuts. Observed on the
+      // live notes editor (#9910): typing a note scheduled the task and opened
+      // the schedule dialog instead of writing anything.
+      const activeEl = document.activeElement;
+      if (activeEl instanceof HTMLElement && isInputElement(activeEl)) {
+        return;
+      }
       if (this.task().id === scheduledForTaskId) {
         focusFn();
       }
