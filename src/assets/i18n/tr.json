@@ -3264,7 +3264,7 @@
     "UNABLE_TO_PERSIST_DATA": "Eklenti deposuna veri kaydedilemedi",
     "UNKNOWN_ERROR": "Bilinmeyen bir hata oluştu",
     "UPLOAD_PLUGIN_INSTRUCTION": "Yüklemek için bir eklenti ZIP dosyası yükleyin:",
-    "VALIDATION_FAILED": "Doğrulama başarısız oldu",
+    "VALIDATION_FAILED": "Doğrulama başarısız oldu: {{errors}}",
     "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Node.js yürütme köprüsüne bağlanılamadı. Lütfen eklentiyi devre dışı bırakıp yeniden etkinleştirmeyi deneyin.",
     "PLUGIN_LOAD_FAILED": "\"{{pluginName}}\" eklentisi yüklenemedi: {{error}}"
   },

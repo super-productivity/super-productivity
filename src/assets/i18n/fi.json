@@ -3274,7 +3274,7 @@
     "UNABLE_TO_PERSIST_DATA": "Tietojen tallentaminen laajennuksen tallennustilaan ei onnistu",
     "UNKNOWN_ERROR": "Tuntematon virhe tapahtui",
     "UPLOAD_PLUGIN_INSTRUCTION": "Lataa laajennus ZIP-tiedosto asentaaksesi sen:",
-    "VALIDATION_FAILED": "Vahvistus epäonnistui",
+    "VALIDATION_FAILED": "Vahvistus epäonnistui: {{errors}}",
     "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Tämä lisäosa tarjoaa tehtäväintegraation, joka on käytössä ({{count}} tehtävätarjoajaa). Sen poistaminen käytöstä rikkoo tilapäisesti tehtävien synkronoinnin näille tarjoajille, kunnes lisäosa otetaan uudelleen käyttöön. Haluatko varmasti poistaa käytöstä \"{{name}}\"?",
     "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Yhteisölisäosien listan lataus epäonnistui",
     "INDEX_HTML_NOT_LOADED": "Lisäosan index.html ei latautunut",

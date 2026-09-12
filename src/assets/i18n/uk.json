@@ -3288,7 +3288,7 @@
     "UNABLE_TO_PERSIST_DATA": "Не вдалося зберегти дані у сховище плагіна",
     "UNKNOWN_ERROR": "Сталася невідома помилка",
     "UPLOAD_PLUGIN_INSTRUCTION": "Завантажте ZIP-файл плагіна для його встановлення:",
-    "VALIDATION_FAILED": "Перевірка не вдалася",
+    "VALIDATION_FAILED": "Перевірка не вдалася: {{errors}}",
     "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Could not connect to the Node.js execution bridge. Please try disabling and re-enabling the plugin.",
     "PLUGIN_LOAD_FAILED": "Plugin \"{{pluginName}}\" failed to load: {{error}}"
   },

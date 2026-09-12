@@ -3333,7 +3333,7 @@
     "UNABLE_TO_PERSIST_DATA": "No se pueden persistir datos en el almacenamiento del plugin",
     "UNKNOWN_ERROR": "Ocurrió un error desconocido",
     "UPLOAD_PLUGIN_INSTRUCTION": "Sube un archivo ZIP de plugin para instalarlo:",
-    "VALIDATION_FAILED": "Validación fallida",
+    "VALIDATION_FAILED": "Validación fallida: {{errors}}",
     "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Este plugin proporciona integración de incidencias que está actualmente en uso ({{count}} proveedor(es) de incidencias). Desactivarlo interrumpirá temporalmente la sincronización de incidencias para esos proveedores hasta que el plugin sea reactivado. ¿Está seguro de que desea desactivar \"{{name}}\"?",
     "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Error al cargar la lista de plugins de la comunidad",
     "LANGUAGES": "Idiomas:",

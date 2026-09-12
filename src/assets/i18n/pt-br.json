@@ -3262,7 +3262,7 @@
     "UNABLE_TO_PERSIST_DATA": "Não foi possível persistir os dados no armazenamento do plugin",
     "UNKNOWN_ERROR": "Ocorreu um erro desconhecido",
     "UPLOAD_PLUGIN_INSTRUCTION": "Envie um arquivo ZIP de plugin para instalá-lo:",
-    "VALIDATION_FAILED": "A validação falhou",
+    "VALIDATION_FAILED": "A validação falhou: {{errors}}",
     "ALLOWED_HOSTS": "Acesso à rede",
     "AUTHORED_BY": "por {{author}}",
     "NODE_EXECUTION_PERMISSION_DENIED": "A permissão para executar Node.js não foi concedida",

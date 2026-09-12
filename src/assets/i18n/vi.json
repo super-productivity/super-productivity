@@ -3326,7 +3326,7 @@
     "UNABLE_TO_PERSIST_DATA": "Không thể lưu trữ dữ liệu vào bộ nhớ plugin",
     "UNKNOWN_ERROR": "Đã xảy ra lỗi không xác định",
     "UPLOAD_PLUGIN_INSTRUCTION": "Tải lên tệp ZIP plugin để cài đặt:",
-    "VALIDATION_FAILED": "Xác thực thất bại",
+    "VALIDATION_FAILED": "Xác thực thất bại: {{errors}}",
     "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Không thể kết nối với cầu nối thực thi Node.js. Vui lòng thử tắt rồi bật lại plugin.",
     "PLUGIN_LOAD_FAILED": "Không thể tải plugin \"{{pluginName}}\": {{error}}"
   },
