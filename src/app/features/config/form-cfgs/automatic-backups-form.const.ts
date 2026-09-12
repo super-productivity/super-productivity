@@ -1,3 +1,4 @@
+import { escapeHtml } from '../../../util/escape-html';
 import {
   ConfigFormSection,
   ConfigSectionAction,
@@ -42,6 +43,14 @@ export const getAutomaticBackUpFormCfg = (
             className: `tpl`,
             templateOptions: {
               tag: 'p',
+              text: T.GCF.AUTO_BACKUPS.HELP_DESKTOP,
+            },
+          },
+          {
+            type: 'tpl',
+            className: `tpl`,
+            templateOptions: {
+              tag: 'p',
               text: T.GCF.AUTO_BACKUPS.LOCATION_INFO,
             },
           },
@@ -50,7 +59,7 @@ export const getAutomaticBackUpFormCfg = (
             className: `tpl`,
             templateOptions: {
               tag: 'p',
-              text: `<a href="file://${backupPath}" target="_blank">${backupPath}</a>`,
+              text: `<a href="file://${escapeHtml(backupPath)}" target="_blank">${escapeHtml(backupPath)}</a>`,
             },
           },
         ]
