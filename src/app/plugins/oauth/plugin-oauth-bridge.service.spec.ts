@@ -1,4 +1,9 @@
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
 import { Subject } from 'rxjs';
 import type { OAuthFlowConfig } from '@super-productivity/plugin-api';
 import { PluginOAuthBridgeService } from './plugin-oauth-bridge.service';
@@ -466,5 +471,58 @@ describe('PluginOAuthBridgeService', () => {
     expect(token).toBeNull();
     expect(oauthService.clearTokens).toHaveBeenCalledWith('google-calendar__oauth');
     expect(oauthService.getValidToken).not.toHaveBeenCalled();
+  });
+
+  describe('with a real PluginOAuthService', () => {
+    const scopedKey = 'test-plugin__oauth__account-a';
+    const tokenUrl = 'https://oauth2.googleapis.com/token';
+    let realOAuthService: PluginOAuthService;
+    let httpMock: HttpTestingController;
+
+    beforeEach(async () => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          PluginOAuthBridgeService,
+          PluginOAuthService,
+          provideHttpClient(),
+          provideHttpClientTesting(),
+        ],
+      });
+      service = TestBed.inject(PluginOAuthBridgeService);
+      realOAuthService = TestBed.inject(PluginOAuthService);
+      httpMock = TestBed.inject(HttpTestingController);
+      await deleteOAuthTokens(scopedKey);
+    });
+
+    afterEach(async () => {
+      httpMock.verify();
+      await deleteOAuthTokens(scopedKey);
+    });
+
+    // Boot: the calendar poll refreshes an expired token while the lifecycle effect
+    // runs the (already completed) migration. The refresh result must survive.
+    it('keeps a refresh that is pending while the steady-state migration runs', async () => {
+      const tokens = {
+        accessToken: 'expired-a',
+        refreshToken: 'refresh-a',
+        expiresAt: 0,
+        tokenUrl,
+        clientId: 'cid',
+      };
+      realOAuthService.storeTokens(scopedKey, tokens);
+      await saveOAuthTokens(scopedKey, JSON.stringify(tokens));
+
+      const pending = realOAuthService.getValidToken(scopedKey);
+      const request = httpMock.expectOne(tokenUrl);
+
+      expect(
+        await service.migrateLegacyOAuthTokenToScopedKey('test-plugin', 'account-a'),
+      ).toBeTrue();
+
+      request.flush({ access_token: 'refreshed-a', expires_in: 3600 });
+      expect(await pending).toBe('refreshed-a');
+      expect(await realOAuthService.getValidToken(scopedKey)).toBe('refreshed-a');
+    });
   });
 });

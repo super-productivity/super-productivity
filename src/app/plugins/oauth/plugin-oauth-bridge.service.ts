@@ -133,7 +133,11 @@ export class PluginOAuthBridgeService {
       if (!serialized) {
         return false;
       }
-      this._pluginOAuthService.restoreTokens(scopedKey, serialized);
+      // Steady state (nothing moved, scoped credential already in memory): do not
+      // replace the live token object, or a refresh in flight is treated as stale.
+      if (!this._pluginOAuthService.hasTokens(scopedKey)) {
+        this._pluginOAuthService.restoreTokens(scopedKey, serialized);
+      }
       return this._pluginOAuthService.hasTokens(scopedKey);
     } catch (error) {
       PluginLog.err('PluginOAuthBridge: Failed to migrate legacy OAuth tokens:', error);
