@@ -164,10 +164,9 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
    *
    * @param isDeferredWrite when true, the action was buffered during the sync
    *   window and is being flushed by `processDeferredActions`. Deferred writes
-   *   emit `entityChanges: []` (matching the pre-counter behaviour — deferred
-   *   actions were never run through the extractor) and are NOT tracked by the
-   *   pending counter (they were never incremented). Throws on lock timeout so
-   *   the deferred retry loop can react (#7700).
+   *   are NOT tracked by the pending counter (they were never incremented) and
+   *   throw on lock timeout so the deferred retry loop can react (#7700). The
+   *   operation itself is built exactly like a direct write (#8758).
    */
   private async writeOperation(
     action: PersistentAction,
@@ -249,12 +248,9 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         // Compute entity changes from the action (for TIME_TRACKING and TASK time
         // sync; empty array for everything else, where the action payload suffices).
         // extractEntityChanges is a pure function of the action, so it is safe to
-        // call here and idempotent across the quota-retry path. Deferred writes
-        // emit [] to preserve the pre-counter behaviour (they were buffered without
-        // being run through the extractor).
-        const entityChanges = isDeferredWrite
-          ? []
-          : this.operationCaptureService.extractEntityChanges(action);
+        // call here and idempotent across the quota-retry path and for deferred
+        // writes alike.
+        const entityChanges = this.operationCaptureService.extractEntityChanges(action);
 
         const actionPayload = this.addReplayDateFieldsToActionPayload(
           action,
@@ -729,9 +725,8 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
 
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
-          // isDeferredWrite=true: deferred actions were buffered (never counted),
-          // emit entityChanges: [], and keep writeOperation's throw so this retry
-          // loop can react.
+          // isDeferredWrite=true: deferred actions were buffered (never counted)
+          // and keep writeOperation's throw so this retry loop can react.
           await this.writeOperation(action, true, options);
           success = true;
           break;
