@@ -10,7 +10,12 @@ import { VectorClockService } from '../sync/vector-clock.service';
 import { OperationLogCompactionService } from '../persistence/operation-log-compaction.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { ImmediateUploadService } from '../sync/immediate-upload.service';
-import { ActionType, OpType } from '../core/operation.types';
+import {
+  ActionType,
+  EntityChange,
+  MultiEntityPayload,
+  OpType,
+} from '../core/operation.types';
 import { PersistentAction } from '../core/persistent-action.interface';
 import { COMPACTION_THRESHOLD } from '../core/operation-log.const';
 import {
@@ -909,6 +914,45 @@ describe('OperationLogEffects', () => {
         }),
         'local',
       );
+    });
+
+    it('should emit the same entityChanges for a deferred write as for a direct write of the same action', async () => {
+      const action = createPersistentAction('[TimeTracking] Sync time spent', false, {
+        taskId: 'task-1',
+        date: '2026-09-12',
+        duration: 60000,
+      });
+      const entityChanges: EntityChange[] = [
+        {
+          entityType: 'TASK',
+          entityId: 'task-1',
+          opType: OpType.Update,
+          changes: { timeSpent: 60000 },
+        },
+      ];
+      mockOperationCaptureService.extractEntityChanges.and.returnValue(entityChanges);
+
+      actions$ = of(action);
+      await new Promise<void>((resolve) =>
+        effects.persistOperation$.subscribe({ complete: resolve }),
+      );
+      const directOp =
+        mockOpLogStore.appendWithVectorClockOverwrite.calls.mostRecent().args[0];
+
+      mockOpLogStore.appendWithVectorClockOverwrite.calls.reset();
+      mockOperationCaptureService.extractEntityChanges.calls.reset();
+      bufferDeferredAction(action);
+      await effects.processDeferredActions();
+      const deferredOp =
+        mockOpLogStore.appendWithVectorClockOverwrite.calls.mostRecent().args[0];
+
+      expect(mockOperationCaptureService.extractEntityChanges).toHaveBeenCalledWith(
+        action,
+      );
+      expect((deferredOp.payload as MultiEntityPayload).entityChanges).toEqual(
+        entityChanges,
+      );
+      expect(deferredOp.payload).toEqual(directOp.payload);
     });
 
     it('should do nothing when no deferred actions are buffered', async () => {
