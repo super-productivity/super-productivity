@@ -171,3 +171,17 @@ border and color as regular tasks. The changed TS/SCSS files pass `checkFile`.
 
 The scope exclusions above remain intentional: deadline markers, calendar events,
 repeat previews, bulk drag, full inline task editing, and touch selection parity.
+
+## Post-review corrections
+
+- Timed day moves use the actual scheduled date when the displayed logical day
+  differs, and preserve modern `remindAt` values, including disabled reminders.
+- Keyboard completion of overdue tasks recovers focus when the card is removed
+  after its animation; moving focus elsewhere keeps that new focus.
+- Bulk-menu focus recovery reuses `findLiveRowEl()` to exclude destroyed hosts.
+- Removed the unused mutation focus option. Planner DOM traversal remains scoped
+  to participating cards; this correction adds no registry or navigation layer.
+
+Regression tests reproduce the date/reminder and delayed-completion failures, and
+the bulk-menu tests cover replacement rows while old hosts remain rendered. A
+browser regression exercises actual overdue completion and subsequent focus.

@@ -4,7 +4,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
 import { PlannerTaskComponent } from './planner-task.component';
 import { TaskService } from '../../tasks/task.service';
-import { DEFAULT_TASK, TaskCopy } from '../../tasks/task.model';
+import { DEFAULT_TASK, TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { DoneToggleComponent } from '../../../ui/done-toggle/done-toggle.component';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
@@ -221,6 +221,26 @@ describe('PlannerTaskComponent', () => {
       );
     });
 
+    for (const [key, expectedDate] of [
+      ['ArrowLeft', new Date(2026, 8, 13, 1, 0).getTime()],
+      ['ArrowRight', new Date(2026, 8, 15, 1, 0).getTime()],
+    ] as const) {
+      it(`moves a timed task from its scheduled date with ${key} when its displayed logical day differs`, () => {
+        const dueWithTime = new Date(2026, 8, 14, 1, 0).getTime();
+        const task = makeTask({ dueWithTime, remindAt: undefined });
+        const { component } = create(task, true, '2026-09-13');
+
+        component.onKeydown(moveDayEvent(component, key));
+
+        expect(taskServiceMock['scheduleTask']).toHaveBeenCalledWith(
+          task,
+          expectedDate,
+          TaskReminderOptionId.DoNotRemind,
+          false,
+        );
+      });
+    }
+
     it('leaves the move-day shortcut untouched in an input and for opt-out cards', () => {
       const optedIn = create(makeTask(), true, '2026-01-01').component;
       const input = document.createElement('input');
@@ -335,6 +355,190 @@ describe('PlannerTaskComponent', () => {
         false,
       );
     });
+
+    it('preserves a modern timed task reminder without a legacy reminder id', () => {
+      const dueWithTime = new Date(2026, 8, 12, 14, 45).getTime();
+      const thirtyMinutes = 30 * 60 * 1000;
+      const task = makeTask({
+        dueWithTime,
+        reminderId: null,
+        remindAt: dueWithTime - thirtyMinutes,
+      });
+      config = {
+        ...DEFAULT_GLOBAL_CONFIG,
+        keyboard: { ...DEFAULT_GLOBAL_CONFIG.keyboard, taskScheduleTomorrow: 'M' },
+      };
+      const { component } = create(task);
+
+      component.onTaskShortcut(shortcutEvent('m'));
+
+      expect(taskServiceMock['scheduleTask']).toHaveBeenCalledWith(
+        task,
+        new Date(2026, 8, 13, 14, 45).getTime(),
+        TaskReminderOptionId.m30,
+        false,
+      );
+    });
+
+    it('keeps reminders disabled when moving a modern timed task', () => {
+      const dueWithTime = new Date(2026, 8, 12, 14, 45).getTime();
+      const task = makeTask({ dueWithTime, reminderId: null, remindAt: undefined });
+      config = {
+        ...DEFAULT_GLOBAL_CONFIG,
+        keyboard: { ...DEFAULT_GLOBAL_CONFIG.keyboard, taskScheduleTomorrow: 'M' },
+      };
+      const { component } = create(task);
+
+      component.onTaskShortcut(shortcutEvent('m'));
+
+      expect(taskServiceMock['scheduleTask']).toHaveBeenCalledWith(
+        task,
+        new Date(2026, 8, 13, 14, 45).getTime(),
+        TaskReminderOptionId.DoNotRemind,
+        false,
+      );
+    });
+
+    it('moves focus after delayed completion removes the focused card', fakeAsync(() => {
+      config = {
+        ...DEFAULT_GLOBAL_CONFIG,
+        keyboard: { ...DEFAULT_GLOBAL_CONFIG.keyboard, taskToggleDone: 'D' },
+      };
+      const scope = document.createElement('planner-day-overdue');
+      scope.setAttribute('data-planner-selection-scope', '2026-09-12');
+      document.body.appendChild(scope);
+      const { fixture, component } = create(makeTask(), true);
+      const host = fixture.nativeElement as HTMLElement;
+      const next = document.createElement('planner-task');
+      next.setAttribute('data-task-id', 'next');
+      next.setAttribute('data-task-selectable', 'true');
+      scope.append(host, next);
+      multiSelectMock.findLiveRowEl.and.callFake((id: string) =>
+        id === 'next' ? next : null,
+      );
+      spyOn(next, 'focus');
+      host.focus();
+      taskServiceMock.toggleDoneWithAnimation.and.callFake(() =>
+        window.setTimeout(() => {
+          component.ngOnDestroy();
+          host.remove();
+        }, 200),
+      );
+
+      component.onTaskShortcut(shortcutEvent('d'));
+      tick(200);
+      tick();
+
+      expect(next.focus).toHaveBeenCalled();
+      scope.remove();
+    }));
+
+    it('does not steal focus after delayed completion when the user moved it', fakeAsync(() => {
+      config = {
+        ...DEFAULT_GLOBAL_CONFIG,
+        keyboard: { ...DEFAULT_GLOBAL_CONFIG.keyboard, taskToggleDone: 'D' },
+      };
+      const scope = document.createElement('planner-day-overdue');
+      scope.setAttribute('data-planner-selection-scope', '2026-09-12');
+      document.body.appendChild(scope);
+      const { fixture, component } = create(makeTask(), true);
+      const host = fixture.nativeElement as HTMLElement;
+      const next = document.createElement('planner-task');
+      next.setAttribute('data-task-id', 'next');
+      next.setAttribute('data-task-selectable', 'true');
+      const userTarget = document.createElement('button');
+      scope.append(host, next, userTarget);
+      multiSelectMock.findLiveRowEl.and.returnValue(next);
+      spyOn(next, 'focus');
+      host.focus();
+      taskServiceMock.toggleDoneWithAnimation.and.callFake(() =>
+        window.setTimeout(() => {
+          component.ngOnDestroy();
+          host.remove();
+        }, 200),
+      );
+
+      component.onTaskShortcut(shortcutEvent('d'));
+      userTarget.focus();
+      tick(200);
+      tick();
+
+      expect(next.focus).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(userTarget);
+      scope.remove();
+    }));
+
+    it('uses the move fallback when an overdue completion is still pending', fakeAsync(() => {
+      config = {
+        ...DEFAULT_GLOBAL_CONFIG,
+        keyboard: { ...DEFAULT_GLOBAL_CONFIG.keyboard, taskToggleDone: 'D' },
+      };
+      const scope = document.createElement('planner-day-overdue');
+      scope.setAttribute('data-planner-selection-scope', 'overdue');
+      document.body.appendChild(scope);
+      const task = makeTask({ dueWithTime: new Date(2026, 8, 11, 14, 45).getTime() });
+      const { fixture, component } = create(task, true, '2026-09-11');
+      const host = fixture.nativeElement as HTMLElement;
+      const next = document.createElement('planner-task');
+      next.setAttribute('data-task-id', 'next');
+      next.setAttribute('data-task-selectable', 'true');
+      const moved = document.createElement('planner-task');
+      scope.append(host, next, moved);
+      multiSelectMock.findLiveRowEl.and.callFake((id: string) =>
+        id === task.id ? moved : id === 'next' ? next : null,
+      );
+      spyOn(next, 'focus');
+      spyOn(moved, 'focus');
+      host.focus();
+      taskServiceMock['scheduleTask'].and.callFake(() => {
+        component.ngOnDestroy();
+        host.remove();
+      });
+
+      component.onTaskShortcut(shortcutEvent('d'));
+      component.onKeydown(moveDayEvent(component, 'ArrowRight'));
+      tick();
+
+      expect(moved.focus).toHaveBeenCalled();
+      expect(next.focus).not.toHaveBeenCalled();
+      scope.remove();
+    }));
+
+    it('restores focus when a moved task stays overdue until completion', fakeAsync(() => {
+      config = {
+        ...DEFAULT_GLOBAL_CONFIG,
+        keyboard: { ...DEFAULT_GLOBAL_CONFIG.keyboard, taskToggleDone: 'D' },
+      };
+      const scope = document.createElement('planner-day-overdue');
+      scope.setAttribute('data-planner-selection-scope', 'overdue');
+      document.body.appendChild(scope);
+      const task = makeTask({ dueWithTime: new Date(2026, 8, 9, 14, 45).getTime() });
+      const { fixture, component } = create(task, true, '2026-09-09');
+      const host = fixture.nativeElement as HTMLElement;
+      const next = document.createElement('planner-task');
+      next.setAttribute('data-task-id', 'next');
+      next.setAttribute('data-task-selectable', 'true');
+      scope.append(host, next);
+      multiSelectMock.findLiveRowEl.and.callFake((id: string) =>
+        id === 'next' ? next : null,
+      );
+      spyOn(next, 'focus');
+      host.focus();
+      taskServiceMock.toggleDoneWithAnimation.and.callFake(() =>
+        window.setTimeout(() => {
+          component.ngOnDestroy();
+          host.remove();
+        }, 200),
+      );
+
+      component.onTaskShortcut(shortcutEvent('d'));
+      component.onKeydown(moveDayEvent(component, 'ArrowRight'));
+      tick(200);
+      tick();
+
+      expect(next.focus).toHaveBeenCalled();
+      scope.remove();
+    }));
 
     it('does not consume time tracking when the feature is disabled', () => {
       TestBed.overrideProvider(GlobalConfigService, {

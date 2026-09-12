@@ -45,7 +45,6 @@ import { getNextWeekDayOffset } from '../../../util/get-next-week-day-offset';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { combineDateAndTime } from '../../../util/combine-date-and-time';
 import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-to-milliseconds';
-import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { PlannerActions } from '../store/planner.actions';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { first } from 'rxjs/operators';
@@ -103,6 +102,10 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   private _dateService = inject(DateService);
   private _dateAdapter = inject(DateAdapter);
   private _isTaskDeleteTriggered = false;
+  private _completionFocusFallback?: {
+    id: string | null;
+    element: HTMLElement | null;
+  };
 
   readonly task = input.required<TaskCopy>();
 
@@ -289,6 +292,16 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     window.clearTimeout(this._doneAnimationTimeout);
     window.clearTimeout(this._dragReadyTimeout);
     this._touchListenerCleanups.forEach((fn) => fn());
+    if (
+      this._completionFocusFallback &&
+      document.activeElement === this._elementRef.nativeElement
+    ) {
+      this._restoreFocus(
+        this.task().id,
+        this._completionFocusFallback.id,
+        this._completionFocusFallback.element,
+      );
+    }
   }
 
   @HostListener('keydown', ['$event'])
@@ -401,7 +414,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     } else if (checkKeyCombo(keyboardEvent, keys.selectNextTask)) {
       this._moveFocus('ArrowDown');
     } else if (checkKeyCombo(keyboardEvent, keys.taskToggleDone)) {
-      this._runMutationWithFocus(() => this.toggleTaskDone());
+      this._runCompletionWithFocus();
     } else if (
       checkKeyCombo(keyboardEvent, keys.togglePlay) &&
       this._configService.appFeatures().isTimeTrackingEnabled
@@ -464,10 +477,10 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   private _moveOneDay(dayDelta: -1 | 1): void {
     const task = this.task();
     const displayedDay = this.day();
-    const baseDate = displayedDay
-      ? parseDbDateStr(displayedDay)
-      : task.dueWithTime
-        ? new Date(task.dueWithTime)
+    const baseDate = task.dueWithTime
+      ? new Date(task.dueWithTime)
+      : displayedDay
+        ? parseDbDateStr(displayedDay)
         : task.dueDay
           ? parseDbDateStr(task.dueDay)
           : null;
@@ -482,10 +495,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     const task = this.task();
     if (task.dueWithTime) {
       const timestamp = combineDateAndTime(date, new Date(task.dueWithTime)).getTime();
-      const remindCfg = task.reminderId
-        ? millisecondsDiffToRemindOption(task.dueWithTime, task.remindAt)
-        : (this._configService.cfg()?.reminder.defaultTaskRemindOption ??
-          DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!);
+      const remindCfg = millisecondsDiffToRemindOption(task.dueWithTime, task.remindAt);
       this._taskService.scheduleTask(task, timestamp, remindCfg, false);
       return;
     }
@@ -595,7 +605,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     this._restoreFocus(this.task().id, null, fallbackEl);
   }
 
-  private _runMutationWithFocus(mutation: () => void, preferTask = true): void {
+  private _runMutationWithFocus(mutation: () => void): void {
     const rows = this._plannerRows();
     const host = this._elementRef.nativeElement as HTMLElement;
     const index = rows.indexOf(host);
@@ -605,7 +615,25 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
       null;
     const fallbackEl = this._localAddButton();
     mutation();
-    this._restoreFocus(preferTask ? this.task().id : null, fallbackId, fallbackEl);
+    this._restoreFocus(this.task().id, fallbackId, fallbackEl);
+  }
+
+  private _runCompletionWithFocus(): void {
+    const host = this._elementRef.nativeElement as HTMLElement;
+    if (this.task().isDone || !host.closest('planner-day-overdue')) {
+      this._runMutationWithFocus(() => this.toggleTaskDone());
+      return;
+    }
+    const rows = this._plannerRows();
+    const index = rows.indexOf(host);
+    this._completionFocusFallback = {
+      id:
+        rows[index + 1]?.getAttribute('data-task-id') ??
+        rows[index - 1]?.getAttribute('data-task-id') ??
+        null,
+      element: this._localAddButton(),
+    };
+    this.toggleTaskDone();
   }
 
   private _restoreFocus(

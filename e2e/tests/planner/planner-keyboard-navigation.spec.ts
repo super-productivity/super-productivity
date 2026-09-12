@@ -185,6 +185,31 @@ test.describe('Planner keyboard navigation', () => {
     await expect(cards.nth(1)).toBeFocused();
   });
 
+  test('restores focus after the completion animation removes an overdue card', async ({
+    page,
+    workViewPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const remainingTitle = `${testPrefix}-Completion remaining`;
+    const overdueTitle = `${testPrefix}-Completion overdue`;
+    await workViewPage.addTask(remainingTitle);
+    await workViewPage.addTask(overdueTitle);
+    await openPlanner(page);
+
+    const overdueCard = cardWithTitle(page, overdueTitle);
+    const remainingCard = cardWithTitle(page, remainingTitle);
+    await overdueCard.click();
+    await page.keyboard.press('Control+Shift+ArrowLeft');
+    await expect(page.locator('planner-day-overdue').locator(overdueCard)).toBeVisible();
+    await expect(overdueCard).toBeFocused();
+
+    await page.keyboard.press('d');
+
+    await expect(overdueCard).toHaveCount(0);
+    await expect(remainingCard).toBeFocused();
+  });
+
   test('moves a focused all-day task between calendar days and keeps focus', async ({
     page,
     workViewPage,
