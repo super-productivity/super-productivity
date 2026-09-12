@@ -3275,7 +3275,7 @@
     "UNABLE_TO_PERSIST_DATA": "Não foi possível guardar dados no armazenamento do plugin",
     "UNKNOWN_ERROR": "Ocorreu um erro desconhecido",
     "UPLOAD_PLUGIN_INSTRUCTION": "Carregue um ficheiro ZIP do plugin para o instalar:",
-    "VALIDATION_FAILED": "Validação falhou",
+    "VALIDATION_FAILED": "Validação falhou: {{errors}}",
     "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Este plugin fornece integração com issues que está atualmente em uso ({{count}} fornecedor(es) de issues). Desativá-lo interromperá temporariamente a sincronização de issues para esses fornecedores até que o plugin seja reativado. Tem a certeza de que pretende desativar \"{{name}}\"?",
     "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Falha ao carregar lista de plugins da comunidade",
     "LANGUAGES": "Idiomas:",

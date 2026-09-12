@@ -3269,7 +3269,7 @@
     "UNABLE_TO_PERSIST_DATA": "غير قادر على حفظ البيانات إلى تخزين الإضافات",
     "UNKNOWN_ERROR": "حدث خطأ غير معروف",
     "UPLOAD_PLUGIN_INSTRUCTION": "رفع ملف ZIP لإضافة لتثبيته:",
-    "VALIDATION_FAILED": "فشل التحقق",
+    "VALIDATION_FAILED": "فشل التحقق: {{errors}}",
     "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "سيؤدي تعطيل هذه الإضافة إلى إزالة مزودي المشكلات المرتبطين بها. هل تريد المتابعة؟",
     "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "فشل تحميل إضافات المجتمع",
     "INDEX_HTML_NOT_LOADED": "لم يتم تحميل index.html",

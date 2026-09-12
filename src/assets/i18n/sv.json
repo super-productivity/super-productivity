@@ -3274,7 +3274,7 @@
     "UNABLE_TO_PERSIST_DATA": "Det går inte att spara data i plugin-lagringen.",
     "UNKNOWN_ERROR": "Ett okänt fel uppstod",
     "UPLOAD_PLUGIN_INSTRUCTION": "Ladda upp en ZIP-fil med plugin-programmet för att installera det:",
-    "VALIDATION_FAILED": "Valideringen misslyckades",
+    "VALIDATION_FAILED": "Valideringen misslyckades: {{errors}}",
     "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Det gick inte att ansluta till bryggan för Node.js-körning. Försök inaktivera och aktivera insticksmodulen igen.",
     "PLUGIN_LOAD_FAILED": "Det gick inte att läsa in insticksmodulen ”{{pluginName}}”: {{error}}"
   },

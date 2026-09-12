@@ -3336,7 +3336,7 @@
     "UNABLE_TO_PERSIST_DATA": "نمی توانم داده ها را به ذخیره سازی افزونه ها حفظ کنم",
     "UNKNOWN_ERROR": "یک خطای ناشناخته رخ داد",
     "UPLOAD_PLUGIN_INSTRUCTION": "یک فایل ZIP افزونه آپلود کنید تا آن را نصب کنید:",
-    "VALIDATION_FAILED": "اعتبارسنجی ناموفق بود",
+    "VALIDATION_FAILED": "اعتبارسنجی ناموفق بود: {{errors}}",
     "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "غیرفعال کردن این افزونه ارائه‌دهندگان مسئله مرتبط را نیز غیرفعال می‌کند. آیا ادامه می‌دهید؟",
     "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "بارگذاری افزونه‌های جامعه ناموفق بود",
     "INDEX_HTML_NOT_LOADED": "فایل index.html بارگذاری نشد",

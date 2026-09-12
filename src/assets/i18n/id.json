@@ -3275,7 +3275,7 @@
     "UNABLE_TO_PERSIST_DATA": "Tidak dapat menyimpan data ke penyimpanan plugin",
     "UNKNOWN_ERROR": "Terjadi kesalahan yang tidak diketahui",
     "UPLOAD_PLUGIN_INSTRUCTION": "Unggah file ZIP plugin untuk menginstalnya:",
-    "VALIDATION_FAILED": "Validasi gagal",
+    "VALIDATION_FAILED": "Validasi gagal: {{errors}}",
     "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Plugin ini menyediakan integrasi isu yang sedang digunakan ({{count}} penyedia isu). Menonaktifkannya akan menghentikan sementara sinkronisasi isu untuk penyedia tersebut hingga plugin diaktifkan kembali. Apakah Anda yakin ingin menonaktifkan \"{{name}}\"?",
     "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Gagal memuat daftar plugin komunitas",
     "LANGUAGES": "Bahasa:",
