@@ -514,6 +514,45 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
 
     expect(focusItemSpy).not.toHaveBeenCalled();
   }));
+
+  // Escape in the notes editor blurs it and hands focus back to the notes item
+  // 150ms later. Clicking straight back into the editor inside that window must
+  // not have the caret yanked out again by the pending timer.
+  it('does not steal focus from a text field focused while the timer is pending', fakeAsync(() => {
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+    const editable = document.createElement('div');
+    editable.contentEditable = 'true';
+    editable.tabIndex = 0;
+    document.body.appendChild(editable);
+
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+    // ...the user clicks back into the editor before the timer fires.
+    editable.focus();
+
+    tick(200);
+
+    expect(focusItemSpy).not.toHaveBeenCalled();
+    editable.remove();
+  }));
+
+  it('still focuses the panel item when focus is not in a text field', fakeAsync(() => {
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+    const item = document.createElement('div');
+    item.tabIndex = 0;
+    document.body.appendChild(item);
+
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+    item.focus();
+
+    tick(200);
+
+    expect(focusItemSpy).toHaveBeenCalled();
+    item.remove();
+  }));
 });
 
 // Opening the notes panel via a checklist's progress badge routes through

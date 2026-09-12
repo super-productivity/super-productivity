@@ -39,9 +39,16 @@ test.describe('Live markdown editor (#9910)', () => {
     await page.keyboard.press('Enter');
     await page.keyboard.type('- [ ] a checklist item');
 
-    // Blur, so no line is revealed as raw source any more.
+    // Blur, so no line is revealed as raw source any more. Escape hands focus
+    // back to the detail panel's notes item 150ms later; wait for that settled
+    // state, or the panel grabs focus in the middle of the click below.
     await page.keyboard.press('Escape');
     await editor.blur();
+    await expect
+      .poll(() =>
+        page.evaluate(() => document.activeElement?.tagName.toLowerCase() ?? ''),
+      )
+      .toBe('task-detail-item');
 
     // The heading renders as a heading and its `#` marker is hidden from view,
     // even though the note's text still holds it.

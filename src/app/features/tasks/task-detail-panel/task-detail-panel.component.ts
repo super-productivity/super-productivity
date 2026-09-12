@@ -822,6 +822,14 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       if (this.isAddSubtaskInputVisible()) {
         return;
       }
+      // Nor from any other text field the user moved into while this timer was
+      // pending. Escape in the notes editor blurs it and schedules this focus
+      // 150ms out; clicking straight back into the notes inside that window
+      // would otherwise have the caret yanked out again.
+      const activeEl = document.activeElement;
+      if (activeEl instanceof HTMLElement && isInputElement(activeEl)) {
+        return;
+      }
       if (this.task().id === scheduledForTaskId) {
         focusFn();
       }
