@@ -433,6 +433,35 @@ describe('PlannerTaskComponent', () => {
       scope.remove();
     }));
 
+    it('moves focus while the destroyed card remains connected for its leave animation', fakeAsync(() => {
+      config = {
+        ...DEFAULT_GLOBAL_CONFIG,
+        keyboard: { ...DEFAULT_GLOBAL_CONFIG.keyboard, taskToggleDone: 'D' },
+      };
+      const scope = document.createElement('planner-day-overdue');
+      scope.setAttribute('data-planner-selection-scope', '2026-09-12');
+      document.body.appendChild(scope);
+      const { fixture, component } = create(makeTask(), true);
+      const host = fixture.nativeElement as HTMLElement;
+      const next = document.createElement('planner-task');
+      next.setAttribute('data-task-id', 'next');
+      next.setAttribute('data-task-selectable', 'true');
+      scope.append(host, next);
+      multiSelectMock.findLiveRowEl.and.callFake((id: string) =>
+        id === 'next' ? next : null,
+      );
+      spyOn(next, 'focus');
+      host.focus();
+
+      component.onTaskShortcut(shortcutEvent('d'));
+      component.ngOnDestroy();
+      tick();
+
+      expect(host.isConnected).toBeTrue();
+      expect(next.focus).toHaveBeenCalled();
+      scope.remove();
+    }));
+
     it('does not steal focus after delayed completion when the user moved it', fakeAsync(() => {
       config = {
         ...DEFAULT_GLOBAL_CONFIG,

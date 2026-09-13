@@ -102,6 +102,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   private _dateService = inject(DateService);
   private _dateAdapter = inject(DateAdapter);
   private _isTaskDeleteTriggered = false;
+  private _isDestroyed = false;
   private _completionFocusFallback?: {
     id: string | null;
     element: HTMLElement | null;
@@ -284,6 +285,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnDestroy(): void {
+    this._isDestroyed = true;
     if (this.focusable()) {
       this._multiSelect.removeWhenUnrendered(
         this.task().id,
@@ -642,9 +644,15 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     fallbackId: string | null,
     fallbackEl: HTMLElement | null,
   ): void {
+    const host = this._elementRef.nativeElement as HTMLElement;
     setTimeout(() => {
       const active = document.activeElement;
-      if (active && active !== document.body && active.isConnected) {
+      if (
+        active &&
+        active !== document.body &&
+        active.isConnected &&
+        !(this._isDestroyed && active === host)
+      ) {
         return;
       }
       const row =

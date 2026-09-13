@@ -199,7 +199,7 @@ test.describe('Planner keyboard navigation', () => {
 
     const overdueCard = cardWithTitle(page, overdueTitle);
     const remainingCard = cardWithTitle(page, remainingTitle);
-    await overdueCard.click();
+    await overdueCard.focus();
     await page.keyboard.press('Control+Shift+ArrowLeft');
     await expect(page.locator('planner-day-overdue').locator(overdueCard)).toBeVisible();
     await expect(overdueCard).toBeFocused();
@@ -233,7 +233,7 @@ test.describe('Planner keyboard navigation', () => {
     expect(initialIndex).toBeGreaterThanOrEqual(0);
     expect(dates.length).toBeGreaterThan(initialIndex + 2);
 
-    await card.click();
+    await card.focus();
     await expect(card).toBeFocused();
     await page.keyboard.press('Control+Shift+ArrowRight');
     await expect(card.locator('xpath=ancestor::planner-day')).toHaveAttribute(
