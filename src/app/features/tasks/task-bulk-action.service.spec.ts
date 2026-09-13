@@ -234,6 +234,11 @@ describe('TaskBulkActionService', () => {
     it('focuses the Planner add button when every selected card is removed', async () => {
       isConfirmBeforeDelete = false;
       select([t('only')]);
+      const otherDay = document.createElement('planner-day');
+      otherDay.setAttribute('data-planner-selection-scope', '2026-09-11');
+      const otherAddTask = document.createElement('add-task-inline');
+      otherAddTask.appendChild(document.createElement('button'));
+      otherDay.appendChild(otherAddTask);
       const day = document.createElement('planner-day');
       day.setAttribute('data-planner-selection-scope', '2026-09-12');
       const row = document.createElement('planner-task');
@@ -244,7 +249,9 @@ describe('TaskBulkActionService', () => {
       const add = document.createElement('button');
       addTask.appendChild(add);
       day.append(row, addTask);
-      document.body.appendChild(day);
+      const unrelatedTask = document.createElement('task');
+      unrelatedTask.setAttribute('data-task-id', 'unrelated');
+      document.body.append(otherDay, day, unrelatedTask);
       row.focus();
       let isDestroyed = false;
       multiSelect.isDestroyedHost = (el: Element) => isDestroyed && el === row;
@@ -256,7 +263,9 @@ describe('TaskBulkActionService', () => {
       await service.deleteSelected();
 
       expect(add.focus).toHaveBeenCalled();
+      otherDay.remove();
       day.remove();
+      unrelatedTask.remove();
     });
 
     it('confirms, dedupes subtasks of selected parents, and splits lone subtasks off', async () => {

@@ -702,11 +702,6 @@ export class TaskBulkActionService {
   }
 
   /**
-   * The first unselected `<task>` after the last selected one in DOM order,
-   * else the last unselected one before it — captured *before* the action so
-   * keyboard focus has somewhere to land once the selected rows leave the view.
-   */
-  /**
    * Id of the row keyboard focus should land on if the selected rows leave the
    * list: the next unselected row after the selection, else the previous one.
    * Like the single-task path, subtask rows of a selected parent do not count
@@ -718,12 +713,18 @@ export class TaskBulkActionService {
       return null;
     }
     const selected = this._multiSelect.selectedIds();
-    const rows = Array.from(
+    const allRows = Array.from(
       document.querySelectorAll<HTMLElement>(
         'task, planner-task[data-task-selectable="true"]',
       ),
     ).filter(
       (el) => !el.closest('task-detail-panel') && !this._multiSelect.isDestroyedHost(el),
+    );
+    const isPlannerSelection = allRows.some(
+      (row) => row.matches('planner-task') && selected.has(row.dataset.taskId ?? ''),
+    );
+    const rows = allRows.filter((row) =>
+      row.matches(isPlannerSelection ? 'planner-task' : 'task'),
     );
     const idOf = (el: HTMLElement): string => el.getAttribute('data-task-id') ?? '';
     const isInSelectedParent = (el: HTMLElement): boolean => {
@@ -755,11 +756,14 @@ export class TaskBulkActionService {
     if (target) {
       return idOf(target);
     }
-    return rows.some((row) => row.matches('planner-task') && selected.has(idOf(row)))
-      ? document.querySelector<HTMLElement>(
-          'planner-day[data-planner-selection-scope] add-task-inline button',
-        )
-      : null;
+    const selectedPlannerRow = rows.find(
+      (row) => row.matches('planner-task') && selected.has(idOf(row)),
+    );
+    return (
+      selectedPlannerRow
+        ?.closest<HTMLElement>('planner-day[data-planner-selection-scope]')
+        ?.querySelector<HTMLElement>('add-task-inline button') ?? null
+    );
   }
 
   /**
