@@ -680,7 +680,7 @@ describe('PlannerTaskComponent', () => {
     expect(event.defaultPrevented).toBeFalse();
   });
 
-  it('focuses an opted-in Planner card on a plain click', () => {
+  it('focuses and opens details for an opted-in Planner card on a plain click', () => {
     const { component } = create(makeTask(), true);
     const host = (component as unknown as { _elementRef: { nativeElement: HTMLElement } })
       ._elementRef.nativeElement;
@@ -690,7 +690,7 @@ describe('PlannerTaskComponent', () => {
     title.click();
 
     expect(host.focus).toHaveBeenCalled();
-    expect(taskServiceMock['setSelectedId']).not.toHaveBeenCalled();
+    expect(taskServiceMock['setSelectedId']).toHaveBeenCalledOnceWith('t1');
   });
 
   it('opens details for an opted-in Planner card on double click', () => {

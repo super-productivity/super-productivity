@@ -177,6 +177,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this.focusable()) {
       if (!this._isInteractiveClickTarget(target)) {
         (this._elementRef.nativeElement as HTMLElement).focus();
+        this._taskService.setSelectedId(this.task().id);
       }
       return;
     }
