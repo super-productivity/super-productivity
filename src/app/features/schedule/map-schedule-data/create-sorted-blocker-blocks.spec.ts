@@ -963,6 +963,56 @@ describe('createBlockerBlocks()', () => {
       expect(r[0].entries[0].type).toBe(BlockedBlockType.ScheduledRepeatProjection);
       expect(r[0].start).toEqual(getDateTimeFromClockString('10:00', oneWeekFromNow));
     });
+
+    it('should show timed repeat projection for today in daily view (nrOfDays=1) #10087', () => {
+      // Regression test for issue #10087:
+      // In the Daily view, nrOfDays=1. The loop previously started at i=1 when
+      // viewing the current day (isViewingCurrentDay=true), so 1 < 1 = false and
+      // the loop body never ran — today's timed repeat projection was never created
+      // as a blocked block, making the task invisible in the Daily view while the
+      // Weekly view (nrOfDays=7) showed it correctly.
+      const now = 0; // epoch midnight = Thursday Jan 1 1970
+      // Use a date before 'now' for lastTaskCreationDay so the selector includes today
+      const lastTaskCreationDay = getDbDateStr(-24 * 60 * 60 * 1000); // 1969-12-31
+      const fakeRepeatTaskCfgs: TaskRepeatCfg[] = [
+        {
+          ...DUMMY_REPEATABLE_TASK,
+          id: 'R_TODAY',
+          title: 'Late Night Task',
+          startTime: '23:50',
+          lastTaskCreationDay: lastTaskCreationDay,
+          defaultEstimate: hours(2), // starts 23:50, ends 01:50 next day (crosses midnight)
+          monday: true,
+          tuesday: true,
+          wednesday: true,
+          thursday: true, // epoch day 0 is a Thursday
+          friday: true,
+          saturday: true,
+          sunday: true,
+        },
+      ];
+
+      // Simulate the Daily view: nrOfDays=1, realNow === now (viewing current day)
+      const r = createSortedBlockerBlocks(
+        [],
+        fakeRepeatTaskCfgs,
+        [],
+        undefined,
+        undefined,
+        now, // contextNow = now (today)
+        1, // nrOfDays = 1 (Daily view)
+        now, // realNow = now (same day → isViewingCurrentDay=true)
+      );
+
+      // Must produce at least one blocked block for today's projection
+      expect(r.length).toBeGreaterThan(0);
+      const todayBlock = r.find(
+        (b) =>
+          b.entries[0].type === BlockedBlockType.ScheduledRepeatProjection &&
+          b.start === getDateTimeFromClockString('23:50', now),
+      );
+      expect(todayBlock).toBeDefined();
+    });
   });
 
   describe('icalEventMap', () => {
