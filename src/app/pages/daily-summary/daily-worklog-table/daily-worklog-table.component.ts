@@ -11,6 +11,9 @@ import {
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { MatFormField, MatLabel } from '@angular/material/form-field';
+import { MatInput } from '@angular/material/input';
+import { MatSelect, MatOption } from '@angular/material/select';
 import { MatButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import { nanoid } from 'nanoid';
@@ -36,6 +39,11 @@ import { T } from '../../../t.const';
   imports: [
     FormsModule,
     MatButton,
+    MatFormField,
+    MatLabel,
+    MatInput,
+    MatSelect,
+    MatOption,
     TranslatePipe,
     MsToClockStringPipe,
     InlineInputComponent,

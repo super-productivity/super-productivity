@@ -87,58 +87,69 @@
             }}
           </legend>
           @if (!edit.taskId) {
-            <label
-              >{{ T.F.TIME_SESSION.TASK | translate }}
-              <select
+            <mat-form-field>
+              <mat-label>{{ T.F.TIME_SESSION.TASK | translate }}</mat-label>
+              <mat-select
+                [disabled]="busy()"
                 name="task"
                 [(ngModel)]="selectedTaskId"
               >
-                <option value="">{{ T.F.TIME_SESSION.NEW_TASK | translate }}</option>
+                <mat-option value="">{{
+                  T.F.TIME_SESSION.NEW_TASK | translate
+                }}</mat-option>
                 @for (task of availableTasks(); track task.id) {
-                  <option [value]="task.id">{{ task.title }}</option>
+                  <mat-option [value]="task.id">{{ task.title }}</mat-option>
                 }
-              </select>
-            </label>
+              </mat-select>
+            </mat-form-field>
             @if (!selectedTaskId) {
-              <label
-                >{{ T.F.TIME_SESSION.NEW_TASK | translate }}
+              <mat-form-field>
+                <mat-label>{{ T.F.TIME_SESSION.NEW_TASK | translate }}</mat-label>
                 <input
+                  matInput
+                  [disabled]="busy()"
                   name="title"
                   [(ngModel)]="newTitle"
                   required
                 />
-              </label>
+              </mat-form-field>
             }
           }
-          <label
-            >{{ T.F.TIME_SESSION.START | translate }}
+          <mat-form-field>
+            <mat-label>{{ T.F.TIME_SESSION.START | translate }}</mat-label>
             <input
+              matInput
+              [disabled]="busy()"
               type="time"
               name="start"
               [(ngModel)]="start"
               (ngModelChange)="updateEnd()"
             />
-          </label>
-          <label
-            >{{ T.F.TIME_SESSION.DURATION | translate }}
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>{{ T.F.TIME_SESSION.DURATION | translate }}</mat-label>
             <input
+              matInput
+              [disabled]="busy()"
               name="duration"
               inputDuration
               [(ngModel)]="duration"
               (ngModelChange)="updateEnd()"
               required
             />
-          </label>
+          </mat-form-field>
           @if (start) {
-            <label
-              >{{ T.F.TIME_SESSION.END | translate }}
+            <mat-form-field>
+              <mat-label>{{ T.F.TIME_SESSION.END | translate }}</mat-label>
               <input
+                matInput
+                [disabled]="busy()"
                 type="time"
                 name="end"
                 [(ngModel)]="end"
                 (ngModelChange)="updateDuration()"
               />
-            </label>
+            </mat-form-field>
           }
           <p>{{ T.F.TIME_SESSION.EXPLICIT_EDIT | translate }}</p>
           <div class="actions">

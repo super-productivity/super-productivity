@@ -42,13 +42,8 @@ fieldset {
   padding: var(--s2);
   border: 1px solid var(--separator-color);
 }
-label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-half);
-  margin-bottom: var(--s);
-}
-input,
-select {
-  max-width: 100%;
+mat-form-field {
+  display: block;
+  width: 100%;
+  text-align: start;
 }
