@@ -116,7 +116,6 @@ export class ShortSyntaxEffects {
         if (!task) {
           return EMPTY;
         }
-        const isReplaceTagIds = originalAction.type === TaskSharedActions.updateTask.type;
         return from(
           shortSyntax(
             task,
@@ -125,7 +124,13 @@ export class ShortSyntaxEffects {
             tags,
             projects,
             undefined,
-            isReplaceTagIds ? 'replace' : 'combine',
+            // Always additive here, including for title edits: parsed tags are
+            // stripped from the title, so an existing task's title can never
+            // name the tags it already has. 'replace' would read that as "the
+            // task has no other tags" and drop them on every `#tag` typed.
+            // The add task bar is the only caller that can mirror its text
+            // (the `#tag` stays visible in the input) and passes 'replace'.
+            'combine',
           ).then((r) => {
             if (environment.production) {
               TaskLog.log('shortSyntax', {
