@@ -136,6 +136,28 @@ describe('DialogEditIssueProviderComponent', () => {
     });
   });
 
+  describe('testConnection success feedback', () => {
+    it('keeps the Gitea success and warning visible together', async () => {
+      const issueService = TestBed.inject(IssueService) as jasmine.SpyObj<IssueService>;
+      const snackService = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
+      issueService.testConnection.and.resolveTo(true);
+      component.issueProviderKey = 'GITEA';
+      component.model = {
+        issueProviderKey: 'GITEA',
+        pluginConfig: { scope: 'all' },
+      } as Partial<IssueProvider>;
+
+      await component.testConnection();
+
+      expect(component.isConnectionWorks()).toBeTrue();
+      expect(snackService.open.calls.count()).toBe(1);
+      expect(snackService.open.calls.argsFor(0)[0]).toEqual({
+        type: 'WARNING',
+        msg: T.F.ISSUE.S.GITEA_CONNECTION_SUCCESS_WITH_WARNING,
+      });
+    });
+  });
+
   describe('testConnection failure reporting (#9635)', () => {
     const openedSnack = (): { msg: string; translateParams: { errorMsg: string } } =>
       (

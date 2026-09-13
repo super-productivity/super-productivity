@@ -4,12 +4,16 @@
     "TOKEN": "Access Token",
     "REPO_FULL_NAME": "Username or Organization name/repository",
     "SCOPE": "Scope",
+    "SCOPE_DESCRIPTION": "Test Connection verifies issue access for the unscoped All scope only. If you later select Created by me or Assigned to me, the scoped import requires a token with read:user access and Test Connection will fail.",
     "SCOPE_ALL": "All",
     "SCOPE_CREATED": "Created by me",
     "SCOPE_ASSIGNED": "Assigned to me",
     "FILTER_LABELS": "Filter by labels (optional)",
     "EXCLUDE_LABELS": "Exclude labels (optional)",
     "HOW_TO_GET_TOKEN": "How to get a token?"
+  },
+  "ERRORS": {
+    "SCOPED_CONNECTION_TEST": "Test Connection is only available with the unscoped All scope. Select All to test issue access."
   },
   "DISPLAY": {
     "SUMMARY": "Summary",

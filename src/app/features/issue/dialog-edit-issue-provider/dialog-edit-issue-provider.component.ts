@@ -285,6 +285,12 @@ export class DialogEditIssueProviderComponent {
     this.isConnectionWorks.set(false);
   }
 
+  private _shouldWarnAboutGiteaScope(): boolean {
+    const pluginConfig = (this.model as { pluginConfig?: Record<string, unknown> })
+      .pluginConfig;
+    return this.issueProviderKey === 'GITEA' && pluginConfig?.['scope'] === 'all';
+  }
+
   async testConnection(): Promise<void> {
     try {
       const isSuccess = await this._issueService.testConnection(
@@ -292,10 +298,18 @@ export class DialogEditIssueProviderComponent {
       );
       this.isConnectionWorks.set(isSuccess);
       if (isSuccess) {
-        this._snackService.open({
-          type: 'SUCCESS',
-          msg: T.F.ISSUE.S.CONNECTION_SUCCESS,
-        });
+        // Keep both messages visible in SnackService's single snackbar slot.
+        if (this._shouldWarnAboutGiteaScope()) {
+          this._snackService.open({
+            type: 'WARNING',
+            msg: T.F.ISSUE.S.GITEA_CONNECTION_SUCCESS_WITH_WARNING,
+          });
+        } else {
+          this._snackService.open({
+            type: 'SUCCESS',
+            msg: T.F.ISSUE.S.CONNECTION_SUCCESS,
+          });
+        }
         // Reload dynamic options (e.g. calendar lists) after successful connection
         await this._loadAndSetDynamicOptionsState();
       } else {
