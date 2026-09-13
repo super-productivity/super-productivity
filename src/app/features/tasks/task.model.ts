@@ -1,3 +1,4 @@
+import { TimeSession } from '../time-session/time-session.model';
 import { IssueProviderKey } from '../issue/issue.model';
 import { EntityState } from '@ngrx/entity';
 import { TaskAttachment } from './task-attachment/task-attachment.model';
@@ -88,6 +89,8 @@ export interface TaskCopy
   // Override required fields that are optional in plugin type
   projectId: string;
   timeSpentOnDay: TimeSpentOnDay;
+  /** Recording detail only; missing on legacy data. Daily totals always win. */
+  timeSessions?: TimeSession[];
 
   // Additional app-specific fields
 

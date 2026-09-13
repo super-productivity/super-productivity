@@ -1,0 +1,182 @@
+<details
+  class="session-details"
+  (toggle)="onToggle($event)"
+>
+  <summary>{{ T.F.TIME_SESSION.REFINE | translate }}</summary>
+  @if (expanded()) {
+    <p>{{ T.F.TIME_SESSION.EXPLANATION | translate }}</p>
+    @if (net() !== null) {
+      <p>
+        {{ T.F.TIME_SESSION.NET | translate }}: {{ net() | msToClockString }} ·
+        {{ T.F.TIME_SESSION.UNALLOCATED | translate }}:
+        {{ unallocated() | msToClockString }}
+      </p>
+    }
+    <div class="table-scroll">
+      <table>
+        <caption>
+          {{
+            T.F.TIME_SESSION.DAY_DETAIL | translate
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ T.F.TIME_SESSION.TASK | translate }}</th>
+            <th scope="col">{{ T.F.TIME_SESSION.TOTAL | translate }}</th>
+            <th scope="col">{{ T.F.TIME_SESSION.RECORDINGS | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.task.id) {
+            <tr>
+              <th scope="row">
+                <small>{{ row.project }}</small
+                ><br />{{ row.task.title }}
+              </th>
+              <td>
+                <inline-input
+                  type="duration"
+                  [value]="row.total"
+                  [displayValue]="row.total | msToClockString"
+                  (changed)="setTotal(row.task.id, $event)"
+                />
+              </td>
+              <td>
+                @for (entry of row.sessions; track entry.session.id) {
+                  <div class="recording">
+                    <span>
+                      @if (entry.start) {
+                        {{ entry.start }} – {{ entry.end }} ·
+                      }
+                      {{ entry.session.t | msToClockString }}
+                    </span>
+                    <button
+                      mat-button
+                      [disabled]="busy()"
+                      (click)="edit(row.task.id, entry.session)"
+                    >
+                      {{ T.G.EDIT | translate }}
+                    </button>
+                  </div>
+                }
+                @if (row.correction || !row.sessions.length) {
+                  <div>
+                    {{ T.F.TIME_SESSION.CORRECTION | translate }}:
+                    {{ row.correction | msToClockString }}
+                  </div>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <button
+      mat-stroked-button
+      (click)="add()"
+      [disabled]="busy()"
+    >
+      {{ T.F.TIME_SESSION.ADD | translate }}
+    </button>
+    @if (editing(); as edit) {
+      <form (ngSubmit)="save()">
+        <fieldset [disabled]="busy()">
+          <legend>
+            {{
+              (edit.session ? T.F.TIME_SESSION.EDIT : T.F.TIME_SESSION.ADD) | translate
+            }}
+          </legend>
+          @if (!edit.taskId) {
+            <label
+              >{{ T.F.TIME_SESSION.TASK | translate }}
+              <select
+                name="task"
+                [(ngModel)]="selectedTaskId"
+              >
+                <option value="">{{ T.F.TIME_SESSION.NEW_TASK | translate }}</option>
+                @for (task of availableTasks(); track task.id) {
+                  <option [value]="task.id">{{ task.title }}</option>
+                }
+              </select>
+            </label>
+            @if (!selectedTaskId) {
+              <label
+                >{{ T.F.TIME_SESSION.NEW_TASK | translate }}
+                <input
+                  name="title"
+                  [(ngModel)]="newTitle"
+                  required
+                />
+              </label>
+            }
+          }
+          <label
+            >{{ T.F.TIME_SESSION.START | translate }}
+            <input
+              type="time"
+              name="start"
+              [(ngModel)]="start"
+              (ngModelChange)="updateEnd()"
+            />
+          </label>
+          <label
+            >{{ T.F.TIME_SESSION.DURATION | translate }}
+            <input
+              name="duration"
+              inputDuration
+              [(ngModel)]="duration"
+              (ngModelChange)="updateEnd()"
+              required
+            />
+          </label>
+          @if (start) {
+            <label
+              >{{ T.F.TIME_SESSION.END | translate }}
+              <input
+                type="time"
+                name="end"
+                [(ngModel)]="end"
+                (ngModelChange)="updateDuration()"
+              />
+            </label>
+          }
+          <p>{{ T.F.TIME_SESSION.EXPLICIT_EDIT | translate }}</p>
+          <div class="actions">
+            <button
+              mat-flat-button
+              color="primary"
+              type="submit"
+            >
+              {{ T.G.SAVE | translate }}
+            </button>
+            <button
+              mat-button
+              type="button"
+              (click)="editing.set(null)"
+            >
+              {{ T.G.CANCEL | translate }}
+            </button>
+            @if (edit.session) {
+              <button
+                mat-button
+                color="warn"
+                type="button"
+                (click)="remove()"
+              >
+                {{ T.G.DELETE | translate }}
+              </button>
+            }
+          </div>
+        </fieldset>
+      </form>
+    }
+    @if (error()) {
+      <p
+        class="callout callout--warning"
+        role="alert"
+      >
+        {{ T.F.TIME_SESSION.ERROR | translate }}
+      </p>
+    }
+  }
+</details>

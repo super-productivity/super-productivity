@@ -1,0 +1,54 @@
+:host {
+  display: block;
+  margin-block: var(--s2);
+}
+summary {
+  cursor: pointer;
+  padding-block: var(--s);
+  font-weight: var(--font-weight-semibold);
+}
+.table-scroll {
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: var(--s2);
+}
+caption {
+  text-align: left;
+  padding-block: var(--s);
+}
+th,
+td {
+  text-align: left;
+  vertical-align: top;
+  padding: var(--s);
+  border-bottom: 1px solid var(--separator-color);
+}
+small {
+  color: var(--text-color-muted);
+  font-weight: normal;
+}
+.recording,
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s);
+}
+fieldset {
+  margin-block: var(--s2);
+  padding: var(--s2);
+  border: 1px solid var(--separator-color);
+}
+label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-half);
+  margin-bottom: var(--s);
+}
+input,
+select {
+  max-width: 100%;
+}

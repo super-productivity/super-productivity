@@ -1,3 +1,4 @@
+import { TimeSession } from '../../time-session/time-session.model';
 /* eslint-disable @typescript-eslint/naming-convention */
 import { createAction, createActionGroup, props } from '@ngrx/store';
 import { WorkContextType } from '../../work-context/work-context.model';
@@ -67,13 +68,18 @@ export const TimeTrackingActions = createActionGroup({
  * Persistent action for syncing accumulated time spent to other clients.
  * Dispatched every 5 minutes during active tracking and when tracking stops.
  *
- * Local dispatch: Ignored by reducer (state already updated by addTimeSpent ticks)
+ * Local dispatch: Records optional session metadata; ticks already updated totals.
  * Replay: Adds the duration. Replay-safe snapshots exclude still-pending batches,
  * so the delta cannot overlap the state from which replay starts.
  */
 export const syncTimeSpent = createAction(
   '[TimeTracking] Sync time spent',
-  (actionProps: { taskId: string; date: string; duration: number }) => ({
+  (actionProps: {
+    taskId: string;
+    date: string;
+    duration: number;
+    session?: TimeSession;
+  }) => ({
     ...actionProps,
     meta: {
       isPersistent: true,
