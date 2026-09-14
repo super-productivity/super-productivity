@@ -19,6 +19,8 @@ const API_VERSION = 'v1';
 // config so existing (migrated) providers keep working.
 const SCOPE_CREATED_BY_ME = 'created-by-me';
 const SCOPE_ASSIGNED_TO_ME = 'assigned-to-me';
+const isScopedScope = (scope: string | undefined): boolean =>
+  scope === SCOPE_CREATED_BY_ME || scope === SCOPE_ASSIGNED_TO_ME;
 
 interface GiteaConfig {
   host?: string;
@@ -173,6 +175,7 @@ PluginAPI.registerIssueProvider({
       key: 'scope',
       type: 'select',
       label: t('CFG.SCOPE'),
+      description: t('CFG.SCOPE_DESCRIPTION'),
       required: true,
       options: [
         { value: 'all', label: t('CFG.SCOPE_ALL') },
@@ -208,19 +211,18 @@ PluginAPI.registerIssueProvider({
     const includedLabels = parseLabelList(cfg.filterLabels);
     const excludedLabels = parseLabelList(cfg.excludeLabels);
 
-    // `priority_repo_id` is the only reliable way to scope the global issue
-    // search to the configured repository, so look it up first.
     const repo = await http.get<GiteaRepositoryReduced>(
       `${base}/repos/${cfg.repoFullname}`,
     );
+    const repoId = repo?.id;
 
     const params: Record<string, string> = {
       limit: '100',
       state: 'open',
       q: searchTerm,
     };
-    if (repo?.id) {
-      params['priority_repo_id'] = String(repo.id);
+    if (repoId) {
+      params['priority_repo_id'] = String(repoId);
     }
     if (cfg.scope === SCOPE_CREATED_BY_ME) {
       params['created'] = 'true';
@@ -295,12 +297,13 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<boolean> {
     const cfg = config as unknown as GiteaConfig;
-    try {
-      await http.get(`${baseUrl(cfg)}/repos/${cfg.repoFullname}`);
-      return true;
-    } catch {
-      return false;
+    if (isScopedScope(cfg.scope)) {
+      throw new Error(t('ERRORS.SCOPED_CONNECTION_TEST'));
     }
+    // Test the endpoint the provider actually consumes. Forgejo can grant
+    // issue read access without granting repository metadata read access.
+    await http.get(`${baseUrl(cfg)}/repos/${cfg.repoFullname}/issues?limit=1&state=open`);
+    return true;
   },
 
   async getNewIssuesForBacklog(
@@ -313,7 +316,7 @@ PluginAPI.registerIssueProvider({
     const excludedLabels = parseLabelList(cfg.excludeLabels);
 
     const params: Record<string, string> = { limit: '100', state: 'open' };
-    if (cfg.scope === SCOPE_CREATED_BY_ME || cfg.scope === SCOPE_ASSIGNED_TO_ME) {
+    if (isScopedScope(cfg.scope)) {
       const user = await http.get<GiteaUser>(`${base}/user`);
       if (cfg.scope === SCOPE_CREATED_BY_ME) {
         params['created_by'] = user.username;
