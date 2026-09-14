@@ -29,15 +29,16 @@
   <string name="share_received">Content received, creating task\u2026</string>
 
   <!-- Home screen widget -->
-  <string name="widget_title">Today\'s Tasks</string>
+  <string name="widget_title">Tasks</string>
   <string name="widget_header_title">Today</string>
   <!-- Header when the snapshot predates the current day; %1$s is that day's date -->
   <string name="widget_header_outdated">%1$s (outdated)</string>
   <!-- Same, but the snapshot's own date could not be read — must still not say "Today" -->
   <string name="widget_header_outdated_unknown">Outdated</string>
-  <string name="widget_description">Shows today\'s tasks with quick done action</string>
-  <string name="widget_empty">No tasks for today</string>
+  <string name="widget_description">Shows Today\'s or a selected project\'s tasks with quick done action</string>
+  <string name="widget_empty">No tasks</string>
   <string name="widget_task_done">Toggle task done</string>
+  <string name="widget_configure_title">Choose task list</string>
 
   <!-- Startup overlay -->
   <string name="startup_overlay_add_task">Add task</string>

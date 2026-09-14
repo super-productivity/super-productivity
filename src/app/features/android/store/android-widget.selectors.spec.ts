@@ -65,11 +65,18 @@ describe('selectAndroidWidgetData', () => {
       ...partial,
     }) as Task;
 
-  const project = (id: string, primary?: string): Project =>
+  const project = (
+    id: string,
+    primary?: string,
+    taskIds: string[] = [],
+    backlogTaskIds: string[] = [],
+  ): Project =>
     ({
       id,
       title: `Project ${id}`,
       theme: primary ? { primary } : {},
+      taskIds,
+      backlogTaskIds,
     }) as Project;
 
   const projectState = (projects: Project[]): any => ({
@@ -85,6 +92,7 @@ describe('selectAndroidWidgetData', () => {
         t2: task('t2', { title: 'Task two', isDone: true }),
       },
       projectState([project('p1', '#ff0000')]),
+      [project('p1', '#ff0000')],
       DAY,
       0,
     );
@@ -97,6 +105,7 @@ describe('selectAndroidWidgetData', () => {
         { id: 't2', title: 'Task two', isDone: true },
       ],
       projectColors: { p1: '#ff0000' },
+      projects: [{ id: 'p1', title: 'Project p1', tasks: [] }],
     });
   });
 
@@ -105,6 +114,7 @@ describe('selectAndroidWidgetData', () => {
       ['missing', 't1'],
       { t1: task('t1') },
       projectState([]),
+      [],
       DAY,
       0,
     );
@@ -117,10 +127,24 @@ describe('selectAndroidWidgetData', () => {
       ['t1'],
       { t1: task('t1', { projectId: undefined }) },
       projectState([]),
+      [],
       DAY,
       0,
     );
     expect('projectId' in result.tasks[0]).toBe(false);
+  });
+
+  it('should serialize a completed task timestamp for native project-widget expiry', () => {
+    const result = selectAndroidWidgetData.projector(
+      ['t1'],
+      { t1: task('t1', { isDone: true, doneOn: 123 }) },
+      projectState([]),
+      [],
+      DAY,
+      0,
+    );
+
+    expect(result.tasks[0].doneOn).toBe(123);
   });
 
   it('should not include colors for projects without a theme primary', () => {
@@ -128,6 +152,7 @@ describe('selectAndroidWidgetData', () => {
       ['t1'],
       { t1: task('t1', { projectId: 'p1' }) },
       projectState([project('p1')]),
+      [project('p1')],
       DAY,
       0,
     );
@@ -143,6 +168,7 @@ describe('selectAndroidWidgetData', () => {
       ['t1'],
       { t1: task('t1') },
       projectState([]),
+      [],
       '2026-07-16',
       fourAmOffset,
     );
@@ -158,6 +184,7 @@ describe('selectAndroidWidgetData', () => {
         t2: task('t2', { title: 'Task two', isDone: true }),
       },
       projectState([project('p1', '#ff0000')]),
+      [project('p1', '#ff0000')],
       DAY,
       0,
     );
@@ -165,7 +192,75 @@ describe('selectAndroidWidgetData', () => {
       `{"v":1,"dayStr":"${DAY}","validUntil":${VALID_UNTIL},"tasks":[` +
         '{"id":"t1","title":"Task one","isDone":false,"projectId":"p1"},' +
         '{"id":"t2","title":"Task two","isDone":true}],' +
-        '"projectColors":{"p1":"#ff0000"}}',
+        '"projectColors":{"p1":"#ff0000"},' +
+        '"projects":[{"id":"p1","title":"Project p1","tasks":[]}]}',
     );
+  });
+
+  it('should project each selectable project in its stored task order', () => {
+    const work = project('work', '#ff0000', ['t2', 'missing', 't1']);
+    const result = selectAndroidWidgetData.projector(
+      [],
+      {
+        t1: task('t1', { title: 'First', projectId: 'work' }),
+        t2: task('t2', {
+          title: 'Second',
+          projectId: 'work',
+          isDone: true,
+          doneOn: 123,
+        }),
+      },
+      projectState([work]),
+      [work],
+      DAY,
+      0,
+    );
+
+    expect(result.projects).toEqual([
+      {
+        id: 'work',
+        title: 'Project work',
+        tasks: [
+          { id: 't2', title: 'Second', isDone: true, doneOn: 123, projectId: 'work' },
+          { id: 't1', title: 'First', isDone: false, projectId: 'work' },
+        ],
+      },
+    ]);
+  });
+
+  it('should cap each project list at the native widget row limit', () => {
+    const taskIds = Array.from({ length: 21 }, (_, index) => `t${index + 1}`);
+    const largeProject = project('large', undefined, taskIds);
+    const result = selectAndroidWidgetData.projector(
+      [],
+      Object.fromEntries(taskIds.map((id) => [id, task(id, { projectId: 'large' })])),
+      projectState([largeProject]),
+      [largeProject],
+      DAY,
+      0,
+    );
+
+    expect(result.projects[0].tasks.length).toBe(20);
+    expect(result.projects[0].tasks[19].id).toBe('t20');
+  });
+
+  it('should append backlog tasks after regular project tasks', () => {
+    const work = project('work', undefined, ['t1'], ['t2']);
+    const result = selectAndroidWidgetData.projector(
+      [],
+      {
+        t1: task('t1', { projectId: 'work' }),
+        t2: task('t2', { projectId: 'work' }),
+      },
+      projectState([work]),
+      [work],
+      DAY,
+      0,
+    );
+
+    expect(result.projects[0].tasks.map((widgetTask) => widgetTask.id)).toEqual([
+      't1',
+      't2',
+    ]);
   });
 });
