@@ -895,11 +895,18 @@ export class FocusModeEffects {
         ),
         map(([, progress, isRunning]) => ({
           progress,
-          progressBarMode: progress < 0 ? 'none' as const : isRunning ? 'normal' as const : 'pause' as const,
+          progressBarMode:
+            progress < 0
+              ? ('none' as const)
+              : isRunning
+                ? ('normal' as const)
+                : ('pause' as const),
         })),
         // A stray tick after cancellation must not clear ordinary task progress again.
-        distinctUntilChanged((prev, curr) =>
-          prev.progress === curr.progress && prev.progressBarMode === curr.progressBarMode,
+        distinctUntilChanged(
+          (prev, curr) =>
+            prev.progress === curr.progress &&
+            prev.progressBarMode === curr.progressBarMode,
         ),
         tap((progressBar) => window.ea.setProgressBar(progressBar)),
       ),

@@ -475,7 +475,6 @@ describe('FocusModeSelectors', () => {
       expect(result).toBe(false);
     });
   });
-
 });
 
 describe('desktop progress for focus timers', () => {

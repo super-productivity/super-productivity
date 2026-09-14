@@ -31,6 +31,7 @@ import {
 import { updateGlobalConfigSection } from '../../config/store/global-config.actions';
 import { take, toArray } from 'rxjs/operators';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { selectCurrentTask } from '../../tasks/store/task.selectors';
 import { DEFAULT_TASK } from '../../tasks/task.model';
 import { IS_ELECTRON_TOKEN } from '../../../app.constants';
 import { Action } from '@ngrx/store';
@@ -3114,11 +3115,8 @@ describe('FocusModeEffects', () => {
       });
     });
   });
-  // The OS progress bar (taskbar/dock) has exactly one writer at a time: a
-  // *timed* session owns it and task-electron.effects stands down. When the
-  // session releases it (cancel/pause), nothing else clears the bar - the task
-  // writer only wakes on setCurrentTask, and focus mode dispatches
-  // unsetCurrentTask - so this effect must clear it on the handoff itself.
+  // The timer owns desktop progress until the session ends, including pauses
+  // and Flowtime. Cancellation clears it once before ordinary tracking resumes.
   describe('setTaskBarProgress$', () => {
     let actionsSubject: Subject<Action>;
     let setProgressBarSpy: jasmine.Spy;
@@ -3150,6 +3148,7 @@ describe('FocusModeEffects', () => {
     beforeEach(() => {
       actionsSubject = new Subject<Action>();
       actions$ = actionsSubject;
+      store.overrideSelector(selectCurrentTask, null);
       setProgressBarSpy = jasmine.createSpy('setProgressBar');
       (window as any).ea = { setProgressBar: setProgressBarSpy };
     });
@@ -3196,7 +3195,28 @@ describe('FocusModeEffects', () => {
       dispatch(actions.pauseFocusSession({}));
       sub.unsubscribe();
 
-      expect(setProgressBarSpy).toHaveBeenCalledOnceWith({ progress: 0.2, progressBarMode: 'pause' });
+      expect(setProgressBarSpy).toHaveBeenCalledOnceWith({
+        progress: 0.2,
+        progressBarMode: 'pause',
+      });
+    }));
+
+    it('should publish task estimate progress during Flowtime', fakeAsync(() => {
+      store.overrideSelector(selectCurrentTask, {
+        ...DEFAULT_TASK,
+        id: 'flowtime-task',
+        projectId: 'project',
+        timeSpent: 300000,
+        timeEstimate: 600000,
+      });
+      setTimer(runningFlowtime);
+      const sub = effects.setTaskBarProgress$.subscribe();
+      dispatch(actions.tick());
+      sub.unsubscribe();
+      expect(setProgressBarSpy).toHaveBeenCalledOnceWith({
+        progress: 0.5,
+        progressBarMode: 'normal',
+      });
     }));
 
     // An open-ended timer without a task estimate hides the bar once.
