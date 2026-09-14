@@ -14,6 +14,7 @@ import { Router } from '@angular/router';
 import { TaskService } from '../features/tasks/task.service';
 import { ProjectService } from '../features/project/project.service';
 import { TagService } from '../features/tag/tag.service';
+import { TaskRepeatCfgService } from '../features/task-repeat-cfg/task-repeat-cfg.service';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { PluginHooksService } from './plugin-hooks';
 import { PluginUserPersistenceService } from './plugin-user-persistence.service';
@@ -69,6 +70,7 @@ describe('PluginBridgeService.setCounter()', () => {
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: ProjectService, useValue: projectServiceSpy },
         { provide: TagService, useValue: tagServiceSpy },
+        { provide: TaskRepeatCfgService, useValue: {} },
         { provide: WorkContextService, useValue: workContextServiceSpy },
         {
           provide: SnackService,
