@@ -18,6 +18,7 @@ import { IssueLog } from '../../../core/log';
 import { HttpErrorResponse } from '@angular/common/http';
 import { CaldavSyncAdapterService } from '../providers/caldav/caldav-sync-adapter.service';
 import { PlainspaceSyncAdapterService } from '../providers/plainspace/plainspace-sync-adapter.service';
+import { OutlookTasksSyncAdapterService } from '../providers/outlook-tasks/outlook-tasks-sync-adapter.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import {
   DeletedTaskIssueSidecarService,
@@ -133,6 +134,8 @@ export class IssueTwoWaySyncEffects {
     this._adapterRegistry.register('CALDAV', caldavAdapter);
     const plainspaceAdapter = inject(PlainspaceSyncAdapterService);
     this._adapterRegistry.register('PLAINSPACE', plainspaceAdapter);
+    const outlookTasksAdapter = inject(OutlookTasksSyncAdapterService);
+    this._adapterRegistry.register('OUTLOOK_TASKS', outlookTasksAdapter);
   }
 
   pushFieldsOnTaskUpdate$: Observable<unknown> = createEffect(

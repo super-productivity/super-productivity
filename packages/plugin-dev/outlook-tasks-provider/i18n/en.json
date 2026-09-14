@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "CONNECT_ACCOUNT": "Connect Microsoft Account",
+    "TASK_LIST": "Task List",
+    "TASK_LIST_DESC": "Select which Outlook task list to sync.",
+    "SYNC_DIRECTION": "Sync Direction",
+    "SYNC_DIRECTION_DESC": "How to sync task completion status between Outlook and Super Productivity.",
+    "SYNC_DIRECTION_PULL_ONLY": "Pull only (Outlook → SP)",
+    "SYNC_DIRECTION_PUSH_AND_PULL": "Push and pull (bidirectional)",
+    "SYNC_DIRECTION_OFF": "Off"
+  },
+  "DISPLAY": {
+    "TITLE": "Title",
+    "STATUS": "Status",
+    "IMPORTANCE": "Importance",
+    "DUE_DATE": "Due Date",
+    "NOTES": "Notes",
+    "CATEGORIES": "Categories"
+  },
+  "ERRORS": {
+    "NOT_AUTHENTICATED": "Not authenticated. Please connect your Microsoft account first."
+  }
+}

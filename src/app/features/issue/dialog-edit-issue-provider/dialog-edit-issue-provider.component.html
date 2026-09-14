@@ -140,6 +140,32 @@
           }
         </div>
       }
+      @if (issueProviderKey === OUTLOOK_TASKS_TYPE) {
+        <div class="action-row">
+          <button
+            mat-stroked-button
+            type="button"
+            [color]="isOAuthConnected() ? 'accent' : 'primary'"
+            [disabled]="outlookOAuthConnecting()"
+            (click)="authorizeOutlookTasks()"
+          >
+            @if (outlookOAuthConnecting()) {
+              <mat-icon class="spin">sync</mat-icon>
+            } @else if (isOAuthConnected()) {
+              <mat-icon>autorenew</mat-icon>
+            } @else {
+              <mat-icon>login</mat-icon>
+            }
+            {{ T.F.OUTLOOK_TASKS.S.AUTHORIZE | translate }}
+          </button>
+          @if (isOAuthConnected()) {
+            <span class="connected-status">
+              <mat-icon class="connected-status-icon">check_circle</mat-icon>
+              {{ T.F.ISSUE.DIALOG.CONNECTED | translate }}
+            </span>
+          }
+        </div>
+      }
       @if (showLoadOptionsButton) {
         <div class="action-row">
           @switch (optionsLoadState()) {

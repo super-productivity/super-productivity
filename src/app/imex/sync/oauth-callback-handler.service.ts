@@ -8,7 +8,7 @@ import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const'
 import { validateOAuthState } from './oauth-state.util';
 import { PENDING_CAPACITOR_OAUTH_URL } from './pending-capacitor-oauth-url';
 
-type OAuthProvider = 'dropbox' | 'onedrive' | 'plugin' | 'unknown';
+type OAuthProvider = 'dropbox' | 'onedrive' | 'outlook-tasks' | 'plugin' | 'unknown';
 
 export interface OAuthCallbackData {
   code?: string;
@@ -122,7 +122,20 @@ export class OAuthCallbackHandlerService implements OnDestroy {
 
       // Validate state for OneDrive CSRF protection.
       let provider: OAuthProvider;
-      if (providerRaw === 'onedrive') {
+      if (providerRaw === 'outlook-tasks') {
+        const stateValid = validateOAuthState('outlook-tasks', state);
+        if (!stateValid) {
+          SyncLog.warn(
+            'OAuthCallbackHandler: Invalid or missing state for Outlook Tasks callback',
+          );
+          return {
+            error: 'invalid_state',
+            error_description: 'OAuth state validation failed',
+            provider: 'outlook-tasks',
+          };
+        }
+        provider = 'outlook-tasks';
+      } else if (providerRaw === 'onedrive') {
         const stateValid = validateOAuthState('onedrive', state);
         if (!stateValid) {
           SyncLog.warn(

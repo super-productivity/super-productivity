@@ -1,4 +1,5 @@
 import { SearchResultItem } from '../issue.model';
+import { OutlookTaskStatus } from '../providers/outlook-tasks/outlook-tasks-issue.model';
 
 const ISSUE_DONE_STATE_NAME_GUESSES = ['closed', 'done', 'completed', 'resolved'];
 
@@ -24,6 +25,12 @@ export const isIssueDone = (searchResultItem: SearchResultItem): boolean => {
 
     case 'CALDAV':
       return false;
+
+    case 'OUTLOOK_TASKS':
+      return (
+        (searchResultItem as SearchResultItem<'OUTLOOK_TASKS'>).issueData.status ===
+        OutlookTaskStatus.COMPLETED
+      );
 
     default: {
       // Handle plugin providers and migrated providers (e.g. 'GITHUB')

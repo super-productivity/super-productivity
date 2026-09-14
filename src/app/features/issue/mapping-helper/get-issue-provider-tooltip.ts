@@ -71,6 +71,8 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
           : undefined;
       case 'PLAINSPACE':
         return issueProvider.spaceId || undefined;
+      case 'OUTLOOK_TASKS':
+        return 'Microsoft Outlook Tasks';
       default:
         return undefined;
     }
@@ -141,5 +143,7 @@ export const getIssueProviderInitials = (
       return issueProvider.selectedBoardTitle?.substring(0, 2)?.toUpperCase();
     case 'PLAINSPACE':
       return issueProvider.spaceId?.substring(0, 2)?.toUpperCase() || 'PS';
+    case 'OUTLOOK_TASKS':
+      return 'OL';
   }
 };

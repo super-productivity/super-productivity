@@ -68,6 +68,7 @@ const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/caldav-calendar-provider',
   'assets/bundled-plugins/doc-mode',
   'assets/bundled-plugins/todoist-import',
+  'assets/bundled-plugins/outlook-tasks-provider',
 ] as const;
 
 // Reserved ids: an uploaded plugin may not reuse a bundled plugin's manifest id (it would
@@ -96,6 +97,7 @@ const BUNDLED_PLUGIN_IDS = new Set<string>([
   'trello-issue-provider',
   'voice-reminder',
   'yesterday-tasks',
+  'outlook-tasks-provider',
 ]);
 
 /**
