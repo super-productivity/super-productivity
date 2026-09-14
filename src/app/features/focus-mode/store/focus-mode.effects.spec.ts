@@ -1,4 +1,6 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { GlobalSectionConfig } from '../../config/global-config.model';
+import { focusModeReducer, initialState } from './focus-mode.reducer';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { BehaviorSubject, Observable, of, Subject, Subscription } from 'rxjs';
 import { FocusModeEffects } from './focus-mode.effects';
@@ -1026,6 +1028,85 @@ describe('FocusModeEffects', () => {
           done();
         },
       });
+    });
+  });
+
+  describe('disabling focus mode', () => {
+    for (const purpose of ['work', 'break'] as const) {
+      for (const isRunning of [true, false]) {
+        it(`releases a hidden ${purpose} timer (running=${isRunning})`, () => {
+          const state = {
+            ...initialState,
+            isOverlayShown: false,
+            timer: createMockTimer({ purpose, isRunning }),
+          };
+          store.overrideSelector(selectors.selectTimer, state.timer);
+          store.overrideSelector(selectIsFocusModeEnabled, false);
+          actions$ = of(
+            updateGlobalConfigSection({
+              sectionKey: 'appFeatures',
+              sectionCfg: {
+                isFocusModeEnabled: false,
+              } as unknown as Partial<GlobalSectionConfig>,
+            }),
+          );
+          const result = collectEmissions(effects.cancelSessionWhenDisabled$);
+          expect(result.emitted).toEqual([actions.cancelFocusSession()]);
+          const nextState = focusModeReducer(state, result.emitted[0]);
+          expect(selectors.selectIsTimerActive.projector(nextState.timer)).toBeFalse();
+          expect(nextState.timer.isRunning).toBeFalse();
+          expect(selectors.selectDesktopProgress.projector(nextState.timer, null)).toBe(
+            -1,
+          );
+          result.subscription.unsubscribe();
+        });
+      }
+    }
+
+    it('keeps ordinary tracking running when cancellation follows feature disable', () => {
+      store.overrideSelector(selectIsFocusModeEnabled, false);
+      actions$ = of(actions.cancelFocusSession());
+      const result = collectEmissions(effects.cancelSession$);
+      expect(result.emitted).toEqual([]);
+      result.subscription.unsubscribe();
+    });
+
+    it('does not cancel an active session while the feature remains enabled', () => {
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({ purpose: 'work', isRunning: true }),
+      );
+      actions$ = of(
+        updateGlobalConfigSection({
+          sectionKey: 'appFeatures',
+          sectionCfg: {
+            isFocusModeEnabled: true,
+          } as unknown as Partial<GlobalSectionConfig>,
+        }),
+      );
+      const result = collectEmissions(effects.cancelSessionWhenDisabled$);
+      expect(result.emitted).toEqual([]);
+      result.subscription.unsubscribe();
+    });
+
+    it('does not cancel an idle timer or react to unrelated settings', () => {
+      store.overrideSelector(selectIsFocusModeEnabled, false);
+      actions$ = of(
+        updateGlobalConfigSection({
+          sectionKey: 'appFeatures',
+          sectionCfg: {
+            isFocusModeEnabled: false,
+          } as unknown as Partial<GlobalSectionConfig>,
+        }),
+      );
+      const idle = collectEmissions(effects.cancelSessionWhenDisabled$);
+      expect(idle.emitted).toEqual([]);
+      idle.subscription.unsubscribe();
+      store.overrideSelector(selectors.selectTimer, createMockTimer({ purpose: 'work' }));
+      actions$ = of(updateGlobalConfigSection({ sectionKey: 'misc', sectionCfg: {} }));
+      const unrelated = collectEmissions(effects.cancelSessionWhenDisabled$);
+      expect(unrelated.emitted).toEqual([]);
+      unrelated.subscription.unsubscribe();
     });
   });
 

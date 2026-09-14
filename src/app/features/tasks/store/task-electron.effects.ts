@@ -190,7 +190,7 @@ export class TaskElectronEffects {
         throttleTime(3000, undefined, { leading: true, trailing: true }),
         withLatestFrom(this._store$.select(selectIsTimerActive)),
         // The timer owns progress even while paused or its overlay is hidden.
-        filter(([a, isFocusSessionRunning]) => !isFocusSessionRunning),
+        filter(([, isTimerActive]) => !isTimerActive),
         tap(([{ task }]) => {
           const progress = task.timeSpent / task.timeEstimate;
           window.ea.setProgressBar({

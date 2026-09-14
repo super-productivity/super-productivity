@@ -117,9 +117,7 @@ describe('TaskElectronEffects desktop timer ownership', () => {
     }
   }
 
-  it('shows ordinary task progress when the overlay is open without a session', () => {
-    store.overrideSelector(selectIsOverlayShown, true);
-    store.refreshState();
+  it('shows task progress when no timer is active', () => {
     const sub = effects.setTaskBarProgress$.subscribe();
     actions$.next(
       TimeTrackingActions.addTimeSpent({
