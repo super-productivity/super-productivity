@@ -71,7 +71,9 @@
           @if (opt.type) {
             <mat-icon class="check-icon">
               {{
-                opt.order === OPTIONS.sort.order.ASC ? 'arrow_downward' : 'arrow_upward'
+                customizerService.selectedSort().order === OPTIONS.sort.order.ASC
+                  ? 'arrow_downward'
+                  : 'arrow_upward'
               }}
             </mat-icon>
           } @else {

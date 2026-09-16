@@ -1,0 +1,41 @@
+:host {
+  display: block;
+  height: 100%;
+  overflow: auto;
+}
+
+.week-page {
+  max-width: var(--component-max-width);
+  margin: 0 auto;
+  padding: var(--s2);
+}
+
+.week-day {
+  margin-bottom: var(--s2);
+}
+
+.week-day-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s);
+  padding: var(--s-half) 0;
+  border-bottom: 1px solid var(--divider-color);
+}
+
+.week-day-header h2 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.week-day-header span {
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.week-day-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-half);
+  padding-top: var(--s-half);
+}

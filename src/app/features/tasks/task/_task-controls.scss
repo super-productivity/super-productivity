@@ -84,6 +84,53 @@
   }
 }
 
+.priority-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0 var(--s-quarter);
+  vertical-align: middle;
+  font-size: 18px;
+
+  mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+  }
+}
+
+:host.priority-high .priority-indicator {
+  color: var(--color-danger);
+}
+
+:host.priority-medium .priority-indicator {
+  color: var(--color-warning);
+}
+
+:host.priority-low .priority-indicator {
+  color: var(--c-primary);
+}
+
+:host.priority-high:not(.isSelected):not(.isMultiSelected):not(.isCurrent):not(.isDone)
+  .inner-wrapper
+  > .box {
+  background: color-mix(in srgb, var(--color-danger) 8%, var(--task-c-bg));
+}
+
+:host.priority-medium:not(.isSelected):not(.isMultiSelected):not(.isCurrent):not(.isDone)
+  .inner-wrapper
+  > .box {
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--task-c-bg));
+}
+
+:host.priority-low:not(.isSelected):not(.isMultiSelected):not(.isCurrent):not(.isDone)
+  .inner-wrapper
+  > .box {
+  background: color-mix(in srgb, var(--c-primary) 8%, var(--task-c-bg));
+}
+
 @mixin timeWrapperMinimalStyles() {
   .time {
     font-size: 13px;

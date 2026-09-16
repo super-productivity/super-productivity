@@ -70,6 +70,8 @@ export interface IssueFieldsForTask {
   issueLastSyncedValues?: Record<string, unknown>;
 }
 
+export type TaskPriority = 'high' | 'medium' | 'low';
+
 // Extend the plugin Task type with app-specific fields
 // Omit issue fields from PluginTask to avoid conflict with IssueFieldsForTask
 export interface TaskCopy
@@ -88,6 +90,7 @@ export interface TaskCopy
   // Override required fields that are optional in plugin type
   projectId: string;
   timeSpentOnDay: TimeSpentOnDay;
+  priority?: TaskPriority | null;
 
   // Additional app-specific fields
 

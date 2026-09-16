@@ -275,6 +275,34 @@ describe('TaskViewCustomizerService', () => {
     expect(sorted.desc[1].title).toBe('Third Task');
   });
 
+  it('should sort by priority with stable equal-rank ordering', () => {
+    const tasks: TaskWithSubTasks[] = [
+      { ...mockTasks[0], id: 'none' },
+      { ...mockTasks[1], id: 'low', priority: 'low' },
+      { ...mockTasks[2], id: 'medium-first', priority: 'medium' },
+      { ...mockTasks[3], id: 'high', priority: 'high' },
+      { ...mockTasks[0], id: 'medium-second', priority: 'medium' },
+    ];
+
+    const asc = service['applySort'](tasks, SORT_OPTION_TYPE.priority);
+    const desc = service['applySort'](tasks, SORT_OPTION_TYPE.priority, SORT_ORDER.DESC);
+
+    expect(asc.map((task) => task.id)).toEqual([
+      'high',
+      'medium-first',
+      'medium-second',
+      'low',
+      'none',
+    ]);
+    expect(desc.map((task) => task.id)).toEqual([
+      'none',
+      'low',
+      'medium-first',
+      'medium-second',
+      'high',
+    ]);
+  });
+
   it('should place date-only tasks after timed tasks on the same scheduled day', () => {
     const scheduledAt = (day: string, time: string): number =>
       getDateTimeFromClockString(time, parseDbDateStr(day));

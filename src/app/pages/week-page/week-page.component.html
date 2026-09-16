@@ -1,0 +1,27 @@
+<main class="week-page">
+  @for (day of weekDays(); track day.day) {
+    <section
+      class="week-day"
+      [attr.data-day]="day.day"
+    >
+      <header class="week-day-header">
+        <h2>
+          {{ dateForLabel(day.day) | localeDate: 'EEEE' : undefined : locale() }}
+        </h2>
+        <span>{{
+          dateForLabel(day.day) | localeDate: 'd MMM' : undefined : locale()
+        }}</span>
+      </header>
+
+      <div class="week-day-tasks">
+        @for (task of day.tasks; track task.id) {
+          <planner-task
+            [task]="task"
+            [day]="day.day"
+            [focusable]="true"
+          />
+        }
+      </div>
+    </section>
+  }
+</main>
