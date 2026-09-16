@@ -88,9 +88,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 18px;
   width: 18px;
   height: 18px;
   margin: 0 var(--s-quarter);
+  align-self: center;
   vertical-align: middle;
   font-size: 18px;
 
@@ -98,6 +100,10 @@
     width: 18px;
     height: 18px;
     font-size: 18px;
+  }
+
+  @include isDoneForFirstLine {
+    opacity: var(--task-is-done-dim-opacity);
   }
 }
 
