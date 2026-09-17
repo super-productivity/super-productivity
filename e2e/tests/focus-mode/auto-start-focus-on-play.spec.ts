@@ -38,6 +38,30 @@ const enableAutoStartOnPlay = async (page: Page): Promise<void> => {
     const header = collapsible.locator('.collapsible-header');
     await header.click();
     await page.waitForTimeout(500);
+  const productivityTab = page.getByRole('tab', { name: /Productivity/i });
+  await productivityTab.click();
+  await expect(productivityTab).toHaveAttribute('aria-selected', 'true');
+
+  const focusSection = page
+    .locator('section.config-section')
+    .filter({ has: page.locator('.form-wrapper.focusMode') })
+    .first();
+  const focusPanel = focusSection.locator('.collapsible-panel');
+  if (!(await focusPanel.isVisible().catch(() => false))) {
+    const header = focusSection.locator('.collapsible-header').first();
+    await header.click();
+    await focusPanel.waitFor({ state: 'visible', timeout: 5000 });
+  }
+
+  const toggle = focusSection.getByRole('switch', {
+    name: /Start a focus session when I start tracking a task/i,
+  });
+
+  await expect(toggle).toBeVisible({ timeout: 5000 });
+  const isChecked = (await toggle.getAttribute('aria-checked')) === 'true';
+  if (!isChecked) {
+    await toggle.click();
+    await page.waitForTimeout(300);
   }
 
   // Use shared helper that handles both mat-slide-toggle and mat-checkbox
