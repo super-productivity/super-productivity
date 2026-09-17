@@ -147,7 +147,7 @@ export class DialogEditIssueProviderComponent {
                   this._pluginRegistry.getProvider(this.issueProviderKey)?.pluginId ??
                   this.issueProviderKey.replace('plugin:', ''),
                 pluginConfig: this._getDefaultPluginConfig(),
-                isAutoAddToBacklog:
+                isAutoCreateTasks:
                   this._pluginRegistry.getProvider(this.issueProviderKey)
                     ?.defaultAutoAddToBacklog ?? false,
               }

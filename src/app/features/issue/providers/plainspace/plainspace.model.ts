@@ -15,6 +15,6 @@ export interface PlainspaceCfg extends BaseIssueProviderCfg {
   spaceId: string | null;
   token?: string | null;
   isAutoPoll?: boolean;
-  isAutoAddToBacklog?: boolean;
+  isAutoCreateTasks?: boolean;
   pollingMode?: IssueProviderPollingMode;
 }

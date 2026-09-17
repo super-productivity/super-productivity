@@ -280,6 +280,29 @@ export class IssueService {
         !(allExistingIssueIds as string[]).includes(issue.id as string),
     );
 
+    // The provider config decides where auto-imported issues land. The legacy
+    // behavior was to always go to the backlog when auto-import was on, so we
+    // add to the backlog only when the user explicitly opts in via
+    // `isAddToBacklogIfEnabled`. Without that opt-in, issues land in the
+    // project's main list (which is what users with backlog-enabled projects
+    // generally expect — backlog tasks are easy to miss).
+    let isAddToBacklog = false;
+    if (issuesToAdd.length) {
+      const providerCfg = await firstValueFrom(
+        this._issueProviderService.getCfgOnce$(issueProviderId, providerKey),
+      );
+      const isAddToBacklogIfEnabled = !!providerCfg.isAddToBacklogIfEnabled;
+      const defaultProjectId = providerCfg.defaultProjectId;
+      let isProjectBacklogEnabled = false;
+      if (isAddToBacklogIfEnabled && defaultProjectId) {
+        const project = await firstValueFrom(
+          this._projectService.getByIdOnce$(defaultProjectId),
+        );
+        isProjectBacklogEnabled = !!project?.isEnableBacklog;
+      }
+      isAddToBacklog = isAddToBacklogIfEnabled && isProjectBacklogEnabled;
+    }
+
     issuesToAdd.forEach((issue: IssueDataReduced) => {
       // TODO add correct project id
       // Every import here is an automatic backlog poll targeting the provider's
@@ -291,7 +314,7 @@ export class IssueService {
         issueDataReduced: issue,
         issueProviderId,
         issueProviderKey: providerKey,
-        isAddToBacklog: true,
+        isAddToBacklog,
         isAutoImport: true,
       });
     });

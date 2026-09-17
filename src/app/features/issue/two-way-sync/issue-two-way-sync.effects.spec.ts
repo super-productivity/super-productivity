@@ -59,7 +59,7 @@ describe('IssueTwoWaySyncEffects', () => {
       issueProviderKey: 'CALDAV',
       isEnabled: true,
       isAutoPoll: true,
-      isAutoAddToBacklog: false,
+      isAutoCreateTasks: false,
       isIntegratedAddTaskBar: false,
       defaultProjectId: null,
       pinnedSearch: null,

@@ -74,14 +74,25 @@ export const ISSUE_PROVIDER_COMMON_FORM_FIELDS: LimitedFormlyFieldConfig<IssuePr
     //   },
     // },
     {
-      key: 'isAutoAddToBacklog',
+      key: 'isAutoCreateTasks',
       type: 'checkbox',
       expressions: {
         // eslint-disable-next-line @typescript-eslint/naming-convention
         'props.disabled': '!model.defaultProjectId',
       },
       props: {
-        label: T.F.ISSUE.FORM.AUTO_ADD_TO_BACKLOG,
+        label: T.F.ISSUE.FORM.AUTO_CREATE_TASKS,
+      },
+    },
+    {
+      key: 'isAddToBacklogIfEnabled',
+      type: 'checkbox',
+      expressions: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        'props.disabled': '!model.isAutoCreateTasks',
+      },
+      props: {
+        label: T.F.ISSUE.FORM.ADD_TO_BACKLOG_IF_ENABLED,
       },
     },
     {
@@ -97,7 +108,7 @@ export const ISSUE_PROVIDER_COMMON_FORM_FIELDS: LimitedFormlyFieldConfig<IssuePr
       defaultValue: 'whenProjectOpen',
       expressions: {
         // eslint-disable-next-line @typescript-eslint/naming-convention
-        'props.disabled': '!model.isAutoPoll && !model.isAutoAddToBacklog',
+        'props.disabled': '!model.isAutoPoll && !model.isAutoCreateTasks',
         // ICAL already polls globally via selectAllCalendarIssueTasks, so pollingMode has no effect
         hide: 'model.issueProviderKey === "ICAL"',
       },

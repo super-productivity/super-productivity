@@ -138,7 +138,8 @@ export const ISSUE_PROVIDER_DEFAULT_COMMON_CFG: Omit<
   'id' | 'issueProviderKey' | 'isEnabled'
 > = {
   isAutoPoll: true,
-  isAutoAddToBacklog: false,
+  isAutoCreateTasks: false,
+  isAddToBacklogIfEnabled: true,
   isIntegratedAddTaskBar: false,
   defaultProjectId: null,
   pinnedSearch: null,

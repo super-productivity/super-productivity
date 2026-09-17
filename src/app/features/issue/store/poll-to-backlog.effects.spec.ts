@@ -29,7 +29,7 @@ describe('PollToBacklogEffects', () => {
       issueProviderKey: JIRA_TYPE,
       isEnabled: true,
       isAutoPoll: true,
-      isAutoAddToBacklog: true,
+      isAutoCreateTasks: true,
       isIntegratedAddTaskBar: false,
       defaultProjectId: 'project-1',
       pinnedSearch: null,
@@ -87,7 +87,7 @@ describe('PollToBacklogEffects', () => {
       const provider = createMockIssueProvider({
         id: 'jira-1',
         defaultProjectId: 'project-1',
-        isAutoAddToBacklog: true,
+        isAutoCreateTasks: true,
       });
 
       store.overrideSelector(selectEnabledIssueProviders, [provider]);
@@ -116,7 +116,7 @@ describe('PollToBacklogEffects', () => {
       const provider = createMockIssueProvider({
         id: 'jira-1',
         defaultProjectId: 'project-1',
-        isAutoAddToBacklog: true,
+        isAutoCreateTasks: true,
         pollingMode: 'always',
       });
 
@@ -146,7 +146,7 @@ describe('PollToBacklogEffects', () => {
       const provider = createMockIssueProvider({
         id: 'jira-1',
         defaultProjectId: 'project-2', // Different from active project
-        isAutoAddToBacklog: true,
+        isAutoCreateTasks: true,
       });
 
       store.overrideSelector(selectEnabledIssueProviders, [provider]);
@@ -177,7 +177,7 @@ describe('PollToBacklogEffects', () => {
       const provider = createMockIssueProvider({
         id: 'jira-1',
         defaultProjectId: 'project-2',
-        isAutoAddToBacklog: true,
+        isAutoCreateTasks: true,
         pollingMode: 'always',
       });
 
@@ -197,11 +197,11 @@ describe('PollToBacklogEffects', () => {
       ).toHaveBeenCalledWith(JIRA_TYPE, 'jira-1', true);
     }));
 
-    it('should NOT poll always-mode providers without isAutoAddToBacklog', fakeAsync(() => {
+    it('should NOT poll always-mode providers without isAutoCreateTasks', fakeAsync(() => {
       const provider = createMockIssueProvider({
         id: 'jira-1',
         defaultProjectId: 'project-2',
-        isAutoAddToBacklog: false,
+        isAutoCreateTasks: false,
         pollingMode: 'always',
       });
 
@@ -224,7 +224,7 @@ describe('PollToBacklogEffects', () => {
       const provider = createMockIssueProvider({
         id: 'jira-1',
         defaultProjectId: null,
-        isAutoAddToBacklog: true,
+        isAutoCreateTasks: true,
         pollingMode: 'always',
       });
 
@@ -247,7 +247,7 @@ describe('PollToBacklogEffects', () => {
       const provider = createMockIssueProvider({
         id: 'jira-1',
         defaultProjectId: 'project-2',
-        isAutoAddToBacklog: true,
+        isAutoCreateTasks: true,
         pollingMode: 'whenProjectOpen',
       });
 
@@ -270,7 +270,7 @@ describe('PollToBacklogEffects', () => {
       const provider = createMockIssueProvider({
         id: 'jira-1',
         defaultProjectId: 'project-2',
-        isAutoAddToBacklog: true,
+        isAutoCreateTasks: true,
         pollingMode: 'always',
       });
 

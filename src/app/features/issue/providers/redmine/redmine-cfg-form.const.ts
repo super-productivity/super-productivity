@@ -22,7 +22,8 @@ export const DEFAULT_REDMINE_CFG: RedmineCfg = {
   scope: 'assigned-to-me',
   isAutoPoll: false,
   isSearchIssuesFromRedmine: false,
-  isAutoAddToBacklog: false,
+  isAutoCreateTasks: false,
+  isAddToBacklogIfEnabled: true,
   isShowTimeTrackingDialog: false,
   isShowTimeTrackingDialogForEachSubTask: false,
 };

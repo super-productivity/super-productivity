@@ -486,6 +486,7 @@
       "DEFAULT_PROJECT_LABEL": "Default Super Productivity Project",
       "DEFAULT_TAGS_LABEL": "Default tags for imported tasks",
       "FORM": {
+        "ADD_TO_BACKLOG_IF_ENABLED": "Add issues to project backlog if enabled",
         "AUTO_ADD_TO_BACKLOG": "Auto import to default project (requires a default project)",
         "AUTO_POLL": "Poll imported for changes and notify",
         "POLLING_MODE": "Polling trigger",

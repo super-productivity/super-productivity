@@ -208,7 +208,10 @@ export interface IssueProviderBase extends BaseIssueProviderCfg {
   // delete at some point in the future
   migratedFromProjectId?: string;
   isAutoPoll?: boolean;
-  isAutoAddToBacklog?: boolean;
+  isAutoCreateTasks?: boolean;
+  // Only meaningful when `isAutoCreateTasks` is enabled. If true, adds
+  // tasks to the backlog. If false, adds tasks to the main list.
+  isAddToBacklogIfEnabled?: boolean;
   isIntegratedAddTaskBar?: boolean;
   pollingMode?: IssueProviderPollingMode;
   defaultTagIds?: string[];

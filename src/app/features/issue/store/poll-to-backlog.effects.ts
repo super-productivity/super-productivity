@@ -61,7 +61,7 @@ export class PollToBacklogEffects {
               const matchingProviders = enabledProviders.filter(
                 (provider) =>
                   provider.defaultProjectId === pId &&
-                  provider.isAutoAddToBacklog &&
+                  provider.isAutoCreateTasks &&
                   provider.pollingMode !== 'always' &&
                   !this._pluginRegistry.getUseAgendaView(provider.issueProviderKey) &&
                   this._issueService.getPollInterval(provider.issueProviderKey) > 0,
@@ -95,7 +95,7 @@ export class PollToBacklogEffects {
               const alwaysProviders = enabledProviders.filter(
                 (provider) =>
                   provider.pollingMode === 'always' &&
-                  provider.isAutoAddToBacklog &&
+                  provider.isAutoCreateTasks &&
                   !!provider.defaultProjectId &&
                   !this._pluginRegistry.getUseAgendaView(provider.issueProviderKey) &&
                   this._issueService.getPollInterval(provider.issueProviderKey) > 0,

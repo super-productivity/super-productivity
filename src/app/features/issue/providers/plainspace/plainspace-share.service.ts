@@ -93,7 +93,7 @@ export class PlainspaceShareService {
         issueProviderKey: 'PLAINSPACE',
         isEnabled: true,
         defaultProjectId: projectId,
-        isAutoAddToBacklog: true,
+        isAutoCreateTasks: true,
         host: cfg.host,
         token: cfg.token,
         spaceId,
