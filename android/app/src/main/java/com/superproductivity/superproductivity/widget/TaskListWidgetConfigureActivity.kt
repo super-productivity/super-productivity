@@ -11,6 +11,7 @@ import com.superproductivity.superproductivity.R
 
 /** Minimal per-instance source picker for the Android home-screen task widget. */
 class TaskListWidgetConfigureActivity : AppCompatActivity() {
+    private var dialog: AlertDialog? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,7 +44,7 @@ class TaskListWidgetConfigureActivity : AppCompatActivity() {
             if (it < 0) 0 else it + 1
         }
 
-        AlertDialog.Builder(this)
+        dialog = AlertDialog.Builder(this)
             .setTitle(R.string.widget_configure_title)
             .setSingleChoiceItems(labels.toTypedArray(), checkedItem) { _, which ->
                 TaskListWidgetProvider.setSelectedProjectId(
@@ -60,5 +61,11 @@ class TaskListWidgetConfigureActivity : AppCompatActivity() {
             }
             .setOnCancelListener { finish() }
             .show()
+    }
+
+    override fun onDestroy() {
+        dialog?.dismiss()
+        dialog = null
+        super.onDestroy()
     }
 }

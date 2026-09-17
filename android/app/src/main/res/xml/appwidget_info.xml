@@ -9,5 +9,6 @@
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="1800000"
     android:configure="com.superproductivity.superproductivity.widget.TaskListWidgetConfigureActivity"
+    android:widgetFeatures="reconfigurable|configuration_optional"
     android:widgetCategory="home_screen"
     android:description="@string/widget_description" />

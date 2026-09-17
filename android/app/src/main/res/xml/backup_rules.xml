@@ -4,4 +4,8 @@
   <exclude
     domain="sharedpref"
     path="com.superproductivity.superproductivity_preferences.xml" />
+  <!-- Widget IDs are not stable across restore/transfer; do not transfer selections or pending navigation. -->
+  <exclude
+    domain="sharedpref"
+    path="task_list_widget.xml" />
 </full-backup-content>

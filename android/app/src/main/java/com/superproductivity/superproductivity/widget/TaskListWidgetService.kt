@@ -46,17 +46,6 @@ private class TaskListRemoteViewsFactory(
                 WidgetDoneQueue.peekDoneTimestamps(context),
                 selectedProjectId
             )
-            if (projectIdToOpen != null) {
-                parsedTasks
-                    .mapNotNull { task ->
-                        task.doneOn?.takeIf { task.isDone }
-                            ?.plus(WidgetData.PROJECT_DONE_TASK_GRACE_MS)
-                    }
-                    .minOrNull()
-                    ?.let { refreshAt ->
-                        TaskListWidgetProvider.scheduleProjectTaskExpiryRefresh(context, refreshAt)
-                    }
-            }
             parsedTasks.take(MAX_TASKS)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse widget data", e)

@@ -134,19 +134,6 @@ describe('selectAndroidWidgetData', () => {
     expect('projectId' in result.tasks[0]).toBe(false);
   });
 
-  it('should serialize a completed task timestamp for native project-widget expiry', () => {
-    const result = selectAndroidWidgetData.projector(
-      ['t1'],
-      { t1: task('t1', { isDone: true, doneOn: 123 }) },
-      projectState([]),
-      [],
-      DAY,
-      0,
-    );
-
-    expect(result.tasks[0].doneOn).toBe(123);
-  });
-
   it('should not include colors for projects without a theme primary', () => {
     const result = selectAndroidWidgetData.projector(
       ['t1'],
@@ -207,7 +194,6 @@ describe('selectAndroidWidgetData', () => {
           title: 'Second',
           projectId: 'work',
           isDone: true,
-          doneOn: 123,
         }),
       },
       projectState([work]),
@@ -221,27 +207,77 @@ describe('selectAndroidWidgetData', () => {
         id: 'work',
         title: 'Project work',
         tasks: [
-          { id: 't2', title: 'Second', isDone: true, doneOn: 123, projectId: 'work' },
+          { id: 't2', title: 'Second', isDone: true, projectId: 'work' },
           { id: 't1', title: 'First', isDone: false, projectId: 'work' },
         ],
       },
     ]);
   });
 
-  it('should cap each project list at the native widget row limit', () => {
-    const taskIds = Array.from({ length: 21 }, (_, index) => `t${index + 1}`);
+  it('should retain 20 open tasks after 20 leading completed tasks', () => {
+    const taskIds = Array.from({ length: 45 }, (_, index) => `t${index + 1}`);
     const largeProject = project('large', undefined, taskIds);
     const result = selectAndroidWidgetData.projector(
       [],
-      Object.fromEntries(taskIds.map((id) => [id, task(id, { projectId: 'large' })])),
+      Object.fromEntries(
+        taskIds.map((id, index) => [
+          id,
+          task(id, {
+            projectId: 'large',
+            isDone: index < 20,
+            doneOn: index < 20 ? index + 1 : undefined,
+          }),
+        ]),
+      ),
       projectState([largeProject]),
       [largeProject],
       DAY,
       0,
     );
 
-    expect(result.projects[0].tasks.length).toBe(20);
-    expect(result.projects[0].tasks[19].id).toBe('t20');
+    expect(result.projects[0].tasks.length).toBe(40);
+    expect(result.projects[0].tasks.map((widgetTask) => widgetTask.id)).toEqual(
+      Array.from({ length: 40 }, (_, index) => `t${index + 1}`),
+    );
+    expect(
+      result.projects[0].tasks
+        .filter((widgetTask) => !widgetTask.isDone)
+        .map((widgetTask) => widgetTask.id),
+    ).toEqual(Array.from({ length: 20 }, (_, index) => `t${index + 21}`));
+    expect('doneOn' in result.projects[0].tasks[0]).toBe(false);
+  });
+
+  it('should retain the 20 newest completed project tasks alongside 20 open tasks', () => {
+    const taskIds = Array.from({ length: 50 }, (_, index) => `t${index + 1}`);
+    const largeProject = project('large', undefined, taskIds);
+    const result = selectAndroidWidgetData.projector(
+      [],
+      Object.fromEntries(
+        taskIds.map((id, index) => [
+          id,
+          task(id, {
+            projectId: 'large',
+            isDone: index < 25,
+            doneOn: index < 25 ? index + 1 : undefined,
+          }),
+        ]),
+      ),
+      projectState([largeProject]),
+      [largeProject],
+      DAY,
+      0,
+    );
+
+    expect(result.projects[0].tasks.length).toBe(40);
+    expect(result.projects[0].tasks.map((widgetTask) => widgetTask.id)).toEqual(
+      Array.from({ length: 40 }, (_, index) => `t${index + 6}`),
+    );
+    expect(
+      result.projects[0].tasks.slice(0, 20).every((widgetTask) => widgetTask.isDone),
+    ).toBe(true);
+    expect(
+      result.projects[0].tasks.slice(20).every((widgetTask) => !widgetTask.isDone),
+    ).toBe(true);
   });
 
   it('should append backlog tasks after regular project tasks', () => {

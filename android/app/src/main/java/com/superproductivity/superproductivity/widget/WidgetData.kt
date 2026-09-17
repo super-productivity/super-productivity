@@ -9,7 +9,7 @@ data class WidgetTask(
     val title: String,
     val isDone: Boolean,
     val projectColor: String?,
-    val doneOn: Long? = null
+    val doneGraceStartedAt: Long? = null
 )
 
 data class WidgetProject(
@@ -80,7 +80,11 @@ object WidgetData {
             return emptyList()
         }
         val projectTasks = selectedProjectId
-            ?.let { projectId -> selectedProject(root, projectId)?.optJSONArray("tasks") }
+            ?.let { projectId ->
+                selectedProject(root, projectId)
+                    ?.takeIf(::isUsableProject)
+                    ?.optJSONArray("tasks")
+            }
         // A selection can outlive a project deleted on another device. Fall back to
         // Today, which is also the backward-compatible default for existing widgets.
         val selectedTasks = projectTasks ?: root.optJSONArray("tasks") ?: return emptyList()
@@ -96,13 +100,16 @@ object WidgetData {
                 projectColors?.takeIf { !it.isNull(pId) }?.optString(pId, null)
             }
             val pendingDoneTarget = pendingDoneTargets[id]
+            val isDone = pendingDoneTarget ?: task.optBoolean("isDone", false)
             val widgetTask = WidgetTask(
                 id = id,
                 title = task.getString("title"),
-                isDone = pendingDoneTarget ?: task.optBoolean("isDone", false),
+                isDone = isDone,
                 projectColor = color,
-                doneOn = if (pendingDoneTarget == true) pendingDoneTimestamps[id] ?: nowMs
-                else task.optLong("doneOn", 0L).takeIf { it > 0L }
+                // A pending completion without a local tap timestamp has no valid
+                // grace period. Treat it as expired instead of defaulting to now,
+                // which would reschedule native refreshes forever.
+                doneGraceStartedAt = if (isDone) pendingDoneTimestamps[id] else null
             )
             // Today retains completed tasks. Project widgets keep a completed task
             // briefly, then remove it from the native projection; the task itself is
@@ -110,7 +117,8 @@ object WidgetData {
             if (
                 projectTasks == null ||
                 !widgetTask.isDone ||
-                (widgetTask.doneOn != null && nowMs < widgetTask.doneOn + PROJECT_DONE_TASK_GRACE_MS)
+                (widgetTask.doneGraceStartedAt != null &&
+                    nowMs < widgetTask.doneGraceStartedAt + PROJECT_DONE_TASK_GRACE_MS)
             ) {
                 result.add(widgetTask)
             }
@@ -125,10 +133,12 @@ object WidgetData {
             return emptyList()
         }
         val projects = root.optJSONArray("projects") ?: return emptyList()
-        return (0 until projects.length()).map { index ->
-            projects.getJSONObject(index).let { project ->
-                WidgetProject(project.getString("id"), project.getString("title"))
-            }
+        return (0 until projects.length()).mapNotNull { index ->
+            projects.getJSONObject(index)
+                .takeIf(::isUsableProject)
+                ?.let { project ->
+                    WidgetProject(project.getString("id"), project.getString("title"))
+                }
         }
     }
 
@@ -138,10 +148,14 @@ object WidgetData {
             return null
         }
         return selectedProject(root, projectId)
-            ?.takeIf { it.optJSONArray("tasks") != null }
+            ?.takeIf(::isUsableProject)
             ?.optString("title")
             ?.takeIf { it.isNotEmpty() }
     }
+
+    private fun isUsableProject(project: JSONObject): Boolean =
+        !project.isNull("title") && project.optString("title").isNotEmpty() &&
+            project.optJSONArray("tasks") != null
 
     private fun selectedProject(root: JSONObject, projectId: String): JSONObject? =
         root.optJSONArray("projects")?.let { projects ->

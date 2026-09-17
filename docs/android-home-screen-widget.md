@@ -2,24 +2,39 @@
 
 > **Status:** Maintained
 >
-> **Last verified:** 2026-07-29
+> **Last verified:** 2026-09-11
 
 The widget displays up to 20 tasks from the app's last snapshot of either the
 Today view or one selected active project and lets the user toggle completion.
 It is a native projection of Angular state, not an independent task or calendar
 engine.
 
-Each new widget uses Android's configuration screen to select Today or an
-unarchived visible project. The selection is stored only for that widget ID;
-existing widgets and a selection whose project is no longer available fall back
-to Today.
+Android's configuration screen can select Today or an unarchived, visible
+project for each widget. Launchers that support optional configuration may add
+the widget with Today as the default; the selection can be changed later from
+the launcher's widget settings. Project choices come from the most recent
+Angular snapshot, so immediately after upgrading from an older widget format
+the picker can show only Today until the app has been opened once.
+
+Selections are device-local and excluded from Android backup and device
+transfer because launcher widget IDs are not stable across restoration. A
+widget whose selected project is deleted, archived, or hidden falls back to
+Today. The stored selection is retained, so making an archived or hidden
+project available again restores it.
 
 Opening a project widget opens that project's task list in the app. Today widgets
 retain the normal default-app behavior.
 
-In a selected-project widget, a completed task stays visible for five seconds before
-leaving the widget. It remains completed and available in the app's normal done-task
-list. Today retains its existing completed-task display.
+Selected-project widgets show open tasks from the active list followed by the
+backlog, up to the 20-row limit. A task completed from the widget stays visible
+for a five-second undo window based on the device's local tap time. Completions
+first observed from app or sync state do not start a grace window. Today retains
+its existing completed-task display. The provider schedules each expiry with
+`AlarmManager`, which can re-enter the provider after Android stops the app process
+when the device is active. When exact alarms are unavailable, an in-process timer
+provides the timely refresh while a non-waking inexact alarm remains as the
+process-death fallback. The expiry path does not wake a sleeping device or bypass
+Doze for this cosmetic update.
 
 ## Contract and ownership
 
@@ -33,6 +48,9 @@ list. Today retains its existing completed-task display.
 - Native checkbox taps write only to `WidgetDoneQueue`. The renderer overlays
   queued target states immediately; Angular later drains, deduplicates, and
   applies those intents. Native code must never rewrite the snapshot.
+- Per-widget project selections and pending project navigation live in
+  `task_list_widget` SharedPreferences. This file must remain excluded from
+  Android backup and device transfer unless widget-ID remapping is implemented.
 - Keep the explicit-component PendingIntent and exported-receiver restrictions;
   external apps must not be able to complete tasks.
 
@@ -54,7 +72,9 @@ until the app writes a current snapshot.
 
 ## Deliberate limitations
 
-- No task creation, undo, or per-task deep link.
+- No task creation or per-task deep link. Undo is available only while a
+  completed row remains visible during its five-second grace window.
+- Inbox, archived projects, and projects hidden from the menu are not selectable.
 - Native widget chrome is English-only and uses fixed styling.
 - At most 20 tasks are rendered.
 - Cross-client freshness while the app is dead requires a separate background

@@ -259,6 +259,13 @@ class CapacitorMainActivity : BridgeActivity() {
         )
         isWidgetProjectOpenDrainReceiverRegistered = true
 
+        // Direct widget activity PendingIntents arrive here on both cold and warm
+        // starts. Keep the project ID in the native queue for the existing pull path;
+        // the drain broadcast additionally wakes an already-running frontend.
+        if (savedInstanceState == null) {
+            handleWidgetProjectOpenIntent(intent)
+        }
+
         // Show startup overlay for quick task entry while Angular loads.
         // Only on fresh cold start — not on config-change recreation.
         if (savedInstanceState == null) {
@@ -332,7 +339,17 @@ class CapacitorMainActivity : BridgeActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        handleWidgetProjectOpenIntent(intent)
         handleIntent(intent)
+    }
+
+    private fun handleWidgetProjectOpenIntent(intent: Intent) {
+        val projectId = intent.getStringExtra(TaskListWidgetProvider.EXTRA_OPEN_PROJECT_ID)
+            ?: return
+        TaskListWidgetProvider.queueProjectToOpen(this, projectId)
+        LocalBroadcastManager.getInstance(this)
+            .sendBroadcast(Intent(TaskListWidgetProvider.ACTION_WIDGET_PROJECT_OPEN_DRAIN))
+        intent.removeExtra(TaskListWidgetProvider.EXTRA_OPEN_PROJECT_ID)
     }
 
     fun getStartupOverlayPartialText(): String? {

@@ -69,12 +69,27 @@ object WidgetDoneQueue {
     /** Completion instants for pending "done" targets, used only by native rendering. */
     @Synchronized
     fun peekDoneTimestamps(context: Context): Map<String, Long> {
-        val data = getPrefs(context).getString(KEY_DONE_TIMESTAMPS, null) ?: return emptyMap()
+        val prefs = getPrefs(context)
+        val data = prefs.getString(KEY_DONE_TIMESTAMPS, null) ?: return emptyMap()
         return try {
             val map = JSONObject(data)
-            map.keys().asSequence().mapNotNull { taskId ->
-                map.optLong(taskId, 0L).takeIf { it > 0L }?.let { taskId to it }
+            val nowMs = System.currentTimeMillis()
+            val active = map.keys().asSequence().mapNotNull { taskId ->
+                map.optLong(taskId, 0L).takeIf {
+                    it > 0L && nowMs < it + WidgetData.PROJECT_DONE_TASK_GRACE_MS
+                }?.let { taskId to it }
             }.toMap()
+            if (active.size == map.length()) {
+                active
+            } else if (active.isEmpty()) {
+                prefs.edit().remove(KEY_DONE_TIMESTAMPS).commit()
+                emptyMap()
+            } else {
+                val activeJson = JSONObject()
+                active.forEach { (taskId, timestamp) -> activeJson.put(taskId, timestamp) }
+                prefs.edit().putString(KEY_DONE_TIMESTAMPS, activeJson.toString()).commit()
+                active
+            }
         } catch (e: Exception) {
             emptyMap()
         }
@@ -86,9 +101,10 @@ object WidgetDoneQueue {
         val prefs = getPrefs(context)
         val data = prefs.getString(KEY_DONE_TASKS, null)
         if (data != null) {
+            // Keep local completion timestamps through Angular's drain so the
+            // project widget's grace period is not cut short by the first push.
             prefs.edit()
                 .remove(KEY_DONE_TASKS)
-                .remove(KEY_DONE_TIMESTAMPS)
                 .commit()
         }
         return data

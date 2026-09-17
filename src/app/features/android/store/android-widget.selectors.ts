@@ -15,7 +15,10 @@ import {
   AndroidWidgetTask,
 } from '../android-widget.model';
 
-const MAX_WIDGET_TASKS = 20;
+const MAX_WIDGET_OPEN_TASKS = 20;
+// Keep recent completed candidates so native can preserve locally tapped grace rows
+// without allowing completed tasks to consume the 20 open-task slots.
+const MAX_WIDGET_DONE_TASKS = 20;
 
 /**
  * The instant the logical day `dayStr` stops being "today": local midnight after it,
@@ -68,9 +71,6 @@ export const selectAndroidWidgetData = createSelector(
         title: task.title,
         isDone: task.isDone,
       };
-      if (task.isDone && typeof task.doneOn === 'number') {
-        widgetTask.doneOn = task.doneOn;
-      }
       if (task.projectId) {
         widgetTask.projectId = task.projectId;
         const color = projectState.entities[task.projectId]?.theme?.primary;
@@ -90,19 +90,49 @@ export const selectAndroidWidgetData = createSelector(
 
     const projects: AndroidWidgetProject[] = visibleProjects.map((project) => {
       const projectTasks: AndroidWidgetTask[] = [];
-      // Keep the established project-wide order: active list first, then backlog.
-      for (const taskIds of [project.taskIds || [], project.backlogTaskIds || []]) {
-        for (const taskId of taskIds) {
-          const task = toWidgetTask(taskId);
-          if (task) {
-            projectTasks.push(task);
-            if (projectTasks.length === MAX_WIDGET_TASKS) {
-              break;
-            }
-          }
+      const orderedTaskIds = [
+        ...(project.taskIds || []),
+        ...(project.backlogTaskIds || []),
+      ];
+      const openTaskOrders: number[] = [];
+      const doneTaskCandidates: Array<{ order: number; doneOn?: number }> = [];
+
+      for (const [order, taskId] of orderedTaskIds.entries()) {
+        const task = taskEntities[taskId];
+        if (!task) {
+          continue;
         }
-        if (projectTasks.length === MAX_WIDGET_TASKS) {
-          break;
+        if (!task.isDone) {
+          if (openTaskOrders.length < MAX_WIDGET_OPEN_TASKS) {
+            openTaskOrders.push(order);
+          }
+          continue;
+        }
+
+        doneTaskCandidates.push({ order, doneOn: task.doneOn });
+        doneTaskCandidates.sort((a, b) => {
+          // Missing timestamps are older than any timestamped completion. For ties,
+          // retain the active-list-then-backlog order deterministically.
+          const aDoneOn = a.doneOn ?? Number.NEGATIVE_INFINITY;
+          const bDoneOn = b.doneOn ?? Number.NEGATIVE_INFINITY;
+          return bDoneOn - aDoneOn || a.order - b.order;
+        });
+        if (doneTaskCandidates.length > MAX_WIDGET_DONE_TASKS) {
+          doneTaskCandidates.pop();
+        }
+      }
+
+      const selectedTaskOrders = new Set([
+        ...openTaskOrders,
+        ...doneTaskCandidates.map(({ order }) => order),
+      ]);
+      // Keep the established project-wide order: active list first, then backlog.
+      for (const [order, taskId] of orderedTaskIds.entries()) {
+        if (selectedTaskOrders.has(order)) {
+          const widgetTask = toWidgetTask(taskId);
+          if (widgetTask) {
+            projectTasks.push(widgetTask);
+          }
         }
       }
       return { id: project.id, title: project.title, tasks: projectTasks };

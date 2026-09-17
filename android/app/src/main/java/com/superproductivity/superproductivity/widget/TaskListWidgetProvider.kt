@@ -1,5 +1,6 @@
 package com.superproductivity.superproductivity.widget
 
+import android.app.AlarmManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
@@ -7,6 +8,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.text.format.DateUtils
@@ -39,10 +41,15 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             appWidgetIds.forEach { remove(selectionKey(it)) }
             apply()
         }
+        clearPendingProjectToOpen(context)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
+        if (intent.action == ACTION_EXPIRY_REFRESH) {
+            refreshAll(context)
+            return
+        }
         if (intent.action != ACTION_CLICK) {
             return
         }
@@ -54,7 +61,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                 // Target state computed at render time from the DISPLAYED state
                 // (incl. pending overlay), so repeated taps toggle back and forth.
                 val setDone = intent.getBooleanExtra(EXTRA_SET_DONE, true)
-                Log.d(TAG, "Toggle done from widget: taskId=$taskId setDone=$setDone")
                 WidgetDoneQueue.setTarget(context, taskId, setDone)
                 // Re-render so the pending-done overlay shows the checked box. Full
                 // refresh, not rows-only: the tap cannot change the blob, but the
@@ -66,6 +72,13 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                 // pulls the IDs from the queue itself (single delivery path).
                 LocalBroadcastManager.getInstance(context)
                     .sendBroadcast(Intent(ACTION_WIDGET_DONE_DRAIN))
+                // Keep expiry tied to this task's tap. The non-waking system alarm delivers
+                // to the provider after process death when the device is active; when exact
+                // alarms are unavailable, a short-lived in-process Handler gives a timely
+                // refresh while the inexact alarm remains as the process-death fallback.
+                // Neither path blocks later checkbox taps or wakes a sleeping device for
+                // this cosmetic update.
+                scheduleProjectTaskExpiryRefresh(context, taskId, setDone)
             }
 
             intent.getBooleanExtra(EXTRA_OPEN_APP, false) -> {
@@ -87,6 +100,9 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                 } catch (e: Exception) {
                     // Background-activity-launch restrictions may block this on some
                     // API levels/OEMs.
+                    if (projectId != null) {
+                        clearPendingProjectToOpen(context)
+                    }
                     Log.w(TAG, "Failed to open app from widget row tap", e)
                 }
             }
@@ -96,6 +112,8 @@ class TaskListWidgetProvider : AppWidgetProvider() {
     companion object {
         private const val TAG = "TaskListWidget"
         const val ACTION_CLICK = "com.superproductivity.superproductivity.WIDGET_CLICK"
+        const val ACTION_EXPIRY_REFRESH =
+            "com.superproductivity.superproductivity.WIDGET_EXPIRY_REFRESH"
         const val ACTION_WIDGET_DONE_DRAIN =
             "com.superproductivity.superproductivity.WIDGET_DONE_DRAIN"
         const val ACTION_WIDGET_PROJECT_OPEN_DRAIN =
@@ -121,25 +139,33 @@ class TaskListWidgetProvider : AppWidgetProvider() {
          * Project widgets use the selected snapshot project's title. A missing selection
          * falls back to the Today header and list together.
          */
-        private fun headerTitle(context: Context, appWidgetId: Int): CharSequence {
+        private data class WidgetDisplay(
+            val header: CharSequence,
+            val projectIdToOpen: String?
+        )
+
+        private fun widgetDisplay(context: Context, appWidgetId: Int): WidgetDisplay {
             val snapshot = try {
                 (context.applicationContext as App).keyValStore
                     .get(WidgetData.KEYVAL_KEY, "{}")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to read widget data for header", e)
                 // Unknown stamp: keep the pre-#9098 behaviour rather than cry stale.
-                return context.getString(R.string.widget_header_title)
+                return WidgetDisplay(context.getString(R.string.widget_header_title), null)
             }
-            selectedProjectId(context, appWidgetId)?.let { projectId ->
+            val selectedId = selectedProjectId(context, appWidgetId)
+            val selectedProjectTitle = selectedId?.let { projectId ->
                 try {
-                    WidgetData.projectTitle(snapshot, projectId)?.let { return it }
+                    WidgetData.projectTitle(snapshot, projectId)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to read selected project for widget header", e)
+                    null
                 }
             }
+            selectedProjectTitle?.let { title -> return WidgetDisplay(title, selectedId) }
             val meta = WidgetData.parseMeta(snapshot)
             // The verdict lives in WidgetData.headerFor (pure, tested); this only renders it.
-            return when (val header = WidgetData.headerFor(meta, System.currentTimeMillis())) {
+            val header = when (val header = WidgetData.headerFor(meta, System.currentTimeMillis())) {
                 is WidgetHeader.Today -> context.getString(R.string.widget_header_title)
                 is WidgetHeader.Outdated -> header.dayMs?.let { dayMs ->
                     context.getString(
@@ -153,6 +179,7 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                     )
                 } ?: context.getString(R.string.widget_header_outdated_unknown)
             }
+            return WidgetDisplay(header, null)
         }
 
         /**
@@ -166,10 +193,11 @@ class TaskListWidgetProvider : AppWidgetProvider() {
          * debounced-and-deduped path, and it does NOT cost scroll position: the host
          * reapplies onto the recycled view (same layout id) and AbsListView keeps the
          * bound adapter when the adapter intent is unchanged, which it always is here.
-         * The obvious "cheaper" partiallyUpdateAppWidget is a trap — despite its docs it
-         * does not ignore a widget with no cached views, it *replaces* them, so it would
-         * install a header with no adapter and no click targets on any widget whose views
-         * the system has dropped (an app upgrade clears them explicitly).
+         * The full update establishes the complete cached hierarchy, adapter, and click
+         * targets. Some hosts can nevertheless retain the previous header when that
+         * update also changes the RemoteViews collection, so updateWidget follows it
+         * with a header-only partial update. Partial updates are ignored before a full
+         * update, making this ordering safe while preserving the established collection.
          */
         fun refreshAll(context: Context) {
             val appWidgetManager = AppWidgetManager.getInstance(context)
@@ -185,25 +213,87 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             updateAll(context, AppWidgetManager.getInstance(context), intArrayOf(appWidgetId))
         }
 
-        @Synchronized
-        fun scheduleProjectTaskExpiryRefresh(context: Context, refreshAtMs: Long) {
-            if (scheduledProjectTaskRefreshAt?.let { it <= refreshAtMs } == true) {
+        /** Schedules or cancels this task's local five-second completion expiry. */
+        private fun scheduleProjectTaskExpiryRefresh(
+            context: Context,
+            taskId: String,
+            setDone: Boolean
+        ) {
+            val appContext = context.applicationContext
+            val alarmManager = appContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val pendingIntent = expiryRefreshPendingIntent(appContext, taskId)
+            if (!setDone) {
+                alarmManager.cancel(pendingIntent)
                 return
             }
-            scheduledProjectTaskRefresh?.let { refreshHandler.removeCallbacks(it) }
-            val appContext = context.applicationContext
-            val refreshRunnable = Runnable {
-                synchronized(this) {
-                    scheduledProjectTaskRefresh = null
-                    scheduledProjectTaskRefreshAt = null
+            val refreshAtMs = WidgetDoneQueue.peekDoneTimestamps(appContext)[taskId]
+                ?.plus(WidgetData.PROJECT_DONE_TASK_GRACE_MS)
+                ?: return
+            val delayMs = (refreshAtMs - System.currentTimeMillis()).coerceAtLeast(0L)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                    !alarmManager.canScheduleExactAlarms()
+                ) {
+                    alarmManager.set(
+                        AlarmManager.RTC,
+                        refreshAtMs,
+                        pendingIntent
+                    )
+                    // Exact-alarm permission is optional. A process-local timer keeps the
+                    // normal five-second UX when the app remains alive, while the alarm
+                    // still delivers to the provider when the device is awake if Android
+                    // kills this process.
+                    postInProcessExpiryRefresh(appContext, delayMs)
+                } else {
+                    alarmManager.setExact(
+                        AlarmManager.RTC,
+                        refreshAtMs,
+                        pendingIntent
+                    )
                 }
-                refreshAll(appContext)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to schedule widget task grace-period refresh", e)
+                // A denied exact alarm can race with permission state changes. Always try
+                // the non-waking system fallback before the in-process timer, so process
+                // death does not lose the expiry refresh.
+                try {
+                    alarmManager.set(AlarmManager.RTC, refreshAtMs, pendingIntent)
+                } catch (fallbackException: Exception) {
+                    Log.e(
+                        TAG,
+                        "Failed to schedule inexact widget expiry fallback",
+                        fallbackException
+                    )
+                }
+                postInProcessExpiryRefresh(appContext, delayMs)
             }
-            scheduledProjectTaskRefresh = refreshRunnable
-            scheduledProjectTaskRefreshAt = refreshAtMs
-            refreshHandler.postDelayed(
-                refreshRunnable,
-                (refreshAtMs - System.currentTimeMillis()).coerceAtLeast(0L)
+        }
+
+        private fun postInProcessExpiryRefresh(context: Context, delayMs: Long) {
+            Handler(Looper.getMainLooper()).postDelayed(
+                {
+                    try {
+                        refreshAll(context)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to refresh widget after task grace period", e)
+                    }
+                },
+                delayMs
+            )
+        }
+
+        private fun expiryRefreshPendingIntent(context: Context, taskId: String): PendingIntent {
+            val intent = Intent(context, TaskListWidgetProvider::class.java).apply {
+                action = ACTION_EXPIRY_REFRESH
+                // Separate alarms preserve each task's original tap deadline. The data is
+                // used only for PendingIntent identity; it is never logged or displayed.
+                data = Uri.parse("widget-expiry:$taskId")
+            }
+            return PendingIntent.getBroadcast(
+                context,
+                EXPIRY_REFRESH_REQUEST_CODE,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
         }
 
@@ -214,7 +304,14 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             appWidgetIds: IntArray
         ) {
             for (appWidgetId in appWidgetIds) {
-                updateWidget(context, appWidgetManager, appWidgetId, headerTitle(context, appWidgetId))
+                val display = widgetDisplay(context, appWidgetId)
+                updateWidget(
+                    context,
+                    appWidgetManager,
+                    appWidgetId,
+                    display.header,
+                    display.projectIdToOpen
+                )
             }
             // setRemoteAdapter alone does not re-invoke the factory's onDataSetChanged()
             // when the adapter intent is unchanged (it always is — same widget id, same
@@ -226,7 +323,8 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             context: Context,
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int,
-            header: CharSequence
+            header: CharSequence,
+            projectIdToOpen: String?
         ) {
             val views = RemoteViews(context.packageName, R.layout.widget_task_list)
 
@@ -250,17 +348,14 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             )
             views.setPendingIntentTemplate(R.id.widget_task_list, clickPendingIntent)
 
-            // Header/empty tap → open this widget's configured source. These use the
-            // same provider path as rows so a project ID reaches Angular on cold start.
-            val openAppIntent = Intent(context, TaskListWidgetProvider::class.java).apply {
-                action = ACTION_CLICK
-                putExtra(EXTRA_OPEN_APP, true)
-                selectedProjectId(context, appWidgetId)?.let { projectId ->
-                    putExtra(EXTRA_OPEN_PROJECT_ID, projectId)
-                }
+            // Header/empty tap → open this widget's configured source directly. Direct
+            // activity PendingIntents avoid background-activity-launch restrictions.
+            val openAppIntent = Intent(context, CapacitorMainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                projectIdToOpen?.let { projectId -> putExtra(EXTRA_OPEN_PROJECT_ID, projectId) }
                 data = Uri.parse("widget-open:$appWidgetId")
             }
-            val openAppPendingIntent = PendingIntent.getBroadcast(
+            val openAppPendingIntent = PendingIntent.getActivity(
                 context, appWidgetId, openAppIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
@@ -268,6 +363,12 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_empty, openAppPendingIntent)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
+            // Some widget hosts retain the previous TextView value when a full update
+            // also changes a RemoteViews collection. Reapply the header after the full
+            // update; the hierarchy is present by then, so this partial update is safe.
+            val headerViews = RemoteViews(context.packageName, R.layout.widget_task_list)
+            headerViews.setTextViewText(R.id.widget_header_title, header)
+            appWidgetManager.partiallyUpdateAppWidget(appWidgetId, headerViews)
         }
 
         fun selectedProjectId(context: Context, appWidgetId: Int): String? =
@@ -292,6 +393,14 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             return projectId
         }
 
+        @Synchronized
+        fun clearPendingProjectToOpen(context: Context) {
+            context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .remove(PENDING_OPEN_PROJECT_KEY)
+                .commit()
+        }
+
         fun setSelectedProjectId(context: Context, appWidgetId: Int, projectId: String?) {
             context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE).edit().apply {
                 if (projectId == null) {
@@ -307,8 +416,6 @@ class TaskListWidgetProvider : AppWidgetProvider() {
 
         private const val PREFERENCES_NAME = "task_list_widget"
         private const val PENDING_OPEN_PROJECT_KEY = "pending_open_project"
-        private val refreshHandler = Handler(Looper.getMainLooper())
-        private var scheduledProjectTaskRefresh: Runnable? = null
-        private var scheduledProjectTaskRefreshAt: Long? = null
+        private const val EXPIRY_REFRESH_REQUEST_CODE = 0
     }
 }

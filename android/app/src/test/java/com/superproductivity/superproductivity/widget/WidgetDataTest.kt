@@ -43,7 +43,7 @@ class WidgetDataTest {
               "id": "p2",
               "title": "Personal",
               "tasks": [
-                {"id": "t2", "title": "Task two", "isDone": true, "doneOn": 1000}
+                {"id": "t2", "title": "Task two", "isDone": true}
               ]
             }
           ]
@@ -87,7 +87,8 @@ class WidgetDataTest {
             WidgetData.parse(blob, selectedProjectId = "p1")
         )
         assertEquals(
-            listOf(WidgetTask("t2", "Task two", true, null, 1000)),
+            // Synced doneOn cannot grant a local grace period without a local tap.
+            emptyList<WidgetTask>(),
             WidgetData.parse(blob, selectedProjectId = "p2", nowMs = 1001L)
         )
     }
@@ -106,6 +107,18 @@ class WidgetDataTest {
     }
 
     @Test
+    fun pendingProjectCompletionWithoutTimestampExpiresImmediately() {
+        assertTrue(
+            WidgetData.parse(
+                blob,
+                pendingDoneTargets = mapOf("t1" to true),
+                selectedProjectId = "p1",
+                nowMs = 1_001L
+            ).isEmpty()
+        )
+    }
+
+    @Test
     fun missingSelectedProjectFallsBackToToday() {
         assertEquals(
             WidgetData.parse(blob),
@@ -116,23 +129,62 @@ class WidgetDataTest {
     @Test
     fun projectWithoutTasksFallsBackToTodayForHeaderAndTasks() {
         val json =
-            """{"v":1,"tasks":[{"id":"t1","title":"Today","isDone":false}],"projects":[{"id":"deleted","title":"Deleted"}]}"""
+            """{"v":1,"tasks":[{"id":"t1","title":"Today","isDone":false}],"projects":[{"id":"deleted","title":"Deleted"},{"id":"untitled","title":"","tasks":[{"id":"p1","title":"Project task","isDone":false}]}]}"""
 
         assertEquals(
             WidgetData.parse(json),
             WidgetData.parse(json, selectedProjectId = "deleted")
         )
         assertNull(WidgetData.projectTitle(json, "deleted"))
+        assertEquals(
+            WidgetData.parse(json),
+            WidgetData.parse(json, selectedProjectId = "untitled")
+        )
+        assertNull(WidgetData.projectTitle(json, "untitled"))
     }
 
     @Test
     fun completedProjectTaskDisappearsAfterFiveSecondGracePeriod() {
+        val pendingTargets = mapOf("t2" to true)
+        val pendingTimestamps = mapOf("t2" to 1_000L)
+        assertEquals(
+            listOf(WidgetTask("t2", "Task two", true, null, 1_000L)),
+            WidgetData.parse(
+                blob,
+                pendingDoneTargets = pendingTargets,
+                pendingDoneTimestamps = pendingTimestamps,
+                selectedProjectId = "p2",
+                nowMs = 1_001L
+            )
+        )
         assertEquals(
             emptyList<WidgetTask>(),
-            WidgetData.parse(blob, selectedProjectId = "p2", nowMs = 6000L)
+            WidgetData.parse(
+                blob,
+                pendingDoneTargets = pendingTargets,
+                pendingDoneTimestamps = pendingTimestamps,
+                selectedProjectId = "p2",
+                nowMs = 6_000L
+            )
         )
         // Today retains its existing completed-task display.
         assertEquals(3, WidgetData.parse(blob, nowMs = 6000L).size)
+    }
+
+    @Test
+    fun completedCandidatesDoNotConsumeProjectWidgetCapacity() {
+        val completed = (1..20).joinToString(",") { index ->
+            "{\"id\":\"done-$index\",\"title\":\"Done $index\",\"isDone\":true}"
+        }
+        val open = (1..20).joinToString(",") { index ->
+            "{\"id\":\"open-$index\",\"title\":\"Open $index\",\"isDone\":false}"
+        }
+        val json =
+            """{"v":1,"tasks":[],"projects":[{"id":"p","title":"Project","tasks":[$completed,$open]}]}"""
+
+        val parsed = WidgetData.parse(json, selectedProjectId = "p").take(20)
+        assertEquals(20, parsed.size)
+        assertTrue(parsed.all { it.id.startsWith("open-") })
     }
 
     @Test
@@ -166,6 +218,23 @@ class WidgetDataTest {
         assertEquals(
             listOf(WidgetProject("p1", "Work"), WidgetProject("p2", "Personal")),
             WidgetData.parseProjects(blob)
+        )
+        val unusableProjects =
+            """{"v":1,"projects":[{"id":"empty","title":"","tasks":[]},{"id":"missing","title":"Missing tasks"},{"id":"ok","title":"Okay","tasks":[]}] }"""
+        assertEquals(
+            listOf(WidgetProject("ok", "Okay")),
+            WidgetData.parseProjects(unusableProjects)
+        )
+    }
+
+    @Test
+    fun syncedDoneOnDoesNotGrantProjectGrace() {
+        val forgedSnapshot = blob.replace(
+            """{"id": "t2", "title": "Task two", "isDone": true}""",
+            """{"id": "t2", "title": "Task two", "isDone": true, "doneOn": 1000}"""
+        )
+        assertTrue(
+            WidgetData.parse(forgedSnapshot, selectedProjectId = "p2", nowMs = 1_001L).isEmpty()
         )
     }
 
