@@ -119,6 +119,8 @@ describe('createRows', () => {
     expect(rows.map((row) => row.timeSpent)).toEqual([twoHours, oneHour + twoHours]);
   });
 
+  // Characterizes a legacy inconsistency, not a requirement: only merged rows were
+  // ever deduplicated, so a lone task keeps two same-titled tags. Safe to change.
   it('should retain duplicate display tags for a single task but deduplicate merged rows', () => {
     const task = createTask({
       id: 'shared',
