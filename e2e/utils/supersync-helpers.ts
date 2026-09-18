@@ -369,6 +369,8 @@ export const createSimulatedClient = async (
   testPrefix: string,
   options: {
     allowExampleTasks?: boolean;
+    /** Released bundles register service workers; block them when switching builds. */
+    serviceWorkers?: 'allow' | 'block';
     /**
      * Runs on the app origin with all JavaScript blocked, before the app boots
      * for the first time — for seeding IndexedDB (e.g. seedSuperSyncCredentials).
@@ -385,6 +387,7 @@ export const createSimulatedClient = async (
     userAgent: `PLAYWRIGHT SYNC-CLIENT-${clientName}`,
     baseURL: effectiveBaseURL,
     viewport: { width: 1920, height: 1080 },
+    serviceWorkers: options.serviceWorkers,
   });
 
   // Install the devError/beforeunload fallback on EVERY page this context ever

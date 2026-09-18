@@ -23,6 +23,25 @@ import { SYNC_DEVICES_DDL } from './sync-devices-ddl.helper';
 const mocks = vi.hoisted(() => {
   const state: { db: PGlite | null } = { db: null };
   const prisma = {
+    syncDevice: {
+      findMany: async (args: { where: { lastSeenAt: { gt: bigint } } }) => {
+        const result = await state.db!.query<{
+          userId: number;
+          appVersion: string | null;
+        }>(
+          'SELECT user_id AS "userId", app_version AS "appVersion" FROM sync_devices WHERE last_seen_at > $1::bigint',
+          [args.where.lastSeenAt.gt.toString()],
+        );
+        return result.rows;
+      },
+      deleteMany: async (args: { where: { lastSeenAt: { lt: bigint } } }) => {
+        const result = await state.db!.query(
+          'DELETE FROM sync_devices WHERE last_seen_at < $1::bigint',
+          [args.where.lastSeenAt.lt.toString()],
+        );
+        return { count: result.affectedRows ?? 0 };
+      },
+    },
     $executeRaw: async (
       strings: TemplateStringsArray,
       ...values: unknown[]
@@ -43,7 +62,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('../src/db', () => ({ prisma: mocks.prisma }));
 
 const { DeviceService } = await import('../src/sync/services/device.service');
-const { DEVICE_TOUCH_THROTTLE_MS } = await import('../src/sync/sync.types');
+const { DEVICE_TOUCH_THROTTLE_MS, RETENTION_MS } = await import('../src/sync/sync.types');
 
 type Row = {
   client_id: string;
@@ -194,5 +213,45 @@ describe('DeviceService.touchDevice (real Postgres)', () => {
       '7:E_abc123',
       '8:E_abc123',
     ]);
+  });
+
+  // Characterizations of known gaps, not evidence that checkpoints are safe.
+  // The ORM adapters above execute the service's time predicates against stored
+  // rows; touchDevice's shipped SQL and the gate classifier run unchanged.
+  describe('checkpoint gate limitations (#9962)', () => {
+    it('reports safe after an old device ages out, then unsafe only after it returns', async () => {
+      const firstSeen = 1_000_000;
+      vi.setSystemTime(firstSeen);
+      await service.touchDevice(7, 'A_modern', '19.0.0');
+      // A pre-reporting client can retain unsynced edits while offline.
+      await service.touchDevice(7, 'B_old');
+      expect((await service.summarizeCheckpointGate(0)).safeAccounts).toBe(0);
+
+      const now = firstSeen + RETENTION_MS + 1;
+      const cutoff = now - RETENTION_MS;
+      vi.setSystemTime(now);
+      await service.touchDevice(7, 'A_modern', '19.0.0');
+      expect(await service.deleteStaleDevices(cutoff)).toBe(1);
+      expect((await service.summarizeCheckpointGate(cutoff)).safeAccounts).toBe(1);
+
+      // A cadence could now create a checkpoint. Re-registering the old device
+      // cannot undo a checkpoint already stored for it to download.
+      await service.touchDevice(7, 'B_old');
+      expect((await service.summarizeCheckpointGate(cutoff)).safeAccounts).toBe(0);
+    });
+
+    it('retains a safe classification when the same device stops reporting its version', async () => {
+      vi.setSystemTime(1_000_000);
+      await service.touchDevice(7, 'A_modern', '19.0.0');
+      expect((await service.summarizeCheckpointGate(0)).safeAccounts).toBe(1);
+
+      vi.setSystemTime(1_000_000 + DEVICE_TOUCH_THROTTLE_MS + 1);
+      // A download from a downgraded, pre-reporting client has the same call
+      // shape as a heartbeat. COALESCE retains the previously reported version.
+      await service.touchDevice(7, 'A_modern');
+      const rows = await readAll();
+      expect(rows[0].app_version).toBe('19.0.0');
+      expect((await service.summarizeCheckpointGate(0)).safeAccounts).toBe(1);
+    });
   });
 });
