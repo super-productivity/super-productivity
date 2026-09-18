@@ -301,16 +301,13 @@ describe('StartupService', () => {
       expect(result).toBe(false);
     });
 
-    // Spied on the prototype, never defined on `navigator` itself: an own data
-    // property survives any "restore" that writes the value back, and from then
-    // on it shadows the prototype getter for the rest of the Karma run —
-    // silently breaking every other spec that stubs the user agent.
-    const stubUserAgent = (userAgent: string): void => {
-      spyOnProperty(Navigator.prototype, 'userAgent', 'get').and.returnValue(userAgent);
-    };
-
+    // Spy on the prototype getter rather than defining an own property on
+    // `navigator`: an own property survives the test and shadows the prototype
+    // getter for every later spec that spies on it.
     it('should return false for NIGHTWATCH user agent', () => {
-      stubUserAgent('NIGHTWATCH');
+      spyOnProperty(Navigator.prototype, 'userAgent', 'get').and.returnValue(
+        'NIGHTWATCH',
+      );
 
       const result = (service as any)._isTourLikelyToBeShown();
 
@@ -318,7 +315,9 @@ describe('StartupService', () => {
     });
 
     it('should return false for PLAYWRIGHT user agent', () => {
-      stubUserAgent('Something PLAYWRIGHT Something');
+      spyOnProperty(Navigator.prototype, 'userAgent', 'get').and.returnValue(
+        'Something PLAYWRIGHT Something',
+      );
 
       const result = (service as any)._isTourLikelyToBeShown();
 
