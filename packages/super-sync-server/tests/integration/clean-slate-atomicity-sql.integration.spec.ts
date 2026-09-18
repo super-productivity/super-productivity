@@ -26,6 +26,7 @@ describeWithDb('Clean-slate upload atomicity (PostgreSQL)', () => {
   const TEST_USER_ID = 99997;
   const TEST_EMAIL = `test-clean-slate-${Date.now()}@test.local`;
   const CLIENT_ID = 'clean-slate-integration-client';
+  let afterResetDelete: (() => Promise<void>) | undefined;
 
   const makeOp = (overrides: Partial<Operation> = {}): Operation => ({
     id: `clean-slate-op-${Date.now()}`,
@@ -67,6 +68,20 @@ describeWithDb('Clean-slate upload atomicity (PostgreSQL)', () => {
   };
 
   beforeAll(async () => {
+    prisma.$use(async (params, next) => {
+      const result = await next(params);
+      if (
+        params.model === 'Operation' &&
+        params.action === 'deleteMany' &&
+        params.args.where.userId === TEST_USER_ID &&
+        afterResetDelete
+      ) {
+        const pause = afterResetDelete;
+        afterResetDelete = undefined;
+        await pause();
+      }
+      return result;
+    });
     await prisma.user.deleteMany({ where: { id: TEST_USER_ID } });
     await prisma.user.create({
       data: { id: TEST_USER_ID, email: TEST_EMAIL, isVerified: 1 },
@@ -84,9 +99,10 @@ describeWithDb('Clean-slate upload atomicity (PostgreSQL)', () => {
   beforeEach(async () => {
     await prisma.operation.deleteMany({ where: { userId: TEST_USER_ID } });
     await prisma.syncDevice.deleteMany({ where: { userId: TEST_USER_ID } });
-    await prisma.userSyncState.update({
+    await prisma.userSyncState.upsert({
       where: { userId: TEST_USER_ID },
-      data: {
+      create: { userId: TEST_USER_ID, lastSeq: 0 },
+      update: {
         lastSeq: 0,
         lastSnapshotSeq: null,
         snapshotData: null,
@@ -100,6 +116,163 @@ describeWithDb('Clean-slate upload atomicity (PostgreSQL)', () => {
       where: { id: TEST_USER_ID },
       data: { storageUsedBytes: 0 },
     });
+  });
+
+  it('delivers a replacement to a client that did not observe the empty reset', async () => {
+    const service = new SyncService();
+    const [seed] = await service.uploadOps(TEST_USER_ID, CLIENT_ID, [
+      makeOp({ id: 'before-account-reset' }),
+    ]);
+    expect(seed.accepted).toBe(true);
+    const oldCursor = seed.serverSeq!;
+
+    await service.deleteAllUserData(TEST_USER_ID);
+    const replacement = makeOp({
+      id: 'after-account-reset',
+      opType: 'SYNC_IMPORT',
+      actionType: '[SP_ALL] Load(import) all data',
+      entityType: 'ALL',
+      entityId: undefined,
+      payload: {
+        task: {
+          ids: ['replacement'],
+          entities: { replacement: { id: 'replacement', title: 'Replacement task' } },
+        },
+      },
+      vectorClock: { [CLIENT_ID]: 2 },
+    });
+    const [uploaded] = await service.uploadOps(TEST_USER_ID, CLIENT_ID, [replacement]);
+    expect(uploaded.accepted).toBe(true);
+    expect(uploaded.serverSeq).toBeGreaterThan(oldCursor);
+
+    const page = await service.getOpsSinceWithSeq(TEST_USER_ID, oldCursor, 'peer');
+    expect(page.ops.map(({ op }) => op.id)).toEqual([replacement.id]);
+    expect(page.latestSeq).toBe(uploaded.serverSeq);
+  });
+
+  it('reports an empty reset while preserving the sequence allocation counter', async () => {
+    const service = new SyncService();
+    const [seed] = await service.uploadOps(TEST_USER_ID, CLIENT_ID, [
+      makeOp({ id: 'empty-reset-seed' }),
+    ]);
+    expect(seed.accepted).toBe(true);
+    await service.deleteAllUserData(TEST_USER_ID);
+
+    expect(await service.getLatestSeq(TEST_USER_ID)).toBe(0);
+    expect(await service.getOpsSinceWithSeq(TEST_USER_ID, seed.serverSeq!)).toMatchObject(
+      {
+        ops: [],
+        latestSeq: 0,
+        gapDetected: true,
+      },
+    );
+    expect(await service.getOpsSinceWithSeq(TEST_USER_ID, 0)).toMatchObject({
+      ops: [],
+      latestSeq: 0,
+      gapDetected: false,
+    });
+    const state = await prisma.userSyncState.findUnique({
+      where: { userId: TEST_USER_ID },
+    });
+    expect(state).toMatchObject({
+      lastSeq: seed.serverSeq,
+      snapshotData: null,
+      latestFullStateSeq: null,
+    });
+    expect((await readPersistentState()).storageUsedBytes).toBe(0n);
+  });
+
+  it('serializes a concurrent upload before clearing history and accounting', async () => {
+    const service = new SyncService();
+    const [seed] = await service.uploadOps(TEST_USER_ID, CLIENT_ID, [
+      makeOp({ id: 'reset-race-seed' }),
+    ]);
+    expect(seed.accepted).toBe(true);
+    let signalDeleted!: () => void;
+    let releaseDelete!: () => void;
+    const deleted = new Promise<void>((resolve) => {
+      signalDeleted = resolve;
+    });
+    const release = new Promise<void>((resolve) => {
+      releaseDelete = resolve;
+    });
+    afterResetDelete = async () => {
+      signalDeleted();
+      await release;
+    };
+
+    const deleting = service.deleteAllUserData(TEST_USER_ID);
+    await deleted;
+    const peerOp = makeOp({
+      id: 'reset-race-peer',
+      clientId: 'reset-race-peer-client',
+      entityId: 'peer-task',
+      vectorClock: { 'reset-race-peer-client': 1 },
+    });
+    // A distinct service bypasses process-local locks, like another server instance.
+    const peer = new SyncService();
+    let uploadFinished = false;
+    const uploading = peer
+      .uploadOps(
+        TEST_USER_ID,
+        peerOp.clientId,
+        [peerOp],
+        undefined,
+        undefined,
+        undefined,
+        false,
+        seed.serverSeq,
+      )
+      .then((result) => {
+        uploadFinished = true;
+        return result;
+      });
+    try {
+      // Wait for a real PostgreSQL lock wait or an incorrectly completed upload,
+      // rather than assuming an upload finishes within an arbitrary sleep.
+      await expect
+        .poll(async () => {
+          const [row] = await prisma.$queryRaw<Array<{ waiting: boolean }>>`
+          SELECT EXISTS (
+            SELECT 1 FROM pg_stat_activity
+            WHERE datname = current_database() AND wait_event_type = 'Lock'
+              AND query LIKE '%user_sync_state%'
+          ) AS waiting
+        `;
+          return uploadFinished || row.waiting;
+        })
+        .toBe(true);
+      expect(uploadFinished).toBe(false);
+    } finally {
+      releaseDelete();
+      await deleting;
+      await uploading;
+    }
+
+    // RepeatableRead may reject the waiting upload once reset commits; retry
+    // must succeed with a fresh snapshot and a sequence above the old cursor.
+    let results = await uploading;
+    if (!results[0].accepted) {
+      expect(results[0].errorCode).toBe(SYNC_ERROR_CODES.INTERNAL_ERROR);
+      results = await peer.uploadOps(TEST_USER_ID, peerOp.clientId, [peerOp]);
+    }
+    expect(results[0].accepted).toBe(true);
+    expect(results[0].serverSeq).toBeGreaterThan(seed.serverSeq!);
+    const state = await readPersistentState();
+    expect(state.operations.map((op) => op.id)).toEqual([peerOp.id]);
+    expect(state.syncState.lastSeq).toBe(results[0].serverSeq);
+    expect(state.storageUsedBytes).toBeGreaterThan(0n);
+
+    const [next] = await peer.uploadOps(TEST_USER_ID, peerOp.clientId, [
+      makeOp({
+        id: 'after-reset-race',
+        entityId: 'next-task',
+        clientId: peerOp.clientId,
+        vectorClock: { [peerOp.clientId]: 2 },
+      }),
+    ]);
+    expect(next.accepted).toBe(true);
+    expect(next.serverSeq).toBeGreaterThan(results[0].serverSeq!);
   });
 
   it('rolls back the whole replacement on a rejected sibling', async () => {

@@ -228,7 +228,7 @@ describe('OperationDownloadService', () => {
           $queryRaw: mockTxQueryRaw(null),
           operation: {
             findFirst: mockOpFindFirst(null, 1),
-            findMany: vi.fn().mockResolvedValue([]),
+            findMany: vi.fn().mockResolvedValue([createMockOpRow(1)]),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 5 }),
@@ -240,8 +240,7 @@ describe('OperationDownloadService', () => {
       const result = await service.getOpsSinceWithSeq(1, 0);
 
       expect(result.gapDetected).toBe(false);
-      // sinceSeq=0 → the indexed minSeq findFirst (orderBy asc) must be skipped;
-      // only the full-state lookup (orderBy desc) runs.
+      // A nonempty first page needs neither gap detection nor an empty-account check.
       expect(capturedTx.operation.findFirst).not.toHaveBeenCalledWith(
         expect.objectContaining({ orderBy: { serverSeq: 'asc' } }),
       );
@@ -1137,7 +1136,7 @@ describe('OperationDownloadService', () => {
 
       expect(result).toBe(42);
       expect(prisma.userSyncState.findUnique).toHaveBeenCalledWith({
-        where: { userId: 1 },
+        where: { userId: 1, user: { operations: { some: {} } } },
         select: { lastSeq: true },
       });
     });

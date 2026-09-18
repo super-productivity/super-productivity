@@ -362,8 +362,12 @@ export class WebSocketConnectionService {
     let pending = this.pendingNotifications.get(userId);
     if (pending) {
       clearTimeout(pending.timer);
-      pending.excludeClientIds.add(excludeClientId);
-      pending.latestSeq = latestSeq;
+      // A sender can skip only its own notifications. With different senders,
+      // each may still need operations committed after its piggyback download.
+      if (!pending.excludeClientIds.has(excludeClientId)) {
+        pending.excludeClientIds.clear();
+      }
+      pending.latestSeq = Math.max(pending.latestSeq, latestSeq);
     } else {
       pending = {
         timer: null as unknown as ReturnType<typeof setTimeout>,
