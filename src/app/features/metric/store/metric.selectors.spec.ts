@@ -158,6 +158,49 @@ describe('Metric Selectors - SimpleCounter StopWatch', () => {
   });
 });
 
+describe('Metric Selectors - Shared counter dates', () => {
+  for (const [type, selector] of [
+    [SimpleCounterType.ClickCounter, selectSimpleCounterClickCounterLineChartData],
+    [SimpleCounterType.StopWatch, selectSimpleCounterStopWatchLineChartData],
+  ] as const) {
+    it(`deduplicates and sorts ${type} dates before limiting the chart`, () => {
+      const unit = type === SimpleCounterType.StopWatch ? 60000 : 1;
+      const counters = [
+        createMockSimpleCounter({
+          id: 'first',
+          type,
+          countOnDay: { '2024-01-03': unit, '2024-01-01': unit, '2024-01-02': 0 },
+        }),
+        createMockSimpleCounter({
+          id: 'second',
+          type,
+          countOnDay: { '2024-01-02': 2 * unit, '2024-01-01': unit },
+        }),
+      ];
+      counters.forEach((counter) => {
+        Object.freeze(counter.countOnDay);
+        Object.freeze(counter);
+      });
+      Object.freeze(counters);
+
+      const chart = selector.projector(counters, { howMany: 2 });
+
+      expect(chart.labels).toEqual(['2024-01-02', '2024-01-03']);
+      expect(chart.datasets.map((dataset) => dataset.label)).toEqual(['first', 'second']);
+      expect(chart.datasets.map((dataset) => dataset.data)).toEqual([
+        [undefined, 1],
+        [2, undefined],
+      ]);
+      // Zero retains the existing "all days" slice behavior.
+      expect(selector.projector(counters, { howMany: 0 }).labels).toEqual([
+        '2024-01-01',
+        '2024-01-02',
+        '2024-01-03',
+      ]);
+    });
+  }
+});
+
 describe('Metric Selectors - Focus Sessions', () => {
   const dayOne = '2024-01-01';
   const dayTwo = '2024-01-02';

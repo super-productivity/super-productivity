@@ -23,6 +23,41 @@ const fakeTaskStateFromArray = (tasks: TaskCopy[]): EntityState<Task> => {
 };
 
 describe('mapArchiveToWorklog', () => {
+  it('should preserve restore flags for every day of active and archived tasks', () => {
+    const taskState = fakeTaskStateFromArray(
+      ['active', 'archived'].map((id) => ({
+        ...DEFAULT_TASK,
+        id,
+        title: id,
+        projectId: 'INBOX',
+        timeSpentOnDay: { '2024-01-01': 1000, '2024-01-02': 2000 },
+      })),
+    );
+    const noRestoreIds = ['missing', 'active', 'active'];
+    Object.freeze(noRestoreIds);
+
+    const { worklog, totalTimeSpent } = mapArchiveToWorklog(
+      taskState,
+      noRestoreIds,
+      { workStart: {}, workEnd: {} },
+      1,
+      'en-US',
+    );
+
+    expect(totalTimeSpent).toBe(6000);
+    for (const day of [1, 2]) {
+      expect(
+        worklog[2024].ent[1].ent[day].logEntries.map((entry) => ({
+          id: entry.task.id,
+          isNoRestore: entry.isNoRestore,
+        })),
+      ).toEqual([
+        { id: 'active', isNoRestore: true },
+        { id: 'archived', isNoRestore: false },
+      ]);
+    }
+  });
+
   it('should work for single task with multiple days', () => {
     const ts = fakeTaskStateFromArray([
       {

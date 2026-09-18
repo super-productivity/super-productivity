@@ -186,4 +186,19 @@ describe('sortWorklogEntriesAlphabetically', () => {
       'Charlie',
     ]);
   });
+
+  it('should preserve accent-insensitive ties in parent, child, and orphan groups', () => {
+    const entries = [
+      createEntry('p1', 'Éclair'),
+      createEntry('p2', 'eclair'),
+      createEntry('s1', 'Éclair', 'p1'),
+      createEntry('s2', 'ECLAIR', 'p1'),
+      createEntry('o1', 'éclair', 'missing'),
+      createEntry('o2', 'Eclair', 'missing'),
+    ];
+
+    expect(
+      sortWorklogEntriesAlphabetically(entries).map((entry) => entry.task.id),
+    ).toEqual(['p1', 's1', 's2', 'p2', 'o1', 'o2']);
+  });
 });
