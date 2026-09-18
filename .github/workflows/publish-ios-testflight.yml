@@ -213,6 +213,24 @@ jobs:
             test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$EXTENSION_PLIST")" = "$EXPECTED_BUILD"
           fi
 
+          # Reject any .appex directly under App.app/PlugIns that is not the one
+          # ExportOptions.plist maps a profile for. Deliberately not recursive and
+          # not covering App.app/Extensions or Watch apps: no observed instance.
+          # Observed instance: PR #8950 adds a SupWidget.appex, which would pass
+          # every other check here, burn the approval gate, install the signing
+          # certificate, and only then fail at `xcodebuild -exportArchive`.
+          PLUGINS_DIR="$ARCHIVE/Products/Applications/App.app/PlugIns"
+          if [ -d "$PLUGINS_DIR" ]; then
+            for appex in "$PLUGINS_DIR"/*.appex; do
+              [ -e "$appex" ] || continue
+              appex_name=$(basename "$appex")
+              if [ "$appex_name" != ShareExtension.appex ]; then
+                echo "::error::Unsupported app extension in archive: $appex_name"
+                exit 1
+              fi
+            done
+          fi
+
           SANITIZED="$RUNNER_TEMP/App.xcarchive.tar.gz"
           tar -czf "$SANITIZED" -C "$RUNNER_TEMP/validated" App.xcarchive
           ARCHIVE_SHA256=$(shasum -a 256 "$SANITIZED" | cut -d ' ' -f 1)
@@ -357,8 +375,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      issues: write
-      pull-requests: read
+      # Comments and labels on a PR need `pull-requests: write`; `issues: write`
+      # does not cover them, because a PR is not an issue for token scoping.
+      pull-requests: write
 
     steps:
       - name: Report result and clear label
@@ -375,10 +394,25 @@ jobs:
           PUBLIC_LINK: ${{ vars.TESTFLIGHT_PUBLIC_LINK }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          set -euo pipefail
           PR_NUMBER="${VALIDATED_PR_NUMBER:-$EVENT_PR_NUMBER}"
           if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
             echo "No associated PR; nothing to report."
             exit 0
+          fi
+
+          # Remove the label before composing the comment, so the comment can
+          # describe the real end state. Telling someone to "re-apply the label"
+          # is a dead end while it is still applied: re-applying a label that is
+          # already there fires no `labeled` event.
+          gh api -X DELETE "repos/$REPO/issues/$PR_NUMBER/labels/ios-test-flight" || true
+          label_state=removed
+          if labels=$(gh api "repos/$REPO/issues/$PR_NUMBER/labels" --jq '.[].name'); then
+            if grep -qx 'ios-test-flight' <<< "$labels"; then
+              label_state=stuck
+            fi
+          else
+            label_state=unknown
           fi
 
           if [ "$PUBLISH_RESULT" = success ]; then
@@ -395,9 +429,34 @@ jobs:
             link_line="See the [workflow run]($RUN_URL)."
           fi
 
-          printf -v body '%s\n\n%s\n\n_The `ios-test-flight` label has been removed; re-apply it to build again._' \
-            "$status_line" "$link_line"
-          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$body" \
-            || echo "Failed to comment on the PR."
-          gh api -X DELETE "repos/$REPO/issues/$PR_NUMBER/labels/ios-test-flight" \
-            || echo "Label already removed."
+          case "$label_state" in
+            removed)
+              label_line='_The `ios-test-flight` label has been removed; re-apply it to build again._'
+              ;;
+            stuck)
+              label_line='_Could not remove the `ios-test-flight` label. Remove it by hand before requesting another build._'
+              ;;
+            *)
+              label_line='_Could not confirm whether the `ios-test-flight` label was removed; check it before requesting another build._'
+              ;;
+          esac
+
+          printf -v body '%s\n\n%s\n\n%s' "$status_line" "$link_line" "$label_line"
+          comment_ok=1
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$body" || comment_ok=0
+
+          if [ "$label_state" != removed ]; then
+            echo "::warning::ios-test-flight label on PR #$PR_NUMBER is $label_state; remove it by hand"
+          fi
+
+          # Only a failed comment fails this job: it is the sole channel that
+          # tells anyone the build is ready. A stuck label is a warning, because
+          # a red run on an already-uploaded build invites a re-run, and re-running
+          # all jobs spends a second approval and re-uploads the same build number.
+          if [ "$comment_ok" = 0 ]; then
+            echo "::error::Failed to comment on PR #$PR_NUMBER"
+            if [ "$PUBLISH_RESULT" = success ]; then
+              echo "::error::The build was uploaded to TestFlight. Do not re-run this workflow; report the result by hand."
+            fi
+            exit 1
+          fi
