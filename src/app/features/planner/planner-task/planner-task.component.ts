@@ -299,10 +299,17 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
         }
         event.preventDefault();
         event.stopPropagation();
-        host.focus();
         if (event.shiftKey) {
-          this._multiSelect.selectRange(this.task().id, event.ctrlKey || event.metaKey);
+          // Range first: until the clicked row takes focus, the focused row is
+          // the one a Shift+click with nothing selected starts from (#10143).
+          this._multiSelect.selectRange(
+            this.task().id,
+            event.ctrlKey || event.metaKey,
+            host,
+          );
+          host.focus();
         } else {
+          host.focus();
           this._multiSelect.toggle(this.task().id);
         }
       };
