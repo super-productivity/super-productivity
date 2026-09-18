@@ -239,6 +239,15 @@ export class OperationDownloadService {
         // an account without retained operations must still look empty to clients
         // so their existing full-state migration/re-upload path can run.
         if (ops.length === 0 && minSeq === null) {
+          if (sinceSeq > 0) {
+            // Same warning the latestSeq === 0 branch logs. Since the allocator
+            // survives a reset, this branch is now the only one a reset account
+            // reaches, so without it reset-induced gaps vanish from the logs.
+            Logger.warn(
+              `[user:${userId}] Gap detected: client at sinceSeq=${sinceSeq} but server is empty (latestSeq=0)`,
+            );
+          }
+
           return {
             ops: [],
             latestSeq: 0,
