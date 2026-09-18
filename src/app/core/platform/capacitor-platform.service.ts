@@ -9,6 +9,7 @@ import {
   WEB_CAPABILITIES,
 } from './platform-capabilities.model';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
+import { IS_ELECTRON_TOKEN } from '../../app.constants';
 
 /**
  * Service for detecting platform and exposing platform-specific capabilities.
@@ -28,6 +29,7 @@ import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 })
 export class CapacitorPlatformService {
   private _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
+  private _isElectron = inject(IS_ELECTRON_TOKEN);
 
   /**
    * The current platform type
@@ -141,7 +143,7 @@ export class CapacitorPlatformService {
    */
   private _detectPlatform(): PlatformType {
     // Check for Electron first (it also has navigator)
-    if (this._isElectron()) {
+    if (this._isElectron) {
       return 'electron';
     }
 
@@ -184,13 +186,6 @@ export class CapacitorPlatformService {
       default:
         return WEB_CAPABILITIES;
     }
-  }
-
-  /**
-   * Check if running in Electron
-   */
-  private _isElectron(): boolean {
-    return navigator.userAgent.toLowerCase().indexOf(' electron/') > -1;
   }
 
   /**
