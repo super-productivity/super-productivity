@@ -74,14 +74,20 @@ import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider
 import { PlainspaceIssue } from './providers/plainspace/plainspace-issue.model';
 
 /**
- * A recurring Plainspace item is a single server row whose `scheduledAt` the
- * server advances, so its issue id is stable across occurrences. Once the
- * completed occurrence is archived, that id would block every later occurrence
- * from ever being imported again (#10074). When the server has already rolled
- * the item on (it is no longer done remotely), the archived task *is* the next
- * occurrence and gets re-activated instead — importing a second task is not an
- * option, since its deterministic id (`generatePlainspaceTaskId`) would collide
- * with the archived one.
+ * A recurring Plainspace item appears to be a single server row whose
+ * `scheduledAt` the server advances, which would make its issue id stable
+ * across occurrences. Once the completed occurrence is archived, that id blocks
+ * every later occurrence from ever being imported again (#10074). When the
+ * server has already rolled the item on (it is no longer done remotely), the
+ * archived task *is* the next occurrence and gets re-activated instead —
+ * importing a second task is not an option, since its deterministic id
+ * (`generatePlainspaceTaskId`) would collide with the archived one.
+ *
+ * The stable-id premise is inferred from the Plainspace API shape, not verified
+ * against a live server (#10074 reports it as "seems", not confirmed). If it is
+ * wrong and each occurrence gets its own id, this is inert rather than harmful:
+ * the completed row stays done, so nothing matches, and the new row imports
+ * normally.
  *
  * Deliberately narrow: for every other provider — and for non-recurring
  * Plainspace items — an archived task keeps blocking re-import forever, which
@@ -305,8 +311,7 @@ export class IssueService {
 
     // Already-imported recurring issues whose task may sit in the archive: those
     // are re-activated rather than imported (see isIssueAwaitingNextOccurrence).
-    // Kept out of `issuesToAdd` so the import snack below still counts imports
-    // only — a restore announces itself with its own snack.
+    // Kept out of `issuesToAdd` so the import snack below still counts imports.
     const reactivationCandidates: IssueDataReduced[] = potentialIssuesToAdd.filter(
       (issue: IssueDataReduced): boolean =>
         (allExistingIssueIds as string[]).includes(issue.id as string) &&
@@ -317,6 +322,7 @@ export class IssueService {
         providerKey,
         issueProviderId,
         reactivationCandidates,
+        isBackgroundPoll,
       );
     }
 
@@ -789,29 +795,26 @@ export class IssueService {
 
   /**
    * Restores the archived task of a recurring issue whose next occurrence the
-   * server has already rolled on to, and resets it from the fresh issue data in
-   * the same pass (#10074) — otherwise the task would come back carrying the
-   * completed occurrence's `isDone` and schedule until the next update poll.
+   * server has already rolled on to, and applies the fresh issue data in the
+   * same pass (#10074).
    *
-   * Candidates whose task is still active (the common case on every poll) are
-   * dropped here rather than by the caller, so the archive is only loaded when
-   * there is actually something to restore.
+   * `handleRestoreTask` already reopens the root task (`isDone: false`,
+   * `doneOn: undefined`) but is schedule-blind, so the new schedule has to be
+   * applied on top — and archiving leaves a stale `remindAt` behind (it clears
+   * `reminderId`/`dueWithTime` but not `remindAt`), which would fire for a long
+   * past occurrence the moment the task is active again.
+   *
+   * `checkForTaskWithIssueEverywhere` matches active tasks first and only loads
+   * the archive on a miss, so a candidate that is still active costs nothing
+   * here.
    */
   private async _reactivateArchivedIssueTasks(
     providerKey: IssueProviderKey,
     issueProviderId: string,
     issues: IssueDataReduced[],
+    isBackgroundPoll: boolean,
   ): Promise<void> {
-    const activeIssueIds = new Set(
-      (await firstValueFrom(this._taskService.allTasks$))
-        .filter((task) => task.issueProviderId === issueProviderId)
-        .map((task) => task.issueId),
-    );
-
     for (const issue of issues) {
-      if (activeIssueIds.has(issue.id as string)) {
-        continue;
-      }
       const res = await this._taskService.checkForTaskWithIssueEverywhere(
         issue.id.toString(),
         providerKey,
@@ -821,14 +824,58 @@ export class IssueService {
         continue;
       }
 
-      this._taskService.restoreTask(res.task, res.subTasks || []);
-      this._updateTaskFromPoll(res.task, this._getAddTaskData(providerKey, issue));
-      this._snackService.open({
-        ico: 'info',
-        msg: T.F.TASK.S.FOUND_RESTORE_FROM_ARCHIVE,
-        translateParams: { title: res.task.title },
-      });
+      // Derived before the restore: `_getAddTaskData` asserts the provider's
+      // payload and can throw, which must not leave a task half-restored out of
+      // the archive with the completed occurrence's data still on it.
+      let changes: Partial<Task>;
+      try {
+        changes = this._getReactivationChanges(providerKey, issue);
+      } catch {
+        // No issue fields logged — log history is exportable (sync rule 9).
+        IssueLog.err('Plainspace: invalid issue data, skipping task reactivation');
+        continue;
+      }
+
+      // Archiving marks every subtask done (`mapTasksToArchiveFormat`) and the
+      // restore reducer only reopens the root, so a recurring task with a
+      // checklist would otherwise come back permanently ticked off.
+      const subTasks = (res.subTasks || []).map((subTask) => ({
+        ...subTask,
+        isDone: false,
+        doneOn: undefined,
+      }));
+
+      this._taskService.restoreTask(res.task, subTasks);
+      this._updateTaskFromPoll(res.task, changes);
+
+      // Background ('always'-mode) polls stay quiet, same as the import snack
+      // above: the task reappearing in the project is the signal.
+      if (!isBackgroundPoll) {
+        this._snackService.open({
+          ico: 'info',
+          msg: T.F.TASK.S.FOUND_RESTORE_FROM_ARCHIVE,
+          translateParams: { title: res.task.title },
+        });
+      }
     }
+  }
+
+  /**
+   * `_getAddTaskData` returns the *import* shape, which omits `dueWithTime`
+   * entirely when the issue carries no schedule. Mirror the poll shape instead
+   * (`_toFreshData`) so the key is always present: an occurrence that comes back
+   * unscheduled then really unschedules, and `withRemindAtForDueChange` can
+   * reach its clear branch for the archived task's stale `remindAt`.
+   */
+  private _getReactivationChanges(
+    providerKey: IssueProviderKey,
+    issue: IssueDataReduced,
+  ): Partial<Task> {
+    const { scheduledAt } = issue as PlainspaceIssue;
+    return {
+      ...this._getAddTaskData(providerKey, issue),
+      dueWithTime: scheduledAt ? new Date(scheduledAt).getTime() : undefined,
+    };
   }
 
   private async _checkAndHandleIssueAlreadyAdded(
