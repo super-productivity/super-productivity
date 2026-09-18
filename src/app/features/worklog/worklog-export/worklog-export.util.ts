@@ -128,16 +128,7 @@ const handleDateGroup = (
       };
 
       if (!taskGroups[day]) {
-        // Each day owns its arrays; taskFields is shared across this task's days.
-        taskGroups[day] = {
-          ...rowItem,
-          titles: [...rowItem.titles],
-          titlesWithSub: [...rowItem.titlesWithSub],
-          tasks: [...rowItem.tasks],
-          notes: [...rowItem.notes],
-          projects: [...rowItem.projects],
-          tags: [...rowItem.tags],
-        };
+        taskGroups[day] = { ...rowItem, ...cloneTaskFields(taskFields) };
       } else {
         taskGroups[day].titles.push(...rowItem.titles);
         taskGroups[day].titlesWithSub.push(...rowItem.titlesWithSub);
@@ -288,6 +279,21 @@ const getTaskFields = (task: WorklogTask, lookups: ExportLookups): TaskFields =>
   const tasks = [task];
   return { tasks, titlesWithSub, titles, notes, projects, tags };
 };
+
+/**
+ * getTaskFields is computed once per task but its arrays end up in every day that
+ * task contributed to, and handleDateGroup accumulates into them by mutation. Each
+ * day therefore needs its own copies. Typed as TaskFields so a new field on that
+ * type fails to compile here instead of silently sharing an array across days.
+ */
+const cloneTaskFields = (fields: TaskFields): TaskFields => ({
+  tasks: [...fields.tasks],
+  titles: [...fields.titles],
+  titlesWithSub: [...fields.titlesWithSub],
+  notes: [...fields.notes],
+  projects: [...fields.projects],
+  tags: [...fields.tags],
+});
 
 const sortDateStrings = (dates: string[]): string[] => {
   return dates.sort((a: string, b: string) => {
