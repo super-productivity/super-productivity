@@ -174,5 +174,13 @@
     "author": "InitialCrow",
     "authorUrl": "https://github.com/InitialCrow",
     "stars": 0
+  },
+  {
+    "name": "Caffeine Tracker",
+    "shortDescription": "Track your caffeine intake and its effects on your productivity.",
+    "url": "https://github.com/BigWebstas/sp-caffiene-tracker",
+    "author": "BigWebstas",
+    "authorUrl": "https://github.com/BigWebstas",
+    "stars": 0
   }
 ]
