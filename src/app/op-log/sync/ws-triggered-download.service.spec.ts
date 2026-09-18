@@ -138,6 +138,38 @@ describe('WsTriggeredDownloadService', () => {
     expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
   }));
 
+  it('retains the highest sequence when later notifications arrive out of order', fakeAsync(() => {
+    syncCapableProvider.getLastServerSeq.and.resolveTo(3);
+    service.start();
+    notification$.next({ latestSeq: 7 });
+    tick(250);
+    // An idempotent snapshot retry can notify with its original, older sequence
+    // in a later server debounce window, but the same client debounce window.
+    notification$.next({ latestSeq: 3 });
+    tick(500);
+    flushMicrotasks();
+
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
+  }));
+
+  it('forgets the previous notification watermark when restarted', fakeAsync(() => {
+    syncCapableProvider.getLastServerSeq.and.resolveTo(3);
+    service.start();
+    notification$.next({ latestSeq: 7 });
+    tick(500);
+    flushMicrotasks();
+    expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledTimes(1);
+
+    service.stop();
+    mockSyncService.downloadRemoteOps.calls.reset();
+    service.start();
+    notification$.next({ latestSeq: 3 });
+    tick(500);
+    flushMicrotasks();
+
+    expect(mockSyncService.downloadRemoteOps).not.toHaveBeenCalled();
+  }));
+
   it('should queue a notification while sync is already in progress', fakeAsync(() => {
     let isSyncInProgress = true;
     mockProviderManager = TestBed.inject(

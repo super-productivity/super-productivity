@@ -1,6 +1,6 @@
 import { inject, Injectable, Injector, OnDestroy } from '@angular/core';
 import { Subscription } from 'rxjs';
-import { debounceTime, filter } from 'rxjs/operators';
+import { debounceTime, filter, scan } from 'rxjs/operators';
 import { SuperSyncWebSocketService } from './super-sync-websocket.service';
 import { OperationLogSyncService } from './operation-log-sync.service';
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
@@ -76,14 +76,14 @@ export class WsTriggeredDownloadService implements OnDestroy {
 
     this._subscription = this._wsService.newOpsNotification$
       .pipe(
+        // Snapshot retries can announce an older sequence after a newer upload.
+        // Preserve the maximum before debounceTime discards earlier messages.
+        scan((latestSeq, notification) => Math.max(latestSeq, notification.latestSeq), 0),
         debounceTime(WS_DOWNLOAD_DEBOUNCE_MS),
         filter(() => !(globalThis as any).__SP_E2E_BLOCK_WS_DOWNLOAD),
       )
-      .subscribe((notification) => {
-        this._pendingLatestSeq = Math.max(
-          this._pendingLatestSeq ?? 0,
-          notification.latestSeq,
-        );
+      .subscribe((latestSeq) => {
+        this._pendingLatestSeq = Math.max(this._pendingLatestSeq ?? 0, latestSeq);
         this._scheduleDrain(0);
       });
 
