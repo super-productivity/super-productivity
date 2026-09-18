@@ -301,40 +301,28 @@ describe('StartupService', () => {
       expect(result).toBe(false);
     });
 
+    // Spied on the prototype, never defined on `navigator` itself: an own data
+    // property survives any "restore" that writes the value back, and from then
+    // on it shadows the prototype getter for the rest of the Karma run —
+    // silently breaking every other spec that stubs the user agent.
+    const stubUserAgent = (userAgent: string): void => {
+      spyOnProperty(Navigator.prototype, 'userAgent', 'get').and.returnValue(userAgent);
+    };
+
     it('should return false for NIGHTWATCH user agent', () => {
-      const originalUserAgent = navigator.userAgent;
-      Object.defineProperty(navigator, 'userAgent', {
-        value: 'NIGHTWATCH',
-        configurable: true,
-      });
+      stubUserAgent('NIGHTWATCH');
 
       const result = (service as any)._isTourLikelyToBeShown();
 
       expect(result).toBe(false);
-
-      // Restore
-      Object.defineProperty(navigator, 'userAgent', {
-        value: originalUserAgent,
-        configurable: true,
-      });
     });
 
     it('should return false for PLAYWRIGHT user agent', () => {
-      const originalUserAgent = navigator.userAgent;
-      Object.defineProperty(navigator, 'userAgent', {
-        value: 'Something PLAYWRIGHT Something',
-        configurable: true,
-      });
+      stubUserAgent('Something PLAYWRIGHT Something');
 
       const result = (service as any)._isTourLikelyToBeShown();
 
       expect(result).toBe(false);
-
-      // Restore
-      Object.defineProperty(navigator, 'userAgent', {
-        value: originalUserAgent,
-        configurable: true,
-      });
     });
 
     it('should return false when more than 2 projects exist', () => {
@@ -363,16 +351,21 @@ describe('StartupService', () => {
   });
 
   describe('_requestPersistence (private)', () => {
+    // Same reason as the user-agent stub above: defining `storage` on
+    // `navigator` itself leaks the mock into every later spec in the run.
+    const stubStorage = (storage: unknown): void => {
+      spyOnProperty(Navigator.prototype, 'storage', 'get').and.returnValue(
+        storage as StorageManager,
+      );
+    };
+
     it('should request persistent storage', fakeAsync(() => {
       const mockStorage = {
         persisted: jasmine.createSpy().and.returnValue(Promise.resolve(false)),
         persist: jasmine.createSpy().and.returnValue(Promise.resolve(true)),
         estimate: jasmine.createSpy(),
       };
-      Object.defineProperty(navigator, 'storage', {
-        value: mockStorage,
-        configurable: true,
-      });
+      stubStorage(mockStorage);
 
       (service as any)._requestPersistence();
       tick();
@@ -389,10 +382,7 @@ describe('StartupService', () => {
         persist: jasmine.createSpy(),
         estimate: jasmine.createSpy(),
       };
-      Object.defineProperty(navigator, 'storage', {
-        value: mockStorage,
-        configurable: true,
-      });
+      stubStorage(mockStorage);
 
       (service as any)._requestPersistence();
       tick();
