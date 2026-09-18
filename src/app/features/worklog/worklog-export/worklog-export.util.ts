@@ -3,6 +3,7 @@ import { msToString } from '../../../ui/duration/ms-to-string.pipe';
 import { formatTimeHHmm } from '../../../util/format-time-hhmm';
 import { roundDuration } from '../../../util/round-duration';
 import { roundTime } from '../../../util/round-time';
+import { unique } from '../../../util/unique';
 import { ProjectCopy } from '../../project/project.model';
 import { TagCopy } from '../../tag/tag.model';
 import { WorklogTask } from '../../tasks/task.model';
@@ -17,6 +18,7 @@ import {
   ItemsByKey,
   RowItem,
   TaskFields,
+  TimeFields,
   WorklogExportData,
 } from './worklog-export.model';
 
@@ -118,40 +120,39 @@ const handleDateGroup = (
         timeEstimate = task.timeEstimate / numDays;
       }
 
-      const rowItem: RowItem = {
+      const timeFields: TimeFields = {
         dates: [day],
         workStart: data.workTimes.start[day],
         workEnd: data.workTimes.end[day],
         timeSpent,
         timeEstimate,
-        ...taskFields,
       };
 
-      if (!taskGroups[day]) {
-        taskGroups[day] = { ...rowItem, ...cloneTaskFields(taskFields) };
+      const group = taskGroups[day];
+      if (!group) {
+        // cloneTaskFields is the only way taskFields reaches a row, so no two
+        // days of the same task can share an array that the merge below mutates.
+        taskGroups[day] = { ...timeFields, ...cloneTaskFields(taskFields) };
       } else {
-        taskGroups[day].titles.push(...rowItem.titles);
-        taskGroups[day].titlesWithSub.push(...rowItem.titlesWithSub);
-        taskGroups[day].tasks.push(...rowItem.tasks);
-        taskGroups[day].notes.push(...rowItem.notes);
-        taskGroups[day].projects.push(...rowItem.projects);
-        taskGroups[day].tags.push(...rowItem.tags);
-        if (taskGroups[day].workStart !== undefined) {
+        group.titles.push(...taskFields.titles);
+        group.titlesWithSub.push(...taskFields.titlesWithSub);
+        group.tasks.push(...taskFields.tasks);
+        group.notes.push(...taskFields.notes);
+        group.projects.push(...taskFields.projects);
+        group.tags.push(...taskFields.tags);
+        if (group.workStart !== undefined) {
           // TODO check if this works as intended
-          taskGroups[day].workStart = Math.min(
-            taskGroups[day].workStart as number,
-            rowItem.workStart as number,
+          group.workStart = Math.min(
+            group.workStart as number,
+            timeFields.workStart as number,
           );
         }
-        if (taskGroups[day].workEnd !== undefined) {
+        if (group.workEnd !== undefined) {
           // TODO check if this works as intended
-          taskGroups[day].workEnd = Math.min(
-            taskGroups[day].workEnd as number,
-            rowItem.workEnd as number,
-          );
+          group.workEnd = Math.min(group.workEnd as number, timeFields.workEnd as number);
         }
-        taskGroups[day].timeEstimate += rowItem.timeEstimate;
-        taskGroups[day].timeSpent += rowItem.timeSpent;
+        group.timeEstimate += timeFields.timeEstimate;
+        group.timeSpent += timeFields.timeSpent;
       }
     });
   }
@@ -159,9 +160,9 @@ const handleDateGroup = (
     // Historically only merged rows are deduplicated. Keep a single task's
     // display tags intact, including different tags that share a title.
     if (row.tasks.length > 1) {
-      row.titles = [...new Set(row.titles)];
-      row.projects = [...new Set(row.projects)];
-      row.tags = [...new Set(row.tags)];
+      row.titles = unique(row.titles);
+      row.projects = unique(row.projects);
+      row.tags = unique(row.tags);
     }
   }
   return taskGroups;
@@ -282,9 +283,11 @@ const getTaskFields = (task: WorklogTask, lookups: ExportLookups): TaskFields =>
 
 /**
  * getTaskFields is computed once per task but its arrays end up in every day that
- * task contributed to, and handleDateGroup accumulates into them by mutation. Each
- * day therefore needs its own copies. Typed as TaskFields so a new field on that
- * type fails to compile here instead of silently sharing an array across days.
+ * task contributed to, and handleDateGroup accumulates into them by mutation, so
+ * each day needs its own copies. Returning TaskFields makes a newly added required
+ * field a compile error here; an optional one would still need adding by hand.
+ * handleTaskGroup/handleWorklogGroup spread taskFields directly on purpose —
+ * neither ever merges, so nothing mutates what they store.
  */
 const cloneTaskFields = (fields: TaskFields): TaskFields => ({
   tasks: [...fields.tasks],
