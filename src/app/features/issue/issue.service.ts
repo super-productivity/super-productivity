@@ -815,6 +815,15 @@ export class IssueService {
    * `checkForTaskWithIssueEverywhere` matches active tasks first and only loads
    * the archive on a miss, so a candidate that is still active costs nothing
    * here.
+   *
+   * Tracked time deliberately carries over instead of starting fresh per
+   * occurrence: `timeSpent` is a derived cache of `timeSpentOnDay` (see
+   * `calcTotalTimeSpent`), so zeroing it would mean wiping the per-day map that
+   * every worklog, export and daily summary reads — destroying real history
+   * from a background poll, and racing the additive `syncTimeSpent` deltas of
+   * other devices. The series is one task here, so its lifetime total is the
+   * honest number; only a manually set `timeEstimate` reads oddly (documented
+   * in the wiki's issue-integration comparison).
    */
   private async _reactivateArchivedIssueTasks(
     providerKey: IssueProviderKey,
