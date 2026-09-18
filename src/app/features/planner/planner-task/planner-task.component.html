@@ -1,6 +1,7 @@
 <ng-content></ng-content>
 
 <swipe-block
+  [canSwipe]="!isTouchSelecting()"
   [isDone]="task().isDone"
   (swipeStart)="onSwipeStart()"
   (swipeRight)="toggleTaskDone()"
@@ -8,14 +9,21 @@
   (swipeLeft)="openContextMenu()"
 >
   <div class="task-content">
-    <done-toggle
-      [isDone]="task().isDone"
-      [isCurrent]="isCurrent()"
-      [showDoneAnimation]="showDoneAnimation()"
-      [showUndoneAnimation]="showUndoneAnimation()"
-      [attr.aria-label]="T.F.TASK.CMP.TOGGLE_DONE | translate"
-      (toggled)="toggleTaskDone()"
-    ></done-toggle>
+    @if (isTouchSelecting()) {
+      <mat-icon aria-hidden="true">{{
+        isMultiSelected() ? 'check_circle' : 'radio_button_unchecked'
+      }}</mat-icon>
+    } @else {
+      <done-toggle
+        [isDone]="task().isDone"
+        [isMultiSelectAware]="focusable()"
+        [isCurrent]="isCurrent()"
+        [showDoneAnimation]="showDoneAnimation()"
+        [showUndoneAnimation]="showUndoneAnimation()"
+        [attr.aria-label]="T.F.TASK.CMP.TOGGLE_DONE | translate"
+        (toggled)="toggleTaskDone()"
+      ></done-toggle>
+    }
 
     <div class="no-drag">
       <div class="wrap">
@@ -62,6 +70,8 @@
     </div>
   </div>
 </swipe-block>
+
+<ng-content select="[task-card-trailing]"></ng-content>
 
 @if (isContextMenuLoaded()) {
   <task-context-menu

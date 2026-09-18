@@ -76,24 +76,30 @@
     }
   }
 
+  // The title is the one thing on the row that should read first; project,
+  // tags and estimate are muted secondary text (see .parent-title, .time).
+  .task-title {
+    font-weight: var(--font-weight-medium);
+  }
+
   // note: we use .tags-container, since we don't want margins for an empty list
   ::ng-deep .tags-container {
     // to match task title padding
-    margin-left: 6px;
-    margin-bottom: 5px;
+    margin-left: var(--s);
+    margin-bottom: var(--s-half);
   }
 }
 
 @mixin timeWrapperMinimalStyles() {
   .time {
-    font-size: 13px;
+    font-size: var(--font-size-md);
     flex-direction: column;
   }
 
   .separator {
-    border-top: 1px solid;
+    border-top: 1px solid var(--divider-color);
     height: 1px;
-    opacity: 0.1;
+    font-size: 0;
     width: 100%;
   }
 }
@@ -121,11 +127,17 @@
   &.isEditable {
     cursor: pointer;
 
-    &:hover {
+    &:hover,
+    &:focus-visible {
       .time {
-        transition: var(--transition-standard);
-        opacity: 1 !important;
+        color: var(--text-color);
       }
+    }
+
+    &:focus-visible {
+      outline: var(--focus-ring-width) solid var(--focus-ring-color);
+      outline-offset: var(--focus-ring-offset);
+      border-radius: var(--radius-xs);
     }
   }
 
@@ -134,16 +146,15 @@
   }
 
   .time {
-    font-style: italic;
+    font-variant-numeric: tabular-nums;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    opacity: 0.6;
-    font-weight: 300;
+    color: var(--text-color-muted);
+    transition: color var(--transition-fast);
 
     @include mq(xs) {
-      opacity: 0.5;
       flex-direction: row;
     }
   }
@@ -381,7 +392,8 @@ done-toggle {
   margin-bottom: -2px;
 
   .title {
-    font-size: 12px;
+    font-size: var(--font-size-sm);
+    color: var(--text-color-muted);
     @include truncateText();
   }
 }

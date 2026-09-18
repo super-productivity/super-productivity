@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { CapacitorPlatformService } from './capacitor-platform.service';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
+import { IS_ELECTRON_TOKEN } from '../../app.constants';
 
 describe('CapacitorPlatformService', () => {
   let service: CapacitorPlatformService;
@@ -56,6 +57,57 @@ describe('CapacitorPlatformService', () => {
       expect(service.capabilities.backgroundTracking).toBe(false);
       expect(service.capabilities.localFileSync).toBe(false);
       expect(service.capabilities.webdavSync).toBe(true);
+    });
+  });
+
+  describe('isIOSWebKit', () => {
+    // Styles that clear the iOS 16px focus-zoom threshold key off this, so it
+    // must stay false where the zoom does not happen. Karma runs desktop Chrome.
+    it('should be false in a desktop browser', () => {
+      expect(service.isIOSWebKit()).toBe(false);
+    });
+
+    // The case isIOS() misses: _detectPlatform() deliberately reports an iOS
+    // browser as 'web', but WKWebView zooms there exactly as it does natively,
+    // so the engine check must still be true.
+    it('should be true for an iOS browser that reports platform web', () => {
+      spyOnProperty(Navigator.prototype, 'userAgent', 'get').and.returnValue(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+      );
+
+      expect(service.isIOS()).toBe(false);
+      expect(service.isIOSWebKit()).toBe(true);
+    });
+  });
+
+  describe('Electron detection', () => {
+    const setup = (isElectron: boolean): CapacitorPlatformService => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          CapacitorPlatformService,
+          { provide: IS_ELECTRON_TOKEN, useValue: isElectron },
+        ],
+      });
+      return TestBed.inject(CapacitorPlatformService);
+    };
+
+    it('should use web capabilities for a foreign Electron host', () => {
+      spyOnProperty(Navigator.prototype, 'userAgent', 'get').and.returnValue(
+        'Mozilla/5.0 Chrome/140.0.0.0 Electron/43.3.0',
+      );
+
+      const platform = setup(false);
+      expect(platform.isWeb()).toBe(true);
+      expect(platform.capabilities.localFileSync).toBe(false);
+      expect(platform.capabilities.scheduledNotifications).toBe(false);
+    });
+
+    it('should use desktop capabilities when the Electron token is true', () => {
+      const platform = setup(true);
+      expect(platform.isElectron()).toBe(true);
+      expect(platform.capabilities.localFileSync).toBe(true);
+      expect(platform.capabilities.scheduledNotifications).toBe(true);
     });
   });
 

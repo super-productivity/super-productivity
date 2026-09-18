@@ -81,11 +81,10 @@ export const selectSimpleCounterClickCounterLineChartData = createSelector(
     const stopwatchItems = simpleCounterItems.filter(
       (item) => item.type === SimpleCounterType.ClickCounter,
     );
-    let allDays: string[] = [];
-    stopwatchItems.forEach((item, i) => {
-      allDays = allDays.concat(Object.keys(item.countOnDay || {}));
-    });
-    const allDaysSorted = sortWorklogDates(unique(allDays)).slice(f);
+    const allDays = unique(
+      stopwatchItems.flatMap((item) => Object.keys(item.countOnDay || {})),
+    );
+    const allDaysSorted = sortWorklogDates(allDays).slice(f);
     chart.labels = allDaysSorted;
 
     stopwatchItems.forEach((item, j) => {
@@ -110,11 +109,10 @@ export const selectSimpleCounterStopWatchLineChartData = createSelector(
     const stopwatchItems = simpleCounterItems.filter(
       (item) => item.type === SimpleCounterType.StopWatch,
     );
-    let allDays: string[] = [];
-    stopwatchItems.forEach((item, i) => {
-      allDays = allDays.concat(Object.keys(item.countOnDay || {}));
-    });
-    const allDaysSorted = sortWorklogDates(unique(allDays)).slice(f);
+    const allDays = unique(
+      stopwatchItems.flatMap((item) => Object.keys(item.countOnDay || {})),
+    );
+    const allDaysSorted = sortWorklogDates(allDays).slice(f);
     chart.labels = allDaysSorted;
 
     stopwatchItems.forEach((item, j) => {

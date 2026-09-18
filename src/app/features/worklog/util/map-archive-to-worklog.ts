@@ -46,6 +46,7 @@ export const mapArchiveToWorklog = (
   locale: string,
 ): { worklog: Worklog; totalTimeSpent: number } => {
   const entities = taskState.entities;
+  const noRestoreIdSet = new Set(noRestoreIds);
   const worklog: Worklog = {};
   let totalTimeSpent = 0;
   Object.keys(entities).forEach((id) => {
@@ -98,7 +99,7 @@ export const mapArchiveToWorklog = (
       const newItem: WorklogDataForDay = {
         task: task,
         parentId: task.parentId,
-        isNoRestore: noRestoreIds.includes(task.id),
+        isNoRestore: noRestoreIdSet.has(task.id),
         timeSpent: timeSpentOnDay[dateStr],
       };
       if (task.parentId) {

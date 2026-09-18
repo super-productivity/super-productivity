@@ -518,6 +518,15 @@ export class GlobalThemeService {
       }
     }
 
+    // Engine-level marker for the iOS focus-zoom workaround, set for web too:
+    // `isIOS` above is inside the isNative branch, so mobile Safari and the
+    // installed PWA never get it, yet they zoom exactly the same. Styles that
+    // must clear the 16px threshold key off THIS class (see
+    // styles/mixins/_ios-focus-zoom.scss).
+    if (this._platformService.isIOSWebKit()) {
+      this.document.body.classList.add(BodyClass.isIOSWebKit);
+    }
+
     if (IS_ANDROID_WEB_VIEW) {
       androidInterface.isKeyboardShown$
         // The native OnGlobalLayoutListener pushes a value on every layout pass

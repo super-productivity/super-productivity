@@ -13,6 +13,7 @@ import { DateTimeFormatService } from '../../../core/date-time-format/date-time-
 import { selectTaskByIdWithSubTaskData } from '../../tasks/store/task.selectors';
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { isTouchActive } from '../../../util/input-intent';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 
 const makeCalendarScheduleEvent = (isReferenceCalendar: boolean): ScheduleEvent => ({
   id: 'cal-1',
@@ -305,6 +306,37 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
         document.dispatchEvent(new MouseEvent('mousemove', { clientY: 300 }));
 
         expect(component._resizeHeight()).toBe('');
+      });
+
+      it('should save the dragged duration even before the new height is rendered', () => {
+        const gridContainer = document.createElement('div');
+        gridContainer.classList.add('grid-container');
+        spyOn(gridContainer, 'getBoundingClientRect').and.returnValue({
+          height: 24 * 12 * 10,
+        } as DOMRect);
+        fixture.nativeElement.parentElement?.insertBefore(
+          gridContainer,
+          fixture.nativeElement,
+        );
+        gridContainer.appendChild(fixture.nativeElement);
+
+        const store = TestBed.inject(MockStore);
+        spyOn(store, 'dispatch');
+        const handle = getHandle();
+        handle.dispatchEvent(
+          new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientY: 100 }),
+        );
+        document.dispatchEvent(new MouseEvent('mousemove', { clientY: 220 }));
+        document.dispatchEvent(new MouseEvent('mouseup'));
+
+        expect(store.dispatch).toHaveBeenCalledWith(
+          TaskSharedActions.updateTask({
+            task: {
+              id: 'task-1',
+              changes: { timeEstimate: 7200000 },
+            },
+          }),
+        );
       });
     });
   });

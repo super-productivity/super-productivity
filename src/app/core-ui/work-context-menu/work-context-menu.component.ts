@@ -160,20 +160,23 @@ export class WorkContextMenuComponent implements OnInit {
 
   async rename(): Promise<void> {
     if (this.isForProject) {
-      const project = await this._projectService.getByIdOnce$(this.contextId).toPromise();
+      const project = await firstValueFrom(
+        this._projectService.getByIdOnce$(this.contextId),
+      );
       if (!project) {
         return;
       }
-      const result = await this._matDialog
-        .open(DialogPromptComponent, {
-          restoreFocus: true,
-          data: {
-            txtValue: project.title,
-            placeholder: T.F.PROJECT.D_RENAME.PLACEHOLDER,
-          },
-        })
-        .afterClosed()
-        .toPromise();
+      const result = await firstValueFrom(
+        this._matDialog
+          .open(DialogPromptComponent, {
+            restoreFocus: true,
+            data: {
+              txtValue: project.title,
+              placeholder: T.F.PROJECT.D_RENAME.PLACEHOLDER,
+            },
+          })
+          .afterClosed(),
+      );
 
       const trimmed = (result as string | undefined)?.trim();
       if (!trimmed || trimmed === project.title) {
@@ -183,20 +186,21 @@ export class WorkContextMenuComponent implements OnInit {
       return;
     }
 
-    const tag = await this._tagService
-      .getTagById$(this.contextId)
-      .pipe(first())
-      .toPromise();
-    const result = await this._matDialog
-      .open(DialogPromptComponent, {
-        restoreFocus: true,
-        data: {
-          txtValue: tag.title,
-          placeholder: T.F.TAG.D_RENAME.PLACEHOLDER,
-        },
-      })
-      .afterClosed()
-      .toPromise();
+    const tag = await firstValueFrom(this._tagService.getTagById$(this.contextId));
+    if (!tag) {
+      return;
+    }
+    const result = await firstValueFrom(
+      this._matDialog
+        .open(DialogPromptComponent, {
+          restoreFocus: true,
+          data: {
+            txtValue: tag.title,
+            placeholder: T.F.TAG.D_RENAME.PLACEHOLDER,
+          },
+        })
+        .afterClosed(),
+    );
 
     const trimmed = (result as string | undefined)?.trim();
     if (!trimmed || trimmed === tag.title) {

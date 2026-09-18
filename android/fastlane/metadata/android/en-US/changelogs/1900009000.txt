@@ -1,0 +1,1 @@
+Live Markdown note editing, clearer highlighting when jumping to tasks from search, double-click renaming for projects, tags and folders, and conversion of selected text into Markdown checklists. Also improves tag entry, scheduled-task ordering, long-title editing, issue polling, reminders, Android time pickers and notifications, window state restoration, translations, and more.

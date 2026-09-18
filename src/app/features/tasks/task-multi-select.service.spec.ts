@@ -29,6 +29,13 @@ describe('TaskMultiSelectService', () => {
           <task data-task-id="b1" tabindex="0"></task>
         </div>
       </task-detail-panel>
+      <planner-day data-planner-selection-scope="2026-09-12">
+        <div><planner-task data-task-id="p1" data-task-selectable="true" tabindex="0"></planner-task></div>
+        <div><planner-task data-task-id="p2" data-task-selectable="true" tabindex="0"></planner-task></div>
+      </planner-day>
+      <planner-day data-planner-selection-scope="2026-09-13">
+        <planner-task data-task-id="p3" data-task-selectable="true" tabindex="0"></planner-task>
+      </planner-day>
     `;
     document.body.appendChild(root);
   };
@@ -45,7 +52,7 @@ describe('TaskMultiSelectService', () => {
   };
 
   const focusRow = (id: string): void => {
-    stubActiveElement(root.querySelector(`task[data-task-id="${id}"]`));
+    stubActiveElement(root.querySelector(`[data-task-id="${id}"]`));
   };
 
   const extend = (direction: 'up' | 'down'): HTMLElement | null => {
@@ -103,6 +110,147 @@ describe('TaskMultiSelectService', () => {
   });
 
   describe('selectRange', () => {
+    const boardRows = (): HTMLElement[][] => {
+      const panels = [
+        ['shared', 'left'],
+        ['shared', 'middle', 'last'],
+      ].map((ids, i) => {
+        const panel = document.createElement('board-panel');
+        panel.setAttribute('data-board-selection-scope', String(i));
+        root.appendChild(panel);
+        return ids.map((id) => {
+          const row = document.createElement('planner-task');
+          row.dataset.taskId = id;
+          row.dataset.taskSelectable = 'true';
+          row.tabIndex = 0;
+          panel.appendChild(row);
+          return row;
+        });
+      });
+      return panels;
+    };
+
+    it('anchors a board range to the selected copy of a duplicated task', () => {
+      const [, right] = boardRows();
+      stubActiveElement(right[0]);
+      service.toggle('shared');
+      stubActiveElement(right[2]);
+      service.selectRange('last');
+      expect(selected()).toEqual(['last', 'middle', 'shared']);
+      expect(service.selectedIdsInDomOrder()).toEqual(['shared', 'middle', 'last']);
+    });
+
+    it('starts a new range when clicking a duplicate in another panel', () => {
+      const [left, right] = boardRows();
+      stubActiveElement(right[2]);
+      service.toggle('last');
+      stubActiveElement(left[0]);
+      service.selectRange('shared');
+      expect(selected()).toEqual(['shared']);
+      stubActiveElement(left[1]);
+      service.selectRange('left');
+      expect(selected()).toEqual(['left', 'shared']);
+    });
+
+    it('selects only the focused panel with select-all and keyboard extension', () => {
+      const [, right] = boardRows();
+      stubActiveElement(right[0]);
+      service.selectAllInListOfFocused();
+      expect(selected()).toEqual(['last', 'middle', 'shared']);
+      service.clear();
+      expect(extend('down')).toBe(right[1]);
+      expect(selected()).toEqual(['middle', 'shared']);
+    });
+
+    it('starts keyboard ranges in the focused panel when its tasks also occur at the old anchor', () => {
+      const [left, right] = boardRows();
+      left[1].dataset.taskId = 'middle';
+      stubActiveElement(left[0]);
+      service.toggle('shared');
+      stubActiveElement(right[0]);
+      expect(extend('down')).toBe(right[1]);
+      expect(selected()).toEqual(['middle']);
+      expect(extend('down')).toBe(right[2]);
+      expect(selected()).toEqual(['last', 'middle']);
+    });
+
+    it('remembers the originating panel after its anchor card leaves', () => {
+      const [, right] = boardRows();
+      const scope = right[0].parentElement;
+      stubActiveElement(right[0]);
+      service.toggle('shared');
+      right[0].remove();
+      stubActiveElement(document.body);
+      expect(service.selectionScope()).toBe(scope);
+      service.clear();
+      expect(service.selectionScope()).toBeNull();
+    });
+
+    it('keeps the originating panel when the anchor row is deselected', () => {
+      const [, right] = boardRows();
+      const scope = right[0].parentElement;
+      stubActiveElement(right[0]);
+      service.toggle('shared');
+      stubActiveElement(right[1]);
+      service.toggle('middle');
+
+      // Deselecting the anchor while the rest of the selection stays put must
+      // not drop the scope: focus moves into the bulk menu after an action, so
+      // selectionScope() is what keeps the post-action focus search inside this
+      // panel instead of widening it to the whole document.
+      service.toggle('middle');
+      stubActiveElement(document.body);
+
+      expect(selected()).toEqual(['shared']);
+      expect(service.anchorId()).toBeNull();
+      expect(service.selectionScope()).toBe(scope);
+    });
+
+    it('re-points a retained scope that holds none of the remaining selection', () => {
+      const [left, right] = boardRows();
+      stubActiveElement(left[1]);
+      service.toggle('left');
+      stubActiveElement(right[1]);
+      service.toggle('middle');
+      expect(service.selectionScope()).toBe(right[1].parentElement);
+
+      // Deselecting the anchor leaves the selection entirely in the OTHER
+      // panel. Keeping the anchor's panel would scope the post-action focus
+      // search to a panel with nothing selected in it, and it would then find
+      // no target at all — worse than no scope, which at least widens.
+      service.toggle('middle');
+      stubActiveElement(document.body);
+
+      expect(selected()).toEqual(['left']);
+      expect(service.selectionScope()).toBe(left[1].parentElement);
+    });
+
+    it('extends a moved selection from its original anchor in the destination', () => {
+      const [left, right] = boardRows();
+      left[1].dataset.taskId = 'middle';
+      stubActiveElement(left[0]);
+      service.toggle('shared');
+      stubActiveElement(left[1]);
+      service.selectRange('middle');
+      expect(selected()).toEqual(['middle', 'shared']);
+
+      // Moving a selection can leave duplicate copies in the source panel.
+      service.reanchorAfterMove(['shared', 'middle'], right);
+      stubActiveElement(right[1]);
+      expect(extend('down')).toBe(right[2]);
+      expect(selected()).toEqual(['last', 'middle', 'shared']);
+      expect(service.anchorId()).toBe('shared');
+    });
+
+    it('ranges across all-day and timed Planner rows within one day only', () => {
+      stubActiveElement(root.querySelector('planner-task[data-task-id="p1"]'));
+      service.toggle('p1');
+      service.selectRange('p2');
+      expect(selected()).toEqual(['p1', 'p2']);
+
+      service.selectRange('p3');
+      expect(selected()).toEqual(['p3']);
+    });
     it('selects the target alone when there is no anchor', () => {
       service.selectRange('c');
       expect(selected()).toEqual(['c']);
@@ -136,6 +284,16 @@ describe('TaskMultiSelectService', () => {
       service.toggle('a');
       service.selectRange('e');
       expect(selected()).toEqual(['e']);
+      expect(service.anchorId()).toBe('e');
+    });
+
+    // No range can be built across lists, but the user still held Ctrl to ADD.
+    // Replacing the selection there threw away everything already picked.
+    it('keeps the existing selection when an additive target is in another list', () => {
+      service.toggle('a');
+      service.toggle('c');
+      service.selectRange('e', true);
+      expect(selected()).toEqual(['a', 'c', 'e']);
       expect(service.anchorId()).toBe('e');
     });
 
@@ -178,6 +336,11 @@ describe('TaskMultiSelectService', () => {
   });
 
   describe('selectAllInListOfFocused', () => {
+    it('selects all participating Planner rows in the focused day', () => {
+      focusRow('p2');
+      service.selectAllInListOfFocused();
+      expect(selected()).toEqual(['p1', 'p2']);
+    });
     it('selects the direct rows of the focused list only', () => {
       focusRow('c');
       service.selectAllInListOfFocused();

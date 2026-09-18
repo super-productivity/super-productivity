@@ -101,8 +101,9 @@ test.describe('Task detail iOS focus zoom', () => {
 
   // Controls with a non-focusable display counterpart (rendered markdown, the
   // static title) are raised only under `isTouchPrimary`, so both layers move
-  // together and desktop keeps its 14px. Forcing the class is what a phone
-  // would set via InputIntentService.
+  // together and desktop keeps its 14px. Forcing the classes is what a phone
+  // would set via InputIntentService (isTouchPrimary) and GlobalThemeService
+  // (isIOSWebKit).
   test('should raise editor/display pairs above the threshold on touch', async ({
     page,
     workViewPage,
@@ -110,10 +111,18 @@ test.describe('Task detail iOS focus zoom', () => {
   }) => {
     await openTaskDetailPanel(page, workViewPage, taskPage, 'touch zoom task');
 
-    await page.locator('inline-markdown .markdown-parsed').first().waitFor();
+    // The live editor is lazily chunked (@defer), so wait for it to mount.
+    await page.locator('inline-markdown .cm-content').first().waitFor();
+    // isIOSWebKit as well as isTouchPrimary: the task title keeps the 14px base
+    // on engines that do not zoom, so its 16px rule is gated on the iOS class.
+    // That class exists to be forceable here — the sibling `@supports
+    // (-webkit-touch-callout: none)` fallback keys off a compile-time WebKit
+    // flag, which no Chromium or Playwright-WebKit build can be made to report,
+    // so a feature query alone would leave this assertion unsatisfiable.
     await page.evaluate(() => {
       document.body.classList.remove('isMousePrimary');
       document.body.classList.add('isTouchPrimary');
+      document.body.classList.add('isIOSWebKit');
     });
 
     // Polled rather than read once: these elements carry a font-size
@@ -121,14 +130,13 @@ test.describe('Task detail iOS focus zoom', () => {
     // phone sets isTouchPrimary at startup, long before any field is focused,
     // so the transition only exists in this test.
     //
-    // Task description. Asserted on the rendered half, not the textarea: both
-    // are raised by a single `.markdown-unparsed, .markdown-parsed` declaration
-    // in inline-markdown.component.scss, so this covers the focusable half too,
-    // and opening the editor needs a click sequence through an animating
-    // expansion panel that proved flaky. Keep the two selectors in one
-    // declaration or this stops covering the textarea.
+    // Task description. Since #9910 the notes field is a CodeMirror editor that
+    // is always mounted and is itself the focusable control (contenteditable),
+    // so this asserts the element iOS would actually zoom for — no display
+    // counterpart to stand in for it. Raised by the `::ng-deep .cm-content`
+    // rule in live-markdown-editor.component.scss.
     await expect
-      .poll(() => getFontSizePx(page, 'inline-markdown .markdown-parsed'))
+      .poll(() => getFontSizePx(page, 'inline-markdown .cm-content'))
       .toBeGreaterThanOrEqual(IOS_ZOOM_THRESHOLD_PX);
 
     // Task title in a list row — the most frequent inline edit on mobile.

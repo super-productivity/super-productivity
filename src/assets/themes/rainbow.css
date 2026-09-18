@@ -47,6 +47,13 @@ body {
   --rainbow-lavender: #af7ac5; /* Lavender - soft accent */
 
   --task-border-radius: 16px;
+  /* Boxed rows: the app default is flat hairline rows, so opt back into
+     the card layout (border, gap, no separator/leading edge). */
+  --task-border: 1px solid var(--task-border-color);
+  --task-separator: none;
+  --task-row-edge: var(--task-border);
+  --task-selected-edge: none;
+  --task-list-row-gap: var(--s-half);
 }
 
 /* ===================================================================
@@ -487,7 +494,7 @@ body.isDarkTheme main-header .wrapper {
  * TASKS — flat idle edge, with glow reserved for interactive state.
  * This keeps long scrolling lists cheap while preserving the neon identity.
  * ===================================================================*/
-body.isDarkTheme task > swipe-block > .inner-wrapper > .box {
+body.isDarkTheme task > swipe-block > .inner-wrapper > .inner-wrapper > .box {
   border: 1px solid color-mix(in srgb, var(--neon-violet) 14%, transparent);
   box-shadow: none;
   transition:
@@ -501,18 +508,14 @@ body.isDarkTheme task > swipe-block > .inner-wrapper > .box {
     task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
     > swipe-block
     > .inner-wrapper
+    > .inner-wrapper
     > .box {
     border-color: color-mix(in srgb, var(--neon-cyan) 40%, transparent);
     box-shadow: 0 0 12px color-mix(in srgb, var(--neon-cyan) 25%, transparent);
   }
 }
 
-body.isDarkTheme task.isSelected > swipe-block > .inner-wrapper > .box {
-  border-color: color-mix(in srgb, var(--neon-cyan) 55%, transparent);
-  box-shadow: var(--task-selected-shadow);
-}
-
-body.isDarkTheme task.isCurrent > swipe-block > .inner-wrapper > .box {
+body.isDarkTheme task.isCurrent > swipe-block > .inner-wrapper > .inner-wrapper > .box {
   border-color: color-mix(in srgb, var(--neon-pink) 60%, transparent);
   box-shadow: var(--task-current-shadow);
 }

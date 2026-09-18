@@ -70,7 +70,10 @@ const readRingMeta = async (tx: OpLogTx): Promise<ImportBackupMeta[]> => {
 /**
  * Newest-first entries that survive a rotation to `size`.
  *
- * Two slots are privileged, then the rest go to the newest remaining entries:
+ * Up to two slots are privileged, then the rest go to the newest remaining
+ * entries. In priority order, and capped at `size` — under a tight `size` the
+ * first wins the only slot, because returning both would free fewer slots than
+ * the caller asked for and the quota retry that prompted the prune throws again:
  * - `protectBackupId`, the entry currently being restored (see
  *   {@link ImportBackupCaptureMeta.protectBackupId}).
  * - the NEWEST pre-replacement capture (REMOTE_IMPORT / FORCE_DOWNLOAD), so a
@@ -88,18 +91,20 @@ const keepNewest = (
   if (size === 0) {
     return [];
   }
-  const privileged = new Set<ImportBackupMeta>();
   const protectedEntry =
     protectBackupId !== undefined
       ? entries.find((e) => e.backupId === protectBackupId)
       : undefined;
-  if (protectedEntry) {
-    privileged.add(protectedEntry);
-  }
   const guarded = entries.find((e) => e.reason !== 'LOCAL_IMPORT');
-  if (guarded) {
-    privileged.add(guarded);
-  }
+  // Both privileged slots can be filled while `size` has room for only one, and
+  // returning both would free one slot fewer than the caller asked for — the
+  // quota-retry path then hits QuotaExceededError again. The entry being
+  // restored outranks the guarded capture, so it takes the single slot.
+  const privileged = new Set<ImportBackupMeta>(
+    [protectedEntry, guarded]
+      .filter((e): e is ImportBackupMeta => !!e)
+      .slice(0, Math.max(0, size)),
+  );
   const others = entries
     .filter((e) => !privileged.has(e))
     .slice(0, Math.max(0, size - privileged.size));
@@ -184,13 +189,18 @@ export const listImportBackupsTx = (tx: OpLogTx): Promise<ImportBackupMeta[]> =>
  * make room when a capture fails (typically storage quota). Zero clears all
  * snapshots, including the protected capture. The undo pointer is
  * retired if its snapshot goes. Returns how many snapshots were evicted.
+ *
+ * `protectBackupId` keeps the entry currently being restored, same as in
+ * {@link saveImportBackupTx}: the quota retry runs mid-restore, and pruning
+ * to the newest capture alone would delete the snapshot the retry is for.
  */
 export const pruneImportBackupRingTx = async (
   tx: OpLogTx,
   keep: number,
+  protectBackupId?: string,
 ): Promise<number> => {
   const entries = await readRingMeta(tx);
-  const kept = keepNewest(entries, keep);
+  const kept = keepNewest(entries, keep, protectBackupId);
   const evicted = entries.filter((e) => !kept.includes(e));
   if (evicted.length === 0) {
     return 0;

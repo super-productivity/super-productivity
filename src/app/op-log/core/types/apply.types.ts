@@ -54,6 +54,12 @@ export interface ApplyOperationsOptions {
   skipReducerDispatch?: boolean;
 
   /**
+   * The ops are the whole history from seq 0, applied onto default state.
+   * Forwarded to `bulkApplyOperations`; see there for what it unlocks.
+   */
+  isReplayFromEmptyBaseline?: boolean;
+
+  /**
    * Called after the bulk reducer dispatch commits and before archive side effects.
    * Remote apply uses this to persist its reducer/archive checkpoint and merge the
    * causal frontier before deferred local actions can be written.

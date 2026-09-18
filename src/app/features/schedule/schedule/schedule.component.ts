@@ -7,6 +7,7 @@ import {
   ElementRef,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { fromEvent } from 'rxjs';
 import { select, Store } from '@ngrx/store';
@@ -104,6 +105,8 @@ export class ScheduleComponent {
     this._hiddenCalendarProviders.toggle(providerId);
   }
 
+  private _scrollWrapper = viewChild<ElementRef<HTMLElement>>('scrollWrapper');
+
   private _currentTimeViewMode = computed(() => this.layoutService.selectedTimeView());
   isMonthView = computed(() => this._currentTimeViewMode() === 'month');
   isDayView = computed(() => this._currentTimeViewMode() === 'day');
@@ -141,29 +144,13 @@ export class ScheduleComponent {
   });
 
   private _daysToShowCount = computed(() => {
-    const size = this._windowSize();
     const selectedView = this._currentTimeViewMode();
-    const width = size.width;
-    const height = size.height;
 
     if (selectedView === 'day') return 1;
 
-    if (selectedView === 'month') {
-      const availableHeight = height - SCHEDULE_CONSTANTS.MONTH_VIEW.HEADER_OFFSET;
-      const minHeightPerWeek =
-        width < SCHEDULE_CONSTANTS.BREAKPOINTS.TABLET
-          ? SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_HEIGHT_PER_WEEK_MOBILE
-          : SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_HEIGHT_PER_WEEK_DESKTOP;
-      const maxWeeks = Math.floor(availableHeight / minHeightPerWeek);
-
-      if (maxWeeks < SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_WEEKS) {
-        return SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_WEEKS;
-      } else if (maxWeeks > SCHEDULE_CONSTANTS.MONTH_VIEW.MAX_WEEKS) {
-        return SCHEDULE_CONSTANTS.MONTH_VIEW.MAX_WEEKS;
-      } else {
-        return maxWeeks;
-      }
-    }
+    // Month view derives its own count from the displayed month, in `daysToShow`
+    // below: it needs `selectedDate` and `firstDayOfWeek`, neither of which is
+    // read here.
 
     // Week view: always 7 days
     return 7;
@@ -177,9 +164,16 @@ export class ScheduleComponent {
     this._todayDateStr();
 
     if (selectedView === 'month') {
+      // Rows follow the month, never the window height. Deriving them from
+      // available space is what #9449 was filed for: a day left out of
+      // `daysToShow` gets no events computed at all, so a task on it vanished
+      // rather than merely being clipped. 4-6 rows spans every
+      // month/firstDayOfWeek pair, and `weeksToShow` carries the same number
+      // into the grid's `--nr-of-weeks`, so the tracks follow the days.
+      const firstDayOfWeek = this.firstDayOfWeek();
       return this.scheduleService.getMonthDaysToShow(
-        count,
-        this.firstDayOfWeek(),
+        this.scheduleService.getMonthWeeksToShow(firstDayOfWeek, selectedDate),
+        firstDayOfWeek,
         selectedDate,
       );
     }
@@ -391,6 +385,19 @@ export class ScheduleComponent {
     this.isHScrolled.set(el.scrollLeft > 0);
   }
 
+  // The month grid is taller than the wrapper on a short window, so a scroll
+  // position carried over from week view clamps to the bottom and opens the
+  // month with its first row above the viewport (#9463 review). scrollTo is
+  // safe here where _scrollAnchorToTop's measured offsets would not be, since
+  // a fixed origin is independent of the warpRoute scale.
+  private _resetScrollWrapper(): void {
+    this._scrollWrapper()?.nativeElement.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    });
+  }
+
   // Scroll one of the schedule's time anchors to the top of the scroll-wrapper.
   //
   // The framing (lead above the target, and clearance for the sticky time
@@ -440,6 +447,8 @@ export class ScheduleComponent {
             this.currentTimeRow() !== null ? 'current-time' : 'work-start',
           ),
         );
+      } else {
+        setTimeout(() => this._resetScrollWrapper());
       }
     });
   }

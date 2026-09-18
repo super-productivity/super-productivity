@@ -57,7 +57,13 @@
   background: var(--task-detail-bg);
   font-size: 14px;
 
-  :host-context(.isNoTouchOnly):focus & {
+  // Marks the row the user is on for the panel's arrow-key navigation.
+  // Mouse intent, not `.isNoTouchOnly`: that class only excludes pure touch
+  // devices, so on an iPad or a touchscreen laptop (both `hybrid` for detect-it)
+  // a tap — which focuses the host via `focusEl()` — left the border stuck.
+  // See docs/styling-guide.md.
+  :host-context(.isMousePrimary):focus &,
+  :host:focus-visible & {
     border-color: var(--palette-primary-400) !important;
   }
 }

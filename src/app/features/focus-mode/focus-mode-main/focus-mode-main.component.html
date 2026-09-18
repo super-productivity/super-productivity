@@ -420,15 +420,12 @@
     </button>
 
     <div class="notes-panel">
-      <!-- No [isFocus]: the panel opens showing the rendered note (read mode);
-           tapping it enters edit mode. isHidePreviewWhileEditing keeps the
-           compact panel to a single view at a time — rendered note when
-           reading, plain textarea when editing — never both at once. -->
+      <!-- No [isFocus]: the panel opens without stealing focus, so tapping is
+           what starts editing. -->
       <inline-markdown
         (blur)="isFocusNotes.set(false)"
         (blurred)="isFocusNotes.set(false)"
         (changed)="changeTaskNotes($event); isFocusNotes.set(false)"
-        [isHidePreviewWhileEditing]="true"
         [isShowControls]="true"
         [isDefaultText]="!displayed.notes"
         [model]="displayed.notes || defaultTaskNotes()"

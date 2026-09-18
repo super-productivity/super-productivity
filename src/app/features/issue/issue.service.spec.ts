@@ -29,6 +29,15 @@ import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider
 import { GlobalConfigService } from '../config/global-config.service';
 import { IssueProvider } from './issue.model';
 import { TaskReminderOptionId } from '../tasks/task.model';
+import { Action } from '@ngrx/store';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { RootState } from '../../root-store/root-state';
+import { TASK_FEATURE_NAME } from '../tasks/store/task.reducer';
+import { createCombinedTaskSharedMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/test-helpers';
+import {
+  createBaseState,
+  createMockTask as createReducerTask,
+} from '../../root-store/meta/task-shared-meta-reducers/test-utils';
 
 describe('IssueService', () => {
   let service: IssueService;
@@ -862,7 +871,7 @@ describe('IssueService', () => {
       expect(changesOfLastUpdate().remindAt).toBe(newDue - MIN_10);
     });
 
-    it('bulk poll: a remote unschedule clears the reminder', async () => {
+    it('bulk poll: a remote unschedule clears the reminder via dismissReminderOnly, not via the update', async () => {
       const task = createCaldavTask({ dueWithTime: oldDue, remindAt: oldDue });
       commonInterfaceServiceSpy.getFreshDataForIssueTasks.and.returnValue(
         Promise.resolve([
@@ -876,9 +885,32 @@ describe('IssueService', () => {
 
       await service.refreshIssueTasks([task], caldavProvider);
 
-      const changes = changesOfLastUpdate();
-      expect(Object.prototype.hasOwnProperty.call(changes, 'remindAt')).toBeTrue();
-      expect(changes.remindAt).toBeUndefined();
+      expect(
+        Object.prototype.hasOwnProperty.call(changesOfLastUpdate(), 'remindAt'),
+      ).toBeFalse();
+      expect(storeSpy.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.dismissReminderOnly({ id: task.id, isSkipSnack: true }),
+      );
+    });
+
+    it('bulk poll: a reschedule of a task without a reminder does not dispatch a clear', async () => {
+      const task = createCaldavTask({ dueWithTime: oldDue, remindAt: undefined });
+      commonInterfaceServiceSpy.getFreshDataForIssueTasks.and.returnValue(
+        Promise.resolve([
+          {
+            task,
+            taskChanges: { dueWithTime: newDue, issueWasUpdated: true },
+            issue: {},
+          },
+        ]),
+      );
+
+      await service.refreshIssueTasks([task], caldavProvider);
+
+      expect(
+        Object.prototype.hasOwnProperty.call(changesOfLastUpdate(), 'remindAt'),
+      ).toBeFalse();
+      expect(storeSpy.dispatch).not.toHaveBeenCalled();
     });
 
     it('bulk poll: an unchanged schedule leaves remindAt alone', async () => {
@@ -913,6 +945,81 @@ describe('IssueService', () => {
       await service.refreshIssueTask(task, false, false);
 
       expect(changesOfLastUpdate().remindAt).toBe(newDue);
+    });
+
+    describe('remote unschedule clears the reminder on every device (#9776 shape)', () => {
+      let dispatched: Action[];
+
+      beforeEach(() => {
+        dispatched = [];
+        storeSpy.dispatch.and.callFake(((action: Action): void => {
+          dispatched.push(action);
+        }) as Store['dispatch']);
+        // Mirror of TaskService.update: for changes without projectId it
+        // dispatches exactly this action (task.service.ts `update`).
+        taskServiceSpy.update.and.callFake((id: string, changes: Partial<Task>) => {
+          dispatched.push(TaskSharedActions.updateTask({ task: { id, changes } }));
+        });
+      });
+
+      // The op-log serializes payloads with JSON, which drops undefined-valued
+      // keys, so this is what every OTHER device replays.
+      const replayOnRemoteDevice = (task: Task): Task => {
+        const reducer = createCombinedTaskSharedMetaReducer((state) => state);
+        const base = createBaseState();
+        let state: RootState = {
+          ...base,
+          [TASK_FEATURE_NAME]: {
+            ...base[TASK_FEATURE_NAME],
+            ids: [task.id],
+            entities: {
+              [task.id]: createReducerTask({
+                id: task.id,
+                dueWithTime: task.dueWithTime,
+                remindAt: task.remindAt,
+              }),
+            },
+          },
+        };
+        for (const action of dispatched) {
+          state = reducer(state, JSON.parse(JSON.stringify(action)));
+        }
+        return state[TASK_FEATURE_NAME].entities[task.id] as Task;
+      };
+
+      it('bulk poll: the replayed ops clear remindAt', async () => {
+        const task = createCaldavTask({ dueWithTime: oldDue, remindAt: oldDue });
+        commonInterfaceServiceSpy.getFreshDataForIssueTasks.and.returnValue(
+          Promise.resolve([
+            {
+              task,
+              taskChanges: { dueWithTime: null, dueDay: null, issueWasUpdated: true },
+              issue: {},
+            },
+          ]),
+        );
+
+        await service.refreshIssueTasks([task], caldavProvider);
+
+        const remoteTask = replayOnRemoteDevice(task);
+        expect(typeof remoteTask.dueWithTime).not.toBe('number');
+        expect(remoteTask.remindAt).toBeUndefined();
+      });
+
+      it('single refresh: the replayed ops clear remindAt', async () => {
+        const task = createCaldavTask({ dueWithTime: oldDue, remindAt: oldDue });
+        commonInterfaceServiceSpy.getFreshDataForIssueTask.and.returnValue(
+          Promise.resolve({
+            taskChanges: { dueWithTime: null, dueDay: null, issueWasUpdated: true },
+            issue: {},
+            issueTitle: 'x',
+          }),
+        );
+
+        await service.refreshIssueTask(task, false, false);
+
+        expect(replayOnRemoteDevice(task).remindAt).toBeUndefined();
+      });
     });
   });
 });

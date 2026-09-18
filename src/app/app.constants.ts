@@ -2,7 +2,9 @@ import { InjectionToken } from '@angular/core';
 import { IS_ANDROID_WEB_VIEW } from './util/is-android-web-view';
 import { IS_IOS_NATIVE } from './util/is-native-platform';
 
-export const IS_ELECTRON = navigator.userAgent.toLowerCase().indexOf(' electron/') > -1;
+// Other Electron apps can embed the web app without our preload bridge.
+export const IS_ELECTRON =
+  navigator.userAgent.toLowerCase().indexOf(' electron/') > -1 && !!window.ea;
 
 /**
  * Injection token for IS_ELECTRON to enable testing.
@@ -115,6 +117,7 @@ export enum BodyClass {
 
   // iOS-specific classes
   isIOS = 'isIOS',
+  isIOSWebKit = 'isIOSWebKit',
   isIPad = 'isIPad',
   isNativeMobile = 'isNativeMobile',
   isKeyboardVisible = 'isKeyboardVisible',

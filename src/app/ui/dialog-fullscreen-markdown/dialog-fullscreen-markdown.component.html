@@ -1,8 +1,8 @@
 <div
   class="content"
-  [class.split-view]="viewMode === 'SPLIT'"
+  [class.split-view]="!isLiveMarkdown() && viewMode === 'SPLIT'"
 >
-  @if (viewMode === 'TEXT_ONLY' || viewMode === 'SPLIT') {
+  @if (isLiveMarkdown() || viewMode === 'TEXT_ONLY' || viewMode === 'SPLIT') {
     <div class="editor-section">
       <!--
         The toolbar is wider than a phone (~565px vs 393px on a Nothing Phone 1)
@@ -216,18 +216,33 @@
         </button>
       </div>
 
-      <textarea
-        #textareaEl
-        [(ngModel)]="data.content"
-        (keydown)="keydownHandler($event)"
-        (paste)="pasteHandler($event)"
-        (ngModelChange)="ngModelChange($event)"
-        rows="1"
-        tabindex="3"
-      ></textarea>
+      @if (isLiveMarkdown()) {
+        <!-- Lazy chunk on purpose: keeps CodeMirror out of the initial bundle. -->
+        @defer (on immediate) {
+          <live-markdown-editor
+            #liveEditorEl
+            [model]="data.content"
+            [autoFocus]="true"
+            [extraKeymap]="liveEditorKeymap"
+            [resolveImageSrc]="resolveImageSrc"
+            (docChanged)="onLiveEditorDocChanged($event)"
+            (pasted)="pasteHandler($event)"
+          ></live-markdown-editor>
+        }
+      } @else {
+        <textarea
+          #textareaEl
+          [(ngModel)]="data.content"
+          (keydown)="keydownHandler($event)"
+          (paste)="pasteHandler($event)"
+          (ngModelChange)="ngModelChange($event)"
+          rows="1"
+          tabindex="3"
+        ></textarea>
+      }
     </div>
   }
-  @if (viewMode === 'PARSED' || viewMode === 'SPLIT') {
+  @if (!isLiveMarkdown() && (viewMode === 'PARSED' || viewMode === 'SPLIT')) {
     <markdown
       #previewEl
       (click)="clickPreview($event)"
@@ -239,27 +254,29 @@
 
 <div class="controls">
   <div class="left-buttons">
-    <mat-button-toggle-group
-      [(ngModel)]="viewMode"
-      (change)="onViewModeChange()"
-    >
-      <mat-button-toggle
-        value="TEXT_ONLY"
-        [matTooltip]="T.F.NOTE.D_FULLSCREEN.VIEW_TEXT_ONLY | translate"
-        ><mat-icon>notes</mat-icon></mat-button-toggle
+    @if (!isLiveMarkdown()) {
+      <mat-button-toggle-group
+        [(ngModel)]="viewMode"
+        (change)="onViewModeChange()"
       >
-      <mat-button-toggle
-        value="SPLIT"
-        class="hide-xs"
-        [matTooltip]="T.F.NOTE.D_FULLSCREEN.VIEW_SPLIT | translate"
-        ><mat-icon>vertical_split</mat-icon></mat-button-toggle
-      >
-      <mat-button-toggle
-        value="PARSED"
-        [matTooltip]="T.F.NOTE.D_FULLSCREEN.VIEW_PARSED | translate"
-        ><mat-icon>photo</mat-icon></mat-button-toggle
-      >
-    </mat-button-toggle-group>
+        <mat-button-toggle
+          value="TEXT_ONLY"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.VIEW_TEXT_ONLY | translate"
+          ><mat-icon>notes</mat-icon></mat-button-toggle
+        >
+        <mat-button-toggle
+          value="SPLIT"
+          class="hide-xs"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.VIEW_SPLIT | translate"
+          ><mat-icon>vertical_split</mat-icon></mat-button-toggle
+        >
+        <mat-button-toggle
+          value="PARSED"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.VIEW_PARSED | translate"
+          ><mat-icon>photo</mat-icon></mat-button-toggle
+        >
+      </mat-button-toggle-group>
+    }
   </div>
 
   <button

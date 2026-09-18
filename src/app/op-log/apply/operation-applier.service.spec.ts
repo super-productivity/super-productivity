@@ -130,6 +130,19 @@ describe('OperationApplierService', () => {
       expect(result.failedOp).toBeUndefined();
     });
 
+    it('forwards isReplayFromEmptyBaseline to the bulk action only when set', async () => {
+      const op = createMockOperation('op-1', 'TASK', OpType.Update, { title: 'Test' });
+
+      await service.applyOperations([op]);
+      await service.applyOperations([op], { isReplayFromEmptyBaseline: true });
+
+      const [plain, fromScratch] = mockStore.dispatch.calls
+        .allArgs()
+        .map(([action]) => action as unknown as { isReplayFromEmptyBaseline?: boolean });
+      expect(plain.isReplayFromEmptyBaseline).toBeUndefined();
+      expect(fromScratch.isReplayFromEmptyBaseline).toBeTrue();
+    });
+
     it('should dispatch bulkApplyOperations with multiple operations', async () => {
       const ops = [
         createMockOperation('op-1', 'TASK', OpType.Update, { title: 'First' }),

@@ -7,6 +7,8 @@ import {
   saveOAuthTokens,
   loadOAuthTokens,
   deleteOAuthTokens,
+  deleteOAuthTokensByPrefix,
+  moveOAuthTokens,
 } from './plugin-oauth-token-store';
 import { IS_ELECTRON } from '../../app.constants';
 import {
@@ -47,6 +49,7 @@ export class PluginOAuthBridgeService {
   async startOAuthFlow(
     pluginId: string,
     config: OAuthFlowConfig,
+    tokenKey?: string,
   ): Promise<OAuthTokenResult> {
     // Validate URLs before starting the loopback server. On Electron,
     // prepareRedirectUri() starts a server — avoid leaking it if config is invalid.
@@ -79,6 +82,7 @@ export class PluginOAuthBridgeService {
     this._openOAuthWindow(url);
 
     const code = await this._pluginOAuthService.waitForRedirectCode(pluginId, state);
+    const scopedPluginId = this._oauthPersistenceKey(pluginId, tokenKey);
 
     const tokens = await this._pluginOAuthService.exchangeCodeForTokens({
       tokenUrl: effectiveConfig.tokenUrl,
@@ -89,49 +93,88 @@ export class PluginOAuthBridgeService {
       clientSecret: effectiveConfig.clientSecret,
     });
 
-    this._pluginOAuthService.storeTokens(pluginId, {
+    this._pluginOAuthService.storeTokens(scopedPluginId, {
       ...tokens,
       tokenUrl: effectiveConfig.tokenUrl,
       clientId: effectiveConfig.clientId,
       clientSecret: effectiveConfig.clientSecret,
     });
 
-    await this._persistOAuthTokens(pluginId);
+    await this._persistOAuthTokens(scopedPluginId);
 
     return tokens;
   }
 
+  async clearOAuthToken(pluginId: string, tokenKey?: string): Promise<void> {
+    const scopedPluginId = this._oauthPersistenceKey(pluginId, tokenKey);
+    this._pluginOAuthService.clearTokens(scopedPluginId);
+    await this._clearPersistedOAuthTokens(scopedPluginId);
+  }
+
   async clearOAuthTokens(pluginId: string): Promise<void> {
-    this._pluginOAuthService.clearTokens(pluginId);
-    await this._clearPersistedOAuthTokens(pluginId);
+    const legacyKey = this._oauthPersistenceKey(pluginId);
+    const scopedPrefix = `${legacyKey}__`;
+    this._pluginOAuthService.clearTokens(legacyKey);
+    this._pluginOAuthService.clearTokensByPrefix(scopedPrefix);
+    await this._clearPersistedOAuthTokens(legacyKey);
+    await deleteOAuthTokensByPrefix(scopedPrefix);
+  }
+
+  async migrateLegacyOAuthTokenToScopedKey(
+    pluginId: string,
+    tokenKey: string,
+  ): Promise<boolean> {
+    const legacyKey = this._oauthPersistenceKey(pluginId);
+    const scopedKey = this._oauthPersistenceKey(pluginId, tokenKey);
+
+    try {
+      const serialized = await moveOAuthTokens(legacyKey, scopedKey);
+      this._pluginOAuthService.clearTokens(legacyKey);
+      if (!serialized) {
+        return false;
+      }
+      // Steady state (nothing moved, scoped credential already in memory): do not
+      // replace the live token object, or a refresh in flight is treated as stale.
+      if (!this._pluginOAuthService.hasTokens(scopedKey)) {
+        this._pluginOAuthService.restoreTokens(scopedKey, serialized);
+      }
+      return this._pluginOAuthService.hasTokens(scopedKey);
+    } catch (error) {
+      PluginLog.err('PluginOAuthBridge: Failed to migrate legacy OAuth tokens:', error);
+      return false;
+    }
   }
 
   async restoreAndCheckOAuthTokens(
     pluginId: string,
     config?: OAuthFlowConfig,
+    tokenKey?: string,
   ): Promise<boolean> {
     if (this._isUnavailableInWeb(config)) {
-      await this.clearOAuthTokens(pluginId);
+      await this.clearOAuthToken(pluginId, tokenKey);
       return false;
     }
-    if (!this._pluginOAuthService.hasTokens(pluginId)) {
-      await this._restoreOAuthTokens(pluginId);
+    const scopedPluginId = this._oauthPersistenceKey(pluginId, tokenKey);
+    if (!this._pluginOAuthService.hasTokens(scopedPluginId)) {
+      await this._restoreOAuthTokens(scopedPluginId);
     }
-    return this._pluginOAuthService.hasTokens(pluginId);
+    return this._pluginOAuthService.hasTokens(scopedPluginId);
   }
 
   async getOAuthToken(
     pluginId: string,
     config?: OAuthFlowConfig,
+    tokenKey?: string,
   ): Promise<string | null> {
     if (this._isUnavailableInWeb(config)) {
-      await this.clearOAuthTokens(pluginId);
+      await this.clearOAuthToken(pluginId, tokenKey);
       return null;
     }
-    if (!this._pluginOAuthService.hasTokens(pluginId)) {
-      await this._restoreOAuthTokens(pluginId);
+    const scopedPluginId = this._oauthPersistenceKey(pluginId, tokenKey);
+    if (!this._pluginOAuthService.hasTokens(scopedPluginId)) {
+      await this._restoreOAuthTokens(scopedPluginId);
     }
-    return this._pluginOAuthService.getValidToken(pluginId);
+    return this._pluginOAuthService.getValidToken(scopedPluginId);
   }
 
   private _isUnavailableInWeb(config?: OAuthFlowConfig): boolean {
@@ -155,35 +198,35 @@ export class PluginOAuthBridgeService {
     }
   }
 
-  private _oauthPersistenceKey(pluginId: string): string {
-    return `${pluginId}__oauth`;
+  private _oauthPersistenceKey(pluginId: string, tokenKey?: string): string {
+    return tokenKey ? `${pluginId}__oauth__${tokenKey}` : `${pluginId}__oauth`;
   }
 
-  private async _persistOAuthTokens(pluginId: string): Promise<void> {
-    const serialized = this._pluginOAuthService.serializeTokens(pluginId);
+  private async _persistOAuthTokens(oauthKey: string): Promise<void> {
+    const serialized = this._pluginOAuthService.serializeTokens(oauthKey);
     if (serialized) {
       try {
-        await saveOAuthTokens(this._oauthPersistenceKey(pluginId), serialized);
+        await saveOAuthTokens(oauthKey, serialized);
       } catch (error) {
         PluginLog.err('PluginOAuthBridge: Failed to persist OAuth tokens:', error);
       }
     }
   }
 
-  private async _restoreOAuthTokens(pluginId: string): Promise<void> {
+  private async _restoreOAuthTokens(oauthKey: string): Promise<void> {
     try {
-      const serialized = await loadOAuthTokens(this._oauthPersistenceKey(pluginId));
+      const serialized = await loadOAuthTokens(oauthKey);
       if (serialized) {
-        this._pluginOAuthService.restoreTokens(pluginId, serialized);
+        this._pluginOAuthService.restoreTokens(oauthKey, serialized);
       }
     } catch (error) {
       PluginLog.err('PluginOAuthBridge: Failed to restore OAuth tokens:', error);
     }
   }
 
-  private async _clearPersistedOAuthTokens(pluginId: string): Promise<void> {
+  private async _clearPersistedOAuthTokens(oauthKey: string): Promise<void> {
     try {
-      await deleteOAuthTokens(this._oauthPersistenceKey(pluginId));
+      await deleteOAuthTokens(oauthKey);
     } catch (error) {
       PluginLog.err('PluginOAuthBridge: Failed to clear persisted OAuth tokens:', error);
     }

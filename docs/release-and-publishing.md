@@ -2,7 +2,7 @@
 
 > **Status:** Maintained
 >
-> **Last verified against workflows:** 2026-07-29
+> **Last verified against workflows:** 2026-09-12
 
 The GitHub Actions workflows are the executable source of truth. Update this
 runbook in the same change whenever their triggers, channels, artifacts, or secret
@@ -36,10 +36,30 @@ The `version` lifecycle updates the Android version, generates
 `build/release-notes.md`, writes the versioned Google Play changelog, stages the
 changes, and creates the npm version commit and tag.
 
+### The release-notes base
+
+Notes span from the **last published GitHub release** to `HEAD`, not from the
+newest tag: a version whose draft release was abandoned, deleted, or left
+unpublished still leaves its tag behind, and basing the notes on that tag drops
+everything the unpublished versions contained. A final version bases on the last
+published non-prerelease, a pre-release on the last published release of either
+kind. The resolved base is written to `build/release-notes-base.txt` and
+committed with the notes; `.github/workflows/build.yml` reads that file rather
+than resolving again, so the release body's Full Changelog link and contributor
+list cannot span a different range than the notes above them.
+
+Resolution needs the GitHub releases API. When it is unreachable the generator
+warns and falls back to the newest matching tag, which is the case that produces
+short notes - if you see that warning, or `build/release-notes-base.txt` names a
+version that never shipped, check the notes against the release users actually
+received before pushing.
+
 Before pushing anything:
 
 1. Review the version commit and tag.
-2. Read `build/release-notes.md` for accuracy and user-data/privacy leaks.
+2. Read `build/release-notes.md` for accuracy and user-data/privacy leaks, and
+   confirm the base in the `npm version` output is the version users last
+   received.
 3. For a final release, confirm the generated Android changelog exists under
    `android/fastlane/metadata/android/en-US/changelogs/`.
 4. Run the relevant release-note tests:

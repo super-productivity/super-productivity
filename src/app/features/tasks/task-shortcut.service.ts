@@ -69,14 +69,35 @@ export class TaskShortcutService {
 
     const keys = cfg.keyboard;
     const focusedTaskId: TaskId | null = getDomFocusedTaskId();
+    const plannerRow = document.activeElement?.closest<HTMLElement>(
+      'planner-task[data-task-selectable="true"]',
+    );
+    const shortcutTargetId =
+      focusedTaskId ?? plannerRow?.getAttribute('data-task-id') ?? null;
+    if (plannerRow && ev.target instanceof HTMLElement && isInputElement(ev.target)) {
+      return false;
+    }
 
     // Multi-selection: Esc clears; Shift+Arrow extends from the focused row;
     // the bulk-capable task shortcuts act on the whole selection. These run
     // before the focused-task gate so they also work when focus sits on the
     // selection bar or a dialog just closed. (ShortcutService already bails
     // out for inputs and open overlays, so Esc/typing there are untouched.)
-    if (this._handleMultiSelectShortcuts(ev, keys, focusedTaskId)) {
+    if (this._handleMultiSelectShortcuts(ev, keys, shortcutTargetId)) {
       return true;
+    }
+
+    if (plannerRow) {
+      const plannerEvent = new CustomEvent('planner-task-shortcut', {
+        cancelable: true,
+        detail: { keyboardEvent: ev },
+      });
+      plannerRow.dispatchEvent(plannerEvent);
+      if (plannerEvent.defaultPrevented) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        return true;
+      }
     }
 
     // Schedule for today (Shift+T). This is the one task shortcut wired to work
@@ -483,7 +504,9 @@ export class TaskShortcutService {
   /** Opens the bulk actions menu next to the focused row (or the bar). */
   private _requestBulkMenu(focusedTaskId: TaskId | null): void {
     const rowEl = focusedTaskId
-      ? (document.activeElement?.closest('task') as HTMLElement | null)
+      ? (document.activeElement?.closest(
+          'task, planner-task[data-task-selectable="true"]',
+        ) as HTMLElement | null)
       : null;
     const rect = rowEl?.getBoundingClientRect();
     this._multiSelect.requestMenuOpen(

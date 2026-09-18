@@ -97,6 +97,7 @@ import { TranslateMatDatepickerIntl } from './app/core/date-time-format/translat
 import { suspendAudioContext, unlockAudioContext } from './app/util/audio-context';
 import { NetworkRetryInterceptorService } from './app/core/http/network-retry-interceptor.service';
 import { routeCapacitorAppUrl } from './app/core/app-url-open-router';
+import { AppUriQuickActionsService } from './app/core-ui/app-uri-actions/app-uri-quick-actions.service';
 
 if (environment.production || environment.stage) {
   enableProdMode();
@@ -319,6 +320,18 @@ bootstrapApplication(AppComponent, {
         return () => {};
       },
       deps: [OAuthCallbackHandlerService],
+      multi: true,
+    },
+    // Ensure AppUriQuickActionsService is instantiated at bootstrap. Like the
+    // handler above it subscribes to a stream fed by the single appUrlOpen
+    // listener below rather than registering its own; nothing else injects it,
+    // so without this a quick action would have no consumer at all.
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (_handler: AppUriQuickActionsService) => {
+        return () => {};
+      },
+      deps: [AppUriQuickActionsService],
       multi: true,
     },
     // SPAP-13: prune the device-local conflict journal to its retention bound
@@ -581,14 +594,14 @@ if (IS_IOS_NATIVE) {
 // `sendRetainedArgumentsForEvent`). A second listener added later never
 // receives it, so registering one here and another in
 // OAuthCallbackHandlerService meant whichever came second silently lost
-// every cold-launch URL. Instead, route the single event to both consumers.
+// every cold-launch URL. Instead, route the single event to every consumer.
 if (IS_NATIVE_PLATFORM) {
   CapacitorApp.addListener('appUrlOpen', (event) => {
-    const isTaskAction = routeCapacitorAppUrl(event.url);
+    const route = routeCapacitorAppUrl(event.url);
     // Never log the raw URL — it carries the task title/notes for task
     // actions and an auth code for OAuth callbacks, and log history is
     // exportable in bug reports. Log only that the event fired and how it
     // was routed.
-    Log.log('Native app URL open', { isTaskAction });
+    Log.log('Native app URL open', { route });
   });
 }

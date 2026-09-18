@@ -17,7 +17,8 @@ describe('withRemindAtForDueChange', () => {
       changes,
       TaskReminderOptionId.AtStart,
     );
-    expect(res).toBe(changes);
+    expect(res.changes).toBe(changes);
+    expect(res.isClearRemindAt).toBeFalse();
   });
 
   it('leaves remindAt alone when dueWithTime is unchanged', () => {
@@ -26,16 +27,18 @@ describe('withRemindAtForDueChange', () => {
       { dueWithTime: oldDue, title: 'renamed' },
       TaskReminderOptionId.AtStart,
     );
-    expect(hasRemindAt(res)).toBeFalse();
+    expect(hasRemindAt(res.changes)).toBeFalse();
+    expect(res.isClearRemindAt).toBeFalse();
   });
 
-  it('uses the default remind option when the task had no reminder', () => {
+  it('uses the default remind option on a first-time schedule', () => {
     const res = withRemindAtForDueChange(
       { dueWithTime: undefined, remindAt: undefined },
       { dueWithTime: newDue },
       TaskReminderOptionId.m10,
     );
-    expect(res.remindAt).toBe(newDue - MIN_10);
+    expect(res.changes.remindAt).toBe(newDue - MIN_10);
+    expect(res.isClearRemindAt).toBeFalse();
   });
 
   it('keeps the existing reminder offset on a reschedule', () => {
@@ -44,7 +47,19 @@ describe('withRemindAtForDueChange', () => {
       { dueWithTime: newDue },
       TaskReminderOptionId.AtStart,
     );
-    expect(res.remindAt).toBe(newDue - MIN_30);
+    expect(res.changes.remindAt).toBe(newDue - MIN_30);
+    expect(res.isClearRemindAt).toBeFalse();
+  });
+
+  it('keeps an already scheduled task reminder-less on a reschedule (no default)', () => {
+    const changes = { dueWithTime: newDue };
+    const res = withRemindAtForDueChange(
+      { dueWithTime: oldDue, remindAt: undefined },
+      changes,
+      TaskReminderOptionId.m10,
+    );
+    expect(res.changes).toBe(changes);
+    expect(res.isClearRemindAt).toBeFalse();
   });
 
   it('falls back to the default when the task had a reminder but no dueWithTime', () => {
@@ -53,47 +68,81 @@ describe('withRemindAtForDueChange', () => {
       { dueWithTime: newDue },
       TaskReminderOptionId.h1,
     );
-    expect(res.remindAt).toBe(newDue - MIN_60);
+    expect(res.changes.remindAt).toBe(newDue - MIN_60);
+    expect(res.isClearRemindAt).toBeFalse();
   });
 
-  it('sets no reminder when the default is DoNotRemind', () => {
+  it('sets no reminder on a first-time schedule when the default is DoNotRemind', () => {
+    const changes = { dueWithTime: newDue };
     const res = withRemindAtForDueChange(
       { dueWithTime: undefined, remindAt: undefined },
-      { dueWithTime: newDue },
+      changes,
       TaskReminderOptionId.DoNotRemind,
     );
-    expect(hasRemindAt(res)).toBeTrue();
-    expect(res.remindAt).toBeUndefined();
+    expect(res.changes).toBe(changes);
+    expect(res.isClearRemindAt).toBeFalse();
   });
 
-  it('clears remindAt when dueWithTime is cleared with undefined', () => {
+  it('signals a clear when DoNotRemind replaces a reminder of a day-only task', () => {
+    const changes = { dueWithTime: newDue, dueDay: null };
+    const res = withRemindAtForDueChange(
+      { dueWithTime: undefined, remindAt: oldDue },
+      changes,
+      TaskReminderOptionId.DoNotRemind,
+    );
+    expect(res.changes).toBe(changes);
+    expect(res.isClearRemindAt).toBeTrue();
+  });
+
+  it('signals a clear when dueWithTime is cleared with undefined', () => {
+    const changes = { dueWithTime: undefined };
     const res = withRemindAtForDueChange(
       { dueWithTime: oldDue, remindAt: oldDue },
-      { dueWithTime: undefined },
+      changes,
       TaskReminderOptionId.AtStart,
     );
-    expect(hasRemindAt(res)).toBeTrue();
-    expect(res.remindAt).toBeUndefined();
+    expect(res.changes).toBe(changes);
+    expect(res.isClearRemindAt).toBeTrue();
   });
 
-  it('clears remindAt when dueWithTime is cleared with null (CalDAV shape)', () => {
+  it('signals a clear when dueWithTime is cleared with null (CalDAV shape)', () => {
+    const changes = { dueWithTime: null, dueDay: null };
     const res = withRemindAtForDueChange(
       { dueWithTime: oldDue, remindAt: oldDue },
-      { dueWithTime: null, dueDay: null },
+      changes,
       TaskReminderOptionId.AtStart,
     );
-    expect(hasRemindAt(res)).toBeTrue();
-    expect(res.remindAt).toBeUndefined();
+    expect(res.changes).toBe(changes);
+    expect(res.isClearRemindAt).toBeTrue();
   });
 
-  it('does not add a remindAt key when clearing a task that had no reminder', () => {
+  it('does not signal a clear when clearing a task that had no reminder', () => {
     const changes = { dueWithTime: null };
     const res = withRemindAtForDueChange(
       { dueWithTime: oldDue, remindAt: undefined },
       changes,
       TaskReminderOptionId.AtStart,
     );
-    expect(res).toBe(changes);
+    expect(res.changes).toBe(changes);
+    expect(res.isClearRemindAt).toBeFalse();
+  });
+
+  it('never puts an undefined remindAt into changes (dropped by JSON on the wire)', () => {
+    const { AtStart, DoNotRemind, m10 } = TaskReminderOptionId;
+    const cases: Parameters<typeof withRemindAtForDueChange>[] = [
+      [{ dueWithTime: oldDue, remindAt: oldDue }, { dueWithTime: null }, AtStart],
+      [{ dueWithTime: oldDue, remindAt: oldDue }, { dueWithTime: undefined }, AtStart],
+      [
+        { dueWithTime: undefined, remindAt: oldDue },
+        { dueWithTime: newDue },
+        DoNotRemind,
+      ],
+      [{ dueWithTime: oldDue, remindAt: undefined }, { dueWithTime: newDue }, m10],
+    ];
+    for (const args of cases) {
+      const res = withRemindAtForDueChange(...args);
+      expect(hasRemindAt(res.changes)).withContext(JSON.stringify(args)).toBeFalse();
+    }
   });
 
   it('does not mutate the input changes', () => {

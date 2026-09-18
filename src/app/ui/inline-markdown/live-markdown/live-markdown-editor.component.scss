@@ -1,0 +1,20 @@
+@use '../../../../styles/_globals.scss' as *;
+
+:host,
+.cm-host {
+  display: block;
+  width: 100%;
+}
+
+// iOS zooms the page when the focused control computes below 16px (#9556).
+// CodeMirror builds its own DOM outside Angular's view encapsulation, so the
+// editable element has to be reached with ::ng-deep.
+//
+// Unlike the textarea this replaces, the element is the rendered view AND the
+// focusable one, so there is no display counterpart to keep in sync — nothing
+// can visibly jump size on tap. Written at the top level rather than via
+// noIosFocusZoomOnTouch() because that mixin nests as a descendant and cannot
+// carry a ::ng-deep boundary (see the mixin's own note).
+:host-context(body.isTouchPrimary) ::ng-deep .cm-content {
+  @include noIosFocusZoom();
+}

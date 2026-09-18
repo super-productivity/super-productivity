@@ -169,6 +169,13 @@ body.isDarkTheme {
   /* Generous radii — Raycast feel */
   --card-border-radius: 10px;
   --task-border-radius: 8px;
+  /* Boxed rows: the app default is flat hairline rows, so opt back into
+     the card layout (border, gap, no separator/leading edge). */
+  --task-border: 1px solid var(--task-border-color);
+  --task-separator: none;
+  --task-row-edge: var(--task-border);
+  --task-selected-edge: none;
+  --task-list-row-gap: var(--s-half);
   --radius-md: 10px;
   --radius-lg: 14px;
 
@@ -611,9 +618,13 @@ body.isDarkTheme right-panel .edge-close-handle:hover mat-icon {
   color: var(--c-primary) !important;
 }
 
-/* Default task: very subtle bg — Raycast list rows are mostly transparent
-   over the gradient, only revealing a bg on hover or selection. */
-body.isDarkTheme task > swipe-block > .inner-wrapper > .box {
+/* Keep the resting surface during focus/multi-selection; outlines mark those states. */
+body.isDarkTheme
+  task:not(.isCurrent)
+  > swipe-block
+  > .inner-wrapper
+  > .inner-wrapper
+  > .box {
   background: var(--velvet-fill-1) !important;
   transition:
     background-color 100ms ease-out,
@@ -626,19 +637,10 @@ body.isDarkTheme task > swipe-block > .inner-wrapper > .box {
     task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
     > swipe-block
     > .inner-wrapper
+    > .inner-wrapper
     > .box {
     background: var(--velvet-fill-2) !important;
   }
-}
-
-/* Selected: subtle neutral white-alpha gradient pill, like Raycast's
-   actual selected list rows — no coral, no offset. */
-body.isDarkTheme task.isSelected > swipe-block > .inner-wrapper > .box {
-  background: linear-gradient(
-    180deg,
-    var(--velvet-fill-5) 0%,
-    var(--velvet-fill-2) 100%
-  ) !important;
 }
 
 /* Task hover-controls share the schedule-event surface (fill-5) so the swing-
@@ -810,14 +812,6 @@ body.isDarkTheme task .sub-tasks task .box {
   background: var(--velvet-fill-1) !important; /* was 0.015, rounded up */
 }
 
-body.isDarkTheme task .sub-tasks task.isSelected > swipe-block > .inner-wrapper > .box {
-  background: linear-gradient(
-    180deg,
-    var(--velvet-fill-4) 0%,
-    var(--velvet-fill-2) 100%
-  ) !important;
-}
-
 /* Dialog titles: Raycast uses bold, tight, pulled-in dialog headers */
 body.isDarkTheme .mat-mdc-dialog-title,
 body.isDarkTheme h2.mat-mdc-dialog-title,
@@ -900,6 +894,7 @@ body.isDarkTheme .mdc-tooltip__surface {
 body.isDarkTheme
   task.isDragReady:not(.cdk-drag-placeholder)
   > swipe-block
+  > .inner-wrapper
   > .inner-wrapper
   > .box,
 body.isDarkTheme .cdk-drag-preview {

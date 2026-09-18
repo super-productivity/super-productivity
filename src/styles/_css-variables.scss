@@ -155,7 +155,9 @@
   --layout-xl: 2000px;
 
   // Component dimensions
-  --component-max-width: 800px;
+  // Grows with the window so wide desktops don't leave an 800px column
+  // floating in empty canvas; capped so rows never get too long to scan.
+  --component-max-width: clamp(800px, 65vw, 960px);
   // Fluid focus-mode clock diameter — single source of truth for the clock
   // face and the focus-mode-main duration-slider overlay. vmin tracks the
   // smaller viewport dimension (clock is square), capped by vh so squat
@@ -315,10 +317,13 @@
   // Task Component
   // -----------------------------
   --task-first-line-min-height: 40px;
+  // Width of a row's leading control slot (done-toggle, select ring, the repeat
+  // icon on recurring-config rows) — shared so those rows' titles line up.
+  --task-icon-size: 40px;
   --task-icon-default-opacity: 0.7;
   --task-inner-padding-top-bottom: 4px;
   --task-is-done-dim-opacity: 0.3;
-  --task-border-radius: var(--radius-sm);
+  --task-border-radius: 0px;
 
   // Task z-indexes
   --z-drag-handle: 1;
@@ -523,10 +528,21 @@ body.isDarkTheme {
   --notes-container-bg: inherit;
 
   // Task surfaces (Cat A)
-  --task-c-bg: var(--surface-2);
+  // Tasks are flat rows by default: no surface, no box border, hairline
+  // separators, sharp corners. The "classic" theme restores the boxed look by
+  // setting these same tokens, so keep every switch here token-driven.
+  --task-c-bg: transparent;
   --task-c-current-bg: var(--surface-3);
   --task-c-drag-drop-bg: var(--surface-3);
   --task-border-color: var(--divider-color);
+  --task-border: none;
+  --task-separator: 1px solid var(--separator-color);
+  // Top/bottom edge for rows that draw their own box (planner, boards, issue
+  // panel): the separator when flat, the box border when boxed, so the two
+  // never cancel each other out on the same element.
+  --task-row-edge: var(--task-separator);
+  --task-selected-edge: 3px solid color-mix(in srgb, var(--text-color) 65%, transparent);
+  --task-list-row-gap: 0px;
 
   // Task shadows (Cat A — same in both modes)
   --task-shadow: rgba(0, 0, 0, 0.16) 0px 1px 4px;
@@ -626,7 +642,10 @@ body {
 
   // Task colors (Cat B)
   --task-c-current-bg: color-mix(in srgb, var(--c-accent) 10%, var(--surface-2));
-  --task-c-selected-bg: var(--selected-task-bg-color);
+  --task-c-selected-bg: var(--state-selected);
+  // Multi-selection reads as a tinted surface — the focus ring is the only
+  // outlined state, so the two never look alike.
+  --task-c-multi-selected-bg: color-mix(in srgb, var(--c-primary) 18%, var(--surface-2));
   --sub-task-c-bg: var(--task-c-bg);
   --sub-task-c-bg-done: var(--task-c-bg);
   --task-c-bg-done: var(--task-c-bg);
@@ -635,7 +654,7 @@ body {
 
   // Task shadows (Cat B)
   --task-shadow-sub-task: none;
-  --task-selected-shadow: var(--whiteframe-shadow-1dp);
+  --task-selected-shadow: none;
 
   // Scrollbar colors (Cat B)
   --scrollbar-thumb: rgba(136, 136, 136, 0.4);
@@ -704,17 +723,18 @@ body.isDarkTheme {
 
   // Task colors (Cat B)
   --task-c-current-bg: color-mix(in srgb, var(--c-accent) 18%, var(--surface-3));
-  --task-c-selected-bg: var(--dark6);
-  --sub-task-c-bg: var(--dark4-5);
-  --sub-task-c-bg-done: var(--dark2);
-  --task-c-bg-done: var(--dark1);
-  --sub-task-c-bg-in-selected: var(--dark10);
+  --task-c-selected-bg: var(--state-selected);
+  --task-c-multi-selected-bg: color-mix(in srgb, var(--c-primary) 28%, var(--surface-3));
+  --sub-task-c-bg: var(--task-c-bg);
+  --sub-task-c-bg-done: var(--task-c-bg);
+  --task-c-bg-done: var(--task-c-bg);
+  --sub-task-c-bg-in-selected: var(--task-c-bg);
   // Dark subtasks separate via a hairline border (like light), not a resting shadow.
   --sub-task-border-color: var(--extra-border-color);
 
   // Task shadows (Cat B)
   --task-shadow-sub-task: none;
-  --task-selected-shadow: var(--whiteframe-shadow-1dp);
+  --task-selected-shadow: none;
 
   // Scrollbar colors (Cat B)
   --scrollbar-thumb: rgba(150, 150, 150, 0.3);

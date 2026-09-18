@@ -14,7 +14,7 @@
 }
 
 .year {
-  border-top: 1px dashed var(--separator-color);
+  border-top: 1px solid var(--separator-color);
 
   &-title {
     margin-top: var(--s3);
@@ -30,7 +30,7 @@
 .month {
   margin-top: calc(3 * var(--s));
   margin-bottom: 0;
-  border-top: 1px dashed var(--separator-color);
+  border-top: 1px solid var(--separator-color);
   padding-top: var(--s2);
 
   &-title {
@@ -227,7 +227,12 @@
     }
   }
 
-  > table > tr:focus {
+  // Row focus ring for the `tr[worklogTaskRow]` rows, which are `tabindex="0"`
+  // so a search jump can focus them. Mouse intent plus `:focus-visible`, never a
+  // bare `:focus` — a tap focuses the row too and would leave the ring stuck on
+  // touch devices (see docs/styling-guide.md).
+  :host-context(.isMousePrimary) & > table > tr:focus,
+  & > table > tr:focus-visible {
     outline: none;
     box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring-color);
     border-radius: var(--card-border-radius);

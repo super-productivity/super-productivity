@@ -161,8 +161,9 @@
     }
   }
 
-  // Focus state
-  &:focus:not(:disabled) {
+  // Focus state — :focus-visible only, so tapping "Next" on a phone does not
+  // leave the ring behind on the button (see docs/styling-guide.md).
+  &:focus-visible:not(:disabled) {
     outline: 2px solid var(--c-accent, var(--c-primary));
     outline-offset: 2px;
   }

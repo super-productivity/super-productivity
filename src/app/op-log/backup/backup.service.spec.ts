@@ -111,6 +111,7 @@ describe('BackupService', () => {
       'saveImportBackup',
       'pruneImportBackups',
       'loadImportBackup',
+      'loadImportBackupById',
       'clearImportBackup',
       'runDestructiveStateReplacement',
     ]);
@@ -271,9 +272,31 @@ describe('BackupService', () => {
 
       const meta = await service.captureRecoveryPointIfMeaningful('REMOTE_IMPORT');
 
-      expect(mockOpLogStore.pruneImportBackups).toHaveBeenCalledOnceWith(1);
+      expect(mockOpLogStore.pruneImportBackups).toHaveBeenCalledOnceWith(1, undefined);
       expect(mockOpLogStore.saveImportBackup).toHaveBeenCalledTimes(2);
       expect(meta?.backupId).toBe('b2');
+    });
+
+    it('should protect the snapshot being restored when the quota prune runs mid-restore', async () => {
+      mockOpLogStore.loadImportBackupById.and.resolveTo({
+        backupId: 'r1',
+        savedAt: 1,
+        state: createMinimalValidBackup(),
+      });
+      mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
+        snapshotWithTask() as any,
+      );
+      mockOpLogStore.saveImportBackup.and.returnValues(
+        Promise.reject(new DOMException('full', 'QuotaExceededError')),
+        Promise.resolve({ backupId: 'b2', savedAt: 2 }),
+      );
+      mockOpLogStore.pruneImportBackups.and.resolveTo(2);
+
+      await service.restoreImportBackupById('r1');
+
+      // Pruning to the newest capture alone would delete r1 while it is still
+      // needed for a retry if the rest of the restore fails.
+      expect(mockOpLogStore.pruneImportBackups).toHaveBeenCalledOnceWith(1, 'r1');
     });
 
     it('should still fail when the retry after pruning fails too', async () => {

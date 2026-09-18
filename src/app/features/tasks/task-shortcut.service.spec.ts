@@ -850,6 +850,56 @@ describe('TaskShortcutService', () => {
     });
   });
 
+  it('routes a configured modified navigation key to the focused Planner card', () => {
+    mockConfigService.cfg.set({
+      keyboard: { ...defaultKeyboardConfig, selectNextTask: 'Ctrl+Alt+J' },
+      appFeatures: { isTimeTrackingEnabled: true },
+    });
+    const plannerEl = document.createElement('planner-task');
+    plannerEl.setAttribute('data-task-id', 'planner-task');
+    plannerEl.setAttribute('data-task-selectable', 'true');
+    document.body.appendChild(plannerEl);
+    stubActiveElement(plannerEl);
+    const routed = jasmine.createSpy('routed');
+    plannerEl.addEventListener('planner-task-shortcut', (event) => {
+      routed();
+      event.preventDefault();
+    });
+
+    const result = service.handleTaskShortcuts(
+      createKeyboardEvent('j', 'KeyJ', { ctrlKey: true, altKey: true }),
+    );
+
+    expect(result).toBeTrue();
+    expect(routed).toHaveBeenCalled();
+    plannerEl.remove();
+  });
+
+  it('leaves a configured Meta shortcut untouched while editing inside Planner', () => {
+    mockConfigService.cfg.set({
+      keyboard: { ...defaultKeyboardConfig, taskToggleDone: 'Meta+D' },
+      appFeatures: { isTimeTrackingEnabled: true },
+    });
+    const plannerEl = document.createElement('planner-task');
+    plannerEl.setAttribute('data-task-id', 'planner-task');
+    plannerEl.setAttribute('data-task-selectable', 'true');
+    const input = document.createElement('input');
+    plannerEl.appendChild(input);
+    document.body.appendChild(plannerEl);
+    stubActiveElement(input);
+    const routed = jasmine.createSpy('routed');
+    plannerEl.addEventListener('planner-task-shortcut', routed);
+
+    const event = createKeyboardEvent('d', 'KeyD', { metaKey: true });
+    Object.defineProperty(event, 'target', { value: input });
+    const result = service.handleTaskShortcuts(event);
+
+    expect(result).toBeFalse();
+    expect(routed).not.toHaveBeenCalled();
+    expect(mockBulkActions['toggleDone']).not.toHaveBeenCalled();
+    plannerEl.remove();
+  });
+
   describe('schedule-today shortcut (#8851)', () => {
     let hostEl: HTMLElement;
 

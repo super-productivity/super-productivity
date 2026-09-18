@@ -34,6 +34,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { DialogBoardEditComponent } from './dialog-board-edit/dialog-board-edit.component';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { Log } from 'src/app/core/log';
+import { TaskMultiSelectService } from '../tasks/task-multi-select.service';
 
 @Component({
   selector: 'boards',
@@ -59,6 +60,7 @@ import { Log } from 'src/app/core/log';
 })
 export class BoardsComponent {
   private _matDialog = inject(MatDialog);
+  private _multiSelect = inject(TaskMultiSelectService);
   store = inject(Store);
   elementRef = inject(ElementRef);
   selectedTabIndex = signal(localStorage.getItem(LS.SELECTED_BOARD) || 0);
@@ -90,6 +92,7 @@ export class BoardsComponent {
   // We need to delay updating the selected tab index until the click event has completed
   // propagation.
   onTabChange(index: number): void {
+    this._multiSelect.clear();
     setTimeout(() => this.selectedTabIndex.set(index));
     this.store.dispatch(setSelectedTask({ id: null }));
   }

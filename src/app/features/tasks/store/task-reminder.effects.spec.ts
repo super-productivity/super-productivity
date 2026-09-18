@@ -451,6 +451,16 @@ describe('TaskReminderEffects', () => {
         ico: 'schedule',
       });
     });
+
+    it('should not show a snack when dismissing with isSkipSnack', () => {
+      actions$ = of(
+        TaskSharedActions.dismissReminderOnly({ id: 'task-1', isSkipSnack: true }),
+      );
+
+      effects.dismissReminderSnack$.subscribe();
+
+      expect(snackService.open).not.toHaveBeenCalled();
+    });
   });
 
   // NOTE: Tests for removeTaskReminderTrigger1$ were removed because the effect no longer exists.

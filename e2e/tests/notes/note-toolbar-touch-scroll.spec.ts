@@ -1,4 +1,5 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import { fillMarkdownEditor, markdownEditor } from '../../utils/markdown-editor';
 
 // MatTooltip only takes its touch code path when `Platform.ANDROID`/`IOS` is
 // true, and that check is UA-sniffed — a touch-enabled context alone is not
@@ -35,7 +36,7 @@ test.describe('Fullscreen note editor toolbar on a phone', () => {
 
     const noteText = `${testPrefix}-toolbar-note`;
     await page.locator('#add-note-btn, button:has-text("Add new Note")').first().tap();
-    await page.locator('dialog-fullscreen-markdown textarea').fill(noteText);
+    await fillMarkdownEditor(page.locator('dialog-fullscreen-markdown'), noteText);
     await page.locator('#T-save-note').tap();
     await expect(page.locator('dialog-fullscreen-markdown')).toBeHidden();
 
@@ -48,7 +49,7 @@ test.describe('Fullscreen note editor toolbar on a phone', () => {
     // Both components declare `selector: 'dialog-fullscreen-markdown'`, so the
     // element alone cannot tell them apart. Prefilled content can: the add-note
     // dialog always opens empty.
-    await expect(page.locator('dialog-fullscreen-markdown textarea')).toHaveValue(
+    await expect(markdownEditor(page.locator('dialog-fullscreen-markdown'))).toHaveText(
       noteText,
     );
 

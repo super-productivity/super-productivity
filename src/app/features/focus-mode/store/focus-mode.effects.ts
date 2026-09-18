@@ -9,6 +9,7 @@ import {
   filter,
   map,
   pairwise,
+  startWith,
   switchMap,
   take,
   tap,
@@ -24,7 +25,7 @@ import { playSound } from '../../../util/play-sound';
 import { startWhiteNoise, stopWhiteNoise } from '../../../util/white-noise';
 import { startBreakEndAlarm, stopBreakEndAlarm } from '../../../util/break-end-alarm';
 import { FocusModeLocalSettingsService } from '../../config/focus-mode-local-settings.service';
-import { IS_ELECTRON } from '../../../app.constants';
+import { IS_ELECTRON, IS_ELECTRON_TOKEN } from '../../../app.constants';
 import { setCurrentTask, unsetCurrentTask } from '../../tasks/store/task.actions';
 import { selectLastCurrentTask, selectTaskById } from '../../tasks/store/task.selectors';
 import { openIdleDialog } from '../../idle/store/idle.actions';
@@ -55,6 +56,7 @@ const FOCUS_SOUND_VOLUME_FACTOR = 0.4;
 export class FocusModeEffects {
   private actions$ = inject(LOCAL_ACTIONS);
   private store = inject(Store);
+  private _isElectron = inject(IS_ELECTRON_TOKEN);
   private strategyFactory = inject(FocusModeStrategyFactory);
   private globalConfigService = inject(GlobalConfigService);
   private taskService = inject(TaskService);
@@ -854,37 +856,46 @@ export class FocusModeEffects {
   // Action-based effect to update Windows taskbar progress (fixes #6061)
   // Throttled to prevent excessive IPC calls (timer ticks every 1s)
   // Follows action-based pattern (CLAUDE.md Section 8) instead of selector-based
-  setTaskBarProgress$ =
-    IS_ELECTRON &&
-    createEffect(
-      () =>
-        this.actions$.pipe(
-          ofType(
-            actions.tick,
-            actions.startFocusSession,
-            actions.pauseFocusSession,
-            actions.unPauseFocusSession,
-            actions.startBreak,
-            actions.skipBreak,
-            actions.completeBreak,
-            actions.completeFocusSession,
-            actions.cancelFocusSession,
-            actions.selectFocusTask,
-          ),
-          // Throttle to prevent excessive IPC calls (timer ticks every 1s)
-          // Use leading + trailing to ensure immediate feedback and final state
-          throttleTime(500, undefined, { leading: true, trailing: true }),
-          withLatestFrom(this.store.select(selectors.selectOsProgressBar)),
-          tap(([_action, osProgressBar]) => {
-            // null = an open-ended (Flowtime) session, which owns nothing:
-            // task-electron.effects publishes the task's own progress instead.
-            if (osProgressBar) {
-              window.ea.setProgressBar(osProgressBar);
-            }
-          }),
+  setTaskBarProgress$ = createEffect(
+    () =>
+      // Gated inside the pipe, not by returning a shared EMPTY: createEffect
+      // tags the returned observable, and a singleton cannot be tagged twice.
+      this.actions$.pipe(
+        filter(() => this._isElectron),
+        ofType(
+          actions.tick,
+          actions.startFocusSession,
+          actions.pauseFocusSession,
+          actions.unPauseFocusSession,
+          actions.startBreak,
+          actions.skipBreak,
+          actions.completeBreak,
+          actions.completeFocusSession,
+          actions.cancelFocusSession,
+          actions.selectFocusTask,
         ),
-      { dispatch: false },
-    );
+        // Throttle to prevent excessive IPC calls (timer ticks every 1s)
+        // Use leading + trailing to ensure immediate feedback and final state
+        throttleTime(500, undefined, { leading: true, trailing: true }),
+        withLatestFrom(this.store.select(selectors.selectOsProgressBar)),
+        map(([_action, osProgressBar]) => osProgressBar),
+        // null = the session owns nothing (open-ended Flowtime, or a timed
+        // session that was paused/cancelled) and task-electron.effects
+        // publishes the task's own progress instead. Clear the bar exactly
+        // once on the owned -> null handoff, else it stays frozen at the last
+        // session value; nothing else clears it since focus mode dispatches
+        // unsetCurrentTask, not the setCurrentTask that setTaskBarNoProgress$
+        // listens for. Consecutive nulls (Flowtime ticks) send nothing so we
+        // don't fight the task writer every 500ms.
+        startWith(null),
+        pairwise(),
+        filter(([prev, curr]) => curr !== null || prev !== null),
+        tap(([_prev, curr]) => {
+          window.ea.setProgressBar(curr ?? { progress: -1, progressBarMode: 'none' });
+        }),
+      ),
+    { dispatch: false },
+  );
 
   focusWindowOnBreakStart$ =
     IS_ELECTRON &&

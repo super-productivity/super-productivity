@@ -12,7 +12,9 @@
   // Flat rows: resting elevation replaced by the shared task-border hairline so
   // planner tasks match the main task list (isCurrent/isDragReady keep their lift).
   box-shadow: none;
-  border: var(--task-border, 1px solid var(--task-border-color));
+  border: var(--task-border);
+  transition: var(--transition-standard);
+  transition-property: background-color, box-shadow;
 
   &.isDone {
     opacity: var(--task-is-done-dim-opacity);
@@ -25,7 +27,7 @@
   // v-margins come from the global .planner-tag-list-shared rules
   ::ng-deep .tags-container {
     // to match task title padding
-    margin-left: 3px;
+    margin-left: var(--s-half);
   }
 }
 
@@ -35,13 +37,30 @@
   z-index: 1;
   position: relative;
   transition:
-    background 150ms ease-out,
-    box-shadow 150ms ease-out;
+    background var(--transition-duration-s) ease-out,
+    box-shadow var(--transition-duration-s) ease-out;
 }
 
 :host.isCurrent {
   background: var(--task-c-current-bg);
   box-shadow: var(--task-current-shadow);
+}
+
+// Tint plus a 1px outline — see _task-base.scss for why the outline stays as the
+// fallback channel where a theme or a stronger state owns the background.
+:host.isMultiSelected {
+  background: var(--task-c-multi-selected-bg);
+  outline: 1px solid var(--palette-primary-400);
+  outline-offset: -1px;
+}
+
+// Keep the focused card distinct even when it is current or multi-selected.
+// Mouse intent plus `:focus-visible` — see _task-base.scss for why a bare
+// `:focus` would leave the ring stuck on a tapped card.
+:host-context(.isMousePrimary):focus,
+:host:focus-visible {
+  outline: var(--focus-ring-width) solid var(--palette-primary-400) !important;
+  outline-offset: calc(-1 * var(--focus-ring-width));
 }
 
 .no-drag {
@@ -85,22 +104,19 @@ done-toggle {
 }
 
 .title {
+  font-size: var(--planner-font-size);
   padding-left: var(--s-half);
   padding-right: var(--s-half);
   // to have room for the coloured edit border
-  padding-top: 1px;
-  padding-bottom: 1px;
+  padding-top: var(--s-quarter);
+  padding-bottom: var(--s-quarter);
 
-  line-height: 1.5;
+  line-height: var(--line-height-normal);
   position: relative;
   overflow: hidden;
   overflow-wrap: anywhere;
   flex-grow: 1;
   flex-shrink: 1;
-
-  @include mq(xs) {
-    font-size: var(--planner-font-size);
-  }
 }
 
 .parent-title {
@@ -110,12 +126,9 @@ done-toggle {
   padding-bottom: var(--s-half);
   overflow: hidden;
   overflow-wrap: anywhere;
-  line-height: 1.1;
-  font-size: var(--planner-font-size-smaller-mobile);
-
-  @include mq(xs) {
-    font-size: var(--planner-font-size-smaller);
-  }
+  line-height: var(--line-height-snug);
+  font-size: var(--font-size-sm);
+  color: var(--text-color-muted);
 }
 
 .planner-time-remaining-shared {
@@ -143,9 +156,9 @@ done-toggle {
   }
 
   .sub-task-count {
-    font-style: italic;
+    font-size: var(--font-size-sm);
     white-space: nowrap;
-    line-height: 1;
+    line-height: var(--line-height-snug);
     margin-top: var(--s-quarter);
 
     mat-icon {
@@ -153,7 +166,7 @@ done-toggle {
       width: 14px;
       height: 14px;
       vertical-align: middle;
-      margin-right: 1px;
+      margin-right: var(--s-quarter);
     }
   }
 }

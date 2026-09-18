@@ -7,7 +7,7 @@
   display: flex;
   align-items: stretch;
   flex-direction: row;
-  border: 1px solid var(--separator-color);
+  border: var(--task-border);
   border-radius: var(--task-border-radius);
   opacity: 0.9;
   min-height: var(--planner-item-height);

@@ -60,8 +60,13 @@ describe('TaskDetailPanelComponent', () => {
     });
     const mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       cfg: jasmine.createSpy().and.returnValue({ keyboard: {} }),
-      tasks: jasmine.createSpy().and.returnValue({}),
+      // Formatting off keeps these specs on the plain-textarea notes path; the
+      // live markdown editor (#9910) has its own specs and an e2e.
+      tasks: jasmine
+        .createSpy()
+        .and.returnValue({ isMarkdownFormattingInNotesEnabled: false }),
       clipboardImages: jasmine.createSpy().and.returnValue(null),
+      misc: jasmine.createSpy().and.returnValue({}),
     });
     const mockIssueService = jasmine.createSpyObj(
       'IssueService',
@@ -419,7 +424,14 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
         { provide: LayoutService, useValue: { isXs: () => false } },
-        { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            cfg: () => ({}),
+            misc: () => ({}),
+            tasks: () => ({ isMarkdownFormattingInNotesEnabled: false }),
+          },
+        },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
           provide: TaskRepeatCfgService,
@@ -502,12 +514,53 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
 
     expect(focusItemSpy).not.toHaveBeenCalled();
   }));
+
+  // Escape in the notes editor blurs it and hands focus back to the notes item
+  // 150ms later. Clicking straight back into the editor inside that window must
+  // not have the caret yanked out again by the pending timer.
+  it('does not steal focus from a text field focused while the timer is pending', fakeAsync(() => {
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+    const editable = document.createElement('div');
+    editable.contentEditable = 'true';
+    editable.tabIndex = 0;
+    document.body.appendChild(editable);
+
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+    // ...the user clicks back into the editor before the timer fires.
+    editable.focus();
+
+    tick(200);
+
+    expect(focusItemSpy).not.toHaveBeenCalled();
+    editable.remove();
+  }));
+
+  it('still focuses the panel item when focus is not in a text field', fakeAsync(() => {
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+    const item = document.createElement('div');
+    item.tabIndex = 0;
+    document.body.appendChild(item);
+
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+    item.focus();
+
+    tick(200);
+
+    expect(focusItemSpy).toHaveBeenCalled();
+    item.remove();
+  }));
 });
 
 // Opening the notes panel via a checklist's progress badge routes through
-// TaskDetailTargetPanel.Notes. It must land on the RENDERED checklist (preview),
-// not auto-open the raw-markdown editor: doing both briefly flashed the raw
-// "- [ ] " source before focusItem() blurred the editor back to preview.
+// TaskDetailTargetPanel.Notes. It must not auto-focus the notes editor: doing
+// both briefly flashed the raw "- [ ] " source before focusItem() blurred it
+// back. (These specs run the markdown-formatting-off path, so "not focused"
+// means the preview stays up; on the default path it means the live editor
+// keeps its syntax hidden.)
 describe('TaskDetailPanelComponent notes target does not auto-edit', () => {
   let component: TaskDetailPanelComponent;
   let fixture: ComponentFixture<TaskDetailPanelComponent>;
@@ -535,7 +588,14 @@ describe('TaskDetailPanelComponent notes target does not auto-edit', () => {
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
         { provide: LayoutService, useValue: { isXs: () => false } },
-        { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            cfg: () => ({}),
+            misc: () => ({}),
+            tasks: () => ({ isMarkdownFormattingInNotesEnabled: false }),
+          },
+        },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
           provide: TaskRepeatCfgService,
@@ -634,7 +694,11 @@ describe('TaskDetailPanelComponent add sub-task', () => {
         { provide: LayoutService, useValue: { isXs: () => false } },
         {
           provide: GlobalConfigService,
-          useValue: { cfg: () => ({ keyboard: { taskAddSubTask: 'a' } }) },
+          useValue: {
+            cfg: () => ({ keyboard: { taskAddSubTask: 'a' } }),
+            misc: () => ({}),
+            tasks: () => ({ isMarkdownFormattingInNotesEnabled: false }),
+          },
         },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
