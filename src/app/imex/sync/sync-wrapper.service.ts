@@ -1124,9 +1124,11 @@ export class SyncWrapperService {
           });
         }
         return 'HANDLED_ERROR';
-      } else if (error instanceof LocalDataConflictError) {
-        // File-based sync: Local data exists and remote snapshot would overwrite it
-        // Show conflict dialog to let user choose between local and remote data
+      } else if (
+        error instanceof LocalDataConflictError ||
+        (error instanceof UnsupportedMultiEntityConflictError && isUserTriggered)
+      ) {
+        this._providerManager.setSyncStatus('ERROR');
         return this._handleLocalDataConflict(error);
       } else if (error instanceof WebCryptoNotAvailableError) {
         // WebCrypto (crypto.subtle) is unavailable in insecure contexts
@@ -1286,6 +1288,8 @@ export class SyncWrapperService {
             this._snackService.open({
               msg: T.F.SYNC.S.UNSUPPORTED_MULTI_ENTITY_CONFLICT,
               type: 'ERROR',
+              actionStr: T.F.SYNC.D_CONFLICT.TITLE,
+              actionFn: () => this.sync(true),
               translateParams: {
                 details: escapeHtml(errStr),
               },
@@ -1632,21 +1636,20 @@ export class SyncWrapperService {
   }
 
   /**
-   * Handles LocalDataConflictError by showing a conflict resolution dialog.
-   * This occurs when sync detects local data that would be overwritten by remote data.
-   *
-   * User can choose:
-   * - USE_LOCAL: Upload local data, overwriting remote (uses forceUploadLocalState)
-   * - USE_REMOTE: Download remote data, discarding local (uses forceDownloadRemoteState)
+   * Offers whole-dataset replacement when automatic merging cannot proceed.
+   * Unknown remote metadata keeps the dialog's overwrite confirmation mandatory.
    */
   private async _handleLocalDataConflict(
-    error: LocalDataConflictError,
+    error: LocalDataConflictError | UnsupportedMultiEntityConflictError,
   ): Promise<SyncStatus | 'HANDLED_ERROR'> {
     // Signal that we're waiting for user input (prevents sync timeout)
     const stopWaiting = this._userInputWaitState.startWaiting('local-data-conflict');
 
     try {
-      // Build ConflictData for the dialog
+      const snapshotConflict =
+        error instanceof LocalDataConflictError ? error : undefined;
+      const unsyncedCount =
+        snapshotConflict?.unsyncedCount ?? (await this._opLogStore.getUnsynced()).length;
       const vcEntry = await this._opLogStore.getVectorClockEntry();
       const localClock = vcEntry?.clock;
       const localLastUpdate = vcEntry?.lastUpdate || Date.now();
@@ -1654,32 +1657,27 @@ export class SyncWrapperService {
       const conflictData: ConflictData = {
         reason: ConflictReason.NoLastSync,
         remote: {
-          lastUpdate: error.remoteLastModified ?? null,
+          lastUpdate: snapshotConflict?.remoteLastModified ?? null,
           lastUpdateAction: 'Remote data',
           revMap: {},
           crossModelVersion: 1,
-          mainModelData: error.remoteSnapshotState,
-          isFullData: true,
-          vectorClock: error.remoteVectorClock,
+          mainModelData: snapshotConflict?.remoteSnapshotState ?? {},
+          isFullData: !!snapshotConflict,
+          vectorClock: snapshotConflict?.remoteVectorClock,
         },
         local: {
           lastUpdate: localLastUpdate,
-          lastUpdateAction: `${error.unsyncedCount} local changes pending`,
+          lastUpdateAction: `${unsyncedCount} local changes pending`,
           revMap: {},
           crossModelVersion: 1,
-          // Op-log (NoLastSync) conflicts do not carry a last-synced timestamp, so
-          // this is always null here; the dialog renders it as "Never"/"-".
+          // No last-synced timestamp is available for this dialog.
           lastSyncedUpdate: null,
           metaRev: null,
           vectorClock: localClock,
-          lastSyncedVectorClock: error.lastSyncedVectorClock ?? null,
+          lastSyncedVectorClock: snapshotConflict?.lastSyncedVectorClock ?? null,
         },
-        localUnsyncedOpsCount: error.unsyncedCount,
+        localUnsyncedOpsCount: unsyncedCount,
       };
-
-      SyncLog.log(
-        `SyncWrapperService: Showing conflict dialog for ${error.unsyncedCount} local changes vs remote snapshot`,
-      );
 
       const resolution = await firstValueFrom(this._openConflictDialog$(conflictData));
 
@@ -1727,7 +1725,7 @@ export class SyncWrapperService {
         return SyncStatus.InSync;
       } else {
         // User cancelled the dialog
-        SyncLog.log('SyncWrapperService: User cancelled first sync conflict dialog');
+        SyncLog.log('SyncWrapperService: User cancelled conflict dialog');
         this._snackService.open({
           msg: T.F.SYNC.S.LOCAL_DATA_REPLACE_CANCELLED,
         });

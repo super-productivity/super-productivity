@@ -55,6 +55,7 @@ import {
   PlaintextWhenEncryptionExpectedError,
 } from '../../op-log/core/errors/sync-errors';
 import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password/dialog-enter-encryption-password.component';
+import { DialogSyncConflictComponent } from './dialog-sync-conflict/dialog-sync-conflict.component';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
 import { ActionType } from '../../op-log/core/operation.types';
 import type { SyncProviderBase } from '../../op-log/sync-providers/provider.interface';
@@ -168,8 +169,10 @@ describe('SyncWrapperService', () => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'getVectorClockEntry',
       'setVectorClock',
+      'getUnsynced',
     ]);
     mockOpLogStore.getVectorClockEntry.and.returnValue(Promise.resolve(null));
+    mockOpLogStore.getUnsynced.and.resolveTo([]);
 
     mockLegacyPfDb = jasmine.createSpyObj('LegacyPfDbService', [
       'loadMetaModel',
@@ -1497,7 +1500,7 @@ describe('SyncWrapperService', () => {
       }
     });
 
-    it('should render unsupported multi-entity diagnostics through the dedicated snack', async () => {
+    it('offers recovery without a persistent snack that would block feedback after manual sync', async () => {
       mockSyncService.downloadRemoteOps.and.rejectWith(
         new UnsupportedMultiEntityConflictError(
           'remote',
@@ -1513,12 +1516,77 @@ describe('SyncWrapperService', () => {
       expect(mockSnackService.open).toHaveBeenCalledWith({
         msg: T.F.SYNC.S.UNSUPPORTED_MULTI_ENTITY_CONFLICT,
         type: 'ERROR',
+        actionStr: T.F.SYNC.D_CONFLICT.TITLE,
+        actionFn: jasmine.any(Function),
         translateParams: {
           details:
             'SYNC_MULTI_ENTITY_UNSUPPORTED side=remote ' +
             `actionType=${ActionType.TASK_SHARED_UPDATE_MULTIPLE} entityCount=2`,
         },
       });
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+      const snack = mockSnackService.open.calls.mostRecent().args[0] as SnackParams;
+      const syncSpy = spyOn(service, 'sync').and.resolveTo('HANDLED_ERROR');
+      await snack.actionFn!();
+      expect(syncSpy).toHaveBeenCalledWith(true);
+    });
+
+    describe('unsupported multi-entity conflict recovery', () => {
+      beforeEach(() => {
+        configSubject.next(createMockSyncConfig(SyncProviderId.WebDAV));
+        mockSyncService.downloadRemoteOps.and.rejectWith(
+          new UnsupportedMultiEntityConflictError(
+            'local',
+            ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+            8,
+          ),
+        );
+        mockSyncService.forceUploadLocalState = jasmine
+          .createSpy('forceUploadLocalState')
+          .and.resolveTo({ hasUnresolvedOps: false });
+        mockSyncService.forceDownloadRemoteState = jasmine
+          .createSpy('forceDownloadRemoteState')
+          .and.resolveTo();
+      });
+
+      for (const choice of ['USE_LOCAL', 'USE_REMOTE', undefined] as const) {
+        it(`offers explicit recovery on manual sync: ${choice ?? 'cancel'}`, async () => {
+          mockMatDialog.open.and.returnValue({
+            afterClosed: () => of(choice),
+          } as MatDialogRef<DialogSyncConflictComponent>);
+
+          const result = await service.sync(true);
+
+          expect(mockMatDialog.open).toHaveBeenCalledWith(
+            DialogSyncConflictComponent,
+            jasmine.objectContaining({ disableClose: true }),
+          );
+          const data = mockMatDialog.open.calls.mostRecent().args[1]!
+            .data as ConflictData;
+          expect(data.localUnsyncedOpsCount).toBe(0);
+          expect(data.remote.lastUpdate).toBeNull();
+          expect(data.remote.vectorClock).toBeUndefined();
+          if (choice === 'USE_LOCAL') {
+            expect(mockSyncService.forceUploadLocalState).toHaveBeenCalledOnceWith(
+              mockSyncCapableProvider,
+            );
+          } else {
+            expect(mockSyncService.forceUploadLocalState).not.toHaveBeenCalled();
+          }
+          if (choice === 'USE_REMOTE') {
+            expect(mockSyncService.forceDownloadRemoteState).toHaveBeenCalledOnceWith(
+              mockSyncCapableProvider,
+            );
+          } else {
+            expect(mockSyncService.forceDownloadRemoteState).not.toHaveBeenCalled();
+          }
+          expect(result).toBe(choice ? SyncStatus.InSync : 'HANDLED_ERROR');
+          if (!choice) {
+            expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+            expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+          }
+        });
+      }
     });
 
     it('should escape the diagnostic before it reaches the [innerHtml] snack', async () => {
