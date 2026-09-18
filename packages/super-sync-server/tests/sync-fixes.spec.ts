@@ -303,6 +303,19 @@ describe('Sync System Fixes', () => {
     await app.close();
   });
 
+  it('returns 400 when a restore target has no retained history after reset', async () => {
+    // DELETE retains the allocator while clearing the history and snapshot cache.
+    serverSeqCounter = 3;
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/sync/restore/3',
+      headers: { authorization: `Bearer ${authToken}` },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('Target sequence 3 is no longer available');
+  });
+
   // =============================================================================
   // Issue 1: Request deduplication with piggybacking
   // =============================================================================

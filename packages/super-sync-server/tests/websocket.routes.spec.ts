@@ -10,6 +10,7 @@ import {
 import {
   WS_CONNECTION_RATE_LIMIT_MAX,
   WS_CONNECTION_RATE_LIMIT_WINDOW,
+  WS_IP_CONNECTION_RATE_LIMIT_MAX,
   wsRateLimitKeyGenerator,
   wsRoutes,
 } from '../src/sync/websocket.routes';
@@ -112,6 +113,34 @@ describe('WebSocket Route Validation', () => {
       expect(WS_CONNECTION_RATE_LIMIT_WINDOW).toBe('1 minute');
     });
 
+    it('allows 35 clients behind one IP to exhaust their normal reconnect backoff', async () => {
+      const app = Fastify();
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        await app.register(rateLimit, { max: 500, timeWindow: '15 minutes' });
+        await app.register(websocket);
+        await app.register(wsRoutes, { prefix: '/api/sync' });
+        let now = Date.now();
+        for (let attempt = 0; attempt < 50; attempt++) {
+          if (attempt > 0) {
+            // The browser uses 1s exponential backoff, capped at 60s.
+            now += Math.min(1000 * 2 ** (attempt - 1), 60_000);
+            vi.setSystemTime(now);
+          }
+          for (let client = 0; client < 35; client++) {
+            const response = await app.inject({
+              url: `/api/sync/ws?clientId=office-${client}`,
+              remoteAddress: '192.0.2.35',
+            });
+            expect(response.statusCode).toBe(404);
+          }
+        }
+      } finally {
+        await app.close();
+        vi.useRealTimers();
+      }
+    });
+
     it('bounds rotating client IDs from one IP independently of the per-client limit', async () => {
       const app = Fastify();
       try {
@@ -119,7 +148,7 @@ describe('WebSocket Route Validation', () => {
         await app.register(websocket);
         await app.register(wsRoutes, { prefix: '/api/sync' });
         // Non-upgrade requests traverse the real pre-auth route limiter too.
-        for (let i = 0; i < 500; i++) {
+        for (let i = 0; i < WS_IP_CONNECTION_RATE_LIMIT_MAX; i++) {
           const response = await app.inject({
             url: `/api/sync/ws?clientId=rotating-${i}`,
             remoteAddress: '192.0.2.1',

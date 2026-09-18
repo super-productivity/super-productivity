@@ -27,6 +27,7 @@ describeWithDb('Clean-slate upload atomicity (PostgreSQL)', () => {
   const TEST_EMAIL = `test-clean-slate-${Date.now()}@test.local`;
   const CLIENT_ID = 'clean-slate-integration-client';
   let afterResetDelete: (() => Promise<void>) | undefined;
+  let afterDownloadSeqRead: (() => Promise<void>) | undefined;
 
   const makeOp = (overrides: Partial<Operation> = {}): Operation => ({
     id: `clean-slate-op-${Date.now()}`,
@@ -70,6 +71,17 @@ describeWithDb('Clean-slate upload atomicity (PostgreSQL)', () => {
   beforeAll(async () => {
     prisma.$use(async (params, next) => {
       const result = await next(params);
+      if (
+        params.model === 'UserSyncState' &&
+        params.action === 'findUnique' &&
+        params.args.where.userId === TEST_USER_ID &&
+        params.args.select?.latestFullStateSeq &&
+        afterDownloadSeqRead
+      ) {
+        const resume = afterDownloadSeqRead;
+        afterDownloadSeqRead = undefined;
+        await resume();
+      }
       if (
         params.model === 'Operation' &&
         params.action === 'deleteMany' &&
@@ -125,6 +137,7 @@ describeWithDb('Clean-slate upload atomicity (PostgreSQL)', () => {
     ]);
     expect(seed.accepted).toBe(true);
     const oldCursor = seed.serverSeq!;
+    expect(await service.getLatestSeq(TEST_USER_ID)).toBe(oldCursor);
 
     await service.deleteAllUserData(TEST_USER_ID);
     const replacement = makeOp({
@@ -144,6 +157,7 @@ describeWithDb('Clean-slate upload atomicity (PostgreSQL)', () => {
     const [uploaded] = await service.uploadOps(TEST_USER_ID, CLIENT_ID, [replacement]);
     expect(uploaded.accepted).toBe(true);
     expect(uploaded.serverSeq).toBeGreaterThan(oldCursor);
+    expect(await service.getLatestSeq(TEST_USER_ID)).toBe(uploaded.serverSeq);
 
     const page = await service.getOpsSinceWithSeq(TEST_USER_ID, oldCursor, 'peer');
     expect(page.ops.map(({ op }) => op.id)).toEqual([replacement.id]);
@@ -181,6 +195,83 @@ describeWithDb('Clean-slate upload atomicity (PostgreSQL)', () => {
     });
     expect((await readPersistentState()).storageUsedBytes).toBe(0n);
   });
+
+  it('keeps download reads consistent when reset and replacement commit mid-download', async () => {
+    const service = new SyncService();
+    const [seed] = await service.uploadOps(TEST_USER_ID, CLIENT_ID, [
+      makeOp({ id: 'download-reset-seed' }),
+    ]);
+    expect(seed.accepted).toBe(true);
+    const replacement = makeOp({
+      id: 'download-reset-replacement',
+      opType: 'SYNC_IMPORT',
+      actionType: '[SP_ALL] Load(import) all data',
+      entityType: 'ALL',
+      entityId: undefined,
+      payload: { task: { ids: [], entities: {} } },
+      vectorClock: { [CLIENT_ID]: 2 },
+    });
+    afterDownloadSeqRead = async () => {
+      // Both writes really commit after the downloader has read its upper bound.
+      await service.deleteAllUserData(TEST_USER_ID);
+      const [uploaded] = await service.uploadOps(TEST_USER_ID, CLIENT_ID, [replacement]);
+      expect(uploaded.accepted).toBe(true);
+    };
+
+    const page = await service.getOpsSinceWithSeq(TEST_USER_ID, 0, 'peer');
+    expect(page.latestSeq).toBe(seed.serverSeq);
+    expect(page.ops.map(({ op }) => op.id)).toEqual(['download-reset-seed']);
+    expect(page.gapDetected).toBe(false);
+
+    const nextPage = await service.getOpsSinceWithSeq(TEST_USER_ID, page.latestSeq);
+    expect(nextPage.ops.map(({ op }) => op.id)).toEqual([replacement.id]);
+    expect(nextPage.latestSeq).toBeGreaterThan(page.latestSeq);
+  });
+
+  it.each([
+    [0, false],
+    [0, true],
+    [100000, false],
+    [100000, true],
+  ] as const)(
+    'rejects deleted restore targets (prior sequence: %i, replacement: %s)',
+    async (initialSeq, uploadReplacement) => {
+      const service = new SyncService();
+      await prisma.userSyncState.update({
+        where: { userId: TEST_USER_ID },
+        data: { lastSeq: initialSeq },
+      });
+      const [seed] = await service.uploadOps(TEST_USER_ID, CLIENT_ID, [
+        makeOp({ id: 'restore-reset-seed' }),
+      ]);
+      expect(seed.accepted).toBe(true);
+      if (initialSeq > 0) {
+        await expect(
+          service.generateSnapshotAtSeq(TEST_USER_ID, seed.serverSeq!),
+        ).rejects.toThrow('Too many operations to process');
+      }
+      await service.deleteAllUserData(TEST_USER_ID);
+
+      if (uploadReplacement) {
+        const [replacement] = await service.uploadOps(TEST_USER_ID, CLIENT_ID, [
+          makeOp({
+            id: 'restore-reset-replacement',
+            opType: 'SYNC_IMPORT',
+            entityType: 'ALL',
+            entityId: undefined,
+            payload: { task: { ids: [], entities: {} } },
+            vectorClock: { [CLIENT_ID]: 2 },
+          }),
+        ]);
+        expect(replacement.accepted).toBe(true);
+        expect(replacement.serverSeq).toBeGreaterThan(seed.serverSeq!);
+      }
+
+      await expect(
+        service.generateSnapshotAtSeq(TEST_USER_ID, seed.serverSeq!),
+      ).rejects.toThrow(`Target sequence ${seed.serverSeq} is no longer available`);
+    },
+  );
 
   it('serializes a concurrent upload before clearing history and accounting', async () => {
     const service = new SyncService();

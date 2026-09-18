@@ -297,7 +297,10 @@ describe('OperationDownloadService', () => {
 
       await service.getOpsSinceWithSeq(1, 0);
 
-      expect(capturedOptions).toEqual({ timeout: 60000 });
+      expect(capturedOptions).toEqual({
+        timeout: 60000,
+        isolationLevel: 'RepeatableRead',
+      });
       expect(capturedTx.operation.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           select: EXPECTED_OPERATION_DOWNLOAD_SELECT,

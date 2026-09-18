@@ -4,6 +4,7 @@
  * Extracted from SyncService for better separation of concerns.
  * This service handles operation retrieval with gap detection and snapshot optimization.
  */
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../db';
 import {
   LatestCausalFullStateRow,
@@ -301,7 +302,11 @@ export class OperationDownloadService {
           persistedSnapshotVectorClock,
         } satisfies OperationDownloadTransactionResult;
       },
-      { timeout: DOWNLOAD_TRANSACTION_TIMEOUT_MS },
+      {
+        timeout: DOWNLOAD_TRANSACTION_TIMEOUT_MS,
+        // A reset/replacement must not mix the old watermark with new history.
+        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+      },
     ); // Matches other sync transactions; stays below Fastify's 80s request timeout.
 
     let snapshotVectorClock: VectorClock | undefined;
@@ -407,7 +412,7 @@ export class OperationDownloadService {
   async getLatestSeq(userId: number): Promise<number> {
     const row = await prisma.userSyncState.findUnique({
       // lastSeq is an allocation counter, retained even after DELETE /data.
-      // The indexed existence check preserves the empty-server wire contract
+      // The existence check preserves the empty-server wire contract
       // without replacing that counter with MAX(server_seq), which can lag it.
       where: { userId, user: { operations: { some: {} } } },
       select: { lastSeq: true },
