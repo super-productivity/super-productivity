@@ -40,6 +40,12 @@ class WebDavHttpPlugin : Plugin() {
                         response = chain.proceed(request)
                         break
                     } catch (e: IOException) {
+                        // A failed PUT may still be running on the server. Replaying it
+                        // can hit its Nextcloud lock (#10116); let the next sync reconcile.
+                        // OkHttp already handles recoverable connection failures itself.
+                        if (request.method == "PUT") {
+                            throw e
+                        }
                         tryCount++
                         if (tryCount >= maxRetries) {
                             throw e
