@@ -4,6 +4,7 @@ import { sortWorklogDates } from '../../../util/sortWorklogDates';
 import { METRIC_FEATURE_NAME, metricAdapter } from './metric.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectAllSimpleCounters } from '../../simple-counter/store/simple-counter.reducer';
+import { unique } from '../../../util/unique';
 import {
   SimpleCounter,
   SimpleCounterType,
@@ -80,10 +81,10 @@ export const selectSimpleCounterClickCounterLineChartData = createSelector(
     const stopwatchItems = simpleCounterItems.filter(
       (item) => item.type === SimpleCounterType.ClickCounter,
     );
-    const allDays = new Set(
+    const allDays = unique(
       stopwatchItems.flatMap((item) => Object.keys(item.countOnDay || {})),
     );
-    const allDaysSorted = sortWorklogDates([...allDays]).slice(f);
+    const allDaysSorted = sortWorklogDates(allDays).slice(f);
     chart.labels = allDaysSorted;
 
     stopwatchItems.forEach((item, j) => {
@@ -108,10 +109,10 @@ export const selectSimpleCounterStopWatchLineChartData = createSelector(
     const stopwatchItems = simpleCounterItems.filter(
       (item) => item.type === SimpleCounterType.StopWatch,
     );
-    const allDays = new Set(
+    const allDays = unique(
       stopwatchItems.flatMap((item) => Object.keys(item.countOnDay || {})),
     );
-    const allDaysSorted = sortWorklogDates([...allDays]).slice(f);
+    const allDaysSorted = sortWorklogDates(allDays).slice(f);
     chart.labels = allDaysSorted;
 
     stopwatchItems.forEach((item, j) => {
