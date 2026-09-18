@@ -113,7 +113,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     const confirmDialog = pageB.locator('dialog-confirm');
     await expect(confirmDialog).toBeVisible();
     await expect(confirmDialog.locator('.content')).toHaveText(
-      'WARNING: This device cannot determine how many unsynced changes the remote data has (it has no record of a previous sync). Overwriting the remote data with the local version may discard changes. Are you sure?',
+      'WARNING: The number of unsynced changes is unknown. This will replace the entire remote dataset with the local version. Changes present only in the remote data will be lost. Are you sure?',
     );
     const snapshotUploadResponse = pageB.waitForResponse(
       (response) =>
@@ -230,7 +230,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     const confirmDialog = pageB.locator('dialog-confirm');
     await expect(confirmDialog).toBeVisible();
     await expect(confirmDialog.locator('.content')).toHaveText(
-      'WARNING: This device cannot determine how many unsynced changes the local data has (it has no record of a previous sync). Overwriting the local data with the remote version may discard changes. Are you sure?',
+      'WARNING: The number of unsynced changes is unknown. This will replace the entire local dataset with the remote version. Changes present only in the local data will be lost. Are you sure?',
     );
     await confirmDialog.locator('[e2e="confirmBtn"]').click();
 

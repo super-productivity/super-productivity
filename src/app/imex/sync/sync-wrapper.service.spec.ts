@@ -57,7 +57,8 @@ import {
 import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password/dialog-enter-encryption-password.component';
 import { DialogSyncConflictComponent } from './dialog-sync-conflict/dialog-sync-conflict.component';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
-import { ActionType } from '../../op-log/core/operation.types';
+import { ActionType, OpType } from '../../op-log/core/operation.types';
+import { TestClient } from '../../op-log/testing/integration/helpers/test-client.helper';
 import type { SyncProviderBase } from '../../op-log/sync-providers/provider.interface';
 import type { MatDialogRef } from '@angular/material/dialog';
 import { DialogGetAndEnterAuthCodeComponent } from './dialog-get-and-enter-auth-code/dialog-get-and-enter-auth-code.component';
@@ -1516,7 +1517,7 @@ describe('SyncWrapperService', () => {
       expect(mockSnackService.open).toHaveBeenCalledWith({
         msg: T.F.SYNC.S.UNSUPPORTED_MULTI_ENTITY_CONFLICT,
         type: 'ERROR',
-        actionStr: T.F.SYNC.D_CONFLICT.TITLE,
+        actionStr: T.F.SYNC.S.BTN_RESOLVE_CONFLICT,
         actionFn: jasmine.any(Function),
         translateParams: {
           details:
@@ -1534,6 +1535,21 @@ describe('SyncWrapperService', () => {
     describe('unsupported multi-entity conflict recovery', () => {
       beforeEach(() => {
         configSubject.next(createMockSyncConfig(SyncProviderId.WebDAV));
+        mockOpLogStore.getUnsynced.and.resolveTo([
+          {
+            seq: 1,
+            source: 'local',
+            appliedAt: 1,
+            op: new TestClient('local').createOperation({
+              actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              entityId: 'task-a',
+              entityIds: ['task-a', 'task-b'],
+              payload: { tasks: [] },
+            }),
+          },
+        ]);
         mockSyncService.downloadRemoteOps.and.rejectWith(
           new UnsupportedMultiEntityConflictError(
             'local',
@@ -1563,7 +1579,7 @@ describe('SyncWrapperService', () => {
           );
           const data = mockMatDialog.open.calls.mostRecent().args[1]!
             .data as ConflictData;
-          expect(data.localUnsyncedOpsCount).toBe(0);
+          expect(data.localUnsyncedOpsCount).toBe(1);
           expect(data.remote.lastUpdate).toBeNull();
           expect(data.remote.vectorClock).toBeUndefined();
           if (choice === 'USE_LOCAL') {
@@ -2374,6 +2390,7 @@ describe('SyncWrapperService', () => {
 
         expect(result).toBe('HANDLED_ERROR');
         expect(mockSnackService.open).toHaveBeenCalled();
+        expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('ERROR');
         // Issue #7339: previously, filter(undefined) on the dialog stream caused
         // firstValueFrom() to throw EmptyError, which surfaced as the generic
         // ERROR snack. After the fix, an undefined close (e.g., iOS app
@@ -2630,9 +2647,7 @@ describe('SyncWrapperService', () => {
 
         await service.sync();
 
-        expect(mockUserInputWaitState.startWaiting).toHaveBeenCalledWith(
-          'local-data-conflict',
-        );
+        expect(mockUserInputWaitState.startWaiting).toHaveBeenCalledWith('data-conflict');
         expect(stopWaitingSpy).toHaveBeenCalled();
       });
 
