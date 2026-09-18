@@ -59,12 +59,21 @@ test.describe('@webdav overlapping bulk archive recovery (#10102)', () => {
         const localWork = new WorkViewPage(local.page);
         const remoteWork = new WorkViewPage(remote.page);
         const titles = ['Shared archive task A', 'Shared archive task B'];
+        // Watch BOTH devices: a recurrence on the remote after recovery would
+        // otherwise go unnoticed, since every remote-side task assertion below
+        // is already satisfied by its pre-recovery state.
         const diagnostics: string[] = [];
-        local.page.on('console', (message) => {
-          if (message.text().includes('SYNC_MULTI_ENTITY_UNSUPPORTED')) {
-            diagnostics.push(message.text());
-          }
-        });
+        const remoteDiagnostics: string[] = [];
+        for (const [page, sink] of [
+          [local.page, diagnostics],
+          [remote.page, remoteDiagnostics],
+        ] as const) {
+          page.on('console', (message) => {
+            if (message.text().includes('SYNC_MULTI_ENTITY_UNSUPPORTED')) {
+              sink.push(message.text());
+            }
+          });
+        }
 
         await localSync.setupWebdavSync(config);
         await waitForSyncComplete(local.page, localSync);
@@ -138,17 +147,23 @@ test.describe('@webdav overlapping bulk archive recovery (#10102)', () => {
         await dialog.getByRole('button', { name: choice, exact: true }).click();
         await confirmation.locator('[e2e="confirmBtn"]').click();
         await expect(dialog).not.toBeVisible();
+        // The force upload/download runs AFTER the dialog closes, and the
+        // status is already ERROR (set before the dialog opened) so no spinner
+        // renders — the manual-trigger settle check would read "idle" and fire
+        // the next sync mid-recovery. Wait for the error state to clear.
+        await expect(localSync.syncErrorIcon).not.toBeVisible({ timeout: 60000 });
 
         // Real force recovery must clear pending conflicting history, not merely
         // report success once. Exercise subsequent downloads and uploads twice.
         const failuresBeforeRecovery = diagnostics.length;
         for (let round = 0; round < 2; round++) {
           await localSync.triggerSync();
-          await waitForSyncComplete(local.page, localSync);
+          expect(await waitForSyncComplete(local.page, localSync)).toBe('success');
           await remoteSync.triggerSync();
-          await waitForSyncComplete(remote.page, remoteSync);
+          expect(await waitForSyncComplete(remote.page, remoteSync)).toBe('success');
         }
         expect(diagnostics.length).toBe(failuresBeforeRecovery);
+        expect(remoteDiagnostics).toEqual([]);
         const kept = choice === 'Keep local' ? 'Local-only task' : 'Remote-only task';
         const discarded =
           choice === 'Keep local' ? 'Remote-only task' : 'Local-only task';

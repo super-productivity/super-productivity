@@ -1126,10 +1126,33 @@ export class SyncWrapperService {
         return 'HANDLED_ERROR';
       } else if (
         error instanceof LocalDataConflictError ||
-        (error instanceof UnsupportedMultiEntityConflictError && isUserTriggered)
+        error instanceof UnsupportedMultiEntityConflictError
       ) {
         if (error instanceof UnsupportedMultiEntityConflictError) {
           this._providerManager.setSyncStatus('ERROR');
+          // Ordering matters, exactly like the OperationIntegrityError branch
+          // below: this precise instanceof MUST stay ABOVE the string-heuristic
+          // branches. The diagnostic embeds `entityCount=N`, and a bulk op
+          // covering 504 entities would otherwise match _isTimeoutError's
+          // \b504\b and be swallowed as a gateway timeout — silently, since
+          // that branch stays quiet on automatic syncs.
+          if (!isUserTriggered) {
+            // A background cycle must not steal focus with a modal, so offer
+            // the route to it instead. Deliberately NOT a sticky snack: it
+            // would block later feedback once recovery runs from the toolbar.
+            if (!this._snackService.hasPendingPersistentAction()) {
+              this._snackService.open({
+                msg: T.F.SYNC.S.UNSUPPORTED_MULTI_ENTITY_CONFLICT,
+                type: 'ERROR',
+                actionStr: T.F.SYNC.S.BTN_RESOLVE_CONFLICT,
+                actionFn: () => this.sync(true),
+                translateParams: {
+                  details: escapeHtml(getSyncErrorStr(error)),
+                },
+              });
+            }
+            return 'HANDLED_ERROR';
+          }
         }
         return this._handleDataConflict(error);
       } else if (error instanceof WebCryptoNotAvailableError) {
@@ -1286,26 +1309,14 @@ export class SyncWrapperService {
         // rendering is debounced, so opening the generic error here would win
         // the race and silently remove the only recovery action.
         if (!this._snackService.hasPendingPersistentAction()) {
-          if (error instanceof UnsupportedMultiEntityConflictError) {
-            this._snackService.open({
-              msg: T.F.SYNC.S.UNSUPPORTED_MULTI_ENTITY_CONFLICT,
-              type: 'ERROR',
-              actionStr: T.F.SYNC.S.BTN_RESOLVE_CONFLICT,
-              actionFn: () => this.sync(true),
-              translateParams: {
-                details: escapeHtml(errStr),
-              },
-            });
-          } else {
-            this._snackService.open({
-              // msg: T.F.SYNC.S.UNKNOWN_ERROR,
-              msg: errStr,
-              type: 'ERROR',
-              translateParams: {
-                err: errStr,
-              },
-            });
-          }
+          this._snackService.open({
+            // msg: T.F.SYNC.S.UNKNOWN_ERROR,
+            msg: errStr,
+            type: 'ERROR',
+            translateParams: {
+              err: errStr,
+            },
+          });
         }
         return 'HANDLED_ERROR';
       }
@@ -1662,7 +1673,11 @@ export class SyncWrapperService {
           : ConflictReason.BothNewerLastSync,
         remote: {
           lastUpdate: snapshotConflict?.remoteLastModified ?? null,
-          lastUpdateAction: 'Remote data',
+          // A user whose first encounter is a manual sync never sees the snack,
+          // so surface the reportable diagnostic in the dialog's Additional Info
+          // row instead. Safe to show: the message carries only an allowlisted
+          // action type and integer counts, never user content (rule 9).
+          lastUpdateAction: snapshotConflict ? 'Remote data' : error.message,
           revMap: {},
           crossModelVersion: 1,
           mainModelData: snapshotConflict?.remoteSnapshotState ?? {},

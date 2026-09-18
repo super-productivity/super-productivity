@@ -1532,6 +1532,34 @@ describe('SyncWrapperService', () => {
       expect(syncSpy).toHaveBeenCalledWith(true);
     });
 
+    // The diagnostic embeds `entityCount=N`. _isTimeoutError matches /\b504\b/,
+    // and `=` is a non-word char, so a bulk op over exactly 504 entities used to
+    // be misread as a gateway timeout — which stays silent on automatic syncs,
+    // leaving a permanent wedge with no snack and no ERROR status.
+    it('does not let entityCount=504 fall through to the gateway-timeout branch', async () => {
+      mockSyncService.downloadRemoteOps.and.rejectWith(
+        new UnsupportedMultiEntityConflictError(
+          'local',
+          ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+          504,
+        ),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.UNSUPPORTED_MULTI_ENTITY_CONFLICT,
+          actionStr: T.F.SYNC.S.BTN_RESOLVE_CONFLICT,
+        }),
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ msg: T.F.SYNC.S.TIMEOUT_ERROR }),
+      );
+    });
+
     describe('unsupported multi-entity conflict recovery', () => {
       beforeEach(() => {
         configSubject.next(createMockSyncConfig(SyncProviderId.WebDAV));
@@ -1582,6 +1610,9 @@ describe('SyncWrapperService', () => {
           expect(data.localUnsyncedOpsCount).toBe(1);
           expect(data.remote.lastUpdate).toBeNull();
           expect(data.remote.vectorClock).toBeUndefined();
+          // The reportable code must stay reachable for users who only ever
+          // sync manually and therefore never see the snack.
+          expect(data.remote.lastUpdateAction).toContain('SYNC_MULTI_ENTITY_UNSUPPORTED');
           if (choice === 'USE_LOCAL') {
             expect(mockSyncService.forceUploadLocalState).toHaveBeenCalledOnceWith(
               mockSyncCapableProvider,
