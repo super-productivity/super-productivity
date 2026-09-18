@@ -26,6 +26,81 @@ const createTask = (
 };
 
 describe('getTimeConflictTaskIds', () => {
+  it('should handle empty and single-task schedules', () => {
+    expect([...getTimeConflictTaskIds([])]).toEqual([]);
+    expect([
+      ...getTimeConflictTaskIds([createTask({ id: 'only', dueWithTime: h(9) })]),
+    ]).toEqual([]);
+  });
+
+  it('should find nested overlaps even after the immediately previous task ends', () => {
+    const tasks = [
+      createTask({ id: 'late', dueWithTime: h(12), timeEstimate: m(15) }),
+      createTask({ id: 'long', dueWithTime: h(9), timeEstimate: h(4) }),
+      createTask({ id: 'short', dueWithTime: h(10), timeEstimate: m(15) }),
+      createTask({ id: 'touching', dueWithTime: h(13), timeEstimate: h(1) }),
+    ];
+    tasks.forEach(Object.freeze);
+    Object.freeze(tasks);
+
+    expect([...getTimeConflictTaskIds(tasks)]).toEqual(['long', 'short', 'late']);
+    expect(tasks.map((task) => task.id)).toEqual(['late', 'long', 'short', 'touching']);
+  });
+
+  it('should extend overlap chains and keep separate groups separate', () => {
+    expect([
+      ...getTimeConflictTaskIds([
+        createTask({ id: 'a', dueWithTime: h(9), timeEstimate: h(2) }),
+        createTask({ id: 'b', dueWithTime: h(10), timeEstimate: h(2) }),
+        createTask({ id: 'c', dueWithTime: h(11), timeEstimate: h(2) }),
+        createTask({ id: 'isolated', dueWithTime: h(13), timeEstimate: h(1) }),
+        createTask({ id: 'd', dueWithTime: h(15), timeEstimate: h(1) }),
+        createTask({ id: 'e', dueWithTime: h(15), timeEstimate: h(1) }),
+      ]),
+    ]).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
+
+  it('should use remaining time with a one-minute minimum', () => {
+    const tracked = createTask({
+      id: 'tracked',
+      dueWithTime: h(9),
+      timeEstimate: h(2),
+      timeSpent: h(1),
+    });
+    const next = createTask({ id: 'next', dueWithTime: h(10), timeEstimate: h(1) });
+    expect([...getTimeConflictTaskIds([tracked, next])]).toEqual([]);
+    expect([...getTimeConflictTaskIds([{ ...tracked, timeSpent: m(59) }, next])]).toEqual(
+      ['tracked', 'next'],
+    );
+    expect([
+      ...getTimeConflictTaskIds([
+        { ...tracked, timeSpent: h(3) },
+        { ...next, dueWithTime: h(9) + m(0.5) },
+      ]),
+    ]).toEqual(['tracked', 'next']);
+    expect([
+      ...getTimeConflictTaskIds([
+        { ...tracked, timeSpent: h(3) },
+        { ...next, dueWithTime: h(9) + m(1) },
+      ]),
+    ]).toEqual([]);
+  });
+
+  it('should use the full remaining estimate for parents with subtasks', () => {
+    expect([
+      ...getTimeConflictTaskIds([
+        createTask({
+          id: 'parent',
+          dueWithTime: h(9),
+          timeEstimate: h(2),
+          timeSpent: h(2),
+          subTaskIds: ['child'],
+        }),
+        createTask({ id: 'next', dueWithTime: h(10), timeEstimate: h(1) }),
+      ]),
+    ]).toEqual(['parent', 'next']);
+  });
+
   it('should mark tasks with overlapping planned time', () => {
     const result = getTimeConflictTaskIds([
       createTask({
