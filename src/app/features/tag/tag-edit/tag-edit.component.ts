@@ -141,15 +141,13 @@ export class TagEditComponent {
     }
 
     if (!matAutocomplete.isOpen) {
-      const inputEl = event.chipInput.inputElement;
       const tagTitle = (event.value || '').trim();
 
       if (tagTitle) {
         this._addByTitle(tagTitle);
       }
 
-      inputEl.value = '';
-      this.inputCtrl.setValue(null);
+      this._clearInput();
     }
   }
 
