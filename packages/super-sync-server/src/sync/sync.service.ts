@@ -923,6 +923,9 @@ export class SyncService {
           lastSnapshotSeq: null,
           snapshotData: null,
           snapshotAt: null,
+          // Cleared with the blob, as every other cache-clear site does; a
+          // stale version left behind would describe data that no longer exists.
+          snapshotSchemaVersion: null,
           latestFullStateSeq: null,
           latestFullStateVectorClock: Prisma.DbNull,
           latestStateReplacementSeq: null,
