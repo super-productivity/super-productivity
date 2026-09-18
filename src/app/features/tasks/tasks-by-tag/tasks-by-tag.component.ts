@@ -1,7 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, input, Input } from '@angular/core';
 import { T } from 'src/app/t.const';
 import { Task } from '../task.model';
-import { unique } from '../../../util/unique';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map, withLatestFrom } from 'rxjs/operators';
 import { DateService } from '../../../core/date/date.service';
@@ -52,9 +51,7 @@ export class TasksByTagComponent {
   //  Accessor inputs cannot be migrated as they are too complex.
   @Input('flatTasks') set flatTasksIn(tasks: Task[]) {
     this.flatTasks = tasks;
-    const tagIds: string[] = unique(
-      tasks.reduce((acc, t) => [...acc, ...t.tagIds], [] as string[]),
-    );
+    const tagIds = [...new Set(tasks.flatMap((t) => t.tagIds))];
     this.todaysTasksTagIds$.next(tagIds);
   }
 

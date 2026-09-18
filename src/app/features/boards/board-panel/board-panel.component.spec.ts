@@ -569,6 +569,26 @@ describe('BoardPanelComponent - Tag match mode, sort, inline-create computeds', 
   });
 
   describe('sortBy', () => {
+    for (const sortBy of [undefined, 'title'] as const) {
+      it(`preserves saved order and appends new tasks with sortBy=${sortBy}`, async () => {
+        await setup([
+          mkTask({ id: 'new-a' }),
+          mkTask({ id: 'a' }),
+          mkTask({ id: 'b' }),
+          mkTask({ id: 'new-b' }),
+        ]);
+        fixture.componentRef.setInput('panelCfg', {
+          ...DEFAULT_PANEL_CFG,
+          taskIds: ['missing', 'b', 'a', 'b'],
+          sortBy,
+        });
+        fixture.detectChanges();
+
+        // All titles are equal: explicit sorting must retain the manual tie order.
+        expect(component.tasks().map((t) => t.id)).toEqual(['b', 'a', 'new-a', 'new-b']);
+      });
+    }
+
     it('sorts by title ascending', async () => {
       await setup([
         mkTask({ id: 'c', title: 'Charlie' }),
