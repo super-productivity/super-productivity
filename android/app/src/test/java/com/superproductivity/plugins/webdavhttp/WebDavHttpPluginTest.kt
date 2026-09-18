@@ -1,15 +1,24 @@
 package com.superproductivity.plugins.webdavhttp
 
 import okhttp3.OkHttpClient
+import okhttp3.Call
+import okhttp3.ConnectionPool
+import okhttp3.Dispatcher
+import okhttp3.Dns
+import okhttp3.EventListener
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import java.net.ConnectException
 import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.ServerSocket
 import java.net.SocketException
 import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -40,14 +49,67 @@ class WebDavHttpPluginTest {
         }
     }
 
-    private fun withStalledRequest(test: (OkHttpClient, String, AtomicInteger) -> Unit) {
+    @Test
+    fun `PUT retries a refused connection before sending any bytes`() {
+        val attempts = AtomicInteger()
+        val port = ServerSocket(0, 10, InetAddress.getByName("127.0.0.1")).use { it.localPort }
+        val client = newTestClientBuilder().eventListener(object : EventListener() {
+            override fun connectStart(call: Call, address: InetSocketAddress, proxy: Proxy) {
+                attempts.incrementAndGet()
+            }
+        }).build()
+        try {
+            val request = Request.Builder().url("http://127.0.0.1:$port/sync-state.json")
+                .put("snapshot".toRequestBody()).build()
+            assertThrows(ConnectException::class.java) {
+                client.newCall(request).execute().close()
+            }
+            assertEquals(2, attempts.get())
+        } finally {
+            closeTestClient(client)
+        }
+    }
+
+    @Test
+    fun `PUT retains retries when DNS lookup fails`() {
+        val lookups = AtomicInteger()
+        val client = newTestClientBuilder().dns(object : Dns {
+            override fun lookup(hostname: String): List<InetAddress> {
+                lookups.incrementAndGet()
+                throw UnknownHostException("Simulated transient DNS failure")
+            }
+        }).build()
+        try {
+            val request = Request.Builder().url("http://webdav.invalid/sync-state.json")
+                .put("snapshot".toRequestBody()).build()
+            assertThrows(UnknownHostException::class.java) {
+                client.newCall(request).execute().close()
+            }
+            assertEquals(2, lookups.get())
+        } finally {
+            closeTestClient(client)
+        }
+    }
+
+    private fun newTestClientBuilder(): OkHttpClient.Builder {
         // Exercise the production client's interceptors over real sockets.
         // Shorten only the timeout so the regression does not take 30 seconds.
         val field = WebDavHttpPlugin::class.java.getDeclaredField("client")
         field.isAccessible = true
-        val client = (field.get(null) as OkHttpClient).newBuilder()
-            .readTimeout(500, TimeUnit.MILLISECONDS)
-            .build()
+        return (field.get(null) as OkHttpClient).newBuilder()
+            .dispatcher(Dispatcher())
+            .connectionPool(ConnectionPool())
+            .proxy(Proxy.NO_PROXY)
+            .readTimeout(2, TimeUnit.SECONDS)
+    }
+
+    private fun closeTestClient(client: OkHttpClient) {
+        client.connectionPool.evictAll()
+        client.dispatcher.executorService.shutdown()
+    }
+
+    private fun withStalledRequest(test: (OkHttpClient, String, AtomicInteger) -> Unit) {
+        val client = newTestClientBuilder().build()
         val requests = AtomicInteger()
         val releaseOriginal = CountDownLatch(1)
         val executor = Executors.newCachedThreadPool()
@@ -92,8 +154,7 @@ class WebDavHttpPluginTest {
             releaseOriginal.countDown()
             server.close()
             executor.shutdownNow()
-            client.connectionPool.evictAll()
-            client.dispatcher.executorService.shutdown()
+            closeTestClient(client)
         }
     }
 }
