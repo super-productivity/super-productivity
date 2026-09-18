@@ -74,20 +74,28 @@ import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider
 import { PlainspaceIssue } from './providers/plainspace/plainspace-issue.model';
 
 /**
- * A recurring Plainspace item appears to be a single server row whose
- * `scheduledAt` the server advances, which would make its issue id stable
- * across occurrences. Once the completed occurrence is archived, that id blocks
- * every later occurrence from ever being imported again (#10074). When the
- * server has already rolled the item on (it is no longer done remotely), the
- * archived task *is* the next occurrence and gets re-activated instead —
- * importing a second task is not an option, since its deterministic id
+ * A recurring Plainspace item is ONE server row (`items`) reused for every
+ * occurrence, so its issue id never changes. Verified against the Plainspace
+ * server, not inferred — the completion flip runs in two stages, which is the
+ * whole reason #10074 exists:
+ *
+ * 1. Our `done: true` push advances `remind_at` to the next occurrence straight
+ *    away but leaves `checked = true` (`recurrenceUpdateOnCheck`, integration
+ *    PATCH). The task is legitimately done, just already pointing at what's
+ *    next — so it lands in the done list and gets archived with everything else
+ *    at the end of the day.
+ * 2. Only when that next occurrence's DAY begins does the server's sweep set
+ *    `checked = false` (`reopenDueRecurringItems`) — typically hours or days
+ *    later, long after the archive ran.
+ *
+ * So the reopen can never reach a task through the normal update poll: by then
+ * the task is in the archive, and its issue id blocks re-import forever. Hence
+ * re-activating the archived task, which IS the next occurrence. Importing a
+ * second task is not an option — its deterministic id
  * (`generatePlainspaceTaskId`) would collide with the archived one.
  *
- * The stable-id premise is inferred from the Plainspace API shape, not verified
- * against a live server (#10074 reports it as "seems", not confirmed). If it is
- * wrong and each occurrence gets its own id, this is inert rather than harmful:
- * the completed row stays done, so nothing matches, and the new row imports
- * normally.
+ * `isRecurring && !isDone` maps exactly onto stage 2, so this cannot fire early:
+ * between completion and the day-start sweep the issue still reads as done.
  *
  * Deliberately narrow: for every other provider — and for non-recurring
  * Plainspace items — an archived task keeps blocking re-import forever, which
