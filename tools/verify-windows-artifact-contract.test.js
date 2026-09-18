@@ -219,3 +219,48 @@ test('the tool fails instead of writing metadata without executables', async (t)
     /No setup executables found/,
   );
 });
+
+// The Windows-only dispatch path finishes a release whose tag run already spent
+// its windows-bin job. Each of these is a way it silently does the wrong thing
+// rather than failing: a dispatch that rebuilds everything, one that publishes to
+// a release named after the branch, or one that skips the only job it exists for.
+test('the Windows-only dispatch path stays windows-only', () => {
+  const linuxJob = RELEASE_WORKFLOW.indexOf('  linux-bin-and-snap-release:');
+  const macJob = RELEASE_WORKFLOW.indexOf('  mac-bin:');
+  assert.notEqual(linuxJob, -1, 'linux job not found');
+  assert.match(
+    RELEASE_WORKFLOW.slice(linuxJob, macJob),
+    /if: github\.event_name != 'workflow_dispatch'/,
+    'the linux job has no tag gate, so it must opt out of dispatch runs explicitly',
+  );
+});
+
+test('a dispatch run publishes to the named release, not to the dispatched branch', () => {
+  assert.match(
+    RELEASE_WORKFLOW,
+    /RELEASE_TAG: \$\{\{ inputs\.release_tag \|\| github\.ref_name \}\}/,
+  );
+  assert.match(RELEASE_WORKFLOW, /tag_name: \$\{\{ env\.RELEASE_TAG \}\}/);
+  // github.ref_name is the branch on a dispatch run, so the publish step must not
+  // fall back to it for either the target release or the prerelease flag.
+  // Scoped to windows-bin: create-release only ever runs on a tag push, where
+  // github.ref is the tag, so its own use of it is correct.
+  const windowsJob = RELEASE_WORKFLOW.slice(RELEASE_WORKFLOW.indexOf('  windows-bin:'));
+  assert.doesNotMatch(
+    windowsJob,
+    /prerelease: \$\{\{ contains\(github\.ref/,
+    'prerelease must be derived from RELEASE_TAG, not the dispatched ref',
+  );
+  assert.match(windowsJob, /prerelease: \$\{\{ contains\(env\.RELEASE_TAG/);
+});
+
+test('windows-bin opts out of being skipped alongside create-release', () => {
+  const winJob = RELEASE_WORKFLOW.indexOf('  windows-bin:');
+  assert.notEqual(winJob, -1, 'windows job not found');
+  const gate = RELEASE_WORKFLOW.slice(winJob, winJob + 600);
+  // Without a status function the implied success() skips this job whenever
+  // create-release is skipped -- which is every dispatch run.
+  assert.match(gate, /!cancelled\(\)/);
+  assert.match(gate, /needs\.create-release\.result == 'skipped'/);
+  assert.match(gate, /github\.event_name == 'workflow_dispatch'/);
+});
