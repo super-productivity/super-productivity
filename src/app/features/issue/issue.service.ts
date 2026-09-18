@@ -71,6 +71,29 @@ import { GlobalProgressBarService } from '../../core-ui/global-progress-bar/glob
 import { NavigateToTaskService } from '../../core-ui/navigate-to-task/navigate-to-task.service';
 import { PluginIssueProviderAdapterService } from '../../plugins/issue-provider/plugin-issue-provider-adapter.service';
 import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
+import { PlainspaceIssue } from './providers/plainspace/plainspace-issue.model';
+
+/**
+ * A recurring Plainspace item is a single server row whose `scheduledAt` the
+ * server advances, so its issue id is stable across occurrences. Once the
+ * completed occurrence is archived, that id would block every later occurrence
+ * from ever being imported again (#10074). When the server has already rolled
+ * the item on (it is no longer done remotely), the archived task *is* the next
+ * occurrence and gets re-activated instead — importing a second task is not an
+ * option, since its deterministic id (`generatePlainspaceTaskId`) would collide
+ * with the archived one.
+ *
+ * Deliberately narrow: for every other provider — and for non-recurring
+ * Plainspace items — an archived task keeps blocking re-import forever, which
+ * is the behaviour #7971 and #5162 locked in.
+ */
+const isIssueAwaitingNextOccurrence = (
+  issueProviderKey: IssueProviderKey,
+  issue: IssueDataReduced,
+): boolean =>
+  issueProviderKey === PLAINSPACE_TYPE &&
+  !!(issue as PlainspaceIssue).isRecurring &&
+  !(issue as PlainspaceIssue).isDone;
 
 @Injectable({
   providedIn: 'root',
@@ -279,6 +302,23 @@ export class IssueService {
       (issue: IssueDataReduced): boolean =>
         !(allExistingIssueIds as string[]).includes(issue.id as string),
     );
+
+    // Already-imported recurring issues whose task may sit in the archive: those
+    // are re-activated rather than imported (see isIssueAwaitingNextOccurrence).
+    // Kept out of `issuesToAdd` so the import snack below still counts imports
+    // only — a restore announces itself with its own snack.
+    const reactivationCandidates: IssueDataReduced[] = potentialIssuesToAdd.filter(
+      (issue: IssueDataReduced): boolean =>
+        (allExistingIssueIds as string[]).includes(issue.id as string) &&
+        isIssueAwaitingNextOccurrence(providerKey, issue),
+    );
+    if (reactivationCandidates.length) {
+      await this._reactivateArchivedIssueTasks(
+        providerKey,
+        issueProviderId,
+        reactivationCandidates,
+      );
+    }
 
     issuesToAdd.forEach((issue: IssueDataReduced) => {
       // TODO add correct project id
@@ -745,6 +785,50 @@ export class IssueService {
     const effectiveParentId = parentTask.task.parentId || parentTask.task.id;
     const taskId = this._taskService.addSubTaskTo(effectiveParentId, subTaskData);
     return { taskId, parentTaskId: effectiveParentId };
+  }
+
+  /**
+   * Restores the archived task of a recurring issue whose next occurrence the
+   * server has already rolled on to, and resets it from the fresh issue data in
+   * the same pass (#10074) — otherwise the task would come back carrying the
+   * completed occurrence's `isDone` and schedule until the next update poll.
+   *
+   * Candidates whose task is still active (the common case on every poll) are
+   * dropped here rather than by the caller, so the archive is only loaded when
+   * there is actually something to restore.
+   */
+  private async _reactivateArchivedIssueTasks(
+    providerKey: IssueProviderKey,
+    issueProviderId: string,
+    issues: IssueDataReduced[],
+  ): Promise<void> {
+    const activeIssueIds = new Set(
+      (await firstValueFrom(this._taskService.allTasks$))
+        .filter((task) => task.issueProviderId === issueProviderId)
+        .map((task) => task.issueId),
+    );
+
+    for (const issue of issues) {
+      if (activeIssueIds.has(issue.id as string)) {
+        continue;
+      }
+      const res = await this._taskService.checkForTaskWithIssueEverywhere(
+        issue.id.toString(),
+        providerKey,
+        issueProviderId,
+      );
+      if (!res?.isFromArchive) {
+        continue;
+      }
+
+      this._taskService.restoreTask(res.task, res.subTasks || []);
+      this._updateTaskFromPoll(res.task, this._getAddTaskData(providerKey, issue));
+      this._snackService.open({
+        ico: 'info',
+        msg: T.F.TASK.S.FOUND_RESTORE_FROM_ARCHIVE,
+        translateParams: { title: res.task.title },
+      });
+    }
   }
 
   private async _checkAndHandleIssueAlreadyAdded(
