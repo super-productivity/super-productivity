@@ -17,6 +17,7 @@ import { getDiffInDays } from '../../util/get-diff-in-days';
 import { selectActiveTaskRepeatCfgs } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { Log } from '../../core/log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
+import { buildDayWindow } from './util/build-day-window';
 
 @Injectable({
   providedIn: 'root',
@@ -65,40 +66,19 @@ export class PlannerService {
     this.includedWeekDays$,
   ]).pipe(
     tap(([count, todayStr]) => Log.log('daysToShow$', { count, todayStr })),
-    map(([count, _, includedWeekDays]) => {
-      // Guard against empty includedWeekDays to prevent infinite loop
-      if (includedWeekDays.length === 0) {
-        return [];
-      }
-
-      // Anchor on the logical day, not the raw clock: between calendar
-      // midnight and the configured start-of-next-day the window must still
-      // begin at (logical) today, or the tasks planned for it have no rendered
-      // day at all; ensureDayLoaded below can only extend the window forward.
-      const cursor = this._dateService.getLogicalTodayDate();
-      // Only date parts are read below, so pin the cursor to midday first.
-      // setDate() preserves the wall time, and a late-evening one is normalised
-      // past midnight in zones whose spring-forward gap ends at 00:00
-      // (America/Godthab and America/Scoresbysund skip 23:00-23:59), which
-      // would drop a whole day from the window. Midday is never in a gap.
-      cursor.setHours(12, 0, 0, 0);
-      const daysToShow: string[] = [];
-
-      // Loop until we have the required count of days (not just iterate N
-      // times, which produces fewer days when weekends are excluded), stepping
-      // by calendar day: a DST transition day is 23h/25h long, so +24h ms
-      // arithmetic from a late-evening anchor skips or duplicates a date.
-      let daysAdded = 0;
-      while (daysAdded < count) {
-        if (includedWeekDays.includes(cursor.getDay())) {
-          daysToShow.push(this._dateService.todayStr(cursor));
-          daysAdded++;
-        }
-        cursor.setDate(cursor.getDate() + 1);
-      }
-
-      return daysToShow;
-    }),
+    map(([count, _, includedWeekDays]) =>
+      buildDayWindow(
+        // Anchor on the logical day, not the raw clock: between calendar
+        // midnight and the configured start-of-next-day the window must still
+        // begin at (logical) today, or the tasks planned for it have no
+        // rendered day at all; ensureDayLoaded below can only extend the
+        // window forward.
+        this._dateService.getLogicalTodayDate(),
+        count,
+        includedWeekDays,
+        (d) => this._dateService.todayStr(d),
+      ),
+    ),
   );
 
   allDueWithTimeTasks$: Observable<TaskWithDueTime[]> = this._store.select(
@@ -161,6 +141,28 @@ export class PlannerService {
   //   .select(selectTaskIdPlannedDayMap)
   //   // make this more performant by sharing stream
   //   .pipe(shareReplay(1));
+
+  /**
+   * Planner days for the next `count` logical days starting today, built by the
+   * same selector as `days$`, so a day looks and orders the same in every view.
+   * No load-more state: the Week page shows a fixed window.
+   */
+  daysFor$(count: number): Observable<PlannerDay[]> {
+    const dayDates$ = combineLatest([
+      this._globalTrackingIntervalService.todayDateStr$,
+      this.includedWeekDays$,
+    ]).pipe(
+      map(([, includedWeekDays]) =>
+        buildDayWindow(
+          this._dateService.getLogicalTodayDate(),
+          count,
+          includedWeekDays,
+          (d) => this._dateService.todayStr(d),
+        ),
+      ),
+    );
+    return this._selectPlannerDaysFor$(dayDates$);
+  }
 
   getDayOnce$(dayStr: string): Observable<PlannerDay | undefined> {
     return this._selectPlannerDaysFor$(of([dayStr])).pipe(

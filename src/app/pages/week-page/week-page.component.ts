@@ -1,24 +1,22 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { Store } from '@ngrx/store';
-import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
-import { PlannerTaskComponent } from '../../features/planner/planner-task/planner-task.component';
-import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
-import { parseDbDateStr } from '../../util/parse-db-date-str';
-import { selectWeekDays } from './week-page.selectors';
+import { CdkDropListGroup } from '@angular/cdk/drag-drop';
+import { CdkScrollable } from '@angular/cdk/scrolling';
+import { PlannerDayComponent } from '../../features/planner/planner-day/planner-day.component';
+import { PlannerService } from '../../features/planner/planner.service';
+
+/** Today plus the next six logical days. */
+const WEEK_DAY_COUNT = 7;
 
 @Component({
   selector: 'week-page',
-  standalone: true,
-  imports: [PlannerTaskComponent, LocaleDatePipe],
+  imports: [PlannerDayComponent, CdkDropListGroup, CdkScrollable],
   templateUrl: './week-page.component.html',
   styleUrl: './week-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class WeekPageComponent {
-  readonly weekDays = toSignal(inject(Store).select(selectWeekDays), {
+  readonly days = toSignal(inject(PlannerService).daysFor$(WEEK_DAY_COUNT), {
     initialValue: [],
   });
-  readonly dateForLabel = parseDbDateStr;
-  readonly locale = inject(DateTimeFormatService).textLocale;
 }
