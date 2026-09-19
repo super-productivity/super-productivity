@@ -3296,7 +3296,7 @@
     "UNABLE_TO_PERSIST_DATA": "Daten können nicht in den Plugin-Speicher übernommen werden",
     "UNKNOWN_ERROR": "Ein unbekannter Fehler ist aufgetreten",
     "UPLOAD_PLUGIN_INSTRUCTION": "Lade eine Plugin-ZIP-Datei hoch, um sie zu installieren:",
-    "VALIDATION_FAILED": "Validierung fehlgeschlagen",
+    "VALIDATION_FAILED": "Validierung fehlgeschlagen: {{errors}}",
     "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Verbindung zur Node.js-Ausführungsbrücke fehlgeschlagen. Bitte versuche das Deaktivieren und erneute Aktivieren des Plugins.",
     "PLUGIN_LOAD_FAILED": "Plugin \"{{pluginName}}\" konnte nicht geladen werden: {{error}}"
   },
