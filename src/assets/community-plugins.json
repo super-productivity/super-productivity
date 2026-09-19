@@ -174,5 +174,13 @@
     "author": "InitialCrow",
     "authorUrl": "https://github.com/InitialCrow",
     "stars": 0
+  },
+  {
+    "name": "Study Courses & Timetable",
+    "shortDescription": "A semester-aware student timetable and planning plugin for Super Productivity, with course imports, assignments, task sync, and calendar export.",
+    "url": "https://github.com/Khk-NL/sp-study-courses",
+    "author": "Khk-NL",
+    "authorUrl": "https://github.com/Khk-NL",
+    "stars": 0
   }
 ]
