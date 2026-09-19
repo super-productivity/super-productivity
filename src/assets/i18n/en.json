@@ -110,6 +110,14 @@
     }
   },
   "F": {
+    "IOS_SHARE": {
+      "SAVE": "Save",
+      "DESTINATION": "Inbox",
+      "NEXT_OPEN": "Added when you next open Super Productivity",
+      "SAVE_ERROR": "Could not save. Please try again.",
+      "IMPORT_ERROR": "Could not import shared content. It has been kept on this device; reopen the app to retry.",
+      "INVALID": "Share a link or text (up to 100,000 characters)."
+    },
     "ANDROID": {
       "FOREGROUND_SERVICE_START_FAILED_FOCUS": "Android blocked the persistent focus mode notification. The timer continues in the app, but background alerts may be unavailable. Check notification permission and battery/background restrictions.",
       "FOREGROUND_SERVICE_START_FAILED_TRACKING": "Android blocked the persistent time tracking notification. Time is still tracked in the app, but background recovery may be unavailable. Check notification permission and battery/background restrictions.",
