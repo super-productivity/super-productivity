@@ -1,3 +1,4 @@
+import { DailyWorklogTableComponent } from './daily-worklog-table/daily-worklog-table.component';
 import { AsyncPipe } from '@angular/common';
 import {
   AfterViewInit,
@@ -102,6 +103,7 @@ export const FINISH_DAY_FINAL_SYNC_TIMEOUT_MS = SYNC_WAIT_TIMEOUT_MS;
     MsToClockStringPipe,
     TranslatePipe,
     TaskSummaryTablesComponent,
+    DailyWorklogTableComponent,
     TasksByTagComponent,
     EvaluationSheetComponent,
     WorklogWeekComponent,
@@ -550,6 +552,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
           (t.timeSpentOnDay &&
             t.timeSpentOnDay?.[yesterdayStr] &&
             t.timeSpentOnDay?.[yesterdayStr] > 0) ||
+          t.timeSessions?.some((session) => session.d === dayStr) ||
           (t.dueDay && t.dueDay === dayStr) ||
           (t.isDone &&
             t.doneOn &&
@@ -560,6 +563,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
           (t.timeSpentOnDay &&
             t.timeSpentOnDay?.[dayStr] &&
             t.timeSpentOnDay?.[dayStr] > 0) ||
+          t.timeSessions?.some((session) => session.d === dayStr) ||
           (t.dueDay && t.dueDay === dayStr) ||
           (t.isDone && t.doneOn && this._dateService.isToday(t.doneOn));
       }

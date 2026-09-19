@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
@@ -42,8 +43,9 @@ describe('Post-sync validation latch (#7330) — integration', () => {
       'validateAndRepairCurrentState',
     ]);
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
-    storeSpy = jasmine.createSpyObj('Store', ['dispatch', 'select']);
+    storeSpy = jasmine.createSpyObj('Store', ['dispatch', 'select', 'selectSignal']);
     storeSpy.select.and.returnValue(of(undefined));
+    storeSpy.selectSignal.and.returnValue(signal({}));
     opLogStoreSpy = jasmine.createSpyObj('OperationLogStoreService', [
       'getUnsynced',
       'append',
@@ -221,7 +223,12 @@ describe('Post-sync validation latch (#7330) — integration', () => {
       vectorClockSpy.getCurrentVectorClock.and.resolveTo({});
       const archiveDbSpy = jasmine.createSpyObj('ArchiveDbAdapter', ['load']);
       archiveDbSpy.load.and.resolveTo(undefined);
-      const storeForHydrationSpy = jasmine.createSpyObj('Store', ['dispatch', 'select']);
+      const storeForHydrationSpy = jasmine.createSpyObj('Store', [
+        'dispatch',
+        'select',
+        'selectSignal',
+      ]);
+      storeForHydrationSpy.selectSignal.and.returnValue(signal({}));
       storeForHydrationSpy.select.and.returnValue(
         of({ syncProvider: null, isEnabled: false }),
       );

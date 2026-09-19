@@ -232,7 +232,12 @@ export class TaskService {
           this.addTimeSpent(currentTask, tick.duration, tick.date);
 
           // Accumulate for batch sync
-          this._taskTimeSync.accumulate(currentTask.id, tick.duration, tick.date);
+          this._taskTimeSync.accumulate(
+            currentTask.id,
+            tick.duration,
+            tick.date,
+            tick.timestamp,
+          );
 
           // Track contexts for TIME_TRACKING sync
           this._trackContextsForSync(currentTask, tick.date);
@@ -244,8 +249,9 @@ export class TaskService {
         }
       });
 
-    // Flush accumulated time when task stops (currentTaskId becomes null or changes)
+    // End the session and flush accumulated time when the task stops or changes
     this.currentTaskId$.subscribe(() => {
+      this._taskTimeSync.endSession();
       this._flushAccumulatedTimeSpent();
     });
 
@@ -814,6 +820,7 @@ export class TaskService {
   }
 
   addSubTaskTo(parentId: string, additional: Partial<Task> = {}): string {
+    this._taskTimeSync.flushOne(parentId);
     const task = this.createNewTaskWithDefaults({
       title: additional.title || '',
       additional: { dueDay: additional.dueDay || undefined, ...additional },
@@ -977,7 +984,9 @@ export class TaskService {
     // We only update real parents here since otherwise we'd move sub-tasks without
     // their parent into the archive.
     const subTasks = tasks.filter((t) => t?.parentId);
-    const parentTasks = tasks.filter((t) => t && !t.parentId);
+    const parentTasks = this._taskTimeSync.flushTasks(
+      tasks.filter((t) => t && !t.parentId),
+    );
 
     TaskLog.log('[TaskService] Filtered tasks:', {
       parentTasks: parentTasks.map((t) => t.id),
@@ -1032,6 +1041,7 @@ export class TaskService {
         await this._archiveService.moveTasksToArchiveAndFlushArchiveIfDue(
           parentTasksToArchive,
         );
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
         TaskLog.log('[TaskService] Dispatching moveToArchive action for parent tasks');
         this._store.dispatch(
           TaskSharedActions.moveToArchive({ tasks: parentTasksToArchive }),
