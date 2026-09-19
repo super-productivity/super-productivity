@@ -19,6 +19,7 @@ import { TODAY_TAG } from '../tag/tag.const';
 import { ICalIssueReduced } from './providers/calendar/calendar.model';
 import { PlainspaceIssue } from './providers/plainspace/plainspace-issue.model';
 import { PlainspaceCommonInterfacesService } from './providers/plainspace/plainspace-common-interfaces.service';
+import { PlainspaceApiService } from './providers/plainspace/plainspace-api.service';
 import { SnackParams } from '../../core/snack/snack.model';
 import { JiraCommonInterfacesService } from './providers/jira/jira-common-interfaces.service';
 import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-interfaces.service';
@@ -29,6 +30,7 @@ import { CalendarCommonInterfacesService } from './providers/calendar/calendar-c
 import { PluginIssueProviderAdapterService } from '../../plugins/issue-provider/plugin-issue-provider-adapter.service';
 import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { GlobalConfigService } from '../config/global-config.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { IssueProvider } from './issue.model';
 import { TaskReminderOptionId } from '../tasks/task.model';
 import { Action } from '@ngrx/store';
@@ -1047,6 +1049,7 @@ describe('IssueService', () => {
     // *import* shape (it omits `dueWithTime` when the issue is unscheduled), and
     // a hand-written double hid exactly that difference.
     let plainspaceService: PlainspaceCommonInterfacesService;
+    let dispatched: Action[];
 
     const createPlainspaceIssue = (
       overrides: Partial<PlainspaceIssue> = {},
@@ -1066,7 +1069,7 @@ describe('IssueService', () => {
     // and no dueDay, reminderId cleared — but remindAt left behind.
     const STALE_REMIND_AT = new Date('2026-09-18T07:45:00.000Z').getTime();
     const createArchivedTask = (overrides: Partial<Task> = {}): Task =>
-      createMockTask({
+      createReducerTask({
         id: ARCHIVED_TASK_ID,
         title: 'Water the plants',
         issueId: ISSUE_ID,
@@ -1098,6 +1101,10 @@ describe('IssueService', () => {
     };
 
     beforeEach(() => {
+      dispatched = [];
+      storeSpy.dispatch.and.callFake(((action: Action): void => {
+        dispatched.push(action);
+      }) as Store['dispatch']);
       plainspaceService = TestBed.inject(PlainspaceCommonInterfacesService);
       spyOn(plainspaceService, 'getNewIssuesToAddToBacklog').and.resolveTo([]);
       translateServiceSpy.instant.and.returnValue('issues');
@@ -1106,23 +1113,62 @@ describe('IssueService', () => {
         subTasks: null,
         isFromArchive: true,
       });
+      taskServiceSpy.restoreTask.and.callFake((task, subTasks) => {
+        storeSpy.dispatch(TaskSharedActions.restoreTask({ task, subTasks }));
+      });
+      taskServiceSpy.update.and.callFake((id, changes) => {
+        storeSpy.dispatch(TaskSharedActions.updateTask({ task: { id, changes } }));
+      });
     });
 
-    it('restores the archived task and resets it to the next occurrence', async () => {
-      const archivedTask = createArchivedTask();
+    const restoredStates = (): RootState[] => {
+      expect(storeSpy.dispatch).toHaveBeenCalledTimes(1);
+      const action = dispatched[0];
+      expect(action.type).toBe(TaskSharedActions.restoreTask.type);
+      const reducer = createCombinedTaskSharedMetaReducer((state) => state);
+      return [action, JSON.parse(JSON.stringify(action))].map((restoreAction) =>
+        reducer(createBaseState(), restoreAction),
+      );
+    };
+
+    it('restores the next occurrence in one action locally and after JSON replay', async () => {
+      const trackedDay = '2026-09-18';
+      const archivedTask = createArchivedTask({
+        notes: 'Keep these notes',
+        timeSpent: 1800000,
+        timeSpentOnDay: { [trackedDay]: 1800000 },
+        timeEstimate: 1800000,
+      });
       taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
         task: archivedTask,
         subTasks: null,
         isFromArchive: true,
       });
 
-      await importForIssue(createPlainspaceIssue());
+      const issue = createPlainspaceIssue({ title: 'Fresh title' });
+      await importForIssue(issue);
 
-      expect(taskServiceSpy.restoreTask).toHaveBeenCalledWith(archivedTask, []);
-      const [taskId, changes] = taskServiceSpy.update.calls.mostRecent().args;
-      expect(taskId).toBe(ARCHIVED_TASK_ID);
-      expect(changes.isDone).toBe(false);
-      expect(changes.dueWithTime).toBe(new Date('2026-09-19T08:00:00.000Z').getTime());
+      for (const state of restoredStates()) {
+        const task = state[TASK_FEATURE_NAME].entities[ARCHIVED_TASK_ID] as Task;
+        expect(task).toEqual(
+          jasmine.objectContaining({
+            id: ARCHIVED_TASK_ID,
+            title: issue.title,
+            isDone: false,
+            dueWithTime: new Date(issue.scheduledAt!).getTime(),
+            remindAt: new Date(issue.scheduledAt!).getTime(),
+            issueLastUpdated: new Date(issue.updatedAt).getTime(),
+            issueLastSyncedValues:
+              plainspaceService.getAddTaskData(issue).issueLastSyncedValues,
+            notes: archivedTask.notes,
+            timeSpent: archivedTask.timeSpent,
+            timeSpentOnDay: archivedTask.timeSpentOnDay,
+            timeEstimate: archivedTask.timeEstimate,
+          }),
+        );
+        expect(task.doneOn).toBeUndefined();
+      }
+      expect(taskServiceSpy.update).not.toHaveBeenCalled();
       // never a second task — its deterministic id would collide with the archived one
       expect(taskServiceSpy.add).not.toHaveBeenCalled();
       expect(taskServiceSpy.addAndSchedule).not.toHaveBeenCalled();
@@ -1158,20 +1204,53 @@ describe('IssueService', () => {
     it('unschedules and clears the stale reminder when the next occurrence has no time', async () => {
       await importForIssue(createPlainspaceIssue({ scheduledAt: null }));
 
-      const [, changes] = taskServiceSpy.update.calls.mostRecent().args;
-      // key must be PRESENT and undefined - the import shape omits it entirely,
-      // which would leave the archived task's remindAt live and long overdue
-      expect('dueWithTime' in changes).toBe(true);
-      expect(changes.dueWithTime).toBeUndefined();
-      expect(storeSpy.dispatch).toHaveBeenCalledWith(
-        TaskSharedActions.dismissReminderOnly({
-          id: ARCHIVED_TASK_ID,
-          isSkipSnack: true,
-        }),
-      );
+      for (const state of restoredStates()) {
+        const task = state[TASK_FEATURE_NAME].entities[ARCHIVED_TASK_ID] as Task;
+        expect(task.dueWithTime).toBeUndefined();
+        expect(task.remindAt).toBeUndefined();
+        expect(selectAllTasksWithReminder.projector([task])).toEqual([]);
+      }
     });
 
-    it('reopens archived subtasks without stale reminders locally and after sync', async () => {
+    it('restores a scheduled occurrence without a reminder when reminders are disabled', async () => {
+      spyOn(TestBed.inject(GlobalConfigService), 'cfg').and.returnValue({
+        ...DEFAULT_GLOBAL_CONFIG,
+        reminder: {
+          ...DEFAULT_GLOBAL_CONFIG.reminder,
+          defaultTaskRemindOption: TaskReminderOptionId.DoNotRemind,
+        },
+      });
+      const issue = createPlainspaceIssue();
+
+      await importForIssue(issue);
+
+      for (const state of restoredStates()) {
+        const task = state[TASK_FEATURE_NAME].entities[ARCHIVED_TASK_ID] as Task;
+        expect(task.dueWithTime).toBe(new Date(issue.scheduledAt!).getTime());
+        expect(task.remindAt).toBeUndefined();
+      }
+    });
+
+    it('keeps later edits when the restore is replayed again', async () => {
+      await importForIssue(createPlainspaceIssue());
+
+      const reducer = createCombinedTaskSharedMetaReducer((state) => state);
+      for (const state of restoredStates()) {
+        const edited = reducer(
+          state,
+          TaskSharedActions.updateTask({
+            task: {
+              id: ARCHIVED_TASK_ID,
+              changes: { title: 'Later edit', isDone: true },
+            },
+          }),
+        );
+        const replayed = reducer(edited, JSON.parse(JSON.stringify(dispatched[0])));
+        expect(replayed).toEqual(edited);
+      }
+    });
+
+    it('preserves completed subtasks and clears stale reminders locally and after sync', async () => {
       taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
         task: createArchivedTask({ subTaskIds: ['sub-1'] }),
         subTasks: [
@@ -1191,18 +1270,47 @@ describe('IssueService', () => {
 
       await importForIssue(createPlainspaceIssue());
 
-      const [task, subTasks] = taskServiceSpy.restoreTask.calls.mostRecent().args;
-      const action = TaskSharedActions.restoreTask({ task, subTasks });
-      const reducer = createCombinedTaskSharedMetaReducer((state) => state);
-      // Restore adds complete entities, so omitted reminder fields must also
-      // remain absent after the action crosses the JSON sync wire.
-      for (const restoreAction of [action, JSON.parse(JSON.stringify(action))]) {
-        const state = reducer(createBaseState(), restoreAction);
+      for (const state of restoredStates()) {
         const restoredSubTask = state[TASK_FEATURE_NAME].entities['sub-1'] as Task;
-        expect(restoredSubTask.isDone).toBe(false);
-        expect(restoredSubTask.doneOn).toBeUndefined();
+        expect(restoredSubTask.isDone).toBe(true);
+        expect(restoredSubTask.doneOn).toBe(STALE_REMIND_AT);
         expect(restoredSubTask.remindAt).toBeUndefined();
         expect(selectAllTasksWithReminder.projector([restoredSubTask])).toEqual([]);
+      }
+    });
+
+    it('also keeps completed subtasks completed when an active task recurs', async () => {
+      const task = createArchivedTask({ remindAt: undefined, subTaskIds: ['sub-1'] });
+      const subTask = createReducerTask({
+        id: 'sub-1',
+        parentId: task.id,
+        isDone: true,
+        doneOn: STALE_REMIND_AT,
+      });
+      spyOn(TestBed.inject(PlainspaceApiService), 'getMyTasks$').and.returnValue(
+        of([createPlainspaceIssue()]),
+      );
+
+      await service.refreshIssueTasks([task], {
+        id: PROVIDER_ID,
+        issueProviderKey: 'PLAINSPACE',
+      } as IssueProvider);
+
+      const base = createBaseState();
+      const initialState: RootState = {
+        ...base,
+        [TASK_FEATURE_NAME]: {
+          ...base[TASK_FEATURE_NAME],
+          ids: [task.id, subTask.id],
+          entities: { [task.id]: task, [subTask.id]: subTask },
+        },
+      };
+      const reducer = createCombinedTaskSharedMetaReducer((state) => state);
+      expect(dispatched.length).toBe(1);
+      for (const action of [dispatched[0], JSON.parse(JSON.stringify(dispatched[0]))]) {
+        const state = reducer(initialState, action);
+        expect(state[TASK_FEATURE_NAME].entities[task.id].isDone).toBe(false);
+        expect(state[TASK_FEATURE_NAME].entities[subTask.id]).toEqual(subTask);
       }
     });
 

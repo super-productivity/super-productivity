@@ -74,32 +74,11 @@ import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider
 import { PlainspaceIssue } from './providers/plainspace/plainspace-issue.model';
 
 /**
- * A recurring Plainspace item is ONE server row (`items`) reused for every
- * occurrence, so its issue id never changes. Verified against the Plainspace
- * server, not inferred — the completion flip runs in two stages, which is the
- * whole reason #10074 exists:
- *
- * 1. Our `done: true` push advances `remind_at` to the next occurrence straight
- *    away but leaves `checked = true` (`recurrenceUpdateOnCheck`, integration
- *    PATCH). The task is legitimately done, just already pointing at what's
- *    next — so it lands in the done list and gets archived with everything else
- *    at the end of the day.
- * 2. Only when that next occurrence's DAY begins does the server's sweep set
- *    `checked = false` (`reopenDueRecurringItems`) — typically hours or days
- *    later, long after the archive ran.
- *
- * So the reopen can never reach a task through the normal update poll: by then
- * the task is in the archive, and its issue id blocks re-import forever. Hence
- * re-activating the archived task, which IS the next occurrence. Importing a
- * second task is not an option — its deterministic id
- * (`generatePlainspaceTaskId`) would collide with the archived one.
- *
- * `isRecurring && !isDone` maps exactly onto stage 2, so this cannot fire early:
- * between completion and the day-start sweep the issue still reads as done.
- *
- * Deliberately narrow: for every other provider — and for non-recurring
- * Plainspace items — an archived task keeps blocking re-import forever, which
- * is the behaviour #7971 and #5162 locked in.
+ * Plainspace reuses one issue id per series (#10074). Completion advances the
+ * schedule but leaves the item done until the next occurrence's day begins.
+ * By then its task may be archived: update polling cannot see it and import
+ * dedup blocks it. Restore that task once the server reopens the issue.
+ * Other providers and non-recurring issues keep the usual archive dedup.
  */
 const isIssueAwaitingNextOccurrence = (
   issueProviderKey: IssueProviderKey,
@@ -802,28 +781,9 @@ export class IssueService {
   }
 
   /**
-   * Restores the archived task of a recurring issue whose next occurrence the
-   * server has already rolled on to, and applies the fresh issue data in the
-   * same pass (#10074).
-   *
-   * `handleRestoreTask` already reopens the root task (`isDone: false`,
-   * `doneOn: undefined`) but is schedule-blind, so the new schedule has to be
-   * applied on top — and archiving leaves a stale `remindAt` behind (it clears
-   * `reminderId`/`dueWithTime` but not `remindAt`), which would fire for a long
-   * past occurrence the moment the task is active again.
-   *
-   * `checkForTaskWithIssueEverywhere` matches active tasks first and only loads
-   * the archive on a miss, so a candidate that is still active costs nothing
-   * here.
-   *
-   * Tracked time deliberately carries over instead of starting fresh per
-   * occurrence: `timeSpent` is a derived cache of `timeSpentOnDay` (see
-   * `calcTotalTimeSpent`), so zeroing it would mean wiping the per-day map that
-   * every worklog, export and daily summary reads — destroying real history
-   * from a background poll, and racing the additive `syncTimeSpent` deltas of
-   * other devices. The series is one task here, so its lifetime total is the
-   * honest number; only a manually set `timeEstimate` reads oddly (documented
-   * in the wiki's issue-integration comparison).
+   * Prepare the next occurrence before restoring it, so schedule, reminder and
+   * provider baselines replay together. Time history and completed subtasks
+   * carry over, matching the active-task poll's parent-only reopen.
    */
   private async _reactivateArchivedIssueTasks(
     providerKey: IssueProviderKey,
@@ -841,31 +801,27 @@ export class IssueService {
         continue;
       }
 
-      // Derived before the restore: `_getAddTaskData` asserts the provider's
-      // payload and can throw, which must not leave a task half-restored out of
-      // the archive with the completed occurrence's data still on it.
-      let changes: Partial<Task>;
+      let task: Task;
       try {
-        changes = this._getReactivationChanges(providerKey, issue);
+        const { changes } = withRemindAtForDueChange(
+          res.task,
+          this._getAddTaskData(providerKey, issue),
+          this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
+            DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
+        );
+        // Archiving clears the schedule but leaves remindAt behind. Restore
+        // inserts complete entities, so omitting the old reminder is wire-safe.
+        task = { ...res.task, remindAt: undefined, ...changes };
       } catch {
-        // No issue fields logged — log history is exportable (sync rule 9).
         IssueLog.err('Plainspace: invalid issue data, skipping task reactivation');
         continue;
       }
 
-      // Archiving marks every subtask done (`mapTasksToArchiveFormat`) and the
-      // restore reducer only reopens the root, so a recurring task with a
-      // checklist would otherwise come back permanently ticked off.
       const subTasks = (res.subTasks || []).map((subTask) => ({
         ...subTask,
-        isDone: false,
-        doneOn: undefined,
-        // Archiving cleared the schedule; discard its leftover reminder too.
         remindAt: undefined,
       }));
-
-      this._taskService.restoreTask(res.task, subTasks);
-      this._updateTaskFromPoll(res.task, changes);
+      this._taskService.restoreTask(task, subTasks);
 
       // Background ('always'-mode) polls stay quiet, same as the import snack
       // above: the task reappearing in the project is the signal.
@@ -877,24 +833,6 @@ export class IssueService {
         });
       }
     }
-  }
-
-  /**
-   * `_getAddTaskData` returns the *import* shape, which omits `dueWithTime`
-   * entirely when the issue carries no schedule. Mirror the poll shape instead
-   * (`_toFreshData`) so the key is always present: an occurrence that comes back
-   * unscheduled then really unschedules, and `withRemindAtForDueChange` can
-   * reach its clear branch for the archived task's stale `remindAt`.
-   */
-  private _getReactivationChanges(
-    providerKey: IssueProviderKey,
-    issue: IssueDataReduced,
-  ): Partial<Task> {
-    const { scheduledAt } = issue as PlainspaceIssue;
-    return {
-      ...this._getAddTaskData(providerKey, issue),
-      dueWithTime: scheduledAt ? new Date(scheduledAt).getTime() : undefined,
-    };
   }
 
   private async _checkAndHandleIssueAlreadyAdded(
