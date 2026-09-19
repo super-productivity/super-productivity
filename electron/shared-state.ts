@@ -6,6 +6,7 @@
 let isQuiting = false;
 let isLocked = false;
 let isMinimizeToTray = false;
+let isAlwaysOnTop = false;
 let isTrayShowCurrentTask = false;
 let isTrayShowCurrentCountdown = false;
 
@@ -25,6 +26,12 @@ export const getIsMinimizeToTray = (): boolean => isMinimizeToTray;
 
 export const setIsMinimizeToTray = (value: boolean): void => {
   isMinimizeToTray = value;
+};
+
+export const getIsAlwaysOnTop = (): boolean => isAlwaysOnTop;
+
+export const setIsAlwaysOnTop = (value: boolean): void => {
+  isAlwaysOnTop = value;
 };
 
 export const getIsTrayShowCurrentTask = (): boolean => isTrayShowCurrentTask;
