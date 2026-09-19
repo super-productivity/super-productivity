@@ -149,21 +149,25 @@ export class DialogWorkContextSettingsComponent {
   }
 
   cancelEdit(): void {
-    this._applyChanges(this._originalEntityData);
+    this._applyChanges(this._originalEntityData, true);
     this._matDialogRef.close();
   }
 
-  private _applyChanges(data: Project | Tag): void {
+  private _applyChanges(data: Project | Tag, isCancelled?: boolean): void {
     const theme: WorkContextThemeCfg = { ...data.theme };
     if (this.isProject) {
       const p = data as Project;
-      this._projectService.update(p.id, {
-        title: p.title,
-        icon: p.icon,
-        isEnableBacklog: p.isEnableBacklog,
-        isHiddenFromMenu: p.isHiddenFromMenu,
-        theme,
-      });
+      this._projectService.update(
+        p.id,
+        {
+          title: p.title,
+          icon: p.icon,
+          isEnableBacklog: p.isEnableBacklog,
+          isHiddenFromMenu: p.isHiddenFromMenu,
+          theme,
+        },
+        isCancelled,
+      );
     } else {
       const t = data as Tag;
       const orig = this._originalEntityData as Tag;

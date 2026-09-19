@@ -414,13 +414,18 @@ export class ProjectService {
     );
   }
 
-  update(projectId: string, changedFields: Partial<Project>): void {
+  update(
+    projectId: string,
+    changedFields: Partial<Project>,
+    isCancelled?: boolean,
+  ): void {
     this._store$.dispatch(
       updateProject({
         project: {
           id: projectId,
           changes: changedFields,
         },
+        isCancelled,
       }),
     );
   }

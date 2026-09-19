@@ -1058,7 +1058,8 @@
         "SHOW_IN_MENU": "Show in sidebar",
         "UNARCHIVED": "Project restored",
         "UNARCHIVED_HIDDEN_FROM_MENU": "Project restored, but still hidden from the sidebar",
-        "UPDATED": "Updated project settings"
+        "UPDATED": "Updated project settings",
+        "DISCARDED": "Changes discarded"
       },
       "ARCHIVED_NOTICE": "This project is archived.",
       "ARCHIVED_PROJECTS": {

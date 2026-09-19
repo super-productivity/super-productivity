@@ -111,10 +111,11 @@ export class ProjectEffects {
       this._actions$.pipe(
         ofType(updateProject),
         filter((a) => !a.isSkipSnack),
-        tap(() => {
+        tap((a) => {
           this._snackService.open({
-            type: 'SUCCESS',
-            msg: T.F.PROJECT.S.UPDATED,
+            type: a.isCancelled ? 'CUSTOM' : 'SUCCESS',
+            msg: a.isCancelled ? T.F.PROJECT.S.DISCARDED : T.F.PROJECT.S.UPDATED,
+            ...(a.isCancelled ? { ico: 'undo' } : {}),
           });
         }),
       ),
