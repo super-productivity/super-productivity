@@ -188,6 +188,42 @@ describe('ShortSyntaxEffects', () => {
       expect(emittedAction.type).toBe(TaskSharedActions.applyShortSyntax.type);
     }));
 
+    it('should keep tags the title does not name when a title edit adds one', fakeAsync(() => {
+      // Parsed tags are stripped from the title, so an existing task's title
+      // can never name the tags it already has. Parsing a title edit as a
+      // complete tag list would drop every tag on each `#tag` typed.
+      tagServiceMock.tagsNoMyDayAndNoList$.next([
+        { id: 'tag-1', title: 'existingTag' },
+        { id: 'tag-2', title: 'otherTag' },
+      ]);
+      const task = createTask('task-1', {
+        title: 'some task #otherTag',
+        tagIds: ['tag-1'],
+      });
+      taskServiceMock.getByIdOnce$.and.returnValue(of(task));
+
+      let emittedAction: any = null;
+      effects.shortSyntax$.subscribe((action) => {
+        emittedAction = action;
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: {
+            id: 'task-1',
+            changes: { title: 'some task #otherTag' },
+          },
+        }),
+      );
+
+      tick(100);
+
+      expect(emittedAction).toBeDefined();
+      expect(emittedAction.type).toBe(TaskSharedActions.applyShortSyntax.type);
+      expect(emittedAction.taskChanges.tagIds).toEqual(['tag-1', 'tag-2']);
+      expect(emittedAction.taskChanges.title).toBe('some task');
+    }));
+
     it('should parse short syntax for sub-tasks added via addSubTask (#8568)', fakeAsync(() => {
       const task = createTask('sub-1', {
         title: 'Buy milk 15m',

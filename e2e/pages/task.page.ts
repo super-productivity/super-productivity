@@ -3,7 +3,7 @@ import { BasePage } from './base.page';
 import { cssSelectors } from '../constants/selectors';
 import { waitForAngularStability } from '../utils/waits';
 
-const { TASK, FIRST_TASK, TASK_DONE_BTN, TASK_TEXTAREA, SUB_TASK } = cssSelectors;
+const { TASK, FIRST_TASK, TASK_DONE_BTN, SUB_TASK } = cssSelectors;
 
 export class TaskPage extends BasePage {
   constructor(page: Page, testPrefix: string = '') {
@@ -108,11 +108,21 @@ export class TaskPage extends BasePage {
    * Edit task title
    */
   async editTaskTitle(task: Locator, newTitle: string): Promise<void> {
-    const titleElement = this.getTaskTitle(task);
+    // Re-anchor on the task id before touching the title. Callers commonly pass
+    // a text-filtered locator (`filter({ hasText: 'x' })`), and clearing the
+    // title below stops that filter from matching, so every later step would
+    // resolve to nothing mid-edit.
+    const taskId = await task.getAttribute('data-task-id');
+    const row = taskId ? this.page.locator(`task[data-task-id="${taskId}"]`) : task;
+
+    const titleElement = this.getTaskTitle(row);
     await titleElement.waitFor({ state: 'visible' });
     await titleElement.click();
 
-    const textarea = task.locator(TASK_TEXTAREA);
+    // Scoped to <task-title>, not TASK_TEXTAREA ('task textarea'): that
+    // selector is page-level, so relative to the task it would look for a
+    // nested <task>, which only a parent row with subtasks has.
+    const textarea = row.locator('task-title textarea');
     await textarea.waitFor({ state: 'visible', timeout: 3000 });
     await textarea.clear();
     await this.page.waitForTimeout(50);
