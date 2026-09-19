@@ -35,6 +35,7 @@ import { Action } from '@ngrx/store';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { RootState } from '../../root-store/root-state';
 import { TASK_FEATURE_NAME } from '../tasks/store/task.reducer';
+import { selectAllTasksWithReminder } from '../tasks/store/task.selectors';
 import { createCombinedTaskSharedMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/test-helpers';
 import {
   createBaseState,
@@ -1170,21 +1171,39 @@ describe('IssueService', () => {
       );
     });
 
-    it('reopens the archived subtasks along with the task', async () => {
+    it('reopens archived subtasks without stale reminders locally and after sync', async () => {
       taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo({
-        task: createArchivedTask(),
+        task: createArchivedTask({ subTaskIds: ['sub-1'] }),
         subTasks: [
-          createMockTask({ id: 'sub-1', parentId: ARCHIVED_TASK_ID, isDone: true }),
+          createReducerTask({
+            id: 'sub-1',
+            parentId: ARCHIVED_TASK_ID,
+            isDone: true,
+            doneOn: STALE_REMIND_AT,
+            dueWithTime: undefined,
+            dueDay: undefined,
+            reminderId: undefined,
+            remindAt: STALE_REMIND_AT,
+          }),
         ],
         isFromArchive: true,
       });
 
       await importForIssue(createPlainspaceIssue());
 
-      const [, restoredSubTasks] = taskServiceSpy.restoreTask.calls.mostRecent().args;
-      // archiving marks subtasks done; the restore reducer only reopens the root
-      expect(restoredSubTasks[0].isDone).toBe(false);
-      expect(restoredSubTasks[0].doneOn).toBeUndefined();
+      const [task, subTasks] = taskServiceSpy.restoreTask.calls.mostRecent().args;
+      const action = TaskSharedActions.restoreTask({ task, subTasks });
+      const reducer = createCombinedTaskSharedMetaReducer((state) => state);
+      // Restore adds complete entities, so omitted reminder fields must also
+      // remain absent after the action crosses the JSON sync wire.
+      for (const restoreAction of [action, JSON.parse(JSON.stringify(action))]) {
+        const state = reducer(createBaseState(), restoreAction);
+        const restoredSubTask = state[TASK_FEATURE_NAME].entities['sub-1'] as Task;
+        expect(restoredSubTask.isDone).toBe(false);
+        expect(restoredSubTask.doneOn).toBeUndefined();
+        expect(restoredSubTask.remindAt).toBeUndefined();
+        expect(selectAllTasksWithReminder.projector([restoredSubTask])).toEqual([]);
+      }
     });
 
     it('stays quiet on a background poll and snacks on a foreground one', async () => {

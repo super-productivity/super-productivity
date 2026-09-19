@@ -860,6 +860,8 @@ export class IssueService {
         ...subTask,
         isDone: false,
         doneOn: undefined,
+        // Archiving cleared the schedule; discard its leftover reminder too.
+        remindAt: undefined,
       }));
 
       this._taskService.restoreTask(res.task, subTasks);
