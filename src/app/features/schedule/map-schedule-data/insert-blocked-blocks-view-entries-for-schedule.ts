@@ -6,7 +6,6 @@ import {
   SVESplitTaskContinued,
   SVESplitTaskStart,
 } from '../../schedule/schedule.model';
-import { formatDate } from '../../../util/format-date';
 import { TaskCopy, TaskWithoutReminder } from '../../tasks/task.model';
 import { SVEType } from '../../schedule/schedule.const';
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
@@ -17,9 +16,6 @@ import {
 } from './is-schedule-types-type';
 import { createViewEntriesForBlock } from './create-view-entries-for-block';
 
-// const debug = (...args: any): void => Log.log(...args);
-const debug = (...args: any): void => undefined;
-
 export const insertBlockedBlocksViewEntriesForSchedule = (
   // viewEntriesIn: SVETask[],
   viewEntriesIn: SVE[],
@@ -28,13 +24,8 @@ export const insertBlockedBlocksViewEntriesForSchedule = (
 ): void => {
   const viewEntries: SVE[] = viewEntriesIn;
   let veIndex: number = 0;
-  debug('################__insertBlockedBlocksViewEntries()_START__################');
-  debug(blockedBlocks.length + ' BLOCKS');
-  debug('viewEntriesIn', JSON.parse(JSON.stringify(viewEntriesIn)));
 
-  blockedBlocks.forEach((blockedBlock, blockIndex) => {
-    debug(`**********BB:${blockIndex}***********`);
-
+  blockedBlocks.forEach((blockedBlock) => {
     const viewEntriesToAddForBB: SVE[] = createViewEntriesForBlock(blockedBlock, dayDate);
 
     if (veIndex > viewEntries.length) {
@@ -42,7 +33,6 @@ export const insertBlockedBlocksViewEntriesForSchedule = (
     }
     // we don't have any tasks to split anymore, so we just insert
     if (veIndex === viewEntries.length) {
-      debug('JUST INSERT since no entries after');
       viewEntries.splice(veIndex, 0, ...viewEntriesToAddForBB);
       // skip to end of added entries
       veIndex += viewEntriesToAddForBB.length;
@@ -50,34 +40,12 @@ export const insertBlockedBlocksViewEntriesForSchedule = (
 
     for (; veIndex < viewEntries.length; ) {
       const viewEntry = viewEntries[veIndex];
-      debug(`------------ve:${veIndex}-------------`);
-      debug(
-        {
-          BIndex: blockIndex,
-          BStart: formatDate(new Date(blockedBlock.start), 'DD/MM H:mm'),
-          BEnd: formatDate(new Date(blockedBlock.end), 'DD/MM H:mm'),
-          BTypes: blockedBlock.entries.map((v) => v.type).join(', '),
-          blockedBlock,
-          viewEntriesToAddForBB,
-        },
-        {
-          veIndex,
-          veStart: formatDate(new Date(viewEntry.start), 'DD/MM H:mm'),
-          viewEntry,
-        },
-        { viewEntriesLength: viewEntries.length },
-        {
-          viewEntries,
-        },
-      );
-      debug(viewEntry.type + ': ' + (viewEntry as any)?.data?.title);
 
       // block before all tasks
       // => just insert
       if (blockedBlock.end <= viewEntry.start) {
         viewEntries.splice(veIndex, 0, ...viewEntriesToAddForBB);
         veIndex += viewEntriesToAddForBB.length;
-        debug('AAA insert blocked block and skip index to after added entries');
         break;
       }
       // block starts before task and lasts until after it starts
@@ -87,22 +55,15 @@ export const insertBlockedBlocksViewEntriesForSchedule = (
         moveEntries(viewEntries, blockedBlock.end - currentListTaskStart, veIndex);
         viewEntries.splice(veIndex, 0, ...viewEntriesToAddForBB);
         veIndex += viewEntriesToAddForBB.length;
-        debug('BBB insert and move all following entries');
         break;
       } else {
         const timeLeft = viewEntry.duration;
         const veEnd = viewEntry.start + viewEntry.duration;
-        debug(blockedBlock.start < veEnd, blockedBlock.start, veEnd);
 
         // NOTE: blockedBlock.start > viewEntry.start is implicated by above checks
         // if (blockedBlock.start > viewEntry.start && blockedBlock.start < veEnd) {
         if (blockedBlock.start < veEnd) {
-          debug('CCC split');
-          debug('SPLIT', viewEntry.type, '---', (viewEntry as any)?.data?.title);
-
           if (isTaskDataType(viewEntry)) {
-            debug('CCC a) ' + viewEntry.type);
-
             const currentVE: SVESplitTaskStart =
               viewEntry as unknown as SVESplitTaskStart;
             const timeLeftOnTask = timeLeft;
@@ -139,7 +100,6 @@ export const insertBlockedBlocksViewEntriesForSchedule = (
             veIndex += viewEntriesToAddForBB.length;
             break;
           } else if (isContinuedTaskType(viewEntry)) {
-            debug('CCC b) ' + viewEntry.type);
             const currentVE: SVESplitTaskContinued = viewEntry as any;
             const timeLeftForCompleteSplitTask = timeLeft;
             const timePlannedForSplitTaskBefore = blockedBlock.start - currentVE.start;
@@ -191,7 +151,6 @@ export const insertBlockedBlocksViewEntriesForSchedule = (
             viewEntry.type === SVEType.RepeatProjection ||
             viewEntry.type === SVEType.RepeatProjectionSplit
           ) {
-            debug('CCC C) ' + viewEntry.type);
             const currentVE: SVERepeatProjection = viewEntry as SVERepeatProjection;
             const taskRepeatCfg: TaskRepeatCfg = currentVE.data as TaskRepeatCfg;
 
@@ -233,7 +192,6 @@ export const insertBlockedBlocksViewEntriesForSchedule = (
             viewEntry.type === SVEType.RepeatProjectionSplitContinued ||
             viewEntry.type === SVEType.RepeatProjectionSplitContinuedLast
           ) {
-            debug('CCC D) ' + viewEntry.type);
             const currentVE: SVERepeatProjectionSplitContinued =
               viewEntry as SVERepeatProjectionSplitContinued;
             const timeLeftForCompleteSplitRepeatCfgProjection = timeLeft;
@@ -290,22 +248,14 @@ export const insertBlockedBlocksViewEntriesForSchedule = (
             throw new Error('Invalid type given ' + viewEntry.type);
           }
         } else if (veIndex + 1 === viewEntries.length) {
-          debug('DDD', veIndex, viewEntries.length, viewEntries[veIndex]);
           viewEntries.splice(veIndex, 0, ...viewEntriesToAddForBB);
           veIndex += viewEntriesToAddForBB.length + 1;
         } else {
-          debug(
-            'EEEE insert, since entry ends before blocked block',
-            veIndex,
-            viewEntries.length,
-            viewEntries[veIndex],
-          );
           veIndex++;
         }
       }
     }
   });
-  debug('################__insertBlockedBlocksViewEntries()_END__#################');
 };
 
 const moveAllEntriesAfterTime = (
@@ -315,12 +265,6 @@ const moveAllEntriesAfterTime = (
 ): void => {
   viewEntries.forEach((viewEntry: any) => {
     if (viewEntry.start >= startTime && isFlowableEntryVE(viewEntry)) {
-      debug(
-        'MOVE_ENTRY2',
-        viewEntry.data?.title,
-        formatDate(new Date(viewEntry.start), 'DD/MM H:mm'),
-        formatDate(new Date(viewEntry.start + moveBy), 'DD/MM H:mm'),
-      );
       viewEntry.start = viewEntry.start + moveBy;
     }
   });
@@ -334,13 +278,6 @@ const moveEntries = (
   for (let i = startIndex; i < viewEntries.length; i++) {
     const viewEntry: any = viewEntries[i];
     if (isFlowableEntryVE(viewEntry)) {
-      debug(
-        i,
-        'MOVE_ENTRY',
-        viewEntry.data?.title,
-        formatDate(new Date(viewEntry.start), 'DD/MM H:mm'),
-        formatDate(new Date(viewEntry.start + moveBy), 'DD/MM H:mm'),
-      );
       viewEntry.start = viewEntry.start + moveBy;
     }
   }

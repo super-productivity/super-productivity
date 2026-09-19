@@ -16,9 +16,9 @@
        mousedown is preventDefaulted so a desktop click does not blur the input
        away before onSubmitClick commits — on touch the tap commits via onBlur
        instead (see onSubmitClick). No pointerdown/focus trickery beyond that. -->
-  <!-- tabindex=-1: keyboard users commit with Enter in the field — tabbing to
-       the button would blur the input and cancel the draft on desktop. The
-       button stays in the a11y tree for pointer and screen-reader-by-touch use. -->
+  <!-- tabindex=-1: keyboard users commit with Enter in the field, so the button
+       would only add a redundant tab stop between the draft and the task list.
+       It stays in the a11y tree for pointer and screen-reader-by-touch use. -->
   <button
     type="button"
     mat-icon-button

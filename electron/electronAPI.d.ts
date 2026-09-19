@@ -235,7 +235,7 @@ export interface ElectronAPI {
 
   setProgressBar(args: {
     progress: number;
-    progressBarMode: 'normal' | 'pause' | 'none';
+    progressBarMode: 'normal' | 'paused' | 'none';
   }): void;
 
   sendAppSettingsToElectron(globalCfg: GlobalConfigState): void;

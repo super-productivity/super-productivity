@@ -101,8 +101,9 @@ test.describe('Task detail iOS focus zoom', () => {
 
   // Controls with a non-focusable display counterpart (rendered markdown, the
   // static title) are raised only under `isTouchPrimary`, so both layers move
-  // together and desktop keeps its 14px. Forcing the class is what a phone
-  // would set via InputIntentService.
+  // together and desktop keeps its 14px. Forcing the classes is what a phone
+  // would set via InputIntentService (isTouchPrimary) and GlobalThemeService
+  // (isIOSWebKit).
   test('should raise editor/display pairs above the threshold on touch', async ({
     page,
     workViewPage,
@@ -112,9 +113,16 @@ test.describe('Task detail iOS focus zoom', () => {
 
     // The live editor is lazily chunked (@defer), so wait for it to mount.
     await page.locator('inline-markdown .cm-content').first().waitFor();
+    // isIOSWebKit as well as isTouchPrimary: the task title keeps the 14px base
+    // on engines that do not zoom, so its 16px rule is gated on the iOS class.
+    // That class exists to be forceable here — the sibling `@supports
+    // (-webkit-touch-callout: none)` fallback keys off a compile-time WebKit
+    // flag, which no Chromium or Playwright-WebKit build can be made to report,
+    // so a feature query alone would leave this assertion unsatisfiable.
     await page.evaluate(() => {
       document.body.classList.remove('isMousePrimary');
       document.body.classList.add('isTouchPrimary');
+      document.body.classList.add('isIOSWebKit');
     });
 
     // Polled rather than read once: these elements carry a font-size

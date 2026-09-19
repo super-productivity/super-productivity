@@ -2,6 +2,10 @@ import { computed, Injectable, signal } from '@angular/core';
 
 export type MultiSelectDirection = 'up' | 'down';
 
+/** The containers a selection can be scoped to: one board panel, one Planner day, one task list. */
+const SELECTION_SCOPE_SELECTOR =
+  '[data-board-selection-scope], [data-planner-selection-scope], .task-list-inner';
+
 /**
  * Transient multi-selection of task rows ("select several tasks, edit them
  * once"). Deliberately named *multi-select* so it can never be confused with
@@ -21,7 +25,24 @@ export type MultiSelectDirection = 'up' | 'down';
 })
 export class TaskMultiSelectService {
   private readonly _selectedIds = signal<ReadonlySet<string>>(new Set());
-  private readonly _anchorId = signal<string | null>(null);
+  /**
+   * Where the next Shift+click / Shift+Arrow range starts, plus the row it was
+   * set from. Purely a cursor: it is dropped the moment its row is deselected,
+   * and is always null while nothing is selected.
+   */
+  private readonly _anchor = signal<{ id: string; row: HTMLElement | null } | null>(null);
+  /**
+   * The list the current selection lives in, remembered so `selectionScope()`
+   * still answers once focus has moved into the bulk menu or a dialog.
+   *
+   * This belongs to the SELECTION, not to the anchor: it outlives the anchor
+   * being deselected and is dropped only when the selection itself goes. The
+   * two used to share a lifetime, which is what made "drop the anchor"
+   * ambiguous about whether the scope went with it — and a scope that wrongly
+   * survives, or wrongly dies, silently sends post-action keyboard focus to
+   * the wrong panel or nowhere at all.
+   */
+  private _selectionScopeEl: HTMLElement | null = null;
   private readonly _menuOpenRequest = signal<{ x: number; y: number } | null>(null);
   private readonly _bulkFeedbackSuppressionDepth = signal(0);
   private readonly _isTouchSelectionMode = signal(false);
@@ -34,7 +55,7 @@ export class TaskMultiSelectService {
   private readonly _destroyedHosts = new WeakSet<Element>();
 
   readonly selectedIds = this._selectedIds.asReadonly();
-  readonly anchorId = this._anchorId.asReadonly();
+  readonly anchorId = computed(() => this._anchor()?.id ?? null);
   readonly count = computed(() => this._selectedIds().size);
   readonly isActive = computed(() => this._selectedIds().size > 0);
   /** Set when a selected row asks for the bulk menu (right-click / Q). */
@@ -102,6 +123,27 @@ export class TaskMultiSelectService {
     return this._focusedRow()?.id ?? null;
   }
 
+  /** Retain the originating list while focus is in the bulk menu or a dialog. */
+  selectionScope(): HTMLElement | null {
+    return (
+      this._focusedRow()?.el.closest<HTMLElement>(SELECTION_SCOPE_SELECTOR) ??
+      this._selectionScopeEl
+    );
+  }
+
+  /** Preserve the range anchor when its selected group moves to another panel. */
+  reanchorAfterMove(movedIds: readonly string[], rows: readonly HTMLElement[]): void {
+    const anchorId = this.anchorId();
+    if (!anchorId || !this.has(anchorId) || !movedIds.includes(anchorId)) return;
+    const anchorRow = rows.find(
+      (row) =>
+        row.dataset.taskId === anchorId &&
+        row.isConnected &&
+        !this._destroyedHosts.has(row),
+    );
+    if (anchorRow) this._setAnchor(anchorId, anchorRow);
+  }
+
   /** Ctrl/Cmd+click and `X`: toggle one task, which becomes the anchor. */
   toggle(id: string): void {
     const next = new Set(this._selectedIds());
@@ -112,10 +154,11 @@ export class TaskMultiSelectService {
     }
     this._setSelectedIds(next);
     if (next.has(id)) {
-      this._anchorId.set(id);
-    } else if (this._anchorId() === id) {
+      this._setAnchor(id, this._rowForNewAnchor(id));
+    } else if (this.anchorId() === id) {
       // A deselected row must not stay the anchor of the next Shift+click.
-      this._anchorId.set(null);
+      // (An emptied selection already went through _setSelectedIds' full clear.)
+      this._dropAnchor();
     }
   }
 
@@ -124,12 +167,19 @@ export class TaskMultiSelectService {
    * anchor's list, replacing the selection. Without an anchor, or when the
    * target sits in a different list, the target becomes the new anchor.
    */
-  selectRange(targetId: string, isAdditive = false): void {
-    const anchorId = this._anchorId();
-    const range = anchorId ? this._rangeInAnchorList(anchorId, targetId) : null;
+  selectRange(targetId: string, isAdditive = false, targetRow?: HTMLElement): void {
+    const anchorId = this.anchorId();
+    const range = anchorId
+      ? this._rangeInAnchorList(anchorId, targetId, targetRow)
+      : null;
     if (!range) {
-      this._selectedIds.set(new Set([targetId]));
-      this._anchorId.set(targetId);
+      // No range to build (no anchor, or the target is in another list), so the
+      // target just becomes the new anchor — but an additive Shift+Ctrl+click
+      // still means "add", so what is already selected must survive.
+      const next = isAdditive ? new Set(this._selectedIds()) : new Set<string>();
+      next.add(targetId);
+      this._selectedIds.set(next);
+      this._setAnchor(targetId, targetRow ?? this._rowForNewAnchor(targetId));
       return;
     }
     const next = isAdditive ? new Set(this._selectedIds()) : new Set<string>();
@@ -148,9 +198,9 @@ export class TaskMultiSelectService {
       return null;
     }
     const { el: focusedEl, id: focusedId } = focused;
-    if (!this._anchorId() || !this._selectedIds().size) {
+    if (!this.anchorId() || !this._selectedIds().size) {
       this._selectedIds.set(new Set([focusedId]));
-      this._anchorId.set(focusedId);
+      this._setAnchor(focusedId, focusedEl);
     }
     const siblings = this._listRowsFor(focusedEl);
     const index = siblings.indexOf(focusedEl);
@@ -159,7 +209,7 @@ export class TaskMultiSelectService {
     if (!nextEl || !nextId) {
       return null;
     }
-    this.selectRange(nextId);
+    this.selectRange(nextId, false, nextEl);
     nextEl.focus();
     return nextEl;
   }
@@ -196,7 +246,7 @@ export class TaskMultiSelectService {
       .map((el) => el.getAttribute('data-task-id'))
       .filter((id): id is string => !!id);
     this._selectedIds.set(new Set(ids));
-    this._anchorId.set(focusedId);
+    this._setAnchor(focusedId, focusedEl);
   }
 
   /**
@@ -239,8 +289,8 @@ export class TaskMultiSelectService {
     const next = new Set(this._selectedIds());
     next.delete(id);
     this._setSelectedIds(next);
-    if (this._anchorId() === id) {
-      this._anchorId.set(null);
+    if (this.anchorId() === id) {
+      this._dropAnchor();
     }
   }
 
@@ -256,18 +306,18 @@ export class TaskMultiSelectService {
     if (next.size !== current.size) {
       this._setSelectedIds(next);
     }
-    const anchorId = this._anchorId();
+    const anchorId = this.anchorId();
     if (anchorId && !next.has(anchorId)) {
-      this._anchorId.set(null);
+      this._dropAnchor();
     }
   }
 
   /** Empties the selection and leaves touch selection mode. */
   clear(): void {
+    this._clearSelectionState();
     if (this._selectedIds().size) {
       this._selectedIds.set(new Set());
     }
-    this._anchorId.set(null);
     this._menuOpenRequest.set(null);
     this._isTouchSelectionMode.set(false);
   }
@@ -276,9 +326,69 @@ export class TaskMultiSelectService {
   private _setSelectedIds(next: Set<string>): void {
     this._selectedIds.set(next);
     if (!next.size) {
-      this._anchorId.set(null);
+      this._clearSelectionState();
       this._isTouchSelectionMode.set(false);
     }
+  }
+
+  /**
+   * Point the anchor at a row, and move the selection's scope to that row's
+   * list. The only way to set an anchor, so the scope can never drift from the
+   * list the user is actually working in.
+   */
+  private _setAnchor(id: string, row: HTMLElement | null): void {
+    this._anchor.set({ id, row });
+    this._selectionScopeEl = row?.closest<HTMLElement>(SELECTION_SCOPE_SELECTOR) ?? null;
+  }
+
+  /**
+   * Drop the range cursor while the selection lives on. The scope deliberately
+   * survives — it is the selection's, not the anchor's — but it is re-checked,
+   * because deselecting the anchor can leave the remaining selection entirely
+   * in another list.
+   */
+  private _dropAnchor(): void {
+    this._anchor.set(null);
+    this._repointScopeAtRemainingSelection();
+  }
+
+  /**
+   * A selection can span panels: only `selectRange` is list-scoped, so
+   * Ctrl+clicking rows in two panels selects across both. Leaving the scope on
+   * a panel that holds none of the survivors actively loses focus — the
+   * post-action search scopes itself there, finds nothing selected and gives
+   * up, where re-pointing lands it on the right panel.
+   *
+   * Resolved at this moment rather than lazily in `selectionScope()` because
+   * the selection is unambiguous here; later, one task rendered in two panels
+   * at once makes "which panel holds it" unanswerable.
+   */
+  private _repointScopeAtRemainingSelection(): void {
+    const scope = this._selectionScopeEl;
+    const selected = this._selectedIds();
+    if (!scope || !selected.size) {
+      return;
+    }
+    const isSelectedRow = (el: HTMLElement): boolean => {
+      const id = el.getAttribute('data-task-id');
+      return !!id && selected.has(id) && !this._destroyedHosts.has(el);
+    };
+    const rendered = this._getAllTaskEls();
+    if (rendered.some((el) => scope.contains(el) && isSelectedRow(el))) {
+      return;
+    }
+    const elsewhere = rendered.find(isSelectedRow);
+    // Nothing selected is rendered anywhere (cards mid-move or mid-animation):
+    // the old scope is the only memory there is, so leave it.
+    if (elsewhere) {
+      this._selectionScopeEl = elsewhere.closest<HTMLElement>(SELECTION_SCOPE_SELECTOR);
+    }
+  }
+
+  /** The selection is gone, so both the cursor into it and its list go too. */
+  private _clearSelectionState(): void {
+    this._anchor.set(null);
+    this._selectionScopeEl = null;
   }
 
   requestMenuOpen(pos: { x: number; y: number }): void {
@@ -289,12 +399,29 @@ export class TaskMultiSelectService {
     this._menuOpenRequest.set(null);
   }
 
-  private _rangeInAnchorList(anchorId: string, targetId: string): string[] | null {
-    const anchorEl = this._findRowEl(anchorId);
+  private _rangeInAnchorList(
+    anchorId: string,
+    targetId: string,
+    targetRow?: HTMLElement,
+  ): string[] | null {
+    const anchorRow = this._anchor()?.row;
+    const anchorEl =
+      anchorRow?.isConnected && !this._destroyedHosts.has(anchorRow)
+        ? anchorRow
+        : this._getAllTaskEls().find(
+            (el) =>
+              el.dataset.taskId === anchorId &&
+              (!this._selectionScopeEl || this._selectionScopeEl.contains(el)),
+          );
     if (!anchorEl) {
       return null;
     }
     const rows = this._listRowsFor(anchorEl);
+    // Identical task IDs can be rendered in different board panels. The clicked
+    // copy determines the range, not the first matching task elsewhere on screen.
+    const target = this._focusedRow();
+    const targetEl = targetRow ?? (target?.id === targetId ? target.el : null);
+    if (targetEl && !rows.includes(targetEl)) return null;
     const anchorIndex = rows.indexOf(anchorEl);
     const targetIndex = rows.findIndex(
       (el) => el.getAttribute('data-task-id') === targetId,
@@ -326,7 +453,9 @@ export class TaskMultiSelectService {
 
   /** Participating rows in the selection scope containing `el`. */
   private _listRowsFor(el: HTMLElement): HTMLElement[] {
-    const plannerScope = el.closest<HTMLElement>('[data-planner-selection-scope]');
+    const plannerScope = el.closest<HTMLElement>(
+      '[data-planner-selection-scope], [data-board-selection-scope]',
+    );
     if (plannerScope) {
       return Array.from(
         plannerScope.querySelectorAll<HTMLElement>(
@@ -340,11 +469,20 @@ export class TaskMultiSelectService {
     }
     return Array.from(list.children).filter(
       (child): child is HTMLElement =>
-        child instanceof HTMLElement && child.tagName.toLowerCase() === 'task',
+        child instanceof HTMLElement &&
+        child.tagName.toLowerCase() === 'task' &&
+        // A row animating out is still a child here. Sweeping it into a range
+        // or Ctrl+A leaves an id that nothing prunes afterwards, because
+        // removeWhenUnrendered already ran while it was unselected.
+        !this._destroyedHosts.has(child),
     );
   }
 
-  /** The rendered row for a task id, ignoring copies inside the detail panel. */
+  private _rowForNewAnchor(id: string): HTMLElement | null {
+    const focused = this._focusedRow();
+    return focused?.id === id ? focused.el : this._findRowEl(id);
+  }
+
   private _findRowEl(id: string): HTMLElement | null {
     return (
       this._getAllTaskEls().find((el) => el.getAttribute('data-task-id') === id) ?? null

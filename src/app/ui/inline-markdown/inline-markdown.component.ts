@@ -559,6 +559,10 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     if (liveEditorEl) {
       currentText = liveEditorEl.value;
       cursorPos = liveEditorEl.selectionStart;
+      // Must be read too: leaving it undefined reads as "there is a selection"
+      // below, and applyTaskList's substring(undefined) then appends the whole
+      // note back onto itself before emitting it.
+      selectionEnd = liveEditorEl.selectionEnd;
     } else if (textareaEl) {
       currentText = textareaEl.nativeElement.value;
       cursorPos = textareaEl.nativeElement.selectionStart;

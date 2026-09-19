@@ -29,7 +29,7 @@
       (collapseParent)="collapseParent()"
       (keyPress)="onItemKeyPress($event)"
       [expanded]="isSubTasksExpanded()"
-      (expandedChange)="isSubTasksExpanded.set($event)"
+      (expandedChange)="onSubTasksExpandedChange($event)"
       (afterExpand)="onSubTasksAfterExpand()"
       [type]="'panel'"
     >

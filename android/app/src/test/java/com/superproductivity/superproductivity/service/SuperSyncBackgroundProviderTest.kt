@@ -6,6 +6,8 @@ import com.superproductivity.superproductivity.crypto.EncryptedOpFixtures.PASSWO
 import com.superproductivity.superproductivity.crypto.EncryptedOpFixtures.SCHEDULE_CIPHERTEXT
 import com.superproductivity.superproductivity.crypto.InMemoryKeyCache
 import com.superproductivity.superproductivity.crypto.OpPayloadDecryptor
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -24,6 +26,46 @@ class SuperSyncBackgroundProviderTest {
 
     private fun providerWithDecryptor(): SuperSyncBackgroundProvider =
         SuperSyncBackgroundProvider(OpPayloadDecryptor(PASSWORD, InMemoryKeyCache()))
+
+    @Test
+    fun `processes the cancellation after a full page of encrypted reminder ops`() {
+        val fixtureOps = JSONObject(ENCRYPTED_DOWNLOAD_RESPONSE).getJSONArray("ops")
+        val serverOps = (1..101).map { seq ->
+            val fixtureIndex = if (seq <= 99) 0 else seq - 99
+            JSONObject(fixtureOps.getJSONObject(fixtureIndex).toString())
+                .put("serverSeq", seq)
+        }
+        val provider = providerWithDecryptor()
+        val cursors = mutableListOf<Long>()
+        val cancellations = mutableSetOf<String>()
+        var cursor = 0L
+        var hasMore: Boolean
+        do {
+            cursors.add(cursor)
+            val remaining = serverOps.filter { it.getLong("serverSeq") > cursor }
+            val response = JSONObject()
+                .put("ops", JSONArray(remaining.take(100)))
+                .put("latestSeq", 101)
+                .put("hasMore", remaining.size > 100)
+            val result = provider.parseResponse(response.toString())
+            cancellations.addAll(result.taskIdsToCancel)
+            cursor = result.latestSeq
+            hasMore = result.hasMore
+        } while (hasMore && cursors.size < 3)
+
+        assertEquals(listOf(0L, 100L), cursors)
+        assertEquals(setOf("task-dismiss-1"), cancellations)
+        assertEquals(101L, cursor)
+    }
+
+    @Test
+    fun `empty responses preserve the server reset cursor`() {
+        val result = SuperSyncBackgroundProvider(null).parseResponse(
+            """{"ops": [], "latestSeq": 0, "hasMore": false}"""
+        )
+        assertEquals(0L, result.latestSeq)
+        assertEquals(false, result.hasMore)
+    }
 
     @Test
     fun `schedules reminders from encrypted ops when a decryptor is present`() {

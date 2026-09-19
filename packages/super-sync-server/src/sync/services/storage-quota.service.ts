@@ -812,10 +812,9 @@ export class StorageQuotaService {
       where: {
         userId,
         serverSeq: { gte: windowStart, lt: windowEnd },
-        // Not redundant with the caller's fresh-op probe: a concurrent
-        // deleteAllUserData / clean slate resets lastSeq to 0, so the user's
-        // re-import reuses low seq numbers. Only this filter stops a stale
-        // protectedFromSeq from shredding that brand-new history.
+        // Older servers reset lastSeq during DELETE /data and can re-import
+        // at low sequences. Keep the age filter so a stale protectedFromSeq
+        // cannot delete that fresh history during an upgrade.
         receivedAt: { lt: BigInt(cutoffTime) },
       },
     });

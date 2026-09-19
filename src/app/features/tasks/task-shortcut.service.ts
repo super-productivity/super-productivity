@@ -359,6 +359,17 @@ export class TaskShortcutService {
       return true;
     }
 
+    // Escape releases the task row: keyboard focus goes back to the page, so the
+    // focus border disappears and arrow keys stop navigating the list. Runs last
+    // so every configured task shortcut wins over it. Deliberately no
+    // preventDefault: returning true already stops ShortcutService, while other
+    // document-level Escape handlers (the onboarding hint skips on Escape, but
+    // only when the event was not defaultPrevented) must still get their turn.
+    if (ev.key === 'Escape' && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !ev.shiftKey) {
+      (document.activeElement as HTMLElement | null)?.blur();
+      return true;
+    }
+
     return false;
   }
 

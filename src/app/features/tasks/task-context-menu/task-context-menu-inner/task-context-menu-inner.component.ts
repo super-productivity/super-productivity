@@ -211,7 +211,10 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     // rendered flat in a tag or Today list would reorder invisibly.
     this.isInSubTaskList = !!this._elementRef.nativeElement.closest('.sub-tasks');
     const host = this._elementRef.nativeElement as HTMLElement;
-    this.isInTaskRow = !!host.closest('task') && !host.closest('task-detail-panel');
+    this.isInTaskRow =
+      !!host.closest(
+        'task, [data-board-selection-scope] planner-task[data-task-selectable="true"]',
+      ) && !host.closest('task-detail-panel');
 
     setTimeout(() => {
       if (!this._isOpenedFromKeyboard) {

@@ -1,0 +1,159 @@
+name: iOS TestFlight Build on Label
+
+# This is the untrusted half of the public TestFlight pipeline. It intentionally
+# receives no Apple credentials: PR-controlled npm scripts, CocoaPods, Xcode
+# project files, and build phases execute here and only produce an unsigned
+# archive. publish-ios-testflight.yml runs from the default branch, validates the
+# archive, waits for protected-environment approval, then signs and uploads it.
+
+on:
+  pull_request:
+    branches: [master]
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-testflight-build-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  build-unsigned-archive:
+    if: >
+      github.event.label.name == 'ios-test-flight' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - name: Record TestFlight request
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/request"
+          jq -n \
+            --argjson pr_number "$PR_NUMBER" \
+            --arg head_sha "$HEAD_SHA" \
+            --arg base_sha "$BASE_SHA" \
+            --argjson run_id "$GITHUB_RUN_ID" \
+            --argjson run_number "$GITHUB_RUN_NUMBER" \
+            --argjson run_attempt "$GITHUB_RUN_ATTEMPT" \
+            '{pr_number: $pr_number, head_sha: $head_sha, base_sha: $base_sha,
+              run_id: $run_id, run_number: $run_number, run_attempt: $run_attempt}' \
+            > "$RUNNER_TEMP/request/metadata.json"
+
+      - name: Upload request metadata
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-testflight-request-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/request/metadata.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Check out PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore trusted version helper
+        run: |
+          # The PR's frozen base commit can predate this helper, and the PR's own
+          # copy is untrusted. Take the helper and the version inputs from the
+          # default branch, which is where this workflow is defined.
+          if ! TRUSTED_SHA=$(git rev-parse --verify --quiet origin/master); then
+            git fetch --force --tags origin master
+            TRUSTED_SHA=$(git rev-parse FETCH_HEAD)
+          fi
+          git cat-file -e "$TRUSTED_SHA:tools/ios-testflight-version.js"
+          git checkout "$TRUSTED_SHA" -- tools/ios-testflight-version.js
+          git show "$TRUSTED_SHA:package.json" > "$RUNNER_TEMP/trusted-package.json"
+          echo "TRUSTED_SHA=$TRUSTED_SHA" >> "$GITHUB_ENV"
+
+      - name: Select Xcode 26.2
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.2.app
+          echo "SDKROOT=$(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk" >> "$GITHUB_ENV"
+
+      - name: Verify Xcode and SDK version
+        run: |
+          xcodebuild -version
+          xcrun --show-sdk-version
+          xcodebuild -showsdks | grep -E "(iOS|iphoneos)"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: 22
+
+      # work around for npm installs from git+https://github.com/johannesjo/J2M.git
+      - name: Reconfigure git to use HTTP authentication
+        run: >
+          git config --global url."https://github.com/".insteadOf
+          ssh://git@github.com/
+
+      - name: Get npm cache directory
+        id: npm-cache-dir
+        run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        with:
+          path: ${{ steps.npm-cache-dir.outputs.dir }}
+          key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node22-
+
+      - name: Install npm packages
+        run: npm i
+
+      - name: Generate environment
+        run: npm run env
+
+      - name: Set TestFlight version
+        run: |
+          VERSION=$(node tools/ios-testflight-version.js "$RUNNER_TEMP/trusted-package.json" "$TRUSTED_SHA")
+          BUILD_NUMBER="${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          echo "Setting iOS TestFlight version to $VERSION (build $BUILD_NUMBER)"
+
+          cd ios/App
+          xcrun agvtool new-marketing-version "$VERSION"
+          xcrun agvtool new-version -all "$BUILD_NUMBER"
+
+      - name: Build Angular frontend
+        run: npm run buildFrontend:prodWeb
+
+      - name: Sync Capacitor iOS
+        run: npm run sync:ios
+
+      - name: Install CocoaPods
+        working-directory: ios/App
+        run: pod install
+
+      - name: Archive iOS app without signing
+        working-directory: ios/App
+        run: |
+          xcodebuild archive \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Pack unsigned archive
+        run: |
+          test -f "$RUNNER_TEMP/App.xcarchive/Info.plist"
+          tar -czf "$RUNNER_TEMP/App.xcarchive.tar.gz" \
+            -C "$RUNNER_TEMP" App.xcarchive
+
+      - name: Upload unsigned archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-testflight-unsigned-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/App.xcarchive.tar.gz
+          if-no-files-found: error
+          retention-days: 7

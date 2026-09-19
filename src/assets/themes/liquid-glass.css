@@ -65,6 +65,19 @@
   --lg-ease-spring: cubic-bezier(0.2, 0.9, 0.3, 1.5);
 }
 
+/* Tasks are glass cards, not flat rows. The app default draws tasks as
+ * hairline-separated rows (no box, no radius, no gap); opt back into the
+ * boxed layout via the same tokens classic.css flips. */
+body,
+body.isDarkTheme {
+  --task-border: 1px solid var(--task-border-color);
+  --task-separator: none;
+  --task-row-edge: var(--task-border);
+  --task-selected-edge: none;
+  --task-border-radius: var(--lg-radius-md);
+  --task-list-row-gap: var(--s-half);
+}
+
 /* ---------------------------------------------------------
  * Light mode
  * --------------------------------------------------------- */
@@ -851,25 +864,17 @@ schedule-event {
   box-shadow: var(--task-shadow) !important;
 }
 
-/* Sub-task edge model. _task-base.scss:184-194 sets a 4-side
- * border via --extra-border-color in light mode, which reads as
- * a card-within-a-card frame on translucent surfaces. We want a
+/* Sub-task edge model. _task-base.scss (.sub-tasks ::ng-deep .box) keeps
+ * the 4-side --task-border on sub-tasks via --sub-task-border-color, which
+ * reads as a card-within-a-card frame on translucent surfaces. We want a
  * single top-edge separator between siblings instead — same role
  * as a list divider. --ink-on-channel keeps it mode-correct
- * (black hairline in light, white in dark) at 0.06 alpha. */
+ * (black hairline in light, white in dark) at 0.06 alpha. Focus on a
+ * sub-task is a background tint + keyboard outline in the base styles,
+ * so nothing here needs restoring. */
 .sub-tasks .box {
   border-color: transparent !important;
   border-top-color: rgba(var(--ink-on-channel), 0.06) !important;
-}
-
-/* The single-edge separator above sets border-color: transparent !important,
- * which also erases the base keyboard focus ring on subtasks
- * (:host:focus … .box uses a non-!important border). Restore it so a focused
- * subtask matches a focused parent task (both use --palette-primary-400 here).
- * Scoped to .isNoTouchOnly to mirror the base ring, which is noTouchOnly-guarded
- * (_task-base.scss:111) — no focus border on touch-only devices. */
-.isNoTouchOnly .sub-tasks task:focus .box {
-  border-color: var(--palette-primary-400) !important;
 }
 
 /* Current task fill — applied in both modes. _task-base.scss only
@@ -894,10 +899,9 @@ planner-task.isDragReady:not(.cdk-drag-placeholder) {
   background: var(--lg-solid-utility-bg) !important;
 }
 
-/* Smooth material state changes. The base task styles only animate
- * transform + shadow, so selected/current fills snap between glass
- * recipes. Keep selected task left/right transitions untouched. */
-task:not(.isSelected) .box,
+/* Smooth material state changes with Apple's ease so selected/current
+ * fills glide between glass recipes instead of using the stock curve. */
+task .box,
 planner-task {
   transition-property: transform, box-shadow, background, background-color !important;
   transition-duration: var(--transition-duration-s) !important;

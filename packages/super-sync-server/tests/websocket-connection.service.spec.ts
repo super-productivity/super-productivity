@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { WebSocketConnectionService } from '../src/sync/services/websocket-connection.service';
 import { Logger } from '../src/logger';
+import type { WebSocket } from 'ws';
 
 vi.mock('../src/logger', () => ({
   Logger: {
@@ -483,7 +484,7 @@ describe('WebSocketConnectionService', () => {
       );
     });
 
-    it('should accumulate excludeClientIds across debounced calls', () => {
+    it('notifies uploaders about other clients in the same debounce window', () => {
       const wsA = createMockWs();
       const wsB = createMockWs();
       const wsC = createMockWs();
@@ -499,17 +500,26 @@ describe('WebSocketConnectionService', () => {
       service.notifyNewOps(1, 'B', 5);
       vi.advanceTimersByTime(100);
 
-      // Client A excluded from first call, client B excluded from second
-      const messagesA = parseSendCalls(wsA);
-      expect(messagesA).not.toContainEqual(expect.objectContaining({ type: 'new_ops' }));
+      // A's piggyback download can finish before B commits. Uploading during
+      // this window is not proof that a client has seen every coalesced update.
+      for (const socket of [wsA, wsB, wsC]) {
+        expect(parseSendCalls(socket)).toContainEqual(
+          expect.objectContaining({ type: 'new_ops', latestSeq: 5 }),
+        );
+      }
+    });
 
-      const messagesB = parseSendCalls(wsB);
-      expect(messagesB).not.toContainEqual(expect.objectContaining({ type: 'new_ops' }));
+    it('retains the highest sequence when upload responses finish out of order', () => {
+      const wsB = createMockWs();
+      service.addConnection(1, 'B', wsB as unknown as WebSocket);
+      wsB.send.mockClear();
 
-      // Only client C should receive the notification
-      const messagesC = parseSendCalls(wsC);
-      expect(messagesC).toContainEqual(
-        expect.objectContaining({ type: 'new_ops', latestSeq: 5 }),
+      service.notifyNewOps(1, 'A', 7);
+      service.notifyNewOps(1, 'A', 3);
+      vi.advanceTimersByTime(100);
+
+      expect(parseSendCalls(wsB)).toContainEqual(
+        expect.objectContaining({ type: 'new_ops', latestSeq: 7 }),
       );
     });
 

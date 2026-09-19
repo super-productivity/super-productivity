@@ -913,17 +913,30 @@ export class SyncService {
    */
   async deleteAllUserData(userId: number): Promise<void> {
     await prisma.$transaction(async (tx) => {
+      // Acquire the upload sequence row's write lock BEFORE deleting history.
+      // Keep its counter so a peer that misses the empty interval still sees
+      // the replacement snapshot above its old cursor.
+      await tx.userSyncState.upsert({
+        where: { userId },
+        create: { userId, lastSeq: 0 },
+        update: {
+          lastSnapshotSeq: null,
+          snapshotData: null,
+          snapshotAt: null,
+          // Cleared with the blob, as every other cache-clear site does; a
+          // stale version left behind would describe data that no longer exists.
+          snapshotSchemaVersion: null,
+          latestFullStateSeq: null,
+          latestFullStateVectorClock: Prisma.DbNull,
+          latestStateReplacementSeq: null,
+        },
+      });
+
       // Delete all operations
       await tx.operation.deleteMany({ where: { userId } });
 
       // Delete all devices
       await tx.syncDevice.deleteMany({ where: { userId } });
-
-      // Delete sync state entirely, resetting lastSeq to 0.
-      // Unlike uploadOps clean slate (which preserves lastSeq), account reset
-      // intentionally wipes everything. Clients detect the wipe via latestSeq=0
-      // and trigger a full state re-upload.
-      await tx.userSyncState.deleteMany({ where: { userId } });
 
       // Reset storage usage
       await tx.user.update({

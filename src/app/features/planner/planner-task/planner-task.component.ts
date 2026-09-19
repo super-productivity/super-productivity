@@ -32,6 +32,7 @@ import { DoneToggleComponent } from '../../../ui/done-toggle/done-toggle.compone
 import { SwipeBlockComponent } from '../../../ui/swipe-block/swipe-block.component';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
+import { TASK_CARD_LIST } from '../../tasks/task-card-list.token';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { checkKeyCombo } from '../../../util/check-key-combo';
 import { MatDialog } from '@angular/material/dialog';
@@ -49,7 +50,8 @@ import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-t
 import { PlannerActions } from '../store/planner.actions';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { first } from 'rxjs/operators';
-import { isInputElement } from '../../../util/dom-element';
+import { isInputElement, isLinkTarget } from '../../../util/dom-element';
+import { isMultiSelectModifierEvent } from '../../../util/is-multi-select-modifier-event';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import {
   moveTaskDownInTodayList,
@@ -59,6 +61,8 @@ import {
 } from '../../work-context/store/work-context-meta.actions';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { TODAY_TAG } from '../../tag/tag.const';
+import { ADD_TASK_INLINE_BTN_SELECTOR } from '../add-task-inline/add-task-inline.const';
+import { getNextPlannerAddButton } from '../get-next-planner-add-button';
 
 @Component({
   selector: 'planner-task',
@@ -80,8 +84,7 @@ import { TODAY_TAG } from '../../tag/tag.const';
   ],
   /* eslint-disable @typescript-eslint/naming-convention */
   host: {
-    // Planner explicitly opts cards into keyboard and selection behavior.
-    // Other PlannerTask consumers (Boards and scheduled-list) stay unchanged.
+    // Planner and Boards opt in; scheduled-list cards keep their existing behavior.
     '[attr.data-task-id]': 'focusable() ? task().id : null',
     '[attr.data-task-selectable]': 'focusable() ? "true" : null',
     '[attr.tabindex]': 'focusable() ? "0" : null',
@@ -98,6 +101,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   private _destroyRef = inject(DestroyRef);
   private _elementRef = inject(ElementRef);
   private _multiSelect = inject(TaskMultiSelectService);
+  private _cardList = inject(TASK_CARD_LIST, { optional: true });
   private _configService = inject(GlobalConfigService);
   private _matDialog = inject(MatDialog);
   private _store = inject(Store);
@@ -120,10 +124,13 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   // TODO remove
   readonly day = input<string | undefined>();
   readonly tagsToHide = input<string[]>();
-  // Explicit opt-in keeps Boards and scheduled-list cards out of Planner navigation.
+  // Containers opt in explicitly; TASK_CARD_LIST supplies board-specific movement.
   readonly focusable = input<boolean>(false);
   readonly isMultiSelected = computed(() =>
     this.focusable() ? this._multiSelect.selectedIds().has(this.task().id) : false,
+  );
+  readonly isTouchSelecting = computed(
+    () => !!this._cardList && this._multiSelect.isTouchSelectionMode(),
   );
 
   readonly T = T;
@@ -171,16 +178,34 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   @HostListener('click', ['$event'])
   async clickHandler(event: MouseEvent): Promise<void> {
     const target = event.target as HTMLElement | null;
-    if (this.focusable() && this._multiSelect.isActive()) {
-      this._multiSelect.clear();
-    }
-    if (target?.tagName === 'A' || target?.closest('a')) {
+    if (isLinkTarget(target)) {
       return;
+    }
+    // Mirrors the modifier/touch half of task.component's clear (which lives in
+    // its onHostMouseDown): a modifier click is building the selection and a
+    // touch tap is toggling it, so neither may clear it. The link bail-out above
+    // has to come first, or clicking a link inside a selected row drops the
+    // whole selection. NOT full parity: task.component also bails on every
+    // interactive target, so a click on a button or chip inside a selected
+    // planner row still clears here.
+    // The modifier term looks redundant against selectFromModifierClick's
+    // capture-phase stopPropagation, but that handler bails on inputs and never
+    // suppresses an at-target click — so modifier clicks on an input inside the
+    // row, and on the row element itself, still arrive here.
+    if (
+      this.focusable() &&
+      this._multiSelect.isActive() &&
+      !isMultiSelectModifierEvent(event) &&
+      !this._multiSelect.isTouchSelectionMode()
+    ) {
+      this._multiSelect.clear();
     }
     if (this.focusable()) {
       if (!this._isInteractiveClickTarget(target)) {
         (this._elementRef.nativeElement as HTMLElement).focus();
-        this._taskService.setSelectedId(this.task().id);
+        if (!this._cardList || isTouchActive()) {
+          this._taskService.setSelectedId(this.task().id);
+        }
       }
       return;
     }
@@ -254,9 +279,23 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
       const host = this._elementRef.nativeElement as HTMLElement;
       const selectFromModifierClick = (event: MouseEvent): void => {
         const target = event.target;
+        // Touch selection mode deliberately swallows links too: the whole row
+        // is a selection target in that mode, which also suspends swipe, drag
+        // and title editing. Tapping the link needs the mode left first.
+        if (this.isTouchSelecting()) {
+          event.preventDefault();
+          event.stopPropagation();
+          host.focus();
+          this._multiSelect.toggle(this.task().id);
+          return;
+        }
         if (
           !(event.ctrlKey || event.metaKey || event.shiftKey) ||
-          (target instanceof HTMLElement && isInputElement(target))
+          (target instanceof HTMLElement && isInputElement(target)) ||
+          // This runs in the CAPTURE phase, so without the bail-out a
+          // Ctrl/Cmd+click on a link is preventDefault'ed here and never opens
+          // its new tab — it would silently toggle the row instead.
+          isLinkTarget(target)
         ) {
           return;
         }
@@ -357,6 +396,10 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private _moveFocus(key: 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight'): void {
+    if (this._cardList) {
+      this._cardList.navigate(this.task().id, key);
+      return;
+    }
     const rows = this._plannerRows();
     const host = this._elementRef.nativeElement as HTMLElement;
     const current = host;
@@ -402,6 +445,9 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private _plannerRows(): HTMLElement[] {
+    if (this._cardList) {
+      return this._cardList.rows();
+    }
     return Array.from(
       document.querySelectorAll<HTMLElement>('planner-task[data-task-selectable="true"]'),
     );
@@ -480,6 +526,10 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private _moveOneDay(dayDelta: -1 | 1): void {
+    if (this._cardList) {
+      this._cardList.moveToAdjacent(this.task().id, dayDelta);
+      return;
+    }
     const task = this.task();
     const displayedDay = this.day();
     const baseDate = task.dueWithTime
@@ -557,6 +607,10 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private _reorderAllDay(direction: 'up' | 'down' | 'top' | 'bottom'): void {
+    if (this._cardList) {
+      this._cardList.reorder(this.task().id, direction);
+      return;
+    }
     const host = this._elementRef.nativeElement as HTMLElement;
     if (host.closest('.scheduled-items')) {
       return;
@@ -625,7 +679,7 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private _runCompletionWithFocus(): void {
     const host = this._elementRef.nativeElement as HTMLElement;
-    if (this.task().isDone || !host.closest('planner-day-overdue')) {
+    if (this.task().isDone || (!this._cardList && !host.closest('planner-day-overdue'))) {
       this._runMutationWithFocus(() => this.toggleTaskDone());
       return;
     }
@@ -657,9 +711,12 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
       ) {
         return;
       }
+      const findRow = (id: string): HTMLElement | null | undefined =>
+        this._cardList
+          ? this._cardList.rows().find((row) => row.dataset.taskId === id)
+          : this._multiSelect.findLiveRowEl(id);
       const row =
-        (preferredId && this._multiSelect.findLiveRowEl(preferredId)) ||
-        (fallbackId && this._multiSelect.findLiveRowEl(fallbackId));
+        (preferredId && findRow(preferredId)) || (fallbackId && findRow(fallbackId));
       if (row) {
         row.focus({ preventScroll: true });
         row.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -670,14 +727,17 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private _localAddButton(): HTMLElement | null {
-    return (
-      (this._elementRef.nativeElement as HTMLElement)
-        .closest<HTMLElement>('[data-planner-selection-scope]')
-        ?.querySelector<HTMLElement>('add-task-inline button') ??
-      document.querySelector<HTMLElement>(
-        'planner-day[data-planner-selection-scope] add-task-inline button',
-      )
+    if (this._cardList) {
+      return this._cardList.addButton();
+    }
+    const scope = (this._elementRef.nativeElement as HTMLElement).closest<HTMLElement>(
+      '[data-planner-selection-scope]',
     );
+    // Overdue has no add button; capture the next section's before it disappears.
+    return scope
+      ? (scope.querySelector<HTMLElement>(ADD_TASK_INLINE_BTN_SELECTOR) ??
+          getNextPlannerAddButton(scope))
+      : null;
   }
 
   private _openContextMenuFromKeyboard(): void {

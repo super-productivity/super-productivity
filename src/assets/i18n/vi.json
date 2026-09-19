@@ -1386,14 +1386,14 @@
         "FORCE_OVERWRITE_CONFIRM": "Xóa dữ liệu máy chủ và tải lên với mật khẩu này. Tiếp tục?",
         "FORCE_OVERWRITE_INFO": "Muốn giữ dữ liệu cục bộ? Có thể ghi đè máy chủ.",
         "FORCE_OVERWRITE_TITLE": "Ghi đè dữ liệu máy chủ?",
-        "MESSAGE": "Máy chủ chứa dữ liệu mã hóa. Nhập mật khẩu để giải mã.",
+        "MESSAGE": "Máy chủ đồng bộ chứa dữ liệu đã mã hóa, nhưng thiết bị này chưa được cấu hình mật khẩu mã hóa. Vui lòng nhập mật khẩu mã hóa của bạn để giải mã và đồng bộ dữ liệu.",
         "PASSWORD_LABEL": "Mật khẩu mã hóa",
-        "TITLE": "Cấu hình đồng bộ"
+        "TITLE": "Cần mật khẩu mã hóa"
       },
       "D_FRESH_CLIENT_CONFIRM": {
-        "MESSAGE": "Máy chủ chứa dữ liệu mã hóa. Nhập mật khẩu để giải mã.",
+        "MESSAGE": "Đây có vẻ là một bản cài đặt mới. Đã tìm thấy dữ liệu từ xa với {{count}} thay đổi. Bạn có muốn tải xuống và ghi đè dữ liệu cục bộ bằng dữ liệu đó không?",
         "OK": "Tải dữ liệu từ xa",
-        "TITLE": "Cấu hình đồng bộ"
+        "TITLE": "Đồng bộ lần đầu"
       },
       "D_INCOMPLETE_SYNC": {
         "BTN_CLOSE_APP": "Đóng ứng dụng",
@@ -1414,8 +1414,8 @@
         "TITLE": "Cấu hình đồng bộ"
       },
       "D_LOCAL_DATA_REPLACE_CONFIRM": {
-        "MESSAGE": "Máy chủ chứa dữ liệu mã hóa. Nhập mật khẩu để giải mã.",
-        "TITLE": "Cấu hình đồng bộ"
+        "MESSAGE": "Bạn có {{count}} thay đổi cục bộ chưa được đồng bộ và chúng sẽ bị thay thế bởi dữ liệu từ xa. Bạn có muốn tiếp tục không?",
+        "TITLE": "Thay thế dữ liệu cục bộ?"
       },
       "D_NOTHING_TO_UPLOAD": {
         "MESSAGE": "Không có gì bị thay đổi — dữ liệu trên máy chủ đồng bộ của bạn vẫn còn đó.\n\nThiết bị này chưa bao giờ hoàn tất một lần đồng bộ, nên nó không giữ bản sao dữ liệu nào mà ứng dụng có thể thấy. Việc ghi đè sẽ thay thế mọi thứ trên máy chủ bằng một thiết bị trống, và điều đó không thể hoàn tác.\n\nHãy thử lại mật khẩu mã hóa của bạn ở đây — mật khẩu cũ thường vẫn dùng được. Nếu bạn không nhớ, hãy giữ nguyên thiết bị này và máy chủ đúng như hiện tại rồi báo cáo vấn đề thay vì ghi đè; lịch sử của bạn vẫn nằm trên máy chủ.\n\nNếu bạn thực sự muốn xóa máy chủ đồng bộ và bắt đầu lại, hãy đóng cửa sổ này và dùng Buộc ghi đè trong Cài đặt → Đồng bộ & Sao lưu → Đồng bộ.",
@@ -1444,10 +1444,10 @@
         "WARNING": "Thay thế TẤT CẢ dữ liệu hiện tại. Không thể hoàn tác!"
       },
       "D_SERVER_MIGRATION_CONFIRM": {
-        "CONFIRM": "Xác nhận",
-        "MESSAGE": "Máy chủ chứa dữ liệu mã hóa. Nhập mật khẩu để giải mã.",
+        "CONFIRM": "Thay thế dữ liệu máy chủ",
+        "MESSAGE": "Máy chủ đồng bộ này đã chứa dữ liệu — rất có thể từ các thiết bị khác của bạn. Chọn <strong>Thay thế dữ liệu máy chủ</strong> sẽ <strong>ghi đè toàn bộ dữ liệu trên máy chủ và trên mọi thiết bị khác</strong> bằng bản sao cục bộ của thiết bị này. Đây <strong>không phải là hợp nhất</strong>. Chọn <strong>Hủy</strong> để tải dữ liệu của máy chủ xuống (nên chọn cách này, trừ khi bạn chắc chắn thiết bị này có phiên bản mới nhất).",
         "SKIP": "Hủy",
-        "TITLE": "Cấu hình đồng bộ"
+        "TITLE": "Máy chủ đã chứa dữ liệu"
       },
       "D_SYNC_IMPORT_CONFLICT": {
         "FILTERED_CHANGES": "Thay đổi liên quan",
@@ -1479,11 +1479,11 @@
           "AUTH_SUCCESS": "Xác thực Dropbox thành công!",
           "BTN_AUTHENTICATE": "Xác thực",
           "BTN_REAUTHENTICATE": "Xác thực lại",
-          "INFO_TEXT": "<strong>Cảnh báo:</strong> Không dùng Syncthing/Resilio để đồng bộ thư mục này.",
+          "INFO_TEXT": "Dropbox sử dụng OAuth. Khi bạn lưu cài đặt, Dropbox sẽ được mở trong trình duyệt để bạn cấp quyền truy cập.",
           "L_ACCESS_TOKEN": "Token truy cập (từ mã xác thực)",
           "REAUTH_SUCCESS": "Xác thực Dropbox thành công!",
-          "STATUS_CONFIGURED": "Trạng thái",
-          "STATUS_NOT_CONFIGURED": "Trạng thái"
+          "STATUS_CONFIGURED": "Dropbox đã được cấu hình và sẵn sàng đồng bộ",
+          "STATUS_NOT_CONFIGURED": "Chưa được cấu hình - hãy xác thực để bật đồng bộ"
         },
         "FILE_BASED": {
           "BTN_CHANGE_PASSWORD": "Đổi mật khẩu",
@@ -1553,7 +1553,7 @@
         "L_SYNC_PROVIDER": "Nhà cung cấp",
         "L_USE_SPLIT_SYNC_FILES": "Đồng bộ phân tách (thử nghiệm) – Đồng bộ nhanh hơn nhờ bố cục tệp thao tác/ảnh chụp nhanh tách biệt. Sau khi bật, tất cả thiết bị đồng bộ thư mục này cũng phải bật tùy chọn này.",
         "LOCAL_FILE": {
-          "INFO_TEXT": "<strong>Cảnh báo:</strong> Không dùng Syncthing/Resilio để đồng bộ thư mục này.",
+          "INFO_TEXT": "<strong>Cảnh báo:</strong> <strong>Không</strong> dùng các công cụ đồng bộ tệp như Syncthing, Resilio hoặc tương tự để đồng bộ thư mục này giữa các thiết bị — chúng <strong>sẽ</strong> gây hỏng dữ liệu và xung đột. Để đồng bộ nhiều thiết bị, hãy dùng SuperSync, Nextcloud hoặc Dropbox.",
           "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Cần quyền truy cập",
           "L_SYNC_FOLDER_PATH": "Đường dẫn đồng bộ",
           "S_COMMIT_FOLDER_ERROR": "Không thể lưu thư mục đồng bộ đã chọn. Thư mục có thể đã bị di chuyển hoặc xóa — vui lòng chọn lại."
@@ -1572,7 +1572,7 @@
           "DISABLE_ENCRYPTION_ITEM_2": "Tải lại không mã hóa",
           "DISABLE_ENCRYPTION_ITEM_3": "Đồng bộ không mã hóa",
           "DISABLE_ENCRYPTION_NOT_READY": "Chưa bật đồng bộ.",
-          "DISABLE_ENCRYPTION_NOTE": "Dữ liệu cục bộ sẽ KHÔNG bị xóa.",
+          "DISABLE_ENCRYPTION_NOTE": "Dữ liệu cục bộ sẽ KHÔNG bị xóa. Bạn có thể bật lại mã hóa bất cứ lúc nào.",
           "DISABLE_ENCRYPTION_SUCCESS": "Đã tắt mã hóa",
           "DISABLE_ENCRYPTION_SUPERSYNC_ONLY": "Chỉ cho SuperSync.",
           "DISABLE_ENCRYPTION_TITLE": "Tắt mã hóa?",
@@ -1584,7 +1584,7 @@
           "ENABLE_ENCRYPTION_ITEM_2": "Tải lại với mã hóa",
           "ENABLE_ENCRYPTION_ITEM_3": "Cần mật khẩu trên thiết bị khác",
           "ENABLE_ENCRYPTION_NOT_READY": "Chưa bật đồng bộ.",
-          "ENABLE_ENCRYPTION_NOTE": "Dữ liệu cục bộ sẽ KHÔNG bị xóa.",
+          "ENABLE_ENCRYPTION_NOTE": "Dữ liệu cục bộ sẽ KHÔNG bị xóa. Bạn có thể tắt mã hóa bất cứ lúc nào.",
           "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Nhập mật khẩu trước.",
           "ENABLE_ENCRYPTION_SUCCESS": "Đã bật mã hóa",
           "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "Chỉ cho SuperSync.",
@@ -1597,7 +1597,7 @@
           "FORCE_OVERWRITE_CONFIRM": "Xóa dữ liệu máy chủ và tải lên với mật khẩu này. Tiếp tục?",
           "FORCE_OVERWRITE_INFO": "Muốn giữ dữ liệu cục bộ? Có thể ghi đè máy chủ.",
           "FORCE_OVERWRITE_TITLE": "Ghi đè dữ liệu máy chủ?",
-          "INFO_TEXT": "<strong>Cảnh báo:</strong> Không dùng Syncthing/Resilio để đồng bộ thư mục này.",
+          "INFO_TEXT": "SuperSync giữ cho công việc của bạn được đồng bộ theo thời gian thực trên mọi thiết bị. Dữ liệu của bạn được lưu trữ an toàn trên máy chủ đồng bộ. Lưu ý: SuperSync hiện đang trong giai đoạn Beta.",
           "L_ACCESS_TOKEN": "Token truy cập",
           "L_CHANGE_ENCRYPTION_PASSWORD": "Đổi mật khẩu mã hóa",
           "L_CONFIRM_PASSWORD": "Xác nhận mật khẩu",

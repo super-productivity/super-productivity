@@ -1,10 +1,18 @@
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
+  ElementRef,
+  forwardRef,
+  HostListener,
   inject,
+  Injector,
   input,
   output,
+  signal,
+  viewChildren,
 } from '@angular/core';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { PlannerTaskComponent } from '../../planner/planner-task/planner-task.component';
@@ -33,7 +41,6 @@ import { T } from '../../../t.const';
 import { TaskCopy } from '../../tasks/task.model';
 import { TaskService } from '../../tasks/task.service';
 import { BoardsActions } from '../store/boards.actions';
-import { moveItemInArray } from '../../../util/move-item-in-array';
 import { unique } from '../../../util/unique';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { LocalDateStrPipe } from '../../../ui/pipes/local-date-str.pipe';
@@ -53,6 +60,26 @@ import {
   moveProjectTaskToRegularListAuto,
 } from '../../project/store/project.actions';
 import { TaskAddEvent } from '../../tasks/add-task-bar/add-task-bar.component';
+import { firstValueFrom } from 'rxjs';
+import {
+  TASK_CARD_LIST,
+  TaskCardArrow,
+  TaskCardList,
+  TaskCardMove,
+} from '../../tasks/task-card-list.token';
+import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
+import { TaskBulkActionService } from '../../tasks/task-bulk-action.service';
+import { reorderBoardTasks } from '../reorder-board-tasks';
+import { GlobalConfigService } from '../../config/global-config.service';
+import { checkKeyCombo } from '../../../util/check-key-combo';
+import { ADD_TASK_INLINE_BTN_SELECTOR } from '../../planner/add-task-inline/add-task-inline.const';
+
+export interface BoardPanelNavigation {
+  direction: -1 | 1 | 'up' | 'down';
+  rowIndex: number;
+  taskIds?: string[];
+  focusTaskId?: string;
+}
 
 @Component({
   selector: 'board-panel',
@@ -72,17 +99,137 @@ import { TaskAddEvent } from '../../tasks/add-task-bar/add-task-bar.component';
   templateUrl: './board-panel.component.html',
   styleUrl: './board-panel.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [
+    { provide: TASK_CARD_LIST, useExisting: forwardRef(() => BoardPanelComponent) },
+  ],
+  host: {
+    // Angular host bindings use template attribute syntax.
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '[attr.data-board-selection-scope]': 'panelCfg().id',
+  },
 })
-export class BoardPanelComponent {
+export class BoardPanelComponent implements TaskCardList {
   T = T;
   dragDelayForTouch = dragDelayForTouch;
 
   panelCfg = input.required<BoardPanelCfg>();
   editBoard = output<void>();
+  adjacentPanel = output<BoardPanelNavigation>();
 
   store = inject(Store);
   taskService = inject(TaskService);
   _matDialog = inject(MatDialog);
+  readonly multiSelect = inject(TaskMultiSelectService);
+  private _element = inject<ElementRef<HTMLElement>>(ElementRef);
+  private _injector = inject(Injector);
+  private _destroyRef = inject(DestroyRef);
+  private _config = inject(GlobalConfigService);
+  private _cards = viewChildren(PlannerTaskComponent, { read: ElementRef });
+  readonly isMoving = signal(false);
+
+  rows(): HTMLElement[] {
+    return this._cards().map((card) => card.nativeElement as HTMLElement);
+  }
+
+  addButton(): HTMLElement | null {
+    return this._element.nativeElement.querySelector(ADD_TASK_INLINE_BTN_SELECTOR);
+  }
+
+  focusRow(index: number, taskId?: string): void {
+    const rows = this.rows();
+    const target =
+      (taskId && rows.find((row) => row.dataset.taskId === taskId)) ||
+      rows[Math.min(index, rows.length - 1)] ||
+      this.addButton();
+    target?.focus();
+    target?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  navigate(taskId: string, key: TaskCardArrow): void {
+    const index = this.tasks().findIndex((task) => task.id === taskId);
+    if (key === 'ArrowLeft' || key === 'ArrowRight') {
+      this.adjacentPanel.emit({
+        direction: key === 'ArrowLeft' ? -1 : 1,
+        rowIndex: index,
+      });
+    } else {
+      const next = index + (key === 'ArrowUp' ? -1 : 1);
+      if (next >= 0 && next < this.tasks().length) this.focusRow(next);
+    }
+  }
+
+  @HostListener('keydown', ['$event'])
+  onAddButtonKeydown(event: KeyboardEvent): void {
+    if (
+      event.target !== this.addButton() ||
+      event.ctrlKey ||
+      event.altKey ||
+      event.metaKey ||
+      event.shiftKey
+    )
+      return;
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    const keys = this._config.cfg()?.keyboard;
+    if (
+      keys &&
+      Object.values(keys).some(
+        (combo) => typeof combo === 'string' && combo && checkKeyCombo(event, combo),
+      )
+    )
+      return;
+    this.adjacentPanel.emit({
+      direction: event.key === 'ArrowLeft' ? -1 : 1,
+      rowIndex: 0,
+    });
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  moveToAdjacent(taskId: string, direction: -1 | 1): void {
+    const taskIds = this._taskIdsToMove(taskId);
+    if (!taskIds.length) return;
+    this.adjacentPanel.emit({
+      direction,
+      rowIndex: 0,
+      taskIds,
+      focusTaskId: taskId,
+    });
+  }
+
+  reorder(taskId: string, direction: TaskCardMove): void {
+    const ids = this.tasks().map((task) => task.id);
+    const selected = new Set(this._taskIdsToMove(taskId));
+    if (!selected.size) return;
+    if (
+      (direction === 'up' && ids[0] === taskId) ||
+      (direction === 'down' && ids[ids.length - 1] === taskId)
+    ) {
+      this.adjacentPanel.emit({
+        direction,
+        rowIndex: 0,
+        taskIds: [...selected],
+        focusTaskId: taskId,
+      });
+      return;
+    }
+    if (!this.isManualOrder()) return;
+    const taskIds = reorderBoardTasks(ids, selected, direction);
+    if (!fastArrayCompare(ids, taskIds)) {
+      this.store.dispatch(
+        BoardsActions.updatePanelCfgTaskIds({ panelId: this.panelCfg().id, taskIds }),
+      );
+      afterNextRender(() => this.focusRow(0, taskId), { injector: this._injector });
+    }
+  }
+
+  private _taskIdsToMove(taskId: string, sourceTasks = this.tasks()): string[] {
+    if (!this.multiSelect.has(taskId)) return [taskId];
+    const selected = this.multiSelect.selectedIds();
+    const ids = sourceTasks
+      .filter((task) => selected.has(task.id))
+      .map((task) => task.id);
+    return ids.length === selected.size ? ids : [];
+  }
 
   allTasks$ = this.store.select(selectAllTasksInActiveProjects);
   allTasks = toSignal(this.allTasks$, {
@@ -159,6 +306,13 @@ export class BoardPanelComponent {
     const panelCfg = this.panelCfg();
     const orderedTasks: TaskCopy[] = [];
     const nonOrderedTasks: TaskCopy[] = [];
+    const taskOrder = new Map<string, number>();
+    panelCfg.taskIds.forEach((id, index) => {
+      // Preserve indexOf's first-occurrence ordering for repeated IDs.
+      if (!taskOrder.has(id)) {
+        taskOrder.set(id, index);
+      }
+    });
 
     // Hoist the backlog predicate out of the filter callback so it's allocated
     // once per recompute, not once per task.
@@ -168,8 +322,8 @@ export class BoardPanelComponent {
     );
 
     allFilteredTasks.forEach((task) => {
-      const index = panelCfg.taskIds.indexOf(task.id);
-      if (index > -1) {
+      const index = taskOrder.get(task.id);
+      if (index !== undefined) {
         orderedTasks[index] = task;
       } else {
         nonOrderedTasks.push(task);
@@ -186,24 +340,111 @@ export class BoardPanelComponent {
     return merged;
   });
 
-  async drop(ev: CdkDragDrop<BoardPanelCfg, string, TaskCopy>): Promise<void> {
-    const panelCfg = ev.container.data;
-    const task = ev.item.data;
-
-    // In sorted mode, intra-panel drops are no-ops: the task already matches the
-    // panel filter and the visible order is derived from the comparator, not taskIds.
+  async drop(ev: CdkDragDrop<TaskCopy[], TaskCopy[], TaskCopy>): Promise<void> {
     if (ev.previousContainer.id === ev.container.id && !this.isManualOrder()) {
       return;
     }
+    const ids = this._taskIdsToMove(ev.item.data.id, ev.previousContainer.data);
+    if (!ids.length) return;
+    const isSamePanel = ev.previousContainer.id === ev.container.id;
+    const moving = new Set(ids);
+    // CDK removes only the dragged row when calculating its insertion index.
+    // Group placement removes every moving row, including destination duplicates.
+    const index = this.tasks()
+      .filter((task) => !isSamePanel || task.id !== ev.item.data.id)
+      .slice(0, ev.currentIndex)
+      .filter((task) => !moving.has(task.id)).length;
+    if (isSamePanel) {
+      this._placeInOrder(ids, index);
+      return;
+    }
+    await this.moveTasks(ids, index);
+  }
 
-    const prevTaskIds = this.tasks().map((t) => t.id);
+  /** Shared by dragging and keyboard placement; normal task actions retain their effects. */
+  async moveTasks(ids: string[], index = this.tasks().length): Promise<boolean> {
+    if (this.isMoving()) return false;
+    this.isMoving.set(true);
+    const panelCfg = this.panelCfg();
+    try {
+      const tasks = (
+        await Promise.all(
+          unique(ids).map((id) =>
+            firstValueFrom(this.store.select(selectTaskById, { id })),
+          ),
+        )
+      ).filter((task): task is TaskCopy => !!task);
+      const unscheduled =
+        panelCfg.scheduledState === BoardPanelCfgScheduledState.Scheduled
+          ? tasks.filter((task) => !task.dueDay && !task.dueWithTime)
+          : [];
+      let schedule: Parameters<TaskBulkActionService['scheduleFor']>[0] | undefined;
+      if (unscheduled.length) {
+        schedule = await firstValueFrom(
+          this._matDialog
+            .open(DialogScheduleTaskComponent, {
+              data: { isSelectDueOnly: true },
+            })
+            .afterClosed(),
+        );
+        if (!schedule?.date) return false;
+      }
+      if (this._destroyRef.destroyed) return false;
+      this.multiSelect.setBulkFeedbackSuppressed(true);
+      try {
+        for (const original of tasks) {
+          // A preceding parent/project move can change the next selected task.
+          const task = await firstValueFrom(
+            this.store.select(selectTaskById, { id: original.id }),
+          );
+          if (task) await this._applyPanel(task, panelCfg);
+        }
+        // Flush captured task operations before the dependent panel-order write.
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        const movingIds = tasks.map((task) => task.id);
+        this._placeInOrder(movingIds, index);
+        if (schedule) {
+          // Panel placement may have moved a parent and its children to a new
+          // project. Scheduling actions must carry the resulting task data.
+          const tasksToSchedule = (
+            await Promise.all(
+              unscheduled.map((task) =>
+                firstValueFrom(this.store.select(selectTaskById, { id: task.id })),
+              ),
+            )
+          ).filter(
+            (task): task is TaskCopy => !!task && !task.dueDay && !task.dueWithTime,
+          );
+          await this._injector
+            .get(TaskBulkActionService)
+            .scheduleFor(schedule, tasksToSchedule);
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        this.multiSelect.reanchorAfterMove(movingIds, this.rows());
+      } finally {
+        this.multiSelect.setBulkFeedbackSuppressed(false);
+      }
+      return true;
+    } finally {
+      this.isMoving.set(false);
+    }
+  }
 
-    const taskIds = prevTaskIds.includes(task.id)
-      ? // move in array
-        moveItemInArray(prevTaskIds, ev.previousIndex, ev.currentIndex)
-      : // NOTE: original array is mutated and splice does not return a new array
-        prevTaskIds.splice(ev.currentIndex, 0, task.id) && prevTaskIds;
+  private _placeInOrder(ids: string[], index: number): void {
+    const moving = new Set(ids);
+    const remainingIds = this.tasks()
+      .map((task) => task.id)
+      .filter((id) => !moving.has(id));
+    remainingIds.splice(index, 0, ...ids);
+    this.store.dispatch(
+      BoardsActions.updatePanelCfgTaskIds({
+        panelId: this.panelCfg().id,
+        taskIds: remainingIds,
+      }),
+    );
+  }
 
+  private async _applyPanel(task: TaskCopy, panelCfg: BoardPanelCfg): Promise<void> {
     const newTagIds = rewriteTagIdsForPanel(task.tagIds || [], panelCfg);
 
     const updates: Partial<TaskCopy> = {};
@@ -252,15 +493,12 @@ export class BoardPanelComponent {
       );
     }
 
-    this.store.dispatch(
-      BoardsActions.updatePanelCfgTaskIds({
-        panelId: panelCfg.id,
-        taskIds,
-      }),
-    );
-
-    this._checkToScheduledTask(panelCfg, task.id);
-    this._checkBacklogState(panelCfg, task.id);
+    if (panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled) {
+      this.store.dispatch(
+        TaskSharedActions.unscheduleTask({ id: task.id, isSkipToast: true }),
+      );
+    }
+    await this._checkBacklogState(panelCfg, task.id);
   }
 
   async afterTaskAdd({ taskId, isAddToBottom, isNewTask }: TaskAddEvent): Promise<void> {

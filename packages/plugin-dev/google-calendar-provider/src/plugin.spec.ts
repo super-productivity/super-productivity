@@ -16,6 +16,11 @@ beforeAll(async () => {
 });
 
 describe('Google Calendar Plugin', () => {
+  beforeEach(() => {
+    (globalThis as any).PluginAPI.getOAuthToken.mockReset();
+    (globalThis as any).PluginAPI.getOAuthToken.mockResolvedValue('mock-token');
+  });
+
   afterEach(() => {
     vi.useRealTimers();
   });
@@ -39,6 +44,42 @@ describe('Google Calendar Plugin', () => {
       expect(oauthConfig?.scopes).not.toContain(
         'https://www.googleapis.com/auth/calendar.readonly',
       );
+    });
+
+    it('reads OAuth token with transient provider-specific token key', async () => {
+      const getOAuthToken = (globalThis as any).PluginAPI.getOAuthToken;
+      getOAuthToken.mockResolvedValueOnce('account-token');
+
+      await expect(
+        definition.getHeaders({ __spOAuthTokenKey: 'provider-a' }),
+      ).resolves.toEqual({
+        Authorization: 'Bearer account-token',
+      });
+
+      expect(getOAuthToken).toHaveBeenCalledWith('provider-a');
+    });
+
+    it('does not fall back to the legacy token when a scoped token is missing', async () => {
+      const getOAuthToken = (globalThis as any).PluginAPI.getOAuthToken;
+      getOAuthToken.mockResolvedValueOnce(null);
+
+      await expect(
+        definition.getHeaders({ __spOAuthTokenKey: 'provider-with-cleared-token' }),
+      ).rejects.toThrow('Not authenticated. Please connect your Google account first.');
+
+      expect(getOAuthToken).toHaveBeenCalledOnce();
+      expect(getOAuthToken).toHaveBeenCalledWith('provider-with-cleared-token');
+    });
+
+    it('falls back to legacy default OAuth token when config has no token key', async () => {
+      const getOAuthToken = (globalThis as any).PluginAPI.getOAuthToken;
+      getOAuthToken.mockResolvedValueOnce('legacy-token');
+
+      await expect(definition.getHeaders({})).resolves.toEqual({
+        Authorization: 'Bearer legacy-token',
+      });
+
+      expect(getOAuthToken).toHaveBeenCalledWith();
     });
   });
 

@@ -433,6 +433,75 @@ describe('PlannerTaskComponent', () => {
       scope.remove();
     }));
 
+    for (const action of ['delete', 'unschedule', 'complete'] as const) {
+      it(`focuses the next available add button after ${action} removes the last overdue card`, fakeAsync(() => {
+        config = {
+          ...DEFAULT_GLOBAL_CONFIG,
+          tasks: { ...DEFAULT_GLOBAL_CONFIG.tasks, isConfirmBeforeDelete: false },
+          keyboard: {
+            ...DEFAULT_GLOBAL_CONFIG.keyboard,
+            taskDelete: 'D',
+            taskUnschedule: 'U',
+            taskToggleDone: 'C',
+          },
+        };
+        const task = makeTask({ dueDay: '2026-09-11' });
+        TestBed.overrideProvider(TaskService, {
+          useValue: {
+            ...taskServiceMock,
+            getByIdWithSubTaskData$: () => of({ ...task, subTasks: [] }),
+          },
+        });
+        const root = document.createElement('div');
+        root.innerHTML = `
+          <planner-day data-planner-selection-scope="earlier">
+            <add-task-inline><button data-add-task-btn>Earlier</button></add-task-inline>
+          </planner-day>
+          <planner-day-overdue>
+            <div data-planner-selection-scope="overdue"></div>
+          </planner-day-overdue>
+          <planner-day data-planner-selection-scope="open-form">
+            <add-task-inline><add-task-bar><button>Form control</button></add-task-bar></add-task-inline>
+          </planner-day>
+          <planner-day data-planner-selection-scope="next">
+            <add-task-inline><button data-add-task-btn>Next</button></add-task-inline>
+          </planner-day>`;
+        document.body.appendChild(root);
+        try {
+          const { fixture, component } = create(task, true);
+          const host = fixture.nativeElement as HTMLElement;
+          const overdue = root.querySelector('planner-day-overdue')!;
+          overdue.querySelector('[data-planner-selection-scope]')!.appendChild(host);
+          const nextAdd = root.querySelector<HTMLButtonElement>(
+            '[data-planner-selection-scope="next"] button',
+          )!;
+          const removeCard = (): void => {
+            component.ngOnDestroy();
+            overdue.remove();
+          };
+          taskServiceMock['remove'].and.callFake(removeCard);
+          taskServiceMock.toggleDoneWithAnimation.and.callFake(() =>
+            window.setTimeout(removeCard, 200),
+          );
+          host.focus();
+
+          component.onTaskShortcut(
+            shortcutEvent({ delete: 'd', unschedule: 'u', complete: 'c' }[action]),
+          );
+          if (action === 'unschedule') {
+            expect(storeMock.dispatch).toHaveBeenCalled();
+            removeCard();
+          }
+          tick(200);
+
+          expect(overdue.isConnected).toBeFalse();
+          expect(document.activeElement).toBe(nextAdd);
+        } finally {
+          root.remove();
+        }
+      }));
+    }
+
     it('moves focus while the destroyed card remains connected for its leave animation', fakeAsync(() => {
       config = {
         ...DEFAULT_GLOBAL_CONFIG,
@@ -618,6 +687,9 @@ describe('PlannerTaskComponent', () => {
       const scope = document.createElement('planner-day');
       scope.setAttribute('data-planner-selection-scope', '2026-09-12');
       const add = document.createElement('button');
+      // Mirrors the real template: focus recovery targets the marked collapsed
+      // button, never a button inside the open add-task-bar.
+      add.setAttribute('data-add-task-btn', '');
       const addTask = document.createElement('add-task-inline');
       addTask.appendChild(add);
       scope.appendChild(addTask);
@@ -692,6 +764,42 @@ describe('PlannerTaskComponent', () => {
 
     expect(multiSelectMock.toggle).toHaveBeenCalledWith('t1');
     expect(taskServiceMock.toggleDoneWithAnimation).not.toHaveBeenCalled();
+  });
+
+  it('lets a modifier click on a link open it instead of selecting the card', () => {
+    const { fixture } = create(makeTask(), true);
+    const link = document.createElement('a');
+    link.href = 'https://example.com';
+    fixture.nativeElement.appendChild(link);
+    const event = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: true,
+    });
+
+    // Registered before the blocker below, so it sees exactly what the
+    // component's capture-phase handler did and nothing else.
+    let wasPreventedByComponent: boolean | null = null;
+    link.addEventListener('click', () => {
+      wasPreventedByComponent = event.defaultPrevented;
+    });
+    // A real Ctrl+click on a real href would have the browser act on the
+    // navigation and take the whole Karma run with it, so block the default
+    // once the assertion above has its answer.
+    const blockNavigation = (e: Event): void => e.preventDefault();
+    window.addEventListener('click', blockNavigation);
+    try {
+      link.dispatchEvent(event);
+    } finally {
+      window.removeEventListener('click', blockNavigation);
+    }
+
+    // null would mean the click never even reached the link: the selection
+    // handler runs in the capture phase, so without its link bail-out it
+    // preventDefault's and stopPropagation's the Ctrl+click there, and the
+    // browser never opens the new tab.
+    expect(wasPreventedByComponent).toBeFalse();
+    expect(multiSelectMock.toggle).not.toHaveBeenCalled();
   });
 
   it('preserves Shift selection inside an embedded input', () => {

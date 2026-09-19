@@ -20,6 +20,14 @@
   --mat-tab-header-inactive-label-text-color: var(--text-color-muted);
 }
 
+// Material's default tab tracking is wider than anything else in the app;
+// match the body text so tabs stop reading as a different typeface. The M2
+// typography mixin emits this token on .mat-mdc-tab-header itself, so a
+// body-level value would lose to it — it has to be set on the same element.
+body .mat-mdc-tab-header {
+  --mat-tab-label-text-tracking: var(--letter-spacing-normal);
+}
+
 body.isDarkTheme {
   --calendar-hover-bg: color-mix(in srgb, var(--c-primary) 20%, transparent);
 }

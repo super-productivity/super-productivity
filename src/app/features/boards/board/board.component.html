@@ -38,6 +38,7 @@
     <board-panel
       [panelCfg]="panel"
       (editBoard)="editBoard()"
+      (adjacentPanel)="adjacentPanel(panel.id, $event)"
     ></board-panel>
   }
 }

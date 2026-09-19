@@ -1,28 +1,43 @@
 @use '../../../../styles/_globals.scss' as *;
 
+// These rows sit in a task list, so they follow the same row contract as the
+// other "draws its own box" rows (planner, board, issue-panel items): the box
+// comes from --task-border, the separating edge from --task-row-edge. Hardcoding
+// a border made them read as cards floating in a flat, hairline-separated list.
 :host {
   display: block;
-  margin-bottom: var(--s-half);
+  margin-bottom: var(--task-list-row-gap);
 }
 
+// Box and separating edge sit on the same element on purpose: in the boxed
+// (classic) theme --task-row-edge IS --task-border, so splitting them across
+// :host and this div would draw the top edge twice.
 :host > div {
   display: flex;
   align-items: center;
-  padding-top: var(--s-quarter);
-  padding-bottom: var(--s-quarter);
-  border: 1px solid var(--extra-border-color);
+  padding-top: var(--task-inner-padding-top-bottom);
+  padding-bottom: var(--task-inner-padding-top-bottom);
+  border: var(--task-border);
+  border-top: var(--task-row-edge);
   border-radius: var(--task-border-radius);
-  opacity: 0.9;
+  background: var(--task-c-bg);
   cursor: pointer;
-  min-height: var(--planner-item-height);
+  min-height: var(--task-first-line-min-height);
 
   &:hover {
     border-color: var(--c-primary);
   }
 
-  mat-icon {
+  // Same leading slot as the task rows' done-toggle (--task-icon-size, centered),
+  // so the titles of both row types start on the same vertical line.
+  > mat-icon {
+    flex: 0 0 var(--task-icon-size);
+    width: var(--task-icon-size);
     margin-left: var(--s);
-    margin-right: var(--s);
+    margin-right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     opacity: 0.8;
   }
 }
@@ -51,6 +66,10 @@
   width: 16px;
   height: 16px;
   margin-right: var(--s-quarter);
+}
+
+:host:last-of-type > div {
+  border-bottom: var(--task-row-edge);
 }
 
 :host.isPaused > div {

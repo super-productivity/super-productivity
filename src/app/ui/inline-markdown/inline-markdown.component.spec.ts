@@ -158,6 +158,36 @@ describe('InlineMarkdownComponent', () => {
       expect(view.state.doc.toString()).toBe('- [ ] milk');
     });
 
+    // A collapsed caret must take the "insert one item after this line" path.
+    // Reading only selectionStart from the editor left selectionEnd undefined,
+    // which read as a selection, and applyTaskList's `text.substring(undefined)`
+    // appended the whole note back onto itself — then emitted and synced it.
+    it('inserts a single item without duplicating the note when nothing is selected', async () => {
+      fixture.componentRef.setInput('isShowChecklistToggle', true);
+      await mountLiveEditor('Groceries\nmilk\neggs');
+      spyOn(component.changed, 'emit');
+
+      component.toggleChecklistMode(new Event('click'));
+
+      expect(component.changed.emit).toHaveBeenCalledWith(
+        'Groceries\n- [ ] \nmilk\neggs',
+      );
+    });
+
+    it('converts every selected line when there is a real selection', async () => {
+      fixture.componentRef.setInput('isShowChecklistToggle', true);
+      await mountLiveEditor('Groceries\nmilk\neggs');
+      const view = editorView();
+      view.dispatch({ selection: { anchor: 10, head: 19 } });
+      spyOn(component.changed, 'emit');
+
+      component.toggleChecklistMode(new Event('click'));
+
+      expect(component.changed.emit).toHaveBeenCalledWith(
+        'Groceries\n- [ ] milk\n- [ ] eggs',
+      );
+    });
+
     // Typing must not save: a note is one op per edit session, not per keystroke.
     it("does not commit while typing, and commits on the editor's own change", async () => {
       await mountLiveEditor('before');

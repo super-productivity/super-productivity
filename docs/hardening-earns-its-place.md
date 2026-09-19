@@ -118,6 +118,37 @@ that layer is off; it warns rather than swallowing. It never rethrows: an
 exception escaping `emit('ready')` skips every window-creating listener
 registered after it and exits 333 — no app at all, over a dictionary fetch.
 
+## Rejected guards
+
+Guards measured against real history and turned down. Recorded so they are not
+re-proposed from first principles.
+
+**"Extension surfaces need a dedicated PR" — CI gate, rejected 2026-09.** The
+proposal: fail a PR that changes a persisted model, the sync wire or the plugin
+API alongside anything else, so those changes always arrive alone. Measured over
+the 150 most recent squash-merged PRs on `master` (2026-09, using the surface
+paths in [`feature-review-guide.md`](feature-review-guide.md)): **~14 of 150
+would have failed, and 0 would have passed.** Not one surface change in that
+window was already shaped the way the gate demanded, because these changes
+arrive atomically coupled to their consumers — a plugin-API method with no
+bridge implementation is a lie to plugin authors, and a model field with no
+reader is dead code. Roughly a quarter of the fires were not surface changes at
+all (router query params, a UI banner enum, a dead-code deletion).
+
+The premise did not survive either. The regression the gate was meant to prevent
+— the v18.15.0 boot-to-empty-store incident behind #9124/#9125 — came from
+`3ae2360345` (#8965), a small, focused **10-file** feature PR whose entire
+surface change was one required field. Splitting that field into its own PR
+would have shipped the identical bug; what fixed the class was
+`frozen-state.spec.ts`. PR size was not the signal. A second variant, a
+generated API-surface snapshot, was rejected on cost: prototypes produced ~1,300
+lines of output in which a single new `Task` field lands on 3 lines and a third
+of the file churns when an unrelated union gains a member.
+
+Both variants also shipped with a bypass label designed in from the start, which
+is the tell: a check you build an escape hatch for before writing it is one you
+already expect to be wrong.
+
 ## Related
 
 - [`feature-review-guide.md`](feature-review-guide.md) — does it earn its place

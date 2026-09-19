@@ -1124,10 +1124,37 @@ export class SyncWrapperService {
           });
         }
         return 'HANDLED_ERROR';
-      } else if (error instanceof LocalDataConflictError) {
-        // File-based sync: Local data exists and remote snapshot would overwrite it
-        // Show conflict dialog to let user choose between local and remote data
-        return this._handleLocalDataConflict(error);
+      } else if (
+        error instanceof LocalDataConflictError ||
+        error instanceof UnsupportedMultiEntityConflictError
+      ) {
+        if (error instanceof UnsupportedMultiEntityConflictError) {
+          this._providerManager.setSyncStatus('ERROR');
+          // Ordering matters, exactly like the OperationIntegrityError branch
+          // below: this precise instanceof MUST stay ABOVE the string-heuristic
+          // branches. The diagnostic embeds `entityCount=N`, and a bulk op
+          // covering 504 entities would otherwise match _isTimeoutError's
+          // \b504\b and be swallowed as a gateway timeout — silently, since
+          // that branch stays quiet on automatic syncs.
+          if (!isUserTriggered) {
+            // A background cycle must not steal focus with a modal, so offer
+            // the route to it instead. Deliberately NOT a sticky snack: it
+            // would block later feedback once recovery runs from the toolbar.
+            if (!this._snackService.hasPendingPersistentAction()) {
+              this._snackService.open({
+                msg: T.F.SYNC.S.UNSUPPORTED_MULTI_ENTITY_CONFLICT,
+                type: 'ERROR',
+                actionStr: T.F.SYNC.S.BTN_RESOLVE_CONFLICT,
+                actionFn: () => this.sync(true),
+                translateParams: {
+                  details: escapeHtml(getSyncErrorStr(error)),
+                },
+              });
+            }
+            return 'HANDLED_ERROR';
+          }
+        }
+        return this._handleDataConflict(error);
       } else if (error instanceof WebCryptoNotAvailableError) {
         // WebCrypto (crypto.subtle) is unavailable in insecure contexts
         // (e.g., Android Capacitor serves from http://localhost)
@@ -1282,24 +1309,14 @@ export class SyncWrapperService {
         // rendering is debounced, so opening the generic error here would win
         // the race and silently remove the only recovery action.
         if (!this._snackService.hasPendingPersistentAction()) {
-          if (error instanceof UnsupportedMultiEntityConflictError) {
-            this._snackService.open({
-              msg: T.F.SYNC.S.UNSUPPORTED_MULTI_ENTITY_CONFLICT,
-              type: 'ERROR',
-              translateParams: {
-                details: escapeHtml(errStr),
-              },
-            });
-          } else {
-            this._snackService.open({
-              // msg: T.F.SYNC.S.UNKNOWN_ERROR,
-              msg: errStr,
-              type: 'ERROR',
-              translateParams: {
-                err: errStr,
-              },
-            });
-          }
+          this._snackService.open({
+            // msg: T.F.SYNC.S.UNKNOWN_ERROR,
+            msg: errStr,
+            type: 'ERROR',
+            translateParams: {
+              err: errStr,
+            },
+          });
         }
         return 'HANDLED_ERROR';
       }
@@ -1632,58 +1649,61 @@ export class SyncWrapperService {
   }
 
   /**
-   * Handles LocalDataConflictError by showing a conflict resolution dialog.
-   * This occurs when sync detects local data that would be overwritten by remote data.
-   *
-   * User can choose:
-   * - USE_LOCAL: Upload local data, overwriting remote (uses forceUploadLocalState)
-   * - USE_REMOTE: Download remote data, discarding local (uses forceDownloadRemoteState)
+   * Offers whole-dataset replacement when automatic merging cannot proceed.
+   * Unknown remote metadata keeps the dialog's overwrite confirmation mandatory.
    */
-  private async _handleLocalDataConflict(
-    error: LocalDataConflictError,
+  private async _handleDataConflict(
+    error: LocalDataConflictError | UnsupportedMultiEntityConflictError,
   ): Promise<SyncStatus | 'HANDLED_ERROR'> {
     // Signal that we're waiting for user input (prevents sync timeout)
-    const stopWaiting = this._userInputWaitState.startWaiting('local-data-conflict');
+    const stopWaiting = this._userInputWaitState.startWaiting('data-conflict');
 
     try {
-      // Build ConflictData for the dialog
+      const snapshotConflict =
+        error instanceof LocalDataConflictError ? error : undefined;
+      const unsyncedCount =
+        snapshotConflict?.unsyncedCount ?? (await this._opLogStore.getUnsynced()).length;
       const vcEntry = await this._opLogStore.getVectorClockEntry();
       const localClock = vcEntry?.clock;
       const localLastUpdate = vcEntry?.lastUpdate || Date.now();
 
       const conflictData: ConflictData = {
-        reason: ConflictReason.NoLastSync,
+        reason: snapshotConflict
+          ? ConflictReason.NoLastSync
+          : ConflictReason.BothNewerLastSync,
         remote: {
-          lastUpdate: error.remoteLastModified ?? null,
-          lastUpdateAction: 'Remote data',
+          lastUpdate: snapshotConflict?.remoteLastModified ?? null,
+          // A user whose first encounter is a manual sync never sees the snack,
+          // so surface the reportable diagnostic in the dialog's Additional Info
+          // row instead. Safe to show: the message carries only an allowlisted
+          // action type and integer counts, never user content (rule 9).
+          lastUpdateAction: snapshotConflict ? 'Remote data' : error.message,
           revMap: {},
           crossModelVersion: 1,
-          mainModelData: error.remoteSnapshotState,
-          isFullData: true,
-          vectorClock: error.remoteVectorClock,
+          mainModelData: snapshotConflict?.remoteSnapshotState ?? {},
+          isFullData: !!snapshotConflict,
+          vectorClock: snapshotConflict?.remoteVectorClock,
         },
         local: {
           lastUpdate: localLastUpdate,
-          lastUpdateAction: `${error.unsyncedCount} local changes pending`,
+          lastUpdateAction: `${unsyncedCount} local changes pending`,
           revMap: {},
           crossModelVersion: 1,
-          // Op-log (NoLastSync) conflicts do not carry a last-synced timestamp, so
-          // this is always null here; the dialog renders it as "Never"/"-".
+          // Op-log errors lack a last-synced timestamp; the dialog shows Never.
           lastSyncedUpdate: null,
           metaRev: null,
           vectorClock: localClock,
-          lastSyncedVectorClock: error.lastSyncedVectorClock ?? null,
+          lastSyncedVectorClock: snapshotConflict?.lastSyncedVectorClock ?? null,
         },
-        localUnsyncedOpsCount: error.unsyncedCount,
+        localUnsyncedOpsCount: unsyncedCount,
       };
 
-      SyncLog.log(
-        `SyncWrapperService: Showing conflict dialog for ${error.unsyncedCount} local changes vs remote snapshot`,
-      );
-
+      SyncLog.log('SyncWrapperService: Opening data conflict dialog', {
+        errorType: error.name,
+        unsyncedCount,
+      });
       const resolution = await firstValueFrom(this._openConflictDialog$(conflictData));
 
-      // Get sync provider for the resolution operation
       const rawProvider = this._providerManager.getActiveProvider();
       const syncCapableProvider =
         await this._wrappedProvider.getOperationSyncCapable(rawProvider);
@@ -1696,7 +1716,6 @@ export class SyncWrapperService {
       }
 
       if (resolution === 'USE_LOCAL') {
-        // User chose to keep local data and upload it to remote
         SyncLog.log(
           'SyncWrapperService: User chose USE_LOCAL - uploading local state to overwrite remote',
         );
@@ -1709,8 +1728,7 @@ export class SyncWrapperService {
         this._providerManager.setSyncStatus('IN_SYNC');
         return SyncStatus.InSync;
       } else if (resolution === 'USE_REMOTE') {
-        // User chose to discard local data and download remote.
-        // Reset latch — read after forceDownloadRemoteState returns. (#7330)
+        // Read the validation latch after the forced download (#7330).
         SyncLog.log(
           'SyncWrapperService: User chose USE_REMOTE - downloading remote state, discarding local',
         );
@@ -1726,8 +1744,6 @@ export class SyncWrapperService {
         this._providerManager.setSyncStatus('IN_SYNC');
         return SyncStatus.InSync;
       } else {
-        // User cancelled the dialog
-        SyncLog.log('SyncWrapperService: User cancelled first sync conflict dialog');
         this._snackService.open({
           msg: T.F.SYNC.S.LOCAL_DATA_REPLACE_CANCELLED,
         });
@@ -1765,7 +1781,6 @@ export class SyncWrapperService {
         });
         return 'HANDLED_ERROR';
       }
-      // Error during conflict resolution (forceUpload or forceDownload failed)
       SyncLog.err(
         'SyncWrapperService: Error during conflict resolution:',
         resolutionError,
@@ -2027,10 +2042,8 @@ export class SyncWrapperService {
       disableClose: true,
       data: conflictData,
     });
-    // disableClose blocks ESC/backdrop, but a programmatic close (iOS app
-    // lifecycle, navigation, or re-entry calling close()) emits `undefined`.
-    // Forward it as-is so _handleLocalDataConflict treats it as cancellation;
-    // filtering it would leave firstValueFrom() to throw EmptyError (issue #7339).
+    // Programmatic close emits undefined: forward cancellation instead of
+    // making firstValueFrom throw EmptyError (#7339).
     return this.lastConflictDialog.afterClosed();
   }
 

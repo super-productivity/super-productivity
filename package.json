@@ -109,7 +109,7 @@
     "int:watch": "node ./tools/extract-i18n-watch.js",
     "lint": "npm run lint:ts && npm run lint:scss && npm run lint:css-vars && npm run test:lint-rules && npm run test:tools && npm run test:mac-icon",
     "test:lint-rules": "node eslint-local-rules/run-specs.js",
-    "test:tools": "node --test tools/theme-assets.test.js tools/check-css-vars.test.js tools/verify-linux-wm-class.test.js tools/verify-windows-artifact-contract.test.js tools/strip-service-worker-assets.test.js",
+    "test:tools": "node --test tools/theme-assets.test.js tools/check-css-vars.test.js tools/verify-linux-wm-class.test.js tools/verify-windows-artifact-contract.test.js tools/strip-service-worker-assets.test.js tools/verify-ios-quick-actions.test.js",
     "test:mac-icon": "node --test tools/verify-mac-icon.test.js",
     "lint:ts": "ng lint",
     "lint:scss": "stylelint \"**/*.scss\" \"src/assets/themes/*.css\" -- --custom-formatter @csstools/stylelint-formatter-github",

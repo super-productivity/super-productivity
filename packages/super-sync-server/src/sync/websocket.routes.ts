@@ -6,14 +6,16 @@ import { isValidClientId } from './sync.const';
 
 export const WS_CONNECTION_RATE_LIMIT_MAX = 120;
 export const WS_CONNECTION_RATE_LIMIT_WINDOW = '1 minute';
+export const WS_IP_CONNECTION_RATE_LIMIT_MAX = 10_000;
 
 /**
  * Rate-limit key for the WS upgrade endpoint. Keyed by (ip, clientId) instead
  * of ip alone so a single hammering client (pre-18.6.0 reconnect-on-close
  * loop) exhausts only its own quota and does not poison other clients sharing
- * the same NAT. Per-IP amplification is bounded by the server-wide 500/15min
- * cap registered in server.ts. Falls back to ip when clientId is missing or
- * invalid (route handler rejects those with 4001).
+ * the same NAT. A separate 10,000/15min per-IP limiter bounds client-ID rotation
+ * while allowing normal reconnect backoff for many clients behind one NAT.
+ * Route-level limits override the global configuration. Falls back to ip when
+ * clientId is missing or invalid (route handler rejects those with 4001).
  *
  * Exported for direct unit testing — the inline keyGenerator option on
  * @fastify/rate-limit is otherwise unreachable from tests.
@@ -24,10 +26,32 @@ export const wsRateLimitKeyGenerator = (req: FastifyRequest): string => {
 };
 
 export const wsRoutes = async (fastify: FastifyInstance): Promise<void> => {
-  fastify.get(
+  // Test-mode servers deliberately do not register the rate-limit plugin.
+  // createRateLimit is independent of the plugin's once-per-request hook flag,
+  // so the aggregate check and the route's per-client check both run.
+  const checkIpLimit = fastify.hasDecorator('createRateLimit')
+    ? fastify.createRateLimit({
+        max: WS_IP_CONNECTION_RATE_LIMIT_MAX,
+        timeWindow: '15 minutes',
+        keyGenerator: (req) => req.ip,
+      })
+    : undefined;
+  fastify.get<{ Querystring: { token?: string; clientId?: string } }>(
     '/ws',
     {
       websocket: true,
+      onRequest: checkIpLimit
+        ? async (req, reply) => {
+            const limit = await checkIpLimit(req);
+            if (!limit.isAllowed && limit.isExceeded) {
+              return reply.header('Retry-After', limit.ttlInSeconds).code(429).send({
+                statusCode: 429,
+                error: 'Too Many Requests',
+                message: 'WebSocket connection rate limit exceeded',
+              });
+            }
+          }
+        : undefined,
       config: {
         rateLimit: {
           max: WS_CONNECTION_RATE_LIMIT_MAX,

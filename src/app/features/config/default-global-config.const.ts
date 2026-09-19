@@ -59,7 +59,10 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     startOfNextDayTime: '00:00',
     isDisableAnimations: false,
     isVerticalActionBar: false,
-    isDisableCelebration: false,
+    // Confetti is attention-grabbing, so it ships off and stays opt-in
+    // (product principle: less noise, more depth). Existing installs keep
+    // their persisted value.
+    isDisableCelebration: true,
     // NOTE: isUseCustomWindowTitleBar is intentionally NOT defaulted here. A
     // persisted default would be pushed to Electron on every launch and override
     // a legacy `isUseObsidianStyleHeader` choice. Its effective default is resolved

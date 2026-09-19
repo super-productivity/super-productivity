@@ -521,6 +521,36 @@ test('deep task hover and running indicators do not override stronger states', (
   }
 });
 
+// Observed 2026-09: a multi-selected row was hovered and the theme's hover rule
+// (higher specificity than the component's) replaced the multi-select tint, so the
+// row looked like any other hovered row. The component's own hover rule carried a
+// :not(.isMultiSelected) guard; the per-theme copies of it did not.
+// Velvet is the documented opt-out: it paints one resting surface across every
+// state on purpose ("outlines mark those states") rather than tinting per state.
+test('theme task-row hover rules do not repaint a multi-selected row', () => {
+  const HOVER_RULE = /([^{}]*:hover[^{}]*)\{([^{}]*)\}/g;
+  const OPT_OUT = new Set(['velvet.css']);
+  let checked = 0;
+
+  for (const file of themeFiles) {
+    if (OPT_OUT.has(file)) continue;
+    const css = withoutComments(readTheme(file));
+    for (const [, selector, body] of css.matchAll(HOVER_RULE)) {
+      const paintsTaskBox = /\btask\b/.test(selector) && /\.box\b/.test(selector);
+      if (!paintsTaskBox || !/background(?:-color)?\s*:/.test(body)) continue;
+      checked++;
+      assert.match(
+        selector,
+        /:not\(\.isMultiSelected\)/,
+        `${file}: a hover rule repaints the task box, so it must exclude ` +
+          `.isMultiSelected or it erases the multi-selection tint`,
+      );
+    }
+  }
+
+  assert.ok(checked > 0, 'no theme hover rule was inspected — the matcher is stale');
+});
+
 test('Velvet task hosts use their component focus border without a second outline', () => {
   const css = withoutComments(readTheme('velvet.css'));
   assert.match(css, /task-detail-item:focus-visible/);
