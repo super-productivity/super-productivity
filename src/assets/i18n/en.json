@@ -1905,6 +1905,11 @@
         "MOVE_TO_OTHER_PROJECT": "Move to project",
         "MOVE_TO_REGULAR": "Move to regular list",
         "MOVE_TO_TOP": "Move to top",
+        "PRIORITY": "Priority",
+        "PRIORITY_HIGH": "High",
+        "PRIORITY_LOW": "Low",
+        "PRIORITY_MEDIUM": "Medium",
+        "PRIORITY_NONE": "None",
         "OPEN_ATTACH": "Attach file or link",
         "OPEN_ISSUE": "Open in browser",
         "OPEN_TIME": "Time tracking",
@@ -2067,6 +2072,14 @@
             "PARTIAL": "Moved {{count}} of {{total}} tasks to the regular list (subtasks follow their parent)"
           },
           "NOTHING_TO_DO": "Nothing to change for the selected tasks",
+          "PRIORITY_CLEARED": {
+            "ONE": "Cleared the priority of {{count}} task",
+            "OTHER": "Cleared the priority of {{count}} tasks"
+          },
+          "PRIORITY_SET": {
+            "ONE": "Set the priority of {{count}} task to {{priority}}",
+            "OTHER": "Set the priority of {{count}} tasks to {{priority}}"
+          },
           "SCHEDULED": {
             "ONE": "Scheduled {{count}} task for {{date}}",
             "OTHER": "Scheduled {{count}} tasks for {{date}}"
@@ -2260,6 +2273,7 @@
         "FILTER_DEFAULT": "No Filter",
         "FILTER_ESTIMATED_TIME": "Estimated Time",
         "FILTER_NOT_SPECIFIED": "Not specified",
+        "FILTER_PRIORITY": "Priority",
         "FILTER_PROJECT": "Project",
         "FILTER_SCHEDULED_DATE": "Planned Date",
         "FILTER_TAG": "Tag",
@@ -2284,6 +2298,7 @@
         "SORT_DEADLINE": "Deadline",
         "SORT_DEFAULT": "Default",
         "SORT_NAME": "Name",
+        "SORT_PRIORITY": "Priority",
         "SORT_SCHEDULED_DATE": "Planned Date",
         "TIME_1HOUR": "> 1 Hour",
         "TIME_2HOUR": "> 2 Hours",
