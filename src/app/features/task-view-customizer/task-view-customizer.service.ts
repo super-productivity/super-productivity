@@ -299,6 +299,12 @@ export class TaskViewCustomizerService {
             : 0;
           return spent >= +value;
         });
+      case FILTER_OPTION_TYPE.priority:
+        if (value === FILTER_COMMON.NOT_SPECIFIED) {
+          return tasks.filter((t) => !t.priority);
+        }
+
+        return tasks.filter((t) => t.priority === value);
       default:
         return tasks;
     }

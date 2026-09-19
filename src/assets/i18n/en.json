@@ -2071,6 +2071,14 @@
             "PARTIAL": "Moved {{count}} of {{total}} tasks to the regular list (subtasks follow their parent)"
           },
           "NOTHING_TO_DO": "Nothing to change for the selected tasks",
+          "PRIORITY_CLEARED": {
+            "ONE": "Cleared the priority of {{count}} task",
+            "OTHER": "Cleared the priority of {{count}} tasks"
+          },
+          "PRIORITY_SET": {
+            "ONE": "Set the priority of {{count}} task to {{priority}}",
+            "OTHER": "Set the priority of {{count}} tasks to {{priority}}"
+          },
           "SCHEDULED": {
             "ONE": "Scheduled {{count}} task for {{date}}",
             "OTHER": "Scheduled {{count}} tasks for {{date}}"
@@ -2264,6 +2272,7 @@
         "FILTER_DEFAULT": "No Filter",
         "FILTER_ESTIMATED_TIME": "Estimated Time",
         "FILTER_NOT_SPECIFIED": "Not specified",
+        "FILTER_PRIORITY": "Priority",
         "FILTER_PROJECT": "Project",
         "FILTER_SCHEDULED_DATE": "Planned Date",
         "FILTER_TAG": "Tag",

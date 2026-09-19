@@ -20,6 +20,7 @@ import {
   DEFAULT_OPTIONS,
   FILTER_COMMON,
   FILTER_OPTION_TYPE,
+  FILTER_PRIORITY,
   FILTER_SCHEDULE,
   FilterOption,
   GROUP_OPTION_TYPE,
@@ -261,6 +262,42 @@ describe('TaskViewCustomizerService', () => {
       FILTER_COMMON.NOT_SPECIFIED,
     );
     expect(filtered.length).toBe(1);
+  });
+
+  it('should filter by priority', () => {
+    const tasks: TaskWithSubTasks[] = [
+      { ...mockTasks[0], id: 'high', priority: 'high' },
+      { ...mockTasks[1], id: 'medium', priority: 'medium' },
+      { ...mockTasks[2], id: 'high-2', priority: 'high' },
+      { ...mockTasks[3], id: 'none' },
+    ];
+
+    const filtered = service['applyFilter'](
+      tasks,
+      FILTER_OPTION_TYPE.priority,
+      FILTER_PRIORITY.high,
+    );
+
+    expect(filtered.map((task) => task.id)).toEqual(['high', 'high-2']);
+  });
+
+  it('should filter by NOT_SPECIFIED priority (no priority)', () => {
+    const tasks: TaskWithSubTasks[] = [
+      { ...mockTasks[0], id: 'undefined-priority' },
+      { ...mockTasks[1], id: 'null-priority', priority: null },
+      { ...mockTasks[2], id: 'low', priority: 'low' },
+    ];
+
+    const filtered = service['applyFilter'](
+      tasks,
+      FILTER_OPTION_TYPE.priority,
+      FILTER_COMMON.NOT_SPECIFIED,
+    );
+
+    expect(filtered.map((task) => task.id)).toEqual([
+      'undefined-priority',
+      'null-priority',
+    ]);
   });
 
   it('should sort by name', () => {
