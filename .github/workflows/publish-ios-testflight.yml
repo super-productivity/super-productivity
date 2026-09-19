@@ -213,21 +213,33 @@ jobs:
             test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$EXTENSION_PLIST")" = "$EXPECTED_BUILD"
           fi
 
-          # Reject any .appex directly under App.app/PlugIns that is not the one
+          WIDGET_PLIST="$ARCHIVE/Products/Applications/App.app/PlugIns/SupWidget.appex/Info.plist"
+          if [ -f "$WIDGET_PLIST" ]; then
+            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$WIDGET_PLIST")" = com.super-productivity.app.widget
+            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$WIDGET_PLIST")" = "$EXPECTED_VERSION"
+            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$WIDGET_PLIST")" = "$EXPECTED_BUILD"
+          fi
+
+          # Reject any .appex directly under App.app/PlugIns that is not one
           # ExportOptions.plist maps a profile for. Deliberately not recursive and
           # not covering App.app/Extensions or Watch apps: no observed instance.
-          # Observed instance: PR #8950 adds a SupWidget.appex, which would pass
-          # every other check here, burn the approval gate, install the signing
-          # certificate, and only then fail at `xcodebuild -exportArchive`.
+          # The original observed instance was PR #8950's SupWidget.appex, which
+          # passed every other check here, would burn the approval gate, install
+          # the signing certificate, and only then fail at
+          # `xcodebuild -exportArchive`. That extension is now allowlisted and
+          # profile-mapped below; the rule stays for the next unmapped one.
           PLUGINS_DIR="$ARCHIVE/Products/Applications/App.app/PlugIns"
           if [ -d "$PLUGINS_DIR" ]; then
             for appex in "$PLUGINS_DIR"/*.appex; do
               [ -e "$appex" ] || continue
               appex_name=$(basename "$appex")
-              if [ "$appex_name" != ShareExtension.appex ]; then
-                echo "::error::Unsupported app extension in archive: $appex_name"
-                exit 1
-              fi
+              case "$appex_name" in
+                ShareExtension.appex | SupWidget.appex) ;;
+                *)
+                  echo "::error::Unsupported app extension in archive: $appex_name"
+                  exit 1
+                  ;;
+              esac
             done
           fi
 
@@ -300,6 +312,7 @@ jobs:
           mac_certs_password: ${{ secrets.mac_certs_password }}
           ios_provision_profile: ${{ secrets.IOS_PROVISION_PROFILE }}
           ios_share_provision_profile: ${{ secrets.IOS_SHARE_PROVISION_PROFILE }}
+          ios_widget_provision_profile: ${{ secrets.IOS_WIDGET_PROVISION_PROFILE }}
 
       - name: Create ExportOptions.plist
         run: |
@@ -333,6 +346,17 @@ jobs:
             fi
             /usr/libexec/PlistBuddy -c \
               "Add :provisioningProfiles:com.super-productivity.app.ShareExtension string $SHARE_PROVISIONING_PROFILE_UUID" \
+              "$RUNNER_TEMP/ExportOptions.plist"
+          fi
+
+          WIDGET_PLIST="$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app/PlugIns/SupWidget.appex/Info.plist"
+          if [ -f "$WIDGET_PLIST" ]; then
+            if [ -z "${WIDGET_PROVISIONING_PROFILE_UUID:-}" ]; then
+              echo "::error::SupWidget requires the IOS_WIDGET_PROVISION_PROFILE secret (an App Store profile for com.super-productivity.app.widget) - see ios/App/SupWidget/README.md"
+              exit 1
+            fi
+            /usr/libexec/PlistBuddy -c \
+              "Add :provisioningProfiles:com.super-productivity.app.widget string $WIDGET_PROVISIONING_PROFILE_UUID" \
               "$RUNNER_TEMP/ExportOptions.plist"
           fi
 

@@ -16,8 +16,13 @@ plan changes the pipeline's design. What is missing is purely Apple-side
 identifier and profile setup, because #10033 introduces a **second signable
 bundle** and a **shared container**.
 
-Out of scope: #8950 (WidgetKit) needs a third bundle ID and profile plus a
-workflow change, and is explicitly rejected by the archive validation today.
+Out of scope: #8950 (WidgetKit) needs a third bundle ID
+(`com.super-productivity.app.widget`) and its own profile. As of 2026-09-19 that
+PR carries the workflow side itself — the widget profile input on
+`setup-ios-signing`, the export-options entry, and the `SupWidget.appex`
+allowlist entry in `validate` — so the two PRs now differ only in which App ID
+and secret they need. Steps 1, 2 and 4 below are shared work: do them once.
+
 Also out of scope: internal `master` betas, covered by
 [`2026-07-14-ios-testflight-master-builds.md`](2026-07-14-ios-testflight-master-builds.md).
 
