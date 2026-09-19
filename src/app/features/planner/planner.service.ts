@@ -142,28 +142,6 @@ export class PlannerService {
   //   // make this more performant by sharing stream
   //   .pipe(shareReplay(1));
 
-  /**
-   * Planner days for the next `count` logical days starting today, built by the
-   * same selector as `days$`, so a day looks and orders the same in every view.
-   * No load-more state: the Week page shows a fixed window.
-   */
-  daysFor$(count: number): Observable<PlannerDay[]> {
-    const dayDates$ = combineLatest([
-      this._globalTrackingIntervalService.todayDateStr$,
-      this.includedWeekDays$,
-    ]).pipe(
-      map(([, includedWeekDays]) =>
-        buildDayWindow(
-          this._dateService.getLogicalTodayDate(),
-          count,
-          includedWeekDays,
-          (d) => this._dateService.todayStr(d),
-        ),
-      ),
-    );
-    return this._selectPlannerDaysFor$(dayDates$);
-  }
-
   getDayOnce$(dayStr: string): Observable<PlannerDay | undefined> {
     return this._selectPlannerDaysFor$(of([dayStr])).pipe(
       map((days) => days.find((d) => d.dayDate === dayStr)),

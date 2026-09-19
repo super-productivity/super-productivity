@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { PlannerService } from './planner.service';
 import { DateService } from '../../core/date/date.service';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { of, BehaviorSubject, firstValueFrom, ReplaySubject } from 'rxjs';
+import { of, BehaviorSubject, ReplaySubject } from 'rxjs';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
 import {
@@ -592,25 +592,6 @@ describe('PlannerService', () => {
         expect(days[2]).toBe(getDbDateStr(monday));
         done();
       });
-    });
-  });
-
-  describe('daysFor$', () => {
-    it('should emit a fixed window of planner days starting on the logical today', async () => {
-      jasmine.clock().install();
-      jasmine.clock().mockDate(new Date(2026, 0, 14, 12, 0, 0));
-
-      const days = await firstValueFrom(service.daysFor$(7).pipe(first()));
-
-      expect(days.map((day) => day.dayDate)).toEqual([
-        '2026-01-14',
-        '2026-01-15',
-        '2026-01-16',
-        '2026-01-17',
-        '2026-01-18',
-        '2026-01-19',
-        '2026-01-20',
-      ]);
     });
   });
 

@@ -67,7 +67,6 @@
 - [[4.04-Schedule-View]]
 - [[4.12-Scheduled-Tasks]]
 - [[4.13-Repeating-Tasks]]
-- [[4.25-Week-View]]
 - [[4.08-Time-Estimates]]
 
 ### Doing

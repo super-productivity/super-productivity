@@ -250,6 +250,7 @@ export class MagicNavConfigService {
         icon: 'list',
         route: '/scheduled-list',
       },
+
       // Help Menu (rendered as mat-menu)
       // Donation links are disabled on native iOS and every macOS desktop build
       // to keep App Store review behavior deterministic (Guideline 3.1.1).
@@ -380,14 +381,6 @@ export class MagicNavConfigService {
         workContext: mainContext,
         workContextType: WorkContextType.TAG,
         defaultIcon: 'today',
-      });
-
-      items.push({
-        type: 'route',
-        id: 'week',
-        label: T.MH.WEEK,
-        icon: 'view_week',
-        route: '/week',
       });
     }
 
