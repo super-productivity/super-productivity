@@ -35,6 +35,7 @@ jobs:
           mac_certs_password: ${{ secrets.mac_certs_password }}
           ios_provision_profile: ${{ secrets.IOS_PROVISION_PROFILE }}
           ios_share_provision_profile: ${{ secrets.IOS_SHARE_PROVISION_PROFILE }}
+          ios_widget_provision_profile: ${{ secrets.IOS_WIDGET_PROVISION_PROFILE }}
 
       - name: Get npm cache directory
         id: npm-cache-dir
@@ -130,6 +131,19 @@ jobs:
             fi
             /usr/libexec/PlistBuddy -c \
               "Add :provisioningProfiles:com.super-productivity.app.ShareExtension string $SHARE_PROVISIONING_PROFILE_UUID" \
+              "$RUNNER_TEMP/ExportOptions.plist"
+          fi
+
+          if [ -f ios/App/SupWidget/Info.plist ]; then
+            if [ -z "${WIDGET_PROVISIONING_PROFILE_UUID:-}" ]; then
+              echo "ERROR: SupWidget target requires the IOS_WIDGET_PROVISION_PROFILE secret"
+              echo "(an App Store profile for com.super-productivity.app.widget; the app"
+              echo "profile must also carry the App Group). Setup steps:"
+              echo "ios/App/SupWidget/README.md"
+              exit 1
+            fi
+            /usr/libexec/PlistBuddy -c \
+              "Add :provisioningProfiles:com.super-productivity.app.widget string $WIDGET_PROVISIONING_PROFILE_UUID" \
               "$RUNNER_TEMP/ExportOptions.plist"
           fi
 

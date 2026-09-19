@@ -6,6 +6,7 @@ import {
   ipcMain,
   Menu,
   nativeTheme,
+  screen,
   shell,
 } from 'electron';
 import { errorHandlerWithFrontendInform } from './error-handler-with-frontend-inform';
@@ -35,10 +36,21 @@ import {
   isUserUnmaximize,
   setWasMaximizedBeforeHide,
 } from './window-maximized-state';
+import {
+  clampBoundsToDisplay,
+  initRestoreBounds,
+  isSampleableBounds,
+  parseStoredBounds,
+  setRestoreBounds,
+} from './window-restore-bounds';
 import { markGpuStartupSuccess } from './gpu-startup-guard';
 import { isAppOriginUrl } from './navigation-guard';
 import { assertSecureWebPreferences } from './web-preferences-guard';
 import { applyJiraImageAuth } from './jira-image-auth';
+
+// Long enough to outlast a resize or move gesture, so a drag records one
+// sample rather than one per frame.
+const BOUNDS_SAMPLE_DEBOUNCE_MS = 250;
 
 let mainWin: BrowserWindow;
 
@@ -333,6 +345,34 @@ export const createWindow = async ({
       ? mainWindowState.isMaximized === true
       : persistedWasMaximized === true;
   initWasMaximizedBeforeHide(wasMaximized);
+
+  // #10058: the library gets the un-maximized geometry wrong the same two ways
+  // it gets the flag wrong, so our own copy owns it. Applied before the
+  // maximize below, so un-maximizing lands on these bounds and not on the
+  // full-screen ones the library may have recorded as the restore bounds.
+  const persistedBounds = parseStoredBounds(
+    simpleStore[SimpleStoreKey.WINDOW_RESTORE_BOUNDS],
+  );
+  // Clamp rather than discard. The library resets an overhanging window to
+  // the default size; nudging it onto the nearest display keeps the size the
+  // user actually chose. Tracked as the clamped value too: seeding the raw one
+  // leaves setRestoreBounds() deduping against geometry the window never had,
+  // so the correction would be re-applied on every launch instead of sticking.
+  const restoreBounds = persistedBounds
+    ? clampBoundsToDisplay(
+        persistedBounds,
+        screen.getDisplayMatching(persistedBounds).workArea,
+      )
+    : null;
+  initRestoreBounds(restoreBounds);
+  // manage() above restores full screen (electron-window-state `config.fullScreen`
+  // defaults true), and a full-screen window reports isMaximized() === false, so
+  // this has to exclude it the same way isSampleableBounds() does. The persisted
+  // flag rather than the live getter, because setFullScreen() is async on macOS.
+  if (restoreBounds && !mainWin.isMaximized() && !mainWindowState.isFullScreen) {
+    mainWin.setBounds(restoreBounds);
+  }
+
   if (wasMaximized && !mainWin.isMaximized()) {
     mainWin.maximize();
   }
@@ -584,6 +624,36 @@ function initWinEventListeners(app: Electron.App): void {
   mainWin.on('hide', () => {
     showTaskWidget();
   });
+
+  // #10058: keep our own copy of the un-maximized geometry. Debounced because
+  // resize and move fire continuously while the user drags; only the settled
+  // value matters, and a sample lost to a crash leaves the previous one in place.
+  let boundsSampleTimeout: NodeJS.Timeout | undefined;
+  const sampleRestoreBounds = (): void => {
+    clearTimeout(boundsSampleTimeout);
+    boundsSampleTimeout = setTimeout(() => {
+      // 'closed' nulls mainWin, and a timer armed by the last resize/move can
+      // still be pending when it fires.
+      if (!mainWin || mainWin.isDestroyed()) {
+        return;
+      }
+      if (
+        !isSampleableBounds({
+          isVisible: mainWin.isVisible(),
+          isMinimized: mainWin.isMinimized(),
+          isMaximized: mainWin.isMaximized(),
+          isFullScreen: mainWin.isFullScreen(),
+        })
+      ) {
+        return;
+      }
+      setRestoreBounds(mainWin.getBounds());
+    }, BOUNDS_SAMPLE_DEBOUNCE_MS);
+  };
+  mainWin.on('resize', sampleRestoreBounds);
+  mainWin.on('move', sampleRestoreBounds);
+  // A pending sample would otherwise hold the event loop open past the close.
+  mainWin.on('closed', () => clearTimeout(boundsSampleTimeout));
 
   // Handle maximize and unmaximize events to change wasMaximizedBeforeHide flag accordingly
   mainWin.on('maximize', () => {
