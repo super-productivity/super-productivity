@@ -27,6 +27,7 @@ jobs:
       requested: ${{ steps.request.outputs.requested }}
       pr_number: ${{ steps.source.outputs.pr_number }}
       head_sha: ${{ steps.source.outputs.head_sha }}
+      pr_title: ${{ steps.source.outputs.pr_title }}
 
     steps:
       - name: Check out trusted publisher code
@@ -113,8 +114,14 @@ jobs:
              .run_number == $run_number and .run_attempt == $run_attempt' \
             "$RUNNER_TEMP/request/metadata.json" > /dev/null
 
+          # Strip newlines and cap the length: the title reaches testers as the
+          # TestFlight "What to Test" text, and an unbounded value written to
+          # GITHUB_OUTPUT could forge additional outputs.
+          PR_TITLE=$(jq -r '.title' <<< "$PR_JSON" | tr -d '\r\n' | cut -c1-200)
+
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "pr_title=$PR_TITLE" >> "$GITHUB_OUTPUT"
 
   validate:
     needs: discover
@@ -381,6 +388,7 @@ jobs:
           TESTFLIGHT_GROUP: ${{ vars.TESTFLIGHT_GROUP }}
           PR_NUMBER: ${{ needs.discover.outputs.pr_number }}
           HEAD_SHA: ${{ needs.discover.outputs.head_sha }}
+          PR_TITLE: ${{ needs.discover.outputs.pr_title }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -390,7 +398,12 @@ jobs:
             exit 1
           fi
           export IPA_PATH="${ipas[0]}"
-          export CHANGELOG="Test build from PR #$PR_NUMBER (${HEAD_SHA:0:7})"
+          # Testers see this verbatim in TestFlight; name the feature, not just the PR.
+          if [ -n "${PR_TITLE:-}" ]; then
+            export CHANGELOG="PR #$PR_NUMBER - $PR_TITLE (${HEAD_SHA:0:7})"
+          else
+            export CHANGELOG="Test build from PR #$PR_NUMBER (${HEAD_SHA:0:7})"
+          fi
           bundle exec fastlane ios testflight
 
   report:
@@ -410,6 +423,7 @@ jobs:
           REPO: ${{ github.repository }}
           EVENT_PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
           VALIDATED_PR_NUMBER: ${{ needs.discover.outputs.pr_number }}
+          PR_TITLE: ${{ needs.discover.outputs.pr_title }}
           HEAD_SHA: ${{ github.event.workflow_run.pull_requests[0].head.sha }}
           SOURCE_RESULT: ${{ github.event.workflow_run.conclusion }}
           DISCOVER_RESULT: ${{ needs.discover.result }}
@@ -440,7 +454,11 @@ jobs:
           fi
 
           if [ "$PUBLISH_RESULT" = success ]; then
-            status_line="TestFlight build for \`${HEAD_SHA:0:7}\` uploaded."
+            if [ -n "${PR_TITLE:-}" ]; then
+              status_line="TestFlight build for \`${HEAD_SHA:0:7}\` uploaded: $PR_TITLE"
+            else
+              status_line="TestFlight build for \`${HEAD_SHA:0:7}\` uploaded."
+            fi
             link_line="Join the beta: $PUBLIC_LINK"
           elif [ "$SOURCE_RESULT" != success ]; then
             status_line="Unsigned iOS build for \`${HEAD_SHA:0:7}\` failed."
