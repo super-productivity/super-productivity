@@ -52,8 +52,12 @@ export const parseImageDimensionsFromTitle = (
 export const preprocessMarkdown = (markdown: string): string => {
   // Match: ![alt](url =WIDTHxHEIGHT) or ![alt](url =WIDTHx) or ![alt](url =xHEIGHT)
   // Capture groups: 1=alt, 2=url, 3=width, 4=height
+  // The `\s*` right after `\(` keeps this in sync with SIZED_IMAGE_RE in
+  // live-markdown-ranges.ts, which already tolerates a leading space before the
+  // URL — without it, `![a]( u =10x20)` parsed differently depending on which
+  // renderer was on screen (#10153).
   return markdown.replace(
-    /!\[([^\]]*)\]\(([^\s)]+)\s+=(\d*)x(\d*)\)/g,
+    /!\[([^\]]*)\]\(\s*([^\s)]+)\s+=(\d*)x(\d*)\)/g,
     (match, alt, url, width, height) => {
       // Create title attribute with width|height format
       const dimensions = `${width || ''}|${height || ''}`;
