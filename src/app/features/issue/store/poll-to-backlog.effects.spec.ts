@@ -12,6 +12,7 @@ import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { JIRA_TYPE } from '../issue.const';
 import { IssueProvider } from '../issue.model';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 
 describe('PollToBacklogEffects', () => {
   let effects: PollToBacklogEffects;
@@ -173,6 +174,58 @@ describe('PollToBacklogEffects', () => {
   });
 
   describe('pollNewIssuesToBacklogAlways$', () => {
+    it('should start polling when Linear registers after initial sync', fakeAsync(() => {
+      const pluginRegistry = TestBed.inject(PluginIssueProviderRegistryService);
+      const provider = createMockIssueProvider({
+        id: 'linear-1',
+        issueProviderKey: 'LINEAR',
+        pollingMode: 'always',
+      });
+
+      issueServiceSpy.getPollInterval.and.callFake((key) =>
+        pluginRegistry.getPollIntervalMs(key),
+      );
+      store.overrideSelector(selectEnabledIssueProviders, [provider]);
+      store.refreshState();
+
+      const subscription = effects.pollNewIssuesToBacklogAlways$.subscribe();
+
+      tick(300000);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).not.toHaveBeenCalled();
+
+      pluginRegistry.register({
+        pluginId: 'linear-issue-provider',
+        issueProviderKey: 'LINEAR',
+        name: 'Linear',
+        humanReadableName: 'Linear',
+        icon: 'linear',
+        pollIntervalMs: 300000,
+        issueStrings: { singular: 'Issue', plural: 'Issues' },
+        definition: {
+          configFields: [],
+          getHeaders: () => ({}),
+          searchIssues: () => Promise.resolve([]),
+          getById: () => Promise.resolve({ id: '1', title: '', body: '', url: '' }),
+          getIssueLink: () => '',
+          issueDisplay: [],
+        },
+      });
+
+      tick(10001);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).toHaveBeenCalledWith('LINEAR', 'linear-1', true);
+
+      tick(300000);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).toHaveBeenCalledTimes(2);
+
+      subscription.unsubscribe();
+    }));
+
     it('should poll providers with pollingMode always after sync without context switch', fakeAsync(() => {
       const provider = createMockIssueProvider({
         id: 'jira-1',
