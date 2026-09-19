@@ -22,6 +22,7 @@ import { IS_HYBRID_DEVICE } from '../../../util/is-mouse-primary';
 import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
 import { T } from '../../../t.const';
 import { TaskContextMenuComponent } from '../../tasks/task-context-menu/task-context-menu.component';
+import { TaskPriorityIndicatorComponent } from '../../tasks/task-priority-indicator/task-priority-indicator.component';
 import { MatIcon } from '@angular/material/icon';
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { InlineInputComponent } from '../../../ui/inline-input/inline-input.component';
@@ -70,6 +71,7 @@ import { TODAY_TAG } from '../../tag/tag.const';
     TagListComponent,
     InlineInputComponent,
     TaskContextMenuComponent,
+    TaskPriorityIndicatorComponent,
     MsToStringPipe,
     RenderLinksPipe,
     DoneToggleComponent,

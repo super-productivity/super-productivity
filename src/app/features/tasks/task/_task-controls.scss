@@ -84,57 +84,16 @@
   }
 }
 
-.priority-indicator {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 18px;
-  width: 18px;
-  height: 18px;
-  margin: 0 var(--s-quarter);
+// Priority reads as a coloured icon only (like the overdue schedule icon and
+// the time-conflict "!"); the colour lives inside task-priority-indicator's
+// own encapsulation, so no colour rule here can leak into nested sub-task rows.
+task-priority-indicator {
   align-self: center;
-  vertical-align: middle;
-  font-size: 18px;
-
-  mat-icon {
-    width: 18px;
-    height: 18px;
-    font-size: 18px;
-  }
+  margin: 0 var(--s-quarter);
 
   @include isDoneForFirstLine {
     opacity: var(--task-is-done-dim-opacity);
   }
-}
-
-:host.priority-high .priority-indicator {
-  color: var(--color-danger);
-}
-
-:host.priority-medium .priority-indicator {
-  color: var(--color-warning);
-}
-
-:host.priority-low .priority-indicator {
-  color: var(--c-primary);
-}
-
-:host.priority-high:not(.isSelected):not(.isMultiSelected):not(.isCurrent):not(.isDone)
-  .inner-wrapper
-  > .box {
-  background: color-mix(in srgb, var(--color-danger) 8%, var(--task-c-bg));
-}
-
-:host.priority-medium:not(.isSelected):not(.isMultiSelected):not(.isCurrent):not(.isDone)
-  .inner-wrapper
-  > .box {
-  background: color-mix(in srgb, var(--color-warning) 8%, var(--task-c-bg));
-}
-
-:host.priority-low:not(.isSelected):not(.isMultiSelected):not(.isCurrent):not(.isDone)
-  .inner-wrapper
-  > .box {
-  background: color-mix(in srgb, var(--c-primary) 8%, var(--task-c-bg));
 }
 
 @mixin timeWrapperMinimalStyles() {

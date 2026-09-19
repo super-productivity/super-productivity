@@ -90,9 +90,16 @@ export interface TaskCopy
   // Override required fields that are optional in plugin type
   projectId: string;
   timeSpentOnDay: TimeSpentOnDay;
-  priority?: TaskPriority | null;
 
   // Additional app-specific fields
+
+  /**
+   * Optional High / Medium / Low priority. `undefined` and `null` both mean "no
+   * priority" and are treated the same by sorting and filtering.
+   * Persisted as an optional field (no schema bump); older clients carry it as
+   * an unknown field.
+   */
+  priority?: TaskPriority | null;
 
   /**
    * Scheduled time as Unix timestamp (ms). For tasks scheduled with a specific time.

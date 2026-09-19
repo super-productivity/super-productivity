@@ -294,27 +294,8 @@
             }
           </div>
         </div>
-        @if (t.priority) {
-          <span
-            class="priority-indicator"
-            role="img"
-            [attr.aria-label]="
-              (t.priority === 'high'
-                ? T.F.TASK.CMP.PRIORITY_HIGH
-                : t.priority === 'medium'
-                  ? T.F.TASK.CMP.PRIORITY_MEDIUM
-                  : T.F.TASK.CMP.PRIORITY_LOW
-              ) | translate
-            "
-          >
-            <mat-icon aria-hidden="true">{{
-              t.priority === 'high'
-                ? 'priority_high'
-                : t.priority === 'medium'
-                  ? 'remove'
-                  : 'arrow_downward'
-            }}</mat-icon>
-          </span>
+        @if (t.priority; as p) {
+          <task-priority-indicator [priority]="p"></task-priority-indicator>
         }
       </div>
     </div>
