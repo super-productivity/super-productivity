@@ -1,27 +1,20 @@
 import { inject, Injectable } from '@angular/core';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
-import { TaskService } from '../../features/tasks/task.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
-import { SnackService } from '../snack/snack.service';
 import { SS } from '../persistence/storage-keys.const';
 import { androidInterface } from '../../features/android/android-interface';
 import { Log } from '../log';
 
 @Injectable({ providedIn: 'root' })
 export class StartupOverlayService {
-  private _taskService = inject(TaskService);
   private _layoutService = inject(LayoutService);
-  private _snackService = inject(SnackService);
 
   processAndDismiss(): void {
     if (!IS_ANDROID_WEB_VIEW) return;
 
     try {
-      // Drain the widget task queue on cold start.
-      // The processWidgetTasks$ effect in android.effects.ts only fires on
-      // onResume$, which is a Subject — on cold start, onResume fires before
-      // effects subscribe, so the event is lost. We must drain here.
-      this._processQueuedTasks();
+      // Tasks submitted through the overlay are imported from the native
+      // capture inbox by AndroidEffects.importNativeCaptures$.
 
       // Get partial text from native overlay (overlay stays visible).
       // Returns null if bar was never opened, empty string if opened but empty,
@@ -62,31 +55,6 @@ export class StartupOverlayService {
     } catch (e) {
       Log.err('StartupOverlayService: processAndDismiss failed', e);
       androidInterface.dismissStartupOverlay?.();
-    }
-  }
-
-  private _processQueuedTasks(): void {
-    const queueJson = androidInterface.getWidgetTaskQueue?.();
-    if (!queueJson) return;
-
-    try {
-      const queue = JSON.parse(queueJson);
-      const tasks = queue.tasks || [];
-      for (const task of tasks) {
-        this._taskService.add(task.title);
-      }
-
-      if (tasks.length > 0) {
-        this._snackService.open({
-          type: 'SUCCESS',
-          msg:
-            tasks.length === 1
-              ? 'Task added from startup'
-              : `${tasks.length} tasks added from startup`,
-        });
-      }
-    } catch (e) {
-      Log.err('StartupOverlayService: Failed to process queued tasks', e);
     }
   }
 

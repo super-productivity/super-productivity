@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
-import { tap } from 'rxjs/operators';
+import { concatMap, startWith, tap } from 'rxjs/operators';
 import { SnackService } from '../../../core/snack/snack.service';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { DroidLog } from '../../../core/log';
@@ -9,6 +9,10 @@ import { TaskService } from '../../tasks/task.service';
 import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
 import { T } from '../../../t.const';
 import { readableUrl } from '../../../util/readable-url';
+import {
+  AndroidCaptureImportService,
+  getCaptureImportErrorReason,
+} from '../android-capture-import.service';
 
 // TODO send message to electron when current task changes here
 
@@ -17,6 +21,7 @@ export class AndroidEffects {
   private _snackService = inject(SnackService);
   private _taskService = inject(TaskService);
   private _taskAttachmentService = inject(TaskAttachmentService);
+  private _captureImport = inject(AndroidCaptureImportService);
 
   handleShare$ =
     IS_ANDROID_WEB_VIEW &&
@@ -72,37 +77,32 @@ export class AndroidEffects {
       { dispatch: false },
     );
 
-  // Process tasks queued from the home screen widget
-  processWidgetTasks$ =
+  // Import tasks captured natively (startup quick-add overlay) on cold start and
+  // every resume. concatMap keeps imports serial; startWith covers cold start.
+  importNativeCaptures$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
       () =>
         androidInterface.onResume$.pipe(
-          tap(() => {
-            const queueJson = androidInterface.getWidgetTaskQueue?.();
-            if (!queueJson) {
-              return;
-            }
-
+          startWith(undefined),
+          concatMap(async () => {
             try {
-              const queue = JSON.parse(queueJson);
-              const tasks = queue.tasks || [];
-
-              for (const widgetTask of tasks) {
-                this._taskService.add(widgetTask.title);
-              }
-
-              if (tasks.length > 0) {
+              const count = await this._captureImport.importPending();
+              if (count > 0) {
                 this._snackService.open({
                   type: 'SUCCESS',
-                  msg:
-                    tasks.length === 1
-                      ? 'Task added from widget'
-                      : `${tasks.length} tasks added from widget`,
+                  msg: T.F.ANDROID.CAPTURES_IMPORTED,
+                  translateParams: { count },
                 });
               }
             } catch (e) {
-              DroidLog.err('Failed to process widget tasks', e);
+              DroidLog.err('Native capture import failed; captures retained', {
+                reason: getCaptureImportErrorReason(e),
+              });
+              this._snackService.open({
+                type: 'ERROR',
+                msg: T.F.ANDROID.CAPTURE_IMPORT_ERROR,
+              });
             }
           }),
         ),
