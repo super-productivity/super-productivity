@@ -2,6 +2,7 @@
 
 const { readdirSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
+const { isLocaleOnlyPluralForm } = require('./clean-translations');
 
 const BASE_PATH = join(__dirname, '..', 'src', 'assets', 'i18n');
 const EXAMPLE_LIMIT = 3;
@@ -29,10 +30,20 @@ const collectLeafKeys = (value) => {
 
 const compareKeyLists = (referenceKeys, referenceKeySet, translationKeys) => {
   const translationKeySet = new Set(translationKeys);
+  const notInReference = translationKeys.filter((key) => !referenceKeySet.has(key));
+
+  // A locale that needs FEW or MANY has plural forms en.json cannot contain.
+  // Those are live translations; reporting them beside genuinely dead keys is
+  // what let one get deleted in #9938.
+  const localePluralKeys = notInReference.filter((key) =>
+    isLocaleOnlyPluralForm(key, referenceKeys),
+  );
+  const localePluralKeySet = new Set(localePluralKeys);
 
   return {
     missingKeys: referenceKeys.filter((key) => !translationKeySet.has(key)),
-    unnecessaryKeys: translationKeys.filter((key) => !referenceKeySet.has(key)),
+    unnecessaryKeys: notInReference.filter((key) => !localePluralKeySet.has(key)),
+    localePluralKeys,
   };
 };
 
@@ -155,6 +166,10 @@ const inspectTranslationDirectory = (directory) => {
       (total, file) => total + file.unnecessaryKeys.length,
       0,
     ),
+    totalLocalePlural: files.reduce(
+      (total, file) => total + file.localePluralKeys.length,
+      0,
+    ),
     totalPlaceholderMismatches: files.reduce(
       (total, file) => total + file.placeholderMismatches.length,
       0,
@@ -195,10 +210,13 @@ const printReport = (report) => {
     const mismatched = file.placeholderMismatches.length;
     const unexpected = file.unexpectedPlaceholderKeys.length;
     const malformed = file.malformedKeys.length;
+    const localePluralKeys = file.localePluralKeys ?? [];
+    const localePlural = localePluralKeys.length;
 
     if (
       missing === 0 &&
       unnecessary === 0 &&
+      localePlural === 0 &&
       mismatched === 0 &&
       unexpected === 0 &&
       malformed === 0
@@ -210,6 +228,7 @@ const printReport = (report) => {
     console.log(
       `${formatLogValue(file.file)}: ${missing} missing${formatExamples(file.missingKeys)}; ` +
         `${unnecessary} not in en.json${formatExamples(file.unnecessaryKeys)}; ` +
+        `${localePlural} locale-only plural forms${formatExamples(localePluralKeys)}; ` +
         `${mismatched} placeholder mismatches${formatExamples(file.placeholderMismatches)}; ` +
         `${unexpected} unexpected placeholders${formatExamples(file.unexpectedPlaceholderKeys)}; ` +
         `${malformed} broken braces${formatExamples(file.malformedKeys)}`,
@@ -220,6 +239,7 @@ const printReport = (report) => {
     `Checked ${report.files.length} translation files against en.json ` +
       `(${report.referenceKeyCount} keys): ${report.totalMissing} missing, ` +
       `${report.totalUnnecessary} not in en.json, ` +
+      `${report.totalLocalePlural ?? 0} locale-only plural forms, ` +
       `${report.totalPlaceholderMismatches} placeholder mismatches, ` +
       `${report.totalUnexpectedPlaceholders} unexpected placeholders, ` +
       `${report.totalMalformed} broken braces.`,
@@ -228,6 +248,12 @@ const printReport = (report) => {
     'Key differences and missing-only placeholder mismatches are informational; ' +
       'missing translations use the English fallback.',
   );
+  if ((report.totalLocalePlural ?? 0) > 0) {
+    console.log(
+      'Locale-only plural forms are live translations for CLDR categories ' +
+        'English does not have (FEW, MANY, ...). Do not delete them.',
+    );
+  }
   if (report.totalUnexpectedPlaceholders > 0 || report.totalMalformed > 0) {
     console.error(
       'Unexpected placeholder names in an English placeholder contract and ' +

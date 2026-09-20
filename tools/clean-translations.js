@@ -4,10 +4,6 @@ const fs = require('fs');
 const path = require('path');
 
 const i18nDir = path.join(__dirname, '..', 'src', 'assets', 'i18n');
-const enFile = path.join(i18nDir, 'en.json');
-
-// Read and parse en.json
-const enData = JSON.parse(fs.readFileSync(enFile, 'utf8'));
 
 // Get all valid keys from en.json
 function getAllKeys(obj, prefix = '') {
@@ -21,6 +17,24 @@ function getAllKeys(obj, prefix = '') {
     }
   }
   return keys;
+}
+
+// CLDR plural categories. English only ever needs ONE and OTHER, so a locale
+// that needs FEW or MANY has keys en.json cannot contain. Those are live
+// translations, not leftovers, and deleting them makes the affected counts
+// fall back to OTHER.
+const CLDR_PLURAL_CATEGORIES = new Set(['ZERO', 'ONE', 'TWO', 'FEW', 'MANY', 'OTHER']);
+
+// True for e.g. `F.SCHEDULE.MORE_EVENTS.FEW` when en.json has any key under
+// `F.SCHEDULE.MORE_EVENTS`, i.e. the string itself is still in use and this is
+// one of its plural forms.
+function isLocaleOnlyPluralForm(fullKey, validKeys) {
+  const lastDot = fullKey.lastIndexOf('.');
+  if (lastDot === -1) return false;
+  if (!CLDR_PLURAL_CATEGORIES.has(fullKey.slice(lastDot + 1))) return false;
+
+  const parentPath = fullKey.slice(0, lastDot) + '.';
+  return validKeys.some((k) => k.startsWith(parentPath));
 }
 
 // Remove keys from object that are not in validKeys
@@ -41,7 +55,7 @@ function cleanObject(obj, validKeys, prefix = '') {
       }
     } else {
       // Check if this key exists in validKeys
-      if (validKeys.includes(fullKey)) {
+      if (validKeys.includes(fullKey) || isLocaleOnlyPluralForm(fullKey, validKeys)) {
         cleaned[key] = obj[key];
       }
     }
@@ -50,34 +64,44 @@ function cleanObject(obj, validKeys, prefix = '') {
   return cleaned;
 }
 
-const validKeys = getAllKeys(enData);
-console.log(`Found ${validKeys.length} valid keys in en.json`);
+function main() {
+  const enData = JSON.parse(fs.readFileSync(path.join(i18nDir, 'en.json'), 'utf8'));
+  const validKeys = getAllKeys(enData);
+  console.log(`Found ${validKeys.length} valid keys in en.json`);
 
-// Get all translation files
-const translationFiles = fs
-  .readdirSync(i18nDir)
-  .filter((file) => file.endsWith('.json') && file !== 'en.json');
+  // Get all translation files
+  const translationFiles = fs
+    .readdirSync(i18nDir)
+    .filter((file) => file.endsWith('.json') && file !== 'en.json');
 
-let totalRemoved = 0;
+  let totalRemoved = 0;
 
-// Process each translation file
-translationFiles.forEach((file) => {
-  const filePath = path.join(i18nDir, file);
-  const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  // Process each translation file
+  translationFiles.forEach((file) => {
+    const filePath = path.join(i18nDir, file);
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
-  const originalKeys = getAllKeys(data);
-  const cleanedData = cleanObject(data, validKeys);
-  const cleanedKeys = getAllKeys(cleanedData);
+    const originalKeys = getAllKeys(data);
+    const cleanedData = cleanObject(data, validKeys);
+    const cleanedKeys = getAllKeys(cleanedData);
 
-  const removedCount = originalKeys.length - cleanedKeys.length;
-  totalRemoved += removedCount;
+    const removedCount = originalKeys.length - cleanedKeys.length;
+    totalRemoved += removedCount;
 
-  if (removedCount > 0) {
-    fs.writeFileSync(filePath, JSON.stringify(cleanedData, null, 2) + '\n', 'utf8');
-    console.log(`${file}: Removed ${removedCount} orphaned keys`);
-  } else {
-    console.log(`${file}: No orphaned keys found`);
-  }
-});
+    if (removedCount > 0) {
+      fs.writeFileSync(filePath, JSON.stringify(cleanedData, null, 2) + '\n', 'utf8');
+      console.log(`${file}: Removed ${removedCount} orphaned keys`);
+    } else {
+      console.log(`${file}: No orphaned keys found`);
+    }
+  });
 
-console.log(`\nTotal orphaned keys removed: ${totalRemoved}`);
+  console.log(`\nTotal orphaned keys removed: ${totalRemoved}`);
+}
+
+// Only rewrite files when run as a script; requiring this module must be safe.
+if (require.main === module) {
+  main();
+}
+
+module.exports = { cleanObject, getAllKeys, isLocaleOnlyPluralForm };
