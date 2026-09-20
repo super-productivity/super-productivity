@@ -43,6 +43,7 @@ import { Update } from '@ngrx/entity';
 import { unique } from '../../../util/unique';
 import { roundDurationVanilla } from '../../../util/round-duration';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
+import { allDataWasLoaded } from '../../../root-store/meta/all-data-was-loaded.actions';
 import { createReducer, on } from '@ngrx/store';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -177,6 +178,9 @@ export const initialTaskState: TaskState = taskAdapter.getInitialState({
 
 export const taskReducer = createReducer<TaskState>(
   initialTaskState,
+
+  // Operation-log-only startup replays entities without dispatching loadAllData.
+  on(allDataWasLoaded, (state) => ({ ...state, isDataLoaded: true })),
 
   // META ACTIONS
   // ------------

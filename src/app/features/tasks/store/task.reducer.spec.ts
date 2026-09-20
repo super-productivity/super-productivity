@@ -12,6 +12,7 @@ import {
 import { _resetDevErrorState } from '../../../util/dev-error';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
+import { allDataWasLoaded } from '../../../root-store/meta/all-data-was-loaded.actions';
 import { ActionType, OpType, Operation } from '../../../op-log/core/operation.types';
 
 describe('Task Reducer', () => {
@@ -51,6 +52,13 @@ describe('Task Reducer', () => {
     },
     currentTaskId: 'task1',
   };
+
+  it('marks replayed tasks loaded when startup completes without a snapshot', () => {
+    const result = taskReducer(stateWithTasks, allDataWasLoaded());
+    expect(result.isDataLoaded).toBeTrue();
+    expect(result.entities).toBe(stateWithTasks.entities);
+    expect(result.currentTaskId).toBe(stateWithTasks.currentTaskId);
+  });
 
   const stubWindowConfirm = (returnValue: boolean): void => {
     if (jasmine.isSpy(window.confirm)) {

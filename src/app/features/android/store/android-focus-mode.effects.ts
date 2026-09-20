@@ -1,7 +1,15 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
-import { Action, Store } from '@ngrx/store';
-import { filter, map, pairwise, startWith, tap, withLatestFrom } from 'rxjs/operators';
+import { Action, createSelector, Store } from '@ngrx/store';
+import {
+  exhaustMap,
+  filter,
+  map,
+  pairwise,
+  startWith,
+  tap,
+  withLatestFrom,
+} from 'rxjs/operators';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { androidInterface } from '../android-interface';
 import {
@@ -16,7 +24,7 @@ import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
 import {
   selectCurrentTask,
   selectCurrentTaskId,
-  selectIsTaskDataLoaded,
+  selectTaskEntities,
 } from '../../tasks/store/task.selectors';
 import { combineLatest, firstValueFrom, Observable } from 'rxjs';
 import { FocusModeMode, TimerState } from '../../focus-mode/focus-mode.model';
@@ -27,6 +35,13 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 import { Task } from '../../tasks/task.model';
 import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { TaskService } from '../../tasks/task.service';
+import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
+import { T } from '../../../t.const';
+import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
+import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
+import { waitForSyncWindow } from '../../../util/wait-for-sync-window.operator';
+import { bulkApplyOperations } from '../../../op-log/apply/bulk-hydration.action';
 
 type FocusNotificationTask = Pick<Task, 'id' | 'title'> | null | undefined;
 
@@ -135,6 +150,9 @@ export type NativeFocusModeData = {
   remainingMs: number;
   isBreak: boolean;
   isPaused: boolean;
+  taskId?: string;
+  taskTimeSpentMs?: number;
+  isTaskTracking?: boolean;
 };
 
 /**
@@ -167,8 +185,15 @@ export const parseNativeFocusModeData = (
     return null;
   }
 
-  const { durationMs, remainingMs, isBreak, isPaused } =
-    parsed as Partial<NativeFocusModeData>;
+  const {
+    durationMs,
+    remainingMs,
+    isBreak,
+    isPaused,
+    taskId,
+    taskTimeSpentMs,
+    isTaskTracking,
+  } = parsed as Partial<NativeFocusModeData>;
   if (
     typeof durationMs !== 'number' ||
     !Number.isFinite(durationMs) ||
@@ -183,7 +208,18 @@ export const parseNativeFocusModeData = (
     return null;
   }
 
-  return { durationMs, remainingMs, isBreak, isPaused };
+  return {
+    durationMs,
+    remainingMs,
+    isBreak,
+    isPaused,
+    ...(typeof taskId === 'string' &&
+    typeof taskTimeSpentMs === 'number' &&
+    Number.isFinite(taskTimeSpentMs) &&
+    typeof isTaskTracking === 'boolean'
+      ? { taskId, taskTimeSpentMs, isTaskTracking }
+      : {}),
+  };
 };
 
 @Injectable()
@@ -194,6 +230,10 @@ export class AndroidFocusModeEffects {
   private _globalTrackingInterval = inject(GlobalTrackingIntervalService);
   private _reminderService = inject(CapacitorReminderService);
   private _actions$ = inject(LOCAL_ACTIONS);
+  private _taskService = inject(TaskService);
+  private _syncTrigger = inject(SyncTriggerService);
+  private _dataInitState = inject(DataInitStateService);
+  private _operationWriteFlush = inject(OperationWriteFlushService);
 
   /**
    * Ask for notification permission when the user STARTS a focus session.
@@ -231,104 +271,188 @@ export class AndroidFocusModeEffects {
     IS_ANDROID_WEB_VIEW &&
     createEffect(
       () =>
-        combineLatest([
-          this._store.select(selectTimer),
-          this._store.select(selectMode),
-          this._store.select(selectCurrentTask),
-          this._store.select(selectIsBreakActive),
-          this._store.select(selectIsLongBreak),
-          this._store.select(selectTimeRemaining),
-        ]).pipe(
-          // PERF: Skip during hydration/sync to avoid unnecessary processing
-          filter(() => !this._hydrationState.isApplyingRemoteOps()),
-          map(
-            ([timer, mode, currentTask, isBreakActive, isLongBreak, timeRemaining]) => ({
-              timer,
-              mode,
-              currentTask,
-              isBreakActive,
-              isLongBreak,
-              timeRemaining,
-            }),
-          ),
-          startWith(null),
-          pairwise(),
-          tap(([prev, curr]) => {
-            if (!curr) return;
+        this._store
+          .select(
+            createSelector(
+              selectTimer,
+              selectMode,
+              selectCurrentTask,
+              selectIsBreakActive,
+              selectIsLongBreak,
+              selectTimeRemaining,
+              createSelector(selectPausedTaskId, selectTaskEntities, (id, entities) =>
+                id ? entities[id] : undefined,
+              ),
+              (
+                timer,
+                mode,
+                currentTask,
+                isBreakActive,
+                isLongBreak,
+                timeRemaining,
+                pausedTask,
+              ) => ({
+                timer,
+                mode,
+                currentTask,
+                recoveryTask: currentTask ?? pausedTask,
+                isBreakActive,
+                isLongBreak,
+                timeRemaining,
+              }),
+            ),
+          )
+          .pipe(
+            // Sample one consistent store state: separate selector streams can
+            // combine a new break timer with the previous work flag/remainder.
+            filter(() => !this._hydrationState.isApplyingRemoteOps()),
+            startWith(null),
+            pairwise(),
+            tap(([prev, curr]) => {
+              if (!curr) return;
 
-            const {
-              timer,
-              mode,
-              currentTask,
-              isBreakActive,
-              isLongBreak,
-              timeRemaining,
-            } = curr;
-            const taskTitle = currentTask?.title || null;
+              const {
+                timer,
+                mode,
+                currentTask,
+                isBreakActive,
+                isLongBreak,
+                timeRemaining,
+                recoveryTask,
+              } = curr;
+              const taskTitle = currentTask?.title || null;
 
-            // Check if focus mode is active (has a purpose)
-            const isFocusModeActive = timer.purpose !== null;
-            const wasFocusModeActive = prev?.timer?.purpose !== null;
+              // Check if focus mode is active (has a purpose)
+              const isFocusModeActive = timer.purpose !== null;
+              const wasFocusModeActive = !!prev && prev.timer.purpose !== null;
 
-            if (isFocusModeActive) {
-              const title = this._getNotificationTitle(mode, isBreakActive, isLongBreak);
-              const remainingMs = timer.duration > 0 ? timeRemaining : timer.elapsed; // Flowtime shows elapsed
-
-              // Start service if just became active, otherwise update
-              if (!wasFocusModeActive) {
-                DroidLog.log('AndroidFocusModeEffects: Starting focus mode service', {
-                  title,
-                  duration: timer.duration,
-                  remaining: remainingMs,
-                  isBreak: isBreakActive,
-                  isPaused: !timer.isRunning,
-                });
-                this._safeNativeCall(
-                  () =>
-                    androidInterface.startFocusModeService?.(
-                      title,
-                      timer.duration,
-                      remainingMs,
-                      isBreakActive,
-                      !timer.isRunning,
-                      taskTitle,
-                    ),
-                  'Failed to start focus mode notification',
-                  true,
+              if (isFocusModeActive) {
+                // Task totals are recovery data, so mirror even small edits.
+                // Updating this clock does not rebuild the native notification.
+                if (
+                  !wasFocusModeActive ||
+                  prev?.currentTask?.id !== currentTask?.id ||
+                  prev?.recoveryTask?.id !== recoveryTask?.id ||
+                  prev?.recoveryTask?.timeSpent !== recoveryTask?.timeSpent
+                ) {
+                  this._safeNativeCall(
+                    () =>
+                      androidInterface.updateFocusTask?.(
+                        recoveryTask?.id ?? null,
+                        recoveryTask?.timeSpent ?? 0,
+                        !!currentTask,
+                      ),
+                    'Failed to update focus task tracking',
+                  );
+                }
+                const title = this._getNotificationTitle(
+                  mode,
+                  isBreakActive,
+                  isLongBreak,
                 );
-              } else if (
-                hasFocusNotificationStateChanged(
-                  prev?.timer,
-                  timer,
-                  prev?.currentTask,
-                  currentTask,
-                )
-              ) {
-                // Only update if something significant changed
-                DroidLog.log('AndroidFocusModeEffects: Updating focus mode service', {
-                  title,
-                  remaining: remainingMs,
-                  isPaused: !timer.isRunning,
-                  isBreak: isBreakActive,
-                });
+                const remainingMs = timer.duration > 0 ? timeRemaining : timer.elapsed; // Flowtime shows elapsed
+
+                // Start service if just became active, otherwise update
+                if (!wasFocusModeActive) {
+                  DroidLog.log('AndroidFocusModeEffects: Starting focus mode service', {
+                    title,
+                    duration: timer.duration,
+                    remaining: remainingMs,
+                    isBreak: isBreakActive,
+                    isPaused: !timer.isRunning,
+                  });
+                  this._safeNativeCall(
+                    () =>
+                      androidInterface.startFocusModeService?.(
+                        title,
+                        timer.duration,
+                        remainingMs,
+                        isBreakActive,
+                        !timer.isRunning,
+                        taskTitle,
+                      ),
+                    'Failed to start focus mode notification',
+                    true,
+                  );
+                } else if (
+                  hasFocusNotificationStateChanged(
+                    prev?.timer,
+                    timer,
+                    prev?.currentTask,
+                    currentTask,
+                  )
+                ) {
+                  // Only update if something significant changed
+                  DroidLog.log('AndroidFocusModeEffects: Updating focus mode service', {
+                    title,
+                    remaining: remainingMs,
+                    isPaused: !timer.isRunning,
+                    isBreak: isBreakActive,
+                  });
+                  this._safeNativeCall(
+                    () =>
+                      androidInterface.updateFocusModeService?.(
+                        title,
+                        remainingMs,
+                        !timer.isRunning,
+                        isBreakActive,
+                        taskTitle,
+                      ),
+                    'Failed to update focus mode service',
+                  );
+                }
+              } else if (wasFocusModeActive && !isFocusModeActive) {
+                // Focus mode ended, stop the service
+                DroidLog.log('AndroidFocusModeEffects: Stopping focus mode service');
                 this._safeNativeCall(
-                  () =>
-                    androidInterface.updateFocusModeService?.(
-                      title,
-                      remainingMs,
-                      !timer.isRunning,
-                      isBreakActive,
-                      taskTitle,
-                    ),
-                  'Failed to update focus mode service',
+                  () => androidInterface.stopFocusModeService?.(),
+                  'Failed to stop focus mode service',
                 );
               }
-            } else if (wasFocusModeActive && !isFocusModeActive) {
-              // Focus mode ended, stop the service
-              DroidLog.log('AndroidFocusModeEffects: Stopping focus mode service');
+            }),
+          ),
+      { dispatch: false },
+    );
+
+  // Bulk replay suppresses normal notification mirroring. Adjust only the
+  // applied task delta so remote edits preserve unrecorded native elapsed time.
+  // Sample every local action before pairing: local ticks can occur while the
+  // remote-apply window is open and must not become part of the remote delta.
+  syncReplayedTaskTimeToNative$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        this._actions$.pipe(
+          startWith(null),
+          withLatestFrom(
+            this._store.select(
+              createSelector(
+                selectCurrentTask,
+                selectPausedTaskId,
+                selectTaskEntities,
+                (currentTask, pausedId, entities) =>
+                  currentTask ?? (pausedId ? entities[pausedId] : undefined),
+              ),
+            ),
+            this._store.select(selectTimer),
+          ),
+          pairwise(),
+          tap(([[, previousTask, previousTimer], [action, task, timer]]) => {
+            if (
+              action?.type !== bulkApplyOperations.type ||
+              !this._hydrationState.isApplyingRemoteOps() ||
+              previousTimer.purpose === null ||
+              timer.purpose === null ||
+              !task ||
+              !previousTask ||
+              task.id !== previousTask.id
+            )
+              return;
+            const delta = task.timeSpent - previousTask.timeSpent;
+            if (delta !== 0) {
               this._safeNativeCall(
-                () => androidInterface.stopFocusModeService?.(),
-                'Failed to stop focus mode service',
+                () => androidInterface.adjustFocusTaskTime?.(task.id, delta),
+                'Failed to reconcile native focus task time after replay',
               );
             }
           }),
@@ -395,7 +519,9 @@ export class AndroidFocusModeEffects {
   // Triggers ONLY on the resume/cold-start edge:
   //   - onResume$ (ReplaySubject + startWith) fires on every app resume and
   //     replays the cold-start emission even if it fired before we subscribed;
-  //   - selectIsTaskDataLoaded flips false→true once when hydration settles.
+  //   - initial loading finishes after BOTH snapshot and tail-op replay;
+  //     reconciliation then waits for initial sync with the local baseline captured.
+  //     Task readiness alone can become true while only the snapshot is loaded.
   // `selectTimer` is SAMPLED via withLatestFrom, NOT used as a trigger. This is
   // load-bearing: if the timer were a combineLatest source, *ending* a session
   // (cancel/complete) would re-emit an idle store and re-run this read. Because
@@ -413,30 +539,88 @@ export class AndroidFocusModeEffects {
   // intentional, idempotent round-trip (no countdown reset).
   recoverFocusSession$ =
     IS_ANDROID_WEB_VIEW &&
-    createEffect(() =>
-      combineLatest([
-        androidInterface.onResume$.pipe(startWith(undefined)),
-        this._store.select(selectIsTaskDataLoaded),
-      ]).pipe(
-        filter(([, isTaskDataLoaded]) => isTaskDataLoaded),
-        withLatestFrom(this._store.select(selectTimer)),
-        filter(
-          ([, timer]) =>
-            timer.purpose === null && !this._hydrationState.isApplyingRemoteOps(),
+    createEffect(
+      () =>
+        combineLatest([
+          androidInterface.onResume$.pipe(startWith(undefined)),
+          this._dataInitState.isAllDataLoadedInitially$,
+        ]).pipe(
+          filter(([, isDataLoaded]) => isDataLoaded),
+          withLatestFrom(
+            this._store.select(selectTimer),
+            this._store.select(selectTaskEntities),
+          ),
+          filter(
+            ([, timer]) =>
+              timer.purpose === null && !this._hydrationState.isApplyingRemoteOps(),
+          ),
+          map(([, , entities]) => ({
+            data: parseNativeFocusModeData(androidInterface.getFocusModeElapsed?.()),
+            entities,
+          })),
+          exhaustMap(({ data, entities }) =>
+            data
+              ? this._recoverFocusSession(
+                  data,
+                  data.taskId ? entities[data.taskId]?.timeSpent : undefined,
+                )
+              : [],
+          ),
         ),
-        map(() => parseNativeFocusModeData(androidInterface.getFocusModeElapsed?.())),
-        filter((data): data is NativeFocusModeData => data !== null),
-        tap((data) =>
-          DroidLog.log('AndroidFocusModeEffects: Recovering focus session from native', {
-            durationMs: data.durationMs,
-            remainingMs: data.remainingMs,
-            isBreak: data.isBreak,
-            isPaused: data.isPaused,
-          }),
-        ),
-        map((data) => focusModeActions.restoreFocusSessionFromNative(data)),
-      ),
+      { dispatch: false },
     );
+
+  private async _recoverFocusSession(
+    initialData: NativeFocusModeData,
+    recordedBeforeSync: number | undefined,
+  ): Promise<void> {
+    try {
+      // Capture the local baseline before initial sync, then add only the
+      // missing local interval to the post-sync task. Subtracting the synced
+      // total would swallow time added on another device while we were away.
+      const [, timer, entities] = await firstValueFrom(
+        this._syncTrigger.afterInitialSyncDoneStrict$.pipe(
+          waitForSyncWindow(
+            this._hydrationState,
+            'AndroidFocusModeEffects:recoverFocusSession',
+          ),
+          withLatestFrom(
+            this._store.select(selectTimer),
+            this._store.select(selectTaskEntities),
+          ),
+        ),
+      );
+      if (timer.purpose !== null || this._hydrationState.isApplyingRemoteOps()) return;
+      const data = parseNativeFocusModeData(androidInterface.getFocusModeElapsed?.());
+      // A user can end or replace the native session while startup sync waits.
+      if (!data || data.taskId !== initialData.taskId) return;
+      const task = data.taskId ? entities[data.taskId] : undefined;
+      if (
+        task &&
+        data.taskTimeSpentMs !== undefined &&
+        recordedBeforeSync !== undefined
+      ) {
+        this._taskService.addTimeSpentAndSync(
+          task,
+          data.taskTimeSpentMs - recordedBeforeSync,
+        );
+      }
+      this._globalTrackingInterval.resetTrackingStart();
+      this._store.dispatch(
+        focusModeActions.restoreFocusSessionFromNative({
+          ...data,
+          pausedTaskId: task?.id,
+        }),
+      );
+      if (task && data.isTaskTracking) {
+        this._taskService.setCurrentId(task.id);
+      }
+      await this._operationWriteFlush.flushPendingWrites();
+    } catch (error) {
+      DroidLog.err('Failed to recover focus task time', error);
+      this._snackService.open({ msg: T.F.ANDROID.TIME_RECOVERY_FAILED, type: 'ERROR' });
+    }
+  }
 
   handleFocusSkip$ =
     IS_ANDROID_WEB_VIEW &&

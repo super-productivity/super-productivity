@@ -88,6 +88,10 @@ export interface AndroidInterface {
   // Read back the live focus session for cold-start/resume recovery (#7855).
   // Returns a JSON string, or 'null' when no focus session is running.
   getFocusModeElapsed?(): string;
+  // Device-local task clock owned by the Focus foreground service. Null freezes
+  // the last task so a paused session can still recover its task association.
+  updateFocusTask?(taskId: string | null, timeSpentMs: number, isTracking: boolean): void;
+  adjustFocusTaskTime?(taskId: string, timeSpentDeltaMs: number): void;
 
   // Native reminder scheduling (snooze handled entirely in background)
   scheduleNativeReminder?(

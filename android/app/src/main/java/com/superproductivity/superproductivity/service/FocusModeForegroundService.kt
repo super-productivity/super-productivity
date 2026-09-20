@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
@@ -22,6 +23,8 @@ class FocusModeForegroundService : Service() {
         const val ACTION_SKIP = "com.superproductivity.ACTION_SKIP_FOCUS"
         const val ACTION_COMPLETE = "com.superproductivity.ACTION_COMPLETE_FOCUS"
         const val ACTION_TIMER_COMPLETE = "com.superproductivity.ACTION_TIMER_COMPLETE_FOCUS"
+        const val ACTION_UPDATE_TASK = "com.superproductivity.ACTION_UPDATE_FOCUS_TASK"
+        const val ACTION_ADJUST_TASK = "com.superproductivity.ACTION_ADJUST_FOCUS_TASK"
 
         const val EXTRA_TITLE = "title"
         const val EXTRA_TASK_TITLE = "task_title"
@@ -29,6 +32,46 @@ class FocusModeForegroundService : Service() {
         const val EXTRA_REMAINING_MS = "remaining_ms"
         const val EXTRA_IS_BREAK = "is_break"
         const val EXTRA_IS_PAUSED = "is_paused"
+        const val EXTRA_TASK_ID = "task_id"
+        const val EXTRA_TASK_TIME_SPENT_MS = "task_time_spent_ms"
+        const val EXTRA_TASK_TIME_DELTA_MS = "task_time_delta_ms"
+        const val EXTRA_TASK_IS_TRACKING = "task_is_tracking"
+        const val EXTRA_TASK_UPDATE_SEQUENCE = "task_update_sequence"
+
+        private val taskClock = FocusTaskClock()
+        private data class TaskUpdate(
+            val taskId: String?,
+            val timeSpentMs: Long,
+            val isTracking: Boolean,
+            val sequence: Long
+        )
+        private var pendingTaskUpdate: TaskUpdate? = null
+        private var taskUpdateSequence = 0L
+
+        @Synchronized
+        internal fun stageTaskUpdate(taskId: String?, timeSpentMs: Long, isTracking: Boolean): Long {
+            val sequence = ++taskUpdateSequence
+            pendingTaskUpdate = TaskUpdate(taskId, timeSpentMs, isTracking, sequence)
+            return sequence
+        }
+
+        @Synchronized
+        internal fun attachPendingTaskUpdate(intent: Intent) {
+            val update = pendingTaskUpdate ?: return
+            intent.putExtra(EXTRA_TASK_ID, update.taskId)
+            intent.putExtra(EXTRA_TASK_TIME_SPENT_MS, update.timeSpentMs)
+            intent.putExtra(EXTRA_TASK_IS_TRACKING, update.isTracking)
+            intent.putExtra(EXTRA_TASK_UPDATE_SEQUENCE, update.sequence)
+            pendingTaskUpdate = null
+        }
+
+        @Synchronized
+        private fun clearPendingTaskUpdate(sequence: Long) {
+            if (pendingTaskUpdate?.sequence == sequence) pendingTaskUpdate = null
+        }
+
+        internal fun taskSnapshot(): FocusTaskClock.Snapshot =
+            taskClock.snapshot(SystemClock.elapsedRealtime())
 
         @Volatile
         var isRunning: Boolean = false
@@ -143,18 +186,25 @@ class FocusModeForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "onStartCommand: action=${intent?.action}")
+        val isTaskClockAction =
+            intent?.action == ACTION_UPDATE_TASK || intent?.action == ACTION_ADJUST_TASK
+        if (!isTaskClockAction) {
+            Log.d(TAG, "onStartCommand: action=${intent?.action}")
+        }
 
         // Android documents successful startForeground() as the safe path
         // after startForegroundService(). Promote before handling actions so
-        // newly started services satisfy that contract.
-        if (!ensureForegroundNotification()) {
+        // newly started services satisfy that contract. A task-only update
+        // on an already running service changes no notification state.
+        if (!isTaskClockAction || !isRunning) {
+            if (!ensureForegroundNotification()) {
+                clearStartPending()
+                reportForegroundFailure()
+                stopAfterForegroundFailure(startId)
+                return START_NOT_STICKY
+            }
             clearStartPending()
-            reportForegroundFailure()
-            stopAfterForegroundFailure(startId)
-            return START_NOT_STICKY
         }
-        clearStartPending()
 
         when (intent?.action) {
             ACTION_START -> {
@@ -168,6 +218,17 @@ class FocusModeForegroundService : Service() {
                 remainingMs = intent.getLongExtra(EXTRA_REMAINING_MS, 0L)
                 isBreak = intent.getBooleanExtra(EXTRA_IS_BREAK, false)
                 isPaused = intent.getBooleanExtra(EXTRA_IS_PAUSED, false)
+                // The bridge attaches an update made before this START. An
+                // ordinary START without one preserves the existing task clock.
+                if (intent.hasExtra(EXTRA_TASK_UPDATE_SEQUENCE)) {
+                    taskClock.update(
+                        intent.getStringExtra(EXTRA_TASK_ID),
+                        intent.getLongExtra(EXTRA_TASK_TIME_SPENT_MS, 0L),
+                        SystemClock.elapsedRealtime(),
+                        intent.getBooleanExtra(EXTRA_TASK_IS_TRACKING, true)
+                    )
+                }
+                taskClock.setFocusPaused(isPaused, SystemClock.elapsedRealtime())
 
                 if (!startFocusMode()) {
                     reportForegroundFailure()
@@ -190,11 +251,39 @@ class FocusModeForegroundService : Service() {
                 lastUpdateTimestamp = System.currentTimeMillis()
                 remainingMs = newRemainingMs
                 isPaused = intent.getBooleanExtra(EXTRA_IS_PAUSED, isPaused)
+                taskClock.setFocusPaused(isPaused, SystemClock.elapsedRealtime())
                 isBreak = intent.getBooleanExtra(EXTRA_IS_BREAK, isBreak)
                 taskTitle = intent.getStringExtra(EXTRA_TASK_TITLE) ?: taskTitle
 
                 scheduleCompletionCheck()
                 updateNotification()
+            }
+
+            ACTION_UPDATE_TASK -> {
+                if (isRunning) {
+                    taskClock.update(
+                        intent.getStringExtra(EXTRA_TASK_ID),
+                        intent.getLongExtra(EXTRA_TASK_TIME_SPENT_MS, 0L),
+                        SystemClock.elapsedRealtime(),
+                        intent.getBooleanExtra(EXTRA_TASK_IS_TRACKING, true)
+                    )
+                    clearPendingTaskUpdate(intent.getLongExtra(EXTRA_TASK_UPDATE_SEQUENCE, -1L))
+                } else {
+                    stopForegroundAndSelf()
+                }
+            }
+
+            ACTION_ADJUST_TASK -> {
+                if (isRunning) {
+                    intent.getStringExtra(EXTRA_TASK_ID)?.let { taskId ->
+                        taskClock.adjust(
+                            taskId,
+                            intent.getLongExtra(EXTRA_TASK_TIME_DELTA_MS, 0L)
+                        )
+                    }
+                } else {
+                    stopForegroundAndSelf()
+                }
             }
 
             ACTION_STOP -> {
@@ -276,6 +365,7 @@ class FocusModeForegroundService : Service() {
 
     private fun stopAfterForegroundFailure(startId: Int) {
         isRunning = false
+        taskClock.clear()
         handler.removeCallbacks(completionRunnable)
         title = ""
         taskTitle = null
@@ -300,6 +390,7 @@ class FocusModeForegroundService : Service() {
         Log.d(TAG, "Stopping focus mode")
 
         isRunning = false
+        taskClock.clear()
         handler.removeCallbacks(completionRunnable)
 
         // Clear the mirrored state so a stale session can't be recovered after
@@ -377,6 +468,7 @@ class FocusModeForegroundService : Service() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
         isRunning = false
+        taskClock.clear()
         // Heal a never-promoted start: if the service was created but torn down
         // before onStartCommand cleared it, drop the stale flag so the next cold
         // stop uses stopService() rather than needlessly re-spawning the service.
