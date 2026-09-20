@@ -5,8 +5,8 @@ import {
   ANDROID_CAPTURE_INBOX,
   ANDROID_CAPTURE_RECEIPTS_KEY,
   AndroidCaptureImportService,
-  getCaptureImportErrorReason,
 } from './android-capture-import.service';
+import { getCaptureImportErrorReason } from '../tasks/native-capture/native-capture-importer.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { SyncTriggerService } from '../../imex/sync/sync-trigger.service';
 import { HydrationStateService } from '../../op-log/apply/hydration-state.service';
@@ -184,21 +184,13 @@ describe('AndroidCaptureImportService', () => {
     expect(await service.importPending()).toBe(0);
   });
 
-  describe('getCaptureImportErrorReason', () => {
-    it('reports the importer own failure messages', async () => {
-      pending = null;
-      loaded.next(true);
-      const e = await service.importPending().catch((err: unknown) => err);
-      expect(getCaptureImportErrorReason(e)).toBe('Could not read capture inbox');
-    });
-
-    it('reports only the error name for foreign errors, never their message', async () => {
-      pending = '["Buy milk"';
-      loaded.next(true);
-      const e = await service.importPending().catch((err: unknown) => err);
-      expect(getCaptureImportErrorReason(e)).toBe('SyntaxError');
-      expect(getCaptureImportErrorReason(new Error('Buy milk'))).toBe('Error');
-      expect(getCaptureImportErrorReason('Buy milk')).toBe('unknown');
-    });
+  it('fails with log-safe reasons for unreadable or corrupt inboxes', async () => {
+    loaded.next(true);
+    pending = null;
+    const unreadable = await service.importPending().catch((err: unknown) => err);
+    expect(getCaptureImportErrorReason(unreadable)).toBe('Could not read capture inbox');
+    pending = '["Buy milk"';
+    const corrupt = await service.importPending().catch((err: unknown) => err);
+    expect(getCaptureImportErrorReason(corrupt)).toBe('SyntaxError');
   });
 });

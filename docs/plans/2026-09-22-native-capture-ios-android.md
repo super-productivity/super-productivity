@@ -117,8 +117,11 @@ Guarantees, all already implemented or directly derivable from #10033:
   the sync window before dispatching. This is also what keeps imports out of
   the way of sync imports/restores; no separate lock is needed.
 - A malformed or invalid entry is moved aside via `reject()` and counted, so
-  it cannot block later entries (a poison entry currently throws and blocks
-  the whole batch in #10033 — fix this while generalizing).
+  it cannot block later entries. _Status (2026-09-23):_ #10033 as merged
+  already skips invalid entries and imports later ones; they stay on disk, so
+  iOS shows the import-error snackbar on every resume until removed.
+  `reject()` (move aside natively) is deferred to M3, when the Swift side is
+  touched anyway.
 - Receipts are id-only and live only until the native ack succeeds (#10033's
   pruning is correct: once the native file is gone it cannot be redelivered,
   so long-lived receipts buy nothing).
@@ -212,7 +215,7 @@ control and should be stated in the docs. Payload files are deleted on ack.
 | #   | Deliverable                                                                                   | Exit                                                                                                  |
 | --- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | M0  | Land #10033 (device test + TestFlight per the 2026-09-18 plan)                                | Share → Inbox verified on a physical iPhone.                                                          |
-| M1  | `NativeCaptureImporter` generalized from `IosShareService`; poison-entry fix; shared fixtures | Existing 12 importer tests + new poison/limits tests pass; desktop MCP can call the same entry point. |
+| M1  | `NativeCaptureImporter` generalized from `IosShareService`; poison-entry fix; shared fixtures | Existing 12 importer tests + new poison/limits tests pass; desktop MCP can call the same entry point. _Status: importer shared by Android + iOS (done); poison `reject()` and shared fixtures deferred to M3._ |
 | M2  | Android `NativeCaptureInbox` + overlay migration                                              | Kill-after-save and replay tests pass on device; `WidgetTaskQueue` removed.                           |
 | M3  | iOS App Intent + App Shortcut (device spike first)                                            | Siri/Shortcuts capture with app killed creates exactly one task on next launch.                       |
 | M4  | Docs/wiki + release notes; AppFunctions spike result recorded                                 | Only verified routes documented.                                                                      |

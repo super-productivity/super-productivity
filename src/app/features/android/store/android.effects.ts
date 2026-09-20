@@ -9,10 +9,8 @@ import { TaskService } from '../../tasks/task.service';
 import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
 import { T } from '../../../t.const';
 import { readableUrl } from '../../../util/readable-url';
-import {
-  AndroidCaptureImportService,
-  getCaptureImportErrorReason,
-} from '../android-capture-import.service';
+import { AndroidCaptureImportService } from '../android-capture-import.service';
+import { getCaptureImportErrorReason } from '../../tasks/native-capture/native-capture-importer.service';
 
 // TODO send message to electron when current task changes here
 
