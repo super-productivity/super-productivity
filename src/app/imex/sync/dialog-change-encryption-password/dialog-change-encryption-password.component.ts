@@ -14,7 +14,6 @@ import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import { EncryptionPasswordChangeService } from '../encryption-password-change.service';
-import { SuperSyncEncryptionToggleService } from '../supersync-encryption-toggle.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatDivider } from '@angular/material/divider';
@@ -30,9 +29,8 @@ export interface ChangeEncryptionPasswordResult {
 export interface ChangeEncryptionPasswordDialogData {
   mode?: 'full' | 'disable-only';
   /**
-   * Type of sync provider. Determines which disable method to call.
-   * - 'supersync': Uses SuperSyncEncryptionToggleService.disableEncryption() (deletes server data + uploads)
-   * - 'file-based': Uses FileBasedEncryptionService.disableEncryption() (just uploads unencrypted)
+   * Type of sync provider. Removing encryption is only offered for
+   * 'file-based'; SuperSync mandates encryption (GHSA-9v8x-68pf-p5x7).
    */
   providerType?: 'supersync' | 'file-based';
 }
@@ -61,7 +59,6 @@ export interface ChangeEncryptionPasswordDialogData {
 export class DialogChangeEncryptionPasswordComponent {
   private _encryptionPasswordChangeService = inject(EncryptionPasswordChangeService);
   private _fileBasedEncryptionService = inject(FileBasedEncryptionService);
-  private _encryptionToggleService = inject(SuperSyncEncryptionToggleService);
   private _syncWrapperService = inject(SyncWrapperService);
   private _syncLocalStateService = inject(SyncLocalStateService);
   private _snackService = inject(SnackService);
@@ -159,16 +156,10 @@ export class DialogChangeEncryptionPasswordComponent {
     this.isRemovingEncryption.set(true);
 
     try {
-      // Call appropriate disable method based on provider type
-      if (this.providerType === 'file-based') {
-        await this._syncWrapperService.runWithSyncBlocked(() =>
-          this._fileBasedEncryptionService.disableEncryption(),
-        );
-      } else {
-        await this._syncWrapperService.runWithSyncBlocked(() =>
-          this._encryptionToggleService.disableEncryption(),
-        );
-      }
+      // Fails closed for non-file-based providers.
+      await this._syncWrapperService.runWithSyncBlocked(() =>
+        this._fileBasedEncryptionService.disableEncryption(),
+      );
       this._snackService.open({
         type: 'SUCCESS',
         msg: this.textKeys.DISABLE_ENCRYPTION_SUCCESS,
