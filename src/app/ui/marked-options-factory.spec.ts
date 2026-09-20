@@ -839,6 +839,24 @@ describe('preprocessMarkdown', () => {
     );
   });
 
+  it('should not treat a newline after the opening paren as sizing syntax', () => {
+    // the live editor matches a single line, so a multi-line image stays raw
+    const input = '![alt](\nurl.png =10x20)';
+    const result = preprocessMarkdown(input);
+    expect(result).toBe(input);
+  });
+
+  it('should not treat a CR or CRLF after the opening paren as sizing syntax', () => {
+    // CodeMirror breaks the line at a lone \r too; preprocessMarkdown turns
+    // both into \n before matching, so the image is left raw, not sized
+    expect(preprocessMarkdown('![alt](\rurl.png =10x20)')).toBe(
+      '![alt](\nurl.png =10x20)',
+    );
+    expect(preprocessMarkdown('![alt](\r\nurl.png =10x20)')).toBe(
+      '![alt](\nurl.png =10x20)',
+    );
+  });
+
   it('should preserve other markdown content', () => {
     const input = '# Header\n\n![img](url.png =50x50)\n\nParagraph';
     const result = preprocessMarkdown(input);
