@@ -85,6 +85,8 @@ test('compareTranslationKeys reports sorted nested missing and unnecessary keys'
   assert.deepEqual(compareTranslationKeys(reference, translation), {
     missingKeys: ['common.save'],
     unnecessaryKeys: ['common.delete', 'obsolete.label'],
+    localePluralKeys: [],
+    localePluralKeys: [],
   });
 });
 
@@ -105,6 +107,8 @@ test('compareTranslationKeys treats object-versus-leaf differences as structural
   assert.deepEqual(compareTranslationKeys(reference, translation), {
     missingKeys: ['settings.theme.label'],
     unnecessaryKeys: ['settings.theme'],
+    localePluralKeys: [],
+    localePluralKeys: [],
   });
 });
 
@@ -265,6 +269,7 @@ test('inspectTranslationDirectory compares every locale with deterministic order
           file: 'de.json',
           missingKeys: ['common.save'],
           unnecessaryKeys: ['common.delete'],
+          localePluralKeys: [],
           placeholderMismatches: [],
           unexpectedPlaceholderKeys: [],
           malformedKeys: [],
@@ -273,6 +278,7 @@ test('inspectTranslationDirectory compares every locale with deterministic order
           file: 'fr.json',
           missingKeys: ['common.save', 'task.title'],
           unnecessaryKeys: [],
+          localePluralKeys: [],
           placeholderMismatches: [],
           unexpectedPlaceholderKeys: [],
           malformedKeys: [],
@@ -281,6 +287,7 @@ test('inspectTranslationDirectory compares every locale with deterministic order
           file: 'zh.json',
           missingKeys: [],
           unnecessaryKeys: [],
+          localePluralKeys: [],
           placeholderMismatches: [],
           unexpectedPlaceholderKeys: [],
           malformedKeys: [],
@@ -288,6 +295,7 @@ test('inspectTranslationDirectory compares every locale with deterministic order
       ],
       totalMissing: 3,
       totalUnnecessary: 1,
+      totalLocalePlural: 0,
       totalPlaceholderMismatches: 0,
       totalUnexpectedPlaceholders: 0,
       totalMalformed: 0,
@@ -331,6 +339,7 @@ test('inspectTranslationDirectory ignores .json directories and checks locale fi
           file: 'de.json',
           missingKeys: ['common.cancel'],
           unnecessaryKeys: [],
+          localePluralKeys: [],
           placeholderMismatches: [],
           unexpectedPlaceholderKeys: [],
           malformedKeys: [],
@@ -338,6 +347,7 @@ test('inspectTranslationDirectory ignores .json directories and checks locale fi
       ],
       totalMissing: 1,
       totalUnnecessary: 0,
+      totalLocalePlural: 0,
       totalPlaceholderMismatches: 0,
       totalUnexpectedPlaceholders: 0,
       totalMalformed: 0,
@@ -360,6 +370,7 @@ test('printReport keeps adversarial values on inert output lines', (t) => {
         file: '::error file=secret::forged\nname\r\x1b[31m.json',
         missingKeys: ['error.message\n::warning::forged\r\x00\x1b[2J'],
         unnecessaryKeys: [],
+        localePluralKeys: [],
         placeholderMismatches: [],
         unexpectedPlaceholderKeys: [],
         malformedKeys: [],
@@ -399,6 +410,7 @@ test('printReport bounds keys while retaining three examples and the remainder',
           'fifth.omitted',
         ],
         unnecessaryKeys: [],
+        localePluralKeys: [],
         placeholderMismatches: [],
         unexpectedPlaceholderKeys: [],
         malformedKeys: [],
