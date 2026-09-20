@@ -367,17 +367,15 @@ export const createWindow = async ({
   let documentGeneration = 0;
   let insertedCssKey: string | undefined;
   let insertedCssGeneration = -1;
-  const onDidStartNavigation = (
-    _ev: Electron.Event,
-    _url: string,
-    isInPlace: boolean,
-    isMainFrame: boolean,
-  ): void => {
-    if (isMainFrame && !isInPlace) {
-      documentGeneration++;
-    }
-  };
-  mainWin.webContents.on('did-start-navigation', onDidStartNavigation);
+  // Count committed navigations (`did-navigate`), not started ones: Electron
+  // emits `did-start-navigation` before `will-navigate`, and the
+  // `preventDefault()` in the navigation guard does not retract it, so a
+  // blocked navigation would bump the counter while the document stays the
+  // same — untracking the live sheet and leaking it on the next apply.
+  // `did-navigate` also doesn't fire for in-page navigations (hash routes).
+  mainWin.webContents.on('did-navigate', () => {
+    documentGeneration++;
+  });
   // Applies are serialized through a promise chain: the key is read before and
   // written after the `insertCSS` round-trip, which can take seconds while the
   // renderer is still booting, so two overlapping runs would otherwise capture
@@ -389,11 +387,29 @@ export const createWindow = async ({
         return;
       }
       try {
-        const styles = readFileSync(CSS_FILE_PATH, { encoding: 'utf8' });
+        let styles: string | undefined;
+        try {
+          styles = readFileSync(CSS_FILE_PATH, { encoding: 'utf8' });
+        } catch (readError) {
+          if ((readError as NodeJS.ErrnoException).code !== 'ENOENT') {
+            throw readError;
+          }
+        }
         const isKeyFromCurrentDoc = insertedCssGeneration === documentGeneration;
         const prevKey = isKeyFromCurrentDoc ? insertedCssKey : undefined;
+        if (styles === undefined) {
+          // Deleting the file un-applies it, just like emptying it does, and
+          // like removing a theme via the in-app installer.
+          insertedCssKey = undefined;
+          insertedCssGeneration = -1;
+          if (prevKey) {
+            await mainWin.webContents.removeInsertedCSS(prevKey);
+          }
+          log('No custom styles detected at ' + CSS_FILE_PATH);
+          return;
+        }
         insertedCssKey = await mainWin.webContents.insertCSS(styles);
-        // re-read after the await: if a navigation started while we were
+        // re-read after the await: if a navigation completed while we were
         // inserting, the sheet belongs to the document that is current now
         insertedCssGeneration = documentGeneration;
         if (prevKey) {
@@ -401,11 +417,7 @@ export const createWindow = async ({
         }
         log('Custom styles loaded from ' + CSS_FILE_PATH);
       } catch (cssError) {
-        if ((cssError as NodeJS.ErrnoException).code === 'ENOENT') {
-          log('No custom styles detected at ' + CSS_FILE_PATH);
-        } else {
-          error('Failed to load custom styles:', cssError);
-        }
+        error('Failed to load custom styles:', cssError);
       }
     });
     return cssApplyQueue;
