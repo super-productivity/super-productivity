@@ -378,16 +378,19 @@ export class SyncService {
 
           for (const op of ops) {
             const firstRequestOperation = firstOperationById.get(op.id);
-            if (!firstRequestOperation) {
-              firstOperationById.set(op.id, {
-                op,
-                originalTimestamp: op.timestamp,
-              });
-            }
             const validation =
               prevalidatedResults.get(op) ??
               this.validationService.validateOp(op, clientId);
             prevalidatedResults.set(op, validation);
+            if (!firstRequestOperation) {
+              // Copy: processOperation clamps the timestamp and prunes the
+              // vector clock of the stored op in place, so a live reference
+              // would make an exact in-batch retry look like an ID collision.
+              firstOperationById.set(op.id, {
+                op: { ...op },
+                originalTimestamp: op.timestamp,
+              });
+            }
 
             const { result, storageBytes, fallback } =
               await this.operationUploadService.processOperation(
