@@ -482,11 +482,12 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       this._animateTimeoutId = null;
     }
     this.animateWidth.set(true);
-    // Slightly longer than --transition-duration-m (225ms) to ensure cleanup
+    // Slightly longer than --sidenav-transition-duration (300ms) to ensure
+    // cleanup runs after the width has settled instead of cutting it short
     this._animateTimeoutId = window.setTimeout(() => {
       this.animateWidth.set(false);
       this._animateTimeoutId = null;
-    }, 300);
+    }, 400);
   }
 
   private _handleArrowNavigation(event: KeyboardEvent): void {

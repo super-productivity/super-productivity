@@ -12,8 +12,13 @@
 :host {
   --sidenav-width-expanded: var(--side-nav-width, 260px);
   --mobile-breakpoint: 768px;
-  --sidenav-transition-duration: var(--transition-duration-m, 0.3s);
-  --sidenav-transition-timing: var(--ani-standard-timing, cubic-bezier(0.4, 0, 0.2, 1));
+  // Collapse/expand choreography. A touch longer than the generic `-m` step and
+  // on a decelerating curve, so the panel leads and settles instead of moving
+  // in lockstep with every other transition on the symmetric Material ease.
+  // `_enableWidthAnimation()` in the component holds its cleanup window open for
+  // the same reason.
+  --sidenav-transition-duration: 300ms;
+  --sidenav-transition-timing: cubic-bezier(0.22, 1, 0.36, 1);
   --mat-menu-item-spacing: 4px;
   --sidenav-border-color: var(--separator-color);
 
@@ -187,11 +192,10 @@
     scrollbar-width: none;
     scrollbar-gutter: stable both-edges;
 
-    .mode-toggle {
-      right: auto;
-      left: 50%;
-      transform: translateX(-50%);
-    }
+    // The toggle keeps its `right: 8px` anchor here and rides the panel's
+    // animated edge into the rail. Re-anchoring it (`right: auto` + `left: 50%`
+    // + translate) cannot be interpolated, so the button used to jump across
+    // the panel the instant a collapse started.
   }
 
   // Mobile specific
@@ -243,7 +247,12 @@
   border-radius: 6px;
   padding: 6px;
   cursor: pointer;
-  transition: var(--transition-standard);
+  // Only the tint is transitioned. The generic `--transition-standard` is
+  // `all`, which dragged every hover tint out to the panel's collapse pace.
+  transition:
+    background-color var(--transition-duration-s) var(--ani-standard-timing),
+    border-color var(--transition-duration-s) var(--ani-standard-timing),
+    color var(--transition-duration-s) var(--ani-standard-timing);
   color: var(--sidenav-text-secondary);
   -webkit-app-region: no-drag;
 
@@ -313,12 +322,17 @@
 // Resize handle (now positioned relative to host component)
 .resize-handle {
   position: absolute;
-  top: 0;
+  // The host box reaches up to the window top, but themes that clear the macOS
+  // traffic lights push the panel itself down from it (liquid-glass publishes
+  // that offset as `--title-bar-drag-height`, see above). Start the handle
+  // where the panel starts, so the affordance never runs past the panel's top
+  // edge into the title-bar band. Themes that keep the panel flush fall back to
+  // zero and cover the panel exactly.
+  top: var(--title-bar-drag-height, 0px);
   bottom: 0;
   width: 4px;
   cursor: col-resize;
   z-index: 1003; // Above the nav-sidenav
-  transition: background-color 0.2s ease;
 
   &.position-left {
     right: -2px;
@@ -328,12 +342,97 @@
     left: -2px;
   }
 
-  &:focus,
-  &:hover {
-    background-color: var(--sidenav-active-text);
+  // Keep the 4px hit area, but only ever draw a hairline: the affordance reads
+  // as the panel's own straight edge lighting up, not as a bar drawn across the
+  // divider.
+  //
+  // The panel is rounded at both ends, and this line runs along its edge the
+  // whole way down — over a corner the edge curves inwards, so the line would
+  // be hanging in the page background just outside the panel. Hence a window
+  // between the two tangent points: NO line at all over the corners, and inside
+  // the straight stretch a ramp that only reaches full strength one radius in
+  // from each end. So the line is solid along the middle of the panel and
+  // dissolves into the corners instead of being cut off by them.
+  //
+  // The radius arrives as `--sidenav-panel-radius` from the theme, published
+  // next to the panel's `border-radius`. The fallback inside `var()` is where
+  // the default has to live: a `:host` declaration would outrank the theme's
+  // `magic-side-nav` one and the theme value would never apply.
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    border-radius: 2px;
+    background: var(--sidenav-active-text);
+    opacity: 0;
+    -webkit-mask-image: linear-gradient(
+      180deg,
+      transparent 0,
+      transparent var(--sidenav-panel-radius, 8px),
+      #000 calc(var(--sidenav-panel-radius, 8px) * 2),
+      #000 calc(100% - var(--sidenav-panel-radius, 8px) * 2),
+      transparent calc(100% - var(--sidenav-panel-radius, 8px)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      180deg,
+      transparent 0,
+      transparent var(--sidenav-panel-radius, 8px),
+      #000 calc(var(--sidenav-panel-radius, 8px) * 2),
+      #000 calc(100% - var(--sidenav-panel-radius, 8px) * 2),
+      transparent calc(100% - var(--sidenav-panel-radius, 8px)),
+      transparent 100%
+    );
+    transition: opacity var(--transition-duration-s) var(--ani-standard-timing);
   }
 
+  &:focus-visible::after,
+  &:hover::after {
+    opacity: 0.35;
+  }
+}
+
+// Dragging a resize is a committed gesture — show the edge a little more
+// firmly. `:active` on the handle itself would drop out as soon as the pointer
+// leaves the 4px strip, and this has to hold for the whole drag.
+:host(.resizing) .resize-handle::after {
+  opacity: 0.6;
+}
+
+.title-bar-drag-strip {
+  display: none;
+}
+
+// macOS desktop only: the window has no native title bar (`hiddenInset`), so the
+// traffic lights are drawn over the empty band above the nav content. The header
+// is a window drag region, the nav is `no-drag` — which turned that band into a
+// dead zone where grabbing the window did nothing.
+//
+// Themes that push the nav down from the window top (liquid-glass does, to clear
+// the traffic lights) publish that pushed-in height as `--title-bar-drag-height`,
+// so the strip covers exactly the empty band and never overlaps the `no-drag`
+// panel. Themes that keep the nav flush with the window top fall back to zero
+// height: the empty space there sits inside the scroll container, which has to
+// stay `no-drag` for scrolling (#6435).
+:host-context(.isMac.isElectron) .title-bar-drag-strip {
+  display: block;
+  position: absolute;
+  // Relative to the host's padding box, so `top: 0` is the window top even with
+  // the theme's padding-top applied.
+  top: 0;
+  right: 0;
+  left: 0;
+  height: var(--title-bar-drag-height, 0px);
+  -webkit-app-region: drag;
+  cursor: grab;
+  // Above the nav and the resize handle.
+  z-index: 1004;
+
   &:active {
-    background-color: var(--sidenav-active-text);
+    cursor: grabbing;
   }
 }

@@ -112,6 +112,26 @@ describe('MagicSideNavComponent', () => {
     expect(fixture.componentInstance.isMobile()).toBe(true);
   });
 
+  it('renders the window drag strip above the desktop nav', () => {
+    fixture = TestBed.createComponent(MagicSideNavComponent);
+    fixture.detectChanges();
+
+    const strip = fixture.nativeElement.querySelector(
+      '.title-bar-drag-strip',
+    ) as HTMLElement | null;
+
+    expect(strip).not.toBeNull();
+    expect(strip!.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('omits the window drag strip on mobile, where the nav is a drawer', () => {
+    isXs.set(true);
+    fixture = TestBed.createComponent(MagicSideNavComponent);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.title-bar-drag-strip')).toBeNull();
+  });
+
   it('exposes the open mobile drawer as labelled navigation with a focus trap', () => {
     isXs.set(true);
     browserMatches = true;
