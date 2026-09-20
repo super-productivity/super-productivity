@@ -778,6 +778,44 @@ describe('preprocessMarkdown', () => {
     expect(result).toBe('![alt](http://example.com/image.png "A title")');
   });
 
+  it('should leave sizing syntax inside a fenced code block alone', () => {
+    const input = '```md\n![alt](url.png =200x100)\n```';
+    const result = preprocessMarkdown(input);
+    expect(result).toBe(input);
+  });
+
+  it('should leave sizing syntax inside a tilde fence alone', () => {
+    const input = '~~~\n![alt](url.png =200x100)\n~~~';
+    const result = preprocessMarkdown(input);
+    expect(result).toBe(input);
+  });
+
+  it('should resume rewriting after the fence closes', () => {
+    const input = '![a](a.png =1x2)\n```\n![b](b.png =3x4)\n```\n![c](c.png =5x6)';
+    const result = preprocessMarkdown(input);
+    expect(result).toBe(
+      '![a](a.png "1|2")\n```\n![b](b.png =3x4)\n```\n![c](c.png "5|6")',
+    );
+  });
+
+  it('should recognise an indented fence and a longer closing fence', () => {
+    const input = '   ````\n![alt](url.png =1x2)\n   `````\n![after](a.png =3x4)';
+    const result = preprocessMarkdown(input);
+    expect(result).toBe('   ````\n![alt](url.png =1x2)\n   `````\n![after](a.png "3|4")');
+  });
+
+  it('should not close a fence with a shorter run of backticks', () => {
+    const input = '````\n![alt](url.png =1x2)\n```\n![still inside](b.png =3x4)';
+    const result = preprocessMarkdown(input);
+    expect(result).toBe(input);
+  });
+
+  it('should leave an unclosed fence as code to the end of the note', () => {
+    const input = 'before ![a](a.png =1x2)\n```\n![b](b.png =3x4)';
+    const result = preprocessMarkdown(input);
+    expect(result).toBe('before ![a](a.png "1|2")\n```\n![b](b.png =3x4)');
+  });
+
   it('should preserve other markdown content', () => {
     const input = '# Header\n\n![img](url.png =50x50)\n\nParagraph';
     const result = preprocessMarkdown(input);
