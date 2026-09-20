@@ -112,8 +112,11 @@ export interface AndroidInterface {
   // Reminder done queue - get task IDs marked done from notifications
   getReminderDoneQueue?(): string | null;
 
-  // Widget task queue - get queued tasks from home screen widget
-  getWidgetTaskQueue?(): string | null;
+  // Native capture inbox (startup quick-add overlay). Non-destructive read of a
+  // JSON array, or null if the inbox could not be read; see CaptureInbox.kt.
+  getPendingCaptures?(): string | null;
+  // Delete one capture after its task is persisted. Returns false on failure.
+  acknowledgeCapture?(id: string): boolean;
 
   // Widget done queue - get pending done-state changes from the home screen
   // widget as a JSON object string `{taskId: targetIsDone}` and clear the queue
