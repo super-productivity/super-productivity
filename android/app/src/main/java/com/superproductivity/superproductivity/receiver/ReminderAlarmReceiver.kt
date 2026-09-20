@@ -3,8 +3,11 @@ package com.superproductivity.superproductivity.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import android.util.Log
 import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
+import com.superproductivity.superproductivity.service.QuickFetchCoalescer
+import com.superproductivity.superproductivity.service.ReminderChangeResult
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
 import com.superproductivity.superproductivity.service.SuperSyncBackgroundProvider
 import com.superproductivity.superproductivity.service.buildPayloadDecryptor
@@ -31,6 +34,17 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         const val EXTRA_USE_ALARM_STYLE = "use_alarm_style"
         const val EXTRA_IS_ONGOING = "is_ongoing"
         const val EXTRA_TRIGGER_AT_MS = "trigger_at_ms"
+
+        /** Alarms that fire together share one stale-check GET; see [QuickFetchCoalescer]. */
+        private val staleCheckFetches =
+            QuickFetchCoalescer<Triple<String, String, Long>, ReminderChangeResult?>(
+                // Covers one owner's worst case (5s callTimeout) plus the alarms
+                // queued behind it. Kept short: a reused result can't see ops
+                // uploaded after it, e.g. a task just marked done on another device.
+                ttlMs = 15_000L,
+                // Monotonic: a wall clock set backwards would keep a result alive past the ttl.
+                nowMs = SystemClock::elapsedRealtime,
+            )
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -91,13 +105,18 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             context, credentials.baseUrl
         )
 
-        // Cache-only decryptor: a cold KDF takes seconds and would blow the
-        // goAsync() window. Ops with unknown salts degrade to envelope-only
-        // parsing, which fails open (notification shows).
-        val decryptor = buildPayloadDecryptor(context, TAG, deriveOnMiss = false)
-        val result = SuperSyncBackgroundProvider(decryptor).fetchQuick(
-            credentials.baseUrl, credentials.accessToken, lastSeq
-        ) ?: return false  // Error -> fail-open
+        // Token in the key: a re-login on the same server keeps lastSeq, and one
+        // account's result must never answer for another's alarms.
+        val cacheKey = Triple(credentials.baseUrl, credentials.accessToken, lastSeq)
+        val result = staleCheckFetches.get(cacheKey) {
+            // Cache-only decryptor: a cold KDF takes seconds and would blow the
+            // goAsync() window. Ops with unknown salts degrade to envelope-only
+            // parsing, which fails open (notification shows).
+            val decryptor = buildPayloadDecryptor(context, TAG, deriveOnMiss = false)
+            SuperSyncBackgroundProvider(decryptor).fetchQuick(
+                credentials.baseUrl, credentials.accessToken, lastSeq
+            )
+        } ?: return false  // Error -> fail-open
 
         // Stale if explicitly cancelled (deleted/done/dismissed/unscheduled)
         if (taskId in result.taskIdsToCancel) return true

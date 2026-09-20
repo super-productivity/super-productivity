@@ -26,6 +26,8 @@ import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
+import { getDueDateNotificationOffsetMs } from '../due-date-notification-offset';
 
 const DELAY_PERMISSIONS = 2000;
 const DELAY_SCHEDULE = 5000;
@@ -62,6 +64,7 @@ export class MobileNotificationEffects {
   private _reminderService = inject(CapacitorReminderService);
   private _platformService = inject(CapacitorPlatformService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
   // Single-shot guard so we don't spam the user with duplicate warnings.
   private _hasShownNotificationWarning = false;
   // Track scheduled reminder IDs to cancel removed ones
@@ -397,12 +400,16 @@ export class MobileNotificationEffects {
               await this._warnIfExactAlarmPermissionDeniedOnce();
 
               const now = Date.now();
+              // Android only: its alarms hit SuperSync on firing, iOS ones don't.
+              const offsetMs = this._isAndroidWebView
+                ? getDueDateNotificationOffsetMs()
+                : 0;
               for (const task of tasks) {
                 // Build trigger time: dueDay at configured hour, local timezone
                 const triggerDate = new Date(
                   task.dueDay + 'T' + String(dueDateHour).padStart(2, '0') + ':00:00',
                 );
-                const triggerAtMs = triggerDate.getTime();
+                const triggerAtMs = triggerDate.getTime() + offsetMs;
 
                 // Skip if in the past
                 if (triggerAtMs <= now) {
