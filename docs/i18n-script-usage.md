@@ -28,7 +28,7 @@ To extract missing translations for a specific language (e.g., Turkish):
 node tools/add-missing-i18n-variables.js extract tr
 ```
 
-This creates `tr-wip.json` with all keys that exist in `en.json` but are missing or empty in `tr.json`.
+This creates `src/assets/i18n/tr-wip.json` with all keys that exist in `en.json` but are missing from `tr.json`. Existing keys with empty string values are not included. If all keys are present, the command reports that no translations are missing and does not create a WIP file.
 
 ### Translate WIP File
 
@@ -50,6 +50,14 @@ Example `tr-wip.json`:
   }
 }
 ```
+
+### Translating Empty or Existing Values
+
+To translate an empty value or improve an existing translation, add its key and translated value to the WIP file, preserving the nested structure from `en.json`. If the extract command did not create a WIP file, create `src/assets/i18n/<lang>-wip.json` yourself with just the entries you want to translate.
+
+Only include keys that already exist in `en.json`, and preserve placeholders such as `{{name}}`. Leave entries you are not translating out of the WIP file: values in the WIP file take precedence over existing translations when merged.
+
+Then run the merge command below and review the resulting diff before submitting the updated language file.
 
 ### Merge Translations
 
