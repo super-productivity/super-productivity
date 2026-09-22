@@ -1,3 +1,4 @@
+import { TimeSession } from '../../features/time-session/time-session.model';
 import { Injectable } from '@angular/core';
 import { EntityChange, OpType } from '../core/operation.types';
 import { PersistentAction } from '../core/persistent-action.interface';
@@ -320,10 +321,11 @@ export class OperationCaptureService {
    * so we capture from the action payload instead of state diffing.
    */
   private _captureTaskTimeSyncFromAction(action: PersistentAction): EntityChange[] {
-    const { taskId, date, duration } = action as unknown as {
+    const { taskId, date, duration, session } = action as unknown as {
       taskId: string;
       date: string;
       duration: number;
+      session?: TimeSession;
     };
 
     return [
@@ -335,6 +337,7 @@ export class OperationCaptureService {
           taskId,
           date,
           duration,
+          ...(session && { session }),
         },
       },
     ];

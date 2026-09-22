@@ -257,7 +257,7 @@ export class TaskPage extends BasePage {
   async toggleTaskTimeTracking(task: Locator): Promise<void> {
     await task.waitFor({ state: 'visible' });
     await task.hover();
-    const playBtn = task.locator('.play-btn, .pause-btn').first();
+    const playBtn = task.getByRole('button', { name: /(?:Start|Pause) tracking time/ });
     await playBtn.waitFor({ state: 'visible', timeout: 3000 });
     await playBtn.click();
     await waitForAngularStability(this.page);

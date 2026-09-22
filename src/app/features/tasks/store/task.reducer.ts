@@ -1,3 +1,4 @@
+import { isTimeSession, mergeTimeSession } from '../../time-session/time-session.util';
 import { PersistentActionMeta } from '../../../op-log/core/persistent-action.interface';
 import {
   __updateMultipleTaskSimple,
@@ -244,16 +245,11 @@ export const taskReducer = createReducer<TaskState>(
   }),
 
   // Sync time spent from operation replay.
-  // Local: no-op (state already updated by addTimeSpent ticks).
+  // Local: records annotations only (totals already updated by ticks).
   // Replay is additive for every client so concurrent tracking contributions are
   // preserved. Op-log/file snapshots project pending local batches out before they
   // are persisted, preventing a snapshot from overlapping a later delta operation.
   on(syncTimeSpent, (state, action) => {
-    // Only apply for remote actions - local state is already up-to-date
-    if (!(action.meta as PersistentActionMeta).isRemote) {
-      return state;
-    }
-
     const { taskId, date, duration } = action;
     const task = state.entities[taskId];
     if (!task) {
@@ -267,6 +263,21 @@ export const taskReducer = createReducer<TaskState>(
       return state;
     }
 
+    const session = action.session;
+    const annotatedState =
+      isTimeSession(session) && session.d === date
+        ? taskAdapter.updateOne(
+            {
+              id: taskId,
+              changes: {
+                timeSessions: mergeTimeSession(task.timeSessions, session),
+              },
+            },
+            state,
+          )
+        : state;
+    // Local ticks already updated totals. Annotations enter state only with the durable op.
+    if (!(action.meta as PersistentActionMeta).isRemote) return annotatedState;
     const currentTimeSpentForDay =
       (task.timeSpentOnDay && +task.timeSpentOnDay[date]) || 0;
     return updateTimeSpentForTask(
@@ -275,7 +286,7 @@ export const taskReducer = createReducer<TaskState>(
         ...task.timeSpentOnDay,
         [date]: currentTimeSpentForDay + duration,
       },
-      state,
+      annotatedState,
     );
   }),
 
@@ -516,15 +527,18 @@ export const taskReducer = createReducer<TaskState>(
       return state;
     }
 
+    const isInheritTime =
+      parentTask.subTaskIds.length === 0 &&
+      Object.keys(task.timeSpentOnDay || {}).length === 0;
     // add item1
     const stateCopy = taskAdapter.addOne(
       {
         ...task,
         // update timeSpent if first sub task and non present
         // Guard timeSpentOnDay: legacy/imported tasks may have undefined here
-        ...(parentTask.subTaskIds.length === 0 &&
-        Object.keys(task.timeSpentOnDay || {}).length === 0
+        ...(isInheritTime
           ? {
+              ...(parentTask.timeSessions && { timeSessions: parentTask.timeSessions }),
               timeSpentOnDay: parentTask.timeSpentOnDay,
               timeSpent: calcTotalTimeSpent(parentTask.timeSpentOnDay),
             }
@@ -557,6 +571,7 @@ export const taskReducer = createReducer<TaskState>(
         ...stateCopy.entities,
         [parentId]: {
           ...parentTask,
+          ...(isInheritTime && parentTask.timeSessions ? { timeSessions: [] } : {}),
           subTaskIds: parentSubTaskIds,
         },
       },

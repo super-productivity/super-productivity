@@ -159,6 +159,13 @@
     <mat-tab [label]="'1. ' + (T.PDS.REVIEW_TASKS | translate)">
       <section class="tab-inner">
         @if (tasksWorkedOnOrDoneOrRepeatableFlat$ | async; as tasks) {
+          <daily-worklog-table
+            [day]="dayStr"
+            [tasks]="tasks"
+            [workStart]="started$ | async"
+            [workEnd]="end$ | async"
+            [breakTime]="breakTime$ | async"
+          />
           @if (tasks?.length) {
             <task-summary-tables
               [dayStr]="dayStr"
