@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
-import { EMPTY, from, merge, Observable, timer } from 'rxjs';
+import { combineLatest, EMPTY, from, merge, Observable, timer } from 'rxjs';
 import {
   catchError,
   concatMap,
@@ -83,15 +83,18 @@ export class PollToBacklogEffects {
 
   /**
    * Polls for backlog import for providers with pollingMode 'always'.
-   * Starts once after initial sync and runs continuously, reacting only
-   * to provider configuration changes -- not to context switches.
+   * Starts once after initial sync and runs continuously, reacting to provider
+   * configuration and registration changes -- not to context switches.
    */
   pollNewIssuesToBacklogAlways$: Observable<unknown> = createEffect(
     () =>
       this._syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$.pipe(
         switchMap(() =>
-          this._store.select(selectEnabledIssueProviders).pipe(
-            switchMap((enabledProviders: IssueProvider[]) => {
+          combineLatest([
+            this._store.select(selectEnabledIssueProviders),
+            this._pluginRegistry.registrationChanges$,
+          ]).pipe(
+            switchMap(([enabledProviders]) => {
               const alwaysProviders = enabledProviders.filter(
                 (provider) =>
                   provider.pollingMode === 'always' &&
