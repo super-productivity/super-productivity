@@ -873,3 +873,31 @@ describe('CaldavClientService._getNativeXhrProvider – native platform', () => 
     expect(rscFired).toBeFalse();
   });
 });
+
+// ─── query builders – namespaces from the lazily loaded cdav-library ──────────
+
+interface TestQueryTarget {
+  _getAllTodos: (calendar: TestCalendarLike, filterOpen: boolean) => Promise<unknown>;
+  _findTaskByUid: (calendar: TestCalendarLike, taskUid: string) => Promise<unknown>;
+}
+
+describe('CaldavClientService query builders', () => {
+  const CALDAV_NS = 'urn:ietf:params:xml:ns:caldav';
+  const target = CaldavClientService as unknown as TestQueryTarget;
+
+  it('_getAllTodos queries with the CalDAV namespace', async () => {
+    const calendar = makeCalendar('/cal/');
+    await target._getAllTodos(calendar, true);
+
+    const [query] = calendar.calendarQuery.calls.mostRecent().args[0];
+    expect(query.name).toEqual([CALDAV_NS, 'comp-filter']);
+  });
+
+  it('_findTaskByUid queries with the CalDAV namespace', async () => {
+    const calendar = makeCalendar('/cal/');
+    await target._findTaskByUid(calendar, 'uid-1');
+
+    const [query] = calendar.calendarQuery.calls.mostRecent().args[0];
+    expect(query.name).toEqual([CALDAV_NS, 'comp-filter']);
+  });
+});
