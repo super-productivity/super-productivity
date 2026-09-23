@@ -194,6 +194,7 @@ describe('LocalRestApiHandlerService', () => {
       ['add', 'update', 'remove', 'archive'],
       {
         list$: of([]),
+        archived$: of([]),
       },
     );
     Object.defineProperty(projectServiceMock, 'list', {
@@ -709,6 +710,21 @@ describe('LocalRestApiHandlerService', () => {
         expect(response.body.ok).toBe(true);
         expect(response.status).toBe(200);
         expectTaskIds(response, ['task-1', 'task-2']);
+      });
+
+      it('should leave out tasks of archived projects by default', async () => {
+        const tasks = [
+          createMockTask('task-1', { projectId: 'live' }),
+          createMockTask('task-2', { projectId: 'shelved' }),
+        ];
+        Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of(tasks) });
+        Object.defineProperty(projectServiceMock, 'archived$', {
+          get: () => of([{ id: 'shelved', isArchived: true } as Project]),
+        });
+
+        const response = await sendRequestAndWait(createRequest('GET', '/tasks'));
+
+        expectTaskIds(response, ['task-1']);
       });
 
       it('should filter tasks by query', async () => {

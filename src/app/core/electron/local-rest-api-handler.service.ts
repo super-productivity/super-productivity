@@ -631,7 +631,14 @@ export class LocalRestApiHandlerService {
     } else if (source === 'all') {
       tasks = await this._taskService.getAllTasksEverywhere();
     } else {
-      tasks = await firstValueFrom(this._taskService.allTasks$);
+      // Archiving a project leaves its tasks in the store; the app hides them
+      // everywhere, so "active" does too.
+      const [allTasks, archivedProjects] = await Promise.all([
+        firstValueFrom(this._taskService.allTasks$),
+        firstValueFrom(this._projectService.archived$),
+      ]);
+      const archivedIds = new Set(archivedProjects.map((p) => p.id));
+      tasks = allTasks.filter((t) => !t.projectId || !archivedIds.has(t.projectId));
     }
 
     let filtered = tasks;
