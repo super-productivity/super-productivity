@@ -56,6 +56,7 @@ import { registerPlugin } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SafeArea } from 'capacitor-plugin-safe-area';
 import { patchCdkViewportForSafeArea } from './cdk-safe-area-viewport.util';
+import { lockViewportZoom } from './lock-viewport-zoom.util';
 import { LS } from '../persistence/storage-keys.const';
 import { Log, PluginLog } from '../log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
@@ -510,6 +511,7 @@ export class GlobalThemeService {
       if (this._platformService.isIOS()) {
         this.document.body.classList.add(BodyClass.isIOS);
         this._iosKeyboardService.init();
+        lockViewportZoom(this.document);
 
         // Add iPad-specific class for tablet optimizations
         if (this._platformService.isIPad()) {
