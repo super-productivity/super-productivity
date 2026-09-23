@@ -16,9 +16,9 @@ Implementation plan · 22 September 2026 · **rev. 4** · implemented 23 Septemb
 
 ## 1. Why, and why this shape
 
-- **Demand.** Two community MCP servers are listed in `community-plugins.json`: ≈120★ and ≈81★. Both depend on the REST API's all-access token and on a Node install. First-party support adds four things:
+- **Demand.** Two community MCP servers are listed in `community-plugins.json`: ≈120★ and ≈81★. Both pair an external MCP server with an SP plugin the user uploads by hand, which gets the full plugin API; one needs Python (`pip install mcp`), the other `npx` plus the plugin's Node-execution consent (checked 2026-09). First-party support adds four things:
   - scoped credentials (read-only, notes opt-in, capture-only)
-  - no Node install for HTTP clients
+  - no plugin upload, and no runtime install for HTTP clients
   - bounded, content-minimal responses
   - supported setup
 - **No SDK.** The AGENTS.md dependency rule applies. `@modelcontextprotocol/sdk@1.30.0` pulls in 17 runtime dependencies (express, hono, cors, jose, ajv, …). Neither SDK 1.30 nor 2.0 implements the current 2026-07-28 revision anyway.
@@ -186,7 +186,7 @@ Strings are added only to `en.json`, via `T`.
   - routing next to REST
 - **Renderer specs:** settings fields, readiness gate, capture outcomes.
 - **Manual, still to be done:**
-  - Claude Code: `claude mcp add --transport http superproductivity http://127.0.0.1:3876/mcp --header "Authorization: Bearer <token>"`.
+  - Claude Code: `claude mcp add --scope user --transport http superproductivity http://127.0.0.1:3876/mcp --header "Authorization: Bearer <token>"`.
   - Codex.
   - Claude Desktop via `.mcpb`.
   - MAS dev build.
