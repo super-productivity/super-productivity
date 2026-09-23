@@ -152,6 +152,12 @@ const respondUnauthorized = (res: ServerResponse, message: string): void => {
   );
 };
 
+const respondDisabled = (res: ServerResponse): void =>
+  writeJsonResponse(res, 503, {
+    ok: false,
+    error: { code: 'API_DISABLED', message: 'Local REST API is disabled' },
+  });
+
 const isCurrentToken = (candidate: string): boolean =>
   !!localRestApiToken && compareToken(candidate, localRestApiToken);
 
@@ -313,18 +319,31 @@ const mcpDeps: McpHttpDeps = {
   },
 };
 
-const isAssistantAccessPath = (req: IncomingMessage): boolean => {
-  const pathname = new URL(req.url ?? '/', `http://${LOCAL_REST_API_HOST}`).pathname;
-  return pathname === ASSISTANT_ACCESS_PATH;
+// `new URL` throws on request targets Node's parser accepts, such as `//`.
+const parseRequestUrl = (req: IncomingMessage): URL | undefined => {
+  try {
+    return new URL(req.url ?? '/', `http://${LOCAL_REST_API_HOST}`);
+  } catch {
+    return undefined;
+  }
 };
 
 const handleHttpRequest = async (
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> => {
+  const requestUrl = parseRequestUrl(req);
+  if (!requestUrl) {
+    writeJsonResponse(res, 400, {
+      ok: false,
+      error: { code: 'INVALID_URL', message: 'Invalid request target' },
+    });
+    return;
+  }
+
   // The assistant endpoint shares this listener but not its switch, its
   // credential or its (looser) Origin rule, so it is routed before any of them.
-  if (isAssistantAccessPath(req)) {
+  if (requestUrl.pathname === ASSISTANT_ACCESS_PATH) {
     await handleMcpHttpRequest(req, res, mcpDeps);
     return;
   }
@@ -333,13 +352,7 @@ const handleHttpRequest = async (
   // sockets, but an in-flight keep-alive connection could still be served
   // during the close window; this makes the off switch immediate.
   if (!isEnabled) {
-    writeJsonResponse(res, 503, {
-      ok: false,
-      error: {
-        code: 'API_DISABLED',
-        message: 'Local REST API is disabled',
-      },
-    });
+    respondDisabled(res);
     return;
   }
 
@@ -384,7 +397,6 @@ const handleHttpRequest = async (
     return;
   }
 
-  const requestUrl = new URL(req.url ?? '/', `http://${LOCAL_REST_API_HOST}`);
   const method = req.method ?? 'GET';
 
   if (method === 'GET' && requestUrl.pathname === '/health') {
@@ -448,6 +460,13 @@ const handleHttpRequest = async (
   // to hold for a request that was authenticated but not yet executed.
   if (!isCurrentToken(tokenToValidate)) {
     respondUnauthorized(res, `Invalid authorization token. ${TOKEN_LOCATION_HINT}`);
+    return;
+  }
+
+  // Same for the off switch: the assistant endpoint can keep this listener up
+  // after REST is switched off, so a body still arriving must not run then.
+  if (!isEnabled) {
+    respondDisabled(res);
     return;
   }
 
@@ -528,7 +547,21 @@ export const initLocalRestApi = (): void => {
   });
 
   server = createServer((req, res) => {
-    void handleHttpRequest(req, res);
+    handleHttpRequest(req, res).catch((error: unknown) => {
+      // An escaped rejection would reach start-app's uncaughtException handler,
+      // which exits the app. Log the code only: the message can carry request
+      // content.
+      const code = (error as NodeJS.ErrnoException | undefined)?.code;
+      warn('[local-rest-api] Request handler failed', code ?? 'UNKNOWN');
+      // A client that disconnected mid-upload has no socket left to answer on.
+      if (req.destroyed || res.headersSent) {
+        return;
+      }
+      writeJsonResponse(res, 500, {
+        ok: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Internal error' },
+      });
+    });
   });
 
   server.on('error', (error: NodeJS.ErrnoException) => {

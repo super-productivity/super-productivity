@@ -363,6 +363,9 @@ const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-assistant-test-'))
 const handleHandlers = new Map();
 const onHandlers = new Map();
 const rendererCalls = [];
+// One-shot probe fired from getIsAppReady(), which the REST path calls right
+// after its token check and before it starts reading the body.
+let onAppReadyCheck = null;
 
 const win = {
   webContents: {
@@ -402,7 +405,15 @@ Module._load = function patchedLoad(request, parent, isMain) {
     return { log: () => {}, warn: () => {} };
   }
   if (request.endsWith('main-window') || request.endsWith('main-window.ts')) {
-    return { getIsAppReady: () => true, getWin: () => win };
+    return {
+      getIsAppReady: () => {
+        const probe = onAppReadyCheck;
+        onAppReadyCheck = null;
+        probe?.();
+        return true;
+      },
+      getWin: () => win,
+    };
   }
   if (
     request.endsWith('local-rest-api.model') ||
@@ -638,6 +649,85 @@ test('rotating the credential revokes the old one immediately', async () => {
   assert.equal(withOld.status, 401);
   const withNew = await post(rpc('ping'), auth());
   assert.equal(withNew.status, 200);
+});
+
+// A rejection escaping the listener's handler reaches start-app's
+// uncaughtException handler, which exits the app. Recorded here instead so the
+// tests below can assert that none escaped.
+const unhandled = [];
+process.on('unhandledRejection', (reason) => unhandled.push(reason));
+const settle = (ms = 50) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test('a malformed request target is answered, not thrown out of the handler', async () => {
+  const res = await post(undefined, {}, 'GET', '//');
+  assert.equal(res.status, 400);
+  await settle();
+  assert.deepEqual(unhandled, []);
+});
+
+test('a client that disconnects mid-upload does not escape the handler', async () => {
+  await new Promise((resolve) => {
+    const req = http.request({
+      host: '127.0.0.1',
+      port: PORT,
+      method: 'POST',
+      path: '/mcp',
+      headers: { ...auth(), 'Content-Type': 'application/json', 'Content-Length': 1000 },
+    });
+    req.on('error', () => undefined);
+    req.write('{"jsonrpc":');
+    setTimeout(() => {
+      req.destroy();
+      resolve();
+    }, 20);
+  });
+  await settle();
+  assert.deepEqual(unhandled, []);
+  const stillUp = await post(rpc('ping'), auth());
+  assert.equal(stillUp.status, 200);
+});
+
+// The assistant endpoint keeps the listener up after REST is switched off, so
+// the off switch has to hold for a REST request that was already reading its body.
+test('switching REST off stops a request whose body was still arriving', async () => {
+  api.applyLocalRestApiEnabled(true);
+  const restToken = await ipc('LOCAL_REST_API_GET_TOKEN');
+  const callsBefore = rendererCalls.length;
+  const payload = JSON.stringify({ title: 'late' });
+  const authenticated = new Promise((resolve) => (onAppReadyCheck = resolve));
+  let finish;
+  const response = new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        host: '127.0.0.1',
+        port: PORT,
+        method: 'POST',
+        path: '/tasks',
+        headers: {
+          Authorization: `Bearer ${restToken}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+        },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(data) }));
+      },
+    );
+    req.on('error', reject);
+    req.write(payload.slice(0, 1));
+    finish = () => req.end(payload.slice(1));
+  });
+
+  await authenticated;
+  api.applyLocalRestApiEnabled(false);
+  finish();
+
+  const res = await response;
+  assert.equal(res.status, 503);
+  assert.equal(res.body.error.code, 'API_DISABLED');
+  assert.equal(rendererCalls.length, callsBefore);
 });
 
 const { spawn } = require('node:child_process');
