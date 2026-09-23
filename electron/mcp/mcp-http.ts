@@ -1,5 +1,11 @@
 import { IncomingMessage, ServerResponse } from 'http';
 import {
+  readRequestBody,
+  UNAUTHORIZED_HEADERS,
+  writeEmptyResponse,
+  writeJsonResponse,
+} from '../http-utils';
+import {
   getAssistantAccessScopes,
   isAssistantAccessEnabled,
   verifyAssistantCredential,
@@ -40,19 +46,10 @@ const writeReply = (
   extraHeaders: Record<string, string> = {},
 ): void => {
   if (body === undefined) {
-    res.writeHead(status, extraHeaders);
-    res.end();
+    writeEmptyResponse(res, status, extraHeaders);
     return;
   }
-  const json = JSON.stringify(body);
-  res.writeHead(status, {
-    /* eslint-disable-next-line @typescript-eslint/naming-convention */
-    'Content-Type': 'application/json; charset=utf-8',
-    /* eslint-disable-next-line @typescript-eslint/naming-convention */
-    'Content-Length': String(Buffer.byteLength(json)),
-    ...extraHeaders,
-  });
-  res.end(json);
+  writeJsonResponse(res, status, body, extraHeaders);
 };
 
 const writeError = (
@@ -68,30 +65,12 @@ const writeError = (
     extraHeaders,
   );
 
-const readBody = async (req: IncomingMessage): Promise<Buffer | 'TOO_LARGE'> => {
-  const chunks: Buffer[] = [];
-  let total = 0;
-  for await (const chunk of req) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    total += buffer.length;
-    if (total > MAX_BODY_BYTES) {
-      return 'TOO_LARGE';
-    }
-    chunks.push(buffer);
-  }
-  return Buffer.concat(chunks);
-};
-
 const headerValue = (value: string | string[] | undefined): string | undefined =>
   Array.isArray(value) ? value[0] : value;
 
 // A 401 names the scheme and nothing else. With `resource_metadata` a client
-// would start OAuth discovery, which this endpoint does not offer.
-const UNAUTHORIZED_HEADERS = {
-  /* eslint-disable-next-line @typescript-eslint/naming-convention */
-  'WWW-Authenticate': 'Bearer',
-};
-
+// would start OAuth discovery, which this endpoint does not offer — shares
+// the header with the REST API's 401, which is on the same loopback server.
 const isAuthorized = (credential: string | undefined): boolean =>
   credential !== undefined && verifyAssistantCredential(credential);
 
@@ -149,7 +128,7 @@ export const handleMcpHttpRequest = async (
     return;
   }
 
-  const raw = await readBody(req);
+  const raw = await readRequestBody(req, MAX_BODY_BYTES);
   if (raw === 'TOO_LARGE') {
     writeError(res, 413, 'Request body too large');
     return;

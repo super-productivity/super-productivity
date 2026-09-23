@@ -1,7 +1,8 @@
 import { app, ipcMain } from 'electron';
 import { warn } from 'electron-log/main';
-import { createHash, randomBytes, timingSafeEqual } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { join } from 'path';
+import { timingSafeEqualLenient } from '../crypto-utils';
 import { IPC } from '../shared-with-frontend/ipc-events.const';
 import { SimpleStoreKey } from '../shared-with-frontend/simple-store.const';
 import {
@@ -83,7 +84,7 @@ export const verifyAssistantCredential = (candidate: string): boolean => {
   if (!isEnabled || !verifier) {
     return false;
   }
-  return timingSafeEqual(hashCredential(candidate), verifier);
+  return timingSafeEqualLenient(hashCredential(candidate), verifier);
 };
 
 export const getAssistantAccessState = (): AssistantAccessState => ({

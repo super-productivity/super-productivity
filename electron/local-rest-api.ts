@@ -1,9 +1,11 @@
 import { app, ipcMain } from 'electron';
 import { log, warn } from 'electron-log/main';
 import { createServer, IncomingMessage, Server, ServerResponse } from 'http';
-import { randomBytes, randomUUID, timingSafeEqual } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { join } from 'path';
 import { readSecretFile, writeSecretFile } from './secure-file';
+import { timingSafeEqualLenient } from './crypto-utils';
+import { readRequestBody, UNAUTHORIZED_HEADERS, writeJsonResponse } from './http-utils';
 import { initAssistantAccess, isAssistantAccessEnabled } from './mcp/assistant-access';
 import { handleMcpHttpRequest, McpHttpDeps } from './mcp/mcp-http';
 import { RendererTimeoutError } from './mcp/mcp-tools';
@@ -23,11 +25,6 @@ import {
   LocalRestApiResponsePayload,
   LocalRestApiState,
 } from './shared-with-frontend/local-rest-api.model';
-
-const JSON_HEADERS = {
-  /* eslint-disable-next-line @typescript-eslint/naming-convention */
-  'Content-Type': 'application/json; charset=utf-8',
-};
 
 let server: Server | null = null;
 let isInitialized = false;
@@ -132,46 +129,16 @@ const regenerateToken = (): string => {
   return token;
 };
 
-const compareToken = (input: string, expected: string): boolean => {
-  const inputBuffer = Buffer.from(input, 'utf8');
-  const expectedBuffer = Buffer.from(expected, 'utf8');
+const compareToken = (input: string, expected: string): boolean =>
+  timingSafeEqualLenient(Buffer.from(input, 'utf8'), Buffer.from(expected, 'utf8'));
 
-  if (inputBuffer.length !== expectedBuffer.length) {
-    // Perform a dummy comparison with expectedBuffer to mitigate timing attacks on length differences
-    timingSafeEqual(expectedBuffer, expectedBuffer);
-    return false;
-  }
-
-  return timingSafeEqual(inputBuffer, expectedBuffer);
-};
-
-const writeJson = (
-  res: ServerResponse,
-  status: number,
-  body: LocalRestApiResponsePayload['body'],
-  extraHeaders: Record<string, string> = {},
-): void => {
-  const responseJson = JSON.stringify(body);
-  res.writeHead(status, {
-    ...JSON_HEADERS,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'Content-Length': Buffer.byteLength(responseJson),
-    ...extraHeaders,
-  });
-  res.end(responseJson);
-};
-
-// RFC 7235 requires a challenge on every 401. It also tells the scripts written
-// against the unauthenticated API (v18.1.0 onwards) what to do, since this 401
-// is the only thing they will see after upgrading.
-const UNAUTHORIZED_HEADERS = {
-  /* eslint-disable-next-line @typescript-eslint/naming-convention */
-  'WWW-Authenticate': 'Bearer',
-};
+// The 401's WWW-Authenticate header (see UNAUTHORIZED_HEADERS in http-utils)
+// tells the scripts written against the unauthenticated API (v18.1.0 onwards)
+// what to do, since this 401 is the only thing they will see after upgrading.
 const TOKEN_LOCATION_HINT = 'Find the token in Settings → Misc → Access Token.';
 
 const respondUnauthorized = (res: ServerResponse, message: string): void => {
-  writeJson(
+  writeJsonResponse(
     res,
     401,
     {
@@ -227,23 +194,16 @@ const parseBearerToken = (authHeader: string | undefined): string | undefined =>
 };
 
 const readJsonBody = async (req: IncomingMessage): Promise<unknown> => {
-  const chunks: Buffer[] = [];
-  let totalBytes = 0;
-
-  for await (const chunk of req) {
-    const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    totalBytes += bufferChunk.length;
-    if (totalBytes > LOCAL_REST_API_MAX_BODY_BYTES) {
-      throw new Error('Request body too large');
-    }
-    chunks.push(bufferChunk);
+  const raw = await readRequestBody(req, LOCAL_REST_API_MAX_BODY_BYTES);
+  if (raw === 'TOO_LARGE') {
+    throw new Error('Request body too large');
   }
 
-  if (!chunks.length) {
+  if (!raw.length) {
     return undefined;
   }
 
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  return JSON.parse(raw.toString('utf8'));
 };
 
 const getQueryObject = (url: URL): Record<string, string | string[]> => {
@@ -373,7 +333,7 @@ const handleHttpRequest = async (
   // sockets, but an in-flight keep-alive connection could still be served
   // during the close window; this makes the off switch immediate.
   if (!isEnabled) {
-    writeJson(res, 503, {
+    writeJsonResponse(res, 503, {
       ok: false,
       error: {
         code: 'API_DISABLED',
@@ -386,7 +346,7 @@ const handleHttpRequest = async (
   // Block DNS rebinding: reject requests with unexpected Host headers
   const host = req.headers.host;
   if (!host || !ALLOWED_HOSTS.has(host)) {
-    writeJson(res, 403, {
+    writeJsonResponse(res, 403, {
       ok: false,
       error: {
         code: 'FORBIDDEN',
@@ -403,7 +363,7 @@ const handleHttpRequest = async (
   // closes that gap on top of the Host-header check above.
   const origin = req.headers.origin;
   if (origin && origin !== 'null') {
-    writeJson(res, 403, {
+    writeJsonResponse(res, 403, {
       ok: false,
       error: {
         code: 'FORBIDDEN',
@@ -414,7 +374,7 @@ const handleHttpRequest = async (
   }
 
   if (pendingRequests.size >= LOCAL_REST_API_MAX_CONCURRENT_REQUESTS) {
-    writeJson(res, 429, {
+    writeJsonResponse(res, 429, {
       ok: false,
       error: {
         code: 'TOO_MANY_REQUESTS',
@@ -428,7 +388,7 @@ const handleHttpRequest = async (
   const method = req.method ?? 'GET';
 
   if (method === 'GET' && requestUrl.pathname === '/health') {
-    writeJson(res, 200, {
+    writeJsonResponse(res, 200, {
       ok: true,
       data: {
         server: 'up',
@@ -455,7 +415,7 @@ const handleHttpRequest = async (
   }
 
   if (!getIsAppReady()) {
-    writeJson(res, 503, {
+    writeJsonResponse(res, 503, {
       ok: false,
       error: {
         code: 'APP_NOT_READY',
@@ -469,7 +429,7 @@ const handleHttpRequest = async (
   try {
     body = await readJsonBody(req);
   } catch (error) {
-    writeJson(res, 400, {
+    writeJsonResponse(res, 400, {
       ok: false,
       error: {
         code: 'INVALID_REQUEST_BODY',
@@ -499,12 +459,12 @@ const handleHttpRequest = async (
       query: getQueryObject(requestUrl),
       body,
     });
-    writeJson(res, rendererResponse.status, rendererResponse.body);
+    writeJsonResponse(res, rendererResponse.status, rendererResponse.body);
   } catch (error) {
     warn('[local-rest-api] Request failed', requestUrl.pathname, error);
     const isTimeout =
       error instanceof Error && error.message === 'Renderer request timed out';
-    writeJson(res, isTimeout ? 504 : 500, {
+    writeJsonResponse(res, isTimeout ? 504 : 500, {
       ok: false,
       error: {
         code: isTimeout ? 'RENDERER_TIMEOUT' : 'INTERNAL_ERROR',
