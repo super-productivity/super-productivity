@@ -25,18 +25,23 @@
  * Tune copy or beat order in this file — every choice is one block,
  * edited independently.
  */
+import { expect } from '@playwright/test';
 import { test } from '../fixture';
-import type { OverlayHandle } from '../overlays';
 import {
-  LOGOS,
   cutToScene,
+  type LayerHandle,
   loopBoundary,
+  markScene,
+  setCursorVisible,
   showEndCard,
-  showIntegrationsCard,
+  showLogoGridCard,
   showOverlay,
-} from '../overlays';
+} from '../../video-kit';
+import { LOGOS } from '../logos';
 
 const VARIANT = process.env.REEL_VARIANT ?? '';
+/** Variants this choreography serves; '' is the default reel. */
+const REEL_VARIANTS = ['', 'full', 'shorts', 'ms-store'];
 const isFull = VARIANT === 'full';
 // 9:16 portrait variant for TikTok / YouTube Shorts / Instagram Reels. Skips
 // beat 2 (the side-panel drag doesn't translate to portrait — the schedule
@@ -63,11 +68,12 @@ const CAPTURED_TASK_TITLE = 'A task 1h';
 const CAPTURED_TASK_DISPLAY_TITLE = 'A task';
 
 test.describe('@video reel', () => {
-  // The keyboard and mobile variants have their own choreography (see
-  // keyboard.spec.ts / mobile.spec.ts); skip this spec when either is
-  // active so a single capture run doesn't record two unrelated webms.
-  test.skip(VARIANT === 'keyboard', 'keyboard variant runs keyboard.spec.ts');
-  test.skip(VARIANT === 'mobile', 'mobile variant runs mobile.spec.ts');
+  // Opt-in: other variants have their own spec, and a capture run must not
+  // record two unrelated webms into one variant directory.
+  test.skip(
+    !REEL_VARIANTS.includes(VARIANT),
+    `REEL_VARIANT=${VARIANT} runs its own spec`,
+  );
   test.use({ locale: 'en', theme: 'dark' });
 
   test('marketing reel', async ({ seededPage, markBeatsStart }) => {
@@ -77,10 +83,10 @@ test.describe('@video reel', () => {
     await page.goto('/#/tag/TODAY/tasks');
     await page.locator('task').first().waitFor({ state: 'visible', timeout: 15_000 });
     const scheduleBtn = page.locator('.e2e-toggle-schedule-day-panel').first();
-    if (!isShorts && (await scheduleBtn.isVisible().catch(() => false))) {
+    if (!isShorts) {
+      await expect(scheduleBtn).toBeVisible();
       await scheduleBtn.click();
-      await page.locator('schedule-day-panel').first().waitFor({
-        state: 'visible',
+      await expect(page.locator('schedule-day-panel').first()).toBeVisible({
         timeout: 5_000,
       });
       // The panel's `_scrollToCurrentTime` runs on a 100ms timeout after init
@@ -109,26 +115,27 @@ test.describe('@video reel', () => {
     await loopBoundary(page, 'in', isFull ? 600 : 480);
 
     // ── Beat 1 — Capture in seconds. ─────────────────────────────────────
+    markScene(page, 'Capture in seconds.');
     const b1 = await showOverlay(page, 'Capture in seconds.');
-    await page.evaluate(() => {
-      const helper = (
-        window as unknown as {
-          __e2eTestHelpers?: { store?: { dispatch: (a: unknown) => void } };
-        }
-      ).__e2eTestHelpers;
-      helper?.store?.dispatch({ type: '[Layout] Show AddTaskBar' });
-    });
+    const addTaskButton = page.locator('main-header button.tour-addBtn');
+    await expect(addTaskButton).toBeVisible();
+    await addTaskButton.click();
     const globalInput = page.locator('add-task-bar.global .main-input').first();
-    await globalInput.waitFor({ state: 'visible', timeout: 5_000 });
+    await expect(globalInput).toBeFocused({ timeout: 5_000 });
     await page.waitForTimeout(250);
     await globalInput.click();
     // Hide the cursor highlight during typing — it sits in the middle of
     // the focused input and reads as a stray white dot. Restored after.
-    await page.evaluate(() => document.body.classList.add('__sp-hide-cursor-highlight'));
+    await setCursorVisible(page, false);
     await globalInput.pressSequentially(CAPTURED_TASK_TITLE, { delay: 55 });
     await page.waitForTimeout(450);
     await page.keyboard.press('Enter');
     await page.waitForTimeout(500);
+    const capturedTask = page
+      .locator('task')
+      .filter({ hasText: CAPTURED_TASK_DISPLAY_TITLE })
+      .first();
+    await expect(capturedTask).toBeVisible({ timeout: 5_000 });
 
     // ── Beat 1 → next: cut to black, swap state ──────────────────────────
     // cutToScene fades to opaque black (z-index max), runs the callback
@@ -136,8 +143,8 @@ test.describe('@video reel', () => {
     // new state. `noWait` on the next overlay lets its fade-in play
     // *during* the fade-from-black instead of being wasted behind it.
     let capturedTaskId: string | null = null;
-    let bExtra: OverlayHandle | undefined;
-    let b2: OverlayHandle | undefined;
+    let bExtra: LayerHandle | undefined;
+    let b2: LayerHandle | undefined;
     await cutToScene(
       page,
       async () => {
@@ -151,23 +158,13 @@ test.describe('@video reel', () => {
             /* Non-fatal: backdrop can detach during the cut. */
           });
         }
-        await page
-          .locator('add-task-bar.global')
-          .first()
-          .waitFor({ state: 'hidden', timeout: 3_000 })
-          .catch(() => undefined);
-        const capturedTask = page
-          .locator('task')
-          .filter({ hasText: CAPTURED_TASK_DISPLAY_TITLE })
-          .first();
-        await capturedTask.waitFor({ state: 'visible', timeout: 3_000 });
-        capturedTaskId = await capturedTask
-          .getAttribute('data-task-id')
-          .catch(() => null);
+        await expect(page.locator('add-task-bar.global').first()).toBeHidden({
+          timeout: 3_000,
+        });
+        capturedTaskId = await capturedTask.getAttribute('data-task-id');
+        expect(capturedTaskId).toBeTruthy();
         // Restore the cursor highlight — drag in beat 2 needs it visible.
-        await page.evaluate(() =>
-          document.body.classList.remove('__sp-hide-cursor-highlight'),
-        );
+        await setCursorVisible(page, true);
         await parkCursor(page);
         void b1.hide();
         if (isFull) {
@@ -183,7 +180,11 @@ test.describe('@video reel', () => {
       },
       {
         fadeMs: 260,
-        label: isFull ? 'beat 1 to 1.5' : 'beat 1 to 2',
+        label: isFull
+          ? 'No account. No tracking.'
+          : isShorts
+            ? 'Focus on what matters.'
+            : 'Plan your day.',
       },
     );
 
@@ -198,7 +199,7 @@ test.describe('@video reel', () => {
         },
         {
           fadeMs: 260,
-          label: 'beat 1.5 to 2',
+          label: 'Plan your day.',
         },
       );
     }
@@ -214,9 +215,12 @@ test.describe('@video reel', () => {
     if (!isShorts) {
       await dragSource.waitFor({ state: 'visible', timeout: 5_000 });
     }
-    const taskBox = !isShorts ? await dragSource.boundingBox() : null;
-    const panelBox = !isShorts ? await schedulePanel.boundingBox() : null;
-    if (taskBox && panelBox) {
+    if (!isShorts) {
+      await expect(schedulePanel).toBeVisible();
+      const taskBox = await dragSource.boundingBox();
+      const panelBox = await schedulePanel.boundingBox();
+      if (!taskBox || !panelBox)
+        throw new Error('Drag source or schedule panel has no box');
       const taskHalfW = taskBox.width * 0.5;
       const taskHalfH = taskBox.height * 0.5;
       const panelHalfW = panelBox.width * 0.5;
@@ -233,6 +237,12 @@ test.describe('@video reel', () => {
       await page.waitForTimeout(180);
       await page.mouse.up();
       await page.waitForTimeout(isFull ? 250 : 150);
+      await expect(
+        schedulePanel
+          .locator('schedule-event:not(.custom-drag-preview)')
+          .filter({ hasText: CAPTURED_TASK_DISPLAY_TITLE })
+          .first(),
+      ).toBeVisible({ timeout: 5_000 });
       await parkCursor(page);
     }
     await page.waitForTimeout(isFull ? 900 : isShorts ? 0 : 600);
@@ -240,12 +250,13 @@ test.describe('@video reel', () => {
     // ── Beat 2 → 3 transition: cut to black, dispatch focus mode ─────────
     // Shorts: b2 already says "Focus on what matters." so reuse it rather
     // than hide-and-respawn (which would re-fade the same words).
-    let b3: OverlayHandle | undefined;
+    let b3: LayerHandle | undefined;
     await cutToScene(
       page,
       async () => {
         if (!isShorts) void b2!.hide();
-        if (!isShorts && (await scheduleBtn.isVisible().catch(() => false))) {
+        if (!isShorts) {
+          await expect(scheduleBtn).toBeVisible();
           await scheduleBtn.click();
         }
         if (capturedTaskId) {
@@ -263,18 +274,16 @@ test.describe('@video reel', () => {
               duration: 1500000,
             });
           }, capturedTaskId);
-          await page
-            .locator('focus-mode-main')
-            .first()
-            .waitFor({ state: 'visible', timeout: 10_000 })
-            .catch(() => undefined);
-          await page.clock.runFor(5500).catch(() => undefined);
-          await page
-            .locator('focus-mode-main .bottom-controls')
-            .first()
-            .waitFor({ state: 'visible', timeout: 5_000 })
-            .catch(() => undefined);
-          await page.clock.resume().catch(() => undefined);
+          await expect(page.locator('focus-mode-main').first()).toBeVisible({
+            timeout: 10_000,
+          });
+          await page.clock.runFor(5500);
+          await expect(
+            page.locator('focus-mode-main .bottom-controls').first(),
+          ).toBeVisible({
+            timeout: 5_000,
+          });
+          await page.clock.resume();
         }
         await parkCursor(page);
         b3 = isShorts
@@ -283,13 +292,13 @@ test.describe('@video reel', () => {
       },
       {
         fadeMs: 260,
-        label: 'beat 2 to 3',
+        label: 'Focus on what matters.',
       },
     );
     await page.waitForTimeout(isFull ? 1800 : isShorts ? 900 : 1200);
 
     // ── Beat 3 → 4 transition: cut to black, swap to integrations card ──
-    let b4: OverlayHandle | undefined;
+    let b4: LayerHandle | undefined;
     await cutToScene(
       page,
       async () => {
@@ -308,7 +317,7 @@ test.describe('@video reel', () => {
           .first()
           .waitFor({ state: 'hidden', timeout: 3_000 })
           .catch(() => undefined);
-        b4 = await showIntegrationsCard(
+        b4 = await showLogoGridCard(
           page,
           {
             title: 'Plays well with GitHub, Jira & many more',
@@ -326,12 +335,13 @@ test.describe('@video reel', () => {
       },
       {
         fadeMs: 260,
-        label: 'beat 3 to 4',
+        label: 'Plays well with integrations.',
       },
     );
     await page.waitForTimeout(isFull ? 2500 : isShorts ? 1700 : 2000);
 
     // ── Beat 4 → 5 transition: crossfade between controlled cards ───────
+    markScene(page, 'Free and open source.');
     await showEndCard(
       page,
       {
