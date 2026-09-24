@@ -174,5 +174,13 @@
     "author": "InitialCrow",
     "authorUrl": "https://github.com/InitialCrow",
     "stars": 0
+  },
+  {
+    "name": "Journal Markdown",
+    "shortDescription": "A synced Markdown journal with one editable civil-day note per date, continuous history, live rendering, and offline support.",
+    "url": "https://github.com/giba0/sp-journal-plugin",
+    "author": "giba0",
+    "authorUrl": "https://github.com/giba0",
+    "stars": 0
   }
 ]
