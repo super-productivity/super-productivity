@@ -370,6 +370,49 @@ describe('OperationLogUploadService', () => {
         expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1, 2]);
       });
 
+      // Regression guard for #9371: getUnsynced() returns pending ops regardless
+      // of author. After a clientId rotation (clean-slate, backup-restore, E2EE
+      // password change) with a non-empty local outbox, the pending set can mix
+      // two identities. The server rejects every op whose clientId doesn't match
+      // the single request-level clientId as INVALID_CLIENT_ID, with no retry
+      // path, permanently stranding the non-matching group.
+      describe('mixed-author pending batch after clientId rotation (#9371)', () => {
+        it('uploads only the ops matching the chosen clientId, leaving the other author pending', async () => {
+          const oldClientOp = createMockEntry(1, 'op-old', 'client-old');
+          const newClientOp = createMockEntry(2, 'op-new', 'client-new');
+          mockOpLogStore.getUnsynced.and.resolveTo([oldClientOp, newClientOp]);
+          mockApiProvider.uploadOps.and.resolveTo({
+            results: [{ opId: 'op-old', accepted: true }],
+            latestSeq: 10,
+            newOps: [],
+          });
+
+          const result = await service.uploadPendingOps(mockApiProvider);
+
+          // Every uploadOps call must carry a single, homogeneous clientId batch.
+          for (const call of mockApiProvider.uploadOps.calls.all()) {
+            const [ops, requestClientId] = call.args as unknown as [
+              { clientId: string }[],
+              string,
+            ];
+            expect(ops.every((op) => op.clientId === requestClientId)).toBe(true);
+          }
+
+          const uploadedIds = (
+            mockApiProvider.uploadOps.calls.mostRecent().args[0] as { id: string }[]
+          ).map((op) => op.id);
+          expect(uploadedIds).toEqual(['op-old']);
+
+          // The other author's op must stay pending (not synced, not rejected) so
+          // it is uploaded under its own clientId on a later cycle.
+          expect(mockOpLogStore.markSynced).not.toHaveBeenCalledWith(
+            jasmine.arrayContaining([2]),
+          );
+          expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+          expect(result.uploadedCount).toBe(1);
+        });
+      });
+
       describe('genesis ops are never uploaded (#9921)', () => {
         const createGenesisEntry = (
           seq: number,

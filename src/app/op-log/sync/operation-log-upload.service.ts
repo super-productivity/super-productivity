@@ -195,6 +195,26 @@ export class OperationLogUploadService {
 
       // Get the clientId from the first operation
       const clientId = pendingOps[0].op.clientId;
+      // #9371: getUnsynced() returns pending ops regardless of author. After any
+      // clientId rotation (clean-slate, backup-restore, E2EE password change) that
+      // leaves a non-empty local outbox, pendingOps can mix ops from two
+      // identities. The request below sends a single request-level clientId for
+      // the whole batch, and the server permanently rejects (INVALID_CLIENT_ID,
+      // with no retry path) any op whose clientId doesn't match it. Restrict this
+      // round to the ops that share the chosen clientId; the rest stay pending
+      // (still returned by getUnsynced()) and get uploaded under their own
+      // clientId on a later sync cycle.
+      const otherAuthorOps = pendingOps.filter((entry) => entry.op.clientId !== clientId);
+      const homogeneousPendingOps =
+        otherAuthorOps.length > 0
+          ? pendingOps.filter((entry) => entry.op.clientId === clientId)
+          : pendingOps;
+      if (otherAuthorOps.length > 0) {
+        OpLog.warn(
+          `OperationLogUploadService: ${otherAuthorOps.length} pending op(s) belong to a ` +
+            'different clientId (rotation in progress) — deferring them to a later sync cycle.',
+        );
+      }
       // Use let so we can update between chunks to avoid duplicate piggybacked ops
       let lastKnownServerSeq = await syncProvider.getLastServerSeq();
       // Track highest received sequence across ALL chunks to prevent regression
@@ -259,7 +279,9 @@ export class OperationLogUploadService {
       const isGenesisToSkip = (entry: OperationLogEntry): boolean =>
         syncProvider.providerMode !== 'fileSnapshotOps' &&
         isGenesisEntityType(entry.op.entityType);
-      const uploadableOps = pendingOps.filter((entry) => !isGenesisToSkip(entry));
+      const uploadableOps = homogeneousPendingOps.filter(
+        (entry) => !isGenesisToSkip(entry),
+      );
 
       // Separate full-state operations (backup imports, repairs) from regular ops
       // Full-state ops are uploaded via snapshot endpoint for better efficiency
@@ -384,7 +406,9 @@ export class OperationLogUploadService {
       // just dropped in favour of a remote one, the pending genesis op is what
       // makes the incoming-import gate prompt on the next cycle instead of
       // silently replacing this client's state. (#9921)
-      const genesisSeqs = pendingOps.filter(isGenesisToSkip).map((entry) => entry.seq);
+      const genesisSeqs = homogeneousPendingOps
+        .filter(isGenesisToSkip)
+        .map((entry) => entry.seq);
       if (genesisSeqs.length > 0 && droppedFullStateOnExists) {
         OpLog.normal(
           'OperationLogUploadService: Keeping genesis op(s) pending — the local SYNC_IMPORT ' +
