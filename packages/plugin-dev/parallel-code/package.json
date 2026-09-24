@@ -1,0 +1,8 @@
+{
+  "name": "parallel-code",
+  "version": "1.0.0",
+  "description": "Parallel Code plugin for Super Productivity",
+  "scripts": {
+    "build": "echo 'No build needed for simple plugin'"
+  }
+}

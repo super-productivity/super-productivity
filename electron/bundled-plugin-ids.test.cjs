@@ -142,3 +142,26 @@ test('every BUNDLED_PLUGIN_PATHS plugin has its manifest id reserved in BUNDLED_
       `BUNDLED_PLUGIN_IDS:\n  ${missingIds.join('\n  ')}`,
   );
 });
+
+// Release builds only bundle plugin dirs that have a package.json
+// (packages/build-packages.js `getPlugins`); `plugins:build` (build-all.js),
+// used by E2E, copies them regardless. A bundled plugin missing it passes E2E
+// and silently disappears from releases — observed once, for `parallel-code`.
+test('every BUNDLED_PLUGIN_PATHS plugin has a package.json so release builds include it', () => {
+  const source = fs.readFileSync(BUNDLED_PLUGINS_CONST_PATH, 'utf8');
+  const bundledPaths = extractStringLiteralList(source, 'BUNDLED_PLUGIN_PATHS = [', ']');
+  assert.ok(bundledPaths.length > 0, 'Parsed zero entries from BUNDLED_PLUGIN_PATHS.');
+
+  const missing = bundledPaths
+    .map((assetPath) => assetPath.split('/').pop())
+    .filter(
+      (dirName) => !fs.existsSync(path.join(PLUGIN_DEV_DIR, dirName, 'package.json')),
+    );
+
+  assert.deepEqual(
+    missing,
+    [],
+    `Bundled plugin dir(s) without packages/plugin-dev/<dir>/package.json: ${missing.join(', ')}. ` +
+      'packages/build-packages.js skips them, so release builds would ship without the plugin.',
+  );
+});
