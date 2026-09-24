@@ -127,13 +127,6 @@ export class LocalDataConflictError extends Error {
       remoteOpCount,
     );
   }
-
-  /** Remote-side label for the conflict dialog. */
-  get remoteSummary(): string {
-    return this.remoteOpCount === undefined
-      ? 'Remote data'
-      : `${this.remoteOpCount} remote changes`;
-  }
 }
 
 export class SyncAlreadyInProgressError extends Error {

@@ -164,6 +164,12 @@ export interface ConflictData {
    * USE_REMOTE would discard.
    */
   localUnsyncedOpsCount?: number;
+  /**
+   * Number of downloaded remote ops when the remote side has no snapshot
+   * (#9391). Display only — deliberately not a change count, so the overwrite
+   * confirmation stays mandatory for never-synced clients.
+   */
+  remoteOpCount?: number;
   additional?: unknown;
 }
 

@@ -1674,7 +1674,6 @@ export class SyncWrapperService {
       const unsyncedCount =
         snapshotConflict?.unsyncedCount ?? (await this._opLogStore.getUnsynced()).length;
       const vcEntry = await this._opLogStore.getVectorClockEntry();
-      const localClock = vcEntry?.clock;
       const localLastUpdate = vcEntry?.lastUpdate || Date.now();
 
       const conflictData: ConflictData = {
@@ -1687,7 +1686,7 @@ export class SyncWrapperService {
           // so surface the reportable diagnostic in the dialog's Additional Info
           // row instead. Safe to show: the message carries only an allowlisted
           // action type and integer counts, never user content (rule 9).
-          lastUpdateAction: snapshotConflict?.remoteSummary ?? error.message,
+          lastUpdateAction: snapshotConflict ? 'Remote data' : error.message,
           revMap: {},
           crossModelVersion: 1,
           mainModelData: snapshotConflict?.remoteSnapshotState ?? {},
@@ -1702,10 +1701,11 @@ export class SyncWrapperService {
           // Op-log errors lack a last-synced timestamp; the dialog shows Never.
           lastSyncedUpdate: null,
           metaRev: null,
-          vectorClock: localClock,
+          vectorClock: vcEntry?.clock,
           lastSyncedVectorClock: snapshotConflict?.lastSyncedVectorClock ?? null,
         },
         localUnsyncedOpsCount: unsyncedCount,
+        remoteOpCount: snapshotConflict?.remoteOpCount,
       };
 
       SyncLog.log('SyncWrapperService: Opening data conflict dialog', {

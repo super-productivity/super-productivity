@@ -2347,7 +2347,7 @@ describe('SyncWrapperService', () => {
           data: ConflictData;
         };
         expect(dialogConfig.data.remote.isFullData).toBe(false);
-        expect(dialogConfig.data.remote.lastUpdateAction).toBe('7 remote changes');
+        expect(dialogConfig.data.remoteOpCount).toBe(7);
         expect(dialogConfig.data.localUnsyncedOpsCount).toBe(1);
       });
 
@@ -2372,6 +2372,7 @@ describe('SyncWrapperService', () => {
           tasks: [{ id: 'remote-task' }],
         } as unknown as ConflictData['remote']['mainModelData']);
         expect(dialogConfig.data.remote.lastUpdateAction).toBe('Remote data');
+        expect(dialogConfig.data.remoteOpCount).toBeUndefined();
       });
 
       it('should call forceUploadLocalState when user chooses USE_LOCAL', async () => {
