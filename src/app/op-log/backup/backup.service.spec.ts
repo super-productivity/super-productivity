@@ -13,6 +13,7 @@ import { LockService } from '../sync/lock.service';
 import { ConflictJournalService } from '../sync/conflict-journal.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
 import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
+import { WORKLOG_EXPORT_DEFAULTS } from '../../features/work-context/work-context.const';
 
 describe('BackupService', () => {
   let service: BackupService;
@@ -40,12 +41,21 @@ describe('BackupService', () => {
           noteIds: [],
           isHiddenFromMenu: false,
           isArchived: false,
+          advancedCfg: { worklogExportSettings: { ...WORKLOG_EXPORT_DEFAULTS } },
         },
       },
     },
     tag: {
       ids: ['TODAY'],
-      entities: { TODAY: { id: 'TODAY', title: 'Today', taskIds: [], icon: 'wb_sunny' } },
+      entities: {
+        TODAY: {
+          id: 'TODAY',
+          title: 'Today',
+          taskIds: [],
+          icon: 'wb_sunny',
+          advancedCfg: { worklogExportSettings: { ...WORKLOG_EXPORT_DEFAULTS } },
+        },
+      },
     },
     globalConfig: {
       misc: { isDisableInitialDialog: true },
@@ -175,6 +185,21 @@ describe('BackupService', () => {
 
     await expectAsync(
       service.importCompleteBackup(truncated, true, true),
+    ).toBeRejectedWithError('Data validation failed and repair not possible');
+
+    expect(mockOpLogStore.runDestructiveStateReplacement).not.toHaveBeenCalled();
+    expect(mockStore.dispatch).not.toHaveBeenCalled();
+  });
+
+  // #8279: a backup whose errors dataRepair cannot fix was persisted and
+  // broadcast as BACKUP_IMPORT, so every receiving client failed validation.
+  it('should refuse a backup that is still invalid after repair', async () => {
+    const backup = createMinimalValidBackup() as any;
+    backup.project.entities.INBOX_PROJECT.advancedCfg.worklogExportSettings.groupBy =
+      'NOT_A_GROUPING';
+
+    await expectAsync(
+      service.importCompleteBackup(backup, true, true),
     ).toBeRejectedWithError('Data validation failed and repair not possible');
 
     expect(mockOpLogStore.runDestructiveStateReplacement).not.toHaveBeenCalled();

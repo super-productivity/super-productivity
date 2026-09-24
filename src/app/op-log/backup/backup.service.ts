@@ -198,6 +198,12 @@ export class BackupService {
               : [];
           const { dataRepair } = await import('../validation/data-repair');
           validatedData = dataRepair(backupData, errors).data;
+          // The import is persisted and broadcast as BACKUP_IMPORT, so state that
+          // repair could not fix would fail validation on every client (#8279).
+          if (!validateFull(validatedData).isValid) {
+            OpLog.err('BackupService: backup refused, still invalid after repair');
+            throw new Error('Data validation failed and repair not possible');
+          }
         } else {
           throw new Error('Data validation failed and repair not possible');
         }
