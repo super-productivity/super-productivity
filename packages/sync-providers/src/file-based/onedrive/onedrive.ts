@@ -1,6 +1,10 @@
 import type { SyncLogger } from '@sp/sync-core';
 import type { ProviderPlatformInfo } from '../../platform/provider-platform-info';
 import type { WebFetchFactory } from '../../platform/web-fetch-factory';
+import {
+  executeNativeRequestWithRetry,
+  type NativeHttpExecutor,
+} from '../../http/native-http-retry';
 import type { SyncCredentialStorePort } from '../../credential-store-port';
 import type { FileSyncProvider, SyncProviderAuthHelper } from '../../provider-types';
 import {
@@ -34,6 +38,7 @@ export interface OneDriveDeps {
   hasOfficialClientId: boolean;
   addOAuthState: (provider: string, state: string) => void;
   isElectron: boolean;
+  nativeHttpExecutor: NativeHttpExecutor;
 }
 
 const ONEDRIVE_PROTOCOL = {
@@ -567,11 +572,11 @@ export class OneDrive implements FileSyncProvider<
     req: OAuthTokenRequest,
   ): Promise<OneDriveTokenResponse> {
     const tenant = cfg.tenantId || ONEDRIVE_DEFAULTS.tenantId;
-    const response = await this._deps.webFetch()(this._buildOAuthTokenUrl(tenant), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, // eslint-disable-line @typescript-eslint/naming-convention
-      body: this._buildOAuthTokenRequestBody(cfg, req),
-    });
+    const response = await this._postOAuthToken(
+      this._buildOAuthTokenUrl(tenant),
+      this._buildOAuthTokenRequestBody(cfg, req),
+      req.grantType,
+    );
 
     if (!response.ok) {
       const body = await response.text();
@@ -626,6 +631,46 @@ export class OneDrive implements FileSyncProvider<
     }
 
     return (await response.json()) as OneDriveTokenResponse;
+  }
+
+  /**
+   * POST to the token endpoint. On native platforms this must go through
+   * native HTTP: the WebView fetch adds an `Origin` header, and Entra only
+   * accepts cross-origin token redemption for SPA registrations — native
+   * ("Mobile and desktop") ones fail with AADSTS90023 (#9546). Electron
+   * strips `Origin`, so web/Electron keep using fetch.
+   *
+   * shortcut: iOS included, although CapacitorHttp there uses
+   * URLSession.shared (-1005 issues, see Dropbox) — WKWebView cannot drop
+   * `Origin`, so there is no working alternative; transient errors on refresh
+   * are retried. Upgrade path if -1005 shows up: pass `disableRedirects` to
+   * get a fresh URLSession.
+   */
+  private async _postOAuthToken(
+    url: string,
+    body: URLSearchParams,
+    grantType: OAuthTokenRequest['grantType'],
+  ): Promise<Response> {
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' }; // eslint-disable-line @typescript-eslint/naming-convention
+    if (!this._deps.platformInfo.isNativePlatform) {
+      return this._deps.webFetch()(url, { method: 'POST', headers, body });
+    }
+
+    const nativeResponse = await executeNativeRequestWithRetry(
+      { url, method: 'POST', headers, data: body.toString() },
+      {
+        executor: this._deps.nativeHttpExecutor,
+        logger: this._deps.logger,
+        label: '[OneDrive]',
+        // An auth code is single-use and the exchange is user-initiated; the
+        // user can simply retry. Refresh keeps the default transient retries.
+        maxRetries: grantType === 'authorization_code' ? 0 : undefined,
+      },
+    );
+    // CapacitorHttp auto-parses JSON responses, so data may be an object.
+    const data = nativeResponse.data;
+    const text = typeof data === 'string' ? data : JSON.stringify(data ?? '');
+    return new Response(text, { status: nativeResponse.status });
   }
 
   private _getRedirectUri(): string {
