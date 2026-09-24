@@ -3,6 +3,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { PluginMenuRegistryService } from './plugin-menu-registry.service';
 import { PluginTaskContextMenuEntryCfg } from './plugin-api.model';
 import { T } from '../t.const';
+import { PluginLog } from '../core/log';
 
 describe('PluginMenuRegistryService', () => {
   let service: PluginMenuRegistryService;
@@ -63,6 +64,53 @@ describe('PluginMenuRegistryService', () => {
         }),
       ).toThrowError(T.PLUGINS.MENU_ENTRY_ICON_STRING);
       expect(service.taskContextMenuEntries()).toEqual([]);
+    });
+  });
+
+  describe('runTaskContextMenuEntry', () => {
+    it('passes the task id to the plugin', () => {
+      const onClick = jasmine.createSpy('onClick');
+      service.runTaskContextMenuEntry(
+        { pluginId: 'plugin-a', label: 'x', onClick },
+        'task-1',
+      );
+      expect(onClick).toHaveBeenCalledWith('task-1');
+    });
+
+    it('logs a throwing or rejecting plugin instead of letting it escape', async () => {
+      const errSpy = spyOn(PluginLog, 'err');
+      expect(() =>
+        service.runTaskContextMenuEntry(
+          {
+            pluginId: 'plugin-a',
+            label: 'x',
+            onClick: () => {
+              throw new Error('boom');
+            },
+          },
+          'task-1',
+        ),
+      ).not.toThrow();
+      service.runTaskContextMenuEntry(
+        {
+          pluginId: 'plugin-b',
+          label: 'y',
+          onClick: (() => Promise.reject(new Error('later'))) as unknown as (
+            taskId: string,
+          ) => void,
+        },
+        'task-1',
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(errSpy).toHaveBeenCalledWith(jasmine.any(String), {
+        pluginId: 'plugin-a',
+        error: 'Error',
+      });
+      expect(errSpy).toHaveBeenCalledWith(jasmine.any(String), {
+        pluginId: 'plugin-b',
+        error: 'Error',
+      });
     });
   });
 

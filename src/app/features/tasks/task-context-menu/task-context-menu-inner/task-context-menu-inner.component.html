@@ -360,7 +360,7 @@
 
   @for (entry of pluginEntries(); track entry.pluginId + entry.label) {
     <button
-      (click)="entry.onClick(task.id)"
+      (click)="runPluginEntry(entry, task.id)"
       mat-menu-item
     >
       <mat-icon>{{ entry.icon || 'extension' }}</mat-icon>

@@ -10,8 +10,9 @@ export const OPEN_EXTERNAL_URL_PERMISSION = 'openExternalUrl';
  *      `permissions`, which the plugin card lists for the user to review.
  *   2. Scheme: the shared external-link allowlist (GHSA-hr87-735w-hfq3). On
  *      desktop the main process re-checks it at the OPEN_EXTERNAL sink.
- *   3. No `file:`: a note link is opened by a user's click, a plugin call has no
- *      click behind it, so plugins may not open local files or folders.
+ *   3. No `file:` URLs: a note link is opened by a user's click, a plugin call
+ *      has no click behind it. (App deep links that take a path, e.g.
+ *      `vscode://file/…`, stay allowed as they are for note links.)
  * Like `deleteProject`, the permission is install-time disclosure, not
  * containment: plugin.js runs in the renderer and can reach `window.ea`.
  */
