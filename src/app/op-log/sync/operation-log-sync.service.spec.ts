@@ -6371,6 +6371,48 @@ describe('OperationLogSyncService', () => {
       }
     });
 
+    it('describes the remote side by its op count, not a fake empty snapshot, when no snapshot exists (#9391)', async () => {
+      stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+        task: { ids: ['task-1'] },
+        project: { ids: [INBOX_PROJECT.id] },
+        tag: { ids: [TODAY_TAG.id] },
+        note: { ids: [] },
+      } as any);
+
+      const remoteOp = (id: string, clientSeq: number): Operation => ({
+        id,
+        clientId: 'clientB',
+        actionType: 'test' as ActionType,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: 'task-1',
+        payload: {},
+        vectorClock: { clientB: clientSeq },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      });
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [remoteOp('remote-op-1', 1), remoteOp('remote-op-2', 2)],
+        needsFullStateUpload: false,
+        success: true,
+        providerMode: 'superSyncOps',
+        failedFileCount: 0,
+        latestServerSeq: 2,
+      });
+
+      const error = await service
+        .downloadRemoteOps({ supportsOperationSync: true } as any)
+        .then(
+          () => undefined,
+          (e: unknown) => e,
+        );
+
+      expect(error).toBeInstanceOf(LocalDataConflictError);
+      const conflictError = error as LocalDataConflictError;
+      expect(conflictError.remoteSnapshotState).toBeNull();
+      expect(conflictError.remoteOpCount).toBe(2);
+    });
+
     it('should NOT throw when store has only system tags (TODAY, URGENT, IMPORTANT, IN_PROGRESS)', async () => {
       // Store has all system tags but no user data
       stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({

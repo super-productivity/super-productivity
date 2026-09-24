@@ -1687,11 +1687,11 @@ export class SyncWrapperService {
           // so surface the reportable diagnostic in the dialog's Additional Info
           // row instead. Safe to show: the message carries only an allowlisted
           // action type and integer counts, never user content (rule 9).
-          lastUpdateAction: snapshotConflict ? 'Remote data' : error.message,
+          lastUpdateAction: snapshotConflict?.remoteSummary ?? error.message,
           revMap: {},
           crossModelVersion: 1,
           mainModelData: snapshotConflict?.remoteSnapshotState ?? {},
-          isFullData: !!snapshotConflict,
+          isFullData: !!snapshotConflict?.remoteSnapshotState,
           vectorClock: snapshotConflict?.remoteVectorClock,
         },
         local: {

@@ -1141,10 +1141,10 @@ export class OperationLogSyncService {
         OpLog.warn(
           `OperationLogSyncService: Fresh client has local data and ${result.newOps.length} remote ops. Showing conflict dialog.`,
         );
-        // No prior sync, so no last-synced clock (SPAP-7). Pending count: 0 when
-        // wholly fresh, >= 1 (the genesis op) for a genesis client.
+        // Pending count: 0 when wholly fresh, >= 1 (the genesis op) for a genesis
+        // client. No snapshot here, so the remote side is its op count (#9391).
         const unsyncedCount = (await this.opLogStore.getUnsynced()).length;
-        throw new LocalDataConflictError(unsyncedCount, {}, undefined, null);
+        throw LocalDataConflictError.forRemoteOps(unsyncedCount, result.newOps.length);
       }
 
       OpLog.warn(
