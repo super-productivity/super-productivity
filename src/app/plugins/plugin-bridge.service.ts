@@ -13,6 +13,7 @@ import {
   PluginHeaderBtnCfg,
   PluginHookHandler,
   PluginMenuEntryCfg,
+  PluginTaskContextMenuEntryCfg,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
   PluginShortcutCfg,
@@ -91,6 +92,8 @@ import { ISSUE_PROVIDER_TYPES } from '../features/issue/issue.const';
 import { PluginService } from './plugin.service';
 import { PluginI18nService } from './plugin-i18n.service';
 import { formatDateForPlugin } from './plugin-i18n-date.util';
+import { PluginMenuRegistryService } from './plugin-menu-registry.service';
+import { openExternalUrlForPlugin } from './util/plugin-open-external-url.util';
 
 /**
  * Relational fields `updateTask` refuses: they are applied to the store as
@@ -167,6 +170,7 @@ export class PluginBridgeService implements OnDestroy {
   private _pluginSecretService = inject(PluginSecretService);
   private _dataInitService = inject(DataInitService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _pluginMenuRegistry = inject(PluginMenuRegistryService);
   readonly #nodeExecutionGrantTokens = new Map<string, string>();
   readonly #nodeExecutionApi = this._consumeNodeExecutionApi();
 
@@ -175,8 +179,7 @@ export class PluginBridgeService implements OnDestroy {
   public readonly headerButtons = this._headerButtons.asReadonly();
 
   // Track menu entries registered by plugins
-  private readonly _menuEntries = signal<PluginMenuEntryCfg[]>([]);
-  public readonly menuEntries = this._menuEntries.asReadonly();
+  public readonly menuEntries = this._pluginMenuRegistry.menuEntries;
 
   // Track shortcuts registered by plugins
   readonly shortcuts = signal<PluginShortcutCfg[]>([]);
@@ -244,6 +247,10 @@ export class PluginBridgeService implements OnDestroy {
     downloadFile: (filename: string, data: string) => Promise<void>;
     registerHeaderButton: (cfg: PluginHeaderBtnCfg) => void;
     registerMenuEntry: (cfg: Omit<PluginMenuEntryCfg, 'pluginId'>) => void;
+    registerTaskContextMenuEntry: (
+      cfg: Omit<PluginTaskContextMenuEntryCfg, 'pluginId'>,
+    ) => void;
+    openExternalUrl: (url: string) => Promise<void>;
     registerSidePanelButton: (cfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>) => void;
     registerWorkContextHeaderButton: (
       cfg: Omit<PluginWorkContextHeaderBtnCfg, 'pluginId'>,
@@ -307,7 +314,12 @@ export class PluginBridgeService implements OnDestroy {
       registerHeaderButton: (cfg: PluginHeaderBtnCfg) =>
         this._registerHeaderButton(pluginId, cfg),
       registerMenuEntry: (cfg: Omit<PluginMenuEntryCfg, 'pluginId'>) =>
-        this._registerMenuEntry(pluginId, cfg),
+        this._pluginMenuRegistry.registerMenuEntry(pluginId, cfg),
+      registerTaskContextMenuEntry: (
+        cfg: Omit<PluginTaskContextMenuEntryCfg, 'pluginId'>,
+      ) => this._pluginMenuRegistry.registerTaskContextMenuEntry(pluginId, cfg),
+      openExternalUrl: (url: string): Promise<void> =>
+        openExternalUrlForPlugin(url, manifest?.permissions),
       registerSidePanelButton: (cfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>) =>
         this._registerSidePanelButton(pluginId, cfg),
       registerWorkContextHeaderButton: (
@@ -1467,7 +1479,7 @@ export class PluginBridgeService implements OnDestroy {
 
     this._pluginHooksService.unregisterPluginHooks(pluginId);
     this._removePluginHeaderButtons(pluginId);
-    this._removePluginMenuEntries(pluginId);
+    this._pluginMenuRegistry.removePluginEntries(pluginId);
     this._removePluginSidePanelButtons(pluginId);
     this._removePluginWorkContextHeaderButtons(pluginId);
     this.unregisterPluginShortcuts(pluginId);
@@ -1506,59 +1518,6 @@ export class PluginBridgeService implements OnDestroy {
     PluginLog.log('PluginBridge: Header button registered', {
       pluginId,
       headerBtnCfg,
-    });
-  }
-
-  /**
-   * Internal method to register menu entry
-   */
-  private _registerMenuEntry(
-    pluginId: string,
-    menuEntryCfg: Omit<PluginMenuEntryCfg, 'pluginId'>,
-  ): void {
-    // Validate required fields manually since typia has issues with optional fields
-    if (!menuEntryCfg.label || typeof menuEntryCfg.label !== 'string') {
-      throw new Error(
-        this._translateService.instant(T.PLUGINS.MENU_ENTRY_LABEL_REQUIRED),
-      );
-    }
-    if (!menuEntryCfg.onClick || typeof menuEntryCfg.onClick !== 'function') {
-      throw new Error(
-        this._translateService.instant(T.PLUGINS.MENU_ENTRY_ONCLICK_REQUIRED),
-      );
-    }
-    if (menuEntryCfg.icon !== undefined && typeof menuEntryCfg.icon !== 'string') {
-      throw new Error(this._translateService.instant(T.PLUGINS.MENU_ENTRY_ICON_STRING));
-    }
-
-    const newMenuEntry: PluginMenuEntryCfg = {
-      ...menuEntryCfg,
-      pluginId,
-    };
-
-    const currentEntries = this._menuEntries();
-
-    // Check for duplicate entry (same plugin ID and label)
-    const isDuplicate = currentEntries.some(
-      (entry) => entry.pluginId === pluginId && entry.label === menuEntryCfg.label,
-    );
-
-    if (isDuplicate) {
-      PluginLog.err(
-        'PluginBridge: Duplicate menu entry detected, skipping registration',
-        {
-          pluginId,
-          label: menuEntryCfg.label,
-        },
-      );
-      return;
-    }
-
-    this._menuEntries.set([...currentEntries, newMenuEntry]);
-
-    PluginLog.log('PluginBridge: Menu entry registered', {
-      pluginId,
-      menuEntryCfg,
     });
   }
 
@@ -1638,17 +1597,6 @@ export class PluginBridgeService implements OnDestroy {
 
   invokeConfigHandler(pluginId: string): void {
     this._configHandlers.get(pluginId)?.();
-  }
-
-  /**
-   * Remove all menu entries for a specific plugin
-   */
-  private _removePluginMenuEntries(pluginId: string): void {
-    const currentEntries = this._menuEntries();
-    const filteredEntries = currentEntries.filter((entry) => entry.pluginId !== pluginId);
-    this._menuEntries.set(filteredEntries);
-
-    PluginLog.log('PluginBridge: Menu entries removed for plugin', { pluginId });
   }
 
   /**

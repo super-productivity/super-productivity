@@ -14,6 +14,7 @@ export {
   PluginCreateTaskData,
   PluginShortcutCfg,
   PluginMenuEntryCfg,
+  PluginTaskContextMenuEntryCfg,
   PluginHeaderBtnCfg,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,

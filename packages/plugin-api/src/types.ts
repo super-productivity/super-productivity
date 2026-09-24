@@ -14,6 +14,13 @@ export interface PluginMenuEntryCfg {
   onClick: () => void;
 }
 
+export interface PluginTaskContextMenuEntryCfg {
+  pluginId: string;
+  label: string;
+  icon?: string; // Material icon name
+  onClick: (taskId: string) => void;
+}
+
 export enum PluginHooks {
   TASK_CREATED = 'taskCreated',
   TASK_COMPLETE = 'taskComplete',
@@ -522,6 +529,15 @@ export interface PluginAPI {
 
   registerMenuEntry(menuEntryCfg: Omit<PluginMenuEntryCfg, 'pluginId'>): void;
 
+  /**
+   * Add an entry to the task context (right-click) menu. `onClick` receives the
+   * id of the task the menu was opened for. plugin.js only; entries are removed
+   * when the plugin is disabled. Optional because older app versions lack it.
+   */
+  registerTaskContextMenuEntry?(
+    cfg: Omit<PluginTaskContextMenuEntryCfg, 'pluginId'>,
+  ): void;
+
   registerConfigHandler(handler: () => void): void;
 
   registerShortcut(
@@ -758,6 +774,14 @@ export interface PluginAPI {
    * in `allowedHosts` (the scope). Missing either is rejected (fail-closed).
    */
   request<T = unknown>(url: string, options?: PluginRequestOptions): Promise<T>;
+
+  /**
+   * Open a URL with the OS default handler (desktop) or in a new tab (web).
+   * Requires `"openExternalUrl"` in `permissions` (fail-closed). The URL must
+   * use a scheme the app allows for external links; `file:` is always refused.
+   * plugin.js only. Optional because older app versions lack it.
+   */
+  openExternalUrl?(url: string): Promise<void>;
 
   // download file
   downloadFile(filename: string, data: string): Promise<void>;

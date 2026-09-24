@@ -81,6 +81,7 @@ import { AddSubtaskInputService } from '../../add-subtask-input/add-subtask-inpu
 import { TaskDuplicateService } from '../../task-duplicate.service';
 import { TaskMoveToProjectService } from '../../task-move-to-project.service';
 import { TaskMultiSelectService } from '../../task-multi-select.service';
+import { PluginMenuRegistryService } from '../../../../plugins/plugin-menu-registry.service';
 
 @Component({
   selector: 'task-context-menu-inner',
@@ -125,6 +126,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _taskDuplicateService = inject(TaskDuplicateService);
   private readonly _taskMoveToProjectService = inject(TaskMoveToProjectService);
   private readonly _taskMultiSelectService = inject(TaskMultiSelectService);
+  private readonly _pluginMenuRegistry = inject(PluginMenuRegistryService);
 
   protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
@@ -177,6 +179,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     ),
   );
   toggleTagList = this._tagService.tagsNoMyDayAndNoListInTreeOrder;
+  // A shared signal: this component only exists while the menu is open.
+  readonly pluginEntries = this._pluginMenuRegistry.taskContextMenuEntries;
   projectFolderMap = computed(() => this._menuTreeService.projectFolderMap());
   tagFolderMap = computed(() => this._menuTreeService.tagFolderMap());
 

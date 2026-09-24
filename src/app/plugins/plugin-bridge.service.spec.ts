@@ -44,6 +44,7 @@ import { T } from '../t.const';
 import { INBOX_PROJECT } from '../features/project/project.const';
 import { Project } from '../features/project/project.model';
 import { PluginManifest } from '@super-productivity/plugin-api';
+import { PluginMenuRegistryService } from './plugin-menu-registry.service';
 
 describe('PluginBridgeService - Counter Methods', () => {
   let service: PluginBridgeService;
@@ -332,6 +333,66 @@ describe('PluginBridgeService - Counter Methods', () => {
       service.createBoundMethods('other-plugin').unregisterShortcut('rule-1');
 
       expect(service.shortcuts().length).toBe(1);
+    });
+  });
+
+  describe('task context menu entries', () => {
+    it('registers entries per plugin and removes only that plugin on unload', () => {
+      const registry = TestBed.inject(PluginMenuRegistryService);
+      const onClick = jasmine.createSpy('onClick');
+      service
+        .createBoundMethods('test-plugin')
+        .registerTaskContextMenuEntry({ label: 'Mine', onClick });
+      service
+        .createBoundMethods('other-plugin')
+        .registerTaskContextMenuEntry({ label: 'Theirs', onClick });
+      service
+        .createBoundMethods('test-plugin')
+        .registerMenuEntry({ label: 'Nav entry', onClick: () => {} });
+
+      service.unregisterPluginHooks('test-plugin');
+
+      expect(registry.taskContextMenuEntries().map((e) => e.pluginId)).toEqual([
+        'other-plugin',
+      ]);
+      expect(service.menuEntries()).toEqual([]);
+    });
+  });
+
+  describe('openExternalUrl', () => {
+    const manifestWith = (permissions: string[]): PluginManifest => ({
+      id: 'test-plugin',
+      name: 'Test',
+      manifestVersion: 1,
+      version: '1.0.0',
+      minSupVersion: '1.0.0',
+      hooks: [],
+      permissions,
+    });
+
+    it('is blocked when the manifest does not declare the permission', async () => {
+      const openSpy = spyOn(window, 'open');
+
+      await expectAsync(
+        service
+          .createBoundMethods('test-plugin', manifestWith([]))
+          .openExternalUrl('https://example.com'),
+      ).toBeRejectedWithError(/"openExternalUrl" permission/);
+      expect(openSpy).not.toHaveBeenCalled();
+    });
+
+    it('opens an allowed URL when the permission is declared', async () => {
+      const openSpy = spyOn(window, 'open');
+
+      await service
+        .createBoundMethods('test-plugin', manifestWith(['openExternalUrl']))
+        .openExternalUrl('parallelcode://new-task?spTaskId=a');
+
+      expect(openSpy).toHaveBeenCalledOnceWith(
+        'parallelcode://new-task?spTaskId=a',
+        '_blank',
+        'noopener,noreferrer',
+      );
     });
   });
 
