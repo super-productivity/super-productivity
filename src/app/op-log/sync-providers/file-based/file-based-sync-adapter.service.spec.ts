@@ -1209,6 +1209,69 @@ describe('FileBasedSyncAdapterService', () => {
 
         expect(result.gapDetected).toBe(true);
       });
+
+      it('flags a gap when a tail op masks a USE_LOCAL replacement (#9170)', async () => {
+        // Reproduces #9170: client A syncs up to syncVersion 3. Client B then
+        // chooses "Keep local" (USE_LOCAL), which replaces the remote snapshot
+        // and resets syncVersion to 1 with an unrelated vector clock. Before A's
+        // next download, B uploads two more tail ops, which walk syncVersion
+        // back up to exactly the value A already expects (3) and leave
+        // recentOps non-empty again. All three syncVersion/recentOps-based
+        // heuristics miss this, so A must never apply the tail alone without
+        // first rehydrating B's replacement snapshot.
+        const compactOp = (
+          id: string,
+          clock: Record<string, number>,
+          syncVersion: number,
+        ): FileBasedSyncData['recentOps'][number] => ({
+          id,
+          c: 'client-b',
+          a: 'HA',
+          o: 'ADD',
+          e: 'TASK',
+          d: id,
+          v: clock,
+          t: Date.now(),
+          s: 1,
+          p: {},
+          sv: syncVersion,
+        });
+
+        // A establishes its baseline: syncVersion 3, vector clock {clientA: 3}.
+        const established = createMockSyncData({
+          syncVersion: 3,
+          vectorClock: { clientA: 3 },
+          clientId: 'client-a',
+          recentOps: [],
+        });
+        mockProvider.downloadFile.and.returnValue(
+          Promise.resolve({ dataStr: addPrefix(established), rev: 'rev-1' }),
+        );
+        await adapter.downloadOps(0, 'client-a');
+        await adapter.setLastServerSeq(3);
+
+        // B replaces the remote with its own state (USE_LOCAL) and then
+        // uploads two tail ops, landing syncVersion back at 3 with a vector
+        // clock that shares no history with A's ({clientB: 3} is CONCURRENT
+        // with {clientA: 3}) — a genuine lineage break.
+        const replacedWithTail = createMockSyncData({
+          syncVersion: 3,
+          vectorClock: { clientB: 3 },
+          clientId: 'client-b',
+          recentOps: [compactOp('op-b3', { clientB: 3 }, 3)],
+          oldestOpSyncVersion: 3,
+          state: { tasks: [{ id: 'task-b' }] },
+        });
+        mockProvider.downloadFile.and.returnValue(
+          Promise.resolve({ dataStr: addPrefix(replacedWithTail), rev: 'rev-2' }),
+        );
+
+        const result = await adapter.downloadOps(3, 'client-a');
+
+        // Must be flagged as a gap so the caller re-hydrates the replacement
+        // snapshot instead of applying the tail op on top of stale local state.
+        expect(result.gapDetected).toBe(true);
+      });
     });
 
     it('should set seq counter to syncVersion after snapshot upload', async () => {
