@@ -354,6 +354,44 @@ describe('conflict-disjoint-merge.util', () => {
         {},
       );
     });
+
+    // #10214: a crossing time-tracking op must not be dropped just because the
+    // local side ALSO has a disjoint non-time edit. Two additive syncTimeSpent
+    // deltas always commute regardless of what else rides along on either side.
+    it('treats two syncTimeSpent deltas as disjoint even when the local side also has a non-time edit', () => {
+      const renameLocal = op({
+        id: 'a-title',
+        payload: { task: { id: 'task-1', title: 'Renamed' } },
+      });
+      expect(
+        isDisjointMergeEligible({
+          localOps: [syncTimeSpentOp(), renameLocal],
+          remoteOps: [syncTimeSpentOp({ id: 'b-time', clientId: 'B' })],
+          payloadKey: 'task',
+          entityId: 'task-1',
+        }),
+      ).toBe(true);
+    });
+
+    it('keeps delta-vs-absolute a collision even when the local side also has a disjoint non-time edit', () => {
+      const renameLocal = op({
+        id: 'a-title',
+        payload: { task: { id: 'task-1', title: 'Renamed' } },
+      });
+      const absoluteRemoteTimeWrite = op({
+        id: 'b-time',
+        clientId: 'B',
+        payload: { task: { id: 'task-1', timeSpent: 5 } },
+      });
+      expect(
+        isDisjointMergeEligible({
+          localOps: [syncTimeSpentOp(), renameLocal],
+          remoteOps: [absoluteRemoteTimeWrite],
+          payloadKey: 'task',
+          entityId: 'task-1',
+        }),
+      ).toBe(false);
+    });
   });
 
   describe('isAdditiveTimeOp', () => {

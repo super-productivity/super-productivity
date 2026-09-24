@@ -221,12 +221,27 @@ const SYNC_TIME_SPENT_FIELDS: readonly string[] = ['timeSpent', 'timeSpentOnDay'
  * deliberately NOT surfaced through `mergeChangedFields`: the delta's values
  * must never be applied as a field patch.
  */
+/** A side's non-noise fields, split by how the field was reached. */
+interface SideNonNoiseKeys {
+  /** Every non-noise field this side touches (absolute + additive-delta). */
+  all: string[];
+  /**
+   * Subset of `all` reached ONLY via additive time deltas (`syncTimeSpent`) on
+   * this side, never via an absolute field write. Two additive deltas on the
+   * SAME field always commute (#10214); a delta and an absolute write of the
+   * same field do not, so a field stays out of this set as soon as any op on
+   * the side writes it as an absolute value.
+   */
+  additiveOnlyKeys: Set<string>;
+}
+
 const sideNonNoiseKeys = (
   ops: Operation[],
   payloadKey: string,
   entityId: string,
-): string[] | undefined => {
+): SideNonNoiseKeys | undefined => {
   const keys = new Set<string>();
+  const absoluteKeys = new Set<string>();
   for (const op of ops) {
     if (op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT) {
       SYNC_TIME_SPENT_FIELDS.forEach((field) => keys.add(field));
@@ -235,11 +250,13 @@ const sideNonNoiseKeys = (
     if (isOpaqueChangeOp(op, payloadKey, entityId)) {
       return undefined;
     }
-    nonNoiseKeys(extractOpChanges(op, payloadKey, entityId)).forEach((field) =>
-      keys.add(field),
-    );
+    nonNoiseKeys(extractOpChanges(op, payloadKey, entityId)).forEach((field) => {
+      keys.add(field);
+      absoluteKeys.add(field);
+    });
   }
-  return [...keys];
+  const additiveOnlyKeys = new Set([...keys].filter((field) => !absoluteKeys.has(field)));
+  return { all: [...keys], additiveOnlyKeys };
 };
 
 /**
@@ -279,9 +296,12 @@ export const noiseTiebreakSide = (
  *    classification;
  *  - the two sides' non-noise changed-field sets are DISJOINT, with a
  *    `syncTimeSpent` op counted as touching `timeSpent`/`timeSpentOnDay` (see
- *    `sideNonNoiseKeys`). Callers that SYNTHESIZE a merged patch must still
- *    refuse additive time ops up front (`isAdditiveTimeOp`): this predicate only
- *    answers whether the two sides commute.
+ *    `sideNonNoiseKeys`) — EXCEPT a field both sides reach ONLY via additive
+ *    time deltas is not a collision: two `syncTimeSpent` deltas always commute
+ *    (#10214), while a delta vs. an absolute write of the same field still is.
+ *    Callers that SYNTHESIZE a merged patch must still refuse additive time
+ *    ops up front (`isAdditiveTimeOp`): this predicate only answers whether
+ *    the two sides commute.
  */
 export const isDisjointMergeEligible = (params: {
   localOps: Operation[];
@@ -305,10 +325,20 @@ export const isDisjointMergeEligible = (params: {
   const localNonNoise = sideNonNoiseKeys(localOps, payloadKey, entityId);
   const remoteNonNoise = sideNonNoiseKeys(remoteOps, payloadKey, entityId);
   if (localNonNoise === undefined || remoteNonNoise === undefined) return false;
-  if (localNonNoise.length === 0 || remoteNonNoise.length === 0) return false;
+  if (localNonNoise.all.length === 0 || remoteNonNoise.all.length === 0) return false;
 
-  const remoteSet = new Set(remoteNonNoise);
-  return !localNonNoise.some((field) => remoteSet.has(field));
+  const remoteSet = new Set(remoteNonNoise.all);
+  return !localNonNoise.all.some((field) => {
+    if (!remoteSet.has(field)) return false;
+    // Both sides reach this field only through additive deltas — they commute.
+    if (
+      localNonNoise.additiveOnlyKeys.has(field) &&
+      remoteNonNoise.additiveOnlyKeys.has(field)
+    ) {
+      return false;
+    }
+    return true;
+  });
 };
 
 /**

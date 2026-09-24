@@ -4506,12 +4506,20 @@ export class ConflictResolutionService {
 
       // Task-time sync operations are positive deltas, so two concurrent timer
       // batches commute. Sending them through entity-level LWW would discard one
-      // user's tracked time even though both can be applied safely.
+      // user's tracked time even though both can be applied safely. #10214: this
+      // must also hold when one side ALSO carries a disjoint non-time edit (e.g.
+      // `[syncTimeSpent, rename]` vs a remote `syncTimeSpent`) — `isAdditiveTimeOp`
+      // + `isDisjointMergeEligible` decide it field-by-field instead of requiring
+      // every op on both sides to be a time op. A delta-vs-absolute write of the
+      // same time field still collides (not eligible) and falls through to LWW.
       if (
-        remoteOp.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT &&
-        ctx.localOpsForEntity.every(
-          (op) => op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
-        )
+        [...ctx.localOpsForEntity, remoteOp].some(isAdditiveTimeOp) &&
+        isDisjointMergeEligible({
+          localOps: ctx.localOpsForEntity,
+          remoteOps: [remoteOp],
+          payloadKey: this._resolvePayloadKey(remoteOp.entityType),
+          entityId,
+        })
       ) {
         return { isSupersededOrDuplicate: false, conflict: null };
       }

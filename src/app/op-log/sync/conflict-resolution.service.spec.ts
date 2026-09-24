@@ -7203,6 +7203,69 @@ describe('ConflictResolutionService', () => {
       expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
     });
 
+    // #10214: a crossing task-time delta must not be dropped just because the
+    // local side ALSO has a pending non-time edit alongside its own delta —
+    // the two additive deltas commute regardless of the rename.
+    it('should keep a concurrent additive task-time delta non-conflicting when the local side also has a disjoint pending edit', async () => {
+      const remoteOp: Operation = {
+        ...createMockOp('remote-time', 'clientB'),
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        entityId: 'task-1',
+        payload: { taskId: 'task-1', date: '2024-01-15', duration: 3000 },
+        vectorClock: { clientB: 1 },
+      };
+      const localTimeOp: Operation = {
+        ...createMockOp('local-time', 'clientA'),
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        entityId: 'task-1',
+        payload: { taskId: 'task-1', date: '2024-01-15', duration: 2000 },
+        vectorClock: { clientA: 1 },
+      };
+      const localRenameOp: Operation = {
+        ...createMockOp('local-rename', 'clientA'),
+        entityId: 'task-1',
+        payload: { task: { id: 'task-1', changes: { title: 'Renamed' } } },
+        vectorClock: { clientA: 2 },
+      };
+      const localPendingOpsByEntity = new Map<string, Operation[]>([
+        ['TASK:task-1', [localTimeOp, localRenameOp]],
+      ]);
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ localPendingOpsByEntity }),
+      );
+
+      expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+    });
+
+    it('should still conflict when the crossing task-time delta collides with an absolute write of the same field', async () => {
+      const remoteOp: Operation = {
+        ...createMockOp('remote-time', 'clientB'),
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        entityId: 'task-1',
+        payload: { taskId: 'task-1', date: '2024-01-15', duration: 3000 },
+        vectorClock: { clientB: 1 },
+      };
+      const localAbsoluteTimeOp: Operation = {
+        ...createMockOp('local-time', 'clientA'),
+        entityId: 'task-1',
+        payload: { task: { id: 'task-1', changes: { timeSpent: 5 } } },
+        vectorClock: { clientA: 1 },
+      };
+      const localPendingOpsByEntity = new Map<string, Operation[]>([
+        ['TASK:task-1', [localAbsoluteTimeOp]],
+      ]);
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ localPendingOpsByEntity }),
+      );
+
+      expect(result.isSupersededOrDuplicate).toBe(false);
+      expect(result.conflicts.length).toBe(1);
+    });
+
     [
       {
         description: 'remote cross-section move and local source removal',
