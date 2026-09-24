@@ -7,10 +7,12 @@ import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
 import { TaskArchiveService } from '../../features/archive/task-archive.service';
 import { ProjectService } from '../../features/project/project.service';
 import { TagService } from '../../features/tag/tag.service';
+import { IssueService } from '../../features/issue/issue.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
 import { isTodayWithOffset } from '../../util/is-today.util';
 import { isValidDBDateStr } from '../../util/get-db-date-str';
+import { IssueLog } from '../log';
 
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { getDeadlineAutoPlanFields } from '../../features/tasks/util/get-deadline-auto-plan-fields';
@@ -336,6 +338,14 @@ const createSuccessResponse = (
 
 type TaskSource = 'active' | 'archived' | 'all';
 
+/**
+ * Upper bound for building `issueUrl` on `GET /tasks/:id`. Some providers
+ * (e.g. plugin providers without a derivable link) fetch the issue over the
+ * network; the link is a convenience, so a slow or offline provider must not
+ * eat the renderer's whole request budget (`LOCAL_REST_API_TIMEOUT_MS`).
+ */
+const ISSUE_URL_TIMEOUT_MS = 3000;
+
 const isValidTimestamp = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && new Date(value).getTime() > 0;
 
@@ -359,6 +369,7 @@ export class LocalRestApiHandlerService {
   private readonly _projectService = inject(ProjectService);
   private readonly _tagService = inject(TagService);
   private readonly _dateService = inject(DateService);
+  private readonly _issueService = inject(IssueService);
   private readonly _store = inject(Store);
   private _isInitialized = false;
 
@@ -751,7 +762,12 @@ export class LocalRestApiHandlerService {
         if (!task) {
           return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
         }
-        return createSuccessResponse(requestId, 200, task);
+        const issueUrl = await this._getIssueUrl(task);
+        return createSuccessResponse(
+          requestId,
+          200,
+          issueUrl ? { ...task, issueUrl } : task,
+        );
       }
 
       if (method === 'PATCH') {
@@ -975,6 +991,35 @@ export class LocalRestApiHandlerService {
     }
 
     return createSuccessResponse(requestId, 200, tags);
+  }
+
+  /**
+   * Best-effort link to the task's issue for `GET /tasks/:id`. Returns
+   * undefined when the task has no issue, the provider can't build a link, or
+   * building it fails or times out — never turns the request into an error.
+   */
+  private async _getIssueUrl(task: Task): Promise<string | undefined> {
+    const { issueType, issueId, issueProviderId } = task;
+    if (!issueType || !issueId || !issueProviderId) {
+      return undefined;
+    }
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const url = await Promise.race([
+        this._issueService.issueLink(issueType, issueId, issueProviderId),
+        new Promise<undefined>((resolve) => {
+          timeoutId = setTimeout(() => resolve(undefined), ISSUE_URL_TIMEOUT_MS);
+        }),
+      ]);
+      return typeof url === 'string' && url ? url : undefined;
+    } catch {
+      IssueLog.warn('[LocalRestApi] issueUrl omitted: link lookup failed', {
+        id: task.id,
+      });
+      return undefined;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
   // The id equality checks reject prototype-property names ('constructor',

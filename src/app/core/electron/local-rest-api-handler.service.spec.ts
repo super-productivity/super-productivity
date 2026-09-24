@@ -7,6 +7,8 @@ import { TaskArchiveService } from '../../features/archive/task-archive.service'
 import { ProjectService } from '../../features/project/project.service';
 import { Project } from '../../features/project/project.model';
 import { TagService } from '../../features/tag/tag.service';
+import { IssueService } from '../../features/issue/issue.service';
+import { IssueLog } from '../log';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
 import { Task, TaskWithSubTasks, TaskArchive } from '../../features/tasks/task.model';
@@ -35,6 +37,7 @@ describe('LocalRestApiHandlerService', () => {
   let projectServiceMock: jasmine.SpyObj<ProjectService>;
   let tagServiceMock: jasmine.SpyObj<TagService>;
   let dateServiceMock: jasmine.SpyObj<DateService>;
+  let issueServiceMock: jasmine.SpyObj<IssueService>;
   let store: MockStore;
   let dispatchSpy: jasmine.Spy;
   let activeProjects: Project[];
@@ -212,6 +215,9 @@ describe('LocalRestApiHandlerService', () => {
     dateServiceMock.todayStr.and.returnValue('2026-05-12');
     dateServiceMock.getStartOfNextDayDiffMs.and.returnValue(0);
 
+    issueServiceMock = jasmine.createSpyObj<IssueService>('IssueService', ['issueLink']);
+    issueServiceMock.issueLink.and.returnValue(Promise.resolve(''));
+
     TestBed.configureTestingModule({
       providers: [
         LocalRestApiHandlerService,
@@ -220,6 +226,7 @@ describe('LocalRestApiHandlerService', () => {
         { provide: ProjectService, useValue: projectServiceMock },
         { provide: TagService, useValue: tagServiceMock },
         { provide: DateService, useValue: dateServiceMock },
+        { provide: IssueService, useValue: issueServiceMock },
         provideMockStore({ initialState: { focusMode: initialFocusModeState } }),
       ],
     });
@@ -1227,6 +1234,126 @@ describe('LocalRestApiHandlerService', () => {
         expect(response.body.ok).toBe(false);
         expect(response.status).toBe(404);
         expect((response.body as any).error.code).toBe('TASK_NOT_FOUND');
+      });
+
+      describe('issueUrl', () => {
+        const issueTask = createMockTask('task-1', {
+          issueType: 'GITHUB',
+          issueId: '42',
+          issueProviderId: 'provider-1',
+        });
+
+        const mockGetTask = (task: Task): void => {
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) => of(task),
+          });
+        };
+
+        const getData = (
+          response: LocalRestApiResponsePayload,
+        ): Record<string, unknown> => {
+          if (!response.body.ok) {
+            throw new Error(`Expected success response, got ${response.body.error.code}`);
+          }
+          return response.body.data as Record<string, unknown>;
+        };
+
+        it('should include issueUrl when the provider builds a link', async () => {
+          mockGetTask(issueTask);
+          issueServiceMock.issueLink.and.returnValue(
+            Promise.resolve('https://github.com/o/r/issues/42'),
+          );
+
+          const response = await sendRequestAndWait(
+            createRequest('GET', '/tasks/task-1'),
+          );
+
+          expect(response.status).toBe(200);
+          expect(issueServiceMock.issueLink).toHaveBeenCalledWith(
+            'GITHUB',
+            '42',
+            'provider-1',
+          );
+          const data = getData(response);
+          expect(data.issueUrl).toBe('https://github.com/o/r/issues/42');
+          expect(data.id).toBe('task-1');
+        });
+
+        it('should omit issueUrl and not look it up for a task without an issue', async () => {
+          mockGetTask(createMockTask('task-1'));
+
+          const response = await sendRequestAndWait(
+            createRequest('GET', '/tasks/task-1'),
+          );
+
+          expect(response.status).toBe(200);
+          expect(issueServiceMock.issueLink).not.toHaveBeenCalled();
+          expect('issueUrl' in getData(response)).toBe(false);
+        });
+
+        it('should omit issueUrl when the provider returns an empty link', async () => {
+          mockGetTask(issueTask);
+          issueServiceMock.issueLink.and.returnValue(Promise.resolve(''));
+
+          const response = await sendRequestAndWait(
+            createRequest('GET', '/tasks/task-1'),
+          );
+
+          expect(response.status).toBe(200);
+          expect('issueUrl' in getData(response)).toBe(false);
+        });
+
+        it('should return 200 without issueUrl when building the link fails', async () => {
+          mockGetTask(issueTask);
+          const warnSpy = spyOn(IssueLog, 'warn');
+          issueServiceMock.issueLink.and.returnValue(
+            Promise.reject(new Error('provider config missing')),
+          );
+
+          const response = await sendRequestAndWait(
+            createRequest('GET', '/tasks/task-1'),
+          );
+
+          expect(response.status).toBe(200);
+          expect('issueUrl' in getData(response)).toBe(false);
+          expect(warnSpy).toHaveBeenCalledWith(jasmine.any(String), { id: 'task-1' });
+        });
+
+        it('should return 200 without issueUrl when building the link hangs', async () => {
+          mockGetTask(issueTask);
+          let markCalled!: () => void;
+          const isCalled = new Promise<void>((resolve) => (markCalled = resolve));
+          issueServiceMock.issueLink.and.callFake(() => {
+            markCalled();
+            return new Promise<string>(() => undefined);
+          });
+
+          jasmine.clock().install();
+          try {
+            const responsePromise = sendRequestAndWait(
+              createRequest('GET', '/tasks/task-1'),
+            );
+            await isCalled;
+            jasmine.clock().tick(3000);
+            const response = await responsePromise;
+
+            expect(response.status).toBe(200);
+            expect('issueUrl' in getData(response)).toBe(false);
+          } finally {
+            jasmine.clock().uninstall();
+          }
+        });
+
+        it('should not look up issue links for the task list', async () => {
+          Object.defineProperty(taskServiceMock, 'allTasks$', {
+            get: () => of([issueTask]),
+          });
+
+          const response = await sendRequestAndWait(createRequest('GET', '/tasks'));
+
+          expect(response.status).toBe(200);
+          expect(issueServiceMock.issueLink).not.toHaveBeenCalled();
+        });
       });
     });
 
