@@ -13,6 +13,7 @@ import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
 import { Task, TaskWithSubTasks, TaskArchive } from '../../features/tasks/task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { addSubTask } from '../../features/tasks/store/task.actions';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
@@ -161,6 +162,7 @@ describe('LocalRestApiHandlerService', () => {
       [
         'add',
         'addSubTaskTo',
+        'createNewTaskWithDefaults',
         'update',
         'remove',
         'setCurrentId',
@@ -1062,6 +1064,93 @@ describe('LocalRestApiHandlerService', () => {
         expect(taskServiceMock.add).not.toHaveBeenCalled();
       });
 
+      describe('isIgnoreShortSyntax', () => {
+        beforeEach(() => {
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (id: string) =>
+              id === 'parent-1'
+                ? of(createMockTask('parent-1', { projectId: 'project-1' }))
+                : of(createMockTask(id)),
+          });
+        });
+
+        it('should store a top-level title literally when asked', async () => {
+          await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: { title: 'Fix #12 in 30m', isIgnoreShortSyntax: true },
+            }),
+          );
+
+          expect(taskServiceMock.add).toHaveBeenCalledWith(
+            'Fix #12 in 30m',
+            false,
+            { title: 'Fix #12 in 30m' },
+            false,
+            true,
+          );
+        });
+
+        it('should create a literal subtask without the parsing path', async () => {
+          (taskServiceMock as any).createNewTaskWithDefaults.and.returnValue(
+            createMockTask('literal-sub', { title: 'Child #x' }),
+          );
+
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: {
+                title: 'Child #x',
+                parentId: 'parent-1',
+                isIgnoreShortSyntax: true,
+              },
+            }),
+          );
+
+          expect(response.status).toBe(201);
+          expect(taskServiceMock.addSubTaskTo).not.toHaveBeenCalled();
+          const action = dispatchSpy.calls.mostRecent().args[0];
+          expect(action.type).toBe(addSubTask.type);
+          expect(action.parentId).toBe('parent-1');
+          expect(action.isIgnoreShortSyntax).toBe(true);
+        });
+
+        it('should reject a non-boolean flag', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: { title: 'T', isIgnoreShortSyntax: 'yes' },
+            }),
+          );
+
+          expect(response.status).toBe(400);
+          expect(taskServiceMock.add).not.toHaveBeenCalled();
+        });
+
+        it('should update a title literally when asked', async () => {
+          await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { title: 'Renamed #tag', isIgnoreShortSyntax: true },
+            }),
+          );
+
+          expect(taskServiceMock.update).not.toHaveBeenCalled();
+          expect(dispatchSpy).toHaveBeenCalledOnceWith(
+            TaskSharedActions.updateTask({
+              task: { id: 'task-1', changes: { title: 'Renamed #tag' } },
+              isIgnoreShortSyntax: true,
+            }),
+          );
+        });
+
+        it('should keep parsing by default', async () => {
+          await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', { body: { title: 'Renamed #tag' } }),
+          );
+
+          expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+            title: 'Renamed #tag',
+          });
+        });
+      });
+
       describe('with parentId (create subtask)', () => {
         it('should create a subtask when parentId refers to an existing top-level task', async () => {
           const parentTask = createMockTask('parent-1', { projectId: 'project-1' });
@@ -1258,14 +1347,16 @@ describe('LocalRestApiHandlerService', () => {
           return response.body.data as Record<string, unknown>;
         };
 
-        it('should include issueUrl when the provider builds a link', async () => {
+        const withIssueUrl = { query: { include: 'issueUrl' } };
+
+        it('should include issueUrl when asked and the provider builds a link', async () => {
           mockGetTask(issueTask);
           issueServiceMock.issueLink.and.returnValue(
             Promise.resolve('https://github.com/o/r/issues/42'),
           );
 
           const response = await sendRequestAndWait(
-            createRequest('GET', '/tasks/task-1'),
+            createRequest('GET', '/tasks/task-1', withIssueUrl),
           );
 
           expect(response.status).toBe(200);
@@ -1279,11 +1370,38 @@ describe('LocalRestApiHandlerService', () => {
           expect(data.id).toBe('task-1');
         });
 
+        it('should not look up the link unless asked', async () => {
+          mockGetTask(issueTask);
+
+          const response = await sendRequestAndWait(
+            createRequest('GET', '/tasks/task-1'),
+          );
+
+          expect(response.status).toBe(200);
+          expect(issueServiceMock.issueLink).not.toHaveBeenCalled();
+          expect('issueUrl' in getData(response)).toBe(false);
+        });
+
+        it('should accept issueUrl in a comma-separated include list', async () => {
+          mockGetTask(issueTask);
+          issueServiceMock.issueLink.and.returnValue(
+            Promise.resolve('https://github.com/o/r/issues/42'),
+          );
+
+          const response = await sendRequestAndWait(
+            createRequest('GET', '/tasks/task-1', {
+              query: { include: 'subTasks, issueUrl' },
+            }),
+          );
+
+          expect(getData(response).issueUrl).toBe('https://github.com/o/r/issues/42');
+        });
+
         it('should omit issueUrl and not look it up for a task without an issue', async () => {
           mockGetTask(createMockTask('task-1'));
 
           const response = await sendRequestAndWait(
-            createRequest('GET', '/tasks/task-1'),
+            createRequest('GET', '/tasks/task-1', withIssueUrl),
           );
 
           expect(response.status).toBe(200);
@@ -1296,7 +1414,7 @@ describe('LocalRestApiHandlerService', () => {
           issueServiceMock.issueLink.and.returnValue(Promise.resolve(''));
 
           const response = await sendRequestAndWait(
-            createRequest('GET', '/tasks/task-1'),
+            createRequest('GET', '/tasks/task-1', withIssueUrl),
           );
 
           expect(response.status).toBe(200);
@@ -1311,7 +1429,7 @@ describe('LocalRestApiHandlerService', () => {
           );
 
           const response = await sendRequestAndWait(
-            createRequest('GET', '/tasks/task-1'),
+            createRequest('GET', '/tasks/task-1', withIssueUrl),
           );
 
           expect(response.status).toBe(200);
@@ -1331,7 +1449,7 @@ describe('LocalRestApiHandlerService', () => {
           jasmine.clock().install();
           try {
             const responsePromise = sendRequestAndWait(
-              createRequest('GET', '/tasks/task-1'),
+              createRequest('GET', '/tasks/task-1', withIssueUrl),
             );
             await isCalled;
             jasmine.clock().tick(3000);

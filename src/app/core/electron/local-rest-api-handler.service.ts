@@ -15,6 +15,7 @@ import { isValidDBDateStr } from '../../util/get-db-date-str';
 import { IssueLog } from '../log';
 
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { addSubTask } from '../../features/tasks/store/task.actions';
 import { getDeadlineAutoPlanFields } from '../../features/tasks/util/get-deadline-auto-plan-fields';
 import {
   selectCurrentCycle,
@@ -294,6 +295,29 @@ const getQueryParam = (
   return Array.isArray(value) ? value[0] : value;
 };
 
+/**
+ * `isIgnoreShortSyntax: true` in a POST/PATCH body stores the title literally:
+ * `#tag`, `+project`, `30m`, `@date` and URLs are not parsed out of it. Opt-in
+ * so scripts that rely on parsing keep working; returns an error message for a
+ * non-boolean value.
+ */
+const readIsIgnoreShortSyntax = (
+  body: Record<string, unknown>,
+): { ok: true; value: boolean } | { ok: false; message: string } => {
+  const value = body['isIgnoreShortSyntax'];
+  if (value === undefined) return { ok: true, value: false };
+  return typeof value === 'boolean'
+    ? { ok: true, value }
+    : { ok: false, message: 'isIgnoreShortSyntax must be a boolean' };
+};
+
+/** `?include=a,b` (or repeated `include=`) asks for optional response fields. */
+const isIncluded = (query: Record<string, string | string[]>, field: string): boolean => {
+  const value = query['include'];
+  const values = value === undefined ? [] : Array.isArray(value) ? value : [value];
+  return values.some((v) => v.split(',').some((part) => part.trim() === field));
+};
+
 const getQueryParamAsBoolean = (
   query: Record<string, string | string[]>,
   key: string,
@@ -339,7 +363,7 @@ const createSuccessResponse = (
 type TaskSource = 'active' | 'archived' | 'all';
 
 /**
- * Upper bound for building `issueUrl` on `GET /tasks/:id`. Some providers
+ * Upper bound for building `issueUrl` on `GET /tasks/:id?include=issueUrl`. Some providers
  * (e.g. plugin providers without a derivable link) fetch the issue over the
  * network; the link is a convenience, so a slow or offline provider must not
  * eat the renderer's whole request budget (`LOCAL_REST_API_TIMEOUT_MS`).
@@ -463,7 +487,7 @@ export class LocalRestApiHandlerService {
     }
 
     if (segments[0] === 'tasks' && segments[1] && segments.length >= 2) {
-      return this._handleTaskRoutes(method, segments, requestId, body);
+      return this._handleTaskRoutes(method, segments, requestId, body, query);
     }
 
     if (method === 'GET' && path === '/projects') {
@@ -646,6 +670,17 @@ export class LocalRestApiHandlerService {
       );
     }
 
+    const shortSyntaxFlag = readIsIgnoreShortSyntax(body);
+    if (!shortSyntaxFlag.ok) {
+      return createErrorResponse(
+        requestId,
+        400,
+        'INVALID_INPUT',
+        shortSyntaxFlag.message,
+      );
+    }
+    const isIgnoreShortSyntax = shortSyntaxFlag.value;
+
     const title = body.title.trim();
     const additionalFields = pickAllowedFields(body);
 
@@ -728,10 +763,12 @@ export class LocalRestApiHandlerService {
         );
       }
 
-      const subTaskId = this._taskService.addSubTaskTo(body.parentId, {
-        title,
-        ...additionalFields,
-      });
+      const subTaskId = isIgnoreShortSyntax
+        ? this._addLiteralSubTask(body.parentId, { title, ...additionalFields })
+        : this._taskService.addSubTaskTo(body.parentId, {
+            title,
+            ...additionalFields,
+          });
       if (deadlineResolution.change?.type === 'set') {
         this._dispatchDeadlineChange(subTaskId, deadlineResolution.change);
       }
@@ -739,7 +776,9 @@ export class LocalRestApiHandlerService {
       return createSuccessResponse(requestId, 201, createdSubTask);
     }
 
-    const taskId = this._taskService.add(title, false, additionalFields);
+    const taskId = isIgnoreShortSyntax
+      ? this._taskService.add(title, false, additionalFields, false, true)
+      : this._taskService.add(title, false, additionalFields);
     if (deadlineResolution.change?.type === 'set') {
       this._dispatchDeadlineChange(taskId, deadlineResolution.change);
     }
@@ -753,6 +792,7 @@ export class LocalRestApiHandlerService {
     segments: string[],
     requestId: string,
     body: unknown,
+    query: Record<string, string | string[]>,
   ): Promise<LocalRestApiResponsePayload> {
     const taskId = segments[1];
 
@@ -762,7 +802,11 @@ export class LocalRestApiHandlerService {
         if (!task) {
           return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
         }
-        const issueUrl = await this._getIssueUrl(task);
+        // Opt-in: some providers fetch the issue over the network to build
+        // the link, and most callers (e.g. frequent status polls) don't need it.
+        const issueUrl = isIncluded(query, 'issueUrl')
+          ? await this._getIssueUrl(task)
+          : undefined;
         return createSuccessResponse(
           requestId,
           200,
@@ -777,6 +821,16 @@ export class LocalRestApiHandlerService {
             400,
             'INVALID_INPUT',
             'PATCH body must be a JSON object',
+          );
+        }
+
+        const patchShortSyntaxFlag = readIsIgnoreShortSyntax(body);
+        if (!patchShortSyntaxFlag.ok) {
+          return createErrorResponse(
+            requestId,
+            400,
+            'INVALID_INPUT',
+            patchShortSyntaxFlag.message,
           );
         }
 
@@ -877,7 +931,19 @@ export class LocalRestApiHandlerService {
         }
 
         if (Object.keys(changes).length > 0) {
-          this._taskService.update(taskId, changes);
+          // Short syntax only ever runs on title-only updates, which never
+          // carry a project move, so the flagged path needs none of update()'s
+          // subtask bookkeeping.
+          if (patchShortSyntaxFlag.value && !hasOwn(changes, 'projectId')) {
+            this._store.dispatch(
+              TaskSharedActions.updateTask({
+                task: { id: taskId, changes },
+                isIgnoreShortSyntax: true,
+              }),
+            );
+          } else {
+            this._taskService.update(taskId, changes);
+          }
         }
         if (deadlineResolution.change) {
           this._dispatchDeadlineChange(taskId, deadlineResolution.change);
@@ -991,6 +1057,19 @@ export class LocalRestApiHandlerService {
     }
 
     return createSuccessResponse(requestId, 200, tags);
+  }
+
+  /**
+   * `TaskService.addSubTaskTo` with short syntax switched off. Kept here
+   * rather than as a flag on the service, which is already over the size cap.
+   */
+  private _addLiteralSubTask(parentId: string, additional: Partial<Task>): string {
+    const task = this._taskService.createNewTaskWithDefaults({
+      title: additional.title || '',
+      additional: { dueDay: additional.dueDay || undefined, ...additional },
+    });
+    this._store.dispatch(addSubTask({ task, parentId, isIgnoreShortSyntax: true }));
+    return task.id;
   }
 
   /**
