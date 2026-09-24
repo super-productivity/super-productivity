@@ -1,0 +1,17 @@
+{
+  "name": "Parallel Code",
+  "id": "parallel-code",
+  "manifestVersion": 1,
+  "version": "1.0.0",
+  "minSupVersion": "19.1.1",
+  "description": "Adds a \"Start in Parallel Code\" task menu entry that sends the task to Parallel Code, a desktop app that runs coding agents like Claude Code or Codex in isolated git worktrees.",
+  "author": "Super Productivity",
+  "permissions": ["openExternalUrl"],
+  "hooks": [],
+  "iFrame": false,
+  "isSkipMenuEntry": true,
+  "icon": "icon.svg",
+  "i18n": {
+    "languages": ["en"]
+  }
+}
