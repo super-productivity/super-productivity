@@ -49,6 +49,7 @@ export const ALLOWED_EXTERNAL_URL_SCHEMES = [
   'outlook:', // #8859 — Outlook desktop deep-links (outlook:<EntryID>)
   'webexteams:',
   'x-devonthink-item:', // DEVONthink item links (x-devonthink-item://<uuid>)
+  'parallelcode:', // Parallel Code: `new-task?spTaskId=<id>` only pre-fills its New Task form
 ];
 
 const LOCAL_FILE_URL_PREFIX = 'file:///';
