@@ -23,7 +23,6 @@ import {
 import { getRepeatableTaskId } from '../../task-repeat-cfg/get-repeatable-task-id.util';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
-import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
 import { LS } from '../../../core/persistence/storage-keys.const';
 
 // Matches the internal DELAY_SCHEDULE in the effects file.
@@ -347,7 +346,6 @@ describe('MobileNotificationEffects', () => {
   describe('on native platform — due-date gating', () => {
     let reminderServiceSpy: jasmine.SpyObj<CapacitorReminderService>;
     let cfg$: BehaviorSubject<TestCfg>;
-    let isAndroidWebView: boolean;
 
     const futureDueTask = (id: string): { id: string; title: string; dueDay: string } => {
       // Local date: the effect fires at the local hour, so a UTC date can land
@@ -382,7 +380,6 @@ describe('MobileNotificationEffects', () => {
         { platform: 'android', isNative: true },
       );
       platformService.isAndroid.and.returnValue(true);
-      isAndroidWebView = false;
 
       TestBed.configureTestingModule({
         imports: [EffectsModule.forRoot([])],
@@ -406,7 +403,6 @@ describe('MobileNotificationEffects', () => {
           { provide: CapacitorReminderService, useValue: reminderServiceSpy },
           { provide: CapacitorPlatformService, useValue: platformService },
           { provide: GlobalConfigService, useValue: { cfg$: cfg$.asObservable() } },
-          { provide: IS_ANDROID_WEB_VIEW_TOKEN, useFactory: () => isAndroidWebView },
         ],
       });
 
@@ -453,12 +449,12 @@ describe('MobileNotificationEffects', () => {
       // Every Android device fired its stale-check GET at exactly 09:00:00,
       // exhausting the SuperSync connection pool (2026-09).
       it('spreads Android due-date notifications by the per-install offset', fakeAsync(() => {
-        isAndroidWebView = true;
-
         expect(scheduledTriggerAtMs()).toBe(nineAm() + 123000);
       }));
 
       it('keeps due-date notifications on the hour off Android', fakeAsync(() => {
+        platformService.isAndroid.and.returnValue(false);
+
         expect(scheduledTriggerAtMs()).toBe(nineAm());
       }));
     });

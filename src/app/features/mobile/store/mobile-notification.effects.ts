@@ -26,7 +26,6 @@ import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { getDbDateStr } from '../../../util/get-db-date-str';
-import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
 import { getDueDateNotificationOffsetMs } from '../due-date-notification-offset';
 
 const DELAY_PERMISSIONS = 2000;
@@ -64,7 +63,6 @@ export class MobileNotificationEffects {
   private _reminderService = inject(CapacitorReminderService);
   private _platformService = inject(CapacitorPlatformService);
   private _globalConfigService = inject(GlobalConfigService);
-  private _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
   // Single-shot guard so we don't spam the user with duplicate warnings.
   private _hasShownNotificationWarning = false;
   // Track scheduled reminder IDs to cancel removed ones
@@ -401,7 +399,7 @@ export class MobileNotificationEffects {
 
               const now = Date.now();
               // Android only: its alarms hit SuperSync on firing, iOS ones don't.
-              const offsetMs = this._isAndroidWebView
+              const offsetMs = this._platformService.isAndroid()
                 ? getDueDateNotificationOffsetMs()
                 : 0;
               for (const task of tasks) {
