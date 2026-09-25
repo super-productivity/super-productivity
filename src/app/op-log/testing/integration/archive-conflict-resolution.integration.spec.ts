@@ -1630,6 +1630,31 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
         expect(state[TASK_FEATURE_NAME].entities[SUB]!.parentId).toBe(TASK_A);
       });
 
+      it('keeps the winning update after a restore preceded by an ordinary update of the archived task', () => {
+        // Rejected remote updates remain in the status-blind restart log.
+        // Updating an absent task is a no-op, so it cannot make the restore
+        // a duplicate or suppress the winning state following that restore.
+        const ops = [
+          archiveOp(),
+          opFor(
+            TaskSharedActions.updateTask({
+              task: { id: TASK_A, changes: { title: 'Rejected edit' } },
+            }) as PersistentAction,
+            2_000,
+          ),
+          restoreOp(),
+          taskUpdateOp(4_000),
+        ];
+        const batch = replayBatch(initialState(), ops);
+        const opByOp = replayOpByOp(initialState(), ops);
+
+        expect(batch.failures).toEqual([]);
+        expect(opByOp.failures).toEqual([]);
+        expect(opByOp.state[TASK_FEATURE_NAME].entities[TASK_A]!.title).toBe('LWW title');
+        expect(batch.state[TASK_FEATURE_NAME].entities[TASK_A]!.title).toBe('LWW title');
+        expect(batch.state[TASK_FEATURE_NAME].entities[SUB]!.parentId).toBe(TASK_A);
+      });
+
       it('keeps a deleted child removed when a duplicate restore of its active parent precedes a stale update', () => {
         const deleteOp = opFor(
           TaskSharedActions.deleteTasks({ taskIds: [SUB] }) as PersistentAction,

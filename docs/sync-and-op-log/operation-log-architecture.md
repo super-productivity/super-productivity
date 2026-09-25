@@ -1042,6 +1042,7 @@ Same-batch restores (#10220) — restart replay is status-blind, so a rejected b
 - Ops AFTER a `restoreTask` treat the task it brings back as active; ops between the archive and the restore still skip it, so a stale update cannot recreate the task and turn the restore into a no-op.
 - A later archive makes the task archived again; a later delete leaves it deleted but not archived, so a `recreatesEntityAfterDelete` update still applies.
 - A `restoreTask` whose root is already active is ignored, as `handleRestoreTask` ignores it: its payload subtasks are not treated as restored and the restore point does not move.
+- Ordinary task updates do not create missing tasks in the pre-scan: a rejected update between archive and restore cannot make the restore look like a duplicate or suppress a later winning update.
 - Logs replayed after upgrading may apply an LWW Update the pre-#10220 filter skipped; state moves to what op-by-op apply produces.
 - Known gaps (no observed occurrence yet): a subtask restored on its own under a still-archived parent is not detected; `restoreDeletedTask` (undo delete) is not treated as a restore, so a same-batch LWW Update after it is still skipped.
 

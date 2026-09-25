@@ -243,6 +243,9 @@ const upsertTaskProjectionFromTaskOrUpdate = (
   const id = typeof task.id === 'string' ? task.id : fallbackId;
   const changes = task.changes;
   if (id && changes && typeof changes === 'object') {
+    // Update<Task> cannot create a missing task. Inventing one here would
+    // make a later restore look like a duplicate, unlike the real reducers.
+    if (!projection[id]) return;
     upsertTaskProjectionFromTaskLike(
       projection,
       { ...(changes as object), id },
