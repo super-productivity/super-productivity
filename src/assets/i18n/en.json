@@ -3276,6 +3276,7 @@
     "PLEASE_SELECT_ZIP_FILE": "Please select a ZIP file",
     "PLUGIN_DIALOG_TITLE": "Plugin Message",
     "PLUGIN_ID_RESERVED": "Plugin ID \"{{pluginId}}\" is reserved for a built-in plugin",
+    "PLUGIN_INSTALLED": "Plugin \"{{name}}\" installed",
     "PLUGIN_JS_NOT_FOUND": "Plugin JavaScript file (plugin.js) not found in ZIP file",
     "PROJECT_DOES_NOT_EXIST": "Project does not exist",
     "PROJECT_NOT_FOUND": "Project \"{{contextId}}\" not found",

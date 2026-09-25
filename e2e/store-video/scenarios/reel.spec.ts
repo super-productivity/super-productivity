@@ -353,7 +353,7 @@ test.describe('@video reel', () => {
         title: 'Free and open source.',
         subtitle: 'superproductivity.com',
         stats: [
-          { template: '★ {n}K on GitHub', to: 19 },
+          { template: '★ {n}K on GitHub', to: 22 },
           { template: '{n} ★ on Google Play', to: 4.8, decimals: 1 },
           'Web · iOS · Android · macOS · Linux · Windows & many more',
         ],

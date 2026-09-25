@@ -456,13 +456,18 @@ body.isDarkTheme add-task-bar.global .add-task-container {
  * RIGHT PANEL — frosted glass with a violet glow edge
  * ===================================================================*/
 body.isDarkTheme right-panel .side {
-  background: var(--neon-pane-strong) !important;
-  backdrop-filter: var(--neon-blur);
-  -webkit-backdrop-filter: var(--neon-blur);
   border-left: 1px solid color-mix(in srgb, var(--neon-violet) 45%, transparent) !important;
   box-shadow:
     -16px 0 48px rgba(0, 0, 0, 0.45),
     -1px 0 30px color-mix(in srgb, var(--neon-violet) 30%, transparent);
+}
+
+/* Frost on .side-inner, not .side, which would otherwise become a stacking
+ * context that lets .content cover the panel's edge handles. */
+body.isDarkTheme right-panel .side-inner {
+  background: var(--neon-pane-strong) !important;
+  backdrop-filter: var(--neon-blur);
+  -webkit-backdrop-filter: var(--neon-blur);
 }
 
 /* ===================================================================

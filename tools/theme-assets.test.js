@@ -504,6 +504,27 @@ test('Liquid Glass keeps routed overlays and mobile safe-area math intact', () =
   );
 });
 
+test('right panel .side stays out of stacking contexts so its edge handles take clicks', () => {
+  for (const file of themeFiles) {
+    const css = withoutComments(readTheme(file));
+    for (const block of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const targetsSide = block[1].split(',').some((selector) => {
+        const compounds = selector.trim().split(/\s*[\s>+~]\s*/);
+        return (
+          compounds.includes('right-panel') &&
+          /\.side(?![\w-])/.test(compounds[compounds.length - 1])
+        );
+      });
+      if (!targetsSide) continue;
+      assert.doesNotMatch(
+        block[2],
+        /(?<![\w-])(?:-webkit-)?(?:backdrop-filter|filter|transform|opacity|will-change|contain|isolation)\s*:/i,
+        `${file} makes right-panel .side a stacking context via ${block[1].trim()}, so .content covers the edge handles`,
+      );
+    }
+  }
+});
+
 test('deep task hover and running indicators do not override stronger states', () => {
   for (const file of ['rainbow.css', 'velvet.css']) {
     const css = withoutComments(readTheme(file));
