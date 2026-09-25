@@ -380,6 +380,17 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     await expect(pageA.locator('task', { hasText: taskB2 })).toBeVisible();
     await expect(pageA.locator('task', { hasText: taskA })).not.toBeVisible();
 
+    // Converged state must survive a reload on both clients.
+    for (const page of [pageA, pageB]) {
+      await page.reload();
+      await waitForAppReady(page);
+      await new WorkViewPage(page).waitForTaskList();
+      await expect(page.locator('task')).toHaveCount(2);
+      await expect(page.locator('task', { hasText: taskB })).toBeVisible();
+      await expect(page.locator('task', { hasText: taskB2 })).toBeVisible();
+      await expect(page.locator('task', { hasText: taskA })).not.toBeVisible();
+    }
+
     await closeContextsSafely(contextA, contextB);
   });
 
