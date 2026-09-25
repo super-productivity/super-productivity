@@ -199,7 +199,7 @@ Implemented on `claude/local-desktop-mcp-review-j0tgjv`. Each group of commits c
 | PR  | Commits                                                                                                            | Scope                                                                  |
 | --- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
 | A   | `fix(local-rest-api): make the enable switch device-local and report status`                                       | simpleStore switch, default off, state/enable IPC, listen errors in UI |
-| B   | `build(mas,snap): allow the opt-in local API listener to bind 127.0.0.1`                                           | MAS `network.server`, Snap `network-bind`. Ship in its own release.    |
+| B   | `build(mas,snap): allow the opt-in local API listener to bind 127.0.0.1`                                           | Snap `network-bind` only; MAS `network.server` deferred (see below).   |
 | C   | `fix(local-rest-api): answer APP_NOT_READY until app data has loaded`                                              | readiness gate for REST and MCP                                        |
 | D   | `refactor(electron): extract secret-file helpers…`, then the `feat(assistant-access)` commits and the review fixes | `/mcp` endpoint, tools, capture, settings panel, `.mcpb` bridge, wiki  |
 
@@ -215,6 +215,7 @@ Implemented on `claude/local-desktop-mcp-review-j0tgjv`. Each group of commits c
 - Claude Code and Codex against a real build.
 - Claude Desktop with the packed `.mcpb` on macOS and Windows.
 - A MAS dev build: confirm EPERM without the entitlement and listening with it.
+  The entitlement was taken back out of this branch so it can ship in its own release after that check (§3). Until then the MAS build shows `PERMISSION_DENIED` when the API is switched on.
 - A Snap install (core22).
 - Tray/minimize and renderer reload with assistant access on.
 

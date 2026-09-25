@@ -6,11 +6,6 @@
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
-	<!-- Opt-in local REST API / assistant access: listens on 127.0.0.1 only,
-	     off by default (Settings > Misc). Without this the sandbox refuses the
-	     bind (EPERM) and the toggle cannot work. -->
-	<key>com.apple.security.network.server</key>
-	<true/>
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
 </dict>
