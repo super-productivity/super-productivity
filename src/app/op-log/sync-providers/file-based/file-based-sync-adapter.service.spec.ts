@@ -1274,6 +1274,92 @@ describe('FileBasedSyncAdapterService', () => {
         // snapshot instead of applying the tail op on top of stale local state.
         expect(result.gapDetected).toBe(true);
       });
+
+      it('records a clock on the first commit after upgrading from state without lastSeenClocks (#9170)', async () => {
+        // State persisted by a pre-#9170 client: cursor and expected version, but
+        // no last-seen clock (it was kept in memory only).
+        localStorage.setItem(
+          FILE_BASED_SYNC_CONSTANTS.SYNC_VERSION_STORAGE_KEY_PREFIX + 'state',
+          JSON.stringify({
+            syncVersions: { [SyncProviderId.WebDAV]: 3 },
+            seqCounters: { [SyncProviderId.WebDAV]: 3 },
+          }),
+        );
+        TestBed.resetTestingModule();
+        TestBed.configureTestingModule({
+          providers: [
+            FileBasedSyncAdapterService,
+            { provide: ArchiveDbAdapter, useValue: mockArchiveDbAdapter },
+            { provide: StateSnapshotService, useValue: mockStateSnapshotService },
+            { provide: SnackService, useValue: mockSnackService },
+            {
+              provide: GlobalConfigService,
+              useValue: { sync: () => ({ isUseSplitSyncFiles: false }) },
+            },
+          ],
+        });
+        const upgraded = TestBed.inject(FileBasedSyncAdapterService).createAdapter(
+          mockProvider,
+          mockCfg,
+          mockEncryptKey,
+        );
+
+        // A new-version client wrote the snapshot at {clientA:3, clientB:1}, which
+        // this client already holds, then appended one ordinary tail op. Without a
+        // recorded clock the snapshot base cannot be judged, so it is not a gap
+        // (#10258); the first commit records the clock the later checks rely on.
+        const tailOp = (sv: number): FileBasedSyncData['recentOps'][number] => ({
+          id: `op-b${sv}`,
+          c: 'client-b',
+          a: 'HA',
+          o: 'ADD',
+          e: 'TASK',
+          d: `task-b${sv}`,
+          v: { clientA: 3, clientB: sv - 2 },
+          t: Date.now(),
+          s: 1,
+          p: {},
+          sv,
+        });
+        const remote = createMockSyncData({
+          syncVersion: 4,
+          vectorClock: { clientA: 3, clientB: 2 },
+          snapshotBaseClock: { clientA: 3, clientB: 1 },
+          clientId: 'client-b',
+          recentOps: [tailOp(4)],
+          oldestOpSyncVersion: 4,
+        });
+        mockProvider.downloadFile.and.returnValue(
+          Promise.resolve({ dataStr: addPrefix(remote), rev: 'rev-4' }),
+        );
+
+        const first = await upgraded.downloadOps(3, 'client-a');
+        expect(first.gapDetected).toBe(false);
+        expect(first.ops.map((o) => o.op.id)).toEqual(['op-b4']);
+        await upgraded.setLastServerSeq(4);
+
+        expect((await upgraded.downloadOps(4, 'client-a')).gapDetected).toBe(false);
+
+        // Later appends keep the base clock, which the committed clock now covers.
+        const appended = createMockSyncData({
+          ...remote,
+          syncVersion: 5,
+          vectorClock: { clientA: 3, clientB: 3 },
+          recentOps: [tailOp(4), tailOp(5)],
+        });
+        mockProvider.downloadFile.and.returnValue(
+          Promise.resolve({ dataStr: addPrefix(appended), rev: 'rev-5' }),
+        );
+        expect((await upgraded.downloadOps(4, 'client-a')).gapDetected).toBe(false);
+        await upgraded.setLastServerSeq(5);
+        expect(
+          JSON.parse(
+            localStorage.getItem(
+              FILE_BASED_SYNC_CONSTANTS.SYNC_VERSION_STORAGE_KEY_PREFIX + 'state',
+            ) as string,
+          ).lastSeenClocks[SyncProviderId.WebDAV],
+        ).toEqual({ clientA: 3, clientB: 3 });
+      });
     });
 
     it('should set seq counter to syncVersion after snapshot upload', async () => {
