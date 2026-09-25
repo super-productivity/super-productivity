@@ -43,3 +43,22 @@ export const toDownloadResultForRejection = (
       throw new Error('Nested download blocked by an incompatible remote operation.');
   }
 };
+
+/**
+ * #9256: whether the decrypt error of a kept prefix no longer needs reporting
+ * because the cycle already ended in a state that supersedes it:
+ * - `cancelled`: the user declined the prefix, so nothing was applied;
+ * - `blocked_incompatible`: "update the app" is the actionable state (and a
+ *   newer client is a plausible cause of the undecryptable page);
+ * - cursor past the prefix: a conflict resolution in this cycle (USE_LOCAL)
+ *   replaced the server, whose seqs keep counting up, so the failing page is
+ *   gone. A cursor BEHIND the prefix (e.g. a deferred REPAIR skipped the
+ *   persist) still reports the error.
+ */
+export const isKeptPrefixDecryptErrorSuperseded = (
+  outcome: DownloadOutcome,
+  cursors: { prefixCursor: number | undefined; persistedCursor: number },
+): boolean =>
+  outcome.kind === 'cancelled' ||
+  outcome.kind === 'blocked_incompatible' ||
+  (cursors.prefixCursor !== undefined && cursors.persistedCursor > cursors.prefixCursor);

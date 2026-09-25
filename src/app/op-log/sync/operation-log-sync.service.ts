@@ -32,7 +32,10 @@ import {
   LocalDataConflictError,
 } from '../core/errors/sync-errors';
 import { SuperSyncStatusService } from './super-sync-status.service';
-import { toDownloadResultForRejection } from './download-outcome.util';
+import {
+  isKeptPrefixDecryptErrorSuperseded,
+  toDownloadResultForRejection,
+} from './download-outcome.util';
 import { ServerMigrationService } from './server-migration.service';
 import { OperationWriteFlushService } from './operation-write-flush.service';
 import { RepairSyncContextService } from '../validation/repair-sync-context.service';
@@ -649,7 +652,13 @@ export class OperationLogSyncService {
     const outcome = await this._processDownloadResult(syncProvider, result, options);
     // #9256: the kept prefix is applied and its cursor persisted; report the page
     // that failed to decrypt now, so this cycle ends in the decrypt-error flow.
-    if (result.decryptErrorAfterKeptPrefix && outcome.kind !== 'cancelled') {
+    if (
+      result.decryptErrorAfterKeptPrefix &&
+      !isKeptPrefixDecryptErrorSuperseded(outcome, {
+        prefixCursor: result.latestServerSeq,
+        persistedCursor: await syncProvider.getLastServerSeq(),
+      })
+    ) {
       throw result.decryptErrorAfterKeptPrefix;
     }
     return outcome;
