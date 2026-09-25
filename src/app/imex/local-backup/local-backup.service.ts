@@ -26,6 +26,7 @@ import {
 } from './backup-ring.util';
 import { DEFAULT_MAX_BACKUP_FILES } from '../../../../electron/shared-with-frontend/backup-file-cleanup.util';
 import { SnackService } from '../../core/snack/snack.service';
+import { BackupRepairFailedError } from '../../op-log/core/errors/sync-errors';
 import { Log } from '../../core/log';
 import { confirmDialog } from '../../util/native-dialogs';
 import { CapacitorPlatformService } from '../../core/platform/capacitor-platform.service';
@@ -643,7 +644,10 @@ export class LocalBackupService {
     } catch (e) {
       this._snackService.open({
         type: 'ERROR',
-        msg: T.FILE_IMEX.S_ERR_IMPORT_FAILED,
+        msg:
+          e instanceof BackupRepairFailedError
+            ? T.FILE_IMEX.S_ERR_IMPORT_UNREPAIRABLE
+            : T.FILE_IMEX.S_ERR_IMPORT_FAILED,
       });
       return false;
     }
