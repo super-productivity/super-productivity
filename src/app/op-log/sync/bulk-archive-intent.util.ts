@@ -72,7 +72,7 @@ export const groupArchiveWinConflicts = (
 export interface ArchiveResolutionGroup {
   archiveOp: Operation;
   resolutions: LwwResolvedConflict<Operation, EntityConflict>[];
-  /** Rows of this intent that a remote archive won. */
+  /** Entities whose row a remote archive won. */
   remoteWinnerIds: Set<string>;
 }
 
@@ -80,8 +80,10 @@ export interface ArchiveResolutionGroup {
  * Groups resolved rows by the `moveToArchive` intents among their local ops,
  * for the partial-archive preserve step (#9537). Single-task archives join
  * too, so a restore after a one-task Finish Day is kept (#10220) — except
- * when a remote archive won their task: nothing is left to narrow then, and
- * such groups keep their pre-#10220 per-row handling.
+ * when a remote archive won ANY of their rows (the task or one of its
+ * subtasks): such groups keep their pre-#10220 per-row handling. A remote
+ * archive of the task covers its subtasks, leaving nothing to narrow; one of
+ * a subtask alone has no observed instance, so it is not special-cased.
  */
 export const groupArchiveResolutionsByIntent = (
   resolutions: readonly LwwResolvedConflict<Operation, EntityConflict>[],

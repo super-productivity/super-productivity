@@ -3415,9 +3415,9 @@ export class ConflictResolutionService {
       if (replacementOp && !assignedToLocalWinner) {
         additionalOps.push(replacementOp);
       }
-      // A restored task WITHOUT a row keeps its pending restoreTask, but other
-      // devices never saw the archive and ignore a restore of an active task
-      // (isDone stays true there): re-assert its current state after it.
+      // A restored task WITHOUT a row keeps its restoreTask, which devices that
+      // never saw the archive ignore (isDone stays true): re-assert its state.
+      // The durable append rebases the clock above an already-uploaded restore.
       for (const entityId of retainedEntityIds) {
         const entityType = group.archiveOp.entityType;
         const entityKey = toEntityKey(entityType, entityId);

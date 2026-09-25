@@ -25,6 +25,7 @@ import { ConflictResolutionService } from '../../sync/conflict-resolution.servic
 import { ImmediateUploadService } from '../../sync/immediate-upload.service';
 import { OperationWriteFlushService } from '../../sync/operation-write-flush.service';
 import { CLIENT_ID_PROVIDER } from '../../util/client-id.provider';
+import { toEntityKey } from '../../util/entity-key.util';
 import { ValidateStateService } from '../../validation/validate-state.service';
 import { buildArchiveWinOp } from '../../sync/bulk-archive-intent.util';
 import { compareVectorClocks, VectorClockComparison } from '@sp/sync-core';
@@ -1088,6 +1089,48 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
       expectDominates(archive!, remoteEditB);
       expectRowlessRestoreReasserted(pending, TASK_A);
       expect(pending.length).toBe(3);
+    });
+
+    it('re-asserts a restore that already uploaded while the archive was rejected', async () => {
+      // Upload race: the server accepted A's restoreTask but rejected the bulk
+      // archive (concurrent with the edit on B), so only the archive is still
+      // pending for A. Built from pending ops alone, the update's clock would
+      // EQUAL the synced restore's: the server accepts that as a same-client
+      // retry and receivers skip it as a duplicate. The durable append rebases
+      // it onto this client's clock, which already covers the restore.
+      const bulkOp = await archiveThenRestore(
+        [doneTask(TASK_A), doneTask(TASK_B), doneTask(TASK_C)],
+        [TASK_A],
+      );
+      const restoreEntry = (await opLogStore.getUnsynced()).find(
+        ({ op }) => op.actionType === ActionType.TASK_SHARED_RESTORE,
+      )!;
+      await opLogStore.markSynced([restoreEntry.seq]);
+      const remoteEditB = buildRemoteTaskEdit(
+        remoteClient(),
+        TASK_B,
+        bulkOp.timestamp + 10,
+      );
+
+      await resolver.autoResolveConflictsLWW(await detectConflictsFor(remoteEditB));
+
+      const pending = await unsyncedOps();
+      expect(archivedIds(pending)).not.toContain(TASK_A);
+      const update = compensationFor(pending, TASK_A);
+      expect(update).toBeDefined();
+      expectDominates(update!, restoreEntry.op);
+      // A receiver that applied the uploaded restore must not drop the update.
+      const receiverView = await resolver.checkOpForConflicts(update!, {
+        localPendingOpsByEntity: new Map(),
+        appliedFrontierByEntity: new Map([
+          [toEntityKey('TASK', TASK_A), restoreEntry.op.vectorClock],
+        ]),
+        retainedOpsByEntity: new Map(),
+        snapshotVectorClock: undefined,
+        snapshotEntityKeys: undefined,
+        hasNoSnapshotClock: true,
+      });
+      expect(receiverView.isSupersededOrDuplicate).toBe(false);
     });
 
     it('keeps several restores across conflicted and unconflicted rows', async () => {
