@@ -377,6 +377,82 @@ describe('round-time conflict convergence integration (#8944)', () => {
     });
   }
 
+  it('keeps both timer deltas when a remote delta crosses a pending local delta + rename (#10214)', async () => {
+    const capture = TestBed.inject(OperationCaptureService);
+    const resolver = TestBed.inject(ConflictResolutionService);
+    const server = new MockSyncServer();
+    const clientA = new TestClient(CLIENT_A);
+    const clientB = new TestClient(CLIENT_B);
+
+    // Device A: tracks 2m on X (the timer already wrote them to its store),
+    // then renames it; both ops still pending.
+    localState = updateTaskEntity(localState, TASK_X, {
+      timeSpent: 12 * MINUTE,
+      timeSpentOnDay: { [DAY]: 12 * MINUTE },
+    });
+    const localActions = [
+      syncTimeSpent({ taskId: TASK_X, date: DAY, duration: 2 * MINUTE }),
+      TaskSharedActions.updateTask({ task: { id: TASK_X, changes: { title: 'A' } } }),
+    ] as PersistentAction[];
+    for (const [i, action] of localActions.entries()) {
+      localState = reducer(localState, action);
+      const op = captureOperation(action, clientA, capture, 1_000 + i);
+      await opLogStore.append(op, 'local');
+    }
+
+    // Device B: tracks 3m on X and syncs first.
+    const remoteDelta = captureOperation(
+      syncTimeSpent({
+        taskId: TASK_X,
+        date: DAY,
+        duration: 3 * MINUTE,
+      }) as PersistentAction,
+      clientB,
+      capture,
+      2_000,
+    );
+    let remoteState = reducer(initialState, convertOpToAction(remoteDelta));
+    server.uploadOps([remoteDelta], CLIENT_B);
+
+    // The deltas commute and the rename touches no time field: no conflict,
+    // B's delta applies on A like any non-conflicting remote op.
+    const detection = await resolver.checkOpForConflicts(remoteDelta, {
+      localPendingOpsByEntity: await opLogStore.getUnsyncedByEntity(),
+      appliedFrontierByEntity: new Map(),
+      retainedOpsByEntity: new Map(),
+      snapshotVectorClock: undefined,
+      snapshotEntityKeys: undefined,
+      hasNoSnapshotClock: true,
+    });
+    expect(detection.conflicts).toEqual([]);
+    await opLogStore.append(remoteDelta, 'remote');
+    localState = reducer(localState, convertOpToAction(remoteDelta));
+
+    // A uploads; B applies A's ops. (A real server rejects the rename as
+    // concurrent to B's delta; its superseded re-creation is a snapshot of A's
+    // current state, which is the same 15m / 'A' checked here.)
+    server.uploadOps(
+      (await opLogStore.getUnsynced()).map((entry) => entry.op),
+      CLIENT_A,
+    );
+    for (const { op } of server.downloadOps(1, CLIENT_B).ops) {
+      remoteState = reducer(remoteState, convertOpToAction(op as Operation));
+    }
+
+    expect(getTask(localState, TASK_X).timeSpent).toBe(15 * MINUTE);
+    expect(getTask(localState, TASK_X).title).toBe('A');
+    expect(taskSyncProjection(remoteState, TASK_X)).toEqual(
+      taskSyncProjection(localState, TASK_X),
+    );
+    let restartedState = initialState;
+    for (const entry of await opLogStore.getOpsAfterSeq(0)) {
+      restartedState = reducer(restartedState, convertOpToAction(entry.op));
+    }
+    expect(taskSyncProjection(restartedState, TASK_X)).toEqual(
+      taskSyncProjection(localState, TASK_X),
+    );
+  });
+
   it('resolves a REMOTE bulk rounding op against a newer local edit and converges (#9601)', async () => {
     const capture = TestBed.inject(OperationCaptureService);
     const resolver = TestBed.inject(ConflictResolutionService);
