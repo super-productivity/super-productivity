@@ -1036,8 +1036,10 @@ the websocket downloads one op per trigger, so an LWW Update that escaped level
 update recreates the task next to its archived copy. There is deliberately no
 receiver-side "is it in the archive?" guard: such a check cannot tell an update
 concurrent with the archive from a legitimate later re-introduction (a
-superseded `restoreTask` is re-emitted as a plain LWW Update), and skipping the
-latter diverges clients permanently. The fix is upstream — declare the full
+superseded `restoreTask` followed by later edits of the same task, or one from a
+released client, is re-emitted as a plain LWW Update — a sole one keeps its
+semantic type since #10196), and skipping the latter diverges clients
+permanently. The fix is upstream — declare the full
 footprint so level 1 never lets the update through. A pre-fix sender can still
 cause one visible, re-archivable resurrection during a mixed-fleet rollout.
 
