@@ -791,7 +791,9 @@ function _fillLegacyEntityDefaults(data: Record<string, any>): Record<string, an
     if (!cfg) continue;
     cfg.repeatCycle ??= DEFAULT_TASK_REPEAT_CFG.repeatCycle;
     cfg.repeatEvery ??= DEFAULT_TASK_REPEAT_CFG.repeatEvery;
-    cfg.order ??= DEFAULT_TASK_REPEAT_CFG.order;
+    // Before `order`, the placement was the boolean `isAddToBottom`; the
+    // pre-v14 migration mapped it to 1 (bottom), else 0 (top).
+    cfg.order ??= cfg.isAddToBottom ? 1 : DEFAULT_TASK_REPEAT_CFG.order;
   }
   return data;
 }
