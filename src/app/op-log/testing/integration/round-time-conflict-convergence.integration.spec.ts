@@ -30,6 +30,7 @@ import {
 import { lwwUpdateMetaReducer } from '../../../root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer';
 import { compareVectorClocks, VectorClockComparison } from '@sp/sync-core';
 import { MockSyncServer } from './helpers/mock-sync-server.helper';
+import { mergeVectorClocks } from '../../../core/util/vector-clock';
 import { SupersededOperationResolverService } from '../../sync/superseded-operation-resolver.service';
 import { SyncConflictBannerService } from '../../sync/sync-conflict-banner.service';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
@@ -445,7 +446,8 @@ describe('round-time conflict convergence integration (#8944)', () => {
       for (const [i, action] of localActions.entries()) {
         localState = reducer(localState, action);
         const op = captureOperation(action, clientA, capture, 1_000 + i);
-        await opLogStore.append(op, 'local');
+        // Capture's write path: the durable clock follows each local op.
+        await opLogStore.appendWithVectorClockOverwrite(op, 'local');
       }
 
       // Device B: tracks 3m on X and syncs first.
@@ -503,8 +505,30 @@ describe('round-time conflict convergence integration (#8944)', () => {
         );
         expect(await uploadPending()).toEqual([]);
       }
+      // B has no pending ops; run its no-pending conflict check against its
+      // applied frontier before applying each download.
+      const appliedOnB: Operation[] = [remoteDelta];
       for (const { op } of server.downloadOps(1, CLIENT_B).ops) {
-        remoteState = reducer(remoteState, convertOpToAction(op as Operation));
+        const downloaded = op as Operation;
+        const onB = await resolver.checkOpForConflicts(downloaded, {
+          localPendingOpsByEntity: new Map(),
+          appliedFrontierByEntity: new Map([
+            [
+              `TASK:${TASK_X}`,
+              appliedOnB.reduce(
+                (clock, applied) => mergeVectorClocks(clock, applied.vectorClock),
+                {},
+              ),
+            ],
+          ]),
+          retainedOpsByEntity: new Map([[`TASK:${TASK_X}`, [...appliedOnB]]]),
+          snapshotVectorClock: undefined,
+          snapshotEntityKeys: undefined,
+          hasNoSnapshotClock: true,
+        });
+        expect(onB).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+        appliedOnB.push(downloaded);
+        remoteState = reducer(remoteState, convertOpToAction(downloaded));
       }
 
       expect(getTask(localState, TASK_X).timeSpent).toBe(15 * MINUTE);
