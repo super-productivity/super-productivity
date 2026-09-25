@@ -250,6 +250,8 @@ export class FocusModeMainComponent {
   );
   isShowSimpleCounters = computed(() => this._isInProgress());
   isShowCompleteSessionButton = computed(() => this._isInProgress());
+  // cycle 1 is the reset target, so resetting there would be a silent no-op (#9893)
+  isResetCyclesDisabled = computed(() => this.focusModeService.currentCycle() <= 1);
   isShowBottomControls = computed(() => this._isInProgress());
   isShowCountdown = computed(() => this._isCountdown());
   isShowPlayButton = computed(() => this._isPreparation());
