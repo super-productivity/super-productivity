@@ -146,7 +146,11 @@ export class WebSocketConnectionService {
     number,
     {
       timer: ReturnType<typeof setTimeout>;
-      excludeClientIds: Set<string>;
+      /**
+       * The single uploader that may skip this notification, or null once a
+       * second distinct uploader joins the window — see notifyNewOps.
+       */
+      excludeClientId: string | null;
       latestSeq: number;
     }
   >();
@@ -362,12 +366,17 @@ export class WebSocketConnectionService {
     let pending = this.pendingNotifications.get(userId);
     if (pending) {
       clearTimeout(pending.timer);
-      pending.excludeClientIds.add(excludeClientId);
-      pending.latestSeq = latestSeq;
+      // A sender can skip only its own notifications. With different senders,
+      // each may still need operations committed after its piggyback download,
+      // so the window stops excluding anyone.
+      if (pending.excludeClientId !== excludeClientId) {
+        pending.excludeClientId = null;
+      }
+      pending.latestSeq = Math.max(pending.latestSeq, latestSeq);
     } else {
       pending = {
         timer: null as unknown as ReturnType<typeof setTimeout>,
-        excludeClientIds: new Set([excludeClientId]),
+        excludeClientId,
         latestSeq,
       };
       this.pendingNotifications.set(userId, pending);
@@ -377,14 +386,14 @@ export class WebSocketConnectionService {
       const entry = this.pendingNotifications.get(userId);
       this.pendingNotifications.delete(userId);
       if (entry) {
-        this._sendNewOpsNotification(userId, entry.excludeClientIds, entry.latestSeq);
+        this._sendNewOpsNotification(userId, entry.excludeClientId, entry.latestSeq);
       }
     }, WebSocketConnectionService.NOTIFY_DEBOUNCE_MS);
   }
 
   private _sendNewOpsNotification(
     userId: number,
-    excludeClientIds: Set<string>,
+    excludeClientId: string | null,
     latestSeq: number,
   ): void {
     const userSet = this.connections.get(userId);
@@ -398,7 +407,7 @@ export class WebSocketConnectionService {
 
     let notified = 0;
     for (const client of userSet) {
-      if (!excludeClientIds.has(client.clientId)) {
+      if (client.clientId !== excludeClientId) {
         if (this._sendMessage(client.ws, message)) {
           notified++;
         }

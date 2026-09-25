@@ -497,10 +497,10 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
     expect(item.elementRef.nativeElement.focus).not.toHaveBeenCalled();
   }));
 
-  // A late panel auto-focus must not blur an open "add subtask" draft: the
-  // draft's blur handler closes it, which left "Add subtask" silently broken
-  // when opened from the Planner under load (#8617/#8630).
-  it('does not steal focus from an open add-subtask draft', fakeAsync(() => {
+  // A late panel auto-focus must not blur an open "add subtask" draft: it left
+  // "Add subtask" silently broken when opened from the Planner under load
+  // (#8617/#8630). The draft here is not rendered yet — the actual race.
+  it('does not steal focus from an add-subtask draft that owns focus', fakeAsync(() => {
     (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
       () => [makeItem()];
     const focusItemSpy = spyOn(component, 'focusItem');
@@ -513,6 +513,70 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
     tick(200);
 
     expect(focusItemSpy).not.toHaveBeenCalled();
+  }));
+
+  // A draft with text stays open after losing focus, so suppressing on its mere
+  // existence would disable every deferred panel focus for the rest of the
+  // task's session (keyboard nav dropping to <body>).
+  it('still focuses the panel item when an open draft no longer holds focus', fakeAsync(() => {
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+    const draftInput = document.createElement('input');
+    document.body.appendChild(draftInput);
+    // A rendered draft input that something else has focus over.
+    (
+      component as unknown as {
+        addSubtaskInput: () => { inputEl: () => { nativeElement: HTMLInputElement } };
+      }
+    ).addSubtaskInput = () => ({ inputEl: () => ({ nativeElement: draftInput }) });
+    component.isAddSubtaskInputVisible.set(true);
+
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+
+    tick(200);
+
+    expect(focusItemSpy).toHaveBeenCalled();
+    draftInput.remove();
+  }));
+
+  // Escape in the notes editor blurs it and hands focus back to the notes item
+  // 150ms later. Clicking straight back into the editor inside that window must
+  // not have the caret yanked out again by the pending timer.
+  it('does not steal focus from a text field focused while the timer is pending', fakeAsync(() => {
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+    const editable = document.createElement('div');
+    editable.contentEditable = 'true';
+    editable.tabIndex = 0;
+    document.body.appendChild(editable);
+
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+    // ...the user clicks back into the editor before the timer fires.
+    editable.focus();
+
+    tick(200);
+
+    expect(focusItemSpy).not.toHaveBeenCalled();
+    editable.remove();
+  }));
+
+  it('still focuses the panel item when focus is not in a text field', fakeAsync(() => {
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+    const item = document.createElement('div');
+    item.tabIndex = 0;
+    document.body.appendChild(item);
+
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+    item.focus();
+
+    tick(200);
+
+    expect(focusItemSpy).toHaveBeenCalled();
+    item.remove();
   }));
 });
 
@@ -708,6 +772,18 @@ describe('TaskDetailPanelComponent add sub-task', () => {
 
     expect(addSubTaskToSpy).toHaveBeenCalledWith('P');
     expect(subComponent.isAddSubtaskInputVisible()).toBe(false);
+  });
+
+  it('drops an open draft when the sub-task section is collapsed', () => {
+    // Collapsing only hides the section's content, so a kept-open draft would
+    // linger invisible and unreachable.
+    component.addSubTask();
+    expect(component.isAddSubtaskInputVisible()).toBe(true);
+
+    component.onSubTasksExpandedChange(false);
+
+    expect(component.isSubTasksExpanded()).toBe(false);
+    expect(component.isAddSubtaskInputVisible()).toBe(false);
   });
 
   it('hides the input again when it is closed', () => {

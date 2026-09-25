@@ -88,6 +88,10 @@ export interface AndroidInterface {
   // Read back the live focus session for cold-start/resume recovery (#7855).
   // Returns a JSON string, or 'null' when no focus session is running.
   getFocusModeElapsed?(): string;
+  // Device-local task clock owned by the Focus foreground service. Null freezes
+  // the last task so a paused session can still recover its task association.
+  updateFocusTask?(taskId: string | null, timeSpentMs: number, isTracking: boolean): void;
+  adjustFocusTaskTime?(taskId: string, timeSpentDeltaMs: number): void;
 
   // Native reminder scheduling (snooze handled entirely in background)
   scheduleNativeReminder?(
@@ -108,8 +112,11 @@ export interface AndroidInterface {
   // Reminder done queue - get task IDs marked done from notifications
   getReminderDoneQueue?(): string | null;
 
-  // Widget task queue - get queued tasks from home screen widget
-  getWidgetTaskQueue?(): string | null;
+  // Native capture inbox (startup quick-add overlay). Non-destructive read of a
+  // JSON array, or null if the inbox could not be read; see CaptureInbox.kt.
+  getPendingCaptures?(): string | null;
+  // Delete one capture after its task is persisted. Returns false on failure.
+  acknowledgeCapture?(id: string): boolean;
 
   // Widget done queue - get pending done-state changes from the home screen
   // widget as a JSON object string `{taskId: targetIsDone}` and clear the queue
@@ -261,6 +268,7 @@ if (IS_ANDROID_WEB_VIEW) {
     delete requestMap[rId];
   };
 
+  // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
   DroidLog.log('Android Web View interfaces initialized', androidInterface);
 
   // Pull-based: retrieve share data persisted in SharedPreferences (survives process death)
@@ -305,6 +313,7 @@ if (IS_ANDROID_WEB_VIEW) {
     const snoozeQueue = androidInterface.getReminderSnoozeQueue?.();
     if (snoozeQueue) {
       const events: { taskId: string; newRemindAt: number }[] = JSON.parse(snoozeQueue);
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       DroidLog.log('Pulled reminder snooze queue from SharedPreferences', events);
       for (const event of events) {
         androidInterface.onReminderSnooze$.next(event);

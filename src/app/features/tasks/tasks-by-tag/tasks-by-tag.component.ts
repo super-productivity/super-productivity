@@ -52,9 +52,9 @@ export class TasksByTagComponent {
   //  Accessor inputs cannot be migrated as they are too complex.
   @Input('flatTasks') set flatTasksIn(tasks: Task[]) {
     this.flatTasks = tasks;
-    const tagIds: string[] = unique(
-      tasks.reduce((acc, t) => [...acc, ...t.tagIds], [] as string[]),
-    );
+    // `?? []` because flatMap folds a non-array return in as a value: a task
+    // missing tagIds would emit `undefined` as a tag id instead of nothing.
+    const tagIds = unique(tasks.flatMap((t) => t.tagIds ?? []));
     this.todaysTasksTagIds$.next(tagIds);
   }
 

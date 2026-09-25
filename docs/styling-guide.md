@@ -157,6 +157,60 @@ Dark elevation colors: `--dark0` (rgb(0,0,0)) through `--dark24` (rgb(56,56,56))
 
 Mixins are in `src/styles/mixins/_theming.scss`.
 
+## Task rows (flat vs boxed)
+
+Tasks, planner and board rows, and issue-panel items are flat, hairline-separated
+rows by default. The boxed look lives in the `classic` theme and is token-only, so
+every switch must stay token-driven — never hardcode a border or surface on a row:
+
+| Token                  | Default                            | Classic                              |
+| ---------------------- | ---------------------------------- | ------------------------------------ |
+| `--task-border`        | `none`                             | `1px solid var(--task-border-color)` |
+| `--task-separator`     | `1px solid var(--separator-color)` | `none`                               |
+| `--task-row-edge`      | `var(--task-separator)`            | `var(--task-border)`                 |
+| `--task-border-radius` | `0`                                | `var(--radius-sm)`                   |
+| `--task-list-row-gap`  | `0`                                | `var(--s-half)`                      |
+| `--task-c-bg` & co     | `transparent`                      | surfaces                             |
+
+Rows that draw their own box (planner, board and issue-panel items) take their
+top/bottom edge from `--task-row-edge`, so the separator and the box border never
+cancel each other out on one element. Bare `task` hosts use `--task-separator`.
+
+Chrome around task lists — section headings (`collapsible.task-section`), board panel
+titles, the collapsed "+ n completed subtasks" label — is typed one level below the
+content it frames: `--font-size-sm`, `--font-weight-semibold` (regular for inline
+labels), `--letter-spacing-wide`, `--text-color-muted`. Task text stays at the 14px
+base, so the two never read alike. No `text-transform: uppercase` — these labels are
+often long and user-authored, where caps only add width. Meta counts follow the same
+label style and are omitted entirely when zero rather than shown as `-` or `0`.
+
+Task multi-selection is a `--task-c-multi-selected-bg` tint plus a 1px
+`--palette-primary-400` outline; keyboard focus is a `--focus-ring-width` (2px) outline
+in the same color and no tint. The tint is what separates them — a 1px vs 2px line in
+one color is not readable as two states — but it is the weaker channel, so the outline
+stays: `background` on a task row is contested (the `isCurrent` chain and the
+`isSelected` `!important` rule win over it, and several bundled themes force it with
+`!important`), and author backgrounds are dropped in forced-colors mode while outlines
+survive. Never make a row state depend on `background` alone. The task open in the
+detail panel uses the neutral `--task-c-selected-bg`.
+
+Focus rings on rows and other focusable containers (anything carrying a `tabindex`,
+as opposed to a button or control — those keep the `.focus-ring` utility from the Focus
+Ring section below) pair `:host-context(.isMousePrimary):focus` with `:focus-visible`.
+Never a bare `:focus`: rows carry `tabindex="0"`, so a tap focuses them and the ring
+then stays on the tapped row for the rest of the session. The two halves split the
+work — the mouse-intent one covers clicks plus the scripted navigation and focus
+restoration that follow them, and `:focus-visible` covers keyboards, including on a
+touch device, where only a pen otherwise sets mouse intent. `.isNoTouchOnly` is not a
+usable guard here: it only excludes pure touch devices, so iPads and touchscreen
+laptops (`hybrid` for detect-it) still get the stuck ring.
+
+Known edge of the mouse-intent half: on a hybrid device, a row that was tapped and left
+focused picks up its ring once the user moves the mouse and intent flips back. Dropping
+to `:focus-visible` alone removes that, at the cost of no ring on plain mouse clicks —
+the ring on click is the deliberate choice here. Where a cue must show regardless of
+input, use a class instead (see `highlight-searched-task`).
+
 ## Shadows & Elevation
 
 - `--whiteframe-shadow-1dp` through `--whiteframe-shadow-24dp` — classic Material shadows

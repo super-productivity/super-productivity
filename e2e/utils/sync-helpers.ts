@@ -324,9 +324,11 @@ export const confirmSyncConflictOverwriteIfShown = async (
   page: Page,
   conflictDialog: Locator,
 ): Promise<void> => {
+  // Both wordings must match: OVERWRITE_WARNING (known counts) says
+  // "overwrite", OVERWRITE_WARNING_UNKNOWN says "replace the entire … dataset".
   const overwriteConfirm = page
     .locator('dialog-confirm')
-    .filter({ hasText: /WARNING:[\s\S]*overwrit/i });
+    .filter({ hasText: /WARNING:[\s\S]*(overwrit|replace)/i });
 
   await expect
     .poll(

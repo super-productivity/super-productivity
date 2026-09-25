@@ -144,17 +144,33 @@
   flex-grow: 1;
 }
 
-.normal-tasks-items > *,
-.deadline-items > * {
-  // Match the main task list's inter-row rhythm (its .box is inset ~4px), rather
-  // than the roomier 8px, so planner and task-list spacing read the same.
-  margin-bottom: var(--s-half);
+// Rows read like the main task list: hairline-separated with no gap by
+// default; boxed themes set --task-list-row-gap and --task-separator: none.
+// The item components draw their own box border, so their top/bottom edge
+// goes through --task-row-edge (separator when flat, box border when boxed).
+.normal-tasks-items > :not(.empty),
+.deadline-items > :not(.empty) {
+  margin-bottom: var(--task-list-row-gap);
+  border-top: var(--task-row-edge);
+
+  &:last-child {
+    border-bottom: var(--task-row-edge);
+  }
+}
+
+// Scheduled rows are wrappers without a box of their own.
+.scheduled-items > .scheduled-item {
+  margin-bottom: var(--task-list-row-gap);
+  border-top: var(--task-separator);
+
+  &:last-child {
+    border-bottom: var(--task-separator);
+  }
 }
 
 .scheduled-item {
   display: flex;
   align-items: center;
-  margin-bottom: var(--s);
 
   &.Task .time {
     cursor: pointer;

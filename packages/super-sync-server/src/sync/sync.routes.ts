@@ -410,7 +410,8 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         const message = errorMessage(err);
         if (
           message.includes('exceeds latest sequence') ||
-          message.includes('must be at least')
+          message.includes('must be at least') ||
+          message.includes('is no longer available')
         ) {
           Logger.warn(
             `[user:${getAuthUser(req).userId}] Invalid restore request: ${message}`,

@@ -84,10 +84,12 @@ inserted, and the replacement is piggybacked without excluding its author. The
 nullable marker is reconciled lazily from retained operations after an upgrade;
 zero records that the reconciliation found no replacement.
 
-A clean-slate full-state upload deletes the prior dataset but preserves
-`lastSeq`, preventing sequence reuse visible to existing clients. Only explicit
-`DELETE /api/sync/data` erases the entire dataset and resets the sequence to
-zero.
+A clean-slate full-state upload and explicit `DELETE /api/sync/data` both
+preserve `lastSeq`, preventing sequence reuse visible to existing clients.
+DELETE acquires the same sequence row's write lock before removing operations,
+devices, and cached snapshots. An account with no retained operations still
+reports `latestSeq: 0` to clients so their existing empty-server recovery runs;
+the next upload allocates above the preserved counter.
 
 This serialization mechanism is a load-bearing decision; see
 [ADR #4](../../../ARCHITECTURE-DECISIONS.md#4-upload-conflict-safety-via-the-lastseq-row-lock-under-repeatableread),

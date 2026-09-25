@@ -783,3 +783,119 @@ describe('autoFixTypiaErrors — against REAL typia validation (#9139)', () => {
     ).toBe(true);
   });
 });
+
+// Issue #8279: a synced state failed typia with the first error at
+// `project.entities["…"].advancedCfg.worklogExportSettings.groupBy` (expected
+// the WorklogGrouping enum). No branch healed it, so every sync that brought in
+// remote ops ended in "sync validation failed". Driven through the REAL
+// validator so the tests fail if typia reports these at a different path.
+describe('autoFixTypiaErrors — invalid worklogExportSettings (#8279)', () => {
+  beforeEach(() => {
+    spyOn(OP_LOG_SYNC_LOGGER, 'err').and.stub();
+    spyOn(OP_LOG_SYNC_LOGGER, 'warn').and.stub();
+  });
+
+  // Starts with a digit like the id in the #8279 log, so typia emits the
+  // bracketed `entities["…"]` path form.
+  const ENTITY_ID = '6CrcqXM8F9qJ7f58';
+
+  // A user who customised their export settings: the heal must keep these.
+  const USER_SETTINGS = {
+    cols: ['DATE', 'TITLES', 'TIME_STR'],
+    roundWorkTimeTo: 'QUARTER',
+    roundStartTimeTo: null,
+    roundEndTimeTo: null,
+    separateTasksBy: ' ; ',
+    groupBy: 'TASK',
+  };
+
+  const build = (
+    root: 'project' | 'tag',
+    mutate: (s: Record<string, unknown>) => void,
+  ): AppDataComplete => {
+    const d = createAppDataCompleteMock() as unknown as Record<string, unknown>;
+    const base = root === 'project' ? DEFAULT_PROJECT : DEFAULT_TAG;
+    const settings = structuredClone(USER_SETTINGS) as Record<string, unknown>;
+    mutate(settings);
+    const entity = {
+      ...structuredClone(base),
+      id: ENTITY_ID,
+      title: 'Probe',
+      ...(root === 'tag' ? { created: Date.now() } : {}),
+      advancedCfg: { worklogExportSettings: settings },
+    };
+    d[root] = { ids: [ENTITY_ID], entities: { [ENTITY_ID]: entity } };
+    return d as unknown as AppDataComplete;
+  };
+
+  const errorsOf = (d: AppDataComplete): IValidation.IError[] =>
+    (validateAllData(d) as { errors?: IValidation.IError[] }).errors ?? [];
+  const isValid = (d: AppDataComplete): boolean =>
+    (validateAllData(d) as { success: boolean }).success;
+  const settingsOf = (d: AppDataComplete, root: 'project' | 'tag'): unknown =>
+    (d as any)[root].entities[ENTITY_ID].advancedCfg.worklogExportSettings;
+
+  (['project', 'tag'] as const).forEach((root) => {
+    it(`real typia reports an invalid ${root} groupBy at the #8279 path`, () => {
+      const errors = errorsOf(build(root, (s) => (s.groupBy = 'INVALID')));
+
+      expect(errors.length).toBe(1);
+      expect(errors[0].path).toBe(
+        `$input.${root}.entities["${ENTITY_ID}"].advancedCfg.worklogExportSettings.groupBy`,
+      );
+      expect(errors[0].expected).toBe('("DATE" | "PARENT" | "TASK" | "WORKLOG")');
+    });
+
+    // `undefined`: projects created between 2019-03 and 2019-04 persisted
+    // worklogExportSettings before `groupBy` existed (b0b00a5a63e..4e8857d7de5).
+    (
+      [
+        ['an unknown value', (s: Record<string, unknown>): unknown => (s.groupBy = 'X')],
+        ['a missing value', (s: Record<string, unknown>): unknown => delete s.groupBy],
+        ['null', (s: Record<string, unknown>): unknown => (s.groupBy = null)],
+      ] as const
+    ).forEach(([label, mutate]) => {
+      it(`heals ${label} for ${root} groupBy, keeping the other settings`, () => {
+        const data = build(root, mutate);
+        expect(isValid(data)).toBe(false);
+
+        const repaired = autoFixTypiaErrors(data, errorsOf(data));
+
+        expect(isValid(repaired)).toBe(true);
+        expect(settingsOf(repaired, root)).toEqual({
+          ...USER_SETTINGS,
+          groupBy: 'DATE',
+        });
+      });
+    });
+
+    it(`heals other invalid ${root} worklogExportSettings fields`, () => {
+      const data = build(root, (s) => {
+        delete s.separateTasksBy;
+        s.cols = ['DATE', 'NOT_A_COL'];
+        s.roundWorkTimeTo = 'FORTNIGHT';
+      });
+      expect(isValid(data)).toBe(false);
+
+      const repaired = autoFixTypiaErrors(data, errorsOf(data));
+
+      expect(isValid(repaired)).toBe(true);
+      expect(settingsOf(repaired, root)).toEqual({
+        ...USER_SETTINGS,
+        cols: ['DATE', 'START', 'END', 'TIME_CLOCK', 'TITLES_INCLUDING_SUB'],
+        roundWorkTimeTo: null,
+        separateTasksBy: ' | ',
+      });
+    });
+  });
+
+  it('does not alias the shared defaults into the repaired state', () => {
+    const data = build('project', (s) => (s.cols = ['NOT_A_COL']));
+
+    const repaired = autoFixTypiaErrors(data, errorsOf(data));
+
+    const cols = (settingsOf(repaired, 'project') as { cols: string[] }).cols;
+    expect(cols).toEqual(['DATE', 'START', 'END', 'TIME_CLOCK', 'TITLES_INCLUDING_SUB']);
+    expect(cols).not.toBe(DEFAULT_PROJECT.advancedCfg.worklogExportSettings.cols);
+  });
+});

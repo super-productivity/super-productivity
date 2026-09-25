@@ -34,9 +34,11 @@ applied as one `bulkApplyOperations` action; `LOCAL_ACTIONS` ensures your effect
 only sees genuine local user intent.
 
 - Default for **all** effects: `private _actions$ = inject(LOCAL_ACTIONS);`
-- The only legitimate exception uses `ALL_ACTIONS` and handles `isRemote`
-  itself: `operation-log.effects.ts` (captures/persists every action). You are
-  almost certainly not adding a second.
+- The only legitimate exceptions use `ALL_ACTIONS`: `operation-log.effects.ts`
+  (captures/persists every action, handles `isRemote` itself) and
+  `reducer-failure-snack.effects.ts` (surfaces rejected actions, which
+  `LOCAL_ACTIONS` hides by design, #10195). You are almost certainly not adding
+  a third.
 - Remote **archive** side effects are _not_ an `ALL_ACTIONS` case:
   `archive-operation-handler.effects.ts` itself uses `LOCAL_ACTIONS`; the
   remote-client archive writes/deletes are driven separately by
@@ -45,6 +47,28 @@ only sees genuine local user intent.
 ✅ **Enforced by `local-rules/no-actions-in-effects`** — you cannot get this
 wrong; the linter rejects `inject(Actions)` / `Actions` imports in
 `*.effects.ts`.
+
+**A reducer throw on a local action is boxed, marked, not captured, and not
+fed to `LOCAL_ACTIONS` (#10195).** `reducerFailureGuardMetaReducer` (index 0 of
+`META_REDUCERS`) catches the throw, returns the previous state, marks the
+action instance rejected, and reports via `devError`. Without it the throw
+escapes the NgRx `State` scan and silently freezes the store: every later
+dispatch — including bulk-applied remote ops the op log already marks applied —
+is dropped until restart. Capture builds operations from action payloads, so
+`persistOperation$` and `LOCAL_ACTIONS` both skip rejected actions
+(`isReducerRejectedAction`): no op is uploaded for a state change that never
+happened, and no `ofType` effect runs side effects for it. Nothing is retried;
+the user sees an error and state stays consistent. Do not rely on the box as a
+correctness tool — a reducer that can throw on a stale UI-held id
+(`getTaskById` after a remote archive) should still guard and return state.
+
+Because the app now survives that throw, **a meta-reducer that writes
+module-level state must commit it last — after the inner reducer and anything
+else that can throw, `devError` included (it throws in dev builds when
+confirmed).** Writing first leaves the module describing a rejected action:
+`undoTaskDeleteMetaReducer` once captured `lastDeletePayload` before the delete
+reducer, so a rejected delete made an open undo snack restore a task that was
+never deleted — a synced write.
 
 **The reducer-side mirror: a reducer handling a _non-persistent_ action must
 not write synced entity fields.** Capture builds operations from action

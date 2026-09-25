@@ -1,30 +1,37 @@
 For all current downloads, package links, and platform-specific notes: [check the wiki](https://github.com/super-productivity/super-productivity/wiki/2.01-Downloads-and-Install).
 
-### Highlights
+### Features
 
-- Edit notes directly with live Markdown—no more switching between edit and preview modes.
-- Double-click projects, tags, and folders in the navigation to rename them.
-- Convert selected text into Markdown checklist items.
-- Tasks opened from search are now clearly highlighted.
-- Bulk Add Tasks is now available in the community plugins list.
-
-### Improvements
-
-- Added missing translations across all locales.
-- Added labels to date-picker quick-access shortcuts.
-- Refined appearance controls and centered the settings tabs.
-- REST API support for task deadlines.
+- **tasks:** unfocus the focused task on Escape
+- **ios:** add home screen quick actions (#10124)
+- **trello:** add two-way card synchronization (#9447)
+- **calendar:** support multiple Google Calendar accounts (#8865)
+- **boards:** add keyboard navigation and task multiselect
+- **planner:** add keyboard navigation, shortcuts, and multiselect (#10086)
 
 ### Fixes
 
-- Issue polling no longer overwrites task completion status and now keeps reminders aligned with due-time changes.
-- Tag entry now uses Tab to accept suggestions and Enter to keep typed text.
-- Date-only scheduled tasks are ordered after timed tasks.
-- Long task titles remain reachable while editing.
-- Maximized windows retain their state after hiding, minimizing, or restarting.
-- Fixed native time pickers and notifications in Android WebView.
-- Fixed repeated side-navigation actions.
-- Preserved legacy data during operation-log rebuilds.
-- Plainspace now distinguishes rejected tokens from unreachable hosts.
-- Flowtime retains the OS progress bar, and the macOS tray icon no longer blinks during focus sessions.
-- Added support for `mid:` email message links.
+- **plainspace:** restore archived recurring task for next occurrence (#10157)
+- **window:** track un-maximized bounds instead of trusting the library (#10094)
+- **ci:** repair TestFlight publisher reporting and extension handling (#10156)
+- **tasks:** keep a non-empty sub-task draft open on focus loss
+- **sync:** offer recovery for unsupported multi-entity conflicts (#10140)
+- **sync:** prevent missed updates during resets and realtime sync (#10145)
+- **electron:** correct progressBarMode typo 'pause' -> 'paused'
+- **i18n:** correct wrong Vietnamese sync safety strings
+- **platform:** require the preload bridge for electron detection (#10139)
+- address review findings in notes, task selection, and recovery (#10138)
+- **schedule:** span the whole month in the month grid (#9463)
+- **tasks:** make the iOS focus-zoom guard reachable from tests
+- **daily-summary:** keep the celebration headline when confetti is off
+- **tasks:** stop focus borders sticking after a tap on touch
+- **tasks:** restore focus outlines and selection behavior
+- **schedule:** persist resize before render
+
+### Performance
+
+- reduce task, schedule, and worklog processing costs (#10141)
+
+### Other Changes
+
+- chore(deps)(deps): bump the github-actions-minor group with 5 updates (#10108)

@@ -71,7 +71,9 @@
           @if (opt.type) {
             <mat-icon class="check-icon">
               {{
-                opt.order === OPTIONS.sort.order.ASC ? 'arrow_downward' : 'arrow_upward'
+                customizerService.selectedSort().order === OPTIONS.sort.order.ASC
+                  ? 'arrow_downward'
+                  : 'arrow_upward'
               }}
             </mat-icon>
           } @else {
@@ -221,6 +223,21 @@
       }
     </span>
   </button>
+
+  <button
+    mat-menu-item
+    [matMenuTriggerFor]="filterPriorityMenu"
+    [class.active]="
+      customizerService.selectedFilter().type === OPTIONS.filter.types.priority
+    "
+  >
+    <span class="menu-item-content">
+      <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_PRIORITY | translate }}</span>
+      @if (customizerService.selectedFilter().type === OPTIONS.filter.types.priority) {
+        <mat-icon class="check-icon">check</mat-icon>
+      }
+    </span>
+  </button>
 </mat-menu>
 
 <!-- Filter: Tag submenu -->
@@ -323,6 +340,16 @@
   <task-view-customizer-menu-item
     [type]="OPTIONS.filter.types.timeSpent"
     [options]="PRESETS.time"
+    [selectedFilter]="customizerService.selectedFilter()"
+    (byClick)="onFilterWithValue($event)"
+  />
+</mat-menu>
+
+<!-- Filter: Priority submenu -->
+<mat-menu #filterPriorityMenu>
+  <task-view-customizer-menu-item
+    [type]="OPTIONS.filter.types.priority"
+    [options]="PRESETS.priority"
     [selectedFilter]="customizerService.selectedFilter()"
     (byClick)="onFilterWithValue($event)"
   />

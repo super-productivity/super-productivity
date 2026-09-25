@@ -850,6 +850,56 @@ describe('TaskShortcutService', () => {
     });
   });
 
+  it('routes a configured modified navigation key to the focused Planner card', () => {
+    mockConfigService.cfg.set({
+      keyboard: { ...defaultKeyboardConfig, selectNextTask: 'Ctrl+Alt+J' },
+      appFeatures: { isTimeTrackingEnabled: true },
+    });
+    const plannerEl = document.createElement('planner-task');
+    plannerEl.setAttribute('data-task-id', 'planner-task');
+    plannerEl.setAttribute('data-task-selectable', 'true');
+    document.body.appendChild(plannerEl);
+    stubActiveElement(plannerEl);
+    const routed = jasmine.createSpy('routed');
+    plannerEl.addEventListener('planner-task-shortcut', (event) => {
+      routed();
+      event.preventDefault();
+    });
+
+    const result = service.handleTaskShortcuts(
+      createKeyboardEvent('j', 'KeyJ', { ctrlKey: true, altKey: true }),
+    );
+
+    expect(result).toBeTrue();
+    expect(routed).toHaveBeenCalled();
+    plannerEl.remove();
+  });
+
+  it('leaves a configured Meta shortcut untouched while editing inside Planner', () => {
+    mockConfigService.cfg.set({
+      keyboard: { ...defaultKeyboardConfig, taskToggleDone: 'Meta+D' },
+      appFeatures: { isTimeTrackingEnabled: true },
+    });
+    const plannerEl = document.createElement('planner-task');
+    plannerEl.setAttribute('data-task-id', 'planner-task');
+    plannerEl.setAttribute('data-task-selectable', 'true');
+    const input = document.createElement('input');
+    plannerEl.appendChild(input);
+    document.body.appendChild(plannerEl);
+    stubActiveElement(input);
+    const routed = jasmine.createSpy('routed');
+    plannerEl.addEventListener('planner-task-shortcut', routed);
+
+    const event = createKeyboardEvent('d', 'KeyD', { metaKey: true });
+    Object.defineProperty(event, 'target', { value: input });
+    const result = service.handleTaskShortcuts(event);
+
+    expect(result).toBeFalse();
+    expect(routed).not.toHaveBeenCalled();
+    expect(mockBulkActions['toggleDone']).not.toHaveBeenCalled();
+    plannerEl.remove();
+  });
+
   describe('schedule-today shortcut (#8851)', () => {
     let hostEl: HTMLElement;
 
@@ -1091,6 +1141,93 @@ describe('TaskShortcutService', () => {
       service.handleTaskShortcuts(ev);
       expect(mockMultiSelect.clear).toHaveBeenCalled();
       expect(mockBulkActions['toggleDone']).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Escape unfocuses the focused task', () => {
+    it('blurs the focused row and consumes the event', () => {
+      const el = setFocusedTask('task-1');
+      const blurSpy = spyOn(el, 'blur');
+      const ev = createKeyboardEvent('Escape', 'Escape');
+
+      expect(service.handleTaskShortcuts(ev)).toBeTrue();
+      expect(blurSpy).toHaveBeenCalled();
+      // Time tracking is untouched — Escape only drops keyboard focus.
+      expect(mockTaskService.setCurrentId).not.toHaveBeenCalled();
+      expect(mockTaskService.toggleStartTask).not.toHaveBeenCalled();
+      // Not defaultPrevented, so other document-level Escape handlers still run.
+      expect(ev.defaultPrevented).toBeFalse();
+    });
+
+    it('blurs a row inside the detail panel too', () => {
+      detailPanelEl = document.createElement('task-detail-panel');
+      document.body.appendChild(detailPanelEl);
+      const el = setFocusedTask('task-1');
+      detailPanelEl.appendChild(el);
+      const blurSpy = spyOn(el, 'blur');
+
+      expect(service.handleTaskShortcuts(createKeyboardEvent('Escape', 'Escape'))).toBe(
+        true,
+      );
+      expect(blurSpy).toHaveBeenCalled();
+    });
+
+    it('blurs a focused child of the row (e.g. a hover control)', () => {
+      const el = setFocusedTask('task-1');
+      const btn = document.createElement('button');
+      el.appendChild(btn);
+      stubActiveElement(btn);
+      const blurSpy = spyOn(btn, 'blur');
+
+      expect(service.handleTaskShortcuts(createKeyboardEvent('Escape', 'Escape'))).toBe(
+        true,
+      );
+      expect(blurSpy).toHaveBeenCalled();
+    });
+
+    it('clears an active selection first, keeping focus for a second Escape', () => {
+      const el = setFocusedTask('task-1');
+      const blurSpy = spyOn(el, 'blur');
+      mockMultiSelect.isActive.set(true);
+      mockMultiSelect.isSelecting.set(true);
+
+      expect(service.handleTaskShortcuts(createKeyboardEvent('Escape', 'Escape'))).toBe(
+        true,
+      );
+      expect(mockMultiSelect.clear).toHaveBeenCalled();
+      expect(blurSpy).not.toHaveBeenCalled();
+
+      mockMultiSelect.isSelecting.set(false);
+      mockMultiSelect.isActive.set(false);
+      expect(service.handleTaskShortcuts(createKeyboardEvent('Escape', 'Escape'))).toBe(
+        true,
+      );
+      expect(blurSpy).toHaveBeenCalled();
+    });
+
+    it('does nothing without a focused task', () => {
+      expect(service.handleTaskShortcuts(createKeyboardEvent('Escape', 'Escape'))).toBe(
+        false,
+      );
+    });
+
+    it('ignores Escape with modifiers', () => {
+      const el = setFocusedTask('task-1');
+      const blurSpy = spyOn(el, 'blur');
+
+      // metaKey matters most: Cmd+key is the one combo ShortcutService lets
+      // through from inputs, so a title edit must not lose focus to it.
+      [
+        { shiftKey: true },
+        { ctrlKey: true },
+        { altKey: true },
+        { metaKey: true },
+      ].forEach((init) => {
+        expect(
+          service.handleTaskShortcuts(createKeyboardEvent('Escape', 'Escape', init)),
+        ).toBe(false);
+      });
+      expect(blurSpy).not.toHaveBeenCalled();
     });
   });
 });

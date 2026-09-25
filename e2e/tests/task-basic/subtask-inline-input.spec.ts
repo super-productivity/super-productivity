@@ -107,10 +107,10 @@ test.describe('Subtask inline input', () => {
     await expect(subTask).toBeFocused();
   });
 
-  // On desktop (this suite runs mouse-primary Chrome), click-away cancels the
-  // draft — commit-on-blur is scoped to touch (#8791/#8856), where the
-  // soft-keyboard Enter is unreliable. Desktop commits via Enter or the button.
-  test('discards a typed draft when it loses focus on desktop', async ({
+  // On desktop (this suite runs mouse-primary Chrome), click-away neither
+  // commits nor discards a draft with text: commit-on-blur is scoped to touch
+  // (#8791/#8856), and losing focus must not throw typed text away.
+  test('keeps a typed draft when it loses focus on desktop', async ({
     page,
     workViewPage,
     taskPage,
@@ -130,8 +130,34 @@ test.describe('Subtask inline input', () => {
     await draftInput.fill('Blurred subtask');
     await page.locator('body').click({ position: { x: 10, y: 10 } });
 
+    await expect(draftInput).toHaveValue('Blurred subtask');
+    await expect(draftInput).not.toBeFocused();
+    await expect(parentTask.locator('.sub-tasks task')).toHaveCount(0);
+
+    // ...and the draft can still be committed after coming back to it.
+    await draftInput.click();
+    await page.keyboard.press('Enter');
+    await expect(parentTask.locator('.sub-tasks task')).toHaveCount(1);
+  });
+
+  test('discards an empty draft when it loses focus on desktop', async ({
+    page,
+    workViewPage,
+    taskPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('Parent task');
+
+    const parentTask = taskPage.getTaskByText('Parent task');
+    await expect(parentTask).toBeVisible();
+
+    await parentTask.focus();
+    await page.keyboard.press('a');
+    await expect(parentTask.locator('.e2e-add-subtask-input')).toBeFocused();
+
+    await page.locator('body').click({ position: { x: 10, y: 10 } });
+
     await expect(parentTask.locator('.e2e-add-subtask-input')).toHaveCount(0);
     await expect(parentTask.locator('.sub-tasks task')).toHaveCount(0);
-    await expect(parentTask).not.toContainText('Blurred subtask');
   });
 });

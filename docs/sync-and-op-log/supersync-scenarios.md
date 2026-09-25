@@ -68,7 +68,11 @@ branch. It provides the dedicated services and sharded SuperSync jobs. See
 [`e2e/CLAUDE.md`](../../e2e/CLAUDE.md) for focused local commands.
 
 Every sync fix must begin with a reproducible failure against real operation or
-state shapes. Add the narrow focused test first, then add or extend E2E when the
-contract spans clients, persistence/restart, transport, or released-version
-compatibility. Update this index only when a durable scenario family gains or
+state shapes. Every sync bug fix requires an E2E test that exactly reproduces
+the reported failure: write it first and confirm it fails without the fix. A
+narrow focused spec may additionally pin the mechanism, but never replaces the
+E2E. Only when the failure is unreachable from the app (`super-sync-server`
+internals, or behaviour specific to a provider with no E2E harness — Dropbox,
+OneDrive today) use the narrowest test that exercises the real code path, and
+state in the PR why E2E can't reach it. Update this index only when a durable scenario family gains or
 changes its executable owner.

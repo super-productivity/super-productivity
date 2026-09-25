@@ -158,6 +158,36 @@ describe('InlineMarkdownComponent', () => {
       expect(view.state.doc.toString()).toBe('- [ ] milk');
     });
 
+    // A collapsed caret must take the "insert one item after this line" path.
+    // Reading only selectionStart from the editor left selectionEnd undefined,
+    // which read as a selection, and applyTaskList's `text.substring(undefined)`
+    // appended the whole note back onto itself — then emitted and synced it.
+    it('inserts a single item without duplicating the note when nothing is selected', async () => {
+      fixture.componentRef.setInput('isShowChecklistToggle', true);
+      await mountLiveEditor('Groceries\nmilk\neggs');
+      spyOn(component.changed, 'emit');
+
+      component.toggleChecklistMode(new Event('click'));
+
+      expect(component.changed.emit).toHaveBeenCalledWith(
+        'Groceries\n- [ ] \nmilk\neggs',
+      );
+    });
+
+    it('converts every selected line when there is a real selection', async () => {
+      fixture.componentRef.setInput('isShowChecklistToggle', true);
+      await mountLiveEditor('Groceries\nmilk\neggs');
+      const view = editorView();
+      view.dispatch({ selection: { anchor: 10, head: 19 } });
+      spyOn(component.changed, 'emit');
+
+      component.toggleChecklistMode(new Event('click'));
+
+      expect(component.changed.emit).toHaveBeenCalledWith(
+        'Groceries\n- [ ] milk\n- [ ] eggs',
+      );
+    });
+
     // Typing must not save: a note is one op per edit session, not per keystroke.
     it("does not commit while typing, and commits on the editor's own change", async () => {
       await mountLiveEditor('before');
@@ -231,6 +261,7 @@ describe('InlineMarkdownComponent', () => {
         selectionEnd: number;
         selectionStart: number;
         setSelectionRange: jasmine.Spy;
+        blur: jasmine.Spy;
         value: string;
       };
     };
@@ -243,12 +274,33 @@ describe('InlineMarkdownComponent', () => {
           selectionStart: 0,
           selectionEnd: 0,
           setSelectionRange: jasmine.createSpy('setSelectionRange'),
+          blur: jasmine.createSpy('blur'),
           value: 'Hello world',
         },
       };
       spyOn(component, 'resizeTextareaToFit'); // skip resize logic
       spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
       spyOn(component.changed, 'emit');
+    });
+
+    // With markdown formatting off the textarea is mounted unconditionally, so
+    // nothing else takes focus off it. The panel's deferred focus hand-off
+    // (keyboardUnToggle -> focusItem) skips itself while a text field owns
+    // focus, so Escape has to give the field up itself or the caret is stranded
+    // in the field the user just asked to leave.
+    ['Escape', 'Ctrl+Enter'].forEach((combo) => {
+      it(`blurs the textarea before handing focus back on ${combo}`, () => {
+        const ev =
+          combo === 'Escape'
+            ? new KeyboardEvent('keydown', { code: 'Escape' })
+            : new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true });
+        const unToggle = spyOn(component.keyboardUnToggle, 'emit');
+
+        component.keypressHandler(ev);
+
+        expect(mockTextareaEl.nativeElement.blur).toHaveBeenCalled();
+        expect(unToggle).toHaveBeenCalled();
+      });
     });
 
     it('should wrap selected text with ** on Ctrl+B', () => {

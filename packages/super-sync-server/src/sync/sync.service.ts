@@ -378,16 +378,19 @@ export class SyncService {
 
           for (const op of ops) {
             const firstRequestOperation = firstOperationById.get(op.id);
-            if (!firstRequestOperation) {
-              firstOperationById.set(op.id, {
-                op,
-                originalTimestamp: op.timestamp,
-              });
-            }
             const validation =
               prevalidatedResults.get(op) ??
               this.validationService.validateOp(op, clientId);
             prevalidatedResults.set(op, validation);
+            if (!firstRequestOperation) {
+              // Copy: processOperation clamps the timestamp and prunes the
+              // vector clock of the stored op in place, so a live reference
+              // would make an exact in-batch retry look like an ID collision.
+              firstOperationById.set(op.id, {
+                op: { ...op },
+                originalTimestamp: op.timestamp,
+              });
+            }
 
             const { result, storageBytes, fallback } =
               await this.operationUploadService.processOperation(
@@ -467,29 +470,6 @@ export class SyncService {
             );
           }
 
-          // Update device last seen
-          await tx.syncDevice.upsert({
-            where: {
-              // Prisma composite key naming uses underscores; allow it here
-              // eslint-disable-next-line @typescript-eslint/naming-convention
-              userId_clientId: {
-                userId,
-                clientId,
-              },
-            },
-            create: {
-              userId,
-              clientId,
-              lastSeenAt: BigInt(now),
-              createdAt: BigInt(now),
-              lastAckedSeq: 0,
-            },
-            update: {
-              lastSeenAt: BigInt(now),
-            },
-          });
-          uploadDbRoundtrips++;
-
           // W1: write the storage counter as the LAST statement before COMMIT
           // so the row-level write lock on `users` is held for only the
           // commit round-trip, not for the entire 60s transaction window.
@@ -535,6 +515,18 @@ export class SyncService {
         this.storageQuotaService.clearForUser(userId);
         this.requestDeduplicationService.clearForUser(userId);
       }
+
+      // Outside the RepeatableRead transaction on purpose: the download route
+      // touches the same (user_id, client_id) row fire-and-forget, and a touch
+      // committing between this transaction's snapshot and its own upsert
+      // aborted the WHOLE upload with a serialization failure (40001). Seen
+      // reproducibly right after a clean slate or wipe, when the row does not
+      // exist yet and both sides INSERT it. As a standalone statement the two
+      // writes just serialize on the row lock. Trade-off: a full wipe
+      // (deleteAllUserData) landing in this gap leaves a device row with no
+      // ops behind it; the row is advisory and ages out of the device list,
+      // and the download-route touch has always had the same window.
+      await this.registerUploadDevice(userId, clientId, now);
 
       const accepted = results.filter((result) => result.accepted).length;
       Logger.info('UPLOAD_BATCH_SUMMARY', {
@@ -626,10 +618,43 @@ export class SyncService {
   }
 
   /**
+   * Records the uploading device (`lastSeenAt`) once the upload transaction
+   * has committed. Advisory metadata for the device list: a failure here must
+   * never turn an accepted upload into an error.
+   */
+  private async registerUploadDevice(
+    userId: number,
+    clientId: string,
+    now: number,
+  ): Promise<void> {
+    try {
+      await prisma.syncDevice.upsert({
+        where: {
+          // Prisma composite key naming uses underscores; allow it here
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          userId_clientId: { userId, clientId },
+        },
+        create: {
+          userId,
+          clientId,
+          lastSeenAt: BigInt(now),
+          createdAt: BigInt(now),
+          lastAckedSeq: 0,
+        },
+        update: { lastSeenAt: BigInt(now) },
+      });
+    } catch (err) {
+      Logger.debug(
+        `[user:${userId}] registerUploadDevice failed: ${(err as Error)?.message}`,
+      );
+    }
+  }
+
+  /**
    * Keeps the device row alive for the device list. Called from the download
    * ROUTE only — not from `getOpsSinceWithSeq`, whose other callers (the
    * upload handler's piggyback and dedup-retry reads) run right after the
-   * upload transaction already upserted `lastSeenAt`, so a touch there is a
+   * upload already upserted `lastSeenAt`, so a touch there is a
    * guaranteed-suppressed extra statement per upload. Fire-and-forget and
    * deliberately outside any transaction: this is advisory metadata for a UI
    * list and must never fail, slow, or lengthen the lock window of a sync.
@@ -913,17 +938,30 @@ export class SyncService {
    */
   async deleteAllUserData(userId: number): Promise<void> {
     await prisma.$transaction(async (tx) => {
+      // Acquire the upload sequence row's write lock BEFORE deleting history.
+      // Keep its counter so a peer that misses the empty interval still sees
+      // the replacement snapshot above its old cursor.
+      await tx.userSyncState.upsert({
+        where: { userId },
+        create: { userId, lastSeq: 0 },
+        update: {
+          lastSnapshotSeq: null,
+          snapshotData: null,
+          snapshotAt: null,
+          // Cleared with the blob, as every other cache-clear site does; a
+          // stale version left behind would describe data that no longer exists.
+          snapshotSchemaVersion: null,
+          latestFullStateSeq: null,
+          latestFullStateVectorClock: Prisma.DbNull,
+          latestStateReplacementSeq: null,
+        },
+      });
+
       // Delete all operations
       await tx.operation.deleteMany({ where: { userId } });
 
       // Delete all devices
       await tx.syncDevice.deleteMany({ where: { userId } });
-
-      // Delete sync state entirely, resetting lastSeq to 0.
-      // Unlike uploadOps clean slate (which preserves lastSeq), account reset
-      // intentionally wipes everything. Clients detect the wipe via latestSeq=0
-      // and trigger a full state re-upload.
-      await tx.userSyncState.deleteMany({ where: { userId } });
 
       // Reset storage usage
       await tx.user.update({

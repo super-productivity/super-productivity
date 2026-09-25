@@ -10,6 +10,7 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
@@ -40,6 +41,15 @@ class WebDavHttpPlugin : Plugin() {
                         response = chain.proceed(request)
                         break
                     } catch (e: IOException) {
+                        // Scope this guard to the reproduced PUT lock collision (#10116).
+                        // A failed upload may still be running on the server. DNS and
+                        // connection-refused failures happen before sending and remain
+                        // retryable here, even when OkHttp has no other routes to try.
+                        if (request.method == "PUT" &&
+                            e !is UnknownHostException && e !is ConnectException
+                        ) {
+                            throw e
+                        }
                         tryCount++
                         if (tryCount >= maxRetries) {
                             throw e

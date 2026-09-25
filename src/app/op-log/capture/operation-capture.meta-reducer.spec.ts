@@ -14,6 +14,10 @@ import { Action } from '@ngrx/store';
 import { PersistentAction } from '../core/persistent-action.interface';
 import { EntityType, OpType } from '../core/operation.types';
 import { RootState } from '../../root-store/root-state';
+import {
+  isReducerRejectedAction,
+  reducerFailureGuardMetaReducer,
+} from '../../root-store/meta/reducer-failure-guard.meta-reducer';
 
 describe('operationCaptureMetaReducer', () => {
   let mockCaptureService: jasmine.SpyObj<OperationCaptureService>;
@@ -365,6 +369,33 @@ describe('operationCaptureMetaReducer', () => {
           bufferDeferredAction(a),
         );
         expect(reloadWarningCalls().length).toBe(2);
+      });
+
+      // The developer confirms "Throw" on a buffer warning; the guard's own
+      // devError prompt is then declined. The throw rejects the action and
+      // keeps the pre-dispatch state, so buffering it would later upload an op
+      // for a change NgRx never committed (#10195).
+      [
+        { warning: 'soft', alreadyBuffered: 10 },
+        {
+          warning: 'reload',
+          alreadyBuffered: DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD - 1,
+        },
+      ].forEach(({ warning, alreadyBuffered }) => {
+        it(`should not buffer an action rejected via the ${warning}-warning throw`, () => {
+          const confirmSpy = spyNativeDialogs();
+          createManyActions(alreadyBuffered).forEach((a) => bufferDeferredAction(a));
+          confirmSpy.and.returnValues(true, false);
+          setIsApplyingRemoteOps(true);
+          const guarded = reducerFailureGuardMetaReducer(
+            operationCaptureMetaReducer(mockReducer),
+          );
+          const action = createMockAction();
+
+          expect(guarded(mockState, action)).toBe(mockState);
+          expect(isReducerRejectedAction(action)).toBe(true);
+          expect(getDeferredActions().length).toBe(alreadyBuffered);
+        });
       });
     });
   });

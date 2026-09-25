@@ -15,6 +15,7 @@ import {
   DEFAULT_OPTIONS,
   FILTER_COMMON,
   FILTER_OPTION_TYPE,
+  FILTER_PRIORITY,
   FILTER_SCHEDULE,
   FILTER_TIME,
   FilterOption,
@@ -71,7 +72,7 @@ export class TaskViewCustomizerPanelComponent {
 
   onFilterWithValue(val: {
     filterType: FILTER_OPTION_TYPE;
-    preset: FILTER_SCHEDULE | FILTER_TIME | null;
+    preset: FILTER_COMMON | FILTER_SCHEDULE | FILTER_TIME | FILTER_PRIORITY | null;
   }): void {
     const foundFilter = OPTIONS.filter.list.find((x) => x.type === val.filterType);
     if (!foundFilter) return;

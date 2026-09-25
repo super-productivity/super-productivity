@@ -55,8 +55,10 @@ import {
   PlaintextWhenEncryptionExpectedError,
 } from '../../op-log/core/errors/sync-errors';
 import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password/dialog-enter-encryption-password.component';
+import { DialogSyncConflictComponent } from './dialog-sync-conflict/dialog-sync-conflict.component';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
-import { ActionType } from '../../op-log/core/operation.types';
+import { ActionType, OpType } from '../../op-log/core/operation.types';
+import { TestClient } from '../../op-log/testing/integration/helpers/test-client.helper';
 import type { SyncProviderBase } from '../../op-log/sync-providers/provider.interface';
 import type { MatDialogRef } from '@angular/material/dialog';
 import { DialogGetAndEnterAuthCodeComponent } from './dialog-get-and-enter-auth-code/dialog-get-and-enter-auth-code.component';
@@ -168,8 +170,10 @@ describe('SyncWrapperService', () => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'getVectorClockEntry',
       'setVectorClock',
+      'getUnsynced',
     ]);
     mockOpLogStore.getVectorClockEntry.and.returnValue(Promise.resolve(null));
+    mockOpLogStore.getUnsynced.and.resolveTo([]);
 
     mockLegacyPfDb = jasmine.createSpyObj('LegacyPfDbService', [
       'loadMetaModel',
@@ -872,7 +876,12 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: true, isNeverSynced: false, fenceEpoch: 0 },
+        {
+          forceFromSeq0: true,
+          isNeverSynced: false,
+          fenceEpoch: 0,
+          keepDecryptedPrefix: true,
+        },
       );
     });
 
@@ -886,7 +895,12 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: undefined, isNeverSynced: false, fenceEpoch: 0 },
+        {
+          forceFromSeq0: undefined,
+          isNeverSynced: false,
+          fenceEpoch: 0,
+          keepDecryptedPrefix: true,
+        },
       );
     });
 
@@ -897,7 +911,12 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: undefined, isNeverSynced: false, fenceEpoch: 0 },
+        {
+          forceFromSeq0: undefined,
+          isNeverSynced: false,
+          fenceEpoch: 0,
+          keepDecryptedPrefix: true,
+        },
       );
     });
 
@@ -1497,7 +1516,7 @@ describe('SyncWrapperService', () => {
       }
     });
 
-    it('should render unsupported multi-entity diagnostics through the dedicated snack', async () => {
+    it('offers recovery without a persistent snack that would block feedback after manual sync', async () => {
       mockSyncService.downloadRemoteOps.and.rejectWith(
         new UnsupportedMultiEntityConflictError(
           'remote',
@@ -1513,12 +1532,123 @@ describe('SyncWrapperService', () => {
       expect(mockSnackService.open).toHaveBeenCalledWith({
         msg: T.F.SYNC.S.UNSUPPORTED_MULTI_ENTITY_CONFLICT,
         type: 'ERROR',
+        actionStr: T.F.SYNC.S.BTN_RESOLVE_CONFLICT,
+        actionFn: jasmine.any(Function),
         translateParams: {
           details:
             'SYNC_MULTI_ENTITY_UNSUPPORTED side=remote ' +
             `actionType=${ActionType.TASK_SHARED_UPDATE_MULTIPLE} entityCount=2`,
         },
       });
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+      const snack = mockSnackService.open.calls.mostRecent().args[0] as SnackParams;
+      const syncSpy = spyOn(service, 'sync').and.resolveTo('HANDLED_ERROR');
+      await snack.actionFn!();
+      expect(syncSpy).toHaveBeenCalledWith(true);
+    });
+
+    // The diagnostic embeds `entityCount=N`. _isTimeoutError matches /\b504\b/,
+    // and `=` is a non-word char, so a bulk op over exactly 504 entities used to
+    // be misread as a gateway timeout — which stays silent on automatic syncs,
+    // leaving a permanent wedge with no snack and no ERROR status.
+    it('does not let entityCount=504 fall through to the gateway-timeout branch', async () => {
+      mockSyncService.downloadRemoteOps.and.rejectWith(
+        new UnsupportedMultiEntityConflictError(
+          'local',
+          ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+          504,
+        ),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.UNSUPPORTED_MULTI_ENTITY_CONFLICT,
+          actionStr: T.F.SYNC.S.BTN_RESOLVE_CONFLICT,
+        }),
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ msg: T.F.SYNC.S.TIMEOUT_ERROR }),
+      );
+    });
+
+    describe('unsupported multi-entity conflict recovery', () => {
+      beforeEach(() => {
+        configSubject.next(createMockSyncConfig(SyncProviderId.WebDAV));
+        mockOpLogStore.getUnsynced.and.resolveTo([
+          {
+            seq: 1,
+            source: 'local',
+            appliedAt: 1,
+            op: new TestClient('local').createOperation({
+              actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              entityId: 'task-a',
+              entityIds: ['task-a', 'task-b'],
+              payload: { tasks: [] },
+            }),
+          },
+        ]);
+        mockSyncService.downloadRemoteOps.and.rejectWith(
+          new UnsupportedMultiEntityConflictError(
+            'local',
+            ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+            8,
+          ),
+        );
+        mockSyncService.forceUploadLocalState = jasmine
+          .createSpy('forceUploadLocalState')
+          .and.resolveTo({ hasUnresolvedOps: false });
+        mockSyncService.forceDownloadRemoteState = jasmine
+          .createSpy('forceDownloadRemoteState')
+          .and.resolveTo();
+      });
+
+      for (const choice of ['USE_LOCAL', 'USE_REMOTE', undefined] as const) {
+        it(`offers explicit recovery on manual sync: ${choice ?? 'cancel'}`, async () => {
+          mockMatDialog.open.and.returnValue({
+            afterClosed: () => of(choice),
+          } as MatDialogRef<DialogSyncConflictComponent>);
+
+          const result = await service.sync(true);
+
+          expect(mockMatDialog.open).toHaveBeenCalledWith(
+            DialogSyncConflictComponent,
+            jasmine.objectContaining({ disableClose: true }),
+          );
+          const data = mockMatDialog.open.calls.mostRecent().args[1]!
+            .data as ConflictData;
+          expect(data.localUnsyncedOpsCount).toBe(1);
+          expect(data.remote.lastUpdate).toBeNull();
+          expect(data.remote.vectorClock).toBeUndefined();
+          // The reportable code must stay reachable for users who only ever
+          // sync manually and therefore never see the snack.
+          expect(data.remote.lastUpdateAction).toContain('SYNC_MULTI_ENTITY_UNSUPPORTED');
+          if (choice === 'USE_LOCAL') {
+            expect(mockSyncService.forceUploadLocalState).toHaveBeenCalledOnceWith(
+              mockSyncCapableProvider,
+            );
+          } else {
+            expect(mockSyncService.forceUploadLocalState).not.toHaveBeenCalled();
+          }
+          if (choice === 'USE_REMOTE') {
+            expect(mockSyncService.forceDownloadRemoteState).toHaveBeenCalledOnceWith(
+              mockSyncCapableProvider,
+            );
+          } else {
+            expect(mockSyncService.forceDownloadRemoteState).not.toHaveBeenCalled();
+          }
+          expect(result).toBe(choice ? SyncStatus.InSync : 'HANDLED_ERROR');
+          if (!choice) {
+            expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+            expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+          }
+        });
+      }
     });
 
     it('should escape the diagnostic before it reaches the [innerHtml] snack', async () => {
@@ -2218,6 +2348,46 @@ describe('SyncWrapperService', () => {
         expect(dialogConfig.data.remote.lastUpdate).toBe(remoteLastModified);
       });
 
+      it('does not present an ops-only remote side as full data (#9391)', async () => {
+        // Shape thrown for a fresh client that received remote ops, no snapshot.
+        const conflictError = new LocalDataConflictError(1, null, undefined, null);
+        mockSyncService.downloadRemoteOps.and.rejectWith(conflictError);
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of(undefined),
+        } as MatDialogRef<DialogSyncConflictComponent>);
+
+        await service.sync();
+
+        const dialogConfig = mockMatDialog.open.calls.mostRecent().args[1] as {
+          data: ConflictData;
+        };
+        expect(dialogConfig.data.remote.isFullData).toBe(false);
+        expect(dialogConfig.data.localUnsyncedOpsCount).toBe(1);
+      });
+
+      it('still presents a remote snapshot as full data', async () => {
+        const conflictError = new LocalDataConflictError(
+          3,
+          { tasks: [{ id: 'remote-task' }] },
+          { clientB: 5 },
+        );
+        mockSyncService.downloadRemoteOps.and.rejectWith(conflictError);
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of(undefined),
+        } as MatDialogRef<DialogSyncConflictComponent>);
+
+        await service.sync();
+
+        const dialogConfig = mockMatDialog.open.calls.mostRecent().args[1] as {
+          data: ConflictData;
+        };
+        expect(dialogConfig.data.remote.isFullData).toBe(true);
+        expect(dialogConfig.data.remote.mainModelData).toEqual({
+          tasks: [{ id: 'remote-task' }],
+        } as unknown as ConflictData['remote']['mainModelData']);
+        expect(dialogConfig.data.remote.lastUpdateAction).toBe('Remote data');
+      });
+
       it('should call forceUploadLocalState when user chooses USE_LOCAL', async () => {
         const conflictError = new LocalDataConflictError(
           2,
@@ -2306,6 +2476,7 @@ describe('SyncWrapperService', () => {
 
         expect(result).toBe('HANDLED_ERROR');
         expect(mockSnackService.open).toHaveBeenCalled();
+        expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('ERROR');
         // Issue #7339: previously, filter(undefined) on the dialog stream caused
         // firstValueFrom() to throw EmptyError, which surfaced as the generic
         // ERROR snack. After the fix, an undefined close (e.g., iOS app
@@ -2562,9 +2733,7 @@ describe('SyncWrapperService', () => {
 
         await service.sync();
 
-        expect(mockUserInputWaitState.startWaiting).toHaveBeenCalledWith(
-          'local-data-conflict',
-        );
+        expect(mockUserInputWaitState.startWaiting).toHaveBeenCalledWith('data-conflict');
         expect(stopWaitingSpy).toHaveBeenCalled();
       });
 
@@ -3535,6 +3704,71 @@ describe('SyncWrapperService', () => {
 
       const result = await service.sync();
 
+      expect(result).toBe(SyncStatus.UpdateRemote);
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    });
+
+    it('should immediately re-upload an op the server rejected with a transient INTERNAL_ERROR', async () => {
+      // "Concurrent transaction conflict - please retry": the op stays pending
+      // locally, and without a retry in this cycle it sat unsynced until the
+      // next auto-sync tick while the header showed unsynced changes.
+      mockSyncService.downloadRemoteOps.and.resolveTo({ kind: 'no_new_ops' as const });
+      mockSyncService.uploadPendingOps.and.returnValues(
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 0,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [
+            {
+              opId: 'op-1',
+              error: 'Concurrent transaction conflict - please retry',
+              errorCode: 'INTERNAL_ERROR',
+            },
+          ],
+        }),
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 1,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        }),
+      );
+
+      const result = await service.sync();
+
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(result).toBe(SyncStatus.InSync);
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('IN_SYNC');
+    });
+
+    it('should not report IN_SYNC when an op is still transiently rejected after the retry budget', async () => {
+      mockSyncService.downloadRemoteOps.and.resolveTo({ kind: 'no_new_ops' as const });
+      mockSyncService.uploadPendingOps.and.resolveTo({
+        kind: 'completed' as const,
+        uploadedCount: 0,
+        piggybackedOpsCount: 0,
+        localWinOpsCreated: 0,
+        permanentRejectionCount: 0,
+        hasMorePiggyback: false,
+        rejectedOps: [
+          { opId: 'op-1', error: 'server busy', errorCode: 'INTERNAL_ERROR' },
+        ],
+      });
+
+      const result = await service.sync();
+
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(
+        1 + MAX_LWW_REUPLOAD_RETRIES,
+      );
       expect(result).toBe(SyncStatus.UpdateRemote);
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
         'UNKNOWN_OR_CHANGED',

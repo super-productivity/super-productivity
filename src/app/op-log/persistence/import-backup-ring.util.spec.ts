@@ -86,6 +86,25 @@ describe('import backup ring', () => {
     expect(kept.length).toBeLessThan(IMPORT_BACKUP_RING_SIZE);
   });
 
+  // Both privileged slots (the entry being restored, and the newest
+  // pre-replacement capture) can be filled while only one is asked for. Keeping
+  // both frees one slot fewer than requested, so the quota retry that triggered
+  // the prune hits QuotaExceededError again.
+  it('never keeps more entries than asked for, even with both slots privileged', async () => {
+    const tx = createTx();
+    const oldest = await save(tx, { pre: 'loss' }, 'REMOTE_IMPORT');
+    for (let i = 0; i < IMPORT_BACKUP_RING_SIZE - 1; i++) {
+      await save(tx, { i }, 'REMOTE_IMPORT');
+    }
+
+    await pruneImportBackupRingTx(tx, 1, oldest.backupId);
+
+    const kept = await listImportBackupsTx(tx);
+    expect(kept.length).toBe(1);
+    // The entry being restored outranks the guarded capture for the one slot.
+    expect(kept[0].backupId).toBe(oldest.backupId);
+  });
+
   it('still guards the newest pre-replacement capture from a plain restore', async () => {
     const tx = createTx();
     const remote = await save(tx, { remote: true }, 'REMOTE_IMPORT');

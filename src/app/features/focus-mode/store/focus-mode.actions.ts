@@ -99,5 +99,6 @@ export const restoreFocusSessionFromNative = createAction(
     remainingMs: number;
     isBreak: boolean;
     isPaused: boolean;
+    pausedTaskId?: string;
   }>(),
 );

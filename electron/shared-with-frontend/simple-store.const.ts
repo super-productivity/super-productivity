@@ -15,4 +15,7 @@ export enum SimpleStoreKey {
   // Whether the main window was maximized when it was last hidden/closed (#7276).
   // electron-window-state cannot be trusted with this bit, see window-maximized-state.ts.
   WINDOW_WAS_MAXIMIZED = 'windowWasMaximized',
+  // The main window's last known un-maximized size/position (#10058).
+  // electron-window-state cannot be trusted with these either, see window-restore-bounds.ts.
+  WINDOW_RESTORE_BOUNDS = 'windowRestoreBounds',
 }

@@ -3,11 +3,16 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
   input,
+  viewChildren,
 } from '@angular/core';
 import { BoardCfg } from '../boards.model';
-import { BoardPanelComponent } from '../board-panel/board-panel.component';
+import {
+  BoardPanelComponent,
+  BoardPanelNavigation,
+} from '../board-panel/board-panel.component';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -43,6 +48,42 @@ export class BoardComponent {
   private _matDialog = inject(MatDialog);
 
   boardCfg = input.required<BoardCfg>();
+  private _panels = viewChildren(BoardPanelComponent);
+  private _panelElements = viewChildren(BoardPanelComponent, { read: ElementRef });
+
+  async adjacentPanel(sourceId: string, event: BoardPanelNavigation): Promise<void> {
+    const panels = this._panels();
+    const index = panels.findIndex((panel) => panel.panelCfg().id === sourceId);
+    const rects = this._panelElements().map((element) =>
+      (element.nativeElement as HTMLElement).getBoundingClientRect(),
+    );
+    const source = rects[index];
+    // Use the rendered grid so responsive columns and RTL follow visual direction.
+    let targetIndex = -1;
+    let distance = Infinity;
+    rects.forEach((rect, panelIndex) => {
+      const isVertical = event.direction === 'up' || event.direction === 'down';
+      const offset =
+        event.direction === 'up'
+          ? source.top - rect.top
+          : event.direction === 'down'
+            ? rect.top - source.top
+            : (rect.left - source.left) * event.direction;
+      const isAligned = isVertical ? rect.left === source.left : rect.top === source.top;
+      if (isAligned && offset > 0 && offset < distance) {
+        targetIndex = panelIndex;
+        distance = offset;
+      }
+    });
+    const target = panels[targetIndex];
+    if (!target) return;
+    if (
+      event.taskIds &&
+      !(await target.moveTasks(event.taskIds, event.direction === 'down' ? 0 : undefined))
+    )
+      return;
+    target.focusRow(event.rowIndex, event.focusTaskId ?? event.taskIds?.[0]);
+  }
 
   allExistingTagIds = toSignal(this._store.select(selectAllTagIds), { initialValue: [] });
 

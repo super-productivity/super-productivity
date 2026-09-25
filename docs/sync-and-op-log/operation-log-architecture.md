@@ -791,10 +791,31 @@ treats file `syncVersion` as a synthetic transport watermark and exposes it as
 it once; snapshot replacement can reset it, which the gap path detects. It is
 not the provider `rev`/ETag and does not prove per-operation ordering. One upload
 can carry multiple operations under the same new watermark; stable operation
-IDs provide durable deduplication, while vector clocks carry causality.
+IDs deduplicate ops still in the local log, while vector clocks carry causality.
 
 1. **Normal catch-up:** download the bounded ops buffer and pass every retained
-   candidate through the common applied-ID and conflict pipeline.
+   candidate through the common applied-ID and conflict pipeline. Each retained
+   op carries the `syncVersion` it was written at (`sv`), which the adapter
+   exposes as its `serverSeq`. The applied-ID set alone cannot recognise an op
+   that local compaction already pruned (7-day retention), so the download
+   also skips an op when its `sv` is at or below the persisted cursor **and**
+   the local vector clock covers its author counter (#10119). Otherwise an old
+   create op still in the buffer would re-create an entity archived or deleted
+   here since. The clock half is needed because the cursor can run ahead of
+   applied ops: an upload merges into the freshly read file and sets the
+   cursor to the new version. Legacy ops without `sv` use the file's
+   `syncVersion` as a conservative upper bound. After local compaction prunes
+   such an op's applied ID, a later file write advances this upper bound past
+   the cursor, so the old op can be re-applied (reproduced for v2 and v3 with
+   an archived task). Skipping it on clock coverage alone is unsafe: conflict
+   resolution can merge a remote clock even when its op was not applied locally.
+   Seq-0 downloads and downloads after a gap reset do not use this filter. Other
+   known gaps: the guard assumes each author's counter never goes backwards (a
+   device that keeps its clientId but adopts a lower own clock, e.g. USE_REMOTE
+   after another device's USE_LOCAL, could have a new op skipped when the cursor
+   also ran ahead; reproduced by pending tests in the #10119 integration spec,
+   fix tracked in #10239); and a remote op whose apply failed is no longer
+   retried once compaction prunes it, matching SuperSync.
 2. **Fresh client / forced seq-0:** return a full state/archive baseline. In v2,
    that baseline represents the monolith and its retained ops. In v3, the ops
    file points to a validated snapshot generation; retained ops newer than the
@@ -869,8 +890,10 @@ but differ in pagination and baseline behavior. For SuperSync, one normal cycle:
    effects, applied IDs, and clocks are durable;
 4. uploads pending local rows in bounded batches and processes per-operation
    acceptance/rejection results plus any piggybacked remote operations; and
-5. re-uploads newly synthesized local-win operations in the same cycle through a
-   bounded reconciliation loop.
+5. re-uploads newly synthesized local-win operations, plus any operation the
+   server rejected with a retryable `INTERNAL_ERROR`, in the same cycle through
+   a bounded reconciliation loop; whatever is still pending after the budget is
+   reported as `UNKNOWN_OR_CHANGED`, never `IN_SYNC`.
 
 An incompatible operation, failed apply, or cancelled full-state decision leaves
 its operation and suffix uncommitted, so a later cycle downloads them again. The
@@ -1008,13 +1031,48 @@ When a `moveToArchive` operation conflicts with a field-level update (e.g., rena
 
 **Rationale:** If Client A archives a task and Client B concurrently renames it, the archive must win — otherwise, the LWW update would "resurrect" the archived task back into the active store by replacing its state.
 
-**Implementation:** `ConflictResolutionService` checks whether either the local or remote side contains a `TASK_SHARED_MOVE_TO_ARCHIVE` action. If so, the archive side wins automatically, and a new archive operation is created with a merged vector clock (via `_createArchiveWinOp()`).
+**Implementation:** `ConflictResolutionService` checks whether either the local or remote side contains a `TASK_SHARED_MOVE_TO_ARCHIVE` action. If so, the archive side wins automatically, and a new archive operation is created with a merged vector clock (via `buildArchiveWinOp()`).
+
+- **One op per archive intent (#10102):** a bulk archive that wins several rows emits ONE recreation shared by all of them; pending exact copies of one intent left by pre-fix clients are folded back into one (`bulk-archive-intent.util.ts`).
+- **Restored tasks are never re-archived (#10220):** the archive is re-emitted scoped to the other tasks (`buildScopedArchiveReplacementOp()`, or dropped if none remain), and each restored top-level task gets a current-state LWW Update:
+  - _own row conflicted_ — the update replaces the rejected `restoreTask` and resolves as a local win, overriding the concurrent remote edit regardless of timestamps (as in the partial-archive path of #9537);
+  - _no row_ — the `restoreTask` stays pending and the update follows it to carry `isDone: false`, because other devices never saw the archive and ignore a restore of an active task.
+- **Known limitation:** that update is an ordinary pending op. A newer concurrent remote edit of the task arriving in a LATER sync beats it by whole-op LWW and both local ops are rejected, so other devices keep the task done while this one keeps `isDone: false` until `isDone` changes again — the pre-existing [composition residual](./conflict-journal-and-review.md#composition-residual-pre-existing-class) class.
 
 This is the **first level** of archive resurrection prevention. The **second level** is the [bulk archive filter](../../src/app/op-log/apply/bulk-archive-filter.util.ts), which pre-scans operation batches for archive operations and skips any LWW Update operations targeting entities being archived in the same batch. This two-level defense handles the 3+ client scenario where LWW Updates can arrive before or after archive ops in the same batch.
 
+Same-batch restores (#10220) — restart replay is status-blind, so a rejected bulk archive still precedes the restore and the local-win update that re-asserts it:
+
+- Ops AFTER a `restoreTask` treat the task it brings back as active; ops between the archive and the restore still skip it, so a stale update cannot recreate the task and turn the restore into a no-op.
+- A later archive makes the task archived again; a later delete leaves it deleted but not archived, so a `recreatesEntityAfterDelete` update still applies.
+- A `restoreTask` whose root is already active is ignored, as `handleRestoreTask` ignores it: its payload subtasks are not treated as restored and the restore point does not move.
+- Ordinary task updates do not create missing tasks in the pre-scan: a rejected update between archive and restore cannot make the restore look like a duplicate or suppress a later winning update.
+- Logs replayed after upgrading may apply an LWW Update the pre-#10220 filter skipped; state moves to what op-by-op apply produces.
+- Known gaps (no observed occurrence yet): a subtask restored on its own under a still-archived parent is not detected; `restoreDeletedTask` (undo delete) is not treated as a restore, so a same-batch LWW Update after it is still skipped.
+
+Both levels only work if the archive op DECLARES the entity. A client awake on
+the websocket downloads one op per trigger, so an LWW Update that escaped level
+1 arrives in its own batch, where level 2 has no archive op to match — and the
+update recreates the task next to its archived copy. There is deliberately no
+receiver-side "is it in the archive?" guard: such a check cannot tell an update
+concurrent with the archive from a legitimate later re-introduction (a
+superseded `restoreTask` is re-emitted as a plain LWW Update), and skipping the
+latter diverges clients permanently. The fix is upstream — declare the full
+footprint so level 1 never lets the update through. A pre-fix sender can still
+cause one visible, re-archivable resurrection during a mixed-fleet rollout.
+
+**Footprint:** `moveToArchive.meta.entityIds` lists the top-level tasks AND the
+subtasks its reducer cascades to (`collectArchivedTaskEntityIds`), so archive
+precedence applies to concurrent subtask edits on both the client and the
+server conflict probe. Old ops carry top-level ids only; every consumer
+re-derives the cascade. Partial-rejection re-scoping keys on the payload's
+top-level `tasks` and re-derives the footprint from the scoped tasks
+(`scopeBulkArchivePayload`).
+
 **Key files:**
 
-- `src/app/op-log/sync/conflict-resolution.service.ts` — Archive-wins check and `_createArchiveWinOp()`
+- `src/app/op-log/sync/conflict-resolution.service.ts` — Archive-wins check
+- `src/app/op-log/sync/bulk-archive-intent.util.ts` — `buildArchiveWinOp()`, one recreation per archive intent; `buildScopedArchiveReplacementOp()`, the narrowed re-emit
 - `src/app/op-log/apply/bulk-hydration.meta-reducer.ts` — Pre-scan archive filtering
 
 ### Superseded Operation Handling for moveToArchive
@@ -1024,6 +1082,8 @@ The `SupersededOperationResolverService` treats `moveToArchive` as a special cas
 This is necessary because `moveToArchive` removes entities from the NgRx store (via the archive reducer), so `getCurrentEntityState()` returns `undefined` for archived entities. Without this special handling, the superseded operation resolver would be unable to re-create the operation, and archived tasks would be lost.
 
 **Implementation:** Before entity-by-entity processing, `SupersededOperationResolverService` identifies bulk semantic operations like `moveToArchive` and re-creates them with the original payload and a merged vector clock, preserving the full task data in `MultiEntityPayload` format.
+
+Known gap: this re-creation does not check for tasks restored after the archive was captured (unlike the conflict path, #10220), so a superseded bulk archive can re-archive a restored task — not reproduced yet.
 
 **Key file:** `src/app/op-log/sync/superseded-operation-resolver.service.ts`
 

@@ -28,6 +28,13 @@
 
 .weeks {
   overflow: hidden;
+  // Set from the component, so ROW_HEIGHT is not restated here. Six rows always
+  // render; where they do not fit at full size they shrink (#9449 review).
+  --row-height: 40px;
+}
+
+.week {
+  height: var(--row-height);
 }
 
 .week button {
@@ -37,9 +44,9 @@
   background: none;
   color: inherit;
   font-size: 14px;
-  width: 36px;
-  height: 36px;
-  margin: var(--s-quarter) auto;
+  width: min(36px, calc(var(--row-height) - 2 * var(--s-quarter)));
+  height: min(36px, calc(var(--row-height) - 2 * var(--s-quarter)));
+  margin: auto;
   border-radius: 50%;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;

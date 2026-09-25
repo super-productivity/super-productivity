@@ -5,14 +5,19 @@
   display: flex;
   align-items: center;
   padding: 0;
-  border-radius: 6px;
+  border-radius: var(--task-border-radius);
 
   background: var(--task-c-bg);
-  // Flat row matching the task list: hairline border instead of a resting shadow.
-  // Routed through the --task-border switch so zen/lines stay borderless.
+  // Flat row matching the task list: hairline separators, no resting shadow.
+  // Routed through the same tokens so boxed themes get their box back.
   box-shadow: none;
-  border: var(--task-border, 1px solid var(--task-border-color));
+  border: var(--task-border);
+  border-top: var(--task-row-edge);
   color: var(--text-color);
+
+  &:last-of-type {
+    border-bottom: var(--task-row-edge);
+  }
   //border-color: var(--extra-border-color);
 
   &.isDone {

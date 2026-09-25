@@ -1,0 +1,516 @@
+name: iOS TestFlight Publish
+
+# Security boundary: workflow_run executes this file from the default branch,
+# not from the PR. PR code only produces an unsigned archive. A credential-free
+# job validates and repacks that archive before the protected `ios-testflight`
+# environment can expose signing credentials to the publish job.
+
+on:
+  workflow_run:
+    workflows: ['iOS TestFlight Build on Label']
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  discover:
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      requested: ${{ steps.request.outputs.requested }}
+      pr_number: ${{ steps.source.outputs.pr_number }}
+      head_sha: ${{ steps.source.outputs.head_sha }}
+      pr_title: ${{ steps.source.outputs.pr_title }}
+
+    steps:
+      - name: Check out trusted publisher code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Discover TestFlight request
+        id: request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          NAME="ios-testflight-request-${SOURCE_RUN_ID}-${SOURCE_RUN_ATTEMPT}"
+          COUNT=$(gh api "repos/$REPO/actions/runs/$SOURCE_RUN_ID/artifacts" \
+            --jq "[.artifacts[] | select(.name == \"$NAME\")] | length")
+          if [ "$COUNT" = 0 ]; then
+            echo "requested=false" >> "$GITHUB_OUTPUT"
+            echo "No TestFlight request artifact; ignoring this label event."
+            exit 0
+          fi
+          test "$COUNT" = 1
+          echo "requested=true" >> "$GITHUB_OUTPUT"
+
+      - name: Download request metadata
+        if: steps.request.outputs.requested == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
+        with:
+          name: ios-testflight-request-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+          path: ${{ runner.temp }}/request
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Validate source run and PR
+        if: steps.request.outputs.requested == 'true'
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          EVENT_HEAD_SHA: ${{ github.event.workflow_run.pull_requests[0].head.sha }}
+        run: |
+          set -euo pipefail
+          RUN_JSON=$(gh api "repos/$REPO/actions/runs/$SOURCE_RUN_ID")
+
+          test "$(jq -r '.event' <<< "$RUN_JSON")" = pull_request
+          test "$(jq -r '.path' <<< "$RUN_JSON")" = .github/workflows/build-ios-testflight.yml
+          test "$(jq -r '.head_repository.full_name' <<< "$RUN_JSON")" = "$REPO"
+
+          PR_NUMBER=$(jq -r '.pull_requests[0].number // empty' <<< "$RUN_JSON")
+          HEAD_SHA=$(jq -r '.pull_requests[0].head.sha // empty' <<< "$RUN_JSON")
+          BASE_SHA=$(jq -r '.pull_requests[0].base.sha // empty' <<< "$RUN_JSON")
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || [ "$HEAD_SHA" != "$EVENT_HEAD_SHA" ]; then
+            echo "::error::Source run is not bound to the expected PR head"
+            exit 1
+          fi
+          if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || ! git merge-base --is-ancestor "$BASE_SHA" "${{ github.sha }}"; then
+            echo "::error::Source run base is not a trusted master ancestor"
+            exit 1
+          fi
+
+          PR_JSON=$(gh api "repos/$REPO/pulls/$PR_NUMBER")
+          test "$(jq -r '.state' <<< "$PR_JSON")" = open
+          test "$(jq -r '.base.ref' <<< "$PR_JSON")" = master
+          test "$(jq -r '.head.repo.full_name' <<< "$PR_JSON")" = "$REPO"
+          test "$(jq -r '.head.sha' <<< "$PR_JSON")" = "$HEAD_SHA"
+          jq -e '.labels | map(.name) | index("ios-test-flight") != null' \
+            <<< "$PR_JSON" > /dev/null
+
+          jq -e \
+            --argjson pr "$PR_NUMBER" \
+            --arg head "$HEAD_SHA" \
+            --arg base "$BASE_SHA" \
+            --argjson run_id "$SOURCE_RUN_ID" \
+            --argjson run_number "$SOURCE_RUN_NUMBER" \
+            --argjson run_attempt "$SOURCE_RUN_ATTEMPT" \
+            '.pr_number == $pr and .head_sha == $head and .base_sha == $base and .run_id == $run_id and
+             .run_number == $run_number and .run_attempt == $run_attempt' \
+            "$RUNNER_TEMP/request/metadata.json" > /dev/null
+
+          # Strip newlines and cap the length: the title reaches testers as the
+          # TestFlight "What to Test" text, and an unbounded value written to
+          # GITHUB_OUTPUT could forge additional outputs.
+          PR_TITLE=$(jq -r '.title' <<< "$PR_JSON" | tr -d '\r\n' | cut -c1-200)
+
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "pr_title=$PR_TITLE" >> "$GITHUB_OUTPUT"
+
+  validate:
+    needs: discover
+    if: >
+      needs.discover.outputs.requested == 'true' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: macos-26
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      validated: ${{ steps.archive.outputs.validated }}
+      version: ${{ steps.archive.outputs.version }}
+      build_number: ${{ steps.archive.outputs.build_number }}
+      archive_sha256: ${{ steps.archive.outputs.archive_sha256 }}
+
+    steps:
+      - name: Check out trusted publisher code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download unsigned archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
+        with:
+          name: ios-testflight-unsigned-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+          path: ${{ runner.temp }}/raw
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Validate and repack archive
+        id: archive
+        env:
+          SOURCE_RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          SOURCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          set -euo pipefail
+          RAW="$RUNNER_TEMP/raw"
+          test -f "$RAW/App.xcarchive.tar.gz"
+          test "$(find "$RAW" -type f | wc -l | tr -d ' ')" = 1
+
+          mkdir -p "$RUNNER_TEMP/validated"
+          RAW_TAR="$RAW/App.xcarchive.tar.gz" python3 - <<'PY'
+          import os
+          import posixpath
+          import tarfile
+
+          with tarfile.open(os.environ['RAW_TAR'], 'r:gz') as archive:
+              for member in archive.getmembers():
+                  normalized = posixpath.normpath(member.name)
+                  if member.name.startswith('/') or normalized == '..' or normalized.startswith('../'):
+                      raise SystemExit(f'Unsafe archive path: {member.name}')
+                  if member.islnk() or not (member.isfile() or member.isdir() or member.issym()):
+                      raise SystemExit(f'Unsupported archive entry: {member.name}')
+                  if member.issym():
+                      target = posixpath.normpath(posixpath.join(posixpath.dirname(normalized), member.linkname))
+                      if member.linkname.startswith('/') or target == '..' or target.startswith('../'):
+                          raise SystemExit(f'Unsafe archive symlink: {member.name} -> {member.linkname}')
+          PY
+          tar -xzf "$RAW/App.xcarchive.tar.gz" -C "$RUNNER_TEMP/validated"
+
+          ARCHIVE="$RUNNER_TEMP/validated/App.xcarchive"
+          APP_PLIST="$ARCHIVE/Products/Applications/App.app/Info.plist"
+          test -f "$ARCHIVE/Info.plist"
+          test -f "$APP_PLIST"
+
+          ARCHIVE="$ARCHIVE" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['ARCHIVE']).resolve()
+          for path in root.rglob('*'):
+              if path.is_symlink():
+                  target = (path.parent / os.readlink(path)).resolve(strict=False)
+                  if root not in (target, *target.parents):
+                      raise SystemExit(f'Unsafe archive symlink: {path} -> {target}')
+          PY
+
+          # Recompute from this trusted default-branch checkout, never from
+          # PR-controlled or frozen-base data. A newer master that changes the
+          # version train intentionally fails validation so a stale build is
+          # never signed.
+          EXPECTED_VERSION=$(node tools/ios-testflight-version.js package.json HEAD)
+          EXPECTED_BUILD="${SOURCE_RUN_NUMBER}.${SOURCE_RUN_ATTEMPT}"
+
+          # A bare `test` under `set -e` fails without output; name the
+          # bundle, key and both values so a mismatch is diagnosable.
+          expect_plist() {
+            local plist="$1" key="$2" expected="$3" actual
+            # A missing key still reaches the mismatch branch with the error text.
+            actual=$(/usr/libexec/PlistBuddy -c "Print :$key" "$plist" 2>&1) || true
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::${plist#"$ARCHIVE/"} $key is '$actual', expected '$expected'"
+              exit 1
+            fi
+          }
+          expect_bundle() {
+            expect_plist "$1" CFBundleIdentifier "$2"
+            expect_plist "$1" CFBundleShortVersionString "$EXPECTED_VERSION"
+            expect_plist "$1" CFBundleVersion "$EXPECTED_BUILD"
+          }
+
+          expect_bundle "$APP_PLIST" com.super-productivity.app
+
+          EXTENSION_PLIST="$ARCHIVE/Products/Applications/App.app/PlugIns/ShareExtension.appex/Info.plist"
+          if [ -f "$EXTENSION_PLIST" ]; then
+            expect_bundle "$EXTENSION_PLIST" com.super-productivity.app.ShareExtension
+          fi
+
+          WIDGET_PLIST="$ARCHIVE/Products/Applications/App.app/PlugIns/SupWidget.appex/Info.plist"
+          if [ -f "$WIDGET_PLIST" ]; then
+            expect_bundle "$WIDGET_PLIST" com.super-productivity.app.widget
+          fi
+
+          # Reject any .appex directly under App.app/PlugIns that is not one
+          # ExportOptions.plist maps a profile for. Deliberately not recursive and
+          # not covering App.app/Extensions or Watch apps: no observed instance.
+          # The original observed instance was PR #8950's SupWidget.appex, which
+          # passed every other check here, would burn the approval gate, install
+          # the signing certificate, and only then fail at
+          # `xcodebuild -exportArchive`. That extension is now allowlisted and
+          # profile-mapped below; the rule stays for the next unmapped one.
+          PLUGINS_DIR="$ARCHIVE/Products/Applications/App.app/PlugIns"
+          if [ -d "$PLUGINS_DIR" ]; then
+            for appex in "$PLUGINS_DIR"/*.appex; do
+              [ -e "$appex" ] || continue
+              appex_name=$(basename "$appex")
+              case "$appex_name" in
+                ShareExtension.appex | SupWidget.appex) ;;
+                *)
+                  echo "::error::Unsupported app extension in archive: $appex_name"
+                  exit 1
+                  ;;
+              esac
+            done
+          fi
+
+          SANITIZED="$RUNNER_TEMP/App.xcarchive.tar.gz"
+          tar -czf "$SANITIZED" -C "$RUNNER_TEMP/validated" App.xcarchive
+          ARCHIVE_SHA256=$(shasum -a 256 "$SANITIZED" | cut -d ' ' -f 1)
+          echo "version=$EXPECTED_VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_number=$EXPECTED_BUILD" >> "$GITHUB_OUTPUT"
+          echo "archive_sha256=$ARCHIVE_SHA256" >> "$GITHUB_OUTPUT"
+          echo "validated=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload validated archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-testflight-validated-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/App.xcarchive.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: 'Publish PR #${{ needs.discover.outputs.pr_number }} (${{ needs.discover.outputs.head_sha }})'
+    needs: [discover, validate]
+    if: needs.validate.outputs.validated == 'true'
+    runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: read
+    environment:
+      name: ios-testflight
+      url: ${{ vars.TESTFLIGHT_PUBLIC_LINK }}
+    concurrency:
+      group: ios-testflight-publish-${{ needs.discover.outputs.pr_number }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Verify protected environment configuration
+        env:
+          ENVIRONMENT_READY: ${{ secrets.IOS_TESTFLIGHT_ENV_READY }}
+        run: |
+          if [ "$ENVIRONMENT_READY" != configured ]; then
+            echo "::error::Configure the protected ios-testflight environment before publishing"
+            exit 1
+          fi
+
+      - name: Check out trusted publisher code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download validated archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
+        with:
+          name: ios-testflight-validated-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/validated
+
+      - name: Verify and unpack validated archive
+        env:
+          EXPECTED_SHA256: ${{ needs.validate.outputs.archive_sha256 }}
+        run: |
+          ARCHIVE_TAR="$RUNNER_TEMP/validated/App.xcarchive.tar.gz"
+          test "$(shasum -a 256 "$ARCHIVE_TAR" | cut -d ' ' -f 1)" = "$EXPECTED_SHA256"
+          tar -xzf "$ARCHIVE_TAR" -C "$RUNNER_TEMP"
+
+      - name: Configure iOS signing
+        uses: ./.github/actions/setup-ios-signing
+        with:
+          mac_certs: ${{ secrets.mac_certs }}
+          mac_certs_password: ${{ secrets.mac_certs_password }}
+          ios_provision_profile: ${{ secrets.IOS_PROVISION_PROFILE }}
+          ios_share_provision_profile: ${{ secrets.IOS_SHARE_PROVISION_PROFILE }}
+          ios_widget_provision_profile: ${{ secrets.IOS_WIDGET_PROVISION_PROFILE }}
+
+      - name: Create ExportOptions.plist
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store-connect</string>
+              <key>teamID</key>
+              <string>${{ secrets.APPLE_TEAM_ID }}</string>
+              <key>uploadSymbols</key>
+              <true/>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.super-productivity.app</key>
+                  <string>${{ env.PROVISIONING_PROFILE_UUID }}</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+
+          EXTENSION_PLIST="$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app/PlugIns/ShareExtension.appex/Info.plist"
+          if [ -f "$EXTENSION_PLIST" ]; then
+            if [ -z "${SHARE_PROVISIONING_PROFILE_UUID:-}" ]; then
+              echo "::error::ShareExtension requires IOS_SHARE_PROVISION_PROFILE"
+              exit 1
+            fi
+            /usr/libexec/PlistBuddy -c \
+              "Add :provisioningProfiles:com.super-productivity.app.ShareExtension string $SHARE_PROVISIONING_PROFILE_UUID" \
+              "$RUNNER_TEMP/ExportOptions.plist"
+          fi
+
+          WIDGET_PLIST="$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app/PlugIns/SupWidget.appex/Info.plist"
+          if [ -f "$WIDGET_PLIST" ]; then
+            if [ -z "${WIDGET_PROVISIONING_PROFILE_UUID:-}" ]; then
+              echo "::error::SupWidget requires the IOS_WIDGET_PROVISION_PROFILE secret (an App Store profile for com.super-productivity.app.widget) - see ios/App/SupWidget/README.md"
+              exit 1
+            fi
+            /usr/libexec/PlistBuddy -c \
+              "Add :provisioningProfiles:com.super-productivity.app.widget string $WIDGET_PROVISIONING_PROFILE_UUID" \
+              "$RUNNER_TEMP/ExportOptions.plist"
+          fi
+
+      - name: Export IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportPath "$RUNNER_TEMP/ipa-output" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Set up Ruby and fastlane
+        uses: ruby/setup-ruby@a0102e0972be65f351c307e2d64b9314a57c8073 # v1.324.0
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.mac_api_key_id }}
+          ASC_ISSUER_ID: ${{ secrets.mac_api_key_issuer_id }}
+          ASC_KEY_CONTENT: ${{ secrets.mac_api_key }}
+          TESTFLIGHT_GROUP: ${{ vars.TESTFLIGHT_GROUP }}
+          PR_NUMBER: ${{ needs.discover.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.discover.outputs.head_sha }}
+          PR_TITLE: ${{ needs.discover.outputs.pr_title }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          ipas=("$RUNNER_TEMP"/ipa-output/*.ipa)
+          if [ ${#ipas[@]} -ne 1 ]; then
+            echo "Expected exactly 1 .ipa, found ${#ipas[@]}: ${ipas[*]:-none}"
+            exit 1
+          fi
+          export IPA_PATH="${ipas[0]}"
+          # Testers see this verbatim in TestFlight; name the feature, not just the PR.
+          if [ -n "${PR_TITLE:-}" ]; then
+            export CHANGELOG="PR #$PR_NUMBER - $PR_TITLE (${HEAD_SHA:0:7})"
+          else
+            export CHANGELOG="Test build from PR #$PR_NUMBER (${HEAD_SHA:0:7})"
+          fi
+          bundle exec fastlane ios testflight
+
+  report:
+    needs: [discover, validate, publish]
+    if: always() && needs.discover.outputs.requested == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # Comments and labels on a PR need `pull-requests: write`; `issues: write`
+      # does not cover them, because a PR is not an issue for token scoping.
+      pull-requests: write
+
+    steps:
+      - name: Report result and clear label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          VALIDATED_PR_NUMBER: ${{ needs.discover.outputs.pr_number }}
+          PR_TITLE: ${{ needs.discover.outputs.pr_title }}
+          HEAD_SHA: ${{ github.event.workflow_run.pull_requests[0].head.sha }}
+          SOURCE_RESULT: ${{ github.event.workflow_run.conclusion }}
+          DISCOVER_RESULT: ${{ needs.discover.result }}
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+          PUBLIC_LINK: ${{ vars.TESTFLIGHT_PUBLIC_LINK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${VALIDATED_PR_NUMBER:-$EVENT_PR_NUMBER}"
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "No associated PR; nothing to report."
+            exit 0
+          fi
+
+          # Remove the label before composing the comment, so the comment can
+          # describe the real end state. Telling someone to "re-apply the label"
+          # is a dead end while it is still applied: re-applying a label that is
+          # already there fires no `labeled` event.
+          gh api -X DELETE "repos/$REPO/issues/$PR_NUMBER/labels/ios-test-flight" || true
+          label_state=removed
+          if labels=$(gh api "repos/$REPO/issues/$PR_NUMBER/labels" --jq '.[].name'); then
+            if grep -qx 'ios-test-flight' <<< "$labels"; then
+              label_state=stuck
+            fi
+          else
+            label_state=unknown
+          fi
+
+          if [ "$PUBLISH_RESULT" = success ]; then
+            if [ -n "${PR_TITLE:-}" ]; then
+              status_line="TestFlight build for \`${HEAD_SHA:0:7}\` uploaded: $PR_TITLE"
+            else
+              status_line="TestFlight build for \`${HEAD_SHA:0:7}\` uploaded."
+            fi
+            link_line="Join the beta: $PUBLIC_LINK"
+          elif [ "$SOURCE_RESULT" != success ]; then
+            status_line="Unsigned iOS build for \`${HEAD_SHA:0:7}\` failed."
+            link_line="See the [workflow run]($RUN_URL)."
+          elif [ "$DISCOVER_RESULT" != success ] || [ "$VALIDATE_RESULT" != success ]; then
+            status_line="TestFlight validation for \`${HEAD_SHA:0:7}\` failed."
+            link_line="The PR may have changed or the archive was invalid. See the [workflow run]($RUN_URL)."
+          else
+            status_line="TestFlight publish for \`${HEAD_SHA:0:7}\` did not complete."
+            link_line="See the [workflow run]($RUN_URL)."
+          fi
+
+          case "$label_state" in
+            removed)
+              label_line='_The `ios-test-flight` label has been removed; re-apply it to build again._'
+              ;;
+            stuck)
+              label_line='_Could not remove the `ios-test-flight` label. Remove it by hand before requesting another build._'
+              ;;
+            *)
+              label_line='_Could not confirm whether the `ios-test-flight` label was removed; check it before requesting another build._'
+              ;;
+          esac
+
+          printf -v body '%s\n\n%s\n\n%s' "$status_line" "$link_line" "$label_line"
+          comment_ok=1
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$body" || comment_ok=0
+
+          if [ "$label_state" != removed ]; then
+            echo "::warning::ios-test-flight label on PR #$PR_NUMBER is $label_state; remove it by hand"
+          fi
+
+          # Only a failed comment fails this job: it is the sole channel that
+          # tells anyone the build is ready. A stuck label is a warning, because
+          # a red run on an already-uploaded build invites a re-run, and re-running
+          # all jobs spends a second approval and re-uploads the same build number.
+          if [ "$comment_ok" = 0 ]; then
+            echo "::error::Failed to comment on PR #$PR_NUMBER"
+            if [ "$PUBLISH_RESULT" = success ]; then
+              echo "::error::The build was uploaded to TestFlight. Do not re-run this workflow; report the result by hand."
+            fi
+            exit 1
+          fi

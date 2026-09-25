@@ -12,7 +12,7 @@ import {
   ScheduleLunchBreakCfg,
   ScheduleWorkStartEndCfg,
 } from '../schedule.model';
-import { selectTaskRepeatCfgsForExactDay } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { getTaskRepeatCfgsForExactDayCached } from '../../task-repeat-cfg/store/get-task-repeat-cfgs-for-exact-day-cached.util';
 import { isSameDay } from '../../../util/is-same-day';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 const PROJECTION_DAYS: number = 30;
@@ -91,11 +91,9 @@ const createBlockerBlocksForScheduledRepeatProjections = (
     const currentDayTimestamp = targetDate.getTime();
     const currentDayStr = getDbDateStr(currentDayTimestamp);
 
-    const allRepeatableTasksForDay = selectTaskRepeatCfgsForExactDay.projector(
+    const allRepeatableTasksForDay = getTaskRepeatCfgsForExactDayCached(
       scheduledTaskRepeatCfgs,
-      {
-        dayDate: currentDayTimestamp,
-      },
+      currentDayTimestamp,
     );
     i++;
 

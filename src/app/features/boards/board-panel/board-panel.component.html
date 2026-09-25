@@ -1,14 +1,14 @@
 <header>
   <div class="title">{{ panelCfg().title | translate }}</div>
-  <div
-    class="tasks-total-estimate"
-    [title]="tasks().length"
-  >
-    {{ totalEstimate() | msToString }}
-    <mat-icon style="font-size: 14px; line-height: 14px; height: 14px; width: 14px"
-      >task_alt</mat-icon
-    >{{ this.tasks().length }}
-  </div>
+  @if (tasks().length) {
+    <div class="tasks-total-estimate">
+      @if (totalEstimate()) {
+        <!-- placeholder hidden: the pipe renders '-' for any sub-minute total -->
+        <span>{{ totalEstimate() | msToString: false : true }}</span>
+      }
+      <mat-icon>task_alt</mat-icon>{{ tasks().length }}
+    </div>
+  }
   <button
     mat-icon-button
     (click)="editBoard.emit()"
@@ -22,7 +22,6 @@
   <!--        </button>-->
 </header>
 
-<!--[cdkDropListData]="panelCfg()"-->
 <add-task-inline
   style="margin-bottom: 8px"
   [additionalFields]="additionalTaskFields()"
@@ -35,7 +34,7 @@
 <div
   class="task-items"
   cdkDropList
-  [cdkDropListData]="panelCfg()"
+  [cdkDropListData]="tasks()"
   [cdkDropListSortingDisabled]="!isManualOrder()"
   (cdkDropListDropped)="drop($event)"
 >
@@ -45,10 +44,13 @@
       [cdkDragData]="task"
       [cdkDragStartDelay]="dragDelayForTouch()"
       [task]="task"
+      [focusable]="true"
+      [cdkDragDisabled]="isMoving() || multiSelect.isTouchSelectionMode()"
       [tagsToHide]="panelCfg().includedTagIds || []"
     >
       @if (task.remindAt) {
         <button
+          task-card-trailing
           (click)="scheduleTask(task, $event)"
           [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
           class="ico-btn schedule-btn"
@@ -64,6 +66,7 @@
       }
       @if (task.dueDay) {
         <button
+          task-card-trailing
           (click)="scheduleTask(task, $event)"
           [title]="T.F.TASK.CMP.SCHEDULE | translate"
           class="ico-btn schedule-btn"

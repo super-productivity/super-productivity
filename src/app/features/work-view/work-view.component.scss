@@ -29,15 +29,17 @@ h2 {
 }
 
 .work-view-header {
-  padding: var(--s-half);
-
+  // Share the task column's responsive width and horizontal gutters.
+  padding-top: var(--s);
+  padding-bottom: var(--s);
   position: relative;
   min-height: var(--bar-height-small);
   display: flex;
   justify-content: center;
   align-items: center;
   @include mq(xs) {
-    padding: var(--s2) 0;
+    padding-top: var(--s2);
+    padding-bottom: var(--s2);
   }
 
   @include smallMainContainer() {
@@ -60,32 +62,22 @@ h2 {
   }
 }
 
-.completed-tasks-heading {
-  margin: var(--s);
-  margin-top: var(--s2);
-  //text-align: left;
-  font-size: 16px;
-  //border-bottom: 1px solid var(--extra-border-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.backlog-heading {
-  margin: var(--s);
-}
-
 .status-bar {
   display: flex;
   align-items: center;
-  flex-direction: row;
   justify-content: center;
-  padding: 5px 0;
+  flex-wrap: wrap;
+  gap: var(--s) var(--s3);
+  padding: var(--s-half) 0;
+  font-size: var(--font-size-sm);
   user-select: none;
 
   .item {
-    margin: 0 calc(1.5 * var(--s));
-    text-align: center;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s-half);
     position: relative;
   }
 
@@ -96,7 +88,7 @@ h2 {
   }
 
   .label {
-    margin-right: var(--s);
+    color: var(--text-color-muted);
   }
 
   .no-wrap {
@@ -104,6 +96,20 @@ h2 {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: var(--s-quarter);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .time-val {
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .no-wrap > mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    color: var(--text-color-muted);
   }
 }
 
@@ -251,25 +257,6 @@ finish-day-btn,
   }
 }
 
-:host ::ng-deep .collapsible-header {
-  font-size: 16px;
-  margin-top: 0;
-  min-height: var(--bar-height);
-  padding: 0 var(--s);
-  justify-content: flex-start;
-  border-bottom: 2px solid transparent;
-
-  .collapsible-title {
-    flex-grow: 1;
-    opacity: 0.8;
-    text-align: left;
-  }
-}
-
-:host collapsible.isExpanded ::ng-deep .collapsible-header {
-  @include extraBorder('-bottom');
-}
-
 .overdue-tasks {
   margin-top: var(--s2);
 }
@@ -284,7 +271,10 @@ finish-day-btn,
 }
 
 .repeat-cfg-list {
-  padding: var(--s-half);
+  // No top padding: the first row's own top hairline has to land exactly on the
+  // section heading's bottom border, the way the task lists do. Any gap here
+  // renders the two as separate lines.
+  padding: 0 0 var(--s-half);
 }
 
 // Read-only calendar event outlines below the Later Today task list.

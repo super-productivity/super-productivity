@@ -3,14 +3,29 @@
 
 // TODO rename to task title component
 
-// .display-value, the edit textarea and .height-measure all take `font-size:
-// inherit`, so raising it on the host moves all three at once — the textarea
-// clears the iOS zoom threshold and stays measured correctly by
-// .height-measure. Raising only the textarea would desync that pair and
-// mis-size the box. Written out rather than via noIosFocusZoomOnTouch() because
-// that mixin nests as a descendant, which cannot target the host itself.
+// Touch keeps the 14px base (docs/styling-guide.md: "Task text stays at the
+// 14px base"). .display-value, the edit textarea and .height-measure all take
+// `font-size: inherit`, so setting it on the host moves all three at once —
+// raising only the textarea would desync that pair and mis-size the box
+// (#9641). Written out rather than via noIosFocusZoomOnTouch() because that
+// mixin nests as a descendant, which cannot target the host itself.
 :host-context(body.isTouchPrimary) {
+  font-size: var(--font-size-md);
+}
+
+// iOS-family WebKit is the only engine that zooms below 16px, so only it is
+// raised. Two selectors on purpose: the body class is what the E2E guard can
+// force in Chromium (`@supports` keys off a compile-time WebKit flag no other
+// engine can be made to report), while the feature query still covers a UA
+// sniff that misses. Either one alone must be enough.
+:host-context(body.isTouchPrimary.isIOSWebKit) {
   @include noIosFocusZoom();
+}
+
+@supports (-webkit-touch-callout: none) {
+  :host-context(body.isTouchPrimary) {
+    @include noIosFocusZoom();
+  }
 }
 
 :host {

@@ -1,78 +1,49 @@
 package com.superproductivity.superproductivity.widget
 
 import android.content.Context
-import android.content.SharedPreferences
-import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
 /**
- * Manages a queue of tasks created from the home screen widget.
- * Tasks are stored in SharedPreferences and processed when the Angular app resumes.
+ * Legacy SharedPreferences queue used by the startup overlay before [CaptureInbox].
+ * Kept only to move entries left behind by an older app version into the inbox.
  */
 object WidgetTaskQueue {
     private const val PREFS_NAME = "SuperProductivityWidget"
     private const val KEY_TASK_QUEUE = "WIDGET_TASK_QUEUE"
 
-    private fun getPrefs(context: Context): SharedPreferences {
-        return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    }
+    data class LegacyTask(val id: String, val title: String, val createdAt: Long)
 
     /**
-     * Add a task to the queue.
-     * @return The generated task ID
+     * Copies legacy entries into [inbox], then clears the legacy key. Re-running after
+     * a partial failure is safe: entries keep their id, so a copy just overwrites itself.
      */
     @Synchronized
-    fun addTask(context: Context, title: String): String {
-        val taskId = UUID.randomUUID().toString()
-        val task = JSONObject().apply {
-            put("id", taskId)
-            put("title", title.trim())
-            put("createdAt", System.currentTimeMillis())
+    fun migrateInto(context: Context, inbox: CaptureInbox) {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val queueJson = prefs.getString(KEY_TASK_QUEUE, null) ?: return
+        for (task in parseLegacy(queueJson)) {
+            inbox.add(task.title, "overlay", task.createdAt, task.id)
         }
-
-        val prefs = getPrefs(context)
-        val queueJson = prefs.getString(KEY_TASK_QUEUE, null)
-        val queue = if (queueJson != null) {
-            try {
-                JSONObject(queueJson)
-            } catch (e: Exception) {
-                JSONObject().put("tasks", JSONArray())
-            }
-        } else {
-            JSONObject().put("tasks", JSONArray())
-        }
-
-        val tasks = queue.optJSONArray("tasks") ?: JSONArray()
-        tasks.put(task)
-        queue.put("tasks", tasks)
-
-        prefs.edit().putString(KEY_TASK_QUEUE, queue.toString()).apply()
-        return taskId
+        prefs.edit().remove(KEY_TASK_QUEUE).commit()
     }
 
-    /**
-     * Get all queued tasks and clear the queue atomically.
-     * @return JSON string of queued tasks, or null if empty
-     */
-    @Synchronized
-    fun getAndClearQueue(context: Context): String? {
-        val prefs = getPrefs(context)
-        val queueJson = prefs.getString(KEY_TASK_QUEUE, null)
-
-        if (queueJson != null) {
-            prefs.edit().remove(KEY_TASK_QUEUE).commit()
-
-            try {
-                val queue = JSONObject(queueJson)
-                val tasks = queue.optJSONArray("tasks")
-                if (tasks != null && tasks.length() > 0) {
-                    return queueJson
-                }
-            } catch (e: Exception) {
-                // Invalid JSON, return null
-            }
+    fun parseLegacy(queueJson: String): List<LegacyTask> {
+        val tasks = try {
+            JSONObject(queueJson).optJSONArray("tasks")
+        } catch (e: Exception) {
+            null
+        } ?: return emptyList()
+        return (0 until tasks.length()).mapNotNull { i ->
+            val task = tasks.optJSONObject(i) ?: return@mapNotNull null
+            val title = task.optString("title").trim()
+            if (title.isEmpty()) return@mapNotNull null
+            val legacyId = task.optString("id")
+            LegacyTask(
+                id = if (CaptureInbox.isValidId(legacyId)) legacyId else UUID.randomUUID().toString(),
+                title = title,
+                createdAt = task.optLong("createdAt", System.currentTimeMillis()),
+            )
         }
-        return null
     }
 }

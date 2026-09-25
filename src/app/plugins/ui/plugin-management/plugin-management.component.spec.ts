@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { TranslateModule } from '@ngx-translate/core';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
+import { SnackService } from '../../../core/snack/snack.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { PluginBridgeService } from '../../plugin-bridge.service';
 import { PluginCacheService } from '../../plugin-cache.service';
@@ -13,6 +14,7 @@ import { PluginMetaPersistenceService } from '../../plugin-meta-persistence.serv
 import { PluginManifest, PluginHooks } from '../../plugin-api.model';
 import { PluginService } from '../../plugin.service';
 import { PluginManagementComponent } from './plugin-management.component';
+import { T } from '../../../t.const';
 
 type PluginManifestWithAuthor = PluginManifest & { author?: string };
 
@@ -20,9 +22,13 @@ describe('PluginManagementComponent', () => {
   let component: PluginManagementComponent;
   let routerNavigateSpy: jasmine.Spy;
   let layoutToggleSpy: jasmine.Spy;
+  let loadPluginFromZipSpy: jasmine.Spy;
+  let snackOpenSpy: jasmine.Spy;
   let isShowIssuePanel: ReturnType<typeof signal<boolean>>;
 
   beforeEach(() => {
+    loadPluginFromZipSpy = jasmine.createSpy('loadPluginFromZip');
+    snackOpenSpy = jasmine.createSpy('open');
     routerNavigateSpy = jasmine
       .createSpy('navigate')
       .and.returnValue(Promise.resolve(true));
@@ -35,6 +41,7 @@ describe('PluginManagementComponent', () => {
           provide: PluginService,
           useValue: {
             pluginStates: signal(new Map()),
+            loadPluginFromZip: loadPluginFromZipSpy,
           },
         },
         {
@@ -72,6 +79,10 @@ describe('PluginManagementComponent', () => {
         {
           provide: PluginBridgeService,
           useValue: {},
+        },
+        {
+          provide: SnackService,
+          useValue: { open: snackOpenSpy },
         },
       ],
     });
@@ -130,6 +141,48 @@ describe('PluginManagementComponent', () => {
         isEnabled: false,
       }),
     ).toBeNull();
+  });
+
+  const zipInputEvent = (): Event => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    const file = new File(['zip'], 'plugin.zip');
+    Object.defineProperty(input, 'files', { value: [file] });
+    return { target: input } as unknown as Event;
+  };
+
+  it('shows a success snack after a plugin ZIP installs', async () => {
+    loadPluginFromZipSpy.and.returnValue(
+      Promise.resolve({ manifest: { name: 'My Plugin' } }),
+    );
+
+    await component.onFileSelected(zipInputEvent());
+
+    expect(snackOpenSpy).toHaveBeenCalledWith({
+      type: 'SUCCESS',
+      msg: T.PLUGINS.PLUGIN_INSTALLED,
+      translateParams: { name: 'My Plugin' },
+    });
+    expect(component.uploadError()).toBeNull();
+  });
+
+  it('shows no snack when the plugin loads but fails to run', async () => {
+    loadPluginFromZipSpy.and.returnValue(
+      Promise.resolve({ manifest: { name: 'My Plugin' }, error: 'boom' }),
+    );
+
+    await component.onFileSelected(zipInputEvent());
+
+    expect(snackOpenSpy).not.toHaveBeenCalled();
+  });
+
+  it('shows the error instead of a snack when a plugin ZIP fails to install', async () => {
+    loadPluginFromZipSpy.and.returnValue(Promise.reject(new Error('bad zip')));
+
+    await component.onFileSelected(zipInputEvent());
+
+    expect(snackOpenSpy).not.toHaveBeenCalled();
+    expect(component.uploadError()).toBe('bad zip');
   });
 
   const baseManifest: PluginManifest = {

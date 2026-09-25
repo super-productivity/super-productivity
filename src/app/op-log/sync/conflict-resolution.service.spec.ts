@@ -1,3 +1,5 @@
+import { OperationCaptureService } from '../capture/operation-capture.service';
+import { PersistentAction } from '../core/persistent-action.interface';
 import { TestBed } from '@angular/core/testing';
 import { SyncConflictBannerService } from './sync-conflict-banner.service';
 import {
@@ -47,6 +49,8 @@ import {
   toLwwUpdateActionType,
 } from '../core/lww-update-action-types';
 import { convertOpToAction } from '../apply/operation-converter.util';
+import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { TaskWithSubTasks } from '../../features/tasks/task.model';
 import { TIME_TRACKING_FEATURE_KEY } from '../../features/time-tracking/store/time-tracking.reducer';
 import { lwwUpdateMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer';
 
@@ -3602,7 +3606,10 @@ describe('ConflictResolutionService', () => {
         expect(result.localWinOpsCreated).toBe(1);
         expect(replacement.actionType).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
         expect(replacement.entityId).toBe('task-2');
-        expect(replacement.entityIds).toEqual(['task-2']);
+        // The footprint is re-derived from the SCOPED tasks, so it declares the
+        // subtask the scoped archive still cascades to (and nothing from the
+        // dropped parent).
+        expect(replacement.entityIds).toEqual(['task-2', 'task-2-child']);
         expect(
           (
             extractActionPayload(replacement.payload)['tasks'] as Array<{
@@ -3630,6 +3637,213 @@ describe('ConflictResolutionService', () => {
         expect(
           compareVectorClocks(replacement.vectorClock, remoteArchive.vectorClock),
         ).toBe(VectorClockComparison.GREATER_THAN);
+      });
+
+      it('mints no replacement when every top-level task of a bulk archive lost', async () => {
+        // The envelope also lists cascaded subtask ids. Scoping by those would
+        // retain ids that are not top-level entries of `tasks`, minting a
+        // moveToArchive with an empty `tasks` array that still claims those ids
+        // (and their clock) fleet-wide.
+        const tasks = [
+          { id: 'task-1', title: 'Task one', subTasks: [{ id: 'task-1-child' }] },
+          { id: 'task-2', title: 'Task two', subTasks: [{ id: 'task-2-child' }] },
+        ];
+        const localBulkArchive: Operation = {
+          ...createOpWithTimestamp(
+            'local-archive-all-lost',
+            'client-a',
+            1000,
+            OpType.Update,
+            'task-1',
+          ),
+          actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+          entityIds: TaskSharedActions.moveToArchive({
+            tasks: tasks as unknown as TaskWithSubTasks[],
+          }).meta.entityIds,
+          payload: { actionPayload: { tasks }, entityChanges: [] },
+        };
+        const createRemoteArchive = (id: string, entityId: string): Operation => ({
+          ...createOpWithTimestamp(id, 'client-b', 2000, OpType.Update, entityId),
+          actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+          payload: {
+            actionPayload: { tasks: [{ id: entityId, title: 'Remote', subTasks: [] }] },
+            entityChanges: [],
+          },
+        });
+        mockOperationApplier.applyOperations.and.callFake(async (ops, options) => {
+          await options?.onReducersCommitted?.(ops);
+          return { appliedOps: ops };
+        });
+
+        await service.autoResolveConflictsLWW([
+          createConflict(
+            'task-1',
+            [localBulkArchive],
+            [createRemoteArchive('remote-archive-1', 'task-1')],
+          ),
+          createConflict(
+            'task-2',
+            [localBulkArchive],
+            [createRemoteArchive('remote-archive-2', 'task-2')],
+          ),
+        ]);
+
+        expect(getMixedLocalOps()).toEqual([]);
+      });
+
+      it('assigns the scoped replacement to a retained parent CHILD row', async () => {
+        // #9537 follow-up: the archive cascade declares subtask ids, so a
+        // concurrent remote edit of a subtask raises a row for the SUBTASK.
+        // Retention is computed over top-level ids only, so keying the
+        // replacement assignment by those ids left the child row of a RETAINED
+        // parent without a local-win op — and the mixed-winner compensation
+        // then wedged the whole batch on "Cannot safely compensate".
+        const tasks = [
+          {
+            id: 'parent-a',
+            title: 'Family A',
+            subTaskIds: ['sub-a'],
+            subTasks: [{ id: 'sub-a', title: 'Child A', parentId: 'parent-a' }],
+          },
+          {
+            id: 'parent-b',
+            title: 'Family B',
+            subTaskIds: ['sub-b'],
+            subTasks: [{ id: 'sub-b', title: 'Child B', parentId: 'parent-b' }],
+          },
+        ];
+        const localBulkArchive: Operation = {
+          ...createOpWithTimestamp(
+            'local-archive-two-families',
+            'client-a',
+            1000,
+            OpType.Update,
+            'parent-a',
+          ),
+          actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+          entityIds: TaskSharedActions.moveToArchive({
+            tasks: tasks as unknown as TaskWithSubTasks[],
+          }).meta.entityIds,
+          payload: { actionPayload: { tasks }, entityChanges: [] },
+        };
+        // Device B rounded the child's time together with an unrelated task.
+        const remoteRoundTime: Operation = {
+          ...createOpWithTimestamp(
+            'remote-round',
+            'client-b',
+            2000,
+            OpType.Update,
+            'sub-a',
+          ),
+          actionType: ActionType.TASK_ROUND_TIME_SPENT,
+          entityIds: ['sub-a', 'other-1'],
+          payload: {
+            actionPayload: {
+              taskIds: ['sub-a', 'other-1'],
+              day: '2024-01-01',
+              isRoundUp: false,
+              roundTo: 'QUARTER',
+            },
+            entityChanges: [],
+          },
+        };
+        // ... and archived family B itself.
+        const remoteArchiveB: Operation = {
+          ...createOpWithTimestamp(
+            'remote-archive-b',
+            'client-b',
+            2000,
+            OpType.Update,
+            'parent-b',
+          ),
+          actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+          entityIds: ['parent-b', 'sub-b'],
+          payload: { actionPayload: { tasks: [tasks[1]] }, entityChanges: [] },
+        };
+        mockOperationApplier.applyOperations.and.callFake(async (ops, options) => {
+          await options?.onReducersCommitted?.(ops);
+          return { appliedOps: ops };
+        });
+
+        await service.autoResolveConflictsLWW([
+          createConflict('sub-a', [localBulkArchive], [remoteRoundTime]),
+          createConflict('parent-b', [localBulkArchive], [remoteArchiveB]),
+          createConflict('sub-b', [localBulkArchive], [remoteArchiveB]),
+        ]);
+
+        const replacement = getFirstMixedLocalOp();
+        expect(replacement.actionType).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
+        // Re-scoped to family A, footprint including its cascaded subtask.
+        expect(replacement.entityIds).toEqual(['parent-a', 'sub-a']);
+        expect(
+          (
+            extractActionPayload(replacement.payload)['tasks'] as Array<{ id: string }>
+          ).map(({ id }) => id),
+        ).toEqual(['parent-a']);
+        // Family B stays remote-won: no second local archive is minted for it.
+        expect(
+          getMixedLocalOps().filter(
+            (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+          ).length,
+        ).toBe(1);
+      });
+
+      it('still fails closed when two pending bulk archives overlap only in a SUBTASK', async () => {
+        // Pins the current outcome now that the cascade puts subtask ids in
+        // the footprint: a row for a subtask can carry two distinct pending
+        // bulk archives, so the degenerate-history stop is reachable through
+        // it too. The everyday archive → restore → re-archive flow always
+        // overlaps in the PARENT as well and already tripped this stop before
+        // the cascade; reaching it via the subtask alone additionally needs
+        // the subtask to change parent between the two unsynced archives.
+        // Fail-closed (sync stops, nothing mutated) — unchanged by #9537.
+        const buildArchive = (
+          id: string,
+          parentId: string,
+          siblingId: string,
+        ): Operation => {
+          const tasks = [
+            {
+              id: parentId,
+              title: parentId,
+              subTaskIds: ['roamer'],
+              subTasks: [{ id: 'roamer', title: 'Roamer', parentId }],
+            },
+            { id: siblingId, title: siblingId },
+          ];
+          return {
+            ...createOpWithTimestamp(id, 'client-a', 1000, OpType.Update, parentId),
+            actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+            entityIds: TaskSharedActions.moveToArchive({
+              tasks: tasks as unknown as TaskWithSubTasks[],
+            }).meta.entityIds,
+            payload: { actionPayload: { tasks }, entityChanges: [] },
+          };
+        };
+        const firstArchive = buildArchive('local-archive-1', 'parent-a', 'parent-x');
+        const secondArchive = buildArchive('local-archive-2', 'parent-b', 'parent-y');
+        expect(firstArchive.entityIds).toContain('roamer');
+        expect(secondArchive.entityIds).toContain('roamer');
+
+        await expectAsync(
+          service.autoResolveConflictsLWW([
+            createConflict(
+              'roamer',
+              [firstArchive, secondArchive],
+              [
+                createOpWithTimestamp(
+                  'remote-roamer',
+                  'client-b',
+                  2000,
+                  OpType.Update,
+                  'roamer',
+                ),
+              ],
+            ),
+          ]),
+        ).toBeRejectedWithError(UnsupportedMultiEntityConflictError);
+        expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalled();
+        expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
       });
 
       it('scopes a legacy flat-payload bulk archive without inventing a MultiEntityPayload wrapper', async () => {
@@ -6007,6 +6221,63 @@ describe('ConflictResolutionService', () => {
       mockOpLogStore.markRejected.and.resolveTo(undefined);
     });
 
+    // The reducer cascades a moveToArchive to every subtask, so the op must
+    // declare them in `entityIds` — that footprint is what raises a conflict
+    // row per entity, and only a row for the SUBTASK can give the archive
+    // precedence over a concurrent edit of it. Without it the edit's
+    // LWW-resolved snapshot is accepted after the archive and recreates the
+    // subtask next to its archived copy.
+    it('should give a remote parent archive precedence over a concurrent local SUBTASK edit', async () => {
+      const parent = {
+        id: 'parent-1',
+        title: 'Parent',
+        subTaskIds: ['sub-1'],
+        subTasks: [{ id: 'sub-1', title: 'Sub' }],
+      };
+      const archiveEntityIds = TaskSharedActions.moveToArchive({
+        tasks: [parent as unknown as TaskWithSubTasks],
+      }).meta.entityIds;
+      const remoteArchiveOp: Operation = {
+        ...createArchiveOp('remote-archive', 'client-b', 1000, 'parent-1', ['parent-1']),
+        entityIds: archiveEntityIds,
+        payload: { actionPayload: { tasks: [parent] }, entityChanges: [] },
+      };
+      const localClientId = 'client-a';
+      const localSubTaskOp: Operation = {
+        ...createOpWithTimestamp(
+          'local-sub-upd',
+          localClientId,
+          5000,
+          OpType.Update,
+          'sub-1',
+        ),
+        actionType: '[TASK] LWW Update' as ActionType,
+        vectorClock: { [localClientId]: 1 },
+      };
+      // Subtask is still in the local active store (this device has not archived it).
+      mockStore.select.and.returnValue(of({ id: 'sub-1' }));
+
+      const detection = await service.checkOpForConflicts(remoteArchiveOp, {
+        localPendingOpsByEntity: new Map([['TASK:sub-1', [localSubTaskOp]]]),
+        appliedFrontierByEntity: new Map([['TASK:sub-1', { [localClientId]: 1 }]]),
+        retainedOpsByEntity: new Map(),
+        snapshotVectorClock: undefined,
+        snapshotEntityKeys: new Set<string>(),
+        hasNoSnapshotClock: true,
+      });
+
+      expect(detection.conflicts.map((c) => c.entityId)).toContain('sub-1');
+
+      mockOperationApplier.applyOperations.and.resolveTo({
+        appliedOps: [remoteArchiveOp],
+      });
+      const result = await service.autoResolveConflictsLWW(detection.conflicts);
+
+      // Archive wins: no local-win op is minted and the local edit is rejected.
+      expect(result.localWinOpsCreated).toBe(0);
+      expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-sub-upd']);
+    });
+
     it('should resolve remote moveToArchive as winner over local UPDATE (regardless of timestamps)', async () => {
       const now = Date.now();
       // Local UPDATE has NEWER timestamp, but remote archive should still win
@@ -7430,6 +7701,70 @@ describe('ConflictResolutionService', () => {
 
       expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
     });
+
+    // Real captured shapes of a syncTimeSpent op (#10146): a non-adapter
+    // actionPayload plus the entityChanges the PRODUCTION extractor declares for
+    // a direct write, or [] for a deferred write. Both must classify alike.
+    const capturedTimeOp = (
+      id: string,
+      clientId: string,
+      clock: VectorClock,
+      form: 'direct' | 'deferred',
+    ): Operation => {
+      const actionPayload = { taskId: 'task-1', date: '2024-01-15', duration: 2000 };
+      const entityChanges =
+        form === 'direct'
+          ? new OperationCaptureService().extractEntityChanges({
+              type: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+              ...actionPayload,
+              meta: {
+                isPersistent: true,
+                entityType: 'TASK',
+                entityId: 'task-1',
+                opType: OpType.Update,
+              },
+            } as unknown as PersistentAction)
+          : [];
+      return {
+        ...updateOp({ id, clientId, vectorClock: clock, timestamp: 2000, changes: {} }),
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        payload: { actionPayload, entityChanges },
+      };
+    };
+
+    for (const form of ['direct', 'deferred'] as const) {
+      it(`keeps a remote task-time delta (${form} form) non-conflicting against a retained edit of other fields (#10146)`, async () => {
+        // Desktop tracks time while the phone edits the title: the delta only
+        // touches timeSpent/timeSpentOnDay, so apply-both is lossless.
+        const result = await detect(
+          capturedTimeOp('op-time-r', 'clientB', { clientB: 1 }, form),
+          [opX],
+        );
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it(`routes a remote task-time delta (${form} form) into a conflict against a retained absolute timeSpentOnDay write (#10146)`, async () => {
+        const localTimeEdit = updateOp({
+          id: 'op-time-edit',
+          clientId: 'clientA',
+          vectorClock: { clientA: 1 },
+          timestamp: 1000,
+          changes: { timeSpentOnDay: { ['2024-01-15']: 5000 } },
+        });
+
+        // The delta is additive and apply-both is order-dependent here, so the
+        // crossing must fall to LWW.
+        const result = await detect(
+          capturedTimeOp('op-time-r', 'clientB', { clientB: 1 }, form),
+          [localTimeEdit],
+        );
+
+        expect(result.isSupersededOrDuplicate).toBe(false);
+        expect(result.conflicts.length).toBe(1);
+        expect(result.conflicts[0].entityId).toBe('task-1');
+      });
+    }
 
     it('applies multi-entity remote ops as-is (needs the pending path compensation machinery)', async () => {
       const multiRemote = updateOp({

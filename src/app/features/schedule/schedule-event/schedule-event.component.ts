@@ -43,6 +43,7 @@ import { DateTimeFormatService } from '../../../core/date-time-format/date-time-
 import { FH } from '../schedule.const';
 import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
 import { isTouchActive } from '../../../util/input-intent';
+import { isLinkTarget } from '../../../util/dom-element';
 
 const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
 
@@ -371,8 +372,7 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
   });
 
   async clickHandler(event: MouseEvent): Promise<void> {
-    const target = event.target as HTMLElement | null;
-    if (target?.tagName === 'A' || target?.closest('a')) {
+    if (isLinkTarget(event.target)) {
       return; // Let link clicks propagate without opening the schedule event panel
     }
     // Prevent opening dialog when resizing or just finished resizing
@@ -534,6 +534,7 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
   readonly _resizeHeight = signal('');
   private _startY = 0;
   private _startHeight = 0;
+  private _heightDelta = 0;
   private _endResizeGesture: (() => void) | null = null;
 
   isResizable(): boolean {
@@ -577,6 +578,7 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
     this._endResizeGesture?.();
     this._startY = event.clientY;
     this._startHeight = this._elRef.nativeElement.offsetHeight;
+    this._heightDelta = 0;
 
     const moveHandler = (e: MouseEvent): void => this._onResizeMove(e);
     const endHandler = (): void => this._onResizeEnd();
@@ -610,10 +612,12 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
       const newHeight = Math.max(rowHeight, this._startHeight + snappedDelta);
 
       // Update the element height temporarily for visual feedback
+      this._heightDelta = newHeight - this._startHeight;
       this._resizeHeight.set(newHeight + 'px');
     } else {
       // Fallback to original behavior
       const newHeight = Math.max(20, this._startHeight + deltaY);
+      this._heightDelta = newHeight - this._startHeight;
       this._resizeHeight.set(newHeight + 'px');
     }
   }
@@ -629,13 +633,9 @@ export class ScheduleEventComponent implements AfterViewInit, OnDestroy {
       this._justFinishedResizing.set(false);
     }, 200); // 200ms cooldown
 
-    // Calculate new duration based on height change
-    const currentHeight = this._elRef.nativeElement.offsetHeight;
-    const heightDelta = currentHeight - this._startHeight;
-
     // Convert height change to time change (based on grid row height)
     // Each row represents a time slice (FH rows per hour)
-    const timeChangeInMs = this._calculateTimeFromHeightDelta(heightDelta);
+    const timeChangeInMs = this._calculateTimeFromHeightDelta(this._heightDelta);
 
     const t = this.task();
     if (t && Math.abs(timeChangeInMs) > 30000) {

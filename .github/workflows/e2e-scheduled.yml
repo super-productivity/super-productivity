@@ -257,6 +257,13 @@ jobs:
           # return, leaving the actual failure unreadable.
           echo "=== SuperSync Logs (last 400 lines per container) ==="
           docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml logs --tail=400 supersync webdav
+          # The tail above is mostly Prisma query noise; a transaction failure
+          # (e.g. "Transaction serialization failure for user ...") can sit
+          # minutes before the end and never make the cut. Surface every
+          # server WARN/ERROR separately so the failing request is nameable.
+          echo "=== SuperSync WARN/ERROR lines (last 200) ==="
+          docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml logs --no-log-prefix supersync \
+            | grep -E '\[(WARN|ERROR)\]' | tail -n 200 || true
 
       - name: Stop Docker Services
         if: always()

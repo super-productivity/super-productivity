@@ -11,7 +11,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { DateService } from '../../core/date/date.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { WorkContextService } from '../work-context/work-context.service';
-import { Task, TaskReminderOptionId, TaskWithSubTasks } from './task.model';
+import { Task, TaskPriority, TaskReminderOptionId, TaskWithSubTasks } from './task.model';
 import {
   selectTaskEntities,
   selectTaskByIdWithSubTaskData,
@@ -41,9 +41,12 @@ import {
   resolveTagIntent,
   splitParentOnly,
 } from './task-bulk-action.util';
+import { TASK_PRIORITY_LABEL_KEY } from './task-priority.const';
 import { isTouchActive } from '../../util/input-intent';
 import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
 import { msToString } from '../../ui/duration/ms-to-string.pipe';
+import { ADD_TASK_INLINE_BTN_SELECTOR } from '../planner/add-task-inline/add-task-inline.const';
+import { getNextPlannerAddButton } from '../planner/get-next-planner-add-button';
 
 interface DateTimePick {
   date: Date | null;
@@ -563,6 +566,33 @@ export class TaskBulkActionService {
     this._finish();
   }
 
+  // ---- PRIORITY ---------------------------------------------------------
+
+  /** Sets one priority on every selected task, or clears it with `null`. */
+  async setPriority(priority: TaskPriority | null): Promise<void> {
+    const tasks = this._resolveInVisualOrder().filter(
+      (t) => (t.priority ?? null) !== priority,
+    );
+    if (!tasks.length) {
+      this._snackNothingToDo();
+      return;
+    }
+    await this._runSuppressed(() =>
+      tasks.forEach((t) => this._taskService.update(t.id, { priority })),
+    );
+    if (priority) {
+      this._snack(
+        'PRIORITY_SET',
+        tasks.length,
+        { priority: this._translateService.instant(TASK_PRIORITY_LABEL_KEY[priority]) },
+        'priority_high',
+      );
+    } else {
+      this._snack('PRIORITY_CLEARED', tasks.length);
+    }
+    this._finish();
+  }
+
   // ---- BACKLOG ----------------------------------------------------------
 
   async moveToBacklog(): Promise<void> {
@@ -702,24 +732,31 @@ export class TaskBulkActionService {
   }
 
   /**
-   * The first unselected `<task>` after the last selected one in DOM order,
-   * else the last unselected one before it — captured *before* the action so
-   * keyboard focus has somewhere to land once the selected rows leave the view.
-   */
-  /**
    * Id of the row keyboard focus should land on if the selected rows leave the
    * list: the next unselected row after the selection, else the previous one.
    * Like the single-task path, subtask rows of a selected parent do not count
    * (they leave together with it). Resolved to an element only afterwards,
    * since rows may re-mount.
    */
-  private _getFocusTargetAfterRemoval(): string | null {
+  private _getFocusTargetAfterRemoval(): string | HTMLElement | null {
     if (isTouchActive()) {
       return null;
     }
     const selected = this._multiSelect.selectedIds();
-    const rows = Array.from(document.querySelectorAll<HTMLElement>('task')).filter(
+    const scope = this._multiSelect.selectionScope();
+    const boardScope = scope?.matches('[data-board-selection-scope]') ? scope : null;
+    const allRows = Array.from(
+      (boardScope ?? document).querySelectorAll<HTMLElement>(
+        'task, planner-task[data-task-selectable="true"]',
+      ),
+    ).filter(
       (el) => !el.closest('task-detail-panel') && !this._multiSelect.isDestroyedHost(el),
+    );
+    const isPlannerSelection = allRows.some(
+      (row) => row.matches('planner-task') && selected.has(row.dataset.taskId ?? ''),
+    );
+    const rows = allRows.filter((row) =>
+      row.matches(isPlannerSelection ? 'planner-task' : 'task'),
     );
     const idOf = (el: HTMLElement): string => el.getAttribute('data-task-id') ?? '';
     const isInSelectedParent = (el: HTMLElement): boolean => {
@@ -748,7 +785,25 @@ export class TaskBulkActionService {
     const target =
       rows.slice(lastSelectedIndex + 1).find(isCandidate) ??
       rows.slice(0, lastSelectedIndex).reverse().find(isCandidate);
-    return target ? idOf(target) : null;
+    if (target) {
+      return boardScope ? target : idOf(target);
+    }
+    const selectedPlannerRow = rows.find(
+      (row) => row.matches('planner-task') && selected.has(idOf(row)),
+    );
+    const rowScope = selectedPlannerRow?.closest<HTMLElement>(
+      '[data-planner-selection-scope], [data-board-selection-scope]',
+    );
+    if (!rowScope) {
+      return null;
+    }
+    const inScope = rowScope.querySelector<HTMLElement>(ADD_TASK_INLINE_BTN_SELECTOR);
+    if (inScope || rowScope.matches('[data-board-selection-scope]')) {
+      // Board panels stop here even with nothing to offer: reaching into a
+      // sibling panel is the cross-panel jump this fallback exists to avoid.
+      return inScope ?? null;
+    }
+    return getNextPlannerAddButton(rowScope);
   }
 
   /**
@@ -757,12 +812,12 @@ export class TaskBulkActionService {
    * selection is a working set that survives, so only keyboard focus is
    * restored. Cancelled dialogs and "nothing to do" never get here.
    */
-  private _finish(focusTargetId: string | null = null): void {
+  private _finish(focusTarget: string | HTMLElement | null = null): void {
     if (this._multiSelect.isTouchSelectionMode()) {
       this._multiSelect.clear();
       return;
     }
-    this._restoreFocus(focusTargetId);
+    this._restoreFocus(focusTarget);
   }
 
   /**
@@ -771,12 +826,9 @@ export class TaskBulkActionService {
    * DOM while its leave animation runs, so "gone" is asked from the selection
    * service, which knows the destroyed hosts.
    */
-  private _restoreFocus(targetId: string | null): void {
-    if (!targetId) {
-      return;
-    }
+  private _restoreFocus(target: string | HTMLElement | null): void {
     const active = document.activeElement;
-    const activeRow = active?.closest('task');
+    const activeRow = active?.closest('task, planner-task[data-task-selectable="true"]');
     const isFocusIntact =
       !!active &&
       active !== document.body &&
@@ -785,6 +837,10 @@ export class TaskBulkActionService {
     if (isFocusIntact) {
       return;
     }
-    this._multiSelect.findLiveRowEl(targetId)?.focus({ preventScroll: true });
+    const targetEl =
+      typeof target === 'string' ? this._multiSelect.findLiveRowEl(target) : target;
+    if (targetEl?.isConnected) {
+      targetEl.focus({ preventScroll: true });
+    }
   }
 }

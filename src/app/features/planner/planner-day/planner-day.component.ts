@@ -78,6 +78,11 @@ export class PlannerDayComponent {
     return this.day?.dayDate;
   }
 
+  @HostBinding('attr.data-planner-selection-scope')
+  get selectionScopeAttr(): string | undefined {
+    return this.day?.dayDate;
+  }
+
   protected readonly T = T;
   protected readonly SCHEDULE_ITEM_TYPE = ScheduleItemType;
   protected readonly dragDelayForTouch = dragDelayForTouch;

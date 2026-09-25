@@ -143,7 +143,13 @@ class SuperSyncBackgroundProvider(
         val ops = json.optJSONArray("ops")
             ?: return ReminderChangeResult(emptySet(), emptyList(), json.optLong("latestSeq", 0L), false)
         val hasMore = json.optBoolean("hasMore", false)
-        val latestSeq = json.optLong("latestSeq", 0L)
+        // latestSeq is the server's global watermark, not the end of this page.
+        // The worker must request the remaining ops before persisting that watermark.
+        val latestSeq = if (hasMore) {
+            ops.getJSONObject(ops.length() - 1).getLong("serverSeq")
+        } else {
+            json.optLong("latestSeq", 0L)
+        }
         val now = System.currentTimeMillis()
 
         // Keyed by (taskId, isDueDate) so later ops naturally overwrite earlier ones

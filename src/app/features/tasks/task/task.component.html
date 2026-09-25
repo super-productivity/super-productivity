@@ -294,6 +294,9 @@
             }
           </div>
         </div>
+        @if (t.priority; as p) {
+          <task-priority-indicator [priority]="p"></task-priority-indicator>
+        }
       </div>
     </div>
 

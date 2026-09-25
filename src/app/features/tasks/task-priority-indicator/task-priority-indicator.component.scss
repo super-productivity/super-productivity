@@ -1,0 +1,32 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+
+mat-icon {
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+  line-height: 18px;
+}
+
+// Keyed on this component's own host attribute, so the rule can never match a
+// nested sub-task row. The previous `:host.priority-* .priority-indicator` form
+// lived in task.component's stylesheet, where `:host` is the task row: under
+// emulated encapsulation a sub-task row carries the same content attribute, so
+// a high-priority parent recoloured every indicator in its subtree.
+:host[data-priority='high'] {
+  color: var(--color-danger);
+}
+
+:host[data-priority='medium'] {
+  color: var(--color-warning);
+}
+
+:host[data-priority='low'] {
+  color: var(--c-primary);
+}

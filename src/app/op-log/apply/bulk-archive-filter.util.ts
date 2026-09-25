@@ -243,6 +243,9 @@ const upsertTaskProjectionFromTaskOrUpdate = (
   const id = typeof task.id === 'string' ? task.id : fallbackId;
   const changes = task.changes;
   if (id && changes && typeof changes === 'object') {
+    // Update<Task> cannot create a missing task. Inventing one here would
+    // make a later restore look like a duplicate, unlike the real reducers.
+    if (!projection[id]) return;
     upsertTaskProjectionFromTaskLike(
       projection,
       { ...(changes as object), id },
@@ -381,6 +384,20 @@ export const collectCascadedSubTaskIds = (
   });
 };
 
+export interface TaskRemovalEntityIds {
+  all: Set<string>;
+  archiving: Set<string>;
+  /**
+   * #10220: index (in the scanned batch) of a `restoreTask` that brought back
+   * a task removed EARLIER in the batch, with no removal after it. Only ops
+   * after that index see the task as active again — see `isRemovedAtIndex`.
+   */
+  restoredAt: Map<string, number>;
+  /** Same for `archiving`: only a later ARCHIVE undoes it — a later delete
+   * removes the task without archiving it, so recreate-after-delete applies. */
+  archiveRestoredAt: Map<string, number>;
+}
+
 /**
  * Build the same-batch archive/delete filter set using a lightweight task-state
  * projection. This keeps the pre-scan aligned with reducer order: if an earlier
@@ -391,23 +408,24 @@ export const collectCascadedSubTaskIds = (
 export const collectTaskRemovalEntityIdsFromBatch = (
   operations: Operation[],
   state: unknown,
-): {
-  all: Set<string>;
-  archiving: Set<string>;
-} => {
+): TaskRemovalEntityIds => {
   // Archive-free hydration/sync batches are common; skip projection work for them.
   if (!operations.some(isTaskArchiveOrDeleteOp)) {
     return {
       all: new Set<string>(),
       archiving: new Set<string>(),
+      restoredAt: new Map<string, number>(),
+      archiveRestoredAt: new Map<string, number>(),
     };
   }
 
   const archivingOrDeletingEntityIds = new Set<string>();
   const archivingEntityIds = new Set<string>();
+  const restoredAt = new Map<string, number>();
+  const archiveRestoredAt = new Map<string, number>();
   const projectedTaskEntities = cloneTaskEntityMap(state);
 
-  for (const op of operations) {
+  for (const [index, op] of operations.entries()) {
     if (isTaskArchiveOrDeleteOp(op)) {
       const removedByThisOp = new Set<string>();
       addOperationEntityIds(op, removedByThisOp);
@@ -415,20 +433,88 @@ export const collectTaskRemovalEntityIdsFromBatch = (
       const isArchive = isTaskArchiveOp(op);
       for (const id of removedByThisOp) {
         archivingOrDeletingEntityIds.add(id);
-        if (isArchive) archivingEntityIds.add(id);
+        restoredAt.delete(id);
+        if (isArchive) {
+          archivingEntityIds.add(id);
+          archiveRestoredAt.delete(id);
+        }
         delete projectedTaskEntities[id];
       }
       continue;
     }
 
+    if (op.actionType === ActionType.TASK_SHARED_RESTORE) {
+      const task = unwrapActionPayloadObject(op.payload)?.task as
+        | { id?: unknown }
+        | undefined;
+      const existingTask =
+        typeof task?.id === 'string'
+          ? (projectedTaskEntities[task.id] as { id?: unknown } | undefined)
+          : undefined;
+      // handleRestoreTask ignores the entire restore when its root is active,
+      // including payload children that have since been deleted.
+      if (existingTask && existingTask.id === task?.id) continue;
+      for (const id of collectRestoredTaskIds(op)) {
+        if (archivingOrDeletingEntityIds.has(id)) restoredAt.set(id, index);
+        if (archivingEntityIds.has(id)) archiveRestoredAt.set(id, index);
+      }
+    }
+
+    // A filtered LWW update must not make the projection's root look active
+    // and turn a later, legitimate restore into a duplicate above.
+    if (isTaskLwwUpdateOp(op) && op.entityId) {
+      const recreatesAfterDelete =
+        isLwwUpdatePayload(op.payload) && op.payload.recreatesEntityAfterDelete === true;
+      if (
+        isRemovedAtIndex(
+          recreatesAfterDelete ? archivingEntityIds : archivingOrDeletingEntityIds,
+          recreatesAfterDelete ? archiveRestoredAt : restoredAt,
+          op.entityId,
+          index,
+        )
+      ) {
+        continue;
+      }
+    }
     applyTaskProjectionFromOp(op, projectedTaskEntities);
   }
 
   return {
     all: archivingOrDeletingEntityIds,
     archiving: archivingEntityIds,
+    restoredAt,
+    archiveRestoredAt,
   };
 };
+
+const collectRestoredTaskIds = (op: Operation): Set<string> => {
+  const restoredIds = new Set<string>();
+  addOperationEntityIds(op, restoredIds);
+  const subTasks = unwrapActionPayloadObject(op.payload)?.subTasks;
+  if (Array.isArray(subTasks)) {
+    for (const subTask of subTasks) {
+      if (subTask && typeof subTask === 'object') {
+        addString((subTask as { id?: unknown }).id, restoredIds);
+      }
+    }
+  }
+  return restoredIds;
+};
+
+/**
+ * Whether the op at `index` must treat `entityId` as removed by the batch.
+ * A task restored after its archive stays removed for ops BEFORE the restore
+ * (a stale LWW Update there would recreate it, turning the restore into a
+ * no-op), but not for ops after it: restart replay is status-blind, so a
+ * rejected bulk archive still precedes the restore and the local-win update
+ * that re-asserts it (#10220).
+ */
+export const isRemovedAtIndex = (
+  ids: Set<string>,
+  restoredAt: Map<string, number>,
+  entityId: string,
+  index: number,
+): boolean => ids.has(entityId) && !((restoredAt.get(entityId) ?? Infinity) < index);
 
 /**
  * Issue #7330: `lwwUpdateMetaReducer`'s orphan filter only sees taskState as
@@ -444,7 +530,9 @@ export const collectTaskRemovalEntityIdsFromBatch = (
 export const stripBatchArchivedTaskIdsFromLwwPayload = (
   op: Operation,
   isLww: boolean,
-  archivingOrDeletingEntityIds: Set<string>,
+  // A lookup, not a Set: bulk replay answers it per op index (#10220) without
+  // copying the whole removal set for every op.
+  archivingOrDeletingEntityIds: Pick<Set<string>, 'has'>,
 ): Operation => {
   if (!isLww) return op;
   const payload = op.payload;

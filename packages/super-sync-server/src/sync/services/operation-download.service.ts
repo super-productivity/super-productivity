@@ -4,6 +4,7 @@
  * Extracted from SyncService for better separation of concerns.
  * This service handles operation retrieval with gap detection and snapshot optimization.
  */
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../db';
 import {
   LatestCausalFullStateRow,
@@ -216,8 +217,8 @@ export class OperationDownloadService {
 
         let minSeq: number | null = null;
 
-        if (sinceSeq > 0 && latestSeq > 0) {
-          // Get min sequence, but only when gap detection can use it.
+        if (sinceSeq > 0 || ops.length === 0) {
+          // Also distinguish a reset from an empty page filtered by client ID.
           // NOTE: Prisma's `aggregate({ _min })` compiles to
           // `SELECT MIN(x) FROM (SELECT x ... OFFSET 0) sub`. The OFFSET
           // subquery is a planner optimization fence, so Postgres cannot use
@@ -232,6 +233,27 @@ export class OperationDownloadService {
             select: { serverSeq: true },
           });
           minSeq = minSeqRow?.serverSeq ?? null;
+        }
+
+        // Reset retains the allocation counter to prevent sequence reuse, but
+        // an account without retained operations must still look empty to clients
+        // so their existing full-state migration/re-upload path can run.
+        if (ops.length === 0 && minSeq === null) {
+          if (sinceSeq > 0) {
+            // Same warning the latestSeq === 0 branch logs. Since the allocator
+            // survives a reset, this branch is now the only one a reset account
+            // reaches, so without it reset-induced gaps vanish from the logs.
+            Logger.warn(
+              `[user:${userId}] Gap detected: client at sinceSeq=${sinceSeq} but server is empty (latestSeq=0)`,
+            );
+          }
+
+          return {
+            ops: [],
+            latestSeq: 0,
+            gapDetected: sinceSeq > 0,
+            shouldComputeSnapshotVectorClock: false,
+          };
         }
 
         // Gap detection logic
@@ -289,7 +311,11 @@ export class OperationDownloadService {
           persistedSnapshotVectorClock,
         } satisfies OperationDownloadTransactionResult;
       },
-      { timeout: DOWNLOAD_TRANSACTION_TIMEOUT_MS },
+      {
+        timeout: DOWNLOAD_TRANSACTION_TIMEOUT_MS,
+        // A reset/replacement must not mix the old watermark with new history.
+        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+      },
     ); // Matches other sync transactions; stays below Fastify's 80s request timeout.
 
     let snapshotVectorClock: VectorClock | undefined;
@@ -394,7 +420,10 @@ export class OperationDownloadService {
    */
   async getLatestSeq(userId: number): Promise<number> {
     const row = await prisma.userSyncState.findUnique({
-      where: { userId },
+      // lastSeq is an allocation counter, retained even after DELETE /data.
+      // The existence check preserves the empty-server wire contract
+      // without replacing that counter with MAX(server_seq), which can lag it.
+      where: { userId, user: { operations: { some: {} } } },
       select: { lastSeq: true },
     });
     return row?.lastSeq ?? 0;

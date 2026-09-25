@@ -15,6 +15,7 @@ export const handleIssueProviderHttpError$ = <T>(
 ): ObservableInput<T> => {
   const errorBody: unknown = error.error;
   IssueLog.log('Issue provider HTTP error', {
+    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
     issueProviderKey,
     status: error.status,
     errorBodyName: _getErrorBodyName(errorBody),

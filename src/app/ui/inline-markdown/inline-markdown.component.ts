@@ -21,8 +21,11 @@ import { MatIcon } from '@angular/material/icon';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { GlobalConfigService } from '../../features/config/global-config.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { isMarkdownChecklist } from '../../features/markdown-checklist/is-markdown-checklist';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import {
   removeCheckedChecklistItems,
   setAllChecklistItemsChecked,
@@ -31,6 +34,7 @@ import { T } from '../../t.const';
 import { fadeInAnimation } from '../animations/fade.ani';
 import { openFullscreenMarkdownDialog } from '../dialog-fullscreen-markdown/open-fullscreen-markdown-dialog';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { ResolveClipboardImagesDirective } from '../../core/clipboard-image/resolve-clipboard-images.directive';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
@@ -291,6 +295,13 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
     if ((ev.key === 'Enter' && ev.ctrlKey) || ev.code === 'Escape') {
       this.untoggleShowEdit();
+      // Give the field up before handing focus back, the same way
+      // `_leaveLiveEditor` does. With markdown formatting off the textarea is
+      // mounted unconditionally (see the template's `@else if`), so
+      // `untoggleShowEdit` leaves it on screen AND focused — and the panel's
+      // deferred `focusItem` skips itself while a text field owns focus, so
+      // Escape would strand the caret in the field it was meant to leave.
+      this.textareaEl()?.nativeElement.blur();
       this.keyboardUnToggle.emit(ev);
       return;
     }
@@ -552,6 +563,10 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     if (liveEditorEl) {
       currentText = liveEditorEl.value;
       cursorPos = liveEditorEl.selectionStart;
+      // Must be read too: leaving it undefined reads as "there is a selection"
+      // below, and applyTaskList's substring(undefined) then appends the whole
+      // note back onto itself before emitting it.
+      selectionEnd = liveEditorEl.selectionEnd;
     } else if (textareaEl) {
       currentText = textareaEl.nativeElement.value;
       cursorPos = textareaEl.nativeElement.selectionStart;

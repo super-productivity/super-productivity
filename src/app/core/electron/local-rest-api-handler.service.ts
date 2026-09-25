@@ -2,18 +2,28 @@ import { Injectable, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import typia from 'typia';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TaskService } from '../../features/tasks/task.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TaskArchiveService } from '../../features/archive/task-archive.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { ProjectService } from '../../features/project/project.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TagService } from '../../features/tag/tag.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
 import { isTodayWithOffset } from '../../util/is-today.util';
 import { isValidDBDateStr } from '../../util/get-db-date-str';
+import { IssueLog } from '../log';
+import { LOCAL_REST_API_FEATURE_BRIDGE } from './local-rest-api-feature-bridge';
 
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { getDeadlineAutoPlanFields } from '../../features/tasks/util/get-deadline-auto-plan-fields';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import {
   selectCurrentCycle,
   selectIsBreakTimeUp,
@@ -292,6 +302,29 @@ const getQueryParam = (
   return Array.isArray(value) ? value[0] : value;
 };
 
+/**
+ * `isIgnoreShortSyntax: true` in a POST/PATCH body stores the title literally:
+ * `#tag`, `+project`, `30m`, `@date` and URLs are not parsed out of it. Opt-in
+ * so scripts that rely on parsing keep working; returns an error message for a
+ * non-boolean value.
+ */
+const readIsIgnoreShortSyntax = (
+  body: Record<string, unknown>,
+): { ok: true; value: boolean } | { ok: false; message: string } => {
+  const value = body['isIgnoreShortSyntax'];
+  if (value === undefined) return { ok: true, value: false };
+  return typeof value === 'boolean'
+    ? { ok: true, value }
+    : { ok: false, message: 'isIgnoreShortSyntax must be a boolean' };
+};
+
+/** `?include=a,b` (or repeated `include=`) asks for optional response fields. */
+const isIncluded = (query: Record<string, string | string[]>, field: string): boolean => {
+  const value = query['include'];
+  const values = value === undefined ? [] : Array.isArray(value) ? value : [value];
+  return values.some((v) => v.split(',').some((part) => part.trim() === field));
+};
+
 const getQueryParamAsBoolean = (
   query: Record<string, string | string[]>,
   key: string,
@@ -336,6 +369,14 @@ const createSuccessResponse = (
 
 type TaskSource = 'active' | 'archived' | 'all';
 
+/**
+ * Upper bound for building `issueUrl` on `GET /tasks/:id?include=issueUrl`. Some providers
+ * (e.g. plugin providers without a derivable link) fetch the issue over the
+ * network; the link is a convenience, so a slow or offline provider must not
+ * eat the renderer's whole request budget (`LOCAL_REST_API_TIMEOUT_MS`).
+ */
+const ISSUE_URL_TIMEOUT_MS = 3000;
+
 const isValidTimestamp = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && new Date(value).getTime() > 0;
 
@@ -359,6 +400,7 @@ export class LocalRestApiHandlerService {
   private readonly _projectService = inject(ProjectService);
   private readonly _tagService = inject(TagService);
   private readonly _dateService = inject(DateService);
+  private readonly _featureBridge = inject(LOCAL_REST_API_FEATURE_BRIDGE);
   private readonly _store = inject(Store);
   private _isInitialized = false;
 
@@ -452,7 +494,7 @@ export class LocalRestApiHandlerService {
     }
 
     if (segments[0] === 'tasks' && segments[1] && segments.length >= 2) {
-      return this._handleTaskRoutes(method, segments, requestId, body);
+      return this._handleTaskRoutes(method, segments, requestId, body, query);
     }
 
     if (method === 'GET' && path === '/projects') {
@@ -635,6 +677,17 @@ export class LocalRestApiHandlerService {
       );
     }
 
+    const shortSyntaxFlag = readIsIgnoreShortSyntax(body);
+    if (!shortSyntaxFlag.ok) {
+      return createErrorResponse(
+        requestId,
+        400,
+        'INVALID_INPUT',
+        shortSyntaxFlag.message,
+      );
+    }
+    const isIgnoreShortSyntax = shortSyntaxFlag.value;
+
     const title = body.title.trim();
     const additionalFields = pickAllowedFields(body);
 
@@ -717,10 +770,15 @@ export class LocalRestApiHandlerService {
         );
       }
 
-      const subTaskId = this._taskService.addSubTaskTo(body.parentId, {
-        title,
-        ...additionalFields,
-      });
+      const subTaskId = isIgnoreShortSyntax
+        ? this._featureBridge.addLiteralSubTask(body.parentId, {
+            title,
+            ...additionalFields,
+          })
+        : this._taskService.addSubTaskTo(body.parentId, {
+            title,
+            ...additionalFields,
+          });
       if (deadlineResolution.change?.type === 'set') {
         this._dispatchDeadlineChange(subTaskId, deadlineResolution.change);
       }
@@ -728,7 +786,9 @@ export class LocalRestApiHandlerService {
       return createSuccessResponse(requestId, 201, createdSubTask);
     }
 
-    const taskId = this._taskService.add(title, false, additionalFields);
+    const taskId = isIgnoreShortSyntax
+      ? this._taskService.add(title, false, additionalFields, false, true)
+      : this._taskService.add(title, false, additionalFields);
     if (deadlineResolution.change?.type === 'set') {
       this._dispatchDeadlineChange(taskId, deadlineResolution.change);
     }
@@ -742,6 +802,7 @@ export class LocalRestApiHandlerService {
     segments: string[],
     requestId: string,
     body: unknown,
+    query: Record<string, string | string[]>,
   ): Promise<LocalRestApiResponsePayload> {
     const taskId = segments[1];
 
@@ -751,7 +812,16 @@ export class LocalRestApiHandlerService {
         if (!task) {
           return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
         }
-        return createSuccessResponse(requestId, 200, task);
+        // Opt-in: some providers fetch the issue over the network to build
+        // the link, and most callers (e.g. frequent status polls) don't need it.
+        const issueUrl = isIncluded(query, 'issueUrl')
+          ? await this._getIssueUrl(task)
+          : undefined;
+        return createSuccessResponse(
+          requestId,
+          200,
+          issueUrl ? { ...task, issueUrl } : task,
+        );
       }
 
       if (method === 'PATCH') {
@@ -761,6 +831,16 @@ export class LocalRestApiHandlerService {
             400,
             'INVALID_INPUT',
             'PATCH body must be a JSON object',
+          );
+        }
+
+        const patchShortSyntaxFlag = readIsIgnoreShortSyntax(body);
+        if (!patchShortSyntaxFlag.ok) {
+          return createErrorResponse(
+            requestId,
+            400,
+            'INVALID_INPUT',
+            patchShortSyntaxFlag.message,
           );
         }
 
@@ -861,7 +941,21 @@ export class LocalRestApiHandlerService {
         }
 
         if (Object.keys(changes).length > 0) {
-          this._taskService.update(taskId, changes);
+          // Short syntax only parses a title-only change set, so that is the
+          // only shape the flag changes; everything else keeps going through
+          // update() and whatever bookkeeping it does.
+          const isTitleOnly =
+            Object.keys(changes).length === 1 && hasOwn(changes, 'title');
+          if (patchShortSyntaxFlag.value && isTitleOnly) {
+            this._store.dispatch(
+              TaskSharedActions.updateTask({
+                task: { id: taskId, changes },
+                isIgnoreShortSyntax: true,
+              }),
+            );
+          } else {
+            this._taskService.update(taskId, changes);
+          }
         }
         if (deadlineResolution.change) {
           this._dispatchDeadlineChange(taskId, deadlineResolution.change);
@@ -975,6 +1069,35 @@ export class LocalRestApiHandlerService {
     }
 
     return createSuccessResponse(requestId, 200, tags);
+  }
+
+  /**
+   * Best-effort link to the task's issue for `GET /tasks/:id`. Returns
+   * undefined when the task has no issue, the provider can't build a link, or
+   * building it fails or times out — never turns the request into an error.
+   */
+  private async _getIssueUrl(task: Task): Promise<string | undefined> {
+    const { issueType, issueId, issueProviderId } = task;
+    if (!issueType || !issueId || !issueProviderId) {
+      return undefined;
+    }
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const url = await Promise.race([
+        this._featureBridge.issueLink(issueType, issueId, issueProviderId),
+        new Promise<undefined>((resolve) => {
+          timeoutId = setTimeout(() => resolve(undefined), ISSUE_URL_TIMEOUT_MS);
+        }),
+      ]);
+      return typeof url === 'string' && url ? url : undefined;
+    } catch {
+      IssueLog.warn('[LocalRestApi] issueUrl omitted: link lookup failed', {
+        id: task.id,
+      });
+      return undefined;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
   // The id equality checks reject prototype-property names ('constructor',
