@@ -482,6 +482,8 @@ export class ReminderModule {
     }
 
     // Predicted instance ids have the shape `rpt_<cfgId>_<dayStr>` (getRepeatableTaskId).
+    // todayStr() is deliberately the LOGICAL day: it must match the day
+    // addAllDueToday creates the instance for.
     const isTodaysPredictedInstance =
       taskId.startsWith('rpt_') && taskId.endsWith(`_${this._dateService.todayStr()}`);
     if (!isTodaysPredictedInstance) {
