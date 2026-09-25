@@ -19,7 +19,7 @@
   [multiple]="to.multiple"
   (selectionChange)="onSelectionChange($event)"
 >
-  @if (to.multiple && triggerLabel()) {
+  @if (triggerLabel()) {
     <mat-select-trigger>
       {{ triggerLabel() }}
     </mat-select-trigger>
