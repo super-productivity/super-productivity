@@ -441,12 +441,38 @@ export const collectTaskRemovalEntityIdsFromBatch = (
     }
 
     if (op.actionType === ActionType.TASK_SHARED_RESTORE) {
+      const task = unwrapActionPayloadObject(op.payload)?.task as
+        | { id?: unknown }
+        | undefined;
+      const existingTask =
+        typeof task?.id === 'string'
+          ? (projectedTaskEntities[task.id] as { id?: unknown } | undefined)
+          : undefined;
+      // handleRestoreTask ignores the entire restore when its root is active,
+      // including payload children that have since been deleted.
+      if (existingTask && existingTask.id === task?.id) continue;
       for (const id of collectRestoredTaskIds(op)) {
         if (archivingOrDeletingEntityIds.has(id)) restoredAt.set(id, index);
         if (archivingEntityIds.has(id)) archiveRestoredAt.set(id, index);
       }
     }
 
+    // A filtered LWW update must not make the projection's root look active
+    // and turn a later, legitimate restore into a duplicate above.
+    if (isTaskLwwUpdateOp(op) && op.entityId) {
+      const recreatesAfterDelete =
+        isLwwUpdatePayload(op.payload) && op.payload.recreatesEntityAfterDelete === true;
+      if (
+        isRemovedAtIndex(
+          recreatesAfterDelete ? archivingEntityIds : archivingOrDeletingEntityIds,
+          recreatesAfterDelete ? archiveRestoredAt : restoredAt,
+          op.entityId,
+          index,
+        )
+      ) {
+        continue;
+      }
+    }
     applyTaskProjectionFromOp(op, projectedTaskEntities);
   }
 
