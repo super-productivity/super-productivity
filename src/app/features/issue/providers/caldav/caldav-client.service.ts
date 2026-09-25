@@ -1,6 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { CaldavCfg } from './caldav.model';
 // @ts-ignore
+import DavClient, { namespaces as NS } from '@nextcloud/cdav-library';
+// @ts-ignore
 import Calendar from 'cdav-library/models/calendar';
 import { loadIcalModule } from '../../../schedule/ical/ical-lazy-loader';
 
@@ -38,25 +40,8 @@ interface XhrLike {
   onreadystatechange: ((event: unknown) => void) | null;
 }
 
-// cdav-library (~50 kB) is only needed once a CalDAV provider is used, but this
-// service reaches the initial bundle through IssueService, so load it lazily.
-interface CdavModule {
-  default: new (...args: unknown[]) => DavClientLike;
-  namespaces: { IETF_CALDAV: string };
-}
-
-interface DavClientLike {
-  connect: (opts: { enableCalDAV: boolean }) => Promise<unknown>;
-  calendarHomes: unknown;
-}
-
-// The module loader caches the import, so repeated calls are cheap.
-const loadCdavModule = (): Promise<CdavModule> =>
-  // @ts-ignore - the library ships no type declarations
-  import('@nextcloud/cdav-library') as Promise<CdavModule>;
-
 interface ClientCache {
-  client: DavClientLike;
+  client: DavClient;
   calendars: Map<string, Calendar>;
 }
 
@@ -146,7 +131,6 @@ export class CaldavClientService {
     calendar: Calendar,
     filterOpen: boolean,
   ): Promise<CalDavTaskData[]> {
-    const { namespaces: NS } = await loadCdavModule();
     const query = {
       name: [NS.IETF_CALDAV, 'comp-filter'],
       attributes: [['name', 'VCALENDAR']],
@@ -180,7 +164,6 @@ export class CaldavClientService {
     calendar: Calendar,
     taskUid: string,
   ): Promise<CalDavTaskData[]> {
-    const { namespaces: NS } = await loadCdavModule();
     const query = {
       name: [NS.IETF_CALDAV, 'comp-filter'],
       attributes: [['name', 'VCALENDAR']],
@@ -307,7 +290,6 @@ export class CaldavClientService {
     if (this._clientCache.has(client_key)) {
       return this._clientCache.get(client_key) as ClientCache;
     } else {
-      const { default: DavClient } = await loadCdavModule();
       const client = new DavClient(
         {
           rootUrl: cfg.caldavUrl,
