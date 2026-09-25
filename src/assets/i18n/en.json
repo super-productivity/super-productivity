@@ -1258,8 +1258,7 @@
       "BTN_SHOW_DEVICES": "Show Connected Devices",
       "BTN_SYNC_NOW": "Sync Now",
       "C": {
-        "FORCE_UPLOAD": "This will REPLACE all data on the server and on every other device with this device's local copy. Any unsynced changes on those devices will be permanently lost. Continue?",
-        "DECRYPT_OVERWRITE": "This will REPLACE the encrypted data on the server with this device's local copy and re-encrypt it with the new password. All other devices will need to re-enter the password and download the replaced data. Any unsynced changes on those devices will be permanently lost. Continue?"
+        "FORCE_UPLOAD": "This will REPLACE all data on the server and on every other device with this device's local copy. Any unsynced changes on those devices will be permanently lost. Continue?"
       },
       "CONFLICT_REVIEW": {
         "PAGE_TITLE": "Sync Conflicts",
@@ -1359,11 +1358,10 @@
         "UNKNOWN_ERROR": "Unknown Sync Error: {{err}}"
       },
       "D_DECRYPT_ERROR": {
-        "BTN_OVER_WRITE_REMOTE": "Overwrite Server & Other Devices",
         "CHANGE_PW_AND_DECRYPT": "Retry Decrypt",
         "P1": "Your remote data is encrypted and decryption failed.",
         "P2_FORGOT_PW": "If you <strong>forgot your password</strong>, enter the correct password and click \"Retry Decrypt\".",
-        "P3_PW_CHANGED": "If you <strong>changed your password on another device</strong>, enter your new password and click <strong>Overwrite Server & Other Devices</strong>. ⚠️ This is destructive: it replaces ALL data on the server and on your other devices with this device's local copy. Any unsynced changes on those devices will be lost.",
+        "P3_START_OVER": "If you cannot recover the password, leave the sync server as it is \u2014 your data there stays intact. To erase it and start over from this device, close this window and use <strong>Force Overwrite</strong> in Settings \u2192 Sync & Backup \u2192 Sync.",
         "PASSWORD": "Password",
         "TITLE": "Decryption Failed"
       },

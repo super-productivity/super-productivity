@@ -91,7 +91,9 @@ export class LocalDataConflictError extends Error {
 
   constructor(
     public readonly unsyncedCount: number,
-    public readonly remoteSnapshotState: Record<string, unknown>,
+    // `null` when the remote side arrived as ops without a snapshot (#9391) —
+    // there is no full remote state to show.
+    public readonly remoteSnapshotState: Record<string, unknown> | null,
     public readonly remoteVectorClock?: Record<string, number>,
     // The client's vector clock as of its last successful sync. Used by the
     // conflict dialog as an APPROXIMATE baseline for the per-client

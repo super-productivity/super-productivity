@@ -81,3 +81,40 @@ describe('Azure DevOps Plugin - getNewIssuesForBacklog', () => {
     expect(query).toContain(`[System.AssignedTo] = @Me`);
   });
 });
+
+describe('Azure DevOps Plugin - work item fetch (#9473)', () => {
+  // Process templates (e.g. on-prem Scrum) may not define DueDate/TargetDate;
+  // naming a field the collection lacks fails the whole request with HTTP 400
+  // (TF51535), so the list fetch must not name fields explicitly.
+  it('requests no explicit field list and maps items lacking date fields', async () => {
+    const get = vi.fn(async () => ({
+      value: [
+        {
+          id: 11085,
+          fields: {
+            'System.Title': 'Backlog item',
+            'System.WorkItemType': 'Product Backlog Item',
+            'System.State': 'New',
+          },
+        },
+      ],
+    }));
+    const http = {
+      post: vi.fn(async () => ({ workItems: [{ id: 11085 }] })),
+      get,
+    } as unknown as PluginHttp;
+
+    const results = await definition.searchIssues('Backlog', { project: 'P' }, http);
+
+    expect(get).toHaveBeenCalledTimes(1);
+    const opts = (get.mock.calls[0] as unknown[])[1] as {
+      params: Record<string, string>;
+    };
+    expect(opts.params.ids).toBe('11085');
+    expect(opts.params).not.toHaveProperty('fields');
+    expect(results).toHaveLength(1);
+    expect(results[0].title).toBe('Product Backlog Item 11085: Backlog item');
+    expect(results[0].due).toBe('');
+    expect(results[0].dueWithTime).toBeUndefined();
+  });
+});

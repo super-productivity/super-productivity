@@ -9,6 +9,7 @@ import {
   IS_ANDROID_NATIVE,
 } from '../../util/is-native-platform';
 import {
+  catchError,
   concatMap,
   delay,
   filter,
@@ -25,11 +26,11 @@ import { throttle } from '../../util/decorators';
 import { SyncTriggerService } from '../../imex/sync/sync-trigger.service';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
-import { merge, of, timer, interval, firstValueFrom, Observable } from 'rxjs';
+import { merge, of, timer, interval, firstValueFrom, Observable, timeout } from 'rxjs';
 import { TaskService } from '../tasks/task.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from 'src/app/t.const';
-import { TaskWithReminderData } from '../tasks/task.model';
+import { TaskWithReminderData, Task } from '../tasks/task.model';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { GlobalConfigService } from '../config/global-config.service';
@@ -41,9 +42,15 @@ import {
 import { Log } from '../../core/log';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { androidInterface } from '../android/android-interface';
+import { DateService } from '../../core/date/date.service';
 
 const SNOOZE_10M_MS = 10 * 60 * 1000;
 const SNOOZE_1H_MS = 60 * 60 * 1000;
+// Pre-scheduled reminders for repeatable tasks can fire for a predicted
+// instance before the lazy creation has run (strict sync gate + 1s debounce).
+// The margin covers slow initial syncs; re-queue the done natively instead if
+// this ceiling ever proves too tight.
+const REPEATABLE_DONE_MAX_WAIT_MS = 15000;
 
 @NgModule({
   declarations: [],
@@ -62,6 +69,7 @@ export class ReminderModule {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _capacitorReminderService = inject(CapacitorReminderService);
   private readonly _syncWrapperService = inject(SyncWrapperService);
+  private readonly _dateService = inject(DateService);
 
   constructor() {
     // Initialize reminder service (runs migration in background)
@@ -433,7 +441,7 @@ export class ReminderModule {
       // Continue even if sync fails
     }
 
-    const task = await firstValueFrom(this._taskService.getByIdOnce$(taskId));
+    const task = await this._getDoneActionTask(taskId);
     if (!task || task.isDone) {
       this._snackService.open({
         type: 'SUCCESS',
@@ -447,6 +455,49 @@ export class ReminderModule {
       type: 'SUCCESS',
       msg: T.NOTIFICATION.TASK_MARKED_DONE,
     });
+  }
+
+  /**
+   * Resolve the task for a Done action, tolerating a pending repeatable
+   * instance.
+   *
+   * Reminders for repeatable tasks are natively pre-scheduled for predicted
+   * instances (`rpt_<cfgId>_<dayStr>`, #7850) before the task entity exists.
+   * The instance is created lazily only after the strict initial-sync gate
+   * plus a 1s debounce (TaskDueEffects#createRepeatableTasksAndAddDueToday$),
+   * so a Done tap on a cold start can beat creation; a one-shot read then
+   * returns undefined and the #8551 guard would drop the done as "already
+   * completed" while the unchecked instance appears right after (#10077).
+   *
+   * Only a predicted id for TODAY can still be created (lazy creation
+   * materializes only the newest occurrence), so the bounded wait applies
+   * exactly to that case. For anything else a missing task is really missing
+   * and we fall through to the #8551 handling — the native done queue is
+   * already cleared, so there is nothing to replay.
+   */
+  private async _getDoneActionTask(taskId: string): Promise<Task | undefined> {
+    const task = await firstValueFrom(this._taskService.getByIdOnce$(taskId));
+    if (task) {
+      return task;
+    }
+
+    // Predicted instance ids have the shape `rpt_<cfgId>_<dayStr>` (getRepeatableTaskId).
+    // todayStr() is deliberately the LOGICAL day: it must match the day
+    // addAllDueToday creates the instance for.
+    const isTodaysPredictedInstance =
+      taskId.startsWith('rpt_') && taskId.endsWith(`_${this._dateService.todayStr()}`);
+    if (!isTodaysPredictedInstance) {
+      return undefined;
+    }
+
+    return await firstValueFrom(
+      this._taskService.getByIdLive$(taskId).pipe(
+        filter((t): t is Task => !!t),
+        take(1),
+        timeout(REPEATABLE_DONE_MAX_WAIT_MS),
+        catchError(() => of(undefined)),
+      ),
+    );
   }
 
   /**
