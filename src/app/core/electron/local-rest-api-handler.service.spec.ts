@@ -1170,6 +1170,7 @@ describe('LocalRestApiHandlerService', () => {
             title: 'Renamed #tag',
             notes: 'n',
           });
+          expect(dispatchSpy).not.toHaveBeenCalled();
         });
 
         it('should keep parsing by default', async () => {

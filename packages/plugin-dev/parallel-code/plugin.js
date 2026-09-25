@@ -17,7 +17,9 @@ if (isSupportedPlatform && typeof PluginAPI.registerTaskContextMenuEntry === 'fu
     icon: 'terminal',
     onClick: function (context) {
       // The desktop app routes window.open through its external-link handler,
-      // which applies the scheme allowlist and reports a link it can't open.
+      // which applies the scheme allowlist. A link nothing handles fails
+      // quietly on Linux (the OS reports success), so the description says
+      // Parallel Code must be installed.
       window.open(
         'parallelcode://new-task?spTaskId=' + encodeURIComponent(context.taskId),
         '_blank',
