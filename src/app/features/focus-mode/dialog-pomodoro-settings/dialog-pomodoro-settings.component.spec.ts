@@ -1,15 +1,19 @@
 import { TestBed } from '@angular/core/testing';
 import { MatDialogRef } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DialogPomodoroSettingsComponent } from './dialog-pomodoro-settings.component';
 import { EnvironmentInjector, runInInjectionContext } from '@angular/core';
+import { resetCycles } from '../store/focus-mode.actions';
+import { selectCurrentCycle } from '../store/focus-mode.selectors';
 
 describe('DialogPomodoroSettingsComponent', () => {
   let component: DialogPomodoroSettingsComponent;
   let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogPomodoroSettingsComponent>>;
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
   let environmentInjector: EnvironmentInjector;
+  let store: MockStore;
 
   const defaultPomodoroConfig = {
     duration: 25 * 60 * 1000,
@@ -32,11 +36,15 @@ describe('DialogPomodoroSettingsComponent', () => {
       providers: [
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
-        { provide: Store, useValue: jasmine.createSpyObj('Store', ['dispatch']) },
+        provideMockStore({
+          selectors: [{ selector: selectCurrentCycle, value: 1 }],
+        }),
       ],
     });
 
     environmentInjector = TestBed.inject(EnvironmentInjector);
+    store = TestBed.inject(Store) as MockStore;
+    spyOn(store, 'dispatch');
 
     // Create component inside injection context
     runInInjectionContext(environmentInjector, () => {
@@ -128,6 +136,27 @@ describe('DialogPomodoroSettingsComponent', () => {
     it('should close dialog without saving', () => {
       component.close();
 
+      expect(mockDialogRef.close).toHaveBeenCalledWith();
+      expect(mockGlobalConfigService.updateSection).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resetSessionCounter', () => {
+    it('should be disabled on the first cycle since there is nothing to reset', () => {
+      expect(component.isResetDisabled()).toBe(true);
+    });
+
+    it('should be enabled once the cycle counter has advanced', () => {
+      store.overrideSelector(selectCurrentCycle, 3);
+      store.refreshState();
+
+      expect(component.isResetDisabled()).toBe(false);
+    });
+
+    it('should reset the cycles and close the dialog', () => {
+      component.resetSessionCounter();
+
+      expect(store.dispatch).toHaveBeenCalledWith(resetCycles());
       expect(mockDialogRef.close).toHaveBeenCalledWith();
       expect(mockGlobalConfigService.updateSection).not.toHaveBeenCalled();
     });

@@ -77,6 +77,30 @@ export const SERVER_HELMET_CONFIG = {
 };
 
 /**
+ * Helmet config for the deployment's public URL.
+ *
+ * Helmet's default CSP adds `upgrade-insecure-requests`, which makes the
+ * browser fetch every same-origin asset over https. On a plain-HTTP
+ * deployment (e.g. a LAN IP) that breaks every page, so the directive is
+ * dropped when PUBLIC_URL is http:// (#10023). This never weakens a
+ * production server: config.ts refuses to boot with a non-https PUBLIC_URL
+ * when NODE_ENV=production.
+ */
+export const getServerHelmetConfig = (publicUrl: string) => {
+  if (!/^http:\/\//i.test(publicUrl)) {
+    return SERVER_HELMET_CONFIG;
+  }
+  const { contentSecurityPolicy } = SERVER_HELMET_CONFIG;
+  return {
+    ...SERVER_HELMET_CONFIG,
+    contentSecurityPolicy: {
+      ...contentSecurityPolicy,
+      directives: { ...contentSecurityPolicy.directives, upgradeInsecureRequests: null },
+    },
+  };
+};
+
+/**
  * Picks the log level for a Fastify-handled error. 5xx → error (with stack);
  * WS-upgrade 429s → debug (storm tail from pre-18.6.0 clients that reconnect
  * on any close; the cooldown WARN+summary in WebSocketConnectionService is
@@ -405,7 +429,7 @@ export const createServer = (
       });
 
       // Security Headers
-      await fastifyServer.register(helmet, SERVER_HELMET_CONFIG);
+      await fastifyServer.register(helmet, getServerHelmetConfig(fullConfig.publicUrl));
 
       // Rate Limiting (prevent brute force)
       if (!fullConfig.testMode?.enabled) {
