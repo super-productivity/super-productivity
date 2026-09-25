@@ -12,7 +12,7 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { CLIENT_ID_PROVIDER } from '../../util/client-id.provider';
 import { buildEntityRegistry, ENTITY_REGISTRY } from '../../core/entity-registry';
 import { PersistentAction } from '../../core/persistent-action.interface';
-import { Operation } from '../../core/operation.types';
+import { EntityConflict, Operation } from '../../core/operation.types';
 import { convertOpToAction } from '../../apply/operation-converter.util';
 import { roundTimeSpentForDay } from '../../../features/tasks/store/task.actions';
 import { taskReducer } from '../../../features/tasks/store/task.reducer';
@@ -884,6 +884,84 @@ describe('round-time conflict convergence integration (#8944)', () => {
       }
       if (scenario === 'unrelated-create')
         expect(getTask(localState, 'new-task').timeSpent).toBe(2 * MINUTE);
+    });
+  }
+
+  // Split winners on one task: the local rename beats an older remote rename,
+  // a newer remote delta beats the local side. The local-win snapshot must
+  // carry the delta, or receivers keep the pre-delta time.
+  for (const roundIds of [[TASK_X], [TASK_X, TASK_Y]]) {
+    it(`converges a rounding of ${roundIds.length} task(s) + newer rename against an older remote rename + newer delta`, async () => {
+      const capture = TestBed.inject(OperationCaptureService);
+      const resolver = TestBed.inject(ConflictResolutionService);
+      const clientA = new TestClient(CLIENT_A);
+      const clientB = new TestClient(CLIENT_B);
+      const rename = (title: string): PersistentAction =>
+        TaskSharedActions.updateTask({
+          task: { id: TASK_X, changes: { title } },
+        }) as PersistentAction;
+      const localActions: [PersistentAction, number][] = [
+        [
+          roundTimeSpentForDay({
+            day: DAY,
+            taskIds: roundIds,
+            roundTo: 'QUARTER',
+            isRoundUp: true,
+          }) as PersistentAction,
+          1_000,
+        ],
+        [rename('A'), 3_000],
+      ];
+      for (const [action, timestamp] of localActions) {
+        localState = reducer(localState, action);
+        await opLogStore.append(
+          captureOperation(action, clientA, capture, timestamp),
+          'local',
+        );
+      }
+      const delta = syncTimeSpent({ taskId: TASK_X, date: DAY, duration: 3 * MINUTE });
+      const remoteOps = [
+        captureOperation(rename('B'), clientB, capture, 2_000),
+        captureOperation(delta as PersistentAction, clientB, capture, 4_000),
+      ];
+      let remoteState = initialState;
+      for (const op of remoteOps) {
+        remoteState = reducer(remoteState, convertOpToAction(op));
+      }
+      const context = {
+        localPendingOpsByEntity: await opLogStore.getUnsyncedByEntity(),
+        appliedFrontierByEntity: new Map(),
+        retainedOpsByEntity: new Map(),
+        snapshotVectorClock: undefined,
+        snapshotEntityKeys: undefined,
+        hasNoSnapshotClock: true,
+      };
+      const conflicts: EntityConflict[] = [];
+      for (const op of remoteOps) {
+        conflicts.push(...(await resolver.checkOpForConflicts(op, context)).conflicts);
+      }
+      expect(conflicts.length).toBe(2);
+      await resolver.autoResolveConflictsLWW(conflicts);
+
+      const pending = (await opLogStore.getUnsynced()).map(({ op }) => op);
+      const snapshot = pending.find((op) => op.entityId === TASK_X);
+      expect(compareVectorClocks(snapshot!.vectorClock, remoteOps[1].vectorClock)).toBe(
+        VectorClockComparison.GREATER_THAN,
+      );
+      for (const op of pending) {
+        remoteState = reducer(remoteState, convertOpToAction(op));
+      }
+      let restartedState = initialState;
+      for (const entry of await opLogStore.getOpsAfterSeq(0)) {
+        restartedState = reducer(restartedState, convertOpToAction(entry.op));
+      }
+      for (const state of [localState, remoteState, restartedState]) {
+        expect(getTask(state, TASK_X).title).toBe('A');
+        expect(getTask(state, TASK_X).timeSpent).toBe(18 * MINUTE);
+        expect(taskSyncProjection(state, TASK_Y)).toEqual(
+          taskSyncProjection(localState, TASK_Y),
+        );
+      }
     });
   }
 

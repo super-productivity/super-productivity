@@ -88,20 +88,19 @@ export const buildTimeAwareResolutionBatches = async ({
   getTask: (taskId: string) => Promise<unknown>;
 }): Promise<{ batches: MixedSourceOperationBatch[]; foldedTimeOps: Operation[] }> => {
   const foldedIds = new Set<string>();
-  const foldSnapshots = (ops: Operation[]): Promise<Operation[]> =>
+  const foldSnapshots = (ops: Operation[], timeOps: Operation[]): Promise<Operation[]> =>
     Promise.all(
       ops.map(async (op) => {
         if (op.entityType !== 'TASK' || !op.entityId || !isLwwUpdatePayload(op.payload)) {
           return op;
         }
         const fields = op.payload.actionPayload;
-        if (!('timeSpentOnDay' in fields) || nonConflictingTimeOps.length === 0)
-          return op;
+        if (!('timeSpentOnDay' in fields) || timeOps.length === 0) return op;
         const subTaskIds =
           (fields as Partial<Task>).subTaskIds ??
           ((await getTask(op.entityId)) as Partial<Task> | undefined)?.subTaskIds ??
           [];
-        const deltas = nonConflictingTimeOps.filter((delta) => {
+        const deltas = timeOps.filter((delta) => {
           const taskId = extractActionPayload(delta.payload)?.['taskId'];
           return (
             taskId === op.entityId ||
@@ -126,22 +125,35 @@ export const buildTimeAwareResolutionBatches = async ({
         return { ...op, vectorClock, payload: { ...op.payload, actionPayload } };
       }),
     );
+  // A delta that won its own row can share the entity with a local-win row
+  // (e.g. local rename beat a remote rename); the snapshot must carry it too.
+  // Reconciliations already fold their winning deltas.
+  const winningTimeOps = remoteWinsOps.filter(isSyncTimeSpentOp);
   const [localWins, reconciliations] = await Promise.all([
-    foldSnapshots(newLocalWinOps),
-    foldSnapshots(localMultiReconciliationOps),
+    foldSnapshots(newLocalWinOps, [...nonConflictingTimeOps, ...winningTimeOps]),
+    foldSnapshots(localMultiReconciliationOps, nonConflictingTimeOps),
   ]);
   // Leave unrelated deltas in their original batch: a preceding CREATE may be
   // required before their task exists, so blindly hoisting every delta loses it.
-  const foldedTimeOps = nonConflictingTimeOps.filter((op) => foldedIds.has(op.id));
+  const isFolded = (op: Operation): boolean => foldedIds.has(op.id);
+  const foldedTimeOps = nonConflictingTimeOps.filter(isFolded);
   const batches: MixedSourceOperationBatch[] = [
     { ops: unappliedRemoteLosers, source: 'remote' },
     {
-      ops: [...compensatedRemoteOps, ...foldedTimeOps],
+      ops: [
+        ...compensatedRemoteOps,
+        ...foldedTimeOps,
+        ...winningTimeOps.filter(isFolded),
+      ],
       source: 'remote',
       options: { pendingApply: true },
     },
     { ops: localWins, source: 'local' },
-    { ops: remoteWinsOps, source: 'remote', options: { pendingApply: true } },
+    {
+      ops: remoteWinsOps.filter((op) => !isFolded(op)),
+      source: 'remote',
+      options: { pendingApply: true },
+    },
     { ops: reconciliations, source: 'local' },
   ];
   return { foldedTimeOps, batches: batches.filter((batch) => batch.ops.length > 0) };

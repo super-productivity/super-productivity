@@ -2276,7 +2276,7 @@ export class ConflictResolutionService {
       ];
       for (const localOp of resolution.conflict.localOps) {
         const allowedFields = DECOMPOSABLE_MULTI_ACTION_FIELDS.get(localOp.actionType);
-        // A lone rounding stays in state; only pure deltas stack on it (#10215).
+        // Lone rounding: pure-delta winners stack on it (#10215); else plain LWW.
         const single = !isMultiEntityOperation(localOp);
         if (!allowedFields || (single && remoteFieldOps.length > 0)) continue;
         for (const entityId of getOpEntityIds(localOp)) {
@@ -3421,12 +3421,12 @@ export class ConflictResolutionService {
   }
 
   /**
-   * #10220: a restored task with no conflict row keeps its raw `restoreTask`,
-   * but that is a no-op wherever the rejected bulk archive never landed — the
-   * task is still active there, still done. Re-assert its current (restored)
-   * state, and its subtasks' (`restoreToToday` clears their schedule), with a
-   * clock over the root's pending ops, so each replays after the restore.
-   * Entities with their own row are skipped: the row compensates them.
+   * #10220: a restored task's raw `restoreTask` is dropped with its own row,
+   * and without a row it is a no-op wherever the rejected bulk archive never
+   * landed (the task is still active there, still done). Re-assert its current
+   * (restored) state and its subtasks' (`restoreToToday` clears their schedule)
+   * with a clock over the root's pending ops, so each replays after the
+   * restore. Entities with their own row are skipped: the row compensates them.
    */
   private async _reassertRestoredTasks(
     archiveOp: Operation,
