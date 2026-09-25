@@ -10,6 +10,7 @@ import { OperationWriteFlushService } from '../../../op-log/sync/operation-write
 import { TaskLog } from '../../../core/log';
 import { AssistantCaptureResult } from '../../../../../electron/shared-with-frontend/assistant-access.model';
 import { AssistantCaptureInput } from '../../../core/electron/assistant-capture-input';
+import { GlobalConfigService } from '../../config/global-config.service';
 
 /**
  * Adds an assistant-captured task to the Inbox and reports whether it reached
@@ -32,6 +33,7 @@ export class AssistantCaptureService {
   private readonly _hydrationState = inject(HydrationStateService);
   private readonly _operationCapture = inject(OperationCaptureService);
   private readonly _writeFlush = inject(OperationWriteFlushService);
+  private readonly _globalConfig = inject(GlobalConfigService);
 
   async capture(input: AssistantCaptureInput): Promise<AssistantCaptureResult> {
     // Actions dispatched while remote ops are applied are deferred and not
@@ -44,9 +46,15 @@ export class AssistantCaptureService {
       return { status: 'PERSIST_DEGRADED' };
     }
 
+    // TaskInternalEffects otherwise dispatches a second persistent updateTask
+    // for this default. Include it in the creation op so capture stays one op.
+    const defaultEstimate = this._globalConfig.cfg()?.timeTracking.defaultEstimate || 0;
     const task = this._taskService.createNewTaskWithDefaults({
       title: input.title,
-      additional: input.notes ? { notes: input.notes } : {},
+      additional: {
+        ...(input.notes ? { notes: input.notes } : {}),
+        ...(defaultEstimate > 0 ? { timeEstimate: defaultEstimate } : {}),
+      },
       workContextType: WorkContextType.PROJECT,
       workContextId: INBOX_PROJECT.id,
     });

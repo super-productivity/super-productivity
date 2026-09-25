@@ -8,7 +8,9 @@ import { OperationWriteFlushService } from '../../../op-log/sync/operation-write
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { INBOX_PROJECT } from '../../project/project.const';
-import { Task } from '../task.model';
+import { DEFAULT_TASK, Task } from '../task.model';
+import { GlobalConfigService } from '../../config/global-config.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 
 describe('AssistantCaptureService', () => {
   let service: AssistantCaptureService;
@@ -18,6 +20,7 @@ describe('AssistantCaptureService', () => {
   let hydrationState: jasmine.SpyObj<HydrationStateService>;
   let operationCapture: jasmine.SpyObj<OperationCaptureService>;
   let writeFlush: jasmine.SpyObj<OperationWriteFlushService>;
+  let config: { cfg: () => typeof DEFAULT_GLOBAL_CONFIG };
 
   const task = { id: 'new-task', title: 'Buy milk #shop' } as Task;
 
@@ -41,6 +44,7 @@ describe('AssistantCaptureService', () => {
       ['flushPendingWrites'],
     );
     writeFlush.flushPendingWrites.and.resolveTo();
+    config = { cfg: () => DEFAULT_GLOBAL_CONFIG };
 
     TestBed.configureTestingModule({
       providers: [
@@ -50,6 +54,7 @@ describe('AssistantCaptureService', () => {
         { provide: HydrationStateService, useValue: hydrationState },
         { provide: OperationCaptureService, useValue: operationCapture },
         { provide: OperationWriteFlushService, useValue: writeFlush },
+        { provide: GlobalConfigService, useValue: config },
       ],
     });
     service = TestBed.inject(AssistantCaptureService);
@@ -108,5 +113,29 @@ describe('AssistantCaptureService', () => {
       status: 'OUTCOME_UNKNOWN',
       id: 'new-task',
     });
+  });
+
+  it('includes a configured default estimate in the add op', async () => {
+    config.cfg = () => ({
+      ...DEFAULT_GLOBAL_CONFIG,
+      timeTracking: { ...DEFAULT_GLOBAL_CONFIG.timeTracking, defaultEstimate: 3600000 },
+    });
+    taskService.createNewTaskWithDefaults.and.callFake(({ additional }) => ({
+      ...DEFAULT_TASK,
+      ...additional,
+      id: 'new-task',
+      title: 'x',
+      projectId: INBOX_PROJECT.id,
+    }));
+
+    await service.capture({ title: 'x' });
+
+    expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledOnceWith({
+      title: 'x',
+      additional: { timeEstimate: 3600000 },
+      workContextType: WorkContextType.PROJECT,
+      workContextId: INBOX_PROJECT.id,
+    });
+    expect(dispatchSpy.calls.mostRecent().args[0].task.timeEstimate).toBe(3600000);
   });
 });

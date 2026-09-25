@@ -156,6 +156,10 @@ export const handleMcpHttpRequest = async (
     return;
   }
 
+  // Re-check this request's key as well as its grants after renderer reads:
+  // rotation must revoke requests already waiting for data too.
+  const getScopes = (): ReturnType<typeof getAssistantAccessScopes> =>
+    isAuthorized(credential) ? getAssistantAccessScopes() : [];
   let reply: McpHttpReply;
   try {
     reply = await handleMcpMessage(
@@ -163,10 +167,9 @@ export const handleMcpHttpRequest = async (
       { mcpMethod: headerValue(req.headers['mcp-method']) },
       {
         serverVersion: deps.serverVersion,
-        listTools: () => listGrantedTools(getAssistantAccessScopes()),
-        hasTool: (name) => isToolGranted(name, getAssistantAccessScopes()),
-        callTool: (name, args) =>
-          runTool(name, args, getAssistantAccessScopes, deps.forward),
+        listTools: () => listGrantedTools(getScopes()),
+        hasTool: (name) => isToolGranted(name, getScopes()),
+        callTool: (name, args) => runTool(name, args, getScopes, deps.forward),
       },
     );
   } catch {

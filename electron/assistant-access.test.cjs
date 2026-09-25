@@ -366,6 +366,7 @@ const rendererCalls = [];
 // One-shot probe fired from getIsAppReady(), which the REST path calls right
 // after its token check and before it starts reading the body.
 let onAppReadyCheck = null;
+let onRendererResponse = null;
 
 const win = {
   webContents: {
@@ -378,10 +379,15 @@ const win = {
             : payload.path === '/assistant/capture'
               ? { status: 'created', id: 'new1' }
               : { anything: true };
-        onHandlers.get('LOCAL_REST_API_RESPONSE')(
-          {},
-          { requestId: payload.requestId, status: 200, body: { ok: true, data } },
-        );
+        const respond = () =>
+          onHandlers.get('LOCAL_REST_API_RESPONSE')(
+            {},
+            { requestId: payload.requestId, status: 200, body: { ok: true, data } },
+          );
+        const intercept = onRendererResponse;
+        onRendererResponse = null;
+        if (intercept) intercept(respond);
+        else respond();
       }, 1);
     },
   },
@@ -649,6 +655,20 @@ test('rotating the credential revokes the old one immediately', async () => {
   assert.equal(withOld.status, 401);
   const withNew = await post(rpc('ping'), auth());
   assert.equal(withNew.status, 200);
+});
+
+test('rotating the credential withholds a read already awaiting the renderer', async () => {
+  await ipc('ASSISTANT_ACCESS_SET_SCOPES', ['tasks:read']);
+  const rendererWaiting = new Promise((resolve) => (onRendererResponse = resolve));
+  const response = post(rpc('tools/call', { name: 'list_tasks', arguments: {} }), auth());
+  const respond = await rendererWaiting;
+  credential = (await ipc('ASSISTANT_ACCESS_ROTATE_CREDENTIAL')).credential;
+  respond();
+
+  const res = await response;
+  assert.equal(res.body.result.isError, true);
+  assert.doesNotMatch(JSON.stringify(res.body), /Write report|SECRET NOTES/);
+  await ipc('ASSISTANT_ACCESS_SET_SCOPES', ['tasks:capture']);
 });
 
 // A rejection escaping the listener's handler reaches start-app's
