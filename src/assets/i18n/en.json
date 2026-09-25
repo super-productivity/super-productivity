@@ -1673,6 +1673,7 @@
         "DECRYPTION_FAILED": "Failed to decrypt synced data. Please check your encryption password.",
         "DEFERRED_ACTION_FAILED": "Some changes made during sync could not be saved yet. The next sync will retry; keep the app open.",
         "DEFERRED_ACTION_PERMANENT_FAILED": "A change could not be saved and sync is paused. Reload to restore the last saved state.",
+        "DEFERRED_ACTIONS_STUCK": "Sync seems stuck, so your recent changes are not being saved. Reload the app to recover; changes made since then may be lost.",
         "DISABLE_ENCRYPTION_FAILED": "Failed to disable encryption: {{message}}",
         "ENABLE_ENCRYPTION_FAILED": "Failed to enable encryption: {{message}}",
         "ENCRYPTION_PASSWORD_REQUIRED": "Encrypted data received but no encryption password is configured. Please set your encryption password in sync settings.",

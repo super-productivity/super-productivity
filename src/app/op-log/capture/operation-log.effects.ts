@@ -2,7 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import type { DeferredLocalActionsPort } from '@sp/sync-core';
 import { ALL_ACTIONS } from '../../util/local-actions.token';
-import { concatMap, filter } from 'rxjs/operators';
+import { concatMap, filter, tap } from 'rxjs/operators';
 import { LockService } from '../sync/lock.service';
 import {
   LockAcquisitionTimeoutError,
@@ -34,6 +34,7 @@ import { OperationCaptureService } from './operation-capture.service';
 import { ImmediateUploadService } from '../sync/immediate-upload.service';
 import {
   acknowledgeDeferredAction,
+  consumeDeferredBufferStuckNotice,
   getDeferredActions,
   isDeferredAction,
 } from './operation-capture.meta-reducer';
@@ -126,6 +127,32 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
         ),
         // concatMap for sequential, ordered processing (one write at a time).
         concatMap((action) => this.writeOperationFromEffect(action)),
+      ),
+    { dispatch: false },
+  );
+
+  /**
+   * The deferred buffer only grows this large when the remote-apply window is
+   * stuck, and then nothing the user does is written as an operation. Tell
+   * them in every build, not just via the dev-only devError dialog (#8297).
+   * Runs after the reducer pass that raised the notice: a snackbar must not
+   * open inside one.
+   */
+  notifyStuckDeferredBuffer$ = createEffect(
+    () =>
+      this.actions$.pipe(
+        filter(() => consumeDeferredBufferStuckNotice()),
+        tap(() =>
+          this.snackService.open({
+            type: 'ERROR',
+            msg: T.F.SYNC.S.DEFERRED_ACTIONS_STUCK,
+            actionStr: T.PS.RELOAD,
+            actionFn: (): void => {
+              window.location.reload();
+            },
+            config: { duration: 0 },
+          }),
+        ),
       ),
     { dispatch: false },
   );
