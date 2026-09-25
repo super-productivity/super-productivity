@@ -3104,7 +3104,7 @@ describe('FileBasedSyncAdapterService', () => {
       expect(result.gapDetected).toBeFalsy();
     });
 
-    it('re-downloads fully after refusing to append to an unseen replacement (#9170)', async () => {
+    it('does not refuse uploads before a clock is recorded (#9170)', async () => {
       const replaced = createMockSyncData({
         syncVersion: 2,
         vectorClock: { client2: 5 },
@@ -3116,30 +3116,15 @@ describe('FileBasedSyncAdapterService', () => {
       );
       await adapter.downloadOps(0);
       await adapter.setLastServerSeq(2);
-      // State persisted before last-seen clocks were: the rev is known, the
-      // replacement base is not.
+      // State persisted before last-seen clocks were: the rev is known, so the
+      // pre-check would skip every re-download a refusal relies on.
       service['_lastSeenVectorClocks'].clear();
       crossPollBoundary();
-      mockProvider.getFileRev.and.callFake(async (path: string) => {
-        if (path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE) return { rev: 'rev-1' };
-        throw new RemoteFileNotFoundAPIError('not found');
-      });
+      mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-up' }));
 
       await expectAsync(
         adapter.uploadOps([createMockSyncOp()], 'client1'),
-      ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
-      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
-      // Persisted too, so a restart before the next poll cannot revive it.
-      const persisted = JSON.parse(localStorage.getItem(STATE_KEY) as string);
-      expect(persisted.revs[SyncProviderId.Dropbox]).toBeUndefined();
-
-      // Short-circuiting on the unchanged rev would retry the refused upload
-      // forever; the full download instead signals the gap to hydrate.
-      crossPollBoundary();
-      mockProvider.downloadFile.calls.reset();
-      const result = await adapter.downloadOps(2);
-      expect(mockProvider.downloadFile).toHaveBeenCalled();
-      expect(result.gapDetected).toBeTrue();
+      ).toBeResolved();
     });
 
     it('(b) proceeds with the full download when the remote rev changed', async () => {

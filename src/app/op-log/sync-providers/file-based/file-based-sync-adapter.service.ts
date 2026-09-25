@@ -928,7 +928,7 @@ export class FileBasedSyncAdapterService {
       `FileBasedSyncAdapter: Uploading ${ops.length} ops for client ${clientId}${!fileExists ? ' (creating initial sync file)' : ''}`,
     );
 
-    this._assertSnapshotBaseSeen(providerKey, currentData?.snapshotBaseClock, revToMatch);
+    this._assertSnapshotBaseSeen(providerKey, currentData?.snapshotBaseClock);
 
     // Log version mismatch (not an error, just informational)
     const expectedVersion = this._expectedSyncVersions.get(providerKey) || 0;
@@ -2296,7 +2296,7 @@ export class FileBasedSyncAdapterService {
     if (ops.length === 0 && opsFile) {
       return { results: [], latestSeq: this._localSeqCounters.get(providerKey) || 0 };
     }
-    this._assertSnapshotBaseSeen(providerKey, opsFile?.snapshotBaseClock, opsRev);
+    this._assertSnapshotBaseSeen(providerKey, opsFile?.snapshotBaseClock);
 
     const existingOps: SyncFileCompactOp[] = opsFile?.recentOps || [];
     const existingOpIndexById = new Map(
@@ -2698,8 +2698,6 @@ export class FileBasedSyncAdapterService {
   ): Promise<FileSnapshotOpDownloadResponse> {
     try {
       const { data } = await this._downloadSyncFile(provider, cfg, encryptKey);
-      // #9170: once hydrated, the legacy base is seen — else the migrating upload is refused.
-      this._pendingVectorClocks.set(this._getProviderKey(provider), data.vectorClock);
       const filteredOps: ServerSyncOperation[] = [];
       data.recentOps.forEach((compactOp, index) => {
         filteredOps.push({
@@ -3023,26 +3021,20 @@ export class FileBasedSyncAdapterService {
   /**
    * #9170: never append to a replacement this client has not hydrated; that
    * would overwrite its snapshot with stale state and mark it seen for good.
-   * A last-seen rev equal to `readRev` would skip that re-download; drop it.
-   * Keep any other: REPAIR snapshots write conditionally on it.
+   * Skipped without a recorded clock (first sync after upgrading): no baseline
+   * to judge by, and the rev pre-check could then skip the re-download forever.
    */
   private _assertSnapshotBaseSeen(
     providerKey: string,
     snapshotBaseClock: VectorClock | undefined,
-    readRev: string | null,
   ): void {
     const lastSeenClock = this._lastSeenVectorClocks.get(providerKey);
-    if (!isSnapshotBaseUnseen(snapshotBaseClock, lastSeenClock)) {
-      return;
+    if (lastSeenClock && isSnapshotBaseUnseen(snapshotBaseClock, lastSeenClock)) {
+      throw new UploadRevToMatchMismatchAPIError(
+        'FileBasedSyncAdapter: Remote was replaced by a snapshot this client has not ' +
+          'loaded. Next sync cycle will download it before uploading.',
+      );
     }
-    if (this._lastSeenRevs.get(providerKey) === readRev) {
-      this._lastSeenRevs.delete(providerKey);
-      this._persistState();
-    }
-    throw new UploadRevToMatchMismatchAPIError(
-      'FileBasedSyncAdapter: Remote was replaced by a snapshot this client has not ' +
-        'loaded. Next sync cycle will download it before uploading.',
-    );
   }
 
   /**
