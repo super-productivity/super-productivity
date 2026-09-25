@@ -30,6 +30,7 @@ import {
   FILE_BASED_SYNC_CONSTANTS,
   SyncFileCompactOp,
 } from './file-based-sync.types';
+import { assertSyncFileVersion } from './assert-sync-file-version';
 import { OpLog } from '../../../core/log';
 import {
   DecompressError,
@@ -1650,12 +1651,11 @@ export class FileBasedSyncAdapterService {
           encryptKey,
           response.dataStr,
         );
-      if (data.version !== FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION) {
-        throw new SyncDataCorruptedError(
-          `Unsupported ops-file version: ${data.version} (expected ${FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION})`,
-          FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
-        );
-      }
+      assertSyncFileVersion(
+        data,
+        FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
+        FILE_BASED_SYNC_CONSTANTS.OPS_FILE,
+      );
       return { data, rev: response.rev };
     } catch (decodeErr) {
       // Annotate the corrupt file's rev so the .bak recovery path can seed the
@@ -1682,12 +1682,7 @@ export class FileBasedSyncAdapterService {
         encryptKey,
         response.dataStr,
       );
-    if (data.version !== FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION) {
-      throw new SyncDataCorruptedError(
-        `Unsupported state-file version: ${data.version} (expected ${FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION})`,
-        path,
-      );
-    }
+    assertSyncFileVersion(data, FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION, path);
     return { data, rev: response.rev };
   }
 
@@ -3169,7 +3164,7 @@ export class FileBasedSyncAdapterService {
    */
   private _isRecoverableCorruption(e: unknown): boolean {
     return (
-      e instanceof SyncDataCorruptedError ||
+      (e instanceof SyncDataCorruptedError && !e.isRemoteNewer) ||
       // Covers EmptyRemoteBodySPError (empty file) via its InvalidDataSPError base.
       e instanceof InvalidDataSPError ||
       e instanceof JsonParseError ||
@@ -3251,13 +3246,11 @@ export class FileBasedSyncAdapterService {
         throw new SplitSyncFormatDetectedError();
       }
 
-      // Validate file version
-      if (data.version !== FILE_BASED_SYNC_CONSTANTS.FILE_VERSION) {
-        throw new SyncDataCorruptedError(
-          `Unsupported file version: ${data.version} (expected ${FILE_BASED_SYNC_CONSTANTS.FILE_VERSION})`,
-          FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
-        );
-      }
+      assertSyncFileVersion(
+        data,
+        FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
+        FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+      );
     } catch (decodeErr) {
       // A split tombstone is a valid signal, not corruption — let it propagate
       // by type without being annotated as a corrupt primary.

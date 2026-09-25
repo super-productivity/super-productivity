@@ -2256,11 +2256,11 @@ describe('SyncWrapperService', () => {
       expect(callArgs['actionFn']).toBeUndefined();
     });
 
-    it('should handle SyncDataCorruptedError for newer remote version (no force-overwrite, same message)', async () => {
+    it('should ask to update the app for a newer remote version (no force-overwrite) (#8764)', async () => {
       // version 3 > FILE_VERSION 2 — remote is from a future app version
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.reject(
-          new SyncDataCorruptedError('Unsupported version: 3', 'sync-data.json'),
+          new SyncDataCorruptedError('Unsupported version: 3', 'sync-data.json', true),
         ),
       );
 
@@ -2269,7 +2269,7 @@ describe('SyncWrapperService', () => {
       expect(result).toBe('HANDLED_ERROR');
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
-          msg: T.F.SYNC.S.ERROR_SYNC_VERSION_MISMATCH,
+          msg: T.F.SYNC.S.VERSION_TOO_OLD,
           type: 'ERROR',
         }),
       );

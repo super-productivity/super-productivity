@@ -542,6 +542,9 @@ export class StorageQuotaExceededError extends Error {
  * This can occur when the remote file was written by a different (older or newer)
  * version of the app. Force-uploading is unsafe in this case because the remote
  * may be in a newer format.
+ *
+ * `isRemoteNewer` marks a file written in a format NEWER than this build reads:
+ * it is healthy, so it must never be "recovered" from an older backup (#8764).
  */
 export class SyncDataCorruptedError extends Error {
   override name = 'SyncDataCorruptedError';
@@ -549,6 +552,7 @@ export class SyncDataCorruptedError extends Error {
   constructor(
     message: string,
     public readonly filePath: string,
+    public readonly isRemoteNewer = false,
   ) {
     super(`Sync data incompatible at ${filePath}: ${message}`);
   }

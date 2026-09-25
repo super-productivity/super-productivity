@@ -1059,12 +1059,12 @@ export class SyncWrapperService {
         });
         return 'HANDLED_ERROR';
       } else if (error instanceof SyncDataCorruptedError) {
-        // Remote file format version is incompatible (could be older or newer than local).
-        // Do NOT offer force-upload: if remote is newer, overwriting would destroy newer data.
-        // Users should ensure all devices run the same app version.
+        // Incompatible remote format. No force-upload: it would destroy a newer one (#8764).
         this._providerManager.setSyncStatus('ERROR');
         this._snackService.open({
-          msg: T.F.SYNC.S.ERROR_SYNC_VERSION_MISMATCH,
+          msg: error.isRemoteNewer
+            ? T.F.SYNC.S.VERSION_TOO_OLD
+            : T.F.SYNC.S.ERROR_SYNC_VERSION_MISMATCH,
           type: 'ERROR',
           config: { duration: 12000 },
         });

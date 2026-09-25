@@ -2680,6 +2680,30 @@ describe('FileBasedSyncAdapterService', () => {
       expect(mockSnackService.open).toHaveBeenCalled();
     });
 
+    it('(b) never recovers over a primary written in a NEWER format (#8764)', async () => {
+      // A newer app version's file is not corrupt. Adopting the older .bak would
+      // make this cycle's upload overwrite ("heal") the newer file.
+      const newerPrimary = createMockSyncData();
+      (newerPrimary as any).version = FILE_BASED_SYNC_CONSTANTS.FILE_VERSION + 2;
+      mockProvider.downloadFile.and.callFake((path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
+          return Promise.resolve({
+            dataStr: addPrefix(createMockSyncData()),
+            rev: 'bak-rev-older',
+          });
+        }
+        return Promise.resolve({ dataStr: addPrefix(newerPrimary), rev: 'newer-rev' });
+      });
+
+      await expectAsync(adapter.downloadOps(0)).toBeRejectedWith(
+        jasmine.objectContaining({ isRemoteNewer: true }),
+      );
+      expect(mockProvider.downloadFile).not.toHaveBeenCalledWith(
+        FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
+
     it('(b) rethrows the original corruption error when no usable backup exists', async () => {
       mockProvider.downloadFile.and.callFake((path: string) => {
         if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
@@ -3414,6 +3438,20 @@ describe('FileBasedSyncAdapterService', () => {
       await adapter.uploadOps([createMockSyncOp()], 'client1');
 
       expect(uploadedPaths()).toContain(C.OPS_FILE);
+    });
+
+    it('(a) never recovers over an ops file written in a NEWER format (#8764)', async () => {
+      const newerOpsFile = makeOpsFile({ syncVersion: 3, recentOps: [] });
+      (newerOpsFile as any).version = C.SPLIT_FILE_VERSION + 1;
+      routeDownloads({
+        [C.OPS_FILE]: addPrefix(newerOpsFile, 3),
+        [C.OPS_BACKUP_FILE]: addPrefix(makeOpsFile({ syncVersion: 2 }), 3),
+      });
+
+      await expectAsync(adapter.downloadOps(0)).toBeRejectedWith(
+        jasmine.objectContaining({ isRemoteNewer: true }),
+      );
+      expect(mockProvider.downloadFile).not.toHaveBeenCalledWith(C.OPS_BACKUP_FILE);
     });
 
     it('(a) op-only download reads ONLY sync-ops.json (no sync-state.json fetch)', async () => {
