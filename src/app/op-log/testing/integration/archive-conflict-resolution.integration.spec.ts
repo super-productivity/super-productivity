@@ -651,6 +651,54 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
     expect(pending.length).toBe(3);
   });
 
+  it('re-asserts the subtasks of a restored task that has no row (#10220)', async () => {
+    const SUB_B = 'task-b-sub';
+    const subTask: Task = {
+      ...DEFAULT_TASK,
+      id: SUB_B,
+      parentId: TASK_B,
+      projectId: 'project1',
+      dueDay: '2026-09-01',
+    };
+    const [bulkOp] = await dispatchAndFlush(
+      TaskSharedActions.moveToArchive({
+        tasks: [doneTask(TASK_A), doneTask(TASK_B, [subTask]), doneTask(TASK_C)],
+      }) as PersistentAction,
+    );
+    store.dispatch(
+      TaskSharedActions.restoreTask({
+        task: doneTask(TASK_B, [subTask]),
+        subTasks: [subTask],
+        restoreToToday: { today: '2026-09-25', startOfNextDayDiffMs: 0 },
+      }) as PersistentAction,
+    );
+    await writeFlush.flushPendingWrites();
+    // restoreToToday clears the subtask's schedule; a device that never saw
+    // the archive ignores the restore and would keep it.
+    taskStateById[TASK_B] = { ...doneTask(TASK_B, [subTask]), isDone: false };
+    taskStateById[SUB_B] = { ...subTask, dueDay: undefined };
+
+    const remoteEditOp = buildRemoteTaskEdit(
+      remoteClient(),
+      TASK_A,
+      bulkOp.timestamp + 2,
+    );
+    await resolver.autoResolveConflictsLWW(await detectConflictsFor(remoteEditOp));
+
+    const pending = await unsyncedOps();
+    const restoreOp = pending.find(
+      (op) => op.actionType === ActionType.TASK_SHARED_RESTORE,
+    );
+    const subSnapshot = pending.find(
+      (op) =>
+        op.entityId === SUB_B && op.actionType !== ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+    );
+    expect(subSnapshot?.actionType).toBe('[TASK] LWW Update' as ActionType);
+    const subPayload = subSnapshot!.payload as { actionPayload?: Partial<Task> };
+    expect(subPayload.actionPayload?.dueDay).toBeUndefined();
+    expectDominates(subSnapshot!, restoreOp!);
+  });
+
   it('compensates a restored task instead of wedging when a remote BULK delete shares its row', async () => {
     // Same restored-task shape, but the remote loser on B is a MULTI-entity
     // deleteTasks op: with a bare undefined localWinOp the mixed-winner

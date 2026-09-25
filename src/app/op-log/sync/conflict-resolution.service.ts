@@ -3414,7 +3414,11 @@ export class ConflictResolutionService {
         (id) => !stillArchivedEntityIds.includes(id) && !rowIds.has(id),
       );
       additionalOps.push(
-        ...(await this._reassertRestoredTasks(group.archiveOp, restoredIdsWithoutRow)),
+        ...(await this._reassertRestoredTasks(
+          group.archiveOp,
+          restoredIdsWithoutRow,
+          rowIds,
+        )),
       );
     }
     return additionalOps;
@@ -3424,25 +3428,33 @@ export class ConflictResolutionService {
    * #10220: a restored task with no conflict row keeps its raw `restoreTask`,
    * but that is a no-op wherever the rejected bulk archive never landed — the
    * task is still active there, still done. Re-assert its current (restored)
-   * state with a clock over all its pending ops, so it replays after them.
+   * state, and its subtasks' (`restoreToToday` clears their schedule), with a
+   * clock over the root's pending ops, so each replays after the restore.
    */
   private async _reassertRestoredTasks(
     archiveOp: Operation,
-    taskIds: string[],
+    rootIds: string[],
+    rowIds: ReadonlySet<string>,
   ): Promise<Operation[]> {
-    if (taskIds.length === 0) return [];
+    if (rootIds.length === 0) return [];
     const pendingByEntity = await this.opLogStore.getUnsyncedByEntity();
+    const pendingFor = (id: string): Operation[] =>
+      pendingByEntity.get(toEntityKey('TASK', id)) ?? [];
     const ops: Operation[] = [];
-    for (const entityId of taskIds) {
-      const localOps = pendingByEntity.get(toEntityKey('TASK', entityId)) ?? [];
-      const op = await this._createLocalWinUpdateOp({
-        entityType: 'TASK',
-        entityId,
-        localOps: localOps.length > 0 ? localOps : [archiveOp],
-        remoteOps: [],
-        suggestedResolution: 'local',
-      });
-      if (op) ops.push(op);
+    for (const rootId of rootIds) {
+      const root = (await this.getCurrentEntityState('TASK', rootId)) as Partial<Task>;
+      const subTaskIds = (root?.subTaskIds ?? []).filter((id) => !rowIds.has(id));
+      for (const entityId of [rootId, ...subTaskIds]) {
+        const ownOps = entityId === rootId ? [] : pendingFor(entityId);
+        const op = await this._createLocalWinUpdateOp({
+          entityType: 'TASK',
+          entityId,
+          localOps: [archiveOp, ...pendingFor(rootId), ...ownOps],
+          remoteOps: [],
+          suggestedResolution: 'local',
+        });
+        if (op) ops.push(op);
+      }
     }
     return ops;
   }
