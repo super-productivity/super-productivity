@@ -475,6 +475,18 @@ describe('shortSyntax', () => {
 
       expect(r).toBeUndefined();
     });
+
+    it('should not parse deadline syntax for issue tasks', async () => {
+      const t = {
+        ...TASK,
+        issueId: '42',
+        title: 'Crash on save !3',
+      };
+      const now = new Date('2026-06-01T10:00:00');
+      const r = await shortSyntax(t, DEADLINE_CONFIG, undefined, undefined, now);
+
+      expect(r).toBeUndefined();
+    });
   });
 
   describe('tags', () => {

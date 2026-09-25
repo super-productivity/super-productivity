@@ -2,21 +2,28 @@ import { Injectable, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import typia from 'typia';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TaskService } from '../../features/tasks/task.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TaskArchiveService } from '../../features/archive/task-archive.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { ProjectService } from '../../features/project/project.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TagService } from '../../features/tag/tag.service';
-import { IssueService } from '../../features/issue/issue.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
 import { isTodayWithOffset } from '../../util/is-today.util';
 import { isValidDBDateStr } from '../../util/get-db-date-str';
-import { IssueLog, TaskLog } from '../log';
+import { IssueLog } from '../log';
+import { LOCAL_REST_API_FEATURE_BRIDGE } from './local-rest-api-feature-bridge';
 
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { addSubTask } from '../../features/tasks/store/task.actions';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { getDeadlineAutoPlanFields } from '../../features/tasks/util/get-deadline-auto-plan-fields';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import {
   selectCurrentCycle,
   selectIsBreakTimeUp,
@@ -393,7 +400,7 @@ export class LocalRestApiHandlerService {
   private readonly _projectService = inject(ProjectService);
   private readonly _tagService = inject(TagService);
   private readonly _dateService = inject(DateService);
-  private readonly _issueService = inject(IssueService);
+  private readonly _featureBridge = inject(LOCAL_REST_API_FEATURE_BRIDGE);
   private readonly _store = inject(Store);
   private _isInitialized = false;
 
@@ -764,7 +771,10 @@ export class LocalRestApiHandlerService {
       }
 
       const subTaskId = isIgnoreShortSyntax
-        ? this._addLiteralSubTask(body.parentId, { title, ...additionalFields })
+        ? this._featureBridge.addLiteralSubTask(body.parentId, {
+            title,
+            ...additionalFields,
+          })
         : this._taskService.addSubTaskTo(body.parentId, {
             title,
             ...additionalFields,
@@ -1062,20 +1072,6 @@ export class LocalRestApiHandlerService {
   }
 
   /**
-   * `TaskService.addSubTaskTo` with short syntax switched off. Kept here
-   * rather than as a flag on the service, which is already over the size cap.
-   */
-  private _addLiteralSubTask(parentId: string, additional: Partial<Task>): string {
-    const task = this._taskService.createNewTaskWithDefaults({
-      title: additional.title || '',
-      additional: { dueDay: additional.dueDay || undefined, ...additional },
-    });
-    TaskLog.log('addSubTaskTo', { taskId: task.id, parentId });
-    this._store.dispatch(addSubTask({ task, parentId, isIgnoreShortSyntax: true }));
-    return task.id;
-  }
-
-  /**
    * Best-effort link to the task's issue for `GET /tasks/:id`. Returns
    * undefined when the task has no issue, the provider can't build a link, or
    * building it fails or times out — never turns the request into an error.
@@ -1088,7 +1084,7 @@ export class LocalRestApiHandlerService {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
       const url = await Promise.race([
-        this._issueService.issueLink(issueType, issueId, issueProviderId),
+        this._featureBridge.issueLink(issueType, issueId, issueProviderId),
         new Promise<undefined>((resolve) => {
           timeoutId = setTimeout(() => resolve(undefined), ISSUE_URL_TIMEOUT_MS);
         }),

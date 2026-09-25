@@ -1374,6 +1374,7 @@ export class SyncWrapperService {
     // Diagnostic: stamp the originating error/dialog so we can correlate
     // "what stuck the user" with "what they recovered with" in shared logs.
     SyncLog.log('SyncWrapperService: forceUpload called - uploading local state', {
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       triggerSource,
     });
 

@@ -7,13 +7,15 @@ import { TaskArchiveService } from '../../features/archive/task-archive.service'
 import { ProjectService } from '../../features/project/project.service';
 import { Project } from '../../features/project/project.model';
 import { TagService } from '../../features/tag/tag.service';
-import { IssueService } from '../../features/issue/issue.service';
 import { IssueLog } from '../log';
+import {
+  LOCAL_REST_API_FEATURE_BRIDGE,
+  LocalRestApiFeatureBridge,
+} from './local-rest-api-feature-bridge';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
 import { Task, TaskWithSubTasks, TaskArchive } from '../../features/tasks/task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { addSubTask } from '../../features/tasks/store/task.actions';
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
@@ -38,7 +40,7 @@ describe('LocalRestApiHandlerService', () => {
   let projectServiceMock: jasmine.SpyObj<ProjectService>;
   let tagServiceMock: jasmine.SpyObj<TagService>;
   let dateServiceMock: jasmine.SpyObj<DateService>;
-  let issueServiceMock: jasmine.SpyObj<IssueService>;
+  let featureBridgeMock: jasmine.SpyObj<LocalRestApiFeatureBridge>;
   let store: MockStore;
   let dispatchSpy: jasmine.Spy;
   let activeProjects: Project[];
@@ -162,7 +164,6 @@ describe('LocalRestApiHandlerService', () => {
       [
         'add',
         'addSubTaskTo',
-        'createNewTaskWithDefaults',
         'update',
         'remove',
         'setCurrentId',
@@ -217,8 +218,11 @@ describe('LocalRestApiHandlerService', () => {
     dateServiceMock.todayStr.and.returnValue('2026-05-12');
     dateServiceMock.getStartOfNextDayDiffMs.and.returnValue(0);
 
-    issueServiceMock = jasmine.createSpyObj<IssueService>('IssueService', ['issueLink']);
-    issueServiceMock.issueLink.and.returnValue(Promise.resolve(''));
+    featureBridgeMock = jasmine.createSpyObj<LocalRestApiFeatureBridge>(
+      'LocalRestApiFeatureBridge',
+      ['issueLink', 'addLiteralSubTask'],
+    );
+    featureBridgeMock.issueLink.and.returnValue(Promise.resolve(''));
 
     TestBed.configureTestingModule({
       providers: [
@@ -228,7 +232,7 @@ describe('LocalRestApiHandlerService', () => {
         { provide: ProjectService, useValue: projectServiceMock },
         { provide: TagService, useValue: tagServiceMock },
         { provide: DateService, useValue: dateServiceMock },
-        { provide: IssueService, useValue: issueServiceMock },
+        { provide: LOCAL_REST_API_FEATURE_BRIDGE, useValue: featureBridgeMock },
         provideMockStore({ initialState: { focusMode: initialFocusModeState } }),
       ],
     });
@@ -1091,9 +1095,7 @@ describe('LocalRestApiHandlerService', () => {
         });
 
         it('should create a literal subtask without the parsing path', async () => {
-          taskServiceMock.createNewTaskWithDefaults.and.returnValue(
-            createMockTask('literal-sub', { title: 'Child #x' }),
-          );
+          featureBridgeMock.addLiteralSubTask.and.returnValue('literal-sub');
 
           const response = await sendRequestAndWait(
             createRequest('POST', '/tasks', {
@@ -1107,17 +1109,11 @@ describe('LocalRestApiHandlerService', () => {
 
           expect(response.status).toBe(201);
           expect(taskServiceMock.addSubTaskTo).not.toHaveBeenCalled();
-          // Same arguments addSubTaskTo would pass — incl. the dueDay key, whose
-          // presence stops a Today context from giving the subtask a due date.
-          const factoryArgs = taskServiceMock.createNewTaskWithDefaults.calls.mostRecent()
-            .args[0] as { title: string; additional: Record<string, unknown> };
-          expect(factoryArgs.title).toBe('Child #x');
-          expect('dueDay' in factoryArgs.additional).toBe(true);
-          expect(factoryArgs.additional.title).toBe('Child #x');
-          const action = dispatchSpy.calls.mostRecent().args[0];
-          expect(action.type).toBe(addSubTask.type);
-          expect(action.parentId).toBe('parent-1');
-          expect(action.isIgnoreShortSyntax).toBe(true);
+          expect(featureBridgeMock.addLiteralSubTask).toHaveBeenCalledOnceWith(
+            'parent-1',
+            { title: 'Child #x' },
+          );
+          expect((response.body as any).data.id).toBe('literal-sub');
         });
 
         it('should reject a non-boolean flag', async () => {
@@ -1384,7 +1380,7 @@ describe('LocalRestApiHandlerService', () => {
 
         it('should include issueUrl when asked and the provider builds a link', async () => {
           mockGetTask(issueTask);
-          issueServiceMock.issueLink.and.returnValue(
+          featureBridgeMock.issueLink.and.returnValue(
             Promise.resolve('https://github.com/o/r/issues/42'),
           );
 
@@ -1393,7 +1389,7 @@ describe('LocalRestApiHandlerService', () => {
           );
 
           expect(response.status).toBe(200);
-          expect(issueServiceMock.issueLink).toHaveBeenCalledWith(
+          expect(featureBridgeMock.issueLink).toHaveBeenCalledWith(
             'GITHUB',
             '42',
             'provider-1',
@@ -1411,13 +1407,13 @@ describe('LocalRestApiHandlerService', () => {
           );
 
           expect(response.status).toBe(200);
-          expect(issueServiceMock.issueLink).not.toHaveBeenCalled();
+          expect(featureBridgeMock.issueLink).not.toHaveBeenCalled();
           expect('issueUrl' in getData(response)).toBe(false);
         });
 
         it('should accept a repeated include parameter', async () => {
           mockGetTask(issueTask);
-          issueServiceMock.issueLink.and.returnValue(
+          featureBridgeMock.issueLink.and.returnValue(
             Promise.resolve('https://github.com/o/r/issues/42'),
           );
 
@@ -1432,7 +1428,7 @@ describe('LocalRestApiHandlerService', () => {
 
         it('should accept issueUrl in a comma-separated include list', async () => {
           mockGetTask(issueTask);
-          issueServiceMock.issueLink.and.returnValue(
+          featureBridgeMock.issueLink.and.returnValue(
             Promise.resolve('https://github.com/o/r/issues/42'),
           );
 
@@ -1453,13 +1449,13 @@ describe('LocalRestApiHandlerService', () => {
           );
 
           expect(response.status).toBe(200);
-          expect(issueServiceMock.issueLink).not.toHaveBeenCalled();
+          expect(featureBridgeMock.issueLink).not.toHaveBeenCalled();
           expect('issueUrl' in getData(response)).toBe(false);
         });
 
         it('should omit issueUrl when the provider returns an empty link', async () => {
           mockGetTask(issueTask);
-          issueServiceMock.issueLink.and.returnValue(Promise.resolve(''));
+          featureBridgeMock.issueLink.and.returnValue(Promise.resolve(''));
 
           const response = await sendRequestAndWait(
             createRequest('GET', '/tasks/task-1', withIssueUrl),
@@ -1472,7 +1468,7 @@ describe('LocalRestApiHandlerService', () => {
         it('should return 200 without issueUrl when building the link fails', async () => {
           mockGetTask(issueTask);
           const warnSpy = spyOn(IssueLog, 'warn');
-          issueServiceMock.issueLink.and.returnValue(
+          featureBridgeMock.issueLink.and.returnValue(
             Promise.reject(new Error('provider config missing')),
           );
 
@@ -1489,7 +1485,7 @@ describe('LocalRestApiHandlerService', () => {
           mockGetTask(issueTask);
           let markCalled!: () => void;
           const isCalled = new Promise<void>((resolve) => (markCalled = resolve));
-          issueServiceMock.issueLink.and.callFake(() => {
+          featureBridgeMock.issueLink.and.callFake(() => {
             markCalled();
             return new Promise<string>(() => undefined);
           });
@@ -1518,7 +1514,7 @@ describe('LocalRestApiHandlerService', () => {
           const response = await sendRequestAndWait(createRequest('GET', '/tasks'));
 
           expect(response.status).toBe(200);
-          expect(issueServiceMock.issueLink).not.toHaveBeenCalled();
+          expect(featureBridgeMock.issueLink).not.toHaveBeenCalled();
         });
       });
     });

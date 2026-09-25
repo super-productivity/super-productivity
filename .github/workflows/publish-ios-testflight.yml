@@ -209,22 +209,34 @@ jobs:
           # never signed.
           EXPECTED_VERSION=$(node tools/ios-testflight-version.js package.json HEAD)
           EXPECTED_BUILD="${SOURCE_RUN_NUMBER}.${SOURCE_RUN_ATTEMPT}"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PLIST")" = com.super-productivity.app
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PLIST")" = "$EXPECTED_VERSION"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PLIST")" = "$EXPECTED_BUILD"
+
+          # A bare `test` under `set -e` fails without output; name the
+          # bundle, key and both values so a mismatch is diagnosable.
+          expect_plist() {
+            local plist="$1" key="$2" expected="$3" actual
+            # A missing key still reaches the mismatch branch with the error text.
+            actual=$(/usr/libexec/PlistBuddy -c "Print :$key" "$plist" 2>&1) || true
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::${plist#"$ARCHIVE/"} $key is '$actual', expected '$expected'"
+              exit 1
+            fi
+          }
+          expect_bundle() {
+            expect_plist "$1" CFBundleIdentifier "$2"
+            expect_plist "$1" CFBundleShortVersionString "$EXPECTED_VERSION"
+            expect_plist "$1" CFBundleVersion "$EXPECTED_BUILD"
+          }
+
+          expect_bundle "$APP_PLIST" com.super-productivity.app
 
           EXTENSION_PLIST="$ARCHIVE/Products/Applications/App.app/PlugIns/ShareExtension.appex/Info.plist"
           if [ -f "$EXTENSION_PLIST" ]; then
-            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$EXTENSION_PLIST")" = com.super-productivity.app.ShareExtension
-            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$EXTENSION_PLIST")" = "$EXPECTED_VERSION"
-            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$EXTENSION_PLIST")" = "$EXPECTED_BUILD"
+            expect_bundle "$EXTENSION_PLIST" com.super-productivity.app.ShareExtension
           fi
 
           WIDGET_PLIST="$ARCHIVE/Products/Applications/App.app/PlugIns/SupWidget.appex/Info.plist"
           if [ -f "$WIDGET_PLIST" ]; then
-            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$WIDGET_PLIST")" = com.super-productivity.app.widget
-            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$WIDGET_PLIST")" = "$EXPECTED_VERSION"
-            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$WIDGET_PLIST")" = "$EXPECTED_BUILD"
+            expect_bundle "$WIDGET_PLIST" com.super-productivity.app.widget
           fi
 
           # Reject any .appex directly under App.app/PlugIns that is not one

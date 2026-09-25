@@ -2,6 +2,7 @@ import { Injectable, inject, Injector } from '@angular/core';
 import { NativeDateAdapter } from '@angular/material/core';
 import { DateTimeFormatService } from './date-time-format.service';
 import { DEFAULT_FIRST_DAY_OF_WEEK } from 'src/app/core/locale.constants';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { GlobalConfigService } from '../../features/config/global-config.service';
 
 /** Custom DateAdapter that handles locale-aware date parsing and formatting */

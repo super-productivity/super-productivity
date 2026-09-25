@@ -59,6 +59,7 @@ export class AndroidEffects {
       () =>
         androidInterface.onForegroundServiceStartFailed$.pipe(
           tap((failure) => {
+            // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
             DroidLog.warn('Foreground service notification failed', failure);
             this._snackService.open({
               type: 'WARNING',
@@ -132,6 +133,7 @@ export class AndroidEffects {
               if (snoozeQueue) {
                 const events: { taskId: string; newRemindAt: number }[] =
                   JSON.parse(snoozeQueue);
+                // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
                 DroidLog.log('Resume: found reminder snooze queue', events);
                 for (const event of events) {
                   androidInterface.onReminderSnooze$.next(event);

@@ -41,6 +41,7 @@ export class LanguageService {
     if (!lng) this._set(this.detect());
     else if (this.isSupported(lng)) this._set(lng);
     else {
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       Log.err('Not supported language code', lng);
       this.tryAutoswitch();
     }

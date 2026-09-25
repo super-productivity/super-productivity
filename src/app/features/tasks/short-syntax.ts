@@ -448,7 +448,9 @@ export const shortSyntax = async (
     }
   }
 
-  if (config.isEnableDeadline) {
+  // don't allow for issue tasks: imported titles like "Crash on save !3"
+  // would otherwise get an unasked-for deadline
+  if (config.isEnableDeadline && !task.issueId) {
     const deadlineResult = await parseDeadlineDate(tracked, now);
     if (deadlineResult) {
       taskChanges = { ...taskChanges, ...deadlineResult.changes };
