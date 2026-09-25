@@ -95,6 +95,7 @@ import {
 import { ConflictJournalService } from './conflict-journal.service';
 import { SyncConflictBannerService } from './sync-conflict-banner.service';
 import { buildConflictJournalEntry } from './conflict-journal-emission.util';
+import { foldSyncTimeSpentDeltas, isSyncTimeSpentOp } from './fold-sync-time-spent.util';
 import {
   hasOpaqueChanges,
   isAdditiveTimeOp,
@@ -1036,7 +1037,6 @@ export class ConflictResolutionService {
     let remoteOpsToReject = [...new Set(lwwPartitions.remoteOpsToReject)];
     const newLocalWinOps = uniqueOpsById([
       ...lwwPartitions.newLocalWinOps,
-      ...localMultiReconciliationOps,
       ...additionalLocalIntentOps,
     ]);
     const { remoteWinnerAffectedEntityKeys } = lwwPartitions;
@@ -1467,7 +1467,9 @@ export class ConflictResolutionService {
     // remote winners in live-apply order. Hydration is status-blind, so both
     // durable ordering and the absence of crash gaps are required here.
     // ─────────────────────────────────────────────────────────────────────────
-    if (localWinsRemoteOps.length > 0 || newLocalWinOps.length > 0) {
+    const hasLocalResolutionOps =
+      newLocalWinOps.length > 0 || localMultiReconciliationOps.length > 0;
+    if (localWinsRemoteOps.length > 0 || hasLocalResolutionOps) {
       const compensatedRemoteOpIds = new Set(compensatedRemoteOps.keys());
       const unappliedRemoteLosers = localWinsRemoteOps.filter(
         (op) => !compensatedRemoteOpIds.has(op.id),
@@ -1493,6 +1495,10 @@ export class ConflictResolutionService {
           source: 'remote',
           options: { pendingApply: true },
         });
+      }
+      if (localMultiReconciliationOps.length > 0) {
+        // After the remote winners: these fold in winning time deltas (#10215).
+        resolutionBatches.push({ ops: localMultiReconciliationOps, source: 'local' });
       }
       const result =
         await this.opLogStore.appendMixedSourceBatchSkipDuplicates(resolutionBatches);
@@ -2232,6 +2238,7 @@ export class ConflictResolutionService {
     const remoteWholeRemovalKeys = new Set<string>();
     const localWinTargetKeys = new Set<string>();
     const remoteWinnerDiscardedTargetKeys = new Set<string>();
+    const winnerTimeDeltas: Operation[] = [];
 
     for (const resolution of resolutions) {
       const conflictTargetKey = toEntityKey(
@@ -2257,22 +2264,16 @@ export class ConflictResolutionService {
       }
 
       const conflictPayloadKey = this._resolvePayloadKey(resolution.conflict.entityType);
-      const remoteWinnerChanges =
+      const remoteWinnerOps =
         resolution.winner === 'remote' && remoteRemovalOps.length === 0
-          ? mergeChangedFields(
-              resolution.conflict.remoteOps,
-              conflictPayloadKey,
-              resolution.conflict.entityId,
-            )
-          : {};
-      const remoteWinnerIsOpaque =
-        resolution.winner === 'remote' &&
-        remoteRemovalOps.length === 0 &&
-        hasOpaqueChanges(
-          resolution.conflict.remoteOps,
-          conflictPayloadKey,
-          resolution.conflict.entityId,
-        );
+          ? resolution.conflict.remoteOps
+          : [];
+      // A winning syncTimeSpent delta is folded in below, not read as fields (#10215).
+      winnerTimeDeltas.push(...remoteWinnerOps.filter(isSyncTimeSpentOp));
+      const remoteFieldOps = remoteWinnerOps.filter((op) => !isSyncTimeSpentOp(op));
+      const fieldArgs = [conflictPayloadKey, resolution.conflict.entityId] as const;
+      const remoteWinnerChanges = mergeChangedFields(remoteFieldOps, ...fieldArgs);
+      const remoteWinnerIsOpaque = hasOpaqueChanges(remoteFieldOps, ...fieldArgs);
 
       const clocks = [
         ...resolution.conflict.localOps.map((op) => op.vectorClock),
@@ -2407,14 +2408,15 @@ export class ConflictResolutionService {
             `${candidate.entityType}:${candidate.entityId}`,
         );
       }
-      const currentChanges = Object.fromEntries(
+      const fieldValues = Object.fromEntries(
         [...candidate.fields].map((field) => [field, stateRecord[field]]),
       );
+      const { entityId } = candidate;
       reconciliationOps.push(
         this.createLWWUpdateOp(
           candidate.entityType,
-          candidate.entityId,
-          currentChanges,
+          entityId,
+          foldSyncTimeSpentDeltas(entityId, fieldValues, winnerTimeDeltas),
           clientId,
           this.mergeAndIncrementClocks(candidate.clocks, clientId),
           candidate.timestamp,

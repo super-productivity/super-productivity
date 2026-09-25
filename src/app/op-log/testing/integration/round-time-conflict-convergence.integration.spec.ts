@@ -17,6 +17,7 @@ import { convertOpToAction } from '../../apply/operation-converter.util';
 import { roundTimeSpentForDay } from '../../../features/tasks/store/task.actions';
 import { taskReducer } from '../../../features/tasks/store/task.reducer';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { syncTimeSpent } from '../../../features/time-tracking/store/time-tracking.actions';
 import { Task } from '../../../features/tasks/task.model';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
 import { RootState } from '../../../root-store/root-state';
@@ -287,6 +288,93 @@ describe('round-time conflict convergence integration (#8944)', () => {
       taskSyncProjection(localState, TASK_Y),
     );
   });
+
+  for (const form of ['direct', 'deferred'] as const) {
+    it(`keeps a newer remote syncTimeSpent (${form} form) crossing a pending local rounding op (#10215)`, async () => {
+      const capture = TestBed.inject(OperationCaptureService);
+      const resolver = TestBed.inject(ConflictResolutionService);
+      const server = new MockSyncServer();
+      const clientA = new TestClient(CLIENT_A);
+      const clientB = new TestClient(CLIENT_B);
+
+      // Device A ("finish day"): rounds X (10m → 15m) and Y (20m → 30m).
+      const roundAction = roundTimeSpentForDay({
+        day: DAY,
+        taskIds: [TASK_X, TASK_Y],
+        roundTo: 'QUARTER',
+        isRoundUp: true,
+      }) as PersistentAction;
+      localState = reducer(localState, roundAction);
+      const localBulkOp = captureOperation(roundAction, clientA, capture, 1_000);
+      await opLogStore.append(localBulkOp, 'local');
+
+      // Device B: tracks 3 more minutes on X (its store already holds them).
+      const syncAction = syncTimeSpent({
+        taskId: TASK_X,
+        date: DAY,
+        duration: 3 * MINUTE,
+      }) as PersistentAction;
+      const capturedDeltaOp = captureOperation(syncAction, clientB, capture, 2_000);
+      const remoteDeltaOp: Operation =
+        form === 'direct'
+          ? capturedDeltaOp
+          : {
+              ...capturedDeltaOp,
+              payload: {
+                ...(capturedDeltaOp.payload as object),
+                entityChanges: [],
+              },
+            };
+      let remoteState = updateTaskEntity(initialState, TASK_X, {
+        timeSpent: 13 * MINUTE,
+        timeSpentOnDay: { [DAY]: 13 * MINUTE },
+      });
+      server.uploadOps([remoteDeltaOp], CLIENT_B);
+
+      const detection = await resolver.checkOpForConflicts(remoteDeltaOp, {
+        localPendingOpsByEntity: await opLogStore.getUnsyncedByEntity(),
+        appliedFrontierByEntity: new Map(),
+        retainedOpsByEntity: new Map(),
+        snapshotVectorClock: undefined,
+        snapshotEntityKeys: undefined,
+        hasNoSnapshotClock: true,
+      });
+      expect(detection.conflicts.map((c) => c.entityId)).toEqual([TASK_X]);
+
+      await resolver.autoResolveConflictsLWW(detection.conflicts);
+
+      const pendingOps = (await opLogStore.getUnsynced()).map((entry) => entry.op);
+      server.uploadOps(pendingOps, CLIENT_A);
+      const downloadedByB = server
+        .downloadOps(1, CLIENT_B)
+        .ops.map((entry) => entry.op as Operation);
+      for (const op of downloadedByB) {
+        remoteState = reducer(remoteState, convertOpToAction(op));
+      }
+
+      // Both devices keep A's rounding AND B's tracked time: round(10m) + 3m
+      // (the same bounded order effect as a remote rounding op, #9601).
+      expect(getTask(remoteState, TASK_X).timeSpent).toBe(18 * MINUTE);
+      expect(taskSyncProjection(localState, TASK_X)).toEqual(
+        taskSyncProjection(remoteState, TASK_X),
+      );
+      expect(taskSyncProjection(localState, TASK_Y)).toEqual(
+        taskSyncProjection(remoteState, TASK_Y),
+      );
+
+      // Status-blind restart replay reproduces the live result.
+      let restartedState = initialState;
+      for (const entry of await opLogStore.getOpsAfterSeq(0)) {
+        restartedState = reducer(restartedState, convertOpToAction(entry.op));
+      }
+      expect(taskSyncProjection(restartedState, TASK_X)).toEqual(
+        taskSyncProjection(localState, TASK_X),
+      );
+      expect(taskSyncProjection(restartedState, TASK_Y)).toEqual(
+        taskSyncProjection(localState, TASK_Y),
+      );
+    });
+  }
 
   it('resolves a REMOTE bulk rounding op against a newer local edit and converges (#9601)', async () => {
     const capture = TestBed.inject(OperationCaptureService);
