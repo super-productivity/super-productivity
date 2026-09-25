@@ -987,12 +987,74 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
     const subPayload = subSnapshot!.payload as { actionPayload?: Partial<Task> };
     expect(subPayload.actionPayload?.dueDay).toBeUndefined();
     expectDominates(subSnapshot!, restoreOp!);
+    // Every row won locally: scoped archive, kept restore, one update each for
+    // B and its subtask — nothing re-asserted twice.
+    const archiveOps = pending.filter(
+      (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+    );
+    expect(archiveOps.map((op) => op.entityIds)).toEqual([[TASK_A, TASK_C]]);
+    expect(pending.filter((op) => op.entityId === TASK_B).length).toBe(2);
+    expect(pending.length).toBe(4);
 
     const receivedTask = replayOnReceiver(pending, SUB_B);
     expect(receivedTask(TASK_B).isDone).toBe(false);
     expect(receivedTask(SUB_B).dueDay).toBeUndefined();
     expect(receivedTask(SUB_B).parentId).toBe(TASK_B);
     expect(receivedTask(TASK_A)).toBeUndefined();
+  });
+
+  it('re-asserts the subtasks of a task restored after a ONE-task archive (#10220)', async () => {
+    const SUB_B = 'task-b-sub';
+    const subTask: Task = {
+      ...DEFAULT_TASK,
+      id: SUB_B,
+      parentId: TASK_B,
+      projectId: 'project1',
+      dueDay: '2026-09-01',
+    };
+    const [archiveOp] = await dispatchAndFlush(
+      TaskSharedActions.moveToArchive({
+        tasks: [doneTask(TASK_B, [subTask])],
+      }) as PersistentAction,
+    );
+    store.dispatch(
+      TaskSharedActions.restoreTask({
+        task: doneTask(TASK_B, [subTask]),
+        subTasks: [subTask],
+        restoreToToday: { today: '2026-09-25', startOfNextDayDiffMs: 0 },
+      }) as PersistentAction,
+    );
+    await writeFlush.flushPendingWrites();
+    taskStateById[TASK_B] = { ...doneTask(TASK_B, [subTask]), isDone: false };
+    taskStateById[SUB_B] = { ...subTask, dueDay: undefined };
+
+    const remoteEditOp = buildRemoteTaskEdit(
+      remoteClient(),
+      TASK_B,
+      archiveOp.timestamp + 2,
+    );
+    await resolver.autoResolveConflictsLWW(await detectConflictsFor(remoteEditOp));
+
+    // B's row rejects archive + restore; its compensation and the subtask's
+    // update are all that upload — no archive op survives.
+    const pending = await unsyncedOps();
+    expect(
+      pending.some((op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE),
+    ).toBe(false);
+    const compensation = pending.find((op) => op.entityId === TASK_B);
+    expect(compensation?.actionType).toBe('[TASK] LWW Update' as ActionType);
+    expectDominates(compensation!, remoteEditOp);
+    const subSnapshot = pending.find((op) => op.entityId === SUB_B);
+    expect(subSnapshot?.actionType).toBe('[TASK] LWW Update' as ActionType);
+    const subPayload = subSnapshot!.payload as { actionPayload?: Partial<Task> };
+    expect(subPayload.actionPayload?.dueDay).toBeUndefined();
+    expectDominates(subSnapshot!, archiveOp);
+    expect(pending.length).toBe(2);
+
+    const receivedTask = replayOnReceiver(pending, SUB_B);
+    expect(receivedTask(TASK_B).isDone).toBe(false);
+    expect(receivedTask(SUB_B).dueDay).toBeUndefined();
+    expect(receivedTask(SUB_B).parentId).toBe(TASK_B);
   });
 
   it('re-asserts the subtasks of a restored task whose own row is conflicted (#10220)', async () => {
