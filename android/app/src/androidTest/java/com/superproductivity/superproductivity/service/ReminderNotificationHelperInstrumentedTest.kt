@@ -74,7 +74,7 @@ class ReminderNotificationHelperInstrumentedTest {
         assertEquals(Notification.CATEGORY_ALARM, notification.category)
         // FSI and tap content intent share the request code; an equal intent filter
         // would silently merge them into one PendingIntent (extras are not part of
-        // PendingIntent identity) and break the lockscreen launch marker.
+        // PendingIntent identity) and strip the tap intent's REMINDER_TASK_ID.
         assertNotEquals(notification.contentIntent, notification.fullScreenIntent)
     }
 

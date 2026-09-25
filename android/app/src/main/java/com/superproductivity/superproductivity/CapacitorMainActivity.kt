@@ -5,14 +5,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Rect
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
@@ -25,7 +23,6 @@ import com.superproductivity.superproductivity.service.FocusModeForegroundServic
 import com.superproductivity.superproductivity.service.FocusModeNotificationHelper
 import com.superproductivity.superproductivity.service.ForegroundServiceFailure
 import com.superproductivity.superproductivity.service.RemoteTrackingNotificationHelper
-import com.superproductivity.superproductivity.service.ReminderNotificationHelper
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.util.printWebViewVersion
@@ -394,13 +391,6 @@ class CapacitorMainActivity : BridgeActivity() {
         // Handle reminder notification tap
         val reminderTaskId = intent.getStringExtra("REMINDER_TASK_ID")
         if (reminderTaskId != null) {
-            // Full-screen-intent launch (alarm-style reminder fired with the screen
-            // off): let this activity turn the screen on and draw over the keyguard
-            // so the reminder is actually seen instead of buried in the drawer
-            // (#10071). Set only on the FSI path and cleared again in onStop().
-            if (intent.action == ReminderNotificationHelper.ACTION_SHOW_REMINDER_FSI) {
-                setShowOverLockScreen(true)
-            }
             // Sanitize to prevent JS injection (only allow alphanumeric, dash, underscore)
             val sanitizedId = reminderTaskId.replace(Regex("[^a-zA-Z0-9_-]"), "")
             Log.d("SP_REMINDER", "Reminder tap: taskId=$sanitizedId")
@@ -523,26 +513,6 @@ class CapacitorMainActivity : BridgeActivity() {
         super.onResume()
         Log.v("TW", "CapacitorFullscreenActivity: onResume")
         callJSInterfaceFunctionIfExists("next", "onResume$")
-    }
-
-    override fun onStop() {
-        super.onStop()
-        // Drop the reminder's lock-screen flags once it is out of view (screen off,
-        // app left). Left set, every later screen-on while this activity is on top
-        // would skip the keyguard and expose the whole app without unlocking.
-        setShowOverLockScreen(false)
-    }
-
-    @Suppress("DEPRECATION") // window-flag fallback for API 24-26
-    private fun setShowOverLockScreen(enabled: Boolean) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(enabled)
-            setTurnScreenOn(enabled)
-        } else {
-            val flags = WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-            if (enabled) window.addFlags(flags) else window.clearFlags(flags)
-        }
     }
 
     /**

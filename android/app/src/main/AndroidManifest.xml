@@ -12,11 +12,12 @@
   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-  <!-- Alarm-style reminders launch a full-screen intent so Android wakes the screen
-       and shows the reminder (with its Done/Snooze actions) over the lock screen
-       when the screen is off → issue #10071. Android 14+ may withhold this for apps
-       it does not classify as calling/alarm apps; the intent then degrades to a
-       normal heads-up notification (the pre-fix behavior, never worse). -->
+  <!-- Alarm-style reminders attach a full-screen intent so Android wakes the screen
+       and shows the reminder (with its Done/Snooze actions) on the lock screen
+       when the screen is off → issue #10071. On Android 14+ Google Play withholds
+       this from apps it does not classify as calling/alarm apps (F-Droid and
+       sideloaded installs keep it); the intent then degrades to a normal heads-up
+       notification. -->
   <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
   <!--
