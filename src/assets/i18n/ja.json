@@ -3270,7 +3270,7 @@
     "UNABLE_TO_PERSIST_DATA": "プラグインストレージにデータを保存できません",
     "UNKNOWN_ERROR": "不明なエラーが発生しました",
     "UPLOAD_PLUGIN_INSTRUCTION": "プラグインZIPファイルをアップロードしてインストール:",
-    "VALIDATION_FAILED": "検証に失敗しました",
+    "VALIDATION_FAILED": "検証に失敗しました: {{errors}}",
     "ICON_TOO_LARGE": "プラグインアイコンが大きすぎます（最大 {{maxSize}}KB）",
     "INDEX_HTML_TOO_LARGE": "プラグインのindex.htmlが大きすぎます（最大 {{maxSize}}KB）",
     "ALLOWED_HOSTS": "ネットワークアクセス",

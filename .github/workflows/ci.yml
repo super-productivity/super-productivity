@@ -107,6 +107,8 @@ jobs:
         run: npm i
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium webkit
+      - name: Test video tools
+        run: npm run video:kit-test -- --workers=1
       - run: npm run env # Generate env.generated.ts from environment variables
       - run: npm run int:test # Validate i18n JSON files
       - run: npm run test:electron # Node-side unit tests for electron/*.cjs

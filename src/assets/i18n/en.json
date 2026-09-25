@@ -123,7 +123,9 @@
       "FOREGROUND_SERVICE_START_FAILED_FOCUS": "Android blocked the persistent focus mode notification. The timer continues in the app, but background alerts may be unavailable. Check notification permission and battery/background restrictions.",
       "FOREGROUND_SERVICE_START_FAILED_TRACKING": "Android blocked the persistent time tracking notification. Time is still tracked in the app, but background recovery may be unavailable. Check notification permission and battery/background restrictions.",
       "OPEN_NOTIFICATION_SETTINGS": "Open settings",
-      "WIDGET_TASKS_UPDATED": "{{count}} task(s) updated from widget"
+      "WIDGET_TASKS_UPDATED": "{{count}} task(s) updated from widget",
+      "CAPTURES_IMPORTED": "{{count}} task(s) added from quick add",
+      "CAPTURE_IMPORT_ERROR": "Some quick-add tasks could not be added yet. They are kept and will be retried."
     },
     "ATTACHMENT": {
       "LOCAL_FILE_UNAVAILABLE": "This attachment is only available on the device where it was added.",
@@ -1063,6 +1065,7 @@
         "ARCHIVED": "Archived Project",
         "CREATED": "Created project <strong>{{title}}</strong>. You can select it from the sidebar.",
         "DELETED": "Deleted Project",
+        "DISCARDED": "Changes discarded",
         "REOPENED": "Project reopened",
         "SHOW_IN_MENU": "Show in sidebar",
         "UNARCHIVED": "Project restored",
@@ -1914,6 +1917,11 @@
         "MOVE_TO_OTHER_PROJECT": "Move to project",
         "MOVE_TO_REGULAR": "Move to regular list",
         "MOVE_TO_TOP": "Move to top",
+        "PRIORITY": "Priority",
+        "PRIORITY_HIGH": "High",
+        "PRIORITY_LOW": "Low",
+        "PRIORITY_MEDIUM": "Medium",
+        "PRIORITY_NONE": "None",
         "OPEN_ATTACH": "Attach file or link",
         "OPEN_ISSUE": "Open in browser",
         "OPEN_TIME": "Time tracking",
@@ -2076,6 +2084,14 @@
             "PARTIAL": "Moved {{count}} of {{total}} tasks to the regular list (subtasks follow their parent)"
           },
           "NOTHING_TO_DO": "Nothing to change for the selected tasks",
+          "PRIORITY_CLEARED": {
+            "ONE": "Cleared the priority of {{count}} task",
+            "OTHER": "Cleared the priority of {{count}} tasks"
+          },
+          "PRIORITY_SET": {
+            "ONE": "Set the priority of {{count}} task to {{priority}}",
+            "OTHER": "Set the priority of {{count}} tasks to {{priority}}"
+          },
           "SCHEDULED": {
             "ONE": "Scheduled {{count}} task for {{date}}",
             "OTHER": "Scheduled {{count}} tasks for {{date}}"
@@ -2269,6 +2285,7 @@
         "FILTER_DEFAULT": "No Filter",
         "FILTER_ESTIMATED_TIME": "Estimated Time",
         "FILTER_NOT_SPECIFIED": "Not specified",
+        "FILTER_PRIORITY": "Priority",
         "FILTER_PROJECT": "Project",
         "FILTER_SCHEDULED_DATE": "Planned Date",
         "FILTER_TAG": "Tag",
@@ -2293,6 +2310,7 @@
         "SORT_DEADLINE": "Deadline",
         "SORT_DEFAULT": "Default",
         "SORT_NAME": "Name",
+        "SORT_PRIORITY": "Priority",
         "SORT_SCHEDULED_DATE": "Planned Date",
         "TIME_1HOUR": "> 1 Hour",
         "TIME_2HOUR": "> 2 Hours",
@@ -3258,6 +3276,7 @@
     "PLEASE_SELECT_ZIP_FILE": "Please select a ZIP file",
     "PLUGIN_DIALOG_TITLE": "Plugin Message",
     "PLUGIN_ID_RESERVED": "Plugin ID \"{{pluginId}}\" is reserved for a built-in plugin",
+    "PLUGIN_INSTALLED": "Plugin \"{{name}}\" installed",
     "PLUGIN_JS_NOT_FOUND": "Plugin JavaScript file (plugin.js) not found in ZIP file",
     "PROJECT_DOES_NOT_EXIST": "Project does not exist",
     "PROJECT_NOT_FOUND": "Project \"{{contextId}}\" not found",

@@ -13,6 +13,7 @@ import { WorkContextType } from '../../work-context/work-context.model';
 import { SnackService } from '../../../core/snack/snack.service';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { iosInterface } from '../../ios/ios-interface';
+import { Log } from '../../../core/log';
 
 describe('IosShareService', () => {
   let plugin: jasmine.SpyObj<IosSharePlugin>;
@@ -175,7 +176,10 @@ describe('IosShareService', () => {
       shares: [{ id, title: '', text: 'a'.repeat(100_001) }],
     });
     loaded.next(true);
-    await expectAsync(service.importPending()).toBeRejected();
+    await expectAsync(service.importPending()).toBeRejectedWithError(
+      Error,
+      'Invalid capture entry',
+    );
     expect(store.dispatch).not.toHaveBeenCalled();
     expect(plugin.acknowledge).not.toHaveBeenCalled();
   });
@@ -189,7 +193,10 @@ describe('IosShareService', () => {
       ],
     });
     loaded.next(true);
-    await expectAsync(service.importPending()).toBeRejected();
+    await expectAsync(service.importPending()).toBeRejectedWithError(
+      Error,
+      'Invalid capture entry',
+    );
     expect(store.dispatch).toHaveBeenCalledOnceWith(
       jasmine.objectContaining({
         task: jasmine.objectContaining({ id: validId, title: 'Valid' }),
@@ -221,5 +228,22 @@ describe('IosShareService', () => {
     TestBed.resetTestingModule();
     iosInterface.onResume$.next();
     expect(plugin.getPending).toHaveBeenCalledTimes(2);
+  });
+
+  it('logs a failed import with a content-free reason only', async () => {
+    const logErr = spyOn(Log, 'err');
+    plugin.getPending.and.resolveTo({
+      shares: [{ id, title: 'Secret title', text: '   ' }],
+    });
+    loaded.next(true);
+    service.start();
+    for (let i = 0; i < 20; i++) {
+      await Promise.resolve();
+    }
+    expect(logErr).toHaveBeenCalledOnceWith(
+      'iOS share import failed; pending captures retained',
+      { reason: 'Invalid capture entry' },
+    );
+    TestBed.resetTestingModule();
   });
 });

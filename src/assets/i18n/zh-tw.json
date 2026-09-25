@@ -3335,7 +3335,7 @@
     "UNABLE_TO_PERSIST_DATA": "無法將資料持久化至外掛程式儲存",
     "UNKNOWN_ERROR": "發生未知錯誤",
     "UPLOAD_PLUGIN_INSTRUCTION": "上傳外掛程式 ZIP 檔案以進行安裝：",
-    "VALIDATION_FAILED": "驗證失敗",
+    "VALIDATION_FAILED": "驗證失敗：{{errors}}",
     "ICON_TOO_LARGE": "外掛圖示太大（最大 {{maxSize}}KB）",
     "INDEX_HTML_TOO_LARGE": "外掛 index.html 太大（最大 {{maxSize}}KB）",
     "ALLOWED_HOSTS": "網路存取權",

@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { ConfettiConfig, ConfettiInstance } from './confetti.model';
 

@@ -103,6 +103,7 @@ import { SyncConflictBannerService } from './sync-conflict-banner.service';
 import { buildConflictJournalEntry } from './conflict-journal-emission.util';
 import {
   hasOpaqueChanges,
+  isAdditiveTimeOp,
   isDisjointMergeEligible,
   mergeChangedFields,
   synthesizeMergedChanges,
@@ -2699,6 +2700,16 @@ export class ConflictResolutionService {
     // whole-entity LWW, whose local-win op carries a full snapshot that recreates
     // losslessly. See recreate-fallback.const.ts.
     if (!RECREATE_FALLBACK[conflict.entityType]) {
+      return undefined;
+    }
+
+    // Additive time ops (syncTimeSpent, removeTimeSpent) carry a DELTA. The
+    // disjointness test counts syncTimeSpent as touching the time fields so a
+    // non-time edit can commute with it on the no-pending path, but a delta can
+    // never be expressed as a merged patch: the synthesized op would write the
+    // delta's arguments onto the task as fields and the original op would be
+    // rejected, dropping the tracked time (#10147). Whole-entity LWW instead.
+    if ([...conflict.localOps, ...conflict.remoteOps].some(isAdditiveTimeOp)) {
       return undefined;
     }
 

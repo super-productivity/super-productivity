@@ -3275,7 +3275,7 @@
     "UNABLE_TO_PERSIST_DATA": "Kan ikke lagre data til plugin-lagring",
     "UNKNOWN_ERROR": "En ukjent feil oppstod",
     "UPLOAD_PLUGIN_INSTRUCTION": "Last opp en plugin ZIP-fil for å installere den:",
-    "VALIDATION_FAILED": "Validering mislyktes",
+    "VALIDATION_FAILED": "Validering mislyktes: {{errors}}",
     "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Dette tillegget tilbyr saksintegrasjon som for øyeblikket er i bruk ({{count}} saksleverandør(er)). Å deaktivere det vil midlertidig bryte sakssynkronisering for disse leverandørene til tillegget aktiveres på nytt. Er du sikker på at du vil deaktivere \"{{name}}\"?",
     "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Kunne ikke laste listen over fellesskapstillegg",
     "LANGUAGES": "Språk:",

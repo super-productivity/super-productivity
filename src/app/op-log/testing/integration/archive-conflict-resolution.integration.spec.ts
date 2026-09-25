@@ -887,6 +887,88 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
       expect(thrown).toBeUndefined();
       expect((await unsyncedOps()).length).toBe(1);
     });
+
+    it('emits one archive-win op PER intent when two bulk archives win in one batch', async () => {
+      const [archiveAB] = await dispatchAndFlush(
+        TaskSharedActions.moveToArchive({
+          tasks: [doneTask(TASK_A), doneTask(TASK_B)],
+        }) as PersistentAction,
+      );
+      const [, archiveCD] = await dispatchAndFlush(
+        TaskSharedActions.moveToArchive({
+          tasks: [doneTask(TASK_C), doneTask(TASK_D)],
+        }) as PersistentAction,
+      );
+      const client = remoteClient();
+      const remoteEdits = [TASK_A, TASK_B, TASK_C, TASK_D].map((id, i) =>
+        buildRemoteTaskEdit(client, id, archiveCD.timestamp + i + 1),
+      );
+      const conflicts = (
+        await Promise.all(remoteEdits.map((edit) => detectConflictsFor(edit)))
+      ).flat();
+      expect(conflicts.length).toBe(4);
+
+      await resolver.autoResolveConflictsLWW(conflicts);
+
+      const pending = await unsyncedOps();
+      expect(pending.map(payloadTaskIds)).toEqual([
+        [TASK_A, TASK_B],
+        [TASK_C, TASK_D],
+      ]);
+      const [recreationAB, recreationCD] = pending;
+      expect(recreationAB.timestamp).toBe(archiveAB.timestamp);
+      expect(recreationCD.timestamp).toBe(archiveCD.timestamp);
+      expectDominates(recreationAB, archiveAB);
+      expectDominates(recreationCD, archiveCD);
+      remoteEdits.slice(0, 2).forEach((edit) => expectDominates(recreationAB, edit));
+      remoteEdits.slice(2).forEach((edit) => expectDominates(recreationCD, edit));
+    });
+
+    it('compensates a remote multi-entity op ONCE with the shared archive-win op', async () => {
+      // A remote bulk op hits two archived tasks (both win locally, sharing
+      // one recreation) plus an uncontested sibling, so the remote op applies
+      // and the shared recreation replays after it as the compensation.
+      const [bulkOp] = await dispatchAndFlush(
+        TaskSharedActions.moveToArchive({
+          tasks: [doneTask(TASK_A), doneTask(TASK_B), doneTask(TASK_C)],
+        }) as PersistentAction,
+      );
+      const taskIds = [TASK_B, TASK_C, SIBLING_X];
+      const remoteAction = roundTimeSpentForDay({
+        day: '2026-08-13',
+        taskIds,
+        roundTo: '5M',
+        isRoundUp: true,
+      }) as PersistentAction;
+      const { type, meta, ...actionPayload } = remoteAction;
+      const remoteBulkOp: Operation = {
+        ...remoteClient().createOperation({
+          actionType: type,
+          opType: meta.opType,
+          entityType: meta.entityType,
+          entityId: TASK_B,
+          entityIds: taskIds,
+          payload: { actionPayload, entityChanges: [] },
+        }),
+        timestamp: bulkOp.timestamp + 1,
+      };
+      const conflicts = await detectConflictsFor(remoteBulkOp);
+      expect(conflicts.map(({ entityId }) => entityId).sort()).toEqual([TASK_B, TASK_C]);
+
+      await resolver.autoResolveConflictsLWW(conflicts);
+
+      const pending = await unsyncedOps();
+      expect(pending.length).toBe(1);
+      const [recreation] = pending;
+      expect(payloadTaskIds(recreation)).toEqual([TASK_A, TASK_B, TASK_C]);
+      expectDominates(recreation, remoteBulkOp);
+      const appliedIds = appliedOps().map(({ id }) => id);
+      expect(appliedIds.filter((id) => id === remoteBulkOp.id).length).toBe(1);
+      expect(appliedIds.filter((id) => id === recreation.id).length).toBe(1);
+      expect(appliedIds.indexOf(recreation.id)).toBeGreaterThan(
+        appliedIds.indexOf(remoteBulkOp.id),
+      );
+    });
   });
 
   describe('#10220: restore after an all-local-win bulk archive', () => {

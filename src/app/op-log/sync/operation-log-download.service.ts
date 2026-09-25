@@ -196,11 +196,7 @@ export class OperationLogDownloadService implements OnDestroy {
       // cursor; and the rejection resolver merges server clocks into the local
       // clock, so the clock alone could cover a blocked op).
       // Raw rebuild wants every op, so it keeps this filter off. The provider
-      // gate is an allowlist: only SuperSync hands out a real monotonic server
-      // seq to compare against. File-based providers use synthetic per-download
-      // `serverSeq` values while their cursor is the file's sync version, so the
-      // `<=` check is meaningless there — and the reproduced bug is
-      // SuperSync-only anyway, so a future provider mode must opt in explicitly
+      // gate is an allowlist: a future provider mode must opt in explicitly
       // rather than inherit a filter nobody reasoned about for it.
       // Keyed on the CALLER'S intent, never on `forceFromSeq0` alone: that flag
       // is also set for a provider switch (`SyncWrapperService`), whose whole
@@ -209,10 +205,21 @@ export class OperationLogDownloadService implements OnDestroy {
       // cursor for that provider and a local clock inherited from the other
       // one, so filtering there would silently drop the server's history, skip
       // the dialog, and let this device upload its divergent state.
+      //
+      // File-based providers (#10119) return their WHOLE op buffer (up to
+      // MAX_RECENT_OPS) on every download, so after compaction an old remote op
+      // looks new and can resurrect an entity deleted/archived here since. Their
+      // adapter exposes each op's `serverSeq` as the file `syncVersion` it was
+      // written at, the same space as their cursor, so the filter runs on every
+      // incremental download. It stays off for seq-0 downloads (lastServerSeq
+      // is 0): a provider switch or USE_REMOTE rebuild must see everything. The
+      // clock half is what keeps it safe when the cursor ran ahead of applied
+      // ops (an upload merging a freshly downloaded file sets it to the new
+      // version): an op this client never applied is not covered by its clock.
       const isReDeliveryFilterActive =
-        !!options?.isReDeliveryRetry &&
         !options?.includeOwnAndAppliedOps &&
-        syncProvider.providerMode === 'superSyncOps';
+        ((!!options?.isReDeliveryRetry && syncProvider.providerMode === 'superSyncOps') ||
+          (syncProvider.providerMode === 'fileSnapshotOps' && lastServerSeq > 0));
       // Not const: a gap reset below switches to a new server epoch whose seq
       // space is unrelated to this cursor, so the filter must be disabled.
       let deliveredUpToSeq = isReDeliveryFilterActive

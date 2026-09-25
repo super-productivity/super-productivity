@@ -23,6 +23,7 @@ import com.superproductivity.superproductivity.service.ReminderNotificationHelpe
 import com.superproductivity.superproductivity.service.RemoteTrackingNotificationHelper
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
+import com.superproductivity.superproductivity.widget.CaptureInbox
 import com.superproductivity.superproductivity.widget.ReminderDoneQueue
 import com.superproductivity.superproductivity.widget.ReminderSnoozeQueue
 import com.superproductivity.superproductivity.widget.ReminderTapQueue
@@ -443,13 +444,32 @@ class JavaScriptInterface(
     }
 
     /**
-     * Get queued tasks from the widget and clear the queue.
-     * Returns JSON string of tasks or null if empty.
+     * Non-destructive read of natively captured tasks as a JSON array, oldest first.
+     * Returns null if the inbox could not be read. Entries stay until acknowledged.
      */
     @Suppress("unused")
     @JavascriptInterface
-    fun getWidgetTaskQueue(): String? {
-        return WidgetTaskQueue.getAndClearQueue(activity)
+    fun getPendingCaptures(): String? {
+        return try {
+            val inbox = CaptureInbox.forContext(activity)
+            WidgetTaskQueue.migrateInto(activity, inbox)
+            inbox.pendingJson()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read capture inbox", e)
+            null
+        }
+    }
+
+    /** Delete one capture after the app has persisted its task. */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun acknowledgeCapture(id: String): Boolean {
+        return try {
+            CaptureInbox.forContext(activity).acknowledge(id)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acknowledge capture", e)
+            false
+        }
     }
 
     /**

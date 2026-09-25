@@ -127,7 +127,15 @@ const run = async () => {
       localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
       localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
     });
+    // The add-task bar is usable before hydration finishes, but only picks the
+    // TODAY default due day once the work context loads. Typing earlier files
+    // the task into Inbox and the Today assertion below fails (run 36058539413).
+    const dataLoaded = page.waitForEvent('console', {
+      predicate: (message) => message.text().includes('[SP_ALL] All Data was loaded'),
+      timeout: 30_000,
+    });
     await page.reload({ waitUntil: 'domcontentloaded' });
+    await dataLoaded;
     await page.locator('.route-wrapper').first().waitFor({ state: 'visible' });
 
     const taskTitle = `Packaged Electron smoke ${Date.now()}`;

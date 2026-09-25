@@ -933,6 +933,34 @@ describe('OperationLogEffects', () => {
       );
     });
 
+    it('should keep entityChanges: [] for a deferred write (pinned wire shape)', async () => {
+      // Deferred writes have never gone through the extractor. Keeping them
+      // opaque is deliberate: released clients merge a non-empty syncTimeSpent
+      // entityChanges as field values, so widening extraction to deferred
+      // writes would expose more ops to that path (#8758 stays open).
+      const action = createPersistentAction(
+        ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        false,
+        {
+          taskId: 'task-1',
+          date: '2026-09-12',
+          duration: 60000,
+        },
+      );
+      mockOperationCaptureService.extractEntityChanges.calls.reset();
+
+      bufferDeferredAction(action);
+      await effects.processDeferredActions();
+
+      const deferredOp =
+        mockOpLogStore.appendWithVectorClockOverwrite.calls.mostRecent().args[0];
+      expect(mockOperationCaptureService.extractEntityChanges).not.toHaveBeenCalled();
+      expect(deferredOp.payload).toEqual({
+        actionPayload: { taskId: 'task-1', date: '2026-09-12', duration: 60000 },
+        entityChanges: [],
+      });
+    });
+
     it('should do nothing when no deferred actions are buffered', async () => {
       await expectAsync(effects.processDeferredActions()).toBeResolved();
 
