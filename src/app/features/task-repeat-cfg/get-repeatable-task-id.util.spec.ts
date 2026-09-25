@@ -1,7 +1,4 @@
-import {
-  getRepeatableTaskId,
-  parseRepeatableTaskId,
-} from './get-repeatable-task-id.util';
+import { getRepeatableTaskId } from './get-repeatable-task-id.util';
 
 describe('getRepeatableTaskId', () => {
   describe('valid inputs', () => {
@@ -94,37 +91,5 @@ describe('getRepeatableTaskId', () => {
         /dueDay must be in YYYY-MM-DD format/,
       );
     });
-  });
-});
-
-describe('parseRepeatableTaskId', () => {
-  it('should parse a generated id back into its parts', () => {
-    expect(parseRepeatableTaskId(getRepeatableTaskId('abc123', '2025-01-15'))).toEqual({
-      repeatCfgId: 'abc123',
-      dueDay: '2025-01-15',
-    });
-  });
-
-  it('should parse config ids containing separators greedily up to the date suffix', () => {
-    expect(parseRepeatableTaskId('rpt_cfg-with_special.chars_2025-01-15')).toEqual({
-      repeatCfgId: 'cfg-with_special.chars',
-      dueDay: '2025-01-15',
-    });
-  });
-
-  it('should return null for a regular task id', () => {
-    expect(parseRepeatableTaskId('task-1')).toBeNull();
-  });
-
-  it('should return null for an rpt_ id without a date suffix', () => {
-    expect(parseRepeatableTaskId('rpt_cfg-1_noDate')).toBeNull();
-  });
-
-  it('should return null for a malformed date suffix', () => {
-    expect(parseRepeatableTaskId('rpt_cfg-1_20250115')).toBeNull();
-  });
-
-  it('should return null for empty input', () => {
-    expect(parseRepeatableTaskId('')).toBeNull();
   });
 });

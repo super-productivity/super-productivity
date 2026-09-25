@@ -43,7 +43,6 @@ import { Log } from '../../core/log';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { androidInterface } from '../android/android-interface';
 import { DateService } from '../../core/date/date.service';
-import { parseRepeatableTaskId } from '../task-repeat-cfg/get-repeatable-task-id.util';
 
 const SNOOZE_10M_MS = 10 * 60 * 1000;
 const SNOOZE_1H_MS = 60 * 60 * 1000;
@@ -482,8 +481,10 @@ export class ReminderModule {
       return task;
     }
 
-    const predicted = parseRepeatableTaskId(taskId);
-    if (!predicted || predicted.dueDay !== this._dateService.todayStr()) {
+    // Predicted instance ids have the shape `rpt_<cfgId>_<dayStr>` (getRepeatableTaskId).
+    const isTodaysPredictedInstance =
+      taskId.startsWith('rpt_') && taskId.endsWith(`_${this._dateService.todayStr()}`);
+    if (!isTodaysPredictedInstance) {
       return undefined;
     }
 
