@@ -80,6 +80,15 @@ describe('BackupService', () => {
     pluginUserData: [],
   });
 
+  // A project title typia rejects that neither dataRepair nor any
+  // autoFixTypiaErrors branch touches. Keep it outside every autofix: once a
+  // branch heals it, the refusal specs pass without exercising the refusal.
+  const createBackupInvalidAfterRepair = (): any => {
+    const backup = createMinimalValidBackup() as any;
+    backup.project.entities.INBOX_PROJECT.title = 42;
+    return backup;
+  };
+
   const createEmptyArchiveModel = (): ArchiveModel => ({
     task: { ids: [], entities: {} },
     timeTracking: { project: {}, tag: {} },
@@ -199,9 +208,7 @@ describe('BackupService', () => {
   // #8279: a backup whose errors dataRepair cannot fix was persisted and
   // broadcast as BACKUP_IMPORT, so every receiving client failed validation.
   it('should refuse a backup that is still invalid after repair', async () => {
-    const backup = createMinimalValidBackup() as any;
-    backup.project.entities.INBOX_PROJECT.advancedCfg.worklogExportSettings.groupBy =
-      'NOT_A_GROUPING';
+    const backup = createBackupInvalidAfterRepair();
 
     await expectAsync(
       service.importCompleteBackup(backup, true, true),
@@ -360,9 +367,7 @@ describe('BackupService', () => {
     });
 
     it('should restore a recovery point that is still invalid after repair (#8279)', async () => {
-      const saved = createMinimalValidBackup() as any;
-      saved.project.entities.INBOX_PROJECT.advancedCfg.worklogExportSettings.groupBy =
-        'NOT_A_GROUPING';
+      const saved = createBackupInvalidAfterRepair();
       mockOpLogStore.loadImportBackupById.and.resolveTo({
         backupId: 'r1',
         savedAt: 1,
@@ -532,9 +537,7 @@ describe('BackupService', () => {
     // The recovery slot holds this device's own earlier live state; refusing it
     // for errors repair cannot fix would leave the user no way back (#8279).
     it('should restore own state that is still invalid after repair', async () => {
-      const saved = createMinimalValidBackup() as any;
-      saved.project.entities.INBOX_PROJECT.advancedCfg.worklogExportSettings.groupBy =
-        'NOT_A_GROUPING';
+      const saved = createBackupInvalidAfterRepair();
       mockOpLogStore.loadImportBackup.and.resolveTo({ state: saved, ...backupRef });
 
       await expectAsync(service.restoreImportBackup(backupRef)).toBeResolvedTo(true);
