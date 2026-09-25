@@ -1,4 +1,5 @@
 import { extractActionPayload } from '@sp/sync-core';
+import { mergeVectorClocks } from '../../core/util/vector-clock';
 import { ActionType, isLwwUpdatePayload, Operation } from '../core/operation.types';
 import { Task, TimeSpentOnDay } from '../../features/tasks/task.model';
 import { calcTotalTimeSpent } from '../../features/tasks/util/calc-total-time-spent';
@@ -115,7 +116,14 @@ export const buildTimeAwareResolutionBatches = async ({
         );
         if (actionPayload === fields) return op;
         deltas.forEach((delta) => foldedIds.add(delta.id));
-        return { ...op, payload: { ...op.payload, actionPayload } };
+        // The snapshot now carries each delta, so it must dominate them: the
+        // server compares only against an entity's latest op, so a merely
+        // concurrent snapshot can land and then lose to the delta's author.
+        const vectorClock = deltas.reduce(
+          (clock, delta) => mergeVectorClocks(clock, delta.vectorClock),
+          op.vectorClock,
+        );
+        return { ...op, vectorClock, payload: { ...op.payload, actionPayload } };
       }),
     );
   const [localWins, reconciliations] = await Promise.all([

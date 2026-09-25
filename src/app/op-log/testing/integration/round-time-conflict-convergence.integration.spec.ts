@@ -28,6 +28,7 @@ import {
   updateTaskEntity,
 } from '../../../root-store/meta/task-shared-meta-reducers/test-helpers';
 import { lwwUpdateMetaReducer } from '../../../root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer';
+import { compareVectorClocks, VectorClockComparison } from '@sp/sync-core';
 import { MockSyncServer } from './helpers/mock-sync-server.helper';
 import { resetTestUuidCounter, TestClient } from './helpers/test-client.helper';
 
@@ -653,7 +654,12 @@ describe('round-time conflict convergence integration (#8944)', () => {
       taskSyncProjection(localState, TASK_Z),
     );
   });
-  for (const scenario of ['task', 'parent', 'unrelated-create'] as const) {
+  for (const scenario of [
+    'task',
+    'parent',
+    'unrelated-create',
+    'third-client',
+  ] as const) {
     it(`preserves incoming timer deltas beside a losing rename (${scenario})`, async () => {
       if (scenario === 'parent') {
         initialState = updateTaskEntity(initialState, TASK_X, { parentId: TASK_Y });
@@ -670,6 +676,10 @@ describe('round-time conflict convergence integration (#8944)', () => {
       const clientA = new TestClient(CLIENT_A);
       const clientB = new TestClient(CLIENT_B);
       const renameId = scenario === 'parent' ? TASK_Y : TASK_X;
+      // The rename's author may not have seen the timer delta: the snapshot
+      // that folds it in must still dominate it.
+      const deltaClient =
+        scenario === 'third-client' ? new TestClient('timer-client-c') : clientB;
       const localRename = TaskSharedActions.updateTask({
         task: { id: renameId, changes: { title: 'A winner' } },
       }) as PersistentAction;
@@ -685,7 +695,7 @@ describe('round-time conflict convergence integration (#8944)', () => {
           date: DAY,
           duration: 3 * MINUTE,
         }) as PersistentAction,
-        clientB,
+        deltaClient,
         capture,
         1_000,
       );
@@ -748,6 +758,13 @@ describe('round-time conflict convergence integration (#8944)', () => {
       const detection = await resolver.checkOpForConflicts(remoteRename, context);
       expect(detection.conflicts.length).toBe(1);
       await resolver.autoResolveConflictsLWW(detection.conflicts, nonConflicting);
+      const snapshots = (await opLogStore.getUnsynced())
+        .map(({ op }) => op)
+        .filter((op) => op.entityId === renameId);
+      expect(snapshots.length).toBe(1);
+      expect(compareVectorClocks(snapshots[0].vectorClock, remoteDelta.vectorClock)).toBe(
+        VectorClockComparison.GREATER_THAN,
+      );
       for (const entry of await opLogStore.getUnsynced()) {
         remoteState = reducer(remoteState, convertOpToAction(entry.op));
       }
