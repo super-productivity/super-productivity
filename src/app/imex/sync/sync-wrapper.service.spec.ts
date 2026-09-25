@@ -2339,7 +2339,7 @@ describe('SyncWrapperService', () => {
         mockSyncService.downloadRemoteOps.and.rejectWith(conflictError);
         mockMatDialog.open.and.returnValue({
           afterClosed: () => of(undefined),
-        } as any);
+        } as MatDialogRef<DialogSyncConflictComponent>);
 
         await service.sync();
 
@@ -2359,7 +2359,7 @@ describe('SyncWrapperService', () => {
         mockSyncService.downloadRemoteOps.and.rejectWith(conflictError);
         mockMatDialog.open.and.returnValue({
           afterClosed: () => of(undefined),
-        } as any);
+        } as MatDialogRef<DialogSyncConflictComponent>);
 
         await service.sync();
 
