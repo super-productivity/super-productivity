@@ -304,18 +304,24 @@ describe('round-time conflict convergence integration (#8944)', () => {
     );
   });
 
-  for (const form of ['direct', 'deferred'] as const) {
-    it(`keeps a newer remote syncTimeSpent (${form} form) crossing a pending local rounding op (#10215)`, async () => {
+  for (const [form, taskIds] of [
+    ['direct', [TASK_X, TASK_Y]],
+    ['deferred', [TASK_X, TASK_Y]],
+    ['direct', [TASK_X]],
+    ['deferred', [TASK_X]],
+  ] as const) {
+    it(`keeps a newer remote syncTimeSpent (${form} form) crossing a pending local rounding op of ${taskIds.length} task(s) (#10215)`, async () => {
       const capture = TestBed.inject(OperationCaptureService);
       const resolver = TestBed.inject(ConflictResolutionService);
       const server = new MockSyncServer();
       const clientA = new TestClient(CLIENT_A);
       const clientB = new TestClient(CLIENT_B);
 
-      // Device A ("finish day"): rounds X (10m → 15m) and Y (20m → 30m).
+      // Device A ("finish day"): rounds X (10m → 15m), and Y (20m → 30m)
+      // unless it rounds X alone (a single-entity op).
       const roundAction = roundTimeSpentForDay({
         day: DAY,
-        taskIds: [TASK_X, TASK_Y],
+        taskIds: [...taskIds],
         roundTo: 'QUARTER',
         isRoundUp: true,
       }) as PersistentAction;

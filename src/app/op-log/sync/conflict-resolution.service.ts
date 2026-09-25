@@ -2208,7 +2208,7 @@ export class ConflictResolutionService {
   }
 
   /**
-   * Re-emits safely decomposable fields from a local multi-entity op.
+   * Re-emits safely decomposable fields from a local bulk or rounding op.
    *
    * The original bulk row is rejected as a unit regardless of which side wins.
    * Its disjoint target fields and sibling mutations are still present in the
@@ -2276,9 +2276,9 @@ export class ConflictResolutionService {
       ];
       for (const localOp of resolution.conflict.localOps) {
         const allowedFields = DECOMPOSABLE_MULTI_ACTION_FIELDS.get(localOp.actionType);
-        if (!isMultiEntityOperation(localOp) || !allowedFields) {
-          continue;
-        }
+        // A lone rounding stays in state; only pure deltas stack on it (#10215).
+        const single = !isMultiEntityOperation(localOp);
+        if (!allowedFields || (single && remoteFieldOps.length > 0)) continue;
         for (const entityId of getOpEntityIds(localOp)) {
           if (
             resolution.winner === 'local' &&
