@@ -108,10 +108,11 @@ import {
   reminderReducer,
 } from '../features/reminder/store/reminder.reducer';
 import { PluginOAuthLifecycleEffects } from '../plugins/oauth/plugin-oauth-lifecycle.effects';
+import { ReducerFailureSnackEffects } from './meta/reducer-failure-snack.effects';
 @NgModule({
   declarations: [],
   imports: [
-    EffectsModule.forFeature([OperationLogEffects]),
+    EffectsModule.forFeature([OperationLogEffects, ReducerFailureSnackEffects]),
 
     StoreModule.forFeature(appStateFeature),
     EffectsModule.forFeature([AppStateEffects]),

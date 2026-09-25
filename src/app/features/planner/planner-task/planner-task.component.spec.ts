@@ -931,6 +931,20 @@ describe('PlannerTaskComponent', () => {
     });
   });
 
+  describe('priority indicator', () => {
+    it('renders the shared indicator only when the task has a priority', () => {
+      const withPriority = create(makeTask({ priority: 'high' }));
+      expect(
+        withPriority.fixture.nativeElement.querySelector('task-priority-indicator'),
+      ).toBeTruthy();
+
+      const withoutPriority = create(makeTask());
+      expect(
+        withoutPriority.fixture.nativeElement.querySelector('task-priority-indicator'),
+      ).toBeNull();
+    });
+  });
+
   describe('done toggle (#9929 fallout)', () => {
     /**
      * The Planner has no multi-select, so its `done-toggle` must NOT opt into

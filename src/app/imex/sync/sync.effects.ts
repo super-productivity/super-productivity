@@ -178,6 +178,7 @@ export class SyncEffects {
             ),
           ),
         ),
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         tap((x) => SyncLog.log('sync(effect) background trigger.....', x)),
         // Unchanged frequency limit. The scheduler collapses a burst into one
         // rerun anyway, but this keeps the pre-existing rate ceiling rather than
@@ -238,6 +239,7 @@ export class SyncEffects {
             ),
           ),
         ),
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         tap((x) => SyncLog.log('sync(effect).....', x)),
         // Limit sync frequency to prevent rapid consecutive syncs (e.g., blur event right after initial sync)
         throttleTime(2000, asyncScheduler, { leading: true, trailing: false }),

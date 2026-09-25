@@ -581,13 +581,20 @@ body.isDarkTheme ::-webkit-scrollbar-thumb:hover {
 
 /* right-panel: the host is transparent so the gradient shows through, but
    the actual sliding side panel (.side) gets the Raycast frosted-glass
-   treatment when open — distinct from the main content area. */
+   treatment when open — distinct from the main content area. The frost
+   (background + backdrop-filter) goes on .side-inner, not .side:
+   backdrop-filter on .side makes it a stacking context, and the sibling
+   .content (z-index 44) then covers the part of the edge-close and resize
+   handles that sticks out past the panel edge. */
 body.isDarkTheme right-panel .side {
+  border-left: 1px solid var(--velvet-fill-3) !important;
+  box-shadow: -16px 0 48px rgba(0, 0, 0, 0.3);
+}
+
+body.isDarkTheme right-panel .side-inner {
   background: var(--velvet-pane-3) !important;
   backdrop-filter: var(--velvet-frost-strong);
   -webkit-backdrop-filter: var(--velvet-frost-strong);
-  border-left: 1px solid var(--velvet-fill-3) !important;
-  box-shadow: -16px 0 48px rgba(0, 0, 0, 0.3);
 }
 
 /* Resize handle: coral on hover, like Raycast's resizers */

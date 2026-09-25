@@ -3,6 +3,7 @@ import { Actions } from '@ngrx/effects';
 import { Action } from '@ngrx/store';
 import { Observable } from 'rxjs';
 import { filter, share } from 'rxjs/operators';
+import { isReducerRejectedAction } from '../root-store/meta/reducer-failure-guard.meta-reducer';
 
 /**
  * DEFAULT: Injection token for Actions stream filtered to local user actions only.
@@ -19,6 +20,13 @@ import { filter, share } from 'rxjs/operators';
  * However, some effects might still be triggered by `bulkApplyOperations` itself
  * (if they listen for that action type), so this token provides an additional
  * safety layer by filtering out actions marked with `meta.isRemote`.
+ *
+ * ## Why Filter Rejected Actions? (#10195)
+ *
+ * `reducerFailureGuardMetaReducer` boxes reducer throws and returns the previous
+ * state. NgRx still emits the action on `Actions`, so without this filter an
+ * `ofType` effect would run side effects (snacks, follow-up dispatches,
+ * persistence derived from the payload) for a state change that never happened.
  *
  * ## Why Filter Remote Actions?
  *
@@ -48,7 +56,10 @@ export const LOCAL_ACTIONS = new InjectionToken<Observable<Action>>('LOCAL_ACTIO
   factory: () => {
     const actions$ = inject(Actions);
     return actions$.pipe(
-      filter((action: Action) => !(action as any).meta?.isRemote),
+      filter(
+        (action: Action) =>
+          !(action as any).meta?.isRemote && !isReducerRejectedAction(action),
+      ),
       share(),
     );
   },
@@ -57,8 +68,9 @@ export const LOCAL_ACTIONS = new InjectionToken<Observable<Action>>('LOCAL_ACTIO
 /**
  * SPECIAL CASE: Unfiltered Actions stream including remote sync operations.
  *
- * Only use this for effects that MUST react to remote operations:
+ * Only use this for effects that MUST see what LOCAL_ACTIONS filters out:
  * - operation-log.effects.ts: Captures and persists all actions (handles isRemote internally)
+ * - reducer-failure-snack.effects.ts: Surfaces actions the reducer rejected (#10195)
  *
  * For all other effects, use LOCAL_ACTIONS instead. Note: remote-client
  * archive side effects are NOT an ALL_ACTIONS case — they are driven by

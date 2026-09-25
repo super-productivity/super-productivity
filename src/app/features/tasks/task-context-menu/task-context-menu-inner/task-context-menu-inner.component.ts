@@ -23,7 +23,7 @@ import {
 } from '@angular/material/menu';
 import { MatDivider } from '@angular/material/divider';
 import { ESTIMATE_OPTIONS } from '../../add-task-bar/add-task-bar.const';
-import { Task, TaskWithSubTasks } from '../../task.model';
+import { Task, TaskPriority, TaskWithSubTasks } from '../../task.model';
 import { from, Observable, of, ReplaySubject, Subject } from 'rxjs';
 import {
   delay,
@@ -508,6 +508,13 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
       return;
     }
     this._taskService.update(this.task.id, { timeEstimate: ms });
+  }
+
+  setPriority(priority: TaskPriority | null): void {
+    if (priority === (this.task.priority ?? null)) {
+      return;
+    }
+    this._taskService.update(this.task.id, { priority });
   }
 
   addSubTask(): void {

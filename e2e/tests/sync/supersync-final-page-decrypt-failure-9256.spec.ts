@@ -6,7 +6,7 @@ import {
   type SuperSyncOperation,
 } from '@sp/shared-schema';
 import { encrypt } from '@sp/sync-core';
-import type { Dialog } from '@playwright/test';
+import type { Dialog, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/supersync.fixture';
 import { SettingsPage } from '../../pages/settings.page';
 import { normalizeDialogMessage, translationRegex } from '../../utils/i18n-strings';
@@ -150,6 +150,7 @@ const hasExactKeys = (value: Record<string, unknown>, keys: string[]): boolean =
 const isExpectedDiagnosticSummary = (
   value: unknown,
   decryptedOpsInEarlierBatches: number,
+  passwordEvidence: string,
 ): boolean =>
   isRecord(value) &&
   hasExactKeys(value, [
@@ -160,13 +161,13 @@ const isExpectedDiagnosticSummary = (
     'passwordEvidence',
     'failureCount',
   ]) &&
-  // The failing batch is the lone corrupt op on the final page; the pages
-  // decrypted before it are what prove the password is not globally wrong.
+  // The failing batch is the lone corrupt op on the final page; pages decrypted
+  // before it IN THE SAME RUN are what prove the password is not globally wrong.
   value.encryptedOperationCount === 1 &&
   value.decryptedCount === 0 &&
   value.parsedCount === 0 &&
   value.decryptedOpsInEarlierBatches === decryptedOpsInEarlierBatches &&
-  value.passwordEvidence === 'confirmed-for-some-operations' &&
+  value.passwordEvidence === passwordEvidence &&
   value.failureCount === 1;
 
 const isExpectedDiagnosticFailure = (
@@ -192,6 +193,7 @@ const countExpectedDiagnosticLogs = (
   value: unknown,
   corruptSuffix: CorruptSuffix,
   decryptedOpsInEarlierBatches: number,
+  passwordEvidence: string,
 ): number => {
   if (!Array.isArray(value)) {
     return 0;
@@ -206,15 +208,53 @@ const countExpectedDiagnosticLogs = (
         'OperationLogDownloadService: Encrypted operation batch could not be processed.' &&
       Array.isArray(entry.args) &&
       entry.args.some((arg: unknown) =>
-        isExpectedDiagnosticSummary(arg, decryptedOpsInEarlierBatches),
+        isExpectedDiagnosticSummary(arg, decryptedOpsInEarlierBatches, passwordEvidence),
       ) &&
       entry.args.some((arg: unknown) => isExpectedDiagnosticFailure(arg, corruptSuffix))
     );
   }).length;
 };
 
+// After a kept prefix the cursor sits at the last valid op, so a retry asks for
+// the corrupt op alone instead of re-downloading the history from seq 0.
+const resumesAtCorruptOp = (
+  pages: ObservedDownloadPage[],
+  cursorSeq: number,
+  corruptOpId: string,
+): boolean =>
+  pages.length > 0 &&
+  pages.every((page) => page.sinceSeq !== 0) &&
+  pages.some(
+    (page) =>
+      page.sinceSeq === cursorSeq &&
+      page.hasMore === false &&
+      page.opIds.join() === corruptOpId,
+  );
+
+const FRESH_CLIENT_CONFIRM = translationRegex(
+  'F.SYNC.D_FRESH_CLIENT_CONFIRM.TITLE',
+  'F.SYNC.D_FRESH_CLIENT_CONFIRM.MESSAGE',
+);
+
+// setupSuperSync({ waitForInitialSync: false }) can return before the kept
+// prefix reaches the fresh-client confirmation, and Playwright dismisses an
+// unhandled confirm, which would decline the prefix. Accept that one prompt for
+// the whole test; setupSuperSync tolerates a second listener on the same dialog.
+const acceptFreshClientConfirm = (page: Page): (() => void) => {
+  const handler = async (dialog: Dialog): Promise<void> => {
+    if (
+      dialog.type() === 'confirm' &&
+      FRESH_CLIENT_CONFIRM.test(normalizeDialogMessage(dialog.message()))
+    ) {
+      await dialog.accept().catch(() => {});
+    }
+  };
+  page.on('dialog', handler);
+  return () => page.off('dialog', handler);
+};
+
 test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
-  test('correct password decrypts page 1 but an undecryptable final op blocks recovery', async ({
+  test('keeps the pages that decrypted and still reports the undecryptable final op', async ({
     browser,
     baseURL,
     testRunId,
@@ -222,6 +262,7 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
     test.setTimeout(150000);
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
+    let stopAcceptingFreshConfirm: (() => void) | null = null;
 
     try {
       const user = await createTestUser(testRunId);
@@ -251,6 +292,7 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
       ).toBe(true);
       expect(validHistory.ops.some(({ op }) => op.opType === 'SYNC_IMPORT')).toBe(true);
       const validPageOpIds = validHistory.ops.map(({ op }) => op.id);
+      const lastValidSeq = validHistory.ops[validHistory.ops.length - 1].serverSeq;
       const corruptSuffix = await uploadCorruptSuffix(
         user.token,
         testRunId,
@@ -283,11 +325,14 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
         await route.fulfill({ response });
       });
 
+      stopAcceptingFreshConfirm = acceptFreshClientConfirm(clientB.page);
       await clientB.sync.setupSuperSync({
         ...syncConfig,
         waitForInitialSync: false,
       });
 
+      // The dialog appears in the SAME cycle that applied the prefix: the
+      // failing page is reported, not hidden behind an IN_SYNC status.
       const decryptErrorDialog = clientB.page.locator('dialog-handle-decrypt-error');
       await expect(decryptErrorDialog).toBeVisible({ timeout: 30000 });
       await expect(
@@ -298,16 +343,13 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
           containsFailureSequence(observedPages, validPageOpIds, corruptSuffix.opId),
         )
         .toBe(true);
-
-      // Reaching page 2 proves the same password decrypted and validated page 1.
-      // The failed complete download must not commit its valid prefix.
       expect(await clientB.sync.hasSyncError()).toBe(true);
-      await expect(
-        clientB.page.locator(`task:has-text("${taskName}")`),
-      ).not.toBeVisible();
 
-      // Match the reporter's deterministic retry: restart from page 1, then fail
-      // on the same final operation without partially restoring the task.
+      // #9256: the page that decrypted is kept instead of discarded.
+      await expect(clientB.page.locator(`task:has-text("${taskName}")`)).toBeVisible();
+
+      // Retrying resumes at the persisted cursor (the last valid op) and fails
+      // on the corrupt op alone; the kept data stays.
       const retryPagesStart = observedPages.length;
       await decryptErrorDialog.locator('input[type="password"]').fill(encryptionPassword);
       await decryptErrorDialog
@@ -318,18 +360,16 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
       await expect
         .poll(
           () =>
-            containsFailureSequence(
+            resumesAtCorruptOp(
               observedPages.slice(retryPagesStart),
-              validPageOpIds,
+              lastValidSeq,
               corruptSuffix.opId,
             ),
           { timeout: 30000 },
         )
         .toBe(true);
       await expect(decryptErrorDialog).toBeVisible({ timeout: 30000 });
-      await expect(
-        clientB.page.locator(`task:has-text("${taskName}")`),
-      ).not.toBeVisible();
+      await expect(clientB.page.locator(`task:has-text("${taskName}")`)).toBeVisible();
 
       await decryptErrorDialog
         .getByRole('button', { name: 'Cancel', exact: true })
@@ -344,11 +384,24 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
       const exportedLogsText = await logsTextarea.inputValue();
       const exportedLogs: unknown = JSON.parse(exportedLogsText);
 
-      // One diagnostic entry per failed run: the initial download plus the
-      // deterministic retry — each with identical run-scoped evidence.
+      // The first run decrypted the valid page before failing, which proves the
+      // password; the retry starts at the corrupt op, so it has no such evidence.
       expect(
-        countExpectedDiagnosticLogs(exportedLogs, corruptSuffix, validPageOpIds.length),
-      ).toBeGreaterThanOrEqual(2);
+        countExpectedDiagnosticLogs(
+          exportedLogs,
+          corruptSuffix,
+          validPageOpIds.length,
+          'confirmed-for-some-operations',
+        ),
+      ).toBeGreaterThanOrEqual(1);
+      expect(
+        countExpectedDiagnosticLogs(
+          exportedLogs,
+          corruptSuffix,
+          0,
+          'no-operation-decrypted',
+        ),
+      ).toBeGreaterThanOrEqual(1);
       expect(exportedLogsText).not.toContain(user.token);
       expect(exportedLogsText).not.toContain(encryptionPassword);
       expect(exportedLogsText).not.toContain(corruptSuffix.encryptedPayload);
@@ -357,6 +410,7 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
       }
       expect(exportedLogsText).not.toContain(taskName);
     } finally {
+      stopAcceptingFreshConfirm?.();
       if (clientA) await closeClient(clientA);
       if (clientB) {
         await unrouteSuperSyncOps(clientB.page).catch(() => {});
@@ -365,7 +419,7 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
     }
   });
 
-  test('refuses the destructive overwrite from the stuck client and leaves the server copy intact', async ({
+  test('offers no server overwrite from the stuck client and leaves the server copy intact', async ({
     browser,
     baseURL,
     testRunId,
@@ -373,6 +427,7 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
     test.setTimeout(150000);
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
+    let stopAcceptingFreshConfirm: (() => void) | null = null;
 
     try {
       const user = await createTestUser(testRunId);
@@ -403,6 +458,7 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
       clientA = null;
 
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+      stopAcceptingFreshConfirm = acceptFreshClientConfirm(clientB.page);
       await clientB.sync.setupSuperSync({
         ...syncConfig,
         waitForInitialSync: false,
@@ -411,56 +467,25 @@ test.describe('@supersync @encryption #9256 final-page decrypt failure', () => {
       const decryptErrorDialog = clientB.page.locator('dialog-handle-decrypt-error');
       await expect(decryptErrorDialog).toBeVisible({ timeout: 30000 });
 
-      // The download never committed, so this client holds nothing of the
-      // user's — the state in which overwriting destroys their only copy.
+      // The kept prefix makes this device look like any synced device, so the
+      // #9931 "holds nothing" refusal can no longer protect the unreadable
+      // suffix. The dialog therefore offers no overwrite at all: it cannot tell
+      // a wrong password from a corrupt or foreign-key op.
       await expect(
-        clientB.page.locator(`task:has-text("${taskName}")`),
-      ).not.toBeVisible();
+        decryptErrorDialog.locator('button').filter({ hasText: /overwrite/i }),
+      ).toHaveCount(0);
 
-      const nativeMessages: string[] = [];
-      const dialogHandler = async (dialog: Dialog): Promise<void> => {
-        nativeMessages.push(normalizeDialogMessage(dialog.message()));
-        await dialog.accept();
-      };
-      clientB.page.on('dialog', dialogHandler);
-      try {
-        await decryptErrorDialog
-          .locator('input[type="password"]')
-          .fill(encryptionPassword);
-        await decryptErrorDialog
-          .locator('button')
-          .filter({ hasText: /overwrite server/i })
-          .click();
-        await expect.poll(() => nativeMessages.length, { timeout: 30000 }).toBe(1);
-      } finally {
-        clientB.page.off('dialog', dialogHandler);
-      }
+      await decryptErrorDialog
+        .getByRole('button', { name: 'Cancel', exact: true })
+        .click();
+      await expect(decryptErrorDialog).not.toBeVisible();
 
-      // The refusal fires INSTEAD of the destructive confirmation. Asserting the
-      // absence of DECRYPT_OVERWRITE is the point: reaching that prompt would
-      // mean the guard let an empty device through to the clean slate.
-      expect(nativeMessages[0]).toMatch(
-        translationRegex(
-          'F.SYNC.D_NOTHING_TO_UPLOAD.TITLE',
-          'F.SYNC.D_NOTHING_TO_UPLOAD.MESSAGE',
-        ),
-      );
-      expect(nativeMessages[0]).not.toMatch(
-        translationRegex('F.SYNC.C.DECRYPT_OVERWRITE'),
-      );
-
-      // Onboarding example tasks are created on a timer even though the initial
-      // sync failed, so this also proves they are excluded from the "does this
-      // device hold anything?" test — the unit specs cover the predicate, this
-      // covers the real store the predicate reads.
-      await expect(decryptErrorDialog).toBeVisible();
-
-      // The strongest assertion: FORCE_UPLOAD would have made the server delete
-      // its operations. Every one is still there, corrupt suffix included.
+      // Every server operation is still there, corrupt suffix included.
       const historyAfter = await downloadServerHistory(user.token);
       const opIdsAfter = historyAfter.ops.map(({ op }) => op.id).sort();
       expect(opIdsAfter).toEqual([...opIdsBefore, corruptSuffix.opId].sort());
     } finally {
+      stopAcceptingFreshConfirm?.();
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
     }

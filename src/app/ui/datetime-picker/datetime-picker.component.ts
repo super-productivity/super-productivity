@@ -28,11 +28,14 @@ import { MatOption } from '@angular/material/core';
 import { TranslateModule, TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../t.const';
 import { DateService } from '../../core/date/date.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { GlobalConfigService } from '../../features/config/global-config.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import {
   TaskReminderOption,
   TaskReminderOptionId,
 } from '../../features/tasks/task.model';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TASK_REMINDER_OPTIONS } from '../../features/planner/dialog-schedule-task/task-reminder-options.const';
 import { TimeStepDirective } from '../time-step/time-step.directive';
 import { expandFadeAnimation } from '../animations/expand.ani';

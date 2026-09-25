@@ -32,6 +32,7 @@ import { PluginIconComponent } from '../plugin-icon/plugin-icon.component';
 import { PluginConfigDialogComponent } from '../plugin-config-dialog/plugin-config-dialog.component';
 import { IS_ELECTRON } from '../../../app.constants';
 import { PluginLog } from '../../../core/log';
+import { SnackService } from '../../../core/snack/snack.service';
 import { PluginBridgeService } from '../../plugin-bridge.service';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { LanguageCode } from '../../../core/locale.constants';
@@ -93,6 +94,7 @@ export class PluginManagementComponent {
   private readonly _router = inject(Router);
   private readonly _layoutService = inject(LayoutService);
   private readonly _pluginBridge = inject(PluginBridgeService);
+  private readonly _snackService = inject(SnackService);
   private readonly _allIssueProviders = this._store.selectSignal(selectAllIssueProviders);
 
   // Language code to human-readable name mapping
@@ -300,7 +302,16 @@ export class PluginManagementComponent {
     this.uploadError.set(null);
 
     try {
-      await this._pluginService.loadPluginFromZip(file);
+      const plugin = await this._pluginService.loadPluginFromZip(file);
+      // A plugin whose code fails at load time still resolves, with `error`
+      // set and its card showing the failure; only a clean load gets a snack.
+      if (!plugin.error) {
+        this._snackService.open({
+          type: 'SUCCESS',
+          msg: T.PLUGINS.PLUGIN_INSTALLED,
+          translateParams: { name: plugin.manifest.name },
+        });
+      }
 
       // Clear the input
       input.value = '';

@@ -12,8 +12,10 @@ import {
   IS_ANDROID_WEB_VIEW,
   IS_ANDROID_WEB_VIEW_TOKEN,
 } from '../../util/is-android-web-view';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { androidInterface } from '../../features/android/android-interface';
 import { Observable } from 'rxjs';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { GlobalConfigService } from '../../features/config/global-config.service';
 
 export interface ScheduleReminderOptions {

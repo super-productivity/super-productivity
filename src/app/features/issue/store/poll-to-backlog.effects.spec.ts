@@ -12,6 +12,7 @@ import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { JIRA_TYPE } from '../issue.const';
 import { IssueProvider } from '../issue.model';
+import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 
 describe('PollToBacklogEffects', () => {
   let effects: PollToBacklogEffects;
@@ -20,6 +21,8 @@ describe('PollToBacklogEffects', () => {
   let issueServiceSpy: jasmine.SpyObj<IssueService>;
   let workContextServiceSpy: jasmine.SpyObj<WorkContextService>;
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
+  let isInSyncWindow: boolean;
+  let isInitialSyncDone: boolean;
 
   const createMockIssueProvider = (
     overrides: Partial<IssueProvider> = {},
@@ -54,6 +57,9 @@ describe('PollToBacklogEffects', () => {
 
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
 
+    isInSyncWindow = false;
+    isInitialSyncDone = true;
+
     TestBed.configureTestingModule({
       providers: [
         PollToBacklogEffects,
@@ -65,7 +71,14 @@ describe('PollToBacklogEffects', () => {
         { provide: WorkContextService, useValue: workContextServiceSpy },
         {
           provide: SyncTriggerService,
-          useValue: { afterInitialSyncDoneAndDataLoadedInitially$: of(true) },
+          useValue: {
+            afterInitialSyncDoneAndDataLoadedInitially$: of(true),
+            isInitialSyncDoneSync: () => isInitialSyncDone,
+          },
+        },
+        {
+          provide: HydrationStateService,
+          useValue: { isInSyncWindow: () => isInSyncWindow },
         },
         {
           provide: SnackService,
@@ -303,6 +316,59 @@ describe('PollToBacklogEffects', () => {
       expect(
         issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
       ).toHaveBeenCalledTimes(2);
+    }));
+
+    it('should NOT poll on a tick that falls inside the sync window, but poll on the next tick', fakeAsync(() => {
+      const provider = createMockIssueProvider({
+        id: 'jira-1',
+        defaultProjectId: 'project-2',
+        isAutoAddToBacklog: true,
+        pollingMode: 'always',
+      });
+
+      store.overrideSelector(selectEnabledIssueProviders, [provider]);
+      store.refreshState();
+
+      const actionsSubject = new Subject<any>();
+      actions$ = actionsSubject.asObservable();
+
+      isInSyncWindow = true;
+      effects.pollNewIssuesToBacklogAlways$.subscribe();
+
+      tick(10001);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).not.toHaveBeenCalled();
+
+      // window closed -> the next tick must retry
+      isInSyncWindow = false;
+      tick(300000);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).toHaveBeenCalledWith(JIRA_TYPE, 'jira-1', true);
+    }));
+
+    it('should NOT poll while the initial sync is not done yet', fakeAsync(() => {
+      const provider = createMockIssueProvider({
+        id: 'jira-1',
+        defaultProjectId: 'project-2',
+        isAutoAddToBacklog: true,
+        pollingMode: 'always',
+      });
+
+      store.overrideSelector(selectEnabledIssueProviders, [provider]);
+      store.refreshState();
+
+      const actionsSubject = new Subject<any>();
+      actions$ = actionsSubject.asObservable();
+
+      isInitialSyncDone = false;
+      effects.pollNewIssuesToBacklogAlways$.subscribe();
+
+      tick(10001);
+      expect(
+        issueServiceSpy.checkAndImportNewIssuesToBacklogForProject,
+      ).not.toHaveBeenCalled();
     }));
   });
 });

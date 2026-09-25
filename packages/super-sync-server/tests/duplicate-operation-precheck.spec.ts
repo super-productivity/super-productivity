@@ -503,7 +503,8 @@ describe('Duplicate Operation Pre-check', () => {
         where: { userId: 1 },
         data: { lastSeq: { decrement: 1 } },
       });
-      expect(tx.syncDevice.upsert).toHaveBeenCalled();
+      expect(tx.syncDevice.upsert).not.toHaveBeenCalled();
+      expect(prisma.syncDevice.upsert).toHaveBeenCalled();
     });
 
     it('should reject insert-race ID collisions instead of marking them synced', async () => {
@@ -576,7 +577,8 @@ describe('Duplicate Operation Pre-check', () => {
         where: { userId: 1 },
         data: { lastSeq: { decrement: 1 } },
       });
-      expect(tx.syncDevice.upsert).toHaveBeenCalled();
+      expect(tx.syncDevice.upsert).not.toHaveBeenCalled();
+      expect(prisma.syncDevice.upsert).toHaveBeenCalled();
     });
 
     it('should not report non-id insert skips as duplicate operations', async () => {
@@ -622,6 +624,7 @@ describe('Duplicate Operation Pre-check', () => {
       expect(results[0].error).toBe('Transaction failed - please retry');
       expect(tx.userSyncState.update).toHaveBeenCalledTimes(1);
       expect(tx.syncDevice.upsert).not.toHaveBeenCalled();
+      expect(prisma.syncDevice.upsert).not.toHaveBeenCalled();
     });
 
     it('should classify PostgreSQL repeatable-read serialization failures as retryable', async () => {

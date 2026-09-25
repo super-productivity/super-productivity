@@ -12,6 +12,7 @@ import {
 import { _resetDevErrorState } from '../../../util/dev-error';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
+import { allDataWasLoaded } from '../../../root-store/meta/all-data-was-loaded.actions';
 import { ActionType, OpType, Operation } from '../../../op-log/core/operation.types';
 
 describe('Task Reducer', () => {
@@ -51,6 +52,13 @@ describe('Task Reducer', () => {
     },
     currentTaskId: 'task1',
   };
+
+  it('marks replayed tasks loaded when startup completes without a snapshot', () => {
+    const result = taskReducer(stateWithTasks, allDataWasLoaded());
+    expect(result.isDataLoaded).toBeTrue();
+    expect(result.entities).toBe(stateWithTasks.entities);
+    expect(result.currentTaskId).toBe(stateWithTasks.currentTaskId);
+  });
 
   const stubWindowConfirm = (returnValue: boolean): void => {
     if (jasmine.isSpy(window.confirm)) {
@@ -667,6 +675,35 @@ describe('Task Reducer', () => {
       expect(state.entities['subTask2']).toBe(doneSub2);
     });
 
+    // A reducer throw escapes the NgRx State scan (no boxing meta-reducer for
+    // these actions) and kills the state subscription — the whole store then
+    // silently drops every later (remote) op until restart.
+    it('should unset the current task instead of throwing for a missing task', () => {
+      const state = taskReducer(
+        stateWithTasks,
+        fromActions.setCurrentTask({ id: 'ALREADY_ARCHIVED' }),
+      );
+
+      expect(state.currentTaskId).toBeNull();
+    });
+
+    it('should skip missing subtasks instead of throwing', () => {
+      const state = taskReducer(
+        {
+          ...stateWithTasks,
+          ids: ['task1', 'task2', 'subTask2'],
+          entities: {
+            task1: stateWithTasks.entities['task1'],
+            task2: stateWithTasks.entities['task2'],
+            subTask2: stateWithTasks.entities['subTask2'],
+          },
+        },
+        fromActions.setCurrentTask({ id: 'task1' }),
+      );
+
+      expect(state.currentTaskId).toBe('subTask2');
+    });
+
     it('should preserve lastCurrentTaskId on a no-op unsetCurrentTask', () => {
       const pausedState: TaskState = {
         ...stateWithTasks,
@@ -677,6 +714,36 @@ describe('Task Reducer', () => {
 
       expect(state.currentTaskId).toBeNull();
       expect(state.lastCurrentTaskId).toBe('task1');
+    });
+  });
+
+  describe('removeTimeSpent', () => {
+    it('should subtract the duration for an existing task', () => {
+      const tracked = createTask('task2', {
+        timeSpentOnDay: { '2026-01-01': 5000 },
+        timeSpent: 5000,
+      });
+      const state = taskReducer(
+        { ...stateWithTasks, entities: { ...stateWithTasks.entities, task2: tracked } },
+        fromActions.removeTimeSpent({ id: 'task2', date: '2026-01-01', duration: 2000 }),
+      );
+
+      expect(state.entities['task2']!.timeSpentOnDay['2026-01-01']).toBe(3000);
+    });
+
+    // Same store-killing throw as setCurrentTask: the idle dialog untracks idle
+    // time for a task a remote moveToArchive may have removed meanwhile.
+    it('should return state unchanged for a missing task instead of throwing', () => {
+      const state = taskReducer(
+        stateWithTasks,
+        fromActions.removeTimeSpent({
+          id: 'ALREADY_ARCHIVED',
+          date: '2026-01-01',
+          duration: 2000,
+        }),
+      );
+
+      expect(state).toBe(stateWithTasks);
     });
   });
 

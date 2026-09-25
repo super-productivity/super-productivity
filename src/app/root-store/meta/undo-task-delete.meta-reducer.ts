@@ -9,6 +9,7 @@ import { Project } from '../../features/project/project.model';
 import { Action, ActionReducer } from '@ngrx/store';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { Log } from '../../core/log';
+import { PersistentAction } from '../../op-log/core/persistent-action.interface';
 
 /**
  * Payload structure for restoring a deleted task.
@@ -57,14 +58,30 @@ export const getLastDeletePayload = (): RestoreDeletedTaskPayload | null => {
  *
  * The captured payload is retrieved via getLastDeletePayload() and used
  * by the snackbar effect to dispatch restoreDeletedTask with full data.
+ *
+ * The capture is only committed once the delete reducer has returned: since
+ * #10195 a throw further in is caught by reducerFailureGuardMetaReducer and
+ * the app keeps running, so an early write would leave a payload for a delete
+ * that never happened — and an undo snack still open from the PREVIOUS delete
+ * would then restore the wrong task (a synced write). Remote deletes are
+ * skipped entirely: they never show an undo snack, so capturing them could
+ * only overwrite the payload a local delete's snack still holds.
  */
 export const undoTaskDeleteMetaReducer = (
   reducer: ActionReducer<any, any>,
 ): ActionReducer<any, any> => {
   return (state: RootState, action: Action) => {
     if (action.type === TaskSharedActions.deleteTask.type) {
+      if ((action as PersistentAction).meta.isRemote) {
+        // Replayed ops (sync, hydration) show no undo snack, but capturing
+        // here would overwrite the payload a local delete's snack still holds.
+        return reducer(state, action);
+      }
       const { task } = action as ReturnType<typeof TaskSharedActions.deleteTask>;
-      lastDeletePayload = captureTaskDeletePayload(state, task);
+      const payload = captureTaskDeletePayload(state, task);
+      const nextState = reducer(state, action);
+      lastDeletePayload = payload;
+      return nextState;
     }
     return reducer(state, action);
   };
