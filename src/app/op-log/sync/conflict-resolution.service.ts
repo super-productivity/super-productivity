@@ -3289,8 +3289,8 @@ export class ConflictResolutionService {
    * agree those are archived, only the discarded local snapshot differs
    * (standard remote-archive-wins precedence).
    *
-   * Groups whose every row won locally are skipped: the pre-existing
-   * `_createArchiveWinOp` recreation already re-emits the full task set.
+   * Groups whose every row won locally keep the pre-existing full-set
+   * `_createArchiveWinOp` recreation, unless a task was restored (#10220).
    * When a group mixes winners (some tasks remote-archived, others winning
    * against plain remote edits), the archive-win rows' full-set recreation is
    * swapped for the scoped op so the replacement cannot re-assert the
@@ -3340,9 +3340,6 @@ export class ConflictResolutionService {
 
     const additionalOps: Operation[] = [];
     for (const group of groups.values()) {
-      if (group.remoteWinnerIds.size === 0) {
-        continue;
-      }
       const retainedEntityIds = getBulkArchiveTopLevelIds(group.archiveOp).filter(
         (entityId) => !group.remoteWinnerIds.has(entityId),
       );
@@ -3363,6 +3360,9 @@ export class ConflictResolutionService {
           stillArchivedEntityIds.push(entityId);
         }
       }
+      const hasRestoredTask = stillArchivedEntityIds.length < retainedEntityIds.length;
+      // All rows won locally, nothing restored: keep the full-set recreation.
+      if (group.remoteWinnerIds.size === 0 && !hasRestoredTask) continue;
 
       // With nothing left to re-assert, the replacement is skipped entirely —
       // any archive-win row still holding the FULL-SET recreation is handled
