@@ -200,6 +200,61 @@ describe('bulk-archive-filter.util', () => {
         ]),
       );
     });
+
+    it('keeps the first restore index when a duplicate restore follows', () => {
+      const result = collectTaskRemovalEntityIdsFromBatch(
+        [archiveOp('1'), restoreOp, restoreOp],
+        state,
+      );
+
+      expect(result.restoredAt).toEqual(
+        new Map([
+          ['parent', 1],
+          ['child', 1],
+        ]),
+      );
+    });
+
+    it('ignores a restore whose root is still active', () => {
+      const result = collectTaskRemovalEntityIdsFromBatch(
+        [
+          createOperation({
+            id: 'delete-child',
+            opType: OpType.Delete,
+            actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+            entityIds: ['child'],
+          }),
+          restoreOp,
+        ],
+        state,
+      );
+
+      expect(result.all).toEqual(new Set(['child']));
+      expect(result.restoredAt.size).toBe(0);
+    });
+
+    it('does not let a filtered update revive the root before a later restore', () => {
+      const result = collectTaskRemovalEntityIdsFromBatch(
+        [
+          archiveOp('1'),
+          createOperation({
+            id: 'stale-parent-update',
+            actionType: toLwwUpdateActionType('TASK'),
+            entityId: 'parent',
+            payload: { id: 'parent', title: 'stale' },
+          }),
+          restoreOp,
+        ],
+        state,
+      );
+
+      expect(result.restoredAt).toEqual(
+        new Map([
+          ['parent', 2],
+          ['child', 2],
+        ]),
+      );
+    });
   });
 
   it('should strip archived task IDs from project LWW payload arrays', () => {

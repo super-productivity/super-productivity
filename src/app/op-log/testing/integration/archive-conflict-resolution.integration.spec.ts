@@ -1502,6 +1502,44 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
         expect(state[TASK_FEATURE_NAME].entities[SUB]!.parentId).toBe(TASK_A);
       });
 
+      it('keeps a deleted child removed when a duplicate restore of its active parent precedes a stale update', () => {
+        const deleteOp = opFor(
+          TaskSharedActions.deleteTasks({ taskIds: [SUB] }) as PersistentAction,
+          2_000,
+        );
+        const staleChildUpdate = resolver.createLWWUpdateOp(
+          'TASK',
+          SUB,
+          subTask,
+          REMOTE_CLIENT_ID,
+          clock,
+          4_000,
+        );
+        const { state, failures } = replayBatch(initialState(), [
+          deleteOp,
+          restoreOp(),
+          staleChildUpdate,
+        ]);
+
+        expect(failures).toEqual([]);
+        expect(state[TASK_FEATURE_NAME].ids).not.toContain(SUB);
+        expect(state[TASK_FEATURE_NAME].entities[SUB]).toBeUndefined();
+        expect(state[TASK_FEATURE_NAME].entities[TASK_A]!.subTaskIds).toEqual([]);
+      });
+
+      it('preserves an update between a successful restore and its duplicate', () => {
+        const { state, failures } = replayBatch(initialState(), [
+          archiveOp(),
+          restoreOp(),
+          taskUpdateOp(4_000),
+          restoreOp(),
+        ]);
+
+        expect(failures).toEqual([]);
+        expect(state[TASK_FEATURE_NAME].entities[TASK_A]!.title).toBe('LWW title');
+        expect(state[TASK_FEATURE_NAME].entities[SUB]!.parentId).toBe(TASK_A);
+      });
+
       // Outcome pin, not a guard for the batch strip: `lwwUpdateMetaReducer`'s
       // orphan filter also drops A there (A is absent until the restore).
       it('keeps the task in its project once when a PROJECT LWW Update sits BETWEEN the archive and the restore', () => {
