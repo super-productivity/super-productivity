@@ -33,22 +33,20 @@
  *   likeliest typo of the fix this rule asks for, so it has to stay reported.
  *
  * The error allowlist (`e`, `err`, `statError`) keeps `Log.err(e)` usable; it
- * does not certify the value. `log.ts` narrows to name/message/stack only for a
- * real `instanceof Error`, and Angular's `HttpErrorResponse` is not one — it is
- * stringified whole, exporting `.url` and the response body. An HTTP catch
- * block still needs a hand-written scrub, as `calendar-integration.service.ts`
- * does for iCal URLs carrying a secret token.
+ * does not certify the value. `log.ts` narrows a real `instanceof Error` to
+ * name/message/stack and Angular's `HttpErrorResponse` to name/status/
+ * statusText. Any other error-shaped value is stringified whole, including a
+ * response body taken off an `HttpErrorResponse` (`err.error`).
  *
  * Known gaps (accepted — this is a tripwire against the common accident, not
  * proof of absence). It reasons about shape, never about what a value holds, so
  * a call result (`JSON.stringify(task)`, `ev.getFirstPropertyValue('summary')`),
  * an interpolation, a named member access (`task.title`), a variable assigned
  * user content earlier, or a logger reached through a member chain
- * (`api.log.err(...)` in bundled plugins) all pass. Two shapes were considered
- * and left out on evidence — neither occurs in src/app today, and guarding
- * them cost more than it bought: an entity dictionary riding the id suffix
- * (`tasksById`), and an `as HttpErrorResponse` assertion, which the paragraph
- * above explains is not narrowed by log.ts. A reviewer still has to think.
+ * (`api.log.err(...)` in bundled plugins) all pass. One shape was considered
+ * and left out on evidence — it does not occur in src/app today, and guarding
+ * it cost more than it bought: an entity dictionary riding the id suffix
+ * (`tasksById`). A reviewer still has to think.
  *
  * Scoped to src/app (excluding specs) via eslint.config.js.
  */
