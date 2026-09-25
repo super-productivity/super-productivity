@@ -869,8 +869,10 @@ but differ in pagination and baseline behavior. For SuperSync, one normal cycle:
    effects, applied IDs, and clocks are durable;
 4. uploads pending local rows in bounded batches and processes per-operation
    acceptance/rejection results plus any piggybacked remote operations; and
-5. re-uploads newly synthesized local-win operations in the same cycle through a
-   bounded reconciliation loop.
+5. re-uploads newly synthesized local-win operations, plus any operation the
+   server rejected with a retryable `INTERNAL_ERROR`, in the same cycle through
+   a bounded reconciliation loop; whatever is still pending after the budget is
+   reported as `UNKNOWN_OR_CHANGED`, never `IN_SYNC`.
 
 An incompatible operation, failed apply, or cancelled full-state decision leaves
 its operation and suffix uncommitted, so a later cycle downloads them again. The
@@ -1011,6 +1013,25 @@ When a `moveToArchive` operation conflicts with a field-level update (e.g., rena
 **Implementation:** `ConflictResolutionService` checks whether either the local or remote side contains a `TASK_SHARED_MOVE_TO_ARCHIVE` action. If so, the archive side wins automatically, and a new archive operation is created with a merged vector clock (via `_createArchiveWinOp()`).
 
 This is the **first level** of archive resurrection prevention. The **second level** is the [bulk archive filter](../../src/app/op-log/apply/bulk-archive-filter.util.ts), which pre-scans operation batches for archive operations and skips any LWW Update operations targeting entities being archived in the same batch. This two-level defense handles the 3+ client scenario where LWW Updates can arrive before or after archive ops in the same batch.
+
+Both levels only work if the archive op DECLARES the entity. A client awake on
+the websocket downloads one op per trigger, so an LWW Update that escaped level
+1 arrives in its own batch, where level 2 has no archive op to match — and the
+update recreates the task next to its archived copy. There is deliberately no
+receiver-side "is it in the archive?" guard: such a check cannot tell an update
+concurrent with the archive from a legitimate later re-introduction (a
+superseded `restoreTask` is re-emitted as a plain LWW Update), and skipping the
+latter diverges clients permanently. The fix is upstream — declare the full
+footprint so level 1 never lets the update through. A pre-fix sender can still
+cause one visible, re-archivable resurrection during a mixed-fleet rollout.
+
+**Footprint:** `moveToArchive.meta.entityIds` lists the top-level tasks AND the
+subtasks its reducer cascades to (`collectArchivedTaskEntityIds`), so archive
+precedence applies to concurrent subtask edits on both the client and the
+server conflict probe. Old ops carry top-level ids only; every consumer
+re-derives the cascade. Partial-rejection re-scoping keys on the payload's
+top-level `tasks` and re-derives the footprint from the scoped tasks
+(`scopeBulkArchivePayload`).
 
 **Key files:**
 

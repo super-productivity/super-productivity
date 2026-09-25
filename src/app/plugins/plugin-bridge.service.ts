@@ -1194,6 +1194,7 @@ export class PluginBridgeService implements OnDestroy {
       PluginLog.log('PluginBridge: Validating task reorder', {
         requestedTaskIds: taskIds,
         projectTaskIds: allProjectTaskIds,
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         actualTasksInProject: taskIdsInProject,
         projectId: contextId,
       });
@@ -1505,6 +1506,7 @@ export class PluginBridgeService implements OnDestroy {
 
     PluginLog.log('PluginBridge: Header button registered', {
       pluginId,
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       headerBtnCfg,
     });
   }
@@ -1558,6 +1560,7 @@ export class PluginBridgeService implements OnDestroy {
 
     PluginLog.log('PluginBridge: Menu entry registered', {
       pluginId,
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       menuEntryCfg,
     });
   }
@@ -1695,6 +1698,7 @@ export class PluginBridgeService implements OnDestroy {
 
     PluginLog.log('PluginBridge: Side panel button registered', {
       pluginId,
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       sidePanelBtnCfg,
     });
   }

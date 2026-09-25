@@ -61,7 +61,7 @@ For local SuperSync E2E (docker-compose) and the full E2E reference, see [`e2e/C
 
 ## Project rules
 
-- **Translations:** UI strings go through `T` / `TranslateService`. Edit only `en.json`; never other locales.
+- **Translations:** UI strings go through `T` / `TranslateService`. Edit only `en.json`; never other locales — **except placeholders**: when an English string gains a `{{placeholder}}`, hand-edit every locale that already translates that string, because the i18n script only fills in keys that are missing entirely → [`docs/TRANSLATING.md`](docs/TRANSLATING.md).
 - **Privacy:** no analytics or tracking — user data stays local unless explicitly synced.
 - **Dependencies:** PRs must not add new packages to the root project's `dependencies` or `devDependencies`; use platform APIs, existing packages, or a small in-repo implementation instead. Dependencies scoped to an individual plugin are allowed when they are necessary and remain isolated to that plugin.
 - **Electron:** check `IS_ELECTRON` before using Electron-specific APIs.

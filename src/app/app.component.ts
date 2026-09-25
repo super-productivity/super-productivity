@@ -80,6 +80,7 @@ import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bot
 import { StartupService } from './core/startup/startup.service';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { AppUriTaskActionsService } from './features/tasks/app-uri-actions/app-uri-task-actions.service';
+import { IosShareService } from './features/tasks/ios-share/ios-share.service';
 import { ExampleTasksService } from './core/example-tasks/example-tasks.service';
 import { KeyboardLayoutService } from './core/keyboard-layout/keyboard-layout.service';
 import { setKeyboardLayoutService } from './util/check-key-combo';
@@ -171,6 +172,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   // Injected only to trigger its constructor eagerly at app start, so a
   // cold-launch add-task/complete-task URL action is never missed.
   private _appUriTaskActionsService = inject(AppUriTaskActionsService);
+  private _iosShareService = inject(IosShareService);
   readonly onboardingHintService = inject(OnboardingHintService);
 
   private _syncTriggerService = inject(SyncTriggerService);
@@ -238,6 +240,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   constructor() {
     this._startupService.init();
+    this._iosShareService.start();
     void this._materialIconsLoaderService.ensureFontReady();
 
     // Skip onboarding for existing users with data

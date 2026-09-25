@@ -3265,7 +3265,7 @@
     "UNABLE_TO_PERSIST_DATA": "Nie można zapisać danych w magazynie wtyczki",
     "UNKNOWN_ERROR": "Wystąpił nieznany błąd",
     "UPLOAD_PLUGIN_INSTRUCTION": "Prześlij plik ZIP wtyczki, aby ją zainstalować:",
-    "VALIDATION_FAILED": "Walidacja nie powiodła się",
+    "VALIDATION_FAILED": "Walidacja nie powiodła się: {{errors}}",
     "ICON_TOO_LARGE": "Ikona wtyczki jest za duża (maks. {{maxSize}}KB)",
     "INDEX_HTML_TOO_LARGE": "index.html wtyczki jest za duży (maks. {{maxSize}}KB)",
     "ALLOWED_HOSTS": "Dostęp do sieci",

@@ -41,6 +41,7 @@ import {
 } from '../core/operation.types';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { PROJECT_DELETE_WINS_MARKER } from '../../root-store/meta/task-shared.actions';
+import { scopeBulkArchivePayload } from './scope-bulk-archive-payload.util';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
@@ -51,7 +52,11 @@ import {
 } from '../persistence/operation-log-store.service';
 import { OpLog } from '../../core/log';
 import { toEntityKey } from '../util/entity-key.util';
-import { getOpEntityIds, isMultiEntityOperation } from '../util/get-op-entity-ids.util';
+import {
+  getBulkArchiveTopLevelIds,
+  getOpEntityIds,
+  isMultiEntityOperation,
+} from '../util/get-op-entity-ids.util';
 import { firstValueFrom } from 'rxjs';
 import { SnackService } from '../../core/snack/snack.service';
 import { BannerService } from '../../core/banner/banner.service';
@@ -92,6 +97,7 @@ import { SyncConflictBannerService } from './sync-conflict-banner.service';
 import { buildConflictJournalEntry } from './conflict-journal-emission.util';
 import {
   hasOpaqueChanges,
+  isAdditiveTimeOp,
   isDisjointMergeEligible,
   mergeChangedFields,
   synthesizeMergedChanges,
@@ -2674,6 +2680,16 @@ export class ConflictResolutionService {
       return undefined;
     }
 
+    // Additive time ops (syncTimeSpent, removeTimeSpent) carry a DELTA. The
+    // disjointness test counts syncTimeSpent as touching the time fields so a
+    // non-time edit can commute with it on the no-pending path, but a delta can
+    // never be expressed as a merged patch: the synthesized op would write the
+    // delta's arguments onto the task as fields and the original op would be
+    // rejected, dropping the tracked time (#10147). Whole-entity LWW instead.
+    if ([...conflict.localOps, ...conflict.remoteOps].some(isAdditiveTimeOp)) {
+      return undefined;
+    }
+
     if (
       !isDisjointMergeEligible({
         localOps: conflict.localOps,
@@ -3302,7 +3318,7 @@ export class ConflictResolutionService {
       for (const localOp of resolution.conflict.localOps) {
         if (
           localOp.actionType !== ActionType.TASK_SHARED_MOVE_TO_ARCHIVE ||
-          getOpEntityIds(localOp).length <= 1
+          getBulkArchiveTopLevelIds(localOp).length <= 1
         ) {
           continue;
         }
@@ -3324,7 +3340,7 @@ export class ConflictResolutionService {
       if (group.remoteWinnerIds.size === 0) {
         continue;
       }
-      const retainedEntityIds = getOpEntityIds(group.archiveOp).filter(
+      const retainedEntityIds = getBulkArchiveTopLevelIds(group.archiveOp).filter(
         (entityId) => !group.remoteWinnerIds.has(entityId),
       );
 
@@ -3352,7 +3368,13 @@ export class ConflictResolutionService {
         stillArchivedEntityIds.length > 0
           ? await this._createScopedBulkArchiveReplacement(group, stillArchivedEntityIds)
           : undefined;
-      const stillArchivedEntityIdSet = new Set(stillArchivedEntityIds);
+      // Assign by the replacement's FULL footprint (parents + cascaded
+      // subtasks): a child row of a retained parent left without a local-win
+      // op wedges the batch on the mixed-winner throw. Remote-won families are
+      // absent from the scoped payload and stay remote-won.
+      const replacementFootprint = new Set(
+        replacementOp ? getOpEntityIds(replacementOp) : [],
+      );
       let assignedToLocalWinner = false;
       for (const resolution of group.resolutions) {
         if (
@@ -3366,7 +3388,7 @@ export class ConflictResolutionService {
         ) {
           continue;
         }
-        if (replacementOp && stillArchivedEntityIdSet.has(resolution.conflict.entityId)) {
+        if (replacementOp && replacementFootprint.has(resolution.conflict.entityId)) {
           resolution.localWinOp = replacementOp;
           assignedToLocalWinner = true;
           continue;
@@ -3406,47 +3428,14 @@ export class ConflictResolutionService {
       ...conflict.localOps.map((op) => op.vectorClock),
       ...conflict.remoteOps.map((op) => op.vectorClock),
     ]);
-    const retainedEntityIdSet = new Set(retainedEntityIds);
-    const originalPayload = group.archiveOp.payload;
-    // extractActionPayload passes a null/undefined payload through — guard so
-    // a malformed row hits the clean throw below, not a raw TypeError.
-    const originalActionPayload = (extractActionPayload(originalPayload) ?? {}) as Record<
-      string,
-      unknown
-    >;
-    const originalTasks = originalActionPayload['tasks'];
-    if (!Array.isArray(originalTasks)) {
-      throw new Error(
-        `ConflictResolutionService: Cannot scope bulk archive ${group.archiveOp.actionType} - unsupported payload`,
-      );
-    }
-    const scopedActionPayload: Record<string, unknown> = {
-      ...originalActionPayload,
-      tasks: originalTasks.filter((task) => {
-        if (typeof task !== 'object' || task === null) {
-          return false;
-        }
-        const snapshot = task as Record<string, unknown>;
-        return (
-          typeof snapshot['id'] === 'string' && retainedEntityIdSet.has(snapshot['id'])
-        );
-      }),
-    };
-    const scopedPayload = isMultiEntityPayload(originalPayload)
-      ? {
-          ...originalPayload,
-          actionPayload: scopedActionPayload,
-          entityChanges: originalPayload.entityChanges.filter((change) =>
-            retainedEntityIdSet.has(change.entityId),
-          ),
-        }
-      : scopedActionPayload;
+    const { payload: scopedPayload, entityIds: scopedEntityIds } =
+      scopeBulkArchivePayload(group.archiveOp, retainedEntityIds);
 
     return {
       ...group.archiveOp,
       id: uuidv7(),
-      entityId: retainedEntityIds[0],
-      entityIds: retainedEntityIds,
+      entityId: scopedEntityIds[0],
+      entityIds: scopedEntityIds,
       payload: scopedPayload,
       clientId,
       vectorClock: this.mergeAndIncrementClocks(allClocks, clientId),

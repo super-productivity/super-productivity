@@ -370,6 +370,7 @@ export class ValidateStateService {
       }
 
       OpLog.log('[ValidateStateService] State successfully repaired', {
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         repairSummary,
       });
 

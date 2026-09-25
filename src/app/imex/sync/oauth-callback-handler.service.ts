@@ -140,6 +140,7 @@ export class OAuthCallbackHandlerService implements OnDestroy {
       } else if (providerRaw === 'plugin') {
         provider = 'plugin';
       } else {
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         SyncLog.warn('OAuthCallbackHandler: Unknown provider in callback', providerRaw);
         provider = 'unknown';
       }

@@ -833,10 +833,12 @@ describe('FocusModeReducer', () => {
           remainingMs: 10 * 60 * 1000,
           isBreak: false,
           isPaused: true,
+          pausedTaskId: 'paused-task',
         }),
       );
 
       expect(result.timer.isRunning).toBe(false);
+      expect(result.pausedTaskId).toBe('paused-task');
       expect(result.timer.elapsed).toBe(15 * 60 * 1000);
     });
 

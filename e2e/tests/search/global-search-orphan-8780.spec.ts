@@ -103,7 +103,8 @@ const unlistFromItsProject = async (page: Page, taskId: string): Promise<void> =
 /**
  * Strips every context membership from the task so it renders nowhere.
  * Raw actions carry no `meta`, which is fine here: the reducers apply first and
- * the only consequence is a post-reducer isRemote devError that auto-dismisses.
+ * the post-reducer archive handler reads `meta?.isRemote`, so a missing `meta`
+ * simply reads as a local action.
  */
 const makeTaskAnOrphan = async (page: Page, taskId: string): Promise<void> => {
   await page.evaluate((id) => {

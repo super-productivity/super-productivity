@@ -3276,7 +3276,7 @@
     "UNABLE_TO_PERSIST_DATA": "Nie je možné uložiť údaje do úložiska pluginu",
     "UNKNOWN_ERROR": "Vyskytla sa neznáma chyba",
     "UPLOAD_PLUGIN_INSTRUCTION": "Nahrajte ZIP súbor pluginu na jeho inštaláciu:",
-    "VALIDATION_FAILED": "Overenie zlyhalo",
+    "VALIDATION_FAILED": "Overenie zlyhalo: {{errors}}",
     "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Tento doplnok poskytuje integráciu úloh, ktorá sa momentálne používa ({{count}} poskytovateľov úloh). Zakázanie dočasne preruší synchronizáciu úloh pre týchto poskytovateľov, kým nebude doplnok znovu povolený. Naozaj chcete zakázať \"{{name}}\"?",
     "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Nepodarilo sa načítať zoznam komunitných doplnkov",
     "LANGUAGES": "Jazyky:",

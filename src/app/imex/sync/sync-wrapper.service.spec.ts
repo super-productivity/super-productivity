@@ -3656,6 +3656,71 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
+    it('should immediately re-upload an op the server rejected with a transient INTERNAL_ERROR', async () => {
+      // "Concurrent transaction conflict - please retry": the op stays pending
+      // locally, and without a retry in this cycle it sat unsynced until the
+      // next auto-sync tick while the header showed unsynced changes.
+      mockSyncService.downloadRemoteOps.and.resolveTo({ kind: 'no_new_ops' as const });
+      mockSyncService.uploadPendingOps.and.returnValues(
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 0,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [
+            {
+              opId: 'op-1',
+              error: 'Concurrent transaction conflict - please retry',
+              errorCode: 'INTERNAL_ERROR',
+            },
+          ],
+        }),
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 1,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        }),
+      );
+
+      const result = await service.sync();
+
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(result).toBe(SyncStatus.InSync);
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('IN_SYNC');
+    });
+
+    it('should not report IN_SYNC when an op is still transiently rejected after the retry budget', async () => {
+      mockSyncService.downloadRemoteOps.and.resolveTo({ kind: 'no_new_ops' as const });
+      mockSyncService.uploadPendingOps.and.resolveTo({
+        kind: 'completed' as const,
+        uploadedCount: 0,
+        piggybackedOpsCount: 0,
+        localWinOpsCreated: 0,
+        permanentRejectionCount: 0,
+        hasMorePiggyback: false,
+        rejectedOps: [
+          { opId: 'op-1', error: 'server busy', errorCode: 'INTERNAL_ERROR' },
+        ],
+      });
+
+      const result = await service.sync();
+
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(
+        1 + MAX_LWW_REUPLOAD_RETRIES,
+      );
+      expect(result).toBe(SyncStatus.UpdateRemote);
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    });
+
     it('should stop sync when an LWW re-upload reaches a rejected full-state barrier', async () => {
       mockSyncService.downloadRemoteOps.and.resolveTo({ kind: 'no_new_ops' as const });
       mockSyncService.uploadPendingOps.and.returnValues(

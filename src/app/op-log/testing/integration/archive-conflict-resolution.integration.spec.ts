@@ -294,7 +294,8 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
       }) as PersistentAction,
     );
     expect(bulkOp.actionType).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
-    expect(bulkOp.entityIds).toEqual([TASK_A, TASK_B, TASK_C, TASK_D]);
+    // The footprint declares the subtask the archive cascades to, parents first.
+    expect(bulkOp.entityIds).toEqual([TASK_A, TASK_B, TASK_C, TASK_D, 'task-c-sub-1']);
 
     // REMOTE: the other device archived one of the SAME tasks concurrently.
     const remoteOp = buildRemoteArchiveOp(remoteClient(), [TASK_A], bulkOp.timestamp + 1);
@@ -310,7 +311,8 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
     expect(replacement.id).not.toBe(bulkOp.id);
     expect(replacement.actionType).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
     expect(replacement.entityId).toBe(TASK_B);
-    expect(replacement.entityIds).toEqual([TASK_B, TASK_C, TASK_D]);
+    // Re-derived from the scoped tasks, so C's subtask rides along with C.
+    expect(replacement.entityIds).toEqual([TASK_B, TASK_C, TASK_D, 'task-c-sub-1']);
     expect(payloadTaskIds(replacement)).toEqual([TASK_B, TASK_C, TASK_D]);
     const retainedC = (
       replacement.payload as { actionPayload: { tasks: TaskWithSubTasks[] } }

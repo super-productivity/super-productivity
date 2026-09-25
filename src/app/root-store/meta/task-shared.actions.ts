@@ -1,4 +1,5 @@
 import { createActionGroup } from '@ngrx/store';
+import { SUPER_SYNC_MAX_ENTITY_IDS_PER_OP } from '@sp/shared-schema';
 import { Update } from '@ngrx/entity';
 import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
 import { IssueDataReduced } from '../../features/issue/issue.model';
@@ -30,6 +31,59 @@ export const getCalendarAutoImportDismissals = (
       ? [{ issueProviderId: task.issueProviderId, issueId: task.issueId }]
       : [],
   );
+
+interface ArchivedTaskLike {
+  id?: unknown;
+  subTaskIds?: unknown;
+  subTasks?: unknown;
+}
+
+const asArchivedTaskLike = (value: unknown): ArchivedTaskLike | undefined =>
+  value && typeof value === 'object' ? (value as ArchivedTaskLike) : undefined;
+
+const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
+/**
+ * Every task entity a `moveToArchive` removes from active state: the tasks it
+ * names PLUS the subtasks its reducer cascades to.
+ *
+ * `meta.entityIds` is the footprint conflict detection works on — client-side
+ * (`getOpEntityIds` → one conflict row per id) and server-side (the upload
+ * conflict probe). Declaring only the top-level ids meant a concurrent edit to
+ * a SUBTASK of an archived parent never got "archive wins" precedence: its
+ * LWW-resolved snapshot was accepted after the archive and recreated the
+ * subtask next to its archived copy.
+ *
+ * Parents come first so `entityId` (= `entityIds[0]`, assigned in
+ * `operation-log.effects.ts`) stays a top-level task id. Deduped, and
+ * non-string entries are dropped because this array goes on the wire.
+ *
+ * Old ops in existing logs carry top-level ids only; every consumer re-derives
+ * the cascade from the payload/state, so both shapes stay valid.
+ */
+export const collectArchivedTaskEntityIds = (tasks: readonly unknown[]): string[] => {
+  const topLevelIds = tasks.flatMap((task) => {
+    const id = asArchivedTaskLike(task)?.id;
+    return typeof id === 'string' && id !== '' ? [id] : [];
+  });
+  const ids = new Set<string>(topLevelIds);
+  for (const task of tasks) {
+    const taskLike = asArchivedTaskLike(task);
+    if (!taskLike) continue;
+    for (const id of asArray(taskLike.subTaskIds)) {
+      if (typeof id === 'string' && id !== '') ids.add(id);
+    }
+    for (const subTask of asArray(taskLike.subTasks)) {
+      const id = asArchivedTaskLike(subTask)?.id;
+      if (typeof id === 'string' && id !== '') ids.add(id);
+    }
+  }
+  // The server rejects an op declaring more ids than this (INVALID_ENTITY_ID),
+  // which would strand that archive unsynced forever. Degrading to the
+  // pre-cascade footprint keeps a mass archive syncing: receivers still derive
+  // the cascade from the payload.
+  return ids.size > SUPER_SYNC_MAX_ENTITY_IDS_PER_OP ? topLevelIds : [...ids];
+};
 
 /**
  * Shared actions that affect multiple reducers (tasks, projects, tags)
@@ -134,7 +188,9 @@ export const TaskSharedActions = createActionGroup({
       meta: {
         isPersistent: true,
         entityType: 'TASK',
-        entityIds: taskProps.tasks.map((t) => t.id),
+        // Includes the subtasks the reducer cascades to — see
+        // collectArchivedTaskEntityIds for why the footprint must be complete.
+        entityIds: collectArchivedTaskEntityIds(taskProps.tasks),
         opType: OpType.Update,
         isBulk: true,
       } satisfies PersistentActionMeta,

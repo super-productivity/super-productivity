@@ -2,11 +2,15 @@ import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
 import { filter, first, switchMap, tap } from 'rxjs/operators';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { selectAllTasks } from '../../features/tasks/store/task.selectors';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TaskService } from '../../features/tasks/task.service';
 import { T } from '../../t.const';
 import { LS } from '../persistence/storage-keys.const';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { WorkContextType } from '../../features/work-context/work-context.model';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { SyncTriggerService } from '../../imex/sync/sync-trigger.service';

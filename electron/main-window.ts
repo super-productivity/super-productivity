@@ -6,6 +6,7 @@ import {
   ipcMain,
   Menu,
   nativeTheme,
+  screen,
   shell,
 } from 'electron';
 import { errorHandlerWithFrontendInform } from './error-handler-with-frontend-inform';
@@ -14,7 +15,7 @@ import { pathToFileURL } from 'node:url';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { isExternalUrlSchemeAllowed } from './shared-with-frontend/is-external-url-allowed';
 import { isLocalFileUrl, openLocalPath } from './open-url';
-import { readFileSync, stat } from 'fs';
+import { readFileSync, watch } from 'fs';
 import { error, log } from 'electron-log/main';
 import { IS_MAC, IS_GNOME_WAYLAND } from './common.const';
 import {
@@ -35,10 +36,21 @@ import {
   isUserUnmaximize,
   setWasMaximizedBeforeHide,
 } from './window-maximized-state';
+import {
+  clampBoundsToDisplay,
+  initRestoreBounds,
+  isSampleableBounds,
+  parseStoredBounds,
+  setRestoreBounds,
+} from './window-restore-bounds';
 import { markGpuStartupSuccess } from './gpu-startup-guard';
 import { isAppOriginUrl } from './navigation-guard';
 import { assertSecureWebPreferences } from './web-preferences-guard';
 import { applyJiraImageAuth } from './jira-image-auth';
+
+// Long enough to outlast a resize or move gesture, so a drag records one
+// sample rather than one per frame.
+const BOUNDS_SAMPLE_DEBOUNCE_MS = 250;
 
 let mainWin: BrowserWindow;
 
@@ -333,6 +345,34 @@ export const createWindow = async ({
       ? mainWindowState.isMaximized === true
       : persistedWasMaximized === true;
   initWasMaximizedBeforeHide(wasMaximized);
+
+  // #10058: the library gets the un-maximized geometry wrong the same two ways
+  // it gets the flag wrong, so our own copy owns it. Applied before the
+  // maximize below, so un-maximizing lands on these bounds and not on the
+  // full-screen ones the library may have recorded as the restore bounds.
+  const persistedBounds = parseStoredBounds(
+    simpleStore[SimpleStoreKey.WINDOW_RESTORE_BOUNDS],
+  );
+  // Clamp rather than discard. The library resets an overhanging window to
+  // the default size; nudging it onto the nearest display keeps the size the
+  // user actually chose. Tracked as the clamped value too: seeding the raw one
+  // leaves setRestoreBounds() deduping against geometry the window never had,
+  // so the correction would be re-applied on every launch instead of sticking.
+  const restoreBounds = persistedBounds
+    ? clampBoundsToDisplay(
+        persistedBounds,
+        screen.getDisplayMatching(persistedBounds).workArea,
+      )
+    : null;
+  initRestoreBounds(restoreBounds);
+  // manage() above restores full screen (electron-window-state `config.fullScreen`
+  // defaults true), and a full-screen window reports isMaximized() === false, so
+  // this has to exclude it the same way isSampleableBounds() does. The persisted
+  // flag rather than the live getter, because setFullScreen() is async on macOS.
+  if (restoreBounds && !mainWin.isMaximized() && !mainWindowState.isFullScreen) {
+    mainWin.setBounds(restoreBounds);
+  }
+
   if (wasMaximized && !mainWin.isMaximized()) {
     mainWin.maximize();
   }
@@ -354,24 +394,98 @@ export const createWindow = async ({
     if (IS_DEV) {
       mainWin.setTitle('Super Productivity D');
     }
+  });
 
-    // load custom stylesheet if any
-    const CSS_FILE_PATH = app.getPath('userData') + '/styles.css';
-    stat(app.getPath('userData') + '/styles.css', (err) => {
-      if (err) {
-        log('No custom styles detected at ' + CSS_FILE_PATH);
-      } else {
-        log('Loading custom styles from ' + CSS_FILE_PATH);
-        const styles = readFileSync(CSS_FILE_PATH, { encoding: 'utf8' });
+  // load custom stylesheet if any, and re-apply it whenever the file changes
+  const CSS_FILE_PATH = path.join(app.getPath('userData'), 'styles.css');
+  // An inserted-stylesheet key is a counter scoped to the renderer process, so
+  // it only means anything for the document it was inserted into: after a
+  // reload the old key is inert, and after a renderer crash the counter starts
+  // over at 1 and a stale key can collide with — and silently remove — a live
+  // sheet (measured against Electron 43). So tag every key with the document it
+  // belongs to, and never touch a key from an earlier one.
+  let documentGeneration = 0;
+  let insertedCssKey: string | undefined;
+  let insertedCssGeneration = -1;
+  // Count committed navigations (`did-navigate`), not started ones: Electron
+  // emits `did-start-navigation` before `will-navigate`, and the
+  // `preventDefault()` in the navigation guard does not retract it, so a
+  // blocked navigation would bump the counter while the document stays the
+  // same — untracking the live sheet and leaking it on the next apply.
+  // `did-navigate` also doesn't fire for in-page navigations (hash routes).
+  mainWin.webContents.on('did-navigate', () => {
+    documentGeneration++;
+  });
+  // Applies are serialized through a promise chain: the key is read before and
+  // written after the `insertCSS` round-trip, which can take seconds while the
+  // renderer is still booting, so two overlapping runs would otherwise capture
+  // the same previous key and leave the sheet inserted in between untracked.
+  let cssApplyQueue: Promise<void> = Promise.resolve();
+  const applyCustomCss = (): Promise<void> => {
+    cssApplyQueue = cssApplyQueue.then(async () => {
+      if (mainWin.isDestroyed() || mainWin.webContents.isDestroyed()) {
+        return;
+      }
+      try {
+        let styles: string | undefined;
         try {
-          mainWin.webContents.insertCSS(styles);
-          log('Custom styles loaded successfully');
-        } catch (cssError) {
-          error('Failed to load custom styles:', cssError);
+          styles = readFileSync(CSS_FILE_PATH, { encoding: 'utf8' });
+        } catch (readError) {
+          if ((readError as NodeJS.ErrnoException).code !== 'ENOENT') {
+            throw readError;
+          }
         }
+        const isKeyFromCurrentDoc = insertedCssGeneration === documentGeneration;
+        const prevKey = isKeyFromCurrentDoc ? insertedCssKey : undefined;
+        if (styles === undefined) {
+          // Deleting the file un-applies it, just like emptying it does, and
+          // like removing a theme via the in-app installer.
+          insertedCssKey = undefined;
+          insertedCssGeneration = -1;
+          if (prevKey) {
+            await mainWin.webContents.removeInsertedCSS(prevKey);
+          }
+          log('No custom styles detected at ' + CSS_FILE_PATH);
+          return;
+        }
+        insertedCssKey = await mainWin.webContents.insertCSS(styles);
+        // re-read after the await: if a navigation completed while we were
+        // inserting, the sheet belongs to the document that is current now
+        insertedCssGeneration = documentGeneration;
+        if (prevKey) {
+          await mainWin.webContents.removeInsertedCSS(prevKey);
+        }
+        log('Custom styles loaded from ' + CSS_FILE_PATH);
+      } catch (cssError) {
+        error('Failed to load custom styles:', cssError);
       }
     });
-  });
+    return cssApplyQueue;
+  };
+  // covers the initial load as well as every renderer reload (e.g.
+  // `window.ea.reloadMainWin()`), which would otherwise drop the custom CSS
+  mainWin.webContents.on('did-finish-load', () => void applyCustomCss());
+
+  // Watch the folder rather than the file itself: the file may not exist
+  // yet, and editors often save atomically (write temp + rename), which
+  // detaches a watch bound to the original file. Debounced because a
+  // single save usually emits several events.
+  let cssReloadTimer: NodeJS.Timeout | undefined;
+  try {
+    const cssWatcher = watch(app.getPath('userData'), (_ev, fileName) => {
+      if (fileName && path.basename(fileName.toString()) !== 'styles.css') {
+        return;
+      }
+      clearTimeout(cssReloadTimer);
+      cssReloadTimer = setTimeout(() => void applyCustomCss(), 150);
+    });
+    mainWin.webContents.once('destroyed', () => {
+      clearTimeout(cssReloadTimer);
+      cssWatcher.close();
+    });
+  } catch (watchError) {
+    error('Could not watch for custom style changes:', watchError);
+  }
 
   // show gracefully
   mainWin.once('ready-to-show', () => {
@@ -584,6 +698,36 @@ function initWinEventListeners(app: Electron.App): void {
   mainWin.on('hide', () => {
     showTaskWidget();
   });
+
+  // #10058: keep our own copy of the un-maximized geometry. Debounced because
+  // resize and move fire continuously while the user drags; only the settled
+  // value matters, and a sample lost to a crash leaves the previous one in place.
+  let boundsSampleTimeout: NodeJS.Timeout | undefined;
+  const sampleRestoreBounds = (): void => {
+    clearTimeout(boundsSampleTimeout);
+    boundsSampleTimeout = setTimeout(() => {
+      // 'closed' nulls mainWin, and a timer armed by the last resize/move can
+      // still be pending when it fires.
+      if (!mainWin || mainWin.isDestroyed()) {
+        return;
+      }
+      if (
+        !isSampleableBounds({
+          isVisible: mainWin.isVisible(),
+          isMinimized: mainWin.isMinimized(),
+          isMaximized: mainWin.isMaximized(),
+          isFullScreen: mainWin.isFullScreen(),
+        })
+      ) {
+        return;
+      }
+      setRestoreBounds(mainWin.getBounds());
+    }, BOUNDS_SAMPLE_DEBOUNCE_MS);
+  };
+  mainWin.on('resize', sampleRestoreBounds);
+  mainWin.on('move', sampleRestoreBounds);
+  // A pending sample would otherwise hold the event loop open past the close.
+  mainWin.on('closed', () => clearTimeout(boundsSampleTimeout));
 
   // Handle maximize and unmaximize events to change wasMaximizedBeforeHide flag accordingly
   mainWin.on('maximize', () => {

@@ -20,6 +20,7 @@ import {
   DEFAULT_OPTIONS,
   FILTER_COMMON,
   FILTER_OPTION_TYPE,
+  FILTER_PRIORITY,
   FILTER_SCHEDULE,
   FilterOption,
   GROUP_OPTION_TYPE,
@@ -263,6 +264,42 @@ describe('TaskViewCustomizerService', () => {
     expect(filtered.length).toBe(1);
   });
 
+  it('should filter by priority', () => {
+    const tasks: TaskWithSubTasks[] = [
+      { ...mockTasks[0], id: 'high', priority: 'high' },
+      { ...mockTasks[1], id: 'medium', priority: 'medium' },
+      { ...mockTasks[2], id: 'high-2', priority: 'high' },
+      { ...mockTasks[3], id: 'none' },
+    ];
+
+    const filtered = service['applyFilter'](
+      tasks,
+      FILTER_OPTION_TYPE.priority,
+      FILTER_PRIORITY.high,
+    );
+
+    expect(filtered.map((task) => task.id)).toEqual(['high', 'high-2']);
+  });
+
+  it('should filter by NOT_SPECIFIED priority (no priority)', () => {
+    const tasks: TaskWithSubTasks[] = [
+      { ...mockTasks[0], id: 'undefined-priority' },
+      { ...mockTasks[1], id: 'null-priority', priority: null },
+      { ...mockTasks[2], id: 'low', priority: 'low' },
+    ];
+
+    const filtered = service['applyFilter'](
+      tasks,
+      FILTER_OPTION_TYPE.priority,
+      FILTER_COMMON.NOT_SPECIFIED,
+    );
+
+    expect(filtered.map((task) => task.id)).toEqual([
+      'undefined-priority',
+      'null-priority',
+    ]);
+  });
+
   it('should sort by name', () => {
     const sorted = {
       asc: service['applySort'](mockTasks, SORT_OPTION_TYPE.name),
@@ -273,6 +310,34 @@ describe('TaskViewCustomizerService', () => {
     expect(sorted.asc[1].title).toBe('Beta');
     expect(sorted.desc[0].title).toBe('Zebra');
     expect(sorted.desc[1].title).toBe('Third Task');
+  });
+
+  it('should sort by priority with stable equal-rank ordering', () => {
+    const tasks: TaskWithSubTasks[] = [
+      { ...mockTasks[0], id: 'none' },
+      { ...mockTasks[1], id: 'low', priority: 'low' },
+      { ...mockTasks[2], id: 'medium-first', priority: 'medium' },
+      { ...mockTasks[3], id: 'high', priority: 'high' },
+      { ...mockTasks[0], id: 'medium-second', priority: 'medium' },
+    ];
+
+    const asc = service['applySort'](tasks, SORT_OPTION_TYPE.priority);
+    const desc = service['applySort'](tasks, SORT_OPTION_TYPE.priority, SORT_ORDER.DESC);
+
+    expect(asc.map((task) => task.id)).toEqual([
+      'high',
+      'medium-first',
+      'medium-second',
+      'low',
+      'none',
+    ]);
+    expect(desc.map((task) => task.id)).toEqual([
+      'none',
+      'low',
+      'medium-first',
+      'medium-second',
+      'high',
+    ]);
   });
 
   it('should place date-only tasks after timed tasks on the same scheduled day', () => {

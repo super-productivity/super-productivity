@@ -27,7 +27,7 @@ import com.superproductivity.superproductivity.R
 /**
  * Manages a native overlay shown on top of the webview during app startup.
  * Shows a FAB initially; tapping it reveals an input bar for quick task entry.
- * Tasks are stored in WidgetTaskQueue (SharedPreferences) for processing after hydration.
+ * Tasks are stored durably in CaptureInbox and imported by the app after hydration.
  */
 class StartupOverlayManager(private val activity: android.app.Activity) {
     private var overlayView: View? = null
@@ -244,7 +244,13 @@ class StartupOverlayManager(private val activity: android.app.Activity) {
         val title = editText?.text?.toString()?.trim() ?: return
         if (title.isEmpty()) return
 
-        WidgetTaskQueue.addTask(activity, title)
+        try {
+            CaptureInbox.forContext(activity).add(title, "overlay")
+        } catch (e: Exception) {
+            // Keep the typed text so nothing is silently lost. Never log the title.
+            Log.e(TAG, "Failed to store quick-add capture", e)
+            return
+        }
         taskCount++
 
         editText?.text?.clear()
@@ -267,7 +273,7 @@ class StartupOverlayManager(private val activity: android.app.Activity) {
     fun getPartialTextAndPrepare(): String? {
         if (!isBarVisible) return null
         val partialText = editText?.text?.toString()?.trim() ?: ""
-        Log.d(TAG, "getPartialTextAndPrepare: partialText='$partialText', tasksQueued=$taskCount")
+        Log.d(TAG, "getPartialTextAndPrepare: partialTextLength=${partialText.length}, tasksQueued=$taskCount")
         return partialText
     }
 

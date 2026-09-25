@@ -90,6 +90,18 @@
   }
 }
 
+// Priority reads as a coloured icon only (like the overdue schedule icon and
+// the time-conflict "!"); the colour lives inside task-priority-indicator's
+// own encapsulation, so no colour rule here can leak into nested sub-task rows.
+task-priority-indicator {
+  align-self: center;
+  margin: 0 var(--s-quarter);
+
+  @include isDoneForFirstLine {
+    opacity: var(--task-is-done-dim-opacity);
+  }
+}
+
 @mixin timeWrapperMinimalStyles() {
   .time {
     font-size: var(--font-size-md);

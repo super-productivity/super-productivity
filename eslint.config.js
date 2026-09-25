@@ -11,10 +11,10 @@ const localRules = require('eslint-plugin-local-rules');
 //
 // This rides on `@typescript-eslint/no-restricted-imports`, NOT the base rule,
 // and that is load-bearing: flat config replaces a rule entry wholesale —
-// severity included — so sharing one rule id with the durable-clock fence
-// (#9096, below) would silently demote that fence to `warn` on every file the
-// grandfathering block lists. Separate rule ids keep the two severities
-// independent. Do not merge them.
+// options included — so sharing one rule id with the durable-clock fence
+// (#9096, below) would silently drop that fence's pattern on every file both
+// blocks match. Separate rule ids keep the two fences independent. Do not
+// merge them.
 const FEATURE_LAYER_FENCE = {
   group: ['**/features/*', '**/features/**'],
   message:
@@ -32,6 +32,13 @@ const FEATURE_LAYER_DYNAMIC_IMPORT_FENCE = {
 };
 
 module.exports = tseslint.config(
+  // Warnings are inert (`ng lint` defaults to maxWarnings: -1, so CI never fails
+  // on them) and only bury real signal, so every rule here is 'error' or 'off'.
+  // A stale disable directive errors too: that is what ratchets the inline
+  // grandfathering below — fixing a suppressed line forces its directive out.
+  {
+    linterOptions: { reportUnusedDisableDirectives: 'error' },
+  },
   // Global ignores
   {
     ignores: [
@@ -250,9 +257,9 @@ module.exports = tseslint.config(
     },
     rules: {
       'local-rules/require-hydration-guard': 'error',
-      'local-rules/require-entity-registry': 'warn',
+      'local-rules/require-entity-registry': 'error',
       'local-rules/no-actions-in-effects': 'error',
-      'local-rules/no-multi-entity-effect': 'warn',
+      'local-rules/no-multi-entity-effect': 'error',
     },
   },
   // Spelled-out weekday/month names must be formatted with textLocale(), not
@@ -294,74 +301,20 @@ module.exports = tseslint.config(
       'local-rules/no-user-content-in-logs': 'error',
     },
   },
-  // Measured baseline: the call sites that already existed when the rule landed
-  // (80 hits across these 40 files, measured 2026-09), downgraded to a
-  // non-failing warning so the rule can be an error everywhere else.
+  // Grandfathered baseline: the call sites that already existed when the rule
+  // landed (80 hits across 40 files, measured 2026-09) carry an inline
+  // `eslint-disable-next-line ... -- grandfathered log baseline` each, so the
+  // rule stays an error for every NEW call, even inside those files.
   //
   // Not all of these are leaks. The rule judges shape, never content, so a
   // scalar the naming heuristics cannot classify (`v`, `x`, `date1`, `evName`,
-  // `handlerMap`) sits here next to a real one. Treat an entry as "not yet
-  // triaged", not as "known privacy debt" — the count is a tripwire baseline,
-  // not a backlog estimate.
+  // `handlerMap`) is suppressed next to a real one. Treat a directive as "not
+  // yet triaged", not as "known privacy debt".
   //
-  // This list may only ever SHRINK. A false positive in NEW code is not a
-  // reason to add a file here: fix the heuristics in the rule, or scope a
-  // `// eslint-disable-next-line local-rules/no-user-content-in-logs -- <why
-  // this value holds no user content>` to that one line. Adding the file
-  // silently exempts every future log call in it.
-  //
-  // Caveat, same as `max-lines`: a new violation inside an already-listed file
-  // only warns. Removing a file from the list is what locks its cleanup in.
-  {
-    files: [
-      'src/app/core/language/language.service.ts',
-      'src/app/core/share/share.service.ts',
-      'src/app/core/startup/startup.service.ts',
-      'src/app/core/util/vector-clock.ts',
-      'src/app/features/add-tasks-for-tomorrow/add-tasks-for-tomorrow.service.ts',
-      'src/app/features/android/android-interface.ts',
-      'src/app/features/android/store/android-focus-mode.effects.ts',
-      'src/app/features/android/store/android-foreground-tracking.effects.ts',
-      'src/app/features/android/store/android.effects.ts',
-      'src/app/features/archive/archive.service.ts',
-      'src/app/features/issue/handle-issue-provider-http-error.ts',
-      'src/app/features/mobile/store/mobile-notification.effects.ts',
-      'src/app/features/planner/planner.service.ts',
-      'src/app/features/right-panel/right-panel-content.component.ts',
-      'src/app/features/shepherd/shepherd-helper.ts',
-      'src/app/features/tasks/store/task-due.effects.ts',
-      'src/app/features/tasks/task.service.ts',
-      'src/app/features/tasks/util/play-done-sound.ts',
-      'src/app/features/ui-helper/ui-helper.service.ts',
-      'src/app/imex/sync/oauth-callback-handler.service.ts',
-      'src/app/imex/sync/sync-trigger.service.ts',
-      'src/app/imex/sync/sync-wrapper.service.ts',
-      'src/app/imex/sync/sync.effects.ts',
-      'src/app/op-log/clean-slate/clean-slate.service.ts',
-      'src/app/op-log/model/model-config.ts',
-      'src/app/op-log/persistence/operation-log-hydrator.service.ts',
-      'src/app/op-log/sync/remote-ops-processing.service.ts',
-      'src/app/op-log/validation/repair-operation.service.ts',
-      'src/app/op-log/validation/validate-state.service.ts',
-      'src/app/pages/config-page/config-page.component.ts',
-      'src/app/plugins/plugin-api.ts',
-      'src/app/plugins/plugin-bridge.service.ts',
-      'src/app/plugins/util/plugin-iframe.util.ts',
-      'src/app/root-store/meta/task-shared-meta-reducers/tag-shared.reducer.ts',
-      'src/app/ui/formly-button/formly-btn.component.ts',
-      'src/app/util/action-logger.ts',
-      'src/app/util/ipc-event.ts',
-      'src/app/util/is-same-day.ts',
-      'src/app/util/search-nav-debug.ts',
-      'src/app/util/skip-during-sync-window.operator.ts',
-    ],
-    plugins: {
-      'local-rules': localRules,
-    },
-    rules: {
-      'local-rules/no-user-content-in-logs': 'warn',
-    },
-  },
+  // These directives may only ever disappear. A false positive in NEW code is
+  // not a reason to copy one: fix the heuristics in the rule, or scope a
+  // disable whose reason says why this value holds no user content.
+
   // Op-log persistence: inside an adapter.transaction() callback only the tx
   // handle may be used — adapter methods enqueue behind the transaction's own
   // FIFO queue slot on the SQLite backend and deadlock (see
@@ -450,76 +403,21 @@ module.exports = tseslint.config(
       'no-restricted-syntax': ['error', FEATURE_LAYER_DYNAMIC_IMPORT_FENCE],
     },
   },
-  // Grandfathered layer-boundary offenders: files that already reach into
-  // features/, downgraded to a (non-failing) warning so they don't red-CI
-  // while the layering is untangled. They still warn, so the debt stays
-  // visible in lint output.
-  // This list may only ever SHRINK — a new entry means the boundary was
-  // bypassed. Delete the block once it is empty.
+  // Grandfathered layer-boundary offenders: imports that already reached into
+  // features/ when the fence landed carry an inline `eslint-disable-next-line
+  // ... -- grandfathered layer-boundary debt`, so a NEW features/ import fails
+  // even in those files. These directives may only ever disappear.
   //
-  // Known caveat: the key is the FILE, so a listed file can add further
-  // features/ imports without failing CI. A per-import ratchet would need
-  // ~75 inline eslint-disable comments; that trade was made consciously.
-  //
-  // Roughly a third of the list is four misplaced pieces, not stray imports:
+  // Roughly a third of them are four misplaced pieces, not stray imports:
   // GlobalConfigService (features/config, 69 importers app-wide) and
   // androidInterface (features/android) are de facto core services, while
   // core/startup + core/electron/local-rest-api-handler are app-shell
   // composition roots that belong above features rather than below them.
-  // Relocating all four clears ~11 entries. The rest import 15 distinct
-  // feature areas and are genuine per-file work — this list will not fall to
-  // one refactor. It started at 38; moving work-context-color.ts into ui/
-  // (a colour palette only ui/ consumed) cleared the first two.
-  {
-    files: [
-      'src/app/core/app-url-open-router.ts',
-      'src/app/core/browser-title/browser-title.service.ts',
-      'src/app/core/clipboard-image/clipboard-image.service.ts',
-      'src/app/core/clipboard-image/clipboard-paste-handler.service.ts',
-      'src/app/core/confetti/confetti.service.ts',
-      'src/app/core/data-init/data-init.service.ts',
-      'src/app/core/date-time-format/custom-date-adapter.ts',
-      'src/app/core/date-time-format/date-time-format.service.ts',
-      'src/app/core/draft/local-draft.service.ts',
-      'src/app/core/drop-paste-input/eml-drop.service.ts',
-      'src/app/core/electron/local-rest-api-handler.service.ts',
-      'src/app/core/example-tasks/example-tasks.service.ts',
-      'src/app/core/global-tracking-interval/global-tracking-interval.service.ts',
-      'src/app/core/notify/notify.service.ts',
-      'src/app/core/persistence/archive-db-adapter.service.ts',
-      'src/app/core/persistence/legacy-pf-db.service.ts',
-      'src/app/core/platform/capacitor-reminder.service.ts',
-      'src/app/core/snack/snack.service.ts',
-      'src/app/core/startup-overlay/startup-overlay.service.ts',
-      'src/app/core/startup/startup.service.ts',
-      'src/app/core/theme/dialog-wallpaper/dialog-wallpaper.component.ts',
-      'src/app/core/theme/global-theme.service.ts',
-      'src/app/core/update-check/update-check.service.ts',
-      'src/app/ui/chip-list-input/chip-list-input.component.ts',
-      'src/app/ui/datetime-picker/datetime-picker.component.ts',
-      'src/app/ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component.ts',
-      'src/app/ui/formly-config.module.ts',
-      'src/app/ui/formly-tag-selection/formly-tag-selection.component.ts',
-      'src/app/ui/inline-markdown/inline-markdown.component.ts',
-      'src/app/ui/material-icons-loader.service.ts',
-      'src/app/ui/task-title/task-title.component.ts',
-      // util/ offenders. `app-data-mock.ts` is test-fixture data, the rest are
-      // pure helpers typed against feature models (e.g. Task). Those types
-      // belong in the helper or in a shared model, not the other way round —
-      // none of these needs a feature at runtime. (round-duration/round-time
-      // were cleared by moving RoundTimeOption to util/round-time-option.model.)
-      'src/app/util/app-data-mock.ts',
-      'src/app/util/get-app-version-str.ts',
-      'src/app/util/get-time-left-for-task.ts',
-    ],
-    rules: {
-      '@typescript-eslint/no-restricted-imports': [
-        'warn',
-        { patterns: [FEATURE_LAYER_FENCE] },
-      ],
-      'no-restricted-syntax': ['warn', FEATURE_LAYER_DYNAMIC_IMPORT_FENCE],
-    },
-  },
+  // The rest import 15 distinct feature areas and are genuine per-file work.
+  // util/ offenders (`app-data-mock.ts` aside, which is test-fixture data) are
+  // pure helpers typed against feature models (e.g. Task) — those types belong
+  // in the helper or in a shared model, not the other way round.
+
   // Service size cap (AGENTS.md → Project rules): no service may exceed 1200
   // lines. 'error' so a new service crossing the cap fails CI on the PR that
   // introduces it — 'warn' would be inert, since `ng lint` defaults to
@@ -531,26 +429,25 @@ module.exports = tseslint.config(
       'max-lines': ['error', { max: 1200 }],
     },
   },
-  // Grandfathered offenders: services already over the cap, downgraded to a
-  // (non-failing) warning so they don't red-CI while they are split down. They
-  // still warn at their real size, so the debt stays visible in lint output.
-  // This list may only ever SHRINK — a new entry means the cap was bypassed.
-  // Delete the block once every file below is under 1200 lines.
-  {
-    files: [
-      'src/app/op-log/sync/conflict-resolution.service.ts',
-      'src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts',
-      'src/app/op-log/persistence/operation-log-store.service.ts',
-      'src/app/op-log/sync/operation-log-sync.service.ts',
-      'src/app/plugins/plugin-bridge.service.ts',
-      'src/app/plugins/plugin.service.ts',
-      'src/app/imex/sync/sync-wrapper.service.ts',
-      'src/app/features/tasks/task.service.ts',
-    ],
+  // Grandfathered offenders: services already over the cap, each pinned as an
+  // error at its size when pinned (measured 2026-09), so they can shrink but
+  // never grow. When you shrink one, lower its cap to lock the cleanup in; a
+  // cap may only ever go down. Delete an entry once its file is under 1200.
+  ...Object.entries({
+    'src/app/op-log/sync/conflict-resolution.service.ts': 4838,
+    'src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts': 3356,
+    'src/app/op-log/persistence/operation-log-store.service.ts': 3212,
+    'src/app/op-log/sync/operation-log-sync.service.ts': 2704,
+    'src/app/plugins/plugin-bridge.service.ts': 2354,
+    'src/app/imex/sync/sync-wrapper.service.ts': 2085,
+    'src/app/plugins/plugin.service.ts': 1910,
+    'src/app/features/tasks/task.service.ts': 1531,
+  }).map(([file, max]) => ({
+    files: [file],
     rules: {
-      'max-lines': ['warn', { max: 1200 }],
+      'max-lines': /** @type {['error', { max: number }]} */ (['error', { max }]),
     },
-  },
+  })),
   // HTML files
   {
     files: ['**/*.html'],

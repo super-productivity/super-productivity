@@ -10,6 +10,9 @@ import type {
 declare const PluginAPI: {
   registerIssueProvider(definition: IssueProviderPluginDefinition): void;
   translate(key: string, params?: Record<string, string | number>): string;
+  log: {
+    err: (...args: unknown[]) => void;
+  };
 };
 
 const API_SUFFIX = 'api';
@@ -208,20 +211,12 @@ PluginAPI.registerIssueProvider({
     const includedLabels = parseLabelList(cfg.filterLabels);
     const excludedLabels = parseLabelList(cfg.excludeLabels);
 
-    // `priority_repo_id` is the only reliable way to scope the global issue
-    // search to the configured repository, so look it up first.
-    const repo = await http.get<GiteaRepositoryReduced>(
-      `${base}/repos/${cfg.repoFullname}`,
-    );
-
     const params: Record<string, string> = {
       limit: '100',
       state: 'open',
+      type: 'issues',
       q: searchTerm,
     };
-    if (repo?.id) {
-      params['priority_repo_id'] = String(repo.id);
-    }
     if (cfg.scope === SCOPE_CREATED_BY_ME) {
       params['created'] = 'true';
     } else if (cfg.scope === SCOPE_ASSIGNED_TO_ME) {
@@ -312,24 +307,54 @@ PluginAPI.registerIssueProvider({
     const includedLabels = parseLabelList(cfg.filterLabels);
     const excludedLabels = parseLabelList(cfg.excludeLabels);
 
-    const params: Record<string, string> = { limit: '100', state: 'open' };
-    if (cfg.scope === SCOPE_CREATED_BY_ME || cfg.scope === SCOPE_ASSIGNED_TO_ME) {
-      const user = await http.get<GiteaUser>(`${base}/user`);
-      if (cfg.scope === SCOPE_CREATED_BY_ME) {
-        params['created_by'] = user.username;
-      } else {
-        params['assigned_by'] = user.username;
+    // Hard ceiling on fetched pages; deliberate so huge repos can't stall the
+    // backlog sync. 4 × 100 = 400 issues max.
+    const MAX_PAGES = 4;
+    let page = 1;
+    const allIssues: Map<number, GiteaIssue> = new Map();
+    let issues: GiteaIssue[] = [];
+    let user: GiteaUser | undefined;
+    // Loop over pages until no issues are returned or we reach the limit
+    // The server can restrict the issues per page to less than requested
+    while ((page === 1 || issues.length !== 0) && page <= MAX_PAGES) {
+      const params: Record<string, string> = {
+        limit: '100',
+        state: 'open',
+        type: 'issues',
+        page: page.toString(),
+      };
+      if (cfg.scope === SCOPE_CREATED_BY_ME || cfg.scope === SCOPE_ASSIGNED_TO_ME) {
+        user = user || (await http.get<GiteaUser>(`${base}/user`));
+        if (cfg.scope === SCOPE_CREATED_BY_ME) {
+          params['created_by'] = user.username;
+        } else {
+          params['assigned_by'] = user.username;
+        }
       }
-    }
-    if (includedLabels.length > 0) {
-      params['labels'] = includedLabels.join(',');
-    }
+      if (includedLabels.length > 0) {
+        params['labels'] = includedLabels.join(',');
+      }
 
-    const opts: PluginHttpOptions = { params };
-    const issues =
-      (await http.get<GiteaIssue[]>(`${base}/repos/${cfg.repoFullname}/issues`, opts)) ||
-      [];
-    return issues
+      const opts: PluginHttpOptions = { params };
+      try {
+        issues =
+          (await http.get<GiteaIssue[]>(
+            `${base}/repos/${cfg.repoFullname}/issues`,
+            opts,
+          )) || [];
+      } catch (error) {
+        if (page === 1) {
+          // Only throw the error on the first page
+          throw error;
+        }
+        // Later pages are best-effort: log and stop paging
+        PluginAPI.log.err('Gitea issue provider: failed to fetch page', page, error);
+        break;
+      }
+      issues.forEach((issue) => allIssues.set(issue.id, issue));
+      page += 1;
+    }
+    return [...allIssues.values()]
       .filter((issue) => hasAllLabels(issue, includedLabels))
       .filter((issue) => isIssueIncludedByLabels(issue, excludedLabels))
       .map(mapSearchResult);
