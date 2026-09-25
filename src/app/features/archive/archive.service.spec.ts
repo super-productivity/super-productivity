@@ -456,6 +456,22 @@ describe('ArchiveService', () => {
       expect(savedTaskState.entities['task-b']!.timeSpent).toBe(84);
     });
 
+    it('should leave the archive unchanged when a duplicate archive op replays (#10102)', async () => {
+      let archiveYoung = createEmptyArchive();
+      mockArchiveDbAdapter.loadArchiveYoung.and.callFake(async () => archiveYoung);
+      mockArchiveDbAdapter.saveArchiveYoung.and.callFake(async (next) => {
+        archiveYoung = next;
+      });
+      const tasks = [createMockTask('task-a'), createMockTask('task-b')];
+
+      await service.writeTasksToArchiveForRemoteSync(tasks);
+      const afterFirstCopy = archiveYoung;
+      await service.writeTasksToArchiveForRemoteSync(tasks);
+
+      expect(archiveYoung).toEqual(afterFirstCopy);
+      expect(archiveYoung.task.ids).toEqual(['task-a', 'task-b']);
+    });
+
     it('should ignore malformed tasks without valid ids', async () => {
       const invalidTask = {
         title: 'Invalid task',

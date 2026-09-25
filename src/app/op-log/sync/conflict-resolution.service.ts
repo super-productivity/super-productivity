@@ -42,6 +42,11 @@ import {
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { PROJECT_DELETE_WINS_MARKER } from '../../root-store/meta/task-shared.actions';
 import { scopeBulkArchivePayload } from './scope-bulk-archive-payload.util';
+import {
+  buildArchiveWinOp,
+  getBulkArchiveIntentKey,
+  groupArchiveWinConflicts,
+} from './bulk-archive-intent.util';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
@@ -2115,6 +2120,19 @@ export class ConflictResolutionService {
       conflictCountByEntity.set(key, (conflictCountByEntity.get(key) ?? 0) + 1);
     }
 
+    // #10102: ONE recreation per archive intent, shared by every row it won.
+    const archiveWinOpByConflict = new Map<EntityConflict, Operation | undefined>();
+    for (const group of groupArchiveWinConflicts(plans)) {
+      const clientId = await this.clientIdProvider.loadClientId();
+      if (!clientId) {
+        OpLog.err(
+          'ConflictResolutionService: Cannot create archive-win op - no client ID',
+        );
+      }
+      const archiveWinOp = clientId ? buildArchiveWinOp(group, clientId) : undefined;
+      group.conflicts.forEach((c) => archiveWinOpByConflict.set(c, archiveWinOp));
+    }
+
     for (const plan of plans) {
       // SPAP-14: BEFORE the whole-entity LWW plan, try a disjoint-field merge —
       // when both sides edited the same entity but DIFFERENT real fields, keep
@@ -2144,7 +2162,7 @@ export class ConflictResolutionService {
       let localWinOp: Operation | undefined;
 
       if (plan.localWinOperationKind === 'archive-win') {
-        localWinOp = await this._createArchiveWinOp(plan.conflict);
+        localWinOp = archiveWinOpByConflict.get(plan.conflict);
       } else if (plan.localWinOperationKind === 'delete-win') {
         const deleteOp = mergeMarkedProjectDeleteOps(plan.conflict.localOps);
         if (!deleteOp) {
@@ -2476,7 +2494,7 @@ export class ConflictResolutionService {
    * Generic multi-entity operations cannot be partially compensated safely.
    * Fail before op-log mutation unless every multi-entity op in the plan has an
    * explicit resolution path: bulk archives are re-created when they win
-   * (`_createArchiveWinOp`) or re-scoped to the tasks no remote archive covered
+   * (`buildArchiveWinOp`) or re-scoped to the tasks no remote archive covered
    * when they lose (`_preservePartiallyRejectedLocalBulkArchives`, #9537),
    * independent bulk deletes are re-scoped, and the local legacy rounding
    * action has an explicit per-entity reconciliation path above.
@@ -2556,20 +2574,24 @@ export class ConflictResolutionService {
       // caveat: this sees only ops sharing THIS row's conflicted task — an
       // overlap confined to non-conflicted siblings passes and resolves
       // per-op, which can re-assert the older op's stale sibling snapshot.)
+      // Exact copies of ONE intent (pre-#10102 per-row archive-win
+      // recreations) count once: they resolve as a group, every copy rejected.
       const localBulkArchiveOps = plan.conflict.localOps.filter(
         (op) =>
           isMultiEntityOperation(op) &&
           op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
       );
-      const distinctBulkArchiveOpIds = new Set(localBulkArchiveOps.map(({ id }) => id));
+      const distinctBulkArchiveIntents = new Set(
+        localBulkArchiveOps.map(getBulkArchiveIntentKey),
+      );
       const hasBulkDeleteOverlap =
-        distinctBulkArchiveOpIds.size > 0 &&
+        distinctBulkArchiveIntents.size > 0 &&
         plan.conflict.localOps.some(
           (op) =>
             isMultiEntityOperation(op) &&
             INDEPENDENT_MULTI_DELETE_ACTIONS.has(op.actionType),
         );
-      if (distinctBulkArchiveOpIds.size > 1 || hasBulkDeleteOverlap) {
+      if (distinctBulkArchiveIntents.size > 1 || hasBulkDeleteOverlap) {
         throw new UnsupportedMultiEntityConflictError(
           'local',
           ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
@@ -3286,12 +3308,14 @@ export class ConflictResolutionService {
    * agree those are archived, only the discarded local snapshot differs
    * (standard remote-archive-wins precedence).
    *
-   * Groups whose every row won locally are skipped: the pre-existing
-   * `_createArchiveWinOp` recreation already re-emits the full task set.
-   * When a group mixes winners (some tasks remote-archived, others winning
-   * against plain remote edits), the archive-win rows' full-set recreation is
-   * swapped for the scoped op so the replacement cannot re-assert the
-   * remote-archived tasks' stale local snapshots.
+   * Groups whose every row won locally are skipped: `buildArchiveWinOp`
+   * already re-emits the full task set as ONE op shared by all those rows
+   * (#10102). Groups key on the archive intent, so pre-#10102 duplicate
+   * copies of one bulk archive form one group. When a group mixes winners
+   * (some tasks remote-archived, others winning against plain remote edits),
+   * the archive-win rows' full-set recreation is swapped for the scoped op so
+   * the replacement cannot re-assert the remote-archived tasks' stale local
+   * snapshots.
    *
    * Retained tasks that are back in the ACTIVE store (restored after the bulk
    * archive was captured) are dropped from the replacement; when such a task's
@@ -3302,7 +3326,7 @@ export class ConflictResolutionService {
    * method: `_assertMultiEntityPlansAreSafe` keeps the fail-closed stop for
    * them. Overlaps confined to non-conflicted siblings still flow through
    * per-op and can re-assert a stale snapshot — a pre-existing hazard of the
-   * whole preserve/recreate family, shared with `_createArchiveWinOp`.
+   * whole preserve/recreate family, shared with `buildArchiveWinOp`.
    */
   private async _preservePartiallyRejectedLocalBulkArchives(
     resolutions: LWWResolution[],
@@ -3322,21 +3346,25 @@ export class ConflictResolutionService {
         ) {
           continue;
         }
-        const group = groups.get(localOp.id) ?? {
+        const intentKey = getBulkArchiveIntentKey(localOp);
+        const group = groups.get(intentKey) ?? {
           archiveOp: localOp,
           resolutions: [],
           remoteWinnerIds: new Set<string>(),
         };
-        group.resolutions.push(resolution);
+        // A row holding several copies of one intent joins its group once.
+        if (group.resolutions.at(-1) !== resolution) {
+          group.resolutions.push(resolution);
+        }
         if (resolution.winner === 'remote') {
           group.remoteWinnerIds.add(resolution.conflict.entityId);
         }
-        groups.set(localOp.id, group);
+        groups.set(intentKey, group);
       }
     }
 
     const additionalOps: Operation[] = [];
-    for (const group of groups.values()) {
+    for (const [intentKey, group] of groups) {
       if (group.remoteWinnerIds.size === 0) {
         continue;
       }
@@ -3381,10 +3409,10 @@ export class ConflictResolutionService {
           resolution.winner !== 'local' ||
           resolution.localWinOp?.actionType !== ActionType.TASK_SHARED_MOVE_TO_ARCHIVE ||
           // Provenance binding: only swap a recreation built from THIS
-          // group's op (`_createArchiveWinOp` reuses the payload reference).
+          // group's intent (`buildArchiveWinOp` copies the intent verbatim).
           // A recreation derived from a different pending archive op must
           // stay untouched, or its group's replacement would be lost.
-          resolution.localWinOp.payload !== group.archiveOp.payload
+          getBulkArchiveIntentKey(resolution.localWinOp) !== intentKey
         ) {
           continue;
         }
@@ -3469,46 +3497,6 @@ export class ConflictResolutionService {
       );
     }
     return buildScopedBulkPlanReplacements(resolutions, clientId);
-  }
-
-  /**
-   * Creates a replacement archive operation with merged vector clock.
-   * Used when local moveToArchive wins a conflict — the original op will be
-   * rejected, so we create a new one with a clock that dominates all parties.
-   */
-  private async _createArchiveWinOp(
-    conflict: EntityConflict,
-  ): Promise<Operation | undefined> {
-    const clientId = await this.clientIdProvider.loadClientId();
-    if (!clientId) {
-      OpLog.err('ConflictResolutionService: Cannot create archive-win op - no client ID');
-      return undefined;
-    }
-
-    const archiveOp = conflict.localOps.find(
-      (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
-    )!;
-
-    const allClocks = [
-      ...conflict.localOps.map((op) => op.vectorClock),
-      ...conflict.remoteOps.map((op) => op.vectorClock),
-    ];
-    // No client-side pruning — server prunes AFTER conflict detection, BEFORE storage.
-    const newClock = this.mergeAndIncrementClocks(allClocks, clientId);
-
-    return {
-      id: uuidv7(),
-      actionType: archiveOp.actionType,
-      opType: archiveOp.opType,
-      entityType: archiveOp.entityType,
-      entityId: archiveOp.entityId,
-      entityIds: archiveOp.entityIds,
-      payload: archiveOp.payload,
-      clientId,
-      vectorClock: newClock,
-      timestamp: archiveOp.timestamp,
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-    };
   }
 
   /**
