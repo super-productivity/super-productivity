@@ -73,4 +73,22 @@ describe('foldSyncTimeSpentDeltas', () => {
       timeSpentOnDay: { [DAY]: 650, [PREV_DAY]: 300 },
     });
   });
+
+  // The reducer adds a child's delta to the parent's stored timeSpent; the fold
+  // recomputes it from timeSpentOnDay. On a drifted parent the two differ, but
+  // every device applies the same folded snapshot, so they still converge.
+  it('recomputes a drifted parent timeSpent from timeSpentOnDay', () => {
+    const drifted = { ...changes, timeSpent: 1234 };
+    expect(
+      foldSyncTimeSpentDeltas(
+        'parent',
+        drifted,
+        [deltaOp({ taskId: 'child', date: DAY, duration: 50 })],
+        ['child'],
+      ),
+    ).toEqual({
+      timeSpent: 950,
+      timeSpentOnDay: { [DAY]: 650, [PREV_DAY]: 300 },
+    });
+  });
 });

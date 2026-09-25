@@ -7810,6 +7810,46 @@ describe('ConflictResolutionService', () => {
         expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
       });
 
+      // The pending delta must not widen the commute beyond disjoint fields:
+      // a notes edit beside it commutes with a remote rename, a rename does not.
+      const pendingDeltaWith = (changes: Record<string, unknown>): Operation[] => [
+        capturedTimeOp('op-time-l', 'clientA', { clientA: 1 }, form),
+        updateOp({
+          id: 'op-edit-l',
+          clientId: 'clientA',
+          vectorClock: { clientA: 2 },
+          timestamp: 1500,
+          changes,
+        }),
+      ];
+
+      it(`keeps a remote rename non-conflicting against a pending [delta (${form} form), notes] side (#10214)`, async () => {
+        const result = await service.checkOpForConflicts(
+          opY,
+          buildCtx({
+            localPendingOpsByEntity: new Map([
+              [KEY, pendingDeltaWith({ notes: 'notes on A' })],
+            ]),
+          }),
+        );
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it(`still conflicts a remote rename with a pending [delta (${form} form), rename] side (#10214)`, async () => {
+        const result = await service.checkOpForConflicts(
+          opY,
+          buildCtx({
+            localPendingOpsByEntity: new Map([
+              [KEY, pendingDeltaWith({ title: 'renamed on A' })],
+            ]),
+          }),
+        );
+
+        expect(result.conflicts.length).toBe(1);
+        expect(result.conflicts[0].entityId).toBe('task-1');
+      });
+
       it(`still conflicts a remote task-time delta (${form} form) with a pending [delta, absolute time write] side (#10214)`, async () => {
         const pending = [
           capturedTimeOp('op-time-l', 'clientA', { clientA: 1 }, form),
