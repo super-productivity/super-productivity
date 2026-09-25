@@ -819,6 +819,10 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
 3. **Gap:** a version reset, snapshot replacement, or trimmed operation needed by
    this client signals a gap. The caller retries from seq 0 and installs the
    causal baseline instead of pretending the remaining buffer is complete.
+   A replacement's tail ops can advance the watermark back past this client's
+   and refill the buffer, hiding all three. So the file's vector clock must
+   also equal or dominate the last-seen one, which is persisted and also
+   recorded on upload. Otherwise the lineage broke (#9170).
 4. **Commit:** the downloaded `rev`, vector clock, and expected synthetic
    watermark remain staged until the caller confirms that baseline and ops were
    durably applied. Cancelling a data-conflict decision does not advance the

@@ -48,7 +48,7 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
 import { SnackService } from '../../../core/snack/snack.service';
 import { T } from '../../../t.const';
 import { mergeVectorClocks, compareVectorClocks } from '../../../core/util/vector-clock';
-import { isLineageBroken } from './file-based-sync-lineage.util';
+import { detectDownloadGap } from './file-based-sync-gap.util';
 import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.service';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
 import { stripLocalOnlySyncSettingsFromAppData } from '../../../features/config/local-only-sync-settings.util';
@@ -261,6 +261,11 @@ export class FileBasedSyncAdapterService {
         if (state.revs) {
           this._lastSeenRevs = new Map(Object.entries(state.revs));
         }
+        // #9170: back-compat — without it, lineage checks stay off until the
+        // next download or upload records a clock.
+        if (state.lastSeenClocks) {
+          this._lastSeenVectorClocks = new Map(Object.entries(state.lastSeenClocks));
+        }
         this._persistedStateLoaded = true;
         return;
       }
@@ -314,6 +319,8 @@ export class FileBasedSyncAdapterService {
         seqCounters: Object.fromEntries(this._localSeqCounters),
         // SPAP-10: last-seen remote rev per provider, for the cheap download pre-check.
         revs: Object.fromEntries(this._lastSeenRevs),
+        // #9170: lets a restarted client still detect a masked replacement.
+        lastSeenClocks: Object.fromEntries(this._lastSeenVectorClocks),
       };
       localStorage.setItem(this._STORAGE_KEY, JSON.stringify(state));
     } catch (e) {
@@ -973,6 +980,8 @@ export class FileBasedSyncAdapterService {
     // next poll short-circuit if no other client writes. Caveat (#10239): that also
     // defers ops this upload merged from other clients. Persisted via _persistState().
     this._commitLastSeenRev(providerKey, finalRev);
+    // #9170: an upload-only client must still recognize a later replacement.
+    this._lastSeenVectorClocks.set(providerKey, newData.vectorClock);
 
     // Use finalSyncVersion (NOT mergedOps.length) to match download behavior.
     // mergedOps.length is the total ops count, which can be much larger than syncVersion
@@ -1150,13 +1159,7 @@ export class FileBasedSyncAdapterService {
       }
     }
 
-    // Detect syncVersion reset (e.g., another client uploaded a snapshot).
-    // When syncVersion resets to a lower value, we need to signal this to trigger
-    // a re-download from seq 0 so the caller can get the snapshotState.
     const previousExpectedVersion = this._expectedSyncVersions.get(providerKey) ?? 0;
-    const syncVersionRegressed =
-      previousExpectedVersion > 0 && syncData.syncVersion < previousExpectedVersion;
-
     // Guard against stale in-memory state: if the persisted expected syncVersion is
     // AHEAD of what the remote file reports, our counter is stale (e.g. after another
     // client uploaded a lower-version recovery snapshot). Log and reconcile to the
@@ -1170,105 +1173,22 @@ export class FileBasedSyncAdapterService {
       );
     }
 
-    // SPAP-9: a syncVersion regression only implies data loss if the causal state
-    // also regressed. Compare the file's vector clock against the one we last saw
-    // for this provider. Only an EQUAL clock proves this client already holds the
-    // exact same causal state, so the reset is purely cosmetic (a counter reset
-    // that composed with a snapshot rewrite of identical content) and we can keep
-    // syncing incrementally at the expected version instead of forcing a full
-    // seq-0 resync.
-    //
-    // GREATER_THAN is deliberately NOT treated as cosmetic (review follow-up): it
-    // only proves the writer did strictly more work, not that this client received
-    // the intervening ops. A snapshot can compact ops this client never downloaded
-    // and the writer then make one more op — dominating our last-seen clock — so
-    // suppressing the reset there would silently drop the compacted ops. Anything
-    // that is not EQUAL (GREATER_THAN, behind, or concurrent) is treated as a
-    // genuine reset and triggers a seq-0 resync so the caller re-hydrates the
-    // snapshot. Implemented generally via the last-seen clock — no dependency on
-    // any provider-specific recovery mechanism.
-    const lastSeenClock = this._lastSeenVectorClocks.get(providerKey);
-    let versionWasReset = syncVersionRegressed;
-    if (syncVersionRegressed && lastSeenClock) {
-      const resetClockComparison = compareVectorClocks(
-        syncData.vectorClock,
-        lastSeenClock,
-      );
-      if (resetClockComparison === 'EQUAL') {
-        versionWasReset = false;
-        OpLog.normal(
-          `FileBasedSyncAdapter: syncVersion regressed ` +
-            `(${previousExpectedVersion} → ${syncData.syncVersion}) but remote vector clock is ` +
-            `EQUAL to last-seen — treating reset as cosmetic (no gap).`,
-        );
-      }
-    }
-
-    // Also detect snapshot replacement: if client expected ops (sinceSeq > 0) but file has
-    // no recent ops AND has a snapshot state, another client uploaded a fresh snapshot.
-    // This happens when "Use Local" is chosen in conflict resolution - the snapshot replaces
-    // all previous ops but syncVersion may not decrease (could stay at 1).
-    //
-    // Detection strategy depends on whether we know the downloading client's ID:
-    // - If excludeClient is provided: use clientId comparison (more accurate)
-    // - If excludeClient is undefined: fall back to syncVersion comparison
-    //
-    // The clientId check prevents false positives when we just uploaded a snapshot ourselves.
-    // The syncVersion check works when sinceSeq doesn't match syncVersion (another client changed it).
-    const snapshotReplacement =
-      sinceSeq > 0 &&
-      syncData.recentOps.length === 0 &&
-      !!syncData.state &&
-      (excludeClient !== undefined
-        ? syncData.clientId !== excludeClient
-        : sinceSeq !== syncData.syncVersion);
-
-    // Detect a trimming gap. The client already holds every op up to and including
-    // sinceSeq, so the first op it still needs is sinceSeq+1. syncVersion is
-    // contiguous and every bump carries at least one op, so if the oldest op still
-    // retained has syncVersion > sinceSeq+1, the op at sinceSeq+1 provably existed
-    // and has since been trimmed away — a genuine gap that requires the snapshot.
-    // The boundary oldestOpSyncVersion === sinceSeq + 1 is contiguous (SPAP-9
-    // off-by-one fix) and must NOT be treated as a gap.
-    //
-    // SPAP-33: `oldestOpSyncVersion > sinceSeq + 1` is sufficient on its own and
-    // never false-positives, so the previous `recentOps.length >= MAX_RECENT_OPS`
-    // clause was redundant AND harmful — it silently SUPPRESSED a real gap whenever
-    // the buffer was trimmed at a smaller floor than the current cap: a legacy
-    // buffer written by an old client with a lower MAX_RECENT_OPS, or (in the split
-    // format) a buffer trimmed to SPLIT_COMPACTION_THRESHOLD. Dropping it lets a
-    // behind client correctly fall back to the snapshot instead of silently
-    // diverging.
-    const partialTrimGap =
-      sinceSeq > 0 &&
-      syncData.oldestOpSyncVersion !== undefined &&
-      syncData.oldestOpSyncVersion > sinceSeq + 1;
-
-    // #9170: a tail op uploaded after a USE_LOCAL replacement can walk
-    // syncVersion back up to (or past) our expected value and repopulate
-    // recentOps, masking all three checks above. Catch it via vector-clock
-    // causality instead.
-    const lineageBroken = isLineageBroken(
+    const { needsGapDetection, reason, isCosmeticReset } = detectDownloadGap({
+      remote: syncData,
       sinceSeq,
-      syncData.vectorClock,
-      lastSeenClock,
-      syncData.clientId,
       excludeClient,
-    );
-
-    const needsGapDetection =
-      versionWasReset || snapshotReplacement || partialTrimGap || lineageBroken;
-
+      previousExpectedVersion,
+      lastSeenClock: this._lastSeenVectorClocks.get(providerKey),
+      hasSnapshot: !!syncData.state,
+    });
+    if (isCosmeticReset) {
+      OpLog.normal(
+        `FileBasedSyncAdapter: syncVersion regressed ` +
+          `(${previousExpectedVersion} → ${syncData.syncVersion}) but remote vector clock is ` +
+          `EQUAL to last-seen — treating reset as cosmetic (no gap).`,
+      );
+    }
     if (needsGapDetection) {
-      const reason = versionWasReset
-        ? `sync version reset (${previousExpectedVersion} → ${syncData.syncVersion})`
-        : snapshotReplacement
-          ? `snapshot replacement (expected ops from seq ${sinceSeq}, but recentOps is empty)`
-          : partialTrimGap
-            ? `partial trimming (oldestOpSyncVersion=${syncData.oldestOpSyncVersion}, ` +
-              `sinceSeq=${sinceSeq}, recentOps=${syncData.recentOps.length})`
-            : `lineage break masked by a tail op (remote vector clock is not an ` +
-              `ancestor of last-seen clock)`;
       OpLog.warn(
         `FileBasedSyncAdapter: Gap detected - ${reason}. ` +
           'Another client may have uploaded a snapshot. Signaling gap detection.',
@@ -1510,6 +1430,7 @@ export class FileBasedSyncAdapterService {
     // SPAP-10: record the rev of the snapshot we just wrote as the last-seen rev
     // so the next poll can skip a redundant full download.
     this._commitLastSeenRev(providerKey, snapshotUploadRes.rev);
+    this._lastSeenVectorClocks.set(providerKey, vectorClock);
     this._persistState();
 
     OpLog.warn(
@@ -2681,49 +2602,15 @@ export class FileBasedSyncAdapterService {
       this._setCachedOpsData(providerKey, opsFile, opsRev);
     }
 
-    // Gap detection on the ops file (mirrors the single-file logic).
-    const previousExpectedVersion = this._expectedSyncVersions.get(providerKey) ?? 0;
-    const syncVersionRegressed =
-      previousExpectedVersion > 0 && opsFile.syncVersion < previousExpectedVersion;
-    let versionWasReset = syncVersionRegressed;
-    const lastSeenClock = this._lastSeenVectorClocks.get(providerKey);
-    if (syncVersionRegressed && lastSeenClock) {
-      const cmp = compareVectorClocks(opsFile.vectorClock, lastSeenClock);
-      // EQUAL only — same rationale as the single-file path above: GREATER_THAN
-      // proves the writer did strictly more work, NOT that this client received
-      // the intervening ops. A dominating client's snapshot reset compacts ops
-      // this client never saw into sync-state.json; suppressing the reset here
-      // would skip the snapshot hydration and silently diverge.
-      if (cmp === 'EQUAL') {
-        versionWasReset = false;
-      }
-    }
-    const snapshotReplacement =
-      sinceSeq > 0 &&
-      opsFile.recentOps.length === 0 &&
-      (excludeClient !== undefined
-        ? opsFile.clientId !== excludeClient
-        : sinceSeq !== opsFile.syncVersion);
-    // SPAP-33: `oldestOpSyncVersion > sinceSeq + 1` alone proves the op at
-    // sinceSeq+1 was trimmed (see the single-file _downloadOps note). The old
-    // `recentOps.length >= SPLIT_COMPACTION_THRESHOLD` clause suppressed a real gap
-    // for a migrated/short buffer, so the behind client would apply ops without the
-    // snapshot and silently diverge. Dropped.
-    const partialTrimGap =
-      sinceSeq > 0 &&
-      opsFile.oldestOpSyncVersion !== undefined &&
-      opsFile.oldestOpSyncVersion > sinceSeq + 1;
-    // #9170: see isLineageBroken — catches a USE_LOCAL replacement whose tail
-    // op re-advanced syncVersion/repopulated recentOps, masking the checks above.
-    const lineageBroken = isLineageBroken(
+    // Gap detection on the ops file (shared with the single-file logic).
+    let { needsGapDetection } = detectDownloadGap({
+      remote: opsFile,
       sinceSeq,
-      opsFile.vectorClock,
-      lastSeenClock,
-      opsFile.clientId,
       excludeClient,
-    );
-    let needsGapDetection =
-      versionWasReset || snapshotReplacement || partialTrimGap || lineageBroken;
+      previousExpectedVersion: this._expectedSyncVersions.get(providerKey) ?? 0,
+      lastSeenClock: this._lastSeenVectorClocks.get(providerKey),
+      hasSnapshot: true,
+    });
 
     // See _downloadOps: abort before committing a baseline read from a target
     // that switched mid-download. (Task 2.)
