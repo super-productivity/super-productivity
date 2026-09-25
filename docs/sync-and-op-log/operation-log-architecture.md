@@ -833,7 +833,8 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    base is refused as a retryable conflict, so a stale client cannot append to
    a replacement it never hydrated (in v2, overwriting its snapshot with stale
    state). Before the first recorded clock (e.g. the first sync after
-   upgrading) the upload is not guarded, to avoid refusing it indefinitely.
+   upgrading) the upload is not guarded, to avoid refusing it indefinitely
+   (known gap, #10258).
    This optional metadata requires no schema bump: older readers ignore it,
    but older writers can omit it. Masked dominating replacements written by,
    or subsequently rewritten by, those clients remain a mixed-version gap;
