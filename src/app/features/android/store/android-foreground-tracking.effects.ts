@@ -569,7 +569,9 @@ export class AndroidForegroundTrackingEffects {
     // (combineLatest fires before onResume) from the resume path. Used to
     // triage future re-reports — keep this log.
     DroidLog.log('Recovering active tracking from native service', {
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       source,
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       ...nativeData,
     });
 
@@ -624,6 +626,7 @@ export class AndroidForegroundTrackingEffects {
     nativeTrackingData?: NativeTrackingData,
   ): Promise<boolean> {
     const nativeData = nativeTrackingData ?? this._getNativeTrackingData();
+    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
     DroidLog.log('Syncing elapsed time for task', { taskId, nativeData });
 
     if (!nativeData) {
@@ -658,6 +661,7 @@ export class AndroidForegroundTrackingEffects {
       DroidLog.log('Calculated sync duration', {
         taskId,
         nativeElapsed: nativeData.elapsedMs,
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         currentTimeSpent,
         duration,
       });
@@ -671,6 +675,7 @@ export class AndroidForegroundTrackingEffects {
           {
             taskId,
             nativeElapsed: nativeData.elapsedMs,
+            // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
             currentTimeSpent,
             duration,
           },

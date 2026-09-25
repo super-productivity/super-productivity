@@ -4,7 +4,6 @@ import {
   ChangeDetectorRef,
   Component,
   computed,
-  effect,
   ElementRef,
   inject,
   NgZone,
@@ -145,22 +144,14 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     return Math.round(hoursToday * FH);
   });
 
-  // Effect to scroll to current time when the component initializes or current time changes
-  constructor() {
-    effect(() => {
-      // Track current time row changes to trigger auto-scroll
-      this.currentTimeRow();
-      this._scheduleScrollToCurrentTime();
-    });
-  }
-
   ngAfterViewInit(): void {
     // Listen for global pointer releases while a drag is active so we can finalize drops.
     this._pointerUpSubscription = this._dragDropRegistry.pointerUp.subscribe((event) => {
       this._ngZone.run(() => this._handlePointerUp(event));
     });
 
-    // Initial scroll to current time after view initialization
+    // Deliberately scroll to the current time only once when the panel opens.
+    // Do not tie this to scheduleRefreshTick; doing so reintroduces the snap-back from #9906.
     this._scheduleScrollToCurrentTime();
   }
 

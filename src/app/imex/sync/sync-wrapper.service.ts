@@ -33,6 +33,7 @@ import {
   UnsupportedMultiEntityConflictError,
 } from '../../op-log/core/errors/sync-errors';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
+import { countTransientRejections } from '../../op-log/sync/upload-outcome.util';
 import { SyncConfig } from '../../features/config/global-config.model';
 import { TranslateService } from '@ngx-translate/core';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
@@ -100,7 +101,6 @@ export type ForceUploadTriggerSource =
   | 'InvalidFilePrefixError'
   | 'JsonParseError'
   | 'LegacySyncFormatDetectedError'
-  | 'DecryptError'
   | 'unknown';
 
 /**
@@ -624,6 +624,7 @@ export class SyncWrapperService {
           forceFromSeq0: isProviderSwitch || undefined,
           isNeverSynced: isNeverSyncedAtSyncStart,
           fenceEpoch,
+          keepDecryptedPrefix: true,
         },
       );
       // Auth is confirmed working if download didn't throw AuthFailSPError.
@@ -745,12 +746,19 @@ export class SyncWrapperService {
         downloadResult.kind === 'ops_processed' ? downloadResult.localWinOpsCreated : 0;
       const uploadLwwOps =
         uploadResult.kind === 'completed' ? uploadResult.localWinOpsCreated : 0;
+      // A transient server rejection (INTERNAL_ERROR, e.g. a Postgres
+      // serialization conflict) leaves the op pending with nothing scheduled to
+      // re-send it until the next sync trigger — a whole auto-sync interval, and
+      // the header keeps showing unsynced changes meanwhile. The server asked for
+      // a retry, so fold those ops into the same bounded re-upload loop.
+      const uploadTransientOps =
+        uploadResult.kind === 'completed' ? countTransientRejections(uploadResult) : 0;
       let lwwRetries = 0;
-      let pendingLwwOps = downloadLwwOps + uploadLwwOps;
+      let pendingLwwOps = downloadLwwOps + uploadLwwOps + uploadTransientOps;
       while (pendingLwwOps > 0 && lwwRetries < MAX_LWW_REUPLOAD_RETRIES) {
         lwwRetries++;
         SyncLog.log(
-          `SyncWrapperService: Re-uploading ${pendingLwwOps} local-win op(s) from LWW ` +
+          `SyncWrapperService: Re-uploading ${pendingLwwOps} pending op(s) (LWW local-win or transiently rejected) ` +
             `(attempt ${lwwRetries}/${MAX_LWW_REUPLOAD_RETRIES})...`,
         );
         // Re-thread isNeverSyncedAtSyncStart (the snapshot captured BEFORE the
@@ -783,7 +791,9 @@ export class SyncWrapperService {
           completedUploadResults.push(reuploadResult);
         }
         pendingLwwOps =
-          reuploadResult.kind === 'completed' ? reuploadResult.localWinOpsCreated : 0;
+          reuploadResult.kind === 'completed'
+            ? reuploadResult.localWinOpsCreated + countTransientRejections(reuploadResult)
+            : 0;
       }
       if (completedUploadResults.some((result) => result.blockedByRejectedFullState)) {
         SyncLog.err(
@@ -1364,6 +1374,7 @@ export class SyncWrapperService {
     // Diagnostic: stamp the originating error/dialog so we can correlate
     // "what stuck the user" with "what they recovered with" in shared logs.
     SyncLog.log('SyncWrapperService: forceUpload called - uploading local state', {
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       triggerSource,
     });
 
@@ -1633,9 +1644,6 @@ export class SyncWrapperService {
         if (result?.isReSync) {
           this._suppressEncryptionDialogs = false;
           this.sync();
-        } else if (result?.isForceUpload) {
-          this._suppressEncryptionDialogs = false;
-          this.forceUpload('DecryptError');
         } else {
           // User cancelled — suppress future dialogs so they can navigate to settings
           this._suppressEncryptionDialogs = true;

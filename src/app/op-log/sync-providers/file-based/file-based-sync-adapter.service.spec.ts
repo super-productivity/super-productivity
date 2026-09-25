@@ -894,6 +894,47 @@ describe('FileBasedSyncAdapterService', () => {
       expect(result.ops.some((o) => o.op.id === 'op-600')).toBe(true);
     });
 
+    // #10119: the download service compares serverSeq with the persisted cursor
+    // (the syncVersion of the last processed file), so it must be the version
+    // the op was written at, not its array position. A legacy op without `sv`
+    // gets the file's syncVersion, an upper bound that never over-filters.
+    it('exposes each op sv as serverSeq, legacy ops get the file syncVersion (#10119)', async () => {
+      const compactOp = (id: string, sv?: number): Record<string, unknown> => ({
+        id,
+        c: 'client1',
+        a: 'HA',
+        o: 'ADD',
+        e: 'TASK',
+        d: `task-${id}`,
+        v: { client1: 1 },
+        t: Date.now(),
+        s: 1,
+        p: {},
+        ...(sv === undefined ? {} : { sv }),
+      });
+      const syncData = createMockSyncData({
+        syncVersion: 12,
+        recentOps: [
+          compactOp('legacy'),
+          compactOp('op-a', 10),
+          compactOp('op-b', 10),
+          compactOp('op-c', 12),
+        ] as never,
+      });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
+      );
+
+      const result = await adapter.downloadOps(11, 'client2');
+
+      expect(result.ops.map((o) => [o.op.id, o.serverSeq])).toEqual([
+        ['legacy', 12],
+        ['op-a', 10],
+        ['op-b', 10],
+        ['op-c', 12],
+      ]);
+    });
+
     it('should throw SyncDataCorruptedError for wrong file version', async () => {
       const badSyncData = createMockSyncData();
       (badSyncData as any).version = 1; // Wrong version
@@ -3458,6 +3499,30 @@ describe('FileBasedSyncAdapterService', () => {
       expect(result.ops.length).toBe(total);
       expect(result.hasMore).toBe(false);
       expect(result.ops.some((o) => o.op.id === 'op-600')).toBe(true);
+    });
+
+    // #10119: the download service compares serverSeq with the persisted cursor
+    // (the syncVersion of the last processed file), so it must be the version
+    // the op was written at, not its array position.
+    it('(a2b) split download exposes each op sv as serverSeq (#10119)', async () => {
+      const opsFile = makeOpsFile({
+        syncVersion: 9,
+        vectorClock: { client1: 3 },
+        recentOps: [
+          makeCompactOp({ id: 'legacy', v: { client1: 1 } }),
+          makeCompactOp({ id: 'op-a', v: { client1: 2 }, sv: 7 }),
+          makeCompactOp({ id: 'op-b', v: { client1: 3 }, sv: 9 }),
+        ],
+      });
+      routeDownloads({ [C.OPS_FILE]: addPrefix(opsFile, 3) });
+
+      const result = await adapter.downloadOps(9, 'client2');
+
+      expect(result.ops.map((o) => [o.op.id, o.serverSeq])).toEqual([
+        ['legacy', 9],
+        ['op-a', 7],
+        ['op-b', 9],
+      ]);
     });
 
     // (a3) SPAP-33: a short ops buffer (fewer than SPLIT_COMPACTION_THRESHOLD ops)

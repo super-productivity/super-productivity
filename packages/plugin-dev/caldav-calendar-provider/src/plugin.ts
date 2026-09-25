@@ -9,6 +9,9 @@ import ICAL from 'ical.js';
 
 declare const PluginAPI: {
   registerIssueProvider(definition: IssueProviderPluginDefinition): void;
+  log: {
+    warn(...args: unknown[]): void;
+  };
 };
 
 // --- Config ---
@@ -565,24 +568,18 @@ const parseCalendarList = (xml: string): CalendarInfo[] => {
     const displayName =
       getXmlText(resp, 'displayname') || href.split('/').filter(Boolean).pop() || href;
 
-    // Check supported components
-    let supportsVevent = true; // Default to true if not specified
+    // RFC 4791 section 5.2.3 says an absent component set accepts all types.
+    // If the property is present, however, its advertised components are
+    // authoritative (and the schema requires at least one <comp> child).
     const compSet = resp.getElementsByTagNameNS(
       CALDAV_NS,
       'supported-calendar-component-set',
     )[0];
-    if (compSet) {
-      const comps = compSet.getElementsByTagNameNS(CALDAV_NS, 'comp');
-      if (comps.length > 0) {
-        supportsVevent = false;
-        for (let j = 0; j < comps.length; j++) {
-          if (comps[j].getAttribute('name') === 'VEVENT') {
-            supportsVevent = true;
-            break;
-          }
-        }
-      }
-    }
+    const supportsVevent =
+      !compSet ||
+      Array.from(compSet.getElementsByTagNameNS(CALDAV_NS, 'comp')).some(
+        (comp) => comp.getAttribute('name')?.toUpperCase() === 'VEVENT',
+      );
 
     calendars.push({ href, displayName, supportsVevent });
   }
@@ -632,22 +629,43 @@ const caldavHeaders = (extra?: Record<string, string>): Record<string, string> =
 });
 
 /**
+ * Apple delegates calendar homes from caldav.icloud.com to a numbered partition
+ * host. This is the only cross-origin credential delegation we can verify
+ * without trusting an arbitrary server-supplied hostname.
+ */
+const isTrustedICloudPartition = (server: URL, resolved: URL): boolean =>
+  server.origin.toLowerCase() === 'https://caldav.icloud.com' &&
+  resolved.protocol === 'https:' &&
+  resolved.port === '' &&
+  /^p\d+-caldav\.icloud\.com$/i.test(resolved.hostname);
+
+/**
  * Resolve a server-supplied href against the configured server origin and
- * refuse anything that escapes it. Discovery follows hrefs that the (untrusted)
- * server controls — principal, calendar-home-set — so this is the SSRF
- * boundary: credentials are attached to every request and must never be sent
- * off-origin. Resolving via the URL constructor handles relative, absolute, and
- * protocol-relative (`//host`) forms uniformly; a prefix sniff + string concat
- * would mis-handle `//host` and uppercase schemes. The href is omitted from the
- * error (untrusted content; the log is exportable).
+ * refuse anything that escapes it, except iCloud's validated partition-host
+ * handoff. Discovery follows hrefs that the server controls — principal,
+ * calendar-home-set — so this is the SSRF boundary: credentials are attached
+ * to every request and must never be sent to an arbitrary origin. Resolving via
+ * the URL constructor handles relative, absolute, and protocol-relative
+ * (`//host`) forms uniformly. The href is omitted from the error because log
+ * history is exportable.
  */
 const resolveHref = (cfg: CaldavCalendarConfig, href: string): string => {
-  const serverOrigin = new URL(getServerUrl(cfg)).origin;
-  const resolved = new URL(href, serverOrigin + '/');
-  if (resolved.origin !== serverOrigin) {
+  const server = new URL(getServerUrl(cfg));
+  const resolved = new URL(href, server.origin + '/');
+  if (resolved.origin !== server.origin && !isTrustedICloudPartition(server, resolved)) {
     throw new Error('[CalDAV] Refusing cross-origin href');
   }
   return resolved.toString();
+};
+
+/** Resolve an event href relative to the calendar that returned it. */
+const resolveEventUrl = (
+  cfg: CaldavCalendarConfig,
+  calendarHref: string,
+  eventHref: string,
+): string => {
+  const calendarUrl = ensureTrailingSlash(resolveHref(cfg, calendarHref));
+  return resolveHref(cfg, new URL(eventHref, calendarUrl).toString());
 };
 
 /** Build PROPFIND body to bootstrap discovery: principal + calendar-home-set */
@@ -689,11 +707,23 @@ const propfind = (
 const enumerateCalendars = async (
   http: PluginHttp,
   url: string,
+  cfg: CaldavCalendarConfig,
 ): Promise<{ label: string; value: string }[]> => {
   const xml = await propfind(http, url, buildPropfindBody(), '1');
+  const configuredOrigin = new URL(getServerUrl(cfg)).origin;
+  const collectionOrigin = new URL(url).origin;
   return parseCalendarList(xml)
     .filter((c) => c.supportsVevent)
-    .map((c) => ({ label: c.displayName, value: c.href }));
+    .map((c) => ({
+      label: c.displayName,
+      // Same-origin IDs keep their existing representation. A calendar found
+      // on an iCloud partition needs an absolute ID so later REPORT and write
+      // requests do not resolve its path back onto caldav.icloud.com.
+      value:
+        collectionOrigin === configuredOrigin
+          ? c.href
+          : resolveHref(cfg, new URL(c.href, url).toString()),
+    }));
 };
 
 /**
@@ -739,7 +769,7 @@ const discoverCalendars = async (
   const enteredUrl = ensureTrailingSlash(getServerUrl(cfg));
 
   try {
-    const direct = await enumerateCalendars(http, enteredUrl);
+    const direct = await enumerateCalendars(http, enteredUrl, cfg);
     if (direct.length) return direct;
   } catch {
     // The entered URL may be a principal/root collection that rejects Depth:1.
@@ -748,7 +778,7 @@ const discoverCalendars = async (
 
   const home = await resolveCalendarHome(http, cfg, enteredUrl);
   if (!home) return [];
-  return enumerateCalendars(http, home);
+  return enumerateCalendars(http, home, cfg);
 };
 
 // --- ical.js-based RRULE expansion ---
@@ -1088,10 +1118,39 @@ const fetchEvents = async (
 ): Promise<PluginSearchResult[]> => {
   const calendarIds = getReadCalendarIds(cfg);
   if (calendarIds.length === 0) return [];
-  const results = await Promise.all(
+  const results = await Promise.allSettled(
     calendarIds.map((calId) => fetchEventsForCalendar(http, calId, cfg)),
   );
-  let merged = results.flat().sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+  const failed = results.filter((result) => result.status === 'rejected');
+  results.forEach((result, index) => {
+    if (result.status !== 'rejected') return;
+    const status =
+      typeof result.reason === 'object' &&
+      result.reason !== null &&
+      'status' in result.reason &&
+      typeof result.reason.status === 'number'
+        ? ` (HTTP ${result.reason.status})`
+        : '';
+    PluginAPI.log.warn(
+      `[CalDAV] Failed to query calendar ${index + 1}/${calendarIds.length}${status}`,
+    );
+  });
+  if (failed.length === results.length) {
+    throw failed[0].reason;
+  }
+  const ambiguousFailure = failed.find(
+    (result) => ![400, 403, 404].some((status) => isHttpStatus(result.reason, status)),
+  );
+  if (ambiguousFailure) {
+    // Preserve the host's complete cached snapshot for timeouts and temporary
+    // server failures instead of replacing it with incomplete fresh results.
+    throw ambiguousFailure.reason;
+  }
+
+  let merged = results
+    .filter((result) => result.status === 'fulfilled')
+    .flatMap((result) => result.value)
+    .sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
   if (opts?.maxResults) {
     merged = merged.slice(0, opts.maxResults);
   }
@@ -1253,8 +1312,11 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<PluginIssue> {
     const cfg = config as unknown as CaldavCalendarConfig;
-    const { eventHref, occurrenceMs } = parseCompoundId(issueId, getWriteCalendarId(cfg));
-    const eventUrl = resolveHref(cfg, eventHref);
+    const { calendarHref, eventHref, occurrenceMs } = parseCompoundId(
+      issueId,
+      getWriteCalendarId(cfg),
+    );
+    const eventUrl = resolveEventUrl(cfg, calendarHref, eventHref);
     const icalData = await http.get<string>(eventUrl, { responseType: 'text' });
     const events = parseVEvents(icalData);
     const event = events[0];
@@ -1328,8 +1390,8 @@ PluginAPI.registerIssueProvider({
 
   getIssueLink(issueId: string, config: Record<string, unknown>): string {
     const cfg = config as unknown as CaldavCalendarConfig;
-    const { eventHref } = parseCompoundId(issueId, getWriteCalendarId(cfg));
-    return resolveHref(cfg, eventHref);
+    const { calendarHref, eventHref } = parseCompoundId(issueId, getWriteCalendarId(cfg));
+    return resolveEventUrl(cfg, calendarHref, eventHref);
   },
 
   async testConnection(
@@ -1423,10 +1485,13 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<void> {
     const cfg = config as unknown as CaldavCalendarConfig;
-    const { eventHref, occurrenceMs } = parseCompoundId(id, getWriteCalendarId(cfg));
+    const { calendarHref, eventHref, occurrenceMs } = parseCompoundId(
+      id,
+      getWriteCalendarId(cfg),
+    );
     // Editing one occurrence would rewrite the shared master (whole series).
     if (occurrenceMs !== undefined) throw unsupportedOccurrenceWriteError('edit');
-    const eventUrl = resolveHref(cfg, eventHref);
+    const eventUrl = resolveEventUrl(cfg, calendarHref, eventHref);
 
     // Fetch current iCal data
     const currentIcal = await http.get<string>(eventUrl, { responseType: 'text' });
@@ -1683,10 +1748,13 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<void> {
     const cfg = config as unknown as CaldavCalendarConfig;
-    const { eventHref, occurrenceMs } = parseCompoundId(id, getWriteCalendarId(cfg));
+    const { calendarHref, eventHref, occurrenceMs } = parseCompoundId(
+      id,
+      getWriteCalendarId(cfg),
+    );
     // Deleting one occurrence would DELETE the shared master (whole series).
     if (occurrenceMs !== undefined) throw unsupportedOccurrenceWriteError('delete');
-    const eventUrl = resolveHref(cfg, eventHref);
+    const eventUrl = resolveEventUrl(cfg, calendarHref, eventHref);
     await http.delete(eventUrl, { responseType: 'text' });
   },
 });

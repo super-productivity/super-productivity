@@ -118,7 +118,9 @@ export const sanitizeTasksForArchiving = (
 
   if (droppedRootTasks > 0 || droppedSubTasks > 0) {
     Log.warn(`[ArchiveService] ${logPrefix}: Dropped malformed archive payload tasks`, {
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       droppedRootTasks,
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       droppedSubTasks,
       originalTaskCount: tasksIn.length,
       sanitizedTaskCount: sanitizedTasks.length,

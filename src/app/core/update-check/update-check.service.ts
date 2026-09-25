@@ -4,6 +4,7 @@ import { EMPTY, firstValueFrom, timer } from 'rxjs';
 import { distinctUntilChanged, map, switchMap, timeout } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { T } from '../../t.const';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { isNewerVersion } from '../../util/is-newer-version';
 import { BannerService } from '../banner/banner.service';

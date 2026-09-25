@@ -48,8 +48,10 @@ import {
 } from '../inline-markdown/markdown-toolbar.util';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
 import { DialogConfirmComponent } from '../dialog-confirm/dialog-confirm.component';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { toggleChecklistItemAtIndex } from '../../features/markdown-checklist/checklist-operations';
 import { HISTORY_STATE } from 'src/app/app.constants';
 import { IS_MOBILE } from 'src/app/util/is-mobile';
@@ -57,6 +59,7 @@ import { IS_IOS } from 'src/app/util/is-ios';
 import { Keyboard } from '@capacitor/keyboard';
 import { DialogMarkdownShortcutsComponent } from './dialog-markdown-shortcuts.component';
 import { LiveMarkdownEditorComponent } from '../inline-markdown/live-markdown/live-markdown-editor.component';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import {
   isShortcutWithKey,

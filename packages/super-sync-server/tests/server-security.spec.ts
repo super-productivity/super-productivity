@@ -265,7 +265,7 @@ describe('Server Security Configuration', () => {
   });
 });
 
-describe('Password Reset Page', () => {
+describe('Token Page Escaping', () => {
   let app: FastifyInstance;
 
   beforeEach(async () => {
@@ -276,46 +276,6 @@ describe('Password Reset Page', () => {
     if (app) {
       await app.close();
     }
-  });
-
-  it('should render password reset form with token', async () => {
-    const { pageRoutes } = await import('../src/pages');
-
-    app = Fastify();
-    await app.register(pageRoutes, { prefix: '/' });
-    await app.ready();
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/reset-password?token=test-token-123',
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.headers['content-type']).toContain('text/html');
-
-    const html = response.body;
-    expect(html).toContain('<title>Reset Password</title>');
-    expect(html).toContain('<form id="resetForm">');
-    expect(html).toContain('type="password"');
-    expect(html).toContain('Minimum 12 characters');
-    // Token should be escaped in the JavaScript
-    expect(html).toContain('test-token-123');
-  });
-
-  it('should return 400 when token is missing', async () => {
-    const { pageRoutes } = await import('../src/pages');
-
-    app = Fastify();
-    await app.register(pageRoutes, { prefix: '/' });
-    await app.ready();
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/reset-password',
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.body).toBe('Token is required');
   });
 
   it('should escape malicious token in data attribute', async () => {
@@ -329,7 +289,7 @@ describe('Password Reset Page', () => {
     const maliciousToken = '"><script>alert(1)</script>';
     const response = await app.inject({
       method: 'GET',
-      url: `/reset-password?token=${encodeURIComponent(maliciousToken)}`,
+      url: `/recover-passkey?token=${encodeURIComponent(maliciousToken)}`,
     });
 
     expect(response.statusCode).toBe(200);
@@ -353,7 +313,7 @@ describe('Password Reset Page', () => {
     const maliciousToken = '</script><script>alert("xss")</script>';
     const response = await app.inject({
       method: 'GET',
-      url: `/reset-password?token=${encodeURIComponent(maliciousToken)}`,
+      url: `/recover-passkey?token=${encodeURIComponent(maliciousToken)}`,
     });
 
     expect(response.statusCode).toBe(200);

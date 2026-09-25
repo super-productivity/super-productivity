@@ -1,6 +1,7 @@
 import {
   buildMergedFieldDiffs,
   hasOpaqueChanges,
+  isAdditiveTimeOp,
   isDisjointMergeEligible,
   mergeChangedFields,
   MergeSideMeta,
@@ -32,6 +33,50 @@ const convertToSubTaskOp = (over: Partial<Operation> = {}): Operation =>
         targetParentId: 'parent-1',
         afterTaskId: null,
       },
+      entityChanges: [],
+    },
+    ...over,
+  });
+
+const DAY = '2026-09-12';
+
+/**
+ * Production-shaped syncTimeSpent op as a DIRECT write captures it: the
+ * entityChanges carry the delta's arguments, none of which is a task field.
+ */
+const syncTimeSpentOp = (over: Partial<Operation> = {}): Operation =>
+  op({
+    actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+    payload: {
+      actionPayload: { taskId: 'task-1', date: DAY, duration: 60000 },
+      entityChanges: [
+        {
+          entityType: 'TASK' as EntityType,
+          entityId: 'task-1',
+          opType: OpType.Update,
+          changes: { taskId: 'task-1', date: DAY, duration: 60000 },
+        },
+      ],
+    },
+    ...over,
+  });
+
+/** The same op as a DEFERRED write captures it: `entityChanges: []`. */
+const deferredSyncTimeSpentOp = (over: Partial<Operation> = {}): Operation =>
+  syncTimeSpentOp({
+    payload: {
+      actionPayload: { taskId: 'task-1', date: DAY, duration: 60000 },
+      entityChanges: [],
+    },
+    ...over,
+  });
+
+/** Production-shaped removeTimeSpent op: no entityChanges are captured for it. */
+const removeTimeSpentOp = (over: Partial<Operation> = {}): Operation =>
+  op({
+    actionType: ActionType.TASK_REMOVE_TIME_SPENT,
+    payload: {
+      actionPayload: { id: 'task-1', date: DAY, duration: 60000 },
       entityChanges: [],
     },
     ...over,
@@ -222,6 +267,101 @@ describe('conflict-disjoint-merge.util', () => {
           entityId: 'task-2',
         }),
       ).toBe(false);
+    });
+  });
+
+  describe('isDisjointMergeEligible (additive time ops)', () => {
+    const titleEdit = op({
+      payload: { task: { id: 'task-1', title: 'Remote' } },
+      clientId: 'B',
+    });
+
+    it('treats a syncTimeSpent delta as disjoint from an edit of other fields', () => {
+      // The delta is counted as touching timeSpent/timeSpentOnDay (from its
+      // action type), not its { taskId, date, duration } arguments; a title
+      // edit commutes with it.
+      expect(
+        isDisjointMergeEligible({
+          localOps: [syncTimeSpentOp()],
+          remoteOps: [titleEdit],
+          payloadKey: 'task',
+          entityId: 'task-1',
+        }),
+      ).toBe(true);
+    });
+
+    it('classifies the empty deferred-write form of the delta the same way', () => {
+      // Deferred writes carry entityChanges: []. Read as-is that is opaque; the
+      // action-type mapping makes both wire forms of the same intent commute
+      // with a non-time edit alike.
+      expect(
+        isDisjointMergeEligible({
+          localOps: [deferredSyncTimeSpentOp()],
+          remoteOps: [titleEdit],
+          payloadKey: 'task',
+          entityId: 'task-1',
+        }),
+      ).toBe(true);
+    });
+
+    it('treats a syncTimeSpent delta as overlapping an absolute timeSpentOnDay write', () => {
+      expect(
+        isDisjointMergeEligible({
+          localOps: [
+            op({ payload: { task: { id: 'task-1', timeSpentOnDay: { [DAY]: 1 } } } }),
+          ],
+          remoteOps: [syncTimeSpentOp({ clientId: 'B' })],
+          payloadKey: 'task',
+          entityId: 'task-1',
+        }),
+      ).toBe(false);
+    });
+
+    it('treats a syncTimeSpent delta as overlapping an absolute timeSpent write', () => {
+      expect(
+        isDisjointMergeEligible({
+          localOps: [deferredSyncTimeSpentOp()],
+          remoteOps: [
+            op({ payload: { task: { id: 'task-1', timeSpent: 5 } }, clientId: 'B' }),
+          ],
+          payloadKey: 'task',
+          entityId: 'task-1',
+        }),
+      ).toBe(false);
+    });
+
+    it('keeps a removeTimeSpent delta ineligible (opaque, whole-entity LWW)', () => {
+      expect(
+        isDisjointMergeEligible({
+          localOps: [removeTimeSpentOp()],
+          remoteOps: [titleEdit],
+          payloadKey: 'task',
+          entityId: 'task-1',
+        }),
+      ).toBe(false);
+    });
+
+    it('does not surface the mapped time fields through mergeChangedFields', () => {
+      // The mapping is for the disjointness test only. A merge or a
+      // reconciliation op built from mergeChangedFields must never see the
+      // delta's values under task-field names.
+      expect(mergeChangedFields([syncTimeSpentOp()], 'task', 'task-1')).toEqual({
+        taskId: 'task-1',
+        date: DAY,
+        duration: 60000,
+      });
+      expect(mergeChangedFields([deferredSyncTimeSpentOp()], 'task', 'task-1')).toEqual(
+        {},
+      );
+    });
+  });
+
+  describe('isAdditiveTimeOp', () => {
+    it('is true for both persistent time deltas and false for a plain update', () => {
+      expect(isAdditiveTimeOp(syncTimeSpentOp())).toBe(true);
+      expect(isAdditiveTimeOp(deferredSyncTimeSpentOp())).toBe(true);
+      expect(isAdditiveTimeOp(removeTimeSpentOp())).toBe(true);
+      expect(isAdditiveTimeOp(op())).toBe(false);
     });
   });
 

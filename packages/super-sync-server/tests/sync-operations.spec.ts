@@ -488,6 +488,18 @@ vi.mock('../src/db', async () => {
         }),
       },
       syncDevice: {
+        // Post-commit device registration from uploadOps (outside the tx).
+        upsert: vi.fn().mockImplementation(async (args: any) => {
+          const key = `${args.where.userId_clientId.userId}:${args.where.userId_clientId.clientId}`;
+          const result = {
+            ...args.create,
+            ...args.update,
+            userId: args.where.userId_clientId.userId,
+            clientId: args.where.userId_clientId.clientId,
+          };
+          state.syncDevices.set(key, result);
+          return result;
+        }),
         findMany: vi.fn().mockImplementation(async () => {
           return Array.from(state.syncDevices.values());
         }),

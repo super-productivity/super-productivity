@@ -23,6 +23,7 @@ import com.superproductivity.superproductivity.service.ReminderNotificationHelpe
 import com.superproductivity.superproductivity.service.RemoteTrackingNotificationHelper
 import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
+import com.superproductivity.superproductivity.widget.CaptureInbox
 import com.superproductivity.superproductivity.widget.ReminderDoneQueue
 import com.superproductivity.superproductivity.widget.ReminderSnoozeQueue
 import com.superproductivity.superproductivity.widget.ReminderTapQueue
@@ -280,6 +281,7 @@ class JavaScriptInterface(
                 putExtra(FocusModeForegroundService.EXTRA_REMAINING_MS, remainingMs)
                 putExtra(FocusModeForegroundService.EXTRA_IS_BREAK, isBreak)
                 putExtra(FocusModeForegroundService.EXTRA_IS_PAUSED, isPaused)
+                FocusModeForegroundService.attachPendingTaskUpdate(this)
             }
             FocusModeForegroundService.markStartPending()
             try {
@@ -338,6 +340,45 @@ class JavaScriptInterface(
         }
     }
 
+    @Suppress("unused")
+    @JavascriptInterface
+    fun updateFocusTask(taskId: String?, timeSpentMs: Long, isTracking: Boolean) {
+        safeCall("Failed to update focus task time") {
+            val sequence = FocusModeForegroundService.stageTaskUpdate(
+                taskId,
+                timeSpentMs,
+                isTracking
+            )
+            if (!FocusModeForegroundService.isRunning && !FocusModeForegroundService.isStartPending) {
+                return@safeCall
+            }
+            val intent = Intent(activity, FocusModeForegroundService::class.java).apply {
+                action = FocusModeForegroundService.ACTION_UPDATE_TASK
+                putExtra(FocusModeForegroundService.EXTRA_TASK_ID, taskId)
+                putExtra(FocusModeForegroundService.EXTRA_TASK_TIME_SPENT_MS, timeSpentMs)
+                putExtra(FocusModeForegroundService.EXTRA_TASK_IS_TRACKING, isTracking)
+                putExtra(FocusModeForegroundService.EXTRA_TASK_UPDATE_SEQUENCE, sequence)
+            }
+            activity.startService(intent)
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun adjustFocusTaskTime(taskId: String, timeSpentDeltaMs: Long) {
+        safeCall("Failed to adjust focus task time") {
+            if (!FocusModeForegroundService.isRunning && !FocusModeForegroundService.isStartPending) {
+                return@safeCall
+            }
+            val intent = Intent(activity, FocusModeForegroundService::class.java).apply {
+                action = FocusModeForegroundService.ACTION_ADJUST_TASK
+                putExtra(FocusModeForegroundService.EXTRA_TASK_ID, taskId)
+                putExtra(FocusModeForegroundService.EXTRA_TASK_TIME_DELTA_MS, timeSpentDeltaMs)
+            }
+            activity.startService(intent)
+        }
+    }
+
     /**
      * Read back the live focus-mode session so the WebView can recover it after
      * being recreated (app reopened from recents). Returns "null" when no focus
@@ -352,7 +393,16 @@ class JavaScriptInterface(
             val remainingMs = FocusModeForegroundService.liveRemainingMs()
             val isBreak = FocusModeForegroundService.isBreak
             val isPaused = FocusModeForegroundService.isPaused
-            """{"durationMs":$durationMs,"remainingMs":$remainingMs,"isBreak":$isBreak,"isPaused":$isPaused}"""
+            val task = FocusModeForegroundService.taskSnapshot()
+            JSONObject()
+                .put("durationMs", durationMs)
+                .put("remainingMs", remainingMs)
+                .put("isBreak", isBreak)
+                .put("isPaused", isPaused)
+                .put("taskId", task.taskId ?: JSONObject.NULL)
+                .put("taskTimeSpentMs", task.timeSpentMs)
+                .put("isTaskTracking", task.isTracking)
+                .toString()
         } else {
             "null"
         }
@@ -394,13 +444,32 @@ class JavaScriptInterface(
     }
 
     /**
-     * Get queued tasks from the widget and clear the queue.
-     * Returns JSON string of tasks or null if empty.
+     * Non-destructive read of natively captured tasks as a JSON array, oldest first.
+     * Returns null if the inbox could not be read. Entries stay until acknowledged.
      */
     @Suppress("unused")
     @JavascriptInterface
-    fun getWidgetTaskQueue(): String? {
-        return WidgetTaskQueue.getAndClearQueue(activity)
+    fun getPendingCaptures(): String? {
+        return try {
+            val inbox = CaptureInbox.forContext(activity)
+            WidgetTaskQueue.migrateInto(activity, inbox)
+            inbox.pendingJson()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read capture inbox", e)
+            null
+        }
+    }
+
+    /** Delete one capture after the app has persisted its task. */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun acknowledgeCapture(id: String): Boolean {
+        return try {
+            CaptureInbox.forContext(activity).acknowledge(id)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acknowledge capture", e)
+            false
+        }
     }
 
     /**

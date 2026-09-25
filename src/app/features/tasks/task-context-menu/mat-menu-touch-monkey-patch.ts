@@ -1,10 +1,12 @@
-import { MatMenuTrigger, MatMenuItem } from '@angular/material/menu';
+import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { IS_HYBRID_DEVICE, IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
 import { isTouchActive } from '../../../util/input-intent';
 
 /**
  * Shared timestamp tracking when any menu opens.
- * Used by both the monkey patch and MenuTouchFixDirective.
+ * Only a fallback for elements that are not inside a stamped panel — the guards
+ * read the open time of the panel the clicked item lives in, see
+ * `getMenuOpenTimeFor`.
  */
 export let lastMenuOpenTime = 0;
 
@@ -13,6 +15,57 @@ export let lastMenuOpenTime = 0;
  */
 export const setLastMenuOpenTime = (time: number): void => {
   lastMenuOpenTime = time;
+};
+
+/** Per-panel open time, so one panel opening cannot mute another one's taps. */
+const MENU_OPEN_TIME_ATTR = 'data-menu-open-time';
+
+/**
+ * Record when this panel opened, and keep the global fallback in step.
+ *
+ * Latest stamp wins: a trigger re-tapped while its panel is still animating
+ * closed reuses the same panel element (Material skips `attach()` while the
+ * overlay is still attached), so the MutationObserver never fires and only a
+ * fresh stamp from the `_setIsOpen` override re-arms the guard for that reopen.
+ */
+export const stampMenuPanelOpen = (panel: HTMLElement, time = Date.now()): void => {
+  panel.setAttribute(MENU_OPEN_TIME_ATTR, String(time));
+  setLastMenuOpenTime(time);
+};
+
+/**
+ * When the panel holding `el` opened.
+ *
+ * The touch guards below drop clicks that land within `TOUCH_DELAY_MS` of a
+ * menu opening, to stop a submenu appearing under the finger from selecting
+ * itself (#4436). Keyed to the panel rather than to "the last menu that opened
+ * anywhere": a second panel can open between a tap's touchstart and its
+ * synthesized click — a hover-opened submenu on a hybrid device, or any menu
+ * opened by an unrelated timer — and a global timestamp then silently swallows
+ * that perfectly deliberate tap.
+ */
+export const getMenuOpenTimeFor = (el: Element | null | undefined): number => {
+  const stamped = el
+    ?.closest(`[${MENU_OPEN_TIME_ATTR}]`)
+    ?.getAttribute(MENU_OPEN_TIME_ATTR);
+  return stamped ? Number(stamped) : lastMenuOpenTime;
+};
+
+const TOUCH_DELAY_MS = 300;
+
+/**
+ * True while a click on `el` still falls inside its own menu's guard window.
+ *
+ * The single decision both touch guards below ask — the document-level capture
+ * listener and the `_checkDisabled` override — so neither can drift back to
+ * asking "did *a* menu just open" instead of "did *this* menu just open".
+ */
+export const isWithinMenuOpenGuard = (
+  el: Element | null | undefined,
+  now = Date.now(),
+): boolean => {
+  const openTime = getMenuOpenTimeFor(el);
+  return openTime > 0 && now - openTime < TOUCH_DELAY_MS;
 };
 
 /**
@@ -31,6 +84,7 @@ export const setLastMenuOpenTime = (time: number): void => {
  * 2. Current API dependencies (as of @angular/material 21.x):
  *    - MatMenuItem.prototype._checkDisabled(event) - click handler we override
  *    - MatMenuTrigger.prototype.openMenu() - we intercept to track timing
+ *    - MatMenu.prototype._setIsOpen(isOpen) - covers click and hover reopens
  *    - MatMenu._allItems - QueryList of menu items
  *    - MatMenuItem._elementRef.nativeElement - DOM element access
  *
@@ -41,9 +95,20 @@ export const setLastMenuOpenTime = (time: number): void => {
 export const applyMatMenuTouchMonkeyPatch = (): void => {
   // Store original methods
   const originalOpenMenu = MatMenuTrigger.prototype.openMenu;
+  const originalSetIsOpen = MatMenu.prototype._setIsOpen;
   const originalCheckDisabled = (MatMenuItem.prototype as any)._checkDisabled;
 
-  const TOUCH_DELAY_MS = 300;
+  // Hover opens call _openMenu(false), bypassing the public openMenu method.
+  // Both paths reach _setIsOpen, even when reusing a still-attached panel.
+  MatMenu.prototype._setIsOpen = function (this: MatMenu, isOpen: boolean): void {
+    originalSetIsOpen.call(this, isOpen);
+    if (isOpen) {
+      const panel = document.getElementById(this.panelId);
+      if (panel) {
+        stampMenuPanelOpen(panel);
+      }
+    }
+  };
 
   // Override MatMenuTrigger.openMenu
   MatMenuTrigger.prototype.openMenu = function (this: MatMenuTrigger): void {
@@ -76,10 +141,13 @@ export const applyMatMenuTouchMonkeyPatch = (): void => {
     this: MatMenuItem,
     event: MouseEvent,
   ): void {
-    const timeSinceMenuOpen = Date.now() - lastMenuOpenTime;
-
-    // On touch devices, prevent clicks that happen too quickly after menu opens
-    if (isTouchActive() && event.isTrusted && timeSinceMenuOpen < TOUCH_DELAY_MS) {
+    // On touch devices, prevent clicks that happen too quickly after THIS
+    // item's own menu opened
+    if (
+      isTouchActive() &&
+      event.isTrusted &&
+      isWithinMenuOpenGuard(event.target as Element)
+    ) {
       event.preventDefault();
       // stopImmediatePropagation prevents OTHER handlers on the SAME element from firing
       // (stopPropagation only prevents bubbling UP to parent elements)
@@ -99,12 +167,12 @@ export const applyMatMenuTouchMonkeyPatch = (): void => {
       for (const node of addedNodes) {
         if (node instanceof HTMLElement) {
           // Check if a menu panel was added (directly or as descendant)
-          const menuPanel =
-            node.classList?.contains('mat-mdc-menu-panel') ||
-            node.querySelector?.('.mat-mdc-menu-panel');
-          if (menuPanel) {
-            setLastMenuOpenTime(Date.now());
+          if (node.classList?.contains('mat-mdc-menu-panel')) {
+            stampMenuPanelOpen(node);
           }
+          node
+            .querySelectorAll?.('.mat-mdc-menu-panel')
+            .forEach((panel) => stampMenuPanelOpen(panel as HTMLElement));
         }
       }
     }
@@ -128,15 +196,8 @@ export const applyMatMenuTouchMonkeyPatch = (): void => {
       const menuItem = target.closest('.mat-mdc-menu-item');
       if (!menuItem) return;
 
-      const timeSinceMenuOpen = Date.now() - lastMenuOpenTime;
-
-      // Block clicks that happen too quickly after menu opened
-      if (
-        isTouchActive() &&
-        event.isTrusted &&
-        lastMenuOpenTime > 0 &&
-        timeSinceMenuOpen < TOUCH_DELAY_MS
-      ) {
+      // Block clicks that happen too quickly after THIS item's menu opened
+      if (isTouchActive() && event.isTrusted && isWithinMenuOpenGuard(menuItem)) {
         event.preventDefault();
         event.stopImmediatePropagation();
       }

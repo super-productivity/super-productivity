@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { ClipboardImageService } from './clipboard-image.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { clipboardHasText } from '../../util/clipboard-has-text';
 import { T } from '../../t.const';

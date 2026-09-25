@@ -228,6 +228,19 @@ describe('ArchiveOperationHandler', () => {
     });
 
     describe('moveToArchive action', () => {
+      it('should treat a missing meta as local rather than throwing', async () => {
+        const action = {
+          type: TaskSharedActions.moveToArchive.type,
+          tasks: [createMockTaskWithSubTasks('task-1')],
+        } as unknown as PersistentAction;
+
+        await expectAsync(service.handleOperation(action)).toBeResolved();
+
+        expect(
+          mockArchiveService.writeTasksToArchiveForRemoteSync,
+        ).not.toHaveBeenCalled();
+      });
+
       it('should write tasks to archive for remote sync', async () => {
         const tasks = [
           createMockTaskWithSubTasks('task-1'),
@@ -379,6 +392,21 @@ describe('ArchiveOperationHandler', () => {
         expect(mockTaskArchiveService.updateTask).not.toHaveBeenCalled();
       });
 
+      // A hand-rolled dispatch (e2e fixtures, a plugin) carries no `meta` at
+      // all. That used to throw out of the handler and surface as a devError
+      // plus an "archive operation failed" snack; a missing `meta` reads as
+      // local, the same as an absent isRemote.
+      it('should treat a missing meta as local rather than throwing', async () => {
+        const action = {
+          type: TaskSharedActions.updateTask.type,
+          task: { id: 'task-1', changes: { title: 'Updated Title' } },
+        } as unknown as PersistentAction;
+
+        await expectAsync(service.handleOperation(action)).toBeResolved();
+
+        expect(mockTaskArchiveService.updateTask).not.toHaveBeenCalled();
+      });
+
       it('should skip update for task not in archive (task is non-archived)', async () => {
         // Task is not in archive
         mockTaskArchiveService.hasTask.and.returnValue(Promise.resolve(false));
@@ -416,6 +444,17 @@ describe('ArchiveOperationHandler', () => {
     });
 
     describe('updateTasks action (batch)', () => {
+      it('should treat a missing meta as local rather than throwing', async () => {
+        const action = {
+          type: TaskSharedActions.updateTasks.type,
+          tasks: [{ id: 'task-1', changes: { title: 'Updated 1' } }],
+        } as unknown as PersistentAction;
+
+        await expectAsync(service.handleOperation(action)).toBeResolved();
+
+        expect(mockTaskArchiveService.updateTasks).not.toHaveBeenCalled();
+      });
+
       it('should update multiple archived tasks for remote operations', async () => {
         // Both tasks exist in archive
         mockTaskArchiveService.hasTasksBatch.and.returnValue(

@@ -5,6 +5,8 @@ import { ConflictJournalService } from './conflict-journal.service';
 import { Action, Store } from '@ngrx/store';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { convertOpToAction } from '../apply/operation-converter.util';
+import { OperationCaptureService } from '../capture/operation-capture.service';
+import { PersistentAction } from '../core/persistent-action.interface';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { ValidateStateService } from '../validation/validate-state.service';
@@ -362,6 +364,158 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     expect(entries[0].reason).toBe('disjoint-merge');
     expect(entries[0].status).toBe('info');
     expect((await journal.list('unreviewed')).length).toBe(0);
+  });
+
+  // ── (a-time) #10147 regression: pending edit vs remote syncTimeSpent ───────
+  // A syncTimeSpent op is an additive delta. Its wire entityChanges carry the
+  // delta's arguments ({ taskId, date, duration }, direct write) or nothing
+  // (deferred write); a synthesized merge would write those keys onto the task
+  // and reject the delta. The pair must fall to whole-entity LWW, and whichever
+  // side wins must leave the task's time history intact.
+  describe('(a-time) pending edit vs remote syncTimeSpent (#10147)', () => {
+    const DAY = '2024-01-15';
+    const HISTORY = {
+      ['2024-01-10']: 7200000,
+      ['2024-01-12']: 3600000,
+      [DAY]: 7200000,
+    };
+    const HISTORY_TOTAL = 18000000;
+    const currentTask = {
+      id: 'task-1',
+      title: 'T',
+      isDone: true,
+      timeSpent: HISTORY_TOTAL,
+      timeSpentOnDay: HISTORY,
+      dueWithTime: null,
+      projectId: null,
+      tagIds: [],
+      parentId: null,
+      subTaskIds: [],
+      modified: 1000,
+    };
+
+    const capturedSyncTimeSpent = (form: 'direct' | 'deferred'): Operation => {
+      const actionPayload = { taskId: 'task-1', date: DAY, duration: 60000 };
+      return op({
+        id: `remote-time-${form}`,
+        clientId: 'B',
+        vectorClock: { B: 1 },
+        timestamp: 1000,
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        payload: {
+          actionPayload,
+          entityChanges:
+            form === 'direct'
+              ? new OperationCaptureService().extractEntityChanges({
+                  type: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+                  ...actionPayload,
+                  meta: {
+                    isPersistent: true,
+                    entityType: 'TASK',
+                    entityId: 'task-1',
+                    opType: OpType.Update,
+                  },
+                } as unknown as PersistentAction)
+              : [],
+        },
+      });
+    };
+
+    const pendingDoneEdit = (): Operation =>
+      op({
+        id: 'local-done',
+        clientId: 'A',
+        vectorClock: { A: 1 },
+        timestamp: 2000,
+        payload: { task: { id: 'task-1', changes: { isDone: true } } },
+      });
+
+    const expectNoSynthesizedMerge = async (): Promise<void> => {
+      const localOps = mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
+        .allArgs()
+        .flatMap(([batches]) => batches)
+        .filter((batch) => batch.source === 'local')
+        .flatMap((batch) => [...batch.ops]);
+      for (const emitted of localOps) {
+        const payload = extractActionPayload(emitted.payload);
+        expect(Object.keys(payload)).not.toContain('taskId');
+        expect(Object.keys(payload)).not.toContain('date');
+        expect(Object.keys(payload)).not.toContain('duration');
+        expect((emitted.payload as { lwwUpdateMode?: string }).lwwUpdateMode).not.toBe(
+          'patch',
+        );
+      }
+      const entries = await journal.list('history');
+      expect(entries.length).toBe(1);
+      expect(entries[0].winner).not.toBe('merged');
+      expect(entries[0].reason).not.toBe('disjoint-merge');
+    };
+
+    for (const form of ['direct', 'deferred'] as const) {
+      it(`never synthesizes a merged patch from a ${form}-form delta and keeps the time history on the local-win path`, async () => {
+        mockStore.select.and.returnValue(of(currentTask));
+
+        await service.autoResolveConflictsLWW([
+          conflictOf([pendingDoneEdit()], [capturedSyncTimeSpent(form)]),
+        ]);
+        await expectNoSynthesizedMerge();
+
+        // Local (ts 2000) wins: the local-win op is a full snapshot. Applied
+        // through the production reducer on the other client, it carries the
+        // whole timeSpentOnDay map — not a single-day delta.
+        const localWin = mergedOpArgs();
+        expect(localWin).toBeDefined();
+        const mockBase = jasmine.createSpy('base').and.callFake((st: unknown) => st);
+        const prodReducer = lwwUpdateMetaReducer(mockBase);
+        const otherClientState = buildRootStateWithTask({
+          ...currentTask,
+          isDone: false,
+          timeSpent: HISTORY_TOTAL + 60000,
+          timeSpentOnDay: { ...HISTORY, [DAY]: HISTORY[DAY] + 60000 },
+        });
+        prodReducer(
+          otherClientState,
+          convertOpToAction(
+            JSON.parse(JSON.stringify(localWin)) as Operation,
+          ) as unknown as Action,
+        );
+        const task = (
+          mockBase.calls.mostRecent().args[0] as Record<
+            string,
+            { entities: Record<string, Record<string, unknown>> }
+          >
+        )[TASK_FEATURE_NAME].entities['task-1'];
+        expect(task['isDone']).toBe(true);
+        expect(task['timeSpentOnDay']).toEqual(HISTORY);
+        expect(task['timeSpent']).toBe(HISTORY_TOTAL);
+      });
+    }
+
+    it('never synthesizes a merged patch when the pending side is a removeTimeSpent delta', async () => {
+      mockStore.select.and.returnValue(of(currentTask));
+      const localRemove = op({
+        id: 'local-remove',
+        clientId: 'A',
+        vectorClock: { A: 1 },
+        timestamp: 2000,
+        actionType: ActionType.TASK_REMOVE_TIME_SPENT,
+        payload: {
+          actionPayload: { id: 'task-1', date: DAY, duration: 60000 },
+          entityChanges: [],
+        },
+      });
+      const remoteTitle = op({
+        id: 'remote-title',
+        clientId: 'B',
+        vectorClock: { B: 1 },
+        timestamp: 1000,
+        payload: { task: { id: 'task-1', changes: { title: 'Remote' } } },
+      });
+
+      await service.autoResolveConflictsLWW([conflictOf([localRemove], [remoteTitle])]);
+
+      await expectNoSynthesizedMerge();
+    });
   });
 
   // ── (a0) #9095 regression: rename vs mark-done → merge both ────────────────

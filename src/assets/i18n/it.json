@@ -3274,7 +3274,7 @@
     "UNABLE_TO_PERSIST_DATA": "Impossibile persistere i dati nello storage del plugin",
     "UNKNOWN_ERROR": "Si è verificato un errore sconosciuto",
     "UPLOAD_PLUGIN_INSTRUCTION": "Carica un file ZIP del plugin per installarlo:",
-    "VALIDATION_FAILED": "Validazione fallita",
+    "VALIDATION_FAILED": "Validazione fallita: {{errors}}",
     "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Questo plugin fornisce un'integrazione issue attualmente in uso ({{count}} provider di issue). Disattivarlo interromperà temporaneamente la sincronizzazione issue per quei provider fino alla riattivazione del plugin. Sei sicuro di voler disattivare \"{{name}}\"?",
     "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Caricamento lista plugin della comunità fallito",
     "INDEX_HTML_NOT_LOADED": "index.html del plugin non caricato",

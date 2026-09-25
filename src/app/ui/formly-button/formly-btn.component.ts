@@ -19,6 +19,7 @@ export class FormlyBtnComponent extends FieldType<FormlyFieldConfig> {
       const r = this.to.onClick(this.field, this.form, this.model);
       if (r && 'then' in r) {
         r.then((v) => {
+          // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
           Log.log('update', v, this);
           this.formControl.setValue(v);
           this.form.markAsDirty();

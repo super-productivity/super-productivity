@@ -355,7 +355,7 @@ export const focusModeReducer = createReducer(
   // correct point. For Flowtime (duration 0) `remainingMs` carries elapsed.
   on(
     a.restoreFocusSessionFromNative,
-    (state, { durationMs, remainingMs, isBreak, isPaused }) => {
+    (state, { durationMs, remainingMs, isBreak, isPaused, pausedTaskId }) => {
       const purpose: TimerState['purpose'] = isBreak ? 'break' : 'work';
       const isFlowtime = durationMs <= 0;
       const elapsed = isFlowtime
@@ -390,6 +390,7 @@ export const focusModeReducer = createReducer(
         ...state,
         timer,
         mode,
+        pausedTaskId: pausedTaskId ?? null,
         // `isOverlayShown` is intentionally left untouched (not forced true):
         // recovery should be non-intrusive — the header focus button shows the
         // running timer; we don't pop the full-screen overlay on app reopen.

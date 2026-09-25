@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Action, Store, StoreModule } from '@ngrx/store';
 import { LOCAL_ACTIONS, ALL_ACTIONS } from './local-actions.token';
+import { reducerFailureGuardMetaReducer } from '../root-store/meta/reducer-failure-guard.meta-reducer';
 
 /**
  * Tests for LOCAL_ACTIONS and ALL_ACTIONS injection tokens.
@@ -23,6 +24,28 @@ describe('LOCAL_ACTIONS token', () => {
   });
 
   describe('LOCAL_ACTIONS', () => {
+    it('should filter out actions the reducer rejected (#10195)', (done) => {
+      const localActions$ = TestBed.inject(LOCAL_ACTIONS);
+      const emissions: Action[] = [];
+      const sub = localActions$.subscribe((a) => emissions.push(a));
+
+      // Mark the instance the same way the registered guard does in the app.
+      const rejected: Action = { type: 'REJECTED_ACTION' };
+      (window.confirm as jasmine.Spy).and.returnValue(false);
+      reducerFailureGuardMetaReducer<unknown>(() => {
+        throw new Error('reducer boom');
+      })({}, rejected);
+      (window.confirm as jasmine.Spy).and.returnValue(true);
+
+      store.dispatch(rejected);
+
+      setTimeout(() => {
+        expect(emissions.filter((a) => a.type === 'REJECTED_ACTION')).toEqual([]);
+        sub.unsubscribe();
+        done();
+      }, 0);
+    });
+
     it('should filter out actions with meta.isRemote: true', (done) => {
       const localActions$ = TestBed.inject(LOCAL_ACTIONS);
       const emissions: Action[] = [];

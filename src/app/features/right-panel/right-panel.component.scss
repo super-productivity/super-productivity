@@ -179,6 +179,20 @@
     height: 16px;
   }
 
+  // The painted handle stays 20px so it keeps clearing the 8px row margin
+  // (#9506). Only the pointer target grows: 20px is under the 24px minimum
+  // target size, and the 4px between the handle's right edge and the first row
+  // is empty margin, so taking it widens the target without covering content
+  // or painting anything new (#10132).
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: -4px;
+    bottom: 0;
+    left: 0;
+  }
+
   &:hover {
     //border-color: var(--color-accent);
     //color: var(--color-accent);
