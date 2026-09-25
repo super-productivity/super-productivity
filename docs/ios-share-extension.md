@@ -22,8 +22,10 @@ the app's distribution profile with the App Group entitlement and update
 store its base64 representation in `IOS_SHARE_PROVISION_PROFILE`.
 
 For development, select the same signing team on both Xcode targets and enable
-automatic provisioning. The app target embeds the extension. Existing release
-versioning via `agvtool` updates both targets.
+automatic provisioning. The app target embeds the extension. Release builds
+pass `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` to `xcodebuild archive`,
+so every target's `Info.plist` must reference those build settings rather than
+hardcode versions.
 
 The extension bundles `src/assets/i18n/en.json` for its custom strings. Its
 custom copy currently uses English; system controls follow the device language.

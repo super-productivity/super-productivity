@@ -1490,7 +1490,7 @@ describe('OperationLogDownloadService', () => {
             expect(mockOpLogStore.getVectorClock).not.toHaveBeenCalled();
           });
 
-          it('should deliver everything for file-based providers (synthetic serverSeq)', async () => {
+          it('should deliver everything for a forced seq-0 file-based download', async () => {
             mockApiProvider.providerMode = 'fileSnapshotOps';
 
             const result = await service.downloadRemoteOps(mockApiProvider, {
@@ -1500,6 +1500,68 @@ describe('OperationLogDownloadService', () => {
 
             expect(result.newOps.length).toBe(6);
             expect(mockOpLogStore.getVectorClock).not.toHaveBeenCalled();
+          });
+
+          describe('file-based providers, every incremental download (#10119)', () => {
+            // A file-based download returns the WHOLE remote op buffer, and the
+            // adapter's serverSeq is the file syncVersion each op was written at.
+            beforeEach(() => {
+              mockApiProvider.providerMode = 'fileSnapshotOps';
+            });
+
+            it('should skip ops behind the cursor that the local clock covers', async () => {
+              const result = await service.downloadRemoteOps(mockApiProvider);
+
+              expect(result.newOps.map((op) => op.id)).toEqual([
+                'newer-update',
+                'unknown-client',
+                'beyond-cursor',
+              ]);
+            });
+
+            it('should not filter before the first completed download (cursor 0)', async () => {
+              mockApiProvider.getLastServerSeq.and.returnValue(Promise.resolve(0));
+
+              const result = await service.downloadRemoteOps(mockApiProvider);
+
+              expect(result.newOps.length).toBe(6);
+              expect(mockOpLogStore.getVectorClock).not.toHaveBeenCalled();
+            });
+
+            it('should deliver everything in raw-rebuild mode (includeOwnAndAppliedOps)', async () => {
+              const result = await service.downloadRemoteOps(mockApiProvider, {
+                includeOwnAndAppliedOps: true,
+              });
+
+              expect(result.newOps.length).toBe(6);
+            });
+
+            it('should stop filtering after a gap reset (file replaced, stale cursor)', async () => {
+              // Another client uploaded a snapshot: syncVersion restarts, so the
+              // old cursor (14) would wrongly cover the re-fetched ops.
+              mockApiProvider.downloadOps.and.returnValues(
+                Promise.resolve({
+                  ops: [],
+                  hasMore: false,
+                  latestSeq: 2,
+                  gapDetected: true,
+                }),
+                Promise.resolve({
+                  ops: [
+                    makeServerOp(1, 'fresh-a', 'importClient', { importClient: 3 }),
+                    makeServerOp(2, 'fresh-b', 'importClient', { importClient: 4 }),
+                  ],
+                  hasMore: false,
+                  latestSeq: 2,
+                  gapDetected: false,
+                }),
+              );
+
+              const result = await service.downloadRemoteOps(mockApiProvider);
+
+              expect(mockApiProvider.downloadOps).toHaveBeenCalledTimes(2);
+              expect(result.newOps.map((op) => op.id)).toEqual(['fresh-a', 'fresh-b']);
+            });
           });
 
           it('should stop filtering after a gap reset (new server epoch, stale cursor)', async () => {
