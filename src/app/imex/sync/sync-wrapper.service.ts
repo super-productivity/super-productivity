@@ -1674,6 +1674,7 @@ export class SyncWrapperService {
       const unsyncedCount =
         snapshotConflict?.unsyncedCount ?? (await this._opLogStore.getUnsynced()).length;
       const vcEntry = await this._opLogStore.getVectorClockEntry();
+      const localClock = vcEntry?.clock;
       const localLastUpdate = vcEntry?.lastUpdate || Date.now();
 
       const conflictData: ConflictData = {
@@ -1701,7 +1702,7 @@ export class SyncWrapperService {
           // Op-log errors lack a last-synced timestamp; the dialog shows Never.
           lastSyncedUpdate: null,
           metaRev: null,
-          vectorClock: vcEntry?.clock,
+          vectorClock: localClock,
           lastSyncedVectorClock: snapshotConflict?.lastSyncedVectorClock ?? null,
         },
         localUnsyncedOpsCount: unsyncedCount,
