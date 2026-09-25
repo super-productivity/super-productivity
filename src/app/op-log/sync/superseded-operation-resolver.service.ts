@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import {
   ActionType,
+  extractActionPayload,
   isLwwUpdatePayload,
   Operation,
   OperationLogEntry,
@@ -42,6 +43,7 @@ import { getPhantomChangeRisk } from '../capture/phantom-change-guard.util';
 import { SectionState } from '../../features/section/section.model';
 import { ProjectState } from '../../features/project/project.model';
 import { TagState } from '../../features/tag/tag.model';
+import { Task } from '../../features/tasks/task.model';
 
 type SupersededOperation = {
   opId: string;
@@ -163,6 +165,42 @@ export class SupersededOperationResolverService {
       timestamp,
       schemaVersion: CURRENT_SCHEMA_VERSION,
     };
+  }
+
+  /**
+   * Re-creates a superseded `restoreTask` as a `restoreTask` projected from live
+   * state (the task and its current subtasks), so remote edits applied since
+   * the restore ride along. An LWW Update would recreate the task on receivers
+   * without the archive cleanup only the semantic restore triggers, leaving a
+   * stale archived copy next to the active task (#10196).
+   */
+  private async _createLiveRestoreOp(
+    sourceOp: Operation,
+    liveTask: Task,
+    vectorClock: VectorClock,
+    clientId: string,
+  ): Promise<Operation> {
+    const subTasks: Task[] = [];
+    for (const subTaskId of liveTask.subTaskIds ?? []) {
+      const subTask = await this.conflictResolutionService.getCurrentEntityState(
+        'TASK',
+        subTaskId,
+      );
+      if (subTask) {
+        subTasks.push(subTask as Task);
+      }
+    }
+    const actionPayload = {
+      ...extractActionPayload(sourceOp.payload),
+      task: liveTask,
+      subTasks,
+    };
+    return this._recreateOpWithMergedClock(
+      { ...sourceOp, payload: { actionPayload, entityChanges: [] } },
+      vectorClock,
+      clientId,
+      sourceOp.timestamp,
+    );
   }
 
   private _getSectionCausalReplayDecision(
@@ -502,6 +540,29 @@ export class SupersededOperationResolverService {
           // Still mark the ops as rejected, but track that changes were discarded
           opsToReject.push(...entityOps.map((e) => e.opId));
           discardedChangesCount += entityOps.length;
+          continue;
+        }
+
+        // Only a SOLE restore keeps its semantic type: a restore is a no-op on
+        // receivers where the task is already active, so it could not carry
+        // later edits of the same task there — those keep the LWW snapshot.
+        if (
+          entityOps.length === 1 &&
+          firstOp.actionType === ActionType.TASK_SHARED_RESTORE &&
+          entityType === 'TASK'
+        ) {
+          const restoreOp = await this._createLiveRestoreOp(
+            firstOp,
+            entityState as Task,
+            mergedClock,
+            clientId,
+          );
+          newOpsCreated.push(restoreOp);
+          opsToReject.push(entityOps[0].opId);
+          OpLog.normal(
+            `SupersededOperationResolverService: Created replacement restoreTask op ` +
+              `${restoreOp.id} for ${entityKey}, replacing superseded op ${entityOps[0].opId}`,
+          );
           continue;
         }
 

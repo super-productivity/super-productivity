@@ -2292,6 +2292,81 @@ describe('SupersededOperationResolverService', () => {
       });
     });
 
+    describe('restoreTask operation handling (#10196)', () => {
+      const RESTORE_TO_TODAY = { today: '2026-09-25', startOfNextDayDiffMs: 0 };
+      const createRestoreOp = (): Operation => ({
+        id: 'op-restore',
+        actionType: ActionType.TASK_SHARED_RESTORE,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: 'task-1',
+        payload: {
+          actionPayload: {
+            task: { id: 'task-1', title: 'Stale', subTaskIds: ['sub-1'] },
+            subTasks: [{ id: 'sub-1', title: 'Stale sub', parentId: 'task-1' }],
+            restoreToToday: RESTORE_TO_TODAY,
+          },
+          entityChanges: [],
+        },
+        clientId: 'original-client',
+        vectorClock: { clientA: 5 },
+        timestamp: 1000,
+        schemaVersion: 1,
+      });
+      const liveTask = { id: 'task-1', title: 'Live', subTaskIds: ['sub-1'] };
+      const liveSubTask = { id: 'sub-1', title: 'Live sub', parentId: 'task-1' };
+
+      beforeEach(() => {
+        mockConflictResolutionService.getCurrentEntityState.and.callFake(
+          async (_type: EntityType, id: string) =>
+            [liveTask, liveSubTask].find((task) => task.id === id),
+        );
+      });
+
+      it('re-creates a sole superseded restoreTask as restoreTask from live state', async () => {
+        const result = await service.resolveSupersededLocalOps([
+          { opId: 'op-restore', op: createRestoreOp() },
+        ]);
+
+        expect(result).toBe(1);
+        expectAtomicRejection(['op-restore']);
+        expect(mockConflictResolutionService.createLWWUpdateOp).not.toHaveBeenCalled();
+        const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
+          .args[0] as Operation;
+        expect(appendedOp.actionType).toBe(ActionType.TASK_SHARED_RESTORE);
+        expect(appendedOp.opType).toBe(OpType.Update);
+        expect(appendedOp.entityId).toBe('task-1');
+        expect(appendedOp.id).not.toBe('op-restore');
+        expect(appendedOp.clientId).toBe(TEST_CLIENT_ID);
+        expect(appendedOp.vectorClock).toEqual({ clientA: 5, [TEST_CLIENT_ID]: 1 });
+        expect(appendedOp.timestamp).toBe(1000);
+        expect(appendedOp.payload).toEqual({
+          actionPayload: {
+            task: liveTask,
+            subTasks: [liveSubTask],
+            restoreToToday: RESTORE_TO_TODAY,
+          },
+          entityChanges: [],
+        });
+      });
+
+      it('keeps the LWW snapshot path when later edits share the restored entity', async () => {
+        // A semantic restore is idempotent on a receiver where the task is
+        // already active, so it could not carry the later edit there.
+        const laterEdit = createMockOperation('op-edit', 'TASK', 'task-1', {
+          clientA: 6,
+        });
+
+        await service.resolveSupersededLocalOps([
+          { opId: 'op-restore', op: createRestoreOp() },
+          { opId: 'op-edit', op: laterEdit },
+        ]);
+
+        expect(mockConflictResolutionService.createLWWUpdateOp).toHaveBeenCalledTimes(1);
+        expectAtomicRejection(['op-restore', 'op-edit']);
+      });
+    });
+
     describe('DELETE operation handling', () => {
       const createMockDeleteOperation = (
         id: string,

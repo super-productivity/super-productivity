@@ -32,6 +32,8 @@ import { PersistentAction } from '../../core/persistent-action.interface';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
 import { ConflictJournalService } from '../../sync/conflict-journal.service';
 import { ConflictResolutionService } from '../../sync/conflict-resolution.service';
+import { SupersededOperationResolverService } from '../../sync/superseded-operation-resolver.service';
+import { StateSnapshotService } from '../../backup/state-snapshot.service';
 import { SyncConflictBannerService } from '../../sync/sync-conflict-banner.service';
 import { SyncSessionValidationService } from '../../sync/sync-session-validation.service';
 import { CLIENT_ID_PROVIDER } from '../../util/client-id.provider';
@@ -286,6 +288,7 @@ describe('restoreTask delete-conflict integration (#9263)', () => {
           },
         },
         { provide: ENTITY_REGISTRY, useValue: entityRegistry },
+        { provide: StateSnapshotService, useValue: {} },
         { provide: ArchiveService, useValue: {} },
         { provide: TimeTrackingService, useValue: {} },
       ],
@@ -375,6 +378,43 @@ describe('restoreTask delete-conflict integration (#9263)', () => {
 
     const deleteClientProjection = restoredProjection(localState);
     expect(restoredProjection(restartedState)).toEqual(deleteClientProjection);
+  });
+
+  it('re-creates a superseded restore as restoreTask so receivers clear the archived copy (#10196)', async () => {
+    currentClientId = REMOTE_CLIENT_ID;
+    const restoreClient = new TestClient(REMOTE_CLIENT_ID);
+    const restoreAction = TaskSharedActions.restoreTask({
+      task: deletedParent,
+      subTasks: [subtask],
+    }) as PersistentAction;
+    const localRestore = captureOperation(restoreAction, restoreClient, 2_000);
+
+    localState = reducer(localState, restoreAction);
+    await archiveHandler.handleOperation(restoreAction);
+    await opLogStore.append(localRestore, 'local');
+
+    // The server answered SUPERSEDED: the resolver must re-emit the restore.
+    await TestBed.inject(SupersededOperationResolverService).resolveSupersededLocalOps([
+      { opId: localRestore.id, op: localRestore },
+    ]);
+
+    const pendingOps = (await opLogStore.getUnsynced()).map(({ op }) => op);
+    expect(pendingOps.length).toBe(1);
+    const [replacement] = pendingOps;
+    expect(replacement.id).not.toBe(localRestore.id);
+    expect(replacement.actionType).toBe(TaskSharedActions.restoreTask.type);
+
+    // A receiver still holding the archived task: the restore recreates it
+    // AND its archive side effect removes the archived copies.
+    const deleteAction = TaskSharedActions.deleteTask({
+      task: deletedParentWithSubtasks,
+    }) as PersistentAction;
+    const archivedReceiver = replay(reducer(initialState, deleteAction), [replacement]);
+    expect(restoredProjection(archivedReceiver)).toEqual(restoredProjection(localState));
+
+    await archiveDb.saveArchiveYoung(archiveModel([deletedParent, subtask]));
+    await archiveHandler.handleOperation(convertOpToAction(replacement));
+    expect((await archiveDb.loadArchiveYoung())?.task.ids).toEqual([]);
   });
 
   it('re-emits a winning local restore after a remote delete for replay and archive convergence', async () => {
