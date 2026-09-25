@@ -1374,6 +1374,37 @@ describe('FileBasedSyncAdapterService', () => {
       );
     });
 
+    it('stays conditional on the base rev after refusing to append to an unseen replacement (#9170)', async () => {
+      await seedBaseRev('rev-1');
+      // Another client replaced the remote after this client's last sync.
+      (
+        service as unknown as { _syncCycleCache: Map<string, unknown> }
+      )._syncCycleCache.clear();
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({
+          dataStr: addPrefix(
+            createMockSyncData({
+              syncVersion: 1,
+              vectorClock: { client2: 5 },
+              snapshotBaseClock: { client2: 5 },
+              clientId: 'client2',
+            }),
+          ),
+          rev: 'rev-2',
+        }),
+      );
+      await expectAsync(
+        adapter.uploadOps([createMockSyncOp()], 'client1'),
+      ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+
+      const writes = captureWrites();
+      await uploadRepair();
+
+      // A null base would let providers that resolve it to the current rev
+      // (Dropbox) overwrite the replacement unconditionally.
+      expect(primaryOf(writes)[0].rev).toBe('rev-1');
+    });
+
     it('rejects as REPAIR_STALE — leaving .bak untouched — when the conditional write loses to a concurrent upload', async () => {
       await seedBaseRev('rev-1');
       const writes: { path: string }[] = [];
@@ -3073,6 +3104,44 @@ describe('FileBasedSyncAdapterService', () => {
       expect(result.gapDetected).toBeFalsy();
     });
 
+    it('re-downloads fully after refusing to append to an unseen replacement (#9170)', async () => {
+      const replaced = createMockSyncData({
+        syncVersion: 2,
+        vectorClock: { client2: 5 },
+        snapshotBaseClock: { client2: 5 },
+        clientId: 'client2',
+      });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(replaced), rev: 'rev-1' }),
+      );
+      await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(2);
+      // State persisted before last-seen clocks were: the rev is known, the
+      // replacement base is not.
+      service['_lastSeenVectorClocks'].clear();
+      crossPollBoundary();
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE) return { rev: 'rev-1' };
+        throw new RemoteFileNotFoundAPIError('not found');
+      });
+
+      await expectAsync(
+        adapter.uploadOps([createMockSyncOp()], 'client1'),
+      ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+      // Persisted too, so a restart before the next poll cannot revive it.
+      const persisted = JSON.parse(localStorage.getItem(STATE_KEY) as string);
+      expect(persisted.revs[SyncProviderId.Dropbox]).toBeUndefined();
+
+      // Short-circuiting on the unchanged rev would retry the refused upload
+      // forever; the full download instead signals the gap to hydrate.
+      crossPollBoundary();
+      mockProvider.downloadFile.calls.reset();
+      const result = await adapter.downloadOps(2);
+      expect(mockProvider.downloadFile).toHaveBeenCalled();
+      expect(result.gapDetected).toBeTrue();
+    });
+
     it('(b) proceeds with the full download when the remote rev changed', async () => {
       const seed = createMockSyncData({ syncVersion: 2, recentOps: [] });
       mockProvider.downloadFile.and.returnValue(
@@ -4014,6 +4083,10 @@ describe('FileBasedSyncAdapterService', () => {
         [C.SYNC_FILE]: addPrefix(legacy, 2),
         // ops/state files not present yet
       });
+      // Read-only bootstrap from the legacy file, committed once hydrated: its
+      // snapshot base is then seen, so the migrating upload is not refused.
+      const bootstrap = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(bootstrap.latestSeq);
 
       await adapter.uploadOps([createMockSyncOp()], 'client1');
 

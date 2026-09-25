@@ -48,7 +48,7 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
 import { SnackService } from '../../../core/snack/snack.service';
 import { T } from '../../../t.const';
 import { mergeVectorClocks, compareVectorClocks } from '../../../core/util/vector-clock';
-import { detectDownloadGap } from './file-based-sync-gap.util';
+import { detectDownloadGap, isSnapshotBaseUnseen } from './file-based-sync-gap.util';
 import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.service';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
 import { stripLocalOnlySyncSettingsFromAppData } from '../../../features/config/local-only-sync-settings.util';
@@ -259,8 +259,8 @@ export class FileBasedSyncAdapterService {
         if (state.revs) {
           this._lastSeenRevs = new Map(Object.entries(state.revs));
         }
-        // #9170: back-compat — without it, lineage checks stay off until the
-        // next download or upload records a clock.
+        // #9170: back-compat — until a clock is recorded, lineage checks stay off
+        // and any snapshot base counts as unseen (one extra seq-0 re-download).
         if (state.lastSeenClocks) {
           this._lastSeenVectorClocks = new Map(Object.entries(state.lastSeenClocks));
         }
@@ -927,6 +927,8 @@ export class FileBasedSyncAdapterService {
     OpLog.normal(
       `FileBasedSyncAdapter: Uploading ${ops.length} ops for client ${clientId}${!fileExists ? ' (creating initial sync file)' : ''}`,
     );
+
+    this._assertSnapshotBaseSeen(providerKey, currentData?.snapshotBaseClock, revToMatch);
 
     // Log version mismatch (not an error, just informational)
     const expectedVersion = this._expectedSyncVersions.get(providerKey) || 0;
@@ -2294,6 +2296,7 @@ export class FileBasedSyncAdapterService {
     if (ops.length === 0 && opsFile) {
       return { results: [], latestSeq: this._localSeqCounters.get(providerKey) || 0 };
     }
+    this._assertSnapshotBaseSeen(providerKey, opsFile?.snapshotBaseClock, opsRev);
 
     const existingOps: SyncFileCompactOp[] = opsFile?.recentOps || [];
     const existingOpIndexById = new Map(
@@ -2695,6 +2698,8 @@ export class FileBasedSyncAdapterService {
   ): Promise<FileSnapshotOpDownloadResponse> {
     try {
       const { data } = await this._downloadSyncFile(provider, cfg, encryptKey);
+      // #9170: once hydrated, the legacy base is seen — else the migrating upload is refused.
+      this._pendingVectorClocks.set(this._getProviderKey(provider), data.vectorClock);
       const filteredOps: ServerSyncOperation[] = [];
       data.recentOps.forEach((compactOp, index) => {
         filteredOps.push({
@@ -3013,6 +3018,31 @@ export class FileBasedSyncAdapterService {
     // cursor update cannot promote stale pre-write values over it.
     this._pendingExpectedSyncVersions.delete(providerKey);
     this._pendingVectorClocks.delete(providerKey);
+  }
+
+  /**
+   * #9170: never append to a replacement this client has not hydrated; that
+   * would overwrite its snapshot with stale state and mark it seen for good.
+   * A last-seen rev equal to `readRev` would skip that re-download; drop it.
+   * Keep any other: REPAIR snapshots write conditionally on it.
+   */
+  private _assertSnapshotBaseSeen(
+    providerKey: string,
+    snapshotBaseClock: VectorClock | undefined,
+    readRev: string | null,
+  ): void {
+    const lastSeenClock = this._lastSeenVectorClocks.get(providerKey);
+    if (!isSnapshotBaseUnseen(snapshotBaseClock, lastSeenClock)) {
+      return;
+    }
+    if (this._lastSeenRevs.get(providerKey) === readRev) {
+      this._lastSeenRevs.delete(providerKey);
+      this._persistState();
+    }
+    throw new UploadRevToMatchMismatchAPIError(
+      'FileBasedSyncAdapter: Remote was replaced by a snapshot this client has not ' +
+        'loaded. Next sync cycle will download it before uploading.',
+    );
   }
 
   /**

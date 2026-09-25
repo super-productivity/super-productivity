@@ -8,6 +8,7 @@ import { OperationLogStoreService } from '../../../persistence/operation-log-sto
 import { FILE_BASED_SYNC_CONSTANTS } from '../../../sync-providers/file-based/file-based-sync.types';
 import { ActionType } from '../../../core/action-types.enum';
 import { FileSnapshotOpDownloadResponse } from '../../../sync-providers/provider.interface';
+import { UploadRevToMatchMismatchAPIError } from '../../../core/errors/sync-errors';
 
 /**
  * #9170: client B chooses "Keep local" (USE_LOCAL), which replaces the remote
@@ -245,6 +246,32 @@ for (const isUseSplitSyncFiles of [false, true]) {
       );
 
       it(
+        'refuses to append to a replacement the uploader never hydrated',
+        async () => {
+          const clientA = harness.createClient('client-a');
+          const clientB = harness.createClient('client-b');
+          await seedFromA(clientA);
+          clientB.mergeRemoteClock(clientA.getCurrentClock());
+
+          // B replaces after A's last poll, so A's upload reads it fresh.
+          const tailOpId = await replaceFromBWithTail(clientB);
+          harness.setMockState(stateWithTask('task-a', 'task-a2', 'task-a3'));
+          await expectAsync(
+            clientA.uploadOps([addTaskOp(clientA, 'task-a3')]),
+          ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+
+          // Appending would have overwritten B's snapshot with A's stale state
+          // and marked it seen; instead A's next download hydrates it.
+          await expectReplacementHydrated(clientA, 'client-a', 2, tailOpId);
+          // Once hydrated, the refused upload goes through.
+          await expectAsync(
+            clientA.uploadOps([addTaskOp(clientA, 'task-b3')]),
+          ).toBeResolved();
+        },
+        TIMEOUT,
+      );
+
+      it(
         'control: no gap when B appends to a snapshot base A already knows',
         async () => {
           const clientA = harness.createClient('client-a');
@@ -262,6 +289,8 @@ for (const isUseSplitSyncFiles of [false, true]) {
 
           const seen = await clientB.downloadOps(0);
           clientB.mergeRemoteClock(seen.snapshotVectorClock ?? {});
+          // As the sync service does once the snapshot is hydrated.
+          await clientB.adapter.setLastServerSeq(seen.latestSeq);
           await clientB.uploadOps([addTaskOp(clientB, 'task-b2')]);
 
           const incremental = await clientA.adapter.downloadOps(1, 'client-a');

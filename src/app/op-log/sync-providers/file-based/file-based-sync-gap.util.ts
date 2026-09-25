@@ -34,6 +34,21 @@ export interface GapDetectionResult {
 }
 
 /**
+ * Whether a remote replacement's base clock is not covered by the last file
+ * clock this client committed, i.e. it has not hydrated that snapshot (#9170).
+ */
+export const isSnapshotBaseUnseen = (
+  snapshotBaseClock: VectorClock | undefined,
+  lastSeenClock: VectorClock | undefined,
+): boolean => {
+  if (!snapshotBaseClock) {
+    return false;
+  }
+  const comparison = compareVectorClocks(snapshotBaseClock, lastSeenClock ?? {});
+  return comparison === 'GREATER_THAN' || comparison === 'CONCURRENT';
+};
+
+/**
  * Decides whether a file-based download must fall back to a seq-0 re-download
  * so the caller re-hydrates the remote snapshot. Shared by the single-file and
  * split ("surgical sync") download paths.
@@ -133,12 +148,8 @@ export const detectDownloadGap = ({
   // full-state operation that cleared recentOps, so later tail uploads cannot
   // hide that unseen baseline, even after their reused versions are trimmed.
   // Normal appends preserve this clock; once applied, lastSeenClock covers it.
-  const baseComparison = remote.snapshotBaseClock
-    ? compareVectorClocks(remote.snapshotBaseClock, lastSeenClock ?? {})
-    : undefined;
   const unseenSnapshotBase =
-    sinceSeq > 0 &&
-    (baseComparison === 'GREATER_THAN' || baseComparison === 'CONCURRENT');
+    sinceSeq > 0 && isSnapshotBaseUnseen(remote.snapshotBaseClock, lastSeenClock);
 
   const reason = versionWasReset
     ? `sync version reset (${previousExpectedVersion} → ${remote.syncVersion})`
