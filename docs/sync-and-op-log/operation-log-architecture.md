@@ -808,8 +808,8 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    reset do not use this filter. Known gaps: the guard assumes each author's
    counter never goes backwards (a device that keeps its clientId but adopts
    a lower own clock, e.g. USE_REMOTE after another device's USE_LOCAL, could
-   have a new op skipped when the cursor also ran ahead; reproduced by a
-   pending test in the #10119 integration spec, fix tracked in #10239); and a
+   have a new op skipped when the cursor also ran ahead; reproduced by
+   pending tests in the #10119 integration spec, fix tracked in #10239); and a
    remote op whose apply failed is no longer retried once compaction prunes it,
    matching SuperSync.
 2. **Fresh client / forced seq-0:** return a full state/archive baseline. In v2,
