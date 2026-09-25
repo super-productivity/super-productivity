@@ -46,6 +46,7 @@ import {
 } from '../../features/config/local-only-sync-settings.util';
 import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { OperationLogDownloadService } from './operation-log-download.service';
 
 // Re-export for consumers that import from this service
 export type {
@@ -71,6 +72,7 @@ export class OperationLogUploadService {
   private encryptionService = inject(OperationEncryptionService);
   private stateSnapshotService = inject(StateSnapshotService);
   private providerManager = inject(SyncProviderManager);
+  private downloadService = inject(OperationLogDownloadService);
 
   async uploadPendingOps(
     syncProvider: OperationSyncCapable,
@@ -452,6 +454,16 @@ export class OperationLogUploadService {
         );
       }
       if (syncOps.length === 0) {
+        return;
+      }
+      if (
+        syncProvider.providerMode !== 'fileSnapshotOps' &&
+        this.downloadService.hasUnseenRemoteOps()
+      ) {
+        OpLog.normal(
+          `OperationLogUploadService: Holding ${syncOps.length} op(s) until the remote ` +
+            'backlog is fully downloaded (#8763).',
+        );
         return;
       }
 

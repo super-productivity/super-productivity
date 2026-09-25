@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { OperationLogUploadService } from './operation-log-upload.service';
+import { OperationLogDownloadService } from './operation-log-download.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { LockService } from './lock.service';
 import {
@@ -369,6 +370,41 @@ describe('OperationLogUploadService', () => {
 
         expect(result.uploadedCount).toBe(2);
         expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1, 2]);
+      });
+
+      // A rejection resolved against a partly downloaded backlog could let a
+      // local edit silently beat an unseen newer remote one (#8763).
+      describe('while the remote backlog is only partly downloaded (#8763)', () => {
+        beforeEach(() => {
+          spyOn(
+            TestBed.inject(OperationLogDownloadService),
+            'hasUnseenRemoteOps',
+          ).and.returnValue(true);
+          mockOpLogStore.getUnsynced.and.resolveTo([
+            createMockEntry(1, 'op-1', 'client-1'),
+          ]);
+        });
+
+        it('holds SuperSync ops back', async () => {
+          const result = await service.uploadPendingOps(mockApiProvider);
+
+          expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+          expect(mockOpLogStore.markSynced).not.toHaveBeenCalled();
+          expect(result.uploadedCount).toBe(0);
+        });
+
+        it('still uploads to file-based providers, which never truncate', async () => {
+          mockApiProvider.providerMode = 'fileSnapshotOps';
+          mockApiProvider.uploadOps.and.resolveTo({
+            results: [{ opId: 'op-1', accepted: true }],
+            latestSeq: 1,
+            newOps: [],
+          });
+
+          await service.uploadPendingOps(mockApiProvider);
+
+          expect(mockApiProvider.uploadOps).toHaveBeenCalledTimes(1);
+        });
       });
 
       // The server rejects every op whose clientId differs from the request's

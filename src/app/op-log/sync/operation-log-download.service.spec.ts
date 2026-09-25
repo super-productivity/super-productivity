@@ -206,6 +206,22 @@ describe('OperationLogDownloadService', () => {
           );
           // More remains on the server, so the remote was not fully checked.
           expect(mockSuperSyncStatusService.markRemoteChecked).not.toHaveBeenCalled();
+          expect(service.hasUnseenRemoteOps()).toBeTrue();
+        });
+
+        it('clears the unseen-backlog flag once a pass reaches the head', async () => {
+          serveEndlessBacklog(1);
+          await service.downloadRemoteOps(mockApiProvider);
+          expect(service.hasUnseenRemoteOps()).toBeTrue();
+
+          mockApiProvider.downloadOps.and.resolveTo({
+            ops: [],
+            hasMore: false,
+            latestSeq: MAX_DOWNLOAD_ITERATIONS,
+          });
+          await service.downloadRemoteOps(mockApiProvider);
+
+          expect(service.hasUnseenRemoteOps()).toBeFalse();
         });
 
         it('returns the downloaded prefix once the page-iteration cap is reached', async () => {

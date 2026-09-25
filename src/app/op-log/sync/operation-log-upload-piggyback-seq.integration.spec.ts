@@ -345,6 +345,7 @@ describe('OperationLogSyncService + OperationLogUploadService — piggyback seq 
           provide: OperationLogDownloadService,
           useValue: jasmine.createSpyObj('OperationLogDownloadService', [
             'downloadRemoteOps',
+            'hasUnseenRemoteOps',
           ]),
         },
         {

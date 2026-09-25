@@ -82,10 +82,21 @@ export class OperationLogDownloadService implements OnDestroy {
 
   /** Track if we've already warned about clock drift this session */
   private hasWarnedClockDrift = false;
+  /** The last API pass stopped at a checkpoint with ops left on the server. */
+  private _hasUnseenRemoteOps = false;
 
   /** Timeout handle for clock drift retry check (cleaned up on destroy) */
   private clockDriftTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private clockDriftRetryServerTimestamp: number | null = null;
+
+  /**
+   * True while a SuperSync backlog is only partly downloaded (#8763). Uploads
+   * wait for it: a rejection resolved now would be judged without the unseen
+   * ops and could let a local edit silently win over a newer remote one.
+   */
+  hasUnseenRemoteOps(): boolean {
+    return this._hasUnseenRemoteOps;
+  }
 
   ngOnDestroy(): void {
     this._clearClockDriftTimeout();
@@ -613,6 +624,7 @@ export class OperationLogDownloadService implements OnDestroy {
       return { newOps: [], success: false, failedFileCount: 0 };
     }
 
+    this._hasUnseenRemoteOps = checkpointSeq !== undefined;
     // Mark that we successfully checked the remote server (not when more is left)
     if (checkpointSeq === undefined) {
       this.superSyncStatusService.markRemoteChecked();
