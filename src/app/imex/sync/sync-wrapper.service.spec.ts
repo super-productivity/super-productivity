@@ -876,7 +876,12 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: true, isNeverSynced: false, fenceEpoch: 0 },
+        {
+          forceFromSeq0: true,
+          isNeverSynced: false,
+          fenceEpoch: 0,
+          keepDecryptedPrefix: true,
+        },
       );
     });
 
@@ -890,7 +895,12 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: undefined, isNeverSynced: false, fenceEpoch: 0 },
+        {
+          forceFromSeq0: undefined,
+          isNeverSynced: false,
+          fenceEpoch: 0,
+          keepDecryptedPrefix: true,
+        },
       );
     });
 
@@ -901,7 +911,12 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: undefined, isNeverSynced: false, fenceEpoch: 0 },
+        {
+          forceFromSeq0: undefined,
+          isNeverSynced: false,
+          fenceEpoch: 0,
+          keepDecryptedPrefix: true,
+        },
       );
     });
 

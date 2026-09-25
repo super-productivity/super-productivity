@@ -1,5 +1,8 @@
 import { fakeAsync, flush, TestBed, tick } from '@angular/core/testing';
-import { OperationLogDownloadService } from './operation-log-download.service';
+import {
+  OperationLogDownloadService,
+  RemoteOpsDownloadOptions,
+} from './operation-log-download.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { LockService } from './lock.service';
 import { SnackService } from '../../core/snack/snack.service';
@@ -486,6 +489,180 @@ describe('OperationLogDownloadService', () => {
           }),
           jasmine.objectContaining({ opId: 'op-after-gap' }),
         );
+      });
+
+      // #9256: a fresh install decrypted ~30.5k ops, then one page failed and
+      // the whole run was discarded, leaving the device with nothing.
+      describe('keepDecryptedPrefix', () => {
+        const encryptedServerOp = (
+          serverSeq: number,
+          id: string,
+        ): { serverSeq: number; receivedAt: number; op: SyncOperation } => ({
+          serverSeq,
+          receivedAt: Date.now(),
+          op: {
+            id,
+            clientId: 'c1',
+            actionType: '[Task] Add' as ActionType,
+            opType: OpType.Create,
+            entityType: 'TASK',
+            payload: `ciphertext-${id}`,
+            isPayloadEncrypted: true,
+            vectorClock: {},
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+        });
+        const decryptError = (opId: string): OperationDecryptionError =>
+          new OperationDecryptionError({
+            encryptedOperationCount: 1,
+            decryptedCount: 0,
+            parsedCount: 0,
+            passwordEvidence: 'no-operation-decrypted',
+            failures: [{ operationId: opId, encryptedBatchIndex: 0, stage: 'decrypt' }],
+          });
+        // Page 1 (seq 1-2) decrypts; page 2 (seq 3, 'op-bad') does not.
+        const serveGoodPageThenBadPage = (): OperationDecryptionError => {
+          const error = decryptError('op-bad');
+          mockApiProvider.getEncryptKey = jasmine
+            .createSpy('getEncryptKey')
+            .and.returnValue(Promise.resolve('key'));
+          mockApiProvider.getLastServerSeq.and.returnValue(Promise.resolve(0));
+          mockApiProvider.downloadOps.and.returnValues(
+            Promise.resolve({
+              ops: [encryptedServerOp(1, 'op-a'), encryptedServerOp(2, 'op-b')],
+              hasMore: true,
+              latestSeq: 3,
+            }),
+            Promise.resolve({
+              ops: [encryptedServerOp(3, 'op-bad')],
+              hasMore: false,
+              latestSeq: 3,
+            }),
+          );
+          mockEncryptionService.decryptOperations.and.callFake(async (ops) => {
+            if (ops.some((op) => op.id === 'op-bad')) {
+              throw error;
+            }
+            return ops.map((op) => ({ ...op, payload: {}, isPayloadEncrypted: false }));
+          });
+          return error;
+        };
+
+        it('keeps the decrypted pages and stops the cursor before the failing page', async () => {
+          const errorSpy = spyOn(OpLog, 'error');
+          const error = serveGoodPageThenBadPage();
+
+          const result = await service.downloadRemoteOps(mockApiProvider, {
+            keepDecryptedPrefix: true,
+          });
+
+          expect(result.success).toBeTrue();
+          expect(result.newOps.map((op) => op.id)).toEqual(['op-a', 'op-b']);
+          // The caller persists this as the cursor, so the next download starts
+          // at the failing page and raises the decrypt error there.
+          expect(result.success && result.latestServerSeq).toBe(2);
+          // Handed to the caller, which throws it after applying the prefix.
+          expect(result.success && result.decryptErrorAfterKeptPrefix).toBe(error);
+          // Stopped short of the server head, so not a completed remote check.
+          expect(mockSuperSyncStatusService.markRemoteChecked).not.toHaveBeenCalled();
+          expect(errorSpy).toHaveBeenCalledWith(
+            'OperationLogDownloadService: Encrypted operation batch could not be processed.',
+            jasmine.objectContaining({ decryptedOpsInEarlierBatches: 2 }),
+            jasmine.objectContaining({ opId: 'op-bad' }),
+          );
+        });
+
+        it('still throws when the failing page is the first page of the run', async () => {
+          const error = decryptError('op-bad');
+          mockApiProvider.getEncryptKey = jasmine
+            .createSpy('getEncryptKey')
+            .and.returnValue(Promise.resolve('key'));
+          mockApiProvider.getLastServerSeq.and.returnValue(Promise.resolve(2));
+          mockApiProvider.downloadOps.and.returnValue(
+            Promise.resolve({
+              ops: [encryptedServerOp(3, 'op-bad')],
+              hasMore: false,
+              latestSeq: 3,
+            }),
+          );
+          mockEncryptionService.decryptOperations.and.rejectWith(error);
+
+          await expectAsync(
+            service.downloadRemoteOps(mockApiProvider, { keepDecryptedPrefix: true }),
+          ).toBeRejectedWith(error);
+        });
+
+        // Each of these either replaces local state wholesale or resolves a
+        // conflict the server detected against its full head, so a prefix
+        // would be applied as if it were the whole server history.
+        const cases: { name: string; options: RemoteOpsDownloadOptions }[] = [
+          { name: 'without the opt-in', options: {} },
+          {
+            name: 'on a forced seq-0 download',
+            options: { keepDecryptedPrefix: true, forceFromSeq0: true },
+          },
+          {
+            name: 'on a re-delivery retry',
+            options: { keepDecryptedPrefix: true, isReDeliveryRetry: true },
+          },
+          {
+            name: 'on a raw rebuild',
+            options: { keepDecryptedPrefix: true, includeOwnAndAppliedOps: true },
+          },
+        ];
+        for (const { name, options } of cases) {
+          it(`discards the run and throws ${name}`, async () => {
+            spyOn(OpLog, 'error');
+            const error = serveGoodPageThenBadPage();
+
+            await expectAsync(
+              service.downloadRemoteOps(mockApiProvider, options),
+            ).toBeRejectedWith(error);
+          });
+        }
+
+        it('discards the run and throws for file-based providers', async () => {
+          spyOn(OpLog, 'error');
+          const error = serveGoodPageThenBadPage();
+          mockApiProvider.providerMode = 'fileSnapshotOps';
+
+          await expectAsync(
+            service.downloadRemoteOps(mockApiProvider, { keepDecryptedPrefix: true }),
+          ).toBeRejectedWith(error);
+        });
+
+        it('discards the run and throws after a gap reset', async () => {
+          spyOn(OpLog, 'error');
+          const error = decryptError('op-bad');
+          mockApiProvider.getEncryptKey = jasmine
+            .createSpy('getEncryptKey')
+            .and.returnValue(Promise.resolve('key'));
+          mockApiProvider.getLastServerSeq.and.returnValue(Promise.resolve(100));
+          mockApiProvider.downloadOps.and.returnValues(
+            Promise.resolve({ ops: [], hasMore: false, latestSeq: 3, gapDetected: true }),
+            Promise.resolve({
+              ops: [encryptedServerOp(1, 'op-a'), encryptedServerOp(2, 'op-b')],
+              hasMore: true,
+              latestSeq: 3,
+            }),
+            Promise.resolve({
+              ops: [encryptedServerOp(3, 'op-bad')],
+              hasMore: false,
+              latestSeq: 3,
+            }),
+          );
+          mockEncryptionService.decryptOperations.and.callFake(async (ops) => {
+            if (ops.some((op) => op.id === 'op-bad')) {
+              throw error;
+            }
+            return ops.map((op) => ({ ...op, payload: {}, isPayloadEncrypted: false }));
+          });
+
+          await expectAsync(
+            service.downloadRemoteOps(mockApiProvider, { keepDecryptedPrefix: true }),
+          ).toBeRejectedWith(error);
+        });
       });
 
       // GHSA-8pxh-mgc7-gp3g: reject an inbound plaintext op when SuperSync

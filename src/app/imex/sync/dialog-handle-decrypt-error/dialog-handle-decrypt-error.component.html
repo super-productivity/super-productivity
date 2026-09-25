@@ -36,24 +36,10 @@
       </div>
     </form>
 
-    <hr class="divider" />
-
-    <div class="option-section">
-      <p
-        class="option-label"
-        [innerHTML]="T.F.SYNC.D_DECRYPT_ERROR.P3_PW_CHANGED | translate"
-      ></p>
-      <button
-        mat-stroked-button
-        color="warn"
-        type="button"
-        (click)="updatePWAndForceUpload()"
-        [disabled]="!passwordVal || isForceUploadPending()"
-      >
-        <mat-icon>cloud_upload</mat-icon>
-        {{ T.F.SYNC.D_DECRYPT_ERROR.BTN_OVER_WRITE_REMOTE | translate }}
-      </button>
-    </div>
+    <p
+      class="option-label"
+      [innerHTML]="T.F.SYNC.D_DECRYPT_ERROR.P3_START_OVER | translate"
+    ></p>
   </div>
 </mat-dialog-content>
 
