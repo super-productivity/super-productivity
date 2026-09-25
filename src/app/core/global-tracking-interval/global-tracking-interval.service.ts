@@ -27,6 +27,7 @@ import { Tick } from './tick.model';
 import { DateService } from 'src/app/core/date/date.service';
 import { Log } from '../log';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { androidInterface } from '../../features/android/android-interface';
 
 const MINUTE_MS = 60 * 1000;

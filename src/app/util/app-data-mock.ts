@@ -1,6 +1,8 @@
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
 import { createEmptyEntity } from './create-empty-entity';
 import { AppDataComplete } from '../op-log/model/model-config';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { initialTimeTrackingState } from '../features/time-tracking/store/time-tracking.reducer';
 
 export const createAppDataCompleteMock = (): AppDataComplete => ({

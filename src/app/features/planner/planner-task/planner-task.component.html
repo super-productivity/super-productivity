@@ -48,6 +48,10 @@
         ></tag-list>
       </div>
 
+      @if (task().priority; as p) {
+        <task-priority-indicator [priority]="p"></task-priority-indicator>
+      }
+
       <div
         (click)="estimateTimeClick($event)"
         [class.hasNoTimeSpentOrEstimate]="!task().timeSpent && !task().timeEstimate"

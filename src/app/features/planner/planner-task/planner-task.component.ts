@@ -22,6 +22,7 @@ import { IS_HYBRID_DEVICE } from '../../../util/is-mouse-primary';
 import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
 import { T } from '../../../t.const';
 import { TaskContextMenuComponent } from '../../tasks/task-context-menu/task-context-menu.component';
+import { TaskPriorityIndicatorComponent } from '../../tasks/task-priority-indicator/task-priority-indicator.component';
 import { MatIcon } from '@angular/material/icon';
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { InlineInputComponent } from '../../../ui/inline-input/inline-input.component';
@@ -74,6 +75,7 @@ import { getNextPlannerAddButton } from '../get-next-planner-add-button';
     TagListComponent,
     InlineInputComponent,
     TaskContextMenuComponent,
+    TaskPriorityIndicatorComponent,
     MsToStringPipe,
     RenderLinksPipe,
     DoneToggleComponent,
@@ -299,10 +301,17 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
         }
         event.preventDefault();
         event.stopPropagation();
-        host.focus();
         if (event.shiftKey) {
-          this._multiSelect.selectRange(this.task().id, event.ctrlKey || event.metaKey);
+          // Range first: until the clicked row takes focus, the focused row is
+          // the one a Shift+click with nothing selected starts from (#10143).
+          this._multiSelect.selectRange(
+            this.task().id,
+            event.ctrlKey || event.metaKey,
+            host,
+          );
+          host.focus();
         } else {
+          host.focus();
           this._multiSelect.toggle(this.task().id);
         }
       };

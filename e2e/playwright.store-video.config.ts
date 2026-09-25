@@ -1,13 +1,15 @@
 import { defineConfig } from '@playwright/test';
 import path from 'path';
+import { VIDEO_PROFILE } from './store-video/profile';
+import { recorderLaunchArgs } from './video-kit/recorder';
 
 const repoRoot = path.resolve(__dirname, '..');
 
 /**
  * Playwright config for the marketing-reel video pipeline. Mirrors
- * `playwright.store-screenshots.config.ts` but records video via Playwright's
- * built-in `recordVideo` instead of capturing PNG frames. One run = one
- * continuous webm in `.tmp/video/_results/`. Post-process to mp4 / webm / gif
+ * `playwright.store-screenshots.config.ts` but records video with the
+ * video-kit recorder instead of capturing PNG frames. One run = one
+ * continuous recording in `.tmp/video/recordings/<variant>/`. Post-process to mp4 / webm / gif
  * via `npm run video:build`.
  *
  *   Capture: npm run video:capture
@@ -25,7 +27,9 @@ export default defineConfig({
 
   use: {
     baseURL: process.env.E2E_BASE_URL || 'http://localhost:4242',
-    trace: 'retain-on-failure',
+    // Trace screenshots would claim the page's screencast at 800px before the
+    // recorder starts; DOM snapshots still make failures debuggable.
+    trace: { mode: 'retain-on-failure', screenshots: false },
     screenshot: 'only-on-failure',
     // Video recording, viewport, and deviceScaleFactor are all handled inside
     // the fixture (`store-video/fixture.ts`) because that fixture creates its
@@ -43,6 +47,7 @@ export default defineConfig({
         '--disable-gpu',
         '--disable-software-rasterizer',
         '--hide-scrollbars',
+        ...recorderLaunchArgs(VIDEO_PROFILE.deviceScaleFactor),
       ],
     },
   },

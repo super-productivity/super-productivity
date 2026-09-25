@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
 import { ArchiveStoreService } from '../../op-log/persistence/archive-store.service';
 

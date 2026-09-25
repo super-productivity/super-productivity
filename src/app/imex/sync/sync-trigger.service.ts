@@ -275,6 +275,7 @@ export class SyncTriggerService {
       // once immediately
       _immediateSyncTrigger$.pipe(
         tap((v) => {
+          // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
           SyncLog.log('immediate sync trigger', v);
           // Open BEFORE the downstream debounceTime(100) so the resume → DAY_CHANGE
           // → TODAY_TAG repair cascade (which fires inside that 100ms) sees the

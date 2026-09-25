@@ -167,6 +167,7 @@ export class PluginAPI implements PluginAPIInterface {
   registerWorkContextHeaderButton(
     cfg: Omit<PluginWorkContextHeaderBtnCfg, 'pluginId'>,
   ): void {
+    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
     PluginLog.log(`Plugin ${this.#pluginId} registered work-context header button`, cfg);
     this.#boundMethods.registerWorkContextHeaderButton(cfg);
   }
@@ -520,6 +521,7 @@ export class PluginAPI implements PluginAPIInterface {
   async updateSimpleCounter(id: string, updates: Partial<any>): Promise<void> {
     PluginLog.log(
       `Plugin ${this.#pluginId} requested to update simple counter ${id}`,
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       updates,
     );
     return this.#pluginBridge.updateSimpleCounter(id, updates);

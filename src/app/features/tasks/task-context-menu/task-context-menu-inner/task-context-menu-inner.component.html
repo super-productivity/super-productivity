@@ -301,6 +301,19 @@
   }
 
   <button
+    #priorityMenuTrigger="matMenuTrigger"
+    [matMenuTriggerFor]="priorityMenu"
+    mat-menu-item
+    [menuTouchFix]="priorityMenuTrigger"
+    (menuOpened)="focusFirstSubmenuItem(priorityMenu)"
+  >
+    <span class="menuItemLeft">
+      <mat-icon>priority_high</mat-icon>
+      {{ T.F.TASK.CMP.PRIORITY | translate }}
+    </span>
+  </button>
+
+  <button
     #tagMenuTrigger="matMenuTrigger"
     [matMenuTriggerFor]="tagMenu"
     mat-menu-item
@@ -395,6 +408,49 @@
       </button>
     }
   </ng-template>
+</mat-menu>
+
+<mat-menu #priorityMenu="matMenu">
+  <button
+    mat-menu-item
+    menuTouchFix
+    (click)="setPriority('high')"
+  >
+    @if (task.priority === 'high') {
+      <mat-icon>check</mat-icon>
+    }
+    {{ T.F.TASK.CMP.PRIORITY_HIGH | translate }}
+  </button>
+  <button
+    mat-menu-item
+    menuTouchFix
+    (click)="setPriority('medium')"
+  >
+    @if (task.priority === 'medium') {
+      <mat-icon>check</mat-icon>
+    }
+    {{ T.F.TASK.CMP.PRIORITY_MEDIUM | translate }}
+  </button>
+  <button
+    mat-menu-item
+    menuTouchFix
+    (click)="setPriority('low')"
+  >
+    @if (task.priority === 'low') {
+      <mat-icon>check</mat-icon>
+    }
+    {{ T.F.TASK.CMP.PRIORITY_LOW | translate }}
+  </button>
+  <button
+    mat-menu-item
+    menuTouchFix
+    (click)="setPriority(null)"
+  >
+    @if (!task.priority) {
+      <mat-icon>check</mat-icon>
+    }
+    {{ T.F.TASK.CMP.PRIORITY_NONE | translate }}
+  </button>
 </mat-menu>
 
 <mat-menu #projectMenu="matMenu">

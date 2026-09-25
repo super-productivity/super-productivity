@@ -4,7 +4,6 @@ import { clearSessionKeyCache } from '@sp/sync-core';
 import { SyncLog } from '../../core/log';
 import { SnapshotUploadService } from './snapshot-upload.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
-import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 
 const LOG_PREFIX = 'SuperSyncEncryptionToggleService';
 
@@ -93,52 +92,6 @@ export class SuperSyncEncryptionToggleService {
           'Your data will re-upload (encrypted) on the next sync — or click "Sync Now" to retry now. ' +
           `Reason: ${_friendlyErrorMessage(error)}`,
         { cause: error },
-      );
-    }
-  }
-
-  /**
-   * Disables encryption by deleting all server data and uploading an unencrypted snapshot.
-   */
-  async disableEncryption(): Promise<void> {
-    SyncLog.normal(`${LOG_PREFIX}: Starting encryption disable...`);
-
-    // Capture existing config BEFORE destructive call so we can revert on failure
-    // (including the encryption key, which deleteAndReuploadWithNewEncryption clears)
-    const existingCfg = (await this._providerManager
-      .getActiveProvider()
-      ?.privateCfg.load()) as SuperSyncPrivateCfg | undefined;
-
-    try {
-      await this._snapshotUploadService.deleteAndReuploadWithNewEncryption({
-        encryptKey: undefined,
-        isEncryptionEnabled: false,
-        logPrefix: LOG_PREFIX,
-      });
-
-      // Drop any cached derived key now that encryption is off.
-      clearSessionKeyCache();
-
-      SyncLog.normal(`${LOG_PREFIX}: Encryption disabled successfully!`);
-    } catch (uploadError) {
-      SyncLog.err(
-        `${LOG_PREFIX}: Snapshot upload failed after deleting server data!`,
-        uploadError,
-      );
-
-      // Best-effort revert: restore original config (including encryption key)
-      if (existingCfg) {
-        await this._providerManager.setProviderConfig(
-          SyncProviderId.SuperSync,
-          existingCfg,
-        );
-      }
-
-      throw new Error(
-        'Failed to upload unencrypted snapshot after deleting server data. ' +
-          'Your local data is safe. Encryption is still enabled. Please try disabling encryption again. ' +
-          `Reason: ${_friendlyErrorMessage(uploadError)}`,
-        { cause: uploadError },
       );
     }
   }

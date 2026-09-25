@@ -3266,7 +3266,7 @@
     "UNABLE_TO_PERSIST_DATA": "无法将数据持久化到插件存储",
     "UNKNOWN_ERROR": "发生未知错误",
     "UPLOAD_PLUGIN_INSTRUCTION": "上传插件 ZIP 文件以进行安装：",
-    "VALIDATION_FAILED": "验证失败",
+    "VALIDATION_FAILED": "验证失败：{{errors}}",
     "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "无法连接到 Node.js 执行桥。请尝试先禁用再重新启用此插件。",
     "PLUGIN_LOAD_FAILED": "插件“{{pluginName}}”加载失败：{{error}}"
   },

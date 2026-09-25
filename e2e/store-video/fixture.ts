@@ -1,21 +1,17 @@
 /**
  * Video pipeline fixture. Mirrors the web-mode setup of the screenshot fixture
- * (`e2e/store-screenshots/fixture.ts`) but creates its own browser context
- * with `recordVideo` enabled, since `browser.newContext()` does not inherit
- * the project's `use.video` setting.
+ * (`e2e/store-screenshots/fixture.ts`) but creates its own browser context and
+ * records it with the video-kit recorder (device pixels, near-lossless).
  *
  * Recording lands in a variant directory such as
- * `.tmp/video/recordings/default/<random>.webm` or
- * `.tmp/video/recordings/ms-store/<random>.webm` after the page closes;
- * `build-video.ts` picks the most recent one for the same variant.
+ * `.tmp/video/recordings/default/<timestamp>.mkv`;
+ * `build-video.ts` picks the most recent successful one for the same variant.
  *
  * Trim handling: the recording necessarily includes ~16s of seed-import
- * navigation before the choreographed beats begin. The fixture timestamps the
- * moment of context creation; the spec calls `markBeatsStart()` once seeded
- * and ready. The delta (an offset in ms) is written to a sidecar JSON that
- * `build-video.ts` consumes, so ffmpeg can `-ss` past the lead-in. Single-
- * worker assumption — the sidecar is shared, which is fine because we run
- * `workers: 1`.
+ * navigation before the choreographed beats begin. Offsets are measured from
+ * the recording's start; the spec calls `markBeatsStart()` once seeded and
+ * ready. After a successful test stops the recording, its trim data is
+ * written beside that exact file. Failed captures have no trim sidecar.
  */
 
 import { test as base, type Page } from '@playwright/test';
@@ -29,6 +25,11 @@ import {
   type Theme,
 } from '../store-screenshots/matrix';
 import { waitForAppReady } from '../utils/waits';
+import { installCursor, installTapRipple, onSceneStart } from '../video-kit';
+import { startRecording } from '../video-kit/recorder';
+import { RECORDING_EXT, trimPathFor } from '../video-kit/render';
+import { enableAnimations } from './helpers';
+import { RECORDING_SIZE, VIDEO_PROFILE } from './profile';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const SEED_DIR = path.join(REPO_ROOT, '.tmp', 'video-seeds');
@@ -36,57 +37,7 @@ const VARIANT = process.env.REEL_VARIANT ?? '';
 const RECORDINGS_DIR = path.join(REPO_ROOT, '.tmp', 'video', 'recordings');
 const variantDirName = (VARIANT || 'default').replace(/[^a-z0-9_-]+/gi, '-');
 const RECORDING_DIR = path.join(RECORDINGS_DIR, variantDirName);
-const TRIM_SIDECAR_PATH = path.join(RECORDING_DIR, '_latest-trim.json');
 
-type VideoProfile = {
-  size: { width: number; height: number };
-  deviceScaleFactor: number;
-};
-
-const getVideoProfile = (): VideoProfile => {
-  if (process.env.REEL_VARIANT === 'ms-store') {
-    return {
-      // Microsoft Store trailers must be exactly 1920x1080. Keep the backing
-      // surface at 1x here; 2x would render a 3840x2160 page before recording.
-      size: { width: 1920, height: 1080 },
-      deviceScaleFactor: 1,
-    };
-  }
-
-  if (process.env.REEL_VARIANT === 'shorts') {
-    return {
-      // 9:16 portrait at 1080x1920 — the canonical short-form video size for
-      // TikTok / YouTube Shorts / Instagram Reels / Mastodon. DPR 1 keeps the
-      // backing surface at 1080x1920 (DPR 2 would render 2160x3840 per frame
-      // and the recorder starts dropping frames).
-      size: { width: 1080, height: 1920 },
-      deviceScaleFactor: 1,
-    };
-  }
-
-  if (process.env.REEL_VARIANT === 'mobile') {
-    return {
-      // 19.5:9 phone aspect (iPhone Pro Max / Pixel Pro). Renders as a
-      // recognizable "phone screen" frame for app-store mobile previews
-      // and Play Store "feature graphic" promo clips.
-      size: { width: 1080, height: 2340 },
-      deviceScaleFactor: 1,
-    };
-  }
-
-  return {
-    // Square 1024x1024 plays well on social embeds and matches the rhythm of
-    // the GitHub README. DPR 2 renders the page at 2x physical pixels, then
-    // Playwright downsamples into 1024x1024 for sharper text on the gif.
-    size: { width: 1024, height: 1024 },
-    deviceScaleFactor: 2,
-  };
-};
-
-// Viewport == recording size, otherwise Playwright pads the smaller axis with
-// gray. The profile is selected by REEL_VARIANT so the choreography can be
-// reused for square README assets and 16:9 Store trailers.
-const VIDEO_PROFILE = getVideoProfile();
 const VIDEO_SIZE = VIDEO_PROFILE.size;
 const DEVICE_SCALE_FACTOR = VIDEO_PROFILE.deviceScaleFactor;
 
@@ -100,7 +51,9 @@ type VideoFixtures = {
    * Call once the app is in the desired starting state (post-seed-import,
    * post-settle) and the choreographed beats are about to begin. The fixture
    * writes a sidecar JSON with the offset so `build-video.ts` can trim the
-   * recording's lead-in.
+   * recording's lead-in. The sidecar also records where the test body ended
+   * (teardown is trimmed off) and when each labeled `cutToScene` revealed its
+   * scene (printed by the build and used for the contact sheet).
    */
   markBeatsStart: () => void;
 };
@@ -123,9 +76,18 @@ const ONBOARDING_INIT = (): void => {
   localStorage.setItem('SUP_RIGHT_PANEL_WIDTH', '250');
 };
 
-// Shared between the page fixture (writer) and markBeatsStart (reader).
-// Single-worker invariant — see file header.
-const recordingState: { startMs: number } = { startMs: 0 };
+type TrimSidecar = {
+  offsetMs: number;
+  endOffsetMs: number;
+  scenes: { label: string; offsetMs: number }[];
+  recordedAtMs: number;
+  variant: string;
+  recordingSize: { width: number; height: number };
+};
+
+// The config uses one worker. The page fixture writes the sidecar only after
+// the recorder flushes; markBeatsStart provides its trim data first.
+const recordingState: { startMs: number; trim?: TrimSidecar } = { startMs: 0 };
 
 export const test = base.extend<VideoFixtures>({
   locale: ['en', { option: true }] as never,
@@ -140,18 +102,16 @@ export const test = base.extend<VideoFixtures>({
     await use(file);
   },
 
-  // Override the default page fixture so we can pass `recordVideo` to the
-  // context. `use.video` from the project config only applies to Playwright's
-  // built-in default context.
+  // Override the default page fixture: the video context needs its own
+  // viewport, locale and user agent, and is recorded from its first page.
   page: async ({ browser, baseURL, theme, locale }, use, testInfo) => {
-    // Captured as close to context creation as possible. A ~tens-of-ms delay
-    // before recording really starts means we under-estimate by that amount,
-    // i.e. trim slightly less — safer than over-trimming into beat 1's fade-in.
-    recordingState.startMs = Date.now();
+    recordingState.trim = undefined;
     const isMobile = VARIANT === 'mobile';
     const context = await browser.newContext({
       baseURL: baseURL ?? 'http://localhost:4242',
-      userAgent: `PLAYWRIGHT-VIDEO-${testInfo.workerIndex}`,
+      userAgent: isMobile
+        ? `Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36 PLAYWRIGHT-VIDEO-${testInfo.workerIndex}`
+        : `PLAYWRIGHT-VIDEO-${testInfo.workerIndex}`,
       storageState: undefined,
       // Pin navigator.language so ImportPage's English text matchers work
       // regardless of host locale. UI locale is switched after seed import.
@@ -163,18 +123,27 @@ export const test = base.extend<VideoFixtures>({
       // as a finger, and so any responsive `isMobile` branches activate.
       hasTouch: isMobile,
       isMobile,
-      recordVideo: {
-        dir: RECORDING_DIR,
-        size: VIDEO_SIZE,
-      },
     });
     const page = await context.newPage();
+    fs.mkdirSync(RECORDING_DIR, { recursive: true });
+    const recordingPath = path.join(
+      RECORDING_DIR,
+      `${new Date().toISOString().replace(/[:.]/g, '-')}${RECORDING_EXT}`,
+    );
+    const recording = await startRecording(page, {
+      path: recordingPath,
+      size: RECORDING_SIZE,
+    });
+    recordingState.startMs = recording.startedAtMs;
 
     await page.clock.install({ time: SCREENSHOT_BASE_DATE });
 
     await page.addInitScript(ONBOARDING_INIT);
     await page.addInitScript((variant) => {
-      // Stash variant on body so overlays.ts / scenarios can branch via
+      if (variant === 'updates') {
+        localStorage.setItem('SUP_RIGHT_PANEL_WIDTH', '500');
+      }
+      // Stash variant on body so injected styles / scenarios can branch via
       // attribute selectors without re-reading process.env in the page.
       const apply = (): void => {
         document.body.dataset.spVideoVariant = variant || 'default';
@@ -193,116 +162,13 @@ export const test = base.extend<VideoFixtures>({
       (window as unknown as { __spCurrentLocale?: string }).__spCurrentLocale =
         initialLocale;
     }, locale);
-    // Mobile variant: tap-ripple instead of cursor ring. The recorder
-    // doesn't draw a touch indicator on its own, so taps would otherwise
-    // read as instant state changes with no on-frame cause. Each
-    // touchstart spawns a short-lived expanding ring at the touch point.
+    // Headless recordings draw no cursor, so clicks and taps would read as
+    // state changes with no on-frame cause. Touch variants mark taps instead.
+    // The existing reels were tuned around the soft ring; newer ones use the arrow.
     if (isMobile) {
-      await page.addInitScript(() => {
-        const attach = (): void => {
-          if (document.getElementById('__sp-video-tap-ripple-style')) return;
-          const style = document.createElement('style');
-          style.id = '__sp-video-tap-ripple-style';
-          style.textContent = `
-            .__sp-video-tap-ripple {
-              position: fixed;
-              top: 0;
-              left: 0;
-              width: 0;
-              height: 0;
-              border-radius: 50%;
-              background: radial-gradient(rgba(255,255,255,0.85) 0%,rgba(255,255,255,0.4) 40%,rgba(255,255,255,0) 75%);
-              z-index: 2147483640;
-              pointer-events: none;
-              opacity: 0.9;
-              transform: translate3d(-9999px,-9999px,0);
-              transition: width 520ms ease-out, height 520ms ease-out, opacity 620ms ease-out, transform 520ms ease-out;
-            }
-          `;
-          document.head.appendChild(style);
-          const spawn = (clientX: number, clientY: number): void => {
-            const r = document.createElement('div');
-            r.className = '__sp-video-tap-ripple';
-            r.style.transform = `translate3d(${clientX}px,${clientY}px,0)`;
-            document.body.appendChild(r);
-            void r.offsetWidth;
-            const finalSize = 220;
-            const half = finalSize / 2;
-            r.style.width = `${finalSize}px`;
-            r.style.height = `${finalSize}px`;
-            r.style.marginLeft = `${-half}px`;
-            r.style.marginTop = `${-half}px`;
-            r.style.opacity = '0';
-            window.setTimeout(() => r.remove(), 700);
-          };
-          document.addEventListener(
-            'touchstart',
-            (e) => {
-              for (const t of Array.from(e.touches)) spawn(t.clientX, t.clientY);
-            },
-            { passive: true, capture: true },
-          );
-          // Synthetic taps from Playwright sometimes route through pointer
-          // events without touch events — listen to both for coverage.
-          document.addEventListener(
-            'pointerdown',
-            (e) => {
-              if (e.pointerType !== 'mouse') spawn(e.clientX, e.clientY);
-            },
-            { passive: true, capture: true },
-          );
-        };
-        if (document.body) attach();
-        else document.addEventListener('DOMContentLoaded', attach, { once: true });
-      });
-    }
-    // Inject a soft ring that follows the cursor — at 1024×1024 the OS
-    // pointer is small and easy to miss; this makes drag motions read on
-    // the gif. The ring is at z-index 2147483640 (under the full-screen
-    // cards which sit higher) so it's automatically hidden during beat 4/5.
-    // Spec code can also toggle visibility per-beat by adding/removing the
-    // `__sp-hide-cursor-highlight` class on body — used during the capture
-    // beat where the cursor sits in the middle of the focused input and
-    // would otherwise read as a stray white dot. Skipped for the mobile
-    // variant: no cursor on touch, the tap ripple handles it.
-    if (!isMobile) {
-      await page.addInitScript(() => {
-        const attach = (): void => {
-          const id = '__sp-video-cursor-highlight';
-          if (document.getElementById(id)) return;
-          const dot = document.createElement('div');
-          dot.id = id;
-          dot.style.cssText = [
-            'position:fixed',
-            'top:0',
-            'left:0',
-            'width:36px',
-            'height:36px',
-            'margin:-18px 0 0 -18px',
-            'border-radius:50%',
-            'background:radial-gradient(rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.18) 45%,rgba(255,255,255,0) 70%)',
-            'z-index:2147483640',
-            'pointer-events:none',
-            'transform:translate3d(-9999px,-9999px,0)',
-            'will-change:transform',
-            'transition:opacity 150ms ease-out',
-          ].join(';');
-          document.body.appendChild(dot);
-          const visibilityStyle = document.createElement('style');
-          visibilityStyle.textContent =
-            'body.__sp-hide-cursor-highlight #__sp-video-cursor-highlight{opacity:0!important}';
-          document.head.appendChild(visibilityStyle);
-          document.addEventListener(
-            'mousemove',
-            (e) => {
-              dot.style.transform = `translate3d(${e.clientX}px,${e.clientY}px,0)`;
-            },
-            { passive: true },
-          );
-        };
-        if (document.body) attach();
-        else document.addEventListener('DOMContentLoaded', attach, { once: true });
-      });
+      await installTapRipple(page);
+    } else {
+      await installCursor(page, { style: VARIANT === 'updates' ? 'arrow' : 'ring' });
     }
 
     // Suppress UI noise that fights with the choreographed reel:
@@ -332,9 +198,12 @@ export const test = base.extend<VideoFixtures>({
         /* Hide Material dialogs that would modal over the actual reel, but
            keep the import encryption warning actionable during the trimmed
            pre-roll seed import. focus-mode-overlay is its own element, not a
-           mat-dialog, so it's unaffected. */
-        .cdk-overlay-pane:has(.mat-mdc-dialog-container):not(:has(dialog-import-encryption-warning)),
-        .cdk-overlay-pane:has(mat-dialog-container):not(:has(dialog-import-encryption-warning)) {
+           mat-dialog, so it's unaffected. The backdrop goes too: it would
+           otherwise dim the whole frame, e.g. behind a reminder dialog. */
+        body:not([data-sp-video-variant="updates"]) .cdk-overlay-pane:has(.mat-mdc-dialog-container):not(:has(dialog-import-encryption-warning)),
+        body:not([data-sp-video-variant="updates"]) .cdk-overlay-pane:has(mat-dialog-container):not(:has(dialog-import-encryption-warning)),
+        body:not([data-sp-video-variant="updates"])
+          .cdk-overlay-backdrop:has(+ .cdk-overlay-pane mat-dialog-container):not(:has(+ .cdk-overlay-pane dialog-import-encryption-warning)) {
           display: none !important;
         }
         /* Hide every Material snack bar — beat 1's task-add and beat 4's
@@ -352,6 +221,9 @@ export const test = base.extend<VideoFixtures>({
         app-root {
           zoom: 1.4;
         }
+        body[data-sp-video-variant="updates"] app-root {
+          zoom: 1.7;
+        }
         /* Shorts (9:16, 1080x1920): zoom up further so the work-view fills
            the portrait canvas. The inner viewport is 1080/1.6 = 675 wide,
            1920/1.6 = 1200 tall — wide enough for the task list at the
@@ -360,11 +232,11 @@ export const test = base.extend<VideoFixtures>({
         body[data-sp-video-variant="shorts"] app-root {
           zoom: 1.6;
         }
-        /* Mobile (1080x2340 phone aspect): SP's responsive layout already
-           collapses the sidenav and switches to a touch-friendly toolbar
-           when isMobile=true, so a much smaller zoom is enough. 1.0 keeps
-           the layout in its native mobile breakpoint. */
-        body[data-sp-video-variant="mobile"] app-root {
+        /* Mobile and hero use small CSS viewports that activate SP's
+           responsive layouts; DPR, not zoom, gives them their pixels. */
+        body[data-sp-video-variant="mobile"] app-root,
+        body[data-sp-video-variant="hero"] app-root,
+        body[data-sp-video-variant="hero-light"] app-root {
           zoom: 1;
         }
         /* The right-panel sizes itself to 250px (MIN_WIDTH) via
@@ -392,6 +264,11 @@ export const test = base.extend<VideoFixtures>({
         add-task-bar mat-spinner {
           display: none !important;
         }
+        /* The end card's platforms line (third stat) is much longer than the
+           counters above it; one step smaller keeps it on a single line. */
+        .vk-end-card-stat:nth-child(3) {
+          font-size: clamp(24px, 2.2vw, 38px);
+        }
       `;
       const attach = (): void => {
         if (!document.getElementById(style.id)) document.head.appendChild(style);
@@ -410,9 +287,18 @@ export const test = base.extend<VideoFixtures>({
     try {
       await use(page);
     } finally {
-      // Closing the context flushes the video to disk under RECORDING_DIR.
-      if (!page.isClosed()) await page.close();
-      await context.close();
+      try {
+        await recording.stop();
+      } finally {
+        if (!page.isClosed()) await page.close();
+        await context.close();
+      }
+      if (testInfo.status === 'passed' && recordingState.trim) {
+        fs.writeFileSync(
+          trimPathFor(recordingPath),
+          JSON.stringify(recordingState.trim, null, 2),
+        );
+      }
     }
   },
 
@@ -421,34 +307,32 @@ export const test = base.extend<VideoFixtures>({
     await importPage.navigateToImportPage();
     await importPage.importBackupFile(seedFile);
     await waitForAppReady(page);
+    await enableAnimations(page);
     await use(page);
   },
 
-  markBeatsStart: async ({}, use) => {
+  markBeatsStart: async ({ page }, use) => {
     let beatsMs: number | null = null;
+    const scenes: { label: string; offsetMs: number }[] = [];
+    onSceneStart(page, (label) => {
+      scenes.push({ label, offsetMs: Date.now() - recordingState.startMs });
+    });
     await use(() => {
       beatsMs = Date.now();
     });
+    // Runs right after the test body, before the page fixture closes the
+    // context, so the recorded teardown stays out of the video.
+    const endOffsetMs = Date.now() - recordingState.startMs;
     if (beatsMs == null) return;
     const offsetMs = beatsMs - recordingState.startMs;
-    try {
-      fs.mkdirSync(RECORDING_DIR, { recursive: true });
-      fs.writeFileSync(
-        TRIM_SIDECAR_PATH,
-        JSON.stringify(
-          {
-            offsetMs,
-            recordedAtMs: beatsMs,
-            variant: VARIANT || 'default',
-            recordingSize: VIDEO_SIZE,
-          },
-          null,
-          2,
-        ),
-      );
-    } catch (err) {
-      console.warn(`[video] failed to write trim sidecar: ${(err as Error).message}`);
-    }
+    recordingState.trim = {
+      offsetMs,
+      endOffsetMs,
+      scenes,
+      recordedAtMs: beatsMs,
+      variant: VARIANT || 'default',
+      recordingSize: RECORDING_SIZE,
+    };
   },
 });
 

@@ -17,6 +17,7 @@ export const playDoneSound = async (
   nrOfDoneTasks: number = 0,
 ): Promise<void> => {
   const file = `${BASE}/${soundCfg.doneSound}`;
+  // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
   TaskLog.log(file);
 
   // detune 0 plays the sample at its natural pitch. When the toggle is off we

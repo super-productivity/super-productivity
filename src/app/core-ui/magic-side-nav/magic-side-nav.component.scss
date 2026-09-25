@@ -283,6 +283,12 @@
       var(--safe-area-bottom) + var(--bottom-nav-height) + var(--bottom-nav-extra-offset)
     );
     min-height: calc(100% - var(--s6));
+
+    // .nav-sidenav.mobile already shifts down by --safe-area-top on native,
+    // so applying it again here would double the inset.
+    :host-context(body.isNativeMobile) & {
+      padding-top: 0;
+    }
   }
 
   :host-context(.isMac.isElectron) & {

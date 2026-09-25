@@ -98,6 +98,7 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
 
   private _messageListener?: EventListener;
   private _routeSubscription?: Subscription;
+  private _isDestroyed = false;
 
   async ngOnInit(): Promise<void> {
     // If directPluginId is provided, load that plugin directly
@@ -180,6 +181,7 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this._isDestroyed = true;
     this._cleanupIframeCommunication();
     if (this._routeSubscription) {
       this._routeSubscription.unsubscribe();
@@ -249,6 +251,11 @@ export class PluginIndexComponent implements OnInit, OnDestroy {
     }
 
     const baseCfg = await this._pluginService.getBaseCfg();
+    // Checked after the LAST await: ngOnDestroy has already run cleanup, so a
+    // message listener added below would never be removed.
+    if (this._isDestroyed) {
+      return;
+    }
 
     // Create simple plugin config
     const config: PluginIframeConfig = {
