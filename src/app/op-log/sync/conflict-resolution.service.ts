@@ -42,6 +42,10 @@ import {
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { PROJECT_DELETE_WINS_MARKER } from '../../root-store/meta/task-shared.actions';
 import { scopeBulkArchivePayload } from './scope-bulk-archive-payload.util';
+import {
+  collectDeletedEntityIds,
+  collectDeletedTaskIds,
+} from './collect-deleted-ids.util';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
@@ -1375,7 +1379,7 @@ export class ConflictResolutionService {
       .filter((resolution) => resolution.winner === 'remote')
       .flatMap((resolution) => resolution.conflict.remoteOps)
       .filter((op) => op.opType === OpType.Delete);
-    const concurrentlyDeletedTaskIds = this._collectDeletedTaskIds([
+    const concurrentlyDeletedTaskIds = collectDeletedTaskIds([
       ...nonConflictingOps,
       ...remoteDeleteWinnerOps,
     ]);
@@ -3751,58 +3755,6 @@ export class ConflictResolutionService {
   }
 
   /**
-   * Collects the TASK ids removed by DELETE ops in the same resolution batch.
-   * A bulk `deleteTasks` op carries every id in `entityIds` and mirrors only
-   * the first to `entityId`, with an empty `entityChanges`, so union both via
-   * `getOpEntityIds` — reading `entityId` alone would miss every trailing id
-   * and let recovery resurrect it. A mixed-entity payload can additionally
-   * carry task deletes in `entityChanges`. Used to keep project/parent recovery
-   * from recreating a task another device is concurrently deleting. Archive ops
-   * are `OpType.Update` and are intentionally excluded.
-   */
-  private _collectDeletedTaskIds(ops: readonly Operation[]): Set<string> {
-    const deletedTaskIds = new Set<string>();
-    for (const op of ops) {
-      if (op.entityType === 'TASK' && op.opType === OpType.Delete) {
-        for (const id of getOpEntityIds(op)) deletedTaskIds.add(id);
-      }
-      if (isMultiEntityPayload(op.payload)) {
-        for (const change of op.payload.entityChanges) {
-          if (
-            change.entityType === 'TASK' &&
-            change.opType === OpType.Delete &&
-            change.entityId
-          ) {
-            deletedTaskIds.add(change.entityId);
-          }
-        }
-      }
-    }
-    return deletedTaskIds;
-  }
-
-  /**
-   * Collects the ids removed by single/bulk DELETE ops of one entity type in the
-   * same resolution batch. Unlike `_collectDeletedTaskIds` this does not scan
-   * multi-entity `entityChanges`: `deleteNote`/`deleteSection`/`deleteTaskRepeatCfg(s)`
-   * are all single- or bulk-entity deletes, so `getOpEntityIds` covers them. Used
-   * to keep the project cascade recovery from resurrecting a note/section/repeat-cfg
-   * another device is concurrently deleting (same divergence guard as tasks, #8997).
-   */
-  private _collectDeletedEntityIds(
-    ops: readonly Operation[],
-    entityType: EntityType,
-  ): Set<string> {
-    const deletedIds = new Set<string>();
-    for (const op of ops) {
-      if (op.entityType === entityType && op.opType === OpType.Delete) {
-        for (const id of getOpEntityIds(op)) deletedIds.add(id);
-      }
-    }
-    return deletedIds;
-  }
-
-  /**
    * Reads the full current entity dictionary for an adapter entity type from the
    * store. Used to enumerate a deleted project's still-present sections and repeat
    * configs at resolution time (they are not carried in the `deleteProject`
@@ -3913,7 +3865,7 @@ export class ConflictResolutionService {
     const noteIds = deletePayload['noteIds'];
     if (Array.isArray(noteIds) && noteIds.length > 0) {
       const noteEntities = await this._getCurrentEntitiesOfType('NOTE' as EntityType);
-      const deletedNoteIds = this._collectDeletedEntityIds(
+      const deletedNoteIds = collectDeletedEntityIds(
         guard.batchOps,
         'NOTE' as EntityType,
       );
@@ -3929,7 +3881,7 @@ export class ConflictResolutionService {
     // (same predicate as `removeProjectSections`). Strip taskIds pointing at a
     // concurrently-deleted task so the recreated section carries no dangling ref.
     const sectionEntities = await this._getCurrentEntitiesOfType('SECTION' as EntityType);
-    const deletedSectionIds = this._collectDeletedEntityIds(
+    const deletedSectionIds = collectDeletedEntityIds(
       guard.batchOps,
       'SECTION' as EntityType,
     );
@@ -3961,7 +3913,7 @@ export class ConflictResolutionService {
     const repeatCfgEntities = await this._getCurrentEntitiesOfType(
       'TASK_REPEAT_CFG' as EntityType,
     );
-    const deletedRepeatCfgIds = this._collectDeletedEntityIds(
+    const deletedRepeatCfgIds = collectDeletedEntityIds(
       guard.batchOps,
       'TASK_REPEAT_CFG' as EntityType,
     );
