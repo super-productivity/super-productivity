@@ -5,6 +5,7 @@ import { isLwwUpdateActionType } from '../core/lww-update-action-types';
 import { isLwwUpdatePayload } from '../core/operation.types';
 import {
   collectTaskRemovalEntityIdsFromBatch,
+  isRemovedAtIndex,
   isTaskArchiveOrDeleteOp,
   stripBatchArchivedTaskIdsFromLwwPayload,
 } from './bulk-archive-filter.util';
@@ -103,6 +104,8 @@ export const bulkOperationsMetaReducer = <T>(
           const candidateOps = operations.filter((op) => !failedOpIds.has(op.id));
           let archivingOrDeletingEntityIds: Set<string>;
           let archivingEntityIds: Set<string>;
+          let restoredAt: Map<string, number>;
+          let archiveRestoredAt: Map<string, number>;
           try {
             const taskRemovalIds = collectTaskRemovalEntityIdsFromBatch(
               candidateOps,
@@ -110,6 +113,8 @@ export const bulkOperationsMetaReducer = <T>(
             );
             archivingOrDeletingEntityIds = taskRemovalIds.all;
             archivingEntityIds = taskRemovalIds.archiving;
+            restoredAt = taskRemovalIds.restoredAt;
+            archiveRestoredAt = taskRemovalIds.archiveRestoredAt;
           } catch (error) {
             const unsafeArchiveOps = candidateOps.filter(isTaskArchiveOrDeleteOp);
             for (const op of unsafeArchiveOps) {
@@ -122,7 +127,7 @@ export const bulkOperationsMetaReducer = <T>(
           const hasArchives = archivingOrDeletingEntityIds.size > 0;
           let currentState = state;
           let shouldReplayWithoutFailedOperations = false;
-          for (const op of candidateOps) {
+          for (const [index, op] of candidateOps.entries()) {
             // #9863: the client's OWN genesis op (legacy `pf` → op-log
             // migration, disaster recovery) carries the complete pre-migration
             // state and is the only place in the log that does. Replaying it
@@ -174,14 +179,25 @@ export const bulkOperationsMetaReducer = <T>(
                 isLww &&
                 isLwwUpdatePayload(op.payload) &&
                 op.payload.recreatesEntityAfterDelete === true &&
-                (!op.entityId || !archivingEntityIds.has(op.entityId));
+                (!op.entityId ||
+                  !isRemovedAtIndex(
+                    archivingEntityIds,
+                    archiveRestoredAt,
+                    op.entityId,
+                    index,
+                  ));
               // Skip LWW Updates whose entityId itself is archived/deleted in this batch
               // (covers TASK; for TAG/PROJECT entityId is the tag/project id, not a task).
               if (
                 isLww &&
                 !recreatesEntityAfterDelete &&
                 op.entityId &&
-                archivingOrDeletingEntityIds.has(op.entityId)
+                isRemovedAtIndex(
+                  archivingOrDeletingEntityIds,
+                  restoredAt,
+                  op.entityId,
+                  index,
+                )
               ) {
                 OpLog.normal(
                   `bulkOperationsMetaReducer: Skipping LWW Update for ` +
@@ -190,11 +206,15 @@ export const bulkOperationsMetaReducer = <T>(
                 continue;
               }
               const opForApply = hasArchives
-                ? stripBatchArchivedTaskIdsFromLwwPayload(
-                    op,
-                    isLww,
-                    archivingOrDeletingEntityIds,
-                  )
+                ? stripBatchArchivedTaskIdsFromLwwPayload(op, isLww, {
+                    has: (id) =>
+                      isRemovedAtIndex(
+                        archivingOrDeletingEntityIds,
+                        restoredAt,
+                        id,
+                        index,
+                      ),
+                  })
                 : op;
               const opAction = convertOpToAction(opForApply, {
                 replayAsFullState: isLeadingOwnGenesisOp,

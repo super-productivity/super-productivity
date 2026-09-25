@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
-import { Action, Store } from '@ngrx/store';
+import { Action, ActionReducer, Store } from '@ngrx/store';
 import { of, Subject, Subscription } from 'rxjs';
 import { SnackService } from '../../../core/snack/snack.service';
 import { ClientIdService } from '../../../core/util/client-id.service';
@@ -9,7 +9,10 @@ import { roundTimeSpentForDay } from '../../../features/tasks/store/task.actions
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { OperationApplierService } from '../../apply/operation-applier.service';
 import { OperationCaptureService } from '../../capture/operation-capture.service';
-import { clearDeferredActions } from '../../capture/operation-capture.meta-reducer';
+import {
+  clearDeferredActions,
+  operationCaptureMetaReducer,
+} from '../../capture/operation-capture.meta-reducer';
 import { OperationLogEffects } from '../../capture/operation-log.effects';
 import { buildEntityRegistry, ENTITY_REGISTRY } from '../../core/entity-registry';
 import { UnsupportedMultiEntityConflictError } from '../../core/errors/sync-errors';
@@ -34,6 +37,25 @@ import {
   ApplyOperationsResult,
 } from '../../core/types/apply.types';
 import { resetTestUuidCounter, TestClient } from './helpers/test-client.helper';
+import { bulkApplyOperations } from '../../apply/bulk-hydration.action';
+import {
+  BulkReplayReducerFailure,
+  runWithBulkReplayFailureCollector,
+} from '../../apply/bulk-replay-failure-collector';
+import { META_REDUCERS } from '../../../root-store/meta/meta-reducer-registry';
+import { reducerFailureGuardMetaReducer } from '../../../root-store/meta/reducer-failure-guard.meta-reducer';
+import {
+  PROJECT_FEATURE_NAME,
+  projectReducer,
+} from '../../../features/project/store/project.reducer';
+import { createStateWithExistingTasks } from '../../../root-store/meta/task-shared-meta-reducers/test-utils';
+import { RootState } from '../../../root-store/root-state';
+import {
+  TASK_FEATURE_NAME,
+  taskReducer,
+} from '../../../features/tasks/store/task.reducer';
+import { TAG_FEATURE_NAME, tagReducer } from '../../../features/tag/store/tag.reducer';
+import { SECTION_FEATURE_NAME } from '../../../features/section/store/section.reducer';
 
 /**
  * #9537 / #9405: both devices archiving overlapping done tasks concurrently
@@ -272,6 +294,108 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
     const actionPayload = (op.payload as { actionPayload: { tasks: Task[] } })
       .actionPayload;
     return actionPayload.tasks.map(({ id }) => id);
+  };
+
+  const fullLog = async (): Promise<Operation[]> =>
+    (await opLogStore.getOpsAfterSeq(0)).map(({ op }) => op);
+
+  // Production meta-reducers in registry order over the task, project and tag
+  // feature reducers; capture and the throw-swallowing guard are dropped so
+  // replay failures surface in `failures` instead.
+  const replayReducer = META_REDUCERS.filter(
+    (m) => m !== operationCaptureMetaReducer && m !== reducerFailureGuardMetaReducer,
+  ).reduceRight<ActionReducer<RootState, Action>>(
+    (inner, metaReducer) => metaReducer(inner),
+    (state, action) => ({
+      ...(state as RootState),
+      [TASK_FEATURE_NAME]: taskReducer((state as RootState)[TASK_FEATURE_NAME], action),
+      [PROJECT_FEATURE_NAME]: projectReducer(
+        (state as RootState)[PROJECT_FEATURE_NAME],
+        action,
+      ),
+      [TAG_FEATURE_NAME]: tagReducer((state as RootState)[TAG_FEATURE_NAME], action),
+    }),
+  );
+
+  const replayBatch = (
+    state: RootState,
+    ops: Operation[],
+  ): { state: RootState; failures: BulkReplayReducerFailure[] } => {
+    const failures: BulkReplayReducerFailure[] = [];
+    const nextState = runWithBulkReplayFailureCollector(
+      (failure) => failures.push(failure),
+      () => replayReducer(state, bulkApplyOperations({ operations: ops })),
+    );
+    return { state: nextState, failures };
+  };
+
+  // `doneIds` held active + done in project1, as a device that never saw the
+  // archive has them.
+  const doneState = (doneIds: string[]): RootState => {
+    const base = createStateWithExistingTasks(doneIds);
+    return {
+      ...base,
+      [TASK_FEATURE_NAME]: {
+        ...base[TASK_FEATURE_NAME],
+        entities: Object.fromEntries(
+          doneIds.map((id) => [
+            id,
+            { ...base[TASK_FEATURE_NAME].entities[id]!, isDone: true, doneOn: 1_000 },
+          ]),
+        ),
+      },
+      [SECTION_FEATURE_NAME]: { ids: [], entities: {} },
+    } as RootState;
+  };
+
+  // Either another device that never saw the archive replaying our uploads,
+  // or this device restarting (hydration replays the whole log status-blind).
+  const replayWithRealReducers = (
+    doneIds: string[],
+    ops: Operation[],
+  ): { state: RootState; failures: BulkReplayReducerFailure[] } =>
+    replayBatch(doneState(doneIds), ops);
+
+  const replayOpByOp = (
+    state: RootState,
+    ops: Operation[],
+  ): { state: RootState; failures: BulkReplayReducerFailure[] } =>
+    ops.reduce(
+      (acc, op) => {
+        const next = replayBatch(acc.state, [op]);
+        return { state: next.state, failures: [...acc.failures, ...next.failures] };
+      },
+      { state, failures: [] as BulkReplayReducerFailure[] },
+    );
+
+  // Restart: hydration replays the whole log status-blind, rejected entries
+  // included, in seq order (operation-log-hydrator `_replayTailOps`). A
+  // snapshot can sit at any seq and holds whatever the device applied up to
+  // there — one batch (an earlier hydration) or op by op (live local
+  // dispatches) — so every split must end in the same state once the tail
+  // replays as one batch.
+  const expectRestartKeeps = async (
+    doneIds: string[],
+    expected: { ids: string[]; id: string; title: string },
+  ): Promise<void> => {
+    const log = await fullLog();
+    for (let snapshotAt = 0; snapshotAt < log.length; snapshotAt++) {
+      const prefix = log.slice(0, snapshotAt);
+      for (const [kind, snapshot] of [
+        ['batch', replayWithRealReducers(doneIds, prefix)],
+        ['op-by-op', replayOpByOp(doneState(doneIds), prefix)],
+      ] as const) {
+        const context = `${kind} snapshot after ${snapshotAt} ops`;
+        const { state, failures } = replayBatch(snapshot.state, log.slice(snapshotAt));
+        expect([...snapshot.failures, ...failures])
+          .withContext(context)
+          .toEqual([]);
+        expect(state[TASK_FEATURE_NAME].ids).withContext(context).toEqual(expected.ids);
+        expect(state[TASK_FEATURE_NAME].entities[expected.id])
+          .withContext(context)
+          .toEqual(jasmine.objectContaining({ isDone: false, title: expected.title }));
+      }
+    }
   };
 
   it('re-scopes a losing bulk archive to the tasks the remote archive did not cover (finish-day race)', async () => {
@@ -547,6 +671,11 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
     const appliedIds = appliedOps().map(({ id }) => id);
     expect(appliedIds).toContain(remoteArchiveOp.id);
     expect(appliedIds).not.toContain(remoteEditOp.id);
+    await expectRestartKeeps([TASK_A, TASK_B], {
+      ids: [TASK_B],
+      id: TASK_B,
+      title: 'Restored B current title',
+    });
   });
 
   it('compensates a restored task instead of wedging when a remote BULK delete shares its row', async () => {
@@ -611,6 +740,11 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
     const appliedIds = appliedOps().map(({ id }) => id);
     expect(appliedIds).toContain(remoteDeleteOp.id);
     expect(appliedIds).toContain(compensation!.id);
+    await expectRestartKeeps([TASK_A, TASK_B], {
+      ids: [TASK_B],
+      id: TASK_B,
+      title: 'Restored B survives delete',
+    });
   });
 
   it('splits one group between a scoped replacement and a restore compensation', async () => {
@@ -1062,6 +1196,11 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
       expectDominates(compensation!, remoteEditA);
       expect(pending.length).toBe(2);
       expect(appliedOps().map(({ id }) => id)).not.toContain(remoteEditA.id);
+      await expectRestartKeeps([TASK_A, TASK_B, TASK_C], {
+        ids: [TASK_A],
+        id: TASK_A,
+        title: restoredTitle(TASK_A),
+      });
     });
 
     it('keeps a restore of a task with NO conflict row of its own', async () => {
@@ -1089,6 +1228,350 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
       expectDominates(archive!, remoteEditB);
       expectRowlessRestoreReasserted(pending, TASK_A);
       expect(pending.length).toBe(3);
+
+      // The other device ignores the restoreTask (A is active there); the
+      // update after it must still un-finish A while B and C archive.
+      const { state, failures } = replayWithRealReducers(
+        [TASK_A, TASK_B, TASK_C],
+        pending,
+      );
+      expect(failures).toEqual([]);
+      expect(state[TASK_FEATURE_NAME].ids).toEqual([TASK_A]);
+      expect(state[PROJECT_FEATURE_NAME].entities['project1']!.taskIds).toEqual([TASK_A]);
+      expect(state[TASK_FEATURE_NAME].entities[TASK_A]).toEqual(
+        jasmine.objectContaining({ isDone: false, title: restoredTitle(TASK_A) }),
+      );
+
+      // Restart here: replaying every entry, rejected ones included, lands on
+      // the same restored A.
+      const restart = replayWithRealReducers([TASK_A, TASK_B, TASK_C], await fullLog());
+      expect(restart.failures).toEqual([]);
+      expect(restart.state[TASK_FEATURE_NAME].ids).toEqual([TASK_A]);
+      expect(restart.state[TASK_FEATURE_NAME].entities[TASK_A]).toEqual(
+        jasmine.objectContaining({ isDone: false, title: restoredTitle(TASK_A) }),
+      );
+    });
+
+    it('resolves a LATER concurrent remote edit of a rowless-restored task by plain LWW', async () => {
+      const bulkOp = await archiveThenRestore(
+        [doneTask(TASK_A), doneTask(TASK_B), doneTask(TASK_C)],
+        [TASK_A],
+      );
+      const client = remoteClient();
+      await resolver.autoResolveConflictsLWW(
+        await detectConflictsFor(
+          buildRemoteTaskEdit(client, TASK_B, bulkOp.timestamp + 10),
+        ),
+      );
+      const update = compensationFor(await unsyncedOps(), TASK_A)!;
+
+      // The remote device edits A (concurrently, later) before our update
+      // reaches it: an ordinary single-entity LWW row, no archive precedence.
+      const laterEditA = buildRemoteTaskEdit(client, TASK_A, update.timestamp + 60_000);
+      await resolver.autoResolveConflictsLWW(await detectConflictsFor(laterEditA));
+
+      const pending = await unsyncedOps();
+      expect(archivedIds(pending)).toEqual([TASK_B, TASK_C, TASK_B, TASK_C]);
+      expect(pending.some((op) => op.entityId === TASK_A)).toBe(false);
+      expect(appliedOps().map(({ id }) => id)).toContain(laterEditA.id);
+    });
+
+    it('keeps a restore when a remote BULK delete hits it and an archived task', async () => {
+      // Both rows win locally, but the remote deleteTasks also carries an
+      // uncontested id: the mixed-winner compensation must find a covering
+      // local-win op for BOTH rows (scoped archive for B, current-state
+      // update for A) or it throws and wedges sync.
+      const bulkOp = await archiveThenRestore(
+        [doneTask(TASK_A), doneTask(TASK_B), doneTask(TASK_C)],
+        [TASK_A],
+      );
+      const remoteDeleteIds = [TASK_A, TASK_B, 'task-remote-only'];
+      const remoteDeleteAction = TaskSharedActions.deleteTasks({
+        taskIds: remoteDeleteIds,
+      }) as PersistentAction;
+      const { type, meta, ...actionPayload } = remoteDeleteAction;
+      const remoteDeleteOp: Operation = {
+        ...remoteClient().createOperation({
+          actionType: type,
+          opType: meta.opType,
+          entityType: meta.entityType,
+          entityId: TASK_A,
+          entityIds: remoteDeleteIds,
+          payload: { actionPayload, entityChanges: [] },
+        }),
+        timestamp: bulkOp.timestamp + 10,
+      };
+
+      await resolver.autoResolveConflictsLWW(await detectConflictsFor(remoteDeleteOp));
+
+      const pending = await unsyncedOps();
+      const archive = pending.find(
+        (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+      );
+      expect(archive!.entityIds).toEqual([TASK_B, TASK_C]);
+      expectDominates(archive!, remoteDeleteOp);
+      const compensation = compensationFor(pending, TASK_A);
+      expect(titleOf(compensation!)).toBe(restoredTitle(TASK_A));
+      expectDominates(compensation!, remoteDeleteOp);
+      // The delete applies for its uncontested id; A's recreation replays
+      // after it so the restore survives the delete's cascade.
+      expect(
+        (compensation!.payload as { recreatesEntityAfterDelete?: boolean })
+          .recreatesEntityAfterDelete,
+      ).toBe(true);
+      const appliedIds = appliedOps().map(({ id }) => id);
+      expect(appliedIds).toContain(remoteDeleteOp.id);
+      expect(appliedIds.indexOf(compensation!.id)).toBeGreaterThan(
+        appliedIds.indexOf(remoteDeleteOp.id),
+      );
+      expect(pending.length).toBe(2);
+
+      // The deleting device already dropped A and B: A's recreation brings
+      // the restored task back there, and C still archives.
+      const { state, failures } = replayWithRealReducers([TASK_C], pending);
+      expect(failures).toEqual([]);
+      expect(state[TASK_FEATURE_NAME].ids).toEqual([TASK_A]);
+      expect(state[PROJECT_FEATURE_NAME].entities['project1']!.taskIds).toEqual([TASK_A]);
+      expect(state[TASK_FEATURE_NAME].entities[TASK_A]).toEqual(
+        jasmine.objectContaining({ isDone: false, title: restoredTitle(TASK_A) }),
+      );
+      await expectRestartKeeps([TASK_A, TASK_B, TASK_C], {
+        ids: [TASK_A],
+        id: TASK_A,
+        title: restoredTitle(TASK_A),
+      });
+    });
+
+    it('re-asserts a restored task when two remote edits hit its row in one batch', async () => {
+      const bulkOp = await archiveThenRestore(
+        [doneTask(TASK_A), doneTask(TASK_B), doneTask(TASK_C)],
+        [TASK_A],
+      );
+      const client = remoteClient();
+      const firstEdit = buildRemoteTaskEdit(client, TASK_A, bulkOp.timestamp + 10);
+      const secondEdit = buildRemoteTaskEdit(client, TASK_A, bulkOp.timestamp + 20);
+
+      await resolver.autoResolveConflictsLWW([
+        ...(await detectConflictsFor(firstEdit)),
+        ...(await detectConflictsFor(secondEdit)),
+      ]);
+
+      // One current-state update per row, like any plain local win over two
+      // remote ops: every one carries the restore, and the last dominates both.
+      const pending = await unsyncedOps();
+      expect(archivedIds(pending)).toEqual([TASK_B, TASK_C, TASK_B, TASK_C]);
+      const updates = pending.filter((op) => op.entityId === TASK_A);
+      expect(updates.length).toBe(2);
+      // ONE scoped archive for the intent, not one per conflicted row (#10102).
+      expect(
+        pending.filter((op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE)
+          .length,
+      ).toBe(1);
+      updates.forEach((update) => expect(titleOf(update)).toBe(restoredTitle(TASK_A)));
+      expectDominates(updates.at(-1)!, firstEdit);
+      expectDominates(updates.at(-1)!, secondEdit);
+    });
+
+    describe('same-batch archive → restore replay', () => {
+      const SUB = 'task-a-sub';
+      const clock = { [REMOTE_CLIENT_ID]: 1 };
+      const subTask: Task = { ...doneTask(SUB), parentId: TASK_A };
+
+      // A (with subtask SUB) and B active + done, as before the archive.
+      const initialState = (): RootState => {
+        const base = doneState([TASK_A, TASK_B, SUB]);
+        const entities = base[TASK_FEATURE_NAME].entities;
+        return {
+          ...base,
+          [TASK_FEATURE_NAME]: {
+            ...base[TASK_FEATURE_NAME],
+            entities: {
+              ...entities,
+              [TASK_A]: { ...entities[TASK_A]!, subTaskIds: [SUB] },
+              [SUB]: { ...entities[SUB]!, parentId: TASK_A },
+            },
+          },
+        };
+      };
+
+      const opFor = (action: PersistentAction, timestamp: number): Operation => {
+        const { type, meta, ...actionPayload } = action;
+        return {
+          ...remoteClient().createOperation({
+            actionType: type,
+            opType: meta.opType,
+            entityType: meta.entityType,
+            entityId: meta.entityId ?? meta.entityIds![0],
+            entityIds: meta.entityIds,
+            payload: { actionPayload, entityChanges: [] },
+          }),
+          timestamp,
+        };
+      };
+
+      const archiveOp = (): Operation =>
+        opFor(
+          TaskSharedActions.moveToArchive({
+            tasks: [doneTask(TASK_A, [subTask]), doneTask(TASK_B)],
+          }) as PersistentAction,
+          1_000,
+        );
+      const restoreOp = (): Operation =>
+        opFor(
+          TaskSharedActions.restoreTask({
+            task: {
+              ...doneTask(TASK_A),
+              subTaskIds: [SUB],
+              title: restoredTitle(TASK_A),
+              isDone: false,
+            },
+            subTasks: [subTask],
+          }) as PersistentAction,
+          3_000,
+        );
+      const taskUpdateOp = (timestamp: number): Operation =>
+        resolver.createLWWUpdateOp(
+          'TASK',
+          TASK_A,
+          {
+            ...doneTask(TASK_A),
+            subTasks: undefined,
+            subTaskIds: [SUB],
+            title: 'LWW title',
+          },
+          REMOTE_CLIENT_ID,
+          clock,
+          timestamp,
+        );
+      const projectUpdateOp = (timestamp: number): Operation =>
+        resolver.createLWWUpdateOp(
+          'PROJECT',
+          'project1',
+          {
+            ...initialState()[PROJECT_FEATURE_NAME].entities['project1'],
+            taskIds: [TASK_A],
+          },
+          REMOTE_CLIENT_ID,
+          clock,
+          timestamp,
+        );
+
+      it('applies LWW Updates AFTER the restore exactly like op-by-op apply', () => {
+        const initial = initialState();
+        const ops = [
+          archiveOp(),
+          restoreOp(),
+          taskUpdateOp(4_000),
+          projectUpdateOp(4_500),
+        ];
+
+        // Reducers stamp `modified` from the wall clock; freeze it to compare.
+        jasmine.clock().install();
+        jasmine.clock().mockDate(new Date(5_000));
+        const batch = replayBatch(initial, ops);
+        const opByOp = replayOpByOp(initial, ops);
+        jasmine.clock().uninstall();
+
+        expect(batch.failures).toEqual([]);
+        expect(opByOp.failures).toEqual([]);
+        expect(batch.state[TASK_FEATURE_NAME]).toEqual(opByOp.state[TASK_FEATURE_NAME]);
+        expect(batch.state[PROJECT_FEATURE_NAME]).toEqual(
+          opByOp.state[PROJECT_FEATURE_NAME],
+        );
+        expect(batch.state[TAG_FEATURE_NAME]).toEqual(opByOp.state[TAG_FEATURE_NAME]);
+        expect(batch.state[TASK_FEATURE_NAME].entities[TASK_A]!.title).toBe('LWW title');
+        expect(batch.state[PROJECT_FEATURE_NAME].entities['project1']!.taskIds).toEqual([
+          TASK_A,
+        ]);
+      });
+
+      it('still skips a stale LWW Update BETWEEN the archive and the restore', () => {
+        // Un-skipping it would recreate A from the stale snapshot, turn the
+        // restore into a no-op (A already active) and drop its subtask.
+        const { state, failures } = replayBatch(initialState(), [
+          archiveOp(),
+          taskUpdateOp(2_000),
+          restoreOp(),
+        ]);
+
+        expect(failures).toEqual([]);
+        expect([...state[TASK_FEATURE_NAME].ids].sort()).toEqual([TASK_A, SUB].sort());
+        expect(state[TASK_FEATURE_NAME].entities[TASK_A]).toEqual(
+          jasmine.objectContaining({ title: restoredTitle(TASK_A), isDone: false }),
+        );
+        expect(state[TASK_FEATURE_NAME].entities[SUB]!.parentId).toBe(TASK_A);
+      });
+
+      // Outcome pin, not a guard for the batch strip: `lwwUpdateMetaReducer`'s
+      // orphan filter also drops A there (A is absent until the restore).
+      it('keeps the task in its project once when a PROJECT LWW Update sits BETWEEN the archive and the restore', () => {
+        const { state, failures } = replayBatch(initialState(), [
+          archiveOp(),
+          projectUpdateOp(2_000),
+          restoreOp(),
+        ]);
+
+        expect(failures).toEqual([]);
+        // Only the restore puts A back — once, not also via the stale update.
+        expect(state[PROJECT_FEATURE_NAME].entities['project1']!.taskIds).toEqual([
+          TASK_A,
+        ]);
+      });
+
+      it('matches op-by-op apply when the task is restored, edited, re-archived and restored again', () => {
+        // Only the LAST restore index is kept, so the edit between the two
+        // restores is skipped in the batch; the second restore replays A
+        // from its own payload either way, so the outcome must not differ.
+        const initial = initialState();
+        const reArchiveOp = opFor(
+          TaskSharedActions.moveToArchive({
+            tasks: [{ ...doneTask(TASK_A, [subTask]), title: restoredTitle(TASK_A) }],
+          }) as PersistentAction,
+          5_000,
+        );
+        const ops = [
+          archiveOp(),
+          restoreOp(),
+          taskUpdateOp(4_000),
+          reArchiveOp,
+          restoreOp(),
+        ];
+
+        jasmine.clock().install();
+        jasmine.clock().mockDate(new Date(7_000));
+        const batch = replayBatch(initial, ops);
+        const opByOp = replayOpByOp(initial, ops);
+        jasmine.clock().uninstall();
+
+        expect(batch.failures).toEqual([]);
+        expect(opByOp.failures).toEqual([]);
+        expect(batch.state[TASK_FEATURE_NAME]).toEqual(opByOp.state[TASK_FEATURE_NAME]);
+        expect(batch.state[PROJECT_FEATURE_NAME]).toEqual(
+          opByOp.state[PROJECT_FEATURE_NAME],
+        );
+        expect(batch.state[TAG_FEATURE_NAME]).toEqual(opByOp.state[TAG_FEATURE_NAME]);
+        expect([...batch.state[TASK_FEATURE_NAME].ids].sort()).toEqual(
+          [TASK_A, SUB].sort(),
+        );
+      });
+
+      it('skips LWW Updates again once a later archive re-archives the task', () => {
+        const reArchiveOp = opFor(
+          TaskSharedActions.moveToArchive({
+            tasks: [{ ...doneTask(TASK_A, [subTask]), title: restoredTitle(TASK_A) }],
+          }) as PersistentAction,
+          4_000,
+        );
+        const { state, failures } = replayBatch(initialState(), [
+          archiveOp(),
+          restoreOp(),
+          reArchiveOp,
+          taskUpdateOp(5_000),
+        ]);
+
+        expect(failures).toEqual([]);
+        expect(state[TASK_FEATURE_NAME].ids).toEqual([]);
+      });
     });
 
     it('re-asserts a restore that already uploaded while the archive was rejected', async () => {

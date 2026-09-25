@@ -1157,6 +1157,134 @@ describe('bulkHydrationMetaReducer', () => {
     });
   });
 
+  describe('restoreTask after a same-batch archive (#10220)', () => {
+    const TAG_LWW_TYPE = toLwwUpdateActionType('TAG');
+
+    const archiveOp = (id: string): Operation =>
+      createMockOperation({
+        id,
+        actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: TASK_ID,
+        entityIds: [TASK_ID],
+        payload: {
+          actionPayload: { tasks: [{ id: TASK_ID, title: id }] },
+          entityChanges: [],
+        },
+      });
+    const restoreOp = createMockOperation({
+      id: 'restore',
+      actionType: ActionType.TASK_SHARED_RESTORE,
+      opType: OpType.Update,
+      entityType: 'TASK',
+      entityId: TASK_ID,
+      payload: {
+        actionPayload: { task: { id: TASK_ID }, subTasks: [] },
+        entityChanges: [],
+      },
+    });
+    const deleteOp = createMockOperation({
+      id: 'delete',
+      actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+      opType: OpType.Delete,
+      entityType: 'TASK',
+      entityId: TASK_ID,
+      entityIds: [TASK_ID],
+      payload: { actionPayload: { taskIds: [TASK_ID] }, entityChanges: [] },
+    });
+    const taskLwwOp = (id: string, recreatesEntityAfterDelete = false): Operation =>
+      createMockOperation({
+        id,
+        actionType: TASK_LWW_TYPE,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: TASK_ID,
+        payload: {
+          actionPayload: { id: TASK_ID, title: id },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+          ...(recreatesEntityAfterDelete ? { recreatesEntityAfterDelete } : {}),
+        },
+      });
+    const tagLwwOp = (id: string): Operation =>
+      createMockOperation({
+        id,
+        actionType: TAG_LWW_TYPE,
+        opType: OpType.Update,
+        entityType: 'TAG',
+        entityId: TAG_ID,
+        payload: { id: TAG_ID, title: id, taskIds: [TASK_ID, TASK_ID_2] },
+      });
+
+    const applied = (operations: Operation[]): string[] => {
+      bulkHydrationMetaReducer(mockReducer)(
+        createMockState(),
+        bulkApplyHydrationOperations({ operations }),
+      );
+      // Label each applied action by the id its fixture embedded in a title.
+      return reducerCalls.map(({ action }) => {
+        const { type, title, tasks } = action as {
+          type: string;
+          title?: string;
+          tasks?: { title: string }[];
+        };
+        return title ?? tasks?.[0].title ?? type;
+      });
+    };
+    const tagTaskIds = (title: string): unknown =>
+      (
+        reducerCalls.find((c) => (c.action as { title?: string }).title === title)
+          ?.action as { taskIds?: string[] } | undefined
+      )?.taskIds;
+
+    it('skips a task LWW Update before the restore and applies one after it', () => {
+      expect(
+        applied([
+          archiveOp('archive'),
+          taskLwwOp('between'),
+          restoreOp,
+          taskLwwOp('after'),
+        ]),
+      ).toEqual(['archive', ActionType.TASK_SHARED_RESTORE, 'after']);
+    });
+
+    it('strips the task from a TAG LWW Update before the restore only', () => {
+      applied([archiveOp('archive'), tagLwwOp('between'), restoreOp, tagLwwOp('after')]);
+
+      expect(tagTaskIds('between')).toEqual([TASK_ID_2]);
+      expect(tagTaskIds('after')).toEqual([TASK_ID, TASK_ID_2]);
+    });
+
+    it('skips again after a later archive re-archives the task', () => {
+      expect(
+        applied([
+          archiveOp('archive'),
+          restoreOp,
+          archiveOp('re-archive'),
+          taskLwwOp('after', true),
+        ]),
+      ).toEqual(['archive', ActionType.TASK_SHARED_RESTORE, 're-archive']);
+    });
+
+    it('lets a recreate-after-delete update through after a later delete', () => {
+      expect(
+        applied([
+          archiveOp('archive'),
+          restoreOp,
+          deleteOp,
+          taskLwwOp('plain'),
+          taskLwwOp('recreate', true),
+        ]),
+      ).toEqual([
+        'archive',
+        ActionType.TASK_SHARED_RESTORE,
+        ActionType.TASK_SHARED_DELETE_MULTIPLE,
+        'recreate',
+      ]);
+    });
+  });
+
   // =========================================================================
   // Issue #7330: TAG/PROJECT LWW Updates whose taskIds payload references
   // entities being archived/deleted in the SAME batch must have those task
