@@ -9,6 +9,7 @@ import { FILE_BASED_SYNC_CONSTANTS } from '../../../sync-providers/file-based/fi
 import { ActionType } from '../../../core/action-types.enum';
 import { FileSnapshotOpDownloadResponse } from '../../../sync-providers/provider.interface';
 import { UploadRevToMatchMismatchAPIError } from '../../../core/errors/sync-errors';
+import { SnackService } from '../../../../core/snack/snack.service';
 
 /**
  * #9170: client B chooses "Keep local" (USE_LOCAL), which replaces the remote
@@ -51,7 +52,14 @@ for (const isUseSplitSyncFiles of [false, true]) {
         );
         opLogStoreSpy.getLatestFullStateOpEntry.and.resolveTo(undefined);
         TestBed.configureTestingModule({
-          providers: [{ provide: OperationLogStoreService, useValue: opLogStoreSpy }],
+          providers: [
+            { provide: OperationLogStoreService, useValue: opLogStoreSpy },
+            // .bak recovery surfaces a notice.
+            {
+              provide: SnackService,
+              useValue: jasmine.createSpyObj<SnackService>('SnackService', ['open']),
+            },
+          ],
         });
         harness = FileBasedSyncTestHarness.create({
           isUseSplitSyncFiles,
@@ -264,6 +272,47 @@ for (const isUseSplitSyncFiles of [false, true]) {
           // and marked it seen; instead A's next download hydrates it.
           await expectReplacementHydrated(clientA, 'client-a', 2, tailOpId);
           // Once hydrated, the refused upload goes through.
+          await expectAsync(
+            clientA.uploadOps([addTaskOp(clientA, 'task-b3')]),
+          ).toBeResolved();
+        },
+        TIMEOUT,
+      );
+
+      it(
+        'treats a replacement recovered from the backup file as unseen',
+        async () => {
+          const clientA = harness.createClient('client-a');
+          const clientB = harness.createClient('client-b');
+          await seedFromA(clientA);
+          clientB.mergeRemoteClock(clientA.getCurrentClock());
+          await replaceFromBWithTail(clientB);
+
+          // A torn tail write leaves only the .bak, which holds B's replacement.
+          const provider = harness.getProvider();
+          const primary = isUseSplitSyncFiles
+            ? FILE_BASED_SYNC_CONSTANTS.OPS_FILE
+            : FILE_BASED_SYNC_CONSTANTS.SYNC_FILE;
+          const { data } = provider.getFileContent(primary)!;
+          provider.setFileContent(primary, data.slice(0, data.length / 2));
+          const recovered = await clientA.adapter.downloadOps(2, 'client-a');
+          expect(recovered.gapDetected).toBeTrue();
+
+          // The upload reuses the recovered data; healing the primary from it
+          // before hydrating would write A's stale state over B's replacement.
+          harness.setMockState(stateWithTask('task-a', 'task-a2', 'task-a3'));
+          await expectAsync(
+            clientA.uploadOps([addTaskOp(clientA, 'task-a3')]),
+          ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+
+          const full = (await clientA.adapter.downloadOps(
+            0,
+            'client-a',
+          )) as FileSnapshotOpDownloadResponse;
+          const taskIds = (full.snapshotState as { task: { ids: string[] } }).task.ids;
+          expect(taskIds).toEqual(['task-b']);
+          await clientA.adapter.setLastServerSeq(full.latestSeq);
+          harness.setMockState(stateWithTask('task-b', 'task-b3'));
           await expectAsync(
             clientA.uploadOps([addTaskOp(clientA, 'task-b3')]),
           ).toBeResolved();
