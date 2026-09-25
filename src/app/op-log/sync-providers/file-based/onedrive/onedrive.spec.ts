@@ -781,6 +781,37 @@ describe('OneDrive', () => {
         );
       });
 
+      it('retries a transient network error on native token refresh', async () => {
+        cfgStoreSpy.load.and.resolveTo({ ...baseCfg, tokenExpiresAt: Date.now() - 1000 });
+        const okResponse = await nativeExecutorSpy();
+        nativeExecutorSpy.calls.reset();
+        nativeExecutorSpy.and.callFake(async () => {
+          if (nativeExecutorSpy.calls.count() === 1) {
+            throw Object.assign(new Error('timeout'), { code: 'SocketTimeoutException' });
+          }
+          return okResponse;
+        });
+
+        // The retry backoff is a real setTimeout; advance a mock clock
+        // instead of waiting for it.
+        jasmine.clock().install();
+        try {
+          const removePromise = nativeProvider.removeFile('test.json');
+          for (let i = 0; i < 100 && nativeExecutorSpy.calls.count() < 2; i++) {
+            await Promise.resolve();
+            jasmine.clock().tick(100);
+          }
+          await removePromise;
+        } finally {
+          jasmine.clock().uninstall();
+        }
+
+        expect(nativeExecutorSpy).toHaveBeenCalledTimes(2);
+        expect(cfgStoreSpy.setComplete).toHaveBeenCalledWith(
+          jasmine.objectContaining({ accessToken: 'new-access' }),
+        );
+      });
+
       it('surfaces the AADSTS error_description from a native auth-code 400', async () => {
         nativeExecutorSpy.and.resolveTo({
           status: 400,
