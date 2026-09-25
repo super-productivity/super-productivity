@@ -154,14 +154,22 @@ test('every BUNDLED_PLUGIN_PATHS plugin has a package.json so release builds inc
 
   const missing = bundledPaths
     .map((assetPath) => assetPath.split('/').pop())
-    .filter(
-      (dirName) => !fs.existsSync(path.join(PLUGIN_DEV_DIR, dirName, 'package.json')),
-    );
+    .filter((dirName) => {
+      // build-packages.js also skips a package.json it can't parse.
+      try {
+        JSON.parse(
+          fs.readFileSync(path.join(PLUGIN_DEV_DIR, dirName, 'package.json'), 'utf8'),
+        );
+        return false;
+      } catch {
+        return true;
+      }
+    });
 
   assert.deepEqual(
     missing,
     [],
-    `Bundled plugin dir(s) without packages/plugin-dev/<dir>/package.json: ${missing.join(', ')}. ` +
+    `Bundled plugin dir(s) without a readable packages/plugin-dev/<dir>/package.json: ${missing.join(', ')}. ` +
       'packages/build-packages.js skips them, so release builds would ship without the plugin.',
   );
 });

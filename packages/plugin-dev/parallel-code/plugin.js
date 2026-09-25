@@ -6,24 +6,22 @@
 // Parallel Code is a desktop app for macOS and Linux; elsewhere the link has
 // nothing to open. The enabled state syncs, so check at runtime.
 var isSupportedPlatform =
-  PluginAPI.cfg.platform === 'desktop' &&
-  !(typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent));
+  PluginAPI.cfg.platform === 'desktop' && !/Windows/i.test(navigator.userAgent);
 
-// Both APIs are optional; hosts older than the ones that ship them lack them.
-if (
-  isSupportedPlatform &&
-  typeof PluginAPI.registerTaskContextMenuEntry === 'function' &&
-  typeof PluginAPI.openExternalUrl === 'function'
-) {
+// Task context menu entries come from the plugin API added for #9616; a build
+// without it gets no entry rather than an error.
+if (isSupportedPlatform && typeof PluginAPI.registerTaskContextMenuEntry === 'function') {
   PluginAPI.registerTaskContextMenuEntry({
+    id: 'start-in-parallel-code',
     label: PluginAPI.translate('MENU.START_IN_PARALLEL_CODE'),
     icon: 'terminal',
-    onClick: function (taskId) {
-      PluginAPI.openExternalUrl(
-        'parallelcode://new-task?spTaskId=' + encodeURIComponent(taskId),
-      ).catch(function (e) {
-        PluginAPI.log.err('[parallel-code] Could not open Parallel Code', e);
-      });
+    onClick: function (context) {
+      // The desktop app routes window.open through its external-link handler,
+      // which applies the scheme allowlist and reports a link it can't open.
+      window.open(
+        'parallelcode://new-task?spTaskId=' + encodeURIComponent(context.taskId),
+        '_blank',
+      );
     },
   });
 }
