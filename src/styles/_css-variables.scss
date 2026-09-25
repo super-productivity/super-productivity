@@ -65,24 +65,14 @@
   --safe-area-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
 
   // Bottom clearance reserved by the mobile bottom nav and everything stacked
-  // above it (scroll content, snackbars). The FULL inset, on every platform.
-  //
-  // This used to be half the inset on iOS because the drawn home indicator is
-  // thin, and the half inset does clear the glyph itself. But iOS reserves a
-  // system-gesture region along the bottom edge that reaches well above the
-  // glyph, and taps that land in it can be swallowed or need a second tap.
-  // Native iOS tab bars clear the full inset for the same reason. The nav's
-  // background fills the reserved band (mobile-bottom-nav.component.scss), so
-  // the only visible change is that the button row sits higher. Native Android
-  // already needed the full inset because its system bars are opaque (#8792).
-  // One rule for both platforms.
-  //
-  // Reads through the shared --safe-area-bottom (not raw env()) so this tracks
-  // the same source as the header/side-nav/body insets and all bottom-inset UI
-  // behaves uniformly across SystemBars WebView bands. Caveat: on the narrow
-  // API >= 35 / WebView < 140 band the shared source can double-count vs
-  // SystemBars' native padding (a cosmetic gap, not an overlap — see the
-  // device-matrix risks in docs/android-edge-to-edge-keyboard.md).
+  // above it (scroll content, snackbars): the full inset on every platform. iOS
+  // reserves a system-gesture region well above the drawn home indicator, and
+  // taps landing in it can be swallowed; Android's system bars are opaque
+  // (#8792). Reads through the shared --safe-area-bottom (not raw env()) so it
+  // tracks the same source as the other insets. Caveat: on the narrow
+  // API >= 35 / WebView < 140 band that source can double-count vs SystemBars'
+  // native padding (a cosmetic gap, not an overlap — see the device-matrix risks
+  // in docs/android-edge-to-edge-keyboard.md).
   --bottom-nav-safe-area: var(--safe-area-bottom);
 
   // Keyboard geometry. Android / mobile web write `--keyboard-height` here from
