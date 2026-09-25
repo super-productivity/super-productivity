@@ -3351,7 +3351,7 @@
     "UNABLE_TO_PERSIST_DATA": "Data nelze uložit do úložiště pluginu",
     "UNKNOWN_ERROR": "Došlo k neznámé chybě",
     "UPLOAD_PLUGIN_INSTRUCTION": "Nahrajte soubor ZIP pluginu pro jeho instalaci:",
-    "VALIDATION_FAILED": "Validace selhala",
+    "VALIDATION_FAILED": "Validace selhala: {{errors}}",
     "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Tento plugin poskytuje integraci úkolů, která je aktuálně používána ({{count}} poskytovatel(ů) úkolů). Deaktivace dočasně přeruší synchronizaci úkolů pro tyto poskytovatele, dokud nebude plugin znovu aktivován. Opravdu chcete deaktivovat \"{{name}}\"?",
     "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Načtení seznamu komunitních pluginů selhalo"
   },

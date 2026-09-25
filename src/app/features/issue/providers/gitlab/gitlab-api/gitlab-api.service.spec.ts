@@ -124,6 +124,30 @@ describe('GitlabApiService', () => {
       expect(result?.[0].issueType).toBe('GITLAB');
     });
 
+    it('URL-encodes the search term so "#" and "&" do not break the query (#9907)', () => {
+      service.searchIssueInProject$('fix #42 & bug', cfg).subscribe();
+
+      const req = httpMock.expectOne(() => true);
+      const url = new URL(req.request.url);
+      expect(url.searchParams.get('search')).toBe('fix #42 & bug');
+      expect(url.searchParams.get('scope')).toBe('all');
+      expect(url.searchParams.get('order_by')).toBe('updated_at');
+      req.flush([]);
+    });
+
+    it('keeps a "#" in the custom filter from truncating the query (#10151)', () => {
+      service
+        .searchIssueInProject$('bug', { ...cfg, filter: 'labels=C#&state=opened' })
+        .subscribe();
+
+      const req = httpMock.expectOne(() => true);
+      const url = new URL(req.request.url);
+      expect(url.searchParams.get('labels')).toBe('C#');
+      expect(url.searchParams.get('state')).toBe('opened');
+      expect(url.searchParams.get('search')).toBe('bug');
+      req.flush([]);
+    });
+
     it('resolves to [] and sends no request when settings are invalid', () => {
       let result: SearchResultItem[] | undefined;
       let completed = false;

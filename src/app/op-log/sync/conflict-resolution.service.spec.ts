@@ -1,3 +1,5 @@
+import { OperationCaptureService } from '../capture/operation-capture.service';
+import { PersistentAction } from '../core/persistent-action.interface';
 import { TestBed } from '@angular/core/testing';
 import { SyncConflictBannerService } from './sync-conflict-banner.service';
 import {
@@ -7699,6 +7701,70 @@ describe('ConflictResolutionService', () => {
 
       expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
     });
+
+    // Real captured shapes of a syncTimeSpent op (#10146): a non-adapter
+    // actionPayload plus the entityChanges the PRODUCTION extractor declares for
+    // a direct write, or [] for a deferred write. Both must classify alike.
+    const capturedTimeOp = (
+      id: string,
+      clientId: string,
+      clock: VectorClock,
+      form: 'direct' | 'deferred',
+    ): Operation => {
+      const actionPayload = { taskId: 'task-1', date: '2024-01-15', duration: 2000 };
+      const entityChanges =
+        form === 'direct'
+          ? new OperationCaptureService().extractEntityChanges({
+              type: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+              ...actionPayload,
+              meta: {
+                isPersistent: true,
+                entityType: 'TASK',
+                entityId: 'task-1',
+                opType: OpType.Update,
+              },
+            } as unknown as PersistentAction)
+          : [];
+      return {
+        ...updateOp({ id, clientId, vectorClock: clock, timestamp: 2000, changes: {} }),
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        payload: { actionPayload, entityChanges },
+      };
+    };
+
+    for (const form of ['direct', 'deferred'] as const) {
+      it(`keeps a remote task-time delta (${form} form) non-conflicting against a retained edit of other fields (#10146)`, async () => {
+        // Desktop tracks time while the phone edits the title: the delta only
+        // touches timeSpent/timeSpentOnDay, so apply-both is lossless.
+        const result = await detect(
+          capturedTimeOp('op-time-r', 'clientB', { clientB: 1 }, form),
+          [opX],
+        );
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it(`routes a remote task-time delta (${form} form) into a conflict against a retained absolute timeSpentOnDay write (#10146)`, async () => {
+        const localTimeEdit = updateOp({
+          id: 'op-time-edit',
+          clientId: 'clientA',
+          vectorClock: { clientA: 1 },
+          timestamp: 1000,
+          changes: { timeSpentOnDay: { ['2024-01-15']: 5000 } },
+        });
+
+        // The delta is additive and apply-both is order-dependent here, so the
+        // crossing must fall to LWW.
+        const result = await detect(
+          capturedTimeOp('op-time-r', 'clientB', { clientB: 1 }, form),
+          [localTimeEdit],
+        );
+
+        expect(result.isSupersededOrDuplicate).toBe(false);
+        expect(result.conflicts.length).toBe(1);
+        expect(result.conflicts[0].entityId).toBe('task-1');
+      });
+    }
 
     it('applies multi-entity remote ops as-is (needs the pending path compensation machinery)', async () => {
       const multiRemote = updateOp({

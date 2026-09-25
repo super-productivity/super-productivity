@@ -19,6 +19,7 @@ import { buildWorkContextSettingsFormCfg } from './work-context-settings-form-cf
 import { adjustToLiveFormlyForm } from '../../../util/adjust-to-live-formly-form';
 import { MatButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
+import { SnackService } from 'src/app/core/snack/snack.service';
 
 export interface WorkContextSettingsDialogData {
   isProject: boolean;
@@ -45,6 +46,7 @@ export class DialogWorkContextSettingsComponent {
   private _data = inject<WorkContextSettingsDialogData>(MAT_DIALOG_DATA);
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
+  private _snackService = inject(SnackService);
   private _matDialogRef =
     inject<MatDialogRef<DialogWorkContextSettingsComponent>>(MatDialogRef);
 
@@ -149,21 +151,30 @@ export class DialogWorkContextSettingsComponent {
   }
 
   cancelEdit(): void {
-    this._applyChanges(this._originalEntityData);
+    this._applyChanges(this._originalEntityData, true);
+    this._snackService.open({
+      type: 'CUSTOM',
+      msg: T.F.PROJECT.S.DISCARDED,
+      ico: 'history',
+    });
     this._matDialogRef.close();
   }
 
-  private _applyChanges(data: Project | Tag): void {
+  private _applyChanges(data: Project | Tag, isSkipSnack?: boolean): void {
     const theme: WorkContextThemeCfg = { ...data.theme };
     if (this.isProject) {
       const p = data as Project;
-      this._projectService.update(p.id, {
-        title: p.title,
-        icon: p.icon,
-        isEnableBacklog: p.isEnableBacklog,
-        isHiddenFromMenu: p.isHiddenFromMenu,
-        theme,
-      });
+      this._projectService.update(
+        p.id,
+        {
+          title: p.title,
+          icon: p.icon,
+          isEnableBacklog: p.isEnableBacklog,
+          isHiddenFromMenu: p.isHiddenFromMenu,
+          theme,
+        },
+        isSkipSnack,
+      );
     } else {
       const t = data as Tag;
       const orig = this._originalEntityData as Tag;

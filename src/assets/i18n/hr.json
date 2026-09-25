@@ -3267,7 +3267,7 @@
     "UNABLE_TO_PERSIST_DATA": "Nije moguće spremiti podatke u spremište dodataka",
     "UNKNOWN_ERROR": "Došlo je do nepoznate greške",
     "UPLOAD_PLUGIN_INSTRUCTION": "Prenesi ZIP datoteku dodatka za instalaciju:",
-    "VALIDATION_FAILED": "Validacija nije uspjela",
+    "VALIDATION_FAILED": "Validacija nije uspjela: {{errors}}",
     "ALLOWED_HOSTS": "Pristup mreži",
     "AUTHORED_BY": "autor: {{author}}",
     "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Nije se moguće povezati s mostom za izvršavanje Node.js koda. Pokušaj isključiti i ponovo uključiti dodatak.",

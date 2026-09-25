@@ -164,10 +164,19 @@ export class TaskMultiSelectService {
 
   /**
    * Shift+click: select everything between the anchor and `targetId` in the
-   * anchor's list, replacing the selection. Without an anchor, or when the
-   * target sits in a different list, the target becomes the new anchor.
+   * anchor's list, replacing the selection. When there is no anchor (nothing
+   * selected yet, or the anchor was deselected), the focused row becomes the
+   * anchor, as for Shift+Arrow, because a plain click only focuses a row
+   * (#10143). If no row is focused, or the target sits in a different list,
+   * the target becomes the new anchor.
    */
   selectRange(targetId: string, isAdditive = false, targetRow?: HTMLElement): void {
+    if (!this.anchorId() || !this._selectedIds().size) {
+      const focused = this._focusedRow();
+      if (focused) {
+        this._setAnchor(focused.id, focused.el);
+      }
+    }
     const anchorId = this.anchorId();
     const range = anchorId
       ? this._rangeInAnchorList(anchorId, targetId, targetRow)

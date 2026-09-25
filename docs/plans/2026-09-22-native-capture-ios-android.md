@@ -212,13 +212,13 @@ control and should be stated in the docs. Payload files are deleted on ack.
 
 ## 7. Milestones
 
-| #   | Deliverable                                                                                   | Exit                                                                                                  |
-| --- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| M0  | Land #10033 (device test + TestFlight per the 2026-09-18 plan)                                | Share → Inbox verified on a physical iPhone.                                                          |
+| #   | Deliverable                                                                                   | Exit                                                                                                                                                                                                           |
+| --- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0  | Land #10033 (device test + TestFlight per the 2026-09-18 plan)                                | Share → Inbox verified on a physical iPhone.                                                                                                                                                                   |
 | M1  | `NativeCaptureImporter` generalized from `IosShareService`; poison-entry fix; shared fixtures | Existing 12 importer tests + new poison/limits tests pass; desktop MCP can call the same entry point. _Status: importer shared by Android + iOS (done); poison `reject()` and shared fixtures deferred to M3._ |
-| M2  | Android `NativeCaptureInbox` + overlay migration                                              | Kill-after-save and replay tests pass on device; `WidgetTaskQueue` removed.                           |
-| M3  | iOS App Intent + App Shortcut (device spike first)                                            | Siri/Shortcuts capture with app killed creates exactly one task on next launch.                       |
-| M4  | Docs/wiki + release notes; AppFunctions spike result recorded                                 | Only verified routes documented.                                                                      |
+| M2  | Android `NativeCaptureInbox` + overlay migration                                              | Kill-after-save and replay tests pass on device; `WidgetTaskQueue` removed.                                                                                                                                    |
+| M3  | iOS App Intent + App Shortcut (device spike first)                                            | Siri/Shortcuts capture with app killed creates exactly one task on next launch.                                                                                                                                |
+| M4  | Docs/wiki + release notes; AppFunctions spike result recorded                                 | Only verified routes documented.                                                                                                                                                                               |
 
 M1 and M2 need no Apple hardware and can start in parallel with M0. M3 depends
 on M0 (App Group provisioning). AppFunctions never blocks a milestone.

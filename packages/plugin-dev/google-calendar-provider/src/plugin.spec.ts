@@ -443,6 +443,84 @@ describe('Google Calendar Plugin', () => {
 
       expect(results).toHaveLength(1);
     });
+
+    // #10190: Google applies `timeMin` (exclusive) to an event's END time. With
+    // `timeMin = now`, an event dropped out of the schedule/agenda on the first
+    // poll after it ended. The window must start at the user's LOCAL start of
+    // day (or 2h ago, if earlier), not at UTC midnight. Each case pins TZ for
+    // this process, so the result is the same on CI (UTC) and locally.
+    describe('query window start (timeMin)', () => {
+      afterEach(() => {
+        vi.unstubAllEnvs();
+      });
+
+      it.each([
+        {
+          label: 'UTC: 15:00-16:00 meeting, polled at 16:05',
+          tz: 'UTC',
+          offsetMin: 0,
+          now: '2026-05-14T16:05:00Z',
+          eventEnd: '2026-05-14T16:00:00Z',
+          expectedTimeMin: '2026-05-14T00:00:00.000Z',
+        },
+        {
+          // UTC midnight equals the event's end, so a UTC anchor drops it.
+          label: 'America/Los_Angeles: 16:00-17:00 meeting, polled at 17:01',
+          tz: 'America/Los_Angeles',
+          offsetMin: 420,
+          now: '2026-05-15T00:01:00Z',
+          eventEnd: '2026-05-15T00:00:00Z',
+          expectedTimeMin: '2026-05-14T07:00:00.000Z',
+        },
+        {
+          // UTC midnight falls between the event's end and the poll.
+          label: 'Australia/Brisbane: 08:00-09:00 meeting, polled at 10:01',
+          tz: 'Australia/Brisbane',
+          offsetMin: -600,
+          now: '2026-05-15T00:01:00Z',
+          eventEnd: '2026-05-14T23:00:00Z',
+          expectedTimeMin: '2026-05-14T14:00:00.000Z',
+        },
+        {
+          // Local midnight is after the event's end; the 2h lookback keeps it.
+          label: 'America/Los_Angeles: 22:30-23:30 meeting, polled at 00:30 next day',
+          tz: 'America/Los_Angeles',
+          offsetMin: 420,
+          now: '2026-05-15T07:30:00Z',
+          eventEnd: '2026-05-15T06:30:00Z',
+          expectedTimeMin: '2026-05-15T05:30:00.000Z',
+        },
+      ])(
+        'keeps an event that ended earlier: $label',
+        async ({ tz, offsetMin, now, eventEnd, expectedTimeMin }) => {
+          vi.stubEnv('TZ', tz);
+          vi.useFakeTimers();
+          vi.setSystemTime(new Date(now));
+          // Guard: fail loudly if the runtime ignored the TZ override.
+          expect(new Date(now).getTimezoneOffset()).toBe(offsetMin);
+          const mockHttp = {
+            get: vi.fn().mockResolvedValue({
+              items: [makeEvent({ end: { dateTime: eventEnd } })],
+            }),
+            post: vi.fn(),
+            put: vi.fn(),
+            patch: vi.fn(),
+            delete: vi.fn(),
+          };
+
+          await definition.getNewIssuesForBacklog!(
+            { readCalendarIds: ['primary'], syncRangeWeeks: '2' } as any,
+            mockHttp as any,
+          );
+
+          const params = mockHttp.get.mock.calls[0][1].params;
+          expect(params.timeMin).toBe(expectedTimeMin);
+          expect(new Date(params.timeMin).getTime()).toBeLessThan(
+            new Date(eventEnd).getTime(),
+          );
+        },
+      );
+    });
   });
 
   describe('timeBlock.upsertEvent', () => {

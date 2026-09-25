@@ -162,6 +162,18 @@
   }
 
   <button
+    #priorityTrigger="matMenuTrigger"
+    [menuTouchFix]="priorityTrigger"
+    [matMenuTriggerFor]="priorityMenu"
+    mat-menu-item
+  >
+    <span class="menuItemLeft">
+      <mat-icon>priority_high</mat-icon>
+      {{ T.F.TASK.CMP.PRIORITY | translate }}
+    </span>
+  </button>
+
+  <button
     #tagTrigger="matMenuTrigger"
     [menuTouchFix]="tagTrigger"
     [matMenuTriggerFor]="tagMenu"
@@ -223,6 +235,41 @@
     >
       <mat-icon>clear</mat-icon>
       {{ T.F.TASK.CMP.CLEAR_ESTIMATE | translate }}
+    </button>
+  </ng-template>
+</mat-menu>
+
+<mat-menu #priorityMenu="matMenu">
+  <ng-template matMenuContent>
+    <button
+      (click)="bulk.setPriority('high')"
+      menuTouchFix
+      mat-menu-item
+    >
+      {{ T.F.TASK.CMP.PRIORITY_HIGH | translate }}
+    </button>
+    <button
+      (click)="bulk.setPriority('medium')"
+      menuTouchFix
+      mat-menu-item
+    >
+      {{ T.F.TASK.CMP.PRIORITY_MEDIUM | translate }}
+    </button>
+    <button
+      (click)="bulk.setPriority('low')"
+      menuTouchFix
+      mat-menu-item
+    >
+      {{ T.F.TASK.CMP.PRIORITY_LOW | translate }}
+    </button>
+    <mat-divider></mat-divider>
+    <button
+      (click)="bulk.setPriority(null)"
+      menuTouchFix
+      mat-menu-item
+    >
+      <mat-icon>clear</mat-icon>
+      {{ T.F.TASK.CMP.PRIORITY_NONE | translate }}
     </button>
   </ng-template>
 </mat-menu>

@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { SS } from '../persistence/storage-keys.const';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { androidInterface } from '../../features/android/android-interface';
 import { Log } from '../log';
 

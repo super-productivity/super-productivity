@@ -292,6 +292,27 @@ const plugins = [
     },
   },
   {
+    name: 'parallel-code',
+    path: 'parallel-code',
+    needsInstall: false,
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/parallel-code',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const files = ['manifest.json', 'plugin.js', 'icon.svg'];
+      for (const file of files) {
+        fs.copyFileSync(path.join(pluginPath, file), path.join(targetDir, file));
+      }
+      copyRecursive(path.join(pluginPath, 'i18n'), path.join(targetDir, 'i18n'));
+      return 'Copied to assets';
+    },
+  },
+  {
     name: 'clickup-issue-provider',
     path: 'clickup-issue-provider',
     needsInstall: true,

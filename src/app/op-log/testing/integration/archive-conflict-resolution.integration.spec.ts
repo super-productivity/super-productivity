@@ -26,6 +26,7 @@ import { ImmediateUploadService } from '../../sync/immediate-upload.service';
 import { OperationWriteFlushService } from '../../sync/operation-write-flush.service';
 import { CLIENT_ID_PROVIDER } from '../../util/client-id.provider';
 import { ValidateStateService } from '../../validation/validate-state.service';
+import { buildArchiveWinOp } from '../../sync/bulk-archive-intent.util';
 import { compareVectorClocks, VectorClockComparison } from '@sp/sync-core';
 import {
   ApplyOperationsOptions,
@@ -817,5 +818,297 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
       bulkArchiveOp.id,
       bulkDeleteOp.id,
     ]);
+  });
+  describe('#10102 repro: all-local-win bulk archive', () => {
+    it('emits ONE archive-win op when several rows of one bulk archive win locally', async () => {
+      // Android "Finish day" archives A, B, C; the PC concurrently edited B
+      // and C (no remote archive). Every row wins locally via archive
+      // precedence, so no scoped replacement runs.
+      const [bulkOp] = await dispatchAndFlush(
+        TaskSharedActions.moveToArchive({
+          tasks: [doneTask(TASK_A), doneTask(TASK_B), doneTask(TASK_C)],
+        }) as PersistentAction,
+      );
+      const client = remoteClient();
+      const remoteEditB = buildRemoteTaskEdit(client, TASK_B, bulkOp.timestamp + 1);
+      const remoteEditC = buildRemoteTaskEdit(client, TASK_C, bulkOp.timestamp + 2);
+      const conflicts = [
+        ...(await detectConflictsFor(remoteEditB)),
+        ...(await detectConflictsFor(remoteEditC)),
+      ];
+      expect(conflicts.length).toBe(2);
+
+      await resolver.autoResolveConflictsLWW(conflicts);
+
+      const pending = await unsyncedOps();
+      expect(pending.length).toBe(1);
+      // The ONE recreation keeps the full set and dominates every won row.
+      const [recreation] = pending;
+      expect(recreation.id).not.toBe(bulkOp.id);
+      expect(payloadTaskIds(recreation)).toEqual([TASK_A, TASK_B, TASK_C]);
+      expect(recreation.timestamp).toBe(bulkOp.timestamp);
+      expectDominates(recreation, bulkOp);
+      expectDominates(recreation, remoteEditB);
+      expectDominates(recreation, remoteEditC);
+    });
+
+    it('does not wedge the NEXT sync when the archive-win ops are still pending', async () => {
+      const [bulkOp] = await dispatchAndFlush(
+        TaskSharedActions.moveToArchive({
+          tasks: [doneTask(TASK_A), doneTask(TASK_B), doneTask(TASK_C)],
+        }) as PersistentAction,
+      );
+      const client = remoteClient();
+      const remoteEditB = buildRemoteTaskEdit(client, TASK_B, bulkOp.timestamp + 1);
+      const remoteEditC = buildRemoteTaskEdit(client, TASK_C, bulkOp.timestamp + 2);
+      await resolver.autoResolveConflictsLWW([
+        ...(await detectConflictsFor(remoteEditB)),
+        ...(await detectConflictsFor(remoteEditC)),
+      ]);
+
+      // Upload did not happen (interrupted / next download first); the PC
+      // edits A concurrently with the archive-win ops.
+      const laterEdit = buildRemoteTaskEdit(client, TASK_A, bulkOp.timestamp + 3);
+
+      const conflicts = await detectConflictsFor(laterEdit);
+
+      let thrown: unknown;
+      try {
+        await resolver.autoResolveConflictsLWW(conflicts);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeUndefined();
+      expect((await unsyncedOps()).length).toBe(1);
+    });
+
+    it('emits one archive-win op PER intent when two bulk archives win in one batch', async () => {
+      const [archiveAB] = await dispatchAndFlush(
+        TaskSharedActions.moveToArchive({
+          tasks: [doneTask(TASK_A), doneTask(TASK_B)],
+        }) as PersistentAction,
+      );
+      const [, archiveCD] = await dispatchAndFlush(
+        TaskSharedActions.moveToArchive({
+          tasks: [doneTask(TASK_C), doneTask(TASK_D)],
+        }) as PersistentAction,
+      );
+      const client = remoteClient();
+      const remoteEdits = [TASK_A, TASK_B, TASK_C, TASK_D].map((id, i) =>
+        buildRemoteTaskEdit(client, id, archiveCD.timestamp + i + 1),
+      );
+      const conflicts = (
+        await Promise.all(remoteEdits.map((edit) => detectConflictsFor(edit)))
+      ).flat();
+      expect(conflicts.length).toBe(4);
+
+      await resolver.autoResolveConflictsLWW(conflicts);
+
+      const pending = await unsyncedOps();
+      expect(pending.map(payloadTaskIds)).toEqual([
+        [TASK_A, TASK_B],
+        [TASK_C, TASK_D],
+      ]);
+      const [recreationAB, recreationCD] = pending;
+      expect(recreationAB.timestamp).toBe(archiveAB.timestamp);
+      expect(recreationCD.timestamp).toBe(archiveCD.timestamp);
+      expectDominates(recreationAB, archiveAB);
+      expectDominates(recreationCD, archiveCD);
+      remoteEdits.slice(0, 2).forEach((edit) => expectDominates(recreationAB, edit));
+      remoteEdits.slice(2).forEach((edit) => expectDominates(recreationCD, edit));
+    });
+
+    it('compensates a remote multi-entity op ONCE with the shared archive-win op', async () => {
+      // A remote bulk op hits two archived tasks (both win locally, sharing
+      // one recreation) plus an uncontested sibling, so the remote op applies
+      // and the shared recreation replays after it as the compensation.
+      const [bulkOp] = await dispatchAndFlush(
+        TaskSharedActions.moveToArchive({
+          tasks: [doneTask(TASK_A), doneTask(TASK_B), doneTask(TASK_C)],
+        }) as PersistentAction,
+      );
+      const taskIds = [TASK_B, TASK_C, SIBLING_X];
+      const remoteAction = roundTimeSpentForDay({
+        day: '2026-08-13',
+        taskIds,
+        roundTo: '5M',
+        isRoundUp: true,
+      }) as PersistentAction;
+      const { type, meta, ...actionPayload } = remoteAction;
+      const remoteBulkOp: Operation = {
+        ...remoteClient().createOperation({
+          actionType: type,
+          opType: meta.opType,
+          entityType: meta.entityType,
+          entityId: TASK_B,
+          entityIds: taskIds,
+          payload: { actionPayload, entityChanges: [] },
+        }),
+        timestamp: bulkOp.timestamp + 1,
+      };
+      const conflicts = await detectConflictsFor(remoteBulkOp);
+      expect(conflicts.map(({ entityId }) => entityId).sort()).toEqual([TASK_B, TASK_C]);
+
+      await resolver.autoResolveConflictsLWW(conflicts);
+
+      const pending = await unsyncedOps();
+      expect(pending.length).toBe(1);
+      const [recreation] = pending;
+      expect(payloadTaskIds(recreation)).toEqual([TASK_A, TASK_B, TASK_C]);
+      expectDominates(recreation, remoteBulkOp);
+      const appliedIds = appliedOps().map(({ id }) => id);
+      expect(appliedIds.filter((id) => id === remoteBulkOp.id).length).toBe(1);
+      expect(appliedIds.filter((id) => id === recreation.id).length).toBe(1);
+      expect(appliedIds.indexOf(recreation.id)).toBeGreaterThan(
+        appliedIds.indexOf(remoteBulkOp.id),
+      );
+    });
+  });
+
+  describe('#10102 heal: pending archive-win copies left by pre-fix clients', () => {
+    // Pre-fix clients built one recreation per local-win row — exactly
+    // `buildArchiveWinOp` over that single row. Seed that durable state.
+    const seedPreFixCopies = async ({ keepOriginalPending = false } = {}): Promise<{
+      bulkOp: Operation;
+      copies: Operation[];
+      client: TestClient;
+    }> => {
+      const [bulkOp] = await dispatchAndFlush(
+        TaskSharedActions.moveToArchive({
+          tasks: [doneTask(TASK_A), doneTask(TASK_B), doneTask(TASK_C)],
+        }) as PersistentAction,
+      );
+      const client = remoteClient();
+      const rows = [
+        ...(await detectConflictsFor(
+          buildRemoteTaskEdit(client, TASK_B, bulkOp.timestamp + 1),
+        )),
+        ...(await detectConflictsFor(
+          buildRemoteTaskEdit(client, TASK_C, bulkOp.timestamp + 2),
+        )),
+      ];
+      const copies = rows.map((conflict) =>
+        buildArchiveWinOp({ archiveOp: bulkOp, conflicts: [conflict] }, LOCAL_CLIENT_ID),
+      );
+      if (!keepOriginalPending) {
+        await opLogStore.markRejected([bulkOp.id]);
+      }
+      await opLogStore.appendBatch(copies, 'local');
+      expect((await unsyncedOps()).map(({ id }) => id)).toEqual(
+        [...(keepOriginalPending ? [bulkOp] : []), ...copies].map(({ id }) => id),
+      );
+      return { bulkOp, copies, client };
+    };
+
+    it('collapses the copies into ONE dominating archive op instead of wedging', async () => {
+      const { bulkOp, copies, client } = await seedPreFixCopies();
+      const laterEdit = buildRemoteTaskEdit(client, TASK_A, bulkOp.timestamp + 3);
+
+      await resolver.autoResolveConflictsLWW(await detectConflictsFor(laterEdit));
+
+      const pending = await unsyncedOps();
+      expect(pending.length).toBe(1);
+      const [healed] = pending;
+      expect(copies.map(({ id }) => id)).not.toContain(healed.id);
+      expect(healed.actionType).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
+      expect(healed.entityIds).toEqual(bulkOp.entityIds);
+      expect(healed.payload).toEqual(bulkOp.payload);
+      expect(healed.timestamp).toBe(bulkOp.timestamp);
+      copies.forEach((copy) => expectDominates(healed, copy));
+      expectDominates(healed, laterEdit);
+      expect(appliedOps().map(({ id }) => id)).not.toContain(laterEdit.id);
+    });
+
+    it('folds the still-pending original and its copies into ONE op when edits hit several tasks', async () => {
+      // Reporter's shape: the original bulk archive never left the device, so
+      // it sits pending next to its pre-fix copies (same intent, dominating
+      // clocks). Remote edits on two archived tasks are all-local-win rows.
+      const { bulkOp, copies, client } = await seedPreFixCopies({
+        keepOriginalPending: true,
+      });
+      const remoteEditA = buildRemoteTaskEdit(client, TASK_A, bulkOp.timestamp + 3);
+      const remoteEditB = buildRemoteTaskEdit(client, TASK_B, bulkOp.timestamp + 4);
+
+      await resolver.autoResolveConflictsLWW([
+        ...(await detectConflictsFor(remoteEditA)),
+        ...(await detectConflictsFor(remoteEditB)),
+      ]);
+
+      const pending = await unsyncedOps();
+      expect(pending.length).toBe(1);
+      const [healed] = pending;
+      expect([bulkOp, ...copies].map(({ id }) => id)).not.toContain(healed.id);
+      expect(healed.entityIds).toEqual(bulkOp.entityIds);
+      expect(healed.payload).toEqual(bulkOp.payload);
+      expect(healed.timestamp).toBe(bulkOp.timestamp);
+      [bulkOp, ...copies, remoteEditA, remoteEditB].forEach((op) =>
+        expectDominates(healed, op),
+      );
+      for (const { id } of [bulkOp, ...copies]) {
+        expect((await opLogStore.getOpById(id))?.rejectedAt).toEqual(jasmine.any(Number));
+      }
+    });
+
+    it('scopes the copies into ONE replacement when a remote archive wins a task', async () => {
+      const { bulkOp, copies, client } = await seedPreFixCopies();
+      const remoteArchiveA = buildRemoteArchiveOp(client, [TASK_A], bulkOp.timestamp + 3);
+
+      await resolver.autoResolveConflictsLWW(await detectConflictsFor(remoteArchiveA));
+
+      const pending = await unsyncedOps();
+      expect(pending.length).toBe(1);
+      const [replacement] = pending;
+      expect(replacement.entityIds).toEqual([TASK_B, TASK_C]);
+      expect(payloadTaskIds(replacement)).toEqual([TASK_B, TASK_C]);
+      copies.forEach((copy) => expectDominates(replacement, copy));
+      expectDominates(replacement, remoteArchiveA);
+      expect(appliedOps().map(({ id }) => id)).toContain(remoteArchiveA.id);
+    });
+
+    it('still fails closed for a re-archive of the SAME tasks after a restore', async () => {
+      // Same task set and footprint, but a separate later intent: collapsing
+      // it with the first archive would erase the restore → re-archive order.
+      const [firstArchive] = await dispatchAndFlush(
+        TaskSharedActions.moveToArchive({
+          tasks: [doneTask(TASK_A), doneTask(TASK_B)],
+        }) as PersistentAction,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      store.dispatch(
+        TaskSharedActions.restoreTask({
+          task: doneTask(TASK_A),
+          subTasks: [],
+        }) as PersistentAction,
+      );
+      store.dispatch(
+        TaskSharedActions.moveToArchive({
+          tasks: [doneTask(TASK_A), doneTask(TASK_B)],
+        }) as PersistentAction,
+      );
+      await writeFlush.flushPendingWrites();
+      const pendingBefore = await unsyncedOps();
+      const reArchive = pendingBefore[2];
+      expect(reArchive.actionType).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
+      expect(reArchive.entityIds).toEqual(firstArchive.entityIds);
+      expect(reArchive.timestamp).toBeGreaterThan(firstArchive.timestamp);
+
+      const remoteEditOp = buildRemoteTaskEdit(
+        remoteClient(),
+        TASK_A,
+        reArchive.timestamp + 1,
+      );
+      let thrown: unknown;
+      try {
+        await resolver.autoResolveConflictsLWW(await detectConflictsFor(remoteEditOp));
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeInstanceOf(UnsupportedMultiEntityConflictError);
+      expect(operationApplier.applyOperations).not.toHaveBeenCalled();
+      expect((await unsyncedOps()).map(({ id }) => id)).toEqual(
+        pendingBefore.map(({ id }) => id),
+      );
+    });
   });
 });

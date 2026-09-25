@@ -87,6 +87,8 @@ import { Log, SyncLog } from './app/core/log';
 import { setLegacyKdfWarningHandler } from '@sp/sync-core';
 import { OperationWriteFlushService } from './app/op-log/sync/operation-write-flush.service';
 import { TaskService } from './app/features/tasks/task.service';
+import { LocalRestApiFeatureBridgeService } from './app/features/tasks/local-rest-api-feature-bridge.service';
+import { LOCAL_REST_API_FEATURE_BRIDGE } from './app/core/electron/local-rest-api-feature-bridge';
 import { PluginOAuthRedirectHandler } from './app/plugins/oauth/plugin-oauth-redirect.handler';
 import { OAuthCallbackHandlerService } from './app/imex/sync/oauth-callback-handler.service';
 import { GlobalConfigService } from './app/features/config/global-config.service';
@@ -222,6 +224,10 @@ bootstrapApplication(AppComponent, {
     ShortTimePipe,
     { provide: DateAdapter, useClass: CustomDateAdapter },
     { provide: MatDatepickerIntl, useClass: TranslateMatDatepickerIntl },
+    {
+      provide: LOCAL_REST_API_FEATURE_BRIDGE,
+      useClass: LocalRestApiFeatureBridgeService,
+    },
     {
       provide: MAT_DATE_FORMATS,
       useFactory: (dateTimeFormatService: DateTimeFormatService): MatDateFormats => {

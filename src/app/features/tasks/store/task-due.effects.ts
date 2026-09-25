@@ -80,6 +80,7 @@ export class TaskDueEffects {
             switchMap((dateStr) => {
               TaskLog.log(
                 '[TaskDueEffects] Date changed, processing tasks for:',
+                // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
                 dateStr,
               );
               return this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$;
@@ -118,6 +119,7 @@ export class TaskDueEffects {
             'TaskDueEffects:removeOverdueFormToday$',
           ),
           switchMap((dateStr) => {
+            // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
             TaskLog.log('[TaskDueEffects] Date changed, removing overdue for:', dateStr);
             return this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$;
           }),
@@ -167,6 +169,7 @@ export class TaskDueEffects {
             'TaskDueEffects:ensureTasksDueTodayInTodayTag$',
           ),
           switchMap((dateStr) => {
+            // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
             TaskLog.log('[TaskDueEffects] Ensuring tasks for:', dateStr);
             return this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$;
           }),

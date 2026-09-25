@@ -1,7 +1,9 @@
 import { Injectable } from '@angular/core';
 import { openDB, IDBPDatabase } from 'idb';
 import { VectorClock } from '../util/vector-clock';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
 import { Log } from '../log';
 
