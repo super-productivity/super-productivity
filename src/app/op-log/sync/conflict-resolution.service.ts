@@ -3410,15 +3410,11 @@ export class ConflictResolutionService {
         additionalOps.push(replacementOp);
       }
       const rowIds = new Set(group.resolutions.map(({ conflict }) => conflict.entityId));
-      const restoredIdsWithoutRow = retainedEntityIds.filter(
-        (id) => !stillArchivedEntityIds.includes(id) && !rowIds.has(id),
+      const restoredIds = retainedEntityIds.filter(
+        (id) => !stillArchivedEntityIds.includes(id),
       );
       additionalOps.push(
-        ...(await this._reassertRestoredTasks(
-          group.archiveOp,
-          restoredIdsWithoutRow,
-          rowIds,
-        )),
+        ...(await this._reassertRestoredTasks(group.archiveOp, restoredIds, rowIds)),
       );
     }
     return additionalOps;
@@ -3430,6 +3426,7 @@ export class ConflictResolutionService {
    * task is still active there, still done. Re-assert its current (restored)
    * state, and its subtasks' (`restoreToToday` clears their schedule), with a
    * clock over the root's pending ops, so each replays after the restore.
+   * Entities with their own row are skipped: the row compensates them.
    */
   private async _reassertRestoredTasks(
     archiveOp: Operation,
@@ -3443,8 +3440,8 @@ export class ConflictResolutionService {
     const ops: Operation[] = [];
     for (const rootId of rootIds) {
       const root = (await this.getCurrentEntityState('TASK', rootId)) as Partial<Task>;
-      const subTaskIds = (root?.subTaskIds ?? []).filter((id) => !rowIds.has(id));
-      for (const entityId of [rootId, ...subTaskIds]) {
+      const ids = [rootId, ...(root?.subTaskIds ?? [])];
+      for (const entityId of ids.filter((id) => !rowIds.has(id))) {
         const ownOps = entityId === rootId ? [] : pendingFor(entityId);
         const op = await this._createLocalWinUpdateOp({
           entityType: 'TASK',

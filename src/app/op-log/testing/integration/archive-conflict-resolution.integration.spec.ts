@@ -740,6 +740,52 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
     expect(receivedTask(TASK_A)).toBeUndefined();
   });
 
+  it('re-asserts the subtasks of a restored task whose own row is conflicted (#10220)', async () => {
+    // B's own row rejects the restoreTask op with it; the row's compensation
+    // covers B alone, so the subtask's cleared schedule needs its own op.
+    const SUB_B = 'task-b-sub';
+    const subTask: Task = {
+      ...DEFAULT_TASK,
+      id: SUB_B,
+      parentId: TASK_B,
+      projectId: 'project1',
+      dueDay: '2026-09-01',
+    };
+    const [bulkOp] = await dispatchAndFlush(
+      TaskSharedActions.moveToArchive({
+        tasks: [doneTask(TASK_A), doneTask(TASK_B, [subTask])],
+      }) as PersistentAction,
+    );
+    const pendingBeforeRestore = await unsyncedOps();
+    await dispatchAndFlush(
+      TaskSharedActions.restoreTask({
+        task: doneTask(TASK_B, [subTask]),
+        subTasks: [subTask],
+        restoreToToday: { today: '2026-09-25', startOfNextDayDiffMs: 0 },
+      }) as PersistentAction,
+    );
+    const restoreOp = (await unsyncedOps()).find(
+      (op) => !pendingBeforeRestore.some(({ id }) => id === op.id),
+    );
+    taskStateById[TASK_B] = { ...doneTask(TASK_B, [subTask]), isDone: false };
+    taskStateById[SUB_B] = { ...subTask, dueDay: undefined };
+
+    const client = remoteClient();
+    const remoteArchiveOp = buildRemoteArchiveOp(client, [TASK_A], bulkOp.timestamp + 1);
+    const remoteEditOp = buildRemoteTaskEdit(client, TASK_B, bulkOp.timestamp + 2);
+    await resolver.autoResolveConflictsLWW([
+      ...(await detectConflictsFor(remoteArchiveOp)),
+      ...(await detectConflictsFor(remoteEditOp)),
+    ]);
+
+    const pending = await unsyncedOps();
+    const subSnapshot = pending.find((op) => op.entityId === SUB_B);
+    expect(subSnapshot?.actionType).toBe('[TASK] LWW Update' as ActionType);
+    const subPayload = subSnapshot!.payload as { actionPayload?: Partial<Task> };
+    expect(subPayload.actionPayload?.dueDay).toBeUndefined();
+    expectDominates(subSnapshot!, restoreOp!);
+  });
+
   it('compensates a restored task instead of wedging when a remote BULK delete shares its row', async () => {
     // Same restored-task shape, but the remote loser on B is a MULTI-entity
     // deleteTasks op: with a bare undefined localWinOp the mixed-winner
