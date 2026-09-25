@@ -279,6 +279,31 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
     );
   };
 
+  // A receiver that never saw the rejected archive: B still active and done,
+  // its subtask still scheduled. Replays the uploads through real reducers.
+  const replayOnReceiver = (ops: Operation[], subId: string): ((id: string) => Task) => {
+    let receiver = createStateWithExistingTasks([TASK_A, TASK_B, subId, TASK_C]);
+    for (const id of [TASK_A, TASK_B, TASK_C]) {
+      receiver = updateTaskEntity(receiver, id, { isDone: true, doneOn: 1_000 });
+    }
+    receiver = updateTaskEntity(receiver, TASK_B, { subTaskIds: [subId] });
+    receiver = updateTaskEntity(receiver, subId, {
+      parentId: TASK_B,
+      dueDay: '2026-09-01',
+    });
+    const rootReducer: ActionReducer<RootState, Action> = (state = receiver, action) => ({
+      ...state,
+      [TASK_FEATURE_NAME]: taskReducer(state[TASK_FEATURE_NAME], action),
+    });
+    const reducer = createCombinedTaskSharedMetaReducer(
+      lwwUpdateMetaReducer(rootReducer),
+    ) as ActionReducer<RootState, Action>;
+    for (const op of ops) {
+      receiver = reducer(receiver, convertOpToAction(op));
+    }
+    return (id) => receiver[TASK_FEATURE_NAME].entities[id] as Task;
+  };
+
   const payloadTaskIds = (op: Operation): string[] => {
     const actionPayload = (op.payload as { actionPayload: { tasks: Task[] } })
       .actionPayload;
@@ -711,29 +736,7 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
     expect(subPayload.actionPayload?.dueDay).toBeUndefined();
     expectDominates(subSnapshot!, restoreOp!);
 
-    // A receiver that never saw the rejected archive: B still active and
-    // done, the subtask still scheduled. Replaying the uploads converges it.
-    let receiver = createStateWithExistingTasks([TASK_A, TASK_B, SUB_B, TASK_C]);
-    for (const id of [TASK_A, TASK_B, TASK_C]) {
-      receiver = updateTaskEntity(receiver, id, { isDone: true, doneOn: 1_000 });
-    }
-    receiver = updateTaskEntity(receiver, TASK_B, { subTaskIds: [SUB_B] });
-    receiver = updateTaskEntity(receiver, SUB_B, {
-      parentId: TASK_B,
-      dueDay: '2026-09-01',
-    });
-    const rootReducer: ActionReducer<RootState, Action> = (state = receiver, action) => ({
-      ...state,
-      [TASK_FEATURE_NAME]: taskReducer(state[TASK_FEATURE_NAME], action),
-    });
-    const reducer = createCombinedTaskSharedMetaReducer(
-      lwwUpdateMetaReducer(rootReducer),
-    ) as ActionReducer<RootState, Action>;
-    for (const op of pending) {
-      receiver = reducer(receiver, convertOpToAction(op));
-    }
-    const receivedTask = (id: string): Task =>
-      receiver[TASK_FEATURE_NAME].entities[id] as Task;
+    const receivedTask = replayOnReceiver(pending, SUB_B);
     expect(receivedTask(TASK_B).isDone).toBe(false);
     expect(receivedTask(SUB_B).dueDay).toBeUndefined();
     expect(receivedTask(SUB_B).parentId).toBe(TASK_B);
@@ -784,6 +787,11 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
     const subPayload = subSnapshot!.payload as { actionPayload?: Partial<Task> };
     expect(subPayload.actionPayload?.dueDay).toBeUndefined();
     expectDominates(subSnapshot!, restoreOp!);
+
+    const receivedTask = replayOnReceiver(pending, SUB_B);
+    expect(receivedTask(TASK_B).isDone).toBe(false);
+    expect(receivedTask(SUB_B).dueDay).toBeUndefined();
+    expect(receivedTask(SUB_B).parentId).toBe(TASK_B);
   });
 
   it('compensates a restored task instead of wedging when a remote BULK delete shares its row', async () => {
