@@ -6371,7 +6371,7 @@ describe('OperationLogSyncService', () => {
       }
     });
 
-    it('describes the remote side by its op count, not a fake empty snapshot, when no snapshot exists (#9391)', async () => {
+    it('does not present a fake empty snapshot as the remote state when no snapshot exists (#9391)', async () => {
       stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
         task: { ids: ['task-1'] },
         project: { ids: [INBOX_PROJECT.id] },
@@ -6410,7 +6410,6 @@ describe('OperationLogSyncService', () => {
       expect(error).toBeInstanceOf(LocalDataConflictError);
       const conflictError = error as LocalDataConflictError;
       expect(conflictError.remoteSnapshotState).toBeNull();
-      expect(conflictError.remoteOpCount).toBe(2);
     });
 
     it('should NOT throw when store has only system tags (TODAY, URGENT, IMPORTANT, IN_PROGRESS)', async () => {

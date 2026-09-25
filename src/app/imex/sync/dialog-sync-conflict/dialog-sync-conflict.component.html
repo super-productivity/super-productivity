@@ -89,14 +89,7 @@
           [matTooltip]="remote.lastUpdateAction"
           [attr.data-label]="T.F.SYNC.D_CONFLICT.LAST_WRITE | translate"
         >
-          @if (data.remoteOpCount !== undefined) {
-            {{
-              T.F.SYNC.D_CONFLICT.REMOTE_CHANGES
-                | translate: { count: data.remoteOpCount }
-            }}
-          } @else {
-            {{ shortenAction(remote.lastUpdateAction || '?') }}
-          }
+          {{ shortenAction(remote.lastUpdateAction || '?') }}
         </td>
       </tr>
       <tr>

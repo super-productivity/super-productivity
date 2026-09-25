@@ -1335,7 +1335,6 @@
         "OVERWRITE_WARNING": "WARNING: The {{targetName}} data contains approximately {{targetChanges}} changes while the {{sourceName}} data only has {{sourceChanges}} changes. Are you sure you want to overwrite the {{targetName}} data with the {{sourceName}} version?",
         "OVERWRITE_WARNING_UNKNOWN": "WARNING: The number of unsynced changes is unknown. This will replace the entire {{targetName}} dataset with the {{sourceName}} version. Changes present only in the {{targetName}} data will be lost. Are you sure?",
         "REMOTE": "Remote",
-        "REMOTE_CHANGES": "{{count}} remote changes",
         "RESULT": "Result",
         "TEXT": "<p>Local and remote data cannot be merged automatically. Keep local replaces all remote data with this device's data. Keep remote replaces all data on this device with the remote data. Changes present only in the replaced version will be lost. Cancel leaves sync unresolved.</p>",
         "TIME": "Time",

@@ -92,7 +92,7 @@ export class LocalDataConflictError extends Error {
   constructor(
     public readonly unsyncedCount: number,
     // `null` when the remote side arrived as ops without a snapshot (#9391) —
-    // there is no full remote state to show, only `remoteOpCount`.
+    // there is no full remote state to show.
     public readonly remoteSnapshotState: Record<string, unknown> | null,
     public readonly remoteVectorClock?: Record<string, number>,
     // The client's vector clock as of its last successful sync. Used by the
@@ -104,28 +104,8 @@ export class LocalDataConflictError extends Error {
     public readonly lastSyncedVectorClock?: Record<string, number> | null,
     /** Actual `lastModified` recorded by the downloaded remote file. */
     public readonly remoteLastModified?: number,
-    /** Number of downloaded remote ops, for conflicts raised without a snapshot. */
-    public readonly remoteOpCount?: number,
   ) {
     super(`Local data conflict: ${unsyncedCount} unsynced changes would be lost`);
-  }
-
-  /**
-   * Conflict for a never-synced client whose remote side arrived as ops without
-   * a snapshot (#9391): no remote state or clock, no last-synced clock (SPAP-7).
-   */
-  static forRemoteOps(
-    unsyncedCount: number,
-    remoteOpCount: number,
-  ): LocalDataConflictError {
-    return new LocalDataConflictError(
-      unsyncedCount,
-      null,
-      undefined,
-      null,
-      undefined,
-      remoteOpCount,
-    );
   }
 }
 

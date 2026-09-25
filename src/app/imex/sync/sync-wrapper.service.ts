@@ -1705,7 +1705,6 @@ export class SyncWrapperService {
           lastSyncedVectorClock: snapshotConflict?.lastSyncedVectorClock ?? null,
         },
         localUnsyncedOpsCount: unsyncedCount,
-        remoteOpCount: snapshotConflict?.remoteOpCount,
       };
 
       SyncLog.log('SyncWrapperService: Opening data conflict dialog', {

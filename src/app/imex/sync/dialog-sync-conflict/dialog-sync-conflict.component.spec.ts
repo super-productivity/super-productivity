@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslateModule } from '@ngx-translate/core';
 import { provideMockStore } from '@ngrx/store/testing';
 
 import { DialogSyncConflictComponent } from './dialog-sync-conflict.component';
@@ -14,11 +14,9 @@ const buildConflictData = (overrides: {
   lastSyncedVectorClock?: VectorClock | null;
   localUnsyncedOpsCount?: number;
   remoteLastUpdate?: number | null;
-  remoteOpCount?: number;
 }): ConflictData => ({
   reason: ConflictReason.NoLastSync,
   localUnsyncedOpsCount: overrides.localUnsyncedOpsCount,
-  remoteOpCount: overrides.remoteOpCount,
   remote: {
     lastUpdate:
       overrides.remoteLastUpdate === undefined ? 1000 : overrides.remoteLastUpdate,
@@ -260,45 +258,6 @@ describe('DialogSyncConflictComponent', () => {
       expect(typed.getConfirmationMessage('USE_REMOTE')).toContain(
         T.F.SYNC.D_CONFLICT.OVERWRITE_WARNING,
       );
-    });
-  });
-
-  describe('remote side received as ops without a snapshot (#9391)', () => {
-    const opsOnlyData = (): ConflictData =>
-      buildConflictData({
-        localVectorClock: { clientA: 1 },
-        remoteLastUpdate: null,
-        lastSyncedVectorClock: null,
-        localUnsyncedOpsCount: 0,
-        remoteOpCount: 7,
-      });
-
-    it('shows the full translated remote op count under Additional Info', () => {
-      TestBed.overrideProvider(MAT_DIALOG_DATA, { useValue: opsOnlyData() });
-      const translate = TestBed.inject(TranslateService);
-      translate.setTranslation('en', {
-        F: { SYNC: { D_CONFLICT: { REMOTE_CHANGES: '{{count}} remote changes' } } },
-      });
-      translate.use('en');
-      const fixture = TestBed.createComponent(DialogSyncConflictComponent);
-      fixture.detectChanges();
-
-      const el = fixture.nativeElement as HTMLElement;
-      el.querySelector<HTMLElement>('.collapsible-header')!.click();
-      fixture.detectChanges();
-
-      expect(el.textContent).toContain('7 remote changes');
-    });
-
-    it('keeps the op count out of the change counts so both overwrites confirm', () => {
-      const component = createComponent(opsOnlyData());
-      const typed = component as unknown as {
-        shouldConfirmOverwrite(r: string): boolean;
-      };
-
-      expect(component.remoteChangeCount).toBeNull();
-      expect(typed.shouldConfirmOverwrite('USE_REMOTE')).toBe(true);
-      expect(typed.shouldConfirmOverwrite('USE_LOCAL')).toBe(true);
     });
   });
 });

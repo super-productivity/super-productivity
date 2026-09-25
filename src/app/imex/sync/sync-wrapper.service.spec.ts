@@ -2335,7 +2335,7 @@ describe('SyncWrapperService', () => {
 
       it('does not present an ops-only remote side as full data (#9391)', async () => {
         // Shape thrown for a fresh client that received remote ops, no snapshot.
-        const conflictError = LocalDataConflictError.forRemoteOps(1, 7);
+        const conflictError = new LocalDataConflictError(1, null, undefined, null);
         mockSyncService.downloadRemoteOps.and.rejectWith(conflictError);
         mockMatDialog.open.and.returnValue({
           afterClosed: () => of(undefined),
@@ -2347,7 +2347,6 @@ describe('SyncWrapperService', () => {
           data: ConflictData;
         };
         expect(dialogConfig.data.remote.isFullData).toBe(false);
-        expect(dialogConfig.data.remoteOpCount).toBe(7);
         expect(dialogConfig.data.localUnsyncedOpsCount).toBe(1);
       });
 
@@ -2372,7 +2371,6 @@ describe('SyncWrapperService', () => {
           tasks: [{ id: 'remote-task' }],
         } as unknown as ConflictData['remote']['mainModelData']);
         expect(dialogConfig.data.remote.lastUpdateAction).toBe('Remote data');
-        expect(dialogConfig.data.remoteOpCount).toBeUndefined();
       });
 
       it('should call forceUploadLocalState when user chooses USE_LOCAL', async () => {
