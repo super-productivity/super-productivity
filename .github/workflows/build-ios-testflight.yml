@@ -117,10 +117,11 @@ jobs:
           VERSION=$(node tools/ios-testflight-version.js "$RUNNER_TEMP/trusted-package.json" "$TRUSTED_SHA")
           BUILD_NUMBER="${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
           echo "Setting iOS TestFlight version to $VERSION (build $BUILD_NUMBER)"
-
-          cd ios/App
-          xcrun agvtool new-marketing-version "$VERSION"
-          xcrun agvtool new-version -all "$BUILD_NUMBER"
+          # Passed to xcodebuild as build settings instead of rewriting plists
+          # with agvtool, which silently skipped ShareExtension/Info.plist's
+          # one-line <key>/<string> layout and left it at 1.0.
+          echo "IOS_MARKETING_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "IOS_BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
 
       - name: Build Angular frontend
         run: npm run buildFrontend:prodWeb
@@ -141,6 +142,8 @@ jobs:
             -configuration Release \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
             -destination 'generic/platform=iOS' \
+            MARKETING_VERSION="$IOS_MARKETING_VERSION" \
+            CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 

@@ -2,13 +2,16 @@ import { effect, inject, Injectable, Injector } from '@angular/core';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { TranslateService } from '@ngx-translate/core';
 import { LocalBackupService } from '../../imex/local-backup/local-backup.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { SnackService } from '../snack/snack.service';
 import { PluginService } from '../../plugins/plugin.service';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { BannerService } from '../banner/banner.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { UiHelperService } from '../../features/ui-helper/ui-helper.service';
 import { ChromeExtensionInterfaceService } from '../chrome-extension-interface/chrome-extension-interface.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { ProjectService } from '../../features/project/project.service';
 import { IS_ELECTRON } from '../../app.constants';
 import { Log } from '../log';
@@ -19,23 +22,29 @@ import { LegacyPfDbService } from '../persistence/legacy-pf-db.service';
 import { BannerId } from '../banner/banner.model';
 import { isOnline$ } from '../../util/is-online';
 import { LS } from '../persistence/storage-keys.const';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { RatePromptService } from '../../features/dialog-please-rate/rate-prompt.service';
 import { map, switchMap, take } from 'rxjs/operators';
 import { combineLatest } from 'rxjs';
 import { Store } from '@ngrx/store';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { selectSyncConfig } from '../../features/config/store/global-config.reducer';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { selectEnabledIssueProviders } from '../../features/issue/store/issue-provider.selectors';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const';
 import { environment } from '../../../environments/environment';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TrackingReminderService } from '../../features/tracking-reminder/tracking-reminder.service';
 import { CapacitorPlatformService } from '../platform/capacitor-platform.service';
 import { alertDialog } from '../../util/native-dialogs';
 import { DataInitStateService } from '../data-init/data-init-state.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { OnboardingHintService } from '../../features/onboarding/onboarding-hint.service';
 import { LocalRestApiHandlerService } from '../electron/local-rest-api-handler.service';
 import { CustomThemeService } from '../theme/custom-theme.service';
 import { UpdateCheckService } from '../update-check/update-check.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { JiraElectronBridgeService } from '../../features/issue/providers/jira/jira-electron-bridge.service';
 
 const w = window as Window & { productivityTips?: string[][]; randomIndex?: number };
@@ -104,6 +113,7 @@ export class StartupService {
             type: 'ERROR',
             isSkipTranslate: true,
           });
+          // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
           Log.err(data);
         });
       });
@@ -416,6 +426,7 @@ export class StartupService {
         }
         return navigator.storage.persist().then((granted) => {
           Log.log('Persistence: persist() resolved', {
+            // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
             granted,
             isNative,
             IS_ELECTRON,
@@ -455,6 +466,7 @@ export class StartupService {
           const usageInMib = Math.round(u / (1024 * 1024));
           const quotaInMib = Math.round(q / (1024 * 1024));
           const details = `${usageInMib} out of ${quotaInMib} MiB used (${percentUsed}%)`;
+          // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
           Log.log(details);
           if (quotaInMib - usageInMib <= 333) {
             alertDialog(
