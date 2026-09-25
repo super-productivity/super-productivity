@@ -273,6 +273,14 @@ describe('Sync backlog and clientId rotation (integration)', () => {
     await opLogStore._clearAllDataForTesting();
     resetTestUuidCounter();
 
+    // The first download into an empty store asks the fresh-client confirm.
+    // test.ts shares one confirm spy across specs, so re-arm it to accept or a
+    // spec that left it returning false cancels the download.
+    if (jasmine.isSpy(window.confirm)) {
+      (window.confirm as jasmine.Spy).and.returnValue(true);
+    } else {
+      spyOn(window, 'confirm').and.returnValue(true);
+    }
     server = new MockSyncServer();
     provider = new ServerBackedProvider(server);
   });
