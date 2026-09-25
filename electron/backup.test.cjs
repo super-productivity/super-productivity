@@ -22,6 +22,8 @@ const BACKUP_DIR_WINSTORE = BACKUP_DIR.replace(
 let existingPaths;
 let handleHandlers;
 let onHandlers;
+// fileName -> mtime (ms) served by the mocked readdirSync/statSync
+let backupFiles;
 
 const resetModule = () => {
   delete require.cache[backupModulePath];
@@ -51,7 +53,12 @@ const installMocks = () => {
       parent.filename.endsWith('backup.ts')
     ) {
       const realFs = originalModuleLoad.call(this, request, parent, isMain);
-      return { ...realFs, existsSync: (p) => existingPaths.has(p) };
+      return {
+        ...realFs,
+        existsSync: (p) => existingPaths.has(p),
+        readdirSync: () => Array.from(backupFiles.keys()),
+        statSync: (p) => ({ mtime: new Date(backupFiles.get(path.basename(p))) }),
+      };
     }
 
     return originalModuleLoad.call(this, request, parent, isMain);
@@ -68,6 +75,7 @@ test.beforeEach(() => {
   existingPaths = new Set();
   handleHandlers = new Map();
   onHandlers = new Map();
+  backupFiles = new Map();
   installMocks();
 });
 
@@ -91,6 +99,44 @@ test('registers backup writes as a completion-aware IPC handler', () => {
 
   assert.equal(handleHandlers.has('BACKUP'), true);
   assert.equal(onHandlers.has('BACKUP'), false);
+});
+
+test('BACKUP_LIST returns every backup file newest first', () => {
+  const { initBackupAdapter } = loadBackupModule();
+  initBackupAdapter();
+  existingPaths.add(BACKUP_DIR);
+  backupFiles.set('old.json', 1000);
+  backupFiles.set('new.json', 3000);
+  backupFiles.set('mid.json', 2000);
+  backupFiles.set('notes.txt', 4000);
+
+  const list = handleHandlers.get('BACKUP_LIST')();
+
+  assert.deepEqual(
+    list.map((f) => f.name),
+    ['new.json', 'mid.json', 'old.json'],
+  );
+  assert.equal(list[0].path, path.join(BACKUP_DIR, 'new.json'));
+  assert.equal(list[0].folder, BACKUP_DIR);
+  assert.equal(list[0].created, 3000);
+});
+
+test('BACKUP_LIST is empty and BACKUP_IS_AVAILABLE false without a backup dir', () => {
+  const { initBackupAdapter } = loadBackupModule();
+  initBackupAdapter();
+
+  assert.deepEqual(handleHandlers.get('BACKUP_LIST')(), []);
+  assert.equal(handleHandlers.get('BACKUP_IS_AVAILABLE')(), false);
+});
+
+test('BACKUP_IS_AVAILABLE returns the newest file', () => {
+  const { initBackupAdapter } = loadBackupModule();
+  initBackupAdapter();
+  existingPaths.add(BACKUP_DIR);
+  backupFiles.set('old.json', 1000);
+  backupFiles.set('new.json', 3000);
+
+  assert.equal(handleHandlers.get('BACKUP_IS_AVAILABLE')().name, 'new.json');
 });
 
 test('non-Store builds always get the real backup dir', () => {

@@ -73,8 +73,6 @@ services:
       - SUPERSYNC_DEFAULT_STORAGE_QUOTA_BYTES=${SUPERSYNC_DEFAULT_STORAGE_QUOTA_BYTES:-}
       - OLD_OPS_CLEANUP_DELETE_BATCH_SIZE=${OLD_OPS_CLEANUP_DELETE_BATCH_SIZE:-5000}
       - OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN=${OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN:-25000}
-      - SUPERSYNC_BATCH_UPLOAD=${SUPERSYNC_BATCH_UPLOAD:-false}
-      - SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=${SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE:-false}
     ports:
       - '127.0.0.1:1900:1900'
     volumes:
@@ -112,8 +110,8 @@ services:
     # per run — 1058 of them on the hosted server after 3.7 days of uptime,
     # reported by the hoster as PID pressure. docker-init (tini) reaps them and
     # still forwards SIGTERM, so graceful shutdown is unaffected.
-    # (caddy/postgres are exempt: nothing execs a forking command into them,
-    # and the postmaster reaps foreign children anyway.)
+    # (caddy is exempt: nothing execs a forking command into it. postgres is
+    # NOT — see the `init: true` on that service, #9695.)
     init: true
     security_opt:
       - no-new-privileges:true
@@ -139,9 +137,24 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-supersync}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB:-supersync}
-    # Tuned for the 1.5g mem_limit. shared_buffers needs shm_size > default 64m.
-    # 120 × 4MB work_mem = 480MB worst-case sort budget + 384MB shared_buffers,
-    # well inside the 1.5g cap. Prisma's DEFAULT pool is ~(host_cpu_count × 2),
+    # Tuned for the 1.5g default mem_limit. shared_buffers needs shm_size >
+    # default 64m. 120 × 4MB work_mem = 480MB worst-case sort budget + 384MB
+    # shared_buffers, inside the 1.5g cap. The cap is deliberately above that
+    # anonymous budget: under cgroup v2 the page cache Postgres reaches is
+    # charged here too, so mem_limit — not host RAM — bounds how much of the
+    # operations heap can stay cached.
+    # POSTGRES_MEM_LIMIT and POSTGRES_EFFECTIVE_CACHE_SIZE are ONE decision, and
+    # RAISING them is deliberately opt-in. The 2026-08-25 outage showed a bigger
+    # cache helps a large heap, but a bigger cap is only safe if the host has the
+    # RAM to back it: this file is the default for `ghcr.io/.../supersync:latest`,
+    # so shipping a 4g-host tuning would give a self-hoster on a 2g VPS a cap at
+    # or above their whole host — cgroup containment gone, the HOST OOM killer
+    # picking the victim, possibly sshd. Keeping the released values as the
+    # default also means updating leaves the resolved config hash unchanged, so
+    # `docker compose up -d` does NOT recreate postgres and drop a warm page
+    # cache. Raise both in .env together; the hint should be roughly
+    # (limit - shared_buffers).
+    # Prisma's DEFAULT pool is ~(host_cpu_count × 2),
     # read from host cores NOT the container cpu limit — it is NOT single-digit
     # on this VPS and will silently consume the entire cap. The app MUST bound
     # it via DATABASE_URL ?connection_limit=N (60, set on the DATABASE_URL
@@ -154,7 +167,7 @@ services:
       - -c
       - shared_buffers=384MB
       - -c
-      - effective_cache_size=1GB
+      - effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-1GB}
       - -c
       - work_mem=4MB
       - -c
@@ -184,9 +197,34 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    # Without an init, `postgres` is PID 1 and adopts every orphan in the
+    # container. The healthcheck above is CMD-SHELL: ash forks `pg_isready` and
+    # exec's `psql` in place, so when a probe exceeds `timeout` and dockerd
+    # SIGKILLs the exec process, a still-running `pg_isready` is orphaned,
+    # reparented to the postmaster, and exits 2 ("no response") once its own
+    # 3s connect timeout expires. The postmaster's CleanupBackend() (same in
+    # PG15-17) treats any reaped status other than 0/1 as a backend crash
+    # BEFORE checking whether the PID is one of its backends: "server process
+    # (PID n) exited with exit code 2 … terminating any other active server
+    # processes", a full in-place crash-restart that drops every client. It
+    # needs a stall that outlives both docker's 5s and the orphan's own 3s
+    # connect window, which is the signature of all 50 crash-restarts on the
+    # hosted server (#9695). docker-init adopts the orphan instead; the
+    # postmaster only ever reaps its own children again. The psql half of the
+    # healthcheck stays: it is what closes the first-run initdb race (see the
+    # root docker-compose).
+    init: true
+    # The image's STOPSIGNAL is SIGINT (fast shutdown): wait for every backend
+    # to exit, then write the shutdown checkpoint. The image itself recommends
+    # a longer stop timeout than docker's default 10s, after which PID 1 is
+    # SIGKILLed and the next start runs crash recovery. Note a recreate stops
+    # the OLD container with the OLD container's timeout, so this value only
+    # protects stops after the first one that applies it; for that first one
+    # run `docker compose stop -t 60 postgres` before `up -d`.
+    stop_grace_period: 60s
     security_opt:
       - no-new-privileges:true
-    mem_limit: 1536m
+    mem_limit: ${POSTGRES_MEM_LIMIT:-1536m}
     networks:
       internal:
         aliases:

@@ -28,8 +28,11 @@ The backup script creates two dumps:
 # Run manually
 ./scripts/backup.sh
 
-# Set up daily cron at 3 AM with 3-day retention
-(crontab -l 2>/dev/null; echo "0 3 * * * RETENTION_DAYS=3 /path/to/scripts/backup.sh >> /var/log/supersync-backup.log 2>&1") | crontab -
+# Set up daily cron at 3 AM with 3-day retention. flock keeps a slow dump from
+# overlapping the next night's run. The lock must live in a root-owned dir like /run —
+# in world-writable /tmp any local user could squat the path and silently block every
+# nightly run.
+(crontab -l 2>/dev/null; echo "0 3 * * * RETENTION_DAYS=3 flock -n /run/supersync-backup.lock /path/to/scripts/backup.sh >> /var/log/supersync-backup.log 2>&1") | crontab -
 ```
 
 Backups are saved to `backups/` next to the scripts directory.
@@ -129,6 +132,20 @@ The procedures above recover the **whole server**. A different situation: one
 user's account is wiped — usually because a bad `SYNC_IMPORT` propagated an
 empty or stale snapshot across their devices — and you need to roll _that one
 user_ back to a point in time.
+
+**Check the affected devices first.** Every client keeps local recovery
+points: right before it applies a remote full-state op (`SYNC_IMPORT`,
+`BACKUP_IMPORT`, `REPAIR`), before "Use server data", and before an import,
+it snapshots its complete state into a ring of three. The user opens
+**Settings → Sync & Backup → Import/Export → Browse backups** on the device
+that held the data when the wipe arrived, picks the entry labelled "before
+sync replaced local data", and restores it. That restore is a normal local
+import, so it uploads as a new full-state op and repairs the other devices
+on their next sync. This works for encrypted accounts and needs nothing from
+the server. See `docs/sync-and-op-log/local-recovery-points.md`.
+
+Only if no device has a usable recovery point, fall back to the server-side
+options below.
 
 The in-app **Restore from History** handles this for unencrypted accounts. It
 does **not** work for E2E-encrypted accounts: the server cannot decrypt the op

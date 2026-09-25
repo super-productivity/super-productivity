@@ -17,6 +17,7 @@ import { createBaseState } from '../../../root-store/meta/task-shared-meta-reduc
 import { RootState } from '../../../root-store/root-state';
 import { TASK_FEATURE_NAME } from './task.reducer';
 import { plannerFeatureKey } from '../../planner/store/planner.reducer';
+import { TaskMultiSelectService } from '../task-multi-select.service';
 
 describe('TaskReminderEffects', () => {
   let actions$: Observable<Action>;
@@ -48,6 +49,10 @@ describe('TaskReminderEffects', () => {
 
     TestBed.configureTestingModule({
       providers: [
+        {
+          provide: TaskMultiSelectService,
+          useValue: { isBulkFeedbackSuppressed: () => false },
+        },
         TaskReminderEffects,
         provideMockActions(() => actions$),
         { provide: SnackService, useValue: snackServiceSpy },
@@ -372,6 +377,66 @@ describe('TaskReminderEffects', () => {
     });
   });
 
+  describe('deadline snacks', () => {
+    it('should show a snack when setting a deadline', () => {
+      actions$ = of(
+        TaskSharedActions.setDeadline({
+          taskId: 'task-1',
+          deadlineDay: '2026-05-12',
+        }),
+      );
+      datePipe.transform.and.returnValue('5/12/2026');
+
+      effects.setDeadlineSnack$.subscribe();
+
+      expect(snackService.open).toHaveBeenCalledWith({
+        type: 'SUCCESS',
+        translateParams: { date: '5/12/2026' },
+        msg: T.F.TASK.S.DEADLINE_SET,
+        ico: 'flag',
+      });
+    });
+
+    it('should not show a snack when setting a deadline with isSkipSnack', () => {
+      actions$ = of(
+        TaskSharedActions.setDeadline({
+          taskId: 'task-1',
+          deadlineDay: '2026-05-12',
+          isSkipSnack: true,
+        }),
+      );
+
+      effects.setDeadlineSnack$.subscribe();
+
+      expect(snackService.open).not.toHaveBeenCalled();
+    });
+
+    it('should show a snack when removing a deadline', () => {
+      actions$ = of(TaskSharedActions.removeDeadline({ taskId: 'task-1' }));
+
+      effects.removeDeadlineSnack$.subscribe();
+
+      expect(snackService.open).toHaveBeenCalledWith({
+        type: 'SUCCESS',
+        msg: T.F.TASK.S.DEADLINE_REMOVED,
+        ico: 'flag',
+      });
+    });
+
+    it('should not show a snack when removing a deadline with isSkipSnack', () => {
+      actions$ = of(
+        TaskSharedActions.removeDeadline({
+          taskId: 'task-1',
+          isSkipSnack: true,
+        }),
+      );
+
+      effects.removeDeadlineSnack$.subscribe();
+
+      expect(snackService.open).not.toHaveBeenCalled();
+    });
+  });
+
   describe('dismissReminderSnack$', () => {
     it('should show snack when reminder is dismissed', () => {
       const action = TaskSharedActions.dismissReminderOnly({ id: 'task-1' });
@@ -385,6 +450,16 @@ describe('TaskReminderEffects', () => {
         msg: T.F.TASK.S.REMINDER_DELETED,
         ico: 'schedule',
       });
+    });
+
+    it('should not show a snack when dismissing with isSkipSnack', () => {
+      actions$ = of(
+        TaskSharedActions.dismissReminderOnly({ id: 'task-1', isSkipSnack: true }),
+      );
+
+      effects.dismissReminderSnack$.subscribe();
+
+      expect(snackService.open).not.toHaveBeenCalled();
     });
   });
 
@@ -409,6 +484,10 @@ describe('TaskReminderEffects - cancelNativeReminderOnUnschedule$ filter', () =>
 
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskReminderEffects,
           provideMockActions(() => actions$),
           { provide: SnackService, useValue: snackServiceSpy },
@@ -459,6 +538,10 @@ describe('TaskReminderEffects - cancelNativeReminderOnUnschedule$ filter', () =>
 
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskReminderEffects,
           provideMockActions(() => actions$),
           { provide: SnackService, useValue: snackServiceSpy },
@@ -507,6 +590,10 @@ describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () 
     beforeEach(() => {
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskReminderEffects,
           provideMockActions(() => actions$),
           {
@@ -583,6 +670,10 @@ describe('TaskReminderEffects - cancelNativeReminderOnDialogAction$ filter', () 
     beforeEach(() => {
       TestBed.configureTestingModule({
         providers: [
+          {
+            provide: TaskMultiSelectService,
+            useValue: { isBulkFeedbackSuppressed: () => false },
+          },
           TaskReminderEffects,
           provideMockActions(() => actions$),
           {

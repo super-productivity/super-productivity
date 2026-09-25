@@ -15,7 +15,6 @@ import {
 import { DateService } from 'src/app/core/date/date.service';
 import { LanguageService } from '../../../core/language/language.service';
 import { SnackService } from '../../../core/snack/snack.service';
-import { UserProfileService } from '../../user-profile/user-profile.service';
 import { updateGlobalConfigSection } from './global-config.actions';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { AppStateActions } from '../../../root-store/app-state/app-state.actions';
@@ -61,10 +60,6 @@ describe('GlobalConfigEffects', () => {
         {
           provide: SnackService,
           useValue: { open: jasmine.createSpy('open') },
-        },
-        {
-          provide: UserProfileService,
-          useValue: { updateDayIdFromRemote: jasmine.createSpy('updateDayIdFromRemote') },
         },
         { provide: IS_ELECTRON_TOKEN, useValue: isElectron },
         { provide: IS_MAC_TOKEN, useValue: isMac },
@@ -243,7 +238,7 @@ describe('GlobalConfigEffects', () => {
         }),
       );
 
-      expect(dateServiceSpy.setStartOfNextDayDiff).toHaveBeenCalledWith('04:00', 4);
+      expect(dateServiceSpy.setStartOfNextDayDiff).toHaveBeenCalledWith('00:00', 0);
     });
   });
 
@@ -314,7 +309,7 @@ describe('GlobalConfigEffects', () => {
         }),
       );
 
-      expect(dateServiceSpy.setStartOfNextDayDiff).toHaveBeenCalledWith('04:00', 4);
+      expect(dateServiceSpy.setStartOfNextDayDiff).toHaveBeenCalledWith('00:00', 0);
     });
   });
 

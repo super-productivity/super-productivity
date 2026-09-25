@@ -11,7 +11,7 @@
       cdkScrollable
     >
       @if (!pluginEmbedId()) {
-        <header class="work-view-header">
+        <header class="work-view-header task-list-wrapper">
           @if (estimateRemainingToday() || workingToday()) {
             <div
               @fade
@@ -30,15 +30,17 @@
                 <span class="label">{{ T.WW.ESTIMATE_REMAINING | translate }}</span>
                 <span class="no-wrap">
                   ~<strong class="time-val">{{
-                    estimateRemainingToday() | msToString
+                    (estimateRemainingToday() | msToString: false : true) || '0m'
                   }}</strong>
-                  <mat-icon style="margin-left: 2px">hourglass_empty</mat-icon>
+                  <mat-icon>hourglass_empty</mat-icon>
                 </span>
               </div>
               <div class="item">
                 <span class="label">{{ T.WW.WORKING_TODAY | translate }}</span>
                 <span class="no-wrap">
-                  <strong class="time-val">{{ workingToday() | msToString }}</strong>
+                  <strong class="time-val">{{
+                    (workingToday() | msToString: false : true) || '0m'
+                  }}</strong>
                   @if (
                     workContextService.workingTodayArchived$ | async;
                     as workingTodayArchived
@@ -62,7 +64,9 @@
                     matTooltipPosition="above"
                   >
                     <strong class="time-val">{{
-                      takeABreakService.timeWorkingWithoutABreak$ | async | msToString
+                      (takeABreakService.timeWorkingWithoutABreak$
+                        | async
+                        | msToString: false : true) || '0m'
                     }}</strong
                     ><mat-icon>timer</mat-icon>
                   </span>
@@ -148,6 +152,7 @@
                 track groupKey
               ) {
                 <collapsible
+                  class="task-section"
                   [title]="groupKey | scheduledDateGroup: todayStr()"
                   [isIconBefore]="true"
                   [isExpanded]="!customizerService.collapsedGroupIds().includes(groupKey)"
@@ -191,6 +196,7 @@
                     [cdkDragLockAxis]="'y'"
                   >
                     <collapsible
+                      class="task-section"
                       [title]="
                         section.title + ' (' + bySection.dict[section.id].length + ')'
                       "
@@ -254,6 +260,7 @@
             >
               <!-- OVERDUE Outline -->
               <collapsible
+                class="task-section"
                 [title]="(T.G.OVERDUE | translate) + ' (' + overdueTasks().length + ')'"
                 [isExpanded]="!isOverdueHidden()"
                 (isExpandedChange)="isOverdueHidden.set(!$event)"
@@ -301,6 +308,7 @@
               class="collapsible-section"
             >
               <collapsible
+                class="task-section"
                 [title]="
                   (T.WW.LATER_TODAY | translate) +
                   ' (' +
@@ -342,6 +350,7 @@
               class="collapsible-section"
             >
               <collapsible
+                class="task-section"
                 [title]="
                   (T.WW.DONE_TASKS | translate) +
                   ' (' +
@@ -387,6 +396,7 @@
               class="collapsible-section"
             >
               <collapsible
+                class="task-section"
                 [title]="
                   (T.WW.RECURRING_TASKS | translate) +
                   ' (' +
@@ -413,6 +423,7 @@
               class="collapsible-section"
             >
               <collapsible
+                class="task-section"
                 [title]="
                   (T.PLAINSPACE.CLAIM_POOL_TITLE | translate) +
                   ' (' +

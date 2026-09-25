@@ -478,12 +478,12 @@ describe('SyncHydrationService', () => {
 
       const validatedData = mockValidateStateService.validateAndRepair.calls.mostRecent()
         .args[0] as any;
-      expect(validatedData.globalConfig.misc.startOfNextDay).toBe(4);
-      expect(validatedData.globalConfig.misc.startOfNextDayTime).toBe('04:00');
+      expect(validatedData.globalConfig.misc.startOfNextDay).toBe(0);
+      expect(validatedData.globalConfig.misc.startOfNextDayTime).toBe('00:00');
 
       const savedState = getCommittedBaseline().state as any;
-      expect(savedState.globalConfig.misc.startOfNextDay).toBe(4);
-      expect(savedState.globalConfig.misc.startOfNextDayTime).toBe('04:00');
+      expect(savedState.globalConfig.misc.startOfNextDay).toBe(0);
+      expect(savedState.globalConfig.misc.startOfNextDayTime).toBe('00:00');
     });
 
     it('should handle null downloadedMainModelData by using only DB data', async () => {

@@ -1,8 +1,17 @@
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
 import { Subject } from 'rxjs';
 import type { OAuthFlowConfig } from '@super-productivity/plugin-api';
 import { PluginOAuthBridgeService } from './plugin-oauth-bridge.service';
-import { deleteOAuthTokens, loadOAuthTokens } from './plugin-oauth-token-store';
+import {
+  deleteOAuthTokens,
+  loadOAuthTokens,
+  saveOAuthTokens,
+} from './plugin-oauth-token-store';
 import { PluginOAuthService } from './plugin-oauth.service';
 import { PluginLog } from '../../core/log';
 
@@ -18,9 +27,49 @@ describe('PluginOAuthBridgeService', () => {
     scopes: ['calendar.readonly'],
   };
 
-  beforeEach(async () => {
-    await deleteOAuthTokens('test-plugin__oauth').catch(() => undefined);
+  const serializedTokens = (accessToken: string): string => {
+    const expiresAt = 4_102_444_800_000;
+    return JSON.stringify({
+      accessToken,
+      refreshToken: `${accessToken}-refresh`,
+      expiresAt,
+      tokenUrl: 'https://oauth2.googleapis.com/token',
+      clientId: 'desktop-client-id',
+    });
+  };
 
+  const useFakeTokenMemory = (
+    initialTokens: Record<string, string> = {},
+  ): Map<string, string> => {
+    const tokenMemory = new Map<string, string>(Object.entries(initialTokens));
+    oauthService.hasTokens.and.callFake((key: string) => tokenMemory.has(key));
+    oauthService.serializeTokens.and.callFake(
+      (key: string) => tokenMemory.get(key) ?? null,
+    );
+    oauthService.restoreTokens.and.callFake((key: string, serialized: string) => {
+      tokenMemory.set(key, serialized);
+    });
+    oauthService.clearTokens.and.callFake((key: string) => {
+      tokenMemory.delete(key);
+    });
+    oauthService.clearTokensByPrefix.and.callFake((prefix: string) => {
+      for (const key of Array.from(tokenMemory.keys())) {
+        if (key.startsWith(prefix)) {
+          tokenMemory.delete(key);
+        }
+      }
+    });
+    return tokenMemory;
+  };
+
+  beforeEach(async () => {
+    await Promise.all([
+      deleteOAuthTokens('test-plugin__oauth').catch(() => undefined),
+      deleteOAuthTokens('test-plugin__oauth__account-a').catch(() => undefined),
+      deleteOAuthTokens('test-plugin__oauth__account-b').catch(() => undefined),
+      deleteOAuthTokens('test-plugin__oauth-extra').catch(() => undefined),
+      deleteOAuthTokens('test-plugin__oauth-extra__account-a').catch(() => undefined),
+    ]);
     oauthService = jasmine.createSpyObj<PluginOAuthService>(
       'PluginOAuthService',
       [
@@ -32,11 +81,15 @@ describe('PluginOAuthBridgeService', () => {
         'storeTokens',
         'serializeTokens',
         'clearTokens',
+        'clearTokensByPrefix',
         'hasTokens',
         'restoreTokens',
         'getValidToken',
       ],
-      { tokenInvalidated$: new Subject<string>() },
+      {
+        tokenInvalidated$: new Subject<string>(),
+        tokensRefreshed$: new Subject<string>(),
+      },
     );
 
     TestBed.configureTestingModule({
@@ -102,6 +155,38 @@ describe('PluginOAuthBridgeService', () => {
     );
   });
 
+  // The token-store writes triggered by tokenInvalidated$/tokensRefreshed$ are
+  // fire-and-forget, so poll instead of awaiting a promise the bridge does not expose.
+  const waitForStoredTokens = async (expected: string | null): Promise<string | null> => {
+    let stored: string | null = null;
+    for (let i = 0; i < 50; i++) {
+      stored = await loadOAuthTokens('test-plugin__oauth');
+      if (stored === expected) {
+        return stored;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    return stored;
+  };
+
+  it('persists the rotated access token after a successful refresh', async () => {
+    await saveOAuthTokens('test-plugin__oauth', 'stale-tokens');
+    oauthService.serializeTokens.and.returnValue('refreshed-tokens');
+
+    oauthService.tokensRefreshed$.next('test-plugin__oauth');
+
+    expect(await waitForStoredTokens('refreshed-tokens')).toBe('refreshed-tokens');
+    await deleteOAuthTokens('test-plugin__oauth');
+  });
+
+  it('deletes persisted tokens once the grant is invalidated', async () => {
+    await saveOAuthTokens('test-plugin__oauth', 'stale-tokens');
+
+    oauthService.tokenInvalidated$.next('test-plugin__oauth');
+
+    expect(await waitForStoredTokens(null)).toBeNull();
+  });
+
   it('persists oauth tokens in the local token store after a successful flow', async () => {
     spyOn(window, 'open').and.returnValue({} as Window);
     oauthService.prepareRedirectUri.and.resolveTo(
@@ -127,6 +212,177 @@ describe('PluginOAuthBridgeService', () => {
 
     expect(await loadOAuthTokens('test-plugin__oauth')).toBe('serialized-tokens');
     await deleteOAuthTokens('test-plugin__oauth');
+  });
+
+  it('persists oauth tokens under a provider-specific key', async () => {
+    spyOn(window, 'open').and.returnValue({} as Window);
+    oauthService.prepareRedirectUri.and.resolveTo(
+      'https://app.super-productivity.com/assets/oauth-callback.html',
+    );
+    oauthService.buildAuthUrl.and.resolveTo({
+      url: 'https://accounts.google.com/o/oauth2/v2/auth',
+      codeVerifier: 'verifier',
+      state: 'state',
+    });
+    oauthService.waitForRedirectCode.and.resolveTo('auth-code');
+    oauthService.exchangeCodeForTokens.and.resolveTo({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresAt: Date.now() + 3600000,
+    });
+    oauthService.serializeTokens.and.returnValue('scoped-serialized-tokens');
+
+    await service.startOAuthFlow(
+      'test-plugin',
+      {
+        ...baseConfig,
+        webClientId: 'web-client-id',
+      },
+      'account-a',
+    );
+
+    expect(oauthService.storeTokens).toHaveBeenCalledWith(
+      'test-plugin__oauth__account-a',
+      jasmine.any(Object),
+    );
+    expect(await loadOAuthTokens('test-plugin__oauth__account-a')).toBe(
+      'scoped-serialized-tokens',
+    );
+  });
+
+  it('clears the legacy key and only scoped oauth tokens for a plugin', async () => {
+    await saveOAuthTokens('test-plugin__oauth', 'legacy');
+    await saveOAuthTokens('test-plugin__oauth__account-a', 'a');
+    await saveOAuthTokens('test-plugin__oauth__account-b', 'b');
+    await saveOAuthTokens('test-plugin__oauth-extra', 'other-legacy');
+    await saveOAuthTokens('test-plugin__oauth-extra__account-a', 'other-scoped');
+
+    await service.clearOAuthTokens('test-plugin');
+
+    expect(oauthService.clearTokens).toHaveBeenCalledWith('test-plugin__oauth');
+    expect(oauthService.clearTokensByPrefix).toHaveBeenCalledWith('test-plugin__oauth__');
+    expect(await loadOAuthTokens('test-plugin__oauth')).toBeNull();
+    expect(await loadOAuthTokens('test-plugin__oauth__account-a')).toBeNull();
+    expect(await loadOAuthTokens('test-plugin__oauth__account-b')).toBeNull();
+    expect(await loadOAuthTokens('test-plugin__oauth-extra')).toBe('other-legacy');
+    expect(await loadOAuthTokens('test-plugin__oauth-extra__account-a')).toBe(
+      'other-scoped',
+    );
+  });
+
+  it('moves an existing legacy token to a provider scoped key and deletes the legacy source', async () => {
+    const legacyTokens = serializedTokens('legacy');
+    const tokenMemory = useFakeTokenMemory({
+      ['test-plugin__oauth']: legacyTokens,
+    });
+    await saveOAuthTokens('test-plugin__oauth', legacyTokens);
+
+    const migrated = await service.migrateLegacyOAuthTokenToScopedKey(
+      'test-plugin',
+      'account-a',
+    );
+
+    expect(migrated).toBeTrue();
+    expect(await loadOAuthTokens('test-plugin__oauth')).toBeNull();
+    expect(await loadOAuthTokens('test-plugin__oauth__account-a')).toBe(legacyTokens);
+    expect(tokenMemory.has('test-plugin__oauth')).toBeFalse();
+    expect(tokenMemory.get('test-plugin__oauth__account-a')).toBe(legacyTokens);
+  });
+
+  it('does not restore a disconnected scoped account from the removed legacy key', async () => {
+    const legacyTokens = serializedTokens('legacy');
+    const tokenMemory = useFakeTokenMemory({
+      ['test-plugin__oauth']: legacyTokens,
+    });
+    await saveOAuthTokens('test-plugin__oauth', legacyTokens);
+    await service.migrateLegacyOAuthTokenToScopedKey('test-plugin', 'account-a');
+
+    await service.clearOAuthToken('test-plugin', 'account-a');
+    const migratedAgain = await service.migrateLegacyOAuthTokenToScopedKey(
+      'test-plugin',
+      'account-a',
+    );
+
+    expect(migratedAgain).toBeFalse();
+    expect(await loadOAuthTokens('test-plugin__oauth')).toBeNull();
+    expect(await loadOAuthTokens('test-plugin__oauth__account-a')).toBeNull();
+    expect(tokenMemory.has('test-plugin__oauth')).toBeFalse();
+    expect(tokenMemory.has('test-plugin__oauth__account-a')).toBeFalse();
+  });
+
+  it('does not let a second scoped provider inherit legacy tokens after the first move', async () => {
+    const legacyTokens = serializedTokens('legacy');
+    const tokenMemory = useFakeTokenMemory({
+      ['test-plugin__oauth']: legacyTokens,
+    });
+    await saveOAuthTokens('test-plugin__oauth', legacyTokens);
+
+    await service.migrateLegacyOAuthTokenToScopedKey('test-plugin', 'account-a');
+    const migratedSecondAccount = await service.migrateLegacyOAuthTokenToScopedKey(
+      'test-plugin',
+      'account-b',
+    );
+
+    expect(migratedSecondAccount).toBeFalse();
+    expect(await loadOAuthTokens('test-plugin__oauth')).toBeNull();
+    expect(await loadOAuthTokens('test-plugin__oauth__account-a')).toBe(legacyTokens);
+    expect(await loadOAuthTokens('test-plugin__oauth__account-b')).toBeNull();
+    expect(tokenMemory.get('test-plugin__oauth__account-a')).toBe(legacyTokens);
+    expect(tokenMemory.has('test-plugin__oauth__account-b')).toBeFalse();
+  });
+
+  it('preserves an existing scoped token and clears obsolete legacy tokens', async () => {
+    const legacyTokens = serializedTokens('legacy');
+    const scopedTokens = serializedTokens('scoped');
+    const tokenMemory = useFakeTokenMemory({
+      ['test-plugin__oauth']: legacyTokens,
+    });
+    await saveOAuthTokens('test-plugin__oauth', legacyTokens);
+    await saveOAuthTokens('test-plugin__oauth__account-a', scopedTokens);
+
+    const migrated = await service.migrateLegacyOAuthTokenToScopedKey(
+      'test-plugin',
+      'account-a',
+    );
+
+    expect(migrated).toBeTrue();
+    expect(await loadOAuthTokens('test-plugin__oauth')).toBeNull();
+    expect(await loadOAuthTokens('test-plugin__oauth__account-a')).toBe(scopedTokens);
+    expect(tokenMemory.has('test-plugin__oauth')).toBeFalse();
+    expect(tokenMemory.get('test-plugin__oauth__account-a')).toBe(scopedTokens);
+  });
+
+  it('does not duplicate a legacy credential across concurrent migrations', async () => {
+    const legacyTokens = serializedTokens('legacy');
+    useFakeTokenMemory({ ['test-plugin__oauth']: legacyTokens });
+    await saveOAuthTokens('test-plugin__oauth', legacyTokens);
+    const results = await Promise.all([
+      service.migrateLegacyOAuthTokenToScopedKey('test-plugin', 'account-a'),
+      service.migrateLegacyOAuthTokenToScopedKey('test-plugin', 'account-b'),
+    ]);
+    expect(results.filter(Boolean).length).toBe(1);
+    const tokens = await Promise.all([
+      loadOAuthTokens('test-plugin__oauth__account-a'),
+      loadOAuthTokens('test-plugin__oauth__account-b'),
+    ]);
+    expect(tokens.filter(Boolean)).toEqual([legacyTokens]);
+    expect(await loadOAuthTokens('test-plugin__oauth')).toBeNull();
+  });
+
+  it('preserves the legacy credential if the IndexedDB move transaction aborts', async () => {
+    const legacyTokens = serializedTokens('legacy');
+    const memory = useFakeTokenMemory({ ['test-plugin__oauth']: legacyTokens });
+    await saveOAuthTokens('test-plugin__oauth', legacyTokens);
+    spyOn(IDBObjectStore.prototype, 'put').and.callFake(function (this: IDBObjectStore) {
+      this.transaction.abort();
+      throw new DOMException('Aborted test write', 'AbortError');
+    });
+    expect(
+      await service.migrateLegacyOAuthTokenToScopedKey('test-plugin', 'account-a'),
+    ).toBeFalse();
+    expect(await loadOAuthTokens('test-plugin__oauth')).toBe(legacyTokens);
+    expect(await loadOAuthTokens('test-plugin__oauth__account-a')).toBeNull();
+    expect(memory.has('test-plugin__oauth__account-a')).toBeFalse();
   });
 
   it('uses a public web client id without carrying the desktop client secret', async () => {
@@ -203,7 +459,7 @@ describe('PluginOAuthBridgeService', () => {
     );
 
     expect(hasTokens).toBeFalse();
-    expect(oauthService.clearTokens).toHaveBeenCalledWith('google-calendar');
+    expect(oauthService.clearTokens).toHaveBeenCalledWith('google-calendar__oauth');
     expect(oauthService.getValidToken).not.toHaveBeenCalled();
   });
 
@@ -213,7 +469,60 @@ describe('PluginOAuthBridgeService', () => {
     const token = await service.getOAuthToken('google-calendar', baseConfig);
 
     expect(token).toBeNull();
-    expect(oauthService.clearTokens).toHaveBeenCalledWith('google-calendar');
+    expect(oauthService.clearTokens).toHaveBeenCalledWith('google-calendar__oauth');
     expect(oauthService.getValidToken).not.toHaveBeenCalled();
+  });
+
+  describe('with a real PluginOAuthService', () => {
+    const scopedKey = 'test-plugin__oauth__account-a';
+    const tokenUrl = 'https://oauth2.googleapis.com/token';
+    let realOAuthService: PluginOAuthService;
+    let httpMock: HttpTestingController;
+
+    beforeEach(async () => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          PluginOAuthBridgeService,
+          PluginOAuthService,
+          provideHttpClient(),
+          provideHttpClientTesting(),
+        ],
+      });
+      service = TestBed.inject(PluginOAuthBridgeService);
+      realOAuthService = TestBed.inject(PluginOAuthService);
+      httpMock = TestBed.inject(HttpTestingController);
+      await deleteOAuthTokens(scopedKey);
+    });
+
+    afterEach(async () => {
+      httpMock.verify();
+      await deleteOAuthTokens(scopedKey);
+    });
+
+    // Boot: the calendar poll refreshes an expired token while the lifecycle effect
+    // runs the (already completed) migration. The refresh result must survive.
+    it('keeps a refresh that is pending while the steady-state migration runs', async () => {
+      const tokens = {
+        accessToken: 'expired-a',
+        refreshToken: 'refresh-a',
+        expiresAt: 0,
+        tokenUrl,
+        clientId: 'cid',
+      };
+      realOAuthService.storeTokens(scopedKey, tokens);
+      await saveOAuthTokens(scopedKey, JSON.stringify(tokens));
+
+      const pending = realOAuthService.getValidToken(scopedKey);
+      const request = httpMock.expectOne(tokenUrl);
+
+      expect(
+        await service.migrateLegacyOAuthTokenToScopedKey('test-plugin', 'account-a'),
+      ).toBeTrue();
+
+      request.flush({ access_token: 'refreshed-a', expires_in: 3600 });
+      expect(await pending).toBe('refreshed-a');
+      expect(await realOAuthService.getValidToken(scopedKey)).toBe('refreshed-a');
+    });
   });
 });

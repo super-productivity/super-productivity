@@ -239,10 +239,12 @@ export const getRelevantEventsForCalendarIntegrationFromIcal = async (
         }
       }
     } catch (error) {
+      // Never the SUMMARY: it is the event title from the user's private
+      // calendar and the log is exportable (rule #9). The UID identifies the
+      // event well enough to debug with.
       Log.warn(
-        'Failed to process event:',
-        ve.getFirstPropertyValue('uid'),
-        ve.getFirstPropertyValue('summary'),
+        'Failed to process event',
+        { uid: ve.getFirstPropertyValue('uid') },
         error,
       );
     }
@@ -384,11 +386,9 @@ const getForRecurring = (
 
     // Handle missing or invalid dtstart for recurring events
     if (!start || typeof (start as { toJSDate?: () => Date }).toJSDate !== 'function') {
-      Log.warn(
-        'Recurring event missing valid dtstart:',
-        vevent.getFirstPropertyValue('uid'),
-        title,
-      );
+      Log.warn('Recurring event missing valid dtstart', {
+        uid: vevent.getFirstPropertyValue('uid'),
+      });
       return [];
     }
 
@@ -474,9 +474,8 @@ const getForRecurring = (
     return evs;
   } catch (error) {
     Log.warn(
-      'Failed to process recurring event:',
-      vevent.getFirstPropertyValue('uid'),
-      vevent.getFirstPropertyValue('summary'),
+      'Failed to process recurring event',
+      { uid: vevent.getFirstPropertyValue('uid') },
       error,
     );
     return [];

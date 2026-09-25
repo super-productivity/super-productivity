@@ -86,8 +86,7 @@
     // *selector* tree, so a `>` combinator would silently stop matching.
     plugin-header-btns,
     plugin-side-panel-btns,
-    desktop-panel-buttons,
-    user-profile-button {
+    desktop-panel-buttons {
       display: flex;
       flex-direction: column;
       align-items: center;

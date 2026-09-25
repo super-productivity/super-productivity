@@ -24,6 +24,12 @@
         [currentTask]="currentTask()"
         [currentTaskContext]="currentTaskContext()"
       ></tracked-task-pill>
+      <!-- Ambient presence chip: what ANOTHER device is tracking. Only when
+           this device is not tracking itself — one tracking surface at a
+           time, and the takeover rule guarantees a single active session. -->
+      @if (isRemoteTrackingShown()) {
+        <remote-tracking-pill></remote-tracking-pill>
+      }
     }
   </div>
 
@@ -173,10 +179,6 @@
           class="secondary-header-action"
         ></plugin-work-context-header-btns>
         <plugin-header-btns class="secondary-header-action"></plugin-header-btns>
-
-        @if (isUserProfilesEnabled()) {
-          <user-profile-button class="secondary-header-action"></user-profile-button>
-        }
 
         <!-- One action, one home: below 600px the bottom nav's panels menu
              lists these, so the header must not render them as well. Rendering

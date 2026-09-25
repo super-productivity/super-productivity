@@ -7,7 +7,6 @@ import {
   MatDialogRef,
   MatDialogTitle,
 } from '@angular/material/dialog';
-import { DateService } from '../../../../../core/date/date.service';
 import { IssueTaskTimeTracked, Task, TimeSpentOnDay } from '../../../../tasks/task.model';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { GitlabApiService } from '../gitlab-api/gitlab-api.service';
@@ -86,17 +85,20 @@ export class DialogGitlabSubmitWorklogForDayComponent {
   readonly data = inject<{
     issueProviderId: string;
     tasksForIssueProvider: Task[];
+    day: string;
   }>(MAT_DIALOG_DATA);
   private readonly _matDialogRef =
     inject<MatDialogRef<DialogGitlabSubmitWorklogForDayComponent>>(MatDialogRef);
-  private readonly _dateService = inject(DateService);
   private readonly _gitlabApiService = inject(GitlabApiService);
   private readonly _snackService = inject(SnackService);
   private readonly _issueProviderService = inject(IssueProviderService);
   private readonly _store = inject(Store);
 
   isLoading = false;
-  day: string = this._dateService.todayStr();
+  // The day being finished, which is not always today: the daily summary has a
+  // Finish Day button for past days too. Only `isPastTrackedData` reads it —
+  // GitLab dates the entry server-side, so submission carries no date.
+  day: string = this.data.day;
 
   tmpTasks$: BehaviorSubject<TmpTask[]> = new BehaviorSubject<TmpTask[]>(
     this.data.tasksForIssueProvider.map((t) => ({

@@ -10,6 +10,7 @@ import {
   navigateToMiscSettings,
   toggleSetting,
   isSettingChecked,
+  ensureSettingState,
 } from '../../utils/config-helpers';
 
 /**
@@ -39,7 +40,7 @@ test.describe('@supersync SuperSync LWW Singleton Conflict Resolution', () => {
    *
    * Flow:
    * 1. Client A + Client B set up with SuperSync
-   * 2. Client A toggles both settings ON, syncs
+   * 2. Client A drives both settings ON, syncs
    * 3. Client B syncs (downloads config), verifies both toggles are ON
    * 4. Client B toggles "Disable all animations" OFF (earlier timestamp)
    * 5. Client B syncs first → uploads B's change to server
@@ -80,18 +81,16 @@ test.describe('@supersync SuperSync LWW Singleton Conflict Resolution', () => {
       await clientB.sync.syncAndWait();
       console.log('[LWW-Singleton] Setup convergence complete');
 
-      // 2. Client A navigates to Misc settings and toggles both settings ON
+      // 2. Client A navigates to Misc settings and drives both settings ON
       await navigateToMiscSettings(clientA.page);
 
-      // Verify default state before toggling (both should be OFF)
-      const aAnimDefault = await isSettingChecked(clientA.page, 'Disable all animations');
-      const aCelebDefault = await isSettingChecked(clientA.page, 'Disable celebration');
-      expect(aAnimDefault).toBe(false);
-      expect(aCelebDefault).toBe(false);
-
-      await toggleSetting(clientA.page, 'Disable all animations');
-      await toggleSetting(clientA.page, 'Disable celebration');
-      console.log('[LWW-Singleton] Client A toggled both settings ON');
+      // Drive the starting state instead of asserting the shipped defaults.
+      // All this test needs is "both ON before the conflict"; asserting the
+      // defaults broke it the day isDisableCelebration started defaulting to
+      // true, which says nothing about singleton LWW resolution.
+      await ensureSettingState(clientA.page, 'Disable all animations', true);
+      await ensureSettingState(clientA.page, 'Disable celebration', true);
+      console.log('[LWW-Singleton] Client A set both settings ON');
 
       await clientA.sync.syncAndWait();
       console.log('[LWW-Singleton] Client A synced (initial)');

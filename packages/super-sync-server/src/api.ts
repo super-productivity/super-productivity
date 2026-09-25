@@ -24,6 +24,7 @@ import { authenticate, getAuthUser } from './middleware';
 import { Logger } from './logger';
 import { prisma } from './db';
 import { authCache } from './auth-cache';
+import { getWsConnectionService } from './sync/services/websocket-connection.service';
 
 // Zod Schemas
 const VerifyEmailSchema = z.object({
@@ -195,6 +196,14 @@ export const apiRoutes = async (
       try {
         const user = getAuthUser(req);
         const result = await replaceToken(user.userId, user.email);
+        // Sockets authenticate only at upgrade, so revoked tokens would keep
+        // receiving op notifications through already-open connections — close
+        // them all, the caller's own socket included: a socket's clientId is
+        // self-declared and unauthenticated, so sparing "the caller's" socket
+        // by id would let a stolen-token client exempt itself by claiming it.
+        // The caller reconnects with its fresh token on the next sync cycle.
+        // Any request body (legacy clients sent their clientId) is ignored.
+        getWsConnectionService().closeForUser(user.userId);
         return reply.send(result);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : 'Unknown error';
@@ -232,6 +241,14 @@ export const apiRoutes = async (
         await prisma.user.delete({ where: { id: userId } });
         // AUTH_CACHE_INVALIDATION: account deletion must not leave a ghost-token window.
         authCache.invalidate(userId);
+
+        // The cascade removed this user's sync_devices rows, but an open socket
+        // keeps answering pings, so the dead-connection branch never reaps it.
+        // Its heartbeat touch would then re-INSERT a device row for a user that
+        // no longer exists and trip the FK every throttle window. Closed after
+        // the delete, not before: with the user row already gone no reconnect
+        // can re-authenticate and re-orphan a socket.
+        getWsConnectionService().closeForUser(userId);
 
         Logger.audit({ event: 'USER_ACCOUNT_DELETED', userId });
 

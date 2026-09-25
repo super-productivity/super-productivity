@@ -157,8 +157,8 @@ deduplication, quota work, snapshot preparation, or persistence.
 No database constraint ships in this step. The intended CHECK backstop on
 `operations` turned out to be undeployable before the cleanup: a `NOT VALID`
 CHECK is still enforced on every UPDATE, and the payload-bytes backfill
-(`scripts/migrate-payload-bytes.ts`, which must complete before batch upload
-may be enabled) updates exactly the legacy plaintext rows, so the constraint
+(`scripts/migrate-payload-bytes.ts`, kept for storage-quota reconciliation)
+updates exactly the legacy plaintext rows, so the constraint
 would permanently wedge that backfill on any install still holding them. The
 `snapshot_data IS NULL` constraint on `user_sync_state` has the same
 UPDATE-enforcement problem on every sync. Both backstops therefore land in

@@ -135,6 +135,7 @@ Add these to your manifest.json based on what your plugin needs:
 - `addTask` - Create tasks
 - `getAllProjects` - Read projects
 - `addProject` - Create projects
+- `deleteProject` - Delete a project and everything it contains (irreversible)
 - `getAllTags` - Read tags
 - `addTag` - Create tags
 - `persistDataSynced` - Persist plugin data

@@ -17,6 +17,7 @@ import { getStartPageUrlPath } from '../config/default-start-page.util';
 import { hideFocusOverlay } from '../focus-mode/store/focus-mode.actions';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../tasks/task-focus.service';
+import { TaskMultiSelectService } from '../tasks/task-multi-select.service';
 
 const TODAY_URL = `/tag/${TODAY_TAG.id}/tasks`;
 
@@ -24,6 +25,10 @@ const project = (over: Partial<Project>): Project =>
   ({ id: 'p1', isArchived: false, isHiddenFromMenu: false, ...over }) as Project;
 
 describe('AndroidBackButtonService (#7972)', () => {
+  const multiSelect = {
+    isSelecting: signal(false),
+    clear: jasmine.createSpy('clear'),
+  };
   let service: AndroidBackButtonService;
   let store: MockStore;
   let routerUrl: string;
@@ -110,6 +115,10 @@ describe('AndroidBackButtonService (#7972)', () => {
           },
         },
         {
+          provide: TaskMultiSelectService,
+          useValue: multiSelect,
+        },
+        {
           provide: TaskFocusService,
           useValue: {
             isTaskContextMenuOpen,
@@ -142,6 +151,30 @@ describe('AndroidBackButtonService (#7972)', () => {
       service as unknown as { _isHistoryOverlayOpen: () => boolean },
       '_isHistoryOverlayOpen',
     ).and.returnValue(false);
+  });
+
+  describe('multi-selection', () => {
+    afterEach(() => {
+      multiSelect.isSelecting.set(false);
+      multiSelect.clear.calls.reset();
+    });
+
+    it('clears an active multi-selection instead of navigating', () => {
+      multiSelect.isSelecting.set(true);
+      service.handleBackButton();
+      expect(multiSelect.clear).toHaveBeenCalled();
+      expect(historyBack).not.toHaveBeenCalled();
+      expect(minimizeApp).not.toHaveBeenCalled();
+    });
+
+    it('closes an open dialog first and keeps the selection', () => {
+      multiSelect.isSelecting.set(true);
+      const dialogRef = { disableClose: false, close: jasmine.createSpy('close') };
+      openDialogs.push(dialogRef as never);
+      service.handleBackButton();
+      expect(dialogRef.close).toHaveBeenCalled();
+      expect(multiSelect.clear).not.toHaveBeenCalled();
+    });
   });
 
   describe('overlays', () => {

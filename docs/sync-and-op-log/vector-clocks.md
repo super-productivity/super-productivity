@@ -185,6 +185,7 @@ When the server rejects an operation:
 1. Client receives rejection with `existingClock`
 2. `SupersededOperationResolverService.resolveSupersededLocalOps()`:
    - Merges the global clock + all superseded ops' clocks + snapshot clock + extra clocks from force download
+     (the forced seq-0 download collects clocks from every re-fetched op, but does not _deliver_ ops that sit behind the persisted cursor AND are covered by the local clock — compaction may have pruned them from the local log, and re-applying a pruned `SYNC_IMPORT` would otherwise resurface it as a new incoming import; the cursor half keeps ops blocked on a newer schema version retryable, since this merge can cover them before they were ever applied)
    - Calls `mergeAndIncrementClocks()` — **no client-side pruning!**
    - Creates new LWW Update ops with the merged clock
 3. Re-uploads → server compares the full merged clock (which now has MAX+1 entries or more) → `GREATER_THAN` → accept
@@ -269,7 +270,7 @@ The lookups in `conflict.ts` match a requested entity as the scalar `entity_id` 
   > `packages/super-sync-server/tests/conflict-entity-lookup-plan.pglite.spec.ts` and the note
   > at `detectConflictForEntity` in `packages/super-sync-server/src/sync/conflict.ts`.
 
-- `detectConflictForEntities` / `prefetchLatestEntityOpsForBatch` (batch) — raw SQL covering the **union** of both columns: a scalar branch (a lateral top-1 per requested id on the `entity_id` btree) `UNION ALL` an array branch (per-id `entity_ids @> ARRAY[id]` probes of the `GIN(entity_ids)` index, migration `20260613000001`), deduped by `DISTINCT ON`.
+- `detectConflictForEntities` (multi-entity ops) — raw SQL covering the **union** of both columns: a scalar branch (a lateral top-1 per requested id on the `entity_id` btree) `UNION ALL` an array branch (per-id `entity_ids @> ARRAY[id]` probes of the `GIN(entity_ids)` index, migration `20260613000001`), deduped by `DISTINCT ON`.
 
   > ⚠️ The two branches must stay **separate**. They were one query with an
   > `entity_ids && ... OR entity_id = ANY(...)` prefilter, and this section used to

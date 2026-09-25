@@ -451,15 +451,12 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       this.selectedReminderCfgId === TaskReminderOptionId.DoNotRemind &&
       this.data.task.remindAt !== undefined
     ) {
+      // NOT updateTask({ changes: { remindAt: undefined } }): JSON serialization
+      // drops undefined-valued keys from the op payload, so that clear never
+      // replayed on other devices (#9776). dismissReminderOnly clears remindAt
+      // inside its reducer, which is deterministic on replay.
       this._store.dispatch(
-        TaskSharedActions.updateTask({
-          task: {
-            id: this.data.task.id,
-            changes: {
-              remindAt: undefined,
-            },
-          },
-        }),
+        TaskSharedActions.dismissReminderOnly({ id: this.data.task.id }),
       );
     }
   }

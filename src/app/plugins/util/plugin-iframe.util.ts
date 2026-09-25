@@ -50,6 +50,7 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'getAllProjects',
   'addProject',
   'updateProject',
+  'deleteProject',
   'getAllTags',
   'addTag',
   'updateTag',
@@ -422,6 +423,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           getAllProjects: () => callApi('getAllProjects'),
           addProject: (projectData) => callApi('addProject', [projectData]),
           updateProject: (projectId, updates) => callApi('updateProject', [projectId, updates]),
+          deleteProject: (projectId) => callApi('deleteProject', [projectId]),
 
           // Tag methods
           getAllTags: () => callApi('getAllTags'),
@@ -454,6 +456,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           registerMenuEntry: unsupportedIframeRegistration('registerMenuEntry'),
           registerConfigHandler: unsupportedIframeRegistration('registerConfigHandler'),
           registerShortcut: unsupportedIframeRegistration('registerShortcut'),
+          unregisterShortcut: unsupportedIframeRegistration('unregisterShortcut'),
           registerSidePanelButton: unsupportedIframeRegistration('registerSidePanelButton'),
           registerWorkContextHeaderButton: (cfg) => {
             // onClick is not structured-cloneable across postMessage; keep it
@@ -675,7 +678,9 @@ export const handlePluginMessage = async (
         if (args.length >= 2) {
           const [hook, handlerPlaceholder] = args;
           PluginLog.log('Plugin iframe registerHook:', {
+            // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
             hook,
+            // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
             handlerPlaceholder,
             pluginId: config.pluginId,
           });

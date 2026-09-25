@@ -18,7 +18,6 @@ export type AppFeaturesConfig = Readonly<{
   isSyncIconEnabled: boolean;
   isSearchEnabled: boolean;
   isDonatePageEnabled: boolean;
-  isEnableUserProfiles: boolean;
   isHabitsEnabled: boolean;
   isFinishDayEnabled: boolean;
 }>;
@@ -161,6 +160,11 @@ export interface SuperSyncConfig extends WebDavConfig {
   isEncryptionEnabled?: boolean;
   /** Encryption password (SuperSync-specific, stored in private config) */
   encryptKey?: string | null;
+  // NOTE: the experimental live-tracking-presence opt-in and device name are
+  // intentionally NOT here. They are per-device choices stored in the
+  // provider's private config (`SuperSyncPrivateCfg.isTrackingPresenceEnabled`
+  // / `.deviceName`) so they are never uploaded or shared across devices — see
+  // SyncWrapperService._applyTrackingPresenceGate.
 }
 
 export interface NextcloudConfig {

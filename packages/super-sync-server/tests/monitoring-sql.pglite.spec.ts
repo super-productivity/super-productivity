@@ -1,5 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
 import { RETENTION_DAYS } from '../src/sync/sync.types';
+import { SYNC_DEVICES_DDL } from './sync-devices-ddl.helper';
 import {
   afterAll,
   afterEach,
@@ -104,22 +105,13 @@ const SCHEMA = `
   -- received_at-bounded reports depend on, so a query that only performs
   -- acceptably *because* of this index would look identical here to one that
   -- does not.
-  CREATE INDEX operations_user_id_received_at_idx ON operations (user_id, received_at);
+  CREATE INDEX operations_user_id_received_at_server_seq_idx ON operations (user_id, received_at, server_seq);
   CREATE TABLE user_sync_state (
     user_id integer PRIMARY KEY,
     last_seq integer NOT NULL DEFAULT 0,
     last_snapshot_seq integer,
     snapshot_data bytea,
     snapshot_at bigint
-  );
-  CREATE TABLE sync_devices (
-    client_id text NOT NULL,
-    user_id integer NOT NULL,
-    device_name text,
-    last_seen_at bigint NOT NULL,
-    last_acked_seq integer NOT NULL DEFAULT 0,
-    created_at bigint NOT NULL,
-    PRIMARY KEY (user_id, client_id)
   );
 `;
 
@@ -136,9 +128,11 @@ const LAPSED_LAST_SEEN_AGO = 10 * ONE_DAY;
 const LAPSED_LAST_OP_AGO = 40 * ONE_DAY;
 const NEVER_SYNCED_USER = 5; // no device, no ops, no sync state
 // The cohort daily cleanup actually produces: operations with NO sync_devices
-// row. `deleteStaleDevices` prunes every device unseen for RETENTION_DAYS, while
-// `deleteOldSyncedOpsForAllUsers` SKIPS users whose snapshot predates the same
-// cutoff -- so a long-lapsed user keeps its operations and loses its heartbeat.
+// row. `deleteStaleDevices` prunes every device unseen for RETENTION_DAYS,
+// while the old-ops sweep never empties a user's history: snapshotless users
+// (like this fixture user, seeded with last_seq only) are excluded outright,
+// and swept users keep their newest full-state op plus replay tail -- so a
+// long-lapsed user still holds operations after losing its heartbeat.
 // A fixture without this user cannot detect a window widened past retention,
 // where the device-scoped driver silently stops seeing these accounts.
 const PRUNED_DEVICE_USER = 6;
@@ -323,6 +317,7 @@ describe('monitoring report SQL (PGlite)', () => {
     await db.waitReady;
     mocks.state.db = db;
     await db.exec(SCHEMA);
+    await db.exec(SYNC_DEVICES_DDL);
     await seed();
   });
 

@@ -3,9 +3,13 @@ import { Store } from '@ngrx/store';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { StateSnapshotService } from './state-snapshot.service';
 import {
+  ImportBackupMeta,
+  ImportBackupReason,
   ImportBackupRef,
   OperationLogStoreService,
 } from '../persistence/operation-log-store.service';
+import { countAllTasks } from '../../imex/local-backup/backup-ring.util';
+import { hasRecoverableData } from './has-recoverable-data.util';
 import { generateClientId } from '../../core/util/generate-client-id';
 import { Operation, OpType, ActionType } from '../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
@@ -18,6 +22,7 @@ import {
   AppDataComplete,
   CROSS_MODEL_VERSION,
   AllModelConfig,
+  withDefaultModelSlices,
 } from '../model/model-config';
 import { CompleteBackup } from '../core/types/sync.types';
 import { normalizeGlobalConfigStartOfNextDay } from '../../features/config/normalize-start-of-next-day-config';
@@ -45,6 +50,14 @@ export class BackupService {
   private _store = inject(Store);
   private _stateSnapshotService = inject(StateSnapshotService);
   private _opLogStore = inject(OperationLogStoreService);
+
+  /**
+   * Ring entry that must survive the pre-restore capture, set only for the
+   * duration of `restoreImportBackupById`. Held here rather than threaded
+   * through `importCompleteBackup` -> `_persistImportToOperationLog`, which
+   * already carries six positional parameters.
+   */
+  private _protectedBackupId: string | null = null;
   private _operationWriteFlushService = inject(OperationWriteFlushService);
   private _lockService = inject(LockService);
   private _conflictJournalService = inject(ConflictJournalService);
@@ -114,6 +127,18 @@ export class BackupService {
       const { isLegacyBackupData, migrateLegacyBackup } =
         await import('./migrate-legacy-backup');
       if (isLegacyBackupData(backupData as unknown as Record<string, unknown>)) {
+        // migrateLegacyBackup() dereferences the slices it migrates, so a
+        // truncated legacy payload has to be refused here rather than inside a
+        // migration step, where it would surface as an opaque TypeError.
+        if (!isDataRepairPossible(backupData)) {
+          // The migration line below never runs on this path, so without this
+          // a refused legacy file leaves no trace in the exported log that it
+          // was legacy at all, and the thrown message is identical to the
+          // modern-path refusal. Fixed string: log history is exportable.
+          OpLog.err('BackupService: legacy backup refused, core slice missing');
+          recordCriticalErrorTime();
+          throw new Error('Data validation failed and repair not possible');
+        }
         OpLog.normal(
           'BackupService: Detected legacy backup format, running migration...',
         );
@@ -121,6 +146,22 @@ export class BackupService {
           backupData as unknown as Record<string, unknown>,
         );
       }
+
+      // Guard the RAW payload BEFORE filling defaults. The fill below
+      // manufactures every missing slice, including `task` and `project`, so
+      // the isDataRepairPossible() refusal further down would never fire again
+      // and a truncated backup would REPLACE the user's data with an
+      // all-defaults empty store — on every import path (JSON import,
+      // local-backup restore, SuperSync restore).
+      if (!isDataRepairPossible(backupData)) {
+        throw new Error('Data validation failed and repair not possible');
+      }
+
+      // A pre-migration `pf` backup carries only the model keys that database
+      // held, so the very file the failed-migration dialog tells the user to
+      // import is missing the newer slices too. Without this the promised
+      // recovery route fails exactly the way the migration did (#9770).
+      backupData = withDefaultModelSlices(backupData);
 
       const normalizedGlobalConfig = normalizeGlobalConfigStartOfNextDay(
         backupData.globalConfig,
@@ -173,7 +214,7 @@ export class BackupService {
 
         // 4b. The conflict journal is a device-local side store describing
         // conflicts in the op history that was JUST replaced — every import
-        // path (profile switch, JSON import, local-backup restore, SuperSync
+        // path (JSON import, local-backup restore, SuperSync
         // restore) funnels through here, and without this the badge keeps its
         // pre-restore count and the review page lists entries from the
         // replaced dataset. Cleared INSIDE the op-log lock: a concurrent
@@ -211,19 +252,104 @@ export class BackupService {
   }
 
   /**
-   * Captures a snapshot of the current state into the single-slot import backup
-   * store, so it can be restored after a destructive state replacement (e.g. the
-   * sync "Use Server Data" path, which clears local ops and replaces NgRx state).
+   * Captures a snapshot of the current state into the recovery ring, so it can
+   * be restored after a destructive state replacement (e.g. the sync "Use
+   * Server Data" path, which clears local ops and replaces NgRx state).
    *
    * Mirrors the pre-import backup taken in `_persistImportToOperationLog`. Errors
    * propagate so the caller can abort the destructive operation rather than wipe
    * local data without a recovery point. Returns the backup's opaque ID plus its
-   * display timestamp so the caller can verify that the single slot has not been
+   * display timestamp so the caller can verify that the undo slot has not been
    * replaced by an unrelated write before restoring it. (#8107)
    */
-  async captureImportBackup(): Promise<ImportBackupRef> {
+  async captureImportBackup(reason: ImportBackupReason): Promise<ImportBackupRef> {
     const currentState = await this._stateSnapshotService.getStateSnapshotAsync();
-    return this._opLogStore.saveImportBackup(currentState);
+    return this._saveRecoveryPoint(currentState, reason, countAllTasks(currentState));
+  }
+
+  /**
+   * Recovery point before a remote full-state op replaces this device's data
+   * (local-recovery-points.md). Captures nothing and returns null only for a
+   * pristine device (`hasRecoverableData`) — the typical first sync of a fresh
+   * install — so an empty snapshot never rotates a real one out of the ring.
+   */
+  async captureRecoveryPointIfMeaningful(
+    reason: ImportBackupReason,
+  ): Promise<ImportBackupMeta | null> {
+    const currentState = await this._stateSnapshotService.getStateSnapshotAsync();
+    if (!hasRecoverableData(currentState)) {
+      return null;
+    }
+    const taskCount = countAllTasks(currentState);
+    const ref = await this._saveRecoveryPoint(currentState, reason, taskCount);
+    return { ...ref, reason, taskCount };
+  }
+
+  /**
+   * On storage quota the ring (up to three full snapshots) is the likeliest
+   * culprit: keep one snapshot — the entry being restored if this runs
+   * mid-restore, else the newest REMOTE_IMPORT / FORCE_DOWNLOAD one, else the
+   * newest — and retry once, so a full device degrades
+   * to a ring of two instead of never applying another full-state op. One
+   * snapshot is always kept (#10003) — a failed capture must never leave the
+   * device with no recovery point. Any other error propagates untouched.
+   */
+  private async _saveRecoveryPoint(
+    state: unknown,
+    reason: ImportBackupReason,
+    taskCount: number,
+  ): Promise<ImportBackupRef> {
+    const meta = {
+      reason,
+      taskCount,
+      ...(this._protectedBackupId ? { protectBackupId: this._protectedBackupId } : {}),
+    };
+    try {
+      return await this._opLogStore.saveImportBackup(state, meta);
+    } catch (e) {
+      if ((e as Error | undefined)?.name !== 'QuotaExceededError') {
+        throw e;
+      }
+      OpLog.warn(
+        'BackupService: Recovery point hit storage quota; pruning ring and retrying',
+      );
+      await this._opLogStore.pruneImportBackups(1, meta.protectBackupId);
+      return this._opLogStore.saveImportBackup(state, meta);
+    }
+  }
+
+  /** Recovery ring metadata, newest first (see local-recovery-points.md). */
+  listImportBackups(): Promise<ImportBackupMeta[]> {
+    return this._opLogStore.listImportBackups();
+  }
+
+  /**
+   * Restores a specific ring snapshot. Unlike the Undo path this captures the
+   * current state first (as `LOCAL_IMPORT`), so a mistaken restore is itself
+   * recoverable. Returns false when the snapshot has rotated out.
+   */
+  async restoreImportBackupById(backupId: string): Promise<boolean> {
+    const backup = await this._opLogStore.loadImportBackupById(backupId);
+    if (!backup) {
+      return false;
+    }
+    // The pre-restore capture below rotates the ring, and the entry being
+    // restored is the one that rotates out when it is the oldest non-guarded
+    // one. The eviction is committed immediately, so a failure further into the
+    // import (quota on the full-state write, IDB abort, app kill) would leave
+    // the user unable to retry the only snapshot holding their data.
+    this._protectedBackupId = backupId;
+    try {
+      await this.importCompleteBackup(
+        backup.state as AppDataComplete,
+        true, // isSkipLegacyWarnings
+        true, // isSkipReload - loadAllData updates state live
+        true, // isForceConflict
+      );
+    } finally {
+      this._protectedBackupId = null;
+    }
+    return true;
   }
 
   /**
@@ -282,7 +408,11 @@ export class BackupService {
       try {
         const currentState = await this._stateSnapshotService.getStateSnapshotAsync();
         OpLog.normal('BackupService: Backing up current state before import...');
-        await this._opLogStore.saveImportBackup(currentState);
+        await this._saveRecoveryPoint(
+          currentState,
+          'LOCAL_IMPORT',
+          countAllTasks(currentState),
+        );
       } catch (e) {
         // `message` is intentionally omitted: log history is user-exportable
         // (CLAUDE.md sync rule 9), and a future validator/IDB error type could

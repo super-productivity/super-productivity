@@ -122,6 +122,217 @@ describe('TaskInternalEffects', () => {
     store.resetSelectors();
   });
 
+  describe('reassertOwnTagsAfterConvert$', () => {
+    it('should re-assert kept tags after convertToSubTask (#9651)', (done) => {
+      // State reflects the post-reducer result: task nested, own tags kept
+      const parentTask = createTask('parent', { subTaskIds: ['task1'] });
+      const task = createTask('task1', { parentId: 'parent', tagIds: ['tag1'] });
+      store.overrideSelector(selectTaskFeatureState, createTaskState([parentTask, task]));
+      store.refreshState();
+
+      effects.reassertOwnTagsAfterConvert$.subscribe((action) => {
+        expect(action.type).toBe(TaskSharedActions.updateTask.type);
+        expect((action as any).task.id).toBe('task1');
+        expect((action as any).task.changes.tagIds).toEqual(['tag1']);
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.convertToSubTask({
+          taskId: 'task1',
+          targetParentId: 'parent',
+          afterTaskId: null,
+        }),
+      );
+    });
+
+    it('should filter the virtual TODAY tag out of re-asserted tagIds (legacy-dirty data)', (done) => {
+      const parentTask = createTask('parent', { subTaskIds: ['task1'] });
+      const task = createTask('task1', {
+        parentId: 'parent',
+        tagIds: ['TODAY', 'tag1'],
+      });
+      store.overrideSelector(selectTaskFeatureState, createTaskState([parentTask, task]));
+      store.refreshState();
+
+      effects.reassertOwnTagsAfterConvert$.subscribe((action) => {
+        expect((action as any).task.changes.tagIds).toEqual(['tag1']);
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.convertToSubTask({
+          taskId: 'task1',
+          targetParentId: 'parent',
+          afterTaskId: null,
+        }),
+      );
+    });
+
+    it('should NOT emit when tagIds contains only the virtual TODAY tag', (done) => {
+      const parentTask = createTask('parent', { subTaskIds: ['task1'] });
+      const task = createTask('task1', { parentId: 'parent', tagIds: ['TODAY'] });
+      store.overrideSelector(selectTaskFeatureState, createTaskState([parentTask, task]));
+      store.refreshState();
+
+      let emitted = false;
+      effects.reassertOwnTagsAfterConvert$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(
+        TaskSharedActions.convertToSubTask({
+          taskId: 'task1',
+          targetParentId: 'parent',
+          afterTaskId: null,
+        }),
+      );
+
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        done();
+      }, 50);
+    });
+
+    it('should NOT emit for convertToSubTask when the task has no tags', (done) => {
+      const parentTask = createTask('parent', { subTaskIds: ['task1'] });
+      const task = createTask('task1', { parentId: 'parent', tagIds: [] });
+      store.overrideSelector(selectTaskFeatureState, createTaskState([parentTask, task]));
+      store.refreshState();
+
+      let emitted = false;
+      effects.reassertOwnTagsAfterConvert$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(
+        TaskSharedActions.convertToSubTask({
+          taskId: 'task1',
+          targetParentId: 'parent',
+          afterTaskId: null,
+        }),
+      );
+
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        done();
+      }, 50);
+    });
+
+    it('should NOT emit when the convertToSubTask op was rejected by the guard', (done) => {
+      // Post-reducer state unchanged: task still top-level with tags
+      const task = createTask('task1', { tagIds: ['tag1'] });
+      const otherTask = createTask('other', {});
+      store.overrideSelector(selectTaskFeatureState, createTaskState([task, otherTask]));
+      store.refreshState();
+
+      let emitted = false;
+      effects.reassertOwnTagsAfterConvert$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(
+        TaskSharedActions.convertToSubTask({
+          taskId: 'task1',
+          targetParentId: 'other',
+          afterTaskId: null,
+        }),
+      );
+
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        done();
+      }, 50);
+    });
+
+    it('should re-assert own tags after convertToMainTask (#9651)', (done) => {
+      // Post-reducer state: promoted with own tags kept
+      const task = createTask('task1', { parentId: undefined, tagIds: ['tag2'] });
+      store.overrideSelector(selectTaskFeatureState, createTaskState([task]));
+      store.refreshState();
+
+      effects.reassertOwnTagsAfterConvert$.subscribe((action) => {
+        expect(action.type).toBe(TaskSharedActions.updateTask.type);
+        expect((action as any).task.id).toBe('task1');
+        expect((action as any).task.changes.tagIds).toEqual(['tag2']);
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.convertToMainTask({
+          task: createTask('task1', { parentId: 'parent', tagIds: ['tag2'] }),
+          parentTagIds: ['tag1'],
+        }),
+      );
+    });
+
+    it('should emit for convertToMainTask when the payload is a stub without tagIds (drag path)', (done) => {
+      const parentTask = createTask('parent', { tagIds: ['tag1'] });
+      const task = createTask('task1', { parentId: undefined, tagIds: ['tag2'] });
+      store.overrideSelector(selectTaskFeatureState, createTaskState([parentTask, task]));
+      store.refreshState();
+
+      effects.reassertOwnTagsAfterConvert$.subscribe((action) => {
+        expect((action as any).task.changes.tagIds).toEqual(['tag2']);
+        done();
+      });
+
+      actions$.next(
+        TaskSharedActions.convertToMainTask({
+          task: { id: 'task1', parentId: 'parent' } as Task,
+        }),
+      );
+    });
+
+    it('should NOT emit for convertToMainTask when own tags equal the parent tags', (done) => {
+      const parentTask = createTask('parent', { tagIds: ['tag1'] });
+      const task = createTask('task1', { parentId: undefined, tagIds: ['tag1'] });
+      store.overrideSelector(selectTaskFeatureState, createTaskState([parentTask, task]));
+      store.refreshState();
+
+      let emitted = false;
+      effects.reassertOwnTagsAfterConvert$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(
+        TaskSharedActions.convertToMainTask({
+          task: createTask('task1', { parentId: 'parent', tagIds: ['tag1'] }),
+          parentTagIds: ['tag1'],
+        }),
+      );
+
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        done();
+      }, 50);
+    });
+
+    it('should NOT emit for convertToMainTask when the task had no own tags (inherit fallback)', (done) => {
+      // Post-reducer state: promoted with inherited parent tags
+      const task = createTask('task1', { parentId: undefined, tagIds: ['tag1'] });
+      store.overrideSelector(selectTaskFeatureState, createTaskState([task]));
+      store.refreshState();
+
+      let emitted = false;
+      effects.reassertOwnTagsAfterConvert$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(
+        TaskSharedActions.convertToMainTask({
+          task: createTask('task1', { parentId: 'parent', tagIds: [] }),
+          parentTagIds: ['tag1'],
+        }),
+      );
+
+      setTimeout(() => {
+        expect(emitted).toBe(false);
+        done();
+      }, 50);
+    });
+  });
+
   describe('onAllSubTasksDone$', () => {
     it('should mark parent as done when all subtasks are done and config enabled', (done) => {
       const parentTask = createTask('parent', {
@@ -342,6 +553,100 @@ describe('TaskInternalEffects', () => {
         expect(emitted).toBe(false);
         done();
       }, 50);
+    });
+  });
+
+  describe('reopenStartedDoneTask$', () => {
+    it('should emit a persistent updateTask re-opening a started done task', (done) => {
+      const task = createTask('task1', { isDone: true, doneOn: 1234 });
+
+      store.overrideSelector(selectTaskFeatureState, createTaskState([task], 'task1'));
+      store.refreshState();
+
+      effects.reopenStartedDoneTask$.subscribe((action) => {
+        expect(action).toEqual(
+          TaskSharedActions.updateTask({
+            task: { id: 'task1', changes: { isDone: false } },
+          }),
+        );
+        expect(action.meta.isPersistent).toBe(true);
+        done();
+      });
+
+      actions$.next(setCurrentTask({ id: 'task1' }));
+    });
+
+    it('should emit nothing when the started task is not done', () => {
+      const task = createTask('task1', { isDone: false });
+
+      store.overrideSelector(selectTaskFeatureState, createTaskState([task], 'task1'));
+      store.refreshState();
+
+      let emitted = false;
+      effects.reopenStartedDoneTask$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(setCurrentTask({ id: 'task1' }));
+
+      expect(emitted).toBe(false);
+    });
+
+    it('should emit nothing when no task ends up current', () => {
+      const task = createTask('task1', { isDone: true });
+
+      store.overrideSelector(selectTaskFeatureState, createTaskState([task], null));
+      store.refreshState();
+
+      let emitted = false;
+      effects.reopenStartedDoneTask$.subscribe(() => {
+        emitted = true;
+      });
+
+      actions$.next(setCurrentTask({ id: null }));
+
+      expect(emitted).toBe(false);
+    });
+
+    it('should re-open the subtask that actually got started, not the parent from the action', (done) => {
+      const parent = createTask('parent', { subTaskIds: ['sub1'], isDone: false });
+      const subTask = createTask('sub1', { parentId: 'parent', isDone: true });
+
+      store.overrideSelector(
+        selectTaskFeatureState,
+        createTaskState([parent, subTask], 'sub1'),
+      );
+      store.refreshState();
+
+      effects.reopenStartedDoneTask$.subscribe((action) => {
+        expect(action.task).toEqual({ id: 'sub1', changes: { isDone: false } });
+        done();
+      });
+
+      actions$.next(setCurrentTask({ id: 'parent' }));
+    });
+
+    it('should re-open the first subtask when a parent with only done subtasks is started', (done) => {
+      const parent = createTask('parent', {
+        subTaskIds: ['sub1', 'sub2'],
+        isDone: false,
+      });
+      const sub1 = createTask('sub1', { parentId: 'parent', isDone: true });
+      const sub2 = createTask('sub2', { parentId: 'parent', isDone: true });
+
+      // The reducer falls back to subTaskIds[0] when every subtask is done.
+      store.overrideSelector(
+        selectTaskFeatureState,
+        createTaskState([parent, sub1, sub2], 'sub1'),
+      );
+      store.refreshState();
+
+      effects.reopenStartedDoneTask$.subscribe((action) => {
+        expect(action.task).toEqual({ id: 'sub1', changes: { isDone: false } });
+        done();
+      });
+
+      actions$.next(setCurrentTask({ id: 'parent' }));
     });
   });
 

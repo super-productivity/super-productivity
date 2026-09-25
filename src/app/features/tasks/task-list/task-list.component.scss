@@ -51,12 +51,31 @@
   color: var(--text-color-muted);
 }
 
+// Reads as a quiet section label (like the work view header labels), not as
+// another task row.
 .expand-tasks-btn {
-  opacity: 0.8;
-
-  &:hover {
-    opacity: 1;
+  // No extra opacity: --text-color-muted is already ~0.66 alpha, and multiplying
+  // the two dropped this 12px label below the 4.5:1 contrast minimum.
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    color: var(--text-color-muted);
   }
+}
+
+.expand-tasks-label {
+  font-size: var(--font-size-sm);
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--text-color-muted);
+}
+
+// The global placeholder opacity (0.1) is too faint between hairline rows;
+// a stronger ghost plus an accent top line marks the drop slot.
+.cdk-drag-placeholder {
+  opacity: 0.3;
+  border-top: 2px solid var(--c-accent);
 }
 
 .cdk-drag-placeholder,

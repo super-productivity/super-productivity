@@ -133,6 +133,21 @@ if (!(window.confirm as jasmine.Spy).and) {
   window.confirm = jasmine.createSpy('confirm').and.returnValue(true);
 }
 
+// Neutralize file-saving clicks. `download()` (src/app/util/download.ts) saves a
+// file by creating an `<a download>` and clicking it, so any spec that reaches a
+// download path writes a real file into the browser's download directory — the
+// user's ~/Downloads on a dev machine. Whether the browser honours it depends on
+// the Chrome version (headless Chrome <= 150 wrote the file, 151 does not), so
+// the leak is silent and comes back with a browser update rather than a code
+// change. Anchor clicks without a `download` attribute keep their real behaviour.
+const originalAnchorClick = HTMLAnchorElement.prototype.click;
+HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement): void {
+  if (this.hasAttribute('download')) {
+    return;
+  }
+  originalAnchorClick.call(this);
+};
+
 // Configure the TestBed providers globally
 const originalConfigureTestingModule = TestBed.configureTestingModule;
 TestBed.configureTestingModule = function (

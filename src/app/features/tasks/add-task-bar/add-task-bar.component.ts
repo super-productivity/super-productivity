@@ -45,7 +45,8 @@ import {
   timeout,
   withLatestFrom,
 } from 'rxjs/operators';
-import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
+import { IosKeyboardService } from '../../../core/theme/ios-keyboard.service';
 import { BehaviorSubject, combineLatest, from, Observable } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
@@ -103,6 +104,15 @@ export interface TaskAddEvent {
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [blendInOutAnimation, expandFadeAnimation],
   standalone: true,
+  /* eslint-disable @typescript-eslint/naming-convention*/
+  host: {
+    // The global bar is fixed and outside the CDK overlay layer, so it gets its
+    // iOS keyboard offset here rather than from <html> (see IosKeyboardService
+    // for why nothing is written there). Null leaves the `:root` default.
+    '[style.--keyboard-overlay-offset]':
+      'isGlobalBarVariant() ? iosKeyboardService.keyboardOverlayOffset() : null',
+  },
+  /* eslint-enable @typescript-eslint/naming-convention*/
   imports: [
     FormsModule,
     CdkTextareaAutosize,
@@ -142,6 +152,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly _dateService = inject(DateService);
   private readonly _menuTreeService = inject(MenuTreeService);
   readonly stateService = inject(AddTaskBarStateService);
+  readonly iosKeyboardService = inject(IosKeyboardService);
 
   T = T;
 
@@ -331,6 +342,10 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     this.highlightSegments();
     this.syncHighlightScroll();
   });
+
+  // Injected rather than read from the constant so the two focus paths below
+  // are reachable from tests (see IS_ANDROID_WEB_VIEW_TOKEN).
+  private readonly _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
 
   private _focusTimeout?: number;
   private _autocompleteTimeout?: number;
@@ -1008,31 +1023,46 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       window.clearTimeout(this._focusTimeout);
     }
 
+    const focus = (): void => {
+      const inputElement = this.inputEl()?.nativeElement;
+      if (!inputElement) {
+        return;
+      }
+      inputElement.focus();
+      if (selectAll) {
+        inputElement.select();
+      }
+    };
+
     document.body.focus();
     this.inputEl()?.nativeElement.focus();
-    window.setTimeout(() => this.inputEl()?.nativeElement.focus());
 
-    // Set new timeout
-    if (IS_ANDROID_WEB_VIEW) {
+    if (this._isAndroidWebView) {
+      // Unchanged: this web view needs the repeated blur → focus cycle to raise
+      // the IME reliably, and it has no iOS focusin scroll handler to disturb.
+      window.setTimeout(() => this.inputEl()?.nativeElement.focus());
       this._focusTimeout = window.setTimeout(() => {
         document.body.focus();
-        this.inputEl()?.nativeElement.focus();
-        if (selectAll) {
-          this.inputEl()?.nativeElement.select();
-        }
+        focus();
         this._focusTimeout = undefined;
       }, 200);
-    } else {
-      this._focusTimeout = window.setTimeout(() => {
-        const inputElement = this.inputEl()?.nativeElement;
-        if (inputElement) {
-          inputElement.focus();
-          if (selectAll) {
-            inputElement.select();
-          }
-        }
-      }, 50);
+      return;
     }
+
+    if (selectAll) {
+      this.inputEl()?.nativeElement.select();
+    }
+    // A web view can drop a focus() issued while the bar is still animating in,
+    // so retry once — but only when the field really did not take focus:
+    // re-focusing an already-focused input re-fires the global focusin handler,
+    // which re-runs its scroll-into-view in the middle of the iOS keyboard
+    // animation, one of the sources of the jumping in #9779.
+    this._focusTimeout = window.setTimeout(() => {
+      this._focusTimeout = undefined;
+      if (document.activeElement !== this.inputEl()?.nativeElement) {
+        focus();
+      }
+    }, 50);
   }
 
   toggleNote(): void {

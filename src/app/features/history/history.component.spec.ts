@@ -28,6 +28,7 @@ import { selectAllProjectColorsAndTitles } from '../project/store/project.select
 import { mapArchiveToWorklog } from '../worklog/util/map-archive-to-worklog';
 import { DateService } from '../../core/date/date.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { DialogWorklogExportComponent } from '../worklog/dialog-worklog-export/dialog-worklog-export.component';
 
 describe('HistoryComponent', () => {
   let fixture: ComponentFixture<HistoryComponent>;
@@ -198,6 +199,44 @@ describe('HistoryComponent', () => {
       .map((de) => de.nativeElement.textContent.trim());
 
     expect(dayLabels).toEqual(['Wed 1.', 'Thu 2.', 'Fri 3.']);
+  });
+
+  it('exports the complete worklog date range', () => {
+    const tasks = [createTaskForDate('2024-03-02'), createTaskForDate('2026-08-14')];
+    worklogData$.next(
+      mapArchiveToWorklog(
+        {
+          ids: tasks.map((task) => task.id),
+          entities: tasks.reduce(
+            (entities, task) => ({ ...entities, [task.id]: task }),
+            {},
+          ),
+        },
+        [],
+        { workStart: {}, workEnd: {} },
+        1,
+        'en-US',
+      ),
+    );
+    fixture.detectChanges();
+
+    fixture.componentInstance.exportAllData();
+
+    expect(matDialogSpy.open).toHaveBeenCalledWith(
+      DialogWorklogExportComponent,
+      jasmine.objectContaining({
+        data: {
+          rangeStart: new Date(2024, 2, 2),
+          rangeEnd: new Date(2026, 7, 14),
+        },
+      }),
+    );
+  });
+
+  it('does not open an export for an empty worklog', () => {
+    fixture.componentInstance.exportAllData();
+
+    expect(matDialogSpy.open).not.toHaveBeenCalled();
   });
 
   it('explicitly restores the archived hierarchy to Today once', fakeAsync(() => {

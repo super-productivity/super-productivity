@@ -3,6 +3,7 @@ import { Update } from '@ngrx/entity';
 import { TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { PersistentActionMeta } from '../../../op-log/core/persistent-action.interface';
 import { OpType } from '../../../op-log/core/operation.types';
+import { clearedFieldsProps } from '../../../util/cleared-update-fields';
 
 export const addTaskRepeatCfgToTask = createAction(
   '[TaskRepeatCfg][Task] Add TaskRepeatCfg to Task',
@@ -29,6 +30,10 @@ export const updateTaskRepeatCfg = createAction(
     isAskToUpdateAllTaskInstances?: boolean;
   }) => ({
     ...cfgProps,
+    // `changes: { someField: undefined }` loses the key at JSON.stringify on
+    // every sync path; list cleared keys out-of-band so replay restores them
+    // (issue #9776 — e.g. a cleared startTime never synced).
+    ...clearedFieldsProps(cfgProps.taskRepeatCfg.changes),
     meta: {
       isPersistent: true,
       entityType: 'TASK_REPEAT_CFG',

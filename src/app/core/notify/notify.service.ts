@@ -4,11 +4,15 @@ import { environment } from '../../../environments/environment';
 import { IS_ELECTRON } from '../../app.constants';
 import { IS_MOBILE } from '../../util/is-mobile';
 import { TranslateService } from '@ngx-translate/core';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { UiHelperService } from '../../features/ui-helper/ui-helper.service';
 import { Log } from '../log';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { generateNotificationId } from '../../features/android/android-notification-id.util';
 import { CapacitorNotificationService } from '../platform/capacitor-notification.service';
 import { CapacitorPlatformService } from '../platform/capacitor-platform.service';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
+import { androidInterface } from '../../features/android/android-interface';
 
 @Injectable({
   providedIn: 'root',
@@ -33,6 +37,27 @@ export class NotifyService {
     const body =
       options.body &&
       this._translateService.instant(options.body, options.translateParams);
+
+    if (this._platformService.isLegacyAndroidWebView) {
+      // The legacy Android WebView shell has no Capacitor bridge, so
+      // `LocalNotifications` falls back to its web implementation. That one
+      // gates on `Notification.permission`, which Android WebView leaves at
+      // 'default' no matter the OS POST_NOTIFICATIONS state (#7408) — so every
+      // schedule here silently no-ops (#5376). JS in this shell only runs while
+      // the app is in the foreground (exactly why reminders go through
+      // AlarmManager instead), so a native toast carries the same information.
+      //
+      // Deliberately the SUPAndroid toast rather than SnackService: the app's
+      // single snack slot suppresses non-sticky messages while a sticky
+      // actionable snack is pending (sync errors, conflict recovery) and
+      // debounces bursts into one — both of which would reintroduce the silent
+      // drop this branch exists to remove.
+      const msg = [title, body].filter((part) => !!part).join(' - ');
+      if (msg) {
+        this._showLegacyAndroidToast(msg);
+      }
+      return undefined;
+    }
 
     if (this._platformService.isNative) {
       // Use Capacitor LocalNotifications for iOS and Android.
@@ -118,6 +143,13 @@ export class NotifyService {
       });
     }
     return undefined;
+  }
+
+  // Thin seam over the `window.SUPAndroid` singleton (undefined off-device) so
+  // the legacy branch is unit-testable without an emulator — same pattern as
+  // LocalBackupService's `_nativeDb*` wrappers.
+  private _showLegacyAndroidToast(msg: string): void {
+    androidInterface.showToast(msg);
   }
 
   private _isBasicNotificationSupport(): boolean {

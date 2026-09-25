@@ -1,3 +1,4 @@
+import { type Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/supersync.fixture';
 import {
   createTestUser,
@@ -7,29 +8,105 @@ import {
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
-import { expectTaskVisible } from '../../utils/supersync-assertions';
 
-/**
- * SuperSync Planner E2E Tests
- *
- * Tests planner/scheduled day sync scenarios:
- * - Scheduling tasks for future days
- * - Moving tasks between days in planner
- * - Virtual TODAY_TAG behavior
- */
+type PlannerTaskSnapshot = {
+  id: string;
+  title: string;
+  dueDay: string | null;
+  tagIds: string[];
+};
+
+type PlannerSyncSnapshot = {
+  tasks: PlannerTaskSnapshot[];
+  plannerTaskIds: string[];
+  todayTaskIds: string[];
+};
+
+const getDbDateStr = async (page: Page, offsetDays = 0): Promise<string> =>
+  page.evaluate((offset) => {
+    const date = new Date();
+    date.setDate(date.getDate() + offset);
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+    return `${date.getFullYear()}-${month}-${day}`;
+  }, offsetDays);
+
+const getPlannerSyncSnapshot = async (
+  page: Page,
+  taskNames: string[],
+  plannerDay: string,
+): Promise<PlannerSyncSnapshot> =>
+  page.evaluate(
+    ({ names, day }) => {
+      type TaskLike = {
+        id?: string;
+        title?: string;
+        dueDay?: string | null;
+        tagIds?: string[];
+      };
+      type TagLike = { taskIds?: string[] };
+      type StoreState = {
+        tasks?: { entities?: Record<string, TaskLike | undefined> };
+        tag?: { entities?: Record<string, TagLike | undefined> };
+        planner?: { days?: Record<string, string[] | undefined> };
+      };
+      type StoreSubscription = { unsubscribe: () => void };
+      type StoreLike = {
+        subscribe: (next: (state: StoreState) => void) => StoreSubscription;
+      };
+
+      const store = (
+        window as unknown as {
+          __e2eTestHelpers?: { store?: StoreLike };
+        }
+      ).__e2eTestHelpers?.store;
+      if (!store) {
+        throw new Error('E2E store helper is unavailable');
+      }
+
+      let latestState: StoreState | undefined;
+      const subscription = store.subscribe((state) => {
+        latestState = state;
+      });
+      subscription.unsubscribe();
+
+      const tasks: PlannerTaskSnapshot[] = [];
+      for (const task of Object.values(latestState?.tasks?.entities ?? {})) {
+        if (task?.id && task.title && names.some((name) => task.title?.includes(name))) {
+          tasks.push({
+            id: task.id,
+            title: task.title,
+            dueDay: task.dueDay ?? null,
+            tagIds: [...(task.tagIds ?? [])],
+          });
+        }
+      }
+
+      return {
+        tasks,
+        plannerTaskIds: [...(latestState?.planner?.days?.[day] ?? [])],
+        todayTaskIds: [...(latestState?.tag?.entities?.TODAY?.taskIds ?? [])],
+      };
+    },
+    { names: taskNames, day: plannerDay },
+  );
+
+const getTask = (
+  snapshot: PlannerSyncSnapshot,
+  taskName: string,
+): PlannerTaskSnapshot => {
+  const task = snapshot.tasks.find((candidate) => candidate.title.includes(taskName));
+  expect(task, `Task state missing for ${taskName}`).toBeDefined();
+  return task!;
+};
+
+const getMatchingOrder = (allTaskIds: string[], taskIds: string[]): string[] => {
+  const taskIdSet = new Set(taskIds);
+  return allTaskIds.filter((taskId) => taskIdSet.has(taskId));
+};
 
 test.describe('@supersync Planner Sync', () => {
-  /**
-   * Test: Task scheduled for tomorrow syncs correctly
-   *
-   * Actions:
-   * 1. Client A creates task scheduled for tomorrow (sd:1d)
-   * 2. Client A syncs
-   * 3. Client B syncs
-   * 4. Client B navigates to planner
-   * 5. Verify task appears on tomorrow in planner
-   */
-  test('Task scheduled for tomorrow syncs to planner', async ({
+  test('Tomorrow short syntax syncs dueDay and planner order', async ({
     browser,
     baseURL,
     testRunId,
@@ -41,115 +118,87 @@ test.describe('@supersync Planner Sync', () => {
     try {
       const user = await createTestUser(testRunId);
       const syncConfig = getSuperSyncConfig(user);
-
-      // ============ PHASE 1: Client A Schedules Task for Tomorrow ============
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
 
-      const taskName = `Tomorrow-${uniqueId}`;
-      // sd:1d means schedule 1 day from now (tomorrow)
-      await clientA.workView.addTask(`${taskName} sd:1d`);
-      console.log('[Planner Test] Client A created task for tomorrow');
+      const taskNames = [`TomorrowFirst-${uniqueId}`, `TomorrowSecond-${uniqueId}`];
+      const tomorrow = await getDbDateStr(clientA.page, 1);
 
-      // Task should NOT be visible in TODAY work view (it's for tomorrow)
-      // But let's verify it was created
-      await clientA.page.waitForTimeout(500);
+      for (const taskName of taskNames) {
+        await clientA.workView.addTask(`${taskName} @tomorrow`, false, null);
+        await expect
+          .poll(async () => {
+            const snapshot = await getPlannerSyncSnapshot(
+              clientA!.page,
+              taskNames,
+              tomorrow,
+            );
+            return snapshot.tasks.find((task) => task.title.includes(taskName))?.dueDay;
+          })
+          .toBe(tomorrow);
+      }
 
-      // ============ PHASE 2: Sync ============
-      await clientA.sync.syncAndWait();
-      console.log('[Planner Test] Client A synced');
-
-      // ============ PHASE 3: Client B Downloads and Checks Planner ============
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-      await clientB.sync.syncAndWait();
-      console.log('[Planner Test] Client B synced');
-
-      // Navigate to planner
-      await clientB.page.goto('/#/planner');
-      await clientB.page.waitForLoadState('networkidle');
-      await clientB.page.waitForSelector('planner', { timeout: 10000 });
-      console.log('[Planner Test] Client B on planner page');
-
-      // Look for task in tomorrow's section
-      // The planner shows days as columns or rows with date headers
-      const taskInPlanner = clientB.page.locator(
-        `planner-day:has-text("${taskName}"), .planner-day-tasks:has-text("${taskName}")`,
+      const clientAState = await getPlannerSyncSnapshot(
+        clientA.page,
+        taskNames,
+        tomorrow,
       );
-
-      await expect(taskInPlanner).toBeVisible({ timeout: 10000 });
-      console.log('[Planner Test] Task visible in planner on Client B');
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-    }
-  });
-
-  /**
-   * Test: Moving task to today in planner syncs correctly
-   *
-   * Actions:
-   * 1. Client A creates task for tomorrow
-   * 2. Both clients sync
-   * 3. Client A moves task to today via context menu
-   * 4. Both sync
-   * 5. Verify task now in TODAY on Client B
-   */
-  test('Scheduled task visible in planner on synced client', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }) => {
-    const uniqueId = Date.now();
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-
-    try {
-      const user = await createTestUser(testRunId);
-      const syncConfig = getSuperSyncConfig(user);
-
-      // ============ PHASE 1: Setup ============
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      const taskName = `Scheduled-${uniqueId}`;
-      // sd:2d means schedule for 2 days from now
-      await clientA.workView.addTask(`${taskName} sd:2d`);
-      console.log('[Scheduled Test] Client A created task for 2 days from now');
+      expect(clientAState.tasks).toHaveLength(taskNames.length);
+      const taskIds = taskNames.map((taskName) => getTask(clientAState, taskName).id);
+      expect(getMatchingOrder(clientAState.plannerTaskIds, taskIds)).toEqual([
+        taskIds[1],
+        taskIds[0],
+      ]);
+      expect(getMatchingOrder(clientAState.todayTaskIds, taskIds)).toEqual([]);
 
       await clientA.sync.syncAndWait();
 
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig);
       await clientB.sync.syncAndWait();
-      console.log('[Scheduled Test] Both synced');
 
-      // ============ PHASE 2: Verify in Planner on Client B ============
+      await expect
+        .poll(async () => {
+          const snapshot = await getPlannerSyncSnapshot(
+            clientB!.page,
+            taskNames,
+            tomorrow,
+          );
+          return taskNames.map(
+            (taskName) =>
+              snapshot.tasks.find((task) => task.title.includes(taskName))?.dueDay,
+          );
+        })
+        .toEqual([tomorrow, tomorrow]);
+
+      const clientBState = await getPlannerSyncSnapshot(
+        clientB.page,
+        taskNames,
+        tomorrow,
+      );
+      expect(clientBState.tasks).toHaveLength(taskNames.length);
+      expect(clientBState.tasks.map((task) => task.id).sort()).toEqual(
+        [...taskIds].sort(),
+      );
+      expect(getMatchingOrder(clientBState.plannerTaskIds, taskIds)).toEqual([
+        taskIds[1],
+        taskIds[0],
+      ]);
+
       await clientB.page.goto('/#/planner');
-      await clientB.page.waitForLoadState('networkidle');
-      await clientB.page.waitForSelector('planner', { timeout: 10000 });
-
-      // Task should appear in planner
-      const taskInPlanner = clientB.page.locator(`text=${taskName}`).first();
-      await expect(taskInPlanner).toBeVisible({ timeout: 10000 });
-      console.log('[Scheduled Test] Scheduled task visible in planner on Client B');
+      const tomorrowDay = clientB.page.locator(`planner-day[data-day="${tomorrow}"]`);
+      for (const taskName of taskNames) {
+        await expect(
+          tomorrowDay.locator('planner-task').filter({ hasText: taskName }),
+        ).toBeVisible();
+      }
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
     }
   });
 
-  /**
-   * Test: Task with dueDay maintains virtual TODAY_TAG behavior
-   *
-   * Actions:
-   * 1. Client A creates task for today (sd:today)
-   * 2. Verify task appears in TODAY tag view
-   * 3. Client A syncs
-   * 4. Client B syncs
-   * 5. Verify task in TODAY on Client B (via dueDay, not tagIds)
-   */
-  test('TODAY tag membership via dueDay syncs correctly', async ({
+  test('Today short syntax syncs virtual TODAY membership and order', async ({
     browser,
     baseURL,
     testRunId,
@@ -161,95 +210,53 @@ test.describe('@supersync Planner Sync', () => {
     try {
       const user = await createTestUser(testRunId);
       const syncConfig = getSuperSyncConfig(user);
-
-      // ============ PHASE 1: Client A Creates Task for Today ============
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
 
-      const taskName = `TodayTask-${uniqueId}`;
-      // sd:today schedules for today, setting dueDay
-      await clientA.workView.addTask(`${taskName} sd:today`);
-      console.log('[TODAY Test] Client A created task for today');
+      const taskNames = [`TodayFirst-${uniqueId}`, `TodaySecond-${uniqueId}`];
+      const today = await getDbDateStr(clientA.page);
+      for (const taskName of taskNames) {
+        await clientA.workView.addTask(`${taskName} @today`, false, taskName);
+      }
 
-      // Verify task appears in TODAY view
-      await waitForTask(clientA.page, taskName);
-      console.log('[TODAY Test] Task visible in TODAY on Client A');
+      const clientAState = await getPlannerSyncSnapshot(clientA.page, taskNames, today);
+      expect(clientAState.tasks).toHaveLength(taskNames.length);
+      const taskIds = taskNames.map((taskName) => getTask(clientAState, taskName).id);
+      for (const taskName of taskNames) {
+        const task = getTask(clientAState, taskName);
+        expect(task.dueDay).toBe(today);
+        expect(task.tagIds).not.toContain('TODAY');
+      }
+      expect(getMatchingOrder(clientAState.todayTaskIds, taskIds)).toEqual([
+        taskIds[1],
+        taskIds[0],
+      ]);
+      expect(getMatchingOrder(clientAState.plannerTaskIds, taskIds)).toEqual([]);
 
-      // ============ PHASE 2: Sync ============
       await clientA.sync.syncAndWait();
 
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig);
       await clientB.sync.syncAndWait();
-      console.log('[TODAY Test] Both synced');
+      for (const taskName of taskNames) {
+        await waitForTask(clientB.page, taskName);
+      }
 
-      // ============ PHASE 3: Verify on Client B ============
-      // Task should appear in TODAY view on Client B
-      // This confirms dueDay synced correctly and TODAY_TAG virtual membership works
-      await waitForTask(clientB.page, taskName);
-
-      await expectTaskVisible(clientB, taskName);
-      console.log('[TODAY Test] Task visible in TODAY on Client B');
-
-      // Verify we're in TODAY tag context (URL check)
-      const currentUrl = clientB.page.url();
-      expect(currentUrl).toContain('TODAY');
-
-      console.log('[TODAY Test] Virtual TODAY_TAG membership working');
-    } finally {
-      if (clientA) await closeClient(clientA);
-      if (clientB) await closeClient(clientB);
-    }
-  });
-
-  /**
-   * Test: Scheduling task for future date syncs
-   *
-   * Actions:
-   * 1. Client A creates task for 3 days from now
-   * 2. Client A syncs
-   * 3. Client B syncs
-   * 4. Client B checks planner for future date
-   */
-  test('Task scheduled for future date syncs to planner', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }) => {
-    const uniqueId = Date.now();
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-
-    try {
-      const user = await createTestUser(testRunId);
-      const syncConfig = getSuperSyncConfig(user);
-
-      // ============ PHASE 1: Client A Schedules Task for Future ============
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
-
-      const taskName = `Future-${uniqueId}`;
-      // sd:3d means schedule 3 days from now
-      await clientA.workView.addTask(`${taskName} sd:3d`);
-      console.log('[Future Test] Client A created task for 3 days from now');
-
-      // ============ PHASE 2: Sync ============
-      await clientA.sync.syncAndWait();
-
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-      await clientB.sync.syncAndWait();
-      console.log('[Future Test] Both synced');
-
-      // ============ PHASE 3: Verify in Planner ============
-      await clientB.page.goto('/#/planner');
-      await clientB.page.waitForLoadState('networkidle');
-      await clientB.page.waitForSelector('planner', { timeout: 10000 });
-
-      // The task should appear somewhere in the planner view
-      const taskInPlanner = clientB.page.locator(`text=${taskName}`).first();
-      await expect(taskInPlanner).toBeVisible({ timeout: 10000 });
-      console.log('[Future Test] Task visible in planner on Client B');
+      const clientBState = await getPlannerSyncSnapshot(clientB.page, taskNames, today);
+      expect(clientBState.tasks).toHaveLength(taskNames.length);
+      expect(clientBState.tasks.map((task) => task.id).sort()).toEqual(
+        [...taskIds].sort(),
+      );
+      for (const taskName of taskNames) {
+        const task = getTask(clientBState, taskName);
+        expect(task.dueDay).toBe(today);
+        expect(task.tagIds).not.toContain('TODAY');
+      }
+      expect(getMatchingOrder(clientBState.todayTaskIds, taskIds)).toEqual([
+        taskIds[1],
+        taskIds[0],
+      ]);
+      expect(getMatchingOrder(clientBState.plannerTaskIds, taskIds)).toEqual([]);
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);

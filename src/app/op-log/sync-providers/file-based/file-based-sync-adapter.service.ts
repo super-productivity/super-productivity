@@ -968,9 +968,9 @@ export class FileBasedSyncAdapterService {
     // Step 4: Post-upload processing
     this._clearCachedSyncData(providerKey);
     this._expectedSyncVersions.set(providerKey, finalSyncVersion);
-    // SPAP-10: the remote is now exactly what we just uploaded, so its rev is the
-    // fresh last-seen rev. Recording it lets the next poll short-circuit if no
-    // other client writes in between. Persisted via _persistState() below.
+    // SPAP-10: the remote is now what we just uploaded; recording its rev lets the
+    // next poll short-circuit if no other client writes. Caveat (#10239): that also
+    // defers ops this upload merged from other clients. Persisted via _persistState().
     this._commitLastSeenRev(providerKey, finalRev);
 
     // Use finalSyncVersion (NOT mergedOps.length) to match download behavior.
@@ -1271,40 +1271,40 @@ export class FileBasedSyncAdapterService {
     this._pendingVectorClocks.set(providerKey, syncData.vectorClock);
     this._stageOrDropDownloadedRev(providerKey, rev, recoveredFromBackup);
 
-    // Filter ops using operation IDs instead of synthetic seq numbers.
-    // Synthetic seq numbers based on array indices shift when the array is trimmed,
-    // causing ops to be missed. Operation IDs are stable identifiers.
+    // Never filter here by `sv > sinceSeq`: the cursor can run ahead of applied
+    // ops (an upload merging a fresh download), so the caller pairs it with the
+    // local vector clock (#10119). Array indices shift on trim — never a cursor.
     //
     // Note: sinceSeq === 0 indicates a fresh download request (e.g., forceFromSeq0),
     // in which case we should return ALL ops regardless of whether we've seen them.
     const isForceFromZero = sinceSeq === 0;
     const filteredOps: ServerSyncOperation[] = [];
 
-    // We return ALL ops from the file and let the download service's appliedOpIds
-    // (from IndexedDB) filter decide what's truly new. This ensures correctness.
-
+    // ALL ops are returned; the download service decides what is new (#10119).
     OpLog.verbose(
-      `FileBasedSyncAdapter: Returning all ${syncData.recentOps.length} ops from file (filtering by appliedOpIds happens in download service)`,
+      `FileBasedSyncAdapter: Returning all ${syncData.recentOps.length} ops from file`,
     );
 
-    syncData.recentOps.forEach((compactOp, index) => {
+    syncData.recentOps.forEach((compactOp) => {
       // Filter by client if specified (excludeClient is for upload deduplication)
       if (excludeClient && compactOp.c === excludeClient) {
         return;
       }
 
       filteredOps.push({
-        serverSeq: index + 1, // Synthetic seq for compatibility (not used for tracking)
+        // #10119: the syncVersion the op was written at, comparable with the
+        // cursor; a legacy op without `sv` gets the upper bound syncVersion.
+        serverSeq: compactOp.sv ?? syncData.syncVersion,
         op: this._compactToSyncOp(compactOp),
         receivedAt: compactOp.t,
       });
     });
 
     // File-based providers re-download the whole file each call and have no
-    // server-side cursor, so there is no "next page": this method returns ops by
-    // array index and ignores `sinceSeq`, and the buffer is bounded on write by
+    // server-side cursor, so there is no "next page": this method returns every
+    // op and ignores `sinceSeq`, and the buffer is bounded on write by
     // MAX_RECENT_OPS. Return it WHOLE with hasMore=false and let the caller's
-    // appliedOpIds dedup decide what is actually new. `limit` (the caller's
+    // dedup (applied ids + cursor/clock) decide what is new. `limit` (the caller's
     // DOWNLOAD_PAGE_SIZE) is deliberately not applied — truncating below the buffer
     // would strand a behind client on the oldest slice, because the caller loops on
     // hasMore but the ignored `sinceSeq` never advances. Returning everything (not
@@ -2709,11 +2709,11 @@ export class FileBasedSyncAdapterService {
     const isForceFromZero = sinceSeq === 0;
     const filteredOps: ServerSyncOperation[] = [];
     const snapshotAppliedOpIds: string[] = [];
-    opsFile.recentOps.forEach((compactOp, index) => {
+    opsFile.recentOps.forEach((compactOp) => {
       if (excludeClient && compactOp.c === excludeClient) return;
       const op = this._compactToSyncOp(compactOp);
       filteredOps.push({
-        serverSeq: index + 1,
+        serverSeq: compactOp.sv ?? opsFile.syncVersion, // see _downloadOps (#10119)
         op,
         receivedAt: compactOp.t,
       });

@@ -86,7 +86,7 @@ describe('ConflictJournalService (store)', () => {
     expect(service.unreviewedCount()).toBe(0);
   });
 
-  it('clearAll() removes every entry and resets the unreviewed count (profile switch)', async () => {
+  it('clearAll() removes every entry and resets the unreviewed count', async () => {
     await service.record(makeEntry({ id: 'a', status: 'unreviewed' }));
     await service.record(makeEntry({ id: 'b', status: 'kept' }));
     expect(service.unreviewedCount()).toBe(1);
@@ -284,12 +284,12 @@ describe('ConflictJournalService (store)', () => {
     }, 10000);
   });
 
-  describe('durable clear boundary (privacy fail-safe on profile switch)', () => {
+  describe('durable clear boundary after dataset replacement', () => {
     const MARKER_KEY = 'SUP_CONFLICT_JOURNAL_CLEARED_BEFORE';
 
     afterEach(() => localStorage.removeItem(MARKER_KEY));
 
-    it('hides pre-switch entries and zeroes the badge even when the bulk clear fails', async () => {
+    it('hides prior entries and zeroes the badge even when the bulk clear fails', async () => {
       const now = Date.now();
       await service.record(
         makeEntry({ id: 'stale-a', resolvedAt: now - 1000, status: 'unreviewed' }),
@@ -312,7 +312,7 @@ describe('ConflictJournalService (store)', () => {
       expect(service.unreviewedCount()).toBe(0);
     });
 
-    it('shows only entries recorded after a failed clear (the new profile stays clean)', async () => {
+    it('shows only entries recorded after a failed clear', async () => {
       await service.record(makeEntry({ id: 'pre', resolvedAt: Date.now() - 1000 }));
 
       const db = await service['_ensureDb']();
@@ -350,7 +350,7 @@ describe('ConflictJournalService (store)', () => {
       const marker = Number(localStorage.getItem(MARKER_KEY));
       expect(marker).toBeGreaterThan(0);
 
-      // A conflict recorded by the NEW profile (after the boundary) must NOT be
+      // A conflict recorded after the replacement boundary must NOT be
       // reclaimed by the marker-aware prune — guards against a "prune deletes
       // everything while a marker is set" regression.
       await service.record(makeEntry({ id: 'fresh', resolvedAt: marker + 1000 }));

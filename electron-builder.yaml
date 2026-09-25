@@ -42,7 +42,7 @@ beforePack: ./tools/beforePack.js
 # Post-pack hook that installs a shell wrapper for Linux builds to force
 # --ozone-platform=x11 in Snap+Wayland sessions.
 # See tools/afterPack.js + build/linux/snap-wrapper.sh and
-# docs/research/snap-wayland-gpu-fix-research.md §18.
+# docs/research/snap-wayland-gpu-fix-research.md.
 afterPack: ./tools/afterPack.js
 
 win:
@@ -59,7 +59,17 @@ win:
     - github
 nsis:
   # Hardcoded to avoid spaces (SignPath converts spaces to dots). Also referenced in build.yml.
-  artifactName: Super-Productivity-Setup-${arch}.${ext}
+  # Deliberately no ${arch}: NsisTarget.finishBuild emits the universal installer
+  # *and* one per arch whenever the resolved artifactName contains ${arch} AND
+  # 2+ archs are configured, so every release submitted the same payload twice
+  # (892 MB of exe against a size-based yearly quota, which we exhausted in Aug
+  # 2026 and which blocked Windows releases entirely).
+  # The universal installer selects the payload at runtime via IsNativeARM64 /
+  # RunningX64 (app-builder-lib templates/nsis/include/extractAppPackage.nsh),
+  # so keeping only it halves the signing volume without asking users which
+  # architecture they are on. Do not reintroduce ${arch} without re-checking
+  # the quota headroom.
+  artifactName: Super-Productivity-Setup.${ext}
   # allow to install to custom location
   oneClick: false
   allowToChangeInstallationDirectory: true
@@ -71,7 +81,10 @@ nsis:
   # (with perMachine: true, packElevateHelper: false is ignored). See #8135.
   packElevateHelper: false
 portable:
-  artifactName: ${name}-${arch}.${ext}
+  # No ${arch}, for the same reason as nsis.artifactName above: the universal
+  # portable covers both archs and halves what we submit for signing. The
+  # release workflow creates the old architecture-specific names after signing.
+  artifactName: ${name}.${ext}
 appx:
   applicationId: SuperProductivity
   displayName: Super Productivity
@@ -87,6 +100,13 @@ linux:
     - x-scheme-handler/superproductivity
   desktop:
     entry:
+      # Must equal LINUX_DESKTOP_NAME in electron/start-app.ts, which pins the
+      # XDG app id that Electron 42+ uses for both the X11 WM_CLASS and the
+      # Wayland app_id. Enforced by tools/verify-linux-wm-class.test.js.
+      # Reverts #9634: `superproductivity-bin` matched the Wayland app_id only on
+      # Electron <= 41, where it came from the renamed binary's basename (#9450).
+      # The Electron 43 bump (#9571, v18.20.0) moved it to the XDG app id, so the
+      # `-bin` value now matches nothing on either session type.
       StartupWMClass: superproductivity
   target:
     - AppImage

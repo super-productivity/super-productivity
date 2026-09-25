@@ -223,7 +223,7 @@ describe('CleanSlate / Backup interrupt (issue #7709 regression)', () => {
       // throw `LocalDataConflictError(0, {})` — the #7709 chain.
       expect(await storeService.getLastSeq()).toBe(seqBefore);
       expect(await storeService.loadStateCache()).toBeNull();
-      expect(syncLocalState.hasMeaningfulStoreData()).toBe(true);
+      expect(await syncLocalState.hasMeaningfulStoreData()).toBe(true);
       // The device is NOT classified as wholly fresh — even though state_cache
       // was missing before the destructive call too, the surviving op-log keeps
       // `lastSeq > 0` so `isWhollyFreshClient()` is false.

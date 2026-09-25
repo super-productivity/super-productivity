@@ -98,6 +98,12 @@ describe('TakeABreakService', () => {
       title: 'Some task',
       simpleCounterToggleBtns: [],
     };
+    const TASK_ITEM: IdleTrackItem = {
+      type: 'TASK',
+      time: 'IDLE_TIME',
+      title: 'Some task',
+      simpleCounterToggleBtns: [],
+    };
 
     const dialogResult = (
       trackItems: IdleTrackItem[],
@@ -139,9 +145,16 @@ describe('TakeABreakService', () => {
       expect(current()).toBe(10000);
     });
 
-    it('adds tracked task time but not break time when not resetting', () => {
+    // idle time tracked to tasks does not count toward the break reminder,
+    // regardless of the shape the dialog mode sends (#9352)
+    it("does not add idle time tracked to tasks ('IDLE_TIME' shape)", () => {
+      actions$.next(dialogResult([BREAK_ITEM, TASK_ITEM], false));
+      expect(current()).toBe(10000);
+    });
+
+    it('does not add idle time tracked to tasks (SPLIT numeric shape)', () => {
       actions$.next(dialogResult([BREAK_ITEM, SPLIT_TASK_ITEM], false));
-      expect(current()).toBe(10000 + 60000);
+      expect(current()).toBe(10000);
     });
 
     it('dismisses the reminder banner when the timer is reset', () => {
@@ -341,17 +354,16 @@ describe('TakeABreakService', () => {
     // The other half of the same overlap, and the reason the reset is edge- and
     // not level-triggered: once it has fired, time added later in the SAME
     // untracked stretch survives. With a level trigger the next tick wiped it
-    // again -- and every tick after -- so unchecking the dialog's reset box was
-    // inert for any absence over BREAK_TRIGGER_DURATION. SPLIT is the only mode
-    // that sends a resolved number, and handleIdleDialogResult$ re-selects a task
-    // only for a single task item, so with 2+ items the stretch keeps running.
-    it('keeps task time from an opt-out added after the untracked-stretch reset', () => {
+    // again -- and every tick after. Idle-dialog results no longer feed the
+    // counter at all (#9352), so the late addition comes from otherNoBreakTIme$.
+    it('keeps time added after the untracked-stretch reset', () => {
       const emitted: number[] = [];
       const sub = service.timeWorkingWithoutABreak$.subscribe((v) => emitted.push(v));
 
       tick$.next({ duration: 11 * 60000, date: '2026-07-28', timestamp: 0 });
       expect(emitted[emitted.length - 1]).toBe(0);
 
+      // a SPLIT-mode opt-out contributes nothing to the counter (#9352)
       actions$.next(
         idleDialogResult({
           trackItems: [
@@ -363,13 +375,16 @@ describe('TakeABreakService', () => {
           idleTime: 11 * 60000,
         }),
       );
-      expect(emitted[emitted.length - 1]).toBe(11 * 60000);
+      expect(emitted[emitted.length - 1]).toBe(0);
+
+      service.otherNoBreakTIme$.next(60000);
+      expect(emitted[emitted.length - 1]).toBe(60000);
 
       // still untracked: a level trigger would re-zero this on the next tick
       tick$.next({ duration: 60000, date: '2026-07-28', timestamp: 0 });
       tick$.next({ duration: 60000, date: '2026-07-28', timestamp: 0 });
 
-      expect(emitted[emitted.length - 1]).toBe(11 * 60000);
+      expect(emitted[emitted.length - 1]).toBe(60000);
       sub.unsubscribe();
     });
   });

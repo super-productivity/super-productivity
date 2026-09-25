@@ -17,7 +17,12 @@ import { BackupService } from '../backup/backup.service';
 import { OpLog } from '../../core/log';
 import { OperationSyncCapable } from '../sync-providers/provider.interface';
 import { OperationLogUploadService } from './operation-log-upload.service';
-import { DownloadOutcome, UploadOutcome } from '../core/types/sync-results.types';
+import { getUnknownOpVocabulary } from './remote-op-block.util';
+import {
+  DownloadOutcome,
+  SuccessfulDownloadResult,
+  UploadOutcome,
+} from '../core/types/sync-results.types';
 import { OperationLogDownloadService } from './operation-log-download.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -27,6 +32,10 @@ import {
   LocalDataConflictError,
 } from '../core/errors/sync-errors';
 import { SuperSyncStatusService } from './super-sync-status.service';
+import {
+  isKeptPrefixDecryptErrorSuperseded,
+  toDownloadResultForRejection,
+} from './download-outcome.util';
 import { ServerMigrationService } from './server-migration.service';
 import { OperationWriteFlushService } from './operation-write-flush.service';
 import { RepairSyncContextService } from '../validation/repair-sync-context.service';
@@ -86,6 +95,23 @@ type RemoteOpsProcessingResult = Awaited<
 
 type GuardedRemoteOpsProcessingResult = RemoteOpsProcessingResult & {
   preApplyFullStateConflict?: IncomingFullStateConflictGateResult;
+  /**
+   * Pending work appeared between the gate check and the apply, and the
+   * incoming full-state op was a causal REPAIR. Nothing was applied; the
+   * caller must leave the cursor behind the batch and retry (#9773).
+   */
+  preApplyRepairDeferred?: boolean;
+  /**
+   * A causal REPAIR was deferred but the substitute local heal FAILED —
+   * this client's state is still invalid and the skipped snapshot is the
+   * one known fix. The caller must skip ONLY the cursor persist (so the
+   * next cycle re-downloads the repair) while letting the rest of the
+   * cycle — in particular the deferred upload acknowledgement — proceed:
+   * once the pending ops are acknowledged the gate stops deferring the
+   * repair and applies it. Early-returning instead would keep the pending
+   * set non-empty and re-arm the deferral forever (#9777 follow-up).
+   */
+  deferredRepairHealFailed?: boolean;
 };
 
 /**
@@ -321,7 +347,8 @@ export class OperationLogSyncService {
           },
         );
       if (piggybackedConflict.fullStateOp) {
-        const { fullStateOp, pendingOps, dialogData } = piggybackedConflict;
+        const { fullStateOp, pendingOps, dialogData, deferredRepairOpId } =
+          piggybackedConflict;
 
         // Existing synced store data is not a conflict here. Prompt only when
         // local pending user changes would be discarded; otherwise an old client
@@ -355,6 +382,12 @@ export class OperationLogSyncService {
             hasMorePiggyback: false,
             rejectedOps: [],
           };
+        } else if (deferredRepairOpId) {
+          OpLog.normal(
+            `OperationLogSyncService: Deferring piggybacked REPAIR from client ` +
+              `${fullStateOp.clientId}; ${pendingOps.length} pending local op(s) ` +
+              `keep their place and this client repairs its own state instead.`,
+          );
         } else {
           // Known limitation (#7985, upload→piggyback path): example-task ops accepted earlier in
           // THIS same upload round were already marked synced, so they have left
@@ -384,6 +417,9 @@ export class OperationLogSyncService {
             preCapturedPendingOps: result.selectedPendingOps ?? [],
           },
           fenceEpoch: options?.fenceEpoch,
+          ...(piggybackedConflict.deferredRepairOpId
+            ? { deferredRepairOpId: piggybackedConflict.deferredRepairOpId }
+            : {}),
         },
       );
       localWinOpsCreated = processResult.localWinOpsCreated;
@@ -415,6 +451,24 @@ export class OperationLogSyncService {
         };
       }
 
+      if (processResult.preApplyRepairDeferred) {
+        // Cursor stays behind the repair (the persist below is skipped), so the
+        // batch comes back next cycle and the gate defers the repair up front.
+        OpLog.normal(
+          'OperationLogSyncService: Pending work appeared before the piggybacked REPAIR apply; ' +
+            'retrying the batch next cycle.',
+        );
+        return {
+          kind: 'completed',
+          uploadedCount: result.uploadedCount,
+          piggybackedOpsCount: result.piggybackedOps.length,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        };
+      }
+
       if (processResult.blockedByIncompatibleOp) {
         return { kind: 'blocked_incompatible' };
       }
@@ -426,7 +480,21 @@ export class OperationLogSyncService {
       // that were never stored. Mirrors the download path's invariant.
       // A version/migration block keeps the cursor behind the blocked op so it is
       // re-downloaded and retried after an app update instead of skipped forever.
-      if (result.lastServerSeqToPersist !== undefined) {
+      if (processResult.deferredRepairHealFailed) {
+        // Heal-substitute for the deferred piggybacked REPAIR failed. Skip ONLY
+        // the cursor persist — the repair snapshot is the one known fix, so it
+        // must be re-downloadable next cycle. Everything below still runs;
+        // above all the deferred acknowledgement MUST proceed, because the gate
+        // defers the repair precisely while meaningful pending ops exist:
+        // skipping markSynced would keep those (server-accepted) ops pending
+        // forever, re-arming the deferral every cycle — a livelock with no
+        // exit. With the ack drained, the next cycle's gate lets the repair
+        // through and it heals the state the local attempt could not.
+        OpLog.err(
+          'OperationLogSyncService: Local heal after deferring a piggybacked REPAIR failed; ' +
+            'keeping the cursor behind the repair for retry.',
+        );
+      } else if (result.lastServerSeqToPersist !== undefined) {
         await syncProvider.setLastServerSeq(result.lastServerSeqToPersist);
       }
     }
@@ -452,6 +520,7 @@ export class OperationLogSyncService {
     // USE_REMOTE, CANCEL) — those paths return early above to avoid stale rejection handling.
     const downloadCallback = async (downloadOptions?: {
       forceFromSeq0?: boolean;
+      isReDeliveryRetry?: boolean;
       ignoredLocalFullStateOpIds?: string[];
     }): Promise<DownloadResultForRejection> => {
       const outcome = await this.downloadRemoteOps(syncProvider, {
@@ -459,35 +528,7 @@ export class OperationLogSyncService {
         isNeverSynced: isNeverSyncedAtSyncStart,
         ...(options?.fenceEpoch !== undefined ? { fenceEpoch: options.fenceEpoch } : {}),
       });
-      const latestServerSeq = await syncProvider.getLastServerSeq();
-      // Validation failure (if any during the nested download) is on the
-      // session-validation latch — no need to thread the boolean back. (#7330)
-      switch (outcome.kind) {
-        case 'ops_processed':
-          return {
-            kind: 'completed',
-            newOpsCount: outcome.newOpsCount,
-            localWinOpsCreated: outcome.localWinOpsCreated,
-            allOpClocks: outcome.allOpClocks,
-            snapshotVectorClock: outcome.snapshotVectorClock,
-            latestServerSeq,
-          };
-        case 'no_new_ops':
-        case 'snapshot_hydrated':
-          return {
-            kind: 'completed',
-            newOpsCount: 0,
-            allOpClocks: outcome.allOpClocks,
-            snapshotVectorClock: outcome.snapshotVectorClock,
-            latestServerSeq,
-          };
-        case 'server_migration_handled':
-          return { kind: 'completed', newOpsCount: 0 };
-        case 'cancelled':
-          return { kind: 'cancelled' };
-        case 'blocked_incompatible':
-          throw new Error('Nested download blocked by an incompatible remote operation.');
-      }
+      return toDownloadResultForRejection(outcome, await syncProvider.getLastServerSeq());
     };
     try {
       // #9074: the rejection handler appends merged/local-win ops and flips
@@ -535,6 +576,7 @@ export class OperationLogSyncService {
         ? { encryptionRequiredKeyMissing: true }
         : {}),
       ...(result.blockedByRejectedFullState ? { blockedByRejectedFullState: true } : {}),
+      ...(result.fullStateUploadDeferred ? { fullStateUploadDeferred: true } : {}),
     };
   }
 
@@ -555,10 +597,13 @@ export class OperationLogSyncService {
     syncProvider: OperationSyncCapable,
     options?: {
       forceFromSeq0?: boolean;
+      isReDeliveryRetry?: boolean;
       isNeverSynced?: boolean;
       ignoredLocalFullStateOpIds?: string[];
       /** Sync epoch captured at cycle start (#9074); fences local writes. */
       fenceEpoch?: number;
+      /** Top-level cycle downloads only (#9256); see `isDecryptedPrefixKeepable`. */
+      keepDecryptedPrefix?: boolean;
     },
   ): Promise<DownloadOutcome> {
     // Crash-resume: a prior USE_REMOTE rebuild committed its baseline
@@ -604,7 +649,26 @@ export class OperationLogSyncService {
           `failedFileCount=${result.failedFileCount}`,
       );
     }
+    const outcome = await this._processDownloadResult(syncProvider, result, options);
+    // #9256: the kept prefix is applied and its cursor persisted; report the failed
+    // page now, unless this cycle's outcome supersedes the decrypt error.
+    if (
+      result.decryptErrorAfterKeptPrefix &&
+      !isKeptPrefixDecryptErrorSuperseded(outcome, {
+        prefixCursor: result.latestServerSeq,
+        persistedCursor: await syncProvider.getLastServerSeq(),
+      })
+    ) {
+      throw result.decryptErrorAfterKeptPrefix;
+    }
+    return outcome;
+  }
 
+  private async _processDownloadResult(
+    syncProvider: OperationSyncCapable,
+    result: SuccessfulDownloadResult,
+    options: Parameters<OperationLogSyncService['downloadRemoteOps']>[1],
+  ): Promise<DownloadOutcome> {
     // Server migration detected: gap on empty server
     // Create a SYNC_IMPORT operation with full local state to seed the new server
     if (result.needsFullStateUpload) {
@@ -614,10 +678,36 @@ export class OperationLogSyncService {
         options?.fenceEpoch,
         'server migration',
       );
-      await this.serverMigrationService.handleServerMigration(syncProvider);
+      const outcome =
+        await this.serverMigrationService.handleServerMigration(syncProvider);
+      // #9932: blocking this cycle's upload is right only when this client HAS
+      // state that failed to ship AND the server still holds no base state for
+      // the ordinary ops that would follow (see `server_migration_skipped` in
+      // DownloadOutcome). Only these two reasons are that case.
+      //
+      // `server_not_empty` is NOT: the fresh check found that someone seeded the
+      // server meanwhile, so a base state exists and the ordinary path applies —
+      // blocking there strands a cycle for nothing, and the client reports
+      // not-in-sync with its ops still pending. `empty_state` has nothing to
+      // ship at all. Both fall through to the ordinary upload, as before #9932.
+      const seedingFailed =
+        outcome.kind === 'skipped' &&
+        (outcome.reason === 'validation_failed' || outcome.reason === 'no_client_id');
+      if (seedingFailed) {
+        OpLog.warn(
+          `OperationLogSyncService: Server-reset seeding created no SYNC_IMPORT (${outcome.reason}).`,
+        );
+        return { kind: 'server_migration_skipped' };
+      }
       // Persist lastServerSeq=0 for the migration case (server was reset)
       if (result.latestServerSeq !== undefined) {
         await syncProvider.setLastServerSeq(result.latestServerSeq);
+      }
+      if (outcome.kind === 'skipped') {
+        OpLog.normal(
+          `OperationLogSyncService: Server was reset but nothing was seeded (${outcome.reason}); continuing with the ordinary upload.`,
+        );
+        return { kind: 'no_new_ops' };
       }
       return { kind: 'server_migration_handled' };
     }
@@ -772,7 +862,7 @@ export class OperationLogSyncService {
           this.syncImportConflictGateService.hasMeaningfulPendingOps(
             unsyncedOps,
             pendingOpClassification,
-          ) || this.syncLocalStateService.hasMeaningfulStoreData(exampleTaskIds);
+          ) || (await this.syncLocalStateService.hasMeaningfulStoreData(exampleTaskIds));
 
         if (hasMeaningfulUserData) {
           // SPAP-9: before surfacing the binary USE_LOCAL/USE_REMOTE dialog, use
@@ -874,7 +964,10 @@ export class OperationLogSyncService {
 
         // CRITICAL FIX: Even if op-log is empty, check if NgRx store has meaningful data.
         // This catches data that existed before the operation-log feature was added.
-        if (isFreshClient && this.syncLocalStateService.hasMeaningfulStoreData()) {
+        if (
+          isFreshClient &&
+          (await this.syncLocalStateService.hasMeaningfulStoreData())
+        ) {
           OpLog.warn(
             'OperationLogSyncService: Fresh client detected with meaningful local data in store. ' +
               'Throwing LocalDataConflictError for conflict resolution dialog.',
@@ -984,16 +1077,17 @@ export class OperationLogSyncService {
     }
 
     if (result.newOps.length === 0) {
-      // FIX I.2: Pre-op-log client with meaningful data on empty server.
-      // A client that has tasks/projects in NgRx but no op-log history can't upload
-      // (isWhollyFreshClient blocks upload) and server migration won't trigger
-      // (hasSyncedOps=false). With an empty server, there are no remote ops to
-      // trigger a conflict dialog. Detect this case and create a SYNC_IMPORT
-      // via the migration service so the client is no longer "fresh".
+      // FIX I.2: Pre-op-log client with meaningful data on empty server. It can't
+      // upload (isWhollyFreshClient blocks it), server migration won't trigger
+      // (hasSyncedOps=false), and no remote ops exist to raise a conflict dialog.
+      // Seed via SYNC_IMPORT. Same for a never-synced genesis client (#9863).
       const isEmptyServer = result.latestServerSeq === 0;
       if (isEmptyServer) {
-        const isFresh = await this.isWhollyFreshClient();
-        if (isFresh && this.syncLocalStateService.hasMeaningfulStoreData()) {
+        const isFresh =
+          await this.syncLocalStateService.isFreshOrNeverSyncedGenesisClient(
+            result.newOps,
+          );
+        if (isFresh && (await this.syncLocalStateService.hasMeaningfulStoreData())) {
           OpLog.warn(
             'OperationLogSyncService: Pre-op-log client with meaningful local data on empty server. ' +
               'Creating SYNC_IMPORT via server migration to seed the server.',
@@ -1002,11 +1096,22 @@ export class OperationLogSyncService {
             options?.fenceEpoch,
             'empty-server migration',
           );
-          await this.serverMigrationService.handleServerMigration(syncProvider, {
-            syncImportReason: 'SERVER_MIGRATION',
-          });
-          // After SYNC_IMPORT is created, isWhollyFreshClient() returns false
-          // and upload phase will proceed normally.
+          const outcome = await this.serverMigrationService.handleServerMigration(
+            syncProvider,
+            { syncImportReason: 'SERVER_MIGRATION' },
+          );
+          // No SYNC_IMPORT → nothing shipped the state → skip this cycle's upload
+          // (see DownloadOutcome) so the next download re-evaluates. (#9921)
+          // `empty_state` is unreachable here (the gate above is a subset of the
+          // seeding's own check) and would strand the genesis state, so it is
+          // not exempted like in the server-reset branch.
+          if (outcome.kind === 'skipped') {
+            OpLog.warn(
+              `OperationLogSyncService: Empty-server seeding created no SYNC_IMPORT (${outcome.reason}).`,
+            );
+            return { kind: 'server_migration_skipped' };
+          }
+          // The SYNC_IMPORT makes the client non-fresh; upload proceeds normally.
           return { kind: 'server_migration_handled' };
         }
       }
@@ -1027,19 +1132,19 @@ export class OperationLogSyncService {
       };
     }
 
-    // SAFETY: Fresh client conflict detection
-    // If this is a wholly fresh client receiving remote data for the first time,
-    // check if there's meaningful local data that would be overwritten.
-    const isFreshClient = await this.isWhollyFreshClient();
+    // SAFETY: a wholly fresh client — or a never-synced genesis client on the
+    // otherwise silent path (#9863) — receiving remote data for the first time.
+    const isFreshClient =
+      await this.syncLocalStateService.isFreshOrNeverSyncedGenesisClient(result.newOps);
     if (isFreshClient && result.newOps.length > 0) {
-      if (this.syncLocalStateService.hasMeaningfulStoreData()) {
-        // Local data exists — throw conflict error so the full conflict dialog is shown,
-        // letting the user choose between keeping local data or using remote data.
+      if (await this.syncLocalStateService.hasMeaningfulStoreData()) {
         OpLog.warn(
           `OperationLogSyncService: Fresh client has local data and ${result.newOps.length} remote ops. Showing conflict dialog.`,
         );
-        // Wholly fresh client — no prior sync, so no last-synced clock (SPAP-7).
-        throw new LocalDataConflictError(0, {}, undefined, null);
+        // No prior sync, so no last-synced clock (SPAP-7). Pending count: 0 when
+        // wholly fresh, >= 1 (the genesis op) for a genesis client.
+        const unsyncedCount = (await this.opLogStore.getUnsynced()).length;
+        throw new LocalDataConflictError(unsyncedCount, {}, undefined, null);
       }
 
       OpLog.warn(
@@ -1094,7 +1199,8 @@ export class OperationLogSyncService {
     let startupOpIdsToDiscard: string[] = [];
     let startupCleanupFullStateOpId: string | undefined;
     if (incomingConflict.fullStateOp) {
-      const { fullStateOp, pendingOps, dialogData } = incomingConflict;
+      const { fullStateOp, pendingOps, dialogData, deferredRepairOpId } =
+        incomingConflict;
       // Existing synced store data is not a conflict here. Prompt only when
       // local pending user changes would be discarded; otherwise an old client
       // can accidentally force-upload stale state over the remote import.
@@ -1118,6 +1224,12 @@ export class OperationLogSyncService {
         // Validation failure (if any during USE_REMOTE force-download) is on
         // the session-validation latch — wrapper reads it. (#7330)
         return { kind: 'no_new_ops' };
+      } else if (deferredRepairOpId) {
+        OpLog.normal(
+          `OperationLogSyncService: Deferring incoming REPAIR from client ` +
+            `${fullStateOp.clientId}; ${pendingOps.length} pending local op(s) ` +
+            `keep their place and this client repairs its own state instead.`,
+        );
       } else {
         startupOpIdsToDiscard = incomingConflict.discardablePendingOpIds;
         startupCleanupFullStateOpId = fullStateOp.id;
@@ -1138,8 +1250,21 @@ export class OperationLogSyncService {
         ignoredLocalFullStateOpIds: options?.ignoredLocalFullStateOpIds,
         conflictRecheck: { isNeverSynced: options?.isNeverSynced },
         fenceEpoch: options?.fenceEpoch,
+        ...(incomingConflict.deferredRepairOpId
+          ? { deferredRepairOpId: incomingConflict.deferredRepairOpId }
+          : {}),
       },
     );
+
+    if (processResult.preApplyRepairDeferred) {
+      // Cursor stays behind the repair (the persist below is skipped), so the
+      // batch comes back next cycle and the gate defers the repair up front.
+      OpLog.normal(
+        'OperationLogSyncService: Pending work appeared before the incoming REPAIR apply; ' +
+          'retrying the batch next cycle.',
+      );
+      return { kind: 'no_new_ops' };
+    }
 
     if (processResult.preApplyFullStateConflict?.dialogData) {
       const { fullStateOp, pendingOps, dialogData } =
@@ -1218,7 +1343,20 @@ export class OperationLogSyncService {
     // This is the correct behavior - better to re-download than to skip ops.
     // A version/migration block keeps the cursor behind the blocked op so it is
     // re-downloaded and retried after an app update instead of skipped forever.
-    if (result.latestServerSeq !== undefined) {
+    if (processResult.deferredRepairHealFailed) {
+      // The substitute local heal after deferring an incoming REPAIR failed:
+      // state is still invalid and the deferred snapshot is the one known fix.
+      // Skip ONLY the cursor persist so the next cycle re-downloads the repair
+      // — once this cycle's uploads are acknowledged the gate stops deferring
+      // it and applies it (see the piggyback-path twin). Everything else
+      // proceeds normally; re-downloaded ops are deduped by appliedOpIds, and
+      // the session-validation latch already reports the failure (sync shows
+      // ERROR).
+      OpLog.err(
+        'OperationLogSyncService: Local heal after deferring an incoming REPAIR failed; ' +
+          'keeping the cursor behind the repair for retry.',
+      );
+    } else if (result.latestServerSeq !== undefined) {
       await syncProvider.setLastServerSeq(result.latestServerSeq);
     }
 
@@ -1254,10 +1392,21 @@ export class OperationLogSyncService {
       };
       /** Sync epoch captured at cycle start (#9074); fences the apply. */
       fenceEpoch?: number;
+      /** Causal REPAIR the gate deferred; dropped from this batch (#9773). */
+      deferredRepairOpId?: string;
     },
   ): Promise<GuardedRemoteOpsProcessingResult> {
     const startupOpIdsToDiscard = new Set(startupOpIds);
     let preApplyFullStateConflict: IncomingFullStateConflictGateResult | undefined;
+    let preApplyRepairDeferred = false;
+    let deferredRepairHealFailed = false;
+    // Drop the deferred repair, then treat the rest of the batch as ordinary
+    // remote ops. The snapshot is not lost work: this client already applies
+    // every op the repair was built from, so only the correction itself is
+    // skipped — and the post-apply validation below recomputes that locally.
+    const opsToProcess = options?.deferredRepairOpId
+      ? remoteOps.filter((op) => op.id !== options.deferredRepairOpId)
+      : remoteOps;
     try {
       const conflictRecheck = options?.conflictRecheck;
       const beforeFullStateApply = conflictRecheck
@@ -1273,6 +1422,14 @@ export class OperationLogSyncService {
             for (const opId of conflict.discardablePendingOpIds) {
               startupOpIdsToDiscard.add(opId);
             }
+            if (conflict.deferredRepairOpId) {
+              // Too late to drop the repair from this batch — it is already
+              // partitioned for a wholesale apply. Block the apply and leave
+              // the cursor behind it; the next cycle's gate check runs before
+              // partitioning and defers it properly (#9773).
+              preApplyRepairDeferred = true;
+              return false;
+            }
             if (conflict.dialogData) {
               preApplyFullStateConflict = conflict;
               return false;
@@ -1282,22 +1439,38 @@ export class OperationLogSyncService {
         : undefined;
       const result = await this.repairSyncContext.runWithBaseServerSeq(
         options?.repairBaseServerSeq,
-        () =>
-          this.remoteOpsProcessingService.processRemoteOps(remoteOps, {
-            ...(options?.ignoredLocalFullStateOpIds?.length
-              ? {
-                  ignoredLocalFullStateOpIds: options.ignoredLocalFullStateOpIds,
-                }
-              : {}),
-            ...(beforeFullStateApply ? { beforeFullStateApply } : {}),
-            ...(options?.fenceEpoch !== undefined
-              ? { fenceEpoch: options.fenceEpoch }
-              : {}),
-          }),
+        async () => {
+          const processed = await this.remoteOpsProcessingService.processRemoteOps(
+            opsToProcess,
+            {
+              ...(options?.ignoredLocalFullStateOpIds?.length
+                ? {
+                    ignoredLocalFullStateOpIds: options.ignoredLocalFullStateOpIds,
+                  }
+                : {}),
+              ...(beforeFullStateApply ? { beforeFullStateApply } : {}),
+              ...(options?.fenceEpoch !== undefined
+                ? { fenceEpoch: options.fenceEpoch }
+                : {}),
+            },
+          );
+          if (options?.deferredRepairOpId && !preApplyRepairDeferred) {
+            // The skipped snapshot carried the fix for corruption this client
+            // most likely shares (it applied the same ops). Heal it here:
+            // processRemoteOps only validates when it applied something, and a
+            // batch holding just the repair applies nothing. Inside
+            // runWithBaseServerSeq so any repair this produces is causal — a
+            // legacy one would make receivers drop concurrent ops.
+            deferredRepairHealFailed =
+              !(await this.remoteOpsProcessingService.validateAfterSync());
+          }
+          return processed;
+        },
       );
       if (
         result.fullStateApplyBlockedByLocalConflict &&
-        !preApplyFullStateConflict?.dialogData
+        !preApplyFullStateConflict?.dialogData &&
+        !preApplyRepairDeferred
       ) {
         throw new Error(
           'Full-state apply was blocked without conflict data for resolution.',
@@ -1311,6 +1484,8 @@ export class OperationLogSyncService {
       return {
         ...result,
         ...(preApplyFullStateConflict ? { preApplyFullStateConflict } : {}),
+        ...(preApplyRepairDeferred ? { preApplyRepairDeferred } : {}),
+        ...(deferredRepairHealFailed ? { deferredRepairHealFailed } : {}),
       };
     } catch (error) {
       try {
@@ -1943,7 +2118,8 @@ export class OperationLogSyncService {
             );
           } else {
             try {
-              currentBackupRef = await this.backupService.captureImportBackup();
+              currentBackupRef =
+                await this.backupService.captureImportBackup('FORCE_DOWNLOAD');
               capturedBackupRef = currentBackupRef;
             } catch (e) {
               OpLog.warn(
@@ -2019,6 +2195,7 @@ export class OperationLogSyncService {
                   {
                     skipConflictDetection: true,
                     callerHoldsOperationLogLock: true,
+                    skipRecoveryPoint: true,
                   },
                 );
               if (processResult.blockedByIncompatibleOp) {
@@ -2068,6 +2245,11 @@ export class OperationLogSyncService {
               this.remoteOpsProcessingService.processRemoteOps(migratedRemoteOps, {
                 skipConflictDetection: true,
                 callerHoldsOperationLogLock: true,
+                skipRecoveryPoint: true,
+                // Whole history onto the default baseline dispatched above; the
+                // file-provider branch hydrates a snapshot first and must NOT
+                // set this (#9863 genesis gate).
+                isReplayFromEmptyBaseline: true,
               }),
           );
 
@@ -2253,7 +2435,7 @@ export class OperationLogSyncService {
     // Same reasoning for note drafts: this "Use Server Data" path replays the
     // complete server history over live state, replacing every note, and it
     // does NOT funnel through importCompleteBackup.
-    this.localDraftService.deleteDraftsForActiveProfile();
+    this.localDraftService.deleteAllDrafts();
     return hasDurableRecovery;
   }
 
@@ -2320,7 +2502,7 @@ export class OperationLogSyncService {
           'USE_REMOTE aborted: remote history contains an unsupported schema version.',
         );
       }
-      if (version > CURRENT_SCHEMA_VERSION) {
+      if (version > CURRENT_SCHEMA_VERSION || getUnknownOpVocabulary(op) !== null) {
         if (
           !this._hasWarnedRebuildVersionBlockThisSession &&
           !this.snackService.hasPendingPersistentAction()
@@ -2335,7 +2517,7 @@ export class OperationLogSyncService {
           });
         }
         throw new Error(
-          'USE_REMOTE aborted: remote history contains ops from a newer schema version — update the app first.',
+          'USE_REMOTE aborted: remote history contains ops from a newer schema version or with an unknown op type — update the app first.',
         );
       }
     }

@@ -60,8 +60,13 @@ describe('TaskDetailPanelComponent', () => {
     });
     const mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       cfg: jasmine.createSpy().and.returnValue({ keyboard: {} }),
-      tasks: jasmine.createSpy().and.returnValue({}),
+      // Formatting off keeps these specs on the plain-textarea notes path; the
+      // live markdown editor (#9910) has its own specs and an e2e.
+      tasks: jasmine
+        .createSpy()
+        .and.returnValue({ isMarkdownFormattingInNotesEnabled: false }),
       clipboardImages: jasmine.createSpy().and.returnValue(null),
+      misc: jasmine.createSpy().and.returnValue({}),
     });
     const mockIssueService = jasmine.createSpyObj(
       'IssueService',
@@ -323,6 +328,63 @@ describe('TaskDetailPanelComponent', () => {
       expect(component.showScheduleIcon()).toBe('today');
     });
   });
+
+  describe('title editor sizing (#9641)', () => {
+    // task-title sizes its edit box from an invisible .height-measure span and
+    // overlays an absolutely positioned, overflow:hidden textarea on it. If the
+    // panel styles the textarea differently from the measurer, the text wraps
+    // to more lines than the box is tall, and because focusing moves the caret
+    // to the end the textarea scrolls down — hiding the start of a long title
+    // with no way to scroll back.
+    const LONG_TITLE =
+      'Test1 Test2 Test3 Test4 Test Test Test Test Test Test Test Test Test Test Test Test';
+
+    const startEditingTitle = (): { textarea: HTMLElement; measurer: HTMLElement } => {
+      const titleEl = fixture.nativeElement.querySelector('task-title') as HTMLElement;
+      titleEl.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      fixture.detectChanges();
+
+      const textarea = titleEl.querySelector('textarea') as HTMLElement | null;
+      const measurer = titleEl.querySelector('.height-measure') as HTMLElement | null;
+      expect(textarea).toBeTruthy();
+      expect(measurer).toBeTruthy();
+      return { textarea: textarea as HTMLElement, measurer: measurer as HTMLElement };
+    };
+
+    beforeEach(() => {
+      componentRef.setInput('task', { ...MOCK_TASK, title: LONG_TITLE });
+      // Phone-width viewport: a long title has to wrap for the bug to show.
+      fixture.nativeElement.style.width = '360px';
+      fixture.detectChanges();
+    });
+
+    it('renders the title textarea with the same text metrics as its measurer', () => {
+      const { textarea, measurer } = startEditingTitle();
+
+      expect(getComputedStyle(textarea).fontWeight).toBe(
+        getComputedStyle(measurer).fontWeight,
+      );
+    });
+
+    it('does not clip the title textarea below its own content height', () => {
+      const words = LONG_TITLE.split(' ');
+      const clipped: string[] = [];
+
+      for (let wordCount = 4; wordCount <= words.length; wordCount++) {
+        const title = words.slice(0, wordCount).join(' ');
+        componentRef.setInput('task', { ...MOCK_TASK, title });
+        fixture.detectChanges();
+        const { textarea } = startEditingTitle();
+        if (textarea.scrollHeight > textarea.clientHeight) {
+          clipped.push(
+            `${title} (${textarea.scrollHeight}px content in ${textarea.clientHeight}px box)`,
+          );
+        }
+      }
+
+      expect(clipped).toEqual([]);
+    });
+  });
 });
 
 const fakeTask = (id: string): TaskWithSubTasks =>
@@ -362,7 +424,14 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
         { provide: LayoutService, useValue: { isXs: () => false } },
-        { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            cfg: () => ({}),
+            misc: () => ({}),
+            tasks: () => ({ isMarkdownFormattingInNotesEnabled: false }),
+          },
+        },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
           provide: TaskRepeatCfgService,
@@ -428,10 +497,10 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
     expect(item.elementRef.nativeElement.focus).not.toHaveBeenCalled();
   }));
 
-  // A late panel auto-focus must not blur an open "add subtask" draft: the
-  // draft's blur handler closes it, which left "Add subtask" silently broken
-  // when opened from the Planner under load (#8617/#8630).
-  it('does not steal focus from an open add-subtask draft', fakeAsync(() => {
+  // A late panel auto-focus must not blur an open "add subtask" draft: it left
+  // "Add subtask" silently broken when opened from the Planner under load
+  // (#8617/#8630). The draft here is not rendered yet — the actual race.
+  it('does not steal focus from an add-subtask draft that owns focus', fakeAsync(() => {
     (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
       () => [makeItem()];
     const focusItemSpy = spyOn(component, 'focusItem');
@@ -445,12 +514,78 @@ describe('TaskDetailPanelComponent stale-focus guard', () => {
 
     expect(focusItemSpy).not.toHaveBeenCalled();
   }));
+
+  // A draft with text stays open after losing focus, so suppressing on its mere
+  // existence would disable every deferred panel focus for the rest of the
+  // task's session (keyboard nav dropping to <body>).
+  it('still focuses the panel item when an open draft no longer holds focus', fakeAsync(() => {
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+    const draftInput = document.createElement('input');
+    document.body.appendChild(draftInput);
+    // A rendered draft input that something else has focus over.
+    (
+      component as unknown as {
+        addSubtaskInput: () => { inputEl: () => { nativeElement: HTMLInputElement } };
+      }
+    ).addSubtaskInput = () => ({ inputEl: () => ({ nativeElement: draftInput }) });
+    component.isAddSubtaskInputVisible.set(true);
+
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+
+    tick(200);
+
+    expect(focusItemSpy).toHaveBeenCalled();
+    draftInput.remove();
+  }));
+
+  // Escape in the notes editor blurs it and hands focus back to the notes item
+  // 150ms later. Clicking straight back into the editor inside that window must
+  // not have the caret yanked out again by the pending timer.
+  it('does not steal focus from a text field focused while the timer is pending', fakeAsync(() => {
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+    const editable = document.createElement('div');
+    editable.contentEditable = 'true';
+    editable.tabIndex = 0;
+    document.body.appendChild(editable);
+
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+    // ...the user clicks back into the editor before the timer fires.
+    editable.focus();
+
+    tick(200);
+
+    expect(focusItemSpy).not.toHaveBeenCalled();
+    editable.remove();
+  }));
+
+  it('still focuses the panel item when focus is not in a text field', fakeAsync(() => {
+    (component as unknown as { itemEls: () => TaskDetailItemComponent[] }).itemEls =
+      () => [makeItem()];
+    const focusItemSpy = spyOn(component, 'focusItem');
+    const item = document.createElement('div');
+    item.tabIndex = 0;
+    document.body.appendChild(item);
+
+    (component as unknown as { _focusFirst: () => void })._focusFirst();
+    item.focus();
+
+    tick(200);
+
+    expect(focusItemSpy).toHaveBeenCalled();
+    item.remove();
+  }));
 });
 
 // Opening the notes panel via a checklist's progress badge routes through
-// TaskDetailTargetPanel.Notes. It must land on the RENDERED checklist (preview),
-// not auto-open the raw-markdown editor: doing both briefly flashed the raw
-// "- [ ] " source before focusItem() blurred the editor back to preview.
+// TaskDetailTargetPanel.Notes. It must not auto-focus the notes editor: doing
+// both briefly flashed the raw "- [ ] " source before focusItem() blurred it
+// back. (These specs run the markdown-formatting-off path, so "not focused"
+// means the preview stays up; on the default path it means the live editor
+// keeps its syntax hidden.)
 describe('TaskDetailPanelComponent notes target does not auto-edit', () => {
   let component: TaskDetailPanelComponent;
   let fixture: ComponentFixture<TaskDetailPanelComponent>;
@@ -478,7 +613,14 @@ describe('TaskDetailPanelComponent notes target does not auto-edit', () => {
         { provide: TaskAttachmentService, useValue: {} },
         { provide: ClipboardImageService, useValue: {} },
         { provide: LayoutService, useValue: { isXs: () => false } },
-        { provide: GlobalConfigService, useValue: { cfg: () => ({}) } },
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            cfg: () => ({}),
+            misc: () => ({}),
+            tasks: () => ({ isMarkdownFormattingInNotesEnabled: false }),
+          },
+        },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
           provide: TaskRepeatCfgService,
@@ -577,7 +719,11 @@ describe('TaskDetailPanelComponent add sub-task', () => {
         { provide: LayoutService, useValue: { isXs: () => false } },
         {
           provide: GlobalConfigService,
-          useValue: { cfg: () => ({ keyboard: { taskAddSubTask: 'a' } }) },
+          useValue: {
+            cfg: () => ({ keyboard: { taskAddSubTask: 'a' } }),
+            misc: () => ({}),
+            tasks: () => ({ isMarkdownFormattingInNotesEnabled: false }),
+          },
         },
         { provide: IssueService, useValue: { getById$: () => of(null) } },
         {
@@ -626,6 +772,18 @@ describe('TaskDetailPanelComponent add sub-task', () => {
 
     expect(addSubTaskToSpy).toHaveBeenCalledWith('P');
     expect(subComponent.isAddSubtaskInputVisible()).toBe(false);
+  });
+
+  it('drops an open draft when the sub-task section is collapsed', () => {
+    // Collapsing only hides the section's content, so a kept-open draft would
+    // linger invisible and unreachable.
+    component.addSubTask();
+    expect(component.isAddSubtaskInputVisible()).toBe(true);
+
+    component.onSubTasksExpandedChange(false);
+
+    expect(component.isSubTasksExpanded()).toBe(false);
+    expect(component.isAddSubtaskInputVisible()).toBe(false);
   });
 
   it('hides the input again when it is closed', () => {

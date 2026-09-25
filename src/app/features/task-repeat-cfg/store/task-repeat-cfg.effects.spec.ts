@@ -2968,6 +2968,108 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         done();
       }, 0);
     });
+
+    // Editing a monthly anchor ("2nd Tuesday" -> "3rd Tuesday", or toggling
+    // last-day-of-month) changes which day the next occurrence lands on, just
+    // like editing the weekly weekday booleans does -- but the monthly anchor
+    // fields were missing from SCHEDULE_AFFECTING_FIELDS, so the live instance
+    // silently stayed on the old day.
+    it('reschedules the live instance when only the monthly nth-weekday anchor changes', () => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: todayStr,
+        created: today.getTime(),
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        monthlyWeekOfMonth: 2,
+        monthlyWeekday: 2,
+      };
+      const expectedOccurrence = getNextRepeatOccurrence(updatedCfg as any, new Date(), {
+        inclusive: true,
+      })!;
+      const expectedDayStr = getDbDateStr(expectedOccurrence);
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { monthlyWeekOfMonth: 2, monthlyWeekday: 2 },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      const emitted: Action[] = [];
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) =>
+        emitted.push(result),
+      );
+
+      expect(emitted).toEqual([
+        PlannerActions.planTaskForDay({ task: liveTask as any, day: expectedDayStr }),
+      ]);
+      expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+        'repeat-cfg-id',
+        jasmine.objectContaining({ lastTaskCreationDay: expectedDayStr }),
+      );
+    });
+
+    it('reschedules the live instance when only monthlyLastDay changes', () => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: todayStr,
+        created: today.getTime(),
+      };
+
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'MONTHLY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        monthlyLastDay: true,
+      };
+      const expectedOccurrence = getNextRepeatOccurrence(updatedCfg as any, new Date(), {
+        inclusive: true,
+      })!;
+      const expectedDayStr = getDbDateStr(expectedOccurrence);
+
+      const action = updateTaskRepeatCfg({
+        taskRepeatCfg: {
+          id: 'repeat-cfg-id',
+          changes: { monthlyLastDay: true },
+        },
+      });
+
+      actions$ = of(action);
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      const emitted: Action[] = [];
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) =>
+        emitted.push(result),
+      );
+
+      expect(emitted).toEqual([
+        PlannerActions.planTaskForDay({ task: liveTask as any, day: expectedDayStr }),
+      ]);
+      expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+        'repeat-cfg-id',
+        jasmine.objectContaining({ lastTaskCreationDay: expectedDayStr }),
+      );
+    });
   });
 });
 

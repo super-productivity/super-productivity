@@ -131,6 +131,55 @@ describe('PlainspaceApiService', () => {
     expect(await p).toBeNull();
   });
 
+  // #9988: the connect dialog must be able to tell "the server rejected this
+  // token" from "we never got an answer" — collapsing both into one message is
+  // what made a transport failure look like a mistyped token.
+  it('verifyToken$ reports ok with the account on a valid token', async () => {
+    const p = firstValueFrom(service.verifyToken$(cfg));
+    const req = httpMock.expectOne(`${BASE}/me`);
+    expect(req.request.headers.get('Authorization')).toBe('Bearer pat_test');
+    req.flush({ email: 'a@b.c', projects: [] });
+    expect(await p).toEqual({ status: 'ok', me: { email: 'a@b.c', projects: [] } });
+  });
+
+  [401, 403].forEach((status) => {
+    it(`verifyToken$ reports invalid-token on ${status}`, async () => {
+      const p = firstValueFrom(service.verifyToken$(cfg));
+      httpMock.expectOne(`${BASE}/me`).flush('nope', { status, statusText: 'x' });
+      expect(await p).toEqual({ status: 'invalid-token' });
+    });
+  });
+
+  it('verifyToken$ reports unreachable when there is no response at all', async () => {
+    const p = firstValueFrom(service.verifyToken$(cfg));
+    httpMock.expectOne(`${BASE}/me`).error(new ProgressEvent('error'), { status: 0 });
+    expect(await p).toEqual({ status: 'unreachable' });
+  });
+
+  // An empty body is no verdict on the token: HttpClient emits null for it, and
+  // treating that as `ok` crashed connect() on `me.email` (#9988 follow-up).
+  it('verifyToken$ reports unreachable on a 204 with no body', async () => {
+    const p = firstValueFrom(service.verifyToken$(cfg));
+    httpMock
+      .expectOne(`${BASE}/me`)
+      .flush(null, { status: 204, statusText: 'No Content' });
+    expect(await p).toEqual({ status: 'unreachable' });
+  });
+
+  it('verifyToken$ reports unreachable on a 200 with an empty body', async () => {
+    const p = firstValueFrom(service.verifyToken$(cfg));
+    httpMock.expectOne(`${BASE}/me`).flush(null);
+    expect(await p).toEqual({ status: 'unreachable' });
+  });
+
+  [500, 502, 404].forEach((status) => {
+    it(`verifyToken$ reports unreachable on ${status} (no verdict on the token)`, async () => {
+      const p = firstValueFrom(service.verifyToken$(cfg));
+      httpMock.expectOne(`${BASE}/me`).flush('boom', { status, statusText: 'x' });
+      expect(await p).toEqual({ status: 'unreachable' });
+    });
+  });
+
   it('getSpaces$ maps the account spaces from /me', async () => {
     const p = firstValueFrom(service.getSpaces$(cfg));
     const req = httpMock.expectOne(`${BASE}/me`);
@@ -218,14 +267,37 @@ describe('PlainspaceApiService', () => {
     // httpMock.verify() in afterEach asserts no /me call was made.
   });
 
-  it('createSpace$ returns the new project id', async () => {
+  it('creates a space, keeps its UUID for the provider, and resolves its slug for opening', async () => {
     const p = firstValueFrom(service.createSpace$('My Space', cfg));
     const req = httpMock.expectOne(`${BASE}/spaces`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ name: 'My Space' });
-    req.flush({ project: { id: 'proj-new' }, url: 'x', memberId: 'm' });
-    expect((await p).id).toBe('proj-new');
+    const project = { id: 'proj-new', name: 'My Space', slug: 'new-space-slug' };
+    const url = 'https://plainspace.org/new-space-slug';
+    req.flush({ project, url, memberId: 'm' });
+    const created = await p;
+    expect(created.id).toBe(project.id);
+
+    const openedUrl = firstValueFrom(
+      service.getSpaceUrl$({ ...cfg, spaceId: created.id }),
+    );
+    httpMock.expectOne(`${BASE}/me`).flush({
+      email: 'me@example.com',
+      projects: [{ ...project, memberDisplayName: 'Me', role: 'admin' }],
+    });
+    expect(await openedUrl).toBe(url);
   });
+
+  for (const status of [401, 429, 500]) {
+    it(`propagates space creation errors (${status}) so the share flow can report them`, async () => {
+      const created = firstValueFrom(service.createSpace$('My Space', cfg));
+      httpMock
+        .expectOne(`${BASE}/spaces`)
+        .flush({ error: 'Cannot create space' }, { status, statusText: 'API error' });
+
+      await expectAsync(created).toBeRejected();
+    });
+  }
 
   it('createTask$ POSTs { spaceId, title } and maps the created task', async () => {
     const p = firstValueFrom(service.createTask$('Buy milk', cfg));

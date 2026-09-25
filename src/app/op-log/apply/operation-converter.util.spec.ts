@@ -789,6 +789,63 @@ describe('operation-converter utility', () => {
         ).toBe('replace');
       });
 
+      it('restores wire-dropped cleared fields for patch-mode LWW deltas (#9776)', () => {
+        // Exactly as a merged op arrives over the wire: JSON dropped the
+        // undefined-valued key from actionPayload; clearedFields survives.
+        const op: Operation = JSON.parse(
+          JSON.stringify(
+            createMockOperation({
+              actionType: '[TASK] LWW Update' as ActionType,
+              entityId: 'task-1',
+              payload: {
+                actionPayload: {
+                  id: 'task-1',
+                  title: 'Kept title',
+                  _hideSubTasksMode: undefined,
+                },
+                entityChanges: [],
+                lwwUpdateMode: 'patch',
+                clearedFields: ['_hideSubTasksMode'],
+              },
+            }),
+          ),
+        );
+
+        const action = convertOpToAction(op) as unknown as Record<string, unknown>;
+
+        expect(action['title']).toBe('Kept title');
+        // The clear must be an OWN property again so updateOne clears the field.
+        expect(Object.keys(action)).toContain('_hideSubTasksMode');
+        expect(action['_hideSubTasksMode']).toBeUndefined();
+      });
+
+      it('never restores a cleared id and ignores clears on replace snapshots', () => {
+        const patchOp = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          entityId: 'task-1',
+          payload: {
+            actionPayload: { id: 'task-1', title: 'T' },
+            entityChanges: [],
+            lwwUpdateMode: 'patch',
+            clearedFields: ['id'],
+          },
+        });
+        expect((convertOpToAction(patchOp) as any).id).toBe('task-1');
+
+        const replaceOp = createMockOperation({
+          actionType: '[TASK] LWW Update' as ActionType,
+          entityId: 'task-1',
+          payload: {
+            actionPayload: { id: 'task-1', title: 'T' },
+            entityChanges: [],
+            lwwUpdateMode: 'replace',
+            clearedFields: ['title'],
+          },
+        });
+        const replaceAction = convertOpToAction(replaceOp) as any;
+        expect(replaceAction.title).toBe('T');
+      });
+
       it('should expose recreate-after-delete metadata (#8997)', () => {
         const op = createMockOperation({
           actionType: '[TASK] LWW Update' as ActionType,

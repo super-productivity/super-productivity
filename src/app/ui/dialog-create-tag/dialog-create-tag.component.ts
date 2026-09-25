@@ -18,7 +18,7 @@ import { FormsModule } from '@angular/forms';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
-import { getRandomWorkContextColor } from '../../features/work-context/work-context-color';
+import { getRandomWorkContextColor } from '../work-context-color';
 import { MatAutocomplete, MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { MatOption } from '@angular/material/core';
 import { MaterialIconsLoaderService } from '../material-icons-loader.service';

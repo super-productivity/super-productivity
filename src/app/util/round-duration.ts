@@ -1,4 +1,4 @@
-import { RoundTimeOption } from '../features/project/project.model';
+import { RoundTimeOption } from './round-time-option.model';
 
 // Simple Duration interface to replace moment.Duration
 export interface SimpleDuration {

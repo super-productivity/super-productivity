@@ -371,6 +371,48 @@ describe('LegacyPfDbService', () => {
     });
   });
 
+  describe('markMigrationSkipped', () => {
+    it('should record the marker and confirm it stuck', async () => {
+      mockDb.get.and.resolveTo(true);
+
+      await expectAsync(service.markMigrationSkipped()).toBeResolvedTo(true);
+
+      expect(mockDb.put).toHaveBeenCalledWith('main', true, '_migration_skipped');
+    });
+
+    // save() swallows its own failures, so an unwritable database would
+    // otherwise look like a success and drop the user back on the same dialog.
+    it('should report false when the marker did not stick', async () => {
+      mockDb.get.and.resolveTo(undefined);
+
+      await expectAsync(service.markMigrationSkipped()).toBeResolvedTo(false);
+    });
+
+    // Nothing may be deleted: the pf store also holds the sync credentials and
+    // the user's only remaining copy of their data.
+    it('should not delete anything', async () => {
+      mockDb.get.and.resolveTo(true);
+
+      await service.markMigrationSkipped();
+
+      expect(mockDb.delete).not.toHaveBeenCalled();
+      expect(mockDb.transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('hasUsableEntityData with the skip marker', () => {
+    it('should report no usable data once the user skipped it', async () => {
+      spyOn(service, 'databaseExists').and.resolveTo(true);
+      mockDb.get.and.callFake((_store: string, key: string) =>
+        Promise.resolve(
+          key === '_migration_skipped' ? true : { ids: ['t1'], entities: {} },
+        ),
+      );
+
+      await expectAsync(service.hasUsableEntityData()).toBeResolvedTo(false);
+    });
+  });
+
   describe('clearAll', () => {
     it('should clear all data from the database', async () => {
       const mockStore = {

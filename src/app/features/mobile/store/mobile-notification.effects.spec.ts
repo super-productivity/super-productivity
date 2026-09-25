@@ -184,22 +184,25 @@ describe('MobileNotificationEffects', () => {
       expect(reminderServiceSpy.ensureExactAlarmPermission).not.toHaveBeenCalled();
     }));
 
-    it('checks exact alarm permission when notifications are granted', fakeAsync(() => {
+    it('never checks exact alarms at startup, even when notifications are granted', fakeAsync(() => {
+      // ensureExactAlarmPermission() opens Android's "Alarms & reminders"
+      // settings page. At startup there is nothing scheduled, so sending the
+      // user there is pure noise — the scheduling effects own that check (#9648).
       setup('android');
       reminderServiceSpy.getPermissionState.and.resolveTo('granted');
       runStartup();
 
-      expect(reminderServiceSpy.ensureExactAlarmPermission).toHaveBeenCalledTimes(1);
+      expect(reminderServiceSpy.ensureExactAlarmPermission).not.toHaveBeenCalled();
       expect(snackServiceSpy.open).not.toHaveBeenCalled();
     }));
 
-    it('warns when granted but exact alarm permission is denied', fakeAsync(() => {
+    it('stays silent at startup when exact alarms would be denied', fakeAsync(() => {
       setup('android');
       reminderServiceSpy.getPermissionState.and.resolveTo('granted');
       reminderServiceSpy.ensureExactAlarmPermission.and.resolveTo(false);
       runStartup();
 
-      expect(snackServiceSpy.open).toHaveBeenCalledTimes(1);
+      expect(snackServiceSpy.open).not.toHaveBeenCalled();
     }));
   });
 

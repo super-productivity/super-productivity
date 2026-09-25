@@ -1,10 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import { info } from 'electron-log/main';
-import {
-  getWin,
-  getWasMaximizedBeforeHide,
-  setWasMaximizedBeforeHide,
-} from './main-window';
+import { getWin, getWasMaximizedBeforeHide } from './main-window';
 import {
   getIsTaskWidgetAlwaysShow,
   getIsTaskWidgetUserForcedVisible,
@@ -33,18 +29,15 @@ export function showOrFocus(passedWin: BrowserWindow): void {
     return;
   }
 
-  if (win.isVisible()) {
-    win.focus();
-  } else {
-    // restore explicitly - always call restore() before show()
-    // On Linux, event.preventDefault() on the minimize event has no effect, so the
-    // window may be minimized. On some desktop environments (e.g. GNOME/Wayland),
-    // isMinimized() returns false for a hidden+minimized window, so calling restore()
-    // only when isMinimized() is true would skip it and leave show() to fail alone.
+  // Preserve this before restore(): its synchronous unmaximize event can clear it.
+  const wasMaximized = getWasMaximizedBeforeHide();
+  // Always show the window even if isVisible() is stale (#8448), but avoid
+  // unmaximizing an already-visible window just to bring it to the front.
+  if (!win.isVisible() || !win.isMaximized() || win.isMinimized()) {
     win.restore();
-    win.show();
-    if (getWasMaximizedBeforeHide()) win.maximize();
   }
+  win.show();
+  if (wasMaximized) win.maximize();
 
   // Hide task widget when main window is shown, unless the user explicitly
   // pinned it visible via the global shortcut.
@@ -109,7 +102,6 @@ export function toggleWindowVisibility(passedWin: BrowserWindow): void {
   //   enabled AND the tray was successfully (re)created; otherwise minimize so a taskbar
   //   handle remains as a safety net. blur() is a Windows focus workaround (electron#20464)
   //   and a no-op elsewhere.
-  setWasMaximizedBeforeHide(win.isMaximized());
   if (IS_MAC) {
     win.hide();
   } else if (getIsMinimizeToTray() && ensureIndicator()) {

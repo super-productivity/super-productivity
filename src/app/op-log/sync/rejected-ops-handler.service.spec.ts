@@ -805,7 +805,10 @@ describe('RejectedOpsHandlerService', () => {
 
         // Should have called twice: normal then forced
         expect(downloadCallback).toHaveBeenCalledTimes(2);
-        expect(downloadCallback).toHaveBeenCalledWith({ forceFromSeq0: true });
+        expect(downloadCallback).toHaveBeenCalledWith({
+          forceFromSeq0: true,
+          isReDeliveryRetry: true,
+        });
       });
 
       it('should not resolve an op already retired by the forced download', async () => {

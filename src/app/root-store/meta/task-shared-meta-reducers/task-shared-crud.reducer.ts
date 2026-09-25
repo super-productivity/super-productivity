@@ -179,6 +179,21 @@ const handleConvertToMainTask = (
     : Array.isArray(parentTask.tagIds)
       ? parentTask.tagIds
       : [];
+  // #9651: a tagged sub task keeps its own tags on promotion; the parent's
+  // tags are only inherited when the task has none (a top-level task without
+  // project or tag would fail validation and vanish from every context view).
+  // The stored entity wins over the payload snapshot; TODAY is virtual and
+  // never lives in tagIds.
+  const storedTask = state[TASK_FEATURE_NAME].entities[task.id];
+  const ownTagIds = filterOutTodayTag(
+    Array.isArray(storedTask?.tagIds)
+      ? storedTask.tagIds
+      : Array.isArray(task.tagIds)
+        ? task.tagIds
+        : [],
+  );
+  const keptTagIds =
+    ownTagIds.length > 0 ? ownTagIds : filterOutTodayTag(resolvedParentTagIds);
   const positionConvertedTask = (taskIds: string[]): string[] => {
     // Dropped at the start of DONE → append to the bottom of the done list.
     if (afterTaskId == null && isDone) {
@@ -200,11 +215,7 @@ const handleConvertToMainTask = (
       id: task.id,
       changes: {
         parentId: undefined,
-        // Filter out TODAY_TAG.id - it's a virtual tag where membership is
-        // determined by task.dueDay, not by being in tagIds
-        tagIds: (Array.isArray(parentTask.tagIds) ? parentTask.tagIds : []).filter(
-          (id) => id !== TODAY_TAG.id,
-        ),
+        tagIds: keptTagIds,
         modified: capturedModified ?? Date.now(),
         ...(isPlanForToday && !task.dueWithTime
           ? {
@@ -250,7 +261,7 @@ const handleConvertToMainTask = (
 
   // Update tags - only update tags that exist
   const tagIdsToUpdate = [
-    ...resolvedParentTagIds,
+    ...keptTagIds,
     ...(isPlanForToday ? [TODAY_TAG.id] : []),
   ].filter((tagId) => state[TAG_FEATURE_NAME].entities[tagId]);
 
@@ -295,7 +306,18 @@ const handleConvertToSubTask = (
     });
   }
 
-  updatedState = removeTasksFromAllTags(updatedState, [task.id]);
+  // #9651: the task keeps its own tags when nested — only the stale TODAY
+  // ordering entry is dropped (dueDay is cleared below and TODAY membership
+  // is virtual, derived from dueDay).
+  const todayTag = updatedState[TAG_FEATURE_NAME].entities[TODAY_TAG.id];
+  if (todayTag && todayTag.taskIds.includes(task.id)) {
+    updatedState = updateTags(updatedState, [
+      {
+        id: TODAY_TAG.id,
+        changes: { taskIds: removeTasksFromList(todayTag.taskIds, [task.id]) },
+      },
+    ]);
+  }
   updatedState = removeTaskFromPlannerDays(updatedState, task.id);
 
   let taskState = updatedState[TASK_FEATURE_NAME];
@@ -316,7 +338,6 @@ const handleConvertToSubTask = (
         changes: {
           parentId: targetParent.id,
           projectId: targetParent.projectId,
-          tagIds: [],
           dueDay: undefined,
           modified: Date.now(),
         },
@@ -440,12 +461,57 @@ const handleDeleteTasks = (
     return [...acc, id];
   }, []);
 
-  // Remove tasks from task state
-  let newTaskState = taskAdapter.removeMany(allIds, updatedState[TASK_FEATURE_NAME]);
+  let newTaskState = updatedState[TASK_FEATURE_NAME];
+
+  // A deleted subtask whose parent survives must also leave the parent's
+  // subTaskIds (the singular deleteTask path does this via
+  // removeTaskFromParentSideEffects). Without it the parent keeps a dangling
+  // reference that replicates to every client through the bulk op.
+  //
+  // Each one goes through the singular path's own helper, in that path's exact
+  // order — remove the entity, THEN run its parent side effects — so the two
+  // stay in step. Both halves of the ordering matter:
+  //   - emptying a parent's subTaskIds must COPY the last subtask's times onto
+  //     the parent (isCopyTimesAfterLast) rather than recalculate from the now
+  //     empty list, which reset tracked time and estimate to 0 everywhere;
+  //   - removing the whole batch up front instead would hide the surviving
+  //     siblings from each intermediate recalc, leaving the parent's timeSpent
+  //     at 0 while timeSpentOnDay held the last subtask's entries.
+  // Iteration follows the parent's subTaskIds order rather than the payload's,
+  // so every client replays the same "last" subtask.
+  const allIdsSet = new Set(allIds);
+  const parentIdsHandled = new Set<string>();
+  taskIds.forEach((id) => {
+    const parentId = (state[TASK_FEATURE_NAME].entities[id] as Task | undefined)
+      ?.parentId;
+    if (!parentId || allIdsSet.has(parentId) || parentIdsHandled.has(parentId)) {
+      return;
+    }
+    const parent = newTaskState.entities[parentId] as Task | undefined;
+    if (!parent) {
+      return;
+    }
+    parentIdsHandled.add(parentId);
+    parent.subTaskIds
+      .filter((subId) => allIdsSet.has(subId))
+      .forEach((subId) => {
+        const subTask = newTaskState.entities[subId] as Task | undefined;
+        if (subTask) {
+          newTaskState = taskAdapter.removeOne(subId, newTaskState);
+          newTaskState = removeTaskFromParentSideEffects(newTaskState, subTask, true);
+        }
+      });
+  });
+
+  // Everything the loop above did not already remove. removeMany ignores ids
+  // that are already gone.
+  newTaskState = taskAdapter.removeMany(allIds, newTaskState);
+
   newTaskState = {
     ...newTaskState,
+    // Check the expanded id list: a tracked subtask disappears with its parent.
     currentTaskId:
-      newTaskState.currentTaskId && taskIds.includes(newTaskState.currentTaskId)
+      newTaskState.currentTaskId && allIdsSet.has(newTaskState.currentTaskId)
         ? null
         : newTaskState.currentTaskId,
   };

@@ -331,6 +331,47 @@ the recovery operation plus snapshot are committed atomically. See
 and
 [`operation-log-recovery.service.ts`](../../src/app/op-log/persistence/operation-log-recovery.service.ts).
 
+A genesis op (`MIGRATION` / `RECOVERY`) is not replayable by other clients — it
+carries this client's whole state as an ordinary Batch op that receivers apply
+as a no-op. A client whose history is still only that genesis op (never synced,
+no full-state op) is therefore treated like a fresh client with local data at
+join time: it gets the local-data conflict dialog on a non-empty server, or
+seeds an empty server with a `SYNC_IMPORT`
+(`SyncLocalStateService.isNeverSyncedGenesisClient`, #9863). Because that
+download-side decision is what actually ships the state, API-based providers
+(SuperSync) never upload the genesis op itself: `OperationLogUploadService`
+leaves it out of the upload set and marks it synced locally once the round's
+full-state ops are settled (`isGenesisEntityType`, #9921). While the upload is
+still blocked (no encryption key yet), or when this client's own `SYNC_IMPORT`
+was just dropped on `SYNC_IMPORT_EXISTS`, the op stays pending, because a
+pending genesis op is what makes the incoming-import gate prompt. File-based
+providers keep uploading it: there the ops upload is what writes the state
+snapshot. Servers may still hold genesis ops uploaded by older clients;
+receivers apply them as no-ops as before.
+
+Both join-time decisions are gated on `SyncLocalStateService.hasMeaningfulStoreData`,
+which uses `hasAnyUserData` — `hasMeaningfulStateData` widened with archives, live
+time tracking and repeat configs, since a legacy client's work can be entirely
+archived. Archived tasks and flushed time tracking live only in IndexedDB and the
+synchronous store snapshot substitutes an empty archive, so the gate falls back to
+the archive-inclusive snapshot when the narrow check finds nothing (#9932).
+Everything it counts is strictly non-default, keeping it a subset of the seeding's
+own check (`hasServerMigrationStateData`).
+
+The wider notion is deliberately confined to that gate. `hasMeaningfulStateData`
+itself stays narrow because `hasNothingWorthUploading` consumes it in the refusing
+direction (#9256), where over-reporting "has data" would let a device holding
+nothing overwrite the server — time tracked against onboarding example tasks being
+exactly such a false positive.
+`ServerMigrationService.handleServerMigration` reports `created` /
+`reused_pending` / `skipped` (with a reason). On the server-reset branch only a
+genuine failure to ship existing state — validation failed, or no client id —
+answers `server_migration_skipped`, so the upload waits for the next cycle
+instead of settling the client onto a server without its base state. A state
+judged empty has nothing to ship, and a server that is no longer empty has been
+seeded by someone else; both continue with the ordinary upload, because blocking
+either would strand the cycle with the client's ops still pending.
+
 ## A.4 Compaction
 
 ### Purpose
@@ -654,6 +695,33 @@ Therefore:
 0. **Default: do NOT bump.** A bump is near-irreversible and it is not free even when "safe": it hard-blocks every not-yet-updated post-v18.14.0 client (frozen cursor) on the new ops, and it cannot be reverted once any op carries the new version — a reverted client hard-blocks on the v(N+1) ops it already wrote and the USE_REMOTE recovery path throws on them. So a bump must earn its cost. If old clients can apply the op unmigrated (the envelope / inert-marker pattern), gate the new semantics on a payload marker and **leave `CURRENT_SCHEMA_VERSION` alone**. Only bump when a change genuinely requires it: a transforming migration (renamed/removed field, dropped op) or a semantic you must hard-fence off older clients. **Cautionary example — v4 (#9009, project delete-wins) was bumped for a marker-only change old clients degrade on fine: the feature is driven entirely by the payload marker (plus the `entityId === projectId` auth check); the `schemaVersion >= 4` gate adds only narrow malformed-op hardening, not feature correctness. It needed no bump, yet it now fences every lagging post-v18.14.0 client and can't be undone. Don't repeat it.**
 1. New op semantics MUST degrade gracefully on older clients — see the `LwwUpdatePayload` envelope pattern in `packages/sync-core` ('patch' ops apply correctly on pre-v3 clients via `updateOne`; the v4 delete-wins marker is inert for them). If they degrade, bumping is _safe_ at any fleet share (the stamp is a fence for future receivers, not a protection for current ones) — but safe ≠ necessary: if it degrades, prefer a marker/envelope with **no** bump (see 0).
 2. A change that older clients would MISAPPLY must not ship behind a bump alone. No fleet percentage makes it safe while released v17–v18.14 clients still sync: one lagging device silently misapplies the ops for its whole account and writes the result back with dominating clocks. Treat such changes as blocked until the v17–v18.14 sync fleet is effectively extinct — or redesign them to degrade (option 1).
+3. **Precondition: any bump PR must address the downgrade relabel (#8770).** Local hydration has no future-version gate — `stateNeedsMigration()` is `version < target` — so a vN client reading a v(N+1) state cache (rollback, snap channel lag, old sideloaded APK) loads it unmigrated (Checkpoint B validation is non-fatal and never repairs), and the next snapshot/compaction write stamps it `CURRENT_SCHEMA_VERSION`. The cache is then v(N+1)-shaped under a vN label — additive residue survives because typia's `createValidate` does not strip excess properties — and on re-upgrade the N→N+1 migration runs a **second** time on already-migrated state. Until #8770 ships a guard (repro-first, per the sync-change rule), every migration MUST be a no-op on already-migrated state (v1→v2 guards via `hasMigratedFields`; barrier migrations are no-ops by construction), and the bump PR must state how downgraded clients are handled.
+
+#### Widening a wire vocabulary needs no bump — but the receiver must block
+
+`opType`, `syncImportReason`, and restore-point `type` are strict enums only on
+the REQUEST side of the SuperSync contract, where the server validates per op.
+On the RESPONSE side they are loose strings, and the receiver decides per op
+(`remote-op-block.util.ts`, the one block predicate shared by
+`remote-ops-processing.service.ts`, the full-state conflict gate's prefix cut,
+and the USE_REMOTE preflight): an unknown
+value blocks the batch at that op exactly like `VERSION_TOO_NEW` — prefix
+applied, cursor frozen, "update your app" snack — never a skip, which would
+advance the cursor past data the client never understood. (Restore points of
+an unknown type are simply kept in the list and rendered generically.) Before this the
+transport parser rejected the whole page with a generic error and wedged every
+not-yet-updated device (#8764). Two consequences:
+
+- Adding a value to one of these unions does not require a schema bump; per
+  rule 0 above, don't add one for it.
+- Clients released before this receiver change still wedge on any widening,
+  so a widening must wait for a release-lag window after it shipped. The
+  window covers servers too: `validation.service.ts` rejects unknown op types
+  on upload, so self-hosted servers must carry the new value first.
+
+A type-level assertion in `super-sync.ts` keeps the sync-core `OpType` enum
+and `SUPER_SYNC_OP_TYPES` identical, so a value added to one side fails the
+build instead of surfacing as a runtime block on other devices.
 
 #### Executable sources and release checks
 
@@ -723,10 +791,27 @@ treats file `syncVersion` as a synthetic transport watermark and exposes it as
 it once; snapshot replacement can reset it, which the gap path detects. It is
 not the provider `rev`/ETag and does not prove per-operation ordering. One upload
 can carry multiple operations under the same new watermark; stable operation
-IDs provide durable deduplication, while vector clocks carry causality.
+IDs deduplicate ops still in the local log, while vector clocks carry causality.
 
 1. **Normal catch-up:** download the bounded ops buffer and pass every retained
-   candidate through the common applied-ID and conflict pipeline.
+   candidate through the common applied-ID and conflict pipeline. Each retained
+   op carries the `syncVersion` it was written at (`sv`), which the adapter
+   exposes as its `serverSeq`. The applied-ID set alone cannot recognise an op
+   that local compaction already pruned (7-day retention), so the download
+   also skips an op when its `sv` is at or below the persisted cursor **and**
+   the local vector clock covers its author counter (#10119). Otherwise an old
+   create op still in the buffer would re-create an entity archived or deleted
+   here since. The clock half is needed because the cursor can run ahead of
+   applied ops: an upload merges into the freshly read file and sets the
+   cursor to the new version. Legacy ops without `sv` use the file's
+   `syncVersion` as an upper bound. Seq-0 downloads and downloads after a gap
+   reset do not use this filter. Known gaps: the guard assumes each author's
+   counter never goes backwards (a device that keeps its clientId but adopts
+   a lower own clock, e.g. USE_REMOTE after another device's USE_LOCAL, could
+   have a new op skipped when the cursor also ran ahead; reproduced by
+   pending tests in the #10119 integration spec, fix tracked in #10239); and a
+   remote op whose apply failed is no longer retried once compaction prunes it,
+   matching SuperSync.
 2. **Fresh client / forced seq-0:** return a full state/archive baseline. In v2,
    that baseline represents the monolith and its retained ops. In v3, the ops
    file points to a validated snapshot generation; retained ops newer than the
@@ -801,8 +886,10 @@ but differ in pagination and baseline behavior. For SuperSync, one normal cycle:
    effects, applied IDs, and clocks are durable;
 4. uploads pending local rows in bounded batches and processes per-operation
    acceptance/rejection results plus any piggybacked remote operations; and
-5. re-uploads newly synthesized local-win operations in the same cycle through a
-   bounded reconciliation loop.
+5. re-uploads newly synthesized local-win operations, plus any operation the
+   server rejected with a retryable `INTERNAL_ERROR`, in the same cycle through
+   a bounded reconciliation loop; whatever is still pending after the budget is
+   reported as `UNKNOWN_OR_CHANGED`, never `IN_SYNC`.
 
 An incompatible operation, failed apply, or cancelled full-state decision leaves
 its operation and suffix uncommitted, so a later cycle downloads them again. The
@@ -940,13 +1027,33 @@ When a `moveToArchive` operation conflicts with a field-level update (e.g., rena
 
 **Rationale:** If Client A archives a task and Client B concurrently renames it, the archive must win — otherwise, the LWW update would "resurrect" the archived task back into the active store by replacing its state.
 
-**Implementation:** `ConflictResolutionService` checks whether either the local or remote side contains a `TASK_SHARED_MOVE_TO_ARCHIVE` action. If so, the archive side wins automatically, and a new archive operation is created with a merged vector clock (via `_createArchiveWinOp()`).
+**Implementation:** `ConflictResolutionService` checks whether either the local or remote side contains a `TASK_SHARED_MOVE_TO_ARCHIVE` action. If so, the archive side wins automatically, and a new archive operation is created with a merged vector clock (via `buildArchiveWinOp()`). A bulk archive that wins several rows emits ONE recreation shared by all of them; pending exact copies of one archive intent left by pre-fix clients are folded back into one (#10102, `bulk-archive-intent.util.ts`).
 
 This is the **first level** of archive resurrection prevention. The **second level** is the [bulk archive filter](../../src/app/op-log/apply/bulk-archive-filter.util.ts), which pre-scans operation batches for archive operations and skips any LWW Update operations targeting entities being archived in the same batch. This two-level defense handles the 3+ client scenario where LWW Updates can arrive before or after archive ops in the same batch.
 
+Both levels only work if the archive op DECLARES the entity. A client awake on
+the websocket downloads one op per trigger, so an LWW Update that escaped level
+1 arrives in its own batch, where level 2 has no archive op to match — and the
+update recreates the task next to its archived copy. There is deliberately no
+receiver-side "is it in the archive?" guard: such a check cannot tell an update
+concurrent with the archive from a legitimate later re-introduction (a
+superseded `restoreTask` is re-emitted as a plain LWW Update), and skipping the
+latter diverges clients permanently. The fix is upstream — declare the full
+footprint so level 1 never lets the update through. A pre-fix sender can still
+cause one visible, re-archivable resurrection during a mixed-fleet rollout.
+
+**Footprint:** `moveToArchive.meta.entityIds` lists the top-level tasks AND the
+subtasks its reducer cascades to (`collectArchivedTaskEntityIds`), so archive
+precedence applies to concurrent subtask edits on both the client and the
+server conflict probe. Old ops carry top-level ids only; every consumer
+re-derives the cascade. Partial-rejection re-scoping keys on the payload's
+top-level `tasks` and re-derives the footprint from the scoped tasks
+(`scopeBulkArchivePayload`).
+
 **Key files:**
 
-- `src/app/op-log/sync/conflict-resolution.service.ts` — Archive-wins check and `_createArchiveWinOp()`
+- `src/app/op-log/sync/conflict-resolution.service.ts` — Archive-wins check
+- `src/app/op-log/sync/bulk-archive-intent.util.ts` — `buildArchiveWinOp()`, one recreation per archive intent
 - `src/app/op-log/apply/bulk-hydration.meta-reducer.ts` — Pre-scan archive filtering
 
 ### Superseded Operation Handling for moveToArchive

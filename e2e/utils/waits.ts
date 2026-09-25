@@ -234,3 +234,43 @@ export const waitForStatePersistence = async (page: Page): Promise<void> => {
     await page.waitForTimeout(200);
   }
 };
+
+/**
+ * Wait until every open `mat-menu` panel has finished its enter animation.
+ *
+ * The panel scales from 0.8 to 1 over 120ms, so every item slides down while it
+ * runs. Playwright's own stability check can pass inside that window, and then
+ * the click lands on the right item but leaves the cursor parked where the item
+ * *above* ends up once the panel settles. Material opens that item's submenu on
+ * the resulting `mouseenter` and closes the one we just opened, which is how the
+ * "Toggle Tags" submenu got replaced by the estimate submenu mid-test (#9880).
+ *
+ * On touch contexts it also waits out the touch guard, which silently drops
+ * taps on a menu item within 300ms of its panel opening (#4436, see
+ * `mat-menu-touch-monkey-patch.ts`). The panel animation can settle inside that
+ * window, so a tap right after it was swallowed and the test failed on the
+ * missing side effect. The panel carries `data-menu-open-time` only when the
+ * guard is installed, so desktop runs don't wait.
+ *
+ * Call this after opening a menu and before clicking anything inside it.
+ */
+export const waitForMenuSettled = async (page: Page, timeout = 5000): Promise<void> => {
+  await page.waitForFunction(
+    () => {
+      const panels = Array.from(document.querySelectorAll('.mat-mdc-menu-panel'));
+      return (
+        panels.length > 0 &&
+        panels.every((panel) => {
+          const { transform } = getComputedStyle(panel);
+          const openTime = Number(panel.getAttribute('data-menu-open-time') ?? 0);
+          return (
+            (transform === 'none' || transform === 'matrix(1, 0, 0, 1, 0, 0)') &&
+            Date.now() - openTime >= 300
+          );
+        })
+      );
+    },
+    undefined,
+    { timeout },
+  );
+};

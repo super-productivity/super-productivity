@@ -27,8 +27,8 @@ docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d sup
 # Run with line reporter for real-time output
 npx playwright test --config e2e/playwright.config.ts --grep @supersync --reporter=line
 
-# Stop the server when done
-docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml down supersync
+# Stop the server when done — `db` too, or it stays up and squats its host port
+docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml down db supersync
 ```
 
 ## Test Template

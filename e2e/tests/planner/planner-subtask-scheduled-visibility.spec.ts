@@ -1,5 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
+import { calendarNextMonthBtn } from '../../utils/element-helpers';
 
 /**
  * Schedule a task for an exact day (day-only, no time) via the keyboard
@@ -31,7 +32,7 @@ const scheduleTaskForDay = async (
     targetDate.getMonth() !== today.getMonth() ||
     targetDate.getFullYear() !== today.getFullYear()
   ) {
-    await scheduleDialog.getByRole('button', { name: /next month/i }).click();
+    await calendarNextMonthBtn(scheduleDialog).click();
   }
 
   const targetDay = scheduleDialog

@@ -370,6 +370,155 @@ describe('OperationLogUploadService', () => {
         expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1, 2]);
       });
 
+      describe('genesis ops are never uploaded (#9921)', () => {
+        const createGenesisEntry = (
+          seq: number,
+          entityType: 'MIGRATION' | 'RECOVERY',
+        ): OperationLogEntry => {
+          const entry = createMockEntry(seq, `genesis-${seq}`, 'client-1');
+          return {
+            ...entry,
+            op: {
+              ...entry.op,
+              actionType: ActionType.MIGRATION_GENESIS_IMPORT,
+              opType: OpType.Batch,
+              entityType,
+              entityId: '*',
+            },
+          };
+        };
+
+        it('marks genesis ops synced locally and uploads only the ordinary ops', async () => {
+          const genesis = createGenesisEntry(1, 'MIGRATION');
+          const regular = createMockEntry(2, 'op-2', 'client-1');
+          mockOpLogStore.getUnsynced.and.resolveTo([genesis, regular]);
+          mockApiProvider.uploadOps.and.resolveTo({
+            results: [{ opId: 'op-2', accepted: true }],
+            latestSeq: 10,
+            newOps: [],
+          });
+
+          const result = await service.uploadPendingOps(mockApiProvider);
+
+          const uploadedIds = (
+            mockApiProvider.uploadOps.calls.mostRecent().args[0] as { id: string }[]
+          ).map((op) => op.id);
+          expect(uploadedIds).toEqual(['op-2']);
+          expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1]);
+          expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([2]);
+          expect(result.uploadedCount).toBe(1);
+        });
+
+        it('uploads nothing for a client whose only pending op is a RECOVERY genesis', async () => {
+          mockOpLogStore.getUnsynced.and.resolveTo([createGenesisEntry(1, 'RECOVERY')]);
+
+          const result = await service.uploadPendingOps(mockApiProvider);
+
+          expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+          expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1]);
+          expect(result.uploadedCount).toBe(0);
+        });
+
+        it('leaves the genesis op pending while the mandatory-encryption guard blocks the upload', async () => {
+          // The pending genesis op is what keeps the incoming-import gate armed
+          // until this client can actually upload; acknowledging it before the
+          // guard would let a later remote SYNC_IMPORT replace local state silently.
+          (mockApiProvider as any).isEncryptionMandatory = true;
+          (mockApiProvider as any).getEncryptKey = jasmine
+            .createSpy('getEncryptKey')
+            .and.resolveTo(undefined);
+          mockOpLogStore.getUnsynced.and.resolveTo([
+            createGenesisEntry(1, 'MIGRATION'),
+            createMockEntry(2, 'op-2', 'client-1'),
+          ]);
+
+          const result = await service.uploadPendingOps(mockApiProvider);
+
+          expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+          expect(mockOpLogStore.markSynced).not.toHaveBeenCalled();
+          expect(result.encryptionRequiredKeyMissing).toBe(true);
+        });
+
+        it('keeps uploading genesis ops on file-based providers (the ops upload writes the snapshot)', async () => {
+          mockApiProvider.providerMode = 'fileSnapshotOps';
+          mockOpLogStore.getUnsynced.and.resolveTo([createGenesisEntry(1, 'MIGRATION')]);
+          mockApiProvider.uploadOps.and.resolveTo({
+            results: [{ opId: 'genesis-1', accepted: true }],
+            latestSeq: 1,
+            newOps: [],
+          });
+
+          const result = await service.uploadPendingOps(mockApiProvider);
+
+          const uploadedIds = (
+            mockApiProvider.uploadOps.calls.mostRecent().args[0] as { id: string }[]
+          ).map((op) => op.id);
+          expect(uploadedIds).toEqual(['genesis-1']);
+          expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1]);
+          expect(result.uploadedCount).toBe(1);
+        });
+
+        it('keeps the genesis op pending when its own SYNC_IMPORT is dropped on SYNC_IMPORT_EXISTS', async () => {
+          // Two legacy clients seed the same empty server at once: the loser's
+          // import is dropped, and its still-pending genesis op is what makes the
+          // next cycle's incoming-import gate prompt instead of applying the
+          // winner's import silently.
+          const genesis = createGenesisEntry(1, 'MIGRATION');
+          const ownImport: OperationLogEntry = {
+            ...createMockEntry(2, 'my-import', 'client-1'),
+            op: {
+              ...createMockEntry(2, 'my-import', 'client-1').op,
+              actionType: ActionType.LOAD_ALL_DATA,
+              opType: OpType.SyncImport,
+              entityType: 'ALL',
+              entityId: undefined,
+              payload: {
+                task: { ids: [], entities: {} },
+                project: { ids: [], entities: {} },
+                tag: { ids: [], entities: {} },
+                globalConfig: {},
+              },
+            },
+          };
+          mockOpLogStore.getUnsynced.and.resolveTo([genesis, ownImport]);
+          (mockApiProvider as any).uploadSnapshot = jasmine
+            .createSpy('uploadSnapshot')
+            .and.resolveTo({
+              accepted: false,
+              error: 'A SYNC_IMPORT already exists',
+              errorCode: 'SYNC_IMPORT_EXISTS',
+            });
+
+          const result = await service.uploadPendingOps(mockApiProvider);
+
+          expect(mockOpLogStore.deleteOpsWhere).toHaveBeenCalled();
+          expect(mockOpLogStore.markSynced).not.toHaveBeenCalled();
+          expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+          expect(result.uploadedCount).toBe(0);
+        });
+
+        it('routes the genesis acknowledgement through the deferred-ack path', async () => {
+          const genesis = createGenesisEntry(1, 'MIGRATION');
+          const regular = createMockEntry(2, 'op-2', 'client-1');
+          mockOpLogStore.getUnsynced.and.resolveTo([genesis, regular]);
+          mockApiProvider.uploadOps.and.resolveTo({
+            results: [{ opId: 'op-2', accepted: true }],
+            latestSeq: 10,
+            newOps: [],
+          });
+
+          const result = await service.uploadPendingOps(mockApiProvider, {
+            deferAcknowledgement: true,
+          });
+
+          expect(mockOpLogStore.markSynced).not.toHaveBeenCalled();
+          // The pre-captured snapshot keeps the genesis op so the piggyback
+          // conflict gate still counts it as pending local work this round.
+          expect(result.selectedPendingOps).toEqual([genesis, regular]);
+          expect(result.pendingAcknowledgementSeqs).toEqual([1, 2]);
+        });
+      });
+
       it('should defer acknowledgements and return the exact selected batch for piggyback resolution', async () => {
         const pendingOps = [
           createMockEntry(1, 'op-1', 'client-1'),
@@ -1507,6 +1656,49 @@ describe('OperationLogUploadService', () => {
         expect(result.blockedByRejectedFullState).toBe(true);
       });
 
+      it('should flag a deferred full-state upload when the server returns a retryable error', async () => {
+        // Observed in CI (scheduled run 32683405598): a server-migration
+        // SYNC_IMPORT was answered with a Postgres serialization conflict.
+        // Nothing was uploaded, so the caller must be able to tell the
+        // difference between this and a clean zero-op sync.
+        const syncImport = createFullStateEntry(
+          1,
+          'migration-import',
+          'client-1',
+          OpType.SyncImport,
+        );
+        const laterOp = createMockEntry(2, 'later-op', 'client-1');
+        mockOpLogStore.getUnsynced.and.resolveTo([syncImport, laterOp]);
+        mockApiProvider.uploadSnapshot.and.resolveTo({
+          accepted: false,
+          error: 'Concurrent transaction conflict - please retry',
+        });
+
+        const result = await service.uploadPendingOps(mockApiProvider);
+
+        expect(result.fullStateUploadDeferred).toBe(true);
+        expect(result.uploadedCount).toBe(0);
+        expect(result.rejectedCount).toBe(0);
+        expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+        expect(mockOpLogStore.markSynced).not.toHaveBeenCalled();
+      });
+
+      it('should not flag a deferred full-state upload when the snapshot is accepted', async () => {
+        const syncImport = createFullStateEntry(
+          1,
+          'migration-import',
+          'client-1',
+          OpType.SyncImport,
+        );
+        mockOpLogStore.getUnsynced.and.resolveTo([syncImport]);
+        mockApiProvider.uploadSnapshot.and.resolveTo({ accepted: true, serverSeq: 1 });
+
+        const result = await service.uploadPendingOps(mockApiProvider);
+
+        expect(result.fullStateUploadDeferred).toBeUndefined();
+        expect(result.uploadedCount).toBe(1);
+      });
+
       it('should update server seq after snapshot upload', async () => {
         const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.SyncImport);
         mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
@@ -1766,9 +1958,9 @@ describe('OperationLogUploadService', () => {
           expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([2]);
         });
 
-        it('should detect SYNC_IMPORT_EXISTS from thrown error when exception contains the code', async () => {
-          // When uploadSnapshot throws an error (e.g., from HTTP client), the error message
-          // is parsed to extract errorCode. This tests that code path.
+        it('should detect SYNC_IMPORT_EXISTS from thrown structured error code', async () => {
+          // When uploadSnapshot throws an HTTP error, the provider keeps the server errorCode
+          // on the Error object so handling does not depend on message substrings.
           const entry = createFullStateEntry(
             1,
             'my-import',
@@ -1776,7 +1968,26 @@ describe('OperationLogUploadService', () => {
             OpType.SyncImport,
           );
           mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
-          // Mock throwing an error with SYNC_IMPORT_EXISTS in the message
+          const error = Object.assign(new Error('HTTP 409 Conflict'), {
+            code: 'SYNC_IMPORT_EXISTS',
+          });
+          mockApiProvider.uploadSnapshot.and.rejectWith(error);
+
+          await service.uploadPendingOps(mockApiProvider);
+
+          // Should still be handled gracefully - delete local op, don't mark rejected
+          expect(mockOpLogStore.deleteOpsWhere).toHaveBeenCalled();
+          expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+        });
+
+        it('keeps legacy SYNC_IMPORT_EXISTS message fallback for older providers', async () => {
+          const entry = createFullStateEntry(
+            1,
+            'my-import',
+            'client-1',
+            OpType.SyncImport,
+          );
+          mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
           mockApiProvider.uploadSnapshot.and.rejectWith(
             new Error('SYNC_IMPORT_EXISTS: Another client already uploaded'),
           );

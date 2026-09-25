@@ -109,8 +109,9 @@ model Operation {
 
   @@unique([userId, serverSeq])
   @@index([userId, entityType, entityId, serverSeq])
-  @@index([userId, clientId])
-  @@index([userId, receivedAt])
+  // Covering: serverSeq trails so the old-ops fresh-prefix probe answers its
+  // server_seq filter from the index tuple (index-only NO answers, #9692).
+  @@index([userId, receivedAt, serverSeq])
   // Multi-entity conflict lookups (#8334) probe entity_ids with @> / &&. This MUST stay
   // modelled here, not only in the 20260613000001 raw migration: `prisma db push` builds
   // from this file alone, so while the GIN existed only as raw SQL the CI, E2E and
@@ -119,9 +120,13 @@ model Operation {
   // EVERY tenant's rows, twice per accepted op. Worse than the outage this replaced.
   // The map name matches the raw migration, so migrate-based deployments see no drift.
   @@index([entityIds], type: Gin, map: "operations_entity_ids_gin")
-  // Restore-point opType lookups use a raw PARTIAL index (20260512000000). That one
-  // genuinely cannot be modelled — Prisma has no partial-index syntax — so db-push
-  // databases still lack it. Same trap, different index; tracked in #9192.
+  // Two raw PARTIAL indexes on op_type live outside this file, because Prisma has no
+  // partial-index syntax: the BROAD 3-value one (20260512000000) that restore-point
+  // lookups and the legacy-REPAIR queries need, and the CAUSAL one (20260829000000)
+  // whose predicate matches CAUSAL_FULL_STATE_OPERATION_WHERE verbatim so the old-ops
+  // sweep's fleet-wide boundary scan runs index-only. Both are additive and both must
+  // exist; see 20260829000000 for why the broad one must not be tightened in place.
+  // db-push databases get NEITHER. Same trap, different indexes; tracked in #9192.
   @@map("operations")
 }
 
@@ -146,7 +151,11 @@ model SyncDevice {
   userId       Int     @map("user_id")
   deviceName   String? @map("device_name")
   userAgent    String? @map("user_agent")
+  /// Bare semver the client last reported on download (`18.22.0`), NULL until
+  /// it does. Read by the checkpoint gate (#9962); never shown to users.
+  appVersion   String? @map("app_version")
   lastSeenAt   BigInt  @map("last_seen_at")
+  /// Reserved: written once at device registration, never read or updated.
   lastAckedSeq Int     @default(0) @map("last_acked_seq")
   createdAt    BigInt  @map("created_at")
 

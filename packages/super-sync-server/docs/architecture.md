@@ -69,9 +69,9 @@ is [`sync.routes.ts`](../src/sync/sync.routes.ts) and
 ## Per-User Ordering and Transaction Invariant
 
 `serverSeq` is a total order within one user's current sync dataset. Accepted
-uploads commit inside a PostgreSQL `RepeatableRead` transaction. In the batch
-path, one atomic update of `user_sync_state.lastSeq` reserves a contiguous
-sequence range and serializes accepted writers for that user. A concurrent
+uploads commit inside a PostgreSQL `RepeatableRead` transaction. One atomic
+update of `user_sync_state.lastSeq` per accepted operation reserves its
+sequence number and serializes accepted writers for that user. A concurrent
 transaction that read the same earlier snapshot must fail and retry rather than
 commit conflicting operations. A causal `REPAIR` additionally locks that row
 and must prove `repairBaseServerSeq === lastSeq`. Incoming vector clocks are
@@ -84,13 +84,15 @@ inserted, and the replacement is piggybacked without excluding its author. The
 nullable marker is reconciled lazily from retained operations after an upgrade;
 zero records that the reconciliation found no replacement.
 
-A clean-slate full-state upload deletes the prior dataset but preserves
-`lastSeq`, preventing sequence reuse visible to existing clients. Only explicit
-`DELETE /api/sync/data` erases the entire dataset and resets the sequence to
-zero.
+A clean-slate full-state upload and explicit `DELETE /api/sync/data` both
+preserve `lastSeq`, preventing sequence reuse visible to existing clients.
+DELETE acquires the same sequence row's write lock before removing operations,
+devices, and cached snapshots. An account with no retained operations still
+reports `latestSeq: 0` to clients so their existing empty-server recovery runs;
+the next upload allocates above the preserved counter.
 
 This serialization mechanism is a load-bearing decision; see
-[ADR #4](../../../ARCHITECTURE-DECISIONS.md#4-batch-uploads-under-repeatableread),
+[ADR #4](../../../ARCHITECTURE-DECISIONS.md#4-upload-conflict-safety-via-the-lastseq-row-lock-under-repeatableread),
 [`sync.service.ts`](../src/sync/sync.service.ts), and
 [`operation-upload.service.ts`](../src/sync/services/operation-upload.service.ts).
 
@@ -101,9 +103,11 @@ This serialization mechanism is a load-bearing decision; see
   data deletion can remove them.
 - `user_sync_state` owns `lastSeq`, the optional compressed snapshot cache, the
   latest causal full-state marker, and the latest explicit state-replacement
-  boundary. `sync_devices` is used only for per-device identity/metadata and
-  last-seen tracking. Its `lastAckedSeq` field is dormant legacy schema state:
-  current sync and retention code neither advances nor reads it.
+  boundary. `sync_devices` is used only for per-device identity/metadata,
+  last-seen tracking, and the client-reported `app_version` (a bare semver,
+  never exposed) that feeds the checkpoint gate below. Its `lastAckedSeq`
+  field is dormant legacy schema state: current sync and retention code
+  neither advances nor reads it.
 - Normal sync bootstraps from operation rows. `GET /ops` can fast-forward to the
   latest causal full-state operation; clients do not download the server's
   cached snapshot blob.
@@ -115,8 +119,29 @@ This serialization mechanism is a load-bearing decision; see
   or history pruning.
 - Default retention is 45 days. Cleanup removes stale devices and may remove
   only the old operation prefix before a proven causal full-state boundary,
-  while preserving that boundary and its replay tail. Quota recovery uses a
+  while preserving that boundary and its replay tail. The boundary comes from
+  the operation stream itself — no snapshot cursor is required (#9688), so
+  encrypted-only and snapshotless histories are pruned too. While a cached
+  snapshot BLOB exists, the boundary additionally never passes that row's
+  cursor (protects the cached base's replay tail for restore); a cursor left
+  behind without its blob does not cap. A user's aged prefix is pruned whole
+  or not at all, so the lowest surviving op stays a full-state op. When recent
+  operations block the newest boundary, cleanup falls back to the newest causal
+  boundary at or before the lowest recent sequence (#9962). This preserves every
+  operation inside retention without letting frequent checkpoints block an older
+  complete prefix. Quota
+  recovery uses a
   separate bounded cleanup policy.
+- Routine incremental sync does not create periodic full-state boundaries.
+  Adding a client cadence requires a compatibility design (#9962): every
+  release before v18.21.2 treats `REPAIR` as a reset and discards concurrent
+  edits. Reusing current repair semantics alone cannot safely enable automatic
+  checkpoints for accounts with those clients. The prerequisite is in place:
+  clients report their version on download, `sync_devices.app_version` stores
+  it, and `checkpoint-gate.ts` decides per account whether every device seen
+  inside retention is at or above the cut (a device with no reported version
+  counts as old). The daily cleanup logs the fleet-wide roll-up as
+  `Cleanup [checkpoint-gate]`; no client uploads checkpoints yet.
 - Server-generated restore is unavailable when the required replay range
   contains encrypted operations.
 

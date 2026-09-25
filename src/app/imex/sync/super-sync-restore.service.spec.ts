@@ -33,7 +33,7 @@ describe('SuperSyncRestoreService', () => {
     mockBackupService = jasmine.createSpyObj('BackupService', ['importCompleteBackup']);
 
     mockLocalDraftService = jasmine.createSpyObj('LocalDraftService', [
-      'deleteDraftsForActiveProfile',
+      'deleteAllDrafts',
     ]);
 
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
@@ -177,12 +177,12 @@ describe('SuperSyncRestoreService', () => {
       });
     });
 
-    it('should clear the active profiles crash-safe drafts after a restore', async () => {
-      // The restore replaced this profile's notes wholesale, so every draft's
+    it('should clear crash-safe drafts after a restore', async () => {
+      // The restore replaced the notes wholesale, so every draft's
       // baseContent now refers to content that no longer exists.
       await service.restoreToPoint(100);
 
-      expect(mockLocalDraftService.deleteDraftsForActiveProfile).toHaveBeenCalledTimes(1);
+      expect(mockLocalDraftService.deleteAllDrafts).toHaveBeenCalledTimes(1);
     });
 
     it('should not clear drafts when the restore fails', async () => {
@@ -192,7 +192,7 @@ describe('SuperSyncRestoreService', () => {
 
       await expectAsync(service.restoreToPoint(100)).toBeRejected();
 
-      expect(mockLocalDraftService.deleteDraftsForActiveProfile).not.toHaveBeenCalled();
+      expect(mockLocalDraftService.deleteAllDrafts).not.toHaveBeenCalled();
     });
 
     it('should show error snack and rethrow on failure after retries', async () => {

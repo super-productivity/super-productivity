@@ -5,22 +5,3 @@
     display: block;
   }
 }
-
-.additional {
-  transition: var(--transition-fast);
-  opacity: 0;
-  transform: scale(0.1);
-  width: 0;
-  position: relative;
-  z-index: 1;
-  transform-origin: center center;
-  margin-top: -2px;
-  height: 40px;
-
-  color: var(--text-color);
-
-  mat-icon {
-    font-size: 22px;
-    max-height: 32px;
-  }
-}

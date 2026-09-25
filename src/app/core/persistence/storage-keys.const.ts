@@ -105,7 +105,7 @@ export enum LS {
 }
 
 // Prefix for device-local, never-synced note drafts (see LocalDraftService).
-// Full key: `${LS_LOCAL_DRAFT_PREFIX}${profileId}:${entityType}:${entityId}`.
+// Full key: `${LS_LOCAL_DRAFT_PREFIX}${entityType}:${entityId}`.
 export const LS_LOCAL_DRAFT_PREFIX = 'SUP_LOCAL_DRAFT_';
 
 // SESSION STORAGE

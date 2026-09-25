@@ -233,8 +233,7 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
 
       if (syncResult === 'dialog') {
         // Choose "Use My Data" to preserve the import
-        await clientA.sync.syncImportUseLocalBtn.click();
-        await syncImportDialog.waitFor({ state: 'hidden', timeout: 5000 });
+        await clientA.sync.chooseSyncImportUseLocal();
         await clientA.sync.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
       }
 
@@ -430,8 +429,7 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       ]);
 
       if (syncResult2 === 'dialog') {
-        await clientA.sync.syncImportUseLocalBtn.click();
-        await syncImportDialog2.waitFor({ state: 'hidden', timeout: 5000 });
+        await clientA.sync.chooseSyncImportUseLocal();
         await clientA.sync.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
       }
 
@@ -592,8 +590,7 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       ]);
 
       if (syncResult3 === 'dialog') {
-        await clientA.sync.syncImportUseLocalBtn.click();
-        await syncImportDialog3.waitFor({ state: 'hidden', timeout: 5000 });
+        await clientA.sync.chooseSyncImportUseLocal();
         await clientA.sync.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
       }
 
@@ -762,8 +759,7 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       ]);
 
       if (syncResult === 'dialog') {
-        await clientB.sync.syncImportUseLocalBtn.click();
-        await syncImportDialog.waitFor({ state: 'hidden', timeout: 5000 });
+        await clientB.sync.chooseSyncImportUseLocal();
         await clientB.sync.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
       }
 

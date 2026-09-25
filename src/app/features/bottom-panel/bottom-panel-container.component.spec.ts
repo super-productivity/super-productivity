@@ -1,7 +1,6 @@
 import {
   getInitialBottomPanelHeightRatio,
-  isBottomPanelCloseButtonVisible,
-  stopBottomPanelHeaderEventPropagation,
+  getMaxBottomPanelHeight,
 } from './bottom-panel-container.component';
 
 describe('getInitialBottomPanelHeightRatio', () => {
@@ -19,21 +18,16 @@ describe('getInitialBottomPanelHeightRatio', () => {
   });
 });
 
-describe('isBottomPanelCloseButtonVisible', () => {
-  it('only shows the close button for notes panels', () => {
-    expect(isBottomPanelCloseButtonVisible('NOTES')).toBeTrue();
-    expect(isBottomPanelCloseButtonVisible('TASK')).toBeFalse();
-    expect(isBottomPanelCloseButtonVisible('ISSUE_PANEL')).toBeFalse();
-    expect(isBottomPanelCloseButtonVisible(null)).toBeFalse();
+describe('getMaxBottomPanelHeight', () => {
+  it('uses the relative cap when there is no top inset', () => {
+    expect(getMaxBottomPanelHeight(1000, 0)).toBe(980);
   });
-});
 
-describe('stopBottomPanelHeaderEventPropagation', () => {
-  it('stops close-button pointer and click events from starting a header drag', () => {
-    const event = jasmine.createSpyObj<Event>('event', ['stopPropagation']);
+  it('keeps the panel top below a notch taller than the relative margin (#10181)', () => {
+    expect(getMaxBottomPanelHeight(844, 47)).toBe(797);
+  });
 
-    stopBottomPanelHeaderEventPropagation(event);
-
-    expect(event.stopPropagation).toHaveBeenCalledOnceWith();
+  it('keeps the relative cap when it is already below a small inset', () => {
+    expect(getMaxBottomPanelHeight(1000, 10)).toBe(980);
   });
 });

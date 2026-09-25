@@ -18,10 +18,10 @@
     </div>
   } @else {
     <p class="intro">{{ T.F.SYNC.D_RESTORE.INTRO | translate }}</p>
-    <p class="warning">
-      <mat-icon>warning</mat-icon>
-      {{ T.F.SYNC.D_RESTORE.WARNING | translate }}
-    </p>
+    <div class="callout callout--warning">
+      <mat-icon aria-hidden="true">warning</mat-icon>
+      <p>{{ T.F.SYNC.D_RESTORE.WARNING | translate }}</p>
+    </div>
 
     <div class="restore-points">
       @for (point of restorePoints(); track point.serverSeq) {

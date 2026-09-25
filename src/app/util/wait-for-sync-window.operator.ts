@@ -62,18 +62,17 @@ export const waitForSyncWindow = <T>(
     if (!hydrationState.isInSyncWindow()) {
       return of(value);
     }
-    Log.log(`[${context}] Emission during sync window, waiting...`, value);
+    // `value` is the caller's `T` and may be a whole entity — the log is
+    // exportable, and `context` already identifies the stream.
+    Log.log(`[${context}] Emission during sync window, waiting...`);
     return hydrationState.isInSyncWindow$.pipe(
       filter((inWindow) => !inWindow),
       first(),
       timeout(SYNC_WINDOW_TIMEOUT_MS),
-      tap(() => Log.log(`[${context}] Sync window ended, proceeding for:`, value)),
+      tap(() => Log.log(`[${context}] Sync window ended, proceeding`)),
       map(() => value),
       catchError(() => {
-        Log.err(
-          `[${context}] Timed out waiting for sync window, proceeding anyway for:`,
-          value,
-        );
+        Log.err(`[${context}] Timed out waiting for sync window, proceeding anyway`);
         return of(value);
       }),
     );

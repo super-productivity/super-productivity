@@ -169,5 +169,27 @@ describe('GitlabCommonInterfacesService', () => {
       expect(issue.commentsNr).toBe(1);
       expect(result?.issueTitle).toBe('#42 GitLab issue');
     });
+
+    it('does not overwrite isDone when an open issue is updated (#9909)', async () => {
+      const issueLastUpdated = new Date(BASE_UPDATED_AT).getTime();
+      gitlabApiService.getById$.and.returnValue(of(makeIssue(NEWER_UPDATED_AT)));
+
+      const result = await service.getFreshDataForIssueTask(makeTask(issueLastUpdated));
+
+      expect(result?.taskChanges.issueWasUpdated).toBe(true);
+      expect('isDone' in result!.taskChanges).toBe(false);
+    });
+
+    it('does not overwrite isDone when a closed issue is updated (#9909)', async () => {
+      const issueLastUpdated = new Date(BASE_UPDATED_AT).getTime();
+      gitlabApiService.getById$.and.returnValue(
+        of({ ...makeIssue(NEWER_UPDATED_AT), state: 'closed' }),
+      );
+
+      const result = await service.getFreshDataForIssueTask(makeTask(issueLastUpdated));
+
+      expect(result?.taskChanges.issueWasUpdated).toBe(true);
+      expect('isDone' in result!.taskChanges).toBe(false);
+    });
   });
 });

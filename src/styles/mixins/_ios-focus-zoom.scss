@@ -28,7 +28,13 @@
 // in one place. This nests as a DESCENDANT of the touch-primary body, so it
 // cannot target a component host — for that, write
 // `:host-context(body.isTouchPrimary) { @include noIosFocusZoom(); }` at the top
-// level of the stylesheet instead (see task-title.component.scss).
+// level of the stylesheet instead (see live-markdown-editor.component.scss).
+//
+// Raising on touch alone is the broad form: it also raises engines that never
+// zoom (Android, Firefox). Where the 14px base is deliberate, add
+// `body.isIOSWebKit` so only the affected engine moves — see
+// task-title.component.scss, which pairs that class with the `@supports` query
+// below so an E2E test can force the iOS path in Chromium.
 //
 // Known gap: an iPad in mouse mode (`isMousePrimary`) that focuses via a
 // hardware Tab still zooms — accepted, since the zoom is far less disruptive at

@@ -251,6 +251,10 @@ export class ProjectService {
       const withSubTasks = await firstValueFrom(
         this._taskService.getByIdWithSubTaskData$(task.id),
       );
+      // Skip tasks that vanished from the store mid-loop (#9946).
+      if (!withSubTasks) {
+        continue;
+      }
       this._taskService.moveToProject(withSubTasks, INBOX_PROJECT.id);
       if (task.isDone) {
         this._taskService.setUnDone(task.id);
@@ -410,13 +414,18 @@ export class ProjectService {
     );
   }
 
-  update(projectId: string, changedFields: Partial<Project>): void {
+  update(
+    projectId: string,
+    changedFields: Partial<Project>,
+    isSkipSnack?: boolean,
+  ): void {
     this._store$.dispatch(
       updateProject({
         project: {
           id: projectId,
           changes: changedFields,
         },
+        isSkipSnack,
       }),
     );
   }

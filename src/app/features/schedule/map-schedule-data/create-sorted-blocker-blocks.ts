@@ -138,6 +138,20 @@ const createBlockerBlocksForWorkStartEnd = (
   if (!workStartEndCfg) {
     return blockedBlocks;
   }
+  // Same corrupt-data class as the repeat-cfg guard above (#7067): the schedule
+  // config is taken verbatim from an imported/synced snapshot -- `loadAllData`
+  // spreads `globalConfig` over the defaults at the top level only, so unlike
+  // `misc`/`tasks`/... the `schedule` section gets no per-field defaulting, and
+  // typia accepts '' for a `string` so autoFixTypiaErrors never repairs it.
+  // Without this, a single bad value throws on every Schedule panel open,
+  // permanently (#5358, #4842). Reported once here rather than per day.
+  if (
+    !isValidSplitTime(workStartEndCfg.startTime) ||
+    !isValidSplitTime(workStartEndCfg.endTime)
+  ) {
+    devError('Timeline: Invalid work start/end time in schedule config');
+    return blockedBlocks;
+  }
   let i: number = 0;
   while (i < nrOfDays) {
     // Calculate proper day start instead of adding 24-hour increments
@@ -183,6 +197,13 @@ const createBlockerBlocksForLunchBreak = (
   const blockedBlocks: BlockedBlock[] = [];
 
   if (!lunchBreakCfg) {
+    return blockedBlocks;
+  }
+  if (
+    !isValidSplitTime(lunchBreakCfg.startTime) ||
+    !isValidSplitTime(lunchBreakCfg.endTime)
+  ) {
+    devError('Timeline: Invalid lunch break time in schedule config');
     return blockedBlocks;
   }
   let i: number = 0;

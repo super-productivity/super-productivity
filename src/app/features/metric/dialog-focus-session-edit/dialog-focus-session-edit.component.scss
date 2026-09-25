@@ -23,7 +23,7 @@
   text-align: center;
   margin-bottom: var(--s3);
   padding: var(--s2);
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--state-hover);
   border-radius: var(--card-border-radius);
 
   .total-info {

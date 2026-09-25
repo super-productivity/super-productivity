@@ -35,10 +35,29 @@ export interface WebdavApiDeps {
   httpAdapter: WebDavHttpAdapter;
   /** Nextcloud's DAV layer exposes its canonical validator in `OC-ETag`. */
   useCanonicalOcEtag?: boolean;
+  /**
+   * Injectable sleep for the post-upload verification backoff, so tests do not
+   * pay the real wait. Defaults to a plain `setTimeout`.
+   */
+  delay?: (ms: number) => Promise<void>;
 }
 
 export class WebdavApi {
   private static readonly L = 'WebdavApi';
+
+  /**
+   * Read-back budget for `_verifyUpload`. The PUT has already been accepted by
+   * the time we verify, so re-reading is idempotent and never re-writes.
+   *
+   * #9985: some servers answer a GET that reuses the PUT's keep-alive
+   * connection with the *previous* version's body and `ETag`, or truncate it
+   * mid-stream (`net::ERR_CONTENT_LENGTH_MISMATCH`). The stored file is
+   * correct; only the read is transiently wrong, so one bad read must not be
+   * reported as a conflict. A genuine concurrent write still shows up on every
+   * attempt and is reported after the budget is spent.
+   */
+  private static readonly VERIFY_MAX_ATTEMPTS = 3;
+  private static readonly VERIFY_RETRY_DELAY_MS = 1000;
   private readonly xmlParser: WebdavXmlParser;
   private readonly directoryCreationQueue = new Map<string, Promise<void>>();
 
@@ -372,8 +391,53 @@ export class WebdavApi {
    * concurrent write by another client landing in the same window. Both cases
    * are surfaced as RemoteFileChangedUnexpectedly so the adapter's existing
    * self-healing path (re-download and retry) handles them uniformly.
+   *
+   * Every failure mode is re-read up to `VERIFY_MAX_ATTEMPTS` times first —
+   * see the constant for why a single bad read is not evidence of a conflict.
    */
   private async _verifyUpload(
+    path: string,
+    fullPath: string,
+    expectedHash: string,
+  ): Promise<string> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this._readBackUpload(path, fullPath, expectedHash);
+      } catch (e) {
+        if (attempt >= WebdavApi.VERIFY_MAX_ATTEMPTS) {
+          throw e;
+        }
+        this._deps.logger.normal(
+          `${WebdavApi.L}._verifyUpload() re-reading after a failed attempt`,
+          errorMeta(e, { path, attempt }),
+        );
+        await this._sleep(WebdavApi.VERIFY_RETRY_DELAY_MS);
+      }
+    }
+  }
+
+  private async _sleep(ms: number): Promise<void> {
+    if (this._deps.delay) {
+      await this._deps.delay(ms);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * One read-back attempt. Deliberately sends no `Cache-Control`: it is not a
+   * CORS-safelisted request header, so on the web build it forces a preflight
+   * that many WebDAV servers reject. The fetch path already passes
+   * `cache: 'no-store'` and the native path adds its own no-cache headers.
+   *
+   * Known gap (#9985): only the body is checked, so a response pairing the
+   * correct body with the *previous* version's `ETag` — possible on a stale
+   * connection when both versions happen to be the same length — is accepted
+   * and its stale rev stored, costing a 412 on the next conditional PUT. Not
+   * guarded because no report shows that combination: STRATO's stale headers
+   * came with a stale or truncated body, which the hash check already catches.
+   */
+  private async _readBackUpload(
     path: string,
     fullPath: string,
     expectedHash: string,
@@ -381,9 +445,6 @@ export class WebdavApi {
     const remoteResponse = await this._makeRequest({
       url: fullPath,
       method: WebDavHttpMethod.GET,
-      headers: {
-        [WebDavHttpHeader.CACHE_CONTROL]: 'no-cache',
-      },
     });
 
     if (!remoteResponse.data || remoteResponse.data.length === 0) {

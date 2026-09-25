@@ -1,11 +1,17 @@
-import { inject, Injectable } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { Log } from '../log';
 import { LS_LOCAL_DRAFT_PREFIX } from '../persistence/storage-keys.const';
-import { UserProfileService } from '../../features/user-profile/user-profile.service';
-import { UserProfileStorageService } from '../../features/user-profile/user-profile-storage.service';
-import { DEFAULT_PROFILE_ID } from '../../features/user-profile/user-profile.model';
 
-export type LocalDraftEntityType = 'NOTE';
+/**
+ * Single source of truth for the entity types drafts are keyed by. The legacy
+ * profile migration below tells an already-migrated key from a legacy one by
+ * its first segment, so the union must stay derived from this list — a second
+ * type declared only in the union would have its new-format drafts read as
+ * legacy and deleted.
+ */
+export const LOCAL_DRAFT_ENTITY_TYPES = ['NOTE'] as const;
+
+export type LocalDraftEntityType = (typeof LOCAL_DRAFT_ENTITY_TYPES)[number];
 
 export interface LocalDraft {
   content: string;
@@ -47,12 +53,16 @@ export const DRAFT_RETENTION_MS = DRAFT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
 /**
  * Drafts whose content + baseContent exceed this are not checkpointed.
- * localStorage's quota (~5 MB) is shared with everything else the app keeps
- * there (profile metadata, UI state), so one huge note must not be able to fill
- * it and break those writes. A note this large simply goes without
+ * localStorage's quota (~5 MB) is shared with UI state, so one huge note must
+ * not be able to fill it and break those writes. A note this large goes without
  * crash-safety; editing itself is unaffected.
  */
 export const DRAFT_MAX_CONTENT_LENGTH = 500_000;
+
+const LEGACY_PROFILE_ENABLED_KEY = 'sp_user_profiles_enabled';
+const LEGACY_PROFILE_META_KEY = 'sp_profile_meta';
+const LEGACY_PROFILE_DATA_PREFIX = 'sp_profile_data_';
+const LEGACY_DEFAULT_PROFILE_ID = 'default';
 
 const isStoredDraft = (v: unknown): v is LocalDraft =>
   typeof v === 'object' &&
@@ -62,9 +72,9 @@ const isStoredDraft = (v: unknown): v is LocalDraft =>
   typeof (v as LocalDraft).updatedAt === 'number';
 
 /**
- * Device-local, profile-aware draft storage for crash-safe editing (e.g. the
- * fullscreen note editor). Drafts live in localStorage, keyed by profile +
- * entity type + entity id, and are never synced or included in backups.
+ * Device-local draft storage for crash-safe editing (e.g. the fullscreen note
+ * editor). Drafts live in localStorage, keyed by entity type + entity id, and
+ * are never synced or included in backups.
  *
  * localStorage is deliberate: it is synchronous, so writes, reads and deletes
  * happen in program order with nothing in flight — no stale connection, no
@@ -74,9 +84,6 @@ const isStoredDraft = (v: unknown): v is LocalDraft =>
  */
 @Injectable({ providedIn: 'root' })
 export class LocalDraftService {
-  private readonly _userProfileService = inject(UserProfileService);
-  private readonly _userProfileStorageService = inject(UserProfileStorageService);
-
   saveDraft({
     entityType,
     entityId,
@@ -89,7 +96,7 @@ export class LocalDraftService {
     baseContent: string;
   }): void {
     try {
-      const key = this._key(this._activeProfileId(), entityType, entityId);
+      const key = this._key(entityType, entityId);
       if (content.length + baseContent.length > DRAFT_MAX_CONTENT_LENGTH) {
         // Also drop a smaller draft stored earlier in the session: once
         // checkpointing stops, keeping it would offer long-outdated text on
@@ -108,9 +115,7 @@ export class LocalDraftService {
 
   loadDraft(entityType: LocalDraftEntityType, entityId: string): LocalDraft | undefined {
     try {
-      const raw = localStorage.getItem(
-        this._key(this._activeProfileId(), entityType, entityId),
-      );
+      const raw = localStorage.getItem(this._key(entityType, entityId));
       if (!raw) {
         return undefined;
       }
@@ -135,38 +140,19 @@ export class LocalDraftService {
 
   clearDraft(entityType: LocalDraftEntityType, entityId: string): void {
     try {
-      localStorage.removeItem(this._key(this._activeProfileId(), entityType, entityId));
+      localStorage.removeItem(this._key(entityType, entityId));
     } catch (e) {
       Log.err('LocalDraftService: Failed to clear draft', e);
     }
   }
 
-  /**
-   * Deletes every draft belonging to a profile. Called from the profile
-   * deletion lifecycle so a deleted profile does not leave its (never-synced)
-   * draft contents behind. Keys are `<prefix><profileId>:<type>:<id>` and a
-   * profile id cannot contain the `:` separator, so the prefix match is
-   * unambiguous.
-   */
-  deleteDraftsForProfile(profileId: string): void {
+  /** Deletes all drafts after the complete dataset is replaced. */
+  deleteAllDrafts(): void {
     try {
-      const prefix = `${LS_LOCAL_DRAFT_PREFIX}${profileId}:`;
-      this._draftKeys()
-        .filter((key) => key.startsWith(prefix))
-        .forEach((key) => localStorage.removeItem(key));
+      this._draftKeys().forEach((key) => localStorage.removeItem(key));
     } catch (e) {
-      Log.err('LocalDraftService: Failed to delete drafts for profile', e);
+      Log.err('LocalDraftService: Failed to delete drafts', e);
     }
-  }
-
-  /**
-   * Deletes the active profile's drafts. Called where that profile's dataset
-   * is replaced wholesale (JSON import, SuperSync "Use Server Data"): every
-   * draft's baseContent then refers to note content that no longer exists, so
-   * keeping them would only offer stale, misleading recovery.
-   */
-  deleteDraftsForActiveProfile(): void {
-    this.deleteDraftsForProfile(this._activeProfileId());
   }
 
   /**
@@ -177,6 +163,7 @@ export class LocalDraftService {
    */
   pruneOnStart(now: number = Date.now()): void {
     try {
+      this._migrateLegacyUserProfileDrafts();
       const cutoff = now - DRAFT_RETENTION_MS;
       for (const key of this._draftKeys()) {
         let parsed: unknown;
@@ -194,27 +181,8 @@ export class LocalDraftService {
     }
   }
 
-  private _activeProfileId(): string {
-    const active = this._userProfileService.activeProfile()?.id;
-    if (active) {
-      return active;
-    }
-    // The profile feature can be disabled, in which case UserProfileService is
-    // never initialized and its in-memory signal stays null — but the last
-    // active profile id is still persisted. Fall back to it so drafts stay
-    // keyed to the profile whose data is actually loaded.
-    return (
-      this._userProfileStorageService.loadProfileMetadataSync()?.activeProfileId ||
-      DEFAULT_PROFILE_ID
-    );
-  }
-
-  private _key(
-    profileId: string,
-    entityType: LocalDraftEntityType,
-    entityId: string,
-  ): string {
-    return `${LS_LOCAL_DRAFT_PREFIX}${profileId}:${entityType}:${entityId}`;
+  private _key(entityType: LocalDraftEntityType, entityId: string): string {
+    return `${LS_LOCAL_DRAFT_PREFIX}${entityType}:${entityId}`;
   }
 
   private _draftKeys(): string[] {
@@ -226,5 +194,68 @@ export class LocalDraftService {
       }
     }
     return keys;
+  }
+
+  /**
+   * Keeps drafts for the dataset that was active when User Profiles was
+   * removed, then deletes the feature's device-local metadata and snapshots.
+   */
+  private _migrateLegacyUserProfileDrafts(): void {
+    let activeProfileId = LEGACY_DEFAULT_PROFILE_ID;
+    const rawMetadata = localStorage.getItem(LEGACY_PROFILE_META_KEY);
+    if (rawMetadata) {
+      try {
+        const metadata: unknown = JSON.parse(rawMetadata);
+        if (
+          typeof metadata === 'object' &&
+          metadata !== null &&
+          typeof (metadata as { activeProfileId?: unknown }).activeProfileId === 'string'
+        ) {
+          activeProfileId = (metadata as { activeProfileId: string }).activeProfileId;
+        }
+      } catch {
+        // Invalid legacy metadata cannot identify a non-default active profile.
+      }
+    }
+
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(LEGACY_PROFILE_DATA_PREFIX)) {
+        localStorage.removeItem(key);
+      }
+    }
+
+    const activeDraftPrefix = `${LS_LOCAL_DRAFT_PREFIX}${activeProfileId}:`;
+    let didMigrateActiveDrafts = true;
+    for (const legacyKey of this._draftKeys()) {
+      if (
+        LOCAL_DRAFT_ENTITY_TYPES.some((entityType) =>
+          legacyKey.startsWith(`${LS_LOCAL_DRAFT_PREFIX}${entityType}:`),
+        )
+      ) {
+        continue;
+      }
+
+      if (legacyKey.startsWith(activeDraftPrefix)) {
+        const draft = localStorage.getItem(legacyKey);
+        const newKey = `${LS_LOCAL_DRAFT_PREFIX}${legacyKey.slice(activeDraftPrefix.length)}`;
+        if (draft !== null && localStorage.getItem(newKey) === null) {
+          try {
+            localStorage.setItem(newKey, draft);
+          } catch (e) {
+            didMigrateActiveDrafts = false;
+            Log.err('LocalDraftService: Failed to migrate legacy draft', e);
+            continue;
+          }
+        }
+      }
+
+      localStorage.removeItem(legacyKey);
+    }
+
+    localStorage.removeItem(LEGACY_PROFILE_ENABLED_KEY);
+    if (didMigrateActiveDrafts) {
+      localStorage.removeItem(LEGACY_PROFILE_META_KEY);
+    }
   }
 }

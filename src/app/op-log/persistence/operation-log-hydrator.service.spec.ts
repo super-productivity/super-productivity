@@ -16,6 +16,7 @@ import { VectorClockService } from '../sync/vector-clock.service';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import { OperationLogSnapshotService } from './operation-log-snapshot.service';
+import { OperationLogCompactionService } from './operation-log-compaction.service';
 import { OperationLogRecoveryService } from './operation-log-recovery.service';
 import { TabSeqFrontierService } from './tab-seq-frontier.service';
 import { SyncHydrationService } from './sync-hydration.service';
@@ -55,6 +56,7 @@ describe('OperationLogHydratorService', () => {
   let mockOperationLogEffects: jasmine.SpyObj<OperationLogEffects>;
   let mockHydrationStateService: jasmine.SpyObj<HydrationStateService>;
   let mockSnapshotService: jasmine.SpyObj<OperationLogSnapshotService>;
+  let mockCompactionService: jasmine.SpyObj<OperationLogCompactionService>;
   let mockRecoveryService: jasmine.SpyObj<OperationLogRecoveryService>;
   let mockSyncHydrationService: jasmine.SpyObj<SyncHydrationService>;
   let mockClientIdProvider: jasmine.SpyObj<ClientIdProvider>;
@@ -165,6 +167,10 @@ describe('OperationLogHydratorService', () => {
       'migrateSnapshotWithBackup',
       'saveCurrentStateAsSnapshot',
     ]);
+    mockCompactionService = jasmine.createSpyObj('OperationLogCompactionService', [
+      'compact',
+      'compactIfBloated',
+    ]);
     mockRecoveryService = jasmine.createSpyObj('OperationLogRecoveryService', [
       'recoverPendingRemoteOps',
       'cleanupCorruptOps',
@@ -220,6 +226,8 @@ describe('OperationLogHydratorService', () => {
     // branches on this return value, so a mock resolving undefined would model a
     // guard-skipped save and silently change which branch the tests exercise.
     mockSnapshotService.saveCurrentStateAsSnapshot.and.resolveTo(true);
+    mockCompactionService.compact.and.resolveTo(true);
+    mockCompactionService.compactIfBloated.and.resolveTo(undefined);
     mockRecoveryService.recoverPendingRemoteOps.and.resolveTo([]);
     mockRecoveryService.cleanupCorruptOps.and.returnValue(Promise.resolve());
     mockRecoveryService.attemptRecovery.and.returnValue(Promise.resolve());
@@ -241,6 +249,7 @@ describe('OperationLogHydratorService', () => {
         { provide: OperationLogEffects, useValue: mockOperationLogEffects },
         { provide: HydrationStateService, useValue: mockHydrationStateService },
         { provide: OperationLogSnapshotService, useValue: mockSnapshotService },
+        { provide: OperationLogCompactionService, useValue: mockCompactionService },
         { provide: OperationLogRecoveryService, useValue: mockRecoveryService },
         { provide: SyncHydrationService, useValue: mockSyncHydrationService },
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
@@ -1792,8 +1801,50 @@ describe('OperationLogHydratorService', () => {
           bulkApplyHydrationOperations({
             operations: allOps.map((e) => e.op),
             localClientId: 'test-client',
+            isReplayFromEmptyBaseline: true,
           }),
         );
+      });
+
+      // #9863: a legacy-migrated client's log opens with its own MIGRATION
+      // genesis op. The corrupt-snapshot rebuild must hand that op to the bulk
+      // replay together with the local client id (the meta-reducer's ownership
+      // gate turns it into loadAllData), and must then persist the rebuilt
+      // state — this is the one replay path that writes its result back.
+      it('replays an own MIGRATION genesis op through the bulk apply and persists the rebuilt snapshot (#9863)', async () => {
+        mockOpLogStore.loadStateCache.and.resolveTo(createMockSnapshot());
+        mockSnapshotService.isValidSnapshot.and.returnValue(false);
+
+        const localClientId = 'test-client';
+        const genesisOp = createMockOperation('genesis-op', OpType.Batch, {
+          actionType: ActionType.MIGRATION_GENESIS_IMPORT,
+          entityType: 'MIGRATION',
+          entityId: '*',
+          payload: { task: { ids: ['pre-migration-task'], entities: {} } },
+          clientId: localClientId,
+          vectorClock: { [localClientId]: 1 },
+        });
+        const postMigrationOp = createMockOperation('post-migration-op', OpType.Create, {
+          clientId: localClientId,
+          vectorClock: { [localClientId]: 2 },
+        });
+        mockOpLogStore.getLastSeq.and.resolveTo(2);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([
+          createMockEntry(1, genesisOp),
+          createMockEntry(2, postMigrationOp),
+        ]);
+
+        await service.hydrateStore();
+
+        expect(mockRecoveryService.attemptRecovery).not.toHaveBeenCalled();
+        expect(mockStore.dispatch).toHaveBeenCalledWith(
+          bulkApplyHydrationOperations({
+            operations: [genesisOp, postMigrationOp],
+            localClientId,
+            isReplayFromEmptyBaseline: true,
+          }),
+        );
+        expect(mockSnapshotService.saveCurrentStateAsSnapshot).toHaveBeenCalled();
       });
 
       it('should attempt recovery for an invalid snapshot only when no ops exist (lastSeq === 0) (#7892)', async () => {
@@ -1839,6 +1890,7 @@ describe('OperationLogHydratorService', () => {
           bulkApplyHydrationOperations({
             operations: allOps.map((e) => e.op),
             localClientId: 'test-client',
+            isReplayFromEmptyBaseline: true,
           }),
         );
         // The degraded recovery must be visible to the user...
@@ -1985,6 +2037,7 @@ describe('OperationLogHydratorService', () => {
           bulkApplyHydrationOperations({
             operations: allOps.map((e) => e.op),
             localClientId: 'test-client',
+            isReplayFromEmptyBaseline: true,
           }),
         );
         // Degraded recovery is visible; the partial replay is never persisted
@@ -2026,6 +2079,7 @@ describe('OperationLogHydratorService', () => {
           bulkApplyHydrationOperations({
             operations: allOps.map((e) => e.op),
             localClientId: 'test-client',
+            isReplayFromEmptyBaseline: true,
           }),
         );
         // Hydration state is managed around the dispatch
@@ -2379,7 +2433,7 @@ describe('OperationLogHydratorService', () => {
       expect(reloadSpy).not.toHaveBeenCalled();
     });
 
-    // #9187: DB_VERSION 8-10 are deliberate downgrade barriers, so a
+    // #9187: DB_VERSION 8-10 and later schema upgrades form downgrade barriers, so a
     // VersionError means an old build is looking at an intact database. The
     // generic dialog's "your browser storage may need to be cleared" would
     // destroy that data and still not let this build open it.
@@ -2437,6 +2491,77 @@ describe('OperationLogHydratorService', () => {
       await service.hydrateStore();
 
       expect(sessionStorage.getItem(IDB_OPEN_ERROR_RELOAD_KEY)).toBeNull();
+    });
+  });
+
+  describe('startup compaction (op-log bloat safety net, #8336)', () => {
+    // Drive hydration down a path that reaches the post-hydration bloat check:
+    // a valid snapshot with no tail ops to replay. The threshold/failure
+    // behavior of the check itself is covered in the compaction service spec.
+    beforeEach(() => {
+      mockOpLogStore.loadStateCache.and.returnValue(
+        Promise.resolve(createMockSnapshot()),
+      );
+      mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve([]));
+    });
+
+    it('runs the bloat check after a successful hydration', async () => {
+      await service.hydrateStore();
+
+      expect(mockCompactionService.compactIfBloated).toHaveBeenCalledTimes(1);
+    });
+
+    it('starts the bloat check only after the hydration-in-progress flag is cleared (#9084)', async () => {
+      // The call site must stay after hydrateStore()'s finally — inside the
+      // try the #9084 guard would skip every startup compaction.
+      const callOrder: string[] = [];
+      mockHydrationStateService.setHydrationInProgress.and.callFake(((
+        isInProgress: boolean,
+      ) => {
+        callOrder.push(`flag:${isInProgress}`);
+      }) as never);
+      mockCompactionService.compactIfBloated.and.callFake((() => {
+        callOrder.push('bloat-check');
+        return Promise.resolve(undefined);
+      }) as never);
+
+      await service.hydrateStore();
+
+      const flagDownIdx = callOrder.indexOf('flag:false');
+      const checkIdx = callOrder.indexOf('bloat-check');
+      expect(flagDownIdx).toBeGreaterThanOrEqual(0);
+      expect(checkIdx).toBeGreaterThan(flagDownIdx);
+    });
+
+    it('skips the bloat check when hydration failed into recovery', async () => {
+      mockOpLogStore.loadStateCache.and.rejectWith(new Error('cache read failed'));
+
+      await service.hydrateStore();
+
+      expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
+      expect(mockCompactionService.compactIfBloated).not.toHaveBeenCalled();
+    });
+
+    it('does not block hydration on the bloat check (fire-and-forget)', async () => {
+      // hydrateStore() gates app boot; if the call site regresses to awaiting
+      // the check, this spec hangs into the jasmine timeout and fails.
+      let releaseCheck!: () => void;
+      mockCompactionService.compactIfBloated.and.returnValue(
+        new Promise<void>((resolve) => (releaseCheck = resolve)),
+      );
+
+      await service.hydrateStore();
+
+      expect(mockCompactionService.compactIfBloated).toHaveBeenCalledTimes(1);
+      releaseCheck();
+    });
+
+    it('still resolves hydration when the bloat check rejects (belt for the never-rejects contract)', async () => {
+      mockCompactionService.compactIfBloated.and.rejectWith(
+        new Error('bloat check broke its contract'),
+      );
+
+      await expectAsync(service.hydrateStore()).toBeResolved();
     });
   });
 });

@@ -13,6 +13,10 @@ import { ActionType, OpType } from '../core/operation.types';
 import { uuidv7 } from '../../util/uuid-v7';
 import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
+import { START_FRESH_RESULT } from './dialog-legacy-migration/dialog-legacy-migration.component';
+import { AppDataComplete } from '../model/model-config';
+import legacyPartial from '../validation/test-fixtures/legacy-pf-v13-partial-models.json';
+import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 
 describe('OperationLogMigrationService', () => {
   let service: OperationLogMigrationService;
@@ -27,7 +31,8 @@ describe('OperationLogMigrationService', () => {
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'loadStateCache',
-      'getOpsAfterSeq',
+      'getFirstOpEntry',
+      'countOps',
       'deleteOpsWhere',
       'clearAllOperations',
       'appendOperationAndSnapshot',
@@ -40,6 +45,8 @@ describe('OperationLogMigrationService', () => {
       'loadClientId',
       'acquireMigrationLock',
       'releaseMigrationLock',
+      'clearAll',
+      'markMigrationSkipped',
     ]);
 
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
@@ -54,6 +61,8 @@ describe('OperationLogMigrationService', () => {
       'getBrowserLang',
     ]);
     mockLanguageService = jasmine.createSpyObj('LanguageService', ['setLng']);
+    // Echo the key back so error.set() receives a string, as it does in the app.
+    mockTranslateService.instant.and.callFake((key: string | string[]) => key);
 
     // Default returns for legacy db
     mockLegacyPfDb.hasUsableEntityData.and.resolveTo(false);
@@ -89,7 +98,7 @@ describe('OperationLogMigrationService', () => {
         await service.checkAndMigrate();
 
         expect(mockOpLogStore.loadStateCache).toHaveBeenCalled();
-        expect(mockOpLogStore.getOpsAfterSeq).not.toHaveBeenCalled();
+        expect(mockOpLogStore.getFirstOpEntry).not.toHaveBeenCalled();
       });
     });
 
@@ -99,24 +108,23 @@ describe('OperationLogMigrationService', () => {
       });
 
       it('should skip if Genesis operation exists', async () => {
-        mockOpLogStore.getOpsAfterSeq.and.resolveTo([
-          {
-            seq: 1,
-            op: {
-              id: 'genesis-op',
-              entityType: 'MIGRATION',
-              actionType: '[Migration] Genesis Import' as ActionType,
-              opType: OpType.Batch,
-              clientId: 'client1',
-              vectorClock: { client1: 1 },
-              timestamp: Date.now(),
-              payload: { task: { ids: ['t1'] } },
-              schemaVersion: 1,
-            },
-            appliedAt: Date.now(),
-            source: 'local',
+        mockOpLogStore.getFirstOpEntry.and.resolveTo({
+          seq: 1,
+          op: {
+            id: 'genesis-op',
+            entityType: 'MIGRATION',
+            actionType: '[Migration] Genesis Import' as ActionType,
+            opType: OpType.Batch,
+            clientId: 'client1',
+            vectorClock: { client1: 1 },
+            timestamp: Date.now(),
+            payload: { task: { ids: ['t1'] } },
+            schemaVersion: 1,
           },
-        ]);
+          appliedAt: Date.now(),
+          source: 'local',
+        });
+        mockOpLogStore.countOps.and.resolveTo(1);
 
         await service.checkAndMigrate();
 
@@ -127,24 +135,23 @@ describe('OperationLogMigrationService', () => {
       });
 
       it('should skip if Recovery operation exists', async () => {
-        mockOpLogStore.getOpsAfterSeq.and.resolveTo([
-          {
-            seq: 1,
-            op: {
-              id: 'recovery-op',
-              entityType: 'RECOVERY',
-              actionType: '[Recovery] Data Recovery Import' as ActionType,
-              opType: OpType.Batch,
-              clientId: 'client1',
-              vectorClock: { client1: 1 },
-              timestamp: Date.now(),
-              payload: { task: { ids: ['t1'] } },
-              schemaVersion: 1,
-            },
-            appliedAt: Date.now(),
-            source: 'local',
+        mockOpLogStore.getFirstOpEntry.and.resolveTo({
+          seq: 1,
+          op: {
+            id: 'recovery-op',
+            entityType: 'RECOVERY',
+            actionType: '[Recovery] Data Recovery Import' as ActionType,
+            opType: OpType.Batch,
+            clientId: 'client1',
+            vectorClock: { client1: 1 },
+            timestamp: Date.now(),
+            payload: { task: { ids: ['t1'] } },
+            schemaVersion: 1,
           },
-        ]);
+          appliedAt: Date.now(),
+          source: 'local',
+        });
+        mockOpLogStore.countOps.and.resolveTo(1);
 
         await service.checkAndMigrate();
 
@@ -152,40 +159,23 @@ describe('OperationLogMigrationService', () => {
       });
 
       it('should clear orphan operations when legacy data exists', async () => {
-        mockOpLogStore.getOpsAfterSeq.and.resolveTo([
-          {
-            seq: 1,
-            op: {
-              id: 'orphan-op-1',
-              entityType: 'TASK',
-              actionType: '[Task] Update Task' as ActionType,
-              opType: OpType.Update,
-              clientId: 'client1',
-              vectorClock: { client1: 1 },
-              timestamp: Date.now(),
-              payload: { id: 't1', title: 'Test' },
-              schemaVersion: 1,
-            },
-            appliedAt: Date.now(),
-            source: 'local',
+        mockOpLogStore.getFirstOpEntry.and.resolveTo({
+          seq: 1,
+          op: {
+            id: 'orphan-op-1',
+            entityType: 'TASK',
+            actionType: '[Task] Update Task' as ActionType,
+            opType: OpType.Update,
+            clientId: 'client1',
+            vectorClock: { client1: 1 },
+            timestamp: Date.now(),
+            payload: { id: 't1', title: 'Test' },
+            schemaVersion: 1,
           },
-          {
-            seq: 2,
-            op: {
-              id: 'orphan-op-2',
-              entityType: 'TAG',
-              actionType: '[Tag] Update Tag' as ActionType,
-              opType: OpType.Update,
-              clientId: 'client1',
-              vectorClock: { client1: 2 },
-              timestamp: Date.now(),
-              payload: { id: 'tag1', name: 'Test Tag' },
-              schemaVersion: 1,
-            },
-            appliedAt: Date.now(),
-            source: 'local',
-          },
-        ]);
+          appliedAt: Date.now(),
+          source: 'local',
+        });
+        mockOpLogStore.countOps.and.resolveTo(2);
         mockOpLogStore.clearAllOperations.and.resolveTo();
         // Legacy data exists - orphan ops should be cleared before migration
         mockLegacyPfDb.hasUsableEntityData.and.resolveTo(true);
@@ -203,24 +193,23 @@ describe('OperationLogMigrationService', () => {
       });
 
       it('should NOT clear orphan operations when no legacy data exists (fresh install)', async () => {
-        mockOpLogStore.getOpsAfterSeq.and.resolveTo([
-          {
-            seq: 1,
-            op: {
-              id: 'orphan-op-1',
-              entityType: 'TASK',
-              actionType: '[Task] Update Task' as ActionType,
-              opType: OpType.Update,
-              clientId: 'client1',
-              vectorClock: { client1: 1 },
-              timestamp: Date.now(),
-              payload: { id: 't1', title: 'Test' },
-              schemaVersion: 1,
-            },
-            appliedAt: Date.now(),
-            source: 'local',
+        mockOpLogStore.getFirstOpEntry.and.resolveTo({
+          seq: 1,
+          op: {
+            id: 'orphan-op-1',
+            entityType: 'TASK',
+            actionType: '[Task] Update Task' as ActionType,
+            opType: OpType.Update,
+            clientId: 'client1',
+            vectorClock: { client1: 1 },
+            timestamp: Date.now(),
+            payload: { id: 't1', title: 'Test' },
+            schemaVersion: 1,
           },
-        ]);
+          appliedAt: Date.now(),
+          source: 'local',
+        });
+        mockOpLogStore.countOps.and.resolveTo(1);
         // No legacy data - orphan ops are kept (fresh install scenario)
         mockLegacyPfDb.hasUsableEntityData.and.resolveTo(false);
 
@@ -236,7 +225,7 @@ describe('OperationLogMigrationService', () => {
     describe('when no snapshot and no operations exist (fresh install)', () => {
       beforeEach(() => {
         mockOpLogStore.loadStateCache.and.resolveTo(null);
-        mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+        mockOpLogStore.getFirstOpEntry.and.resolveTo(undefined);
         mockLegacyPfDb.hasUsableEntityData.and.resolveTo(false);
       });
 
@@ -244,7 +233,7 @@ describe('OperationLogMigrationService', () => {
         await service.checkAndMigrate();
 
         expect(mockOpLogStore.loadStateCache).toHaveBeenCalled();
-        expect(mockOpLogStore.getOpsAfterSeq).toHaveBeenCalledWith(0);
+        expect(mockOpLogStore.getFirstOpEntry).toHaveBeenCalled();
         expect(mockLegacyPfDb.hasUsableEntityData).toHaveBeenCalled();
         expect(OpLog.normal).toHaveBeenCalledWith(
           jasmine.stringContaining('No legacy data found'),
@@ -255,7 +244,7 @@ describe('OperationLogMigrationService', () => {
     describe('when legacy data exists', () => {
       beforeEach(() => {
         mockOpLogStore.loadStateCache.and.resolveTo(null);
-        mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+        mockOpLogStore.getFirstOpEntry.and.resolveTo(undefined);
         mockLegacyPfDb.hasUsableEntityData.and.resolveTo(true);
       });
 
@@ -334,7 +323,7 @@ describe('OperationLogMigrationService', () => {
       beforeEach(() => {
         // Set up pre-conditions: no snapshot, no ops, legacy data exists, lock acquired
         mockOpLogStore.loadStateCache.and.resolveTo(null);
-        mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+        mockOpLogStore.getFirstOpEntry.and.resolveTo(undefined);
         mockLegacyPfDb.hasUsableEntityData.and.resolveTo(true);
         mockLegacyPfDb.acquireMigrationLock.and.resolveTo(true);
         mockLegacyPfDb.releaseMigrationLock.and.resolveTo();
@@ -345,6 +334,7 @@ describe('OperationLogMigrationService', () => {
           componentInstance: {
             status: { set: jasmine.createSpy('statusSet') },
             error: { set: jasmine.createSpy('errorSet') },
+            canStartFresh: { set: jasmine.createSpy('canStartFreshSet') },
           },
           afterClosed: jasmine.createSpy('afterClosed').and.returnValue(of(undefined)),
           close: jasmine.createSpy('close'),
@@ -360,7 +350,7 @@ describe('OperationLogMigrationService', () => {
         };
 
         // Skip auto-backup (download is a non-injectable module import)
-        spyOn(service as any, '_createAutoBackup').and.resolveTo();
+        spyOn(service as any, '_createAutoBackup').and.resolveTo(true);
 
         // Replace _performMigration to skip non-injectable validateFull/download
         // while preserving the client ID logic under test
@@ -434,6 +424,184 @@ describe('OperationLogMigrationService', () => {
         expect(mockClientIdService.persistClientId).not.toHaveBeenCalled();
         expect(mockOpLogStore.appendOperationAndSnapshot).toHaveBeenCalled();
       });
+    });
+
+    // #9770: a `pf` database written by an older version only holds the model
+    // slices that existed back then. Runs the REAL _performMigration — with the
+    // missing slices left unfilled it throws "Data repair failed" and the user
+    // is stuck on "Migration Failed" / "Failed to load data" on every restart.
+    describe('when legacy data predates newer model slices', () => {
+      let mockDialogRef: any;
+      /** Every dialog opened during the test, in order. */
+      let openedDialogRefs: any[];
+
+      const createMockDialogRef = (): any => ({
+        componentInstance: {
+          status: { set: jasmine.createSpy('statusSet') },
+          error: { set: jasmine.createSpy('errorSet') },
+          canStartFresh: { set: jasmine.createSpy('canStartFreshSet') },
+        },
+        afterClosed: jasmine.createSpy('afterClosed').and.returnValue(of(undefined)),
+        close: jasmine.createSpy('close'),
+      });
+
+      beforeEach(() => {
+        mockOpLogStore.loadStateCache.and.resolveTo(null);
+        mockOpLogStore.getFirstOpEntry.and.resolveTo(undefined);
+        mockOpLogStore.appendOperationAndSnapshot.and.resolveTo(1);
+        mockLegacyPfDb.hasUsableEntityData.and.resolveTo(true);
+        mockLegacyPfDb.acquireMigrationLock.and.resolveTo(true);
+        mockLegacyPfDb.releaseMigrationLock.and.resolveTo();
+        mockLegacyPfDb.loadAllEntityData.and.resolveTo(
+          JSON.parse(JSON.stringify(legacyPartial)),
+        );
+        mockLegacyPfDb.loadMetaModel.and.resolveTo({});
+        mockLegacyPfDb.loadClientId.and.resolveTo('legacyClientId1234');
+        mockClientIdService.persistClientId.and.resolveTo();
+
+        mockDialogRef = createMockDialogRef();
+        openedDialogRefs = [];
+        // A distinct ref per open(), so an assertion about the SECOND dialog
+        // cannot be satisfied by the first one that was already closed.
+        mockMatDialog.open.and.callFake(() => {
+          const ref =
+            openedDialogRefs.length === 0 ? mockDialogRef : createMockDialogRef();
+          openedDialogRefs.push(ref);
+          return ref;
+        });
+
+        mockTranslateService.use = jasmine
+          .createSpy('use')
+          .and.returnValue(of(undefined));
+        (service as any).languageService = {
+          detect: jasmine.createSpy('detect').and.returnValue('en'),
+        };
+
+        // Skip auto-backup only (download is a non-injectable module import)
+        spyOn(service as any, '_createAutoBackup').and.resolveTo(true);
+      });
+
+      it('migrates the data instead of aborting', async () => {
+        await service.checkAndMigrate();
+
+        expect(mockDialogRef.componentInstance.error.set).not.toHaveBeenCalled();
+        expect(mockOpLogStore.appendOperationAndSnapshot).toHaveBeenCalled();
+
+        const op = mockOpLogStore.appendOperationAndSnapshot.calls.mostRecent()
+          .args[0] as { payload: AppDataComplete };
+        expect(op.payload.task.ids).toEqual(['TJ-NDR6Sjc0qc0TS-tUgE']);
+        expect(op.payload.timeTracking).toBeDefined();
+        expect(op.payload.menuTree).toBeDefined();
+        expect(op.payload.boards).toBeDefined();
+        // Generous timeout: this is the only test that runs the real
+        // _performMigration, whose dynamic validation/repair imports are slow.
+      }, 10000);
+
+      it('offers the start-fresh escape hatch once the backup is downloaded', async () => {
+        mockLegacyPfDb.loadAllEntityData.and.resolveTo({
+          globalConfig: { misc: {} },
+        } as any);
+
+        await expectAsync(service.checkAndMigrate()).toBeRejected();
+
+        expect(mockDialogRef.componentInstance.canStartFresh.set).toHaveBeenCalledWith(
+          true,
+        );
+      }, 10000);
+
+      it('records the skip and boots on without re-throwing when the user starts fresh', async () => {
+        mockLegacyPfDb.loadAllEntityData.and.resolveTo({
+          globalConfig: { misc: {} },
+        } as any);
+        mockLegacyPfDb.markMigrationSkipped.and.resolveTo(true);
+        mockDialogRef.afterClosed.and.returnValue(of(START_FRESH_RESULT));
+
+        // The dead end is the bug: choosing to start fresh must not re-throw
+        // the migration error at the caller. Returning normally lets the
+        // hydrator boot the empty store in this same load — no reload needed.
+        await service.checkAndMigrate();
+
+        expect(mockLegacyPfDb.markMigrationSkipped).toHaveBeenCalled();
+        // Nothing is deleted: the legacy database has to survive so the choice
+        // stays reversible and the sync credentials in it are not destroyed.
+        expect(mockLegacyPfDb.clearAll).not.toHaveBeenCalled();
+        expect(mockLegacyPfDb.releaseMigrationLock).toHaveBeenCalled();
+      }, 10000);
+
+      it('records nothing when the user only acknowledges the error', async () => {
+        mockLegacyPfDb.loadAllEntityData.and.resolveTo({
+          globalConfig: { misc: {} },
+        } as any);
+
+        await expectAsync(service.checkAndMigrate()).toBeRejected();
+
+        expect(mockLegacyPfDb.markMigrationSkipped).not.toHaveBeenCalled();
+        expect(mockLegacyPfDb.clearAll).not.toHaveBeenCalled();
+      }, 10000);
+
+      // A marker that did not stick would drop the user back onto this same
+      // dialog next boot. Nothing was touched, so escalating is no worse than
+      // never having offered the option.
+      it('escalates when the skip marker cannot be recorded', async () => {
+        mockLegacyPfDb.loadAllEntityData.and.resolveTo({
+          globalConfig: { misc: {} },
+        } as any);
+        mockLegacyPfDb.markMigrationSkipped.and.resolveTo(false);
+        mockDialogRef.afterClosed.and.returnValue(of(START_FRESH_RESULT));
+
+        await expectAsync(service.checkAndMigrate()).toBeRejected();
+      }, 10000);
+
+      it('still offers to start fresh when the backup step itself failed', async () => {
+        mockLegacyPfDb.loadAllEntityData.and.resolveTo({
+          globalConfig: { misc: {} },
+        } as any);
+        ((service as any)._createAutoBackup as jasmine.Spy).and.rejectWith(
+          new Error('download blocked'),
+        );
+
+        await expectAsync(service.checkAndMigrate()).toBeRejected();
+
+        // Nothing is deleted, so a missing backup is no reason to withhold the
+        // way out of the dead end.
+        expect(mockDialogRef.componentInstance.canStartFresh.set).toHaveBeenCalledWith(
+          true,
+        );
+      }, 10000);
+
+      it('still refuses a legacy database with no task or project state', async () => {
+        // Filling defaults must not defeat the isDataRepairPossible() guard:
+        // an empty migration would write a genesis snapshot that permanently
+        // shadows the legacy database.
+        mockLegacyPfDb.loadAllEntityData.and.resolveTo({
+          globalConfig: { misc: {} },
+        } as any);
+
+        await expectAsync(service.checkAndMigrate()).toBeRejectedWithError(
+          /Legacy data is corrupted and cannot be repaired/,
+        );
+
+        expect(mockOpLogStore.appendOperationAndSnapshot).not.toHaveBeenCalled();
+        expect(mockDialogRef.componentInstance.error.set).toHaveBeenCalled();
+      }, 10000);
+
+      // The stale globalConfig above fails typia on its own, so it reaches the
+      // guard even when the guard only runs on the validation-failure branch.
+      // A CURRENT-shaped globalConfig does not: once the missing slices are
+      // filled the whole state validates, and a guard behind `!isValid` is
+      // never consulted at all — the database migrates silently to an empty
+      // store whose genesis snapshot then shadows it forever.
+      it('refuses a legacy database whose only surviving slice is a valid globalConfig', async () => {
+        mockLegacyPfDb.loadAllEntityData.and.resolveTo({
+          globalConfig: structuredClone(DEFAULT_GLOBAL_CONFIG),
+        } as any);
+
+        await expectAsync(service.checkAndMigrate()).toBeRejectedWithError(
+          /Legacy data is corrupted and cannot be repaired/,
+        );
+
+        expect(mockOpLogStore.appendOperationAndSnapshot).not.toHaveBeenCalled();
+      }, 10000);
     });
   });
 });

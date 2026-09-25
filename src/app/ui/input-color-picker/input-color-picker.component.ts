@@ -13,7 +13,7 @@ import {
   CdkOverlayOrigin,
   ConnectedPosition,
 } from '@angular/cdk/overlay';
-import { PRESET_COLORS } from '../../features/work-context/work-context-color';
+import { PRESET_COLORS } from '../work-context-color';
 import { MatIcon } from '@angular/material/icon';
 
 const PANEL_GAP = 4;

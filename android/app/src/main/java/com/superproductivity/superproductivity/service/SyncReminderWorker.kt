@@ -30,7 +30,9 @@ class SyncReminderWorker(
             return Result.success()
         }
 
-        val provider = SuperSyncBackgroundProvider()
+        val provider = SuperSyncBackgroundProvider(
+            buildPayloadDecryptor(applicationContext, TAG)
+        )
         var lastSeq = BackgroundSyncCredentialStore.getLastServerSeq(
             applicationContext, credentials.baseUrl
         )

@@ -175,19 +175,38 @@ describe('AddSubtaskInputComponent', () => {
     expect(closeSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('discards a typed draft on blur on desktop (mouse-primary) and closes', () => {
-    // Desktop keeps click-away-to-cancel: Enter and the submit button are the
-    // reliable commit paths there, so blur must not silently create a task.
+  it('keeps a typed draft open and uncommitted on blur on desktop (mouse-primary)', () => {
+    // Desktop does not commit on blur (Enter and the submit button are the
+    // reliable commit paths), but it must not throw the typed text away either.
     const closeSpy = jasmine.createSpy('closed');
     component.closed.subscribe(closeSpy);
-    setInputValue('Discarded on desktop');
+    setInputValue('Kept on desktop');
 
     getInput().dispatchEvent(new FocusEvent('blur'));
     fixture.detectChanges();
 
     expect(taskServiceSpy.addSubTaskTo).not.toHaveBeenCalled();
+    expect(closeSpy).not.toHaveBeenCalled();
+    expect(getInput().value).toBe('Kept on desktop');
+  });
+
+  it('keeps a composition-buffered draft open on blur on desktop', () => {
+    // titleDraft() is still empty mid-composition, so the open-vs-close decision
+    // must read the live input value — otherwise IME text vanishes on click-away.
+    const closeSpy = jasmine.createSpy('closed');
+    component.closed.subscribe(closeSpy);
+    const input = getInput();
+    input.dispatchEvent(new CompositionEvent('compositionstart'));
+    input.value = 'Composed and kept';
+    input.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true }));
+    fixture.detectChanges();
     expect(component.titleDraft()).toBe('');
-    expect(closeSpy).toHaveBeenCalledOnceWith('blur');
+
+    input.dispatchEvent(new FocusEvent('blur'));
+    fixture.detectChanges();
+
+    expect(closeSpy).not.toHaveBeenCalled();
+    expect(getInput().value).toBe('Composed and kept');
   });
 
   it('closes without creating a subtask on blur when empty', () => {
@@ -284,8 +303,8 @@ describe('AddSubtaskInputComponent', () => {
     });
 
     it('keeps the submit button out of the tab order (Enter is the keyboard path)', () => {
-      // Tabbing to the button would blur + cancel the draft on desktop; keyboard
-      // users commit with Enter, so the button is pointer/screen-reader-only.
+      // Keyboard users commit with Enter in the field, so the button would only
+      // add a redundant tab stop; it stays pointer/screen-reader-only.
       expect(getSubmitBtn().getAttribute('tabindex')).toBe('-1');
     });
 

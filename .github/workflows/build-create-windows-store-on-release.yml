@@ -38,12 +38,6 @@ jobs:
           git config --global url."https://github.com/".insteadOf
           ssh://git@github.com/
 
-      - name: Load Electron Builder Windows Store Config
-        run: echo $WIN_STORE_ELECTRON_BUILDER_YML | base64 --decode > electron-builder.yaml
-        shell: bash
-        env:
-          WIN_STORE_ELECTRON_BUILDER_YML: ${{secrets.WIN_STORE_ELECTRON_BUILDER_YML}}
-
       - name: Get npm cache directory
         id: npm-cache-dir
         shell: bash
@@ -68,6 +62,13 @@ jobs:
 
       - name: Build Frontend & Electron
         run: npm run build
+
+      # `npm run build` checks the repository's Linux packaging config during lint.
+      - name: Load Electron Builder Windows Store Config
+        run: echo $WIN_STORE_ELECTRON_BUILDER_YML | base64 --decode > electron-builder.yaml
+        shell: bash
+        env:
+          WIN_STORE_ELECTRON_BUILDER_YML: ${{secrets.WIN_STORE_ELECTRON_BUILDER_YML}}
 
       - name: Build/Release Electron app
         uses: johannesjo/action-electron-builder@9ea9e2d991c97668843d57337848e3e2b1ffab3d # v1

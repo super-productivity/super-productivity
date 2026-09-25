@@ -61,6 +61,9 @@
 // apply an additional offset when the keyboard still overlays that viewport;
 // using its full height here would move the fixed bar twice (#8778).
 //
+// `--keyboard-overlay-offset` is bound on this host by the component from
+// IosKeyboardService, not inherited from `:root` (#9779).
+//
 // Deliberately no `--safe-area-bottom` here, unlike the rule above: on iOS the
 // inset comes from capacitor-plugin-safe-area, which reads the window insets and
 // re-reads them on orientation change only — so it keeps reporting the home
@@ -277,8 +280,8 @@
       // via the MDC token (the icon inherits it) rather than a .mat-*/.mdc-*
       // selector override.
       opacity: 1;
-      --mdc-icon-button-icon-color: var(--primary);
-      color: var(--primary);
+      --mdc-icon-button-icon-color: var(--c-primary);
+      color: var(--c-primary);
     }
   }
 
@@ -495,10 +498,10 @@
 
       .option-icon {
         flex-shrink: 0;
-        color: var(--text-color-dimmed);
+        color: var(--text-color-muted);
 
         &.archived {
-          color: var(--color-accent);
+          color: var(--c-accent);
         }
       }
 
@@ -510,7 +513,7 @@
       .issue-id {
         flex-shrink: 0;
         font-size: 0.9em;
-        color: var(--text-color-dimmed);
+        color: var(--text-color-muted);
         opacity: 0.7;
       }
     }

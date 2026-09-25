@@ -132,6 +132,7 @@ describe('OperationLogHydratorService retryFailedRemoteOps (integration, real st
             startApplyingRemoteOps: () => {},
             endApplyingRemoteOps: () => {},
             setHydrationInProgress: () => {},
+            setHydrationFallbackActive: () => {},
           },
         },
       ],
@@ -313,11 +314,14 @@ describe('OperationLogHydratorService retryFailedRemoteOps (integration, real st
 
     shouldFailReducer = false;
     applier.applyOperations.and.callFake(async (ops) => ({ appliedOps: ops }));
+    recovery.attemptRecovery.calls.reset();
     const rebootedHydrator = TestBed.runInInjectionContext(
       () => new OperationLogHydratorService(),
     );
     await rebootedHydrator.hydrateStore();
 
+    // The healthy boot must complete normally, not via the recovery catch.
+    expect(recovery.attemptRecovery).not.toHaveBeenCalled();
     expect((await store.getOpById(fullStateOp.id))?.applicationStatus).toBe('applied');
     expect(applier.applyOperations).toHaveBeenCalledWith(
       [

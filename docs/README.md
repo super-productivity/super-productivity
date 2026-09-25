@@ -8,10 +8,13 @@ research note does not override the current code, tests, or an accepted decision
 
 Update these alongside the behavior or workflow they describe:
 
+- [`src/app` layer map](../src/app/README.md) — where things live, which way
+  dependencies point, and which of those directions are lint-enforced
 - [Documentation guide](documentation-guide.md)
 - [Development environment variables](ENV_SETUP.md)
 - [Plugin development](plugin-development.md)
 - [Adding an issue integration](add-new-integration.md)
+- [Feature and PR review guide](feature-review-guide.md)
 - [Styling guide](styling-guide.md) and [theming contract](theming-contract.md)
 - [Android edge-to-edge and keyboard behavior](android-edge-to-edge-keyboard.md)
 - [Android home-screen widget](android-home-screen-widget.md)
@@ -27,12 +30,17 @@ architecture lives in [`sync-and-op-log/`](sync-and-op-log/).
 Accepted decisions describe constraints that remain true even after the
 implementation work is complete:
 
-- [`../ARCHITECTURE-DECISIONS.md`](../ARCHITECTURE-DECISIONS.md)
-- [SuperSync database encryption at rest](supersync-encryption-at-rest-decision.md)
+[`../ARCHITECTURE-DECISIONS.md`](../ARCHITECTURE-DECISIONS.md) is the index of all
+of them. It holds the numbered records inline, and its
+[Decisions Recorded Elsewhere](../ARCHITECTURE-DECISIONS.md#decisions-recorded-elsewhere)
+table points at the ones that live in their own document or as a contributor rule
+— such as
+[SuperSync database encryption at rest](supersync-encryption-at-rest-decision.md).
+A decision kept outside that file must still be listed there.
 
 A decision must state its status and date, the chosen outcome, why it was chosen,
 and what would justify revisiting it. Superseded decisions remain as history but
-must link to their replacement.
+must link to their replacement, and keep their original number.
 
 ## Active plans
 
@@ -66,7 +74,10 @@ it wrong: any claim about which releases carry a change must be re-derived with
 any code changing.
 
 - [Recurring events implementation plan](research/recurring-events-implementation-plan.md)
-- [Snap Wayland GPU fix](research/snap-wayland-gpu-fix-research.md)
+- [Snap Wayland GPU root cause and shipped fix](research/snap-wayland-gpu-fix-research.md)
+  — kept past its research life because `electron-builder.yaml`,
+  `tools/afterPack.js` and `build/linux/snap-wrapper.sh` cite it for the reason
+  their guards exist
 
 ## Review checklist
 

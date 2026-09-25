@@ -13,6 +13,7 @@ import {
   extractFullStateFromPayload,
   assertValidFullStatePayload,
   ActionType,
+  isGenesisEntityType,
   isMultiEntityPayload,
 } from '../core/operation.types';
 import { OpLog } from '../../core/log';
@@ -32,7 +33,7 @@ import {
   UploadOptions,
 } from '../core/types/sync-results.types';
 import { isRetryableUploadError } from '@sp/sync-providers/http';
-import { handleStorageQuotaError } from './sync-error-utils';
+import { getSyncErrorCode, handleStorageQuotaError } from './sync-error-utils';
 import {
   DecryptNoPasswordError,
   EncryptNoPasswordError,
@@ -132,6 +133,10 @@ export class OperationLogUploadService {
     // unsynced, so the caller can report an honest not-in-sync status (not IN_SYNC).
     let encryptionRequiredKeyMissing = false;
     let blockedByRejectedFullState = false;
+    // Set when a full-state op hit a retryable server error (e.g. a Postgres
+    // serialization conflict). The op stays pending, but nothing reached the
+    // server this round, so the caller must not report IN_SYNC.
+    let fullStateUploadDeferred = false;
     let rejectedFullStateBarrierSeq: number | undefined;
 
     await this.lockService.request(LOCK_NAMES.UPLOAD, async () => {
@@ -246,12 +251,22 @@ export class OperationLogUploadService {
         );
       }
 
+      // Genesis ops (MIGRATION / RECOVERY) replay as a no-op on every other
+      // client, so API-based providers never upload them (acknowledged below once
+      // this round's full-state ops are settled). File-based providers keep
+      // uploading them: there the ops upload is what writes the state snapshot,
+      // which a genesis-only client must still do. (#9921)
+      const isGenesisToSkip = (entry: OperationLogEntry): boolean =>
+        syncProvider.providerMode !== 'fileSnapshotOps' &&
+        isGenesisEntityType(entry.op.entityType);
+      const uploadableOps = pendingOps.filter((entry) => !isGenesisToSkip(entry));
+
       // Separate full-state operations (backup imports, repairs) from regular ops
       // Full-state ops are uploaded via snapshot endpoint for better efficiency
-      const fullStateOps = pendingOps.filter((entry) =>
+      const fullStateOps = uploadableOps.filter((entry) =>
         FULL_STATE_OP_TYPES.has(entry.op.opType as OpType),
       );
-      let regularOps = pendingOps.filter(
+      let regularOps = uploadableOps.filter(
         (entry) => !FULL_STATE_OP_TYPES.has(entry.op.opType as OpType),
       );
 
@@ -274,6 +289,7 @@ export class OperationLogUploadService {
       // can order a post-snapshot op BEFORE the full-state op after a clock
       // rollback, which would mark it synced without ever uploading it.
       let lastUploadedFullStateOpSeq: number | undefined;
+      let droppedFullStateOnExists = false;
       for (const entry of fullStateOps) {
         // BACKUP_IMPORT is an explicit restore and intentionally wipes remote
         // history. SYNC_IMPORT only does so when explicitly requested. REPAIR
@@ -323,6 +339,7 @@ export class OperationLogUploadService {
             await this.opLogStore.deleteOpsWhere(
               (logEntry) => logEntry.op.id === entry.op.id,
             );
+            droppedFullStateOnExists = true;
             // Don't count as rejected - this is expected behavior when joining existing group
             continue;
           }
@@ -334,6 +351,7 @@ export class OperationLogUploadService {
               `OperationLogUploadService: Full-state op ${entry.op.id} failed due to network error, will retry: ${result.error}`,
             );
             // Don't mark as rejected - leave as unsynced for retry
+            fullStateUploadDeferred = true;
           } else {
             // Keep the op pending until OperationLogSyncService has processed
             // piggybacked ops and the central rejection handler has classified
@@ -359,6 +377,25 @@ export class OperationLogUploadService {
 
       if (fullStateUploadBlocked) {
         return;
+      }
+
+      // Settle the skipped genesis ops (see isGenesisToSkip) only now: while the
+      // upload was still blocked above, or when this client's own SYNC_IMPORT was
+      // just dropped in favour of a remote one, the pending genesis op is what
+      // makes the incoming-import gate prompt on the next cycle instead of
+      // silently replacing this client's state. (#9921)
+      const genesisSeqs = pendingOps.filter(isGenesisToSkip).map((entry) => entry.seq);
+      if (genesisSeqs.length > 0 && droppedFullStateOnExists) {
+        OpLog.normal(
+          'OperationLogUploadService: Keeping genesis op(s) pending — the local SYNC_IMPORT ' +
+            'was superseded by a remote one.',
+        );
+      } else if (genesisSeqs.length > 0) {
+        OpLog.normal(
+          `OperationLogUploadService: Marking ${genesisSeqs.length} genesis op(s) synced ` +
+            'without uploading them (no receiver on any other client).',
+        );
+        await acknowledge(genesisSeqs);
       }
 
       // Skip regular ops processing if none exist
@@ -458,7 +495,7 @@ export class OperationLogUploadService {
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown error';
           OpLog.error(`OperationLogUploadService: Upload failed: ${message}`);
-          handleStorageQuotaError(message);
+          handleStorageQuotaError(err);
           throw err; // Re-throw to propagate the error
         }
 
@@ -614,6 +651,7 @@ export class OperationLogUploadService {
       ...(lastServerSeqToPersist !== undefined ? { lastServerSeqToPersist } : {}),
       ...(encryptionRequiredKeyMissing ? { encryptionRequiredKeyMissing: true } : {}),
       ...(blockedByRejectedFullState ? { blockedByRejectedFullState: true } : {}),
+      ...(fullStateUploadDeferred ? { fullStateUploadDeferred: true } : {}),
       ...(options?.deferAcknowledgement
         ? { selectedPendingOps, pendingAcknowledgementSeqs }
         : {}),
@@ -808,16 +846,19 @@ export class OperationLogUploadService {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       OpLog.error(`OperationLogUploadService: Snapshot upload failed: ${message}`);
-      handleStorageQuotaError(message);
+      handleStorageQuotaError(err);
 
-      // Extract errorCode from error message if present (server returns JSON with errorCode)
-      let errorCode: string | undefined;
-      if (message.includes('SYNC_IMPORT_EXISTS')) {
-        errorCode = 'SYNC_IMPORT_EXISTS';
-      }
+      const errorCode = getSyncErrorCode(err) ?? this._getLegacyErrorCode(message);
 
       return { accepted: false, error: message, errorCode };
     }
+  }
+
+  private _getLegacyErrorCode(message: string): string | undefined {
+    if (message.includes('SYNC_IMPORT_EXISTS')) {
+      return 'SYNC_IMPORT_EXISTS';
+    }
+    return undefined;
   }
 
   /**

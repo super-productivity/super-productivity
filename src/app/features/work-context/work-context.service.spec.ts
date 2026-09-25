@@ -66,11 +66,10 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
     }) as TaskWithSubTasks;
 
   beforeEach(() => {
-    // Mock current time to be 10 AM for consistent testing
+    // Pin the clock to 2023-06-13 10 AM so it matches the mocked DateService day
+    // (the later-today window is derived from DateService.todayStr()).
     jasmine.clock().install();
-    const currentTime = new Date();
-    currentTime.setHours(10, 0, 0, 0);
-    jasmine.clock().mockDate(currentTime);
+    jasmine.clock().mockDate(new Date(2023, 5, 13, 10, 0, 0, 0));
 
     // Create service mocks
     tagServiceMock = jasmine.createSpyObj('TagService', ['getTagById$']);
@@ -79,9 +78,13 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
       [],
       {
         todayDateStr$: of('2023-06-13'),
+        minuteTick$: of(Date.now()),
       },
     );
-    dateServiceMock = jasmine.createSpyObj('DateService', ['todayStr']);
+    dateServiceMock = jasmine.createSpyObj('DateService', [
+      'todayStr',
+      'getStartOfNextDayDiffMs',
+    ]);
     timeTrackingServiceMock = jasmine.createSpyObj('TimeTrackingService', [
       'getWorkStartEndForWorkContext$',
     ]);
@@ -90,6 +93,7 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
     // Configure mock return values
     tagServiceMock.getTagById$.and.returnValue(of(TODAY_TAG));
     dateServiceMock.todayStr.and.returnValue('2023-06-13');
+    dateServiceMock.getStartOfNextDayDiffMs.and.returnValue(0);
     timeTrackingServiceMock.getWorkStartEndForWorkContext$.and.returnValue(of({}));
     taskArchiveServiceMock.loadYoung.and.returnValue(
       Promise.resolve({ ids: [], entities: {} }),
@@ -175,10 +179,13 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
 
   // Test the filtering logic directly instead of testing the full observable chain
   describe('filtering logic', () => {
-    const filterTasks = (tasks: TaskWithSubTasks[]): TaskWithSubTasks[] => {
+    const filterTasks = (
+      tasks: TaskWithSubTasks[],
+      currentTaskId: string | null = null,
+    ): TaskWithSubTasks[] => {
       return (
         (service as any)
-          ._filterFutureScheduledTasksForToday(tasks)
+          ._filterFutureScheduledTasksForToday(tasks, currentTaskId)
           // The observable filters out done tasks afterwards
           .filter((task: TaskWithSubTasks) => task && !task.isDone)
       );
@@ -225,6 +232,44 @@ describe('WorkContextService - undoneTasks$ filtering', () => {
       expect(filteredTasks.find((t) => t.id === 'EARLIER_TODAY')).toBeDefined();
       expect(filteredTasks.find((t) => t.id === 'UNSCHEDULED')).toBeDefined();
       expect(filteredTasks.find((t) => t.id === 'DONE_TASK')).toBeUndefined();
+    });
+
+    it('should keep the tracked task even when it starts later today', () => {
+      const todayAt = (hours: number): number => {
+        const date = new Date();
+        date.setHours(hours, 0, 0, 0);
+        return date.getTime();
+      };
+
+      const mockTasks: TaskWithSubTasks[] = [
+        createMockTask({
+          id: 'TRACKED',
+          title: 'Appointment started early',
+          dueWithTime: todayAt(14),
+        }),
+        createMockTask({
+          id: 'NOT_TRACKED',
+          title: 'Other appointment',
+          dueWithTime: todayAt(15),
+        }),
+      ];
+
+      const filteredTasks = filterTasks(mockTasks, 'TRACKED');
+
+      expect(filteredTasks.map((t) => t.id)).toEqual(['TRACKED']);
+    });
+
+    it('should keep the parent of the tracked subtask even when it starts later today', () => {
+      const laterToday = new Date();
+      laterToday.setHours(14, 0, 0, 0);
+      const parent = createMockTask({
+        id: 'PARENT',
+        dueWithTime: laterToday.getTime(),
+        subTaskIds: ['SUB'],
+      });
+
+      expect(filterTasks([parent], 'SUB').map((t) => t.id)).toEqual(['PARENT']);
+      expect(filterTasks([parent], null)).toEqual([]);
     });
 
     it('should NOT filter out tasks scheduled for tomorrow', () => {

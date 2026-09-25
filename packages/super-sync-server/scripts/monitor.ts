@@ -159,6 +159,85 @@ interface UsageSnapshot {
   users: UsageSnapshotUser[];
 }
 
+type AutovacuumRow = {
+  relpages: number;
+  relallvisible: number;
+  n_dead_tup: number;
+  n_ins_since_vacuum: number;
+  n_mod_since_analyze: number;
+  xid_age: number;
+  last_autovacuum: Date | null;
+  last_autoanalyze: Date | null;
+  autovacuum_count: number;
+  reloptions: string[] | null;
+};
+
+/**
+ * Visibility-map freshness on `operations`, and the autovacuum cadence behind
+ * it.
+ *
+ * This exists because migration 20260828000003 tells operators to "revisit
+ * against pg_stat_user_tables" and nothing here read those counters, so the
+ * instruction had no instrumentation behind it. Coverage is the load-bearing
+ * number: an index-only scan pays a heap visit for every tuple it EMITS from a
+ * page not marked all-visible. Note the sweep's fresh-prefix probe is NOT that
+ * shape — it discards rows in the access method, so a NO answer stays at zero
+ * heap fetches however far the map decays (a YES emits one row and pays one) —
+ * so read a low number here as bounded map sag and freeze debt, not as that
+ * probe degrading. Production measured 82.8% on 2026-08-25.
+ *
+ * `n_dead_tup` is reported but deliberately not alarmed on — it oscillates
+ * between passes, so a single reading is not evidence of anything.
+ */
+const showAutovacuumHealth = async (): Promise<void> => {
+  const rows: AutovacuumRow[] = await prisma.$queryRaw`
+    SELECT
+      c.relpages::int              AS relpages,
+      c.relallvisible::int         AS relallvisible,
+      s.n_dead_tup::int            AS n_dead_tup,
+      s.n_ins_since_vacuum::int    AS n_ins_since_vacuum,
+      s.n_mod_since_analyze::int   AS n_mod_since_analyze,
+      age(c.relfrozenxid)::int     AS xid_age,
+      s.last_autovacuum,
+      s.last_autoanalyze,
+      s.autovacuum_count::int      AS autovacuum_count,
+      c.reloptions
+    FROM pg_stat_user_tables s
+    JOIN pg_class c ON c.oid = s.relid
+    WHERE s.relname = 'operations';
+  `;
+  const row = rows[0];
+  if (!row) return;
+
+  console.log('\n--- operations: visibility map & autovacuum ---');
+  // relpages is 0 on a never-vacuumed/never-analyzed table; guard the divide.
+  const coverage = row.relpages > 0 ? (row.relallvisible / row.relpages) * 100 : 0;
+  const deficitPages = Math.max(row.relpages - row.relallvisible, 0);
+  console.log(
+    `Visibility map: ${coverage.toFixed(1)}% all-visible ` +
+      `(${row.relallvisible}/${row.relpages} pages, ${formatBytes(deficitPages * 8192)} not marked)`,
+  );
+  console.log(`Inserts since last vacuum:  ${row.n_ins_since_vacuum}`);
+  console.log(`Rows modified since analyze: ${row.n_mod_since_analyze}`);
+  console.log(`Dead tuples (oscillates):    ${row.n_dead_tup}`);
+  console.log(
+    `Last autovacuum: ${row.last_autovacuum?.toISOString() ?? 'never'} ` +
+      `(${row.autovacuum_count} total)`,
+  );
+  console.log(`Last autoanalyze: ${row.last_autoanalyze?.toISOString() ?? 'never'}`);
+  console.log(`Table reloptions: ${row.reloptions?.join(', ') ?? '(defaults)'}`);
+  // Anti-wraparound vacuums do not yield to a waiting ALTER, so a deploy that
+  // touches this table's reloptions can fail with 57014 when xid age is close
+  // to autovacuum_freeze_max_age (default 200M).
+  console.log(`Transaction age: ${row.xid_age} (freeze threshold default 200000000)`);
+  if (coverage < 90 && row.relpages > 0) {
+    console.log(
+      '⚠️  Visibility map below 90%: index-only scans on this table are paying ' +
+        'heap fetches. Check whether autovacuum is keeping up.',
+    );
+  }
+};
+
 const showStats = async (): Promise<void> => {
   console.log('\n--- System Vitals ---');
   console.log(`Hostname: ${os.hostname()}`);
@@ -199,6 +278,8 @@ const showStats = async (): Promise<void> => {
       console.log('\nTop tables by size:');
       tableSizes.forEach((t) => console.log(`  ${t.table}: ${t.size}`));
     }
+
+    await showAutovacuumHealth();
   } catch (error) {
     reportMonitoringError('Error:', error);
     console.log('Status: Disconnected ❌');

@@ -37,6 +37,8 @@ describe('sync errors', () => {
       expectedPrefix: 'pf_',
       endSeparator: '__',
       inputLength: 42,
+      prefixAt: -1,
+      headShape: 'base64',
     });
 
     expect((OpLog.log as jasmine.Spy).calls.count()).toBe(0);
@@ -54,12 +56,43 @@ describe('sync errors', () => {
   });
 
   it('does not log on construction for JsonParseError (privacy invariant)', () => {
-    new JsonParseError(
-      new SyntaxError('Unexpected token SECRET at position 6'),
-      '{"a":"secret value"}',
-    );
+    new JsonParseError(new SyntaxError('Unexpected token SECRET at position 6'));
 
     expect((OpLog.err as jasmine.Spy).calls.count()).toBe(0);
+  });
+
+  it('strips typia error values from ModelValidationError.additionalLog (privacy invariant)', () => {
+    // additionalLog renders into the global error alert and the prefilled
+    // GitHub issue body — the offending `value` (task title, note body) must
+    // never survive into it; path + expected locate the failing field.
+    const validationResult = {
+      success: false,
+      errors: [{ path: '$input.title', expected: 'string', value: 'secret title' }],
+    } as unknown as IValidation<unknown>;
+
+    const err = new ModelValidationError({
+      id: 'task-id-1',
+      data: { title: 'secret title' },
+      validationResult,
+    });
+
+    expect(err.additionalLog).toBeDefined();
+    expect(err.additionalLog).not.toContain('secret title');
+    expect(err.additionalLog).toContain('$input.title');
+    expect(err.additionalLog).toContain('string');
+  });
+
+  it('strips typia error values from DataValidationFailedError.additionalLog (privacy invariant)', () => {
+    const validationResult = {
+      success: false,
+      errors: [{ path: '$input.notes', expected: 'string', value: 'secret note text' }],
+    } as unknown as IValidation<unknown>;
+
+    const err = new DataValidationFailedError(validationResult);
+
+    expect(err.additionalLog).toBeDefined();
+    expect(err.additionalLog).not.toContain('secret note text');
+    expect(err.additionalLog).toContain('$input.notes');
   });
 
   it('does not log on construction for ModelValidationError (privacy invariant)', () => {

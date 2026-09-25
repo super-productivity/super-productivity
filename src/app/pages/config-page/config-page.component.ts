@@ -32,7 +32,7 @@ import {
   GlobalConfigState,
   GlobalSectionConfig,
 } from '../../features/config/global-config.model';
-import { firstValueFrom, from, of } from 'rxjs';
+import { from, of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ProjectCfgFormKey } from '../../features/project/project.model';
@@ -47,7 +47,6 @@ import { isUpdateCheckPossible } from '../../core/update-check/is-update-check-p
 import { ConfigSectionComponent } from '../../features/config/config-section/config-section.component';
 import { ConfigSoundFormComponent } from '../../features/config/config-sound-form/config-sound-form.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { EXPERIMENTAL_APP_FEATURE_KEYS } from '../../features/config/form-cfgs/app-features-form.const';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { SyncConfigService } from '../../imex/sync/sync-config.service';
 import { PluginManagementComponent } from '../../plugins/ui/plugin-management/plugin-management.component';
@@ -60,24 +59,17 @@ import { DialogLogsComponent } from '../../ui/dialog-logs/dialog-logs.component'
 import { SnackService } from '../../core/snack/snack.service';
 import { ShareService } from '../../core/share/share.service';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
-import { UserProfileService } from '../../features/user-profile/user-profile.service';
 import { MatDialog } from '@angular/material/dialog';
-import { DialogDisableProfilesConfirmationComponent } from '../../features/user-profile/dialog-disable-profiles-confirmation/dialog-disable-profiles-confirmation.component';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
-import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { NgTemplateOutlet } from '@angular/common';
 import { LocalBackupService } from '../../imex/local-backup/local-backup.service';
+import { DialogBackupsListComponent } from '../../imex/local-backup/dialog-backups-list/dialog-backups-list.component';
 import { FormsModule } from '@angular/forms';
-import {
-  MatFormField,
-  MatLabel,
-  MatPrefix,
-  MatSuffix,
-} from '@angular/material/form-field';
+import { MatFormField, MatPrefix, MatSuffix } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
 import { MatAutocomplete, MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { MatOption } from '@angular/material/core';
@@ -111,7 +103,6 @@ const TAB_ANIMATION_DURATION_MS = 200;
     NgTemplateOutlet,
     FormsModule,
     MatFormField,
-    MatLabel,
     MatInput,
     MatPrefix,
     MatSuffix,
@@ -129,7 +120,6 @@ export class ConfigPageComponent implements OnInit {
   private readonly _pluginBridgeService = inject(PluginBridgeService);
   private readonly _snackService = inject(SnackService);
   private readonly _shareService = inject(ShareService);
-  private readonly _userProfileService = inject(UserProfileService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _localBackupService = inject(LocalBackupService);
   private readonly _translateService = inject(TranslateService);
@@ -206,7 +196,27 @@ export class ConfigPageComponent implements OnInit {
     this.generalFormCfg = GLOBAL_GENERAL_FORM_CONFIG.slice();
     this.timeTrackingFormCfg = GLOBAL_TIME_TRACKING_FORM_CONFIG.slice();
     this.pluginsShortcutsFormCfg = GLOBAL_PLUGINS_FORM_CONFIG.slice();
-    this.globalImexFormCfg = GLOBAL_IMEX_FORM_CONFIG.slice();
+    // "Browse backups" lives on the Import/Export section so every platform
+    // (incl. web, which has no automatic backups) can reach the recovery ring.
+    this.globalImexFormCfg = GLOBAL_IMEX_FORM_CONFIG.map((section) =>
+      section.customSection === 'FILE_IMPORT_EXPORT'
+        ? {
+            ...section,
+            actions: [
+              ...(section.actions ?? []),
+              {
+                label: T.GCF.AUTO_BACKUPS.BROWSE,
+                icon: 'history',
+                onClick: () => {
+                  this._matDialog.open(DialogBackupsListComponent, {
+                    restoreFocus: true,
+                  });
+                },
+              },
+            ],
+          }
+        : section,
+    );
     this.globalProductivityConfigFormCfg = GLOBAL_PRODUCTIVITY_FORM_CONFIG.slice();
     this.globalTasksFormCfg = GLOBAL_TASKS_FORM_CONFIG.slice();
 
@@ -240,6 +250,7 @@ export class ConfigPageComponent implements OnInit {
     // Use effect to react to plugin shortcuts changes for live updates
     effect(() => {
       const shortcuts = this._pluginBridgeService.shortcuts();
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       Log.log('Plugin shortcuts changed:', { shortcuts });
       this._updateKeyboardFormWithPluginShortcuts(shortcuts);
     });
@@ -355,10 +366,10 @@ export class ConfigPageComponent implements OnInit {
     this._syncWrapperService.sync(true);
   }
 
-  async saveGlobalCfg($event: {
+  saveGlobalCfg($event: {
     sectionKey: GlobalConfigFormSectionKey | ProjectCfgFormKey;
     config: Record<string, unknown>;
-  }): Promise<void> {
+  }): void {
     const config = $event.config;
     const formSectionKey = $event.sectionKey;
 
@@ -381,79 +392,7 @@ export class ConfigPageComponent implements OnInit {
     // From here on we know it's a real GlobalConfigState section.
     const sectionKey = formSectionKey as GlobalConfigSectionKey;
 
-    // Check if user is trying to enable an experimental feature
-    const currentAppFeatures = this.globalCfg?.appFeatures;
-    if (
-      sectionKey === 'appFeatures' &&
-      currentAppFeatures &&
-      EXPERIMENTAL_APP_FEATURE_KEYS.some(
-        (key) => config[key] === true && currentAppFeatures[key] === false,
-      )
-    ) {
-      const confirmed = await this._showExperimentalWarningDialog();
-      if (!confirmed) {
-        return;
-      }
-    }
-
-    // Check if user is trying to disable user profiles when multiple profiles exist
-    if (
-      sectionKey === 'appFeatures' &&
-      config.isEnableUserProfiles === false &&
-      this._userProfileService.hasMultipleProfiles()
-    ) {
-      const appFeatures = this.globalCfg?.appFeatures;
-      // Only show dialog if we're actually changing from true to false
-      if (appFeatures?.isEnableUserProfiles === true) {
-        const confirmed = await this._showDisableProfilesDialog();
-        if (!confirmed) {
-          // User cancelled, don't save the change
-          return;
-        }
-      }
-    }
-
     this.configService.updateSection(sectionKey, config);
-  }
-
-  private async _showDisableProfilesDialog(): Promise<boolean> {
-    const activeProfile = this._userProfileService.activeProfile();
-    const allProfiles = this._userProfileService.profiles();
-    const otherProfiles = allProfiles.filter((p) => p.id !== activeProfile?.id);
-
-    if (!activeProfile) {
-      return true; // No active profile, allow disable
-    }
-
-    const dialogRef = this._matDialog.open(DialogDisableProfilesConfirmationComponent, {
-      data: {
-        activeProfile,
-        otherProfiles,
-      },
-      width: '600px',
-      maxWidth: '90vw',
-      disableClose: true,
-    });
-
-    return new Promise((resolve) => {
-      dialogRef.afterClosed().subscribe((result) => {
-        resolve(!!result);
-      });
-    });
-  }
-
-  private async _showExperimentalWarningDialog(): Promise<boolean> {
-    const dialogRef = this._matDialog.open(DialogConfirmComponent, {
-      restoreFocus: true,
-      data: {
-        title: T.GCF.APP_FEATURES.EXPERIMENTAL_WARNING_TITLE,
-        titleIcon: 'warning',
-        message: T.GCF.APP_FEATURES.EXPERIMENTAL_WARNING_MSG,
-        okTxt: T.G.CONFIRM,
-        cancelTxt: T.G.CANCEL,
-      },
-    });
-    return !!(await firstValueFrom(dialogRef.afterClosed()));
   }
 
   /**

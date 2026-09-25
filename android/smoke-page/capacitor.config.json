@@ -1,0 +1,12 @@
+{
+  "_comment": [
+    "CI-only. Capacitor ties console logging to FLAG_DEBUGGABLE unless",
+    "loggingBehavior says otherwise, and the r8Test APK is release-configured,",
+    "so without this the SP_SMOKE markers never reach logcat and the smoke can",
+    "only time out. Installed by .github/workflows/android-tests.yml; nothing",
+    "else writes this file in CI. Nothing here has to match capacitor.config.ts."
+  ],
+  "android": {
+    "loggingBehavior": "production"
+  }
+}

@@ -44,6 +44,7 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
 import { isOnline } from '../../../util/is-online';
 import { SnackService } from '../../../core/snack/snack.service';
 import { DialogRestorePointComponent } from '../dialog-restore-point/dialog-restore-point.component';
+import { DialogSyncDevicesComponent } from '../dialog-sync-devices/dialog-sync-devices.component';
 import {
   NextcloudProvider,
   type NextcloudPrivateCfg,
@@ -157,6 +158,7 @@ export class DialogSyncCfgComponent implements AfterViewInit {
                   ...(child.fieldGroup ?? []),
                   this._forceOverwriteBtn(),
                   this._restoreBtn(),
+                  this._devicesBtn(),
                 ],
               }
             : child,
@@ -229,6 +231,13 @@ export class DialogSyncCfgComponent implements AfterViewInit {
     return this._actionBtn({
       text: T.F.SYNC.BTN_RESTORE_FROM_HISTORY,
       onClick: () => this.restoreFromHistory(),
+    });
+  }
+
+  private _devicesBtn(): FormlyFieldConfig {
+    return this._actionBtn({
+      text: T.F.SYNC.BTN_SHOW_DEVICES,
+      onClick: () => this.showDevices(),
     });
   }
 
@@ -896,6 +905,26 @@ export class DialogSyncCfgComponent implements AfterViewInit {
       width: '500px',
       maxWidth: '90vw',
     });
+  }
+
+  showDevices(): void {
+    this._matDialog
+      .open<DialogSyncDevicesComponent, undefined, boolean>(DialogSyncDevicesComponent, {
+        width: '500px',
+        maxWidth: '90vw',
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((didSignOut) => {
+        // A sign-out stored a fresh access token, but this dialog's Formly
+        // model was seeded with the now-revoked one and Save merges non-empty
+        // form values over saved cfg (`_updatePrivateConfig`) — a Save here
+        // would silently write the dead token back. End the settings session
+        // instead of re-seeding a live Formly model.
+        if (didSignOut === true) {
+          this._matDialogRef.close();
+        }
+      });
   }
 }
 

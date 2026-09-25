@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '../../fixtures/test.fixture';
+import { fillMarkdownEditor, markdownEditor } from '../../utils/markdown-editor';
 
 /**
  * End-to-end cover for the crash-safe note draft lifecycle (#8982), in a real
@@ -62,9 +63,8 @@ test.describe('Note draft discard recovery (#8982)', () => {
     await note.locator('.markdown-preview').click();
     await notePage.noteDialog.waitFor({ state: 'visible' });
 
-    const textarea = page.locator('dialog-fullscreen-markdown textarea').first();
-    await textarea.waitFor({ state: 'visible' });
-    await textarea.fill(typed);
+    const dialog = page.locator('dialog-fullscreen-markdown');
+    await fillMarkdownEditor(dialog, typed);
 
     // Wait on the checkpoint itself rather than on a timer: the debounce is an
     // implementation detail, the stored draft is the thing the next step needs.
@@ -80,7 +80,7 @@ test.describe('Note draft discard recovery (#8982)', () => {
     // --- Undo back to the original, then Discard ------------------------------
     // Content now equals what the editor opened with, so Discard closes with no
     // confirmation and the pending debounce never becomes a second checkpoint.
-    await textarea.fill(original);
+    await fillMarkdownEditor(dialog, original);
     await page.locator('#T-close-note, button:has-text("Discard")').first().click();
     await notePage.noteDialog.waitFor({ state: 'hidden' });
 
@@ -99,7 +99,8 @@ test.describe('Note draft discard recovery (#8982)', () => {
     // --- Reopen: the editor must NOT be seeded with the discarded text --------
     await note.locator('.markdown-preview').click();
     await notePage.noteDialog.waitFor({ state: 'visible' });
-    await expect(textarea).toHaveValue(original);
+    // Read as text, not as a value: the editor is a contenteditable (#9910).
+    await expect(markdownEditor(dialog)).toHaveText(original);
 
     // --- Escape is the save path, so a bad seed would be written back ---------
     await page.keyboard.press('Escape');
@@ -128,9 +129,7 @@ test.describe('Note draft discard recovery (#8982)', () => {
     const note = notePage.getNoteByContent(original);
     await note.locator('.markdown-preview').click();
     await notePage.noteDialog.waitFor({ state: 'visible' });
-    const textarea = page.locator('dialog-fullscreen-markdown textarea').first();
-    await textarea.waitFor({ state: 'visible' });
-    await textarea.fill(typed);
+    await fillMarkdownEditor(page.locator('dialog-fullscreen-markdown'), typed);
 
     await expect
       .poll(async () => (await readDrafts(page, DRAFT_KEY_PREFIX)).map((d) => d.content))
@@ -146,7 +145,7 @@ test.describe('Note draft discard recovery (#8982)', () => {
     const noteAfterReload = notePage.getNoteByContent(original);
     await noteAfterReload.locator('.markdown-preview').click();
     await notePage.noteDialog.waitFor({ state: 'visible' });
-    await expect(page.locator('dialog-fullscreen-markdown textarea').first()).toHaveValue(
+    await expect(markdownEditor(page.locator('dialog-fullscreen-markdown'))).toHaveText(
       typed,
     );
   });

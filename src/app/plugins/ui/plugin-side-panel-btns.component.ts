@@ -86,7 +86,7 @@ import { PluginLog } from '../../core/log';
       }
 
       .plugin-side-panel-btn:hover:not(.active) {
-        background-color: var(--hover-color, rgba(0, 0, 0, 0.04));
+        background-color: var(--state-hover);
       }
     `,
   ],

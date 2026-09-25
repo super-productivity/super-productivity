@@ -68,6 +68,18 @@ export const logAdvancedStacktrace = (
     .then((stack) => {
       document.getElementById('error-fetching-info-wrapper')?.remove();
 
+      // An empty resolve means we have nothing BETTER than the raw `err.stack`
+      // that createErrorAlert() already put into the dialog and the pre-filled
+      // GitHub report — the throttle (2 per 5s) swallowed this call, or the error
+      // carried no stack at all. Since this runs for EVERY error while the dialog
+      // is only built for the first one, a repeating throw (e.g. a selector that
+      // crashes on every store emission) reaches the throttle within milliseconds
+      // and would otherwise wipe the stacktrace out of the bug report the user
+      // then files — which is how #9647 and #7079 arrived with no stacktrace at all.
+      if (!stack) {
+        return;
+      }
+
       if (additionalLogFn) {
         additionalLogFn(stack);
       }

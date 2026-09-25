@@ -23,11 +23,11 @@ jobs:
           GH_REF_NAME: ${{ github.ref_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if echo "$GH_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            PREV_TAG=$(git tag --merged HEAD --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -v "^${GH_REF_NAME}$" | sed -n '1p')
-          else
-            PREV_TAG=$(git tag --merged HEAD --sort=-v:refname | grep '^v' | grep -v "^${GH_REF_NAME}$" | sed -n '1p')
-          fi
+          # The base `tools/release-notes.js` resolved when it generated these
+          # notes, committed alongside them. Read rather than re-resolved, so the
+          # changelog link and the contributor list cannot span a different range
+          # than the notes above them.
+          PREV_TAG=$(cat build/release-notes-base.txt 2>/dev/null || true)
 
           # Contributor attribution was lost when curated notes replaced GitHub's
           # auto-generated ones; pull the generated notes only to extract it.
@@ -62,7 +62,7 @@ jobs:
             fi
           } > /tmp/release-body.md
       - name: Create Draft Release
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
@@ -128,6 +128,7 @@ jobs:
           name: e2eResults
           path: .tmp/e2e-test-results/**/*.*
           retention-days: 14
+          overwrite: true # so a re-run of this job does not fail on the existing artifact
 
       - name: Build Frontend & Electron
         run: npm run build
@@ -149,6 +150,34 @@ jobs:
           release: false
           args: '--publish never'
 
+      # electron-builder 26.15.0-26.15.6 only 7z-decompressed the snap template's
+      # .tar.7z and shipped the inner .tar verbatim at the snap root, so the
+      # desktop-integration scripts command.sh sources were missing and every
+      # edge revision failed to start (#9992, electron-builder#10002). The build
+      # itself stayed green, so assert on the packaged payload instead.
+      - name: Verify snap template was unpacked
+        run: |
+          set -euo pipefail
+          SNAP_FILE=$(find ./.tmp/app-builds -type f -name '*.snap' -print -quit)
+          if [ -z "$SNAP_FILE" ]; then
+            echo "::error::no .snap produced in .tmp/app-builds"
+            exit 1
+          fi
+          # squashfs-tools is not guaranteed on the runner image, and installing without
+          # refreshing apt lists first fails with "Unable to locate package".
+          if ! command -v unsquashfs > /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends squashfs-tools
+          fi
+          unsquashfs -l "$SNAP_FILE" > "$RUNNER_TEMP/snap-listing.txt"
+          for script in desktop-init.sh desktop-common.sh desktop-gnome-specific.sh; do
+            grep -qx "squashfs-root/$script" "$RUNNER_TEMP/snap-listing.txt" || {
+              echo "::error::$script missing from the snap root -- the template archive was not unpacked"
+              grep -E '^squashfs-root/[^/]+$' "$RUNNER_TEMP/snap-listing.txt"
+              exit 1
+            }
+          done
+
       - name: Normalize snap file name
         if: false == startsWith(github.ref, 'refs/tags/v')
         run: find ./.tmp/app-builds -type f -name '*.snap' -exec sh -c 'x="{}"; mv "$x" ".tmp/app-builds/sp.snap"' \;
@@ -163,34 +192,263 @@ jobs:
           else
             echo "has_final_release_tag=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # Pulled in its own step so the image download (~10s, occasionally much
+      # worse) is not charged against the upload step's store-review budget.
+      - name: Pull snapcraft image
+        if: false == startsWith(github.ref, 'refs/tags/v') && steps.release-tag.outputs.has_final_release_tag != 'true'
+        timeout-minutes: 10
+        run: docker pull ghcr.io/canonical/snapcraft:8_core24
+
       # Upload branch builds to edge. Published releases upload the exact
       # GitHub release snap to edge/stable in build-publish-to-snap-on-release.yml.
       # Uses Canonical's official snapcraft container instead of `sudo snap
       # install snapcraft --classic` on the runner, which has been a recurring
       # source of "unable to contact snap store" failures.
-      # The container runs snapcraft as a pebble service whose working-dir is
-      # hard-coded to /project, so docker's -w flag is ignored — mount the
-      # build dir at /project so `snapcraft upload sp.snap` resolves correctly.
+      # We bypass the image's default entrypoint and exec /bin/snapcraft
+      # directly. The default path starts a pebble daemon that runs
+      # /bin/run-snapcraft.sh, which is an unconditional `apt update` before
+      # `exec /bin/snapcraft "$@"`. That refresh exists so a *build* can
+      # apt-get install; an upload is a pure store API call and installs
+      # nothing. On 2026-09-11 a slow archive.ubuntu.com spent the entire
+      # 10m budget in that apt (runs 34601232816 and 34601758753 both died
+      # mid-`Get:`, never contacting the store) -- i.e. the bound meant for
+      # the store review was being gambled on Ubuntu mirror throughput.
+      # Bypassing it also drops pebble's hard-coded /project working dir,
+      # so pass the snap by absolute path rather than relying on cwd.
+      #
+      # `upload --release edge` blocks until the store's automated review
+      # finishes. That is normally quick -- 78s and 161s on 2026-08-27 -- but
+      # it degraded for two weeks (2026-08-14 -> 08-27) to ~15.5h, and the
+      # 25-minute timeout this step used to fail on turned that into five
+      # consecutive red master runs while edge advanced 4441 -> 4501 anyway.
+      # A killed client cannot un-submit the upload: snapcraft posts the
+      # channel release together with the binary, so the store releases it
+      # when review finishes regardless of what happened to CI.
+      #
+      # So bound the wait and classify by what the store told us.
+      # `Status: processing` prints only once the store has accepted the
+      # binary and queued its review, which is exactly the line between
+      # "review is slow" (pending) and "the upload never landed" (fail).
+      # Only a wait-timeout exit may be pending: any other non-zero exit means
+      # the review ran and rejected the snap, or auth/the store failed, and
+      # those stay red.
+      #
+      # Pending is NOT treated as success on its own -- `Verify edge is still
+      # advancing` below turns it into a hard failure whenever edge has
+      # actually stopped moving. Slow-but-landing stays green; a real freeze
+      # reds the build that caused it.
+      #
+      # Retrying an accepted upload cannot help: the store rejects a re-upload
+      # of the same binary on its sha3-384, so attempts 2+ always fail (a retry
+      # wrapper here kept master red for a week while hiding that). Re-running
+      # is only sound in the failed case, where no revision was created.
       - name: Upload branch snap to edge
+        id: snap-upload
         if: false == startsWith(github.ref, 'refs/tags/v') && steps.release-tag.outputs.has_final_release_tag != 'true'
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
-        with:
-          max_attempts: 3
-          timeout_minutes: 15
-          retry_wait_seconds: 60
-          # The snapcraft-rocks image's wrapper already runs `snapcraft "$@"`,
-          # so the docker CMD must NOT include a leading `snapcraft` word —
-          # that gets passed as the subcommand and snapcraft errors with
-          # "no such command 'snapcraft'".
-          command: |
+        # Backstop only; the inner `timeout` is what normally bounds the wait.
+        timeout-minutes: 15
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        # `--entrypoint /bin/snapcraft` replaces the image's pebble+apt
+        # wrapper, so the CMD here is snapcraft's own argv — still no leading
+        # `snapcraft` word (that would become the subcommand and error with
+        # "no such command 'snapcraft'").
+        run: |
+          set -o pipefail
+          rc=0
+          timeout --signal=TERM --kill-after=30s 10m \
             docker run --rm \
               -v "$PWD/.tmp/app-builds:/project" \
               -e SNAPCRAFT_STORE_CREDENTIALS \
               -e SNAPCRAFT_HAS_TTY=true \
+              --entrypoint /bin/snapcraft \
               ghcr.io/canonical/snapcraft:8_core24 \
-              upload sp.snap --release edge
+              upload /project/sp.snap --release edge 2>&1 \
+            | tee "$RUNNER_TEMP/snap-upload.log" || rc=$?
+
+          if [ "$rc" -eq 0 ] && grep -q "released to 'edge'" "$RUNNER_TEMP/snap-upload.log"; then
+            echo "result=released" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 124 = the wait elapsed; 137 = 128+SIGKILL, normally --kill-after
+          # (any signal death lands here, but paired with an accepted upload
+          # the classification is the same).
+          if { [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; } \
+            && grep -q 'Status: processing' "$RUNNER_TEMP/snap-upload.log"; then
+            echo "result=pending" >> "$GITHUB_OUTPUT"
+            echo "::warning::Snap accepted by the store and queued for review; the next step fails the build if edge has stopped advancing."
+            exit 0
+          fi
+
+          echo "result=failed" >> "$GITHUB_OUTPUT"
+          if grep -q 'Status: processing' "$RUNNER_TEMP/snap-upload.log"; then
+            echo "::error::snapcraft failed after the store accepted the binary (exit $rc); a revision exists, so re-running is rejected on its sha3-384 -- check the store review queue instead"
+          elif [ "$rc" -eq 0 ]; then
+            echo "::error::snapcraft exited 0 without reporting a release to edge"
+          else
+            # Deliberately hedged: a duplicate-binary rejection also lands here
+            # with no 'Status: processing' line, and re-running that is futile.
+            echo "::error::snapcraft upload failed before the store accepted the binary (exit $rc); re-running is safe unless a previous attempt already uploaded this exact binary"
+          fi
+          exit 1
+
+      # The gate behind the pending path above. An upload we could not confirm
+      # is only acceptable while edge is demonstrably still advancing; if edge
+      # has stopped, this is where the build goes red -- on the push that
+      # caused it, not in a cron nobody reads.
+      #
+      # Age the unreleased WORK, not edge itself: edge legitimately sits still
+      # through a quiet weekend, so measuring from its release date would
+      # alarm on the first commit back from one. Commits older than the
+      # current edge release are excluded by design (not by clock skew -- both
+      # clocks are UTC), which is near-harmless: a later master build is a
+      # superset of an earlier one, so a commit whose own snap never uploaded
+      # is covered as soon as any later commit's snap lands.
+      #
+      # Runs on the failure path too, purely to print the channel table.
+      - name: Verify edge is still advancing
+        if: ${{ !cancelled() && (steps.snap-upload.outcome == 'failure' || steps.snap-upload.outputs.result == 'pending') }}
+        # Generous: curl is 4 attempts x 60s + 3 x 5s backoff = 255s worst
+        # case, and a kill here would be a red with no annotation at all.
+        timeout-minutes: 10
         env:
-          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPOSITORY: ${{ github.repository }}
+          # Not hardcoded master: this job also runs on release/* and
+          # test/git-actions, which upload to edge too.
+          BRANCH: ${{ github.ref_name }}
+          UPLOAD_RESULT: ${{ steps.snap-upload.outputs.result }}
+        run: |
+          # -f turns an HTTP >=400 into a failure here rather than a body that
+          # python would read as a frozen edge; the `||` covers the rest
+          # (timeout, DNS, connection refused), which -f does not see at all.
+          curl -fsS --retry 3 --retry-delay 5 --max-time 60 \
+            -H 'Snap-Device-Series: 16' \
+            'https://api.snapcraft.io/v2/snaps/info/superproductivity' \
+            -o "$RUNNER_TEMP/snap-info.json" \
+            || { echo "::error::could not reach api.snapcraft.io to check edge"; exit 1; }
+          python3 - "$RUNNER_TEMP/snap-info.json" <<'PY'
+          import datetime, json, os, subprocess, sys
+
+          # Absorbs a slow review plus a quiet weekend. This assumes review
+          # latency stays well under ~40h: it is the unstable variable here
+          # (minutes -> 15.5h -> minutes again inside two weeks), and if it
+          # approaches the threshold this reds a HEALTHY store. Revisit it
+          # against observed latency, not on a red day.
+          MAX_STALE = datetime.timedelta(hours=48)
+
+
+          def fail(message):
+              # print, don't sys.exit(str): workflow commands are only reliably
+              # parsed on stdout.
+              print(message)
+              sys.exit(1)
+
+
+          try:
+              with open(sys.argv[1]) as fh:
+                  channels = json.load(fh).get("channel-map", [])
+          except (OSError, ValueError) as err:
+              # A 200 carrying HTML (captive portal, CDN interstitial) gets past
+              # curl -f, and a bare traceback here is a red with no annotation.
+              fail(f"::error::could not read the snap channel map: {err}")
+          amd64 = [e for e in channels if e.get("channel", {}).get("architecture") == "amd64"]
+
+          summary = ["### Snap channel map (amd64)", "", "| Channel | Revision | Version | Released |", "| --- | --- | --- | --- |"]
+          for entry in amd64:
+              channel = entry["channel"]
+              summary.append(
+                  f"| {channel['name']} | {entry.get('revision')} "
+                  f"| {entry.get('version')} | {channel.get('released-at', '?')[:19]} |"
+              )
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as fh:
+              fh.write("\n".join(summary) + "\n")
+          print("\n".join(summary))
+
+          # On the failure path the job is already red for a better reason;
+          # the table above is all this step owes it.
+          if os.environ.get("UPLOAD_RESULT") != "pending":
+              sys.exit(0)
+
+          edge = next(
+              (
+                  entry
+                  for entry in amd64
+                  # track too: a versioned track would also carry name 'edge'.
+                  if entry["channel"].get("track") == "latest"
+                  and entry["channel"]["name"] == "edge"
+              ),
+              None,
+          )
+          if edge is None:
+              fail("::error::could not read a latest/edge amd64 revision from the channel map")
+          if "released-at" not in edge["channel"]:
+              fail(f"::error::edge revision {edge.get('revision')} has no released-at")
+
+          released_at = datetime.datetime.fromisoformat(edge["channel"]["released-at"])
+          now = datetime.datetime.now(datetime.timezone.utc)
+          state = (
+              f"edge serves rev {edge['revision']} ({edge['version']}), released "
+              f"{released_at.isoformat(timespec='seconds')}"
+          )
+
+          # Zulu, not isoformat(): its "+00:00" puts a raw `+` in the query
+          # string, which decodes to a space, and the API then ignores `since`
+          # and returns the full recent history (measured 2026-08: `+00:00` ->
+          # every commit, `%2B00:00` and `.123456Z` -> correct, so it is the
+          # `+` and not the microseconds). Re-filter below regardless, so
+          # correctness never rests on the API honouring the parameter.
+          since = released_at.astimezone(datetime.timezone.utc).replace(microsecond=0)
+          # --paginate with --jq emits one value per line across all pages.
+          # (--slurp cannot be combined with --jq.)
+          probe = subprocess.run(
+              [
+                  "gh", "api", "--paginate",
+                  f"repos/{os.environ['GH_REPOSITORY']}/commits"
+                  f"?sha={os.environ['BRANCH']}"
+                  f"&since={since.strftime('%Y-%m-%dT%H:%M:%SZ')}&per_page=100",
+                  "--jq", ".[].commit.committer.date",
+              ],
+              capture_output=True,
+              text=True,
+          )
+          if probe.returncode != 0:
+              # CalledProcessError drops stderr, which is the only thing that
+              # separates a rate limit from a token scope from an outage.
+              fail(
+                  f"::error::could not read {os.environ['BRANCH']} commits from the "
+                  "GitHub API "
+                  f"(gh exit {probe.returncode}): {probe.stderr.strip()[:500]}"
+              )
+
+          pending = sorted(
+              d
+              for d in (
+                  datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                  for raw in probe.stdout.split()
+              )
+              if d > released_at
+          )
+          if not pending:
+              print(f"{state}; no newer commits on {os.environ['BRANCH']} -- edge is current.")
+              sys.exit(0)
+
+          waiting_h = (now - pending[0]).total_seconds() / 3600
+          max_stale_h = MAX_STALE.total_seconds() / 3600
+          print(f"{state}; {len(pending)} newer commit(s), oldest waiting {waiting_h:.1f}h.")
+
+          if waiting_h > max_stale_h:
+              fail(
+                  f"::error::this upload could not be confirmed AND edge has not "
+                  f"advanced in {waiting_h:.0f}h -- either the store review is stuck or "
+                  f"builds have not been reaching the upload step. Snaps are not "
+                  f"reaching users either way. {state}"
+              )
+          print(f"Unconfirmed but edge is still advancing (oldest wait under {max_stale_h:.0f}h).")
+          PY
+
       #      - run: snapcraft push .tmp/app-builds/sp.snap --release candidate
       #        if: startsWith(github.ref, 'refs/tags/v')
   #      - run: snapcraft promote superproductivity --from-channel latest/edge --to-channel latest/candidate --yes
@@ -324,7 +582,7 @@ jobs:
 
       - name: Setup Chrome
         id: setup-chrome
-        uses: browser-actions/setup-chrome@2e1d749697dd1612b833dba4a722266286fbefcd # v2
+        uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2
 
       - name: Export Chrome path for Karma
         shell: pwsh
@@ -349,6 +607,47 @@ jobs:
           release: false
           args: '--publish never' # Explicit: don't auto-publish unsigned exe files
 
+      # The universal installer and portable are named identically whether they
+      # carry one arch or both, so a silently dropped arm64 pack is invisible in
+      # the filename alone. Reintroducing ${arch} in electron-builder.yaml is
+      # equally invisible here and doubles what we submit to SignPath, whose
+      # size-based yearly quota we already exhausted once. Inspect the payloads
+      # as well as the filenames before spending any of it.
+      - name: Verify Windows artifact set before signing
+        shell: pwsh
+        run: |
+          $exes = Get-ChildItem -Path .tmp/app-builds -Filter *.exe
+          $actual = @($exes | ForEach-Object { $_.Name } | Sort-Object)
+          $expected = @('Super-Productivity-Setup.exe', 'superProductivity.exe') | Sort-Object
+          Write-Host "Built: $($actual -join ', ')"
+          if (Compare-Object $actual $expected) {
+            Write-Error "Unexpected Windows artifact set. Expected exactly: $($expected -join ', ')"
+            exit 1
+          }
+
+          $sevenZip = (Get-Command 7z -ErrorAction Stop).Source
+          $requiredPayloads = @('$PLUGINSDIR/app-64.7z', '$PLUGINSDIR/app-arm64.7z')
+          foreach ($exe in $exes) {
+            $listing = & $sevenZip l -slt -tNsis $exe.FullName
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "Could not inspect NSIS payloads in $($exe.Name)"
+              exit 1
+            }
+            $archivePaths = @(
+              $listing |
+                Where-Object { $_ -like 'Path = *' } |
+                ForEach-Object { $_.Substring(7).Replace('\', '/') }
+            )
+            $missingPayloads = @($requiredPayloads | Where-Object { $_ -notin $archivePaths })
+            if ($missingPayloads.Count -gt 0) {
+              Write-Error "$($exe.Name) is missing architecture payloads: $($missingPayloads -join ', ')"
+              exit 1
+            }
+
+            $mb = [math]::Round($exe.Length / 1MB, 1)
+            Write-Host "  $($exe.Name): $mb MiB"
+          }
+
       # --- Code signing (must succeed — we never publish unsigned exe files) ---
 
       - name: Upload unsigned executables for SignPath
@@ -359,10 +658,18 @@ jobs:
           path: .tmp/app-builds/*.exe
           if-no-files-found: error
           retention-days: 1
+          # Artifacts are scoped to the run, not the attempt, and uploading a
+          # name that already exists fails. Without this, re-running this job
+          # after a signing failure dies here instead of retrying the signing.
+          overwrite: true
 
       - name: Sign Windows executables with SignPath
-        uses: signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
         with:
+          # v3 only changed this default to the new Pipeline Connector, and other
+          # projects report v3-only auth failures there (SignPath action issue #18).
+          # Pinned to the endpoint that signed v19.1.0 — drop once v3 is proven.
+          connector-url: 'https://githubactions.connectors.signpath.io'
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
           project-slug: super-productivity
@@ -404,6 +711,25 @@ jobs:
           Write-Host "Final executables:"
           Get-ChildItem -Path .tmp/app-builds -Filter *.exe | Format-Table -AutoSize
 
+      # Blockmaps and latest.yml are generated during the build, over the
+      # unsigned executables SignPath has since replaced, so both have to be
+      # rebuilt from the signed files before publishing.
+      - name: Regenerate blockmaps and generate latest.yml for signed executables
+        shell: pwsh
+        run: node tools/finalize-windows-release-metadata.js .tmp/app-builds
+
+      # Existing website and package-manager manifests still use the old
+      # architecture-specific URLs. Byte-for-byte copies preserve those public
+      # contracts without submitting duplicate executables to SignPath.
+      - name: Create legacy Windows download aliases
+        shell: pwsh
+        run: |
+          $buildDir = '.tmp/app-builds'
+          Copy-Item -Force -ErrorAction Stop "$buildDir/Super-Productivity-Setup.exe" "$buildDir/Super-Productivity-Setup-x64.exe"
+          Copy-Item -Force -ErrorAction Stop "$buildDir/Super-Productivity-Setup.exe" "$buildDir/Super-Productivity-Setup-arm64.exe"
+          Copy-Item -Force -ErrorAction Stop "$buildDir/superProductivity.exe" "$buildDir/superProductivity-x64.exe"
+          Copy-Item -Force -ErrorAction Stop "$buildDir/superProductivity.exe" "$buildDir/superProductivity-arm64.exe"
+
       - name: Verify code signatures
         shell: pwsh
         run: |
@@ -417,108 +743,17 @@ jobs:
             }
           }
 
-      - name: Regenerate blockmaps and generate latest.yml for signed executables
-        shell: pwsh
-        run: |
-          $buildDir = ".tmp/app-builds"
-          # Only regenerate blockmaps for NSIS setup files (portables don't use them)
-          $setupExes = Get-ChildItem -Path $buildDir -Filter "Super-Productivity-Setup*.exe"
-
-          # Resolve the platform-specific app-builder binary from the lockfile-pinned package
-          $appBuilder = node -e "console.log(require('app-builder-bin').appBuilderPath)"
-
-          foreach ($exe in $setupExes) {
-            $blockmapPath = "$($exe.FullName).blockmap"
-            Write-Host "Regenerating blockmap for $($exe.Name)..."
-            $output = & $appBuilder blockmap --input="$($exe.FullName)" --output="$blockmapPath" --compression=gzip
-            Write-Host "  blockmap output: $output"
-          }
-
-          # Update latest.yml with hashes from signed executables
-          # (electron-builder generates it during build, but with hashes of unsigned files)
-          node -e "
-            const fs = require('fs');
-            const path = require('path');
-            const yaml = require('js-yaml');
-            const crypto = require('crypto');
-
-            const buildDir = '.tmp/app-builds';
-            const ymlPath = path.join(buildDir, 'latest.yml');
-
-            function getFileInfo(filePath) {
-              const fileBuffer = fs.readFileSync(filePath);
-              const info = {
-                sha512: crypto.createHash('sha512').update(fileBuffer).digest('base64'),
-                size: fileBuffer.length,
-              };
-              const blockmapPath = filePath + '.blockmap';
-              if (fs.existsSync(blockmapPath)) {
-                info.blockMapSize = fs.statSync(blockmapPath).size;
-              }
-              return info;
-            }
-
-            if (fs.existsSync(ymlPath)) {
-              // Update existing latest.yml (preserves all electron-builder fields)
-              const ymlData = yaml.load(fs.readFileSync(ymlPath, 'utf8'));
-              if (!ymlData.files || ymlData.files.length === 0) {
-                console.error('ERROR: latest.yml has no file entries');
-                process.exit(1);
-              }
-              for (const fileEntry of ymlData.files) {
-                const filePath = path.join(buildDir, fileEntry.url);
-                if (!fs.existsSync(filePath)) {
-                  console.error('ERROR: File referenced in latest.yml not found: ' + fileEntry.url);
-                  process.exit(1);
-                }
-                const info = getFileInfo(filePath);
-                Object.assign(fileEntry, info);
-                console.log('  Updated ' + fileEntry.url + ': sha512=' + info.sha512.substring(0, 20) + '... size=' + info.size);
-              }
-              if (ymlData.path) {
-                const primary = ymlData.files.find(f => f.url === ymlData.path);
-                if (primary) { ymlData.sha512 = primary.sha512; }
-              }
-              fs.writeFileSync(ymlPath, yaml.dump(ymlData, { lineWidth: -1 }));
-              console.log('latest.yml updated with signed file hashes');
-            } else {
-              // Fallback: generate from scratch if latest.yml was not created
-              console.log('No existing latest.yml found, generating from scratch');
-              const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-              const setupExes = fs.readdirSync(buildDir)
-                .filter(f => f.startsWith('Super-Productivity-Setup') && f.endsWith('.exe'));
-              if (setupExes.length === 0) {
-                console.error('ERROR: No setup executables found in ' + buildDir);
-                process.exit(1);
-              }
-              const files = setupExes.map(filename => {
-                const filePath = path.join(buildDir, filename);
-                const info = getFileInfo(filePath);
-                console.log('  ' + filename + ': sha512=' + info.sha512.substring(0, 20) + '... size=' + info.size);
-                return { url: filename, ...info };
-              });
-              const primary = files.find(f => f.url === 'Super-Productivity-Setup.exe')
-                || files.find(f => f.url === 'Super-Productivity-Setup-x64.exe')
-                || files[0];
-              const latestYml = {
-                version: pkg.version,
-                files,
-                path: primary.url,
-                sha512: primary.sha512,
-                releaseDate: new Date().toISOString(),
-              };
-              fs.writeFileSync(ymlPath, yaml.dump(latestYml, { lineWidth: -1 }));
-              console.log('Generated latest.yml for ' + files.length + ' signed executables');
-            }
-          "
-
       - name: Publish signed Windows binaries to GitHub Release
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           files: |
             .tmp/app-builds/*.exe
             .tmp/app-builds/Super-Productivity-Setup*.blockmap
             .tmp/app-builds/latest*.yml
+          # An unmatched glob is a silent success by default. Missing blockmaps
+          # or latest.yml means a published Windows release whose updater feed
+          # is broken -- fail the job instead of shipping it.
+          fail_on_unmatched_files: true
           draft: true
           prerelease: ${{ contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}

@@ -1,26 +1,22 @@
 import { Prisma } from '@prisma/client';
-import { Logger } from '../logger';
 import {
-  BatchUploadCandidate,
   CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
   ConflictResult,
   DuplicateOperationCandidate,
-  LatestBatchEntityOperationRow,
   LatestEntityOperationRow,
   Operation,
   VectorClock,
   compareVectorClocks,
-  isFullStateOpType,
   limitVectorClockSize,
 } from './sync.types';
 
 const TASK_TIME_DELTA_ACTION_TYPE = '[TimeTracking] Sync time spent';
 
 /**
- * ARRAY-branch candidates for BOTH batch conflict lookups: every stored op whose
- * `entity_ids` contains a probed id, tagged with the id that matched. Shared rather than
- * hand-copied — the #8334 "keep these two in sync" hazard is exactly what let #9503 ship
- * the same mis-plan into both queries.
+ * ARRAY-branch candidates for the multi-entity conflict lookup: every stored op whose
+ * `entity_ids` contains a probed id, tagged with the id that matched. (Until 2026-08 a
+ * second consumer existed — the batch engine's prefetch — and the #8334 "keep these two
+ * in sync" hazard is exactly what let #9503 ship the same mis-plan into both queries.)
  *
  * Three properties are load-bearing. Each is a COST property, not a correctness one, so
  * nothing here fails loudly; changing one needs the full measurements in
@@ -132,8 +128,7 @@ export const detectConflictForEntities = async (
     // primary, see getStoredEntityIds — still exposes that scalar entity here.
     // DISTINCT ON then picks the latest op per entity across both branches, which
     // also dedupes the harmless overlap when entity_id is already in the array (the
-    // common entity_id = entityIds[0] case). The same shape is duplicated in
-    // prefetchLatestEntityOpsForBatch — keep them in sync. (#8334)
+    // common entity_id = entityIds[0] case). (#8334)
     //
     // PERF — this must stay TWO separately-indexed branches, for the reason
     // detectConflictForEntity documents at length below. It was ONE query with a combined
@@ -154,15 +149,14 @@ export const detectConflictForEntities = async (
     //
     // Trade accepted knowingly: this moves the array branch's cost from "the probing
     // user's slice" to a FIXED whole-table GIN probe, so SMALL accounts pay ~13 ms / 700
-    // blocks per call they did not pay before (and this path runs twice per upload) while
+    // blocks per call they did not pay before while
     // large ones pay far less. Accepted because the term it replaces is unbounded in
     // account history while this one cannot exceed |probe| index descents. Measurements:
     // PR #9516; the unbounded co-tenant term stacked on top of it is #9510.
     //
     // `probe` binds the ids ONCE and is then referenced twice, so Postgres materialises
-    // the list once. Its DISTINCT is redundant here (detectConflict already dedupes) and
-    // kept only so this shape stays identical to the prefetch sibling, where the same id
-    // can legitimately appear under two entity types.
+    // the list once. Its DISTINCT is redundant here (detectConflict already dedupes) but
+    // harmless, and keeps the shape stable if a caller ever passes duplicate ids.
     const idArray = Prisma.sql`ARRAY[${Prisma.join(batchEntityIds)}]::text[]`;
     const latestOps = await tx.$queryRaw<LatestEntityOperationRow[]>`
       WITH probe(eid) AS (
@@ -329,7 +323,7 @@ export const detectConflictForEntity = async (
   // statements are true and the conclusion was still wrong — "no early-exit bet to
   // lose" and "cheap" are different properties, and the SLICE SCAN does not need a
   // LIMIT. Production cancelled detectConflictForEntities by statement_timeout every
-  // 5-12 minutes until it was split the same way (#9503). Both batch queries are now
+  // 5-12 minutes until it was split the same way (#9503). The query is
   // EXPLAINed by batch-conflict-plan.pglite.spec.ts (#9205).
   //
   // Scalar branch: the (user_id, entity_type, entity_id, server_seq) btree covers all
@@ -709,170 +703,4 @@ export const getStoredEntityIds = (op: Operation): string[] => {
     return [];
   }
   return ids;
-};
-
-export const getEntityConflictKey = (entityType: string, entityId: string): string => {
-  return `${entityType}\u0000${entityId}`;
-};
-
-export const getBatchConflictEntityPairs = (
-  candidates: BatchUploadCandidate[],
-): { entityType: string; entityId: string }[] => {
-  const entityPairs = new Map<string, { entityType: string; entityId: string }>();
-
-  for (const candidate of candidates) {
-    if (isFullStateOpType(candidate.op.opType)) continue;
-
-    for (const entityId of getConflictEntityIds(candidate.op)) {
-      entityPairs.set(getEntityConflictKey(candidate.op.entityType, entityId), {
-        entityType: candidate.op.entityType,
-        entityId,
-      });
-    }
-  }
-
-  return Array.from(entityPairs.values());
-};
-
-export const prefetchLatestEntityOpsForBatch = async (
-  userId: number,
-  entityPairs: { entityType: string; entityId: string }[],
-  tx: Prisma.TransactionClient,
-): Promise<Map<string, LatestBatchEntityOperationRow>> => {
-  const latestByEntity = new Map<string, LatestBatchEntityOperationRow>();
-  if (entityPairs.length === 0) return latestByEntity;
-
-  for (
-    let start = 0;
-    start < entityPairs.length;
-    start += CONFLICT_DETECTION_ENTITY_BATCH_SIZE
-  ) {
-    const batchPairs = entityPairs.slice(
-      start,
-      start + CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
-    );
-    // The ::text casts pin the VALUES list's column types.
-    const touchedRows = batchPairs.map(
-      ({ entityType, entityId }) => Prisma.sql`(${entityType}::text, ${entityId}::text)`,
-    );
-
-    // Two separately-indexed branches, mirroring detectConflictForEntities — see the PERF
-    // note there. The array branch is the shared arrayBranchCandidatesCte, so only the
-    // scalar branch and the keying differ. (#8334) This was the WORSE of the two under the
-    // old OR form: it carries no `entity_type` predicate of its own, so the btree's usable
-    // prefix was just `user_id` and the degeneracy read the user's ENTIRE history across
-    // every entity type. Only `batchUpload` defaulting to false spared it production
-    // traffic (#9503).
-    //
-    // `array_hits` re-checks the entity TYPE with a row-wise `IN`, not a `JOIN`: `cand` is
-    // keyed by id alone (the probe source drops the type), so a stored op matched by id
-    // must still be confirmed against the requested (type, id) PAIR. Semi-join vs JOIN is
-    // a cost choice here, not a correctness one — the outer DISTINCT ON absorbs either.
-    // Either way the residual is |cand| x |touched|, bounded by the batch size and
-    // independent of how wide the stored arrays are, which is what distinguishes it from
-    // a fan-out.
-    const latestOps = await tx.$queryRaw<LatestBatchEntityOperationRow[]>`
-      WITH touched(entity_type, entity_id) AS (
-        VALUES ${Prisma.join(touchedRows)}
-      ),
-      scalar_hits AS (
-        SELECT t.entity_type, t.entity_id AS eid, x.client_id, x.action_type,
-               x.vector_clock, x.server_seq
-        FROM touched t
-        CROSS JOIN LATERAL (
-          SELECT o.client_id, o.action_type, o.vector_clock, o.server_seq
-          FROM operations o
-          WHERE o.user_id = ${userId}
-            AND o.entity_type = t.entity_type
-            AND o.entity_id = t.entity_id
-          ORDER BY o.server_seq DESC
-          LIMIT 1
-        ) x
-      ),
-      ${arrayBranchCandidatesCte(
-        Prisma.sql`SELECT DISTINCT entity_id AS eid FROM touched`,
-      )},
-      array_hits AS (
-        SELECT c.entity_type, c.eid AS eid, c.client_id, c.action_type,
-               c.vector_clock, c.server_seq
-        FROM cand c
-        WHERE c.user_id = ${userId}
-          AND (c.entity_type, c.eid) IN (SELECT entity_type, entity_id FROM touched)
-      )
-      SELECT DISTINCT ON (entity_type, eid)
-        entity_type AS "entityType",
-        eid AS "entityId",
-        client_id AS "clientId",
-        action_type AS "actionType",
-        vector_clock AS "vectorClock",
-        server_seq AS "serverSeq"
-      FROM (
-        SELECT entity_type, eid, client_id, action_type, vector_clock, server_seq
-        FROM scalar_hits
-        UNION ALL
-        SELECT entity_type, eid, client_id, action_type, vector_clock, server_seq
-        FROM array_hits
-      ) u
-      ORDER BY entity_type, eid, server_seq DESC
-    `;
-
-    for (const latestOp of latestOps) {
-      latestByEntity.set(
-        getEntityConflictKey(latestOp.entityType, latestOp.entityId),
-        latestOp,
-      );
-    }
-  }
-
-  if (
-    entityPairs.some(
-      ({ entityType, entityId }) =>
-        entityType === 'GLOBAL_CONFIG' && entityId === 'tasks',
-    )
-  ) {
-    const legacyMiscOp = await tx.operation.findFirst({
-      where: {
-        userId,
-        entityType: 'GLOBAL_CONFIG',
-        entityId: 'misc',
-        // Gate on the fixed split boundary, not CURRENT_SCHEMA_VERSION; see the
-        // detectConflictForEntity legacy-misc lookup for the full rationale.
-        schemaVersion: { lt: MISC_TASKS_SPLIT_SCHEMA_VERSION },
-      },
-      select: { actionType: true, clientId: true, vectorClock: true, serverSeq: true },
-      orderBy: { serverSeq: 'desc' },
-    });
-    const tasksKey = getEntityConflictKey('GLOBAL_CONFIG', 'tasks');
-    const currentTasksOp = latestByEntity.get(tasksKey);
-    if (
-      legacyMiscOp &&
-      (!currentTasksOp ||
-        (legacyMiscOp.serverSeq ?? -1) > (currentTasksOp.serverSeq ?? -1))
-    ) {
-      latestByEntity.set(tasksKey, {
-        entityType: 'GLOBAL_CONFIG',
-        entityId: 'tasks',
-        ...legacyMiscOp,
-      });
-    }
-  }
-
-  return latestByEntity;
-};
-
-export const pruneVectorClockForStorage = (
-  op: Operation,
-  preserveClientIds: readonly string[] = [],
-): void => {
-  const beforeSize = Object.keys(op.vectorClock).length;
-  op.vectorClock = limitVectorClockSize(op.vectorClock, [
-    op.clientId,
-    ...preserveClientIds,
-  ]);
-  const afterSize = Object.keys(op.vectorClock).length;
-  if (afterSize < beforeSize) {
-    Logger.debug(
-      `[client:${op.clientId}] Vector clock pruned from ${beforeSize} to ${afterSize} before storage`,
-    );
-  }
 };

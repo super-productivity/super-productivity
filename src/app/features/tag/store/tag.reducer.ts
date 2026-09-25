@@ -261,12 +261,15 @@ export const tagReducer = createReducer<TagState>(
 
   on(
     moveTaskUpInTodayList,
-    (state: TagState, { taskId, workContextId, workContextType, doneTaskIds }) => {
+    (
+      state: TagState,
+      { taskId, workContextId, workContextType, doneTaskIds: undoneTaskIds },
+    ) => {
       if (workContextType !== WORK_CONTEXT_TYPE) {
         return state;
       }
       // Use Set for O(1) lookup instead of O(n) .includes() in callback
-      const doneTaskIdSet = new Set(doneTaskIds);
+      const undoneTaskIdSet = new Set(undoneTaskIds);
       return tagAdapter.updateOne(
         {
           id: workContextId,
@@ -274,7 +277,7 @@ export const tagReducer = createReducer<TagState>(
             taskIds: arrayMoveLeftUntil(
               (state.entities[workContextId] as Tag).taskIds,
               taskId,
-              (id) => !doneTaskIdSet.has(id),
+              (id) => !undoneTaskIdSet.has(id),
             ),
           },
         },
@@ -285,12 +288,15 @@ export const tagReducer = createReducer<TagState>(
 
   on(
     moveTaskDownInTodayList,
-    (state: TagState, { taskId, workContextId, workContextType, doneTaskIds }) => {
+    (
+      state: TagState,
+      { taskId, workContextId, workContextType, doneTaskIds: undoneTaskIds },
+    ) => {
       if (workContextType !== WORK_CONTEXT_TYPE) {
         return state;
       }
       // Use Set for O(1) lookup instead of O(n) .includes() in callback
-      const doneTaskIdSet = new Set(doneTaskIds);
+      const undoneTaskIdSet = new Set(undoneTaskIds);
       return tagAdapter.updateOne(
         {
           id: workContextId,
@@ -298,7 +304,7 @@ export const tagReducer = createReducer<TagState>(
             taskIds: arrayMoveRightUntil(
               (state.entities[workContextId] as Tag).taskIds,
               taskId,
-              (id) => !doneTaskIdSet.has(id),
+              (id) => !undoneTaskIdSet.has(id),
             ),
           },
         },

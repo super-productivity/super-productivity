@@ -14,8 +14,10 @@
 
 import { IDBPDatabase, openDB } from 'idb';
 import {
+  assertIterateLimit,
   DbCursorDirection,
   DbCursorVisitor,
+  DbIndexQuery,
   DbIterateOptions,
   DbKey,
   DbKeyRange,
@@ -99,14 +101,20 @@ const walkCursor = async <T>(
   options: DbIterateOptions,
   visit: DbCursorVisitor<T>,
 ): Promise<void> => {
+  assertIterateLimit(options.limit);
   const query = options.query !== undefined ? (options.query as IDBValidKey) : null;
   let cursor = await source.openCursor(query, options.direction ?? 'next');
+  let visited = 0;
   while (cursor) {
     const action = visit(cursor.value as T, cursor.primaryKey as DbKey);
     if (action === 'delete' || action === 'delete-stop') {
       await cursor.delete();
     }
     if (action === 'stop' || action === 'delete-stop') {
+      return;
+    }
+    // `limit` bounds the number of entries visited (see DbIterateOptions.limit).
+    if (options.limit !== undefined && ++visited >= options.limit) {
       return;
     }
     cursor = await cursor.continue();
@@ -130,6 +138,10 @@ const toIdbKeyRange = (range?: DbKeyRange): IDBKeyRange | undefined => {
   }
   return undefined;
 };
+
+/** An exact compound-key tuple becomes `IDBKeyRange.only`; a range translates as usual. */
+const toIdbIndexQuery = (query?: DbIndexQuery): IDBKeyRange | undefined =>
+  Array.isArray(query) ? IDBKeyRange.only(query) : toIdbKeyRange(query);
 
 export class IndexedDbOpLogAdapter implements OpLogDbAdapter {
   private _db?: IDBPDatabase;
@@ -318,21 +330,21 @@ export class IndexedDbOpLogAdapter implements OpLogDbAdapter {
   async getAllFromIndex<T>(
     store: string,
     index: string,
-    range?: DbKeyRange,
+    query?: DbIndexQuery,
   ): Promise<T[]> {
     return (await this._database.getAllFromIndex(
       store,
       index,
-      toIdbKeyRange(range),
+      toIdbIndexQuery(query),
     )) as T[];
   }
 
   async countFromIndex(
     store: string,
     index: string,
-    range?: DbKeyRange,
+    query?: DbIndexQuery,
   ): Promise<number> {
-    return this._database.countFromIndex(store, index, toIdbKeyRange(range));
+    return this._database.countFromIndex(store, index, toIdbIndexQuery(query));
   }
 
   async iterate<T>(
@@ -431,11 +443,11 @@ class IdbOpLogTx implements OpLogTx {
   async getAllFromIndex<T>(
     store: string,
     index: string,
-    range?: DbKeyRange,
+    query?: DbIndexQuery,
   ): Promise<T[]> {
     return (await storeOf(this._tx, store)
       .index(index)
-      .getAll(toIdbKeyRange(range))) as T[];
+      .getAll(toIdbIndexQuery(query))) as T[];
   }
 
   async iterate<T>(

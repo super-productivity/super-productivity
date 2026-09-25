@@ -19,9 +19,14 @@
   }
 
   planner-task {
-    // Match the planner/task-list inter-row rhythm (4px), not the roomier 8px.
-    margin-bottom: var(--s-half);
-    margin-right: var(--s-half);
+    // Same row rhythm and hairlines as the planner and the main task list.
+    margin-bottom: var(--task-list-row-gap);
+    // planner-task draws its own box border, so use the row edge token.
+    border-top: var(--task-row-edge);
+
+    &:last-child {
+      border-bottom: var(--task-row-edge);
+    }
   }
 
   add-task-inline {
@@ -56,18 +61,34 @@ header {
     }
   }
 
+  // Same label treatment as the task-list section headings (collapsible
+  // .task-section): a column header must not read like the cards below it.
   .title {
-    font-size: 14px;
-    margin-right: var(--s);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--letter-spacing-wide);
+    color: var(--text-color-muted);
+    // `auto` (not a fixed gap): the meta next to it is omitted when the panel is
+    // empty, so the title has to be what pushes the edit button to the far edge.
+    margin-right: auto;
   }
 
   .tasks-total-estimate {
     white-space: nowrap;
-    margin-left: auto;
+    margin-left: var(--s);
     margin-right: var(--s-half);
-    //margin-right: auto;
-    font-style: italic;
-    opacity: 0.7;
+    display: flex;
+    align-items: center;
+    gap: var(--s-quarter);
+    font-size: var(--font-size-sm);
+    color: var(--text-color-muted);
+
+    mat-icon {
+      font-size: 14px;
+      line-height: 14px;
+      height: 14px;
+      width: 14px;
+    }
   }
 }
 

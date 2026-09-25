@@ -41,8 +41,13 @@ import {
   flattenTasks,
   selectAllTasks,
   selectAllTasksWithSubTasks,
+  selectCurrentTaskId,
   selectTasksWithSubTasksByIdsFactory,
 } from '../tasks/store/task.selectors';
+import {
+  getEndOfTodayTime,
+  isInLaterTodayWindow,
+} from '../tasks/util/later-today-window';
 import { ofType } from '@ngrx/effects';
 import { WorklogExportSettings } from '../worklog/worklog.model';
 import { updateProjectAdvancedCfg } from '../project/store/project.actions';
@@ -52,8 +57,8 @@ import {
   selectActiveContextId,
   selectActiveContextTypeAndId,
   selectActiveWorkContext,
-  selectDoneBacklogTaskIdsForActiveContext,
-  selectDoneTaskIdsForActiveContext,
+  selectUndoneBacklogTaskIdsForActiveContext,
+  selectUndoneTaskIdsForActiveContext,
   selectStartableTasksForActiveContext,
   selectTrackableTasksForActiveContext,
 } from './store/work-context.selectors';
@@ -351,11 +356,11 @@ export class WorkContextService {
     }),
   );
 
-  doneTaskIds$: Observable<string[]> = this._store$.select(
-    selectDoneTaskIdsForActiveContext,
+  undoneTaskIds$: Observable<string[]> = this._store$.select(
+    selectUndoneTaskIdsForActiveContext,
   );
-  doneBacklogTaskIds$: Observable<string[] | undefined> = this._store$.select(
-    selectDoneBacklogTaskIdsForActiveContext,
+  undoneBacklogTaskIds$: Observable<string[] | undefined> = this._store$.select(
+    selectUndoneBacklogTaskIdsForActiveContext,
   );
 
   backlogTasks$: Observable<TaskWithSubTasks[]> = this.backlogTaskIds$.pipe(
@@ -416,17 +421,6 @@ export class WorkContextService {
   // consumers should read this signal instead; the boolean stays for synchronous reads.
   readonly isTodayListSignal = toSignal(this.isTodayList$, { initialValue: false });
 
-  isHasTasksToWorkOn$: Observable<boolean> = combineLatest([
-    this.mainListTasks$,
-    this.isTodayList$,
-  ]).pipe(
-    map(([tasks, isToday]) =>
-      isToday ? this._filterFutureScheduledTasksForToday(tasks) : tasks,
-    ),
-    map(hasTasksToWorkOn),
-    distinctUntilChanged(),
-  );
-
   estimateRemainingToday$: Observable<number> = this.mainListTasks$.pipe(
     map(mapEstimateRemainingFromTasks),
     distinctUntilChanged(),
@@ -472,15 +466,29 @@ export class WorkContextService {
     distinctUntilChanged(), // Only emit when count actually changes
   );
 
+  // "Later Today" membership changes when the clock passes a start time or when
+  // tracking starts/stops, and neither shows up as a change of the task list —
+  // so re-run the filter on the shared minute tick and on the tracked task as
+  // well, or an appointment that already began stays hidden from the main list.
   undoneTasks$: Observable<TaskWithSubTasks[]> = combineLatest([
     this.mainListTasks$,
     this.isTodayList$,
+    this._globalTrackingIntervalService.minuteTick$,
+    this._store$.select(selectCurrentTaskId),
   ]).pipe(
-    map(([tasks, isTodayList]) =>
-      (isTodayList ? this._filterFutureScheduledTasksForToday(tasks) : tasks).filter(
-        (task) => task && !task.isDone,
-      ),
+    map(([tasks, isTodayList, , currentTaskId]) =>
+      (isTodayList
+        ? this._filterFutureScheduledTasksForToday(tasks, currentTaskId)
+        : tasks
+      ).filter((task) => task && !task.isDone),
     ),
+    // the tick above re-emits every minute; only pass on real changes
+    distinctUntilChanged(fastArrayCompare),
+  );
+
+  isHasTasksToWorkOn$: Observable<boolean> = this.undoneTasks$.pipe(
+    map(hasTasksToWorkOn),
+    distinctUntilChanged(),
   );
 
   doneTasks$: Observable<TaskWithSubTasks[]> = this.isTodayList$.pipe(
@@ -791,8 +799,15 @@ export class WorkContextService {
     return this._store$.select(selectTasksWithSubTasksByIdsFactory(ids));
   }
 
+  /**
+   * Hides what the "Later Today" panel shows, so an upcoming appointment is not
+   * listed twice. The tracked task is never hidden: working on it makes it
+   * current, so it belongs in the main list even if it starts later. The same
+   * goes for the parent of a tracked subtask, as the panel drops it as well.
+   */
   private _filterFutureScheduledTasksForToday(
     tasks: TaskWithSubTasks[],
+    currentTaskId: string | null,
   ): TaskWithSubTasks[] {
     if (!tasks) {
       return [];
@@ -802,23 +817,20 @@ export class WorkContextService {
     }
 
     const now = Date.now();
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
-    const todayEndTimestamp = todayEnd.getTime();
+    const endOfTodayTime = getEndOfTodayTime(
+      this._dateService.todayStr(),
+      this._dateService.getStartOfNextDayDiffMs(),
+    );
 
-    return tasks.filter((task) => {
-      if (!task) {
-        return false;
-      }
-      if (
-        task.dueWithTime &&
-        task.dueWithTime >= now &&
-        task.dueWithTime <= todayEndTimestamp
-      ) {
-        return false;
-      }
-      return true;
-    });
+    const isTracked = (task: TaskWithSubTasks): boolean =>
+      !!currentTaskId &&
+      (task.id === currentTaskId || task.subTaskIds.includes(currentTaskId));
+
+    return tasks.filter(
+      (task) =>
+        !!task &&
+        (isTracked(task) || !isInLaterTodayWindow(task.dueWithTime, now, endOfTodayTime)),
+    );
   }
 
   // we don't want a circular dependency that's why we do it here...

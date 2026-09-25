@@ -300,7 +300,11 @@ export class ReminderModule {
     const taskId = event.extra?.['relatedId'] as string | undefined;
     const reminderType = event.extra?.['reminderType'] as string | undefined;
     if (!taskId) {
-      Log.warn('ReminderModule: No task ID in notification action', event);
+      Log.warn('ReminderModule: No task ID in notification action', {
+        actionId: event.actionId,
+        notificationId: event.notificationId,
+        extraKeys: Object.keys(event.extra ?? {}),
+      });
       return;
     }
 

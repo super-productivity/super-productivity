@@ -3,6 +3,8 @@
  *
  * Prerequisites:
  *   DATABASE_URL=postgresql://supersync:superpassword@localhost:55432/supersync_db
+ *   (the db has no fixed host port — `npm run supersync:db` publishes it on
+ *    55432 and applies the schema)
  *
  * Run with:
  *   npx vitest run --config vitest.integration.config.ts \

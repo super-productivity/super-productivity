@@ -17,6 +17,17 @@ const GENERATED_RELEASE_NOTES_DIR = path.join(
 const PLAY_STORE_WHATS_NEW_DIR = path.join(GENERATED_RELEASE_NOTES_DIR, 'play-store');
 const PLAY_STORE_WHATS_NEW_FILE = path.join(PLAY_STORE_WHATS_NEW_DIR, 'whatsnew-en-US');
 const GITHUB_RELEASE_NOTES_FILE = path.join(ROOT_DIR, 'build', 'release-notes.md');
+// Committed next to the notes so the release workflow uses the very base the
+// notes were written against instead of resolving it a second time.
+const RELEASE_NOTES_BASE_FILE = path.join(ROOT_DIR, 'build', 'release-notes-base.txt');
+
+const GITHUB_API_URL = 'https://api.github.com';
+const GITHUB_API_TIMEOUT_MS = 10000;
+const STABLE_TAG_PATTERN = /^v\d+\.\d+\.\d+$/;
+// `npm version` commits carry the bare version as their subject. A base that is
+// the last published release can span several of them, so drop them as noise.
+const VERSION_BUMP_SUBJECT_PATTERN = /^v?\d+\.\d+\.\d+(?:-[\w.]+)?$/;
+const RELEASE_TAG_PATTERN = /^v/;
 
 const USER_FACING_TYPES = new Set(['feat', 'fix', 'perf']);
 const LOW_SIGNAL_TYPES = new Set([
@@ -116,7 +127,7 @@ const getAndroidVersionInfo = (version) => {
   };
 };
 
-const getPreviousTag = ({ version, stableOnly = false }) =>
+const getLatestTag = ({ version, stableOnly = false }) =>
   execFileSync('git', ['tag', '--merged', 'HEAD', '--sort=-v:refname'], {
     encoding: 'utf8',
   })
@@ -126,59 +137,123 @@ const getPreviousTag = ({ version, stableOnly = false }) =>
       if (releaseTag === `v${version}`) {
         return false;
       }
-      return stableOnly ? /^v\d+\.\d+\.\d+$/.test(releaseTag) : /^v/.test(releaseTag);
+      return stableOnly
+        ? STABLE_TAG_PATTERN.test(releaseTag)
+        : RELEASE_TAG_PATTERN.test(releaseTag);
     })
     ?.trim();
 
-const getCommitSubjectsSincePreviousTag = ({ version }) => {
+const getRepoSlug = (env = process.env) => {
+  if (env.GITHUB_REPOSITORY) {
+    return env.GITHUB_REPOSITORY;
+  }
+
+  const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], {
+    encoding: 'utf8',
+  });
+  return remoteUrl.trim().match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/)?.[1];
+};
+
+// Drafts are skipped: an abandoned or still-unpublished draft leaves its tag
+// behind, and basing the notes on that tag silently drops everything the
+// unpublished versions contained. Releases come back newest first, which this
+// repo's single-line release flow makes equivalent to version order; a backport
+// published after a newer release would need version sorting instead.
+const pickPublishedBaseTag = ({ releases, version, stableOnly }) =>
+  releases
+    .find((release) => {
+      const tag = release.tag_name?.trim();
+      if (release.draft || !tag || tag === `v${version}`) {
+        return false;
+      }
+      return stableOnly
+        ? !release.prerelease && STABLE_TAG_PATTERN.test(tag)
+        : RELEASE_TAG_PATTERN.test(tag);
+    })
+    ?.tag_name.trim();
+
+// Messages go to stderr: stdout belongs to the generated files, and the resolved
+// base is handed to the release workflow through RELEASE_NOTES_BASE_FILE.
+const resolveReleaseBaseTag = async ({
+  version,
+  stableOnly,
+  env = process.env,
+  fetchImpl = globalThis.fetch,
+  getFallbackTag = getLatestTag,
+} = {}) => {
   try {
-    const lastTag = getPreviousTag({ version });
-    if (!lastTag) {
-      throw new Error('No previous tag found');
+    const repoSlug = getRepoSlug(env);
+    if (!repoSlug) {
+      throw new Error('could not determine the GitHub repository');
     }
 
-    const gitLog = execFileSync(
-      'git',
-      ['log', `${lastTag}...HEAD`, '--no-merges', '--pretty=format:%s'],
-      { encoding: 'utf8' },
-    );
-    return gitLog.split('\n').filter(Boolean);
-  } catch (err) {
-    console.warn(`Could not generate changelog from git tags: ${err.message}`);
-    console.warn('Falling back to last 20 commits');
-    const gitLog = execFileSync(
-      'git',
-      ['log', '-20', '--no-merges', '--pretty=format:%s'],
+    const token = env.GITHUB_TOKEN || env.GH_TOKEN;
+    const response = await fetchImpl(
+      `${GITHUB_API_URL}/repos/${repoSlug}/releases?per_page=100`,
       {
-        encoding: 'utf8',
+        headers: {
+          accept: 'application/vnd.github+json',
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        signal: AbortSignal.timeout(GITHUB_API_TIMEOUT_MS),
       },
     );
-    return gitLog.split('\n').filter(Boolean);
+    if (!response.ok) {
+      throw new Error(`GitHub API responded with ${response.status}`);
+    }
+
+    const publishedTag = pickPublishedBaseTag({
+      releases: await response.json(),
+      version,
+      stableOnly,
+    });
+    // No published release is an answer, not a failure: nothing shipped yet, so
+    // there is no base. Falling back to a tag here would reintroduce the bug.
+    console.warn(
+      publishedTag
+        ? `Release notes base: ${publishedTag} (last published release)`
+        : 'Release notes base: none - nothing published yet, using the last 20 commits',
+    );
+    return publishedTag;
+  } catch (err) {
+    const fallbackTag = getFallbackTag({ version, stableOnly });
+    console.warn(
+      `Could not resolve the last published release (${err.message}) - basing the notes on ` +
+        `${fallbackTag || 'the last 20 commits'} instead. A tag whose release never shipped ` +
+        'shortens the notes, so review them before pushing.',
+    );
+    return fallbackTag;
   }
 };
 
-const getCommitSubjectsSinceReleaseBase = ({ isPreRelease, version }) => {
-  if (isPreRelease) {
-    return getCommitSubjectsSincePreviousTag({ version });
+const readCommitSubjects = (logArgs) =>
+  execFileSync('git', ['log', ...logArgs, '--no-merges', '--pretty=format:%s'], {
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter(Boolean);
+
+// Two dots, so a base tag that is not an ancestor of HEAD still yields the
+// commits this release adds instead of both sides of the divergence.
+const toCommitRangeArgs = (baseTag) => (baseTag ? [`${baseTag}..HEAD`] : ['-20']);
+
+const getCommitSubjectsSinceBaseTag = (baseTag) => {
+  if (!baseTag) {
+    return readCommitSubjects(toCommitRangeArgs(baseTag));
   }
 
   try {
-    const lastStableTag = getPreviousTag({ version, stableOnly: true });
-    if (!lastStableTag) {
-      throw new Error('No previous stable tag found');
-    }
-
-    const gitLog = execFileSync(
-      'git',
-      ['log', `${lastStableTag}...HEAD`, '--no-merges', '--pretty=format:%s'],
-      { encoding: 'utf8' },
-    );
-    return gitLog.split('\n').filter(Boolean);
+    return readCommitSubjects(toCommitRangeArgs(baseTag));
   } catch (err) {
-    console.warn(`Could not generate changelog from stable tags: ${err.message}`);
-    return getCommitSubjectsSincePreviousTag({ version });
+    console.warn(
+      `Could not read commits since ${baseTag}: ${err.message} - using last 20`,
+    );
+    return readCommitSubjects(['-20']);
   }
 };
+
+const isVersionBumpSubject = (subject) =>
+  VERSION_BUMP_SUBJECT_PATTERN.test(subject.trim());
 
 const uniqueByDescription = (commits) => {
   const seen = new Set();
@@ -215,6 +290,9 @@ const toGroupedGithubMarkdown = (commits) => {
 
   return sections.join('\n\n') || `### Highlights\n\n- ${DEFAULT_CHANGELOG}`;
 };
+
+const orderByGroup = (commits) =>
+  GITHUB_GROUPS.flatMap((group) => commits.filter(group.isMatch));
 
 const getUserFacingCommits = (commits) => {
   const userFacing = commits.filter((commit) => {
@@ -539,15 +617,23 @@ const getLegacyFastlaneChangelogFile = (versionCode) =>
     `${versionCode}.txt`,
   );
 
-const generateReleaseNotes = ({ version, versionCode, isPreRelease }) => {
+const generateReleaseNotes = async ({ version, versionCode, isPreRelease }) => {
+  const baseTag = await resolveReleaseBaseTag({
+    version,
+    stableOnly: !isPreRelease,
+  });
   const commits = uniqueByDescription(
-    getCommitSubjectsSinceReleaseBase({ isPreRelease, version }).map(parseCommitSubject),
+    getCommitSubjectsSinceBaseTag(baseTag)
+      .filter((subject) => !isVersionBumpSubject(subject))
+      .map(parseCommitSubject),
   );
   const releaseCommits =
     commits.length > 0 ? commits : [parseCommitSubject(DEFAULT_CHANGELOG)];
   const userFacingCommits = getUserFacingCommits(releaseCommits);
   const deterministicGithubMarkdown = toGroupedGithubMarkdown(userFacingCommits);
-  const deterministicPlayStoreText = toPlainTextBullets(userFacingCommits);
+  // Features first: the 500-char cut takes whatever comes first, and git order
+  // is newest-first, which buries a release's features under its last fixes.
+  const deterministicPlayStoreText = toPlainTextBullets(orderByGroup(userFacingCommits));
   const aiReleaseNotes = getAiReleaseNotes({
     version,
     commits: releaseCommits,
@@ -561,6 +647,8 @@ ${aiReleaseNotes?.githubMarkdown || deterministicGithubMarkdown}
 
   writeFileEnsuringDir(GITHUB_RELEASE_NOTES_FILE, githubReleaseNotes);
   console.log(`Wrote GitHub release notes to ${GITHUB_RELEASE_NOTES_FILE}`);
+
+  writeFileEnsuringDir(RELEASE_NOTES_BASE_FILE, `${baseTag || ''}\n`);
 
   if (isPreRelease) {
     console.log('Pre-release version - skipping Play Store changelog generation');
@@ -602,30 +690,37 @@ const preparePlayStoreReleaseNotes = ({ versionCode }) => {
 const getCurrentPackageVersion = () =>
   JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'package.json'), 'utf8')).version;
 
-if (require.main === module) {
-  const command = process.argv[2] || 'generate';
+const runCommand = async (command) => {
   const version = getCurrentPackageVersion();
   const versionInfo = getAndroidVersionInfo(version);
 
   if (command === 'generate') {
-    generateReleaseNotes({ version, ...versionInfo });
+    await generateReleaseNotes({ version, ...versionInfo });
   } else if (command === 'prepare-play-store') {
     preparePlayStoreReleaseNotes(versionInfo);
   } else {
     console.error(`Unknown release notes command: ${command}`);
     process.exit(1);
   }
+};
+
+if (require.main === module) {
+  runCommand(process.argv[2] || 'generate');
 }
 
 module.exports = {
   getAndroidVersionInfo,
   generateReleaseNotes,
   preparePlayStoreReleaseNotes,
+  resolveReleaseBaseTag,
   __test: {
     getUserFacingCommits,
+    isVersionBumpSubject,
+    toCommitRangeArgs,
     normalizePlayStoreText,
     parseAiResponse,
     parseCommitSubject,
+    pickPublishedBaseTag,
     resolveAiProvider,
     toGroupedGithubMarkdown,
     toPlainTextBullets,

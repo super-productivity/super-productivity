@@ -31,6 +31,7 @@ import { LS } from './core/persistence/storage-keys.const';
 import { BannerId } from './core/banner/banner.model';
 import { T } from './t.const';
 import { GlobalThemeService } from './core/theme/global-theme.service';
+import { IosKeyboardService } from './core/theme/ios-keyboard.service';
 import { resolveBgImageToDataUrl } from './core/theme/resolve-bg-image-to-data-url.util';
 import { LanguageService } from './core/language/language.service';
 import { WorkContextService } from './features/work-context/work-context.service';
@@ -38,7 +39,6 @@ import { SyncTriggerService } from './imex/sync/sync-trigger.service';
 import { ActivatedRoute, RouterOutlet } from '@angular/router';
 import { concatMap, first, take } from 'rxjs/operators';
 
-import { IS_MOBILE } from './util/is-mobile';
 import { recordSearchNavDebug } from './util/search-nav-debug';
 import { warpAnimation, warpInAnimation } from './ui/animations/warp.ani';
 import {
@@ -80,10 +80,13 @@ import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bot
 import { StartupService } from './core/startup/startup.service';
 import { DataInitStateService } from './core/data-init/data-init-state.service';
 import { AppUriTaskActionsService } from './features/tasks/app-uri-actions/app-uri-task-actions.service';
+import { IosShareService } from './features/tasks/ios-share/ios-share.service';
 import { ExampleTasksService } from './core/example-tasks/example-tasks.service';
 import { KeyboardLayoutService } from './core/keyboard-layout/keyboard-layout.service';
 import { setKeyboardLayoutService } from './util/check-key-combo';
 import { OnboardingPresetSelectionComponent } from './features/onboarding/onboarding-preset-selection.component';
+import { TaskMultiSelectBarComponent } from './features/tasks/task-multi-select-bar/task-multi-select-bar.component';
+import { TaskMultiSelectService } from './features/tasks/task-multi-select.service';
 import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.component';
 import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
 import { MaterialIconsLoaderService } from './ui/material-icons-loader.service';
@@ -127,6 +130,7 @@ interface BeforeInstallPromptEvent extends Event {
     MobileBottomNavComponent,
     OnboardingPresetSelectionComponent,
     OnboardingHintComponent,
+    TaskMultiSelectBarComponent,
   ],
 })
 export class AppComponent implements OnDestroy, AfterViewInit {
@@ -135,6 +139,9 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _bannerService = inject(BannerService);
   private _snackService = inject(SnackService);
   private _globalThemeService = inject(GlobalThemeService);
+  private _iosKeyboardService = inject(IosKeyboardService);
+  /** Sized above the iOS keyboard; null everywhere else. See IosKeyboardService. */
+  readonly iosShellHeight = this._iosKeyboardService.shellHeight;
   private _languageService = inject(LanguageService);
   private _activatedRoute = inject(ActivatedRoute);
   private _matDialog = inject(MatDialog);
@@ -165,6 +172,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   // Injected only to trigger its constructor eagerly at app start, so a
   // cold-launch add-task/complete-task URL action is never missed.
   private _appUriTaskActionsService = inject(AppUriTaskActionsService);
+  private _iosShareService = inject(IosShareService);
   readonly onboardingHintService = inject(OnboardingHintService);
 
   private _syncTriggerService = inject(SyncTriggerService);
@@ -178,6 +186,8 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   readonly T = T;
   readonly TODAY_TAG_ID = TODAY_TAG.id;
   readonly isShowMobileButtonNav = this.layoutService.isShowMobileBottomNav;
+  private readonly _taskMultiSelectService = inject(TaskMultiSelectService);
+  readonly isMultiSelecting = this._taskMultiSelectService.isSelecting;
 
   @ViewChild('routeWrapper', { read: ElementRef }) routeWrapper?: ElementRef<HTMLElement>;
   @ViewChild(RouterOutlet) private _routerOutlet?: RouterOutlet;
@@ -230,6 +240,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   constructor() {
     this._startupService.init();
+    this._iosShareService.start();
     void this._materialIconsLoaderService.ensureFontReady();
 
     // Skip onboarding for existing users with data
@@ -268,7 +279,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
             focusItem: params.focusItem,
             url: window.location.pathname + window.location.search,
           });
-          this._focusElement(params.focusItem);
+          this._focusElement(params.focusItem, params.isFromSearch === 'true');
         }
       }),
     );
@@ -586,23 +597,24 @@ export class AppComponent implements OnDestroy, AfterViewInit {
    * since page load and animation time are not always equal
    * retrying until the rendered task row is available avoids missing focus targets
    */
-  private _focusElement(id: string): void {
+  private _focusElement(id: string, isFromSearch: boolean = false): void {
     recordSearchNavDebug('appComponent:focusElement', {
       taskId: id,
       url: window.location.pathname + window.location.search,
+      isFromSearch,
     });
     this.layoutService.focusTaskInViewWhenReady(id, (el) => {
+      // Only a search jump earns the attention highlight: `focusItem` is also set
+      // by reminder snacks, the tracked-task pill, issue creation and the calendar
+      // banner, where the user never asked "where is it". (#5476)
+      if (isFromSearch) {
+        this.layoutService.highlightTaskBriefly(el);
+      }
       recordSearchNavDebug('appComponent:focusElement:success', {
         taskId: id,
         url: window.location.pathname + window.location.search,
         matchedElementId: el.id,
       });
-      if (el && IS_MOBILE) {
-        el.classList.add('mobile-highlight-searched-item');
-        el.addEventListener('blur', () =>
-          el.classList.remove('mobile-highlight-searched-item'),
-        );
-      }
     });
   }
 }

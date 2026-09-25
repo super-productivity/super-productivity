@@ -1,0 +1,4 @@
+- stop the sync state badge covering the sync icon
+- replace phantom CSS variable references and guard against regressions (#9304)
+- compact at startup when the op-log grows large (#9580)
+- strip emoji from the App Store "What's New" text (#9608)

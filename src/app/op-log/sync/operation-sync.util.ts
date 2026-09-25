@@ -1,4 +1,4 @@
-import { ActionType, OpType, Operation, SyncImportReason } from '../core/operation.types';
+import { ActionType, Operation, SyncImportReason } from '../core/operation.types';
 import {
   SyncProviderBase,
   OperationSyncCapable,
@@ -57,14 +57,18 @@ export const isFileBasedProviderId = (id: SyncProviderId): boolean => {
   return FILE_BASED_PROVIDER_IDS.has(id);
 };
 
-const VALID_OP_TYPES = new Set<string>(Object.values(OpType));
-
 /**
  * Convert a SyncOperation (from API response) to an Operation (local format).
+ *
+ * Only STRUCTURAL validity is enforced here (a missing/empty `opType` is
+ * corruption). An unknown `opType` VALUE is deliberately passed through: it is
+ * handled per op by `RemoteOpsProcessingService` (block at that op, keep the
+ * cursor, show the update-app UX). Throwing on it here would fail the whole
+ * page instead (#8764).
  */
 export const syncOpToOperation = (syncOp: SyncOperation): Operation => {
-  if (!VALID_OP_TYPES.has(syncOp.opType)) {
-    throw new Error(`Invalid opType from server: '${syncOp.opType}'`);
+  if (typeof syncOp.opType !== 'string' || syncOp.opType.length === 0) {
+    throw new Error('Invalid operation from server: missing opType');
   }
 
   return {

@@ -32,6 +32,7 @@ export type KeyboardConfig = Readonly<{
   taskOpenEstimationDialog?: string | null;
   taskToggleDone?: string | null;
   taskAddSubTask?: string | null;
+  taskDuplicate?: string | null;
   taskAddAttachment?: string | null;
   taskMoveToProject?: string | null;
   taskOpenContextMenu?: string | null;
@@ -54,6 +55,7 @@ export type KeyboardConfig = Readonly<{
   collapseSubTasks?: string | null;
   togglePlay?: string | null;
   taskEditTags?: string | null;
+  taskToggleSelect?: string | null;
 
   // Dynamic plugin shortcuts - added at runtime
   [key: `plugin_${string}`]: string | null;

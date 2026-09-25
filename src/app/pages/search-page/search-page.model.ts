@@ -34,4 +34,13 @@ export interface SearchQueryParams {
   focusItem: string;
   dateStr?: string;
   isInBacklog?: boolean;
+  /**
+   * Set only when the navigation started from global search, i.e. when the user
+   * asked "where is this?". The reveal paths draw their attention highlight off
+   * this, never off `focusItem` alone — every other caller of
+   * `NavigateToTaskService.navigate()` (reminder snacks, tracked-task pill,
+   * issue creation, calendar banner) sets `focusItem` without anyone having
+   * asked for attention. (#5476)
+   */
+  isFromSearch?: boolean;
 }

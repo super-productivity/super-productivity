@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { uuidv7 } from 'uuidv7';
 import { Prisma } from '@prisma/client';
-import { testState, resetTestState } from './sync.service.test-state';
+import {
+  testState,
+  resetTestState,
+  isLatestCausalFullStateQuery,
+  latestCausalFullStateRows,
+  rawQueryValues,
+} from './sync.service.test-state';
 
 // Mock the database module with Prisma mocks
 vi.mock('../src/db', async () => {
@@ -180,6 +186,15 @@ vi.mock('../src/db', async () => {
     // Upload transaction writes the storage counter atomically via $executeRaw.
     $executeRaw: vi.fn().mockResolvedValue(0),
     $queryRaw: vi.fn().mockImplementation(async (strings: any, ...params: unknown[]) => {
+      // The download path's newest-causal-full-state lookup ships as a pre-built
+      // `Prisma.Sql` so its op_type values stay literals, so it arrives as ONE object
+      // argument rather than a tagged template — see rawQueryText.
+      if (isLatestCausalFullStateQuery(strings)) {
+        return latestCausalFullStateRows(
+          state.operations,
+          rawQueryValues(strings, params),
+        );
+      }
       const sql = Array.isArray(strings) ? strings.join('') : String(strings);
       // Array branch of the single-entity conflict lookup: MAX(server_seq) over
       // `entity_ids @> ARRAY[id]`, kept separate from the scalar findFirst above.
@@ -215,14 +230,13 @@ vi.mock('../src/db', async () => {
         return [{ lastSeq: state.userSyncStates.get(txUserId)?.lastSeq ?? 0 }];
       }
 
-      // Anything left must be the batched multi-entity conflict lookup. Assert that
+      // Anything left must be the multi-entity conflict lookup. Assert that
       // rather than assuming it: falling through and reinterpreting an unrelated
       // query as this one is how a mock silently answers a call it never modelled.
-      // `DISTINCT ON` alone stopped discriminating once #9503 gave BOTH batch queries
-      // that clause, so key on detect's own CTE and exclude prefetch's — otherwise a
-      // future batchUpload test lands here, finds no bare string to read entityType
-      // from, matches no ops and silently reports "no conflict".
-      if (!sql.includes('scalar_hits') || sql.includes('touched(entity_type')) {
+      // Key on detect's own CTE (`scalar_hits`) — otherwise an unmodelled query
+      // lands here, finds no bare string to read entityType from, matches no ops
+      // and silently reports "no conflict".
+      if (!sql.includes('scalar_hits')) {
         throw new Error(`Unmocked raw query in tx: ${sql}`);
       }
       // Located by shape, not by position: #9503 reordered the params (and repeated
@@ -1079,11 +1093,9 @@ describe('Conflict Detection', () => {
       });
     });
 
-    // NOTE: with the default (non-batch) upload config this exercises
-    // `detectConflictForEntities`. The `prefetchLatestEntityOpsForBatch` variant
-    // (batchUpload=true) shares the same entity_ids matching SQL but is not driven
-    // here; its raw query is validated separately against real Postgres.
-    it('#8334 batch path: incoming multi-entity op hits a non-first stored entity', async () => {
+    // NOTE: this exercises `detectConflictForEntities`; its raw query is
+    // validated separately against real Postgres.
+    it('#8334 multi-entity op: incoming op hits a non-first stored entity', async () => {
       const service = getSyncService();
 
       const stored = await service.uploadOps(userId, clientA, [

@@ -5,6 +5,17 @@
         wData.totalTimeSpent | msToString
       }}</strong>
     </h1>
+    <button
+      (click)="exportAllData()"
+      [attr.aria-label]="T.F.WORKLOG.CMP.EXPORT_DATA | translate"
+      [disabled]="!wData.totalTimeSpent"
+      [matTooltip]="T.F.WORKLOG.CMP.EXPORT_DATA | translate"
+      class="mat-elevation-z1 export-all"
+      color="primary"
+      mat-mini-fab
+    >
+      <mat-icon>call_made</mat-icon>
+    </button>
     <div class="years">
       @for (year of wData.worklog | keyvalue: sortWorklogItems; track year.key) {
         <div class="year">

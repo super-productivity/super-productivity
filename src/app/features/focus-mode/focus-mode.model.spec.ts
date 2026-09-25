@@ -148,9 +148,6 @@ describe('FocusModeModel', () => {
 
   describe('FocusScreen enum', () => {
     it('should have all required screens', () => {
-      expect(FocusScreen.TaskSelection).toBe('TaskSelection');
-      expect(FocusScreen.DurationSelection).toBe('DurationSelection');
-      expect(FocusScreen.Preparation).toBe('Preparation');
       expect(FocusScreen.Main).toBe('Main');
       expect(FocusScreen.SessionDone).toBe('SessionDone');
       expect(FocusScreen.Break).toBe('Break');
@@ -197,7 +194,7 @@ describe('FocusModeModel', () => {
 
       const state: FocusModeState = {
         timer,
-        currentScreen: FocusScreen.TaskSelection,
+        currentScreen: FocusScreen.Main,
         mainState: FocusMainUIState.Preparation,
         isOverlayShown: false,
         mode: FocusModeMode.Pomodoro,
@@ -209,7 +206,7 @@ describe('FocusModeModel', () => {
       };
 
       expect(state.timer).toEqual(timer);
-      expect(state.currentScreen).toBe(FocusScreen.TaskSelection);
+      expect(state.currentScreen).toBe(FocusScreen.Main);
       expect(state.mainState).toBe(FocusMainUIState.Preparation);
       expect(state.isOverlayShown).toBe(false);
       expect(state.mode).toBe(FocusModeMode.Pomodoro);

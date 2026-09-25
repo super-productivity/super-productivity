@@ -90,6 +90,7 @@ describe('Legacy Data Migration Integration', () => {
     it('should skip if snapshot already exists', async () => {
       // Pre-create a snapshot
       await opLogStore.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: { task: { ids: ['existing'] } },
         lastAppliedOpSeq: 5,
         vectorClock: { client1: 5 },

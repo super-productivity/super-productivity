@@ -260,7 +260,11 @@ export class ShortcutService {
       }
     }
 
-    // Check plugin shortcuts (exec last)
+    // Check plugin shortcuts (exec last). Auto-repeat is dropped: holding the
+    // key would otherwise run the plugin action dozens of times a second.
+    if (ev.repeat) {
+      return;
+    }
     const pluginShortcuts = this._pluginBridgeService.shortcuts();
     for (const shortcut of pluginShortcuts) {
       const shortcutKey = `plugin_${shortcut.pluginId}:${shortcut.id}`;

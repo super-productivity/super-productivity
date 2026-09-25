@@ -2,7 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { NEVER, of } from 'rxjs';
+import { By } from '@angular/platform-browser';
 import { PlainspaceSpacePickerDialogComponent } from './plainspace-space-picker-dialog.component';
 import { PlainspaceAccountService } from '../plainspace-account.service';
 import { PlainspaceApiService } from '../../issue/providers/plainspace/plainspace-api.service';
@@ -17,7 +18,7 @@ describe('PlainspaceSpacePickerDialogComponent', () => {
   let component: PlainspaceSpacePickerDialogComponent;
   let fixture: ComponentFixture<PlainspaceSpacePickerDialogComponent>;
   let dialogRef: jasmine.SpyObj<MatDialogRef<PlainspaceSpacePickerDialogComponent>>;
-  let accountStub: { account: jasmine.Spy; host: jasmine.Spy };
+  let accountStub: { account: jasmine.Spy; host: jasmine.Spy; logout: jasmine.Spy };
   let apiStub: { getSpaces$: jasmine.Spy };
   let matDialogStub: { open: jasmine.Spy };
 
@@ -26,6 +27,7 @@ describe('PlainspaceSpacePickerDialogComponent', () => {
     accountStub = {
       account: jasmine.createSpy('account').and.returnValue(ACCOUNT),
       host: jasmine.createSpy('host').and.returnValue(ACCOUNT.host),
+      logout: jasmine.createSpy('logout'),
     };
     apiStub = { getSpaces$: jasmine.createSpy('getSpaces$').and.returnValue(of(SPACES)) };
     matDialogStub = {
@@ -90,6 +92,31 @@ describe('PlainspaceSpacePickerDialogComponent', () => {
     component.cancel();
     expect(dialogRef.close).toHaveBeenCalledWith();
   });
+
+  for (const { state, response } of [
+    { state: 'loaded', response: of(SPACES) },
+    { state: 'empty', response: of([]) },
+    { state: 'failed', response: of(null) },
+    { state: 'loading', response: NEVER },
+  ]) {
+    it(`disconnects and closes without a space choice when spaces are ${state}`, async () => {
+      apiStub.getSpaces$.and.returnValue(response);
+      createComponent();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const disconnect = fixture.debugElement
+        .queryAll(By.css('button'))
+        .find((button) =>
+          button.nativeElement.textContent.includes('PLAINSPACE.SPACE_PICKER.DISCONNECT'),
+        );
+      expect(disconnect).toBeDefined();
+      disconnect?.triggerEventHandler('click');
+
+      expect(accountStub.logout).toHaveBeenCalledTimes(1);
+      expect(dialogRef.close).toHaveBeenCalledWith();
+    });
+  }
 
   it('shows the error state (not empty) when the spaces request fails', async () => {
     apiStub.getSpaces$.and.returnValue(of(null));

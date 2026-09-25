@@ -956,16 +956,17 @@ END:VCALENDAR`;
       expect(result).toBe(true);
     });
 
-    it('should return false when connection fails', async () => {
+    // Rejects rather than resolving `false`, so the provider dialog has a reason
+    // to show instead of a bare "Connection failed" (#9635).
+    it('should surface the error when connection fails', async () => {
       const cfg = createMockProvider();
 
       const promise = service.testConnection(cfg);
 
       const req = httpMock.expectOne(cfg.icalUrl);
-      req.error(new ProgressEvent('error'));
+      req.error(new ProgressEvent('error'), { status: 401, statusText: 'Unauthorized' });
 
-      const result = await promise;
-      expect(result).toBe(false);
+      await expectAsync(promise).toBeRejected();
     });
 
     it('should return false for empty response', async () => {

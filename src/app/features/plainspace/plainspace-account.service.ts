@@ -9,6 +9,12 @@ import { DEFAULT_PLAINSPACE_CFG } from '../issue/providers/plainspace/plainspace
 const DEFAULT_HOST = 'https://plainspace.org';
 
 /**
+ * Why a connect attempt ended. `aborted` means the user disconnected while the
+ * check was in flight — not a failure worth reporting to them.
+ */
+export type PlainspaceConnectResult = 'ok' | 'invalid-token' | 'unreachable' | 'aborted';
+
+/**
  * Holds the connected Plainspace account (a personal API token + host) and
  * exposes it as signals. The account record itself is local-only (localStorage,
  * never synced). Note: sharing a project also copies the token into a bound
@@ -20,6 +26,7 @@ const DEFAULT_HOST = 'https://plainspace.org';
 export class PlainspaceAccountService {
   private readonly _api = inject(PlainspaceApiService);
   private readonly _account = signal<PlainspaceAccount | null>(this._load());
+  private _logoutVersion = 0;
 
   readonly account = this._account.asReadonly();
   readonly isLoggedIn = computed(() => !!this._account());
@@ -28,22 +35,32 @@ export class PlainspaceAccountService {
 
   /**
    * Validates a PAT against the host (`GET /api/integration/me`) and, on
-   * success, stores it. Returns whether the token was accepted.
+   * success, stores it. Reports *why* it failed so the caller can tell a
+   * rejected token apart from an unreachable host (#9988).
    */
-  async connect(token: string, host: string = DEFAULT_HOST): Promise<boolean> {
-    const me = await firstValueFrom(
-      this._api.getMe$({ ...DEFAULT_PLAINSPACE_CFG, host, token }),
+  async connect(
+    token: string,
+    host: string = DEFAULT_HOST,
+  ): Promise<PlainspaceConnectResult> {
+    const logoutVersion = this._logoutVersion;
+    const res = await firstValueFrom(
+      this._api.verifyToken$({ ...DEFAULT_PLAINSPACE_CFG, host, token }),
     );
-    if (!me) {
-      return false;
+    if (res.status !== 'ok') {
+      return res.status;
     }
-    const account: PlainspaceAccount = { host, token, email: me.email };
+    // A late response must not restore an account after an explicit disconnect.
+    if (logoutVersion !== this._logoutVersion) {
+      return 'aborted';
+    }
+    const account: PlainspaceAccount = { host, token, email: res.me.email };
     this._account.set(account);
     this._save(account);
-    return true;
+    return 'ok';
   }
 
   logout(): void {
+    this._logoutVersion++;
     this._account.set(null);
     localStorage.removeItem(LS.PLAINSPACE_ACCOUNT);
   }

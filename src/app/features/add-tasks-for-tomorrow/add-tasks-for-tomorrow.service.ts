@@ -77,7 +77,8 @@ export class AddTasksForTomorrowService {
 
     const tomorrow = this._dateService.getLogicalTomorrowMs();
 
-    const promises = dueRepeatCfgs.sort(sortRepeatableTaskCfgs).map((repeatCfg) => {
+    // copy first: this is memoized selector output other subscribers hold
+    const promises = [...dueRepeatCfgs].sort(sortRepeatableTaskCfgs).map((repeatCfg) => {
       return this._taskRepeatCfgService.createRepeatableTask(repeatCfg, tomorrow);
     });
     await Promise.all(promises);
@@ -141,6 +142,7 @@ export class AddTasksForTomorrowService {
     const todayStr = this._dateService.todayStr();
     const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
 
+    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
     TaskLog.log('[AddTasksForTomorrow] Starting addAllDueToday', { todayStr });
 
     // Yield to event loop before reading so any in-flight store updates
@@ -158,12 +160,14 @@ export class AddTasksForTomorrowService {
     // If this logs 0 repeatCfgs when the user expects tasks to appear,
     // the issue is upstream (configs not loaded, or already marked as processed).
     TaskLog.log('[AddTasksForTomorrow] addAllDueToday repeat configs', {
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       todayStr,
       repeatCfgCount: dueRepeatCfgs?.length ?? 0,
       repeatCfgIds: dueRepeatCfgs?.map((c) => c.id) ?? [],
     });
 
-    const promises = dueRepeatCfgs.sort(sortRepeatableTaskCfgs).map((repeatCfg) => {
+    // copy first: this is memoized selector output other subscribers hold
+    const promises = [...dueRepeatCfgs].sort(sortRepeatableTaskCfgs).map((repeatCfg) => {
       return this._taskRepeatCfgService.createRepeatableTask(repeatCfg, todayTS);
     });
     await Promise.all(promises);

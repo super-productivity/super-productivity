@@ -7,6 +7,7 @@ import {
   createSyncFolder,
   waitForSyncComplete,
   generateSyncFolderName,
+  confirmSyncConflictOverwriteIfShown,
 } from '../../utils/sync-helpers';
 import {
   createLegacyMigratedClient,
@@ -142,22 +143,15 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       // Choose "Keep local"
       const useLocalBtn = conflictDialog.locator('button', { hasText: /Keep local/i });
       await expect(useLocalBtn).toBeVisible();
+      syncPageB.prepareForNextSyncCycle('write');
       await useLocalBtn.click();
       console.log('[Test] Client B clicked "Keep local"');
 
-      // Handle potential confirmation dialog
-      const confirmDialog = clientB.page.locator('dialog-confirm');
-      try {
-        await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
-        await confirmDialog
-          .locator('button[color="warn"], button:has-text("OK")')
-          .first()
-          .click();
-      } catch {
-        // Confirmation might not appear - that's fine
-      }
+      await confirmSyncConflictOverwriteIfShown(clientB.page, conflictDialog);
 
-      await waitForSyncComplete(clientB.page, syncPageB, 30000);
+      await waitForSyncComplete(clientB.page, syncPageB, 30000, {
+        allowResponseOnlyCompletion: true,
+      });
       console.log('[Test] Client B sync completed');
 
       // Navigate to B's project and verify data
@@ -169,6 +163,9 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       await expect(clientB.page.locator('task', { hasText: 'Task B1' })).toBeVisible();
       await expect(clientB.page.locator('task', { hasText: 'Task B2' })).toBeVisible();
       await expect(clientB.page.locator('task', { hasText: 'Task B3' })).toBeVisible();
+      await expect(
+        sidenavB.locator('nav-item', { hasText: 'Client A Project' }),
+      ).not.toBeVisible();
       console.log('[Test] Client B verified: kept local data');
 
       // === Client A syncs - with divergent MIGRATION_GENESIS operations ===
@@ -176,76 +173,47 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       // they're on divergent timelines. Client A may also see a conflict.
       console.log('[Test] Client A syncing...');
       await syncPageA.triggerSync();
+      const syncResultA = await waitForSyncComplete(clientA.page, syncPageA);
 
-      // Client A might also see a conflict dialog since both clients have
-      // independent MIGRATION_GENESIS_IMPORT operations (divergent timelines)
+      // A conflict is allowed for the divergent migration timelines, but it must
+      // be resolved before asserting that both clients converged on B's snapshot.
       const conflictDialogA = clientA.page.locator('mat-dialog-container', {
         hasText: 'Conflicting Data',
       });
-      try {
-        await conflictDialogA.waitFor({ state: 'visible', timeout: 2000 });
+      if (syncResultA === 'conflict') {
+        await expect(conflictDialogA).toBeVisible();
         console.log(
           '[Test] Client A also sees conflict dialog (expected with divergent timelines)',
         );
-        // Choose "Keep remote" to adopt B's data
         const useRemoteBtn = conflictDialogA.locator('button', {
           hasText: /Keep remote/i,
         });
+        syncPageA.prepareForNextSyncCycle('read');
         await useRemoteBtn.click();
-        // Handle confirmation if present
-        const confirmDialogClientA = clientA.page.locator('dialog-confirm');
-        try {
-          await confirmDialogClientA.waitFor({ state: 'visible', timeout: 3000 });
-          await confirmDialogClientA
-            .locator('button[color="warn"], button:has-text("OK")')
-            .first()
-            .click();
-        } catch {
-          // OK if not present
-        }
-      } catch {
-        console.log('[Test] Client A did not see conflict dialog - synced normally');
-      }
 
-      await waitForSyncComplete(clientA.page, syncPageA);
-
-      // Verify Client A has some data (either its own or B's depending on conflict resolution)
-      // Navigate to whatever project exists
-      const projectsInSidebarA = sidenavA.locator('nav-item').filter({
-        has: clientA.page.locator('[class*="project"], [data-project]'),
-      });
-      const projectCount = await projectsInSidebarA.count().catch(() => 0);
-
-      if (projectCount > 0) {
-        // Check if Client B Project exists after sync
-        const hasBProject = await sidenavA
-          .locator('nav-item', { hasText: 'Client B Project' })
-          .isVisible()
-          .catch(() => false);
-
-        if (hasBProject) {
-          await sidenavA.locator('nav-item', { hasText: 'Client B Project' }).click();
-
-          await workViewA.waitForTaskList();
-          await expect(clientA.page.locator('task', { hasText: 'Task B' })).toBeVisible({
-            timeout: 10000,
-          });
-          console.log('[Test] SUCCESS: Client A received Client B data');
-        } else {
-          // Client A kept its own data - this is also valid
-          await sidenavA.locator('nav-item', { hasText: 'Client A Project' }).click();
-
-          await workViewA.waitForTaskList();
-          await expect(clientA.page.locator('task', { hasText: 'Task A1' })).toBeVisible({
-            timeout: 10000,
-          });
-          console.log(
-            '[Test] SUCCESS: Client A kept its own data (divergent timeline scenario)',
-          );
-        }
+        await confirmSyncConflictOverwriteIfShown(clientA.page, conflictDialogA);
       } else {
-        console.log('[Test] WARNING: No projects found in sidebar after sync');
+        expect(syncResultA).toBe('success');
       }
+
+      if (syncResultA === 'conflict') {
+        await waitForSyncComplete(clientA.page, syncPageA, 30000, {
+          allowResponseOnlyCompletion: true,
+        });
+      }
+
+      await expect(
+        sidenavA.locator('nav-item', { hasText: 'Client B Project' }),
+      ).toBeVisible();
+      await expect(
+        sidenavA.locator('nav-item', { hasText: 'Client A Project' }),
+      ).not.toBeVisible();
+      await sidenavA.locator('nav-item', { hasText: 'Client B Project' }).click();
+      await workViewA.waitForTaskList();
+      await expect(clientA.page.locator('task')).toHaveCount(3);
+      await expect(clientA.page.locator('task', { hasText: 'Task B1' })).toBeVisible();
+      await expect(clientA.page.locator('task', { hasText: 'Task B2' })).toBeVisible();
+      await expect(clientA.page.locator('task', { hasText: 'Task B3' })).toBeVisible();
 
       console.log(
         '[Test] PASSED: Legacy migration sync with conflict resolution completed',
@@ -354,22 +322,17 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       // Choose "Keep remote" - adopt A's data
       const useRemoteBtn = conflictDialog.locator('button', { hasText: /Keep remote/i });
       await expect(useRemoteBtn).toBeVisible();
+      syncPageB.prepareForNextSyncCycle('read');
       await useRemoteBtn.click();
       console.log('[Test] Client B clicked "Keep remote"');
 
-      // Handle potential confirmation dialog
-      const confirmDialog = clientB.page.locator('dialog-confirm');
-      try {
-        await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
-        await confirmDialog
-          .locator('button[color="warn"], button:has-text("OK")')
-          .first()
-          .click();
-      } catch {
-        // Confirmation might not appear
-      }
+      await confirmSyncConflictOverwriteIfShown(clientB.page, conflictDialog);
 
-      await waitForSyncComplete(clientB.page, syncPageB, 30000);
+      // USE_REMOTE performs a fresh seq-0 rebuild download. The witness was armed
+      // before the click so the setup response cannot be reused.
+      await waitForSyncComplete(clientB.page, syncPageB, 30000, {
+        allowResponseOnlyCompletion: true,
+      });
       console.log('[Test] Client B sync completed');
 
       // Navigate to A's project (which should now exist on B after adopting remote data)
@@ -385,6 +348,9 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       // Client B's local tasks should be gone since we chose "Keep remote"
       await expect(
         clientB.page.locator('task', { hasText: 'Task B1' }),
+      ).not.toBeVisible();
+      await expect(
+        sidenavB.locator('nav-item', { hasText: 'Client B Project' }),
       ).not.toBeVisible();
       console.log('[Test] SUCCESS: Client B adopted remote (A) data');
     } finally {
@@ -500,22 +466,15 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
 
       // Choose "Keep local" - B's Version B should win
       const useLocalBtn = conflictDialog.locator('button', { hasText: /Keep local/i });
+      syncPageB.prepareForNextSyncCycle('write');
       await useLocalBtn.click();
       console.log('[Test] Client B clicked "Keep local"');
 
-      // Handle confirmation
-      const confirmDialog = clientB.page.locator('dialog-confirm');
-      try {
-        await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
-        await confirmDialog
-          .locator('button[color="warn"], button:has-text("OK")')
-          .first()
-          .click();
-      } catch {
-        // OK if not present
-      }
+      await confirmSyncConflictOverwriteIfShown(clientB.page, conflictDialog);
 
-      await waitForSyncComplete(clientB.page, syncPageB, 30000);
+      await waitForSyncComplete(clientB.page, syncPageB, 30000, {
+        allowResponseOnlyCompletion: true,
+      });
       console.log('[Test] Client B sync completed');
 
       // Navigate back to project and verify
@@ -546,69 +505,45 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       // === Client A syncs - with divergent timelines ===
       console.log('[Test] Client A syncing...');
       await syncPageA.triggerSync();
+      const syncResultA = await waitForSyncComplete(clientA.page, syncPageA);
 
-      // Client A might also see a conflict dialog
+      // Resolve a divergent-timeline conflict if one is raised. Either route
+      // must end with Client A adopting the snapshot B just uploaded.
       const conflictDialogA = clientA.page.locator('mat-dialog-container', {
         hasText: 'Conflicting Data',
       });
-      try {
-        await conflictDialogA.waitFor({ state: 'visible', timeout: 2000 });
+      if (syncResultA === 'conflict') {
+        await expect(conflictDialogA).toBeVisible();
         console.log('[Test] Client A sees conflict dialog - choosing Keep remote');
         const useRemoteBtn = conflictDialogA.locator('button', {
           hasText: /Keep remote/i,
         });
+        syncPageA.prepareForNextSyncCycle('read');
         await useRemoteBtn.click();
-        const confirmDialogA = clientA.page.locator('dialog-confirm');
-        try {
-          await confirmDialogA.waitFor({ state: 'visible', timeout: 3000 });
-          await confirmDialogA
-            .locator('button[color="warn"], button:has-text("OK")')
-            .first()
-            .click();
-        } catch {
-          // OK
-        }
-      } catch {
-        console.log('[Test] Client A did not see conflict dialog');
+        await confirmSyncConflictOverwriteIfShown(clientA.page, conflictDialogA);
+        await waitForSyncComplete(clientA.page, syncPageA, 30000, {
+          allowResponseOnlyCompletion: true,
+        });
+      } else {
+        expect(syncResultA).toBe('success');
       }
-
-      await waitForSyncComplete(clientA.page, syncPageA);
 
       // Navigate to shared project and verify
       await sidenavA.locator('nav-item', { hasText: 'Shared Project' }).click();
 
       await workViewA.waitForTaskList();
 
-      // With divergent MIGRATION_GENESIS_IMPORT operations, Client A may keep its
-      // own data or receive Client B's data depending on sync logic.
-      // The key assertion is: no ID duplicates - only ONE version of shared-task-1 exists.
-      await expect(clientA.page.locator('#t-shared-task-1')).toBeVisible({
-        timeout: 10000,
-      });
-
-      // Check which version Client A has
-      const hasVersionB = await clientA.page
-        .locator('#t-shared-task-1', { hasText: 'Version B' })
-        .isVisible()
-        .catch(() => false);
-      const hasVersionA = await clientA.page
-        .locator('#t-shared-task-1', { hasText: 'Version A' })
-        .isVisible()
-        .catch(() => false);
-
-      // Only ONE version should exist (no duplicates)
-      expect(hasVersionA || hasVersionB).toBe(true);
-      expect(hasVersionA && hasVersionB).toBe(false); // Can't have both
-
-      if (hasVersionB) {
-        console.log(
-          '[Test] SUCCESS: ID collision resolved - Client A received Version B',
-        );
-      } else {
-        console.log(
-          '[Test] SUCCESS: ID collision handled - Client A kept Version A (divergent timeline)',
-        );
-      }
+      await expect(clientA.page.locator('task')).toHaveCount(2);
+      await expect(
+        clientA.page.locator('#t-shared-task-1', { hasText: 'Version B' }),
+      ).toBeVisible({ timeout: 10000 });
+      await expect(
+        clientA.page.locator('#t-shared-task-1', { hasText: 'Version A' }),
+      ).not.toBeVisible();
+      await expect(
+        clientA.page.locator('task', { hasText: 'Version B Extra Task' }),
+      ).toBeVisible();
+      console.log('[Test] SUCCESS: ID collision resolved - Client A received Version B');
     } finally {
       if (clientA) await closeLegacyClient(clientA).catch(() => {});
       if (clientB) await closeLegacyClient(clientB).catch(() => {});

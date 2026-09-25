@@ -121,6 +121,14 @@ body {
   width: 100%;
   height: 100%;
 
+  // Stays untransformed by design (#9874): this is positioned directly
+  // against `body` (its containing block, since `body` is `position:
+  // absolute` above) -- there's nothing between the two to clip it. A
+  // transform/scale added here would expand this layer's painted bounds
+  // without changing its layout size, feeding that straight into `body`'s
+  // scrollable-overflow region -- the same bug `.bg-image` had
+  // (app.component.scss). If this ever needs a transform, give it
+  // `position: fixed` like `.bg-image` too.
   &:before {
     display: none;
     transition: 1s opacity;

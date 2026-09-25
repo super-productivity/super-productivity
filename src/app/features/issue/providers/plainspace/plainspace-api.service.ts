@@ -1,11 +1,12 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { SearchResultItem } from '../../issue.model';
 import { PlainspaceCfg } from './plainspace.model';
 import { PlainspaceIssue } from './plainspace-issue.model';
 import { mapPlainspaceIssueToSearchResult } from './plainspace-issue-map.util';
+import { Log } from '../../../../core/log';
 
 /**
  * HTTP access to the real Plainspace integration API (plainspace.org /
@@ -25,11 +26,36 @@ import { mapPlainspaceIssueToSearchResult } from './plainspace-issue-map.util';
 export class PlainspaceApiService {
   private _http = inject(HttpClient);
 
+  /**
+   * Verifies a token against the host, keeping "the server rejected this token"
+   * (401/403) apart from "we never got an answer" (offline, DNS, TLS, 5xx). The
+   * connect dialog needs that distinction: reporting a bad token for a request
+   * that never arrived sends users into an endless re-copy loop (#9988).
+   */
+  verifyToken$(cfg: PlainspaceCfg): Observable<PlainspaceTokenCheck> {
+    // The body is typed `| null` on purpose: HttpClient declares it as the
+    // generic but emits null for an empty body (a 204, or a 200 with no content
+    // — a proxy or captive portal answering for the host). An empty body is no
+    // verdict on the token and must never pass for a verified account (#9988).
+    return this._http
+      .get<SPMeResponse | null>(`${this._base(cfg)}/me`, { headers: this._headers(cfg) })
+      .pipe(
+        map((me): PlainspaceTokenCheck => {
+          if (me) {
+            return { status: 'ok', me };
+          }
+          Log.err('Plainspace: token check got an empty body');
+          return { status: 'unreachable' };
+        }),
+        catchError((err: unknown) => of(toTokenCheck(err))),
+      );
+  }
+
   /** Verifies the token and returns the account's email + spaces, or null. */
   getMe$(cfg: PlainspaceCfg): Observable<SPMeResponse | null> {
-    return this._http
-      .get<SPMeResponse>(`${this._base(cfg)}/me`, { headers: this._headers(cfg) })
-      .pipe(catchError(() => of(null)));
+    return this.verifyToken$(cfg).pipe(
+      map((res) => (res.status === 'ok' ? res.me : null)),
+    );
   }
 
   /**
@@ -203,6 +229,26 @@ export class PlainspaceApiService {
   }
 }
 
+/**
+ * Outcome of a `/me` token check. A rejected token and an unanswered request
+ * are different user problems and must not collapse into one message (#9988).
+ */
+export type PlainspaceTokenCheck =
+  | { status: 'ok'; me: SPMeResponse }
+  | { status: 'invalid-token' }
+  | { status: 'unreachable' };
+
+// 401/403 is the server giving a verdict on the token; everything else (status
+// 0 = no response at all, 5xx, a non-HTTP throw) means we never got one. Only
+// the status is logged — never the token or the host (sync rule #9).
+const toTokenCheck = (err: unknown): PlainspaceTokenCheck => {
+  const status = err instanceof HttpErrorResponse ? err.status : 0;
+  Log.err('Plainspace: token check failed', { status });
+  return status === 401 || status === 403
+    ? { status: 'invalid-token' }
+    : { status: 'unreachable' };
+};
+
 /** A Plainspace space (project) the connected account can bind a provider to. */
 export interface PlainspaceSpace {
   id: string;
@@ -243,7 +289,7 @@ interface SPCreateSpaceResponse {
   project: { id: string };
 }
 
-interface SPMeResponse {
+export interface SPMeResponse {
   email: string;
   projects: {
     id: string;

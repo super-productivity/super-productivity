@@ -121,6 +121,10 @@ class MockStateSnapshotService {
     return this._state;
   }
 
+  async getStateSnapshotAsync(): Promise<unknown> {
+    return this._state;
+  }
+
   getStateSnapshotForOperationLog(): unknown {
     return this._state;
   }

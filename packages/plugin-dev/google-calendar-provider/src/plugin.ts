@@ -11,7 +11,8 @@ import type {
 declare const PluginAPI: {
   registerIssueProvider(definition: IssueProviderPluginDefinition): void;
   startOAuthFlow(config: OAuthFlowConfig): Promise<OAuthTokenResult>;
-  getOAuthToken(): Promise<string | null>;
+  // Internal host ↔ bundled-plugin contract; not supported for third-party plugins.
+  getOAuthToken(tokenKey?: string): Promise<string | null>;
   clearOAuthToken(): Promise<void>;
 };
 
@@ -39,9 +40,13 @@ const MOBILE_CLIENT_ID =
 const IOS_CLIENT_ID =
   '637968426975-ka1muro7mee1go0m7hhog49fm7svr4os.apps.googleusercontent.com';
 
+// Transient host config paired with getOAuthToken(tokenKey), never synced or public.
+const SP_OAUTH_TOKEN_KEY_CFG_KEY = '__spOAuthTokenKey';
+
 // --- Config ---
 
 interface GoogleCalendarConfig {
+  [SP_OAUTH_TOKEN_KEY_CFG_KEY]?: string;
   readCalendarIds?: string[];
   writeCalendarId?: string;
   syncRangeWeeks?: string;
@@ -252,6 +257,9 @@ const isDeclined = (event: GoogleCalendarEvent): boolean =>
 const isSpManagedEvent = (event: GoogleCalendarEvent): boolean =>
   typeof event.extendedProperties?.private?.spTaskId === 'string';
 
+/** Minimum lookback for the read window, like the iCal provider's START_OFFSET. */
+const LOOKBACK_MS = 2 * 60 * 60 * 1000;
+
 /** Fetch events from a single calendar. */
 const fetchEventsForCalendar = async (
   http: PluginHttp,
@@ -261,7 +269,19 @@ const fetchEventsForCalendar = async (
 ): Promise<PluginSearchResult[]> => {
   const syncRangeWeeks = parseInt(cfg.syncRangeWeeks || '', 10) || 2;
   const now = new Date();
-  const timeMin = now.toISOString();
+  // Google applies `timeMin` (exclusive) to an event's END time, so
+  // `timeMin = now` drops an event on the first poll after it ends (#10190).
+  // Start the window at the user's LOCAL start of day, so events that ended
+  // earlier today stay in the schedule/agenda, or LOOKBACK_MS ago if that is
+  // earlier, so a late-evening event is still shown just after midnight.
+  const localStartOfDayMs = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
+  const timeMin = new Date(
+    Math.min(localStartOfDayMs, now.getTime() - LOOKBACK_MS),
+  ).toISOString();
   const timeMax = new Date(
     now.getTime() + syncRangeWeeks * 7 * 24 * 60 * 60 * 1000,
   ).toISOString();
@@ -396,8 +416,11 @@ PluginAPI.registerIssueProvider({
     },
   ],
 
-  async getHeaders(_config: Record<string, unknown>): Promise<Record<string, string>> {
-    const token = await PluginAPI.getOAuthToken();
+  async getHeaders(config: Record<string, unknown>): Promise<Record<string, string>> {
+    const cfg = migrateConfig(config);
+    const token = cfg[SP_OAUTH_TOKEN_KEY_CFG_KEY]
+      ? await PluginAPI.getOAuthToken(cfg[SP_OAUTH_TOKEN_KEY_CFG_KEY])
+      : await PluginAPI.getOAuthToken();
     if (!token) {
       throw new Error('Not authenticated. Please connect your Google account first.');
     }

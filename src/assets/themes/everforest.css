@@ -503,8 +503,11 @@ body.isDarkTheme a[href]:hover {
 /* Smooth hover states, scoped to the row under the pointer. */
 @media (hover: hover) {
   body
-    task:not(.isSelected):not(.isCurrent):hover:not(:has(task:hover))
+    task:not(.isSelected):not(.isCurrent):not(.isMultiSelected):hover:not(
+      :has(task:hover)
+    )
     > swipe-block
+    > .inner-wrapper
     > .inner-wrapper
     > .box {
     background-color: var(--task-c-selected-bg);
@@ -553,12 +556,12 @@ pre {
 }
 
 /* Completed tasks - subtle green tint */
-body task.isDone > swipe-block > .inner-wrapper > .box {
+body task.isDone > swipe-block > .inner-wrapper > .inner-wrapper > .box {
   background-color: var(--task-c-bg-done);
 }
 
 /* Active/current task highlight */
-body task.isCurrent > swipe-block > .inner-wrapper > .box {
+body task.isCurrent > swipe-block > .inner-wrapper > .inner-wrapper > .box {
   background-color: var(--task-c-current-bg);
   border-left: 3px solid var(--everforest-state-accent);
 }

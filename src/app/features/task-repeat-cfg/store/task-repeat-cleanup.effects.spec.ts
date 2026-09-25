@@ -403,6 +403,138 @@ describe('TaskRepeatCleanupEffects', () => {
       sub.unsubscribe();
     }));
 
+    it('deletes timed overdue instances whose reminder was cleared or snoozed', fakeAsync(() => {
+      // remindAt is app-managed: firing + dismissing clears it, snoozing rewrites
+      // it to a new time. Neither is a user edit, so both must still be reaped.
+      const weekMs = 7 * DAY_MS;
+      const lastWeekMs = todayMs - weekMs;
+      const twoDaysAgoMs = yesterdayMs - DAY_MS;
+      const oneHourMs = 60 * 60 * 1000;
+      const yesterdayDue = getDateTimeFromClockString('20:00', yesterdayMs);
+      const lastWeekDue = getDateTimeFromClockString('20:00', lastWeekMs);
+      const twoDaysAgoDue = getDateTimeFromClockString('20:00', twoDaysAgoMs);
+      repeatCfgs$.next([
+        skipOverdueCfg('cfg-reminder', '', {
+          title: 'Export Bookmarks',
+          startTime: '20:00',
+          remindAt: TaskReminderOptionId.AtStart,
+        }),
+      ]);
+      const base = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        title: 'Export Bookmarks',
+        repeatCfgId: 'cfg-reminder',
+        dueDay: undefined,
+        isDone: false,
+        timeSpent: 0,
+      };
+      const dismissed: Task = {
+        ...base,
+        id: 'reminder-dismissed',
+        created: yesterdayMs,
+        dueWithTime: yesterdayDue,
+        // fired, then dismissed -> dismissReminderOnly cleared remindAt
+        remindAt: undefined,
+      };
+      const snoozed: Task = {
+        ...base,
+        id: 'reminder-snoozed',
+        created: lastWeekMs,
+        dueWithTime: lastWeekDue,
+        // snoozed 1h from the notification -> rewritten, dueWithTime untouched
+        remindAt: lastWeekDue + oneHourMs,
+      };
+      const snoozedActive: Task = {
+        ...base,
+        id: 'reminder-snoozed-active',
+        created: twoDaysAgoMs,
+        dueWithTime: twoDaysAgoDue,
+        // snoozed into the FUTURE and not fired again yet. Still reaped: making
+        // the verdict depend on Date.now() would make it depend on when the
+        // reaper runs.
+        remindAt: todayMs + oneHourMs,
+      };
+      const todayInstance: Task = {
+        ...base,
+        id: 'reminder-today',
+        created: todayMs,
+        dueDay: getDbDateStr(todayMs),
+      };
+
+      repeatableTasks$.next([
+        wrapWithSubTasks(dismissed),
+        wrapWithSubTasks(snoozed),
+        wrapWithSubTasks(snoozedActive),
+        wrapWithSubTasks(todayInstance),
+      ]);
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds().sort()).toEqual([
+        'reminder-dismissed',
+        'reminder-snoozed',
+        'reminder-snoozed-active',
+      ]);
+
+      sub.unsubscribe();
+    }));
+
+    it('keeps a day-planned overdue instance that carries a reminder', fakeAsync(() => {
+      // No in-app path sets remindAt without a dueWithTime, so a day-planned
+      // instance that has one was marked deliberately via PluginAPI.updateTask.
+      // Covers both branches that still compare it: the timed config's
+      // "scheduled action not run yet" shape, and the untimed config.
+      repeatCfgs$.next([
+        skipOverdueCfg('cfg-timed-plugin', '', {
+          title: 'Timed Plugin Reminder',
+          startTime: '20:00',
+          remindAt: TaskReminderOptionId.AtStart,
+        }),
+        skipOverdueCfg('cfg-untimed-plugin', '', { title: 'Untimed Plugin Reminder' }),
+      ]);
+      const base = {
+        ...DEFAULT_TASK,
+        projectId: 'p1',
+        isDone: false,
+        timeSpent: 0,
+      };
+      const mkPair = (cfgId: string, title: string): Task[] => [
+        {
+          ...base,
+          id: `${cfgId}-yesterday`,
+          title,
+          repeatCfgId: cfgId,
+          created: yesterdayMs,
+          dueDay: getDbDateStr(yesterdayMs),
+          remindAt: getDateTimeFromClockString('20:00', yesterdayMs),
+        },
+        {
+          ...base,
+          id: `${cfgId}-today`,
+          title,
+          repeatCfgId: cfgId,
+          created: todayMs,
+          dueDay: getDbDateStr(todayMs),
+        },
+      ];
+
+      repeatableTasks$.next(
+        [
+          ...mkPair('cfg-timed-plugin', 'Timed Plugin Reminder'),
+          ...mkPair('cfg-untimed-plugin', 'Untimed Plugin Reminder'),
+        ].map(wrapWithSubTasks),
+      );
+
+      const sub = effects.cleanupDuplicateRepeatInstances$.subscribe();
+      tick(3001);
+
+      expect(getDispatchedDeleteIds()).toEqual([]);
+
+      sub.unsubscribe();
+    }));
+
     it('keeps an overdue instance whose schedule differs from the template', fakeAsync(() => {
       const editedDueWithTime = getDateTimeFromClockString('10:00', yesterdayMs);
       repeatCfgs$.next([

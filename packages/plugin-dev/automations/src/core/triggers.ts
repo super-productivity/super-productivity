@@ -39,3 +39,11 @@ export const TriggerTimeBased: IAutomationTrigger = {
   name: 'Time Based',
   matches: (event) => event.type === 'timeBased',
 };
+
+export const TriggerShortcut: IAutomationTrigger = {
+  id: 'shortcut',
+  name: 'Keyboard Shortcut',
+  description:
+    'Fires when the keyboard shortcut assigned to this rule is pressed. Assign the key in Settings > Keyboard Shortcuts. Actions apply to the task row currently focused in the app.',
+  matches: (event) => event.type === 'shortcut',
+};

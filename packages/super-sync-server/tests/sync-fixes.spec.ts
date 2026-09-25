@@ -18,27 +18,14 @@ let serverSeqCounter: number;
 let requestCache: Map<string, any>;
 
 // Mock the database module with Prisma mocks
-vi.mock('../src/db', () => {
-  const applySelect = (op: any, select?: Record<string, boolean>) => {
-    if (!op || !select) {
-      return op;
-    }
-
-    return Object.fromEntries(
-      Object.entries(select)
-        .filter(([, shouldSelect]) => shouldSelect)
-        .map(([key]) => [key, op[key]]),
-    );
-  };
-
-  const hasUniqueConflict = (row: any) =>
-    Array.from(testOperations.values()).some(
-      (op) =>
-        op.id === row.id ||
-        (op.userId === row.userId &&
-          row.serverSeq !== undefined &&
-          op.serverSeq === row.serverSeq),
-    );
+vi.mock('../src/db', async () => {
+  const {
+    applyOperationSelect: applySelect,
+    hasOperationUniqueConflict,
+    mockOperationGroupByMaxSeq,
+    mockOperationFindFirstFreshBelowBoundary,
+  } = await import('./sync.service.test-state');
+  const hasUniqueConflict = (row: any) => hasOperationUniqueConflict(testOperations, row);
 
   return {
     prisma: {
@@ -179,7 +166,14 @@ vi.mock('../src/db', () => {
         return callback(tx);
       }),
       operation: {
-        findFirst: vi.fn(),
+        // No other findFirst shape reaches this mock, so the helper's
+        // "not my query" sentinel collapses straight to null.
+        findFirst: vi
+          .fn()
+          .mockImplementation(
+            async (args: any) =>
+              mockOperationFindFirstFreshBelowBoundary(testOperations, args) ?? null,
+          ),
         findMany: vi.fn().mockImplementation(async (args: any) => {
           const ops = Array.from(testOperations.values());
           return ops
@@ -199,6 +193,11 @@ vi.mock('../src/db', () => {
             .slice(0, args.take || 500);
         }),
         aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
+        groupBy: vi
+          .fn()
+          .mockImplementation(async (args: any) =>
+            mockOperationGroupByMaxSeq(testOperations, args),
+          ),
         findUnique: vi.fn().mockImplementation(async (args: any) => {
           if (args.where?.id) {
             return applySelect(testOperations.get(args.where.id), args.select) || null;
@@ -302,6 +301,19 @@ describe('Sync System Fixes', () => {
 
   afterEach(async () => {
     await app.close();
+  });
+
+  it('returns 400 when a restore target has no retained history after reset', async () => {
+    // DELETE retains the allocator while clearing the history and snapshot cache.
+    serverSeqCounter = 3;
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/sync/restore/3',
+      headers: { authorization: `Bearer ${authToken}` },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('Target sequence 3 is no longer available');
   });
 
   // =============================================================================

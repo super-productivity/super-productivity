@@ -288,7 +288,14 @@ export const selectStartableTasksActiveContextFirst = createSelector(
   },
 );
 
-export const selectDoneTaskIdsForActiveContext = createSelector(
+/**
+ * Ids of the NOT-done tasks in the active context — the move-up/down reducers
+ * skip over everything absent from this list. Historically misnamed
+ * `selectDoneTaskIdsForActiveContext`; the matching `doneTaskIds` op payload
+ * field keeps the old name because released clients replay it (see
+ * work-context-meta.actions.ts).
+ */
+export const selectUndoneTaskIdsForActiveContext = createSelector(
   selectActiveWorkContext,
   selectTaskEntities,
   (activeContext, entities): string[] => {
@@ -305,7 +312,8 @@ export const selectDoneTaskIdsForActiveContext = createSelector(
   },
 );
 
-export const selectDoneBacklogTaskIdsForActiveContext = createSelector(
+/** Backlog counterpart of selectUndoneTaskIdsForActiveContext (NOT-done ids). */
+export const selectUndoneBacklogTaskIdsForActiveContext = createSelector(
   selectActiveWorkContext,
   selectTaskEntities,
   (activeContext, entities): string[] | undefined => {

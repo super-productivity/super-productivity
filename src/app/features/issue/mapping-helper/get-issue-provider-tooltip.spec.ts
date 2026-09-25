@@ -1,4 +1,9 @@
-import { sanitizeIcalUrlForDisplay } from './get-issue-provider-tooltip';
+import { IssueProvider } from '../issue.model';
+import {
+  getIssueProviderInitials,
+  getIssueProviderTooltip,
+  sanitizeIcalUrlForDisplay,
+} from './get-issue-provider-tooltip';
 
 describe('sanitizeIcalUrlForDisplay', () => {
   it('returns hostname for https:// URLs', () => {
@@ -83,5 +88,37 @@ describe('sanitizeIcalUrlForDisplay', () => {
 
   it('returns iCal placeholder for undefined input', () => {
     expect(sanitizeIcalUrlForDisplay(undefined)).toBe('iCal');
+  });
+});
+
+describe('CalDAV display name (#9144)', () => {
+  const caldavProvider = (overrides: Record<string, unknown> = {}): IssueProvider =>
+    ({
+      id: 'ip-1',
+      issueProviderKey: 'CALDAV',
+      caldavUrl: 'https://dav.example.com/cal/personal',
+      ...overrides,
+    }) as unknown as IssueProvider;
+
+  it('prefers the user-entered resourceName over the raw URL', () => {
+    expect(getIssueProviderTooltip(caldavProvider({ resourceName: 'Family' }))).toBe(
+      'Family',
+    );
+  });
+
+  it('falls back to the URL when no resourceName is set', () => {
+    expect(getIssueProviderTooltip(caldavProvider())).toBe(
+      'https://dav.example.com/cal/personal',
+    );
+  });
+
+  it('derives initials from the resourceName when present', () => {
+    expect(getIssueProviderInitials(caldavProvider({ resourceName: 'Family' }))).toBe(
+      'FA',
+    );
+  });
+
+  it('derives initials from the host when no resourceName is set', () => {
+    expect(getIssueProviderInitials(caldavProvider())).toBe('DA');
   });
 });

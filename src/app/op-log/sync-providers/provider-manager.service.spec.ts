@@ -295,4 +295,28 @@ describe('SyncProviderManager target-change notification', () => {
       expect(isStrictlyIncreasing).toBeTrue();
     });
   });
+
+  describe('invalidateCredentialCache()', () => {
+    it('delegates to the provider credential-cache hook', async () => {
+      const invalidate = jasmine.createSpy('invalidateCredentialCache');
+      spyOn(service, 'getProviderById').and.resolveTo({
+        id: SyncProviderId.SuperSync,
+        invalidateCredentialCache: invalidate,
+      } as unknown as SyncProviderBase<SyncProviderId>);
+
+      await service.invalidateCredentialCache(SyncProviderId.SuperSync);
+
+      expect(invalidate).toHaveBeenCalled();
+    });
+
+    it('tolerates providers without the hook', async () => {
+      spyOn(service, 'getProviderById').and.resolveTo({
+        id: SyncProviderId.WebDAV,
+      } as unknown as SyncProviderBase<SyncProviderId>);
+
+      await expectAsync(
+        service.invalidateCredentialCache(SyncProviderId.WebDAV),
+      ).toBeResolved();
+    });
+  });
 });

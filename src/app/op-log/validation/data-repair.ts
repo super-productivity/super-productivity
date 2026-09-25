@@ -497,7 +497,11 @@ const _moveArchivedSubTasksToUnarchivedParents = (
         t.parentId && !youngIdSet.has(t.parentId) && !oldIdSet.has(t.parentId),
     );
 
-  OpLog.log('orphanArchivedYoungSubTasks', orphanArchivedYoungSubTasks);
+  // Ids only: these are TaskCopy objects and the log is exportable (rule #9).
+  OpLog.log('orphanArchivedYoungSubTasks', {
+    count: orphanArchivedYoungSubTasks.length,
+    ids: orphanArchivedYoungSubTasks.map((t: TaskCopy) => t.id),
+  });
   const promotedYoungSubTaskIds: string[] = [];
   // Reconcile orphans in O(n) too (#8540): the per-orphan taskState.ids.includes()
   // and the archive .ids.filter() rebuild were each O(n), so a corruption that
@@ -564,7 +568,11 @@ const _moveArchivedSubTasksToUnarchivedParents = (
         t.parentId && !oldIdSet2.has(t.parentId) && !youngIdSet2.has(t.parentId),
     );
 
-  OpLog.log('orphanArchivedOldSubTasks', orphanArchivedOldSubTasks);
+  // Ids only: these are TaskCopy objects and the log is exportable (rule #9).
+  OpLog.log('orphanArchivedOldSubTasks', {
+    count: orphanArchivedOldSubTasks.length,
+    ids: orphanArchivedOldSubTasks.map((t: TaskCopy) => t.id),
+  });
   const promotedOldSubTaskIds: string[] = [];
   // Same O(n) reconciliation as the young block (#8540). `taskMainIdSet2` snapshots
   // taskState.ids *after* the young block's pushes; removals from archiveOld.ids
@@ -631,7 +639,11 @@ const _moveUnArchivedSubTasksToArchivedParents = (
     .map((id: string) => taskState.entities[id] as TaskCopy)
     .filter((t: TaskCopy) => t.parentId && !taskIdSet.has(t.parentId));
 
-  OpLog.log('orphanUnArchivedSubTasks', orphanUnArchivedSubTasks);
+  // Ids only: these are TaskCopy objects and the log is exportable (rule #9).
+  OpLog.log('orphanUnArchivedSubTasks', {
+    count: orphanUnArchivedSubTasks.length,
+    ids: orphanUnArchivedSubTasks.map((t: TaskCopy) => t.id),
+  });
   const promotedUnArchivedSubTaskIds: string[] = [];
   // Reconcile orphans in O(n) (#8540): the per-orphan archive .ids.includes() and
   // the taskState.ids.filter() rebuild were each O(n), leaving this O(orphans*n)

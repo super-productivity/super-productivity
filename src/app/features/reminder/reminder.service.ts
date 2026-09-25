@@ -110,7 +110,7 @@ export class ReminderService {
       .subscribe((reminders) => {
         this._updateRemindersInWorker(reminders);
         if (!environment.production) {
-          Log.log('Updated reminders in worker', reminders);
+          Log.log('Updated reminders in worker', { reminderCount: reminders.length });
         }
       });
   }

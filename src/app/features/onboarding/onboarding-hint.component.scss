@@ -86,8 +86,8 @@
     padding: 1px var(--s-half);
     font-size: 11px;
     font-family: inherit;
-    background: rgba(var(--text-color-rgb, 0, 0, 0), 0.08);
-    border: 1px solid rgba(var(--text-color-rgb, 0, 0, 0), var(--border-alpha));
+    background: rgba(var(--ink-on-channel), 0.08);
+    border: 1px solid rgba(var(--ink-on-channel), var(--border-alpha));
     border-radius: 3px;
   }
 }

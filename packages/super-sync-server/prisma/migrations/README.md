@@ -132,6 +132,41 @@ copy-pasteable manual steps and is **never** auto-marked-applied.
 
 5. **No `BEGIN` / `COMMIT` / `DROP TABLE`.**
 
+Before running the out-of-band `DROP`, recovery first terminates any **orphaned**
+`CONCURRENTLY` build left running by an interrupted prior deploy — PostgreSQL
+does not notice a client disconnect mid-statement, so the abandoned build keeps
+its table lock and the `DROP` would wedge on `statement_timeout` on every retry.
+The termination is scoped to this pipeline's own migrator identity in the
+current database and role, an `active` session, and a `CONCURRENTLY` query; the
+full predicate, its rationale, and its limits live on
+`terminate_orphaned_concurrently_backends` in `scripts/migrate-deploy.sh` — the
+canonical write-up, update it there first. It lets raising `MIGRATION_TIMEOUT`
+and re-running a deploy that timed out mid-build self-heal instead of needing a
+manual `pg_terminate_backend`. Migrator connections also set
+`client_connection_check_interval` (PostgreSQL 14+/Linux required, see the
+server README) so a freshly-abandoned build cancels itself within seconds; the
+termination covers pre-existing orphans and half-open connections the GUC
+cannot detect.
+
+Racing recoveries (e.g. multiple Helm init-containers rolling out together)
+are serialized under a **dedicated recovery advisory lock**, key `72707370` —
+distinct from Prisma's own migrate lock `72707369` (#9781). A recovery that
+finds the lock held fails loudly with diagnosis guidance instead of mistaking
+the holder's **live build** for an orphan; re-running the deploy after the
+holder finishes succeeds (orchestrator restarts do this naturally). The wait
+is `MIGRATE_RECOVERY_LOCK_TIMEOUT` seconds (default 30). Residual unlocked
+windows — a pre-lock migrator version racing a current one, an operator
+running the printed manual recovery statements, or a run that degraded to
+unlocked after a lock-helper failure (it warns loudly) — can still abort a
+live peer build; the fleet then converges via the idempotent drop-then-create
+at the cost of a wasted rebuild. That trade is why the `P1002` advisory-lock
+path still refuses to auto-kill.
+
+Enforced by `tests/migrate-deploy-script.spec.ts` (the termination SQL and its
+ordering) and
+`tests/integration/migrate-deploy-orphan-cleanup.integration.spec.ts` (real
+`pg_terminate_backend` targeting).
+
 ## Intentional exception: bare `CREATE INDEX CONCURRENTLY`
 
 `20260511000000_add_entity_sequence_index` is a deliberately bare

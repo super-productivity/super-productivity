@@ -102,7 +102,7 @@ export const MAX_COMPRESSED_SIZE_SNAPSHOT = 30 * 1024 * 1024; // 30MB for /snaps
 export const MAX_DECOMPRESSED_SIZE_OPS = 30 * 1024 * 1024; // 30MB for /ops
 export const MAX_DECOMPRESSED_SIZE_SNAPSHOT = 60 * 1024 * 1024; // 60MB for /snapshot
 // Route-level guard that mirrors the shared contract but runs before Zod's
-// per-op validation and before SyncService can build large prefetch queries.
+// per-op validation and before SyncService can build large conflict-lookup queries.
 export const MAX_OPS_PER_BATCH = SUPER_SYNC_MAX_OPS_PER_UPLOAD;
 
 // Fastify's route bodyLimit runs before our parser can decode Android's

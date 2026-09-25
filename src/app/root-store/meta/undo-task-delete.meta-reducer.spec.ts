@@ -13,6 +13,11 @@ import { Project } from '../../features/project/project.model';
 import { Action, ActionReducer } from '@ngrx/store';
 import { DEFAULT_PROJECT } from '../../features/project/project.const';
 import { DEFAULT_TAG, TODAY_TAG } from '../../features/tag/tag.const';
+import { bulkOperationsMetaReducer } from '../../op-log/apply/bulk-hydration.meta-reducer';
+import { bulkApplyOperations } from '../../op-log/apply/bulk-hydration.action';
+import { ActionType, Operation, OpType } from '../../op-log/core/operation.types';
+import { taskSharedCrudMetaReducer } from './task-shared-meta-reducers/task-shared-crud.reducer';
+import { createStateWithExistingTasks } from './task-shared-meta-reducers/test-utils';
 
 describe('undoTaskDeleteMetaReducer', () => {
   let mockReducer: jasmine.Spy;
@@ -332,6 +337,76 @@ describe('undoTaskDeleteMetaReducer', () => {
   // =============================================================================
   // OTHER ACTIONS
   // =============================================================================
+
+  describe('a delete whose reducer throws (#10195)', () => {
+    it('should keep the previous payload so an open undo snack cannot restore the wrong task', () => {
+      const task1 = createMockTaskWithSubTasks({ id: 'task1' });
+      const task2 = createMockTaskWithSubTasks({ id: 'task2' });
+
+      // Left unread, as it is while task1's undo snack is still on screen.
+      metaReducer(baseState, TaskSharedActions.deleteTask({ task: task1 }));
+
+      // task2's delete fails somewhere in the inner chain. Since #10195 the
+      // outer guard boxes that throw and the app keeps running, so the snack
+      // still open for task1 must keep undoing task1.
+      mockReducer.and.throwError('reducer boom');
+      expect(() =>
+        metaReducer(baseState, TaskSharedActions.deleteTask({ task: task2 })),
+      ).toThrowError('reducer boom');
+
+      expect(getLastDeletePayload()!.task.id).toBe('task1');
+    });
+  });
+
+  describe('a remote delete applied while an undo snack is open', () => {
+    // Real chain, no mocked reducer: the remote op goes through
+    // convertOpToAction inside bulkOperationsMetaReducer, which replays it
+    // as a deleteTask action with meta.isRemote.
+    const passThrough: ActionReducer<RootState, Action> = (s) => s as RootState;
+    const chain = bulkOperationsMetaReducer(
+      undoTaskDeleteMetaReducer(taskSharedCrudMetaReducer(passThrough)),
+    );
+
+    const remoteDeleteOp = (task: TaskWithSubTasks): Operation => {
+      const { type, ...actionPayload } = TaskSharedActions.deleteTask({ task });
+      return {
+        id: 'remote-delete-op',
+        actionType: type as ActionType,
+        opType: OpType.Delete,
+        entityType: 'TASK',
+        entityId: task.id,
+        payload: { actionPayload, entityChanges: [] },
+        clientId: 'otherClient',
+        vectorClock: { otherClient: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+    };
+
+    it('should keep the local delete payload so undo restores the locally deleted task', () => {
+      const state = createStateWithExistingTasks(['localTask', 'remoteTask']);
+      const localTask = {
+        ...state[TASK_FEATURE_NAME].entities['localTask']!,
+        subTasks: [],
+      };
+      const remoteTask = {
+        ...state[TASK_FEATURE_NAME].entities['remoteTask']!,
+        subTasks: [],
+      };
+
+      // Local delete: its undo snack is now on screen, payload left unread.
+      const afterLocal = chain(state, TaskSharedActions.deleteTask({ task: localTask }));
+
+      // Another client's delete of a different task arrives within the window.
+      const afterRemote = chain(
+        afterLocal,
+        bulkApplyOperations({ operations: [remoteDeleteOp(remoteTask)] }),
+      );
+      expect(afterRemote[TASK_FEATURE_NAME].entities['remoteTask']).toBeUndefined();
+
+      expect(getLastDeletePayload()!.task.id).toBe('localTask');
+    });
+  });
 
   describe('other actions', () => {
     it('should pass through unrelated actions without capturing', () => {

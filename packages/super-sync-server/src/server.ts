@@ -40,6 +40,26 @@ export const escapeHtml = (unsafe: string): string => {
     .replace(/'/g, '&#039;');
 };
 
+/**
+ * Which peers may set X-Forwarded-* so req.ip resolves to the real client IP
+ * instead of the proxy's. Two proxy-addr ranges, one per place the reverse
+ * proxy can sit: 'loopback' (127.0.0.1/8, ::1/128) for host networking or a
+ * same-pod sidecar, and 'uniquelocal' (10/8, 172.16/12, 192.168/16, fc00::/7)
+ * for the docker bridge or an ingress controller's pod network. Headers from
+ * any other peer are ignored, so a client that reaches the origin directly
+ * cannot spoof its IP.
+ *
+ * Must stay a value that validates the connecting address: fastify 5.12.1
+ * disabled the hop-count form (`trustProxy: 1`) because it ignores the peer
+ * address entirely, leaving the headers spoofable (GHSA-3m5p-2c4r-xxw2).
+ *
+ * req.ip is the @fastify/rate-limit key, so too narrow a value silently
+ * collapses every client into one bucket instead of failing loudly. Neither
+ * range covers 100.64.0.0/10 (CGNAT/Tailscale) or 169.254.0.0/16 — a
+ * deployment needing those wants this configurable, not widened for everyone.
+ */
+export const SERVER_TRUST_PROXY = ['loopback', 'uniquelocal'];
+
 export const SERVER_HELMET_CONFIG = {
   contentSecurityPolicy: {
     directives: {
@@ -54,6 +74,30 @@ export const SERVER_HELMET_CONFIG = {
       baseUri: ["'self'"],
     },
   },
+};
+
+/**
+ * Helmet config for the deployment's public URL.
+ *
+ * Helmet's default CSP adds `upgrade-insecure-requests`, which makes the
+ * browser fetch every same-origin asset over https. On a plain-HTTP
+ * deployment (e.g. a LAN IP) that breaks every page, so the directive is
+ * dropped when PUBLIC_URL is http:// (#10023). This never weakens a
+ * production server: config.ts refuses to boot with a non-https PUBLIC_URL
+ * when NODE_ENV=production.
+ */
+export const getServerHelmetConfig = (publicUrl: string) => {
+  if (!/^http:\/\//i.test(publicUrl)) {
+    return SERVER_HELMET_CONFIG;
+  }
+  const { contentSecurityPolicy } = SERVER_HELMET_CONFIG;
+  return {
+    ...SERVER_HELMET_CONFIG,
+    contentSecurityPolicy: {
+      ...contentSecurityPolicy,
+      directives: { ...contentSecurityPolicy.directives, upgradeInsecureRequests: null },
+    },
+  };
 };
 
 /**
@@ -325,7 +369,7 @@ export const createServer = (
   stop: () => Promise<void>;
 } => {
   const fullConfig = loadConfigFromEnv(config);
-  initSyncService({ batchUpload: fullConfig.batchUpload });
+  initSyncService();
 
   // Ensure data directory exists
   if (!fs.existsSync(fullConfig.dataDir)) {
@@ -356,10 +400,7 @@ export const createServer = (
         // Add explicit timeouts for long-running operations
         connectionTimeout: 90000, // 90s - match client timeout
         requestTimeout: 80000, // 80s - must exceed DB timeout (60s) but be less than Caddy (85s)
-        // Trust exactly one reverse proxy hop (X-Forwarded-For) so req.ip reflects
-        // the real client IP instead of the proxy's IP. Using 1 instead of true
-        // prevents attackers from spoofing IPs when no proxy is present.
-        trustProxy: 1,
+        trustProxy: SERVER_TRUST_PROXY,
       });
 
       // Sanitize 5xx responses so internal details (e.g. raw Prisma errors
@@ -388,7 +429,7 @@ export const createServer = (
       });
 
       // Security Headers
-      await fastifyServer.register(helmet, SERVER_HELMET_CONFIG);
+      await fastifyServer.register(helmet, getServerHelmetConfig(fullConfig.publicUrl));
 
       // Rate Limiting (prevent brute force)
       if (!fullConfig.testMode?.enabled) {
@@ -428,26 +469,14 @@ export const createServer = (
       });
 
       // WebSocket support for real-time sync notifications
-      // maxPayload: only app-level pong messages expected from clients (~20 bytes)
+      // maxPayload: clients send app-level pongs (~20 bytes) and presence
+      // messages (encrypted envelope + JSON wrapper, typically <1 KB). Must
+      // stay >= MAX_PRESENCE_PAYLOAD_BYTES in websocket-connection.service.ts —
+      // an undersized frame limit errors the WHOLE socket (sync included)
+      // instead of just dropping the presence message.
       await fastifyServer.register(websocket, {
-        options: { maxPayload: 1024 },
+        options: { maxPayload: 8192 },
       });
-
-      // Backfill self-check: paired with the env-flag enforcement in
-      // loadConfigFromEnv. The env flag (SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE)
-      // is operator-set; if it is flipped to true before the migrate-payload-bytes
-      // script finishes, batch-upload deltas are still correct but the SUM-based
-      // reconcile in calculateStorageUsage would mix exact bytes with the
-      // CASE-WHEN fallback for legacy rows. One indexed probe at startup closes
-      // the trust hole: refuse to boot if any row still has payload_bytes = 0.
-      if (fullConfig.batchUpload) {
-        try {
-          await getSyncService().assertPayloadBytesBackfillComplete();
-        } catch (err) {
-          Logger.error('Startup self-check failed', err);
-          throw err;
-        }
-      }
 
       // Health Check - verifies database connectivity
       // Exempt from rate limiting (Kubernetes probes hit this every 5-15s)
@@ -466,6 +495,17 @@ export const createServer = (
           });
         }
       });
+
+      // Liveness - process health only, deliberately free of dependency checks.
+      // Restarting the process cannot fix a database that is down, and the restart
+      // lands a cold start exactly when the database comes back; on this chart it
+      // also drops every client's live-sync websocket, since replicaCount > 1 is
+      // rejected and there is no failover. Answering here still proves the event
+      // loop is responsive. Exempt from rate limiting like /health, as probes are
+      // frequent.
+      fastifyServer.get('/live', { config: { rateLimit: false } }, async () => ({
+        status: 'ok',
+      }));
 
       // API Routes
       await fastifyServer.register(apiRoutes, {
@@ -491,8 +531,11 @@ export const createServer = (
       // Start cleanup jobs
       startCleanupJobs();
 
-      // Start WebSocket heartbeat
-      getWsConnectionService().startHeartbeat();
+      // Start WebSocket heartbeat. It also refreshes the device row of every live
+      // socket, so a long-lived read-only connection is not pruned as stale.
+      getWsConnectionService().startHeartbeat((userId, clientId) =>
+        getSyncService().touchDevice(userId, clientId),
+      );
 
       try {
         const address = await fastifyServer.listen(createListenOptions(fullConfig));

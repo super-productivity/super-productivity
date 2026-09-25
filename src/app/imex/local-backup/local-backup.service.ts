@@ -36,6 +36,11 @@ const DEFAULT_BACKUP_INTERVAL = 5 * 60 * 1000;
 // A2 (#7925): high enough that a flurry of UI actions settles into one backup;
 // low enough that a real change is captured before the user backgrounds the app.
 const DATA_CHANGE_BACKUP_DEBOUNCE = 30 * 1000;
+export interface MobileBackupSlot {
+  slot: 'latest' | 'previous';
+  data: string;
+}
+
 const ANDROID_DB_KEY = 'backup';
 // Previous-generation slot for the two-generation ring (#7901).
 const ANDROID_DB_KEY_PREV = 'backup_prev';
@@ -172,6 +177,41 @@ export class LocalBackupService {
     return selectBestBackupStr(primary, prev) ?? '';
   }
 
+  /**
+   * Both mobile ring slots that hold data, newest first (Settings → backups
+   * list). Blobs are returned as-is; the caller decides how to present them.
+   */
+  async listMobileBackupSlots(): Promise<MobileBackupSlot[]> {
+    if (!this._isAndroidWebView && !this._platformService.isIOS()) {
+      return [];
+    }
+    const [latest, previous] = await Promise.all(
+      this._isAndroidWebView
+        ? [
+            this._loadAndroidDbValueSafe(ANDROID_DB_KEY),
+            this._loadAndroidDbValueSafe(ANDROID_DB_KEY_PREV),
+          ]
+        : [
+            this._readIOSFileOrNull(IOS_BACKUP_FILENAME),
+            this._readIOSFileOrNull(IOS_BACKUP_PREV_FILENAME),
+          ],
+    );
+    // Same gate as the Settings restore: a corrupt slot is never offered.
+    const slots: MobileBackupSlot[] = [];
+    if (latest && isUsableBackupStr(latest)) {
+      slots.push({ slot: 'latest', data: latest });
+    }
+    if (previous && isUsableBackupStr(previous)) {
+      slots.push({ slot: 'previous', data: previous });
+    }
+    return slots;
+  }
+
+  /** Imports a raw backup blob (file or mobile slot); false + snack on failure. */
+  restoreBackupStr(backupData: string): Promise<boolean> {
+    return this._importBackup(backupData);
+  }
+
   /** Newest usable backup blob for the current mobile platform ('' if none). */
   private _loadBestMobileBackupStr(): Promise<string> {
     return this._isAndroidWebView ? this.loadBackupAndroid() : this.loadBackupIOS();
@@ -202,21 +242,7 @@ export class LocalBackupService {
 
     // ELECTRON — has its own rotated meta (folder + date) in the prompt.
     if (IS_ELECTRON) {
-      const backupMeta = await this.checkBackupAvailable();
-      if (typeof backupMeta !== 'boolean') {
-        if (
-          confirmDialog(
-            this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP, {
-              dir: backupMeta.folder,
-              from: new Date(backupMeta.created).toLocaleString(),
-            }),
-          )
-        ) {
-          const backupData = await this.loadBackupElectron(backupMeta.path);
-          Log.log('backupData loaded from Electron backup');
-          await this._importBackup(backupData);
-        }
-      }
+      await this._askForElectronBackupRestore();
       return;
     }
 
@@ -306,6 +332,60 @@ export class LocalBackupService {
       return this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP_ANDROID);
     }
     return this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP_MOBILE, {
+      tasks: summary.taskCount,
+      projects: summary.projectCount,
+    });
+  }
+
+  /**
+   * Electron branch of the startup restore: offer the newest rotated backup.
+   * Split out from askForFileStoreBackupIfAvailable so it is reachable in tests
+   * without faking the module-level IS_ELECTRON.
+   */
+  private async _askForElectronBackupRestore(): Promise<void> {
+    const backupMeta = await this.checkBackupAvailable();
+    if (typeof backupMeta === 'boolean') {
+      return;
+    }
+    // Read before prompting so the prompt can name what would be restored
+    // (#9945). Without counts this is a blind choice, and it is shown exactly
+    // when the store is blank and the user has nothing to compare against —
+    // the rotation's newest slot is not by itself evidence of a good backup.
+    let backupData: string;
+    try {
+      backupData = await this.loadBackupElectron(backupMeta.path);
+    } catch (e) {
+      // An unreadable newest backup is nothing to offer; don't prompt for it.
+      Log.err('LocalBackupService: could not read newest backup', e);
+      return;
+    }
+    if (confirmDialog(this._restoreElectronPromptMsg(backupMeta, backupData))) {
+      Log.log('backupData loaded from Electron backup');
+      await this._importBackup(backupData);
+    }
+  }
+
+  /**
+   * Builds the Electron restore prompt. Mirrors the mobile prompt: when the
+   * backup parses, name the task and project counts so the user can judge what
+   * they would restore; otherwise fall back to the count-less prompt (#9945).
+   */
+  private _restoreElectronPromptMsg(
+    backupMeta: LocalBackupMeta,
+    backupData: string,
+  ): string {
+    const dir = backupMeta.folder;
+    const createdStr = new Date(backupMeta.created).toLocaleString();
+    const summary = summarizeBackupStr(backupData);
+    if (!summary) {
+      return this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP, {
+        dir,
+        from: createdStr,
+      });
+    }
+    return this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP_WITH_COUNTS, {
+      dir,
+      from: createdStr,
       tasks: summary.taskCount,
       projects: summary.projectCount,
     });
@@ -558,7 +638,7 @@ export class LocalBackupService {
       // restore, mobile auto-restore, Android Settings restore all funnel
       // here), so every draft's baseContent refers to content that no longer
       // exists.
-      this._localDraftService.deleteDraftsForActiveProfile();
+      this._localDraftService.deleteAllDrafts();
       return true;
     } catch (e) {
       this._snackService.open({

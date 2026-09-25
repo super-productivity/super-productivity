@@ -1,7 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import {
   FocusModeStrategy,
-  FocusScreen,
   FocusModeMode,
   FOCUS_MODE_DEFAULTS,
 } from './focus-mode.model';
@@ -31,18 +30,6 @@ export class PomodoroStrategy implements FocusModeStrategy {
       : (config?.breakDuration ?? FOCUS_MODE_DEFAULTS.SHORT_BREAK_DURATION);
 
     return { duration, isLong };
-  }
-
-  getNextScreenAfterTaskSelection(skipPreparation: boolean): {
-    screen: FocusScreen;
-    duration?: number;
-  } {
-    const duration = this.initialSessionDuration; // Reuse the getter
-
-    return {
-      screen: skipPreparation ? FocusScreen.Main : FocusScreen.Preparation,
-      duration,
-    };
   }
 
   readonly shouldStartBreakAfterSession = true; // Always have breaks in Pomodoro
@@ -105,16 +92,6 @@ export class FlowtimeStrategy implements FocusModeStrategy {
 
     return { duration: breakDuration, isLong: false };
   }
-
-  getNextScreenAfterTaskSelection(skipPreparation: boolean): {
-    screen: FocusScreen;
-    duration?: number;
-  } {
-    return {
-      screen: skipPreparation ? FocusScreen.Main : FocusScreen.Preparation,
-      duration: 0, // Flowtime doesn't have a fixed duration
-    };
-  }
 }
 
 @Injectable({ providedIn: 'root' })
@@ -131,16 +108,6 @@ export class CountdownStrategy implements FocusModeStrategy {
 
   getBreakDuration(): null {
     return null; // No automatic breaks in Countdown mode
-  }
-
-  getNextScreenAfterTaskSelection(skipPreparation: boolean): {
-    screen: FocusScreen;
-    duration?: number;
-  } {
-    // Countdown mode always uses duration selection
-    return {
-      screen: FocusScreen.DurationSelection,
-    };
   }
 }
 

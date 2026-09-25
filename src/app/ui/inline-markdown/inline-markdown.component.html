@@ -4,7 +4,32 @@
   class="markdown-wrapper"
   spResolveClipboardImages
 >
-  @if (isShowEdit() || !isMarkdownFormattingEnabled()) {
+  @if (isLiveMarkdownEditor()) {
+    <!--
+      Always mounted: the live editor is both the read and the edit view, so
+      there is no preview to toggle against. Lazy chunk on purpose — CodeMirror
+      is ~89kB transfer, kept out of the initial bundle and off the critical
+      path for anyone who never opens a note (#9910).
+    -->
+    @defer (on immediate) {
+      <!-- A different task needs a fresh undo history, even if its notes match. -->
+      @for (id of [taskId()]; track id) {
+        <live-markdown-editor
+          #liveEditorEl
+          [model]="modelCopy() ?? ''"
+          [placeholderTxt]="placeholderTxt() ?? ''"
+          [autoFocus]="isLock() || isPendingLiveFocus()"
+          [resolveImageSrc]="resolveImageSrc"
+          [extraKeymap]="liveEditorKeymap"
+          (changed)="onLiveEditorChanged($event)"
+          (docChanged)="onLiveEditorDocChanged($event)"
+          (focused)="onLiveEditorFocused()"
+          (blurred)="onLiveEditorBlurred()"
+          (pasted)="pasteHandler($event)"
+        ></live-markdown-editor>
+      }
+    }
+  } @else if (isShowEdit() || !isMarkdownFormattingEnabled()) {
     <textarea
       #textareaEl
       (blur)="untoggleShowEdit(); setBlur($event)"
@@ -20,19 +45,6 @@
       rows="1"
     ></textarea>
   }
-
-  <!--  (focus)="clickOrFocusPreview($event, true)"-->
-  @if (isShowPreview()) {
-    <markdown
-      #previewEl
-      (mousedown)="previewMousedown($event)"
-      (click)="clickPreview($event)"
-      [data]="resolvedMarkdownData"
-      [class.preview-while-editing]="isShowEdit()"
-      class="mat-body-2 markdown-parsed markdown"
-      tabindex="0"
-    ></markdown>
-  }
 </div>
 
 @if (isShowControls()) {
@@ -42,7 +54,7 @@
     @if (isShowChecklistToggle() && isMarkdownFormattingEnabled()) {
       <!--  -->
       <button
-        [matTooltip]="T.F.TASK.ADDITIONAL_INFO.ADD_CHECKLIST_ITEM | translate"
+        [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.TASK_LIST | translate"
         (mousedown)="$event.preventDefault()"
         (click)="toggleChecklistMode($event)"
         mat-icon-button
@@ -84,7 +96,7 @@
       </mat-menu>
     }
     <button
-      [matTooltip]="'Open in fullscreen'"
+      [matTooltip]="T.F.TASK.ADDITIONAL_INFO.OPEN_IN_FULLSCREEN | translate"
       (mousedown)="$event.preventDefault()"
       (click)="openFullScreen()"
       mat-icon-button

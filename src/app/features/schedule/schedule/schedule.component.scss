@@ -17,6 +17,19 @@
   overflow-x: hidden;
   box-sizing: border-box;
 
+  // Framing for the initial scroll to the current time (or work start):
+  // keep the target clear of the sticky week header and the sticky time
+  // column, and leave a slice of the preceding schedule visible above it so
+  // it reads as "now, in context" rather than the day being cut off.
+  scroll-padding-top: calc(#{$schedule-week-header-height} + #{$schedule-scroll-lead});
+  scroll-padding-left: calc(#{$schedule-time-column-width} + 12px);
+
+  @include mq(xs, max) {
+    scroll-padding-top: calc(
+      #{$schedule-week-header-height-mobile} + #{$schedule-scroll-lead}
+    );
+  }
+
   // Enable horizontal scroll when viewport is too small for 7 days
   &[data-horizontal-scroll] {
     overflow-x: scroll; // Show horizontal scrollbar when needed

@@ -266,6 +266,43 @@ describe('SyncConfigService', () => {
       );
     });
 
+    it('should clear the SuperSync presence device name on "" but keep it when the form omits it', async () => {
+      const mockProvider = {
+        id: SyncProviderId.SuperSync,
+        privateCfg: {
+          load: jasmine
+            .createSpy('load')
+            .and.returnValue(
+              Promise.resolve({ accessToken: 'saved-token', deviceName: 'Work laptop' }),
+            ),
+        },
+      };
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
+      const savedDeviceName = async (deviceName: string | null): Promise<unknown> => {
+        await service.updateSettingsFromForm({
+          isEnabled: true,
+          syncProvider: SyncProviderId.SuperSync,
+          syncInterval: 300000,
+          superSync: {
+            accessToken: 'saved-token',
+            deviceName,
+          } as SyncConfig['superSync'],
+        });
+        return (
+          providerManager.setProviderConfig.calls.mostRecent().args[1] as {
+            deviceName?: string;
+          }
+        ).deviceName;
+      };
+
+      expect(await savedDeviceName('')).toBe('');
+      // A hidden field (resetOnHide) yields null/undefined, never '' — only
+      // an explicit '' from the user may clear the saved name.
+      expect(await savedDeviceName(null)).toBe('Work laptop');
+    });
+
     it('should preserve saved Nextcloud login name when form model has null', async () => {
       const mockProvider = {
         id: SyncProviderId.Nextcloud,
@@ -849,6 +886,26 @@ describe('SyncConfigService', () => {
       expect(loggedSettings.nextcloud?.loginName).toBe('[REDACTED]');
       expect(loggedSettings.nextcloud?.userName).toBe('[REDACTED]');
       expect(loggedSettings.nextcloud?.password).toBe('[REDACTED]');
+    });
+
+    it('should redact the SuperSync presence device name when logging form settings', async () => {
+      const logSpy = spyOn(SyncLog, 'log');
+      mockSyncConfig$.next({
+        ...DEFAULT_GLOBAL_CONFIG.sync,
+        isEnabled: true,
+        syncProvider: SyncProviderId.SuperSync,
+      });
+      mockCurrentProviderPrivateCfg$.next({
+        providerId: SyncProviderId.SuperSync,
+        privateCfg: { accessToken: 'saved-token', deviceName: 'Alices MacBook' },
+      });
+
+      await service.syncSettingsForm$.pipe(first()).toPromise();
+
+      const logged = logSpy.calls.mostRecent().args[1] as {
+        superSync: Record<string, unknown>;
+      };
+      expect(logged.superSync.deviceName).toBe('[REDACTED]');
     });
   });
 

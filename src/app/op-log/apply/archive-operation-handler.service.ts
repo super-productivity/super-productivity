@@ -215,7 +215,7 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    * @remoteBehavior Executes - Writes tasks to archiveYoung
    */
   private async _handleMoveToArchive(action: PersistentAction): Promise<void> {
-    if (!action.meta.isRemote) {
+    if (!action.meta?.isRemote) {
       return; // Local: already written by ArchiveService before dispatch
     }
     const tasks = (action as ReturnType<typeof TaskSharedActions.moveToArchive>).tasks;
@@ -245,7 +245,7 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    * @remoteBehavior Executes - Updates task in archive if it exists there
    */
   private async _handleUpdateTask(action: PersistentAction): Promise<void> {
-    if (!action.meta.isRemote) {
+    if (!action.meta?.isRemote) {
       return; // Local: already written by TaskArchiveService before dispatch
     }
 
@@ -276,7 +276,7 @@ export class ArchiveOperationHandler implements ArchiveSideEffectPort<Persistent
    * @remoteBehavior Executes - Updates tasks in archive if they exist there
    */
   private async _handleUpdateTasks(action: PersistentAction): Promise<void> {
-    if (!action.meta.isRemote) {
+    if (!action.meta?.isRemote) {
       return; // Local: already written by TaskArchiveService before dispatch
     }
 

@@ -8,21 +8,11 @@
 
 body,
 body.isDarkTheme {
-  --zen-selected-border: color-mix(in srgb, var(--text-color) 65%, transparent);
-
-  /* Task backgrounds: transparent (current task keeps the default accent bg) */
-  --task-c-bg: transparent;
-  --task-c-bg-done: transparent;
-  --sub-task-c-bg: transparent;
-  --sub-task-c-bg-done: transparent;
-  --sub-task-c-bg-in-selected: transparent;
-
-  /* Remove task shadows (current task keeps the default elevation shadow) */
-  --task-shadow: none;
-  --task-shadow-sub-task: none;
-
-  /* Remove task border */
-  --task-border: none;
+  /* Transparent, borderless tasks are the app default now; Zen additionally
+     drops the hairline separators and the selected-task leading edge so
+     nothing but the content remains. */
+  --task-separator: none;
+  --task-selected-edge: none;
 
   /* Remove side panel backgrounds and shadows */
   --task-detail-bg: transparent;
@@ -45,9 +35,7 @@ body.isDarkTheme {
   --schedule-event-bg: var(--bg);
   --schedule-event-bg-in-side-panel: var(--bg);
 
-  /* Selected task: flat with border */
-  --task-c-selected-bg: transparent;
-  --task-selected-shadow: none;
+  --task-c-selected-bg: var(--state-selected);
 }
 
 /* Light mode: use pure white for elevated surfaces instead of off-white (#f8f8f7) */
@@ -77,19 +65,6 @@ body.hasBgImage {
 
 body.isDarkTheme.hasBgImage {
   --schedule-event-bg: rgba(19, 19, 20, 0.85);
-}
-
-/* Remove borders and shadows from planner tasks */
-body planner-task {
-  border: none;
-  box-shadow: none;
-  background: transparent;
-}
-
-/* Selected task: a clear flat boundary instead of shadow/background. */
-body task.isSelected > swipe-block > .inner-wrapper > .box {
-  border: 2px solid var(--zen-selected-border) !important;
-  border-radius: var(--task-border-radius);
 }
 
 /* Restore background when dragging */

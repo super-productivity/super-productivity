@@ -7,6 +7,7 @@ import {
   on,
 } from '@ngrx/store';
 import {
+  AppFeaturesConfig,
   ClipboardImagesConfig,
   FocusModeConfig,
   GlobalConfigState,
@@ -17,8 +18,15 @@ import type { KeyboardConfig } from '@sp/keyboard-config';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { getHoursFromClockString } from '../../../util/get-hours-from-clock-string';
+import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { normalizeStartOfNextDayConfig } from '../normalize-start-of-next-day-config';
 import { withLocalOnlySyncSettings } from '../local-only-sync-settings.util';
+
+const stripRemovedUserProfilesSetting = <T extends object>(config: T): T => {
+  const result = { ...config };
+  delete (result as Record<string, unknown>)['isEnableUserProfiles'];
+  return result;
+};
 
 /**
  * Migrate the legacy `isSyncSessionWithTracking` flag (removed in the focus-mode
@@ -166,13 +174,17 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
       ? withLocalOnlySyncSettings(incomingSyncConfig, oldState.sync)
       : incomingSyncConfig;
 
+    const incomingMiscConfig = stripRemovedUserProfilesSetting(
+      appDataComplete.globalConfig.misc ?? {},
+    );
+
     const incomingGlobalConfig = {
       ...DEFAULT_GLOBAL_CONFIG,
       ...appDataComplete.globalConfig,
       misc: {
         ...DEFAULT_GLOBAL_CONFIG.misc,
-        ...appDataComplete.globalConfig.misc,
-        ...normalizeStartOfNextDayConfig(appDataComplete.globalConfig.misc ?? {}),
+        ...incomingMiscConfig,
+        ...normalizeStartOfNextDayConfig(incomingMiscConfig),
       },
     };
 
@@ -183,7 +195,9 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
       // predate newly added fields (e.g., isAutoMarkParentAsDone, notesTemplate).
       appFeatures: {
         ...DEFAULT_GLOBAL_CONFIG.appFeatures,
-        ...appDataComplete.globalConfig.appFeatures,
+        ...stripRemovedUserProfilesSetting(
+          appDataComplete.globalConfig.appFeatures ?? {},
+        ),
       },
       tasks: {
         ...DEFAULT_GLOBAL_CONFIG.tasks,
@@ -221,8 +235,12 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
     const { sectionKey, sectionCfg } = action;
     const normalizedSectionCfg =
       sectionKey === 'misc'
-        ? normalizeStartOfNextDayConfig(sectionCfg as Partial<MiscConfig>)
-        : sectionCfg;
+        ? stripRemovedUserProfilesSetting(
+            normalizeStartOfNextDayConfig(sectionCfg as Partial<MiscConfig>),
+          )
+        : sectionKey === 'appFeatures'
+          ? stripRemovedUserProfilesSetting(sectionCfg as Partial<AppFeaturesConfig>)
+          : sectionCfg;
     const updatedSection = {
       ...state[sectionKey],
       ...normalizedSectionCfg,
@@ -259,6 +277,15 @@ export const selectTimelineWorkStartEndHours = createSelector(
   } | null => {
     const schedule = cfg?.schedule ?? DEFAULT_GLOBAL_CONFIG.schedule;
     if (!schedule.isWorkStartEndEnabled) {
+      return null;
+    }
+    // Same corrupt-data class as the read-side guards in
+    // create-sorted-blocker-blocks.ts (#5358): an imported/synced snapshot can
+    // carry invalid clock strings, and NaN hours would auto-place the work
+    // Start/End markers at an arbitrary grid position. Hide them instead.
+    // Not a devError: createSortedBlockerBlocks already reports the same cfg,
+    // and a selector projector must stay free of side effects.
+    if (!isValidSplitTime(schedule.workStart) || !isValidSplitTime(schedule.workEnd)) {
       return null;
     }
     return {

@@ -1,5 +1,5 @@
 import * as fromSelectors from './task.selectors';
-import { DEFAULT_TASK, Task, TaskState } from '../task.model';
+import { DEFAULT_TASK, Task, TaskState, TaskWithSubTasks } from '../task.model';
 import { TASK_FEATURE_NAME } from './task.reducer';
 import { taskAdapter } from './task.adapter';
 import { TODAY_TAG } from '../../tag/tag.const';
@@ -328,12 +328,79 @@ describe('Task Selectors', () => {
       expect(result.length).toBe(11);
     });
 
+    it('should preserve parent/child order and data when flattening a large list', () => {
+      const tasks = Array.from({ length: 1000 }, (_, i) => {
+        const child = {
+          ...mockTasks.subtask1,
+          id: `child-${i}`,
+          parentId: `parent-${i}`,
+        };
+        const parent = {
+          ...mockTasks.task1,
+          id: `parent-${i}`,
+          subTaskIds: [child.id],
+          subTasks: [child],
+        };
+        Object.freeze(child);
+        Object.freeze(parent.subTasks);
+        return Object.freeze(parent);
+      });
+      Object.freeze(tasks);
+
+      const result = fromSelectors.flattenTasks(tasks);
+
+      expect(result.length).toBe(2000);
+      tasks.forEach((parent, i) => {
+        const parentIndex = i * 2;
+        expect(result[parentIndex]).toBe(parent);
+        expect(result[parentIndex + 1]).toEqual({ ...parent.subTasks[0], subTasks: [] });
+        expect<Task>(result[parentIndex + 1]).not.toBe(parent.subTasks[0]);
+      });
+    });
+
+    it('should retain empty and missing-entry handling while flattening', () => {
+      const parent = {
+        ...mockTasks.task1,
+        subTasks: [null, mockTasks.subtask1, undefined],
+      } as unknown as TaskWithSubTasks;
+      const emptyParent = { ...mockTasks.task2, subTasks: [] };
+      const tasks = [
+        null,
+        parent,
+        undefined,
+        emptyParent,
+      ] as unknown as TaskWithSubTasks[];
+
+      expect(fromSelectors.flattenTasks(tasks)).toEqual([
+        parent,
+        { ...mockTasks.subtask1, subTasks: [] },
+        emptyParent,
+      ]);
+      expect(fromSelectors.flattenTasks([])).toEqual([]);
+    });
+
     it('should select task by ID with subtask data', () => {
       const result = fromSelectors.selectTaskByIdWithSubTaskData(mockState, {
         id: 'task1',
       });
-      expect(result.id).toBe('task1');
-      expect(result.subTasks.length).toBe(2);
+      expect(result?.id).toBe('task1');
+      expect(result?.subTasks.length).toBe(2);
+    });
+
+    // #9946: this used to return a truthy `{ subTasks: [] }` stub with no id,
+    // which defeated every `if (!task)` guard downstream.
+    it('should return undefined for an unknown task id', () => {
+      const result = fromSelectors.selectTaskByIdWithSubTaskData(mockState, {
+        id: 'NO_SUCH_TASK',
+      });
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined for a prototype property name', () => {
+      const result = fromSelectors.selectTaskByIdWithSubTaskData(mockState, {
+        id: 'constructor',
+      });
+      expect(result).toBeUndefined();
     });
   });
 
@@ -1032,8 +1099,8 @@ describe('Task Selectors', () => {
       const result = fromSelectors.selectTaskByIdWithSubTaskData(badState, {
         id: 'task1',
       });
-      expect(result.subTasks.length).toBe(2);
-      expect(result.subTasks.map((st) => st.id)).toEqual(['subtask1', 'subtask2']);
+      expect(result?.subTasks.length).toBe(2);
+      expect(result?.subTasks.map((st) => st.id)).toEqual(['subtask1', 'subtask2']);
       (window.confirm as jasmine.Spy).and.returnValue(true);
     });
   });

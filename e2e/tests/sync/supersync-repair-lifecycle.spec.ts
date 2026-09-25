@@ -508,3 +508,118 @@ test.describe('@supersync REPAIR lifecycle', () => {
     }
   });
 });
+
+test.describe('@supersync REPAIR with an offline client', () => {
+  /**
+   * A causal REPAIR is automatic, so it must never reach the explicit
+   * import/restore conflict dialog. It used to: `SyncImportConflictGateService`
+   * matched on `FULL_STATE_OP_TYPES`, which includes REPAIR, so a device
+   * returning with pending work after another device's background repair was
+   * prompted with "replaces this device's data with the server's and discards N
+   * local change(s)" — and every answer lost something. Traced: the returning
+   * device issued no ops upload at all, so its work reached neither the server
+   * nor its own repaired state (#9773).
+   *
+   * Exempting REPAIR from the gate would have been worse than the prompt:
+   * applying a full-state op replaces the whole store and nothing replays local
+   * unsynced ops afterwards, so it would trade the dialog for silent
+   * divergence. The fix defers instead — a device holding pending work skips
+   * the incoming snapshot and heals its own copy of the same corruption, which
+   * is why a second REPAIR here is expected rather than a regression.
+   */
+  test('keeps an offline client’s pending work and does not resurrect what the REPAIR removed', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.setTimeout(240000);
+
+    const appUrl = baseURL || 'http://localhost:4242';
+    const sharedTaskTitle = `A-${testRunId}-RepairOfflineShared`;
+    const offlineTaskTitle = `A-${testRunId}-RepairOfflineWork`;
+    const ghostTagId = `ghost-tag-offline-${testRunId}`;
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+
+    try {
+      const user = await createTestUser(testRunId);
+      const syncConfig = getSuperSyncConfig(user);
+
+      clientA = await createSimulatedClient(browser, appUrl, 'A', testRunId);
+      await clientA.workView.waitForTaskList();
+      await clientA.sync.setupSuperSync(syncConfig);
+
+      clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
+      await clientB.workView.waitForTaskList();
+      await clientB.sync.setupSuperSync(syncConfig);
+
+      await clientA.workView.addTask(sharedTaskTitle);
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
+      await waitForTask(clientB.page, sharedTaskTitle);
+
+      // B seeds the corruption that A will repair, then stops syncing. Both
+      // clients only ever sync through syncAndWait(), so B is simply offline
+      // from here on.
+      await addGhostTagReference(clientB.page, sharedTaskTitle, ghostTagId);
+      await clientB.sync.syncAndWait();
+      const corruptionServerSeq = await getLatestServerSeq(user.userId);
+
+      // Offline work A's repair snapshot cannot know about.
+      await clientB.workView.addTask(offlineTaskTitle);
+
+      // A downloads the corruption, auto-repairs, and uploads a causal REPAIR.
+      await clientA.sync.syncAndWait({ timeout: 60000 });
+      await clientA.sync.syncAndWait({ timeout: 60000 });
+      await expect
+        .poll(
+          async () =>
+            (await getServerOperations(user.userId)).filter(
+              ({ opType }) => opType === 'REPAIR',
+            ).length,
+          { message: 'client A never uploaded a causal REPAIR', timeout: 60000 },
+        )
+        .toBe(1);
+      const repairOperation = (await getServerOperations(user.userId)).find(
+        ({ opType }) => opType === 'REPAIR',
+      );
+      expect(repairOperation?.serverSeq).toBeGreaterThan(corruptionServerSeq);
+      await expectConvergedTask(clientA, sharedTaskTitle, ghostTagId);
+
+      // B comes back with a cursor below the REPAIR and pending local work.
+      await clientB.sync.syncAndWait({ timeout: 60000 });
+
+      // B keeps both its own offline task and the repaired shared task.
+      await waitForTask(clientB.page, offlineTaskTitle);
+      await expectConvergedTask(clientB, sharedTaskTitle, ghostTagId);
+
+      // The offline work reached the server and replays on top of the repair
+      // for everyone else, and the repair's removal is not undone by it.
+      await clientA.sync.syncAndWait({ timeout: 60000 });
+      await waitForTask(clientA.page, offlineTaskTitle);
+      await expectConvergedTask(clientA, sharedTaskTitle, ghostTagId);
+
+      // One more round each so B's own repair — if it uploaded one after
+      // healing itself — is on the server and applied by A.
+      await clientB.sync.syncAndWait({ timeout: 60000 });
+      await clientA.sync.syncAndWait({ timeout: 60000 });
+      await expectConvergedTask(clientA, sharedTaskTitle, ghostTagId);
+      await expectConvergedTask(clientB, sharedTaskTitle, ghostTagId);
+      await waitForTask(clientA.page, offlineTaskTitle);
+      await waitForTask(clientB.page, offlineTaskTitle);
+      await waitForTask(clientA.page, sharedTaskTitle);
+      await waitForTask(clientB.page, sharedTaskTitle);
+
+      // A's repair, plus at most B's own after it healed its local copy.
+      // Anything beyond that is the two clients trading repairs.
+      const repairOperations = (await getServerOperations(user.userId)).filter(
+        ({ opType }) => opType === 'REPAIR',
+      );
+      expect(repairOperations.length).toBeGreaterThanOrEqual(1);
+      expect(repairOperations.length).toBeLessThanOrEqual(2);
+    } finally {
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
+    }
+  });
+});

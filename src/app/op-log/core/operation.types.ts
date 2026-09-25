@@ -38,6 +38,20 @@ export const FULL_STATE_OP_TYPES = fullStateOpTypeHelpers.FULL_STATE_OP_TYPES;
 export const isFullStateOpType = fullStateOpTypeHelpers.isFullStateOpType;
 
 /**
+ * Genesis entity types: the MIGRATION (legacy `pf` → op-log) and RECOVERY
+ * (disaster recovery) Batch op that opens a client's log carrying its whole
+ * state. A genesis op is local bookkeeping, not sync history — it replays as a
+ * no-op on every other client, is never counted by `hasSyncedOps()`, and on
+ * API-based providers is never uploaded (#9921). Single source of truth.
+ */
+const GENESIS_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
+  'MIGRATION',
+  'RECOVERY',
+]);
+export const isGenesisEntityType = (entityType: string): boolean =>
+  GENESIS_ENTITY_TYPES.has(entityType as EntityType);
+
+/**
  * Entity type — Super Productivity's domain set, sourced from `@sp/shared-schema`
  * so client and server agree on the union.
  */

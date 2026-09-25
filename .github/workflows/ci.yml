@@ -71,6 +71,8 @@ jobs:
       - name: Install npm Packages
         run: npm i
       - run: npm run lint
+      - name: Test issue-triage helpers
+        run: node --test ".github/scripts/*.test.js"
 
   test-on-linux:
     name: Tests
@@ -105,6 +107,8 @@ jobs:
         run: npm i
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium webkit
+      - name: Test video tools
+        run: npm run video:kit-test -- --workers=1
       - run: npm run env # Generate env.generated.ts from environment variables
       - run: npm run int:test # Validate i18n JSON files
       - run: npm run test:electron # Node-side unit tests for electron/*.cjs
@@ -164,7 +168,7 @@ jobs:
           sudo swapon /swapfile
 
       - name: Strip service worker artifacts for Lighthouse
-        run: rm -f dist/browser/ngsw.json dist/browser/ngsw-worker.js dist/browser/safety-worker.js dist/browser/worker-basic.min.js
+        run: node ./tools/strip-service-worker-assets.js dist/browser
 
       - name: Run Lighthouse CI
         uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12

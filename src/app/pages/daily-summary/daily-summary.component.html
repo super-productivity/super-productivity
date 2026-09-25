@@ -1,8 +1,9 @@
-@let cfg = cfg$ | async;
-
 <div class="page-wrapper">
-  <h1 class="done-headline mat-headline-5">
-    @if (isForToday && !cfg?.misc?.isDisableCelebration) {
+  <h1 class="done-headline">
+    <!-- `isDisableCelebration` gates the confetti only (see ngAfterViewInit). The
+    headline is static text, not an attention-grabbing loop, so it stays for
+    today's summary regardless of that opt-out. -->
+    @if (isForToday) {
       <span [innerHTML]="T.PDS.CELEBRATE | translate"></span>
     } @else {
       <span>{{ T.PDS.SUMMARY_FOR | translate: { dayStr: dayStr } }}</span>

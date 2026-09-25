@@ -154,8 +154,11 @@ export class HabitTrackerComponent {
       counter.type === SimpleCounterType.ClickCounter ||
       counter.type === SimpleCounterType.RepeatedCountdownReminder
     ) {
-      // Increment for ClickCounters on left click
-      const newVal = currentValue + 1;
+      // Simple completion habits toggle, so a mis-click can be undone by clicking
+      // again (#9970). Goal-based counters keep incrementing past their goal;
+      // exact corrections there go through the right-click/long-press dialog.
+      const newVal =
+        this.isSimpleCompletion(counter) && currentValue > 0 ? 0 : currentValue + 1;
       this._simpleCounterService.setCounterForDate(counter.id, date, newVal);
     } else {
       // For StopWatch or others, open dialog on left click
@@ -226,9 +229,13 @@ export class HabitTrackerComponent {
   }
 
   isSimpleCompletion(counter: SimpleCounter): boolean {
-    // Simple completion: ClickCounter type with no specific goal or goal of 1
+    // Simple completion: a habit tracked as a streak whose goal is a single click.
+    // Streak tracking is required because the settings dialog clears streakMinValue
+    // whenever streaks are off, which would otherwise render plain tallies (the
+    // shipped "Coffee Counter" default) as a checkmark and hide their count.
     return (
       counter.type === SimpleCounterType.ClickCounter &&
+      !!counter.isTrackStreaks &&
       (!counter.streakMinValue || counter.streakMinValue === 1)
     );
   }

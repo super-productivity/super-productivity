@@ -89,6 +89,55 @@ describe('deepEqual', () => {
     );
   });
 
+  /**
+   * A DAG — the same object referenced twice — is not a cycle. `structuredClone`
+   * preserves aliasing and module-level defaults are routinely aliased (see
+   * `hasServerMigrationStateData`, which compares live state against
+   * `MODEL_CONFIGS[key].defaultData`), so treating one as circular made
+   * structurally identical values compare unequal and minted a full-state
+   * SYNC_IMPORT that had no reason to exist.
+   */
+  it('compares a shared (non-circular) sub-object referenced twice as equal', () => {
+    const logger = createLogger();
+    const shared = { weekDays: { mon: true, sat: false } };
+    const a = { first: { cfg: shared }, second: { cfg: shared } };
+    const b = structuredClone(a);
+
+    // structuredClone preserves the aliasing, so both sides are identical in
+    // shape AND in sharing.
+    expect(b.first.cfg).toBe(b.second.cfg);
+
+    expect(deepEqual(a, b, { logger })).toBe(true);
+    expect(logger.warn).not.toHaveBeenCalled();
+
+    const unaliased = {
+      first: { cfg: { weekDays: { mon: true, sat: false } } },
+      second: { cfg: { weekDays: { mon: true, sat: false } } },
+    };
+    expect(deepEqual(unaliased, structuredClone(unaliased))).toBe(true);
+
+    // Aliasing on ONE side only must not change the answer either: a
+    // JSON-sourced state carries no aliasing and is compared against defaults
+    // that do.
+    expect(deepEqual(unaliased, a)).toBe(true);
+    expect(deepEqual(a, unaliased)).toBe(true);
+  });
+
+  it('still detects a cycle reached through a shared sub-object', () => {
+    const logger = createLogger();
+    const makeCyclicViaDag = (): Record<string, unknown> => {
+      const shared: Record<string, unknown> = { value: 1 };
+      const root: Record<string, unknown> = { first: shared, second: shared };
+      shared['root'] = root;
+      return root;
+    };
+
+    expect(deepEqual(makeCyclicViaDag(), makeCyclicViaDag(), { logger })).toBe(false);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'sync-core.deepEqual detected circular reference, returning false',
+    );
+  });
+
   it('returns false and logs when max depth is exceeded', () => {
     const logger = createLogger();
     expect(deepEqual({ a: { b: 1 } }, { a: { b: 1 } }, { logger, maxDepth: 1 })).toBe(

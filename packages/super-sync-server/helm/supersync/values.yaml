@@ -48,11 +48,6 @@ supersync:
     oldOpsDeleteBatchSize: 5000
     # -- Max old operations deleted across all users in one cleanup pass.
     oldOpsMaxDeletedPerRun: 25000
-  batchUpload:
-    # -- Enable the batched upload implementation. Requires payloadBytesBackfillComplete=true.
-    enabled: false
-    # -- Set only after running `npm run migrate-payload-bytes` to completion.
-    payloadBytesBackfillComplete: false
   webauthn:
     # -- WebAuthn relying party display name, shown in your users' OS passkey prompt.
     # Defaults to the relying-party ID when empty — do not ship someone else's brand here.
@@ -169,6 +164,12 @@ externalDatabase:
   # and pool_timeout value. A pre-upgrade hook validates both before replacing
   # a running pod, and the migration init container rechecks them, e.g.
   # postgresql://user:pass@host:5432/dbname?connection_limit=60&pool_timeout=10
+  # The server must be PostgreSQL 14+ on a Linux host: migrations set
+  # client_connection_check_interval, which an older or non-Linux server
+  # rejects at connect (see the server README).
+  # Rendered as a plain pod env value, so the password is visible in
+  # `helm get manifest`, `kubectl describe pod` and release-history Secrets.
+  # Prefer existingSecret below for anything but a throwaway cluster.
   url: ""
   # -- Use an existing Kubernetes secret for the database URL.
   # The secret must contain a DATABASE_URL key with the same pool parameters.

@@ -25,6 +25,7 @@ import {
   expectTaskEntityExists,
   expectTaskEntityNotExists,
   expectTaskUpdate,
+  expectTaskUpdates,
 } from './test-utils';
 
 describe('taskSharedCrudMetaReducer', () => {
@@ -409,6 +410,71 @@ describe('taskSharedCrudMetaReducer', () => {
       );
     });
 
+    it('should keep own tags instead of inheriting the parent tags (#9651)', () => {
+      const { action, testState: baseTestState } = createConvertAction({
+        tagIds: ['tag2'],
+      });
+      const testState = {
+        ...baseTestState,
+        [TASK_FEATURE_NAME]: {
+          ...baseTestState[TASK_FEATURE_NAME],
+          entities: {
+            ...baseTestState[TASK_FEATURE_NAME].entities,
+            task1: action.task,
+          },
+          ids: [...baseTestState[TASK_FEATURE_NAME].ids, 'task1'],
+        },
+        [TAG_FEATURE_NAME]: {
+          ...baseTestState[TAG_FEATURE_NAME],
+          ids: [...(baseTestState[TAG_FEATURE_NAME].ids as string[]), 'tag2'],
+          entities: {
+            ...baseTestState[TAG_FEATURE_NAME].entities,
+            tag2: createMockTag({ id: 'tag2', taskIds: ['task1'] }),
+          },
+        },
+      };
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectTaskUpdate('task1', { parentId: undefined, tagIds: ['tag2'] }),
+          ...expectTagUpdates({
+            tag1: { taskIds: [] },
+            tag2: { taskIds: ['task1'] },
+          }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should inherit the parent tags when the task has no own tags', () => {
+      const { action, testState: baseTestState } = createConvertAction({ tagIds: [] });
+      const testState = {
+        ...baseTestState,
+        [TASK_FEATURE_NAME]: {
+          ...baseTestState[TASK_FEATURE_NAME],
+          entities: {
+            ...baseTestState[TASK_FEATURE_NAME].entities,
+            task1: action.task,
+          },
+          ids: [...baseTestState[TASK_FEATURE_NAME].ids, 'task1'],
+        },
+      };
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectTaskUpdate('task1', { parentId: undefined, tagIds: ['tag1'] }),
+          ...expectTagUpdate('tag1', { taskIds: ['task1'] }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
     it('should use captured dates when replaying on a different day', () => {
       const capturedToday = '2024-06-14';
       const capturedTimestamp = new Date(2024, 5, 14, 12, 0, 0, 0).getTime();
@@ -774,27 +840,27 @@ describe('taskSharedCrudMetaReducer', () => {
         afterTaskId,
       });
 
-    it('should move a main task under the target parent', () => {
+    it('should move a main task under the target parent and keep its own tags', () => {
       const testState = createConvertToSubTaskState();
       const action = createConvertToSubTaskAction();
 
       metaReducer(testState, action);
       expectStateUpdate(
-        {
-          ...expectTaskUpdate('task1', {
+        expectTaskUpdates({
+          task1: {
             parentId: 'parent-task',
             projectId: 'project1',
-            tagIds: [],
-          }),
-          ...expectTaskUpdate('parent-task', { subTaskIds: ['task1'] }),
-        },
+            tagIds: ['tag1'],
+          },
+          'parent-task': { subTaskIds: ['task1'] },
+        }),
         action,
         mockReducer,
         testState,
       );
     });
 
-    it('should remove converted task from project and tag top-level lists', () => {
+    it('should remove converted task from project lists and TODAY ordering but keep own tag membership', () => {
       const testState = createConvertToSubTaskState();
       const action = createConvertToSubTaskAction();
 
@@ -806,8 +872,44 @@ describe('taskSharedCrudMetaReducer', () => {
             backlogTaskIds: [],
           }),
           ...expectTagUpdates({
-            tag1: { taskIds: ['parent-task'] },
+            tag1: { taskIds: ['parent-task', 'task1'] },
             TODAY: { taskIds: [] },
+          }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should keep a tag the target parent does not have (#9651)', () => {
+      const base = createConvertToSubTaskState({ tagIds: ['tag2'] });
+      const testState = {
+        ...base,
+        [TAG_FEATURE_NAME]: {
+          ...base[TAG_FEATURE_NAME],
+          ids: [...(base[TAG_FEATURE_NAME].ids as string[]), 'tag2'],
+          entities: {
+            ...base[TAG_FEATURE_NAME].entities,
+            tag1: {
+              ...base[TAG_FEATURE_NAME].entities.tag1,
+              taskIds: ['parent-task'],
+            } as Tag,
+            tag2: createMockTag({ id: 'tag2', taskIds: ['task1'] }),
+          },
+        },
+      };
+      const action = createConvertToSubTaskAction();
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectTaskUpdate('task1', {
+            parentId: 'parent-task',
+            tagIds: ['tag2'],
+          }),
+          ...expectTagUpdates({
+            tag2: { taskIds: ['task1'] },
           }),
         },
         action,
@@ -834,10 +936,10 @@ describe('taskSharedCrudMetaReducer', () => {
           ...expectTaskUpdate('task1', {
             parentId: 'parent-task',
             dueDay: undefined,
-            tagIds: [],
+            tagIds: ['tag1'],
           }),
           ...expectTagUpdates({
-            tag1: { taskIds: ['parent-task'] },
+            tag1: { taskIds: ['parent-task', 'task1'] },
             TODAY: { taskIds: [] },
           }),
           planner: jasmine.objectContaining({
@@ -1165,6 +1267,224 @@ describe('taskSharedCrudMetaReducer', () => {
         mockReducer,
         testState,
       );
+    });
+
+    it('should remove a deleted subtask id from its parent subTaskIds and recalc its times', () => {
+      const testState = createStateWithExistingTasks(['parent1'], [], [], []);
+      const parent = createMockTask({
+        id: 'parent1',
+        projectId: 'project1',
+        subTaskIds: ['sub1', 'sub2'],
+        timeSpentOnDay: { '2026-09-08': 150 },
+        timeSpent: 150,
+        timeEstimate: 90,
+      });
+      const sub1 = createMockTask({
+        id: 'sub1',
+        projectId: 'project1',
+        parentId: 'parent1',
+        timeSpentOnDay: { '2026-09-08': 100 },
+        timeSpent: 100,
+        timeEstimate: 60,
+      });
+      const sub2 = createMockTask({
+        id: 'sub2',
+        projectId: 'project1',
+        parentId: 'parent1',
+        timeSpentOnDay: { '2026-09-08': 50 },
+        timeSpent: 50,
+        timeEstimate: 80,
+      });
+      testState[TASK_FEATURE_NAME] = {
+        ...testState[TASK_FEATURE_NAME],
+        ids: ['parent1', 'sub1', 'sub2'],
+        entities: { parent1: parent, sub1, sub2 },
+      };
+
+      const action = TaskSharedActions.deleteTasks({ taskIds: ['sub1'] });
+      metaReducer(testState, action);
+
+      const resultState = mockReducer.calls.mostRecent().args[0] as RootState;
+      expect(resultState[TASK_FEATURE_NAME].entities['sub1']).toBeUndefined();
+      expect(resultState[TASK_FEATURE_NAME].entities['sub2']).toBeDefined();
+      const resultParent = resultState[TASK_FEATURE_NAME].entities['parent1'];
+      expect(resultParent?.subTaskIds).toEqual(['sub2']);
+      expect(resultParent?.timeSpent).toBe(50);
+      expect(resultParent?.timeSpentOnDay).toEqual({ '2026-09-08': 50 });
+      // time left of the remaining subtask: 80 - 50
+      expect(resultParent?.timeEstimate).toBe(30);
+    });
+
+    it('should match the singular delete path when a parent loses every subtask', () => {
+      const makeState = (): RootState => {
+        const s = createStateWithExistingTasks(['parent1'], [], [], []);
+        s[TASK_FEATURE_NAME] = {
+          ...s[TASK_FEATURE_NAME],
+          ids: ['parent1', 'sub1', 'sub2'],
+          entities: {
+            parent1: createMockTask({
+              id: 'parent1',
+              projectId: 'project1',
+              subTaskIds: ['sub1', 'sub2'],
+              timeSpentOnDay: { '2026-09-08': 150 },
+              timeSpent: 150,
+              timeEstimate: 140,
+            }),
+            sub1: createMockTask({
+              id: 'sub1',
+              projectId: 'project1',
+              parentId: 'parent1',
+              timeSpentOnDay: { '2026-09-08': 100 },
+              timeSpent: 100,
+              timeEstimate: 60,
+            }),
+            sub2: createMockTask({
+              id: 'sub2',
+              projectId: 'project1',
+              parentId: 'parent1',
+              timeSpentOnDay: { '2026-09-08': 50 },
+              timeSpent: 50,
+              timeEstimate: 80,
+            }),
+          },
+        };
+        return s;
+      };
+      const parentAfter = (): Task | undefined =>
+        (mockReducer.calls.mostRecent().args[0] as RootState)[TASK_FEATURE_NAME].entities[
+          'parent1'
+        ] as Task | undefined;
+
+      metaReducer(
+        makeState(),
+        TaskSharedActions.deleteTasks({ taskIds: ['sub1', 'sub2'] }),
+      );
+      const bulkParent = parentAfter();
+
+      // Two subtasks on purpose: with only one there is no intermediate
+      // recalculation, so both orderings agree and the test cannot discriminate.
+      // Deleting them one at a time is the behaviour the bulk path must match.
+      let sequentialState = makeState();
+      for (const id of ['sub1', 'sub2']) {
+        const subTask = sequentialState[TASK_FEATURE_NAME].entities[id] as Task;
+        metaReducer(
+          sequentialState,
+          TaskSharedActions.deleteTask({
+            task: { ...subTask, subTasks: [] } as unknown as TaskWithSubTasks,
+          }),
+        );
+        sequentialState = mockReducer.calls.mostRecent().args[0] as RootState;
+      }
+      const sequentialParent = sequentialState[TASK_FEATURE_NAME].entities['parent1'] as
+        | Task
+        | undefined;
+
+      expect(bulkParent?.subTaskIds).toEqual([]);
+      // Recalculating from the emptied subTaskIds instead would zero all three.
+      expect(bulkParent?.timeSpent).toBe(50);
+      expect(bulkParent?.timeSpentOnDay).toEqual({ '2026-09-08': 50 });
+      expect(bulkParent?.timeEstimate).toBe(80);
+      expect(bulkParent).toEqual(sequentialParent);
+    });
+
+    it('should inherit the last-listed subtask times when all subtasks go at once', () => {
+      const testState = createStateWithExistingTasks(['parent1'], [], [], []);
+      const parent = createMockTask({
+        id: 'parent1',
+        projectId: 'project1',
+        subTaskIds: ['sub1', 'sub2'],
+        timeSpentOnDay: { '2026-09-08': 150 },
+        timeSpent: 150,
+        timeEstimate: 140,
+      });
+      const sub1 = createMockTask({
+        id: 'sub1',
+        projectId: 'project1',
+        parentId: 'parent1',
+        timeSpentOnDay: { '2026-09-08': 100 },
+        timeSpent: 100,
+        timeEstimate: 60,
+      });
+      const sub2 = createMockTask({
+        id: 'sub2',
+        projectId: 'project1',
+        parentId: 'parent1',
+        timeSpentOnDay: { '2026-09-08': 50 },
+        timeSpent: 50,
+        timeEstimate: 80,
+      });
+      testState[TASK_FEATURE_NAME] = {
+        ...testState[TASK_FEATURE_NAME],
+        ids: ['parent1', 'sub1', 'sub2'],
+        entities: { parent1: parent, sub1, sub2 },
+      };
+
+      // Deliberately reversed against subTaskIds order: the outcome must follow
+      // the parent's list order, not the payload order, so every client replays
+      // the same state.
+      const action = TaskSharedActions.deleteTasks({ taskIds: ['sub2', 'sub1'] });
+      metaReducer(testState, action);
+
+      const resultParent = (mockReducer.calls.mostRecent().args[0] as RootState)[
+        TASK_FEATURE_NAME
+      ].entities['parent1'];
+      expect(resultParent?.subTaskIds).toEqual([]);
+      expect(resultParent?.timeSpentOnDay).toEqual({ '2026-09-08': 50 });
+      expect(resultParent?.timeSpent).toBe(50);
+      expect(resultParent?.timeEstimate).toBe(80);
+    });
+
+    it('should not touch a parent that is deleted in the same action', () => {
+      const testState = createStateWithExistingTasks(['parent1'], [], [], []);
+      const parent = createMockTask({
+        id: 'parent1',
+        projectId: 'project1',
+        subTaskIds: ['sub1'],
+      });
+      const sub1 = createMockTask({
+        id: 'sub1',
+        projectId: 'project1',
+        parentId: 'parent1',
+      });
+      testState[TASK_FEATURE_NAME] = {
+        ...testState[TASK_FEATURE_NAME],
+        ids: ['parent1', 'sub1'],
+        entities: { parent1: parent, sub1 },
+      };
+
+      const action = TaskSharedActions.deleteTasks({ taskIds: ['sub1', 'parent1'] });
+      metaReducer(testState, action);
+
+      const resultState = mockReducer.calls.mostRecent().args[0] as RootState;
+      expect(resultState[TASK_FEATURE_NAME].entities['parent1']).toBeUndefined();
+      expect(resultState[TASK_FEATURE_NAME].entities['sub1']).toBeUndefined();
+      expect(resultState[TASK_FEATURE_NAME].ids).toEqual([]);
+    });
+
+    it('should clear currentTaskId when the tracked subtask goes with its deleted parent', () => {
+      const testState = createStateWithExistingTasks(['parent1'], [], [], []);
+      const parent = createMockTask({
+        id: 'parent1',
+        projectId: 'project1',
+        subTaskIds: ['sub1'],
+      });
+      const sub1 = createMockTask({
+        id: 'sub1',
+        projectId: 'project1',
+        parentId: 'parent1',
+      });
+      testState[TASK_FEATURE_NAME] = {
+        ...testState[TASK_FEATURE_NAME],
+        ids: ['parent1', 'sub1'],
+        entities: { parent1: parent, sub1 },
+        currentTaskId: 'sub1',
+      };
+
+      const action = TaskSharedActions.deleteTasks({ taskIds: ['parent1'] });
+      metaReducer(testState, action);
+
+      const resultState = mockReducer.calls.mostRecent().args[0] as RootState;
+      expect(resultState[TASK_FEATURE_NAME].currentTaskId).toBeNull();
     });
 
     it('should carry and apply iCal dismissals for deterministic remote replay', () => {

@@ -11,22 +11,29 @@ import { ClientIdService } from '../../core/util/client-id.service';
 import {
   DialogLegacyMigrationComponent,
   MigrationStatus,
+  START_FRESH_RESULT,
 } from './dialog-legacy-migration/dialog-legacy-migration.component';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { download } from '../../util/download';
 import { isDataRepairPossible } from '../validation/is-data-repair-possible.util';
 import { recordCriticalErrorTime } from '../../util/critical-error-signal';
 import { uuidv7 } from '../../util/uuid-v7';
-import { ActionType, Operation, OpType } from '../core/operation.types';
+import {
+  ActionType,
+  isGenesisEntityType,
+  Operation,
+  OpType,
+} from '../core/operation.types';
 import { SINGLETON_ENTITY_ID } from '../core/entity-registry';
 import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
-import { AppDataComplete } from '../model/model-config';
+import { AppDataComplete, withDefaultModelSlices } from '../model/model-config';
 import {
   MIGRATION_BACKUP_PREFIX,
   getBackupTimestamp,
 } from '../../../../electron/shared-with-frontend/get-backup-timestamp';
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
+import { T } from '../../t.const';
 
 /**
  * Service to check for valid operation log state during startup and migrate
@@ -93,6 +100,8 @@ export class OperationLogMigrationService {
     }
 
     let migrationLockAcquired = false;
+    let startFreshRequested = false;
+    let migrationError: unknown;
     let dialogRef: MatDialogRef<DialogLegacyMigrationComponent> | undefined;
     try {
       const migrationCompleted = await this.lockService.request(
@@ -105,10 +114,11 @@ export class OperationLogMigrationService {
             return false;
           }
 
-          const allOps = await this.opLogStore.getOpsAfterSeq(0);
-          if (allOps.length > 0) {
-            const firstOp = allOps[0].op;
-            if (firstOp.entityType === 'MIGRATION' || firstOp.entityType === 'RECOVERY') {
+          // Only the first row decides; a full-log read here would decode
+          // every op on every boot (#9921).
+          const firstEntry = await this.opLogStore.getFirstOpEntry();
+          if (firstEntry) {
+            if (isGenesisEntityType(firstEntry.op.entityType)) {
               OpLog.normal(
                 'OperationLogMigrationService: Genesis operation found. Skipping migration.',
               );
@@ -116,15 +126,16 @@ export class OperationLogMigrationService {
             }
 
             if (hasLegacyData) {
+              const orphanCount = await this.opLogStore.countOps();
               OpLog.warn(
-                `OperationLogMigrationService: Found ${allOps.length} orphan operations. ` +
+                `OperationLogMigrationService: Found ${orphanCount} orphan operations. ` +
                   `Clearing them before legacy migration.`,
               );
               await this.opLogStore.clearAllOperations();
             } else {
               OpLog.normal(
-                `OperationLogMigrationService: Found ${allOps.length} operations (fresh install). ` +
-                  `Skipping migration - hydrator will replay them.`,
+                'OperationLogMigrationService: Found existing operations (fresh install). ' +
+                  'Skipping migration - hydrator will replay them.',
               );
               return false;
             }
@@ -162,20 +173,65 @@ export class OperationLogMigrationService {
       }
     } catch (error) {
       OpLog.err('OperationLogMigrationService: Migration failed:', error);
+      migrationError = error;
       if (dialogRef) {
         dialogRef.componentInstance.error.set(
-          'Migration failed. Your backup has been downloaded. Please restart or import the backup file.',
+          this.translateService.instant(T.MIGRATE.E_MIGRATION_FAILED_MSG),
         );
+        // Always offered here: starting fresh keeps the legacy database, so
+        // there is no copy to lose and nothing to gate on (#9770). Not offered
+        // on the "cannot be read" path above, where the marker write would fail
+        // for the same reason the read did.
+        dialogRef.componentInstance.canStartFresh.set(true);
         // Wait for user acknowledgment before throwing
-        await firstValueFrom(dialogRef.afterClosed());
+        const dialogResult = await firstValueFrom(dialogRef.afterClosed());
+        if (dialogResult === START_FRESH_RESULT) {
+          startFreshRequested = true;
+        }
       }
-      throw error;
+      if (!startFreshRequested) {
+        throw error;
+      }
+      // Otherwise the marker is written after the finally block, so the
+      // migration lock is released and the dialog is closed first.
     } finally {
       if (migrationLockAcquired) {
         await this.legacyPfDb.releaseMigrationLock();
       }
       dialogRef?.close();
     }
+
+    if (startFreshRequested) {
+      await this._skipLegacyData(migrationError);
+    }
+  }
+
+  /**
+   * Records the user's choice to start without the legacy data, then returns so
+   * this same boot continues into the ordinary empty-store path.
+   *
+   * Nothing is deleted: the `pf` database stays exactly as it is, and the marker
+   * only stops migration and recovery from picking it up again. That is what
+   * makes this safe to offer unconditionally — there is no "is the backup really
+   * on disk?" precondition to get wrong, and a mis-click costs the user nothing.
+   *
+   * No reload either: `hasUsableEntityData()` already reports false from here
+   * on, so simply returning lets the hydrator boot the empty store now.
+   */
+  private async _skipLegacyData(originalError: unknown): Promise<void> {
+    if (await this.legacyPfDb.markMigrationSkipped()) {
+      OpLog.normal(
+        'OperationLogMigrationService: Legacy data skipped on user request. ' +
+          'The pf database is untouched and can still be imported from the backup.',
+      );
+      return;
+    }
+
+    // The marker did not stick, so the next boot would land right back on this
+    // dialog. Escalate exactly as an acknowledged failure does — no data was
+    // touched, so this is no worse than not offering the option at all.
+    OpLog.err('OperationLogMigrationService: Could not record the skip marker.');
+    throw originalError;
   }
 
   /**
@@ -205,6 +261,15 @@ export class OperationLogMigrationService {
     });
   }
 
+  /**
+   * Downloads the pre-migration backup, best-effort.
+   *
+   * Deliberately does not try to prove the file landed: `download()` resolves
+   * on cancellation too, and the plain browser/Electron path (an anchor click)
+   * reports nothing either way. Nothing depends on the answer — the legacy
+   * database survives a failed migration now — so the failure message says
+   * where to look rather than claiming the copy exists.
+   */
   private async _createAutoBackup(
     dialogRef: MatDialogRef<DialogLegacyMigrationComponent>,
   ): Promise<void> {
@@ -214,7 +279,7 @@ export class OperationLogMigrationService {
     const filename = `${MIGRATION_BACKUP_PREFIX}_${getBackupTimestamp()}.json`;
 
     await download(filename, JSON.stringify(legacyData));
-    OpLog.normal(`OperationLogMigrationService: Backup created: ${filename}`);
+    OpLog.normal(`OperationLogMigrationService: Backup downloaded: ${filename}`);
   }
 
   private async _performMigration(
@@ -222,14 +287,26 @@ export class OperationLogMigrationService {
   ): Promise<void> {
     this._setStatus(dialogRef, 'migrating');
 
-    // 1. Load data from legacy database
-    const legacyData = await this.legacyPfDb.loadAllEntityData();
+    // 1. Load data from legacy database, adding defaults for the model slices
+    // that database is too old to contain (#9770).
+    const rawLegacyData = await this.legacyPfDb.loadAllEntityData();
+
+    // Guard the RAW data, and guard it BEFORE the fill rather than only when
+    // validation fails: withDefaultModelSlices() makes even an empty database
+    // validate, so a check on the failure branch would simply never run for a
+    // legacy database that has lost its task/project state — and that database
+    // would migrate silently to an all-defaults empty store whose genesis
+    // snapshot then shadows it forever.
+    if (!isDataRepairPossible(rawLegacyData as unknown as AppDataComplete)) {
+      throw new Error('Legacy data is corrupted and cannot be repaired');
+    }
+
+    const legacyData = withDefaultModelSlices(rawLegacyData);
 
     // 2. Validate and repair if needed
-    // LegacyAppData has unknown-typed fields; cast through unknown for the validation pipeline
     const { validateFull } = await import('../validation/validation-fn');
-    const validationResult = validateFull(legacyData as unknown as AppDataComplete);
-    let dataToMigrate = legacyData as unknown as AppDataComplete;
+    const validationResult = validateFull(legacyData);
+    let dataToMigrate: AppDataComplete = legacyData;
 
     if (!validationResult.isValid) {
       // Damaged legacy data on migration — hold off the rating prompt.
@@ -238,16 +315,12 @@ export class OperationLogMigrationService {
         'OperationLogMigrationService: Legacy data validation failed, attempting repair',
       );
 
-      if (!isDataRepairPossible(legacyData as unknown as AppDataComplete)) {
-        throw new Error('Legacy data is corrupted and cannot be repaired');
-      }
-
       const errors =
         'errors' in validationResult.typiaResult
           ? validationResult.typiaResult.errors
           : [];
       const { dataRepair } = await import('../validation/data-repair');
-      dataToMigrate = dataRepair(legacyData as unknown as AppDataComplete, errors).data;
+      dataToMigrate = dataRepair(legacyData, errors).data;
 
       // Re-validate after repair to ensure success
       const postRepairValidation = validateFull(dataToMigrate);

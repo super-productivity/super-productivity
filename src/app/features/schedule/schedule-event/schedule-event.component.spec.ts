@@ -12,6 +12,8 @@ import { CalendarEventActionsService } from '../../calendar-integration/calendar
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { selectTaskByIdWithSubTaskData } from '../../tasks/store/task.selectors';
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
+import { isTouchActive } from '../../../util/input-intent';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 
 const makeCalendarScheduleEvent = (isReferenceCalendar: boolean): ScheduleEvent => ({
   id: 'cal-1',
@@ -249,6 +251,94 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
 
       expect(component.isResizable()).toBe(false);
     });
+
+    // The handle is a 12px band on the bottom edge of every event, unreachable on
+    // purpose with a finger but easy to hit by accident, so it is mouse-only (#9675).
+    describe('mouse-only resizing', () => {
+      const getHandle = (): HTMLElement => {
+        fixture.componentRef.setInput('event', makeTaskScheduleEvent());
+        fixture.detectChanges();
+        const handle = fixture.nativeElement.querySelector('.resize-handle');
+        expect(handle).withContext('resize handle must be rendered').toBeTruthy();
+        return handle as HTMLElement;
+      };
+
+      const mouseDownOnHandle = (clientY: number): void =>
+        void getHandle().dispatchEvent(
+          new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientY }),
+        );
+
+      afterEach(() => {
+        // release any gesture a failing expectation left armed
+        document.dispatchEvent(new MouseEvent('mouseup'));
+      });
+
+      it('should render the handle while mouse is the active input', () => {
+        // the test env reports mouseOnly, so this pins the non-touch branch only
+        expect(isTouchActive()).toBe(false);
+        getHandle();
+        expect(component.isResizable()).toBe(true);
+      });
+
+      it('should follow the mouse while resizing', () => {
+        const handle = getHandle();
+        const heightAtStart = fixture.nativeElement.offsetHeight;
+        handle.dispatchEvent(
+          new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientY: 100 }),
+        );
+
+        expect(component.cssClass()).toContain('is-resizing');
+
+        document.dispatchEvent(new MouseEvent('mousemove', { clientY: 160 }));
+
+        // no .grid-container ancestor in the fixture, so the unsnapped fallback applies
+        expect(component._resizeHeight()).toBe(`${heightAtStart + 60}px`);
+
+        document.dispatchEvent(new MouseEvent('mouseup'));
+        expect(component.cssClass()).not.toContain('is-resizing');
+      });
+
+      it('should drop document listeners once the gesture ends', () => {
+        mouseDownOnHandle(100);
+        document.dispatchEvent(new MouseEvent('mouseup'));
+
+        component._resizeHeight.set('');
+        document.dispatchEvent(new MouseEvent('mousemove', { clientY: 300 }));
+
+        expect(component._resizeHeight()).toBe('');
+      });
+
+      it('should save the dragged duration even before the new height is rendered', () => {
+        const gridContainer = document.createElement('div');
+        gridContainer.classList.add('grid-container');
+        spyOn(gridContainer, 'getBoundingClientRect').and.returnValue({
+          height: 24 * 12 * 10,
+        } as DOMRect);
+        fixture.nativeElement.parentElement?.insertBefore(
+          gridContainer,
+          fixture.nativeElement,
+        );
+        gridContainer.appendChild(fixture.nativeElement);
+
+        const store = TestBed.inject(MockStore);
+        spyOn(store, 'dispatch');
+        const handle = getHandle();
+        handle.dispatchEvent(
+          new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientY: 100 }),
+        );
+        document.dispatchEvent(new MouseEvent('mousemove', { clientY: 220 }));
+        document.dispatchEvent(new MouseEvent('mouseup'));
+
+        expect(store.dispatch).toHaveBeenCalledWith(
+          TaskSharedActions.updateTask({
+            task: {
+              id: 'task-1',
+              changes: { timeEstimate: 7200000 },
+            },
+          }),
+        );
+      });
+    });
   });
 
   describe('split-continued segments stay interactive (#9363)', () => {
@@ -333,6 +423,21 @@ describe('ScheduleEventComponent – isReferenceCalendar', () => {
     tick(51);
 
     expect(taskService.remove).toHaveBeenCalledOnceWith(task);
+  }));
+
+  // #9946: the selector returns undefined for a task that is gone from the
+  // store; removing an id-less stub used to wipe every top-level task.
+  it('should not delete anything when the task is gone from the store', fakeAsync(() => {
+    const store = TestBed.inject(MockStore);
+    const taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
+    store.overrideSelector(selectTaskByIdWithSubTaskData, undefined);
+    fixture.componentRef.setInput('event', makeTaskScheduleEvent());
+    fixture.detectChanges();
+
+    component.deleteTask();
+    tick(51);
+
+    expect(taskService.remove).not.toHaveBeenCalled();
   }));
 
   describe('style', () => {

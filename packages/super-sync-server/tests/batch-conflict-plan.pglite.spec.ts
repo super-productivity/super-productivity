@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { Prisma } from '@prisma/client';
-import {
-  detectConflictForEntities,
-  getEntityConflictKey,
-  prefetchLatestEntityOpsForBatch,
-} from '../src/sync/conflict';
+import { detectConflictForEntities } from '../src/sync/conflict';
 import { explainGeneric, type Measured } from './explain-plan.helper';
 import type { Operation } from '../src/sync/sync.types';
 
@@ -20,8 +16,9 @@ import type { Operation } from '../src/sync/sync.types';
  * spans the entity_ids GIN and the (user_id, entity_type, entity_id, server_seq) btree, and
  * the planner abandons both to slice-scan the btree: on the seed below, PG16.14 and PGlite
  * both discard the probed user's WHOLE (user_id, entity_type) slice — 2520 rows — for a
- * 100-id probe that matches nothing. `prefetchLatestEntityOpsForBatch` carries no
- * `entity_type` predicate at all, so it discarded 20020: the user's ENTIRE history.
+ * 100-id probe that matches nothing. (`prefetchLatestEntityOpsForBatch`, the batch
+ * engine's sibling shape removed with that engine in 2026-08, carried no `entity_type`
+ * predicate at all, so it discarded 20020: the user's ENTIRE history.)
  * That is the same OR-across-two-indexes degeneracy as the 2026-07-20 outage, which
  * conflict.ts flagged as "not excluded" for these paths. `DISTINCT ON` is not what made
  * it expensive; the OR is.
@@ -129,8 +126,9 @@ const makeExplainingTx = (db: PGlite, measured: Measured[]): Prisma.TransactionC
       measured.push(await explainGeneric(db, query.text, query.values));
       return (await db.query(query.text, query.values)).rows as T;
     },
-    // prefetch only reaches this for a GLOBAL_CONFIG:tasks pair, which these probes
-    // never request. Present so a future probe fails loudly instead of silently.
+    // Only the legacy GLOBAL_CONFIG:tasks aliasing path reaches this, and these
+    // probes never request it. Present so a future probe fails loudly instead of
+    // silently.
     operation: {
       findFirst: async (): Promise<null> => {
         throw new Error('unexpected legacy-misc findFirst in a plan probe');
@@ -262,9 +260,10 @@ const BTREE_INDEX = 'operations_user_id_entity_type_entity_id_server_seq_idx';
 /**
  * NO BLOCK BUDGET HERE, unlike the sibling spec — tried and rejected on evidence. On the
  * all-new probe the fix reads 501 blocks against the OR form's 810 (detect) and 438
- * (prefetch): the regression reads FEWER blocks than the fix in one of the two cases, so
- * no threshold can separate them, and any budget wide enough not to flake would pass the
- * very mis-plan this file exists to catch. (The sibling's budget works because its
+ * (the since-deleted batch prefetch shape — the deciding case): the regression read FEWER
+ * blocks than the fix in one of the two cases, so no threshold could separate them, and
+ * any budget wide enough not to flake would pass the very mis-plan this file exists to
+ * catch. (The sibling's budget works because its
  * regression is 816 against a fixed 143.) `Measured.blocks` is therefore reported for
  * debugging and asserted only in the dirty-pending-list describe, where it is a RATIO
  * between two probe sizes rather than an absolute.
@@ -282,22 +281,12 @@ const BTREE_INDEX = 'operations_user_id_entity_type_entity_id_server_seq_idx';
  * still supply the GIN node the assertions below look for. Neither signal covers the
  * other; the ceiling catches fan-out, the counters catch slice scans.
  *
- * `maxJoinFiltered` defaults to 0 because no branch has a join left to mis-plan. The one
- * exception is prefetchLatestEntityOpsForBatch, whose array branch must confirm each
- * by-id GIN match against the requested (entity_type, entity_id) PAIR — `cand` is keyed
- * by id alone. Under `force_generic_plan` PGlite runs that semi-join as a nested loop, so
- * it compares |cand| x |touched|. That residual is bounded by the BATCH SIZE and is
- * independent of how wide the stored arrays are, which is exactly what distinguishes it
- * from a fan-out; PG 16.14 plans it as a hash join and pays none of it.
+ * No branch has a join left to mis-plan, so `rowsJoinFiltered` must stay 0.
  */
-const expectBounded = (
-  measured: Measured,
-  maxRowsTouched: number,
-  maxJoinFiltered = 0,
-): void => {
+const expectBounded = (measured: Measured, maxRowsTouched: number): void => {
   expect(measured.rowsTouched).toBeLessThanOrEqual(maxRowsTouched);
   expect(measured.rowsFiltered).toBe(0);
-  expect(measured.rowsJoinFiltered).toBeLessThanOrEqual(maxJoinFiltered);
+  expect(measured.rowsJoinFiltered).toBe(0);
   expect(measured.tempBlocks).toBe(0);
   expect(measured.nodes).not.toContain('Seq Scan');
   expect(measured.nodes).toContain(GIN_INDEX);
@@ -305,38 +294,16 @@ const expectBounded = (
 };
 
 /**
- * |cand| x |touched| = (PROBE_SIZE x WIDE_OPS) x PROBE_SIZE — the structural bound on
- * prefetch's pair re-check when it is planned as a nested loop. Measured 99_000, i.e.
- * half of it, because a semi-join stops at the first match per candidate. Stated as the
- * derivation rather than the measurement so it stays meaningful if the seed is resized;
- * a fan-out re-expands each candidate by WIDE_WIDTH and lands in the millions, so the
- * separation is orders of magnitude either way.
- */
-const MAX_PAIR_RECHECK_JOIN_FILTERED = PROBE_SIZE * WIDE_OPS * PROBE_SIZE;
-
-/**
  * Row-touch ceilings. They are deliberately LOOSE — the point is to fail a fan-out by
  * orders of magnitude, not to pin a number a planner change can move.
  *
- * All-new probe: nothing matches, so both queries only pay the index seeks. Measured 401.
+ * All-new probe: nothing matches, so the query only pays the index seeks. Measured 401.
  * Wide probe: |cand| is |probe| x WIDE_OPS = 2000 and the branches feed DISTINCT ON.
- * Measured 11_047 (detect) and 13_347 (prefetch). The round-1 fan-out re-expanded each
- * candidate by WIDE_WIDTH and touched 2.2M on PG 16.14 / 21M on PGlite, so it fails
- * these by ~75x and ~700x.
+ * Measured 11_047. The round-1 fan-out re-expanded each candidate by WIDE_WIDTH and
+ * touched 2.2M on PG 16.14 / 21M on PGlite, so it fails these by ~75x and ~700x.
  */
 const MAX_ROWS_TOUCHED_ALL_NEW = 3_000;
 const MAX_ROWS_TOUCHED_WIDE = 30_000;
-/**
- * Prefetch keeps its own, much looser ceiling because its array branch must re-check
- * each candidate against the requested (entity_type, entity_id) PAIR, and the cost of
- * that semi-join is PLANNER-DEPENDENT by an order of magnitude: a hash semi-join (what
- * both PGlite and PG 16.14 currently choose) touches the 13_347 above, while a nested
- * loop over `touched` — which PGlite chose for the pre-`&&` shape of this same query —
- * costs |cand| x |touched| and touched 115_505. The ceiling sits above the pessimistic
- * plan on purpose, so a planner shift is not a red build. Still ~180x below the round-1
- * fan-out on this seed, which is the regression it exists to catch.
- */
-const MAX_ROWS_TOUCHED_WIDE_PAIRS = 250_000;
 
 describe('batch conflict detection does not scan the history (PGlite)', () => {
   let db: PGlite;
@@ -385,68 +352,6 @@ describe('batch conflict detection does not scan the history (PGlite)', () => {
     expect(result.hasConflict).toBe(true);
     expect(measured).toHaveLength(1);
     expectBounded(measured[0], MAX_ROWS_TOUCHED_WIDE);
-  });
-
-  it('prefetchLatestEntityOpsForBatch reads a bounded amount for an all-new batch (#9503)', async () => {
-    const measured: Measured[] = [];
-    const pairs = brandNewIds().map((entityId) => ({ entityType: 'TASK', entityId }));
-
-    const latest = await prefetchLatestEntityOpsForBatch(
-      USER_ID,
-      pairs,
-      makeExplainingTx(db, measured),
-    );
-
-    expect(latest.size).toBe(0);
-    expect(measured).toHaveLength(1);
-    expectBounded(measured[0], MAX_ROWS_TOUCHED_ALL_NEW);
-  });
-
-  it('prefetchLatestEntityOpsForBatch does not fan out on wide entity_ids (#9503)', async () => {
-    // Same guard for the sibling shape, which fanned out harder still (it re-joined
-    // `touched` on two columns): 36.8s at the 1000-id wire cap before the fix.
-    const measured: Measured[] = [];
-    const latest = await prefetchLatestEntityOpsForBatch(
-      USER_ID,
-      wideProbeIds().map((entityId) => ({ entityType: 'TASK', entityId })),
-      makeExplainingTx(db, measured),
-    );
-
-    expect(latest.size).toBe(PROBE_SIZE);
-    expect(measured).toHaveLength(1);
-    expectBounded(
-      measured[0],
-      MAX_ROWS_TOUCHED_WIDE_PAIRS,
-      MAX_PAIR_RECHECK_JOIN_FILTERED,
-    );
-  });
-
-  it('still finds the latest op per entity for a batch that DOES match', async () => {
-    const measured: Measured[] = [];
-    // seq % 8 === 0 puts the op on the TASK slice and seq % 10 === 0 makes it
-    // multi-entity, so multiples of 40 are both and carry a 'co-<seq>' array member.
-    const taskSeqs = [40, 80, 120, 160];
-    const ids = taskSeqs.map((seq) => `task-${seq}`);
-
-    const latest = await prefetchLatestEntityOpsForBatch(
-      USER_ID,
-      ids.map((entityId) => ({ entityType: 'TASK', entityId })),
-      makeExplainingTx(db, measured),
-    );
-
-    for (const seq of taskSeqs) {
-      expect(latest.get(getEntityConflictKey('TASK', `task-${seq}`))?.serverSeq).toBe(
-        seq,
-      );
-    }
-    // 'co-N' is only ever a NON-first member of a multi-entity op's array, so this
-    // pins that the array branch is really consulted, not just the scalar one.
-    const viaArray = await prefetchLatestEntityOpsForBatch(
-      USER_ID,
-      [{ entityType: 'TASK', entityId: 'co-40' }],
-      makeExplainingTx(db, measured),
-    );
-    expect(viaArray.get(getEntityConflictKey('TASK', 'co-40'))?.serverSeq).toBe(40);
   });
 
   it('CANARY: the shipped OR form still reproduces the mis-plan on this seed', async () => {

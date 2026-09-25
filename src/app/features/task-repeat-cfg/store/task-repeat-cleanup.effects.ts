@@ -21,7 +21,6 @@ import { TODAY_TAG } from '../../tag/tag.const';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
-import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { TaskTimeSyncService } from '../../tasks/task-time-sync.service';
 
 const _sameStringSet = (a: readonly string[], b: readonly string[]): boolean => {
@@ -52,13 +51,22 @@ const _hasTemplateSchedule = (
       cfg.startTime,
       dateStrToUtcDate(dueStr),
     );
-    const expectedRemindAt = cfg.remindAt
-      ? remindOptionToMilliseconds(expectedDueWithTime, cfg.remindAt)
-      : undefined;
+    // remindAt is deliberately NOT compared for a TIMED instance: there it is
+    // app-managed, not a user edit. Dismissing a fired reminder clears it
+    // (dismissReminderOnly — also dispatched when the reminder's task is
+    // started or "Do not remind" is picked) and snoozing rewrites it
+    // (reScheduleTaskWithTime, which keeps dueWithTime). So any instance whose
+    // reminder was dismissed, started or snoozed became permanently unreapable
+    // and skipOverdue silently piled up one leftover per occurrence. A
+    // still-pending (future) remindAt is treated the same way on purpose:
+    // keying deletion off Date.now() would make the verdict depend on when the
+    // reaper happens to run. The scheduled time itself is still compared.
     const isScheduledTemplate =
-      task.dueWithTime === expectedDueWithTime &&
-      _isNil(task.dueDay) &&
-      task.remindAt === expectedRemindAt;
+      task.dueWithTime === expectedDueWithTime && _isNil(task.dueDay);
+    // Day-planned instances keep the remindAt check: no in-app path sets a
+    // reminder without a dueWithTime (planTaskForDay and unscheduleTask both
+    // clear it), so one that is set came from PluginAPI.updateTask and is a
+    // deliberate mark on this instance.
     const isBeforeScheduleActionTemplate =
       _isNil(task.dueWithTime) && task.dueDay === dueStr && _isNil(task.remindAt);
 

@@ -28,7 +28,7 @@
 .prep-content {
   display: flex;
   flex-direction: column;
-  gap: var(--s1);
+  gap: var(--s);
 
   &.countdown-over * {
     opacity: 0;
@@ -57,7 +57,7 @@ ol {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: var(--s1);
+  gap: var(--s);
 
   li {
     font-size: 18px;

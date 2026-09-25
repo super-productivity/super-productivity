@@ -1,6 +1,7 @@
 import { getSyncService } from './sync.service';
 import { Logger } from '../logger';
 import { DEFAULT_SYNC_CONFIG, MS_PER_DAY } from './sync.types';
+import { MIN_CHECKPOINT_SAFE_APP_VERSION } from './checkpoint-gate';
 
 let cleanupTimer: NodeJS.Timeout | null = null;
 let initialCleanupTimer: NodeJS.Timeout | null = null;
@@ -12,6 +13,9 @@ const reconcileTimers: Set<NodeJS.Timeout> = new Set();
 const RECONCILE_INTERVAL_MS = 5_000;
 const RECONCILE_BUDGET_MS = 60 * 60 * 1000;
 const INITIAL_CLEANUP_DELAY_MS = 10_000;
+// Grace window before an abandoned (never-verified, nothing in flight) account is
+// deleted — reuses the unified retention period rather than adding a second knob.
+const UNVERIFIED_USER_GRACE_MS = DEFAULT_SYNC_CONFIG.retentionMs;
 
 /**
  * Runs all cleanup tasks in a single daily job.
@@ -25,11 +29,13 @@ const runDailyCleanup = async (): Promise<void> => {
   try {
     const { totalDeleted, affectedUserIds } =
       await syncService.deleteOldSyncedOpsForAllUsers(cutoffTime);
-    if (totalDeleted > 0) {
-      Logger.info(
-        `Cleanup [old-ops]: removed ${totalDeleted} entries (affected ${affectedUserIds.length} users)`,
-      );
-    }
+    // Logged unconditionally, INCLUDING zero. The 2026-08 fleet-wide retention outage was
+    // diagnosable only as an absence — an ERROR line with no accompanying "removed N" line
+    // — because this was gated on `totalDeleted > 0`, which makes "the sweep ran and had
+    // nothing to do" indistinguishable from "the sweep never got that far" in the log.
+    Logger.info(
+      `Cleanup [old-ops]: removed ${totalDeleted} entries (affected ${affectedUserIds.length} users)`,
+    );
     // Storage counter is maintained incrementally on uploads. Doing one full
     // pg_column_size scan per affected user inside this loop was a DoS — but
     // skipping reconcile entirely lets counters drift stale-high forever, so
@@ -51,6 +57,20 @@ const runDailyCleanup = async (): Promise<void> => {
     Logger.error(`Cleanup [stale-devices] failed: ${error}`);
   }
 
+  // 2b. Checkpoint gate (#9962), read-only. Logged unconditionally: this count
+  // is what decides when an automatic client checkpoint cadence can be enabled,
+  // and it should be visible falling toward "all safe" run by run.
+  try {
+    const gate = await syncService.summarizeCheckpointGate(cutoffTime);
+    Logger.info(
+      `Cleanup [checkpoint-gate]: ${gate.safeAccounts} of ${gate.totalAccounts} account(s) ` +
+        `with a device inside retention run only clients >= ${MIN_CHECKPOINT_SAFE_APP_VERSION}; ` +
+        `${gate.unversionedDevices} device(s) report no version.`,
+    );
+  } catch (error) {
+    Logger.error(`Cleanup [checkpoint-gate] failed: ${error}`);
+  }
+
   // 3. Clean up expired rate limit counters
   try {
     const deleted = syncService.cleanupExpiredRateLimitCounters();
@@ -69,6 +89,32 @@ const runDailyCleanup = async (): Promise<void> => {
     }
   } catch (error) {
     Logger.error(`Cleanup [request-dedup] failed: ${error}`);
+  }
+
+  // 5. Delete expired pending passkey registrations (expiry is otherwise only
+  // checked at read time, so abandoned rows would be retained forever)
+  try {
+    const deleted = await syncService.deleteExpiredPendingPasskeyRegistrations(
+      Date.now(),
+    );
+    if (deleted > 0) {
+      Logger.info(`Cleanup [pending-passkeys]: removed ${deleted} entries`);
+    }
+  } catch (error) {
+    Logger.error(`Cleanup [pending-passkeys] failed: ${error}`);
+  }
+
+  // 6. Delete abandoned unverified users (never verified, no registration still
+  // in flight, older than the grace window; verified users can never match)
+  try {
+    const deleted = await syncService.deleteAbandonedUnverifiedUsers(
+      Date.now() - UNVERIFIED_USER_GRACE_MS,
+    );
+    if (deleted > 0) {
+      Logger.info(`Cleanup [unverified-users]: removed ${deleted} entries`);
+    }
+  } catch (error) {
+    Logger.error(`Cleanup [unverified-users] failed: ${error}`);
   }
 };
 
@@ -113,14 +159,16 @@ const scheduleDeferredReconciles = (userIds: number[]): void => {
     userIds.length,
     Math.floor(RECONCILE_BUDGET_MS / RECONCILE_INTERVAL_MS),
   );
-  // S1: `userIds` arrives stalest-first from `deleteOldSyncedOpsForAllUsers`
-  // (orderBy snapshotAt asc). When the budget can't cover everyone, the most
-  // drifted users are reconciled first; the fresh tail rolls over to the next
-  // pass. Deterministic, no Math.random.
+  // S1: `userIds` arrives in a deterministic order (no Math.random), so the
+  // tail rolls over to the next pass rather than being reshuffled. It is NOT
+  // stalest-first any more: since #9688 the sweep only reads snapshotAt for
+  // users still holding a cached snapshot blob, and under the mandatory-E2EE
+  // gate that is almost nobody — everyone else ties and drains in userId
+  // order. See StorageQuotaService.deleteOldSyncedOpsForAllUsers.
   if (maxScheduled < userIds.length) {
     Logger.warn(
       `Cleanup [reconcile]: budget covers ${maxScheduled}/${userIds.length} users; ` +
-        `stalest-first ordering keeps the freshest users rolling to next pass`,
+        `the remainder rolls over to the next pass`,
     );
   }
   const syncService = getSyncService();

@@ -428,9 +428,9 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     this._subs.add(
       this._taskService.getByIdWithSubTaskData$(task.id).subscribe((taskWithSubTasks) => {
         // The task may have vanished from the store between confirm and resolve
-        // (e.g. synced away); a stale snapshot has no id, so skip — the store
-        // reconcile sub already handles closing the dialog in that case.
-        if (!taskWithSubTasks?.id) {
+        // (e.g. synced away), so skip — the store reconcile sub already handles
+        // closing the dialog in that case.
+        if (!taskWithSubTasks) {
           return;
         }
         this._taskService.remove(taskWithSubTasks);

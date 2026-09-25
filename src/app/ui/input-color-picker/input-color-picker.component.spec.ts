@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 import { InputColorPickerComponent } from './input-color-picker.component';
-import { PRESET_COLORS } from '../../features/work-context/work-context-color';
+import { PRESET_COLORS } from '../work-context-color';
 
 /**
  * The wrapper mimics the themed dialog surface from #9423: `backdrop-filter`

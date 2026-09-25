@@ -12,7 +12,7 @@ import {
   selectTagsByIds,
   TAG_FEATURE_NAME,
 } from './store/tag.reducer';
-import { PRESET_COLORS } from '../work-context/work-context-color';
+import { PRESET_COLORS } from '../../ui/work-context-color';
 import { selectMenuTreeTagTree } from '../menu-tree/store/menu-tree.selectors';
 import { MenuTreeKind } from '../menu-tree/store/menu-tree.model';
 import { menuTreeFeatureKey } from '../menu-tree/store/menu-tree.reducer';

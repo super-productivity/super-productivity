@@ -16,6 +16,8 @@ interface MutableServerOperation {
   op?: {
     id?: string;
     schemaVersion?: number;
+    opType?: string;
+    syncImportReason?: string;
   };
 }
 
@@ -83,7 +85,7 @@ const areLocalOperationsSynced = (page: Page, operationIds: string[]): Promise<b
  * - B.4: Payload too large shows alert dialog
  * - G.5: Duplicate operation silently marked as synced
  * - G.7: Schema version mismatch returns handled error
- * - G.8: Failed operation migration skips op
+ * - G.8: Schema/vocabulary blockers preserve the valid prefix and retry the suffix
  *
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-error-scenarios.spec.ts
  */
@@ -483,101 +485,113 @@ test.describe('@supersync Error Scenarios', () => {
   });
 
   /**
-   * Scenario G.8: A mid-batch schema blocker applies only the valid prefix and keeps
+   * Scenario G.8: A mid-batch compatibility blocker applies only the valid prefix and keeps
    * the cursor before the blocker so the suffix can be retried after recovery.
    */
-  test('Mid-batch schema blocker applies prefix and retries suffix from prior cursor', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }) => {
-    test.setTimeout(120000);
-    let clientA: SimulatedE2EClient | null = null;
-    let clientB: SimulatedE2EClient | null = null;
-    let injectedResponses = 0;
+  // #8764 / #9922: vocabulary can grow without a schema bump. The valid
+  // prefix must still apply; neither the blocker nor its suffix may be lost.
+  for (const field of ['schemaVersion', 'opType', 'syncImportReason'] as const) {
+    test(`Mid-batch ${field} blocker applies prefix and retries suffix from prior cursor`, async ({
+      browser,
+      baseURL,
+      testRunId,
+    }) => {
+      test.setTimeout(120000);
+      let clientA: SimulatedE2EClient | null = null;
+      let clientB: SimulatedE2EClient | null = null;
+      let injectedResponses = 0;
 
-    try {
-      const user = await createTestUser(testRunId);
-      const syncConfig = getSuperSyncConfig(user);
+      try {
+        const user = await createTestUser(testRunId);
+        const syncConfig = getSuperSyncConfig(user);
 
-      clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
-      await clientA.sync.setupSuperSync(syncConfig);
+        clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+        await clientA.sync.setupSuperSync(syncConfig);
 
-      clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
-      const cursorBeforeBlock = await getSuperSyncCursor(clientB.page);
-      expect(cursorBeforeBlock).not.toBeNull();
+        clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+        await clientB.sync.setupSuperSync(syncConfig);
+        const cursorBeforeBlock = await getSuperSyncCursor(clientB.page);
+        expect(cursorBeforeBlock).not.toBeNull();
 
-      const taskNames = [
-        `MigrationPrefix-${testRunId}`,
-        `MigrationBlocker-${testRunId}`,
-        `MigrationSuffix-${testRunId}`,
-      ];
-      const uploadedOpIds: string[] = [];
-      await routeSuperSyncOps(clientA.page, async (route) => {
-        if (route.request().method() === 'POST') {
-          const upload = parseSuperSyncRequestBody<OperationUploadBody>(route.request());
-          uploadedOpIds.push(...upload.ops.map((operation) => operation.id));
-        }
-        await route.continue();
-      });
-      for (const taskName of taskNames) {
-        await clientA.workView.addTask(taskName);
-      }
-      await clientA.sync.syncAndWait();
-      await unrouteSuperSyncOps(clientA.page);
-      expect(uploadedOpIds).toHaveLength(3);
-      const blockerOpId = uploadedOpIds[1];
-
-      await routeSuperSyncOps(clientB.page, async (route) => {
-        if (route.request().method() === 'GET') {
-          const response = await route.fetch();
-          const body = (await response.json()) as OperationDownloadBody;
-          const blocker = body.ops?.find(({ op }) => op?.id === blockerOpId);
-          if (blocker?.op) {
-            // Use a real encrypted operation and change only its schema metadata,
-            // preserving real server sequences on both sides of the blocker.
-            blocker.op.schemaVersion = 99;
-            injectedResponses++;
+        const taskNames = [
+          `MigrationPrefix-${testRunId}`,
+          `MigrationBlocker-${testRunId}`,
+          `MigrationSuffix-${testRunId}`,
+        ];
+        const uploadedOpIds: string[] = [];
+        await routeSuperSyncOps(clientA.page, async (route) => {
+          if (route.request().method() === 'POST') {
+            const upload = parseSuperSyncRequestBody<OperationUploadBody>(
+              route.request(),
+            );
+            uploadedOpIds.push(...upload.ops.map((operation) => operation.id));
           }
-          await route.fulfill({
-            response,
-            body: JSON.stringify(body),
-          });
-          return;
+          await route.continue();
+        });
+        for (const taskName of taskNames) {
+          await clientA.workView.addTask(taskName);
         }
-        await route.continue();
-      });
+        await clientA.sync.syncAndWait();
+        await unrouteSuperSyncOps(clientA.page);
+        expect(uploadedOpIds).toHaveLength(3);
+        const blockerOpId = uploadedOpIds[1];
 
-      await clientB.sync.syncBtn.click();
-      await expect.poll(() => clientB!.sync.hasSyncError()).toBe(true);
+        await routeSuperSyncOps(clientB.page, async (route) => {
+          if (route.request().method() === 'GET') {
+            const response = await route.fetch();
+            const body = (await response.json()) as OperationDownloadBody;
+            const blocker = body.ops?.find(({ op }) => op?.id === blockerOpId);
+            if (blocker?.op) {
+              // Preserve the real encrypted payload and server sequences.
+              // These fields are plaintext metadata from a newer client.
+              if (field === 'schemaVersion') {
+                blocker.op.schemaVersion = 99;
+              } else if (field === 'opType') {
+                blocker.op.opType = 'FUTURE_OP_TYPE';
+              } else {
+                blocker.op.syncImportReason = 'FUTURE_IMPORT_REASON';
+              }
+              injectedResponses++;
+            }
+            await route.fulfill({
+              response,
+              body: JSON.stringify(body),
+            });
+            return;
+          }
+          await route.continue();
+        });
 
-      expect(injectedResponses).toBeGreaterThan(0);
-      expect(await getSuperSyncCursor(clientB.page)).toBe(cursorBeforeBlock);
-      await waitForTask(clientB.page, taskNames[0]);
-      await expect(
-        clientB.page.locator(`task:has-text("${taskNames[1]}")`),
-      ).not.toBeVisible();
-      await expect(
-        clientB.page.locator(`task:has-text("${taskNames[2]}")`),
-      ).not.toBeVisible();
+        await clientB.sync.syncBtn.click();
+        await expect.poll(() => clientB!.sync.hasSyncError()).toBe(true);
 
-      await unrouteSuperSyncOps(clientB.page);
-      await clientB.sync.syncAndWait();
-      for (const taskName of taskNames) {
-        await waitForTask(clientB.page, taskName);
+        expect(injectedResponses).toBeGreaterThan(0);
+        expect(await getSuperSyncCursor(clientB.page)).toBe(cursorBeforeBlock);
+        await waitForTask(clientB.page, taskNames[0]);
+        await expect(
+          clientB.page.locator(`task:has-text("${taskNames[1]}")`),
+        ).not.toBeVisible();
+        await expect(
+          clientB.page.locator(`task:has-text("${taskNames[2]}")`),
+        ).not.toBeVisible();
+
+        await unrouteSuperSyncOps(clientB.page);
+        await clientB.sync.syncAndWait();
+        for (const taskName of taskNames) {
+          await waitForTask(clientB.page, taskName);
+        }
+        expect(await clientB.sync.hasSyncError()).toBe(false);
+        expect(await getSuperSyncCursor(clientB.page)).not.toBe(cursorBeforeBlock);
+      } finally {
+        if (clientA) {
+          await unrouteSuperSyncOps(clientA.page).catch(() => {});
+          await closeClient(clientA);
+        }
+        if (clientB) {
+          await unrouteSuperSyncOps(clientB.page).catch(() => {});
+          await closeClient(clientB);
+        }
       }
-      expect(await clientB.sync.hasSyncError()).toBe(false);
-      expect(await getSuperSyncCursor(clientB.page)).not.toBe(cursorBeforeBlock);
-    } finally {
-      if (clientA) {
-        await unrouteSuperSyncOps(clientA.page).catch(() => {});
-        await closeClient(clientA);
-      }
-      if (clientB) {
-        await unrouteSuperSyncOps(clientB.page).catch(() => {});
-        await closeClient(clientB);
-      }
-    }
-  });
+    });
+  }
 });

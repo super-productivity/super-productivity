@@ -6,7 +6,7 @@ import { ConditionEvaluator } from './condition-evaluator';
 import { ActionExecutor } from './action-executor';
 import { RateLimiter } from './rate-limiter';
 import { globalRegistry } from './registry';
-import { TaskEvent } from '../types';
+import { AutomationRule, TaskEvent } from '../types';
 import { DataCache } from './data-cache';
 
 // Mock dependencies
@@ -59,11 +59,18 @@ describe('AutomationManager', () => {
       },
       openDialog: vi.fn(),
       showSnack: vi.fn(),
+      getFocusedTask: vi.fn().mockResolvedValue(null),
+      registerShortcut: vi.fn(),
+      unregisterShortcut: vi.fn(),
     } as unknown as PluginAPI;
 
     // Setup mocks
     mockRuleRegistry = {
+      getRules: vi.fn().mockResolvedValue([]),
       getEnabledRules: vi.fn().mockResolvedValue([]),
+      addOrUpdateRule: vi.fn(),
+      addRules: vi.fn(),
+      deleteRule: vi.fn(),
       toggleRuleStatus: vi.fn(),
     };
     (RuleRegistry as unknown as Mock).mockImplementation(function () {
@@ -282,6 +289,129 @@ describe('AutomationManager', () => {
       );
       expect(mockPlugin.openDialog).toHaveBeenCalled(); // Should ask user
       expect(mockActionExecutor.executeAll).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('shortcut trigger', () => {
+    const shortcutRule = (overrides: Partial<AutomationRule> = {}): AutomationRule => ({
+      id: 'r1',
+      name: 'Tag focused task',
+      trigger: { type: 'shortcut' },
+      conditions: [],
+      actions: [],
+      isEnabled: true,
+      ...overrides,
+    });
+
+    it('should run the shortcut rule the pressed shortcut belongs to', async () => {
+      const rule = shortcutRule({ actions: [{ type: 'addTag', value: 'urgent' }] });
+      mockRuleRegistry.getEnabledRules.mockResolvedValue([rule]);
+      const focusedTask = { id: 't1', title: 'Focused' };
+      (mockPlugin.getFocusedTask as Mock).mockResolvedValue(focusedTask);
+
+      await manager.runShortcutRule('r1');
+
+      expect(mockActionExecutor.executeAll).toHaveBeenCalledWith(rule.actions, {
+        type: 'shortcut',
+        task: focusedTask,
+      });
+    });
+
+    it('should run a shortcut rule without a task when nothing is focused', async () => {
+      const rule = shortcutRule({
+        actions: [{ type: 'webhook', value: 'https://example.com' }],
+      });
+      mockRuleRegistry.getEnabledRules.mockResolvedValue([rule]);
+
+      await manager.runShortcutRule('r1');
+
+      expect(mockActionExecutor.executeAll).toHaveBeenCalledWith(rule.actions, {
+        type: 'shortcut',
+        task: undefined,
+      });
+    });
+
+    it('should still run the rule when the focused task cannot be read', async () => {
+      mockRuleRegistry.getEnabledRules.mockResolvedValue([shortcutRule()]);
+      (mockPlugin.getFocusedTask as Mock).mockRejectedValue(new Error('nope'));
+
+      await manager.runShortcutRule('r1');
+
+      expect(mockPlugin.log.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Could not read the focused task'),
+      );
+      expect(mockActionExecutor.executeAll).toHaveBeenCalled();
+    });
+
+    it('should not run a rule whose trigger is not a shortcut', async () => {
+      mockRuleRegistry.getEnabledRules.mockResolvedValue([
+        shortcutRule({ trigger: { type: 'taskCreated' } }),
+      ]);
+
+      await manager.runShortcutRule('r1');
+
+      expect(mockActionExecutor.executeAll).not.toHaveBeenCalled();
+      expect(mockPlugin.log.warn).toHaveBeenCalledWith(
+        expect.stringContaining('No enabled shortcut rule'),
+      );
+    });
+
+    it('should not rate-limit shortcut rules, so rapid presses raise no dialog', async () => {
+      mockRuleRegistry.getEnabledRules.mockResolvedValue([shortcutRule()]);
+      mockRateLimiter.check.mockReturnValue(false);
+
+      await manager.runShortcutRule('r1');
+
+      expect(mockRateLimiter.check).not.toHaveBeenCalled();
+      expect(mockActionExecutor.executeAll).toHaveBeenCalled();
+    });
+
+    it('should do nothing when the conditions of a shortcut rule do not match', async () => {
+      mockRuleRegistry.getEnabledRules.mockResolvedValue([
+        shortcutRule({ conditions: [{ type: 'hasTag', value: 'urgent' }] }),
+      ]);
+      mockConditionEvaluator.allConditionsMatch.mockResolvedValue(false);
+
+      await manager.runShortcutRule('r1');
+
+      expect(mockActionExecutor.executeAll).not.toHaveBeenCalled();
+    });
+
+    it('should register the shortcut of a newly saved shortcut rule', async () => {
+      const rule = shortcutRule();
+      mockRuleRegistry.getRules.mockResolvedValue([rule]);
+
+      await manager.saveRule(rule);
+
+      expect(mockRuleRegistry.addOrUpdateRule).toHaveBeenCalledWith(rule);
+      expect(mockPlugin.registerShortcut).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'r1', label: 'Tag focused task' }),
+      );
+    });
+
+    // The rate-limit dialog's "Disable Rule" button goes through this wrapper.
+    it('should release the shortcut when a rule is disabled', async () => {
+      const rule = shortcutRule();
+      mockRuleRegistry.getRules.mockResolvedValue([rule]);
+      await manager.saveRule(rule);
+
+      mockRuleRegistry.getRules.mockResolvedValue([{ ...rule, isEnabled: false }]);
+      await manager.toggleRuleStatus('r1', false);
+
+      expect(mockRuleRegistry.toggleRuleStatus).toHaveBeenCalledWith('r1', false);
+      expect(mockPlugin.unregisterShortcut).toHaveBeenCalledWith('r1');
+    });
+
+    it('should release the shortcut when a rule mutation removes it from the list', async () => {
+      const rule = shortcutRule();
+      mockRuleRegistry.getRules.mockResolvedValue([rule]);
+      await manager.saveRule(rule);
+
+      mockRuleRegistry.getRules.mockResolvedValue([]);
+      await manager.deleteRule('r1');
+
+      expect(mockRuleRegistry.deleteRule).toHaveBeenCalledWith('r1');
+      expect(mockPlugin.unregisterShortcut).toHaveBeenCalledWith('r1');
     });
   });
 });

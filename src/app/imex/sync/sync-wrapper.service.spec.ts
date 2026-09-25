@@ -22,6 +22,8 @@ import { UserInputWaitStateService } from './user-input-wait-state.service';
 import { SuperSyncStatusService } from '../../op-log/sync/super-sync-status.service';
 import { SuperSyncWebSocketService } from '../../op-log/sync/super-sync-websocket.service';
 import { WsTriggeredDownloadService } from '../../op-log/sync/ws-triggered-download.service';
+import { TrackingPresenceService } from '../../features/tracking-presence/tracking-presence.service';
+import { RemoteTrackingAndroidNotifierService } from '../../features/tracking-presence/remote-tracking-android-notifier.service';
 import {
   AuthFailSPError,
   DecryptNoPasswordError,
@@ -38,6 +40,7 @@ import {
   LocalDataConflictError,
   LockAcquisitionTimeoutError,
   MissingRefreshTokenAPIError,
+  InvalidFilePrefixError,
   JsonParseError,
   SyncDataCorruptedError,
   UploadRevToMatchMismatchAPIError,
@@ -52,8 +55,10 @@ import {
   PlaintextWhenEncryptionExpectedError,
 } from '../../op-log/core/errors/sync-errors';
 import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password/dialog-enter-encryption-password.component';
+import { DialogSyncConflictComponent } from './dialog-sync-conflict/dialog-sync-conflict.component';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
-import { ActionType } from '../../op-log/core/operation.types';
+import { ActionType, OpType } from '../../op-log/core/operation.types';
+import { TestClient } from '../../op-log/testing/integration/helpers/test-client.helper';
 import type { SyncProviderBase } from '../../op-log/sync-providers/provider.interface';
 import type { MatDialogRef } from '@angular/material/dialog';
 import { DialogGetAndEnterAuthCodeComponent } from './dialog-get-and-enter-auth-code/dialog-get-and-enter-auth-code.component';
@@ -109,6 +114,7 @@ describe('SyncWrapperService', () => {
         'setProviderConfig',
         'getProviderById',
         'clearAuthCredentials',
+        'invalidateCredentialCache',
         'getLastSyncedProviderId',
         'setLastSyncedProviderId',
         'bumpSyncEpoch',
@@ -122,6 +128,7 @@ describe('SyncWrapperService', () => {
       },
     );
     mockProviderManager.clearAuthCredentials.and.returnValue(Promise.resolve());
+    mockProviderManager.invalidateCredentialCache.and.returnValue(Promise.resolve());
     mockProviderManager.getProviderById.and.returnValue(Promise.resolve(undefined));
     mockProviderManager.getLastSyncedProviderId.and.returnValue(null);
     mockProviderManager.getActiveProvider.and.returnValue({
@@ -163,8 +170,10 @@ describe('SyncWrapperService', () => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'getVectorClockEntry',
       'setVectorClock',
+      'getUnsynced',
     ]);
     mockOpLogStore.getVectorClockEntry.and.returnValue(Promise.resolve(null));
+    mockOpLogStore.getUnsynced.and.resolveTo([]);
 
     mockLegacyPfDb = jasmine.createSpyObj('LegacyPfDbService', [
       'loadMetaModel',
@@ -241,6 +250,22 @@ describe('SyncWrapperService', () => {
         { provide: SuperSyncStatusService, useValue: mockSuperSyncStatusService },
         { provide: SuperSyncWebSocketService, useValue: mockSuperSyncWsService },
         { provide: WsTriggeredDownloadService, useValue: mockWsDownloadService },
+        {
+          provide: TrackingPresenceService,
+          // stop() returns a flush handle the wrapper waits on before
+          // closing the socket — see disconnectWebSocket().
+          useValue: jasmine.createSpyObj('TrackingPresenceService', {
+            start: undefined,
+            stop: Promise.resolve(),
+          }),
+        },
+        {
+          provide: RemoteTrackingAndroidNotifierService,
+          useValue: jasmine.createSpyObj('RemoteTrackingAndroidNotifierService', [
+            'start',
+            'stop',
+          ]),
+        },
       ],
     });
 
@@ -648,6 +673,32 @@ describe('SyncWrapperService', () => {
       expect(mockSuperSyncWsService.disconnect).toHaveBeenCalled();
     });
 
+    it('should close the websocket only after the presence stop frame flushed', async () => {
+      const presence = TestBed.inject(
+        TrackingPresenceService,
+      ) as jasmine.SpyObj<TrackingPresenceService>;
+      mockSuperSyncWsService.disconnect.calls.reset();
+      let releaseFlush = (): void => undefined;
+      presence.stop.and.returnValue(
+        new Promise<void>((resolve) => {
+          releaseFlush = resolve;
+        }),
+      );
+
+      service.disconnectWebSocket();
+      await Promise.resolve();
+
+      // the final `stopped` frame needs the socket alive to reach the wire
+      expect(presence.stop).toHaveBeenCalled();
+      expect(mockSuperSyncWsService.disconnect).not.toHaveBeenCalled();
+
+      releaseFlush();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(mockSuperSyncWsService.disconnect).toHaveBeenCalled();
+    });
+
     it('should connect websocket after successful SuperSync sync', async () => {
       const mockProvider = {
         getWebSocketParams: jasmine.createSpy().and.returnValue(
@@ -710,6 +761,57 @@ describe('SyncWrapperService', () => {
       await Promise.resolve();
 
       expect(mockSuperSyncWsService.connect).not.toHaveBeenCalled();
+    });
+
+    // The gate must run on EVERY sync cycle, not only inside connectWebSocket():
+    // the socket stays connected for days, so gating there would make toggling
+    // the setting silently do nothing until a reconnect (a failed opt-out).
+    it('should start tracking presence on sync when opted in, even with WS already connected', async () => {
+      mockSuperSyncWsService.isConnected.set(true);
+      // The opt-in is a per-device flag in the provider's private config
+      // (never the synced global config), so the gate reads it from there.
+      mockProviderManager.getProviderById.and.resolveTo({
+        privateCfg: {
+          load: jasmine.createSpy('load').and.resolveTo({
+            isTrackingPresenceEnabled: true,
+          }),
+        },
+      } as any);
+      const presence = TestBed.inject(
+        TrackingPresenceService,
+      ) as jasmine.SpyObj<TrackingPresenceService>;
+
+      await service.sync();
+      // Gate is fire-and-forget with two async hops (getProviderById +
+      // privateCfg.load); drain enough microtasks for start()/stop() to run.
+      for (let i = 0; i < 5; i++) {
+        await Promise.resolve();
+      }
+
+      expect(presence.start).toHaveBeenCalled();
+      expect(presence.stop).not.toHaveBeenCalled();
+    });
+
+    it('should stop tracking presence on sync when not opted in, even with WS already connected', async () => {
+      mockSuperSyncWsService.isConnected.set(true);
+      mockProviderManager.getProviderById.and.resolveTo({
+        privateCfg: {
+          load: jasmine.createSpy('load').and.resolveTo({
+            isTrackingPresenceEnabled: false,
+          }),
+        },
+      } as any);
+      const presence = TestBed.inject(
+        TrackingPresenceService,
+      ) as jasmine.SpyObj<TrackingPresenceService>;
+
+      await service.sync();
+      for (let i = 0; i < 5; i++) {
+        await Promise.resolve();
+      }
+
+      expect(presence.stop).toHaveBeenCalled();
+      expect(presence.start).not.toHaveBeenCalled();
     });
   });
 
@@ -774,7 +876,12 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: true, isNeverSynced: false, fenceEpoch: 0 },
+        {
+          forceFromSeq0: true,
+          isNeverSynced: false,
+          fenceEpoch: 0,
+          keepDecryptedPrefix: true,
+        },
       );
     });
 
@@ -788,7 +895,12 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: undefined, isNeverSynced: false, fenceEpoch: 0 },
+        {
+          forceFromSeq0: undefined,
+          isNeverSynced: false,
+          fenceEpoch: 0,
+          keepDecryptedPrefix: true,
+        },
       );
     });
 
@@ -799,7 +911,12 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: undefined, isNeverSynced: false, fenceEpoch: 0 },
+        {
+          forceFromSeq0: undefined,
+          isNeverSynced: false,
+          fenceEpoch: 0,
+          keepDecryptedPrefix: true,
+        },
       );
     });
 
@@ -834,6 +951,22 @@ describe('SyncWrapperService', () => {
 
       expect(result).toBe('HANDLED_ERROR');
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setLastSyncedProviderId).not.toHaveBeenCalled();
+      expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
+    });
+
+    it('should skip the upload phase when empty-server seeding created no SYNC_IMPORT (#9921)', async () => {
+      mockSyncService.downloadRemoteOps.and.resolveTo({
+        kind: 'server_migration_skipped',
+      });
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
       expect(mockProviderManager.setLastSyncedProviderId).not.toHaveBeenCalled();
       expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
     });
@@ -1182,6 +1315,29 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
+    it('should set ERROR and return HANDLED_ERROR when upload has PAYLOAD_TOO_LARGE errorCode', async () => {
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 0,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 1,
+          hasMorePiggyback: false,
+          rejectedOps: [{ opId: 'test-op', errorCode: 'PAYLOAD_TOO_LARGE' }],
+        }),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockTranslateService.instant).toHaveBeenCalledWith(
+        T.F.SYNC.S.ERROR_PAYLOAD_TOO_LARGE,
+      );
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    });
+
     it('should set ERROR for non-payload rejected ops', async () => {
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve({
@@ -1360,7 +1516,7 @@ describe('SyncWrapperService', () => {
       }
     });
 
-    it('should render unsupported multi-entity diagnostics through the dedicated snack', async () => {
+    it('offers recovery without a persistent snack that would block feedback after manual sync', async () => {
       mockSyncService.downloadRemoteOps.and.rejectWith(
         new UnsupportedMultiEntityConflictError(
           'remote',
@@ -1376,12 +1532,123 @@ describe('SyncWrapperService', () => {
       expect(mockSnackService.open).toHaveBeenCalledWith({
         msg: T.F.SYNC.S.UNSUPPORTED_MULTI_ENTITY_CONFLICT,
         type: 'ERROR',
+        actionStr: T.F.SYNC.S.BTN_RESOLVE_CONFLICT,
+        actionFn: jasmine.any(Function),
         translateParams: {
           details:
             'SYNC_MULTI_ENTITY_UNSUPPORTED side=remote ' +
             `actionType=${ActionType.TASK_SHARED_UPDATE_MULTIPLE} entityCount=2`,
         },
       });
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+      const snack = mockSnackService.open.calls.mostRecent().args[0] as SnackParams;
+      const syncSpy = spyOn(service, 'sync').and.resolveTo('HANDLED_ERROR');
+      await snack.actionFn!();
+      expect(syncSpy).toHaveBeenCalledWith(true);
+    });
+
+    // The diagnostic embeds `entityCount=N`. _isTimeoutError matches /\b504\b/,
+    // and `=` is a non-word char, so a bulk op over exactly 504 entities used to
+    // be misread as a gateway timeout — which stays silent on automatic syncs,
+    // leaving a permanent wedge with no snack and no ERROR status.
+    it('does not let entityCount=504 fall through to the gateway-timeout branch', async () => {
+      mockSyncService.downloadRemoteOps.and.rejectWith(
+        new UnsupportedMultiEntityConflictError(
+          'local',
+          ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+          504,
+        ),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.UNSUPPORTED_MULTI_ENTITY_CONFLICT,
+          actionStr: T.F.SYNC.S.BTN_RESOLVE_CONFLICT,
+        }),
+      );
+      expect(mockSnackService.open).not.toHaveBeenCalledWith(
+        jasmine.objectContaining({ msg: T.F.SYNC.S.TIMEOUT_ERROR }),
+      );
+    });
+
+    describe('unsupported multi-entity conflict recovery', () => {
+      beforeEach(() => {
+        configSubject.next(createMockSyncConfig(SyncProviderId.WebDAV));
+        mockOpLogStore.getUnsynced.and.resolveTo([
+          {
+            seq: 1,
+            source: 'local',
+            appliedAt: 1,
+            op: new TestClient('local').createOperation({
+              actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              entityId: 'task-a',
+              entityIds: ['task-a', 'task-b'],
+              payload: { tasks: [] },
+            }),
+          },
+        ]);
+        mockSyncService.downloadRemoteOps.and.rejectWith(
+          new UnsupportedMultiEntityConflictError(
+            'local',
+            ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+            8,
+          ),
+        );
+        mockSyncService.forceUploadLocalState = jasmine
+          .createSpy('forceUploadLocalState')
+          .and.resolveTo({ hasUnresolvedOps: false });
+        mockSyncService.forceDownloadRemoteState = jasmine
+          .createSpy('forceDownloadRemoteState')
+          .and.resolveTo();
+      });
+
+      for (const choice of ['USE_LOCAL', 'USE_REMOTE', undefined] as const) {
+        it(`offers explicit recovery on manual sync: ${choice ?? 'cancel'}`, async () => {
+          mockMatDialog.open.and.returnValue({
+            afterClosed: () => of(choice),
+          } as MatDialogRef<DialogSyncConflictComponent>);
+
+          const result = await service.sync(true);
+
+          expect(mockMatDialog.open).toHaveBeenCalledWith(
+            DialogSyncConflictComponent,
+            jasmine.objectContaining({ disableClose: true }),
+          );
+          const data = mockMatDialog.open.calls.mostRecent().args[1]!
+            .data as ConflictData;
+          expect(data.localUnsyncedOpsCount).toBe(1);
+          expect(data.remote.lastUpdate).toBeNull();
+          expect(data.remote.vectorClock).toBeUndefined();
+          // The reportable code must stay reachable for users who only ever
+          // sync manually and therefore never see the snack.
+          expect(data.remote.lastUpdateAction).toContain('SYNC_MULTI_ENTITY_UNSUPPORTED');
+          if (choice === 'USE_LOCAL') {
+            expect(mockSyncService.forceUploadLocalState).toHaveBeenCalledOnceWith(
+              mockSyncCapableProvider,
+            );
+          } else {
+            expect(mockSyncService.forceUploadLocalState).not.toHaveBeenCalled();
+          }
+          if (choice === 'USE_REMOTE') {
+            expect(mockSyncService.forceDownloadRemoteState).toHaveBeenCalledOnceWith(
+              mockSyncCapableProvider,
+            );
+          } else {
+            expect(mockSyncService.forceDownloadRemoteState).not.toHaveBeenCalled();
+          }
+          expect(result).toBe(choice ? SyncStatus.InSync : 'HANDLED_ERROR');
+          if (!choice) {
+            expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+            expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+          }
+        });
+      }
     });
 
     it('should escape the diagnostic before it reaches the [innerHtml] snack', async () => {
@@ -1743,6 +2010,21 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.clearAuthCredentials).not.toHaveBeenCalled();
     });
 
+    it('should drop the credential cache on each AuthFailSPError — the 401 may be another tab having rotated the token', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new AuthFailSPError()),
+      );
+
+      await service.sync();
+
+      // Without this, a second tab keeps serving its cached revoked token,
+      // strikes out, and clearAuthCredentials wipes the fresh token another
+      // tab just stored ("sign out other devices").
+      expect(mockProviderManager.invalidateCredentialCache).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
+      );
+    });
+
     it('should NOT call clearAuthCredentials on second consecutive AuthFailSPError for SuperSync', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.reject(new AuthFailSPError()),
@@ -1876,7 +2158,7 @@ describe('SyncWrapperService', () => {
 
     it('should handle JsonParseError with force-overwrite action and corrupted-data message (#5574, #4616)', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
-        Promise.reject(new JsonParseError(new SyntaxError('Unexpected end of JSON'), '')),
+        Promise.reject(new JsonParseError(new SyntaxError('Unexpected end of JSON'))),
       );
 
       const result = await service.sync();
@@ -1891,6 +2173,79 @@ describe('SyncWrapperService', () => {
           actionStr: jasmine.any(String),
         }),
       );
+    });
+
+    it('should handle InvalidFilePrefixError with force-overwrite action and corrupted-data message (#9627)', async () => {
+      // The remote file's head is not `pf_...__`, so it is rejected before the
+      // decrypt/decompress/JSON stages its siblings cover. Same user-facing
+      // situation as JsonParseError and EmptyRemoteBodySPError — remote is
+      // unreadable, local data is intact — so it gets the same actionable snack
+      // instead of falling through to the generic handler, which surfaced the
+      // raw internal message that became this issue's title.
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(
+          new InvalidFilePrefixError({
+            expectedPrefix: 'pf_',
+            endSeparator: '__',
+            inputLength: 294912,
+            prefixAt: -1,
+            headShape: 'base64',
+          }),
+        ),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.ERROR_REMOTE_FILE_CORRUPTED,
+          type: 'ERROR',
+          actionFn: jasmine.any(Function),
+          actionStr: jasmine.any(String),
+        }),
+      );
+
+      // The branch is shared with JsonParseError, so the trigger label is the
+      // only thing distinguishing the two in the log. Invoke the action rather
+      // than asserting `jasmine.any(Function)` — otherwise a label regression
+      // (both reporting 'JsonParseError') passes silently.
+      const forceUploadSpy = spyOn(service, 'forceUpload').and.resolveTo(undefined);
+      const openedSnack = mockSnackService.open.calls.mostRecent().args[0] as SnackParams;
+      await (openedSnack.actionFn as (() => Promise<void>) | undefined)?.();
+      expect(forceUploadSpy).toHaveBeenCalledWith('InvalidFilePrefixError');
+    });
+
+    it('should NOT offer force-overwrite for InvalidFilePrefixError with a markup head', async () => {
+      // A markup head means the download was a response page (WebDAV
+      // multistatus, proxy/captive-portal) — the stored remote file is likely
+      // intact, so offering the overwrite here would clobber healthy remote
+      // data over a transient network/login problem.
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(
+          new InvalidFilePrefixError({
+            expectedPrefix: 'pf_',
+            endSeparator: '__',
+            inputLength: 1543,
+            prefixAt: -1,
+            headShape: 'markup',
+          }),
+        ),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA,
+          type: 'ERROR',
+        }),
+      );
+      const callArgs = mockSnackService.open.calls.mostRecent().args[0];
+      expect(callArgs['actionFn']).toBeUndefined();
     });
 
     it('should handle SyncDataCorruptedError with version-mismatch message (no force-overwrite)', async () => {
@@ -2081,6 +2436,7 @@ describe('SyncWrapperService', () => {
 
         expect(result).toBe('HANDLED_ERROR');
         expect(mockSnackService.open).toHaveBeenCalled();
+        expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('ERROR');
         // Issue #7339: previously, filter(undefined) on the dialog stream caused
         // firstValueFrom() to throw EmptyError, which surfaced as the generic
         // ERROR snack. After the fix, an undefined close (e.g., iOS app
@@ -2337,9 +2693,7 @@ describe('SyncWrapperService', () => {
 
         await service.sync();
 
-        expect(mockUserInputWaitState.startWaiting).toHaveBeenCalledWith(
-          'local-data-conflict',
-        );
+        expect(mockUserInputWaitState.startWaiting).toHaveBeenCalledWith('data-conflict');
         expect(stopWaitingSpy).toHaveBeenCalled();
       });
 
@@ -2884,6 +3238,22 @@ describe('SyncWrapperService', () => {
           { provide: ReminderService, useValue: mockReminderService },
           { provide: UserInputWaitStateService, useValue: mockUserInputWaitState },
           { provide: SuperSyncStatusService, useValue: signalMockSuperSyncStatusService },
+          {
+            provide: TrackingPresenceService,
+            // stop() returns a flush handle the wrapper waits on before
+            // closing the socket — see disconnectWebSocket().
+            useValue: jasmine.createSpyObj('TrackingPresenceService', {
+              start: undefined,
+              stop: Promise.resolve(),
+            }),
+          },
+          {
+            provide: RemoteTrackingAndroidNotifierService,
+            useValue: jasmine.createSpyObj('RemoteTrackingAndroidNotifierService', [
+              'start',
+              'stop',
+            ]),
+          },
         ],
       });
 
@@ -3012,6 +3382,22 @@ describe('SyncWrapperService', () => {
           { provide: ReminderService, useValue: mockReminderService },
           { provide: UserInputWaitStateService, useValue: mockUserInputWaitState },
           { provide: SuperSyncStatusService, useValue: signalMockSuperSyncStatusService },
+          {
+            provide: TrackingPresenceService,
+            // stop() returns a flush handle the wrapper waits on before
+            // closing the socket — see disconnectWebSocket().
+            useValue: jasmine.createSpyObj('TrackingPresenceService', {
+              start: undefined,
+              stop: Promise.resolve(),
+            }),
+          },
+          {
+            provide: RemoteTrackingAndroidNotifierService,
+            useValue: jasmine.createSpyObj('RemoteTrackingAndroidNotifierService', [
+              'start',
+              'stop',
+            ]),
+          },
         ],
       });
 
@@ -3257,6 +3643,96 @@ describe('SyncWrapperService', () => {
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
       expect(result).toBe('HANDLED_ERROR');
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    });
+
+    it('should not report IN_SYNC when a full-state upload was deferred by a retryable error', async () => {
+      // Server migration whose snapshot upload hit a Postgres serialization
+      // conflict: nothing reached the server, the op stays pending for the next
+      // sync — but the wrapper used to fall through to IN_SYNC.
+      mockSyncService.downloadRemoteOps.and.resolveTo({ kind: 'no_new_ops' as const });
+      mockSyncService.uploadPendingOps.and.resolveTo({
+        kind: 'completed' as const,
+        uploadedCount: 0,
+        piggybackedOpsCount: 0,
+        localWinOpsCreated: 0,
+        permanentRejectionCount: 0,
+        hasMorePiggyback: false,
+        rejectedOps: [],
+        fullStateUploadDeferred: true,
+      });
+
+      const result = await service.sync();
+
+      expect(result).toBe(SyncStatus.UpdateRemote);
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
+    });
+
+    it('should immediately re-upload an op the server rejected with a transient INTERNAL_ERROR', async () => {
+      // "Concurrent transaction conflict - please retry": the op stays pending
+      // locally, and without a retry in this cycle it sat unsynced until the
+      // next auto-sync tick while the header showed unsynced changes.
+      mockSyncService.downloadRemoteOps.and.resolveTo({ kind: 'no_new_ops' as const });
+      mockSyncService.uploadPendingOps.and.returnValues(
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 0,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [
+            {
+              opId: 'op-1',
+              error: 'Concurrent transaction conflict - please retry',
+              errorCode: 'INTERNAL_ERROR',
+            },
+          ],
+        }),
+        Promise.resolve({
+          kind: 'completed' as const,
+          uploadedCount: 1,
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
+        }),
+      );
+
+      const result = await service.sync();
+
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(result).toBe(SyncStatus.InSync);
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('IN_SYNC');
+    });
+
+    it('should not report IN_SYNC when an op is still transiently rejected after the retry budget', async () => {
+      mockSyncService.downloadRemoteOps.and.resolveTo({ kind: 'no_new_ops' as const });
+      mockSyncService.uploadPendingOps.and.resolveTo({
+        kind: 'completed' as const,
+        uploadedCount: 0,
+        piggybackedOpsCount: 0,
+        localWinOpsCreated: 0,
+        permanentRejectionCount: 0,
+        hasMorePiggyback: false,
+        rejectedOps: [
+          { opId: 'op-1', error: 'server busy', errorCode: 'INTERNAL_ERROR' },
+        ],
+      });
+
+      const result = await service.sync();
+
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(
+        1 + MAX_LWW_REUPLOAD_RETRIES,
+      );
+      expect(result).toBe(SyncStatus.UpdateRemote);
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 

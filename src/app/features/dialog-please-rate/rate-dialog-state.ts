@@ -1,8 +1,9 @@
 import { LS } from '../../core/persistence/storage-keys.const';
 import { IS_ANDROID_WEB_VIEW, IS_F_DROID_APP } from '../../util/is-android-web-view';
 import { IS_IOS } from '../../util/is-ios';
-import { IS_ELECTRON } from '../../app.constants';
 import { getAppVersionStr } from '../../util/get-app-version-str';
+import { getOsLabel } from '../../core/util/get-os-label';
+import { PlatformCode, getCurrentPlatformCode } from '../../core/util/generate-client-id';
 
 // Device-local only. localStorage keys are implicitly excluded from sync exports.
 //
@@ -188,17 +189,19 @@ export const getPrimaryCta = (): PrimaryCta => {
   return { labelKey: 'F.D_RATE.BTN_STAR_GITHUB', url: GITHUB_REPO_URL };
 };
 
-const getPlatformLabel = (): string => {
-  if (IS_IOS) return 'iOS';
-  if (IS_ANDROID_WEB_VIEW) return 'Android';
-  if (IS_ELECTRON) {
-    const ua = navigator.userAgent;
-    if (/Mac|Macintosh/.test(ua)) return 'Electron · macOS';
-    if (/Windows/.test(ua)) return 'Electron · Windows';
-    if (/Linux/.test(ua)) return 'Electron · Linux';
-    return 'Electron';
+/**
+ * Platform line for the feedback mail. Builds on the shared platform code
+ * rather than re-checking IS_* flags (#9353); the parameters are test seams.
+ */
+export const getPlatformLabel = (
+  platform: PlatformCode = getCurrentPlatformCode(),
+  userAgent: string = navigator.userAgent,
+): string => {
+  if (platform === 'E') {
+    const os = getOsLabel(userAgent);
+    return os ? `Electron · ${os}` : 'Electron';
   }
-  return 'Web';
+  return { I: 'iOS', A: 'Android', B: 'Web' }[platform];
 };
 
 export const buildFeedbackMailto = (): string => {

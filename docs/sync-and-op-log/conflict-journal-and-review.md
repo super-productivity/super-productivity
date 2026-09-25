@@ -57,9 +57,9 @@ Contracts:
   `3.06-User-Data`).
 - **Cleared on full dataset replacement.** Journal entries describe conflicts
   in the op history; when that history is replaced wholesale the entries are
-  stale (and, across user profiles, a privacy leak).
+  stale and may expose values from a dataset that has been replaced.
   `BackupService.importCompleteBackup` — the chokepoint every replacement path
-  funnels through (profile switch, JSON import, local-backup restore, SuperSync
+  funnels through (JSON import, local-backup restore, SuperSync
   restore) — calls `ConflictJournalService.clearAll()`.
 - **Retention.** Each prune applies whichever bound binds first: entries older
   than 14 days (`JOURNAL_RETENTION_DAYS`), then anything beyond the newest 200

@@ -90,7 +90,7 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
         }
 
         &:hover:not(.isActive) {
-          background-color: var(--hover-color, rgba(0, 0, 0, 0.04));
+          background-color: var(--state-hover);
         }
       }
     `,

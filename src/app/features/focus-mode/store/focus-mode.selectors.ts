@@ -58,6 +58,15 @@ export const selectIsLongBreak = createSelector(
   (timer) => timer.purpose === 'break' && timer.isLongBreak === true,
 );
 
+export const selectIsBreakTimeUp = createSelector(
+  selectTimer,
+  (timer) =>
+    timer.purpose === 'break' &&
+    !timer.isRunning &&
+    timer.startedAt !== null &&
+    timer.elapsed >= timer.duration,
+);
+
 // Timer selectors - much simpler!
 export const selectTimeElapsed = createSelector(selectTimer, (timer) => timer.elapsed);
 
@@ -78,6 +87,28 @@ export const selectProgress = createSelector(
 export const selectIsRunning = createSelector(
   selectTimer,
   (timer) => timer.isRunning && timer.purpose !== null,
+);
+
+/**
+ * Whether the running focus session owns the OS progress bar (taskbar/dock).
+ * Exactly one writer may own that surface, so `task-electron.effects` stands
+ * down on this same flag — when both wrote, the bar cycled between the two
+ * values every second (#9944). An open-ended (Flowtime) session has no target
+ * duration and therefore no progress of its own, so it leaves the bar to the
+ * task writer rather than publishing a meaningless 0.
+ */
+export const selectIsOsProgressBarOwnedBySession = createSelector(
+  selectIsRunning,
+  selectTimeDuration,
+  (isRunning, duration) => isRunning && duration > 0,
+);
+
+/** What the focus session should publish, or `null` when it owns nothing. */
+export const selectOsProgressBar = createSelector(
+  selectIsOsProgressBarOwnedBySession,
+  selectProgress,
+  (isOwnedBySession, progress): { progress: number; progressBarMode: 'normal' } | null =>
+    isOwnedBySession ? { progress: progress / 100, progressBarMode: 'normal' } : null,
 );
 
 // Session completed selector

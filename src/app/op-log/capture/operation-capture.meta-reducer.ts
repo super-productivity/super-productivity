@@ -163,27 +163,32 @@ let highestWarnedThreshold = 0;
  * exists in NgRx, so removal here would create permanent unsyncable state.
  */
 export const bufferDeferredAction = (action: PersistentAction): void => {
-  deferredActions.push(action);
-  deferredActionSet.add(action);
-
+  // Warn BEFORE buffering: devError throws in dev builds when the developer
+  // confirms, and reducerFailureGuardMetaReducer then rejects the action and
+  // keeps the pre-dispatch state (#10195). Buffered first, it would still be
+  // turned into an op for a change NgRx never committed.
+  const nextLength = deferredActions.length + 1;
   if (
-    deferredActions.length >= DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD &&
+    nextLength >= DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD &&
     highestWarnedThreshold < DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD
   ) {
     highestWarnedThreshold = DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD;
     devError(
-      `[operationCaptureMetaReducer] Deferred actions buffer has ${deferredActions.length} items. ` +
+      `[operationCaptureMetaReducer] Deferred actions buffer has ${nextLength} items. ` +
         `Sync may be stuck - consider reloading the app. Nothing is dropped; actions remain buffered.`,
     );
   } else if (
-    deferredActions.length > DEFERRED_ACTIONS_SOFT_WARNING_THRESHOLD &&
+    nextLength > DEFERRED_ACTIONS_SOFT_WARNING_THRESHOLD &&
     highestWarnedThreshold < DEFERRED_ACTIONS_SOFT_WARNING_THRESHOLD
   ) {
     highestWarnedThreshold = DEFERRED_ACTIONS_SOFT_WARNING_THRESHOLD;
     devError(
-      `[operationCaptureMetaReducer] Deferred actions buffer has ${deferredActions.length} items - sync may be stuck or taking too long`,
+      `[operationCaptureMetaReducer] Deferred actions buffer has ${nextLength} items - sync may be stuck or taking too long`,
     );
   }
+
+  deferredActions.push(action);
+  deferredActionSet.add(action);
 };
 
 /**

@@ -374,6 +374,92 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
     expect(operationApplier.applyOperations).not.toHaveBeenCalled();
   });
 
+  it('keeps the local-win compensation uploadable when applying the resolution fails (#8761)', async () => {
+    const { localOp, remoteLoser } = createConflicts();
+    const localWinsConflicts: EntityConflict[] = [
+      {
+        entityType: 'TIME_TRACKING',
+        entityId: ENTITY_ID,
+        localOps: [localOp],
+        remoteOps: [remoteLoser],
+        suggestedResolution: 'manual',
+      },
+    ];
+    // A local-only win dispatches nothing, so the apply window that used to
+    // orphan the edit only opens when the same batch carries other remote ops.
+    const nonConflictingRemoteTaskUpdate: Operation = {
+      id: 'remote-task-update',
+      actionType: toLwwUpdateActionType('TASK'),
+      opType: OpType.Update,
+      entityType: 'TASK',
+      entityId: 'task-1',
+      payload: {
+        actionPayload: { ...DEFAULT_TASK, id: 'task-1', title: 'task-1' } as Task,
+        entityChanges: [],
+        lwwUpdateMode: 'replace',
+      },
+      clientId: REMOTE_CLIENT_ID,
+      vectorClock: { [REMOTE_CLIENT_ID]: 2 },
+      timestamp: 3_000,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+    await opLogStore.append(localOp, 'local');
+    operationApplier.applyOperations.and.callFake(async () => {
+      throw new Error('simulated apply failure during resolution');
+    });
+
+    await expectAsync(
+      service.autoResolveConflictsLWW(localWinsConflicts, [
+        nonConflictingRemoteTaskUpdate,
+      ]),
+    ).toBeRejectedWithError('simulated apply failure during resolution');
+
+    // The replacement is durable before the original is ever rejected, so a
+    // failed apply leaves the local edit uploadable instead of orphaning it.
+    const storedEntries = await opLogStore.getOpsAfterSeq(0);
+    const compensation = storedEntries.find(
+      ({ op, source }) => source === 'local' && op.id !== localOp.id,
+    );
+    expect(compensation).toBeDefined();
+    expect(compensation?.rejectedAt).toBeUndefined();
+    expect(
+      storedEntries.find(({ op }) => op.id === localOp.id)?.rejectedAt,
+    ).toBeUndefined();
+    const unsyncedIdsAfterFailure = (await opLogStore.getUnsynced()).map(
+      ({ op }) => op.id,
+    );
+    expect(unsyncedIdsAfterFailure).toContain(compensation!.op.id);
+    expect(unsyncedIdsAfterFailure).toContain(localOp.id);
+    expect((await opLogStore.getPendingRemoteOps()).map(({ op }) => op.id)).toEqual([
+      nonConflictingRemoteTaskUpdate.id,
+    ]);
+
+    // A successful retry finalizes the rejection of the original while the
+    // compensation stays pending for upload.
+    operationApplier.applyOperations.and.callFake(async (operations, options) => {
+      liveResolutionOps = operations;
+      await options?.onReducersCommitted?.(operations);
+      return { appliedOps: operations };
+    });
+    await service.autoResolveConflictsLWW(localWinsConflicts, [
+      nonConflictingRemoteTaskUpdate,
+    ]);
+
+    expect((await opLogStore.getOpById(localOp.id))?.rejectedAt).toBeDefined();
+    const unsyncedAfterRetry = await opLogStore.getUnsynced();
+    expect(unsyncedAfterRetry.length).toBeGreaterThan(0);
+    expect(unsyncedAfterRetry.map(({ op }) => op.id)).not.toContain(localOp.id);
+    expect(
+      unsyncedAfterRetry.every(
+        ({ op, source }) =>
+          source === 'local' &&
+          op.clientId === LOCAL_CLIENT_ID &&
+          op.actionType === toLwwUpdateActionType('TIME_TRACKING'),
+      ),
+    ).toBeTrue();
+    expect(await opLogStore.getPendingRemoteOps()).toEqual([]);
+  });
+
   it('recovers a crash after the reducer checkpoint without replaying reducers', async () => {
     const { localOp, remoteWinner, conflicts } = createConflicts();
     await opLogStore.append(localOp, 'local');

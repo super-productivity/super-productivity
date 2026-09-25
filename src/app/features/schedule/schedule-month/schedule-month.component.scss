@@ -69,40 +69,8 @@
   max-width: 100%;
   overflow: hidden;
 
-  :host[style*='--nr-of-weeks: 3'] & {
-    min-height: 120px;
-  }
-
-  :host[style*='--nr-of-weeks: 4'] & {
-    min-height: 100px;
-  }
-
-  :host[style*='--nr-of-weeks: 5'] & {
-    min-height: 85px;
-  }
-
-  :host[style*='--nr-of-weeks: 6'] & {
-    min-height: 70px;
-  }
-
   @include mq(xs, max) {
     min-height: 50px;
-
-    :host[style*='--nr-of-weeks: 3'] & {
-      min-height: 80px;
-    }
-
-    :host[style*='--nr-of-weeks: 4'] & {
-      min-height: 65px;
-    }
-
-    :host[style*='--nr-of-weeks: 5'] & {
-      min-height: 55px;
-    }
-
-    :host[style*='--nr-of-weeks: 6'] & {
-      min-height: 50px;
-    }
   }
 
   &.other-month {
@@ -173,40 +141,6 @@
   @include mq(xs, max) {
     padding: var(--s-quarter);
     max-height: calc(100% - 25px);
-  }
-
-  :host[style*='--nr-of-weeks: 3'] & .month-event:nth-child(n + 8) {
-    display: none;
-  }
-
-  :host[style*='--nr-of-weeks: 4'] & .month-event:nth-child(n + 6) {
-    display: none;
-  }
-
-  :host[style*='--nr-of-weeks: 5'] & .month-event:nth-child(n + 4) {
-    display: none;
-  }
-
-  :host[style*='--nr-of-weeks: 6'] & .month-event:nth-child(n + 3) {
-    display: none;
-  }
-
-  @include mq(xs, max) {
-    :host[style*='--nr-of-weeks: 3'] & .month-event:nth-child(n + 4) {
-      display: none;
-    }
-
-    :host[style*='--nr-of-weeks: 4'] & .month-event:nth-child(n + 3) {
-      display: none;
-    }
-
-    :host[style*='--nr-of-weeks: 5'] & .month-event:nth-child(n + 2) {
-      display: none;
-    }
-
-    :host[style*='--nr-of-weeks: 6'] & .month-event:nth-child(n + 2) {
-      display: none;
-    }
   }
 
   .month-event:nth-child(n + 4) {

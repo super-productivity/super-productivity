@@ -2,6 +2,7 @@ import { SUPER_SYNC_CLIENT_ID_REGEX } from '@sp/shared-schema';
 import { MIN_CLIENT_ID_LENGTH } from '../../op-log/core/operation-log.const';
 import {
   generateClientId,
+  getClientIdPlatformCode,
   getPlatformCode,
   isValidClientIdFormat,
 } from './generate-client-id';
@@ -25,6 +26,30 @@ describe('generate-client-id', () => {
         'E',
       );
       expect(getPlatformCode({ ...NONE, isAndroid: true, isIos: true })).toBe('A');
+    });
+  });
+
+  describe('getClientIdPlatformCode()', () => {
+    it('decodes every current compact prefix', () => {
+      expect(getClientIdPlatformCode('E_FXMz')).toBe('E');
+      expect(getClientIdPlatformCode('A_FXMz')).toBe('A');
+      expect(getClientIdPlatformCode('I_FXMz')).toBe('I');
+      expect(getClientIdPlatformCode('B_FXMz')).toBe('B');
+    });
+
+    it('decodes the legacy PFAPI prefixes that map unambiguously', () => {
+      // Legacy ids were `{getEnvironmentId()}_{Date.now()}`:
+      // Electron produced `E_{os}` and Android WebView the fixed `AND`.
+      expect(getClientIdPlatformCode('E_W_1699999999999')).toBe('E');
+      expect(getClientIdPlatformCode('AND_1699999999999')).toBe('A');
+    });
+
+    it('reports null for prefixes it cannot decode without guessing', () => {
+      // Legacy browser ids encoded browser+OS (e.g. `BCL` = Chrome/Linux) —
+      // decoding those would need the historical code table.
+      expect(getClientIdPlatformCode('BCL_1699999999999')).toBeNull();
+      expect(getClientIdPlatformCode('Z_weird1')).toBeNull();
+      expect(getClientIdPlatformCode('')).toBeNull();
     });
   });
 

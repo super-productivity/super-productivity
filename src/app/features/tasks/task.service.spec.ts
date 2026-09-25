@@ -64,8 +64,8 @@ describe('TaskService', () => {
       activeWorkContextId: 'test-project',
       mainListTaskIds$: of(['task-1', 'task-2']),
       backlogTaskIds$: of([]),
-      doneTaskIds$: of([]),
-      doneBacklogTaskIds$: of([]),
+      undoneTaskIds$: of([]),
+      undoneBacklogTaskIds$: of([]),
       startableTasksForActiveContext$: of([]),
       startableTasksForActiveContext: signal([]),
       activeWorkContext$: of({

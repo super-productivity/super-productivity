@@ -2,6 +2,10 @@ import { test, expect, Page } from '@playwright/test';
 import legacyData from '../../fixtures/legacy-full-migration-backup.json';
 import { MIGRATION_BACKUP_PREFIX } from '../../../electron/shared-with-frontend/get-backup-timestamp';
 import { skipOnboardingForE2E } from '../../utils/waits';
+import {
+  readMigratedState,
+  seedLegacyDatabase,
+} from '../../utils/legacy-migration-helpers';
 
 /**
  * Legacy Data Migration E2E Tests
@@ -15,50 +19,6 @@ import { skipOnboardingForE2E } from '../../utils/waits';
  *
  * Run with: npm run e2e:file e2e/tests/migration/legacy-data-migration.spec.ts -- --retries=0
  */
-
-/**
- * Helper to seed the legacy 'pf' IndexedDB database with data
- * Must be called BEFORE navigating to the app
- */
-const seedLegacyDatabase = async (
-  page: Page,
-  data: Record<string, unknown>,
-): Promise<void> => {
-  await page.evaluate(async (entityData) => {
-    return new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open('pf', 1);
-
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        if (!db.objectStoreNames.contains('main')) {
-          db.createObjectStore('main');
-        }
-      };
-
-      request.onsuccess = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        const tx = db.transaction('main', 'readwrite');
-        const store = tx.objectStore('main');
-
-        // Store each entity type
-        for (const [key, value] of Object.entries(entityData)) {
-          store.put(value, key);
-        }
-
-        tx.oncomplete = () => {
-          db.close();
-          resolve();
-        };
-        tx.onerror = () => {
-          db.close();
-          reject(tx.error);
-        };
-      };
-
-      request.onerror = () => reject(request.error);
-    });
-  }, data);
-};
 
 const readLegacyMigrationLock = async (page: Page): Promise<unknown> => {
   return page.evaluate(async () => {
@@ -87,35 +47,12 @@ const readLegacyMigrationLock = async (page: Page): Promise<unknown> => {
 /**
  * Helper to read data from SUP_OPS IndexedDB after migration
  */
-const readMigratedState = async (
-  page: Page,
-): Promise<{
+type MigratedState = {
   globalConfig?: { sync?: Record<string, unknown> };
   task?: { ids: string[]; entities: Record<string, unknown> };
   project?: { ids: string[]; entities: Record<string, unknown> };
   tag?: { ids: string[]; entities: Record<string, unknown> };
   note?: { ids: string[]; entities: Record<string, unknown> };
-}> => {
-  return page.evaluate(async () => {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open('SUP_OPS');
-      request.onsuccess = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        const tx = db.transaction('state_cache', 'readonly');
-        const store = tx.objectStore('state_cache');
-        const getReq = store.get('current');
-        getReq.onsuccess = () => {
-          db.close();
-          resolve(getReq.result?.state || {});
-        };
-        getReq.onerror = () => {
-          db.close();
-          reject(getReq.error);
-        };
-      };
-      request.onerror = () => reject(request.error);
-    });
-  });
 };
 
 /**
@@ -254,7 +191,7 @@ test.describe('@migration Legacy Data Migration', () => {
       // ========================================================================
       // STEP 6: Verify migrated data via IndexedDB
       // ========================================================================
-      const state = await readMigratedState(page);
+      const state = await readMigratedState<MigratedState>(page);
 
       // --- Verify Tasks ---
       expect(state.task?.ids).toBeDefined();
@@ -441,11 +378,13 @@ test.describe('@migration Legacy Data Migration', () => {
 
       const dialog = page.locator('dialog-legacy-migration');
       await expect(dialog.locator('.error-message')).toContainText(
-        'Migration failed. Your backup has been downloaded.',
+        'Your old data could not be migrated.',
         { timeout: 60000 },
       );
-      const acknowledgeButton = dialog.getByRole('button');
-      await expect(acknowledgeButton).toHaveCount(1);
+      // Two buttons once the backup exists: acknowledge, and the #9770 escape
+      // hatch that discards the unmigratable legacy data.
+      await expect(dialog.getByRole('button')).toHaveCount(2);
+      const acknowledgeButton = dialog.getByRole('button', { name: 'Ok' });
       await expect(acknowledgeButton).toBeEnabled();
 
       const download = await downloadPromise;

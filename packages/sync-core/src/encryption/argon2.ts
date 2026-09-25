@@ -1,6 +1,11 @@
 import { argon2id } from 'hash-wasm';
 import { KEY_LENGTH, SALT_LENGTH, getRandomBytes } from './web-crypto';
 
+// These parameters (and the salt|iv|ciphertext wire format in encryption.ts)
+// are a cross-platform contract: the Android background reminder worker
+// re-implements this KDF in Kotlin and must derive identical keys.
+// If you change them, update android/.../crypto/OpPayloadDecryptor.kt and its
+// hash-wasm-generated test vectors (Argon2Test.kt) in the same PR.
 const DEFAULT_ARGON2_PARAMS = {
   parallelism: 1,
   iterations: 3,

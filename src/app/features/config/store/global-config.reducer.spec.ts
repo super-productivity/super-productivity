@@ -19,7 +19,7 @@ import {
 } from './global-config.reducer';
 import { updateGlobalConfigSection } from './global-config.actions';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
-import { GlobalConfigState } from '../global-config.model';
+import { GlobalConfigState, GlobalSectionConfig } from '../global-config.model';
 import { MemoizedSelector } from '@ngrx/store';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { AppDataComplete } from '../../../op-log/model/model-config';
@@ -55,6 +55,27 @@ describe('GlobalConfigReducer', () => {
       );
 
       expect(result.misc.isDisableAnimations).toBe(true);
+    });
+
+    it('should strip the removed user-profiles setting from stored data', () => {
+      const incomingConfig = {
+        ...initialGlobalConfigState,
+        appFeatures: {
+          ...initialGlobalConfigState.appFeatures,
+          isEnableUserProfiles: true,
+        },
+      };
+
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        loadAllData({
+          appDataComplete: {
+            globalConfig: incomingConfig,
+          } as unknown as AppDataComplete,
+        }),
+      );
+
+      expect('isEnableUserProfiles' in result.appFeatures).toBe(false);
     });
 
     it('should fill missing tasks config fields with defaults', () => {
@@ -508,12 +529,19 @@ describe('GlobalConfigReducer', () => {
       expect(result.misc.startOfNextDayTime).toBe('00:00');
     });
 
-    it('should repair invalid startOfNextDayTime with a valid legacy fallback', () => {
+    // #7645: v18.5.0-v18.6.x accepted any colon-string in the free-text
+    // "start of next day" field and clamped it to 23:59, so the whole app sat one
+    // day behind. That reducer ALSO derived the legacy hour from the same bad
+    // string -- getStartOfNextDayHourFromTimeString('24:00') returned 23 -- and
+    // persisted/synced the pair below. Trusting that derived 23 as a "valid legacy
+    // fallback" repairs the config to a 23h offset, which is still yesterday for
+    // 23 of every 24 hours. The legacy hour is poisoned, not independent intent.
+    it('should not fall back to a legacy hour derived from the invalid time string (#7645)', () => {
       const snapshotConfig: any = {
         ...DEFAULT_GLOBAL_CONFIG,
         misc: {
           ...DEFAULT_GLOBAL_CONFIG.misc,
-          startOfNextDay: 4,
+          startOfNextDay: 23,
           startOfNextDayTime: '24:00',
         },
       };
@@ -525,8 +553,8 @@ describe('GlobalConfigReducer', () => {
         }),
       );
 
-      expect(result.misc.startOfNextDay).toBe(4);
-      expect(result.misc.startOfNextDayTime).toBe('04:00');
+      expect(result.misc.startOfNextDayTime).toBe('00:00');
+      expect(result.misc.startOfNextDay).toBe(0);
     });
 
     it('should repair fully invalid startOfNextDay config to the default day boundary', () => {
@@ -897,6 +925,20 @@ describe('GlobalConfigReducer', () => {
   });
 
   describe('updateGlobalConfigSection action', () => {
+    it('should ignore the removed user-profiles setting from an old client', () => {
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        updateGlobalConfigSection({
+          sectionKey: 'appFeatures',
+          sectionCfg: {
+            isEnableUserProfiles: true,
+          } as unknown as Partial<GlobalSectionConfig>,
+        }),
+      );
+
+      expect('isEnableUserProfiles' in result.appFeatures).toBe(false);
+    });
+
     it('should update sync schedule settings for local actions', () => {
       const result = globalConfigReducer(
         initialGlobalConfigState,
@@ -1205,6 +1247,30 @@ describe('GlobalConfigReducer', () => {
         };
         const result = selectTimelineWorkStartEndHours.projector(state);
         expect(result).toBeNull();
+      });
+
+      // Same corrupt-data class as the #5358 guards: an imported/synced
+      // snapshot can carry invalid clock strings; without the guard the NaN
+      // hours auto-place the Start/End markers at an arbitrary grid position.
+      // One case per side: `||` short-circuits, so a combined case would still
+      // pass with either half of the guard deleted.
+      [
+        { workStart: '', workEnd: '17:00' },
+        { workStart: '9:00', workEnd: '25:99' },
+      ].forEach(({ workStart, workEnd }) => {
+        it(`should return null instead of NaN hours for ${workStart || "''"}-${workEnd}`, () => {
+          const state: GlobalConfigState = {
+            ...initialGlobalConfigState,
+            schedule: {
+              ...initialGlobalConfigState.schedule,
+              isWorkStartEndEnabled: true,
+              workStart,
+              workEnd,
+            },
+          };
+          const result = selectTimelineWorkStartEndHours.projector(state);
+          expect(result).toBeNull();
+        });
       });
     });
   });

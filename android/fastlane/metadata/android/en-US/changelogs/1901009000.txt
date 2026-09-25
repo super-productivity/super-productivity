@@ -1,0 +1,9 @@
+- unfocus the focused task on Escape
+- add home screen quick actions (#10124)
+- add two-way card synchronization (#9447)
+- support multiple Google Calendar accounts (#8865)
+- add keyboard navigation and task multiselect
+- add keyboard navigation, shortcuts, and multiselect (#10086)
+- restore archived recurring task for next occurrence (#10157)
+- track un-maximized bounds instead of trusting the library (#10094)
+- repair TestFlight publisher reporting and extension handling (#10156)

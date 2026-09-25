@@ -4,8 +4,10 @@ import {
   Component,
   computed,
   effect,
+  ElementRef,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { fromEvent } from 'rxjs';
 import { select, Store } from '@ngrx/store';
@@ -43,6 +45,7 @@ import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../../core/locale.constants';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { getWeekNumber } from '../../../util/get-week-number';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
+import { anchorContextNow } from '../anchor-context-now';
 
 @Component({
   selector: 'schedule',
@@ -78,6 +81,7 @@ export class ScheduleComponent {
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _translate = inject(TranslateService);
   private _hiddenCalendarProviders = inject(HiddenCalendarProvidersService);
+  private _elRef = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly hiddenCalendarProviderIds = this._hiddenCalendarProviders.hiddenProviderIds;
   readonly enabledCalendarProviders = toSignal(
@@ -100,6 +104,8 @@ export class ScheduleComponent {
   toggleCalProvider(providerId: string): void {
     this._hiddenCalendarProviders.toggle(providerId);
   }
+
+  private _scrollWrapper = viewChild<ElementRef<HTMLElement>>('scrollWrapper');
 
   private _currentTimeViewMode = computed(() => this.layoutService.selectedTimeView());
   isMonthView = computed(() => this._currentTimeViewMode() === 'month');
@@ -138,29 +144,13 @@ export class ScheduleComponent {
   });
 
   private _daysToShowCount = computed(() => {
-    const size = this._windowSize();
     const selectedView = this._currentTimeViewMode();
-    const width = size.width;
-    const height = size.height;
 
     if (selectedView === 'day') return 1;
 
-    if (selectedView === 'month') {
-      const availableHeight = height - SCHEDULE_CONSTANTS.MONTH_VIEW.HEADER_OFFSET;
-      const minHeightPerWeek =
-        width < SCHEDULE_CONSTANTS.BREAKPOINTS.TABLET
-          ? SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_HEIGHT_PER_WEEK_MOBILE
-          : SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_HEIGHT_PER_WEEK_DESKTOP;
-      const maxWeeks = Math.floor(availableHeight / minHeightPerWeek);
-
-      if (maxWeeks < SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_WEEKS) {
-        return SCHEDULE_CONSTANTS.MONTH_VIEW.MIN_WEEKS;
-      } else if (maxWeeks > SCHEDULE_CONSTANTS.MONTH_VIEW.MAX_WEEKS) {
-        return SCHEDULE_CONSTANTS.MONTH_VIEW.MAX_WEEKS;
-      } else {
-        return maxWeeks;
-      }
-    }
+    // Month view derives its own count from the displayed month, in `daysToShow`
+    // below: it needs `selectedDate` and `firstDayOfWeek`, neither of which is
+    // read here.
 
     // Week view: always 7 days
     return 7;
@@ -174,9 +164,16 @@ export class ScheduleComponent {
     this._todayDateStr();
 
     if (selectedView === 'month') {
+      // Rows follow the month, never the window height. Deriving them from
+      // available space is what #9449 was filed for: a day left out of
+      // `daysToShow` gets no events computed at all, so a task on it vanished
+      // rather than merely being clipped. 4-6 rows spans every
+      // month/firstDayOfWeek pair, and `weeksToShow` carries the same number
+      // into the grid's `--nr-of-weeks`, so the tracks follow the days.
+      const firstDayOfWeek = this.firstDayOfWeek();
       return this.scheduleService.getMonthDaysToShow(
-        count,
-        this.firstDayOfWeek(),
+        this.scheduleService.getMonthWeeksToShow(firstDayOfWeek, selectedDate),
+        firstDayOfWeek,
         selectedDate,
       );
     }
@@ -243,36 +240,32 @@ export class ScheduleComponent {
     return cfg !== null && cfg !== undefined ? cfg : DEFAULT_FIRST_DAY_OF_WEEK;
   });
 
-  // Calculate context-aware "now" based on selected date
-  // When viewing a future week, use the start of that week as reference time
+  // Calculate context-aware "now" anchored to the first displayed day
+  // When viewing a future range, use the start of that range as reference time
   private _contextNow = computed(() => {
     // Date.now() is not reactive and computeds cache, so without a time-varying
     // dependency the reference would freeze at whatever instant this last ran.
     // Same 2-min tick currentTimeRow and scheduleDays already refresh on.
     this.scheduleService.scheduleRefreshTick();
 
-    const selectedDate = this._selectedDate();
-    if (selectedDate === null) {
+    // contextNow anchors dayDates[0] (`startTime = i == 0 ? now` in
+    // create-schedule-days), so it has to stay inside that day. Day 0 is not
+    // always the selected date: month view pads the grid back to the start of
+    // the week containing the 1st, so its first cell usually sits in the
+    // previous month, and deriving the anchor from the selected date stamped
+    // that cell with a timestamp from a different day. The bounds therefore
+    // come from daysToShow()[0] itself, via the same helper
+    // create-schedule-days resolves day bounds with. Testing where the wall
+    // clock sits within that day - rather than comparing day strings - lets
+    // the view self-correct once it drifts under a midnight rollover (a day
+    // picked as "tomorrow" becomes today while the view stays put), and can
+    // never hand the mapper a now past day 0's end, which would push every
+    // entry out of the column.
+    const firstDay = this.daysToShow()[0];
+    if (!firstDay) {
       return Date.now();
     }
-
-    // contextNow anchors dayDates[0] (`startTime = i == 0 ? now` in
-    // create-schedule-days), so it has to stay inside that day. Testing where the
-    // wall clock sits within the selected day - rather than comparing day strings -
-    // lets the view self-correct once it drifts under a midnight rollover (a day
-    // picked as "tomorrow" becomes today while the view stays put), and can never
-    // hand the mapper a now past day 0's end, which would push every entry out of
-    // the column.
-    const dayStart = new Date(selectedDate);
-    dayStart.setHours(0, 0, 0, 0);
-    // setDate rather than +24h: DST-safe day advancement.
-    const nextDayStart = new Date(dayStart);
-    nextDayStart.setDate(nextDayStart.getDate() + 1);
-
-    const now = Date.now();
-    return now >= dayStart.getTime() && now < nextDayStart.getTime()
-      ? now
-      : dayStart.getTime();
+    return anchorContextNow(firstDay, Date.now());
   });
 
   scheduleDays = computed(() => {
@@ -392,37 +385,39 @@ export class ScheduleComponent {
     this.isHScrolled.set(el.scrollLeft > 0);
   }
 
-  // Scroll a target element into view inside the scroll-wrapper, but pull
-  // horizontally back by the sticky time column's width (+ a bit extra) so
-  // the target doesn't end up sitting under the time column.
-  private _scrollIntoViewWithTimeColumnOffset(elementId: string): void {
-    const element = document.getElementById(elementId);
-    const scrollContainer = element?.closest('.scroll-wrapper') as HTMLElement | null;
-    if (!element || !scrollContainer) return;
-
-    const timeCol = scrollContainer.querySelector(
-      'schedule-week .time-column-bg, schedule-week .filler',
-    );
-    // `.filler` is `display:none` in side-panel mode, so a 0-width hit
-    // here means we matched the hidden one — fall back to the default.
-    const timeColWidth = timeCol?.getBoundingClientRect().width || 48;
-    const EXTRA_PX = 12;
-
-    const elRect = element.getBoundingClientRect();
-    const containerRect = scrollContainer.getBoundingClientRect();
-    const targetTop = scrollContainer.scrollTop + elRect.top - containerRect.top;
-    const targetLeft =
-      scrollContainer.scrollLeft +
-      elRect.left -
-      containerRect.left -
-      timeColWidth -
-      EXTRA_PX;
-
-    scrollContainer.scrollTo({
-      top: Math.max(0, targetTop),
-      left: Math.max(0, targetLeft),
+  // The month grid is taller than the wrapper on a short window, so a scroll
+  // position carried over from week view clamps to the bottom and opens the
+  // month with its first row above the viewport (#9463 review). scrollTo is
+  // safe here where _scrollAnchorToTop's measured offsets would not be, since
+  // a fixed origin is independent of the warpRoute scale.
+  private _resetScrollWrapper(): void {
+    this._scrollWrapper()?.nativeElement.scrollTo({
+      top: 0,
+      left: 0,
       behavior: 'instant',
     });
+  }
+
+  // Scroll one of the schedule's time anchors to the top of the scroll-wrapper.
+  //
+  // The framing (lead above the target, and clearance for the sticky time
+  // column and week header) lives in CSS as scroll-padding on .scroll-wrapper,
+  // next to the row-height and column-width variables it is derived from.
+  //
+  // scrollIntoView is used rather than scrollTo with measured offsets because
+  // it resolves the target in layout coordinates: the route enter animation
+  // (warpRoute) starts this view at scale(1.2) and the scroll runs on a
+  // setTimeout(0), so anything measured from getBoundingClientRect() while that
+  // is in flight overshoots by the animation's current scale.
+  //
+  // The lookup is scoped to this component's own element: the right panel
+  // embeds a second schedule-week that renders its own #current-time.
+  private _scrollAnchorToTop(elementId: string): void {
+    const element = this._elRef.nativeElement.querySelector(
+      `#${elementId}`,
+    ) as HTMLElement | null;
+
+    element?.scrollIntoView({ block: 'start', inline: 'start', behavior: 'instant' });
   }
 
   selectTimeView(view: 'week' | 'month' | 'day'): void {
@@ -442,8 +437,18 @@ export class ScheduleComponent {
 
     effect(() => {
       if (this.isMonthView() === false) {
-        // scroll to work start whenever view is switched to work-week
-        setTimeout(() => this._scrollIntoViewWithTimeColumnOffset('work-start'));
+        // prefer the current time when it is visible (today is in range),
+        // otherwise fall back to work start. NOTE: the signal read must stay
+        // inside the setTimeout so it is untracked — otherwise currentTimeRow's
+        // 2-minute refresh tick would re-run this effect and yank the scroll
+        // position while the user is reading the schedule.
+        setTimeout(() =>
+          this._scrollAnchorToTop(
+            this.currentTimeRow() !== null ? 'current-time' : 'work-start',
+          ),
+        );
+      } else {
+        setTimeout(() => this._resetScrollWrapper());
       }
     });
   }

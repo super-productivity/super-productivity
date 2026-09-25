@@ -29,6 +29,12 @@ export interface SettingsSearchTab {
  */
 const CUSTOM_TARGETS: readonly SettingsSearchTarget[] = [
   {
+    labelKey: T.GCF.MISC.APPEARANCE,
+    tabLabelKey: T.PS.TABS.GENERAL,
+    tabIndex: 0,
+    scrollSelector: '.appearance-section',
+  },
+  {
     labelKey: T.GCF.MISC.DARK_MODE,
     tabLabelKey: T.PS.TABS.GENERAL,
     tabIndex: 0,

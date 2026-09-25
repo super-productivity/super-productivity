@@ -48,7 +48,7 @@ describe('FileImexComponent', () => {
     ]);
     backupServiceSpy.loadCompleteBackup.and.returnValue(Promise.resolve(mockAppData));
     const localDraftServiceSpy = jasmine.createSpyObj('LocalDraftService', [
-      'deleteDraftsForActiveProfile',
+      'deleteAllDrafts',
     ]);
     const matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
     const importEncryptionHandlerSpy = jasmine.createSpyObj(
@@ -350,15 +350,15 @@ describe('FileImexComponent', () => {
         true,
         true,
       );
-      // The import replaced this profile's notes wholesale, so every draft's
+      // The import replaced the notes wholesale, so every draft's
       // baseContent now refers to content that no longer exists.
-      expect(mockLocalDraftService.deleteDraftsForActiveProfile).toHaveBeenCalledTimes(1);
+      expect(mockLocalDraftService.deleteAllDrafts).toHaveBeenCalledTimes(1);
     });
 
     it('should not clear drafts when the data is invalid and no import happens', async () => {
       await component['_processAndImportData']('{ invalid json');
 
-      expect(mockLocalDraftService.deleteDraftsForActiveProfile).not.toHaveBeenCalled();
+      expect(mockLocalDraftService.deleteAllDrafts).not.toHaveBeenCalled();
     });
 
     it('should handle invalid JSON data', async () => {

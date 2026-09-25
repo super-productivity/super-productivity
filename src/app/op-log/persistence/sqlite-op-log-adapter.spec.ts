@@ -4,7 +4,7 @@ import {
   SqliteDb,
   SqliteOpLogAdapter,
 } from './sqlite-op-log-adapter';
-import { OpLogDbAdapter } from './op-log-db-adapter';
+import { DbKey, OpLogDbAdapter } from './op-log-db-adapter';
 import { STORE_NAMES, OPS_INDEXES } from './db-keys.const';
 import { createSqlJsDb } from './sql-js-db.test-helper';
 
@@ -111,8 +111,11 @@ class FakeSqliteDb implements SqliteDb {
     if (/SELECT COUNT\(\*\)/i.test(s)) {
       return [{ n: rows.length }];
     }
-    if (/LIMIT 1/i.test(s)) {
+    if (/LIMIT 1$/i.test(s)) {
       rows = rows.slice(0, 1);
+    } else if (/LIMIT \?$/i.test(s)) {
+      // Parametrized LIMIT is always the LAST param (see sqlIterate).
+      rows = rows.slice(0, params[params.length - 1] as number);
     }
     // Project selected columns (value, seq AS k / __pk, key, etc.).
     return rows.map((r) => this.project(r, s));
@@ -183,7 +186,10 @@ class FakeSqliteDb implements SqliteDb {
     return { changes: before - kept.length };
   }
 
-  /** Apply the single `col OP ?` / `a = ? AND b = ?` WHERE shapes we emit. */
+  /**
+   * Apply the `col OP ?` / `a = ? AND b = ?` / `col IS NOT NULL` WHERE shapes
+   * we emit.
+   */
   private applyWhere(rows: Row[], sql: string, params: unknown[], invert = false): Row[] {
     const w = /WHERE (.+?)(?: ORDER BY| LIMIT|$)/i.exec(sql);
     if (!w) return rows;
@@ -191,6 +197,10 @@ class FakeSqliteDb implements SqliteDb {
     let pi = 0;
     const test = (r: Row): boolean =>
       conds.every((cond) => {
+        const nn = /(\w+) IS NOT NULL/i.exec(cond);
+        if (nn) {
+          return r[nn[1]] != null;
+        }
         const mm = /(\w+) (>=|<=|>|<|=) \?/.exec(cond)!;
         const [, col, op] = mm;
         const val = params[pi++] as string | number | null;
@@ -363,7 +373,7 @@ const defineBehavioralContract = (
       const pending = await adapter.getAllFromIndex<{ op: { id: string } }>(
         STORE_NAMES.OPS,
         OPS_INDEXES.BY_SOURCE_AND_STATUS,
-        { lower: ['remote', 'pending'], upper: ['remote', 'pending'] },
+        ['remote', 'pending'],
       );
       expect(pending.map((r) => r.op.id).sort()).toEqual(['p1', 'p2']);
     });
@@ -378,10 +388,10 @@ const defineBehavioralContract = (
       expect(await adapter.count(STORE_NAMES.OPS)).toBe(3);
       expect(await adapter.count(STORE_NAMES.OPS, { lower: s2 })).toBe(2);
       expect(
-        await adapter.countFromIndex(STORE_NAMES.OPS, OPS_INDEXES.BY_SOURCE_AND_STATUS, {
-          lower: ['remote', 'pending'],
-          upper: ['remote', 'pending'],
-        }),
+        await adapter.countFromIndex(STORE_NAMES.OPS, OPS_INDEXES.BY_SOURCE_AND_STATUS, [
+          'remote',
+          'pending',
+        ]),
       ).toBe(2);
     });
 
@@ -594,6 +604,79 @@ const defineBehavioralContract = (
       ).toBeRejectedWithError(/outside this transaction's declared scope/);
     });
 
+    // ── index parity: NULL-key rows, compound ranges, limit ──────────────────
+
+    it('index scans skip rows the IDB index would not contain (NULL key column, #8312)', async () => {
+      // A local op has no syncedAt → NULL synced_at → NOT in bySyncedAt.
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry('local', 'local'));
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry('synced', 'remote', 'applied', 5));
+
+      const visited: string[] = [];
+      await adapter.iterate<{ op: { id: string } }>(
+        STORE_NAMES.OPS,
+        { index: OPS_INDEXES.BY_SYNCED_AT, mode: 'readonly' },
+        (v) => {
+          visited.push(v.op.id);
+          return 'continue';
+        },
+      );
+      expect(visited).toEqual(['synced']);
+      expect(
+        (
+          await adapter.getAllFromIndex<{ op: { id: string } }>(
+            STORE_NAMES.OPS,
+            OPS_INDEXES.BY_SYNCED_AT,
+          )
+        ).map((e) => e.op.id),
+      ).toEqual(['synced']);
+      expect(
+        await adapter.countFromIndex(STORE_NAMES.OPS, OPS_INDEXES.BY_SYNCED_AT),
+      ).toBe(1);
+      // Compound index: a local op has no applicationStatus → absent as well.
+      expect(
+        await adapter.countFromIndex(STORE_NAMES.OPS, OPS_INDEXES.BY_SOURCE_AND_STATUS),
+      ).toBe(1);
+    });
+
+    it('rejects a compound-index query that is not a full-arity key tuple', async () => {
+      await adapter.add(STORE_NAMES.OPS, makeOpEntry('a', 'remote', 'pending'));
+      // Prefix tuple: per-column translation would silently match every
+      // remote row where IndexedDB matches nothing.
+      await expectAsync(
+        adapter.getAllFromIndex(STORE_NAMES.OPS, OPS_INDEXES.BY_SOURCE_AND_STATUS, [
+          'remote',
+        ]),
+      ).toBeRejectedWithError(/arity 1 does not match index arity 2/);
+      // A range over a compound index has no engine-agnostic meaning.
+      await expectAsync(
+        adapter.countFromIndex(STORE_NAMES.OPS, OPS_INDEXES.BY_SOURCE_AND_STATUS, {
+          lower: 'local',
+        }),
+      ).toBeRejectedWithError(/takes an exact key tuple, not a range/);
+    });
+
+    it('rejects a non-positive iterate limit', async () => {
+      await expectAsync(
+        adapter.iterate(STORE_NAMES.OPS, { limit: 0, mode: 'readonly' }, () => 'stop'),
+      ).toBeRejectedWithError(/limit must be a positive integer/);
+    });
+
+    it('iterate honors `limit` (visits at most N entries, in the requested direction)', async () => {
+      for (const id of ['a', 'b', 'c', 'd']) {
+        await adapter.add(STORE_NAMES.OPS, makeOpEntry(id, 'local'));
+      }
+      const seen: DbKey[] = [];
+      await adapter.iterate(
+        STORE_NAMES.OPS,
+        { direction: 'prev', limit: 2, mode: 'readonly' },
+        (_v, key) => {
+          seen.push(key);
+          return 'continue';
+        },
+      );
+      expect(seen).toEqual([4, 3]);
+    });
+
     // ── concurrency: transactions are mutually exclusive per connection ──────────
     // The shared connection has no nested transactions: a second BEGIN landing
     // inside the first throws, and a bare statement issued mid-transaction joins
@@ -717,6 +800,21 @@ describe('SqliteOpLogAdapter — translation layer (fake)', () => {
     expect(insert.params).toContain('remote'); // source
     expect(insert.params).toContain('pending'); // application_status
     expect(insert.params).toContain(1234); // synced_at
+  });
+
+  // ── LIMIT pushdown (#8313) ────────────────────────────────────────────────
+
+  it('iterate with `limit` emits LIMIT ? instead of materializing the whole table', async () => {
+    await adapter.add(STORE_NAMES.OPS, makeOpEntry('a', 'local'));
+    db.log.length = 0;
+    await adapter.iterate(
+      STORE_NAMES.OPS,
+      { direction: 'prev', limit: 1, mode: 'readonly' },
+      () => 'stop',
+    );
+    const select = db.log.find((e) => /^SELECT/i.test(e.sql))!;
+    expect(select.sql).toMatch(/ORDER BY seq DESC LIMIT \?$/);
+    expect(select.params[select.params.length - 1]).toBe(1);
   });
 
   // ── transaction SQL emission (BEGIN/COMMIT/ROLLBACK) ───────────────────────

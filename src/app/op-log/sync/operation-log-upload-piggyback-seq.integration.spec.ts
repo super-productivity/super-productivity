@@ -221,12 +221,22 @@ describe('OperationLogSyncService + OperationLogUploadService — piggyback seq 
       'handleServerMigration',
     ]);
     serverMigrationServiceSpy.checkAndHandleMigration.and.resolveTo();
-    serverMigrationServiceSpy.handleServerMigration.and.resolveTo();
+    serverMigrationServiceSpy.handleServerMigration.and.resolveTo({
+      kind: 'created',
+      opId: 'sync-import',
+    });
 
     const stateSnapshotServiceSpy = jasmine.createSpyObj('StateSnapshotService', [
       'getStateSnapshot',
+      'getStateSnapshotAsync',
     ]);
     stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+      task: { ids: [] },
+      project: { ids: [INBOX_PROJECT.id] },
+      tag: { ids: [TODAY_TAG.id] },
+      note: { ids: [] },
+    } as any);
+    stateSnapshotServiceSpy.getStateSnapshotAsync.and.resolveTo({
       task: { ids: [] },
       project: { ids: [INBOX_PROJECT.id] },
       tag: { ids: [TODAY_TAG.id] },

@@ -30,6 +30,7 @@
       tabindex="0"
       (click)="quickAccessBtnClick(1)"
       [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_TODAY | translate"
+      [attr.aria-label]="T.F.TASK.D_SCHEDULE_TASK.QA_TODAY | translate"
     >
       <mat-icon>wb_sunny</mat-icon>
     </button>
@@ -39,6 +40,7 @@
       tabindex="0"
       (click)="quickAccessBtnClick(2)"
       [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_TOMORROW | translate"
+      [attr.aria-label]="T.F.TASK.D_SCHEDULE_TASK.QA_TOMORROW | translate"
     >
       <mat-icon>wb_twilight</mat-icon>
     </button>
@@ -47,6 +49,7 @@
       tabindex="0"
       (click)="quickAccessBtnClick(3)"
       [matTooltip]="T.F.TASK.D_SCHEDULE_TASK.QA_NEXT_WEEK | translate"
+      [attr.aria-label]="T.F.TASK.D_SCHEDULE_TASK.QA_NEXT_WEEK | translate"
     >
       <mat-icon>next_week</mat-icon>
     </button>
@@ -67,6 +70,11 @@
           : (T.F.TASK.CMP.SCHEDULE | translate)) +
         (kb.taskSchedule ? ' [' + kb.taskSchedule + ']' : '')
       "
+      [attr.aria-label]="
+        task.dueWithTime || task.dueDay
+          ? (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
+          : (T.F.TASK.CMP.SCHEDULE | translate)
+      "
       (click)="scheduleTask()"
     >
       <mat-icon>today</mat-icon>
@@ -78,12 +86,24 @@
         tabindex="0"
         (click)="unscheduleTask()"
         [matTooltip]="T.F.TASK.CMP.UNSCHEDULE_TASK | translate"
+        [attr.aria-label]="T.F.TASK.CMP.UNSCHEDULE_TASK | translate"
       >
         <mat-icon>event_busy</mat-icon>
       </button>
     }
   </div>
 
+  @if (isTouchActive() && isInTaskRow) {
+    <button
+      (click)="enterSelectionMode()"
+      mat-menu-item
+    >
+      <span class="menuItemLeft">
+        <mat-icon>checklist_rtl</mat-icon>
+        {{ T.F.TASK.MULTI_SELECT.SELECT_ENTRY | translate }}
+      </span>
+    </button>
+  }
   @if (
     isTimeTrackingEnabled() &&
     ((isAdvancedControls() && isTouchActive()) || !isAdvancedControls()) &&
@@ -201,6 +221,7 @@
         <mat-icon>file_copy</mat-icon>
         {{ T.F.TASK.CMP.DUPLICATE | translate }}
       </span>
+      <span class="key-i">{{ kb.taskDuplicate }}</span>
     </button>
   }
 
@@ -278,6 +299,19 @@
       <span class="key-i">{{ kb.taskOpenEstimationDialog }}</span>
     </button>
   }
+
+  <button
+    #priorityMenuTrigger="matMenuTrigger"
+    [matMenuTriggerFor]="priorityMenu"
+    mat-menu-item
+    [menuTouchFix]="priorityMenuTrigger"
+    (menuOpened)="focusFirstSubmenuItem(priorityMenu)"
+  >
+    <span class="menuItemLeft">
+      <mat-icon>priority_high</mat-icon>
+      {{ T.F.TASK.CMP.PRIORITY | translate }}
+    </span>
+  </button>
 
   <button
     #tagMenuTrigger="matMenuTrigger"
@@ -374,6 +408,49 @@
       </button>
     }
   </ng-template>
+</mat-menu>
+
+<mat-menu #priorityMenu="matMenu">
+  <button
+    mat-menu-item
+    menuTouchFix
+    (click)="setPriority('high')"
+  >
+    @if (task.priority === 'high') {
+      <mat-icon>check</mat-icon>
+    }
+    {{ T.F.TASK.CMP.PRIORITY_HIGH | translate }}
+  </button>
+  <button
+    mat-menu-item
+    menuTouchFix
+    (click)="setPriority('medium')"
+  >
+    @if (task.priority === 'medium') {
+      <mat-icon>check</mat-icon>
+    }
+    {{ T.F.TASK.CMP.PRIORITY_MEDIUM | translate }}
+  </button>
+  <button
+    mat-menu-item
+    menuTouchFix
+    (click)="setPriority('low')"
+  >
+    @if (task.priority === 'low') {
+      <mat-icon>check</mat-icon>
+    }
+    {{ T.F.TASK.CMP.PRIORITY_LOW | translate }}
+  </button>
+  <button
+    mat-menu-item
+    menuTouchFix
+    (click)="setPriority(null)"
+  >
+    @if (!task.priority) {
+      <mat-icon>check</mat-icon>
+    }
+    {{ T.F.TASK.CMP.PRIORITY_NONE | translate }}
+  </button>
 </mat-menu>
 
 <mat-menu #projectMenu="matMenu">

@@ -69,9 +69,9 @@ export class SuperSyncRestoreService {
           true, // isForceConflict - gates page reload (isSkipReload=true overrides)
         );
 
-        // This profile's notes were just replaced wholesale, so every draft's
+        // The notes were just replaced wholesale, so every draft's
         // baseContent refers to content that no longer exists.
-        this._localDraftService.deleteDraftsForActiveProfile();
+        this._localDraftService.deleteAllDrafts();
 
         this._snackService.open({
           type: 'SUCCESS',

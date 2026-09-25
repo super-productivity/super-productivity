@@ -14,7 +14,8 @@ import {
 import { SINGLETON_ENTITY_ID } from '../core/entity-registry';
 import { uuidv7 } from '../../util/uuid-v7';
 import { OpLog } from '../../core/log';
-import { AppDataComplete } from '../model/model-config';
+import { AppDataComplete, withDefaultModelSlices } from '../model/model-config';
+import { isDataRepairPossible } from '../validation/is-data-repair-possible.util';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { LockService } from '../sync/lock.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
@@ -96,7 +97,23 @@ export class OperationLogRecoveryService {
   /**
    * Recovers from legacy data by creating a new genesis snapshot.
    */
-  async recoverFromLegacyData(legacyData: Record<string, unknown>): Promise<void> {
+  async recoverFromLegacyData(rawLegacyData: Record<string, unknown>): Promise<void> {
+    // Guard the RAW data BEFORE the fill, exactly as the migration path does.
+    // withDefaultModelSlices() below makes even a database that has lost its
+    // task/project state validate, and hasUsableEntityData() gets here on
+    // `globalConfig` alone — so without this check that database would be
+    // "recovered" into an all-defaults empty store whose genesis snapshot then
+    // shadows it forever (recovery refuses once a snapshot or ops exist).
+    // Throwing instead leaves the legacy database untouched and retryable.
+    if (!isDataRepairPossible(rawLegacyData as unknown as AppDataComplete)) {
+      throw new Error('Legacy recovery data is corrupted and cannot be repaired');
+    }
+
+    // An old `pf` database lacks the model slices that did not exist when it was
+    // last written; fill those with defaults so healthy data is not rejected as
+    // invalid (#9770).
+    const legacyData = withDefaultModelSlices(rawLegacyData);
+
     // Refuse to import legacy data that doesn't validate. Importing corrupted
     // legacy data would just propagate the corruption into SUP_OPS and the next
     // hydration would fail validation in turn.
@@ -134,7 +151,7 @@ export class OperationLogRecoveryService {
     await this.opLogStore.appendRecoveryOperationAndSnapshot(recoveryOp, legacyData);
 
     // Dispatch to NgRx
-    this.store.dispatch(loadAllData({ appDataComplete: legacyData as AppDataComplete }));
+    this.store.dispatch(loadAllData({ appDataComplete: legacyData }));
 
     OpLog.normal(
       'OperationLogRecoveryService: Recovery complete. Data restored from legacy database.',

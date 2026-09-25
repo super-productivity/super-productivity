@@ -4,6 +4,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { PlainspaceConnectDialogComponent } from './plainspace-connect-dialog.component';
 import { PlainspaceAccountService } from '../plainspace-account.service';
+import { T } from '../../../t.const';
 
 describe('PlainspaceConnectDialogComponent', () => {
   let component: PlainspaceConnectDialogComponent;
@@ -46,7 +47,7 @@ describe('PlainspaceConnectDialogComponent', () => {
   });
 
   it('connects with the trimmed token and closes with true on success', async () => {
-    accountService.connect.and.resolveTo(true);
+    accountService.connect.and.resolveTo('ok');
     component.token = '  pat_abc  ';
     await component.connect();
     expect(accountService.connect).toHaveBeenCalledWith(
@@ -54,14 +55,34 @@ describe('PlainspaceConnectDialogComponent', () => {
       'https://plainspace.org',
     );
     expect(dialogRef.close).toHaveBeenCalledWith(true);
-    expect(component.hasError()).toBe(false);
+    expect(component.errorMsg()).toBeNull();
   });
 
-  it('shows an error and stays open on an invalid token', async () => {
-    accountService.connect.and.resolveTo(false);
+  it('shows the rejected-token message and stays open on an invalid token', async () => {
+    accountService.connect.and.resolveTo('invalid-token');
     component.token = 'bad';
     await component.connect();
-    expect(component.hasError()).toBe(true);
+    expect(component.errorMsg()).toBe(T.PLAINSPACE.CONNECT.INVALID);
+    expect(component.isConnecting()).toBe(false);
+    expect(dialogRef.close).not.toHaveBeenCalled();
+  });
+
+  // #9988: a request that never reached Plainspace must not be blamed on the
+  // token — that is what sent users into an endless re-copy loop.
+  it('shows the unreachable message when the host could not be reached', async () => {
+    accountService.connect.and.resolveTo('unreachable');
+    component.token = 'pat_abc';
+    await component.connect();
+    expect(component.errorMsg()).toBe(T.PLAINSPACE.CONNECT.UNREACHABLE);
+    expect(component.isConnecting()).toBe(false);
+    expect(dialogRef.close).not.toHaveBeenCalled();
+  });
+
+  it('stays silent when the attempt was aborted by a disconnect', async () => {
+    accountService.connect.and.resolveTo('aborted');
+    component.token = 'pat_abc';
+    await component.connect();
+    expect(component.errorMsg()).toBeNull();
     expect(component.isConnecting()).toBe(false);
     expect(dialogRef.close).not.toHaveBeenCalled();
   });

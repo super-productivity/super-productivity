@@ -1,21 +1,9 @@
 <div class="bottom-panel-container">
   <div
     class="bottom-panel-header"
-    [class.has-close-btn]="isShowCloseButton()"
     #panelHeader
   >
     <div class="drag-handle"></div>
-    @if (isShowCloseButton()) {
-      <button
-        mat-icon-button
-        class="close-btn"
-        [attr.aria-label]="T.G.CLOSE | translate"
-        (pointerdown)="stopHeaderEventPropagation($event)"
-        (click)="close(); stopHeaderEventPropagation($event)"
-      >
-        <mat-icon>close</mat-icon>
-      </button>
-    }
   </div>
 
   <div class="bottom-panel-content">
@@ -47,6 +35,9 @@
       }
       @case ('PLUGIN') {
         <plugin-panel-container></plugin-panel-container>
+      }
+      @case ('SCHEDULE_DAY_PANEL') {
+        <schedule-day-panel></schedule-day-panel>
       }
     }
   </div>

@@ -307,6 +307,44 @@ describe('ScheduleMonthComponent', () => {
     });
   });
 
+  describe('week-count custom property', () => {
+    // `--nr-of-weeks` was only ever declared as a static 6 on `schedule`, so
+    // `grid-template-rows` always repeated six rows. At 5 weeks that rendered a
+    // sixth, empty row and sized every row 1/6 instead of 1/5 (#9584).
+    it('should expose the rendered week count on the host', () => {
+      const host = fixture.nativeElement as HTMLElement;
+
+      fixture.componentRef.setInput('weeksToShow', 5);
+      fixture.detectChanges();
+
+      expect(host.style.getPropertyValue('--nr-of-weeks')).toBe('5');
+    });
+
+    it('should give the grid one row per rendered week', () => {
+      const host = fixture.nativeElement as HTMLElement;
+      const grid = host.querySelector('.month-grid-container') as HTMLElement;
+
+      fixture.componentRef.setInput('weeksToShow', 5);
+      fixture.detectChanges();
+
+      // `auto` for the weekday headers, then one row per week.
+      const rows = getComputedStyle(grid).gridTemplateRows.split(' ').length;
+      expect(rows).toBe(6);
+    });
+
+    it('should track the week count when it changes', () => {
+      const host = fixture.nativeElement as HTMLElement;
+
+      fixture.componentRef.setInput('weeksToShow', 3);
+      fixture.detectChanges();
+      expect(host.style.getPropertyValue('--nr-of-weeks')).toBe('3');
+
+      fixture.componentRef.setInput('weeksToShow', 6);
+      fixture.detectChanges();
+      expect(host.style.getPropertyValue('--nr-of-weeks')).toBe('6');
+    });
+  });
+
   describe('getDayClass', () => {
     it('should pass referenceMonth to service.getDayClass', () => {
       // Arrange

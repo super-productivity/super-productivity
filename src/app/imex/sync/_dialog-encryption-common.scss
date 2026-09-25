@@ -5,57 +5,6 @@
 @use '../../../styles/_globals.scss' as *;
 
 // ============================================
-// ALERT BOXES
-// ============================================
-
-// Warning box - orange/amber for destructive actions
-@mixin dialog-warning-box {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: var(--s2);
-  margin-bottom: var(--s2);
-  background: rgba(255, 152, 0, 0.1);
-  border: 1px solid rgba(255, 152, 0, 0.3);
-  border-radius: var(--card-border-radius);
-
-  mat-icon {
-    color: var(--color-warning);
-    flex-shrink: 0;
-  }
-
-  p {
-    margin: 0;
-    line-height: 1.5;
-  }
-}
-
-// Info box - blue for informational messages
-@mixin dialog-info-box {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: var(--s2);
-  background: rgba(33, 150, 243, 0.1);
-  border: 1px solid rgba(33, 150, 243, 0.3);
-  border-radius: var(--card-border-radius);
-
-  mat-icon {
-    color: #2196f3;
-    flex-shrink: 0;
-  }
-
-  p {
-    margin: 0 0 var(--s);
-    line-height: 1.5;
-
-    &:last-child {
-      margin-bottom: 0;
-    }
-  }
-}
-
-// ============================================
 // CONTENT SECTIONS
 // ============================================
 
@@ -65,7 +14,7 @@
 
   h3 {
     margin: 0 0 var(--s);
-    font-size: 14px;
+    font-size: var(--font-size-md);
     font-weight: 500;
   }
 
@@ -129,7 +78,7 @@
 // Note variant with warning background
 @mixin dialog-note-warn {
   padding: 12px;
-  background: rgba(255, 152, 0, 0.08);
+  background: color-mix(in srgb, var(--color-warning) 10%, transparent);
   border-radius: var(--card-border-radius);
   color: var(--c-dark-80);
 
@@ -138,7 +87,6 @@
   }
 
   @include darkTheme {
-    background: rgba(255, 152, 0, 0.15);
     color: var(--c-light-90);
   }
 }
@@ -156,15 +104,9 @@
 // ============================================
 
 // Generate all common dialog classes for enable/disable dialogs
+// (alert boxes come from the global `.callout` primitive — see
+// `src/styles/components/_callout.scss`)
 @mixin dialog-encryption-common-classes {
-  .warning-box {
-    @include dialog-warning-box;
-  }
-
-  .info-box {
-    @include dialog-info-box;
-  }
-
   .info-section {
     @include dialog-info-section;
   }

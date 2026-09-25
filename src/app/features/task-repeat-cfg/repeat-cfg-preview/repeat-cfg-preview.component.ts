@@ -14,6 +14,7 @@ import { T } from '../../../t.const';
 import { TranslateService } from '@ngx-translate/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
+import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { getNextRepeatOccurrence } from '../store/get-next-repeat-occurrence.util';
 import { formatMonthDay } from '../../../util/format-month-day.util';
@@ -24,7 +25,7 @@ import { Log } from '../../../core/log';
   templateUrl: './repeat-cfg-preview.component.html',
   styleUrl: './repeat-cfg-preview.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatIcon, MatTooltip],
+  imports: [MatIcon, MatTooltip, TagListComponent],
 })
 export class RepeatCfgPreviewComponent {
   private _matDialog = inject(MatDialog);

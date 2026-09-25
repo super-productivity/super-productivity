@@ -1,4 +1,7 @@
 {{- if not .Values.postgresql.enabled }}
+{{- if and (not .Values.externalDatabase.existingSecret) (not .Values.externalDatabase.url) }}
+  {{- fail "externalDatabase.url or externalDatabase.existingSecret is required when postgresql.enabled is false" }}
+{{- end }}
 apiVersion: batch/v1
 kind: Job
 metadata:

@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -14,7 +20,10 @@ import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { IS_ELECTRON } from '../../../app.constants';
-import { PlainspaceAccountService } from '../plainspace-account.service';
+import {
+  PlainspaceAccountService,
+  PlainspaceConnectResult,
+} from '../plainspace-account.service';
 
 export interface PlainspaceConnectDialogData {
   host?: string | null;
@@ -70,7 +79,17 @@ export class PlainspaceConnectDialogComponent {
       : '');
   token = '';
   readonly isConnecting = signal(false);
-  readonly hasError = signal(false);
+  // The failure to show, or null for none. `aborted` is deliberately silent:
+  // the user disconnected mid-check, so there is nothing to warn them about.
+  readonly error = signal<'invalid-token' | 'unreachable' | null>(null);
+  readonly errorMsg = computed(() => {
+    const err = this.error();
+    return err === 'unreachable'
+      ? T.PLAINSPACE.CONNECT.UNREACHABLE
+      : err === 'invalid-token'
+        ? T.PLAINSPACE.CONNECT.INVALID
+        : null;
+  });
 
   async connect(): Promise<void> {
     const token = this.token.trim();
@@ -78,14 +97,17 @@ export class PlainspaceConnectDialogComponent {
       return;
     }
     this.isConnecting.set(true);
-    this.hasError.set(false);
-    const ok = await this._accountService.connect(token, this.host);
-    if (ok) {
+    this.error.set(null);
+    const res: PlainspaceConnectResult = await this._accountService.connect(
+      token,
+      this.host,
+    );
+    if (res === 'ok') {
       this._dialogRef.close(true);
-    } else {
-      this.hasError.set(true);
-      this.isConnecting.set(false);
+      return;
     }
+    this.error.set(res === 'aborted' ? null : res);
+    this.isConnecting.set(false);
   }
 
   cancel(): void {

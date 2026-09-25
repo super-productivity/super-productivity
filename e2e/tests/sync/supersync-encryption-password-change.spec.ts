@@ -81,11 +81,7 @@ const useServerDataIfPrompted = async (client: SimulatedE2EClient): Promise<void
 
   if (!appeared) return;
 
-  await client.sync.syncImportUseRemoteBtn.click();
-  await client.sync.syncImportConflictDialog.waitFor({
-    state: 'hidden',
-    timeout: 5000,
-  });
+  await client.sync.chooseSyncImportUseRemote();
 };
 
 const recoverWithNewPasswordAndServerData = async (
@@ -755,10 +751,7 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
         console.log(
           '[PasswordChange] Sync import conflict dialog appeared - using server data',
         );
-        await clientB.page
-          .locator('dialog-sync-import-conflict button:has-text("Use Server Data")')
-          .click();
-        await syncImportDialog.waitFor({ state: 'hidden', timeout: 5000 });
+        await clientB.sync.chooseSyncImportUseRemote();
       }
 
       // Now wait for sync to complete (may need another sync round)

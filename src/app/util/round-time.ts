@@ -1,4 +1,4 @@
-import { RoundTimeOption } from '../features/project/project.model';
+import { RoundTimeOption } from './round-time-option.model';
 
 export const roundTime = (
   val: number | Date,

@@ -112,7 +112,7 @@
     flex-direction: column;
     align-items: center;
     width: 100%;
-    gap: var(--s1);
+    gap: var(--s);
   }
 }
 
@@ -326,7 +326,7 @@
       bottom: 4px;
       right: 4px;
       background: var(--c-accent);
-      color: var(--c-on-accent);
+      color: var(--palette-accent-contrast-500);
       border-radius: 50%;
       width: 18px;
       height: 18px;

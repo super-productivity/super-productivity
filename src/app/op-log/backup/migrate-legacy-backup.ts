@@ -38,7 +38,11 @@ import { isTodayWithOffset } from '../../util/is-today.util';
 // Matches DateService.setStartOfNextDayDiff semantics for legacy backup normalization.
 import { getStartOfNextDayDiffMs } from '../../util/start-of-next-day.util';
 import { LanguageCode } from '../../core/locale.constants';
-import { AppDataComplete, MODEL_CONFIGS } from '../model/model-config';
+import {
+  AppDataComplete,
+  MODEL_CONFIGS,
+  withDefaultModelSlices,
+} from '../model/model-config';
 import { OpLog } from '../../core/log';
 import { migrateLegacyTaskRemindersIntoTasks } from '../../features/reminder/migrate-legacy-task-reminders.util';
 
@@ -727,17 +731,6 @@ function _migration44LocalizationAndAppFeatures(
     };
   }
 
-  // 5. Migrate User Profiles
-  if (typeof data.globalConfig?.misc?.isEnableUserProfiles === 'boolean') {
-    if (data.globalConfig.appFeatures) {
-      data.globalConfig.appFeatures = {
-        ...data.globalConfig.appFeatures,
-        isEnableUserProfiles: data.globalConfig.misc.isEnableUserProfiles,
-      };
-    }
-    delete data.globalConfig.misc.isEnableUserProfiles;
-  }
-
   finishOps.forEach((op) => op());
   return data;
 }
@@ -772,12 +765,7 @@ function _migration45LowercaseLanguageCodes(
 // ---------------------------------------------------------------------------
 
 function _ensureV17Defaults(data: Record<string, any>): Record<string, any> {
-  for (const key of APP_DATA_MODEL_KEYS) {
-    if (!data[key]) {
-      data[key] = structuredClone(MODEL_CONFIGS[key].defaultData);
-    }
-  }
-  return data;
+  return withDefaultModelSlices(data) as unknown as Record<string, any>;
 }
 
 // ---------------------------------------------------------------------------

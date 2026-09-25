@@ -78,6 +78,68 @@ describe('performance migrations', () => {
     expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
   });
 
+  it('drops the unused (user_id, client_id) index as a single native-apply statement', () => {
+    const migrationSql = readMigration(
+      '20260828000000_drop_unused_operations_user_id_client_id_index',
+    );
+
+    expect(migrationSql).toContain(
+      'DROP INDEX CONCURRENTLY IF EXISTS "operations_user_id_client_id_idx"',
+    );
+    // The received_at index is load-bearing for the old-ops fresh-prefix probe
+    // plan and must never be dropped here.
+    expect(migrationSql).not.toContain('"operations_user_id_received_at_idx"');
+    // Single statement so `prisma migrate deploy` applies it natively without
+    // the out-of-band CONCURRENTLY recovery.
+    const sqlWithoutComments = migrationSql
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('--'))
+      .join('\n');
+    expect(sqlWithoutComments.match(/;/g)).toHaveLength(1);
+    expect(migrationSql).not.toMatch(/\bCREATE\b/i);
+    expect(migrationSql).not.toMatch(/\bDROP\s+TABLE\b/i);
+    expect(migrationSql).not.toMatch(/\bALTER\s+TABLE\b/i);
+    expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
+  });
+
+  it('tunes operations autovacuum as a single unlocked native-apply statement', () => {
+    const migrationSql = readMigration('20260828000003_tune_operations_autovacuum');
+    // Compared as ONE exact normalized statement rather than as a set of
+    // substring matches. Two reasons this file needs the stricter form:
+    // its rationale names all three reloptions in prose, so matching the raw
+    // text stays green with the ALTER commented out; and a loose
+    // `SET \(.*autovacuum_vacuum_scale_factor` lets `.*` swallow a `toast.`
+    // prefix — which is the exact footgun the comment warns about, since one
+    // toast.autovacuum_* option breaks the parent-value fallback for every
+    // field. An exact match also pins the single-statement shape that lets
+    // `prisma migrate deploy` apply it natively.
+    const normalizedSql = migrationSql
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('--'))
+      .join('\n')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    expect(normalizedSql).toBe(
+      'ALTER TABLE "operations" SET (autovacuum_vacuum_insert_scale_factor = 0.02);',
+    );
+    // Both omissions are decisions, not oversights, and the exact match above
+    // already fails if someone adds either back — these say WHY, so the failure
+    // reads as a question rather than a stale fixture.
+    //
+    // analyze: ANALYZE samples a fixed 30,000 random blocks that no
+    // page-skipping reduces, so tightening it multiplies the worst-shaped I/O
+    // on an IOPS-capped host.
+    expect(normalizedSql).not.toMatch(/autovacuum_analyze_scale_factor/i);
+    // dead-tuple: measured with VACUUM (VERBOSE), an insert-triggered pass
+    // reports `index scans: 0` while a post-DELETE pass walks all 8 indexes
+    // (~3 GB). On a growing append-only table the insert trigger always fires
+    // first, so lowering this factor buys nothing until the table stops
+    // growing — and then buys 10x more full index passes.
+    expect(normalizedSql).not.toMatch(/autovacuum_vacuum_scale_factor/i);
+  });
+
   it('adds partial encrypted-op sequence index concurrently', () => {
     const migrationSql = readFileSync(
       join(
@@ -119,6 +181,32 @@ describe('performance migrations', () => {
     expect(migrationSql).not.toMatch(/DEFAULT\s+(?!0\b)/i);
     expect(migrationSql).not.toMatch(/\bDROP\s+TABLE\b/i);
     expect(migrationSql).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
+  });
+
+  it('adds sync_devices.app_version as a nullable catalog-only column (#9962)', () => {
+    const migrationSql = readFileSync(
+      join(
+        currentDir,
+        '../prisma/migrations/20260911000000_add_sync_device_app_version/migration.sql',
+      ),
+      'utf8',
+    );
+
+    // Nullable with no default: pure catalog change, no rewrite, no backfill.
+    // A default would silently mark every pre-reporting device as versioned.
+    // The header comment explains exactly that, so match statements only.
+    const statements = migrationSql
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('--'))
+      .join('\n');
+    expect(statements).toMatch(
+      /ALTER TABLE "sync_devices"\s+ADD COLUMN "app_version" TEXT\s*;/i,
+    );
+    expect(statements).not.toMatch(/\bDEFAULT\b/i);
+    expect(statements).not.toMatch(/\bNOT NULL\b/i);
+    expect(statements).not.toMatch(/\bUPDATE\b/i);
+    expect(statements).not.toMatch(/\bCONCURRENTLY\b/i);
+    expect(statements).not.toMatch(/\bBEGIN\b|\bCOMMIT\b/i);
   });
 
   it('adds the payload_bytes unbackfilled partial index concurrently', () => {
@@ -427,14 +515,18 @@ describe('performance migrations', () => {
     expect(indexNames.filter((name) => runtimeMigrateScript.includes(name))).toEqual([]);
     // Reloption keywords are not index names, so the derived list cannot see a
     // hardcode like `fastupdate` — check the ones the migrations actually set.
+    // EVERY option in the list, not just the first: the earlier form stopped at
+    // `SET\s*\(\s*([a-z_]+)`, so in `SET (a = 1, b = 2)` it never saw `b` and
+    // the script was free to hardcode it. That blind spot was live.
     const reloptions = [
       ...migrationSql.matchAll(
-        /\bALTER\s+INDEX\s+(?:IF\s+EXISTS\s+)?"[^"]+"\s+SET\s*\(\s*([a-z_]+)/gi,
+        /\bALTER\s+(?:INDEX|TABLE)\s+(?:IF\s+EXISTS\s+)?"[^"]+"\s+SET\s*\(([^)]*)\)/gi,
       ),
-    ].map((match) => match[1]);
-    // Same sentinel role as above: this list has exactly one entry today, so a
-    // regex that quietly stopped matching would leave `[].filter(...)` green.
+    ].flatMap((match) => [...match[1].matchAll(/([a-z_]+)\s*=/gi)].map((o) => o[1]));
+    // Same sentinel role as above: a regex that quietly stopped matching would
+    // otherwise leave `[].filter(...)` green.
     expect(reloptions).toContain('fastupdate');
+    expect(reloptions).toContain('autovacuum_vacuum_insert_scale_factor');
     expect(reloptions.filter((name) => runtimeMigrateScript.includes(name))).toEqual([]);
     // No migration directory name either.
     expect(runtimeMigrateScript).not.toMatch(/\b20\d{12}_[a-z]/);
@@ -443,9 +535,6 @@ describe('performance migrations', () => {
     );
     expect(composeFile).toContain('REQUIRE_DATABASE_POOL_LIMITS=true');
     expect(composeFile).toContain('MIGRATE_RECOVERY_RUNTIME=compose');
-    expect(composeFile).toContain(
-      'SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE=${SUPERSYNC_PAYLOAD_BYTES_BACKFILL_COMPLETE:-false}',
-    );
     expect(composeFile).toContain('connection_limit=60&pool_timeout=10');
     expect(composeFile).toContain(
       'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "SELECT 1"',

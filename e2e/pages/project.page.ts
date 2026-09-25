@@ -1,5 +1,6 @@
 import { expect, Locator, Page } from '@playwright/test';
 import { BasePage } from './base.page';
+import { fillMarkdownEditor, markdownEditor } from '../utils/markdown-editor';
 
 export const isProjectTasksRoute = (url: string): boolean =>
   /\/#\/project\/[^/]+\/tasks(?:[/?#]|$)/.test(url);
@@ -578,25 +579,13 @@ export class ProjectPage extends BasePage {
       timeout: 10000,
     });
 
-    // Try different selectors for the textarea
-    let noteTextarea = this.page.locator('dialog-fullscreen-markdown textarea').first();
-    let textareaVisible = await noteTextarea
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
-
-    if (!textareaVisible) {
-      // Try alternative selector
-      noteTextarea = this.page.locator('textarea').first();
-      textareaVisible = await noteTextarea
-        .isVisible({ timeout: 2000 })
-        .catch(() => false);
+    const dialog = this.page.locator('dialog-fullscreen-markdown');
+    const noteEditor = markdownEditor(dialog);
+    if (!(await noteEditor.isVisible({ timeout: 2000 }).catch(() => false))) {
+      throw new Error('Note dialog markdown editor not found');
     }
 
-    if (!textareaVisible) {
-      throw new Error('Note dialog textarea not found after trying multiple approaches');
-    }
-
-    await noteTextarea.fill(noteContent);
+    await fillMarkdownEditor(dialog, noteContent);
 
     // Click the save button - try multiple selectors
     let saveBtn = this.page.locator('#T-save-note');
@@ -612,7 +601,7 @@ export class ProjectPage extends BasePage {
       await saveBtn.click();
     } else {
       // Fallback: press Enter to save
-      await noteTextarea.press('Control+Enter');
+      await noteEditor.press('Control+Enter');
     }
 
     // Wait for dialog to close
@@ -720,5 +709,46 @@ export class ProjectPage extends BasePage {
     await this.page
       .locator('.mat-mdc-menu-content')
       .waitFor({ state: 'visible', timeout: 3000 });
+  }
+
+  /** The archived-projects row for a project, matched by its prefixed title. */
+  archivedProjectRow(projectName: string): Locator {
+    return this.page
+      .locator('archived-projects-page .project-row')
+      .filter({ hasText: this.applyPrefix(projectName) });
+  }
+
+  /**
+   * Reopen a completed project from the archived-projects page.
+   *
+   * A single click is not reliable here: in CI the click is delivered but the
+   * handler never runs (no `[Project] Reopen Project` is dispatched, seen in
+   * the trace of run 33189475377), most likely because the page is still
+   * mid route-transition. So re-issue it until the row actually leaves the
+   * list. The click is bounded and skipped once the row is gone so a slow
+   * store update fails on the row assertion instead of an opaque click
+   * timeout.
+   */
+  async reopenArchivedProject(projectName: string): Promise<void> {
+    const row = this.archivedProjectRow(projectName);
+    const reopenBtn = row.getByRole('button', { name: 'Reopen' });
+    // Assert the button up front: without this, a project that was archived
+    // without being completed renders "Restore project" instead, the loop below
+    // would skip the click forever and report the row as merely still present.
+    await expect(reopenBtn).toBeVisible();
+
+    let attempts = 0;
+    await expect(async () => {
+      attempts++;
+      if (await reopenBtn.isVisible()) {
+        await reopenBtn.click({ timeout: 2000 });
+      }
+      await expect(row).toHaveCount(0, { timeout: 2000 });
+    }).toPass({ timeout: 15000 });
+    if (attempts > 1) {
+      // Surface the retry: the suite runs with retries: 0 so that
+      // non-determinism stays visible, and a silent in-test retry defeats that.
+      console.warn(`[reopenArchivedProject] took ${attempts} attempts`);
+    }
   }
 }

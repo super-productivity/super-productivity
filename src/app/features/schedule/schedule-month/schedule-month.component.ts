@@ -14,6 +14,15 @@ import { parseDbDateStr } from 'src/app/util/parse-db-date-str';
 import { TranslatePipe, TranslateService, TranslateStore } from '@ngx-translate/core';
 import { getPluralKey } from '../../../util/get-plural-key';
 
+// `grid-template-rows` repeats `var(--nr-of-weeks)`, which otherwise resolves to
+// the static 6 declared on `schedule`. At 5 weeks that leaves a sixth, empty row
+// and sizes every row 1/6 instead of 1/5 (#9584).
+const HOST_WEEKS_VAR = '[style.--nr-of-weeks]' as const;
+
+const HOST_BINDINGS = {
+  [HOST_WEEKS_VAR]: 'weeksToShow()',
+} as const;
+
 @Component({
   selector: 'schedule-month',
   imports: [ScheduleEventComponent, TranslatePipe],
@@ -21,6 +30,7 @@ import { getPluralKey } from '../../../util/get-plural-key';
   styleUrl: './schedule-month.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
+  host: HOST_BINDINGS,
 })
 export class ScheduleMonthComponent {
   private _scheduleService = inject(ScheduleService);

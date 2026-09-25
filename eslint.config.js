@@ -5,7 +5,40 @@ const prettierRecommended = require('eslint-plugin-prettier/recommended');
 const preferArrow = require('eslint-plugin-prefer-arrow');
 const localRules = require('eslint-plugin-local-rules');
 
+// Layer boundary, pointed inward: `src/app/ui` and `src/app/core` are the
+// shared building blocks that features compose, so the dependency arrow runs
+// features -> core/ui and never back.
+//
+// This rides on `@typescript-eslint/no-restricted-imports`, NOT the base rule,
+// and that is load-bearing: flat config replaces a rule entry wholesale —
+// options included — so sharing one rule id with the durable-clock fence
+// (#9096, below) would silently drop that fence's pattern on every file both
+// blocks match. Separate rule ids keep the two fences independent. Do not
+// merge them.
+const FEATURE_LAYER_FENCE = {
+  group: ['**/features/*', '**/features/**'],
+  message:
+    'Layer boundary: src/app/ui and src/app/core must not import from src/app/features (the arrow points features -> core/ui). Move the shared piece down into core/ui, or invert with an injected callback/token.',
+};
+
+// `no-restricted-imports` only inspects static import/export declarations, so a
+// dynamic `import('../../features/x')` walks straight through it. The packages/
+// fences close the same hole with an ImportExpression ban; core/ui has ~7
+// legitimate dynamic imports, so this narrows the ban to feature paths.
+const FEATURE_LAYER_DYNAMIC_IMPORT_FENCE = {
+  selector: 'ImportExpression > Literal[value=/features\\//]',
+  message:
+    'Layer boundary: src/app/ui and src/app/core must not dynamically import from src/app/features either.',
+};
+
 module.exports = tseslint.config(
+  // Warnings are inert (`ng lint` defaults to maxWarnings: -1, so CI never fails
+  // on them) and only bury real signal, so every rule here is 'error' or 'off'.
+  // A stale disable directive errors too: that is what ratchets the inline
+  // grandfathering below — fixing a suppressed line forces its directive out.
+  {
+    linterOptions: { reportUnusedDisableDirectives: 'error' },
+  },
   // Global ignores
   {
     ignores: [
@@ -224,9 +257,9 @@ module.exports = tseslint.config(
     },
     rules: {
       'local-rules/require-hydration-guard': 'error',
-      'local-rules/require-entity-registry': 'warn',
+      'local-rules/require-entity-registry': 'error',
       'local-rules/no-actions-in-effects': 'error',
-      'local-rules/no-multi-entity-effect': 'warn',
+      'local-rules/no-multi-entity-effect': 'error',
     },
   },
   // Spelled-out weekday/month names must be formatted with textLocale(), not
@@ -244,6 +277,44 @@ module.exports = tseslint.config(
       'local-rules/require-text-locale': 'error',
     },
   },
+  // Log history is exportable (`Log.exportLogHistory()` backs the config-page
+  // download and the error overlay's "Logs" button) and exported logs are
+  // routinely attached to public bug reports, so user content must never reach
+  // a Log method (rule #9). This flags a whole value handed over instead of
+  // named fields — bare, as a property value, spread, or nested in a logged
+  // literal — which is what leaked in #7870 / #9112.
+  //
+  // 'error', so a NEW leak fails CI on the PR that introduces it. 'warn' would
+  // be inert here for the same reason spelled out under `max-lines` below:
+  // `ng lint` defaults to maxWarnings: -1 and never fails a build on warnings,
+  // and CI runs bare `npm run lint`.
+  //
+  // Specs are excluded: a test asserting on a payload is legitimate, and the
+  // invariant is about what a shipped build writes into the export.
+  {
+    files: ['src/app/**/*.ts'],
+    ignores: ['**/*.spec.ts'],
+    plugins: {
+      'local-rules': localRules,
+    },
+    rules: {
+      'local-rules/no-user-content-in-logs': 'error',
+    },
+  },
+  // Grandfathered baseline: the call sites that already existed when the rule
+  // landed (80 hits across 40 files, measured 2026-09) carry an inline
+  // `eslint-disable-next-line ... -- grandfathered log baseline` each, so the
+  // rule stays an error for every NEW call, even inside those files.
+  //
+  // Not all of these are leaks. The rule judges shape, never content, so a
+  // scalar the naming heuristics cannot classify (`v`, `x`, `date1`, `evName`,
+  // `handlerMap`) is suppressed next to a real one. Treat a directive as "not
+  // yet triaged", not as "known privacy debt".
+  //
+  // These directives may only ever disappear. A false positive in NEW code is
+  // not a reason to copy one: fix the heuristics in the rule, or scope a
+  // disable whose reason says why this value holds no user content.
+
   // Op-log persistence: inside an adapter.transaction() callback only the tx
   // handle may be used — adapter methods enqueue behind the transaction's own
   // FIFO queue slot on the SQLite backend and deadlock (see
@@ -316,6 +387,37 @@ module.exports = tseslint.config(
       ],
     },
   },
+  // Layer boundary (inward): features compose core/ui/util, never the reverse.
+  // The packages/ boundary rules above are the argument for this one — they
+  // are lint-enforced and hold at zero violations, while the identical
+  // layering inside src/app was convention-only and drifted to 36 files.
+  // Specs are exempt: a spec legitimately imports feature fixtures.
+  {
+    files: ['src/app/ui/**/*.ts', 'src/app/core/**/*.ts', 'src/app/util/**/*.ts'],
+    ignores: ['**/*.spec.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        { patterns: [FEATURE_LAYER_FENCE] },
+      ],
+      'no-restricted-syntax': ['error', FEATURE_LAYER_DYNAMIC_IMPORT_FENCE],
+    },
+  },
+  // Grandfathered layer-boundary offenders: imports that already reached into
+  // features/ when the fence landed carry an inline `eslint-disable-next-line
+  // ... -- grandfathered layer-boundary debt`, so a NEW features/ import fails
+  // even in those files. These directives may only ever disappear.
+  //
+  // Roughly a third of them are four misplaced pieces, not stray imports:
+  // GlobalConfigService (features/config, 69 importers app-wide) and
+  // androidInterface (features/android) are de facto core services, while
+  // core/startup + core/electron/local-rest-api-handler are app-shell
+  // composition roots that belong above features rather than below them.
+  // The rest import 15 distinct feature areas and are genuine per-file work.
+  // util/ offenders (`app-data-mock.ts` aside, which is test-fixture data) are
+  // pure helpers typed against feature models (e.g. Task) — those types belong
+  // in the helper or in a shared model, not the other way round.
+
   // Service size cap (AGENTS.md → Project rules): no service may exceed 1200
   // lines. 'error' so a new service crossing the cap fails CI on the PR that
   // introduces it — 'warn' would be inert, since `ng lint` defaults to
@@ -327,26 +429,25 @@ module.exports = tseslint.config(
       'max-lines': ['error', { max: 1200 }],
     },
   },
-  // Grandfathered offenders: services already over the cap, downgraded to a
-  // (non-failing) warning so they don't red-CI while they are split down. They
-  // still warn at their real size, so the debt stays visible in lint output.
-  // This list may only ever SHRINK — a new entry means the cap was bypassed.
-  // Delete the block once every file below is under 1200 lines.
-  {
-    files: [
-      'src/app/op-log/sync/conflict-resolution.service.ts',
-      'src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts',
-      'src/app/op-log/persistence/operation-log-store.service.ts',
-      'src/app/op-log/sync/operation-log-sync.service.ts',
-      'src/app/plugins/plugin-bridge.service.ts',
-      'src/app/plugins/plugin.service.ts',
-      'src/app/imex/sync/sync-wrapper.service.ts',
-      'src/app/features/tasks/task.service.ts',
-    ],
+  // Grandfathered offenders: services already over the cap, each pinned as an
+  // error at its size when pinned (measured 2026-09), so they can shrink but
+  // never grow. When you shrink one, lower its cap to lock the cleanup in; a
+  // cap may only ever go down. Delete an entry once its file is under 1200.
+  ...Object.entries({
+    'src/app/op-log/sync/conflict-resolution.service.ts': 4826,
+    'src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts': 3356,
+    'src/app/op-log/persistence/operation-log-store.service.ts': 3212,
+    'src/app/op-log/sync/operation-log-sync.service.ts': 2704,
+    'src/app/plugins/plugin-bridge.service.ts': 2354,
+    'src/app/imex/sync/sync-wrapper.service.ts': 2085,
+    'src/app/plugins/plugin.service.ts': 1857,
+    'src/app/features/tasks/task.service.ts': 1531,
+  }).map(([file, max]) => ({
+    files: [file],
     rules: {
-      'max-lines': ['warn', { max: 1200 }],
+      'max-lines': /** @type {['error', { max: number }]} */ (['error', { max }]),
     },
-  },
+  })),
   // HTML files
   {
     files: ['**/*.html'],

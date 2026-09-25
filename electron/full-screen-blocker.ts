@@ -24,6 +24,9 @@ export const initFullScreenBlocker = (IS_DEV: boolean): void => {
         contextIsolation: true,
         nodeIntegration: false,
         nodeIntegrationInSubFrames: false,
+        // Also disabled session-wide in start-app; this is the layer that holds
+        // if that call is skipped or this window ever gets its own session.
+        spellcheck: false,
       };
       assertSecureWebPreferences(webPreferences, 'full-screen-blocker');
       const win = new BrowserWindow({

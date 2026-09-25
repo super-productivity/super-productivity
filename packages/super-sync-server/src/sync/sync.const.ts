@@ -56,7 +56,7 @@ export const APPROX_BYTES_PER_OP = 1024;
  * the size limit; the payload is immutable across the upload pipeline), so a
  * multi-megabyte payload isn't re-stringified here. The vector clock is always
  * (re)measured because it is pruned AFTER validation (see
- * `limitVectorClockSize` / `pruneVectorClockForStorage`) — the stored clock
+ * `limitVectorClockSize`) — the stored clock
  * differs from the validation/gate-time clock, so its size must be computed at
  * the persist site.
  */

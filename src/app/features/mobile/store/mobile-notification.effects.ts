@@ -105,17 +105,18 @@ export class MobileNotificationEffects {
               // haven't asked yet, so stay silent and let the lazy prompt run
               // when a reminder actually needs scheduling. (#8120)
               const permissionState = await this._reminderService.getPermissionState();
+              // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
               Log.log('MobileEffects: initial permission check', { permissionState });
               if (permissionState === 'denied') {
                 this._notifyPermissionIssue();
                 return;
               }
-              if (permissionState !== 'granted') {
-                // Not asked yet — defer the prompt and the exact-alarm check
-                // until a notification actually needs scheduling.
-                return;
-              }
-              await this._warnIfExactAlarmPermissionDeniedOnce();
+              // Deliberately no exact-alarm check here. `ensureExactAlarmPermission()`
+              // opens Android's "Alarms & reminders" settings PAGE, and running it at
+              // startup sent users there with nothing scheduled — reachable for anyone
+              // once notifications are granted, which now happens on the first timer
+              // start (#9648). The scheduling effects below run it when a reminder
+              // actually needs an alarm, which is the only moment it can matter.
             } catch (error) {
               Log.err(error);
               this._notifyPermissionIssue(error?.toString());

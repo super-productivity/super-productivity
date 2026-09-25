@@ -15,7 +15,9 @@ export type AppUriTaskAction = AppUriAddTaskAction | AppUriCompleteTaskAction;
 /**
  * Parses the `com.super-productivity.app://create-task?title=...` and
  * `.../complete-task?title=...` custom URL scheme actions (used by iOS
- * Shortcuts' "Open URLs" action). `create-task` (not `add-task`) matches the
+ * Shortcuts' "Open URLs" action and Android automation apps — both platforms
+ * declare VIEW filters for these hosts and route through the same Capacitor
+ * `appUrlOpen` listener). `create-task` (not `add-task`) matches the
  * desktop Electron protocol action name — desktop's own `add-task` action
  * already means something unrelated (opens the quick-add-task input bar).
  * Returns `null` for any other/unrecognized URL, including the existing

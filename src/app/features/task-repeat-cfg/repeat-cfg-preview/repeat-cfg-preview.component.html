@@ -3,7 +3,13 @@
   [matTooltip]="nextDueTooltip()"
 >
   <mat-icon>repeat</mat-icon>
-  <div class="title">{{ repeatCfg().title }}</div>
+  <div class="wrap">
+    <div class="title">{{ repeatCfg().title }}</div>
+    <tag-list
+      class="planner-tag-list-shared"
+      [task]="repeatCfg()"
+    ></tag-list>
+  </div>
   <div class="info">
     @if (repeatCfg().isPaused) {
       <mat-icon class="paused-icon">pause</mat-icon>

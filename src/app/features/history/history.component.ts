@@ -35,6 +35,8 @@ import { WorklogTaskRowComponent } from '../worklog/worklog-task-row/worklog-tas
 import { HistoryDayMetaComponent } from './history-day-meta/history-day-meta.component';
 import { DateService } from '../../core/date/date.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
+import { parseDbDateStr } from '../../util/parse-db-date-str';
+import { WorklogDay, WorklogMonth, WorklogYear } from '../worklog/worklog.model';
 
 @Component({
   selector: 'history',
@@ -110,6 +112,31 @@ export class HistoryComponent {
         ? getDateRangeForWeek(+year, week, +month)
         : getDateRangeForMonth(+year, +month);
 
+    this._openExportDialog(rangeStart, rangeEnd);
+  }
+
+  exportAllData(): void {
+    const worklog = this.worklogData()?.worklog;
+    if (!worklog) {
+      return;
+    }
+
+    const dateStrings = (Object.values(worklog) as WorklogYear[])
+      .flatMap((year) => Object.values(year.ent) as WorklogMonth[])
+      .flatMap((month) => Object.values(month.ent) as WorklogDay[])
+      .map((day) => day.dateStr)
+      .sort();
+
+    const firstDate = dateStrings[0];
+    const lastDate = dateStrings[dateStrings.length - 1];
+    if (!firstDate || !lastDate) {
+      return;
+    }
+
+    this._openExportDialog(parseDbDateStr(firstDate), parseDbDateStr(lastDate));
+  }
+
+  private _openExportDialog(rangeStart: Date, rangeEnd: Date): void {
     this._matDialog.open(DialogWorklogExportComponent, {
       restoreFocus: true,
       panelClass: 'big',

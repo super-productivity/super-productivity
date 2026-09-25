@@ -128,7 +128,7 @@
         (cdkDragMoved)="dragMoved($event)"
         (cdkDragStarted)="dragStarted($event)"
         (cdkDragReleased)="dragReleased($event)"
-        [cdkDragStartDelay]="isTouchActive() ? touchDragStartDelayMs : 0"
+        [cdkDragStartDelay]="dragDelayForTouch()"
         [event]="ev"
       ></schedule-event>
     } @else {

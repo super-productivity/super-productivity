@@ -12,7 +12,7 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { expectTaskNotVisible } from '../../utils/supersync-assertions';
-import { waitForAppReady } from '../../utils/waits';
+import { waitForAppReady, waitForMenuSettled } from '../../utils/waits';
 
 /**
  * SuperSync Advanced E2E Tests
@@ -186,6 +186,11 @@ test.describe('@supersync SuperSync Advanced', () => {
       const taskB = getTaskElement(clientB, taskName);
       await taskB.click({ button: 'right' });
 
+      // The panel scales into place over 120ms; clicking before it settles parks
+      // the cursor on the item that slides into that spot, whose submenu then
+      // replaces the one we opened. Wait it out before every click in the menu.
+      await waitForMenuSettled(clientB.page);
+
       // Click "Toggle Tags" in context menu (using text match or class if available)
       // Based on i18n: T.F.TASK.CMP.TOGGLE_TAGS -> 'Toggle Tags' (en)
       const toggleTagsItem = clientB.page
@@ -199,6 +204,7 @@ test.describe('@supersync SuperSync Advanced', () => {
         `.mat-mdc-menu-item:not(.nav-link):has-text("${tagName}")`,
       );
       await tagItem.waitFor({ state: 'visible' });
+      await waitForMenuSettled(clientB.page);
       await tagItem.click();
 
       // Close menu by pressing Escape multiple times (submenu + main menu)

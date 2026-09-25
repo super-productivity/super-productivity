@@ -23,6 +23,7 @@ import {
 import { TaskCopy, TaskReminderOptionId, TaskWithDueTime } from '../../tasks/task.model';
 import { ReminderService } from '../../reminder/reminder.service';
 import { PlannerActions } from '../store/planner.actions';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { selectAllTasksWithDueTimeSorted } from '../../tasks/store/task.selectors';
 import { ScheduleConfig } from '../../config/global-config.model';
@@ -436,6 +437,51 @@ describe('DialogScheduleTaskComponent', () => {
         }),
       );
       expect(dialogRefSpy.close).toHaveBeenCalledWith(true);
+    });
+
+    // Issue #9776: updateTask({ changes: { remindAt: undefined } }) loses the
+    // key at JSON.stringify, so the clear never replayed on other devices.
+    // dismissReminderOnly clears remindAt inside its reducer (replay-safe).
+    it('should dispatch dismissReminderOnly (not a lossy updateTask) when "Do not remind" is picked', async () => {
+      const today = new Date();
+      const mockTask = {
+        id: 'taskWithReminder',
+        title: 'Task With Reminder',
+        tagIds: [] as string[],
+        projectId: 'DEFAULT',
+        timeSpentOnDay: {},
+        attachments: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        isDone: false,
+        created: 1640995200000,
+        subTaskIds: [],
+        dueWithTime: today.getTime(),
+        dueDay: getDbDateStr(today),
+        remindAt: today.getTime(),
+      } as unknown as TaskCopy;
+
+      const dispatchSpy = spyOn(store, 'dispatch');
+
+      component.task = mockTask;
+      component.data = { task: mockTask } as any;
+      component.selectedDate = new Date(today);
+      component.selectedTime = null;
+      component.selectedReminderCfgId = TaskReminderOptionId.DoNotRemind;
+
+      await component.submit();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        TaskSharedActions.dismissReminderOnly({ id: 'taskWithReminder' }),
+      );
+      const updateTaskCalls = dispatchSpy.calls
+        .allArgs()
+        .filter(
+          (args) =>
+            (args[0] as unknown as { type: string }).type ===
+            TaskSharedActions.updateTask.type,
+        );
+      expect(updateTaskCalls).toEqual([]);
     });
   });
 

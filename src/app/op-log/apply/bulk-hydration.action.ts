@@ -34,6 +34,14 @@ export const bulkApplyOperations = createAction(
      * schema migration cannot leave a state that the durable log cannot rebuild.
      */
     atomicReplayGroups?: string[][];
+    /**
+     * The batch is applied onto default (empty) state and is the whole history
+     * from seq 0. Only then may the client's own leading genesis op replay as
+     * full state (#9863): on a non-empty baseline — the normal tail replay, a
+     * remote-apply batch, the file-provider snapshot + suffix path — the same
+     * op must stay inert, or it would replace state the batch did not build.
+     */
+    isReplayFromEmptyBaseline?: boolean;
   }>(),
 );
 

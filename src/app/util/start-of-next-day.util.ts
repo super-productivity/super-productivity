@@ -61,10 +61,14 @@ export const getStartOfNextDayDiffMs = (
   startOfNextDayTime: string | undefined,
   startOfNextDay: number | undefined,
 ): number => {
-  if (
-    typeof startOfNextDayTime === 'string' &&
-    START_OF_NEXT_DAY_TIME_RE.test(startOfNextDayTime)
-  ) {
+  if (typeof startOfNextDayTime === 'string') {
+    if (!START_OF_NEXT_DAY_TIME_RE.test(startOfNextDayTime)) {
+      // #7645: an invalid time string makes the whole pair untrustworthy, because
+      // v18.5.0-v18.6.x derived the legacy hour from that same string and synced
+      // both -- honouring it leaves the app a day behind. Reset to the default
+      // instead of trying to tell derived values from intent (see the spec cases).
+      return 0;
+    }
     return (
       clampStartOfNextDayMinutes(parseStartOfNextDayTimeToMinutes(startOfNextDayTime)) *
       60 *
@@ -72,6 +76,7 @@ export const getStartOfNextDayDiffMs = (
     );
   }
 
+  // No time string at all (pre-v18.5.0 data): the legacy hour is genuine user intent.
   const hour = getValidStartOfNextDayHour(startOfNextDay);
   if (hour != null) {
     return hour * MINUTES_PER_HOUR * 60 * 1000;

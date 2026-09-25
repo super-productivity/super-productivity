@@ -16,12 +16,15 @@ import { OverlayContainer } from '@angular/cdk/overlay';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';
 
+const PLUGIN_SHORTCUT_CFG_KEY = 'plugin_automations:r1';
+
 describe('ShortcutService', () => {
   let service: ShortcutService;
   let mockTaskShortcutService: any;
   let mockRouter: any;
   let mockConfigService: any;
   let mockMatDialog: any;
+  let mockPluginBridgeService: any;
 
   beforeEach(() => {
     mockMatDialog = {
@@ -40,11 +43,16 @@ describe('ShortcutService', () => {
       navigate: jasmine.createSpy('navigate'),
       url: '/',
     };
+    mockPluginBridgeService = {
+      shortcuts: signal<any[]>([]),
+      executeShortcut: jasmine.createSpy('executeShortcut'),
+    };
     mockConfigService = {
       cfg: signal({
         keyboard: {
           goToScheduledView: 'Shift+S',
           showHelp: '?',
+          [PLUGIN_SHORTCUT_CFG_KEY]: 'Ctrl+Shift+U',
         },
       }),
       appFeatures: signal({
@@ -66,7 +74,7 @@ describe('ShortcutService', () => {
         { provide: UiHelperService, useValue: {} },
         { provide: SyncWrapperService, useValue: {} },
         { provide: Store, useValue: { dispatch: jasmine.createSpy('dispatch') } },
-        { provide: PluginBridgeService, useValue: { shortcuts: signal([]) } },
+        { provide: PluginBridgeService, useValue: mockPluginBridgeService },
         {
           provide: OverlayContainer,
           useValue: {
@@ -109,6 +117,36 @@ describe('ShortcutService', () => {
 
       expect(mockTaskShortcutService.handleTaskShortcuts).toHaveBeenCalledWith(ev);
       expect(mockRouter.navigate).toHaveBeenCalledWith(['/schedule']);
+    });
+
+    // Ctrl+Shift+U is the combo PLUGIN_SHORTCUT_CFG_KEY is bound to above.
+    const pressPluginCombo = async (repeat = false): Promise<void> => {
+      mockPluginBridgeService.shortcuts.set([
+        { pluginId: 'automations', id: 'r1', label: 'Tag as urgent', onExec: () => {} },
+      ]);
+      const ev = new KeyboardEvent('keydown', {
+        code: 'KeyU',
+        ctrlKey: true,
+        shiftKey: true,
+        repeat,
+      });
+      Object.defineProperty(ev, 'target', { value: document.body });
+
+      await service.handleKeyDown(ev);
+    };
+
+    it('should execute a plugin shortcut bound to its key combo', async () => {
+      await pressPluginCombo();
+
+      expect(mockPluginBridgeService.executeShortcut).toHaveBeenCalledWith(
+        'automations:r1',
+      );
+    });
+
+    it('should NOT execute a plugin shortcut on key auto-repeat', async () => {
+      await pressPluginCombo(true);
+
+      expect(mockPluginBridgeService.executeShortcut).not.toHaveBeenCalled();
     });
 
     it('should open the shortcut cheat sheet on "?"', async () => {

@@ -118,8 +118,7 @@ test.describe('@supersync lastSeq Preservation After Import', () => {
 
       if (syncResult === 'dialog') {
         // Choose "Use My Data" to preserve the import
-        await clientA.sync.syncImportUseLocalBtn.click();
-        await syncImportDialog.waitFor({ state: 'hidden', timeout: 5000 });
+        await clientA.sync.chooseSyncImportUseLocal();
         await clientA.sync.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
       }
 

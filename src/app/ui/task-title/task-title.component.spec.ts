@@ -78,6 +78,24 @@ describe('TaskTitleComponent', () => {
       expect(component.isEditing()).toBe(false);
     });
 
+    it('should end an ongoing edit when readonly becomes true', () => {
+      fixture.componentRef.setInput('readonly', false);
+      component.tmpValue.set('Test task');
+      fixture.detectChanges();
+      const clickEvent = new MouseEvent('click', { bubbles: true });
+      Object.defineProperty(clickEvent, 'target', {
+        value: document.createElement('span'),
+        enumerable: true,
+      });
+      component.onClick(clickEvent);
+      expect(component.isEditing()).toBe(true);
+
+      fixture.componentRef.setInput('readonly', true);
+      fixture.detectChanges();
+
+      expect(component.isEditing()).toBe(false);
+    });
+
     it('should allow editing when readonly is false', () => {
       fixture.componentRef.setInput('readonly', false);
       component.tmpValue.set('Test task');
@@ -192,6 +210,56 @@ describe('TaskTitleComponent', () => {
 
       expect(stopPropagationSpy).toHaveBeenCalled();
       expect(component.isEditing()).toBe(true);
+    });
+  });
+
+  describe('edit box measurement (#9641)', () => {
+    // The invisible .height-measure span is what gives the wrapper its height
+    // while editing, and the textarea is absolutely positioned into that box
+    // with overflow:hidden. Any text metric that differs between the two layers
+    // (or between the display text and the editor) changes where lines wrap, so
+    // the textarea ends up taller than the box it is clipped to and the first
+    // line scrolls out of reach once the caret jumps to the end.
+    const TEXT_METRIC_PROPS = [
+      'fontWeight',
+      'fontSize',
+      'fontFamily',
+      'fontStyle',
+      'letterSpacing',
+      'wordSpacing',
+      'lineHeight',
+      'textTransform',
+      'overflowWrap',
+    ] as const;
+
+    const textMetricsOf = (el: HTMLElement): Record<string, string> => {
+      const computed = getComputedStyle(el);
+      const metrics: Record<string, string> = {};
+      TEXT_METRIC_PROPS.forEach((prop) => (metrics[prop] = computed[prop]));
+      return metrics;
+    };
+
+    const queryEl = (selector: string): HTMLElement => {
+      const el = fixture.nativeElement.querySelector(selector) as HTMLElement | null;
+      expect(el).withContext(selector).toBeTruthy();
+      return el as HTMLElement;
+    };
+
+    it('renders display text, measurer and textarea with identical text metrics', () => {
+      // Consumers set the weight on the host (the task detail panel uses bold);
+      // all three layers must follow it, or the box size and the rendered text
+      // disagree.
+      fixture.nativeElement.style.fontWeight = '700';
+      component.tmpValue.set('Test1 Test2 Test3 Test4 Test Test Test Test Test');
+      fixture.detectChanges();
+
+      const displayMetrics = textMetricsOf(queryEl('.display-value'));
+
+      component.focusInput();
+      fixture.detectChanges();
+
+      expect(textMetricsOf(queryEl('.height-measure'))).toEqual(displayMetrics);
+      expect(textMetricsOf(queryEl('textarea'))).toEqual(displayMetrics);
     });
   });
 

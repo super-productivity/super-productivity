@@ -3,7 +3,7 @@
 // relied on the now-removed `import { IpcRendererEvent } from 'electron'` here to
 // transitively supply them. Several frontend/shared modules still probe Node globals
 // guarded at runtime (get-dist-channel's `process`/`NodeJS`,
-// create-task-placeholder's `NodeJS.Timeout`, user-profile's `require`),
+// create-task-placeholder's `NodeJS.Timeout`),
 // so re-expose them explicitly instead of by accident.
 /// <reference types="node" />
 import {
@@ -38,6 +38,9 @@ export interface ElectronAPI {
   getBackupPath(): Promise<string>;
 
   checkBackupAvailable(): Promise<false | LocalBackupMeta>;
+
+  /** All automatic backup files, newest first. */
+  listBackups(): Promise<LocalBackupMeta[]>;
 
   loadBackupData(backupPath: string): Promise<string>;
 
@@ -232,7 +235,7 @@ export interface ElectronAPI {
 
   setProgressBar(args: {
     progress: number;
-    progressBarMode: 'normal' | 'pause' | 'none';
+    progressBarMode: 'normal' | 'paused' | 'none';
   }): void;
 
   sendAppSettingsToElectron(globalCfg: GlobalConfigState): void;

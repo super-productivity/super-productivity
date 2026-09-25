@@ -4,6 +4,7 @@ import { Task, TaskDetailTargetPanel } from '../task.model';
 import { RoundTimeOption } from '../../project/project.model';
 import { PersistentActionMeta } from '../../../op-log/core/persistent-action.interface';
 import { OpType } from '../../../op-log/core/operation.types';
+import { clearedFieldsProps } from '../../../util/cleared-update-fields';
 
 export const setCurrentTask = createAction(
   '[Task] SetCurrentTask',
@@ -44,6 +45,10 @@ export const updateTaskUi = createAction(
   '[Task] Update Task Ui',
   (taskProps: { task: Update<Task> }) => ({
     ...taskProps,
+    // `changes: { someField: undefined }` loses the key at JSON.stringify on
+    // every sync path; list cleared keys out-of-band so replay restores them
+    // (issue #9776 — e.g. expanding subtasks never synced).
+    ...clearedFieldsProps(taskProps.task.changes),
     meta: {
       isPersistent: true,
       entityType: 'TASK',

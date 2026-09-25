@@ -1,4 +1,10 @@
-import { DistChannel, distChannelSuffix, getAppVersionStr } from './get-app-version-str';
+import {
+  DistChannel,
+  distChannelSuffix,
+  extractSemver,
+  getAppSemver,
+  getAppVersionStr,
+} from './get-app-version-str';
 import { environment } from '../../environments/environment';
 
 describe('distChannelSuffix', () => {
@@ -35,5 +41,27 @@ describe('getAppVersionStr', () => {
   // all false, so the channel resolves to web -> "WB".
   it('appends the web suffix in a browser context', () => {
     expect(getAppVersionStr()).toBe(`${environment.version}WB`);
+  });
+});
+
+describe('extractSemver', () => {
+  it('keeps a bare semver as is', () => {
+    expect(extractSemver('18.22.0')).toBe('18.22.0');
+  });
+
+  it('strips the Android launch-mode marker', () => {
+    expect(extractSemver('18.22.0_L1')).toBe('18.22.0');
+  });
+
+  it('returns undefined when no version leads the string', () => {
+    expect(extractSemver('')).toBeUndefined();
+    expect(extractSemver('dev')).toBeUndefined();
+    expect(extractSemver('v18.22.0')).toBeUndefined();
+  });
+});
+
+describe('getAppSemver', () => {
+  it('reports the bare package version in a browser context, without the channel suffix', () => {
+    expect(getAppSemver()).toBe(environment.version);
   });
 });

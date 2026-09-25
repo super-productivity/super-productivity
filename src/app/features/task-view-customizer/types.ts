@@ -19,6 +19,7 @@ export enum SORT_OPTION_TYPE {
   estimatedTime = 'estimatedTime',
   timeSpent = 'timeSpent',
   tag = 'tag',
+  priority = 'priority',
 }
 
 export enum SORT_ORDER {
@@ -40,7 +41,7 @@ export enum GROUP_OPTION_TYPE {
 // === FILTER ===
 
 export interface FilterOption extends BaseOption<FILTER_OPTION_TYPE> {
-  preset: FILTER_SCHEDULE | FILTER_TIME | string | null;
+  preset: FILTER_SCHEDULE | FILTER_TIME | FILTER_PRIORITY | string | null;
 }
 
 export enum FILTER_OPTION_TYPE {
@@ -50,6 +51,7 @@ export enum FILTER_OPTION_TYPE {
   deadline = 'deadline',
   estimatedTime = 'estimatedTime',
   timeSpent = 'timeSpent',
+  priority = 'priority',
 }
 
 export enum FILTER_SCHEDULE {
@@ -66,6 +68,13 @@ export enum FILTER_TIME {
   MIN_30 = '1800000',
   MIN_60 = '3600000',
   MIN_120 = '7200000',
+}
+
+/** Values must equal the `TaskPriority` strings — they are matched against `task.priority`. */
+export enum FILTER_PRIORITY {
+  high = 'high',
+  medium = 'medium',
+  low = 'low',
 }
 
 export enum FILTER_COMMON {
@@ -136,6 +145,11 @@ const sortOptions: SortOption[] = [
     order: SORT_ORDER.ASC,
     label: T.F.TASK_VIEW.CUSTOMIZER.GROUP_TAG,
   },
+  {
+    type: SORT_OPTION_TYPE.priority,
+    order: SORT_ORDER.ASC,
+    label: T.F.TASK_VIEW.CUSTOMIZER.SORT_PRIORITY,
+  },
 ];
 
 const groupOptions: GroupOption[] = [
@@ -189,6 +203,11 @@ const filterOptions: FilterOption[] = [
     type: FILTER_OPTION_TYPE.timeSpent,
     preset: null,
     label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_TIME_SPENT,
+  },
+  {
+    type: FILTER_OPTION_TYPE.priority,
+    preset: null,
+    label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_PRIORITY,
   },
 ];
 
@@ -272,6 +291,16 @@ const tagPresets: BaseOption<FILTER_COMMON>[] = [
   },
 ];
 
+const priorityPresets: BaseOption<FILTER_COMMON | FILTER_PRIORITY>[] = [
+  {
+    type: FILTER_COMMON.NOT_SPECIFIED,
+    label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_NOT_SPECIFIED,
+  },
+  { type: FILTER_PRIORITY.high, label: T.F.TASK.CMP.PRIORITY_HIGH },
+  { type: FILTER_PRIORITY.medium, label: T.F.TASK.CMP.PRIORITY_MEDIUM },
+  { type: FILTER_PRIORITY.low, label: T.F.TASK.CMP.PRIORITY_LOW },
+];
+
 export const OPTIONS = {
   sort: {
     types: SORT_OPTION_TYPE,
@@ -293,6 +322,7 @@ export const PRESETS = {
   schedule: scheduledPresets,
   deadline: deadlinePresets,
   time: timePresets,
+  priority: priorityPresets,
 };
 
 /**

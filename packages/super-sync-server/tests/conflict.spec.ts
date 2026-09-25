@@ -3,19 +3,15 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   detectConflictForEntities,
   getConflictEntityIds,
-  getEntityConflictKey,
   isSameDuplicateOperation,
   isSameIncomingOperation,
   isSameDuplicateTimestamp,
-  prefetchLatestEntityOpsForBatch,
-  pruneVectorClockForStorage,
   resolveConflictForExistingOp,
   stableJsonStringify,
 } from '../src/sync/conflict';
 import {
   CONFLICT_DETECTION_ENTITY_BATCH_SIZE,
   DuplicateOperationCandidate,
-  MAX_VECTOR_CLOCK_SIZE,
   Operation,
 } from '../src/sync/sync.types';
 
@@ -330,42 +326,6 @@ describe('conflict helpers', () => {
     expect(result.conflictType).toBe('superseded');
   });
 
-  it('does not alias a post-split misc row during batch prefetch', async () => {
-    const storedSchemaVersion = 2;
-    const postSplitMiscRow = {
-      actionType: '[Global Config] Update',
-      clientId: 'client-b',
-      vectorClock: { 'client-b': 1 },
-      serverSeq: 1,
-    };
-    const tx = {
-      $queryRaw: vi.fn().mockResolvedValue([]),
-      operation: {
-        findFirst: vi
-          .fn()
-          .mockImplementation(
-            async (args: { where: { schemaVersion?: { lt?: number } } }) => {
-              const exclusiveUpperBound = args.where.schemaVersion?.lt;
-              return exclusiveUpperBound !== undefined &&
-                storedSchemaVersion >= exclusiveUpperBound
-                ? null
-                : postSplitMiscRow;
-            },
-          ),
-      },
-    };
-
-    const latestByEntity = await prefetchLatestEntityOpsForBatch(
-      1,
-      [{ entityType: 'GLOBAL_CONFIG', entityId: 'tasks' }],
-      tx as unknown as Prisma.TransactionClient,
-    );
-
-    expect(latestByEntity.has(getEntityConflictKey('GLOBAL_CONFIG', 'tasks'))).toBe(
-      false,
-    );
-  });
-
   it('classifies less-than vector clocks as superseded', () => {
     const result = resolveConflictForExistingOp(
       op({ vectorClock: { 'client-a': 1 } }),
@@ -465,41 +425,5 @@ describe('conflict helpers', () => {
     expect(stableJsonStringify({ z: 1, a: { b: 2, a: 1 } })).toBe(
       '{"a":{"a":1,"b":2},"z":1}',
     );
-  });
-
-  it('prunes and mutates vector clocks before storage', () => {
-    const incoming = op({
-      clientId: 'client-25',
-      vectorClock: Object.fromEntries(
-        Array.from({ length: 25 }, (_, index) => [`client-${index + 1}`, index + 1]),
-      ),
-    });
-    const originalClock = incoming.vectorClock;
-
-    pruneVectorClockForStorage(incoming);
-
-    expect(incoming.vectorClock).not.toBe(originalClock);
-    expect(Object.keys(incoming.vectorClock)).toHaveLength(MAX_VECTOR_CLOCK_SIZE);
-    expect(incoming.vectorClock['client-25']).toBe(25);
-  });
-
-  it('preserves the active full-state author while pruning', () => {
-    const fullStateAuthor = 'import-client';
-    const incoming = op({
-      clientId: 'upload-client',
-      vectorClock: {
-        [fullStateAuthor]: 1,
-        'upload-client': 2,
-        ...Object.fromEntries(
-          Array.from({ length: 25 }, (_, index) => [`old-client-${index}`, 100 + index]),
-        ),
-      },
-    });
-
-    pruneVectorClockForStorage(incoming, [fullStateAuthor]);
-
-    expect(Object.keys(incoming.vectorClock)).toHaveLength(MAX_VECTOR_CLOCK_SIZE);
-    expect(incoming.vectorClock[fullStateAuthor]).toBe(1);
-    expect(incoming.vectorClock['upload-client']).toBe(2);
   });
 });

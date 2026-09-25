@@ -193,6 +193,51 @@ npm run monitor:all:save
 npm run monitor:dev -- usage-history --tail 30
 ```
 
+### Workflow 6: Digging out of an ops backlog
+
+Retention failing silently (see the `Cleanup [old-ops]` warnings in the server
+log) leaves a prunable backlog that the steady-state budget cannot clear: the
+sweep runs **once per day**, so the 25k default clears 25k/day — a 4.4M-row backlog
+takes about six months, and a few million takes months.
+
+```bash
+npm run dry-run-old-ops-sweep     # read-only; predicts what would go
+```
+
+Run it **off-peak**: it is two full aggregate passes over `operations` and will evict the
+page cache the live site depends on. It also _over_-predicts slightly — it mirrors the
+sweep's skip reasons in SQL, but it cannot model a user the sweep skips on a database
+error, which is exactly the deep-prefix cohort you are digging out of. The
+`N user(s) threw before their drain` count below is that discrepancy.
+
+Size `OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN` against that number so the backlog
+clears in a defined number of nights, then put it **back** to the default — a
+permanently high ceiling turns a future runaway into a bigger one. Raise in steps
+and watch three signals:
+
+- `N user(s) failed mid-drain` — the **delete** batch is hitting the database
+  `statement_timeout`. Lower `OLD_OPS_CLEANUP_DELETE_BATCH_SIZE` (on a host with slow
+  cold reads, try 500–1000 rather than the 5000 default); do not raise the timeout.
+- `N user(s) threw before their drain` — a **probe** timed out on a deep prefix, before
+  anything was deleted. Lowering the batch size does not help; this is the cohort that
+  needs a partial index covering the causal-boundary probe (see the operations
+  runbook for the outage analysis and index SQL).
+- the pool-busy health alert — the sweep is competing with real traffic.
+
+`Cleanup [old-ops]: abandoned the run after N consecutive candidate failures` means the
+fault is systemic (pool exhausted, cold cache, database down), not per-user; the sweep
+stopped on purpose rather than hammering the whole fleet at one timeout each.
+
+Two things surprise people afterwards. Deleting millions of rows leaves that many
+dead tuples, so expect autovacuum work. And the table does **not** shrink on
+disk — `DELETE` returns space to PostgreSQL for reuse, not to the OS; only
+`VACUUM FULL` or `pg_repack` does that, both needing a maintenance window. Dumps
+shrink immediately either way, since `pg_dump` writes live rows only.
+
+The daily sweep fires ~10s after the app starts and then every 24h, so the
+**restart time picks the hour it runs**. Restart at a quiet hour — and not during
+the backup window — if the sweep is heavy.
+
 ## Output Files
 
 - **Usage History**: `logs/usage-history.jsonl` - Appended by `monitor.ts usage`
@@ -250,21 +295,58 @@ is not started by `deploy.sh` and nothing else runs it:
 (crontab -l 2>/dev/null; echo "*/5 * * * * ALERT_EMAIL=you@example.com /path/to/super-sync-server/scripts/health-alert.sh") | crontab -
 ```
 
-`deploy.sh` reports at the end of every deploy whether this exact cron exists,
-whether it is still completing, and whether the last attempted email failed. It
-cannot prove delivery while the system is healthy because no email is sent then.
-If it says the cron is missing, nothing is watching the server.
+### The cron entry is not enough — you also need an MTA
+
+`ALERT_EMAIL` plus the crontab line above gets the _checks_ running. Delivering
+their result needs a working `mail` command, and stock Debian and Ubuntu have
+none. Install `mailutils` or `bsd-mailx` — those provide `mail` itself. Neither
+`msmtp` nor `msmtp-mta` does: msmtp is a transport and `msmtp-mta` only supplies
+the `sendmail` interface underneath, so installing it alone leaves the check
+still failing. Use it _in addition to_ `bsd-mailx` if msmtp is your relay.
+
+`health-alert.sh` checks for the binary on every run and records its absence
+in `.health-alert/mail-failed`, which `deploy.sh` surfaces. The same marker
+pattern carries `.health-alert/oom-check-blind` (see the OOM section below):
+conditions that mean _a check could not run_ are reported at deploy time, never
+in the alert body, so they cannot keep `PROBLEMS` permanently non-empty and
+disable the recovery mail. Confirm delivery end to end before trusting the
+setup:
+
+```bash
+echo test | mail -s 'SuperSync test' you@example.com
+```
+
+A queuing MTA exits 0 on accept, not on delivery, so check the message actually
+arrived. If it did not, `mailx` writes the undelivered body to `~/dead.letter`
+for the cron user.
+
+`deploy.sh` reports at the end of every successful deploy whether this exact cron exists,
+whether it is still completing, and why the last attempted email failed. If it
+says the cron is missing, nothing is watching the server.
+
+If the cron was already running _before_ you installed the MTA, the missing-binary
+marker gets you that proof for free: the next healthy run sends one
+`SuperSync OK: Health Check Recovered` message and clears the marker. In the other
+order nothing is sent on a healthy server, so use the manual test above.
+
+The `Reason:` line `deploy.sh` prints comes from your MTA and can name the recipient
+address and the relay host — redact it before pasting into an issue.
 
 ### What it checks
 
-| #   | Check                                                            | Fires when                                                               |
-| --- | ---------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| 0–3 | Docker daemon, container state/health, OOM kills, restart counts | a container is down, unhealthy, OOM-killed, or crash-looping             |
-| 4   | `/health` endpoint                                               | HTTP != 200                                                              |
-| 5   | Disk usage                                                       | > 85%                                                                    |
-| 6   | Long-running queries                                             | any query `active` > `MAX_QUERY_SECONDS` (default 120)                   |
-| 7   | Pool saturation                                                  | connections in use ≥ `POOL_WARN_PCT`% (default 75) of `connection_limit` |
-| 8   | Invalid operations indexes                                       | a non-building index is not valid/ready/live                             |
+| #     | Check                                                 | Fires when                                                                                                                                                                                                             |
+| ----- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0,1,3 | Docker daemon, container state/health, restart counts | a container is down, unhealthy, or crash-looping. A stopped container reports its exit code (`state: exited (exit 128)`)                                                                                               |
+| 2     | OOM kills (kernel log)                                | an OOM kill in the last 6 min. Needs the cron user to read the kernel log (`systemd-journal`, or `adm`); otherwise skipped and reported via the marker below, never as a health finding. Runs even when Docker is down |
+| 4     | `/health` endpoint                                    | HTTP != 200                                                                                                                                                                                                            |
+| 5     | Disk usage                                            | > 85%                                                                                                                                                                                                                  |
+| 6     | Long-running queries                                  | any query `active` > `MAX_QUERY_SECONDS` (default 120)                                                                                                                                                                 |
+| 7     | Pool busy                                             | connections concurrently busy ≥ `POOL_WARN_PCT`% (default 75) of `connection_limit` in **two consecutive runs**                                                                                                        |
+| 8     | Invalid operations indexes                            | a non-building index is not valid/ready/live                                                                                                                                                                           |
+| 9     | PostgreSQL in-place crash-restart                     | the postmaster logged `all server processes terminated; reinitializing` in the last 6 min — a backend crash plus WAL recovery inside the still-running container                                                       |
+
+Check 2 runs outside the Docker gate on purpose: a host that just OOM-killed something
+is exactly when `docker info` is least likely to answer.
 
 Checks 0–5 detect the outage once containers or `/health` fail. Checks 6–8 inspect
 the database through the app container and catch the precursor while the server
@@ -272,10 +354,32 @@ can still answer. This also works when `POSTGRES_SERVICE=` selects an external
 database. A failed/malformed probe and a missing `connection_limit` are themselves
 alertable problems, so the new checks cannot silently become inert.
 
-Check 7 is deliberately a **ratio** against `connection_limit`, not a fixed
-number: measured steady state sits the same order of magnitude below the
-pathological-query ceiling (pool size ÷ worst-case query duration), so the
-absolute margin is thin and a fixed threshold would not survive a pool resize.
+Check 7 counts connections that are **busy** — `active`, or holding an open
+transaction — not connections the pool has open. Prisma keeps its connections
+open after use, so a healthy server sits near `connection_limit` in _occupancy_
+essentially all the time while this check correctly reads low: on the hosted
+server, 57 of 60 connections were open and `idle` while the probe reported 0.
+That is why the alert says "busy" and not "saturated" — the number that moves is
+concurrency, and it is the one worth paging on. It also means an `idle in
+transaction` leak shows up here but **never** in check 6, whose age is measured
+only for `active` sessions. The count is database-wide for the sync user — a
+migrator, the monitor, or a second replica all add to it — while the limit is one
+client's pool cap, so the percentage can legitimately exceed 100. The threshold is
+deliberately a **ratio** against `connection_limit`, not a fixed number: measured steady state sits the same order
+of magnitude below the pathological-query ceiling (pool size ÷ worst-case query
+duration), so the absolute margin is thin and a fixed threshold would not survive
+a pool resize.
+
+Check 7 is also the only one that pages on **persistence**: the crossing must be
+seen in two consecutive runs (~10 min). It samples an instantaneous gauge, and a
+single crossing is routinely a stampede that self-heals within one interval —
+the morning of 2026-08-27 produced three fail+recovery pairs that way
+(hourly-aligned client sync at 04:00Z/06:00Z, the reconnect herd after a deploy
+restart at 07:00Z). Sustained exhaustion still pages, one interval later. The
+pending marker (`.health-alert/pool-busy-pending`) ages out after three
+intervals, so a gap of three or more intervals cannot weld two unrelated spikes
+into a "sustained" condition (a shorter blind gap — a probe failure between two
+spikes — still can, costing one bounded false pair).
 
 Check 8 matters more than it looks. An interrupted `CREATE INDEX CONCURRENTLY`
 leaves an index that is **unusable for reads but still maintained on every
@@ -283,7 +387,23 @@ insert**. If `operations_entity_ids_gin` were the invalid one, the conflict
 lookup would silently degrade to a sequential scan on every upload, permanently,
 and nothing else in the codebase would report it.
 
-The known migrator is excluded from the long-query check. Indexes currently
+Check 9 exists because PostgreSQL recovers from a backend crash **inside** the
+running container: the postmaster terminates every connection, re-runs WAL
+recovery, and is answering again within seconds. `RestartCount` stays 0, the
+container never leaves `running`, and the compose healthcheck needs five
+consecutive failed probes — so checks 0–3 are all structurally blind to it. The
+hosted server crash-restarted 45 times over three months before the first one
+was noticed ([#9695](https://github.com/super-productivity/super-productivity/issues/9695));
+users see each one only as a failed sync. The check reads the postgres container
+log directly (the app-container probe cannot: the crash kills its connection),
+so it is skipped when `POSTGRES_SERVICE=` selects an external database — an
+external database's availability still surfaces through checks 4 and 6–8.
+
+The known migrator and the nightly backup (`backup.sh`, which tags its `pg_dump`
+sessions `supersync-backup`) are excluded from the long-query check — a full dump
+legitimately runs for hours, and an alert that fires on a timetable teaches you to
+ignore the channel. Both still count toward check 7, so a dump that genuinely
+starves the pool is still caught. Indexes currently
 listed in `pg_stat_progress_create_index`, and invalid indexes carrying the
 exact DDL lock held by an active migrator, are excluded from check 8. The latter
 also covers `DROP INDEX CONCURRENTLY`, which has no progress-view entry, without
@@ -291,9 +411,47 @@ hiding unrelated invalid indexes. Each migration run has a unique database
 application id; its finite database/client timeouts and targeted backend cleanup
 bound interrupted DDL without generating incident/recovery noise.
 
-Repeat alerts for the same problem are suppressed by a content hash, so counts
-and durations are normalised out — you get one mail per distinct problem, plus a
-recovery mail when it clears.
+### Alert damping
+
+Repeat alerts for the same problem are suppressed by a content hash, so counts,
+durations and the probe's exit status are normalised out — you get one mail per
+distinct problem, plus a recovery mail when it clears.
+
+When the database probe fails, its **stderr** is appended to the mail body under
+`Database probe stderr (URLs redacted):` — body only, never `PROBLEMS`, because
+that string is the dedupe key and error text that shifts run to run would re-mail
+every five minutes. Each URL is stripped through the end of its line before sending:
+Compose can print malformed datasource URLs with whitespace inside credentials.
+An empty capture is reported as `no stderr captured`; it does not establish why
+the probe failed. This exists because `exit 1` — the one probe failure
+that _does_ carry a cause — used to send that cause to `/dev/null`, leaving a status
+code that cannot distinguish "Prisma threw" from "the exec never started". Measured
+2026-09: four such alerts in ten hours, and reaching "the database was healthy all
+along" needed five rounds of manual `ssh` forensics that the mail could have carried.
+
+On top of that, two rules bound how loud a single incident can get. They exist
+because one incident is routinely reported as several different problems: a long
+query saturates the pool, the health probe then times out behind it, and the
+status it dies with alternates run to run (124 timeout, 143 SIGTERM, 128 exec
+failure). Every one of those is a different hash, and a single-slot state file
+re-mailed on every flip.
+
+| Rule                                                               | Tunable                           |
+| ------------------------------------------------------------------ | --------------------------------- |
+| A problem already mailed in the current incident never mails again | —                                 |
+| Recovery needs this many consecutive healthy runs                  | `RECOVERY_CLEAN_RUNS` (default 2) |
+
+There is deliberately **no** minimum gap between alert mails: normalisation
+already collapses every volatile field, so a hash that is genuinely new means a
+symptom nobody has been told about yet, and a blanket rate cap would hold a
+disk-95% or OOM alert for half an hour because an unrelated minor problem mailed
+first. `RECOVERY_CLEAN_RUNS` falls back to its default on a bad value rather than
+joining `CONFIG_PROBLEMS`: that string is the alert body _and_ the dedupe input,
+so a typo there would keep `PROBLEMS` permanently non-empty and disable the
+recovery mail — the same trap as the OOM marker.
+
+State lives in `.health-alert/`: `state` (one hash per line: the problems already
+mailed in this incident) and `clean-runs`.
 
 ## Automation
 
@@ -336,6 +494,55 @@ You can set up cron jobs for regular monitoring:
 - Reduce `--limit` values
 - Run in quick mode
 - Increase Node.js heap: `NODE_OPTIONS=--max-old-space-size=4096 npm run ...`
+
+### `deploy.sh` warns "OOM detection is BLIND"
+
+The OOM check reads `journalctl -k`. A cron user outside `adm`/`systemd-journal`
+can get no output and **exit 0**, so before
+2026-08-25 the check silently could never fire and the absence of an OOM alert
+was not evidence of no OOM. It now probes readability first.
+
+The marker's second line distinguishes these observations:
+
+| Reason          | Observation                                                       | Advice                                                 |
+| --------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
+| `no-journalctl` | journalctl is not installed                                       | The journal-based check is unavailable                 |
+| `journal-error` | journalctl failed or timed out, even if it printed partial output | Check `journalctl -k` and journal configuration        |
+| `unreadable`    | Successful empty read without root or a recognized journal group  | Check the cron user's journal permissions              |
+| `no-kernel-log` | Successful empty read as root or a member of a journal group      | Check journal configuration and host kernel-log access |
+
+Group names are matched exactly: `systemd-journal-remote` does not grant the
+access associated with `systemd-journal`. The check does not use journalctl's
+permissions hint, because `-q` suppresses it. Membership helps choose advice;
+it does not prove access or identify a container guest. Empty output can also
+reflect journal configuration such as `Storage=none` or `ReadKMsg=no`.
+
+Measured 2026-09 on the hosted OpenVZ VPS: the marker sat at `unreadable` for 16
+days while every alert advised joining a group the operator was already in. On
+that host the kernel log was unavailable; `docker inspect --format
+'{{.State.OOMKilled}}'` is the substitute, and checks 0–3 still catch the restart
+that follows.
+
+An unreadable kernel log is a broken capability, not an unhealthy service, so it
+is recorded in `.health-alert/oom-check-blind` and surfaced by `deploy.sh`
+alongside the `mail-failed` marker — deliberately **not** added to the alert
+body. Putting it there would keep `PROBLEMS` permanently non-empty, and
+`[ -n "$PROBLEMS" ]` gates the recovery branch, so `Health Check Recovered`
+could never be sent again on a host that merely lacks a group. (Alerts
+themselves would keep arriving: the dedupe key is a content hash, so a new
+problem still changes the hash and still mails.)
+
+For a missing journal group: `sudo usermod -aG systemd-journal "$USER"`
+(re-login required). Prefer `systemd-journal` over `adm` — it grants the journal
+read and nothing else, where `adm` also opens `/var/log` broadly. Running the
+cron as root works too but grants far more than this one read needs. The marker
+clears itself on the next run once the log is readable.
+
+If the group is already there and `journalctl -k` still prints nothing, the
+host is a container (OpenVZ/Virtuozzo, LXC) that does not expose a kernel log
+to guests at all — verified on the hosted server 2026-09-09, cron user in
+`systemd-journal`, journal empty. No group fixes that; the marker is permanent
+there and `docker inspect -f '{{.State.OOMKilled}}'` is the only OOM signal.
 
 ### "PostgreSQL canceled this query because it exceeded statement_timeout"
 

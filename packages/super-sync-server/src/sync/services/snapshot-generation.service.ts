@@ -395,6 +395,18 @@ export class SnapshotGenerationService {
 
         const totalOpsToProcess = targetSeq - startSeq;
         if (totalOpsToProcess > MAX_OPS_FOR_SNAPSHOT) {
+          // Classify deleted restore points before enforcing the replay budget,
+          // without fetching payloads for an otherwise oversized request.
+          if (startSeq === 0) {
+            const retainedOp = await tx.operation.findFirst({
+              where: { userId, serverSeq: { lte: targetSeq } },
+              orderBy: { serverSeq: 'asc' },
+              select: { serverSeq: true },
+            });
+            if (!retainedOp) {
+              throw new Error(`Target sequence ${targetSeq} is no longer available`);
+            }
+          }
           throw new Error(
             `Too many operations to process (${totalOpsToProcess}). ` +
               `Max: ${MAX_OPS_FOR_SNAPSHOT}.`,
@@ -418,6 +430,12 @@ export class SnapshotGenerationService {
             take: BATCH_SIZE,
             select: REPLAY_OPERATION_SELECT,
           });
+
+          // A reset preserves the allocator. An old restore target can therefore
+          // precede all retained history, even after the replacement is uploaded.
+          if (currentSeq === 0 && batchOps.length === 0) {
+            throw new Error(`Target sequence ${targetSeq} is no longer available`);
+          }
 
           const expectedFirstSeq = _resolveExpectedFirstSeq(
             batchOps,

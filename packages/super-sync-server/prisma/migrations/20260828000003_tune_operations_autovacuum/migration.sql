@@ -1,0 +1,86 @@
+-- Lower the INSERT-vacuum scale factor on `operations` from PostgreSQL's
+-- default 0.2 (~1.7M rows at 8.6M live rows) to 0.02 (~172k). The default does
+-- fire -- autovacuum_vacuum_insert_scale_factor has existed since PG13 and is
+-- 0.2/1000 out of the box -- but only after the table has drifted that far, and
+-- that interval is what this changes. On a small install it is a near-no-op:
+-- the additive threshold term dominates below ~2.5k rows, so 0.02 is a sane
+-- general default rather than one host's tuning imposed on every self-hoster,
+-- and an operator can override it with ALTER TABLE ... SET/RESET.
+--
+-- Why the INSERT trigger specifically, on an append-only table: it is the only
+-- one that fires here. The nightly retention sweep deletes at most
+-- OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN = 25,000 rows, so the dead-tuple trigger
+-- (0.2, ~1.72M rows) is ~69 nights away and effectively never reached. Every
+-- vacuum this table gets is insert-triggered, and the interval between them is
+-- how far the visibility map sags and relfrozenxid ages. Measured 2026-08-25
+-- the map had decayed to 82.8% of pages, a ~148k-page deficit; a one-off VACUUM
+-- restored it to 99.0% and nothing kept it there.
+--
+-- And it is nearly free, which is the other half of the argument. Measured with
+-- VACUUM (VERBOSE) on postgres:16-alpine against this schema:
+--   * insert-only pass (this table's steady state): `index scans: 0`,
+--     "index scan not needed", 16.88% of heap pages scanned. The index pass is
+--     skipped outright -- not merely LP_DEAD-bypassed.
+--   * pass following a DELETE: `index scans: 1`, and all 8 indexes walked
+--     (~3 GB).
+-- That is the whole "~5x or ~0.5x more vacuum I/O" question, and it resolves
+-- against the DEAD-TUPLE factor, not this one. Which is why
+-- autovacuum_vacuum_scale_factor is deliberately NOT lowered here: on a growing
+-- append-only table it is a no-op (the insert trigger always fires first), and
+-- the moment it stops growing -- retention catches up, or a backlog dig-out
+-- raises the delete budget -- it would start buying 10x more full index passes
+-- on a 150-IOPS host. Leave it at the default.
+--
+-- autovacuum_analyze_scale_factor is deliberately NOT set either. Do not
+-- "complete" this migration by adding either factor: ANALYZE samples
+-- 300 * default_statistics_target = 30,000 blocks at RANDOM, a fixed cost that
+-- no page-skipping reduces, so tightening it multiplies the single worst-shaped
+-- I/O this host can be given. The queries it would help are already built not
+-- to need it (the sweep's stated two-sided server_seq range and the probe's
+-- tie-breaking orderBy), and no measurement here shows a plan actually
+-- flipping. If planner staleness is ever measured on a specific query, it earns
+-- its own change with its own reproduction.
+--
+-- What this is NOT justified by, measured rather than assumed. The sweep's
+-- fresh-prefix probe is IMMUNE to map decay: its `server_seq < $2` is the
+-- covering index's third column, so it lands in the Index Cond and btree
+-- discards non-matching rows in `_bt_checkkeys` -- before the visibility check
+-- -- and a NO answer emits nothing and fetches nothing. Verified against this
+-- schema: 2,000 unvacuumed rows in the window, a 38-page map deficit, still
+-- `Heap Fetches: 0`. Only a scan that EMITS rows pays (the same fixture
+-- measured ~2,014 heap fetches, 0 after VACUUM) -- and an audit of src/ found
+-- no production query with that shape and any volume. So do not re-justify this
+-- migration with index-only-scan heap fetches at all; the benefit here is
+-- bounded map sag and freeze debt. Both behaviours are pinned in
+-- tests/integration/old-ops-probe-plan.integration.spec.ts.
+--
+-- The 82.8% measurement was taken while #9692 had the retention sweep failing
+-- on every run, and #9763 fixed that on 2026-08-28. No nightly cycle of the
+-- post-#9763 steady state has been observed, so 0.02 is a starting point, not a
+-- tuned optimum. The deploy checklist, the revisit criteria and the 57014
+-- recovery step live in docs/production-capacity.md, which can be corrected
+-- after the fact -- this file is checksum-frozen once applied.
+--
+-- REQUIRES PostgreSQL 13+ (the project's supported floor is 16).
+-- autovacuum_vacuum_insert_scale_factor was added in PG13; below that this
+-- ALTER fails with 22023 (unrecognized parameter), which matches no gate in
+-- migrate-deploy.sh and would block the chain permanently. Nothing extra is
+-- needed to prevent that: migrate-deploy.sh sets client_connection_check_interval
+-- on its migrator connections, a PG14+ startup option that an older server
+-- rejects with FATAL at connect time, so a server that could not run this
+-- statement can never open a connection to attempt it (measured on 12.22 and
+-- 13.x: migrate deploy fails loudly and _prisma_migrations is never created).
+--
+-- Two things not to "fix" later:
+--   * Do not add a per-table autovacuum_vacuum_cost_delay. The default is inert
+--     here (at cost_limit 200 / 2ms the limiter allows ~50k page misses/s, ~330x
+--     this host's 150 IOPS, so the disk throttles first), and a per-table cost
+--     option clears at_dobalance, removing this table from autovacuum's cost
+--     BALANCING across workers and letting its worker take the full limit.
+--   * The TOAST table inherits this all-or-nothing (setting one toast.* option
+--     breaks the fallback for every field) and its pg_class.reloptions still
+--     reads NULL, so the inherited value is invisible in the catalog.
+--
+-- Single statement, so no lock bound: adding one needs a second statement, and
+-- migrate-deploy.sh's lock-bounded retry anchors on ALTER INDEX.
+ALTER TABLE "operations" SET (autovacuum_vacuum_insert_scale_factor = 0.02);

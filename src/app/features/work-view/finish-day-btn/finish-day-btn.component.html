@@ -1,28 +1,23 @@
 <div class="finish-day-button-wrapper">
   <!-- NOTE: tabindex is same as for tasks -->
-  @if (hasDoneTasks()) {
-    <button
-      [matTooltip]="T.WW.FINISH_DAY_TOOLTIP | translate"
-      color="primary"
-      mat-flat-button
-      routerLink="/active/daily-summary"
-      tabindex="1"
-      class="e2e-finish-day"
-    >
-      <mat-icon>done_all</mat-icon>
-      {{ T.WW.FINISH_DAY | translate }}
-    </button>
-  } @else {
-    <button
-      [matTooltip]="T.WW.FINISH_DAY_TOOLTIP | translate"
-      color=""
-      mat-stroked-button
-      routerLink="/active/daily-summary"
-      tabindex="1"
-      class="e2e-finish-day"
-    >
-      <mat-icon>done_all</mat-icon>
-      {{ T.WW.FINISH_DAY | translate }}
-    </button>
-  }
+  <!--
+    One element, appearance bound: an @if/@else swap between a flat and a
+    stroked button re-creates the node whenever hasDoneTasks() flips, and a
+    click landing in that window is dropped before the routerLink is wired.
+    matButton sets the same classes as mat-flat-button / mat-stroked-button —
+    but as property bindings they write no DOM attributes, so theme rules
+    keyed on button[mat-flat-button][color='primary'] do not match this one;
+    target the .mat-mdc-*-button classes those rules already list alongside.
+  -->
+  <button
+    [matButton]="hasDoneTasks() ? 'filled' : 'outlined'"
+    [color]="hasDoneTasks() ? 'primary' : ''"
+    [matTooltip]="T.WW.FINISH_DAY_TOOLTIP | translate"
+    routerLink="/active/daily-summary"
+    tabindex="1"
+    class="e2e-finish-day"
+  >
+    <mat-icon>done_all</mat-icon>
+    {{ T.WW.FINISH_DAY | translate }}
+  </button>
 </div>

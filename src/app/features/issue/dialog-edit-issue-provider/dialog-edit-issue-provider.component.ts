@@ -2,10 +2,12 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  DestroyRef,
   inject,
   signal,
 } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   MAT_DIALOG_DATA,
   MatDialog,
@@ -72,7 +74,12 @@ import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../common-issue-form-stuff.co
 import { TagService } from '../../tag/tag.service';
 import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
 import { unique } from '../../../util/unique';
+import { getErrorTxt } from '../../../util/get-error-text';
 import { mergeIssueProviderModelUpdates } from './issue-provider-model-merge.util';
+import {
+  PLUGIN_OAUTH_TOKEN_KEY_CFG_KEY,
+  shouldScopePluginOAuth,
+} from '../../../plugins/oauth/plugin-oauth-token-key.util';
 
 type OptionsLoadState = 'idle' | 'loading' | 'loaded' | 'empty' | 'failed';
 
@@ -179,9 +186,12 @@ export class DialogEditIssueProviderComponent {
   private _store = inject(Store);
   private _issueService = inject(IssueService);
   private _snackService = inject(SnackService);
+  private _destroyRef = inject(DestroyRef);
   private _taskService = inject(TaskService);
   private _tagService = inject(TagService);
 
+  private _isSubmitSuccessful = false;
+  private _isClosedOrDestroyed = false;
   tagSuggestions = toSignal(this._tagService.tagsNoMyDayAndNoList$, { initialValue: [] });
 
   addTag(id: string): void {
@@ -213,6 +223,20 @@ export class DialogEditIssueProviderComponent {
         getSafeErrorLogMeta(err),
       );
     });
+    const onClose = (): void => {
+      this._isClosedOrDestroyed = true;
+      this._cleanupUnsavedOAuthToken().catch((err) => {
+        IssueLog.err(
+          '[DialogEditIssueProvider] OAuth cleanup failed',
+          getSafeErrorLogMeta(err),
+        );
+      });
+    };
+    this._matDialogRef
+      .beforeClosed()
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe(onClose);
+    this._destroyRef.onDestroy(onClose);
   }
 
   submit(isSkipClose = false): void {
@@ -233,6 +257,7 @@ export class DialogEditIssueProviderComponent {
           }),
         );
       }
+      this._isSubmitSuccessful = true;
       if (!isSkipClose) {
         this._matDialogRef.close(this.model);
       }
@@ -304,11 +329,32 @@ export class DialogEditIssueProviderComponent {
       }
     } catch (error) {
       this.isConnectionWorks.set(false);
+      // Two keys, not one with an "Unknown error" placeholder: the else branch
+      // above genuinely has nothing to add, while here there is a real reason to
+      // show (#9635, #9636).
       this._snackService.open({
         type: 'ERROR',
-        msg: T.F.ISSUE.S.CONNECTION_FAILED,
+        msg: T.F.ISSUE.S.CONNECTION_FAILED_WITH_ERROR,
+        translateParams: { errorMsg: this._connectionErrorTxt(error) },
       });
     }
+  }
+
+  /**
+   * The status the user asked for in #9635, minus the request URL Angular bakes
+   * into `HttpErrorResponse.message`. iCal and CalDAV URLs regularly carry a
+   * secret token and are masked on export (`privacy-export.ts`), so they have no
+   * business in a toast that ends up in bug-report screenshots — and the URL is
+   * the one thing the user already knows, having just typed it in this dialog.
+   *
+   * Masked via the error's own `url` rather than by matching Angular's wording,
+   * so a reworded message still can't leak it.
+   */
+  private _connectionErrorTxt(error: unknown): string {
+    const txt = getErrorTxt(error);
+    return error instanceof HttpErrorResponse && error.url
+      ? txt.split(error.url).join('…')
+      : txt;
   }
 
   remove(): void {
@@ -362,9 +408,12 @@ export class DialogEditIssueProviderComponent {
       return;
     }
     const effectiveOAuthConfig = this._withPluginOAuthOverrides(oauthConfig);
+    const tokenKey = shouldScopePluginOAuth(pluginId)
+      ? this._getOAuthTokenKey()
+      : undefined;
     this.isOAuthConnecting.set(true);
     try {
-      await this._pluginBridge.startOAuthFlow(pluginId, effectiveOAuthConfig);
+      await this._pluginBridge.startOAuthFlow(pluginId, effectiveOAuthConfig, tokenKey);
     } catch (e) {
       const detail = (e instanceof Error ? e.message : String(e))
         .replace(/\s+/g, ' ')
@@ -377,7 +426,13 @@ export class DialogEditIssueProviderComponent {
       });
       return;
     } finally {
-      this.isOAuthConnecting.set(false);
+      if (!this._isClosedOrDestroyed) {
+        this.isOAuthConnecting.set(false);
+      }
+    }
+    if (this._isClosedOrDestroyed) {
+      await this._cleanupUnsavedOAuthToken();
+      return;
     }
     this.isOAuthConnected.set(true);
     this._snackService.open({
@@ -394,7 +449,10 @@ export class DialogEditIssueProviderComponent {
     if (!pluginId) {
       return;
     }
-    await this._pluginBridge.clearOAuthTokens(pluginId);
+    const tokenKey = shouldScopePluginOAuth(pluginId)
+      ? this._getOAuthTokenKey()
+      : undefined;
+    await this._pluginBridge.clearOAuthToken(pluginId, tokenKey);
     this.isOAuthConnected.set(false);
   }
 
@@ -428,9 +486,9 @@ export class DialogEditIssueProviderComponent {
       return { isSuccess: true, hasOptions: true };
     }
 
-    const pluginConfig = (this.model as Record<string, unknown>)['pluginConfig'] ?? {};
+    const pluginConfig = this._getPluginConfigForOAuth();
     const http = this._pluginHttp.createHttpHelper(
-      () => provider.definition.getHeaders(pluginConfig as Record<string, unknown>),
+      () => provider.definition.getHeaders(pluginConfig),
       { allowPrivateNetwork: provider.allowPrivateNetwork },
     );
 
@@ -780,6 +838,23 @@ export class DialogEditIssueProviderComponent {
     };
   }
 
+  private _getPluginConfigForOAuth(): Record<string, unknown> {
+    const pluginConfig = ((this.model as Record<string, unknown>)['pluginConfig'] ||
+      {}) as Record<string, unknown>;
+    const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
+    const tokenKey =
+      provider && shouldScopePluginOAuth(provider.pluginId)
+        ? this._getOAuthTokenKey()
+        : undefined;
+    return tokenKey
+      ? { ...pluginConfig, [PLUGIN_OAUTH_TOKEN_KEY_CFG_KEY]: tokenKey }
+      : pluginConfig;
+  }
+
+  private _getOAuthTokenKey(): string | undefined {
+    return this.oauthButtons.length ? this.model.id : undefined;
+  }
+
   private _withPluginOAuthOverrides(oauthConfig: OAuthFlowConfig): OAuthFlowConfig {
     return applyPluginOAuthOverrides(
       oauthConfig,
@@ -809,9 +884,16 @@ export class DialogEditIssueProviderComponent {
     if (!provider) {
       return;
     }
+    const tokenKey = shouldScopePluginOAuth(provider.pluginId)
+      ? this._getOAuthTokenKey()
+      : undefined;
     const hasTokens = await this._pluginBridge.restoreAndCheckOAuthTokens(
       provider.pluginId,
+      tokenKey,
     );
+    if (this._isClosedOrDestroyed) {
+      return;
+    }
     this.isOAuthConnected.set(hasTokens);
     if (hasTokens) {
       await this._loadAndSetDynamicOptionsState();
@@ -830,6 +912,24 @@ export class DialogEditIssueProviderComponent {
         }
       }
     }
+  }
+
+  private async _cleanupUnsavedOAuthToken(): Promise<void> {
+    const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
+    if (
+      this.isEdit ||
+      this._isSubmitSuccessful ||
+      !provider ||
+      !shouldScopePluginOAuth(provider.pluginId)
+    ) {
+      return;
+    }
+    const tokenKey = this._getOAuthTokenKey();
+    if (!tokenKey) {
+      return;
+    }
+    await this._pluginBridge.clearOAuthToken(provider.pluginId, tokenKey);
+    this.isOAuthConnected.set(false);
   }
 
   async loadDynamicOptions(): Promise<void> {

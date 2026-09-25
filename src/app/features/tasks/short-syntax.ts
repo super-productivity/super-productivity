@@ -448,7 +448,9 @@ export const shortSyntax = async (
     }
   }
 
-  if (config.isEnableDeadline) {
+  // don't allow for issue tasks: imported titles like "Crash on save !3"
+  // would otherwise get an unasked-for deadline
+  if (config.isEnableDeadline && !task.issueId) {
     const deadlineResult = await parseDeadlineDate(tracked, now);
     if (deadlineResult) {
       taskChanges = { ...taskChanges, ...deadlineResult.changes };
@@ -526,6 +528,47 @@ export const parseProjectChanges = (
   return result ? { title: tracked.text, projectId: result.projectId } : {};
 };
 
+type MatchableProject = {
+  id: string;
+  words: string[];
+  /** title with all whitespace removed, to match titles typed without spaces */
+  squashedTitle: string;
+  titleLength: number;
+};
+
+const toWords = (title: string): string[] => title.trim().toLowerCase().split(/\s+/);
+
+const toMatchableProject = (project: Project): MatchableProject => ({
+  id: project.id,
+  words: toWords(project.title),
+  squashedTitle: project.title.replaceAll(' ', '').toLowerCase(),
+  titleLength: project.title.length,
+});
+
+const isFullyTypedProjectTitle = (
+  project: MatchableProject,
+  typedWords: string[],
+): boolean =>
+  project.words.length === typedWords.length &&
+  project.words.every((word, i) => word === typedWords[i]);
+
+// A partially typed title may only shorten its last word ("+Some Pro"), otherwise
+// task content would get pulled into the project title ("+Home work on taxes" must
+// not match a project "Homework"). A single word may also be typed without any
+// whitespace at all ("+SomePro").
+const isPartiallyTypedProjectTitle = (
+  project: MatchableProject,
+  typedWords: string[],
+): boolean =>
+  typedWords.length === 1
+    ? project.squashedTitle.startsWith(typedWords[0])
+    : typedWords.length <= project.words.length &&
+      typedWords.every((word, i) =>
+        i === typedWords.length - 1
+          ? project.words[i].startsWith(word)
+          : project.words[i] === word,
+      );
+
 const parseProjectTracked = (
   task: Partial<TaskCopy>,
   tracked: TrackedTitle,
@@ -571,36 +614,51 @@ const parseProjectTracked = (
     };
 
     // Prefer shortest prefix-based project title match
-    const sortedAllProjects = allProjects
-      .slice()
-      .sort((p1, p2) => p1.title.length - p2.title.length);
+    const matchableProjects = allProjects
+      .map(toMatchableProject)
+      .sort((p1, p2) => p1.titleLength - p2.titleLength);
 
-    const existingProject = sortedAllProjects.find(
-      (project) =>
-        project.title.replaceAll(' ', '').toLowerCase().indexOf(projectTitleToMatch) ===
-        0,
+    // The match candidate also contains whatever was typed after the project name
+    // (e.g. "+Some Project Title do the thing"), so walk the word prefixes of the
+    // candidate from the longest down and only consume the words that actually
+    // belong to the project title. A prefix with more words than the longest
+    // project title can never match, which also bounds the walk for long input.
+    const maxNrOfWords = matchableProjects.reduce(
+      (max, project) => Math.max(max, project.words.length),
+      0,
+    );
+    const candidateWordEnds = [...projectTitle.matchAll(/\S+/g)].map(
+      (match) => (match.index ?? 0) + match[0].length,
     );
 
-    if (existingProject) {
-      return {
-        projectId: existingProject.id,
-        ranges: consume(`${CH_PRO}${projectTitle}`),
-      };
-    }
+    const findLongestTypedPrefix = (
+      isMatch: (project: MatchableProject, typedWords: string[]) => boolean,
+    ): { projectId: string; typedTitle: string } | null => {
+      for (
+        let nrOfWords = Math.min(candidateWordEnds.length, maxNrOfWords);
+        nrOfWords > 0;
+        nrOfWords--
+      ) {
+        const typedTitle = projectTitle.slice(0, candidateWordEnds[nrOfWords - 1]);
+        const typedWords = toWords(typedTitle);
+        const project = matchableProjects.find((p) => isMatch(p, typedWords));
+        if (project) {
+          return { projectId: project.id, typedTitle };
+        }
+      }
+      return null;
+    };
 
-    // also try only first word after special char
-    const projectTitleFirstWordOnly = projectTitle.split(' ')[0];
-    const projectTitleToMatch2 = projectTitleFirstWordOnly.replace(' ', '').toLowerCase();
-    const existingProjectForFirstWordOnly = sortedAllProjects.find(
-      (project) =>
-        project.title.replaceAll(' ', '').toLowerCase().indexOf(projectTitleToMatch2) ===
-        0,
-    );
+    // A fully typed title (what the autocomplete inserts) always wins, so that
+    // "+Work in progress" stays in project "Work" even when "Work Inbox" exists
+    const match =
+      findLongestTypedPrefix(isFullyTypedProjectTitle) ||
+      findLongestTypedPrefix(isPartiallyTypedProjectTitle);
 
-    if (existingProjectForFirstWordOnly) {
+    if (match) {
       return {
-        projectId: existingProjectForFirstWordOnly.id,
-        ranges: consume(`${CH_PRO}${projectTitleFirstWordOnly}`),
+        projectId: match.projectId,
+        ranges: consume(`${CH_PRO}${match.typedTitle}`),
       };
     }
   }

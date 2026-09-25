@@ -25,10 +25,10 @@ import { Router } from '@angular/router';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
+import { TrackingPresenceService } from '../../features/tracking-presence/tracking-presence.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { MetricService } from '../../features/metric/metric.service';
 import { DateService } from '../../core/date/date.service';
-import { UserProfileService } from '../../features/user-profile/user-profile.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SyncStatus } from '../../op-log/sync-exports';
 import {
@@ -240,6 +240,10 @@ describe('MainHeaderComponent layout', () => {
       ],
       providers: [
         { provide: Store, useValue: { select: () => EMPTY, dispatch: () => undefined } },
+        {
+          provide: TrackingPresenceService,
+          useValue: { isRemoteSessionShown: signal(false) },
+        },
         {
           provide: TaskService,
           useValue: {
@@ -506,12 +510,15 @@ describe('MainHeaderComponent action placement', () => {
         { provide: MatDialog, useValue: { open: jasmine.createSpy('open') } },
         { provide: Store, useValue: { dispatch: jasmine.createSpy('dispatch') } },
         {
+          provide: TrackingPresenceService,
+          useValue: { isRemoteSessionShown: signal(false) },
+        },
+        {
           provide: DataInitStateService,
           useValue: { isAllDataLoadedInitially$: isAllDataLoaded ? of(true) : EMPTY },
         },
         { provide: MetricService, useValue: { getFocusSummaryForDay: () => null } },
         { provide: DateService, useValue: { todayStr: () => '2026-06-09' } },
-        { provide: UserProfileService, useValue: { isInitialized: () => false } },
         { provide: ConflictJournalService, useValue: { unreviewedCount: signal(0) } },
         {
           provide: FocusModeService,

@@ -42,7 +42,17 @@ export class NavigateToTaskService {
   private _currentTaskId = this._store.selectSignal(selectCurrentTaskId);
   private _projectState = this._store.selectSignal(selectProjectFeatureState);
 
-  async navigate(taskId: string, isArchiveTask: boolean = false): Promise<void> {
+  /**
+   * @param isFromSearch the user navigated here from global search, i.e. asked
+   * "where is this?" — the only caller that earns the attention highlight on the
+   * revealed row. Threaded through as a query param on the route-change branch
+   * so the destination view can honour it too. (#5476)
+   */
+  async navigate(
+    taskId: string,
+    isArchiveTask: boolean = false,
+    { isFromSearch = false }: { isFromSearch?: boolean } = {},
+  ): Promise<void> {
     try {
       const task = await this._taskService.getByIdFromEverywhere(taskId);
       if (!task) {
@@ -84,7 +94,7 @@ export class NavigateToTaskService {
           currentUrl: this._router.url,
           location,
         });
-        this._focusTaskElement(taskId);
+        this._focusTaskElement(taskId, isFromSearch);
         return;
       }
 
@@ -94,6 +104,9 @@ export class NavigateToTaskService {
       // branch above; every location we route to here is one the task renders in
       // — either it already lists the task, or the repair above just added it.
       const queryParams: SearchQueryParams = { focusItem: taskId };
+      if (isFromSearch) {
+        queryParams.isFromSearch = true;
+      }
       if (isArchiveTask) {
         queryParams.dateStr = await this._getArchivedDate(task);
       } else {
@@ -303,7 +316,7 @@ export class NavigateToTaskService {
     return task.dueDay === this._dateService.todayStr();
   }
 
-  private _focusTaskElement(taskId: string): void {
+  private _focusTaskElement(taskId: string, isFromSearch: boolean = false): void {
     // KNOWN GAP: this branch gets the collapsed-parent reveal above and nothing
     // else. The other containers that can drop a row from the DOM — customizer
     // group, section, and the done/overdue/later panels — are opened by
@@ -334,10 +347,14 @@ export class NavigateToTaskService {
     //
     // Never swallow silently: if the task never becomes focusable in the current
     // context, surface the error instead of leaving the user on the wrong view.
-    this._layoutService.focusTaskInViewWhenReady(taskId, undefined, () => {
-      recordSearchNavDebug('navigateToTask:focusFailed', { taskId });
-      this._showNavErrorSnack();
-    });
+    this._layoutService.focusTaskInViewWhenReady(
+      taskId,
+      isFromSearch ? (el) => this._layoutService.highlightTaskBriefly(el) : undefined,
+      () => {
+        recordSearchNavDebug('navigateToTask:focusFailed', { taskId });
+        this._showNavErrorSnack();
+      },
+    );
   }
 
   private _isInBacklog(task: Task): boolean {

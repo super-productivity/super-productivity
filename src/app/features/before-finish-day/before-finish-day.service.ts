@@ -13,8 +13,8 @@ export class BeforeFinishDayService {
     this._actions.push(actionToAdd);
   }
 
-  async executeActions(): Promise<'SUCCESS' | 'ERROR'> {
-    const results = await Promise.all(this._actions.map((action) => action()));
+  async executeActions(dayStr: string): Promise<'SUCCESS' | 'ERROR'> {
+    const results = await Promise.all(this._actions.map((action) => action(dayStr)));
     if (results.includes('ERROR')) {
       return 'ERROR';
     }

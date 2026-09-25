@@ -2,13 +2,32 @@ services:
   # PostgreSQL database for SuperSync
   db:
     image: postgres:15-alpine
-    restart: always
     environment:
       POSTGRES_USER: supersync
       POSTGRES_PASSWORD: superpassword
       POSTGRES_DB: supersync_db
+    # No restart policy on purpose: this is a throwaway E2E database. With
+    # `restart: always` a db container from a since-deleted checkout came back
+    # on every Docker daemon start and squatted the fixed host port forever —
+    # including after a Ctrl-C, where the teardown never runs.
+    #
+    # DB_PORT defaults to 0 = ephemeral host port, so a leftover db can never
+    # block the next run. (The supersync port is still fixed at 1901, so only
+    # one supersync suite runs at a time regardless.) Nothing on the host needs
+    # the db — only the supersync container does, over the compose network. For
+    # host access (the packages/super-sync-server integration tests) use
+    # `npm run supersync:db`, which pins DB_PORT=55432 and applies the schema.
+    # Flipping DB_PORT makes compose recreate the container, so a later
+    # `npm run e2e:supersync` takes the db back to an ephemeral port.
+    #
+    # Don't pin DB_PORT in an env file: every checkout sharing that file gets
+    # the same fixed port back, and with it the collision.
+    # Loopback-bound for the same reason as supersync below: the credentials
+    # above are committed to a public repo, and postgres superuser access means
+    # code execution (COPY ... FROM PROGRAM) on the compose network. The one
+    # host consumer, `npm run supersync:db`, connects to localhost.
     ports:
-      - '55432:5432'
+      - '127.0.0.1:${DB_PORT:-0}:5432'
     volumes:
       - db_data:/var/lib/postgresql/data
     # Gate on supersync_db existing AND accepting queries from the app user.
@@ -27,6 +46,12 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
+    # A CMD-SHELL probe that exceeds `timeout` leaves its forked pg_isready
+    # orphaned; with postgres as PID 1 the postmaster reaps it, and an exit
+    # status of 2 is taken for a backend crash that restarts the whole
+    # cluster. docker-init adopts the orphan instead. See #9695 and the
+    # production compose in packages/super-sync-server.
+    init: true
 
   # SuperSync server for E2E testing
   # Start with: docker compose up -d supersync
@@ -35,9 +60,20 @@ services:
     build:
       context: .
       dockerfile: packages/super-sync-server/Dockerfile.test
-    env_file: .env
+    # Optional: the E2E stack supplies every var it needs below, but a local
+    # .env may override them. Compose resolves env_file for ALL services at
+    # project load, so a required one breaks `docker compose up app webdav`
+    # for self-hosters who never created it.
+    env_file:
+      - path: .env
+        required: false
+    # Loopback-bound on purpose: TEST_MODE exposes unauthenticated /api/test/*
+    # routes (cleanup wipes every user and operation) with rate limiting off.
+    # Docker's iptables rules bypass ufw/firewalld, so a bare '1900:1900' hands
+    # that to the whole LAN. Mirrors the production compose in
+    # packages/super-sync-server, which binds 127.0.0.1 for the same reason.
     ports:
-      - '1900:1900'
+      - '127.0.0.1:1900:1900'
     cap_drop:
       - ALL
     security_opt:

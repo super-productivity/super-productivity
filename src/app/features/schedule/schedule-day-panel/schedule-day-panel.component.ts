@@ -4,7 +4,6 @@ import {
   ChangeDetectorRef,
   Component,
   computed,
-  effect,
   ElementRef,
   inject,
   NgZone,
@@ -145,22 +144,14 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     return Math.round(hoursToday * FH);
   });
 
-  // Effect to scroll to current time when the component initializes or current time changes
-  constructor() {
-    effect(() => {
-      // Track current time row changes to trigger auto-scroll
-      this.currentTimeRow();
-      this._scheduleScrollToCurrentTime();
-    });
-  }
-
   ngAfterViewInit(): void {
     // Listen for global pointer releases while a drag is active so we can finalize drops.
     this._pointerUpSubscription = this._dragDropRegistry.pointerUp.subscribe((event) => {
       this._ngZone.run(() => this._handlePointerUp(event));
     });
 
-    // Initial scroll to current time after view initialization
+    // Deliberately scroll to the current time only once when the panel opens.
+    // Do not tie this to scheduleRefreshTick; doing so reintroduces the snap-back from #9906.
     this._scheduleScrollToCurrentTime();
   }
 
@@ -445,7 +436,14 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
   }
 
   private _findScrollContainer(): Element | null {
-    const selectors = ['.side-inner', '.right-panel', '[class*="panel"]'];
+    // In the mobile bottom sheet the scroll container is the sheet's direct
+    // content child, i.e. this component's host element.
+    const selectors = [
+      '.side-inner',
+      '.right-panel',
+      '.bottom-panel-content > *',
+      '[class*="panel"]',
+    ];
     const el = this.scheduleWeekRef.nativeElement;
 
     for (const selector of selectors) {
@@ -457,6 +455,12 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
     return null;
   }
 
+  // TODO replace with the schedule view's approach (scrollIntoView plus
+  // scroll-padding on the scroll container, see ScheduleComponent) so there is
+  // one implementation of "scroll to now" instead of two that can drift. This
+  // one is rect-based like the old schedule code was, but its enter animation
+  // (slideInFromRightAni) is translateX only, so it does not hit the transform
+  // overshoot that fix had.
   private _scrollToCurrentTime(): void {
     if (!this.scheduleWeekRef?.nativeElement) {
       Log.warn('[ScheduleDayPanel] No scheduleWeekRef available');

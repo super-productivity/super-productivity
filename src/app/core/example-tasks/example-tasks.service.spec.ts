@@ -85,6 +85,11 @@ describe('ExampleTasksService', () => {
         workContextId: INBOX_PROJECT.id,
       }),
     );
+    // Load-bearing for the #9256 empty-device guard: it excludes onboarding
+    // tasks by id via getUnsynced(), but hasMeaningfulStateData's project/tag/
+    // note arms take no such exclusion. Onboarding creating any OTHER entity
+    // would silently make an empty device look like it holds user data and
+    // stop the guard from ever firing. The exact call count is what pins that.
     expect(dispatchSpy).toHaveBeenCalledTimes(4);
     for (const call of dispatchSpy.calls.all()) {
       const action = call.args[0];

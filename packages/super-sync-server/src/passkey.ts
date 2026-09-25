@@ -14,6 +14,7 @@ import { prisma } from './db';
 import { Logger } from './logger';
 import { randomBytes } from 'crypto';
 import { sendPasskeyRecoveryEmail, sendVerificationEmail } from './email';
+import { getWsConnectionService } from './sync/services/websocket-connection.service';
 import { Prisma } from '@prisma/client';
 import { loadConfigFromEnv, isConsentRequired } from './config';
 import {
@@ -638,6 +639,10 @@ export const completePasskeyRecovery = async (
   });
   // AUTH_CACHE_INVALIDATION: keep adjacent to tokenVersion writes.
   authCache.invalidate(user.id);
+  // Sockets authenticate only at upgrade — without this, tokens revoked by
+  // the recovery's tokenVersion bump keep receiving op notifications through
+  // already-open connections. Same pairing as POST /api/replace-token.
+  getWsConnectionService().closeForUser(user.id);
 
   Logger.info(`Passkey recovery completed (ID: ${user.id})`);
 

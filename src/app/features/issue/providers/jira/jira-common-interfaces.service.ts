@@ -108,9 +108,11 @@ export class JiraCommonInterfacesService extends BaseIssueProviderService<JiraCf
     searchTerm: string,
     cfg: JiraCfg,
   ): Observable<SearchResultItem[]> {
-    return this._jiraApiService
-      .issuePicker$(searchTerm, cfg)
-      .pipe(tap((v) => IssueLog.log('jira.issuePicker$', v)));
+    return this._jiraApiService.issuePicker$(searchTerm, cfg).pipe(
+      // Count only: the results carry the user's Jira issue titles and the
+      // log is exportable (rule #9).
+      tap((v) => IssueLog.log('jira.issuePicker$', { resultCount: v.length })),
+    );
   }
 
   protected _formatIssueTitleForSnack(issue: IssueData): string {

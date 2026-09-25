@@ -13,6 +13,8 @@ import { FULL_STATE_OPS_META_KEY, STORE_NAMES, OPS_INDEXES } from './db-keys.con
 import { isFullStateOpType } from '../core/operation.types';
 import { buildFullStateOpsMeta, FullStateOpRef } from './full-state-ops-meta';
 
+const LEGACY_PROFILE_DATA_STORE = 'profile_data';
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
@@ -128,7 +130,7 @@ export const runDbUpgrade = (
   // Version 5: Add profile_data store for user profile switching
   // Moves profile backup blobs from localStorage (5-10 MB quota) to IndexedDB
   if (oldVersion < 5) {
-    db.createObjectStore(STORE_NAMES.PROFILE_DATA, { keyPath: 'id' });
+    db.createObjectStore(LEGACY_PROFILE_DATA_STORE, { keyPath: 'id' });
   }
 
   // Version 6: Add client_id store for atomic clientId rotation.
@@ -156,4 +158,9 @@ export const runDbUpgrade = (
 
   // Version 10: no shape change. This downgrade barrier prevents v9 readers
   // from treating schema-v3 replacement LWW operations as patches.
+
+  // Version 11: User Profiles was removed after an export-warning period.
+  if (oldVersion < 11 && db.version >= 11) {
+    db.deleteObjectStore(LEGACY_PROFILE_DATA_STORE);
+  }
 };

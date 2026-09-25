@@ -61,14 +61,9 @@ test.describe('Project completion', () => {
     await expect(celebration).toBeHidden();
 
     await page.goto('/#/archived-projects');
-    const archivedProject = page
-      .locator('archived-projects-page .project-row')
-      .filter({ hasText: 'Test Project' });
-    await expect(archivedProject).toBeVisible();
+    await expect(projectPage.archivedProjectRow('Test Project')).toBeVisible();
 
-    await archivedProject.getByRole('button', { name: 'Reopen' }).click();
-
-    await expect(archivedProject).toHaveCount(0);
+    await projectPage.reopenArchivedProject('Test Project');
     await projectPage.navigateToProjectByName('Test Project');
     await expect(page).toHaveURL(/\/#\/project\/.+\/tasks/);
 

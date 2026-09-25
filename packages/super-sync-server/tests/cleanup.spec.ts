@@ -6,6 +6,8 @@
  * - Stale device cleanup (using retentionMs cutoff)
  * - Rate limit counter cleanup
  * - Request deduplication cleanup
+ * - Expired pending passkey registration cleanup
+ * - Abandoned unverified user cleanup (using retentionMs as grace window)
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { startCleanupJobs, stopCleanupJobs } from '../src/sync/cleanup';
@@ -19,8 +21,15 @@ const mockSyncService = {
     affectedUserIds: [],
   }),
   deleteStaleDevices: vi.fn().mockResolvedValue(0),
+  summarizeCheckpointGate: vi.fn().mockResolvedValue({
+    safeAccounts: 0,
+    totalAccounts: 0,
+    unversionedDevices: 0,
+  }),
   cleanupExpiredRateLimitCounters: vi.fn().mockReturnValue(0),
   cleanupExpiredRequestDedupEntries: vi.fn().mockReturnValue(0),
+  deleteExpiredPendingPasskeyRegistrations: vi.fn().mockResolvedValue(0),
+  deleteAbandonedUnverifiedUsers: vi.fn().mockResolvedValue(0),
   updateStorageUsage: vi.fn().mockResolvedValue(undefined),
 };
 
@@ -60,6 +69,8 @@ describe('Cleanup Jobs', () => {
       expect(mockSyncService.deleteStaleDevices).toHaveBeenCalled();
       expect(mockSyncService.cleanupExpiredRateLimitCounters).toHaveBeenCalled();
       expect(mockSyncService.cleanupExpiredRequestDedupEntries).toHaveBeenCalled();
+      expect(mockSyncService.deleteExpiredPendingPasskeyRegistrations).toHaveBeenCalled();
+      expect(mockSyncService.deleteAbandonedUnverifiedUsers).toHaveBeenCalled();
     });
 
     it('should use retentionMs for cutoff calculation', async () => {
@@ -78,6 +89,17 @@ describe('Cleanup Jobs', () => {
       // Cutoff should be approximately Date.now() - retentionMs
       const expectedCutoff = Date.now() - DEFAULT_SYNC_CONFIG.retentionMs;
       expect(Math.abs(cutoffCall - expectedCutoff)).toBeLessThan(100);
+
+      // Pending passkey registrations are pruned against "now" (their own
+      // expiry timestamp decides), abandoned unverified users against the
+      // retentionMs grace window.
+      const pendingCutoffCall =
+        mockSyncService.deleteExpiredPendingPasskeyRegistrations.mock.calls[0][0];
+      expect(Math.abs(pendingCutoffCall - Date.now())).toBeLessThan(100);
+
+      const unverifiedCutoffCall =
+        mockSyncService.deleteAbandonedUnverifiedUsers.mock.calls[0][0];
+      expect(Math.abs(unverifiedCutoffCall - expectedCutoff)).toBeLessThan(100);
     });
 
     it('should run cleanup daily', async () => {
@@ -199,6 +221,37 @@ describe('Cleanup Jobs', () => {
       expect(mockSyncService.cleanupExpiredRequestDedupEntries).toHaveBeenCalled();
     });
 
+    it('logs the checkpoint-gate roll-up unconditionally (#9962)', async () => {
+      mockSyncService.summarizeCheckpointGate.mockResolvedValueOnce({
+        safeAccounts: 3,
+        totalAccounts: 10,
+        unversionedDevices: 7,
+      });
+
+      startCleanupJobs();
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      const cutoffCall = mockSyncService.deleteStaleDevices.mock.calls[0][0];
+      expect(mockSyncService.summarizeCheckpointGate).toHaveBeenCalledWith(cutoffCall);
+      expect(Logger.info).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /Cleanup \[checkpoint-gate\]: 3 of 10 account\(s\) .* >= 18\.21\.2; 7 device\(s\) report no version/,
+        ),
+      );
+    });
+
+    it('should continue cleanup even if the checkpoint-gate roll-up fails', async () => {
+      mockSyncService.summarizeCheckpointGate.mockRejectedValueOnce(
+        new Error('DB error'),
+      );
+
+      startCleanupJobs();
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(mockSyncService.cleanupExpiredRateLimitCounters).toHaveBeenCalled();
+      expect(mockSyncService.deleteAbandonedUnverifiedUsers).toHaveBeenCalled();
+    });
+
     it('should continue cleanup even if device cleanup fails', async () => {
       mockSyncService.deleteStaleDevices.mockRejectedValueOnce(new Error('DB error'));
 
@@ -209,6 +262,20 @@ describe('Cleanup Jobs', () => {
       expect(mockSyncService.deleteOldSyncedOpsForAllUsers).toHaveBeenCalled();
       expect(mockSyncService.cleanupExpiredRateLimitCounters).toHaveBeenCalled();
       expect(mockSyncService.cleanupExpiredRequestDedupEntries).toHaveBeenCalled();
+      expect(mockSyncService.deleteExpiredPendingPasskeyRegistrations).toHaveBeenCalled();
+      expect(mockSyncService.deleteAbandonedUnverifiedUsers).toHaveBeenCalled();
+    });
+
+    it('should continue cleanup even if pending passkey cleanup fails', async () => {
+      mockSyncService.deleteExpiredPendingPasskeyRegistrations.mockRejectedValueOnce(
+        new Error('DB error'),
+      );
+
+      startCleanupJobs();
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      // The abandoned-user step should still run
+      expect(mockSyncService.deleteAbandonedUnverifiedUsers).toHaveBeenCalled();
     });
   });
 });

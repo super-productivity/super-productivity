@@ -475,6 +475,18 @@ describe('shortSyntax', () => {
 
       expect(r).toBeUndefined();
     });
+
+    it('should not parse deadline syntax for issue tasks', async () => {
+      const t = {
+        ...TASK,
+        issueId: '42',
+        title: 'Crash on save !3',
+      };
+      const now = new Date('2026-06-01T10:00:00');
+      const r = await shortSyntax(t, DEADLINE_CONFIG, undefined, undefined, now);
+
+      expect(r).toBeUndefined();
+    });
   });
 
   describe('tags', () => {
@@ -1270,6 +1282,199 @@ describe('shortSyntax', () => {
         attachments: [],
         taskChanges: {
           title: 'Other fun title',
+        },
+      });
+    });
+
+    it('should keep task content typed after a multi word project title', async () => {
+      const t = {
+        ...TASK,
+        title: '+Some Project Title do the thing',
+      };
+      const r = await shortSyntax(t, CONFIG, [], projects);
+      expect(r).toEqual({
+        newTagTitles: [],
+        remindAt: null,
+        repeat: null,
+        parsedRanges: expectedRanges(t.title, [['project', '+Some Project Title']]),
+        projectId: 'SomeProjectID',
+        attachments: [],
+        taskChanges: {
+          title: 'do the thing',
+        },
+      });
+    });
+
+    it('should keep task content typed after a partial multi word project title', async () => {
+      const t = {
+        ...TASK,
+        title: '+Some Pro do the thing',
+      };
+      const r = await shortSyntax(t, CONFIG, [], projects);
+      expect(r).toEqual({
+        newTagTitles: [],
+        remindAt: null,
+        repeat: null,
+        parsedRanges: expectedRanges(t.title, [['project', '+Some Pro']]),
+        projectId: 'SomeProjectID',
+        attachments: [],
+        taskChanges: {
+          title: 'do the thing',
+        },
+      });
+    });
+
+    it('should keep task content typed after a single word project title', async () => {
+      const t = {
+        ...TASK,
+        title: '+ProjectEasyShort do the thing',
+      };
+      const r = await shortSyntax(t, CONFIG, [], projects);
+      expect(r).toEqual({
+        newTagTitles: [],
+        remindAt: null,
+        repeat: null,
+        parsedRanges: expectedRanges(t.title, [['project', '+ProjectEasyShort']]),
+        projectId: 'ProjectEasyShortID',
+        attachments: [],
+        taskChanges: {
+          title: 'do the thing',
+        },
+      });
+    });
+
+    it('should keep task content surrounding a multi word project title', async () => {
+      const t = {
+        ...TASK,
+        title: 'Fun title +Some Project Title and more',
+      };
+      const r = await shortSyntax(t, CONFIG, [], projects);
+      expect(r).toEqual({
+        newTagTitles: [],
+        remindAt: null,
+        repeat: null,
+        parsedRanges: expectedRanges(t.title, [['project', '+Some Project Title']]),
+        projectId: 'SomeProjectID',
+        attachments: [],
+        taskChanges: {
+          title: 'Fun title and more',
+        },
+      });
+    });
+
+    it('should prefer a fully typed title over a longer partially matching one', async () => {
+      const overlappingProjects = [
+        { title: 'Work', id: 'WorkID' },
+        { title: 'Work Inbox', id: 'WorkInboxID' },
+      ] as Project[];
+      const t = {
+        ...TASK,
+        title: 'Task +Work in progress',
+      };
+      const r = await shortSyntax(t, CONFIG, [], overlappingProjects);
+      expect(r).toEqual({
+        newTagTitles: [],
+        remindAt: null,
+        repeat: null,
+        parsedRanges: expectedRanges(t.title, [['project', '+Work']]),
+        projectId: 'WorkID',
+        attachments: [],
+        taskChanges: {
+          title: 'Task in progress',
+        },
+      });
+    });
+
+    it('should still consume the longer title when it is typed in full', async () => {
+      const overlappingProjects = [
+        { title: 'Work', id: 'WorkID' },
+        { title: 'Work Inbox', id: 'WorkInboxID' },
+      ] as Project[];
+      const t = {
+        ...TASK,
+        title: 'Task +Work Inbox stuff',
+      };
+      const r = await shortSyntax(t, CONFIG, [], overlappingProjects);
+      expect(r).toEqual({
+        newTagTitles: [],
+        remindAt: null,
+        repeat: null,
+        parsedRanges: expectedRanges(t.title, [['project', '+Work Inbox']]),
+        projectId: 'WorkInboxID',
+        attachments: [],
+        taskChanges: {
+          title: 'Task stuff',
+        },
+      });
+    });
+
+    it('should not join task words into a project title written without white space', async () => {
+      const concatenatedProjects = [
+        { title: 'Home', id: 'HomeID' },
+        { title: 'Homework', id: 'HomeworkID' },
+      ] as Project[];
+      const t = {
+        ...TASK,
+        title: '+Home work on taxes',
+      };
+      const r = await shortSyntax(t, CONFIG, [], concatenatedProjects);
+      expect(r).toEqual({
+        newTagTitles: [],
+        remindAt: null,
+        repeat: null,
+        parsedRanges: expectedRanges(t.title, [['project', '+Home']]),
+        projectId: 'HomeID',
+        attachments: [],
+        taskChanges: {
+          title: 'work on taxes',
+        },
+      });
+    });
+
+    it('should parse a tag and an estimate typed after a multi word project title', async () => {
+      const t = {
+        ...TASK,
+        title: '+Some Project Title do the thing 30m #blu',
+      };
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS, projects);
+      expect(r).toEqual({
+        newTagTitles: [],
+        remindAt: null,
+        repeat: null,
+        parsedRanges: expectedRanges(t.title, [
+          ['project', '+Some Project Title'],
+          ['estimate', '30m'],
+          ['tag', '#blu'],
+        ]),
+        projectId: 'SomeProjectID',
+        attachments: [],
+        taskChanges: {
+          title: 'do the thing',
+          tagIds: ['blu_id'],
+          timeEstimate: 1800000,
+        },
+      });
+    });
+
+    it('should keep a fully typed title even when only part of a longer one is typed', async () => {
+      const overlappingProjects = [
+        { title: 'Work', id: 'WorkID' },
+        { title: 'Work Inbox', id: 'WorkInboxID' },
+      ] as Project[];
+      const t = {
+        ...TASK,
+        title: 'Task +Work Inb stuff',
+      };
+      const r = await shortSyntax(t, CONFIG, [], overlappingProjects);
+      expect(r).toEqual({
+        newTagTitles: [],
+        remindAt: null,
+        repeat: null,
+        parsedRanges: expectedRanges(t.title, [['project', '+Work']]),
+        projectId: 'WorkID',
+        attachments: [],
+        taskChanges: {
+          title: 'Task Inb stuff',
         },
       });
     });

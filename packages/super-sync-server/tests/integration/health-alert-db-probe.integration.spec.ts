@@ -5,22 +5,15 @@
  */
 import { spawnSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
-import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { embeddedProbe } from '../health-probe.helper';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const describeWithDb = DATABASE_URL ? describe : describe.skip;
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const packageDir = join(currentDir, '../..');
-const healthScript = join(packageDir, 'scripts/health-alert.sh');
-const embeddedProbe = (): string => {
-  const script = readFileSync(healthScript, 'utf8');
-  const match = script.match(/DB_PROBE_JS=\$\(cat <<'NODE'\n([\s\S]*?)\nNODE\n\)/);
-  expect(match).not.toBeNull();
-  return match?.[1] ?? '';
-};
 
 const runProbe = (databaseUrl: string, maxQuerySeconds = 120) =>
   spawnSync(process.execPath, ['-e', embeddedProbe()], {

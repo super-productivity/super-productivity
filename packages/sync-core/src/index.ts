@@ -34,6 +34,7 @@ export { classifyOpAgainstSyncImport } from './sync-import-filter';
 // Host-configured sync file prefix helpers.
 export { createSyncFilePrefixHelpers } from './sync-file-prefix';
 export type {
+  SyncFileHeadShape,
   SyncFilePrefixInvalidPrefixDetails,
   SyncFilePrefixParams,
   SyncFilePrefixParamsOutput,

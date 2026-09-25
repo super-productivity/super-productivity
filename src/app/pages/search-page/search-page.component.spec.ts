@@ -359,7 +359,11 @@ describe('SearchPageComponent', () => {
       isArchiveTask: true,
     } as SearchItem;
     component.navigateToItem(item);
-    expect(navigateToTaskServiceSpy.navigate).toHaveBeenCalledWith('nav-1', true);
+    // The search flag is what earns the revealed row its attention highlight —
+    // no other caller of navigate() sets it. (#5476)
+    expect(navigateToTaskServiceSpy.navigate).toHaveBeenCalledWith('nav-1', true, {
+      isFromSearch: true,
+    });
   });
 
   it('should reset form value on clearSearch', fakeAsync(() => {

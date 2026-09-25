@@ -79,59 +79,6 @@ describe('DialogHandleDecryptErrorComponent', () => {
     });
   });
 
-  describe('updatePWAndForceUpload()', () => {
-    let originalConfirm: typeof window.confirm;
-    let confirmReturn: boolean;
-
-    beforeEach(() => {
-      originalConfirm = window.confirm;
-      confirmReturn = true;
-      window.confirm = (() => confirmReturn) as typeof window.confirm;
-    });
-
-    afterEach(() => {
-      window.confirm = originalConfirm;
-    });
-
-    it('should update password, clear field, and close with isForceUpload when confirmed', async () => {
-      component.passwordVal = 'new-password';
-      mockSyncConfigService.updateEncryptionPassword.and.resolveTo();
-
-      await component.updatePWAndForceUpload();
-
-      expect(mockSyncConfigService.updateEncryptionPassword).toHaveBeenCalledWith(
-        'new-password',
-      );
-      expect(component.passwordVal).toBe('');
-      expect(mockDialogRef.close).toHaveBeenCalledWith({ isForceUpload: true });
-    });
-
-    it('should abort without changes when user cancels confirmation', async () => {
-      confirmReturn = false;
-      component.passwordVal = 'new-password';
-
-      await component.updatePWAndForceUpload();
-
-      expect(mockSyncConfigService.updateEncryptionPassword).not.toHaveBeenCalled();
-      expect(mockDialogRef.close).not.toHaveBeenCalled();
-      expect(component.passwordVal).toBe('new-password');
-    });
-
-    it('should show error snack and not close on failure', async () => {
-      component.passwordVal = 'new-password';
-      mockSyncConfigService.updateEncryptionPassword.and.rejectWith(
-        new Error('Save failed'),
-      );
-
-      await component.updatePWAndForceUpload();
-
-      expect(mockSnackService.open).toHaveBeenCalledWith(
-        jasmine.objectContaining({ type: 'ERROR' }),
-      );
-      expect(mockDialogRef.close).not.toHaveBeenCalled();
-    });
-  });
-
   describe('cancel()', () => {
     it('should clear password and close with empty object', () => {
       component.passwordVal = 'something';
@@ -141,5 +88,20 @@ describe('DialogHandleDecryptErrorComponent', () => {
       expect(component.passwordVal).toBe('');
       expect(mockDialogRef.close).toHaveBeenCalledWith({});
     });
+  });
+
+  // #9256: the dialog cannot tell a wrong password from a corrupt or
+  // foreign-key op, so it must not offer to replace the server.
+  it('offers only retry and cancel, no server overwrite', () => {
+    component.passwordVal = 'some-password';
+    fixture.detectChanges();
+
+    const buttons: HTMLButtonElement[] = Array.from(
+      fixture.nativeElement.querySelectorAll('button'),
+    );
+    expect(buttons.map((btn) => btn.textContent?.trim())).toEqual([
+      jasmine.stringContaining('F.SYNC.D_DECRYPT_ERROR.CHANGE_PW_AND_DECRYPT'),
+      'G.CANCEL',
+    ]);
   });
 });

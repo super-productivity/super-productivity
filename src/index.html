@@ -14,6 +14,12 @@
       the same way it does natively. Ignored where it doesn't apply: native
       WebViews (keyboard handled natively), iOS Safari (unsupported → falls back
       to the JS `--keyboard-height` visualViewport tracking), and desktop.
+
+      viewport-fit=cover is load-bearing on Android beyond the notch: Capacitor's
+      SystemBars only passes real insets through when it reads it back from this
+      tag (WebView >= 140). Dropping it strands WebView >= 140 / API < 35 devices
+      with no inset owner — see NativeInsetShimGate and
+      docs/android-edge-to-edge-keyboard.md.
     -->
     <meta
       content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"

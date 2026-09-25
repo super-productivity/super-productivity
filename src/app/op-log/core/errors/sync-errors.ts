@@ -1,5 +1,8 @@
 import { IValidation } from 'typia';
-import type { SyncFilePrefixInvalidPrefixDetails } from '@sp/sync-core';
+import type {
+  SyncFileHeadShape,
+  SyncFilePrefixInvalidPrefixDetails,
+} from '@sp/sync-core';
 import {
   AdditionalLogErrorBase as PackageAdditionalLogErrorBase,
   extractErrorMessage as packageExtractErrorMessage,
@@ -47,6 +50,18 @@ const getValidationErrors = (
   }
   return undefined;
 };
+
+/**
+ * Typia's IError carries the offending `value` — a task title, note body,
+ * project name. `additionalLog` on the classes below renders into the global
+ * error alert and the prefilled GitHub issue body, so keep only the
+ * schema-derived parts (rule: never log user content). `path`/`expected` are
+ * what a maintainer needs to locate the failing field anyway.
+ */
+const stripValidationErrorValues = (
+  errors: IValidation.IError[],
+): { path: string; expected: string }[] =>
+  errors.map((e) => ({ path: e.path, expected: e.expected }));
 
 // AdditionalLogErrorBase is provided by @sp/sync-providers (without the
 // previous constructor-time logging side effect). The remaining app-only
@@ -336,9 +351,13 @@ const buildDecompressErrorMessage = (rawMessage: string): string => {
 export class JsonParseError extends Error {
   override name = 'JsonParseError';
   position?: number;
-  dataSample?: string;
 
-  constructor(originalError: unknown, dataStr?: string) {
+  // No raw-data sample: it had zero readers, and holding ±50 chars around the
+  // parse position retains user content (task titles, notes) on an error
+  // object (rule: log history is exportable, never log user content). The
+  // position in the message plus InvalidFilePrefixError's headShape cover the
+  // triage need.
+  constructor(originalError: unknown) {
     // Extract position from SyntaxError message (e.g., "...at position 80999")
     const positionMatch =
       originalError instanceof Error
@@ -352,13 +371,6 @@ export class JsonParseError extends Error {
 
     super(message);
     this.position = position;
-
-    // Extract a sample of the data around the error position for debugging
-    if (dataStr && position !== undefined) {
-      const start = Math.max(0, position - 50);
-      const end = Math.min(dataStr.length, position + 50);
-      this.dataSample = `...${dataStr.substring(start, end)}...`;
-    }
   }
 }
 
@@ -415,7 +427,7 @@ export class ModelValidationError extends Error {
       try {
         const errors = getValidationErrors(params.validationResult);
         if (errors) {
-          const str = JSON.stringify(errors);
+          const str = JSON.stringify(stripValidationErrorValues(errors));
           this.additionalLog = `Model: ${params.id}, Errors: ${str.substring(0, 400)}`;
         }
       } catch {
@@ -436,7 +448,7 @@ export class DataValidationFailedError extends Error {
     try {
       const errors = getValidationErrors(validationResult);
       if (errors) {
-        const str = JSON.stringify(errors);
+        const str = JSON.stringify(stripValidationErrorValues(errors));
         this.additionalLog = str.substring(0, 400);
       }
     } catch {
@@ -470,6 +482,14 @@ export class ModelVersionToImportNewerThanLocalError extends AdditionalLogErrorB
 
 export class InvalidFilePrefixError extends AdditionalLogErrorBase {
   override name = 'InvalidFilePrefixError';
+  /**
+   * Coarse shape of what the body started with instead of the prefix.
+   * `markup` means the download was a RESPONSE page (WebDAV multistatus,
+   * proxy or captive-portal), not the stored file — handlers use this to
+   * withhold the force-overwrite offer, which would clobber a likely-intact
+   * remote file over a transient network problem.
+   */
+  readonly headShape: SyncFileHeadShape;
 
   constructor(details: SyncFilePrefixInvalidPrefixDetails) {
     super({
@@ -477,7 +497,10 @@ export class InvalidFilePrefixError extends AdditionalLogErrorBase {
       expectedPrefix: details.expectedPrefix,
       endSeparator: details.endSeparator,
       inputLength: details.inputLength,
+      prefixAt: details.prefixAt,
+      headShape: details.headShape,
     });
+    this.headShape = details.headShape;
   }
 }
 

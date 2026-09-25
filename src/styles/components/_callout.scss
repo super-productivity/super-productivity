@@ -1,0 +1,61 @@
+// Shared info/warning/danger/success callout box.
+//
+// Replaces the per-dialog `.warning-box` / `.info-box` / `.warning` clones that
+// each hardcoded their own `rgba(255, 152, 0, …)` tints and therefore ignored
+// the user's theme. One tone token (`--callout-c`) drives icon, border and
+// fill, so a new tone is a single declaration and every tone stays theme-aware.
+//
+// Markup (icon is optional):
+//   <div class="callout callout--warning">
+//     <mat-icon aria-hidden="true">warning</mat-icon>
+//     <p>…</p>
+//   </div>
+//
+// Related: `.info-panel` (see `_info-panel.scss`) is the sibling for
+// formly-generated markup, where no icon element can be added and the glyph has
+// to come from a `::before`.
+.callout {
+  --callout-c: var(--c-primary);
+
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s);
+  padding: var(--s2);
+  border: 1px solid color-mix(in srgb, var(--callout-c) 30%, transparent);
+  border-radius: var(--card-border-radius);
+  background: color-mix(in srgb, var(--callout-c) 10%, transparent);
+  line-height: 1.5;
+
+  > mat-icon {
+    color: var(--callout-c);
+    flex-shrink: 0;
+  }
+
+  p {
+    margin: 0 0 var(--s);
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  > :last-child {
+    margin-bottom: 0;
+  }
+
+  &--info {
+    --callout-c: var(--c-primary);
+  }
+
+  &--success {
+    --callout-c: var(--color-success);
+  }
+
+  &--warning {
+    --callout-c: var(--color-warning);
+  }
+
+  &--danger {
+    --callout-c: var(--color-danger);
+  }
+}

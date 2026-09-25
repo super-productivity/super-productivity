@@ -204,12 +204,9 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
       const dialog = clientB.page.locator('dialog-sync-import-conflict');
       await expect(dialog).toBeVisible({ timeout: 15000 });
 
-      // Click "Use My Data" button
-      const useLocalButton = dialog.getByRole('button', { name: /my data/i });
-      await useLocalButton.click();
-
-      // Wait for dialog to close and sync to complete
-      await expect(dialog).not.toBeVisible({ timeout: 10000 });
+      // Click "Use My Data" (the page object also answers the native confirm).
+      await clientB.sync.chooseSyncImportUseLocal();
+      await expect(dialog).not.toBeVisible();
       await clientB.page.waitForTimeout(2000);
       console.log('[USE_LOCAL] Client B chose USE_LOCAL');
 
@@ -314,12 +311,9 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
       const dialog = clientB.page.locator('dialog-sync-import-conflict');
       await expect(dialog).toBeVisible({ timeout: 15000 });
 
-      // Click "Use Server Data" button
-      const useRemoteButton = dialog.getByRole('button', { name: /server/i });
-      await useRemoteButton.click();
-
-      // Wait for dialog to close and sync to complete
-      await expect(dialog).not.toBeVisible({ timeout: 10000 });
+      // Click "Use Server Data" (the page object also answers the native confirm).
+      await clientB.sync.chooseSyncImportUseRemote();
+      await expect(dialog).not.toBeVisible();
 
       // Wait for sync to fully complete after USE_REMOTE (downloads server state)
       // This is more reliable than a fixed timeout as it waits for actual sync completion
@@ -603,11 +597,10 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
    * regression for it): the app syncs download-first, so in this deterministic flow the
    * incoming SYNC_IMPORT is intercepted by Client B's DOWNLOAD phase, which already
    * persisted lastServerSeq correctly before #8304 — so this test passes with or
-   * without that fix. #8304's actual bug is on the UPLOAD-piggyback path, reachable only
-   * via a timing race (A uploads between B's download and upload) that a deterministic
-   * E2E cannot force; that path is covered by the unit specs and
-   * operation-log-upload-piggyback-seq.integration.spec.ts. This test is the real-server
-   * end-to-end guard for the shared cancel→re-offer→reconverge contract.
+   * without that fix. #8304's actual bug is on the UPLOAD-piggyback path. A held
+   * download in supersync-conflict-gate-non-task-work.spec.ts forces that interleave,
+   * but does not combine it with CANCEL and re-offer. This test is the real-server
+   * end-to-end guard for the download-path cancel→re-offer→reconverge contract.
    *
    * Actions:
    * 1. Clients A and B sync a shared baseline task.
@@ -711,8 +704,8 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
       // ============ PHASE 7: Adopt server data → reconverge ============
       console.log('[#8304] Phase 7: Client B chooses USE_REMOTE to reconverge');
 
-      await dialog.getByRole('button', { name: /server/i }).click();
-      await expect(dialog).not.toBeVisible({ timeout: 10000 });
+      await clientB.sync.chooseSyncImportUseRemote();
+      await expect(dialog).not.toBeVisible();
       await clientB.sync.waitForSyncToComplete();
 
       await clientB.page.goto('/#/work-view');

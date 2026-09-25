@@ -3,6 +3,10 @@ import legacyData from '../../fixtures/legacy-full-migration-backup.json';
 import { MIGRATION_BACKUP_PREFIX } from '../../../electron/shared-with-frontend/get-backup-timestamp';
 import { skipOnboardingForE2E } from '../../utils/waits';
 import { cssSelectors } from '../../constants/selectors';
+import {
+  readMigratedState,
+  seedLegacyDatabase,
+} from '../../utils/legacy-migration-helpers';
 
 /**
  * Issue #9139: a tag persisted with no `theme` at all crashed the app on
@@ -26,66 +30,8 @@ import { cssSelectors } from '../../constants/selectors';
  * Run: npm run e2e:file e2e/tests/migration/legacy-themeless-tag-9139.spec.ts -- --retries=0
  */
 
-/** Read the migrated store back out of SUP_OPS. */
-const readMigratedState = async (
-  page: Page,
-): Promise<{ tag?: { ids: string[]; entities: Record<string, unknown> } }> =>
-  page.evaluate(
-    async () =>
-      new Promise((resolve, reject) => {
-        const request = indexedDB.open('SUP_OPS');
-        request.onsuccess = (event) => {
-          const db = (event.target as IDBOpenDBRequest).result;
-          const tx = db.transaction('state_cache', 'readonly');
-          const getReq = tx.objectStore('state_cache').get('current');
-          getReq.onsuccess = () => {
-            db.close();
-            resolve(getReq.result?.state || {});
-          };
-          getReq.onerror = () => {
-            db.close();
-            reject(getReq.error);
-          };
-        };
-        request.onerror = () => reject(request.error);
-      }),
-  );
-
-const seedLegacyDatabase = async (
-  page: Page,
-  data: Record<string, unknown>,
-): Promise<void> => {
-  await page.evaluate(
-    async (entityData) =>
-      new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('pf', 1);
-        request.onupgradeneeded = (event) => {
-          const db = (event.target as IDBOpenDBRequest).result;
-          if (!db.objectStoreNames.contains('main')) {
-            db.createObjectStore('main');
-          }
-        };
-        request.onsuccess = (event) => {
-          const db = (event.target as IDBOpenDBRequest).result;
-          const tx = db.transaction('main', 'readwrite');
-          const store = tx.objectStore('main');
-          for (const [key, value] of Object.entries(entityData)) {
-            store.put(value, key);
-          }
-          tx.oncomplete = () => {
-            db.close();
-            resolve();
-          };
-          tx.onerror = () => {
-            db.close();
-            reject(tx.error);
-          };
-        };
-        request.onerror = () => reject(request.error);
-      }),
-    data,
-  );
-};
+/** The slices this spec asserts on, out of the migrated SUP_OPS snapshot. */
+type MigratedState = { tag?: { ids: string[]; entities: Record<string, unknown> } };
 
 /**
  * Delete `theme` from the TODAY tag of an already-migrated store, and report
@@ -161,7 +107,6 @@ test.describe('@migration #9139 work context with no theme', () => {
     // visible in the diff instead of buried in ~100KB of JSON.
     const themelessData = JSON.parse(JSON.stringify(legacyData.data)) as Record<
       string,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       any
     >;
     delete themelessData.tag.entities.TODAY.theme;
@@ -209,12 +154,16 @@ test.describe('@migration #9139 work context with no theme', () => {
       // load-bearing assertion of this test (verified: disabling the heal fails
       // right here).
       await expect
-        .poll(async () => (await readMigratedState(page)).tag?.entities?.TODAY != null, {
-          timeout: 30000,
-        })
+        .poll(
+          async () =>
+            (await readMigratedState<MigratedState>(page)).tag?.entities?.TODAY != null,
+          {
+            timeout: 30000,
+          },
+        )
         .toBe(true);
 
-      const state = await readMigratedState(page);
+      const state = await readMigratedState<MigratedState>(page);
       const today = state.tag?.entities?.TODAY as
         | { theme?: Record<string, unknown> }
         | undefined;
@@ -286,7 +235,8 @@ test.describe('@migration #9139 work context with no theme', () => {
       // that silently no-ops cannot masquerade as a pass.
       await expect
         .poll(
-          async () => (await readMigratedState(dbPage)).tag?.entities?.TODAY != null,
+          async () =>
+            (await readMigratedState<MigratedState>(dbPage)).tag?.entities?.TODAY != null,
           {
             timeout: 30000,
           },
@@ -297,9 +247,8 @@ test.describe('@migration #9139 work context with no theme', () => {
       expect(await stripThemeFromMigratedToday(dbPage)).toBe('OK');
 
       // Confirm the corruption is really on disk before relying on it.
-      const corrupted = (await readMigratedState(dbPage)).tag?.entities?.TODAY as
-        | Record<string, unknown>
-        | undefined;
+      const corrupted = (await readMigratedState<MigratedState>(dbPage)).tag?.entities
+        ?.TODAY as Record<string, unknown> | undefined;
       expect(corrupted).toBeDefined();
       expect('theme' in (corrupted as Record<string, unknown>)).toBe(false);
       await dbPage.close();

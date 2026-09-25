@@ -16,7 +16,12 @@ import {
   viewChild,
 } from '@angular/core';
 import { TaskService } from '../task.service';
-import { EMPTY, forkJoin, Subscription } from 'rxjs';
+import { TaskDuplicateService } from '../task-duplicate.service';
+import { TaskMultiSelectService } from '../task-multi-select.service';
+import { TaskMoveToProjectService } from '../task-move-to-project.service';
+import { isMultiSelectModifierEvent } from '../../../util/is-multi-select-modifier-event';
+import { Subscription } from 'rxjs';
+import { first } from 'rxjs/operators';
 import {
   HideSubTasksMode,
   SubmitTrigger,
@@ -35,7 +40,6 @@ import {
   getChecklistProgress,
 } from '../../markdown-checklist/get-checklist-progress';
 import { GlobalConfigService } from '../../config/global-config.service';
-import { concatMap, first, tap } from 'rxjs/operators';
 import { DoneToggleComponent } from '../../../ui/done-toggle/done-toggle.component';
 import { SwipeBlockComponent } from '../../../ui/swipe-block/swipe-block.component';
 import {
@@ -51,7 +55,7 @@ import { TaskAttachmentService } from '../task-attachment/task-attachment.servic
 import { DialogEditTaskAttachmentComponent } from '../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 import { ProjectService } from '../../project/project.service';
 import { Project } from '../../project/project.model';
-import { _MISSING_PROJECT_, DEFAULT_PROJECT_ICON } from '../../project/project.const';
+import { DEFAULT_PROJECT_ICON } from '../../project/project.const';
 import { T } from '../../../t.const';
 import {
   MatMenu,
@@ -61,11 +65,9 @@ import {
 } from '@angular/material/menu';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { throttle } from '../../../util/decorators';
-import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { openFullscreenMarkdownDialog } from '../../../ui/dialog-fullscreen-markdown/open-fullscreen-markdown-dialog';
 import { Location } from '@angular/common';
-import { Update } from '@ngrx/entity';
 import { DateAdapter } from '@angular/material/core';
 import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { combineDateAndTime } from '../../../util/combine-date-and-time';
@@ -93,6 +95,7 @@ import { TaskTitleComponent } from '../../../ui/task-title/task-title.component'
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton, MatMiniFabButton } from '@angular/material/button';
 import { TaskHoverControlsComponent } from './task-hover-controls/task-hover-controls.component';
+import { TaskPriorityIndicatorComponent } from '../task-priority-indicator/task-priority-indicator.component';
 import { ProgressBarComponent } from '../../../ui/progress-bar/progress-bar.component';
 import { TaskListComponent } from '../task-list/task-list.component';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
@@ -108,7 +111,6 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
 import { environment } from '../../../../environments/environment';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
-import { TaskLog } from '../../../core/log';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -122,6 +124,10 @@ import {
 } from '../add-subtask-input/add-subtask-input.component';
 import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 import { getSubTaskTimeLeftForDisplay } from '../util/get-sub-task-time-left-for-display';
+
+const isInteractiveTarget = (target: EventTarget | null): boolean =>
+  target instanceof Element &&
+  !!target.closest('a, button, textarea, input, select, [contenteditable="true"]');
 
 @Component({
   selector: 'task',
@@ -137,10 +143,14 @@ import { getSubTaskTimeLeftForDisplay } from '../util/get-sub-task-time-left-for
     '[class.isDone]': 'task().isDone',
     '[class.isCurrent]': 'isCurrent()',
     '[class.isSelected]': 'isSelected()',
+    '[class.isMultiSelected]': 'isMultiSelected()',
+    '[class.isTouchSelectionMode]': 'isTouchSelectionMode()',
     '[class.hasNoSubTasks]': 'task().subTaskIds.length === 0',
     '[class.isDragReady]': 'isDragReady()',
     '[class.isOverdue]': 'isOverdue()',
     '(contextmenu)': 'onHostContextMenu($event)',
+    '(mousedown)': 'onHostMouseDown($event)',
+    '(click)': 'onHostClick($event)',
   },
   imports: [
     MatIcon,
@@ -148,6 +158,7 @@ import { getSubTaskTimeLeftForDisplay } from '../util/get-sub-task-time-left-for
     MatIconButton,
     TaskTitleComponent,
     TaskHoverControlsComponent,
+    TaskPriorityIndicatorComponent,
     ProgressBarComponent,
     MatMiniFabButton,
     forwardRef(() => TaskListComponent),
@@ -171,7 +182,7 @@ import { getSubTaskTimeLeftForDisplay } from '../util/get-sub-task-time-left-for
 })
 export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _taskService = inject(TaskService);
-  private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
+  private readonly _taskDuplicateService = inject(TaskDuplicateService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _location = inject(Location);
   private readonly _configService = inject(GlobalConfigService);
@@ -189,6 +200,8 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _datePipe = inject(LocaleDatePipe);
   private readonly _plannerService = inject(PlannerService);
   private readonly _addSubtaskInputService = inject(AddSubtaskInputService);
+  private readonly _multiSelect = inject(TaskMultiSelectService);
+  private readonly _taskMoveToProjectService = inject(TaskMoveToProjectService);
 
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
@@ -203,6 +216,11 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   // Use shared signals from services to avoid creating 600+ subscriptions on initial render
   isCurrent = computed(() => this._taskService.currentTaskId() === this.task().id);
   isSelected = computed(() => this._taskService.selectedTaskId() === this.task().id);
+  // Part of the transient multi-selection (modifier click, Shift+Arrow, X,
+  // Ctrl/Cmd+A, touch tap in selection mode).
+  // One O(1) Set lookup per row per selection change; see TaskMultiSelectService.
+  isMultiSelected = computed(() => this._multiSelect.selectedIds().has(this.task().id));
+  isTouchSelectionMode = this._multiSelect.isTouchSelectionMode;
   isShowCloseButton = computed(() => {
     // Only show close button when task is selected AND not on mobile (bottom panel)
     return this.isSelected() && !this.layoutService.isXs();
@@ -452,10 +470,80 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     if (ev.target instanceof Element && ev.target.closest('.show-additional-info-btn')) {
       return;
     }
+    // While a multi-selection exists, focus moves are selection mechanics
+    // (Ctrl+click focuses the row); don't re-target an open detail panel.
+    if (this._multiSelect.isSelecting()) {
+      return;
+    }
     const selectedTaskId = this._taskService.selectedTaskId();
     if (selectedTaskId && selectedTaskId !== this.task().id) {
       this._taskService.setSelectedId(this.task().id);
     }
+  }
+
+  /**
+   * Multi-select mouse handling. A plain primary click anywhere on the row
+   * selects "this one only" (file-manager standard) by clearing the set; the
+   * modifier variants are handled on `click` in onHostClick. Shift+mousedown
+   * also suppresses native text selection.
+   */
+  onHostMouseDown(ev: MouseEvent): void {
+    if (ev.button !== 0 || !this._isInnermostTaskFor(ev.target)) {
+      return;
+    }
+    if (isInteractiveTarget(ev.target)) {
+      // Text selection / caret placement inside the title or subtask input.
+      return;
+    }
+    if (ev.shiftKey) {
+      ev.preventDefault();
+    }
+    if (
+      !isMultiSelectModifierEvent(ev) &&
+      this._multiSelect.isActive() &&
+      !this._multiSelect.isTouchSelectionMode()
+    ) {
+      this._multiSelect.clear();
+    }
+  }
+
+  /**
+   * Ctrl/Cmd+click toggles this row in the multi-selection, Shift+click selects
+   * the range from the anchor; in touch selection mode a plain tap toggles.
+   * Child handlers (title, done toggle, estimate) bail on modifier clicks so the
+   * event reaches the host by bubbling, and the title has pointer-events off
+   * on touch; real controls (links, buttons, inputs) keep their own behaviour.
+   */
+  onHostClick(ev: MouseEvent): void {
+    if (!this._isInnermostTaskFor(ev.target) || isInteractiveTarget(ev.target)) {
+      return;
+    }
+    const isModifierClick = isMultiSelectModifierEvent(ev);
+    const isTouchTap = !isModifierClick && this._multiSelect.isTouchSelectionMode();
+    if (
+      (!isModifierClick && !isTouchTap) ||
+      // Detail-panel copies are never part of the selection.
+      this._elementRef.nativeElement.closest('task-detail-panel')
+    ) {
+      return;
+    }
+    ev.preventDefault();
+    ev.stopPropagation();
+    const id = this.task().id;
+    if (isTouchTap) {
+      this._multiSelect.toggle(id);
+      return;
+    }
+    if (this._taskService.selectedTaskId()) {
+      // The detail panel is single-task UI; close it on the first modifier click.
+      this._taskService.setSelectedId(null);
+    }
+    if (ev.shiftKey) {
+      this._multiSelect.selectRange(id, ev.ctrlKey || ev.metaKey);
+    } else {
+      this._multiSelect.toggle(id);
+    }
+    this.focusSelf();
   }
 
   @HostListener('focusout', ['$event']) onBlur(ev: FocusEvent): void {
@@ -545,6 +633,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   ngOnDestroy(): void {
+    // Possibly no longer rendered (checked after the DOM settles, since rows
+    // re-mount when they change lists and the detail panel renders copies).
+    this._multiSelect.removeWhenUnrendered(
+      this.task().id,
+      this._elementRef.nativeElement,
+    );
     window.clearTimeout(this._doubleClickTimeout);
     window.clearTimeout(this._dragReadyTimeout);
     window.clearTimeout(this._doneAnimationTimeout);
@@ -811,10 +905,33 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   moveToBacklogWithFocus(): void {
     const t = this.task();
-    if (t.projectId && !t.parentId) {
-      this.focusPrevious(true);
-      this.moveToBacklog();
+    if (!t.projectId || t.parentId) {
+      return;
     }
+    // Gated on the ACTIVE context, like the context menu's move-to-backlog item
+    // (task-context-menu-inner.component.ts). Today and tag views have no backlog
+    // of their own, so the menu offers nothing there and the shortcut now matches.
+    //
+    // What this is NOT: the task does not vanish from Today when moved. Since
+    // #8592 the move is position-only and Today membership comes from
+    // dueDay/dueWithTime, so pressing the key from Today used to shuffle the
+    // task inside its project's lists with no visible effect in the view the
+    // user was looking at — plus a focus jump. That invisible half-action is
+    // what #9374 reported; making it a no-op is the answer, and reaching the
+    // backlog stays a project-view operation (#9563's position-vs-schedule rule).
+    //
+    // Subscribed on keypress rather than per instance: this component renders once
+    // per task in long lists. shareReplay(1) makes the emission synchronous, and
+    // first() completes it, so there is nothing to clean up.
+    this.workContextService.activeWorkContext$
+      .pipe(first())
+      .subscribe(({ isEnableBacklog }) => {
+        if (!isEnableBacklog) {
+          return;
+        }
+        this.focusPrevious(true);
+        this.moveToBacklog();
+      });
   }
 
   openProjectMenu(): void {
@@ -908,6 +1025,13 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     });
   }
 
+  onTimeWrapperClick(ev: MouseEvent): void {
+    if (isMultiSelectModifierEvent(ev) || this._multiSelect.isTouchSelectionMode()) {
+      return;
+    }
+    this.estimateTime();
+  }
+
   estimateTime(): void {
     if (this.task().subTaskIds?.length > 0) {
       return;
@@ -942,6 +1066,10 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       this._taskService.showSubTasks(task.id);
     }
     this._addSubtaskInputService.requestOpen(parentId);
+  }
+
+  duplicateTask(): void {
+    this._taskDuplicateService.duplicate(this.task());
   }
 
   onAddSubtaskInputClosed(reason: AddSubtaskInputCloseReason): void {
@@ -1033,10 +1161,22 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     if (task.issueWasUpdated) {
       this._taskService.markIssueUpdatesAsRead(task.id);
     }
-    this.toggleShowDetailPanel(ev);
+    // In its plain 'chat' state the button reads as a notes indicator (it also
+    // shows for issue-linked tasks without notes, hence the notes guard), so
+    // land on the notes section — expanded and scrolled into view — rather
+    // than the collapsed accordion; on mobile that used to cost a second tap
+    // on "Note" (#9850).
+    const targetPanel =
+      this.toggleButtonIcon() === 'chat' && task.notes
+        ? TaskDetailTargetPanel.Notes
+        : TaskDetailTargetPanel.Default;
+    this.toggleShowDetailPanel(ev, targetPanel);
   }
 
-  toggleShowDetailPanel(ev?: MouseEvent): void {
+  toggleShowDetailPanel(
+    ev?: MouseEvent,
+    targetPanel: TaskDetailTargetPanel = TaskDetailTargetPanel.Default,
+  ): void {
     const isInTaskDetailPanel =
       this._elementRef.nativeElement.closest('task-detail-panel');
     if (isInTaskDetailPanel && !this._wasClickedInDoubleClickRange) {
@@ -1051,7 +1191,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     if (this.isSelected()) {
       this._taskService.setSelectedId(null);
     } else {
-      this._taskService.setSelectedId(this.task().id);
+      this._taskService.setSelectedId(this.task().id, targetPanel);
     }
     if (ev) {
       ev.preventDefault();
@@ -1113,6 +1253,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   titleBarClick(event: MouseEvent): void {
+    if (isMultiSelectModifierEvent(event) || this._multiSelect.isTouchSelectionMode()) {
+      return;
+    }
     const targetEl = event.target as HTMLElement;
     if (targetEl.closest('task-title')) {
       return;
@@ -1202,16 +1345,24 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this._elementRef.nativeElement.focus();
   }
 
+  private _getRowMenuPosition(): { x: number; y: number } {
+    const rect = (this._elementRef.nativeElement as HTMLElement).getBoundingClientRect();
+    return { x: rect.left + Math.min(rect.width / 2, 200), y: rect.bottom };
+  }
+
   focusTitleForEdit(): void {
     const taskTitleEditEl = this.taskTitleEditEl();
     if (!taskTitleEditEl) {
-      TaskLog.log(taskTitleEditEl);
       throw new Error('No el');
     }
     taskTitleEditEl.focusInput();
   }
 
   onHostTouchStart(): void {
+    // Drag is disabled in touch selection mode; don't arm the lift visual.
+    if (this._multiSelect.isTouchSelectionMode()) {
+      return;
+    }
     this._dragReadyTimeout = window.setTimeout(() => {
       this.isDragReady.set(true);
     }, DRAG_DELAY_FOR_TOUCH);
@@ -1242,6 +1393,29 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
 
   openContextMenu(event?: TouchEvent | MouseEvent | KeyboardEvent): void {
     this.taskTitleEditEl()?.cancelEditing();
+    // A selected row opens the bulk menu for the whole selection; an unselected
+    // row while a selection exists clears it and acts alone (file-manager rule).
+    // In touch selection mode the menu only ever acts on the selection, so an
+    // unselected row joins it first instead of silently ending the mode.
+    if (this._multiSelect.isSelecting()) {
+      if (
+        this._multiSelect.isTouchSelectionMode() &&
+        !this._multiSelect.has(this.task().id)
+      ) {
+        this._multiSelect.toggle(this.task().id);
+      }
+      if (this._multiSelect.has(this.task().id)) {
+        event?.preventDefault();
+        event?.stopPropagation();
+        const pos =
+          event instanceof MouseEvent
+            ? { x: event.clientX, y: event.clientY }
+            : this._getRowMenuPosition();
+        this._multiSelect.requestMenuOpen(pos);
+        return;
+      }
+      this._multiSelect.clear();
+    }
     if (event) {
       event.preventDefault();
       event.stopPropagation();
@@ -1265,107 +1439,18 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this._taskService.updateTags(this.task(), tagIds);
   }
 
-  // TODO extract so service
   moveTaskToProject(projectId: string): void {
     const t = this.task();
     if (projectId === t.projectId) {
       return;
-    } else if (!t.repeatCfgId) {
-      this._taskService.moveToProject(t, projectId);
-      setTimeout(() => this.focusNext(true));
-    } else {
-      forkJoin([
-        this._taskRepeatCfgService
-          .getTaskRepeatCfgByIdAllowUndefined$(t.repeatCfgId)
-          .pipe(first()),
-        this._taskService.getTasksWithSubTasksByRepeatCfgId$(t.repeatCfgId).pipe(first()),
-        this._taskService.getArchiveTasksForRepeatCfgId(t.repeatCfgId),
-        this._projectService.getByIdOnce$(projectId),
-      ])
-        .pipe(
-          concatMap(
-            ([
-              reminderCfg,
-              nonArchiveInstancesWithSubTasks,
-              archiveInstances,
-              targetProject,
-            ]) => {
-              TaskLog.log({
-                reminderCfg,
-                nonArchiveInstancesWithSubTasks,
-                archiveInstances,
-              });
-
-              // Repeat config was deleted (e.g. via cross-client sync) but the task
-              // still references it — treat it as a plain task move instead of
-              // crashing on the missing config. (#8715)
-              if (!reminderCfg) {
-                this._taskService.moveToProject(this.task(), projectId);
-                setTimeout(() => this.focusNext(true));
-                return EMPTY;
-              }
-
-              // if there is only a single instance (probably just created) than directly update the task repeat cfg
-              if (
-                nonArchiveInstancesWithSubTasks.length === 1 &&
-                archiveInstances.length === 0
-              ) {
-                this._taskRepeatCfgService.updateTaskRepeatCfg(reminderCfg.id, {
-                  projectId,
-                });
-                this._taskService.moveToProject(this.task(), projectId);
-                setTimeout(() => this.focusNext(true));
-                return EMPTY;
-              }
-
-              return this._matDialog
-                .open(DialogConfirmComponent, {
-                  data: {
-                    okTxt: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.OK,
-                    message: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.MSG,
-                    translateParams: {
-                      projectName: targetProject?.title ?? _MISSING_PROJECT_,
-                      tasksNr:
-                        nonArchiveInstancesWithSubTasks.length + archiveInstances.length,
-                    },
-                  },
-                })
-                .afterClosed()
-                .pipe(
-                  tap((isConfirm) => {
-                    if (isConfirm) {
-                      this._taskRepeatCfgService.updateTaskRepeatCfg(reminderCfg.id, {
-                        projectId,
-                      });
-                      nonArchiveInstancesWithSubTasks.forEach((nonArchiveTask) => {
-                        this._taskService.moveToProject(nonArchiveTask, projectId);
-                      });
-
-                      const archiveUpdates: Update<TaskCopy>[] = [];
-                      archiveInstances.forEach((archiveTask) => {
-                        archiveUpdates.push({
-                          id: archiveTask.id,
-                          changes: { projectId },
-                        });
-                        if (archiveTask.subTaskIds.length) {
-                          archiveTask.subTaskIds.forEach((subId) => {
-                            archiveUpdates.push({
-                              id: subId,
-                              changes: { projectId },
-                            });
-                          });
-                        }
-                      });
-                      this._taskService.updateArchiveTasks(archiveUpdates);
-                      setTimeout(() => this.focusNext(true));
-                    }
-                  }),
-                );
-            },
-          ),
-        )
-        .subscribe(() => this.focusSelf());
     }
+    this._taskMoveToProjectService.moveToProject(t, projectId).then((isMoved) => {
+      if (isMoved) {
+        setTimeout(() => this.focusNext(true));
+      } else {
+        this.focusSelf();
+      }
+    });
   }
 
   moveToBacklog(): void {

@@ -121,6 +121,13 @@
   }
 }
 
+// The multi-select bar takes the FAB's place while tasks are being selected
+// (class set on .app-container by the app shell; CSS only, so this core-ui
+// component stays independent of the tasks feature).
+:host-context(.is-multi-selecting) .add-task-button {
+  visibility: hidden;
+}
+
 // Material Design touch target improvements
 .nav-button,
 .add-task-button {

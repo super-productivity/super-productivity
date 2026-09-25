@@ -131,7 +131,9 @@ test.describe('@supersync USE_REMOTE interrupted rebuild recovery', () => {
         timeout: 30000,
       });
 
-      await clientB.sync.syncImportUseRemoteBtn.click();
+      // USE_REMOTE here discards local changes, so production raises a native
+      // confirm first; the page object answers exactly that one prompt.
+      await clientB.sync.chooseSyncImportUseRemote();
       await crashObserved;
       // This reload races the crashed sync's unwind: while `isSyncInProgress` is
       // still set, startup.service's beforeunload handler prevents the unload and

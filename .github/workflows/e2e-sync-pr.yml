@@ -190,8 +190,12 @@ jobs:
       - name: Print Docker Logs on Failure
         if: ${{ failure() }}
         run: |
-          echo "=== SuperSync Logs ==="
-          docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml logs supersync webdav
+          # Bounded on purpose: the container runs with NODE_ENV=development, so Prisma
+          # logs every query. An unbounded dump was ~13k lines and pushed the Playwright
+          # failure out of the log tail the GitHub API and `gh run view --log-failed`
+          # return, leaving the actual failure unreadable.
+          echo "=== SuperSync Logs (last 400 lines per container) ==="
+          docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml logs --tail=400 supersync webdav
 
       - name: Stop Docker Services
         if: always()
@@ -253,8 +257,8 @@ jobs:
       - name: Print Docker Logs on Failure
         if: ${{ failure() }}
         run: |
-          echo "=== WebDAV Logs ==="
-          docker compose logs webdav
+          echo "=== WebDAV Logs (last 400 lines) ==="
+          docker compose logs --tail=400 webdav
 
       - name: Stop Docker Services
         if: always()

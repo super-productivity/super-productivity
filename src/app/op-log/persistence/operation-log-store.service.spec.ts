@@ -1,7 +1,9 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
 import { IDBPDatabase, unwrap } from 'idb';
 import { forceCloseDatabase } from 'fake-indexeddb';
-import { OperationLogStoreService } from './operation-log-store.service';
+import { ImportBackupRef, OperationLogStoreService } from './operation-log-store.service';
+import { IMPORT_BACKUP_RING_SIZE } from './import-backup-ring.util';
 import { VectorClockService } from '../sync/vector-clock.service';
 import {
   ActionType,
@@ -576,6 +578,20 @@ describe('OperationLogStoreService', () => {
     });
   });
 
+  describe('countOps', () => {
+    it('should return 0 when the op-log is empty', async () => {
+      expect(await service.countOps()).toBe(0);
+    });
+
+    it('should return the total number of stored operations', async () => {
+      await service.append(createTestOperation({ entityId: 'task1' }));
+      await service.append(createTestOperation({ entityId: 'task2' }));
+      await service.append(createTestOperation({ entityId: 'task3' }));
+
+      expect(await service.countOps()).toBe(3);
+    });
+  });
+
   describe('getUnsynced', () => {
     it('should return only unsynced local operations', async () => {
       const localOp = createTestOperation({ entityId: 'localTask' });
@@ -742,6 +758,40 @@ describe('OperationLogStoreService', () => {
       const allOps = await service.getOpsAfterSeq(0);
       const lastSeq = await service.getLastSeq();
       expect(lastSeq).toBe(allOps[allOps.length - 1].seq);
+    });
+  });
+
+  describe('getFirstOpEntry', () => {
+    it('should return undefined when no operations exist', async () => {
+      expect(await service.getFirstOpEntry()).toBeUndefined();
+    });
+
+    it('should return the lowest-seq entry, decoded', async () => {
+      const first = createTestOperation({ entityId: 'task1' });
+      const second = createTestOperation({ entityId: 'task2' });
+      const firstSeq = await service.append(first, 'local');
+      await service.append(second, 'local');
+
+      const entry = await service.getFirstOpEntry();
+
+      expect(entry?.seq).toBe(firstSeq);
+      expect(entry?.op.id).toBe(first.id);
+      expect(entry?.op.entityId).toBe('task1');
+      expect(entry?.source).toBe('local');
+    });
+
+    it('pushes a limit of 1 into the adapter scan so SQLite reads a single row (#9932)', async () => {
+      await service.append(createTestOperation({ entityId: 'task1' }), 'local');
+      const adapter = (service as unknown as { _adapter: OpLogDbAdapter })._adapter;
+      const iterateSpy = spyOn(adapter, 'iterate').and.callThrough();
+
+      await service.getFirstOpEntry();
+
+      expect(iterateSpy).toHaveBeenCalledOnceWith(
+        STORE_NAMES.OPS,
+        jasmine.objectContaining({ mode: 'readonly', limit: 1 }),
+        jasmine.any(Function),
+      );
     });
   });
 
@@ -1146,6 +1196,7 @@ describe('OperationLogStoreService', () => {
       const testState = { task: { ids: [], entities: {} } };
 
       await service.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: testState,
         lastAppliedOpSeq: 10,
         vectorClock: {},
@@ -1168,6 +1219,7 @@ describe('OperationLogStoreService', () => {
 
     it('should increment counter', async () => {
       await service.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: {},
         lastAppliedOpSeq: 0,
         vectorClock: {},
@@ -1215,6 +1267,7 @@ describe('OperationLogStoreService', () => {
 
     it('should reset counter', async () => {
       await service.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: {},
         lastAppliedOpSeq: 0,
         vectorClock: {},
@@ -1277,6 +1330,7 @@ describe('OperationLogStoreService', () => {
     it('should merge clocks from snapshot and ops', async () => {
       // Save snapshot with initial clock
       await service.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: {},
         lastAppliedOpSeq: 0,
         vectorClock: { clientA: 5, clientB: 3 },
@@ -1652,6 +1706,7 @@ describe('OperationLogStoreService', () => {
       const newOp = createTestOperation({ id: 'snapshot-op-new' });
       await service.append(existingOp, 'remote');
       await service.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: { task: { ids: ['task1'] } },
         lastAppliedOpSeq: 1,
         vectorClock: { testClient: 1 },
@@ -1683,6 +1738,7 @@ describe('OperationLogStoreService', () => {
       const snapshotOp = createTestOperation({ id: 'snapshot-op-after-gap' });
       await service.append(existingOp, 'remote');
       await service.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: { task: { ids: [] } },
         lastAppliedOpSeq: 0,
         vectorClock: {},
@@ -1749,6 +1805,7 @@ describe('OperationLogStoreService', () => {
       const priorState = { sentinel: 'prior-state' };
       await service.append(priorOp, 'remote');
       await service.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: priorState,
         lastAppliedOpSeq: 1,
         vectorClock: { testClient: 1 },
@@ -2935,16 +2992,161 @@ describe('OperationLogStoreService', () => {
       expect(await service.loadImportBackup()).toBeNull();
     });
 
-    it('should check if backup exists with hasImportBackup', async () => {
-      expect(await service.hasImportBackup()).toBe(false);
+    describe('recovery ring (local-recovery-points.md)', () => {
+      it('should prune to the newest entries and keep the undo pointer when it survives', async () => {
+        await service.saveImportBackup(
+          { v: 1 },
+          { reason: 'LOCAL_IMPORT', taskCount: 1 },
+        );
+        await service.saveImportBackup(
+          { v: 2 },
+          { reason: 'LOCAL_IMPORT', taskCount: 2 },
+        );
+        const newest = await service.saveImportBackup(
+          { v: 3 },
+          { reason: 'REMOTE_IMPORT', taskCount: 3 },
+        );
 
-      await service.saveImportBackup({ test: true });
+        expect(await service.pruneImportBackups(1)).toBe(2);
 
-      expect(await service.hasImportBackup()).toBe(true);
+        expect((await service.listImportBackups()).map((e) => e.backupId)).toEqual([
+          newest.backupId,
+        ]);
+        expect((await service.loadImportBackup())?.backupId).toBe(newest.backupId);
+        expect(await service.pruneImportBackups(1)).toBe(0);
+      });
 
-      await service.clearImportBackup();
+      for (const reason of ['LOCAL_IMPORT', 'REMOTE_IMPORT', 'FORCE_DOWNLOAD'] as const) {
+        it(`should clear the ${reason} snapshot and undo pointer when pruning to zero`, async () => {
+          const backup = await service.saveImportBackup(
+            { v: 1 },
+            { reason, taskCount: 1 },
+          );
 
-      expect(await service.hasImportBackup()).toBe(false);
+          expect(await service.pruneImportBackups(0)).toBe(1);
+
+          expect(await service.listImportBackups()).toEqual([]);
+          expect(await service.loadImportBackup()).toBeNull();
+          expect(await service.loadImportBackupById(backup.backupId)).toBeNull();
+        });
+      }
+
+      it('should list captures newest first with reason and task count', async () => {
+        await service.saveImportBackup(
+          { v: 1 },
+          { reason: 'LOCAL_IMPORT', taskCount: 5 },
+        );
+        const second = await service.saveImportBackup(
+          { v: 2 },
+          { reason: 'REMOTE_IMPORT', taskCount: 0 },
+        );
+
+        const list = await service.listImportBackups();
+        expect(list.length).toBe(2);
+        expect(list[0]).toEqual({
+          backupId: second.backupId,
+          savedAt: second.savedAt,
+          reason: 'REMOTE_IMPORT',
+          taskCount: 0,
+        });
+        expect(list[1].reason).toBe('LOCAL_IMPORT');
+        expect(list[1].taskCount).toBe(5);
+      });
+
+      it('should keep only the newest IMPORT_BACKUP_RING_SIZE snapshots', async () => {
+        const refs: ImportBackupRef[] = [];
+        for (let i = 0; i < IMPORT_BACKUP_RING_SIZE + 2; i++) {
+          refs.push(await service.saveImportBackup({ v: i }));
+        }
+
+        const list = await service.listImportBackups();
+        expect(list.length).toBe(IMPORT_BACKUP_RING_SIZE);
+        expect(list.map((e) => e.backupId)).toEqual(
+          refs
+            .slice(-IMPORT_BACKUP_RING_SIZE)
+            .reverse()
+            .map((r) => r.backupId),
+        );
+        // evicted snapshots are physically gone, kept ones still load
+        expect(await service.loadImportBackupById(refs[0].backupId)).toBeNull();
+        expect(await service.loadImportBackupById(refs[1].backupId)).toBeNull();
+        expect((await service.loadImportBackupById(refs[2].backupId))?.state).toEqual({
+          v: 2,
+        });
+      });
+
+      it('should never rotate the pre-loss capture out (#10003)', async () => {
+        const preLoss = await service.saveImportBackup(
+          { v: 'pre-loss' },
+          { reason: 'REMOTE_IMPORT', taskCount: 40 },
+        );
+        const restores: ImportBackupRef[] = [];
+        for (let i = 0; i < IMPORT_BACKUP_RING_SIZE; i++) {
+          restores.push(await service.saveImportBackup({ v: i }));
+        }
+
+        expect((await service.listImportBackups()).map((e) => e.backupId)).toEqual([
+          ...restores
+            .slice(1)
+            .reverse()
+            .map((r) => r.backupId),
+          preLoss.backupId,
+        ]);
+        expect((await service.loadImportBackupById(preLoss.backupId))?.state).toEqual({
+          v: 'pre-loss',
+        });
+        expect(await service.loadImportBackupById(restores[0].backupId)).toBeNull();
+      });
+
+      it('should keep the pre-loss capture over newer restores when pruning', async () => {
+        const preLoss = await service.saveImportBackup(
+          { v: 'pre-loss' },
+          { reason: 'REMOTE_IMPORT', taskCount: 40 },
+        );
+        await service.saveImportBackup({ v: 1 });
+        await service.saveImportBackup({ v: 2 });
+
+        expect(await service.pruneImportBackups(1)).toBe(2);
+
+        expect((await service.listImportBackups()).map((e) => e.backupId)).toEqual([
+          preLoss.backupId,
+        ]);
+        expect(await service.loadImportBackup()).toBeNull();
+      });
+
+      it('should keep an older snapshot browsable after the undo slot is cleared', async () => {
+        const first = await service.saveImportBackup({ v: 1 });
+        const second = await service.saveImportBackup({ v: 2 });
+
+        await service.clearImportBackup(second.backupId);
+
+        expect(await service.loadImportBackup()).toBeNull();
+        expect((await service.listImportBackups()).length).toBe(2);
+        expect((await service.loadImportBackupById(first.backupId))?.state).toEqual({
+          v: 1,
+        });
+      });
+
+      it('should still serve a legacy single-slot row for undo', async () => {
+        await service.init();
+        const raw = unwrap((service as any)._db as IDBPDatabase);
+        await new Promise<void>((resolve, reject) => {
+          const tx = raw.transaction(STORE_NAMES.IMPORT_BACKUP, 'readwrite');
+          tx.objectStore(STORE_NAMES.IMPORT_BACKUP).put({
+            id: SINGLETON_KEY,
+            state: { legacy: true },
+            savedAt: 42,
+          });
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+
+        const backup = await service.loadImportBackup();
+        expect(backup?.state).toEqual({ legacy: true });
+        expect(backup?.savedAt).toBe(42);
+        expect(backup?.backupId).toBeDefined();
+        expect(await service.listImportBackups()).toEqual([]);
+      });
     });
 
     it('should preserve complex nested data structures', async () => {
@@ -2992,6 +3194,7 @@ describe('OperationLogStoreService', () => {
 
       await service.saveImportBackup(importBackupState);
       await service.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: stateCacheState,
         lastAppliedOpSeq: 1,
         vectorClock: { client1: 1 } as VectorClock,
@@ -3144,6 +3347,7 @@ describe('OperationLogStoreService', () => {
       const priorArchiveOld = createArchive('prior-old');
       await service.append(priorOp);
       await service.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: { sentinel: 'prior-state' },
         lastAppliedOpSeq: 1,
         vectorClock: { testClient: 1 },
@@ -3588,6 +3792,7 @@ describe('OperationLogStoreService', () => {
       const priorOld = createArchive('prior-old');
       await service.append(priorOp);
       await service.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: priorState,
         lastAppliedOpSeq: 1,
         vectorClock: { testClient: 1 },
@@ -3883,6 +4088,7 @@ describe('OperationLogStoreService', () => {
     it('should fall back to snapshot+ops when vector_clock store is empty', async () => {
       // Save snapshot with vector clock (simulating pre-upgrade state)
       await service.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: {},
         lastAppliedOpSeq: 0,
         vectorClock: { snapshotClient: 50 },
@@ -3905,6 +4111,7 @@ describe('OperationLogStoreService', () => {
       await service.setVectorClock({ storeClient: 200 });
 
       await service.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: {},
         lastAppliedOpSeq: 0,
         vectorClock: { snapshotClient: 50 },
@@ -4001,6 +4208,7 @@ describe('OperationLogStoreService', () => {
         lastAppliedOpSeq: 5,
         vectorClock: { client1: 5 } as VectorClock,
         compactedAt: Date.now(),
+        schemaVersion: CURRENT_SCHEMA_VERSION,
       };
       await service.saveStateCache(stateCache);
 
@@ -4293,6 +4501,7 @@ describe('OperationLogStoreService', () => {
       await service.append(createImportOp('importAuthor', 1), 'remote');
 
       await service.saveStateCache({
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         state: { some: 'state' },
         lastAppliedOpSeq: 1,
         vectorClock: createBloatedClock({ importAuthor: 1, testClient: 999 }),
