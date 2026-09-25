@@ -24,6 +24,7 @@ import { reducerFailureGuardMetaReducer } from '../../root-store/meta/reducer-fa
 import { OperationCaptureService } from './operation-capture.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from '../../t.const';
+import { SnackParams } from '../../core/snack/snack.model';
 import { updateGlobalConfigSection } from '../../features/config/store/global-config.actions';
 
 describe('OperationLogEffects', () => {
@@ -163,6 +164,26 @@ describe('OperationLogEffects', () => {
           config: { duration: 0 },
         }),
       );
+    });
+
+    it('should close the notice once the deferred buffer drains', async () => {
+      const actions = Array.from(
+        { length: DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD },
+        () => createPersistentAction(ActionType.TASK_SHARED_UPDATE),
+      );
+      actions.forEach((a) => bufferDeferredAction(a));
+      actions$ = of(actions[actions.length - 1]);
+      effects.notifyStuckDeferredBuffer$.subscribe();
+      const { showWhile$ } = mockSnackService.open.calls.mostRecent()
+        .args[0] as SnackParams;
+      const shown: unknown[] = [];
+      (showWhile$ as Observable<unknown>).subscribe((v) => shown.push(v));
+
+      await effects.processDeferredActions();
+      // The settle ping runs on the serialization chain, one tick after `run`.
+      await Promise.resolve();
+
+      expect(shown).toEqual([true, false]);
     });
 
     it('should stay quiet below the threshold', () => {

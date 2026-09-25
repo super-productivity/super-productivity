@@ -2,7 +2,8 @@ import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import type { DeferredLocalActionsPort } from '@sp/sync-core';
 import { ALL_ACTIONS, LOCAL_ACTIONS } from '../../util/local-actions.token';
-import { concatMap, filter, tap } from 'rxjs/operators';
+import { Subject } from 'rxjs';
+import { concatMap, filter, map, startWith, tap } from 'rxjs/operators';
 import { LockService } from '../sync/lock.service';
 import {
   LockAcquisitionTimeoutError,
@@ -73,6 +74,8 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
    * double-persist the same buffered action (see processDeferredActions).
    */
   private _deferredProcessingChain: Promise<void> = Promise.resolve();
+  /** Emits after every deferred drain, succeeded or not. */
+  private _deferredDrainSettled$ = new Subject<void>();
   /**
    * Dedupe timestamp for the storage-quota snackbar. #7700: when quota fires
    * inside the deferred-action retry loop, the retry loop calls handleQuotaExceeded
@@ -152,6 +155,12 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
               window.location.reload();
             },
             config: { duration: 0 },
+            // Close once the buffer drains: a stale sticky notice would also
+            // hold the snack slot against every ordinary notification.
+            showWhile$: this._deferredDrainSettled$.pipe(
+              startWith(undefined),
+              map(() => getDeferredActions().length > 0),
+            ),
           }),
         ),
       ),
@@ -734,8 +743,8 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
     // Keep the chain alive even if this run rejects; errors still surface to
     // this invocation's caller via `run`.
     this._deferredProcessingChain = run.then(
-      () => undefined,
-      () => undefined,
+      () => this._deferredDrainSettled$.next(),
+      () => this._deferredDrainSettled$.next(),
     );
     return run;
   }
