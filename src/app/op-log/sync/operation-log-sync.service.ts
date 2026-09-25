@@ -18,7 +18,11 @@ import { OpLog } from '../../core/log';
 import { OperationSyncCapable } from '../sync-providers/provider.interface';
 import { OperationLogUploadService } from './operation-log-upload.service';
 import { getUnknownOpVocabulary } from './remote-op-block.util';
-import { DownloadOutcome, UploadOutcome } from '../core/types/sync-results.types';
+import {
+  DownloadOutcome,
+  SuccessfulDownloadResult,
+  UploadOutcome,
+} from '../core/types/sync-results.types';
 import { OperationLogDownloadService } from './operation-log-download.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -28,6 +32,10 @@ import {
   LocalDataConflictError,
 } from '../core/errors/sync-errors';
 import { SuperSyncStatusService } from './super-sync-status.service';
+import {
+  isKeptPrefixDecryptErrorSuperseded,
+  toDownloadResultForRejection,
+} from './download-outcome.util';
 import { ServerMigrationService } from './server-migration.service';
 import { OperationWriteFlushService } from './operation-write-flush.service';
 import { RepairSyncContextService } from '../validation/repair-sync-context.service';
@@ -520,36 +528,7 @@ export class OperationLogSyncService {
         isNeverSynced: isNeverSyncedAtSyncStart,
         ...(options?.fenceEpoch !== undefined ? { fenceEpoch: options.fenceEpoch } : {}),
       });
-      const latestServerSeq = await syncProvider.getLastServerSeq();
-      // Validation failure (if any during the nested download) is on the
-      // session-validation latch — no need to thread the boolean back. (#7330)
-      switch (outcome.kind) {
-        case 'ops_processed':
-          return {
-            kind: 'completed',
-            newOpsCount: outcome.newOpsCount,
-            localWinOpsCreated: outcome.localWinOpsCreated,
-            allOpClocks: outcome.allOpClocks,
-            snapshotVectorClock: outcome.snapshotVectorClock,
-            latestServerSeq,
-          };
-        case 'no_new_ops':
-        case 'snapshot_hydrated':
-          return {
-            kind: 'completed',
-            newOpsCount: 0,
-            allOpClocks: outcome.allOpClocks,
-            snapshotVectorClock: outcome.snapshotVectorClock,
-            latestServerSeq,
-          };
-        case 'server_migration_handled':
-        case 'server_migration_skipped':
-          return { kind: 'completed', newOpsCount: 0 };
-        case 'cancelled':
-          return { kind: 'cancelled' };
-        case 'blocked_incompatible':
-          throw new Error('Nested download blocked by an incompatible remote operation.');
-      }
+      return toDownloadResultForRejection(outcome, await syncProvider.getLastServerSeq());
     };
     try {
       // #9074: the rejection handler appends merged/local-win ops and flips
@@ -623,6 +602,8 @@ export class OperationLogSyncService {
       ignoredLocalFullStateOpIds?: string[];
       /** Sync epoch captured at cycle start (#9074); fences local writes. */
       fenceEpoch?: number;
+      /** Top-level cycle downloads only (#9256); see `isDecryptedPrefixKeepable`. */
+      keepDecryptedPrefix?: boolean;
     },
   ): Promise<DownloadOutcome> {
     // Crash-resume: a prior USE_REMOTE rebuild committed its baseline
@@ -668,7 +649,26 @@ export class OperationLogSyncService {
           `failedFileCount=${result.failedFileCount}`,
       );
     }
+    const outcome = await this._processDownloadResult(syncProvider, result, options);
+    // #9256: the kept prefix is applied and its cursor persisted; report the failed
+    // page now, unless this cycle's outcome supersedes the decrypt error.
+    if (
+      result.decryptErrorAfterKeptPrefix &&
+      !isKeptPrefixDecryptErrorSuperseded(outcome, {
+        prefixCursor: result.latestServerSeq,
+        persistedCursor: await syncProvider.getLastServerSeq(),
+      })
+    ) {
+      throw result.decryptErrorAfterKeptPrefix;
+    }
+    return outcome;
+  }
 
+  private async _processDownloadResult(
+    syncProvider: OperationSyncCapable,
+    result: SuccessfulDownloadResult,
+    options: Parameters<OperationLogSyncService['downloadRemoteOps']>[1],
+  ): Promise<DownloadOutcome> {
     // Server migration detected: gap on empty server
     // Create a SYNC_IMPORT operation with full local state to seed the new server
     if (result.needsFullStateUpload) {

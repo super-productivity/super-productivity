@@ -81,6 +81,24 @@ export const getInitialBottomPanelHeightRatio = (
   }
 };
 
+/**
+ * Tallest the panel may be dragged. Besides the relative cap, keep the top
+ * edge (and with it the drag handle) below the top safe-area inset: on iOS
+ * the WebView spans under the notch/status bar, where the handle can no
+ * longer be grabbed to pull the panel back down (#10181).
+ */
+export const getMaxBottomPanelHeight = (
+  viewportHeight: number,
+  safeAreaTop: number,
+): number =>
+  Math.min(
+    viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT_ABSOLUTE,
+    viewportHeight - safeAreaTop,
+  );
+
+// Resolved inset token (see _css-variables.scss), JS-fed with px on iOS.
+const CSS_VAR_SAFE_AREA_TOP = '--safe-area-top';
+
 const KEYBOARD_DETECT_THRESHOLD = 100;
 const KEYBOARD_SAFE_HEIGHT_MIN = 200;
 const KEYBOARD_SAFE_HEIGHT_RATIO = 0.85;
@@ -131,6 +149,7 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
   private _startY = 0;
   private _startHeight = 0;
   private _currentHeight = 0;
+  private _maxHeight = 0;
   // Rolling window of recent move samples for robust velocity at release.
   // A naive low-pass filter dilutes the peak fling speed because users
   // decelerate slightly as they lift their finger.
@@ -252,6 +271,15 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
 
       this._startHeight = container.offsetHeight;
       this._currentHeight = this._startHeight;
+      // Read once per drag: getComputedStyle per pointermove is wasted work.
+      this._maxHeight = getMaxBottomPanelHeight(
+        window.innerHeight,
+        this._parseCssPx(
+          getComputedStyle(document.documentElement).getPropertyValue(
+            CSS_VAR_SAFE_AREA_TOP,
+          ),
+        ),
+      );
       container.classList.add('dragging');
     }
     document.body.style.userSelect = 'none';
@@ -269,13 +297,11 @@ export class BottomPanelContainerComponent implements AfterViewInit, OnDestroy {
 
     const deltaY = this._startY - clientY;
     const newHeight = this._startHeight + deltaY;
-    const viewportHeight = window.innerHeight;
 
     // Allow heights all the way down to zero so the panel can be dragged
     // off the bottom — closing happens on release based on threshold/velocity.
     const minHeight = 0;
-    const maxHeight = viewportHeight * PANEL_HEIGHTS.MAX_HEIGHT_ABSOLUTE;
-    const constrainedHeight = Math.min(Math.max(newHeight, minHeight), maxHeight);
+    const constrainedHeight = Math.min(Math.max(newHeight, minHeight), this._maxHeight);
 
     container.style.height = `${constrainedHeight}px`;
     container.style.maxHeight = `${constrainedHeight}px`;

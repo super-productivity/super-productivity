@@ -101,7 +101,6 @@ export type ForceUploadTriggerSource =
   | 'InvalidFilePrefixError'
   | 'JsonParseError'
   | 'LegacySyncFormatDetectedError'
-  | 'DecryptError'
   | 'unknown';
 
 /**
@@ -625,6 +624,7 @@ export class SyncWrapperService {
           forceFromSeq0: isProviderSwitch || undefined,
           isNeverSynced: isNeverSyncedAtSyncStart,
           fenceEpoch,
+          keepDecryptedPrefix: true,
         },
       );
       // Auth is confirmed working if download didn't throw AuthFailSPError.
@@ -1644,9 +1644,6 @@ export class SyncWrapperService {
         if (result?.isReSync) {
           this._suppressEncryptionDialogs = false;
           this.sync();
-        } else if (result?.isForceUpload) {
-          this._suppressEncryptionDialogs = false;
-          this.forceUpload('DecryptError');
         } else {
           // User cancelled — suppress future dialogs so they can navigate to settings
           this._suppressEncryptionDialogs = true;
