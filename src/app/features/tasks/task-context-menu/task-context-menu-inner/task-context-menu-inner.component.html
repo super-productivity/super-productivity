@@ -358,16 +358,6 @@
     </button>
   }
 
-  @for (entry of pluginEntries(); track entry.pluginId + entry.label) {
-    <button
-      (click)="entry.onClick(task.id)"
-      mat-menu-item
-    >
-      <mat-icon>{{ entry.icon || 'extension' }}</mat-icon>
-      {{ entry.label }}
-    </button>
-  }
-
   <button
     (click)="deleteTask()"
     class="color-warn"

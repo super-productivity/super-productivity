@@ -427,19 +427,6 @@ Escape untrusted values before interpolating them into the HTML string: the
 sanitizer is a safety net for the host, not a substitute for escaping in your
 plugin. Use `content` when plain text is sufficient.
 
-#### Opening External URLs (plugin.js only)
-
-```javascript
-// Requires "openExternalUrl" in the manifest "permissions".
-await PluginAPI.openExternalUrl?.('https://example.com/docs');
-```
-
-Opens the URL with the operating system's default handler on desktop, or in a
-new tab on web. The host enforces the permission (calls fail without it) and
-the app's external-link scheme allowlist; `file:` URLs are always refused,
-because a plugin call has no user click behind it. The method is optional:
-older app versions do not have it.
-
 ### Registration Methods (plugin.js only)
 
 #### Header Button
@@ -466,22 +453,6 @@ PluginAPI.registerMenuEntry({
   },
 });
 ```
-
-#### Task Context Menu Entry
-
-```javascript
-// Optional method: absent on older app versions, so feature-detect it.
-PluginAPI.registerTaskContextMenuEntry?.({
-  label: 'Send to my tool',
-  icon: 'send', // Material icon name
-  onClick: (taskId) => {
-    console.log('Task context menu entry clicked for', taskId);
-  },
-});
-```
-
-Adds an entry to the task right-click menu. `onClick` receives the id of the
-task the menu was opened for. Entries are removed when the plugin is disabled.
 
 #### Side Panel Button
 
@@ -824,11 +795,10 @@ Iframe plugins receive a filtered `window.PluginAPI` object injected into `index
 The iframe can use the injected task/project/tag APIs, dialog and notification APIs,
 navigation helpers, persistence helpers, counters, action dispatch, `registerHook()`,
 and `registerWorkContextHeaderButton()`. Callback-heavy registration methods such as
-`registerHeaderButton()`, `registerMenuEntry()`, `registerTaskContextMenuEntry()`,
-`registerSidePanelButton()`, `registerShortcut()`/`unregisterShortcut()`, and
-`registerConfigHandler()` must be called from host-side `plugin.js` code.
-`openExternalUrl()` is not injected into the iframe either. APIs not injected into
-the iframe are unavailable, even if they exist on the host-side plugin bridge.
+`registerHeaderButton()`, `registerMenuEntry()`, `registerSidePanelButton()`,
+`registerShortcut()`/`unregisterShortcut()`, and `registerConfigHandler()` must be
+called from host-side `plugin.js` code. APIs not injected into the iframe are
+unavailable, even if they exist on the host-side plugin bridge.
 
 `executeNodeScript()` is proxied through the host bridge for iframe plugins when
 the desktop app grants the plugin `nodeExecution` permission.

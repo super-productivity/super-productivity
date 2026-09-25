@@ -17,7 +17,6 @@ import {
   PluginHooks,
   PluginManifest,
   PluginMenuEntryCfg,
-  PluginTaskContextMenuEntryCfg,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
   PluginRequestOptions,
@@ -127,13 +126,6 @@ export class PluginAPI implements PluginAPIInterface {
   registerMenuEntry(menuEntryCfg: Omit<PluginMenuEntryCfg, 'pluginId'>): void {
     PluginLog.log(`Plugin ${this.#pluginId} registered menu entry`);
     this.#boundMethods.registerMenuEntry(menuEntryCfg);
-  }
-
-  registerTaskContextMenuEntry(
-    cfg: Omit<PluginTaskContextMenuEntryCfg, 'pluginId'>,
-  ): void {
-    PluginLog.log(`Plugin ${this.#pluginId} registered task context menu entry`);
-    this.#boundMethods.registerTaskContextMenuEntry(cfg);
   }
 
   registerConfigHandler(handler: () => void): void {
@@ -357,11 +349,6 @@ export class PluginAPI implements PluginAPIInterface {
   async downloadFile(filename: string, data: string): Promise<void> {
     PluginLog.log(`Plugin ${this.#pluginId} requested to download file "${filename}"`);
     return this.#boundMethods.downloadFile(filename, data);
-  }
-
-  async openExternalUrl(url: string): Promise<void> {
-    PluginLog.log(`Plugin ${this.#pluginId} requested to open an external URL`);
-    return this.#boundMethods.openExternalUrl(url);
   }
 
   async openDialog(dialogCfg: DialogCfg): Promise<DialogResult> {

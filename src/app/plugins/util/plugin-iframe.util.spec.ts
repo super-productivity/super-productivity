@@ -430,11 +430,6 @@ describe('handlePluginMessage()', () => {
     expect(script).toContain(
       "registerHeaderButton: unsupportedIframeRegistration('registerHeaderButton')",
     );
-    expect(script).toContain(
-      "registerTaskContextMenuEntry: unsupportedIframeRegistration('registerTaskContextMenuEntry')",
-    );
-    // openExternalUrl is plugin.js-only: not injected into the iframe API.
-    expect(script).not.toContain('openExternalUrl');
   });
 
   // allow-same-origin is required: an opaque-origin iframe does not paint on

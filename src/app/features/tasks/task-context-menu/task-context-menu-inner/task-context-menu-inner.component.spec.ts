@@ -28,8 +28,6 @@ import { By } from '@angular/platform-browser';
 import { MatMenu } from '@angular/material/menu';
 import { TaskDuplicateService } from '../../task-duplicate.service';
 import { TaskMultiSelectService } from '../../task-multi-select.service';
-import { OverlayContainer } from '@angular/cdk/overlay';
-import { PluginMenuRegistryService } from '../../../../plugins/plugin-menu-registry.service';
 
 const projectInTreeOrder = (id: string, title: string): Project =>
   ({
@@ -161,37 +159,6 @@ describe('TaskContextMenuInnerComponent', () => {
   afterEach(() => {
     selectTaskByIdWithSubTaskData.release();
     store.resetSelectors();
-  });
-
-  describe('plugin task context menu entries', () => {
-    it('renders registered entries and passes the menu task id to onClick', async () => {
-      const onClick = jasmine.createSpy('onClick');
-      TestBed.inject(PluginMenuRegistryService).registerTaskContextMenuEntry(
-        'test-plugin',
-        { label: 'Start in Test App', icon: 'terminal', onClick },
-      );
-      component.taskSet = {
-        ...DEFAULT_TASK,
-        id: 'task-plugin',
-        title: 'Plugin Task',
-        projectId: 'project-current',
-      } as Task;
-      fixture.detectChanges();
-
-      component.contextMenuTrigger()!.openMenu();
-      fixture.detectChanges();
-      await fixture.whenStable();
-
-      const entry = Array.from(
-        TestBed.inject(OverlayContainer)
-          .getContainerElement()
-          .querySelectorAll<HTMLElement>('[mat-menu-item]'),
-      ).find((el) => el.textContent?.includes('Start in Test App'));
-      expect(entry).toBeDefined();
-      entry!.click();
-
-      expect(onClick).toHaveBeenCalledOnceWith('task-plugin');
-    });
   });
 
   describe('enterSelectionMode()', () => {
