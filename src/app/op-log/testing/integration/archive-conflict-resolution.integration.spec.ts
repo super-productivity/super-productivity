@@ -1,3 +1,4 @@
+import { Injector, runInInjectionContext } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { Action, ActionReducer, Store } from '@ngrx/store';
@@ -56,6 +57,16 @@ import {
 } from '../../../features/tasks/store/task.reducer';
 import { TAG_FEATURE_NAME, tagReducer } from '../../../features/tag/store/tag.reducer';
 import { SECTION_FEATURE_NAME } from '../../../features/section/store/section.reducer';
+import { loadAllData } from '../../../root-store/meta/load-all-data.action';
+import { OperationLogHydratorService } from '../../persistence/operation-log-hydrator.service';
+import { OperationLogMigrationService } from '../../persistence/operation-log-migration.service';
+import { OperationLogSnapshotService } from '../../persistence/operation-log-snapshot.service';
+import { OperationLogRecoveryService } from '../../persistence/operation-log-recovery.service';
+import { SyncHydrationService } from '../../persistence/sync-hydration.service';
+import { ArchiveMigrationService } from '../../persistence/archive-migration.service';
+import { CURRENT_SCHEMA_VERSION } from '../../persistence/schema-migration.service';
+import { StateSnapshotService } from '../../backup/state-snapshot.service';
+import { HydrationStateService } from '../../apply/hydration-state.service';
 
 /**
  * #9537 / #9405: both devices archiving overlapping done tasks concurrently
@@ -368,17 +379,119 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
       { state, failures: [] as BulkReplayReducerFailure[] },
     );
 
+  // Boots the REAL hydrator on the on-disk log: snapshot load, the
+  // status-blind tail read, tail migration and the bulk dispatch. Only the
+  // NgRx store (a state holder over `replayReducer`) and services outside
+  // that path are stubbed.
+  const bootRealHydrator = async (
+    snapshotState: RootState,
+    lastAppliedOpSeq: number,
+  ): Promise<RootState | undefined> => {
+    await opLogStore.saveStateCache({
+      state: snapshotState,
+      lastAppliedOpSeq,
+      vectorClock: {},
+      compactedAt: Date.now(),
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    });
+    let state: RootState | undefined;
+    const hydrationStore = {
+      dispatch: (action: Action): void => {
+        if (action.type === loadAllData.type) {
+          state = (action as ReturnType<typeof loadAllData>)
+            .appDataComplete as unknown as RootState;
+        } else if (action.type === bulkApplyOperations.type) {
+          state = replayReducer(state, action);
+        } else {
+          throw new Error(`Unexpected hydration dispatch: ${action.type}`);
+        }
+      },
+    };
+    const recovery = jasmine.createSpyObj<OperationLogRecoveryService>(
+      'OperationLogRecoveryService',
+      ['recoverPendingRemoteOps', 'cleanupCorruptOps', 'attemptRecovery'],
+    );
+    recovery.recoverPendingRemoteOps.and.callFake(() => opLogStore.getPendingRemoteOps());
+    recovery.cleanupCorruptOps.and.resolveTo();
+    recovery.attemptRecovery.and.resolveTo();
+    const injector = Injector.create({
+      parent: TestBed.inject(Injector),
+      providers: [
+        { provide: Store, useValue: hydrationStore },
+        { provide: OperationLogRecoveryService, useValue: recovery },
+        {
+          provide: OperationLogMigrationService,
+          useValue: { checkAndMigrate: () => Promise.resolve() },
+        },
+        {
+          provide: OperationLogSnapshotService,
+          useValue: {
+            isValidSnapshot: () => true,
+            saveCurrentStateAsSnapshot: () => Promise.resolve(false),
+          },
+        },
+        {
+          provide: OperationLogCompactionService,
+          useValue: { compactIfBloated: () => Promise.resolve() },
+        },
+        {
+          provide: ValidateStateService,
+          useValue: {
+            validateState: () => Promise.resolve({ isValid: true, typiaErrors: [] }),
+          },
+        },
+        { provide: SyncHydrationService, useValue: {} },
+        {
+          provide: ArchiveMigrationService,
+          useValue: { migrateArchivesIfNeeded: () => Promise.resolve() },
+        },
+        { provide: StateSnapshotService, useValue: { getStateSnapshot: () => state } },
+        {
+          provide: HydrationStateService,
+          useValue: {
+            startApplyingRemoteOps: () => {},
+            endApplyingRemoteOps: () => {},
+            setHydrationInProgress: () => {},
+            setHydrationFallbackActive: () => {},
+          },
+        },
+      ],
+    });
+    await runInInjectionContext(
+      injector,
+      () => new OperationLogHydratorService(),
+    ).hydrateStore();
+    // Recovery means the replay threw (e.g. a local op's reducer failed).
+    expect(recovery.attemptRecovery).not.toHaveBeenCalled();
+    return state;
+  };
+
+  // Reducers stamp `modified` with the wall clock, which differs per replay.
+  const withoutModified = (state: RootState): RootState[typeof TASK_FEATURE_NAME] => {
+    const taskState = state[TASK_FEATURE_NAME];
+    return {
+      ...taskState,
+      entities: Object.fromEntries(
+        Object.entries(taskState.entities).map(([id, task]) => [
+          id,
+          task && { ...task, modified: undefined },
+        ]),
+      ),
+    };
+  };
+
   // Restart: hydration replays the whole log status-blind, rejected entries
   // included, in seq order (operation-log-hydrator `_replayTailOps`). A
   // snapshot can sit at any seq and holds whatever the device applied up to
   // there — one batch (an earlier hydration) or op by op (live local
   // dispatches) — so every split must end in the same state once the tail
-  // replays as one batch.
+  // replays as one batch, through the simulated replay and the real hydrator.
   const expectRestartKeeps = async (
     doneIds: string[],
     expected: { ids: string[]; id: string; title: string },
   ): Promise<void> => {
-    const log = await fullLog();
+    const entries = await opLogStore.getOpsAfterSeq(0);
+    const log = entries.map(({ op }) => op);
     for (let snapshotAt = 0; snapshotAt < log.length; snapshotAt++) {
       const prefix = log.slice(0, snapshotAt);
       for (const [kind, snapshot] of [
@@ -394,6 +507,21 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
         expect(state[TASK_FEATURE_NAME].entities[expected.id])
           .withContext(context)
           .toEqual(jasmine.objectContaining({ isDone: false, title: expected.title }));
+
+        const hydrated = await bootRealHydrator(
+          snapshot.state,
+          snapshotAt === 0 ? 0 : entries[snapshotAt - 1].seq,
+        );
+        const hydratedContext = `${context}, real hydrator`;
+        expect(hydrated?.[TASK_FEATURE_NAME].ids)
+          .withContext(hydratedContext)
+          .toEqual(expected.ids);
+        expect(hydrated?.[TASK_FEATURE_NAME].entities[expected.id])
+          .withContext(hydratedContext)
+          .toEqual(jasmine.objectContaining({ isDone: false, title: expected.title }));
+        expect(hydrated && withoutModified(hydrated))
+          .withContext(hydratedContext)
+          .toEqual(withoutModified(state));
       }
     }
   };
