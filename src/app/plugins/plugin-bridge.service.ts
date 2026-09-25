@@ -1633,11 +1633,7 @@ export class PluginBridgeService implements OnDestroy {
    * Remove all header buttons for a specific plugin
    */
   private _removePluginHeaderButtons(pluginId: string): void {
-    const currentButtons = this._headerButtons();
-    const filteredButtons = currentButtons.filter(
-      (button) => button.pluginId !== pluginId,
-    );
-    this._headerButtons.set(filteredButtons);
+    this._headerButtons.update((bs) => bs.filter((b) => b.pluginId !== pluginId));
 
     PluginLog.log('PluginBridge: Header buttons removed for plugin', { pluginId });
   }
@@ -1654,9 +1650,7 @@ export class PluginBridgeService implements OnDestroy {
    * Remove all menu entries for a specific plugin
    */
   private _removePluginMenuEntries(pluginId: string): void {
-    const currentEntries = this._menuEntries();
-    const filteredEntries = currentEntries.filter((entry) => entry.pluginId !== pluginId);
-    this._menuEntries.set(filteredEntries);
+    this._menuEntries.update((entries) => entries.filter((e) => e.pluginId !== pluginId));
 
     PluginLog.log('PluginBridge: Menu entries removed for plugin', { pluginId });
   }
@@ -1714,11 +1708,7 @@ export class PluginBridgeService implements OnDestroy {
    * Remove all side panel buttons for a specific plugin
    */
   private _removePluginSidePanelButtons(pluginId: string): void {
-    const currentButtons = this._sidePanelButtons();
-    const filteredButtons = currentButtons.filter(
-      (button) => button.pluginId !== pluginId,
-    );
-    this._sidePanelButtons.set(filteredButtons);
+    this._sidePanelButtons.update((bs) => bs.filter((b) => b.pluginId !== pluginId));
 
     PluginLog.log('PluginBridge: Side panel buttons removed for plugin', { pluginId });
   }
