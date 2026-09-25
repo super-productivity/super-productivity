@@ -28,6 +28,7 @@ import { By } from '@angular/platform-browser';
 import { MatMenu } from '@angular/material/menu';
 import { TaskDuplicateService } from '../../task-duplicate.service';
 import { TaskMultiSelectService } from '../../task-multi-select.service';
+import { T } from '../../../../t.const';
 import { PluginTaskContextMenuRegistryService } from '../../../../plugins/plugin-task-context-menu-registry.service';
 
 const projectInTreeOrder = (id: string, title: string): Project =>
@@ -248,6 +249,46 @@ describe('TaskContextMenuInnerComponent', () => {
 
       expect(onClick).toHaveBeenCalledOnceWith({ taskId: 'task-1' });
     });
+
+    it('renders the plugin submenu and runs the selected entry on click', fakeAsync(() => {
+      const onClick = jasmine.createSpy('onClick');
+      registry.register('plugin-a', {
+        id: 'action',
+        label: 'Run action',
+        onClick,
+      });
+      component.taskSet = {
+        ...DEFAULT_TASK,
+        id: 'task-1',
+      } as Task;
+      fixture.detectChanges();
+
+      const findMenuItem = (text: string): HTMLElement | undefined =>
+        Array.from(
+          document.querySelectorAll<HTMLElement>(
+            '.cdk-overlay-container [mat-menu-item]',
+          ),
+        ).find((el) => el.textContent?.includes(text));
+
+      component.contextMenuTrigger()?.openMenu();
+      fixture.detectChanges();
+      tick();
+      const submenuTrigger = findMenuItem(T.PLUGINS.TASK_CONTEXT_MENU_ACTIONS);
+      expect(submenuTrigger).toBeDefined();
+
+      submenuTrigger!.click();
+      fixture.detectChanges();
+      tick();
+      const entryButton = findMenuItem('Run action');
+      expect(entryButton).toBeDefined();
+
+      entryButton!.click();
+      flush();
+
+      expect(onClick).toHaveBeenCalledOnceWith({ taskId: 'task-1' });
+      component.contextMenuTrigger()?.closeMenu();
+      flush();
+    }));
 
     it('uses SUBTASK filtering for tasks with a parent', () => {
       registry.register('plugin-a', {

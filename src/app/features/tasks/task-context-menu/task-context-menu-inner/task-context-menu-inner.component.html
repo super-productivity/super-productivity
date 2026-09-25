@@ -366,8 +366,10 @@
       [menuTouchFix]="pluginTaskActionsMenuTrigger"
       (menuOpened)="focusFirstSubmenuItem(pluginTaskActionsMenu)"
     >
-      <mat-icon>extension</mat-icon>
-      {{ T.PLUGINS.TASK_CONTEXT_MENU_ACTIONS | translate }}
+      <span class="menuItemLeft">
+        <mat-icon>extension</mat-icon>
+        {{ T.PLUGINS.TASK_CONTEXT_MENU_ACTIONS | translate }}
+      </span>
     </button>
   }
 
