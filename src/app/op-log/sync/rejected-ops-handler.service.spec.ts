@@ -590,6 +590,25 @@ describe('RejectedOpsHandlerService', () => {
         });
       });
 
+      it('should not spend the resolution-attempt budget across partial backlog passes', async () => {
+        const op = createOp({ id: 'op-1' });
+        opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+        downloadCallback.and.resolveTo({ kind: 'completed', newOpsCount: 1 });
+        spyOn(
+          TestBed.inject(OperationLogDownloadService),
+          'hasUnseenRemoteOps',
+        ).and.returnValue(true);
+
+        for (let i = 0; i <= MAX_CONCURRENT_RESOLUTION_ATTEMPTS; i++) {
+          await service.handleRejectedOps(
+            [{ opId: 'op-1', error: 'concurrent', errorCode: 'CONFLICT_CONCURRENT' }],
+            downloadCallback,
+          );
+        }
+
+        expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+      });
+
       it('should stop rejection handling when the nested download is cancelled', async () => {
         const op = createOp({ id: 'op-1' });
         opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));

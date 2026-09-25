@@ -319,7 +319,7 @@ describe('Sync backlog longer than one download pass (integration)', () => {
       // A thousand page requests plus real IndexedDB writes exceed the default.
     }, 30000);
 
-    it('holds local ops back until the whole backlog has been seen', async () => {
+    it('uploads after a truncated pass without skipping the unseen tail', async () => {
       const peer = new TestClient('peer-client');
       const me = new TestClient('my-client');
       const backlog = Array.from({ length: MAX_DOWNLOAD_ITERATIONS + 100 }, (_, i) =>
@@ -330,22 +330,21 @@ describe('Sync backlog longer than one download pass (integration)', () => {
       await opLogStore.append(localOp, 'local');
       provider.pageSize = 1;
 
-      // A truncated pass: a server rejection resolved now would be judged
-      // without the unseen tail, so nothing may be uploaded yet.
+      // One sync cycle: the download stops at the pass cap, then the upload
+      // piggybacks only part of the tail (hasMorePiggyback).
       await syncService.downloadRemoteOps(provider);
       await syncService.uploadPendingOps(provider);
 
-      expect(provider.uploadRequests).toEqual([]);
-      expect((await opLogStore.getUnsynced()).map((e) => e.op.id)).toEqual([localOp.id]);
-
-      // The next pass reaches the head, so the held-back op goes out.
-      await syncService.downloadRemoteOps(provider);
-      await syncService.uploadPendingOps(provider);
-
-      expect(provider.uploadRequests.map((r) => r.opIds)).toEqual([[localOp.id]]);
+      const cursorAfterUpload = await provider.getLastServerSeq();
+      expect(cursorAfterUpload).toBeGreaterThanOrEqual(MAX_DOWNLOAD_ITERATIONS);
+      expect(cursorAfterUpload).toBeLessThan(server.getLatestSeq());
       expect(await opLogStore.getUnsynced()).toEqual([]);
+
+      await syncService.downloadRemoteOps(provider);
+
       expect(await provider.getLastServerSeq()).toBe(server.getLatestSeq());
       expect(await remoteOpIdsInLog()).toEqual(backlog.map((op) => op.id));
+      expect(server.getAllOps().map((stored) => stored.op.id)).toContain(localOp.id);
     }, 30000);
 
     it('leaves a CONCURRENT-rejected op pending while the conflicting op is unseen', async () => {

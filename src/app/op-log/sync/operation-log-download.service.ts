@@ -90,9 +90,9 @@ export class OperationLogDownloadService implements OnDestroy {
   private clockDriftRetryServerTimestamp: number | null = null;
 
   /**
-   * True while a SuperSync backlog is only partly downloaded (#8763). Uploads
-   * wait for it: a rejection resolved now would be judged without the unseen
-   * ops and could let a local edit silently win over a newer remote one.
+   * True while a SuperSync backlog is only partly downloaded (#8763). The
+   * rejection handler must not resolve conflicts locally meanwhile: judged
+   * without the unseen ops, a local edit could silently win over a newer one.
    */
   hasUnseenRemoteOps(): boolean {
     return this._hasUnseenRemoteOps;
