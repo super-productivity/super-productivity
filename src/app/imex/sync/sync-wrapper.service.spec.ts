@@ -876,7 +876,12 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: true, isNeverSynced: false, fenceEpoch: 0 },
+        {
+          forceFromSeq0: true,
+          isNeverSynced: false,
+          fenceEpoch: 0,
+          keepDecryptedPrefix: true,
+        },
       );
     });
 
@@ -890,7 +895,12 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: undefined, isNeverSynced: false, fenceEpoch: 0 },
+        {
+          forceFromSeq0: undefined,
+          isNeverSynced: false,
+          fenceEpoch: 0,
+          keepDecryptedPrefix: true,
+        },
       );
     });
 
@@ -901,7 +911,12 @@ describe('SyncWrapperService', () => {
 
       expect(mockSyncService.downloadRemoteOps).toHaveBeenCalledWith(
         mockSyncCapableProvider,
-        { forceFromSeq0: undefined, isNeverSynced: false, fenceEpoch: 0 },
+        {
+          forceFromSeq0: undefined,
+          isNeverSynced: false,
+          fenceEpoch: 0,
+          keepDecryptedPrefix: true,
+        },
       );
     });
 
@@ -2331,6 +2346,46 @@ describe('SyncWrapperService', () => {
           data: ConflictData;
         };
         expect(dialogConfig.data.remote.lastUpdate).toBe(remoteLastModified);
+      });
+
+      it('does not present an ops-only remote side as full data (#9391)', async () => {
+        // Shape thrown for a fresh client that received remote ops, no snapshot.
+        const conflictError = new LocalDataConflictError(1, null, undefined, null);
+        mockSyncService.downloadRemoteOps.and.rejectWith(conflictError);
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of(undefined),
+        } as MatDialogRef<DialogSyncConflictComponent>);
+
+        await service.sync();
+
+        const dialogConfig = mockMatDialog.open.calls.mostRecent().args[1] as {
+          data: ConflictData;
+        };
+        expect(dialogConfig.data.remote.isFullData).toBe(false);
+        expect(dialogConfig.data.localUnsyncedOpsCount).toBe(1);
+      });
+
+      it('still presents a remote snapshot as full data', async () => {
+        const conflictError = new LocalDataConflictError(
+          3,
+          { tasks: [{ id: 'remote-task' }] },
+          { clientB: 5 },
+        );
+        mockSyncService.downloadRemoteOps.and.rejectWith(conflictError);
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of(undefined),
+        } as MatDialogRef<DialogSyncConflictComponent>);
+
+        await service.sync();
+
+        const dialogConfig = mockMatDialog.open.calls.mostRecent().args[1] as {
+          data: ConflictData;
+        };
+        expect(dialogConfig.data.remote.isFullData).toBe(true);
+        expect(dialogConfig.data.remote.mainModelData).toEqual({
+          tasks: [{ id: 'remote-task' }],
+        } as unknown as ConflictData['remote']['mainModelData']);
+        expect(dialogConfig.data.remote.lastUpdateAction).toBe('Remote data');
       });
 
       it('should call forceUploadLocalState when user chooses USE_LOCAL', async () => {

@@ -118,6 +118,7 @@ export class RepairOperationService {
 
       OpLog.log('[RepairOperationService] Created REPAIR operation', {
         seq,
+        // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
         repairSummary,
       });
     };
@@ -222,6 +223,7 @@ export class RepairOperationService {
       // non-blocking snack per session so a silent data change (auto-repair can
       // drop entities/refs and propagate cross-device) isn't wholly invisible.
       // Only when something actually changed.
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       OpLog.err(logMsg);
       if (totalFixes > 0 && !this._hasShownRepairSnackThisSession) {
         this._hasShownRepairSnackThisSession = true;

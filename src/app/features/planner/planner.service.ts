@@ -65,6 +65,7 @@ export class PlannerService {
     this._globalTrackingIntervalService.todayDateStr$,
     this.includedWeekDays$,
   ]).pipe(
+    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
     tap(([count, todayStr]) => Log.log('daysToShow$', { count, todayStr })),
     map(([count, _, includedWeekDays]) =>
       buildDayWindow(

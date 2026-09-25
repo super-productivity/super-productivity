@@ -1045,7 +1045,9 @@ describe('ServerMigrationService', () => {
    *   the dialog layer (SyncLocalStateService.hasNothingWorthUploading), so
    *   that button is no longer an unguarded entry point. The
    *   hasServerMigrationStateData arm described here is still unable to skip;
-   *   these specs pin that predicate, not the dialog guard.
+   *   these specs pin that predicate, not the dialog guard. Since the #9256
+   *   follow-up the Decryption Failed dialog offers no overwrite at all;
+   *   Settings -> Force Overwrite remains the entry point.
    * - SERVER_MIGRATION is not inherently safe either: `checkAndHandleMigration`
    *   (server-migration.service.ts:125-137) also passes `skipServerEmptyCheck`
    *   against a NON-empty server after its own confirm dialog. It does require

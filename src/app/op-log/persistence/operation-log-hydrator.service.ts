@@ -471,6 +471,7 @@ export class OperationLogHydratorService {
     await this._assertOpLogReplayFallbackViable(cause);
     OpLog.err(
       `OperationLogHydratorService: ${reason}. Skipping the snapshot for this boot and replaying the op-log from the start.`,
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       cause,
     );
     await this._replayAllOpsFromScratch(pendingRemoteOps, cause);

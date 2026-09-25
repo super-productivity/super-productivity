@@ -376,6 +376,22 @@ Operation NOT applied to state
 Sync error shown in UI
 ```
 
+**Pages that did decrypt (#9256).** When earlier pages of the same top-level
+sync download decrypted and a later page fails, the earlier pages are kept: they
+are applied, the cursor stops before the failing page, and the decrypt error is
+still raised in the same sync cycle — unless the cycle ended in a state that
+supersedes it: the user declined the prefix, an incompatible op blocked it, or
+a conflict resolution (USE_LOCAL) replaced the server and moved the cursor past
+the prefix (see `isKeptPrefixDecryptErrorSuperseded` in
+`download-outcome.util.ts`). Downloads that replace state wholesale or
+resolve a conflict the server detected against its full head (forced seq-0, raw
+rebuild, re-delivery retry, rejected-ops downloads) never opt in and discard the
+whole run instead — see `isDecryptedPrefixKeepable` in
+`operation-log-download.service.ts`. Because a failed decrypt cannot tell a
+wrong password from a corrupt or foreign-key op, the Decryption Failed dialog
+offers no server overwrite; replacing the server stays a deliberate Settings
+action (Force Overwrite / Change Password).
+
 ## Snapshot Encryption
 
 Full-state operations (backup import and repair) use the snapshot endpoint but

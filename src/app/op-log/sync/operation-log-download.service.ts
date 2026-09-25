@@ -58,6 +58,53 @@ const isOpCoveredByLocalClock = (
 // Re-export for consumers that import from this service
 export type { DownloadResult } from '../core/types/sync-results.types';
 
+export interface RemoteOpsDownloadOptions {
+  forceFromSeq0?: boolean;
+  isReDeliveryRetry?: boolean;
+  includeOwnAndAppliedOps?: boolean;
+  /**
+   * Keep the ops decrypted on earlier pages when a later page fails to decrypt
+   * (#9256), instead of discarding the whole run. Opt-in: only the top-level
+   * download of a sync cycle may pass it — see `isDecryptedPrefixKeepable`.
+   */
+  keepDecryptedPrefix?: boolean;
+}
+
+/**
+ * #9256: whether a run that hit an undecryptable page may keep the pages it
+ * already decrypted instead of discarding them all.
+ *
+ * Applying the prefix is equivalent to having synced when the server head was
+ * the prefix's last op, a state every client passes through, so the top-level
+ * incremental download of a sync cycle may keep it. Excluded:
+ * - forced seq-0 downloads and the raw rebuild, whose result replaces local
+ *   state or clocks wholesale as if it were the whole server history;
+ * - the re-delivery retry and every other rejected-ops download (they never
+ *   opt in), which resolve a conflict the server detected against its FULL
+ *   head, so a view that stops short of it would resolve against stale data;
+ * - a gap reset, whose re-download belongs to a new server epoch;
+ * - file-based providers, which decrypt inside their adapter and never reach
+ *   this per-page path with a meaningful per-op cursor.
+ */
+const isDecryptedPrefixKeepable = ({
+  options,
+  providerMode,
+  hasResetForGap,
+  keptOpCount,
+}: {
+  options: RemoteOpsDownloadOptions | undefined;
+  providerMode: OperationSyncCapable['providerMode'];
+  hasResetForGap: boolean;
+  keptOpCount: number;
+}): boolean =>
+  !!options?.keepDecryptedPrefix &&
+  !options.forceFromSeq0 &&
+  !options.isReDeliveryRetry &&
+  !options.includeOwnAndAppliedOps &&
+  providerMode === 'superSyncOps' &&
+  !hasResetForGap &&
+  keptOpCount > 0;
+
 /**
  * Handles downloading remote operations from storage.
  *
@@ -110,11 +157,7 @@ export class OperationLogDownloadService implements OnDestroy {
    */
   async downloadRemoteOps(
     syncProvider: OperationSyncCapable,
-    options?: {
-      forceFromSeq0?: boolean;
-      isReDeliveryRetry?: boolean;
-      includeOwnAndAppliedOps?: boolean;
-    },
+    options?: RemoteOpsDownloadOptions,
   ): Promise<DownloadResult> {
     if (!syncProvider) {
       OpLog.warn(
@@ -128,11 +171,7 @@ export class OperationLogDownloadService implements OnDestroy {
 
   private async _downloadRemoteOpsViaApi(
     syncProvider: OperationSyncCapable,
-    options?: {
-      forceFromSeq0?: boolean;
-      isReDeliveryRetry?: boolean;
-      includeOwnAndAppliedOps?: boolean;
-    },
+    options?: RemoteOpsDownloadOptions,
   ): Promise<DownloadResult> {
     const forceFromSeq0 = options?.forceFromSeq0 ?? false;
     OpLog.normal(
@@ -153,6 +192,7 @@ export class OperationLogDownloadService implements OnDestroy {
     // We track this BEFORE decryption to detect the server's actual encryption state.
     let sawAnyOps = false;
     let sawEncryptedOp = false;
+    let decryptErrorAfterKeptPrefix: OperationDecryptionError | undefined;
 
     // Get encryption key upfront (optional - file-based adapters handle encryption internally)
     // Note: Use 'let' instead of 'const' because we may need to re-fetch the key
@@ -196,11 +236,7 @@ export class OperationLogDownloadService implements OnDestroy {
       // cursor; and the rejection resolver merges server clocks into the local
       // clock, so the clock alone could cover a blocked op).
       // Raw rebuild wants every op, so it keeps this filter off. The provider
-      // gate is an allowlist: only SuperSync hands out a real monotonic server
-      // seq to compare against. File-based providers use synthetic per-download
-      // `serverSeq` values while their cursor is the file's sync version, so the
-      // `<=` check is meaningless there — and the reproduced bug is
-      // SuperSync-only anyway, so a future provider mode must opt in explicitly
+      // gate is an allowlist: a future provider mode must opt in explicitly
       // rather than inherit a filter nobody reasoned about for it.
       // Keyed on the CALLER'S intent, never on `forceFromSeq0` alone: that flag
       // is also set for a provider switch (`SyncWrapperService`), whose whole
@@ -209,10 +245,21 @@ export class OperationLogDownloadService implements OnDestroy {
       // cursor for that provider and a local clock inherited from the other
       // one, so filtering there would silently drop the server's history, skip
       // the dialog, and let this device upload its divergent state.
+      //
+      // File-based providers (#10119) return their WHOLE op buffer (up to
+      // MAX_RECENT_OPS) on every download, so after compaction an old remote op
+      // looks new and can resurrect an entity deleted/archived here since. Their
+      // adapter exposes each op's `serverSeq` as the file `syncVersion` it was
+      // written at, the same space as their cursor, so the filter runs on every
+      // incremental download. It stays off for seq-0 downloads (lastServerSeq
+      // is 0): a provider switch or USE_REMOTE rebuild must see everything. The
+      // clock half is what keeps it safe when the cursor ran ahead of applied
+      // ops (an upload merging a freshly downloaded file sets it to the new
+      // version): an op this client never applied is not covered by its clock.
       const isReDeliveryFilterActive =
-        !!options?.isReDeliveryRetry &&
         !options?.includeOwnAndAppliedOps &&
-        syncProvider.providerMode === 'superSyncOps';
+        ((!!options?.isReDeliveryRetry && syncProvider.providerMode === 'superSyncOps') ||
+          (syncProvider.providerMode === 'fileSnapshotOps' && lastServerSeq > 0));
       // Not const: a gap reset below switches to a new server epoch whose seq
       // space is unrelated to this cursor, so the filter must be disabled.
       let deliveredUpToSeq = isReDeliveryFilterActive
@@ -446,6 +493,27 @@ export class OperationLogDownloadService implements OnDestroy {
                   decryptedOpsInEarlierBatches,
                 ),
               );
+              if (
+                isDecryptedPrefixKeepable({
+                  options,
+                  providerMode: syncProvider.providerMode,
+                  hasResetForGap,
+                  keptOpCount: allNewOps.length,
+                })
+              ) {
+                // The caller applies the prefix, persists the cursor (which stops
+                // before this page) and then throws the error, so this cycle still
+                // reports it and the next download starts at the failing page
+                // (unless the cycle's outcome supersedes it — see
+                // `isKeptPrefixDecryptErrorSuperseded`).
+                OpLog.warn(
+                  `OperationLogDownloadService: Keeping ${allNewOps.length} op(s) decrypted ` +
+                    `before the failing page; cursor stops at ${sinceSeq}.`,
+                );
+                finalLatestSeq = sinceSeq;
+                decryptErrorAfterKeptPrefix = error;
+                break;
+              }
             }
             throw error;
           }
@@ -598,8 +666,11 @@ export class OperationLogDownloadService implements OnDestroy {
       return { newOps: [], success: false, failedFileCount: 0 };
     }
 
-    // Mark that we successfully checked the remote server
-    this.superSyncStatusService.markRemoteChecked();
+    // Mark that we successfully checked the remote server. A kept prefix stopped
+    // short of the server head, so it must not count as a completed check.
+    if (!decryptErrorAfterKeptPrefix) {
+      this.superSyncStatusService.markRemoteChecked();
+    }
 
     OpLog.verbose(
       `OperationLogDownloadService: [DEBUG] Return values - newOps=${allNewOps.length}, ` +
@@ -629,6 +700,7 @@ export class OperationLogDownloadService implements OnDestroy {
       ...(snapshotVectorClock ? { snapshotVectorClock } : {}),
       // Include encryption state detection for mismatch handling
       ...(serverHasOnlyUnencryptedData ? { serverHasOnlyUnencryptedData } : {}),
+      ...(decryptErrorAfterKeptPrefix ? { decryptErrorAfterKeptPrefix } : {}),
     };
 
     if (syncProvider.providerMode === 'fileSnapshotOps') {

@@ -355,6 +355,7 @@ export class AndroidFocusModeEffects {
                 // Start service if just became active, otherwise update
                 if (!wasFocusModeActive) {
                   DroidLog.log('AndroidFocusModeEffects: Starting focus mode service', {
+                    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
                     title,
                     duration: timer.duration,
                     remaining: remainingMs,
@@ -384,6 +385,7 @@ export class AndroidFocusModeEffects {
                 ) {
                   // Only update if something significant changed
                   DroidLog.log('AndroidFocusModeEffects: Updating focus mode service', {
+                    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
                     title,
                     remaining: remainingMs,
                     isPaused: !timer.isRunning,
@@ -725,6 +727,7 @@ export class AndroidFocusModeEffects {
     const title = this._getNotificationTitle(mode, isBreakActive, isLongBreak);
     const remainingMs = timer.duration > 0 ? timeRemaining : timer.elapsed; // Flowtime shows elapsed
     DroidLog.log('AndroidFocusModeEffects: Re-posting notification after grant', {
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       title,
       remaining: remainingMs,
     });

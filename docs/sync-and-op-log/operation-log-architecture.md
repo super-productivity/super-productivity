@@ -791,10 +791,27 @@ treats file `syncVersion` as a synthetic transport watermark and exposes it as
 it once; snapshot replacement can reset it, which the gap path detects. It is
 not the provider `rev`/ETag and does not prove per-operation ordering. One upload
 can carry multiple operations under the same new watermark; stable operation
-IDs provide durable deduplication, while vector clocks carry causality.
+IDs deduplicate ops still in the local log, while vector clocks carry causality.
 
 1. **Normal catch-up:** download the bounded ops buffer and pass every retained
-   candidate through the common applied-ID and conflict pipeline.
+   candidate through the common applied-ID and conflict pipeline. Each retained
+   op carries the `syncVersion` it was written at (`sv`), which the adapter
+   exposes as its `serverSeq`. The applied-ID set alone cannot recognise an op
+   that local compaction already pruned (7-day retention), so the download
+   also skips an op when its `sv` is at or below the persisted cursor **and**
+   the local vector clock covers its author counter (#10119). Otherwise an old
+   create op still in the buffer would re-create an entity archived or deleted
+   here since. The clock half is needed because the cursor can run ahead of
+   applied ops: an upload merges into the freshly read file and sets the
+   cursor to the new version. Legacy ops without `sv` use the file's
+   `syncVersion` as an upper bound. Seq-0 downloads and downloads after a gap
+   reset do not use this filter. Known gaps: the guard assumes each author's
+   counter never goes backwards (a device that keeps its clientId but adopts
+   a lower own clock, e.g. USE_REMOTE after another device's USE_LOCAL, could
+   have a new op skipped when the cursor also ran ahead; reproduced by
+   pending tests in the #10119 integration spec, fix tracked in #10239); and a
+   remote op whose apply failed is no longer retried once compaction prunes it,
+   matching SuperSync.
 2. **Fresh client / forced seq-0:** return a full state/archive baseline. In v2,
    that baseline represents the monolith and its retained ops. In v3, the ops
    file points to a validated snapshot generation; retained ops newer than the
@@ -1010,7 +1027,7 @@ When a `moveToArchive` operation conflicts with a field-level update (e.g., rena
 
 **Rationale:** If Client A archives a task and Client B concurrently renames it, the archive must win — otherwise, the LWW update would "resurrect" the archived task back into the active store by replacing its state.
 
-**Implementation:** `ConflictResolutionService` checks whether either the local or remote side contains a `TASK_SHARED_MOVE_TO_ARCHIVE` action. If so, the archive side wins automatically, and a new archive operation is created with a merged vector clock (via `_createArchiveWinOp()`).
+**Implementation:** `ConflictResolutionService` checks whether either the local or remote side contains a `TASK_SHARED_MOVE_TO_ARCHIVE` action. If so, the archive side wins automatically, and a new archive operation is created with a merged vector clock (via `buildArchiveWinOp()`). A bulk archive that wins several rows emits ONE recreation shared by all of them; pending exact copies of one archive intent left by pre-fix clients are folded back into one (#10102, `bulk-archive-intent.util.ts`).
 
 This is the **first level** of archive resurrection prevention. The **second level** is the [bulk archive filter](../../src/app/op-log/apply/bulk-archive-filter.util.ts), which pre-scans operation batches for archive operations and skips any LWW Update operations targeting entities being archived in the same batch. This two-level defense handles the 3+ client scenario where LWW Updates can arrive before or after archive ops in the same batch.
 
@@ -1035,7 +1052,8 @@ top-level `tasks` and re-derives the footprint from the scoped tasks
 
 **Key files:**
 
-- `src/app/op-log/sync/conflict-resolution.service.ts` — Archive-wins check and `_createArchiveWinOp()`
+- `src/app/op-log/sync/conflict-resolution.service.ts` — Archive-wins check
+- `src/app/op-log/sync/bulk-archive-intent.util.ts` — `buildArchiveWinOp()`, one recreation per archive intent
 - `src/app/op-log/apply/bulk-hydration.meta-reducer.ts` — Pre-scan archive filtering
 
 ### Superseded Operation Handling for moveToArchive

@@ -268,6 +268,7 @@ if (IS_ANDROID_WEB_VIEW) {
     delete requestMap[rId];
   };
 
+  // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
   DroidLog.log('Android Web View interfaces initialized', androidInterface);
 
   // Pull-based: retrieve share data persisted in SharedPreferences (survives process death)
@@ -312,6 +313,7 @@ if (IS_ANDROID_WEB_VIEW) {
     const snoozeQueue = androidInterface.getReminderSnoozeQueue?.();
     if (snoozeQueue) {
       const events: { taskId: string; newRemindAt: number }[] = JSON.parse(snoozeQueue);
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       DroidLog.log('Pulled reminder snooze queue from SharedPreferences', events);
       for (const event of events) {
         androidInterface.onReminderSnooze$.next(event);

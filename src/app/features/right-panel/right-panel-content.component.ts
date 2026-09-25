@@ -245,6 +245,7 @@ export class RightPanelContentComponent implements OnDestroy {
         if (shouldClose) {
           Log.log('RightPanel: Closing panel on navigation', {
             from: prev.url,
+            // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
             to: currentRoute,
             fromIsWorkView: prev.isWorkView,
             toIsWorkView: isCurrentWorkView,

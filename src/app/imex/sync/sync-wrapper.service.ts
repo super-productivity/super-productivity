@@ -101,7 +101,6 @@ export type ForceUploadTriggerSource =
   | 'InvalidFilePrefixError'
   | 'JsonParseError'
   | 'LegacySyncFormatDetectedError'
-  | 'DecryptError'
   | 'unknown';
 
 /**
@@ -625,6 +624,7 @@ export class SyncWrapperService {
           forceFromSeq0: isProviderSwitch || undefined,
           isNeverSynced: isNeverSyncedAtSyncStart,
           fenceEpoch,
+          keepDecryptedPrefix: true,
         },
       );
       // Auth is confirmed working if download didn't throw AuthFailSPError.
@@ -1374,6 +1374,7 @@ export class SyncWrapperService {
     // Diagnostic: stamp the originating error/dialog so we can correlate
     // "what stuck the user" with "what they recovered with" in shared logs.
     SyncLog.log('SyncWrapperService: forceUpload called - uploading local state', {
+      // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
       triggerSource,
     });
 
@@ -1643,9 +1644,6 @@ export class SyncWrapperService {
         if (result?.isReSync) {
           this._suppressEncryptionDialogs = false;
           this.sync();
-        } else if (result?.isForceUpload) {
-          this._suppressEncryptionDialogs = false;
-          this.forceUpload('DecryptError');
         } else {
           // User cancelled — suppress future dialogs so they can navigate to settings
           this._suppressEncryptionDialogs = true;
@@ -1691,7 +1689,7 @@ export class SyncWrapperService {
           revMap: {},
           crossModelVersion: 1,
           mainModelData: snapshotConflict?.remoteSnapshotState ?? {},
-          isFullData: !!snapshotConflict,
+          isFullData: !!snapshotConflict?.remoteSnapshotState,
           vectorClock: snapshotConflict?.remoteVectorClock,
         },
         local: {
