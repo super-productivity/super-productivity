@@ -173,7 +173,8 @@ export class WebdavApi {
 
   /**
    * Retrieve metadata for a file or folder via PROPFIND.
-   * Used for testConnection() and listFiles(), not for revision tracking.
+   * Only caller: the #9030 upload pre-check, which swallows failures and falls
+   * back to GET — hence errors log at `normal`, not `critical`.
    */
   async getFileMeta(path: string): Promise<FileMeta> {
     const cfg = await this._deps.getCfg();
@@ -197,7 +198,7 @@ export class WebdavApi {
         }
       }
     } catch (e) {
-      this._deps.logger.critical(
+      this._deps.logger.normal(
         `${WebdavApi.L}.getFileMeta() error`,
         errorMeta(e, { path }),
       );

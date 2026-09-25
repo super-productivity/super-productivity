@@ -584,6 +584,27 @@ describe('WebdavApi', () => {
         expect(getsOf(adapter)).toHaveLength(3);
       });
 
+      it('does not log a swallowed PROPFIND failure as critical', async () => {
+        // The pre-check runs on every upload; a server rejecting PROPFIND
+        // must not flood the exportable log while GET still confirms the rev.
+        const critical = vi.fn();
+        const adapter = makeAdapter();
+        adapter.request.mockRejectedValueOnce(
+          new HttpNotOkAPIError(new Response('', { status: 405 })),
+        );
+        adapter.request.mockResolvedValueOnce(okResponse('old', 200, { etag: '"old"' }));
+        adapter.request.mockResolvedValueOnce(okResponse('', 204));
+        adapter.request.mockResolvedValueOnce(okResponse('mine', 200, { etag: '"new"' }));
+
+        const result = await makeApi(adapter, {
+          ...NOOP_SYNC_LOGGER,
+          critical,
+        }).upload({ path: 'op-1.json', data: 'mine', expectedRev: '"old"' });
+
+        expect(result.rev).toBe('"new"');
+        expect(critical).not.toHaveBeenCalled();
+      });
+
       it('treats a file deleted since the download as a conflict', async () => {
         const adapter = makeAdapter();
         adapter.request.mockRejectedValueOnce(
