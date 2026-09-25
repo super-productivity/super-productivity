@@ -2365,6 +2365,45 @@ describe('SyncWrapperService', () => {
         expect(dialogConfig.data.localUnsyncedOpsCount).toBe(1);
       });
 
+      it('reports a wholly fresh ops-only local count as unknown, not 0 (#9391)', async () => {
+        // Wholly fresh client: meaningful store data but no pending ops at all.
+        const conflictError = new LocalDataConflictError(0, null, undefined, null);
+        mockSyncService.downloadRemoteOps.and.rejectWith(conflictError);
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of(undefined),
+        } as MatDialogRef<DialogSyncConflictComponent>);
+
+        await service.sync();
+
+        const { data } = mockMatDialog.open.calls.mostRecent().args[1] as {
+          data: ConflictData;
+        };
+        // Undefined + no last-synced clock → the dialog renders "unknown" and
+        // confirms both overwrite choices.
+        expect(data.localUnsyncedOpsCount).toBeUndefined();
+        expect(data.local.lastSyncedVectorClock).toBeNull();
+        expect(data.local.lastUpdateAction).not.toContain('0 local changes');
+      });
+
+      it('keeps a 0 pending count when a remote snapshot exists', async () => {
+        const conflictError = new LocalDataConflictError(
+          0,
+          { tasks: [] },
+          { clientB: 5 },
+        );
+        mockSyncService.downloadRemoteOps.and.rejectWith(conflictError);
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of(undefined),
+        } as MatDialogRef<DialogSyncConflictComponent>);
+
+        await service.sync();
+
+        const { data } = mockMatDialog.open.calls.mostRecent().args[1] as {
+          data: ConflictData;
+        };
+        expect(data.localUnsyncedOpsCount).toBe(0);
+      });
+
       it('still presents a remote snapshot as full data', async () => {
         const conflictError = new LocalDataConflictError(
           3,

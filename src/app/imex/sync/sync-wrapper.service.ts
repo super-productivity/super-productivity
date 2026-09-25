@@ -1671,6 +1671,8 @@ export class SyncWrapperService {
         error instanceof LocalDataConflictError ? error : undefined;
       const unsyncedCount =
         snapshotConflict?.unsyncedCount ?? (await this._opLogStore.getUnsynced()).length;
+      // Wholly fresh + ops-only (#9391): 0 pending ops despite meaningful data → unknown.
+      const isFresh = snapshotConflict?.remoteSnapshotState === null && !unsyncedCount;
       const vcEntry = await this._opLogStore.getVectorClockEntry();
       const localClock = vcEntry?.clock;
       const localLastUpdate = vcEntry?.lastUpdate || Date.now();
@@ -1694,7 +1696,7 @@ export class SyncWrapperService {
         },
         local: {
           lastUpdate: localLastUpdate,
-          lastUpdateAction: `${unsyncedCount} local changes pending`,
+          lastUpdateAction: isFresh ? '?' : `${unsyncedCount} local changes pending`,
           revMap: {},
           crossModelVersion: 1,
           // Op-log errors lack a last-synced timestamp; the dialog shows Never.
@@ -1703,7 +1705,7 @@ export class SyncWrapperService {
           vectorClock: localClock,
           lastSyncedVectorClock: snapshotConflict?.lastSyncedVectorClock ?? null,
         },
-        localUnsyncedOpsCount: unsyncedCount,
+        localUnsyncedOpsCount: isFresh ? undefined : unsyncedCount,
       };
 
       SyncLog.log('SyncWrapperService: Opening data conflict dialog', {
