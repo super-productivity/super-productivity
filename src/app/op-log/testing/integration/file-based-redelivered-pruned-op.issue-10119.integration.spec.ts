@@ -88,6 +88,7 @@ for (const isUseSplitSyncFiles of [false, true]) {
     let applierSpy: jasmine.SpyObj<OperationApplierService>;
     let stateSnapshotSpy: jasmine.SpyObj<StateSnapshotService>;
     let ownClientId: string;
+    let newAdapter: () => OperationSyncCapable;
 
     const taskOp = (
       id: string,
@@ -290,7 +291,7 @@ for (const isUseSplitSyncFiles of [false, true]) {
       // One adapter service per device, as in production; one shared remote.
       remote = new MockFileProvider(SyncProviderId.WebDAV);
       const injector = TestBed.inject(EnvironmentInjector);
-      const newAdapter = (): OperationSyncCapable =>
+      newAdapter = (): OperationSyncCapable =>
         runInInjectionContext(
           injector,
           () => new FileBasedSyncAdapterService(),
@@ -452,12 +453,7 @@ for (const isUseSplitSyncFiles of [false, true]) {
     // Pending until #10239 stops the cursor advancing past unseen versions.
     xit('known gap: delivers a new op from an author whose counter regressed via USE_LOCAL/USE_REMOTE', async () => {
       const DESKTOP = 'desktop-client';
-      const newDesktopAdapter = (): OperationSyncCapable =>
-        runInInjectionContext(
-          TestBed.inject(EnvironmentInjector),
-          () => new FileBasedSyncAdapterService(),
-        ).createAdapter(remote, FILE_CFG, undefined);
-      const desktop = newDesktopAdapter();
+      const desktop = newAdapter();
 
       await seedRemoteFromLinux();
       // Android authors counters 1 and 2; Linux applies both (clock covers A:2).
@@ -491,8 +487,10 @@ for (const isUseSplitSyncFiles of [false, true]) {
       );
 
       // Linux uploads without downloading first: the cursor passes that op.
-      // Only possible once the 30s in-cycle cache expired (e.g. a dialog was
-      // open); a warm cache would reject the upload on the rev check.
+      // Needs a cold in-cycle cache (a warm one fails the rev check). In
+      // production: the Dropbox/OneDrive rev pre-check (no cache fill), a
+      // same-cycle re-upload after the cache was cleared, or a >30s cycle.
+      // Expiring the cache stands in for all three.
       const realNow = Date.now();
       spyOn(Date, 'now').and.returnValue(realNow + 60_000);
       await linuxUploads(
