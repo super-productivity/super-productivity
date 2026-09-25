@@ -1042,3 +1042,93 @@ describe('Planner Selectors - selectAllTasksDueToday', () => {
     });
   });
 });
+
+describe('Planner Selectors - selectPlannerDays across several days with offset', () => {
+  const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+  const FIFTY_NINE_MIN_MS = 59 * 60 * 1000;
+  const days = ['2026-03-10', '2026-03-11', '2026-03-12'];
+
+  const plannedTask = (id: string, dueWithTime: number): Task =>
+    ({
+      id,
+      title: id,
+      created: 0,
+      isDone: false,
+      subTaskIds: [],
+      tagIds: [],
+      projectId: 'p1',
+      timeSpentOnDay: {},
+      timeEstimate: 0,
+      timeSpent: 0,
+      attachments: [],
+      dueWithTime,
+    }) as Task;
+
+  const calEvent = (
+    id: string,
+    start: number,
+    isAllDay?: boolean,
+  ): ScheduleFromCalendarEvent =>
+    ({
+      id,
+      calProviderId: 'provider-1',
+      issueProviderKey: 'ICAL',
+      title: id,
+      start,
+      duration: isAllDay ? DAY_DURATION_MS : 30 * 60 * 1000,
+      ...(isAllDay ? { isAllDay: true } : {}),
+    }) as ScheduleFromCalendarEvent;
+
+  it('puts planned tasks and calendar events into their logical day', () => {
+    const tasks = [
+      // 03:59 is still the previous logical day with a 4h offset
+      plannedTask('A', getLocalTime(2026, 3, 11, 3) + FIFTY_NINE_MIN_MS),
+      plannedTask('B', getLocalTime(2026, 3, 11, 10)),
+      plannedTask('C', getLocalTime(2026, 3, 12, 4)),
+      plannedTask('D', getLocalTime(2026, 3, 11, 9)),
+    ];
+    const calendarEvents: ScheduleCalendarMapEntry[] = [
+      { items: [calEvent('E1', getLocalTime(2026, 3, 11, 2))] },
+      {
+        items: [
+          calEvent('E2', getLocalTime(2026, 3, 12, 11)),
+          calEvent('E3', getLocalTime(2026, 3, 11, 12), true),
+        ],
+      },
+    ];
+
+    const result = fromSelectors
+      .selectPlannerDays(
+        days,
+        [],
+        [],
+        calendarEvents,
+        tasks as Parameters<typeof fromSelectors.selectPlannerDays>[4],
+        '2026-03-09',
+      )
+      .projector(
+        new Map(tasks.map((t) => [t.id, t])),
+        { days: {}, addPlannedTasksDialogLastShown: undefined },
+        {
+          isWorkStartEndEnabled: false,
+          workStart: '09:00',
+          workEnd: '17:00',
+          isLunchBreakEnabled: false,
+          lunchBreakStart: '12:00',
+          lunchBreakEnd: '13:00',
+        },
+        FOUR_HOURS_MS,
+      );
+
+    expect(result.map((d) => d.scheduledIItems.map((si) => si.id))).toEqual([
+      ['E1', 'A'],
+      ['D', 'B'],
+      ['C', 'E2'],
+    ]);
+    expect(result.map((d) => d.allDayEvents.map((ev) => ev.id))).toEqual([
+      [],
+      ['E3'],
+      [],
+    ]);
+  });
+});

@@ -744,6 +744,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
   let modeSignal: WritableSignal<FocusModeMode>;
   let isSessionRunningSignal: WritableSignal<boolean>;
   let isXsSignal: WritableSignal<boolean>;
+  let currentCycleSignal: WritableSignal<number>;
   let mockIssueService: jasmine.SpyObj<IssueService>;
 
   const mockTask: TaskCopy = {
@@ -771,6 +772,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     modeSignal = signal(FocusModeMode.Pomodoro);
     isSessionRunningSignal = signal(true);
     isXsSignal = signal(true);
+    currentCycleSignal = signal(1);
 
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
       // Formatting off keeps these specs on the plain-textarea notes path; the
@@ -812,7 +814,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
       isSessionRunning: isSessionRunningSignal,
       isSessionPaused: signal(false),
       isBreakActive: signal(false),
-      currentCycle: signal(1),
+      currentCycle: currentCycleSignal,
       sessionDuration: signal(0),
       mode: modeSignal,
       mainState: mainStateSignal,
@@ -933,6 +935,20 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     expect(controls.querySelector('.open-issue-btn')).not.toBeNull();
     expect(controls.querySelector('.show-notes-btn')).not.toBeNull();
     expect(controls.querySelector('.mini-badge')?.textContent?.trim()).toBe('5');
+  });
+
+  it('should disable the in-session reset cycles button while on the first cycle (#9893)', () => {
+    isXsSignal.set(false);
+    fixture.detectChanges();
+
+    const btn = fixture.nativeElement.querySelector(
+      '.reset-cycles-btn',
+    ) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+
+    currentCycleSignal.set(2);
+    fixture.detectChanges();
+    expect(btn.disabled).toBe(false);
   });
 
   it('should defer resolving the issue URL until the mobile More menu opens', async () => {

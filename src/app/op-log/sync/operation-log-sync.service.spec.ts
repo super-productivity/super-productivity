@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { TabSeqFrontierService } from '../persistence/tab-seq-frontier.service';
 import { OperationLogSyncService } from './operation-log-sync.service';
+import { SyncLocalStateService } from './sync-local-state.service';
 import { FILE_BASED_SYNC_CONSTANTS } from '../sync-providers/file-based/file-based-sync.types';
 import { SchemaMigrationService } from '../persistence/schema-migration.service';
 import { OperationLogHydratorService } from '../persistence/operation-log-hydrator.service';
@@ -906,7 +907,10 @@ describe('OperationLogSyncService', () => {
           // Verify callback was captured
           expect(capturedCallback).toBeDefined();
 
-          // Call the callback and verify it delegates to downloadRemoteOps
+          // Call the callback and verify it delegates to downloadRemoteOps.
+          // The exact options also pin that nested downloads never opt into
+          // keepDecryptedPrefix: they resolve conflicts the server detected
+          // against its full head, so a partial view is unsafe here (#9256).
           await capturedCallback();
           expect(downloadSpy).toHaveBeenCalledWith(mockProvider, {
             isNeverSynced: true,
@@ -1788,6 +1792,165 @@ describe('OperationLogSyncService', () => {
             beforeFullStateApply: jasmine.any(Function),
           }),
         );
+      });
+
+      describe('kept decrypted prefix (#9256)', () => {
+        const remoteOp = (): Operation => ({
+          id: 'remote-before-bad-page',
+          clientId: 'client-B',
+          actionType: 'test' as ActionType,
+          opType: OpType.Update,
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: {},
+          vectorClock: { clientB: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        });
+        const decryptError = new Error('page after the prefix failed to decrypt');
+        let setLastServerSeq: jasmine.Spy;
+        let persistedCursor: number;
+        let provider: any;
+
+        beforeEach(() => {
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [remoteOp()],
+            latestServerSeq: 17,
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'superSyncOps',
+            failedFileCount: 0,
+            decryptErrorAfterKeptPrefix: decryptError,
+          });
+          remoteOpsProcessingServiceSpy.processRemoteOps.and.resolveTo({
+            localWinOpsCreated: 0,
+            allOpsFilteredBySyncImport: false,
+            filteredOpCount: 0,
+            isLocalUnsyncedImport: false,
+            blockedByIncompatibleOp: false,
+          });
+          persistedCursor = 5;
+          setLastServerSeq = jasmine
+            .createSpy('setLastServerSeq')
+            .and.callFake(async (seq: number) => {
+              persistedCursor = seq;
+            });
+          provider = {
+            isReady: async () => true,
+            setLastServerSeq,
+            getLastServerSeq: async () => persistedCursor,
+          };
+        });
+
+        it('applies the prefix and persists its cursor, then throws the decrypt error', async () => {
+          await expectAsync(
+            service.downloadRemoteOps(provider, { keepDecryptedPrefix: true }),
+          ).toBeRejectedWith(decryptError);
+
+          expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+            [jasmine.objectContaining({ id: 'remote-before-bad-page' })],
+            jasmine.anything(),
+          );
+          // The next download must start at the failing page, not re-fetch the prefix.
+          expect(setLastServerSeq).toHaveBeenCalledWith(17);
+        });
+
+        it('does not throw when the user declines to apply the prefix', async () => {
+          const localState = TestBed.inject(SyncLocalStateService);
+          spyOn(localState, 'isFreshOrNeverSyncedGenesisClient').and.resolveTo(true);
+          spyOn(localState, 'hasMeaningfulStoreData').and.resolveTo(false);
+          spyOn(localState, 'confirmFreshClientSync').and.returnValue(false);
+
+          const outcome = await service.downloadRemoteOps(provider, {
+            keepDecryptedPrefix: true,
+          });
+
+          expect(outcome.kind).toBe('cancelled');
+          expect(remoteOpsProcessingServiceSpy.processRemoteOps).not.toHaveBeenCalled();
+          expect(setLastServerSeq).not.toHaveBeenCalled();
+        });
+
+        it('reports the incompatible-op block instead of the decrypt error', async () => {
+          remoteOpsProcessingServiceSpy.processRemoteOps.and.resolveTo({
+            localWinOpsCreated: 0,
+            allOpsFilteredBySyncImport: false,
+            filteredOpCount: 0,
+            isLocalUnsyncedImport: false,
+            blockedByIncompatibleOp: true,
+          });
+
+          const outcome = await service.downloadRemoteOps(provider, {
+            keepDecryptedPrefix: true,
+          });
+
+          expect(outcome.kind).toBe('blocked_incompatible');
+        });
+
+        it('does not report the decrypt error after USE_LOCAL replaced the server', async () => {
+          const incomingImport: Operation = {
+            ...remoteOp(),
+            id: 'import-in-prefix',
+            actionType: ActionType.LOAD_ALL_DATA,
+            opType: OpType.SyncImport,
+            entityType: 'ALL',
+            entityId: undefined,
+          };
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [incomingImport],
+            latestServerSeq: 17,
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'superSyncOps',
+            failedFileCount: 0,
+            decryptErrorAfterKeptPrefix: decryptError,
+          });
+          opLogStoreSpy.getUnsynced.and.resolveTo([
+            {
+              seq: 1,
+              op: {
+                ...remoteOp(),
+                id: 'local-op-1',
+                clientId: 'client-A',
+                payload: { title: 'Local Title' },
+                vectorClock: { clientA: 1 },
+              },
+              appliedAt: Date.now(),
+              source: 'local',
+            },
+          ]);
+          stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+            task: { ids: ['task-1'] },
+            project: { ids: [INBOX_PROJECT.id] },
+            tag: { ids: [TODAY_TAG.id] },
+            note: { ids: [] },
+          } as any);
+          syncImportConflictDialogServiceSpy.showConflictDialog.and.resolveTo(
+            'USE_LOCAL',
+          );
+          // The clean-slate upload moves the cursor past the old head; server
+          // seqs keep counting up across a clean slate.
+          const forceUploadSpy = spyOn(service, 'forceUploadLocalState').and.callFake(
+            async () => {
+              persistedCursor = 40;
+              return { hasUnresolvedOps: false };
+            },
+          );
+
+          const outcome = await service.downloadRemoteOps(provider, {
+            keepDecryptedPrefix: true,
+          });
+
+          expect(forceUploadSpy).toHaveBeenCalled();
+          expect(outcome.kind).toBe('no_new_ops');
+        });
+
+        it('still reports the decrypt error when the cursor stayed behind the prefix', async () => {
+          setLastServerSeq.and.resolveTo();
+
+          await expectAsync(
+            service.downloadRemoteOps(provider, { keepDecryptedPrefix: true }),
+          ).toBeRejectedWith(decryptError);
+        });
       });
 
       it('should NOT advance lastServerSeq when processing blocked at an incompatible op', async () => {
@@ -6368,6 +6531,8 @@ describe('OperationLogSyncService', () => {
         const conflictError = error as LocalDataConflictError;
         expect(conflictError.unsyncedCount).toBe(0);
         expect(conflictError.lastSyncedVectorClock).toBeNull();
+        // No snapshot, so no remote state — not a fake empty one (#9391).
+        expect(conflictError.remoteSnapshotState).toBeNull();
       }
     });
 

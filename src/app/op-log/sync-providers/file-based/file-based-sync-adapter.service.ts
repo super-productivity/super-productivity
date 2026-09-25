@@ -968,9 +968,9 @@ export class FileBasedSyncAdapterService {
     // Step 4: Post-upload processing
     this._clearCachedSyncData(providerKey);
     this._expectedSyncVersions.set(providerKey, finalSyncVersion);
-    // SPAP-10: the remote is now exactly what we just uploaded, so its rev is the
-    // fresh last-seen rev. Recording it lets the next poll short-circuit if no
-    // other client writes in between. Persisted via _persistState() below.
+    // SPAP-10: the remote is now what we just uploaded; recording its rev lets the
+    // next poll short-circuit if no other client writes. Caveat (#10239): that also
+    // defers ops this upload merged from other clients. Persisted via _persistState().
     this._commitLastSeenRev(providerKey, finalRev);
 
     // Use finalSyncVersion (NOT mergedOps.length) to match download behavior.

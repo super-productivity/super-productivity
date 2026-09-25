@@ -23,6 +23,8 @@ import {
 import { getRepeatableTaskId } from '../../task-repeat-cfg/get-repeatable-task-id.util';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
+import { LS } from '../../../core/persistence/storage-keys.const';
+import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 
 // Matches the internal DELAY_SCHEDULE in the effects file.
 const EFFECT_DELAY_MS = 5000;
@@ -31,7 +33,10 @@ const REPEAT_DEBOUNCE_MS = 1000;
 const REPEAT_SETTLE_MS = EFFECT_DELAY_MS + REPEAT_DEBOUNCE_MS;
 
 // Minimal shape the effect reads off GlobalConfigService.cfg$.
-type TestCfg = { reminder: Partial<ReminderConfig> };
+type TestCfg = {
+  reminder: Partial<ReminderConfig>;
+  sync?: { isEnabled: boolean; syncProvider: SyncProviderId | null };
+};
 
 describe('MobileNotificationEffects', () => {
   let effects: MobileNotificationEffects;
@@ -347,8 +352,9 @@ describe('MobileNotificationEffects', () => {
     let cfg$: BehaviorSubject<TestCfg>;
 
     const futureDueTask = (id: string): { id: string; title: string; dueDay: string } => {
-      const d = new Date(Date.now() + 86_400_000);
-      const dueDay = d.toISOString().slice(0, 10);
+      // Local date: the effect fires at the local hour, so a UTC date can land
+      // in the past in far-east timezones.
+      const dueDay = getDbDateStr(Date.now() + 86_400_000);
       return { id, title: `task ${id}`, dueDay };
     };
 
@@ -425,6 +431,61 @@ describe('MobileNotificationEffects', () => {
 
       expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalled();
     }));
+
+    describe('trigger time', () => {
+      const nineAm = (): number =>
+        new Date(futureDueTask('x').dueDay + 'T09:00:00').getTime();
+
+      beforeEach(() => {
+        localStorage.setItem(LS.DUE_DATE_NOTIFICATION_OFFSET_MS, '123000');
+        cfg$.next({
+          ...cfg$.value,
+          sync: { isEnabled: true, syncProvider: SyncProviderId.SuperSync },
+        });
+      });
+      afterEach(() => localStorage.removeItem(LS.DUE_DATE_NOTIFICATION_OFFSET_MS));
+
+      const scheduledTriggerAtMs = (): number => {
+        effects = TestBed.inject(MobileNotificationEffects);
+        (
+          effects.scheduleDueDateNotifications$ as unknown as Observable<unknown>
+        ).subscribe();
+        tick(EFFECT_DELAY_MS + 1);
+        return reminderServiceSpy.scheduleReminder.calls.mostRecent().args[0].triggerAtMs;
+      };
+
+      // Every Android device fired its stale-check GET at exactly 09:00:00,
+      // exhausting the SuperSync connection pool (2026-09).
+      it('spreads Android due-date notifications by the per-install offset', fakeAsync(() => {
+        expect(scheduledTriggerAtMs()).toBe(nineAm() + 123000);
+      }));
+
+      it('keeps due-date notifications on the hour off Android', fakeAsync(() => {
+        platformService.isAndroid.and.returnValue(false);
+
+        expect(scheduledTriggerAtMs()).toBe(nineAm());
+      }));
+
+      // Without SuperSync credentials the alarm makes no stale-check call, so
+      // the offset would delay the notification for nothing.
+      it('keeps due-date notifications on the hour without SuperSync', fakeAsync(() => {
+        cfg$.next({
+          ...cfg$.value,
+          sync: { isEnabled: true, syncProvider: SyncProviderId.WebDAV },
+        });
+
+        expect(scheduledTriggerAtMs()).toBe(nineAm());
+      }));
+
+      it('keeps due-date notifications on the hour when sync is disabled', fakeAsync(() => {
+        cfg$.next({
+          ...cfg$.value,
+          sync: { isEnabled: false, syncProvider: SyncProviderId.SuperSync },
+        });
+
+        expect(scheduledTriggerAtMs()).toBe(nineAm());
+      }));
+    });
   });
 
   describe('on native platform — deadline reminders', () => {

@@ -20,7 +20,7 @@ import { createViewEntriesForDay } from './create-view-entries-for-day';
 import { msLeftToday } from '../../../util/ms-left-today';
 import { getTasksWithinAndBeyondBudget } from './get-tasks-within-and-beyond-budget';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
-import { selectTaskRepeatCfgsForExactDay } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { getTaskRepeatCfgsForExactDayCached } from '../../task-repeat-cfg/store/get-task-repeat-cfgs-for-exact-day-cached.util';
 import { Log } from '../../../core/log';
 
 type ScheduleFlowTask = TaskWithoutReminder | TaskWithPlannedForDayIndication;
@@ -112,11 +112,9 @@ export const createScheduleDays = (
     // i === 0) only agrees with dayDate while day 0 contains now -- an
     // invariant month view breaks, since its day 0 is the first grid cell and
     // usually lands in the previous month.
-    const nonScheduledRepeatCfgsDueOnDay = selectTaskRepeatCfgsForExactDay.projector(
+    const nonScheduledRepeatCfgsDueOnDay = getTaskRepeatCfgsForExactDayCached(
       unScheduledTaskRepeatCfgs,
-      {
-        dayDate: dayStartTime,
-      },
+      dayStartTime,
     );
 
     const blockerBlocksForDay = blockerBlocksDayMap[dayDate] || [];

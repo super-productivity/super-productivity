@@ -230,6 +230,7 @@ export class WsTriggeredDownloadService implements OnDestroy {
 
         const result = await this._syncService.downloadRemoteOps(syncCapableProvider, {
           fenceEpoch,
+          keepDecryptedPrefix: true,
         });
 
         SyncLog.log(`WsTriggeredDownloadService: Download complete. kind=${result.kind}`);

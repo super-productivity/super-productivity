@@ -1,4 +1,3 @@
-import { type Dialog } from '@playwright/test';
 import { test, expect } from '../../fixtures/supersync.fixture';
 import {
   createTestUser,
@@ -8,7 +7,6 @@ import {
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
-import { translationText } from '../../utils/i18n-strings';
 
 /**
  * SuperSync Wrong Password Error E2E Tests
@@ -204,7 +202,10 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
    * This verifies the alternative path where the user decides to upload their
    * local data instead of correcting the password.
    */
-  test('User can choose to overwrite remote instead of correcting password', async ({
+  // #9256: the Decryption Failed dialog cannot tell a wrong password from a
+  // corrupt or foreign-key op, so it no longer offers to overwrite the server.
+  // Replacing the server with this device's data is a deliberate Settings action.
+  test('Decrypt dialog offers no overwrite; Change Password in Settings replaces the server', async ({
     browser,
     baseURL,
     testRunId,
@@ -278,56 +279,19 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
       const decryptErrorDialog = clientB.page.locator('dialog-handle-decrypt-error');
       await decryptErrorDialog.waitFor({ state: 'visible', timeout: 10000 });
 
-      // The "Change & Overwrite Remote" button requires a password to be entered first
-      // Enter any password (it will become the new encryption password after overwrite)
-      const passwordInput = decryptErrorDialog.locator('input[type="password"]');
-      const newPassword = `overwrite-pass-${uniqueId}`;
-      await passwordInput.fill(newPassword);
-      await clientB.page.waitForTimeout(300); // Wait for form validation
-
-      // Look for "Change & Overwrite Remote" button (should be enabled now)
-      const overwriteBtn = decryptErrorDialog
+      await expect(
+        decryptErrorDialog.locator('button').filter({ hasText: /overwrite/i }),
+      ).toHaveCount(0);
+      await decryptErrorDialog
         .locator('button')
-        .filter({ hasText: /Overwrite Server & Other Devices/i })
-        .first();
-      await expect(overwriteBtn).toBeVisible();
-      await expect(overwriteBtn).toBeEnabled();
-
-      const forceUploadResponse = clientB.page.waitForResponse(
-        (response) => {
-          const request = response.request();
-          return (
-            request.method() === 'POST' &&
-            new URL(response.url()).pathname === '/api/sync/snapshot' &&
-            response.ok()
-          );
-        },
-        { timeout: 30000 },
-      );
-      const confirmationMessages: string[] = [];
-      const confirmationHandler = async (dialog: Dialog): Promise<void> => {
-        confirmationMessages.push(dialog.message());
-        await dialog.accept();
-      };
-      clientB.page.on('dialog', confirmationHandler);
-
-      const response = await (async () => {
-        try {
-          await overwriteBtn.click();
-          return await forceUploadResponse;
-        } finally {
-          clientB.page.off('dialog', confirmationHandler);
-        }
-      })();
-
-      // Both destructive prompts must be shown, in this order. Sourced from
-      // en.json so a copy edit fails here instead of quietly matching nothing.
-      expect(confirmationMessages).toEqual([
-        translationText('F.SYNC.C.DECRYPT_OVERWRITE'),
-        translationText('F.SYNC.C.FORCE_UPLOAD'),
-      ]);
-      expect(await response.finished()).toBeNull();
+        .filter({ hasText: /cancel/i })
+        .click();
       await decryptErrorDialog.waitFor({ state: 'hidden', timeout: 10000 });
+
+      // The deliberate path: a new password re-encrypts this device's data and
+      // replaces the server copy (clean slate).
+      const newPassword = `overwrite-pass-${uniqueId}`;
+      await clientB.sync.changeEncryptionPassword(newPassword);
       await waitForTask(clientB.page, taskB);
 
       // A fresh client is the remote oracle: it must hydrate B's replacement

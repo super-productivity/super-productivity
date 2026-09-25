@@ -47,6 +47,11 @@ export enum LS {
   // purpose: other devices run other builds.
   UPDATE_CHECK_DISMISSED_VERSION = 'SUP_UPDATE_CHECK_DISMISSED_VERSION',
 
+  // Per-install delay (ms) added to Android due-date notifications so devices
+  // don't all hit SuperSync at the same second. Device-local on purpose: the
+  // point is that it differs between devices.
+  DUE_DATE_NOTIFICATION_OFFSET_MS = 'SUP_DUE_DATE_NOTIFICATION_OFFSET_MS',
+
   // Epoch ms until which the "encrypt your SuperSync account" migration banner
   // stays hidden. Set when the user picks "Later" (or opens the flow), so — unlike
   // a permanent dismiss — an unencrypted E2EE-intended account is re-nudged calmly
