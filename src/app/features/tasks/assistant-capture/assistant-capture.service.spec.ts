@@ -1,9 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import {
-  AssistantCaptureService,
-  parseAssistantCaptureInput,
-} from './assistant-capture.service';
+import { AssistantCaptureService } from './assistant-capture.service';
 import { TaskService } from '../task.service';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { OperationCaptureService } from '../../../op-log/capture/operation-capture.service';
@@ -111,23 +108,5 @@ describe('AssistantCaptureService', () => {
       status: 'OUTCOME_UNKNOWN',
       id: 'new-task',
     });
-  });
-});
-
-describe('parseAssistantCaptureInput', () => {
-  it('accepts a title with optional notes and trims the title', () => {
-    expect(parseAssistantCaptureInput({ title: '  a  ' })).toEqual({ title: 'a' });
-    expect(parseAssistantCaptureInput({ title: 'a', notes: 'b' })).toEqual({
-      title: 'a',
-      notes: 'b',
-    });
-  });
-
-  it('rejects anything else', () => {
-    expect(parseAssistantCaptureInput(undefined)).toBeUndefined();
-    expect(parseAssistantCaptureInput({ title: '   ' })).toBeUndefined();
-    expect(parseAssistantCaptureInput({ title: 'a'.repeat(501) })).toBeUndefined();
-    expect(parseAssistantCaptureInput({ title: 'a', notes: 1 })).toBeUndefined();
-    expect(parseAssistantCaptureInput({ title: 'a', projectId: 'p' })).toBeUndefined();
   });
 });

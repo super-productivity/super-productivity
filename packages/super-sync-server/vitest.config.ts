@@ -32,8 +32,6 @@ export default defineConfig({
       'tests/integration/migrate-deploy-db-timeout.integration.spec.ts',
       'tests/integration/migrate-deploy-lock-retry.integration.spec.ts',
       'tests/integration/migrate-deploy-orphan-cleanup.integration.spec.ts',
-      // Tests password reset routes that don't exist - server uses passkey/magic link auth
-      'tests/password-reset-api.spec.ts',
     ],
   },
 });

@@ -5,7 +5,7 @@ const path = require('node:path');
 
 // SECURITY INVARIANT (cross-layer regression guard)
 // --------------------------------------------------
-// `src/app/plugins/plugin.service.ts` declares two top-of-file lists:
+// `src/app/plugins/bundled-plugins.const.ts` declares two lists:
 //   - BUNDLED_PLUGIN_PATHS: the on-disk asset dirs of the plugins we ship.
 //   - BUNDLED_PLUGIN_IDS:   the reserved set of *manifest ids* that an uploaded
 //                           plugin is forbidden from claiming.
@@ -24,15 +24,14 @@ const path = require('node:path');
 // for plugins not currently shipped via PATHS (e.g. `ai-productivity-prompts`),
 // which only widens the reserved set and is harmless.
 //
-// A Karma/browser unit test cannot read the filesystem, and importing
-// plugin.service.ts would drag in the whole Angular DI graph. So we parse the
-// file as text here, in the filesystem-capable `node --test` (electron) suite,
-// and read manifests straight off disk.
+// A Karma/browser unit test cannot read the filesystem, and this `node --test`
+// (electron) suite does not load the app's TypeScript. So we parse the file as
+// text here and read manifests straight off disk.
 
 const REPO_ROOT = path.resolve(__dirname, '..');
-const PLUGIN_SERVICE_PATH = path.join(
+const BUNDLED_PLUGINS_CONST_PATH = path.join(
   REPO_ROOT,
-  'src/app/plugins/plugin.service.ts',
+  'src/app/plugins/bundled-plugins.const.ts',
 );
 const PLUGIN_DEV_DIR = path.join(REPO_ROOT, 'packages/plugin-dev');
 
@@ -43,7 +42,7 @@ const PLUGIN_DEV_DIR = path.join(REPO_ROOT, 'packages/plugin-dev');
  * single/double-quoted string out of that slice. This stays robust to
  * formatting (line breaks, trailing commas, `as const`) without executing code.
  *
- * @param {string} source   full plugin.service.ts text
+ * @param {string} source   full bundled-plugins.const.ts text
  * @param {string} declStart the literal's opening, e.g. `BUNDLED_PLUGIN_PATHS = [`
  * @param {string} closeChar the matching close bracket, `]` or `)`
  * @returns {string[]} the quoted entries, in source order
@@ -53,14 +52,14 @@ const extractStringLiteralList = (source, declStart, closeChar) => {
   assert.notEqual(
     startIdx,
     -1,
-    `Could not find "${declStart}" in plugin.service.ts — the const may have been renamed; update this regression test.`,
+    `Could not find "${declStart}" in bundled-plugins.const.ts — the const may have been renamed; update this regression test.`,
   );
   const contentStart = startIdx + declStart.length;
   const closeIdx = source.indexOf(closeChar, contentStart);
   assert.notEqual(
     closeIdx,
     -1,
-    `Could not find closing "${closeChar}" for "${declStart}" in plugin.service.ts.`,
+    `Could not find closing "${closeChar}" for "${declStart}" in bundled-plugins.const.ts.`,
   );
   const slice = source.slice(contentStart, closeIdx);
   const matches = slice.match(/['"]([^'"]+)['"]/g) || [];
@@ -82,13 +81,9 @@ const findManifestPath = (dirName) => {
 };
 
 test('every BUNDLED_PLUGIN_PATHS plugin has its manifest id reserved in BUNDLED_PLUGIN_IDS', () => {
-  const source = fs.readFileSync(PLUGIN_SERVICE_PATH, 'utf8');
+  const source = fs.readFileSync(BUNDLED_PLUGINS_CONST_PATH, 'utf8');
 
-  const bundledPaths = extractStringLiteralList(
-    source,
-    'BUNDLED_PLUGIN_PATHS = [',
-    ']',
-  );
+  const bundledPaths = extractStringLiteralList(source, 'BUNDLED_PLUGIN_PATHS = [', ']');
   const bundledIds = new Set(
     extractStringLiteralList(source, 'BUNDLED_PLUGIN_IDS = new Set<string>([', ']'),
   );
@@ -142,8 +137,39 @@ test('every BUNDLED_PLUGIN_PATHS plugin has its manifest id reserved in BUNDLED_
     missingIds.length,
     0,
     `SECURITY: the following bundled plugins' manifest ids are NOT reserved in ` +
-      `BUNDLED_PLUGIN_IDS (src/app/plugins/plugin.service.ts). An uploaded plugin ` +
+      `BUNDLED_PLUGIN_IDS (src/app/plugins/bundled-plugins.const.ts). An uploaded plugin ` +
       `could claim these ids and impersonate a built-in. Add each missing id to ` +
       `BUNDLED_PLUGIN_IDS:\n  ${missingIds.join('\n  ')}`,
+  );
+});
+
+// Release builds only bundle plugin dirs that have a package.json
+// (packages/build-packages.js `getPlugins`); `plugins:build` (build-all.js),
+// used by E2E, copies them regardless. A bundled plugin missing it passes E2E
+// and silently disappears from releases — observed once, for `parallel-code`.
+test('every BUNDLED_PLUGIN_PATHS plugin has a package.json so release builds include it', () => {
+  const source = fs.readFileSync(BUNDLED_PLUGINS_CONST_PATH, 'utf8');
+  const bundledPaths = extractStringLiteralList(source, 'BUNDLED_PLUGIN_PATHS = [', ']');
+  assert.ok(bundledPaths.length > 0, 'Parsed zero entries from BUNDLED_PLUGIN_PATHS.');
+
+  const missing = bundledPaths
+    .map((assetPath) => assetPath.split('/').pop())
+    .filter((dirName) => {
+      // build-packages.js also skips a package.json it can't parse.
+      try {
+        JSON.parse(
+          fs.readFileSync(path.join(PLUGIN_DEV_DIR, dirName, 'package.json'), 'utf8'),
+        );
+        return false;
+      } catch {
+        return true;
+      }
+    });
+
+  assert.deepEqual(
+    missing,
+    [],
+    `Bundled plugin dir(s) without a readable packages/plugin-dev/<dir>/package.json: ${missing.join(', ')}. ` +
+      'packages/build-packages.js skips them, so release builds would ship without the plugin.',
   );
 });

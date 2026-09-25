@@ -105,6 +105,7 @@ export class MobileNotificationEffects {
               // haven't asked yet, so stay silent and let the lazy prompt run
               // when a reminder actually needs scheduling. (#8120)
               const permissionState = await this._reminderService.getPermissionState();
+              // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
               Log.log('MobileEffects: initial permission check', { permissionState });
               if (permissionState === 'denied') {
                 this._notifyPermissionIssue();

@@ -210,6 +210,7 @@ export const withDefaultModelSlices = (data: object): AppDataComplete => {
     // Model names are schema, not user content — safe to log. Without this the
     // fill is invisible, and a genesis snapshot permanently shadows the legacy
     // database it was built from.
+    // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
     Log.log('withDefaultModelSlices: filled missing model slices', { defaulted });
   }
   return result as unknown as AppDataComplete;

@@ -299,6 +299,12 @@ export class TaskViewCustomizerService {
             : 0;
           return spent >= +value;
         });
+      case FILTER_OPTION_TYPE.priority:
+        if (value === FILTER_COMMON.NOT_SPECIFIED) {
+          return tasks.filter((t) => !t.priority);
+        }
+
+        return tasks.filter((t) => t.priority === value);
       default:
         return tasks;
     }
@@ -362,6 +368,18 @@ export class TaskViewCustomizerService {
 
       case SORT_OPTION_TYPE.tag: {
         return tasksCopy.sort(sortByTagRank);
+      }
+
+      case SORT_OPTION_TYPE.priority: {
+        const getPriorityRank = (priority: TaskWithSubTasks['priority']): number => {
+          if (priority === 'high') return 0;
+          if (priority === 'medium') return 1;
+          if (priority === 'low') return 2;
+          return 3;
+        };
+        return tasksCopy.sort(
+          (a, b) => (getPriorityRank(a.priority) - getPriorityRank(b.priority)) * factor,
+        );
       }
 
       case SORT_OPTION_TYPE.creationDate:
@@ -671,12 +689,15 @@ export class TaskViewCustomizerService {
   }
 
   setSort(val: SortOption): void {
-    const isSame = val.type === this.selectedSort().type;
-    if (isSame) {
-      // reverse sorting
-      val.order = val.order === SORT_ORDER.ASC ? SORT_ORDER.DESC : SORT_ORDER.ASC;
-    }
-    this.selectedSort.set({ ...val });
+    const current = this.selectedSort();
+    const isSame = val.type === current.type;
+    const next = {
+      ...val,
+      ...(isSame && {
+        order: current.order === SORT_ORDER.ASC ? SORT_ORDER.DESC : SORT_ORDER.ASC,
+      }),
+    };
+    this.selectedSort.set(next);
   }
 
   setGroup(val: GroupOption): void {

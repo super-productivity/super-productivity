@@ -1326,7 +1326,7 @@
         "LOCAL": "Cục bộ",
         "LOCAL_REMOTE": "Cục bộ -> Từ xa",
         "NEVER": "Không bao giờ",
-        "OVERWRITE_WARNING": "CẢNH BÁO: Dữ liệu {{targetName}} có {{targetChanges}} thay đổi. Ghi đè? Không thể hoàn tác.",
+        "OVERWRITE_WARNING": "CẢNH BÁO: Dữ liệu {{targetName}} có khoảng {{targetChanges}} thay đổi trong khi dữ liệu {{sourceName}} chỉ có {{sourceChanges}} thay đổi. Bạn có chắc muốn ghi đè dữ liệu {{targetName}} bằng phiên bản {{sourceName}} không?",
         "OVERWRITE_WARNING_UNKNOWN": "CẢNH BÁO: Thiết bị này không thể xác định dữ liệu {{targetName}} có bao nhiêu thay đổi chưa đồng bộ (không có bản ghi về lần đồng bộ trước). Ghi đè dữ liệu {{targetName}} bằng phiên bản {{sourceName}} có thể loại bỏ các thay đổi. Bạn có chắc không?",
         "REMOTE": "Từ xa",
         "RESULT": "Kết quả",
@@ -3326,7 +3326,7 @@
     "UNABLE_TO_PERSIST_DATA": "Không thể lưu trữ dữ liệu vào bộ nhớ plugin",
     "UNKNOWN_ERROR": "Đã xảy ra lỗi không xác định",
     "UPLOAD_PLUGIN_INSTRUCTION": "Tải lên tệp ZIP plugin để cài đặt:",
-    "VALIDATION_FAILED": "Xác thực thất bại",
+    "VALIDATION_FAILED": "Xác thực thất bại: {{errors}}",
     "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Không thể kết nối với cầu nối thực thi Node.js. Vui lòng thử tắt rồi bật lại plugin.",
     "PLUGIN_LOAD_FAILED": "Không thể tải plugin \"{{pluginName}}\": {{error}}"
   },

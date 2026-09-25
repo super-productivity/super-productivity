@@ -97,6 +97,10 @@ done-toggle {
   cursor: pointer;
 }
 
+task-priority-indicator {
+  margin-right: var(--s-half);
+}
+
 .wrap {
   flex-grow: 1;
   flex-shrink: 1;

@@ -6,6 +6,8 @@ Super Productivity uses JSON files for translations, located in `src/assets/i18n
 
 > **Important:** When adding or changing translation keys, **only edit `en.json` directly**. Other locale files are managed via the i18n script workflow described in [i18n-script-usage.md](i18n-script-usage.md). Editing other locale files by hand may cause your changes to be overwritten.
 
+> **Exception – placeholders:** when an English string gains a placeholder such as `{{count}}`, every other locale that already translates that string must be updated by hand to interpolate the same placeholder. `npm run int:test` (`tools/test-lng-files.js`) fails when a locale drops a placeholder that `en.json` declares, and the i18n script only fills in keys that are missing entirely.
+
 1. Add or update translation keys in `src/assets/i18n/en.json`
 2. Run the i18n script to propagate changes to other locales (see [i18n-script-usage.md](i18n-script-usage.md))
 3. Submit a pull request

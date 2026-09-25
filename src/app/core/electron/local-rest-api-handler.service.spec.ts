@@ -7,10 +7,14 @@ import { TaskArchiveService } from '../../features/archive/task-archive.service'
 import { ProjectService } from '../../features/project/project.service';
 import { Project } from '../../features/project/project.model';
 import { TagService } from '../../features/tag/tag.service';
+import { IssueLog } from '../log';
+import {
+  LOCAL_REST_API_FEATURE_BRIDGE,
+  LocalRestApiFeatureBridge,
+} from './local-rest-api-feature-bridge';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
 import { DataInitStateService } from '../data-init/data-init-state.service';
-import { AssistantCaptureService } from '../../features/tasks/assistant-capture/assistant-capture.service';
 import { Task, TaskWithSubTasks, TaskArchive } from '../../features/tasks/task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import {
@@ -32,13 +36,13 @@ import {
 
 describe('LocalRestApiHandlerService', () => {
   let isDataLoaded$: BehaviorSubject<boolean>;
-  let assistantCaptureMock: jasmine.SpyObj<AssistantCaptureService>;
   let service: LocalRestApiHandlerService;
   let taskServiceMock: jasmine.SpyObj<TaskService>;
   let taskArchiveServiceMock: jasmine.SpyObj<TaskArchiveService>;
   let projectServiceMock: jasmine.SpyObj<ProjectService>;
   let tagServiceMock: jasmine.SpyObj<TagService>;
   let dateServiceMock: jasmine.SpyObj<DateService>;
+  let featureBridgeMock: jasmine.SpyObj<LocalRestApiFeatureBridge>;
   let store: MockStore;
   let dispatchSpy: jasmine.Spy;
   let activeProjects: Project[];
@@ -218,11 +222,15 @@ describe('LocalRestApiHandlerService', () => {
     dateServiceMock.getStartOfNextDayDiffMs.and.returnValue(0);
 
     isDataLoaded$ = new BehaviorSubject<boolean>(true);
-    assistantCaptureMock = jasmine.createSpyObj<AssistantCaptureService>(
-      'AssistantCaptureService',
-      ['capture'],
+    featureBridgeMock = jasmine.createSpyObj<LocalRestApiFeatureBridge>(
+      'LocalRestApiFeatureBridge',
+      ['issueLink', 'addLiteralSubTask', 'captureAssistantTask'],
     );
-    assistantCaptureMock.capture.and.resolveTo({ status: 'created', id: 'captured' });
+    featureBridgeMock.issueLink.and.returnValue(Promise.resolve(''));
+    featureBridgeMock.captureAssistantTask.and.resolveTo({
+      status: 'created',
+      id: 'captured',
+    });
 
     TestBed.configureTestingModule({
       providers: [
@@ -232,7 +240,7 @@ describe('LocalRestApiHandlerService', () => {
         { provide: ProjectService, useValue: projectServiceMock },
         { provide: TagService, useValue: tagServiceMock },
         { provide: DateService, useValue: dateServiceMock },
-        { provide: AssistantCaptureService, useValue: assistantCaptureMock },
+        { provide: LOCAL_REST_API_FEATURE_BRIDGE, useValue: featureBridgeMock },
         {
           provide: DataInitStateService,
           useValue: { isAllDataLoadedInitially$: isDataLoaded$ },
@@ -298,7 +306,7 @@ describe('LocalRestApiHandlerService', () => {
         createRequest('POST', '/assistant/capture', { body: { title: 'x' } }),
       );
       expect(res.status).toBe(404);
-      expect(assistantCaptureMock.capture).not.toHaveBeenCalled();
+      expect(featureBridgeMock.captureAssistantTask).not.toHaveBeenCalled();
     });
 
     it('captures for requests the main process marked as assistant calls', async () => {
@@ -308,7 +316,9 @@ describe('LocalRestApiHandlerService', () => {
       });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true, data: { status: 'created', id: 'captured' } });
-      expect(assistantCaptureMock.capture).toHaveBeenCalledOnceWith({ title: 'x' });
+      expect(featureBridgeMock.captureAssistantTask).toHaveBeenCalledOnceWith({
+        title: 'x',
+      });
     });
 
     it('rejects an invalid capture', async () => {
@@ -319,7 +329,7 @@ describe('LocalRestApiHandlerService', () => {
         source: 'mcp',
       });
       expect(res.status).toBe(400);
-      expect(assistantCaptureMock.capture).not.toHaveBeenCalled();
+      expect(featureBridgeMock.captureAssistantTask).not.toHaveBeenCalled();
     });
   });
 
@@ -1145,6 +1155,118 @@ describe('LocalRestApiHandlerService', () => {
         expect(taskServiceMock.add).not.toHaveBeenCalled();
       });
 
+      describe('isIgnoreShortSyntax', () => {
+        beforeEach(() => {
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (id: string) =>
+              id === 'parent-1'
+                ? of(createMockTask('parent-1', { projectId: 'project-1' }))
+                : of(createMockTask(id)),
+          });
+        });
+
+        it('should store a top-level title literally when asked', async () => {
+          await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: { title: 'Fix #12 in 30m', isIgnoreShortSyntax: true },
+            }),
+          );
+
+          expect(taskServiceMock.add).toHaveBeenCalledWith(
+            'Fix #12 in 30m',
+            false,
+            { title: 'Fix #12 in 30m' },
+            false,
+            true,
+          );
+        });
+
+        it('should create a literal subtask without the parsing path', async () => {
+          featureBridgeMock.addLiteralSubTask.and.returnValue('literal-sub');
+
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: {
+                title: 'Child #x',
+                parentId: 'parent-1',
+                isIgnoreShortSyntax: true,
+              },
+            }),
+          );
+
+          expect(response.status).toBe(201);
+          expect(taskServiceMock.addSubTaskTo).not.toHaveBeenCalled();
+          expect(featureBridgeMock.addLiteralSubTask).toHaveBeenCalledOnceWith(
+            'parent-1',
+            { title: 'Child #x' },
+          );
+          expect((response.body as any).data.id).toBe('literal-sub');
+        });
+
+        it('should reject a non-boolean flag', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/tasks', {
+              body: { title: 'T', isIgnoreShortSyntax: 'yes' },
+            }),
+          );
+
+          expect(response.status).toBe(400);
+          expect(taskServiceMock.add).not.toHaveBeenCalled();
+        });
+
+        it('should update a title literally when asked', async () => {
+          await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { title: 'Renamed #tag', isIgnoreShortSyntax: true },
+            }),
+          );
+
+          expect(taskServiceMock.update).not.toHaveBeenCalled();
+          expect(dispatchSpy).toHaveBeenCalledOnceWith(
+            TaskSharedActions.updateTask({
+              task: { id: 'task-1', changes: { title: 'Renamed #tag' } },
+              isIgnoreShortSyntax: true,
+            }),
+          );
+        });
+
+        it('should reject a non-boolean flag on PATCH', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { title: 'T', isIgnoreShortSyntax: 1 },
+            }),
+          );
+
+          expect(response.status).toBe(400);
+          expect(taskServiceMock.update).not.toHaveBeenCalled();
+          expect(dispatchSpy).not.toHaveBeenCalled();
+        });
+
+        it('should keep non-title changes on the regular update path', async () => {
+          await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { title: 'Renamed #tag', notes: 'n', isIgnoreShortSyntax: true },
+            }),
+          );
+
+          expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+            title: 'Renamed #tag',
+            notes: 'n',
+          });
+          expect(dispatchSpy).not.toHaveBeenCalled();
+        });
+
+        it('should keep parsing by default', async () => {
+          await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', { body: { title: 'Renamed #tag' } }),
+          );
+
+          expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+            title: 'Renamed #tag',
+          });
+        });
+      });
+
       describe('with parentId (create subtask)', () => {
         it('should create a subtask when parentId refers to an existing top-level task', async () => {
           const parentTask = createMockTask('parent-1', { projectId: 'project-1' });
@@ -1317,6 +1439,170 @@ describe('LocalRestApiHandlerService', () => {
         expect(response.body.ok).toBe(false);
         expect(response.status).toBe(404);
         expect((response.body as any).error.code).toBe('TASK_NOT_FOUND');
+      });
+
+      describe('issueUrl', () => {
+        const issueTask = createMockTask('task-1', {
+          issueType: 'GITHUB',
+          issueId: '42',
+          issueProviderId: 'provider-1',
+        });
+
+        const mockGetTask = (task: Task): void => {
+          Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+            get: () => (_id: string) => of(task),
+          });
+        };
+
+        const getData = (
+          response: LocalRestApiResponsePayload,
+        ): Record<string, unknown> => {
+          if (!response.body.ok) {
+            throw new Error(`Expected success response, got ${response.body.error.code}`);
+          }
+          return response.body.data as Record<string, unknown>;
+        };
+
+        const withIssueUrl = { query: { include: 'issueUrl' } };
+
+        it('should include issueUrl when asked and the provider builds a link', async () => {
+          mockGetTask(issueTask);
+          featureBridgeMock.issueLink.and.returnValue(
+            Promise.resolve('https://github.com/o/r/issues/42'),
+          );
+
+          const response = await sendRequestAndWait(
+            createRequest('GET', '/tasks/task-1', withIssueUrl),
+          );
+
+          expect(response.status).toBe(200);
+          expect(featureBridgeMock.issueLink).toHaveBeenCalledWith(
+            'GITHUB',
+            '42',
+            'provider-1',
+          );
+          const data = getData(response);
+          expect(data.issueUrl).toBe('https://github.com/o/r/issues/42');
+          expect(data.id).toBe('task-1');
+        });
+
+        it('should not look up the link unless asked', async () => {
+          mockGetTask(issueTask);
+
+          const response = await sendRequestAndWait(
+            createRequest('GET', '/tasks/task-1'),
+          );
+
+          expect(response.status).toBe(200);
+          expect(featureBridgeMock.issueLink).not.toHaveBeenCalled();
+          expect('issueUrl' in getData(response)).toBe(false);
+        });
+
+        it('should accept a repeated include parameter', async () => {
+          mockGetTask(issueTask);
+          featureBridgeMock.issueLink.and.returnValue(
+            Promise.resolve('https://github.com/o/r/issues/42'),
+          );
+
+          const response = await sendRequestAndWait(
+            createRequest('GET', '/tasks/task-1', {
+              query: { include: ['subTasks', 'issueUrl'] },
+            }),
+          );
+
+          expect(getData(response).issueUrl).toBe('https://github.com/o/r/issues/42');
+        });
+
+        it('should accept issueUrl in a comma-separated include list', async () => {
+          mockGetTask(issueTask);
+          featureBridgeMock.issueLink.and.returnValue(
+            Promise.resolve('https://github.com/o/r/issues/42'),
+          );
+
+          const response = await sendRequestAndWait(
+            createRequest('GET', '/tasks/task-1', {
+              query: { include: 'subTasks, issueUrl' },
+            }),
+          );
+
+          expect(getData(response).issueUrl).toBe('https://github.com/o/r/issues/42');
+        });
+
+        it('should omit issueUrl and not look it up for a task without an issue', async () => {
+          mockGetTask(createMockTask('task-1'));
+
+          const response = await sendRequestAndWait(
+            createRequest('GET', '/tasks/task-1', withIssueUrl),
+          );
+
+          expect(response.status).toBe(200);
+          expect(featureBridgeMock.issueLink).not.toHaveBeenCalled();
+          expect('issueUrl' in getData(response)).toBe(false);
+        });
+
+        it('should omit issueUrl when the provider returns an empty link', async () => {
+          mockGetTask(issueTask);
+          featureBridgeMock.issueLink.and.returnValue(Promise.resolve(''));
+
+          const response = await sendRequestAndWait(
+            createRequest('GET', '/tasks/task-1', withIssueUrl),
+          );
+
+          expect(response.status).toBe(200);
+          expect('issueUrl' in getData(response)).toBe(false);
+        });
+
+        it('should return 200 without issueUrl when building the link fails', async () => {
+          mockGetTask(issueTask);
+          const warnSpy = spyOn(IssueLog, 'warn');
+          featureBridgeMock.issueLink.and.returnValue(
+            Promise.reject(new Error('provider config missing')),
+          );
+
+          const response = await sendRequestAndWait(
+            createRequest('GET', '/tasks/task-1', withIssueUrl),
+          );
+
+          expect(response.status).toBe(200);
+          expect('issueUrl' in getData(response)).toBe(false);
+          expect(warnSpy).toHaveBeenCalledWith(jasmine.any(String), { id: 'task-1' });
+        });
+
+        it('should return 200 without issueUrl when building the link hangs', async () => {
+          mockGetTask(issueTask);
+          let markCalled!: () => void;
+          const isCalled = new Promise<void>((resolve) => (markCalled = resolve));
+          featureBridgeMock.issueLink.and.callFake(() => {
+            markCalled();
+            return new Promise<string>(() => undefined);
+          });
+
+          jasmine.clock().install();
+          try {
+            const responsePromise = sendRequestAndWait(
+              createRequest('GET', '/tasks/task-1', withIssueUrl),
+            );
+            await isCalled;
+            jasmine.clock().tick(3000);
+            const response = await responsePromise;
+
+            expect(response.status).toBe(200);
+            expect('issueUrl' in getData(response)).toBe(false);
+          } finally {
+            jasmine.clock().uninstall();
+          }
+        });
+
+        it('should not look up issue links for the task list', async () => {
+          Object.defineProperty(taskServiceMock, 'allTasks$', {
+            get: () => of([issueTask]),
+          });
+
+          const response = await sendRequestAndWait(createRequest('GET', '/tasks'));
+
+          expect(response.status).toBe(200);
+          expect(featureBridgeMock.issueLink).not.toHaveBeenCalled();
+        });
       });
     });
 

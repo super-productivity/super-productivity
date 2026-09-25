@@ -1,12 +1,15 @@
 import { effect, inject, Injectable } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { Title } from '@angular/platform-browser';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { FocusModeService } from '../../features/focus-mode/focus-mode.service';
 import { msToMinuteClockString } from '../../ui/duration/ms-to-minute-clock-string.pipe';
 import { msToString } from '../../ui/duration/ms-to-string.pipe';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { FocusModeMode } from '../../features/focus-mode/focus-mode.model';
 import { T } from 'src/app/t.const';
 import { TranslateService } from '@ngx-translate/core';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TaskService } from '../../features/tasks/task.service';
 import { DateService } from '../date/date.service';
 

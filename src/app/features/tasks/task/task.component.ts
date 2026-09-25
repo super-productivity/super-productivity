@@ -95,6 +95,7 @@ import { TaskTitleComponent } from '../../../ui/task-title/task-title.component'
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton, MatMiniFabButton } from '@angular/material/button';
 import { TaskHoverControlsComponent } from './task-hover-controls/task-hover-controls.component';
+import { TaskPriorityIndicatorComponent } from '../task-priority-indicator/task-priority-indicator.component';
 import { ProgressBarComponent } from '../../../ui/progress-bar/progress-bar.component';
 import { TaskListComponent } from '../task-list/task-list.component';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
@@ -157,6 +158,7 @@ const isInteractiveTarget = (target: EventTarget | null): boolean =>
     MatIconButton,
     TaskTitleComponent,
     TaskHoverControlsComponent,
+    TaskPriorityIndicatorComponent,
     ProgressBarComponent,
     MatMiniFabButton,
     forwardRef(() => TaskListComponent),

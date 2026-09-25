@@ -3277,7 +3277,7 @@
     "UNABLE_TO_PERSIST_DATA": "Nu se poate păstra datele în stocarea plugin-ului",
     "UNKNOWN_ERROR": "A apărut o eroare necunoscută",
     "UPLOAD_PLUGIN_INSTRUCTION": "Încarcă un fișier ZIP de plugin pentru a-l instala:",
-    "VALIDATION_FAILED": "Validarea a eșuat",
+    "VALIDATION_FAILED": "Validarea a eșuat: {{errors}}",
     "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Nu s-a putut conecta la podul de execuție Node.js. Te rugăm să încerci să dezactivezi și să reactivezi plugin-ul.",
     "PLUGIN_LOAD_FAILED": "Plugin-ul \"{{pluginName}}\" nu a reușit să se încarce: {{error}}"
   },

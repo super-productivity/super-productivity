@@ -257,6 +257,32 @@ describe('TaskMultiSelectService', () => {
       expect(service.anchorId()).toBe('c');
     });
 
+    // #10143: a plain click only focuses a row, so it has to anchor the range.
+    it('starts the range at the focused row when nothing is selected', () => {
+      focusRow('a');
+      service.selectRange('c');
+      expect(selected()).toEqual(['a', 'b', 'c']);
+      expect(service.anchorId()).toBe('a');
+    });
+
+    it('starts the range at the focused row after the anchor was deselected', () => {
+      service.toggle('a');
+      service.toggle('c');
+      service.toggle('c');
+      expect(service.anchorId()).toBeNull();
+      focusRow('c');
+      service.selectRange('d');
+      expect(selected()).toEqual(['c', 'd']);
+      expect(service.anchorId()).toBe('c');
+    });
+
+    it('selects the target alone when the focused row is in another list', () => {
+      focusRow('e');
+      service.selectRange('c');
+      expect(selected()).toEqual(['c']);
+      expect(service.anchorId()).toBe('c');
+    });
+
     it('selects direct rows between anchor and target, skipping nested subtasks', () => {
       service.toggle('a');
       service.selectRange('d');
