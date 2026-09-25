@@ -823,6 +823,16 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    and refill the buffer, hiding all three. So the file's vector clock must
    also equal or dominate the last-seen one, which is persisted and also
    recorded on upload. Otherwise the lineage broke (#9170).
+   A replacement can also dominate the reader's clock. Explicit snapshot uploads
+   therefore record `snapshotBaseClock` in the file envelope; ordinary uploads,
+   trimming, split compaction, and format migration preserve it. If the reader's
+   last-seen clock does not cover this base, it must hydrate the snapshot before
+   consuming the tail, regardless of the watermark. After commit, the last-seen
+   clock covers the base and incremental sync resumes.
+   This optional metadata requires no schema bump: older readers ignore it,
+   but older writers can omit it. Masked dominating replacements written by,
+   or subsequently rewritten by, those clients remain a mixed-version gap;
+   the older version/lineage/trim checks still apply to files without the marker.
 4. **Commit:** the downloaded `rev`, vector clock, and expected synthetic
    watermark remain staged until the caller confirms that baseline and ops were
    durably applied. Cancelling a data-conflict decision does not advance the

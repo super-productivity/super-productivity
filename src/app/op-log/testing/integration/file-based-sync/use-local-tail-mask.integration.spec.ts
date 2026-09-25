@@ -5,6 +5,9 @@ import {
   HarnessClient,
 } from '../helpers/file-based-sync-test-harness';
 import { OperationLogStoreService } from '../../../persistence/operation-log-store.service';
+import { FILE_BASED_SYNC_CONSTANTS } from '../../../sync-providers/file-based/file-based-sync.types';
+import { ActionType } from '../../../core/action-types.enum';
+import { FileSnapshotOpDownloadResponse } from '../../../sync-providers/provider.interface';
 
 /**
  * #9170: client B chooses "Keep local" (USE_LOCAL), which replaces the remote
@@ -17,8 +20,11 @@ import { OperationLogStoreService } from '../../../persistence/operation-log-sto
  * Detection runs on the decrypted file, so encryption is covered only to prove
  * it stays outside the branch.
  */
-const stateWithTask = (taskId: string): unknown => ({
-  task: { ids: [taskId], entities: { [taskId]: { id: taskId, title: taskId } } },
+const stateWithTask = (...taskIds: string[]): unknown => ({
+  task: {
+    ids: taskIds,
+    entities: Object.fromEntries(taskIds.map((id) => [id, { id, title: id }])),
+  },
 });
 
 for (const isUseSplitSyncFiles of [false, true]) {
@@ -71,6 +77,7 @@ for (const isUseSplitSyncFiles of [false, true]) {
       const seedFromA = async (clientA: HarnessClient): Promise<void> => {
         harness.setMockState(stateWithTask('task-a'));
         await clientA.uploadOps([addTaskOp(clientA, 'task-a')]);
+        harness.setMockState(stateWithTask('task-a', 'task-a2'));
         const response = await clientA.uploadOps([addTaskOp(clientA, 'task-a2')]);
         // As OperationLogUploadService does after a file-based upload.
         await clientA.adapter.setLastServerSeq(response.latestSeq);
@@ -78,17 +85,29 @@ for (const isUseSplitSyncFiles of [false, true]) {
 
       /** B keeps its local data, then uploads one tail op (syncVersion back to 2). */
       const replaceFromBWithTail = async (clientB: HarnessClient): Promise<string> => {
+        addTaskOp(clientB, 'task-b');
         harness.setMockState(stateWithTask('task-b'));
+        const replacement = clientB.createOp(
+          'ALL',
+          'ALL',
+          'SYNC_IMPORT',
+          ActionType.LOAD_ALL_DATA,
+          stateWithTask('task-b'),
+        );
         await clientB.adapter.uploadSnapshot(
           stateWithTask('task-b'),
           clientB.clientId,
           'recovery',
-          clientB.getCurrentClock(),
+          replacement.vectorClock,
           1,
           undefined,
-          'use-local-op',
+          replacement.id,
         );
+        // The next sync downloads the replacement before appending its tail.
+        await clientB.adapter.downloadOps(1, clientB.clientId);
+        await clientB.adapter.setLastServerSeq(1);
         const tailOp = addTaskOp(clientB, 'task-b2');
+        harness.setMockState(stateWithTask('task-b', 'task-b2'));
         const response = await clientB.uploadOps([tailOp]);
         expect(response.latestSeq).toBe(2);
         return tailOp.id;
@@ -103,12 +122,95 @@ for (const isUseSplitSyncFiles of [false, true]) {
         const incremental = await reader.adapter.downloadOps(sinceSeq, readerClientId);
         expect(incremental.gapDetected).toBeTrue();
 
-        const full = await reader.adapter.downloadOps(0, readerClientId);
+        const full = (await reader.adapter.downloadOps(
+          0,
+          readerClientId,
+        )) as FileSnapshotOpDownloadResponse;
         const taskIds = (full.snapshotState as { task: { ids: string[] } }).task.ids;
         expect(taskIds).toContain('task-b');
         expect(taskIds).not.toContain('task-a');
         expect(full.ops.map(({ op }) => op.id)).toContain(tailOpId);
+        // The monolith already includes the tail; a split snapshot can precede
+        // it. Check the hydration/replay contract used by the sync service.
+        const included = new Set(full.snapshotAppliedOpIds);
+        const hydratedIds = new Set(taskIds);
+        for (const { op } of full.ops) {
+          if (!included.has(op.id) && op.opType === 'CRT') {
+            hydratedIds.add(op.entityId!);
+          }
+        }
+        expect([...hydratedIds].sort()).toEqual(['task-b', 'task-b2']);
+        // A cancelled hydration must not advance the baseline.
+        expect(
+          (await reader.adapter.downloadOps(sinceSeq, readerClientId)).gapDetected,
+        ).toBeTrue();
+        await reader.adapter.setLastServerSeq(full.latestSeq);
+        expect(
+          (await reader.adapter.downloadOps(full.latestSeq, readerClientId)).gapDetected,
+        ).toBeFalse();
       };
+
+      for (const restart of [false, true]) {
+        it(
+          `flags a dominating replacement after shared history (restart=${restart})`,
+          async () => {
+            const clientA = harness.createClient('client-a');
+            const clientB = harness.createClient('client-b');
+            await seedFromA(clientA);
+            const seen = await clientB.downloadOps(0);
+            clientB.mergeRemoteClock(seen.snapshotVectorClock ?? {});
+            for (const { op } of seen.ops) {
+              clientB.mergeRemoteClock(op.vectorClock);
+            }
+            await clientB.adapter.setLastServerSeq(seen.latestSeq);
+            const reader = restart ? harness.createClient('client-a-restarted') : clientA;
+
+            const tailOpId = await replaceFromBWithTail(clientB);
+
+            await expectReplacementHydrated(reader, 'client-a', 2, tailOpId);
+          },
+          TIMEOUT,
+        );
+      }
+
+      it(
+        'detects a replacement even when the reader only saw version 1',
+        async () => {
+          const clientA = harness.createClient('client-a');
+          const clientB = harness.createClient('client-b');
+          harness.setMockState(stateWithTask('task-a'));
+          const uploaded = await clientA.uploadOps([addTaskOp(clientA, 'task-a')]);
+          await clientA.adapter.setLastServerSeq(uploaded.latestSeq);
+          clientB.mergeRemoteClock(clientA.getCurrentClock());
+
+          const tailOpId = await replaceFromBWithTail(clientB);
+
+          await expectReplacementHydrated(clientA, 'client-a', 1, tailOpId);
+        },
+        TIMEOUT,
+      );
+
+      it(
+        'retains replacement detection after all reused-version tail ops are trimmed',
+        async () => {
+          const clientA = harness.createClient('client-a');
+          const clientB = harness.createClient('client-b');
+          await seedFromA(clientA);
+          clientB.mergeRemoteClock(clientA.getCurrentClock());
+          await replaceFromBWithTail(clientB);
+
+          // One batch trims every sv=2 op. The retained floor is now 3, exactly
+          // sinceSeq+1, so neither version reuse nor the trimming check can help.
+          const tail = Array.from(
+            { length: FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS + 1 },
+            () => addTaskOp(clientB, 'task-b2'),
+          );
+          await clientB.uploadOps(tail);
+
+          await expectReplacementHydrated(clientA, 'client-a', 2, tail.at(-1)!.id);
+        },
+        TIMEOUT,
+      );
 
       it(
         'flags a gap for a reader that only uploaded before the replacement',
@@ -143,17 +245,26 @@ for (const isUseSplitSyncFiles of [false, true]) {
       );
 
       it(
-        'control: no gap when B builds on the file A last saw',
+        'control: no gap when B appends to a snapshot base A already knows',
         async () => {
           const clientA = harness.createClient('client-a');
           const clientB = harness.createClient('client-b');
           await seedFromA(clientA);
+          await clientA.adapter.uploadSnapshot(
+            stateWithTask('task-a', 'task-a2'),
+            clientA.clientId,
+            'recovery',
+            clientA.getCurrentClock(),
+            1,
+            undefined,
+            'known-base',
+          );
 
           const seen = await clientB.downloadOps(0);
           clientB.mergeRemoteClock(seen.snapshotVectorClock ?? {});
           await clientB.uploadOps([addTaskOp(clientB, 'task-b2')]);
 
-          const incremental = await clientA.adapter.downloadOps(2, 'client-a');
+          const incremental = await clientA.adapter.downloadOps(1, 'client-a');
           expect(incremental.gapDetected).toBeFalse();
           expect(incremental.ops.map(({ op }) => op.entityId)).toContain('task-b2');
         },

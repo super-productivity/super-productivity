@@ -42,6 +42,13 @@ export interface FileBasedSyncData<
   vectorClock: VectorClock;
 
   /**
+   * Clock of the last explicit snapshot replacement, whose history is not in
+   * recentOps. Preserve it through ordinary uploads and compaction. Optional:
+   * older readers ignore it and older writers may omit it (#9170).
+   */
+  snapshotBaseClock?: VectorClock;
+
+  /**
    * Timestamp of last successful sync (epoch ms).
    */
   lastModified: number;
@@ -121,6 +128,8 @@ export interface FileBasedOpsFile<
   syncVersion: number;
   schemaVersion: number;
   vectorClock: VectorClock;
+  /** Last explicit replacement clock; same meaning as FileBasedSyncData. */
+  snapshotBaseClock?: VectorClock;
   lastModified: number;
   clientId: string;
   recentOps: SyncFileCompactOp<TCompactOperation>[];

@@ -138,10 +138,8 @@ export class FileBasedSyncAdapterService {
   private _pendingExpectedSyncVersions = new Map<string, number>();
 
   /**
-   * SPAP-9: last-seen remote vector clock per provider+user. Used to tell a
-   * benign (cosmetic) syncVersion reset apart from a genuine one: if the file's
-   * causal clock did not regress, a lower syncVersion counter lost no data and
-   * must not trigger the full-gap resync path.
+   * Last committed file clock per provider+user. Distinguishes cosmetic resets
+   * from unseen snapshot replacements, including ones masked by later uploads.
    */
   private _lastSeenVectorClocks = new Map<string, VectorClock>();
 
@@ -774,6 +772,7 @@ export class FileBasedSyncAdapterService {
       syncVersion: newSyncVersion,
       schemaVersion: ops[0]?.schemaVersion || currentData?.schemaVersion || 1,
       vectorClock: mergedClock,
+      snapshotBaseClock: currentData?.snapshotBaseClock,
       lastModified: Date.now(),
       clientId,
       state: currentState,
@@ -899,9 +898,7 @@ export class FileBasedSyncAdapterService {
     const provider = this._withTargetGuard(rawProvider, this._targetGeneration);
     const providerKey = this._getProviderKey(provider);
 
-    // SPAP-11: split-file ("Surgical sync") path is fully separate and only
-    // reached when the opt-in setting is ON. The single-file path below is
-    // byte-for-byte unchanged when the setting is OFF (the default).
+    // Split-file ("Surgical sync") uploads are opt-in; single-file is the default.
     if (this._isSplitSyncEnabled()) {
       return this._uploadOpsSplit(
         provider,
@@ -1028,8 +1025,7 @@ export class FileBasedSyncAdapterService {
     const provider = this._withTargetGuard(rawProvider, capturedGeneration);
     const providerKey = this._getProviderKey(provider);
 
-    // SPAP-11: split-file ("Surgical sync") download path (opt-in). When OFF
-    // (default) the single-file path below runs unchanged.
+    // Split-file downloads are opt-in; single-file is the default.
     if (this._isSplitSyncEnabled()) {
       return this._downloadOpsSplit(
         provider,
@@ -1363,6 +1359,7 @@ export class FileBasedSyncAdapterService {
       syncVersion: newSyncVersion,
       schemaVersion,
       vectorClock,
+      snapshotBaseClock: vectorClock,
       lastModified: Date.now(),
       clientId,
       state: currentState,
@@ -1927,6 +1924,7 @@ export class FileBasedSyncAdapterService {
       syncVersion: legacy.syncVersion,
       schemaVersion,
       vectorClock: legacy.vectorClock,
+      snapshotBaseClock: legacy.snapshotBaseClock,
       lastModified: Date.now(),
       clientId,
       recentOps: legacy.recentOps ?? [],
@@ -2415,6 +2413,7 @@ export class FileBasedSyncAdapterService {
       syncVersion: newSyncVersion,
       schemaVersion,
       vectorClock: mergedClock,
+      snapshotBaseClock: opsFile?.snapshotBaseClock,
       lastModified: Date.now(),
       clientId,
       recentOps: finalOps,
@@ -2811,6 +2810,7 @@ export class FileBasedSyncAdapterService {
       syncVersion: newSyncVersion,
       schemaVersion,
       vectorClock: clock,
+      snapshotBaseClock: clock,
       lastModified: Date.now(),
       clientId,
       recentOps: [],

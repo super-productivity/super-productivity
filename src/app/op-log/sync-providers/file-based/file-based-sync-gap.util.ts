@@ -5,6 +5,7 @@ import { compareVectorClocks } from '../../../core/util/vector-clock';
 export interface GapDetectionRemote {
   syncVersion: number;
   vectorClock: VectorClock;
+  snapshotBaseClock?: VectorClock;
   clientId: string;
   recentOps: readonly unknown[];
   oldestOpSyncVersion?: number;
@@ -128,6 +129,17 @@ export const detectDownloadGap = ({
     clockVsLastSeen !== 'GREATER_THAN' &&
     !(excludeClient !== undefined && remote.clientId === excludeClient);
 
+  // A replacement can dominate our history too. Its base clock records the
+  // full-state operation that cleared recentOps, so later tail uploads cannot
+  // hide that unseen baseline, even after their reused versions are trimmed.
+  // Normal appends preserve this clock; once applied, lastSeenClock covers it.
+  const baseComparison = remote.snapshotBaseClock
+    ? compareVectorClocks(remote.snapshotBaseClock, lastSeenClock ?? {})
+    : undefined;
+  const unseenSnapshotBase =
+    sinceSeq > 0 &&
+    (baseComparison === 'GREATER_THAN' || baseComparison === 'CONCURRENT');
+
   const reason = versionWasReset
     ? `sync version reset (${previousExpectedVersion} → ${remote.syncVersion})`
     : snapshotReplacement
@@ -137,7 +149,9 @@ export const detectDownloadGap = ({
           `sinceSeq=${sinceSeq}, recentOps=${remote.recentOps.length})`
         : lineageBroken
           ? `lineage break (remote vector clock ${clockVsLastSeen} last-seen)`
-          : undefined;
+          : unseenSnapshotBase
+            ? 'snapshot replacement with an unseen causal base'
+            : undefined;
 
   return { needsGapDetection: reason !== undefined, reason, isCosmeticReset };
 };

@@ -4002,9 +4002,11 @@ describe('FileBasedSyncAdapterService', () => {
     // (e) legacy v2 sync-data.json migrates in place: state+ops written, tombstone
     // over sync-data.json, .bak neutralized, sync-data.json NOT removed.
     it('(e) migrates legacy v2 sync-data.json to split format with a v3 tombstone', async () => {
+      const snapshotBaseClock = { client1: 4 };
       const legacy = createMockSyncData({
         syncVersion: 7,
         vectorClock: { client1: 7 },
+        snapshotBaseClock,
         recentOps: [],
         state: { tasks: ['legacy'] },
       });
@@ -4016,6 +4018,13 @@ describe('FileBasedSyncAdapterService', () => {
       await adapter.uploadOps([createMockSyncOp()], 'client1');
 
       const paths = uploadedPaths();
+      for (const [path, encoded] of mockProvider.uploadFile.calls.allArgs()) {
+        if (path === C.OPS_FILE) {
+          expect(parseWithPrefix(encoded as string).snapshotBaseClock).toEqual(
+            snapshotBaseClock,
+          );
+        }
+      }
       // A conditional pending marker is acquired first. State is then written,
       // followed by the legacy tombstone and the finalized ops commit point.
       const stateIdx = paths.indexOf(C.STATE_FILE);
