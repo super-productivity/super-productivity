@@ -477,13 +477,17 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
     expect(replacement).toBeDefined();
     expect(replacement!.entityIds).toEqual([TASK_C]);
     expect(payloadTaskIds(replacement!)).toEqual([TASK_C]);
-    // The restore op itself stays pending and uploads normally.
+    // The restore op itself stays pending and uploads normally...
     const restoreOp = pending.find(
       (op) => op.actionType === ActionType.TASK_SHARED_RESTORE,
     );
     expect(restoreOp).toBeDefined();
-    // Exactly the replacement + the restore op — nothing else re-asserted.
-    expect(pending.length).toBe(2);
+    // ...followed by B's current state for devices where it never left the
+    // active store (#10220). Nothing else is re-asserted.
+    const snapshot = pending.find((op) => op.entityId === TASK_B && op !== restoreOp);
+    expect(snapshot?.actionType).toBe('[TASK] LWW Update' as ActionType);
+    expectDominates(snapshot!, restoreOp!);
+    expect(pending.length).toBe(3);
   });
 
   it('re-asserts a restored task via a current-state op when its own row is conflicted', async () => {
@@ -599,20 +603,20 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
   });
 
   it('drops a restored task from an all-local-win archive recreation it has no row in (#10220)', async () => {
-    const restoredB = doneTask(TASK_B);
     const [bulkOp] = await dispatchAndFlush(
       TaskSharedActions.moveToArchive({
-        tasks: [doneTask(TASK_A), restoredB, doneTask(TASK_C)],
+        tasks: [doneTask(TASK_A), doneTask(TASK_B), doneTask(TASK_C)],
       }) as PersistentAction,
     );
     store.dispatch(
       TaskSharedActions.restoreTask({
-        task: restoredB,
+        task: doneTask(TASK_B),
         subTasks: [],
       }) as PersistentAction,
     );
     await writeFlush.flushPendingWrites();
-    taskStateById[TASK_B] = restoredB;
+    // The restore reducer un-dones the task.
+    taskStateById[TASK_B] = { ...doneTask(TASK_B), isDone: false, doneOn: undefined };
 
     const remoteEditOp = buildRemoteTaskEdit(
       remoteClient(),
@@ -628,11 +632,23 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
     expect(archiveOps.length).toBe(1);
     expect(archiveOps[0].entityIds).toEqual([TASK_A, TASK_C]);
     expectDominates(archiveOps[0], remoteEditOp);
-    // B's own restore op is not on a conflicted row and uploads as-is.
-    expect(pending.some((op) => op.actionType === ActionType.TASK_SHARED_RESTORE)).toBe(
-      true,
+    // B's own restore op is not on a conflicted row and uploads as-is...
+    const restoreOp = pending.find(
+      (op) => op.actionType === ActionType.TASK_SHARED_RESTORE,
     );
-    expect(pending.length).toBe(2);
+    expect(restoreOp).toBeDefined();
+    // ...but the rejected archive never reached other devices, where B is
+    // still active and done, so the restore is a no-op there. A current-state
+    // op carries the un-done B to them.
+    const snapshot = pending.find(
+      (op) =>
+        op.entityId === TASK_B && op.actionType === ('[TASK] LWW Update' as ActionType),
+    );
+    expect(snapshot).toBeDefined();
+    const snapshotPayload = snapshot!.payload as { actionPayload?: Partial<Task> };
+    expect(snapshotPayload.actionPayload?.isDone).toBe(false);
+    expectDominates(snapshot!, restoreOp!);
+    expect(pending.length).toBe(3);
   });
 
   it('compensates a restored task instead of wedging when a remote BULK delete shares its row', async () => {

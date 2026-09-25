@@ -3409,8 +3409,42 @@ export class ConflictResolutionService {
       if (replacementOp && !assignedToLocalWinner) {
         additionalOps.push(replacementOp);
       }
+      const rowIds = new Set(group.resolutions.map(({ conflict }) => conflict.entityId));
+      const restoredIdsWithoutRow = retainedEntityIds.filter(
+        (id) => !stillArchivedEntityIds.includes(id) && !rowIds.has(id),
+      );
+      additionalOps.push(
+        ...(await this._reassertRestoredTasks(group.archiveOp, restoredIdsWithoutRow)),
+      );
     }
     return additionalOps;
+  }
+
+  /**
+   * #10220: a restored task with no conflict row keeps its raw `restoreTask`,
+   * but that is a no-op wherever the rejected bulk archive never landed — the
+   * task is still active there, still done. Re-assert its current (restored)
+   * state with a clock over all its pending ops, so it replays after them.
+   */
+  private async _reassertRestoredTasks(
+    archiveOp: Operation,
+    taskIds: string[],
+  ): Promise<Operation[]> {
+    if (taskIds.length === 0) return [];
+    const pendingByEntity = await this.opLogStore.getUnsyncedByEntity();
+    const ops: Operation[] = [];
+    for (const entityId of taskIds) {
+      const localOps = pendingByEntity.get(toEntityKey('TASK', entityId)) ?? [];
+      const op = await this._createLocalWinUpdateOp({
+        entityType: 'TASK',
+        entityId,
+        localOps: localOps.length > 0 ? localOps : [archiveOp],
+        remoteOps: [],
+        suggestedResolution: 'local',
+      });
+      if (op) ops.push(op);
+    }
+    return ops;
   }
 
   private async _createScopedBulkArchiveReplacement(
