@@ -61,6 +61,13 @@ export interface DownloadResultBase {
    * - Any operation has isPayloadEncrypted: true (server still has encrypted data)
    */
   serverHasOnlyUnencryptedData?: boolean;
+  /**
+   * #9256: set when the run kept the ops decrypted before a page that failed to
+   * decrypt (`keepDecryptedPrefix`). `newOps` and `latestServerSeq` then cover
+   * only that prefix; the caller applies them, persists the cursor, and then
+   * throws this error so the same sync cycle reports the failure.
+   */
+  decryptErrorAfterKeptPrefix?: Error;
 }
 
 export interface DownloadUnavailableResult extends Omit<
@@ -104,6 +111,8 @@ export type DownloadResult =
   | DownloadUnavailableResult
   | SuperSyncDownloadResult
   | FileSnapshotDownloadResult;
+
+export type SuccessfulDownloadResult = Exclude<DownloadResult, DownloadUnavailableResult>;
 
 /**
  * Result of an upload operation. May contain piggybacked operations

@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { TabSeqFrontierService } from '../persistence/tab-seq-frontier.service';
 import { OperationLogSyncService } from './operation-log-sync.service';
+import { SyncLocalStateService } from './sync-local-state.service';
 import { FILE_BASED_SYNC_CONSTANTS } from '../sync-providers/file-based/file-based-sync.types';
 import { SchemaMigrationService } from '../persistence/schema-migration.service';
 import { OperationLogHydratorService } from '../persistence/operation-log-hydrator.service';
@@ -906,7 +907,10 @@ describe('OperationLogSyncService', () => {
           // Verify callback was captured
           expect(capturedCallback).toBeDefined();
 
-          // Call the callback and verify it delegates to downloadRemoteOps
+          // Call the callback and verify it delegates to downloadRemoteOps.
+          // The exact options also pin that nested downloads never opt into
+          // keepDecryptedPrefix: they resolve conflicts the server detected
+          // against its full head, so a partial view is unsafe here (#9256).
           await capturedCallback();
           expect(downloadSpy).toHaveBeenCalledWith(mockProvider, {
             isNeverSynced: true,
@@ -1788,6 +1792,75 @@ describe('OperationLogSyncService', () => {
             beforeFullStateApply: jasmine.any(Function),
           }),
         );
+      });
+
+      describe('kept decrypted prefix (#9256)', () => {
+        const remoteOp = (): Operation => ({
+          id: 'remote-before-bad-page',
+          clientId: 'client-B',
+          actionType: 'test' as ActionType,
+          opType: OpType.Update,
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: {},
+          vectorClock: { clientB: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        });
+        const decryptError = new Error('page after the prefix failed to decrypt');
+        let setLastServerSeq: jasmine.Spy;
+
+        beforeEach(() => {
+          downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+            newOps: [remoteOp()],
+            latestServerSeq: 17,
+            needsFullStateUpload: false,
+            success: true,
+            providerMode: 'superSyncOps',
+            failedFileCount: 0,
+            decryptErrorAfterKeptPrefix: decryptError,
+          });
+          remoteOpsProcessingServiceSpy.processRemoteOps.and.resolveTo({
+            localWinOpsCreated: 0,
+            allOpsFilteredBySyncImport: false,
+            filteredOpCount: 0,
+            isLocalUnsyncedImport: false,
+            blockedByIncompatibleOp: false,
+          });
+          setLastServerSeq = jasmine.createSpy('setLastServerSeq').and.resolveTo();
+        });
+
+        it('applies the prefix and persists its cursor, then throws the decrypt error', async () => {
+          await expectAsync(
+            service.downloadRemoteOps(
+              { isReady: async () => true, setLastServerSeq } as any,
+              { keepDecryptedPrefix: true },
+            ),
+          ).toBeRejectedWith(decryptError);
+
+          expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
+            [jasmine.objectContaining({ id: 'remote-before-bad-page' })],
+            jasmine.anything(),
+          );
+          // The next download must start at the failing page, not re-fetch the prefix.
+          expect(setLastServerSeq).toHaveBeenCalledWith(17);
+        });
+
+        it('does not throw when the user declines to apply the prefix', async () => {
+          const localState = TestBed.inject(SyncLocalStateService);
+          spyOn(localState, 'isFreshOrNeverSyncedGenesisClient').and.resolveTo(true);
+          spyOn(localState, 'hasMeaningfulStoreData').and.resolveTo(false);
+          spyOn(localState, 'confirmFreshClientSync').and.returnValue(false);
+
+          const outcome = await service.downloadRemoteOps(
+            { isReady: async () => true, setLastServerSeq } as any,
+            { keepDecryptedPrefix: true },
+          );
+
+          expect(outcome.kind).toBe('cancelled');
+          expect(remoteOpsProcessingServiceSpy.processRemoteOps).not.toHaveBeenCalled();
+          expect(setLastServerSeq).not.toHaveBeenCalled();
+        });
       });
 
       it('should NOT advance lastServerSeq when processing blocked at an incompatible op', async () => {
