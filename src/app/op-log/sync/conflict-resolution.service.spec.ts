@@ -7424,6 +7424,7 @@ describe('ConflictResolutionService', () => {
     const KEY = 'TASK:task-1';
 
     const buildCtx = (overrides: {
+      localPendingOpsByEntity?: Map<string, Operation[]>;
       retainedOpsByEntity?: Map<string, Operation[]>;
       appliedFrontierByEntity?: Map<string, VectorClock>;
     }): {
@@ -7434,7 +7435,7 @@ describe('ConflictResolutionService', () => {
       snapshotEntityKeys: Set<string>;
       hasNoSnapshotClock: boolean;
     } => ({
-      localPendingOpsByEntity: new Map(),
+      localPendingOpsByEntity: overrides.localPendingOpsByEntity ?? new Map(),
       appliedFrontierByEntity: overrides.appliedFrontierByEntity ?? new Map(),
       retainedOpsByEntity: overrides.retainedOpsByEntity ?? new Map(),
       snapshotVectorClock: undefined,
@@ -7763,6 +7764,70 @@ describe('ConflictResolutionService', () => {
         expect(result.isSupersededOrDuplicate).toBe(false);
         expect(result.conflicts.length).toBe(1);
         expect(result.conflicts[0].entityId).toBe('task-1');
+      });
+
+      // #10214: two additive deltas commute even when the local side also
+      // renamed the task; whole-entity LWW would drop one device's time.
+      const mixedLocalSide = (): Operation[] => [
+        capturedTimeOp('op-time-l', 'clientA', { clientA: 1 }, form),
+        updateOp({
+          id: 'op-rename-l',
+          clientId: 'clientA',
+          vectorClock: { clientA: 2 },
+          timestamp: 1500,
+          changes: { title: 'renamed on A' },
+        }),
+      ];
+
+      it(`keeps a remote task-time delta (${form} form) non-conflicting against a retained [delta, rename] side (#10214)`, async () => {
+        const result = await detect(
+          capturedTimeOp('op-time-r', 'clientB', { clientB: 1 }, form),
+          mixedLocalSide(),
+        );
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it(`keeps a remote task-time delta (${form} form) non-conflicting against a pending [delta, rename] side (#10214)`, async () => {
+        const result = await service.checkOpForConflicts(
+          capturedTimeOp('op-time-r', 'clientB', { clientB: 1 }, form),
+          buildCtx({ localPendingOpsByEntity: new Map([[KEY, mixedLocalSide()]]) }),
+        );
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it(`keeps a remote rename non-conflicting against a pending task-time delta (${form} form) (#10214)`, async () => {
+        const result = await service.checkOpForConflicts(
+          opY,
+          buildCtx({
+            localPendingOpsByEntity: new Map([
+              [KEY, [capturedTimeOp('op-time-l', 'clientA', { clientA: 1 }, form)]],
+            ]),
+          }),
+        );
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it(`still conflicts a remote task-time delta (${form} form) with a pending [delta, absolute time write] side (#10214)`, async () => {
+        const pending = [
+          capturedTimeOp('op-time-l', 'clientA', { clientA: 1 }, form),
+          updateOp({
+            id: 'op-time-edit',
+            clientId: 'clientA',
+            vectorClock: { clientA: 2 },
+            timestamp: 1500,
+            changes: { timeSpentOnDay: { ['2024-01-15']: 5000 } },
+          }),
+        ];
+
+        const result = await service.checkOpForConflicts(
+          capturedTimeOp('op-time-r', 'clientB', { clientB: 1 }, form),
+          buildCtx({ localPendingOpsByEntity: new Map([[KEY, pending]]) }),
+        );
+
+        expect(result.conflicts.length).toBe(1);
       });
     }
 

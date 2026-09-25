@@ -98,6 +98,7 @@ import { buildConflictJournalEntry } from './conflict-journal-emission.util';
 import {
   hasOpaqueChanges,
   isAdditiveTimeOp,
+  isCommutingTimeDeltaCrossing,
   isDisjointMergeEligible,
   mergeChangedFields,
   synthesizeMergedChanges,
@@ -4504,15 +4505,12 @@ export class ConflictResolutionService {
         return { isSupersededOrDuplicate: false, conflict: null };
       }
 
-      // Task-time sync operations are positive deltas, so two concurrent timer
-      // batches commute. Sending them through entity-level LWW would discard one
-      // user's tracked time even though both can be applied safely.
-      if (
-        remoteOp.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT &&
-        ctx.localOpsForEntity.every(
-          (op) => op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
-        )
-      ) {
+      // Task-time sync operations are positive deltas: they commute with each
+      // other and with edits of other fields, but cannot be merged into a patch,
+      // so entity-level LWW would discard one side's time or edit (#10214).
+      const payloadKey = this._resolvePayloadKey(remoteOp.entityType);
+      const sides = { localOps: ctx.localOpsForEntity, remoteOps: [remoteOp] };
+      if (isCommutingTimeDeltaCrossing({ ...sides, payloadKey, entityId })) {
         return { isSupersededOrDuplicate: false, conflict: null };
       }
 

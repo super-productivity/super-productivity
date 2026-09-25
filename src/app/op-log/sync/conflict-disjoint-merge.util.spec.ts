@@ -330,6 +330,31 @@ describe('conflict-disjoint-merge.util', () => {
       ).toBe(false);
     });
 
+    it('treats two syncTimeSpent deltas as commuting even when one side also renamed (#10214)', () => {
+      expect(
+        isDisjointMergeEligible({
+          localOps: [syncTimeSpentOp(), titleEdit],
+          remoteOps: [deferredSyncTimeSpentOp({ clientId: 'B' })],
+          payloadKey: 'task',
+          entityId: 'task-1',
+        }),
+      ).toBe(true);
+    });
+
+    it('still treats a delta as overlapping an absolute write on a side that also has a delta (#10214)', () => {
+      expect(
+        isDisjointMergeEligible({
+          localOps: [
+            syncTimeSpentOp(),
+            op({ payload: { task: { id: 'task-1', timeSpentOnDay: { [DAY]: 1 } } } }),
+          ],
+          remoteOps: [syncTimeSpentOp({ clientId: 'B' })],
+          payloadKey: 'task',
+          entityId: 'task-1',
+        }),
+      ).toBe(false);
+    });
+
     it('keeps a removeTimeSpent delta ineligible (opaque, whole-entity LWW)', () => {
       expect(
         isDisjointMergeEligible({
