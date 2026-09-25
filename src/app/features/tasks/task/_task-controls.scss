@@ -66,6 +66,9 @@
 .title-and-tags-wrapper {
   flex-grow: 1;
   flex-shrink: 1;
+  // Required on flex items to enable content shrinking below min-content width.
+  // Without this, auto (default) prevents wrapping in portrait mode (see #9829).
+  min-width: 0;
   // we cannot do this since this cuts of the box shadow of the task edit
   //overflow: hidden;
 
