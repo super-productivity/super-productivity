@@ -13,6 +13,7 @@ import {
 } from '../core/operation-log.const';
 import { toEntityKey } from '../util/entity-key.util';
 import { RepairOperationService } from '../validation/repair-operation.service';
+import { OperationLogDownloadService } from './operation-log-download.service';
 
 const REPAIR_SUMMARY_KEYS: readonly (keyof RepairSummary)[] = [
   'entityStateFixed',
@@ -100,6 +101,7 @@ export class RejectedOpsHandlerService {
   private snackService = inject(SnackService);
   private supersededOperationResolver = inject(SupersededOperationResolverService);
   private repairOperationService = inject(RepairOperationService);
+  private downloadService = inject(OperationLogDownloadService);
 
   /**
    * Tracks resolution attempts per entity key (entityType:entityId) to prevent infinite loops.
@@ -430,6 +432,17 @@ export class RejectedOpsHandlerService {
         return { kind: 'cancelled' };
       }
       mergedOpsCreated += downloadResult.localWinOpsCreated ?? 0;
+      // The pass stopped short of the server head (#8763), so the op this
+      // rejection is about may still be unseen. Resolving now would give the
+      // local op a clock that silently beats it; retry after the next pass.
+      if (this.downloadService.hasUnseenRemoteOps()) {
+        this._rollbackResolutionAttempts(opsToResolve);
+        return {
+          kind: 'completed',
+          mergedOpsCreated,
+          retryExceededCount: opsExceededRetries.length,
+        };
+      }
 
       // Helper to check which ops are still pending, preserving existingClock from rejection
       const getStillPendingOps = async (): Promise<

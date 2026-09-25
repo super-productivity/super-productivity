@@ -62,6 +62,8 @@ class ServerBackedProvider
   privateCfg = { load: async () => ({ isEncryptionEnabled: false }) } as never;
   pageSize = 500;
   readonly uploadRequests: { clientId: string; opIds: string[] }[] = [];
+  /** Ops the server rejects as CONFLICT_CONCURRENT with a newer entity op. */
+  readonly concurrentOpIds = new Set<string>();
   private _lastServerSeq = 0;
 
   constructor(readonly server: MockSyncServer) {}
@@ -84,8 +86,16 @@ class ServerBackedProvider
     lastKnownServerSeq?: number,
   ): Promise<OpUploadResponse> {
     this.uploadRequests.push({ clientId, opIds: ops.map((op) => op.id) });
-    const matching = ops.filter((op) => op.clientId === clientId);
+    const isConcurrent = (op: SyncOperation): boolean => this.concurrentOpIds.has(op.id);
+    const matching = ops.filter((op) => op.clientId === clientId && !isConcurrent(op));
     const response = this.server.uploadOps(matching, clientId, lastKnownServerSeq);
+    const concurrent = ops.filter(isConcurrent).map((op) => ({
+      opId: op.id,
+      accepted: false,
+      error: 'Concurrent modification',
+      errorCode: 'CONFLICT_CONCURRENT',
+      existingClock: { peerClient: this.server.getLatestSeq() },
+    }));
     const piggyback = response.newOps ?? [];
     if (piggyback.length > this.pageSize) {
       response.newOps = piggyback.slice(0, this.pageSize);
@@ -99,7 +109,7 @@ class ServerBackedProvider
         error: `Operation clientId "${op.clientId}" does not match request clientId "${clientId}"`,
         errorCode: 'INVALID_CLIENT_ID',
       }));
-    return { ...response, results: [...response.results, ...rejected] };
+    return { ...response, results: [...response.results, ...rejected, ...concurrent] };
   }
 
   async downloadOps(
@@ -343,6 +353,32 @@ describe('Sync backlog and clientId rotation (integration)', () => {
       expect(await opLogStore.getUnsynced()).toEqual([]);
       expect(await provider.getLastServerSeq()).toBe(server.getLatestSeq());
       expect(await remoteOpIdsInLog()).toEqual(backlog.map((op) => op.id));
+    }, 30000);
+    it('leaves a CONCURRENT-rejected op pending while the conflicting op is unseen', async () => {
+      const peer = new TestClient('peer-client');
+      const me = new TestClient('my-client');
+      const backlog = Array.from({ length: MAX_DOWNLOAD_ITERATIONS + 100 }, (_, i) =>
+        createTaskUpdate(peer, i),
+      );
+      server.receiveUpload(backlog as SyncOperation[]);
+      const localOp = createTaskUpdate(me, 9999);
+      await opLogStore.append(localOp, 'local');
+      provider.pageSize = 1;
+      provider.concurrentOpIds.add(localOp.id);
+      const resolver = TestBed.inject(
+        SupersededOperationResolverService,
+      ) as jasmine.SpyObj<SupersededOperationResolverService>;
+      resolver.resolveSupersededLocalOps.and.resolveTo(0);
+
+      // An immediate upload can run before the session's first download. The
+      // rejection handler's own download then stops short of the conflicting
+      // op, so resolving now would let the local edit silently win over it.
+      await syncService.uploadPendingOps(provider);
+
+      expect(resolver.resolveSupersededLocalOps).not.toHaveBeenCalled();
+      const entry = await opLogStore.getOpById(localOp.id);
+      expect(entry?.syncedAt).toBeUndefined();
+      expect(entry?.rejectedAt).toBeUndefined();
     }, 30000);
   });
 
