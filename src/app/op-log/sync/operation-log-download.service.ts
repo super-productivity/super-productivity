@@ -142,6 +142,9 @@ export class OperationLogDownloadService implements OnDestroy {
     const allNewOps: Operation[] = [];
     const allOpClocks: import('../core/operation.types').VectorClock[] = [];
     let downloadFailed = false;
+    // Set when a bounds check stops the download early with more left on the
+    // server; returned instead of the server's head seq (#8763).
+    let checkpointSeq: number | undefined;
     let needsFullStateUpload = false;
     let finalLatestSeq = 0;
     let snapshotVectorClock: import('../core/operation.types').VectorClock | undefined;
@@ -252,14 +255,6 @@ export class OperationLogDownloadService implements OnDestroy {
 
       while (hasMore) {
         iterationCount++;
-        if (iterationCount > MAX_DOWNLOAD_ITERATIONS) {
-          OpLog.error(
-            `OperationLogDownloadService: Exceeded max iterations (${MAX_DOWNLOAD_ITERATIONS}). ` +
-              `Server may have a bug returning hasMore=true indefinitely.`,
-          );
-          downloadFailed = true;
-          break;
-        }
 
         const response = await syncProvider.downloadOps(
           sinceSeq,
@@ -462,21 +457,6 @@ export class OperationLogDownloadService implements OnDestroy {
         const newOps = syncOps.map((op) => syncOpToOperation(op));
         allNewOps.push(...newOps);
 
-        // Bounds check: prevent memory exhaustion
-        if (allNewOps.length > MAX_DOWNLOAD_OPS_IN_MEMORY) {
-          OpLog.error(
-            `OperationLogDownloadService: Too many operations to download (${allNewOps.length}). ` +
-              `Stopping at ${MAX_DOWNLOAD_OPS_IN_MEMORY} to prevent memory exhaustion.`,
-          );
-          this.snackService.open({
-            type: 'ERROR',
-            msg: T.F.SYNC.S.TOO_MANY_OPS_TO_DOWNLOAD,
-          });
-          // Process what we have so far rather than failing completely
-          downloadFailed = true;
-          break;
-        }
-
         // Update cursors. A page that claims more data must advance the cursor;
         // otherwise accepting the accumulated prefix would silently skip the
         // unseen suffix (or spin until the iteration cap).
@@ -502,6 +482,34 @@ export class OperationLogDownloadService implements OnDestroy {
 
         // NOTE: Don't persist lastServerSeq here - caller will persist it after ops are
         // stored in IndexedDB. This ensures localStorage and IndexedDB stay in sync.
+
+        // Bounds check (memory / runaway paging). Ops are served in serverSeq
+        // order, so the pages so far are a complete prefix: hand them over with
+        // the cursor at the last page so the caller applies and checkpoints them
+        // and the next sync resumes there. Discarding them instead made a large
+        // backlog re-download the same prefix forever (#8763).
+        if (
+          hasMore &&
+          (allNewOps.length >= MAX_DOWNLOAD_OPS_IN_MEMORY ||
+            iterationCount >= MAX_DOWNLOAD_ITERATIONS)
+        ) {
+          // A seq-0 download (clock rebuild, provider switch, raw rebuild) needs
+          // the WHOLE history; a prefix would be treated as all of it.
+          if (forceFromSeq0 || options?.includeOwnAndAppliedOps) {
+            OpLog.error(
+              `OperationLogDownloadService: Download limit reached (${allNewOps.length} ops, ` +
+                `${iterationCount} pages) during a full-history download. Aborting.`,
+            );
+            downloadFailed = true;
+          } else {
+            OpLog.warn(
+              `OperationLogDownloadService: Download limit reached (${allNewOps.length} ops, ` +
+                `${iterationCount} pages). Processing up to seq ${sinceSeq}; the rest follows on the next sync.`,
+            );
+            checkpointSeq = sinceSeq;
+          }
+          break;
+        }
       }
 
       // NOTE: We don't call acknowledgeOps here anymore.
@@ -605,8 +613,10 @@ export class OperationLogDownloadService implements OnDestroy {
       return { newOps: [], success: false, failedFileCount: 0 };
     }
 
-    // Mark that we successfully checked the remote server
-    this.superSyncStatusService.markRemoteChecked();
+    // Mark that we successfully checked the remote server (not when more is left)
+    if (checkpointSeq === undefined) {
+      this.superSyncStatusService.markRemoteChecked();
+    }
 
     OpLog.verbose(
       `OperationLogDownloadService: [DEBUG] Return values - newOps=${allNewOps.length}, ` +
@@ -629,7 +639,7 @@ export class OperationLogDownloadService implements OnDestroy {
       success: true as const,
       failedFileCount: 0,
       needsFullStateUpload,
-      latestServerSeq: finalLatestSeq,
+      latestServerSeq: checkpointSeq ?? finalLatestSeq,
       // Include all op clocks when force downloading from seq 0
       ...(forceFromSeq0 && allOpClocks.length > 0 ? { allOpClocks } : {}),
       // Include snapshot vector clock when snapshot optimization was used
