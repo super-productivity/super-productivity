@@ -4582,16 +4582,6 @@ export class ConflictResolutionService {
       return null;
     }
 
-    // Concurrent task-time batches are positive deltas and commute — LWW
-    // would discard one user's tracked time (mirror of the pending-path
-    // exemption above).
-    if (
-      remoteOp.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT &&
-      localOps.every((op) => op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT)
-    ) {
-      return null;
-    }
-
     const conflict: EntityConflict = {
       entityType: remoteOp.entityType,
       entityId,
