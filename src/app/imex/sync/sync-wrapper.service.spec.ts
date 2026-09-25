@@ -2382,7 +2382,7 @@ describe('SyncWrapperService', () => {
         // confirms both overwrite choices.
         expect(data.localUnsyncedOpsCount).toBeUndefined();
         expect(data.local.lastSyncedVectorClock).toBeNull();
-        expect(data.local.lastUpdateAction).not.toContain('0 local changes');
+        expect(data.local.lastUpdateAction).toBe('?');
       });
 
       it('reports a fresh snapshot conflict local count as unknown, not 0 (#9391)', async () => {
