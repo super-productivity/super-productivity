@@ -2344,7 +2344,6 @@ describe('SupersededOperationResolverService', () => {
           actionPayload: {
             task: liveTask,
             subTasks: [liveSubTask],
-            restoreToToday: RESTORE_TO_TODAY,
           },
           entityChanges: [],
         });

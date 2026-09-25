@@ -56,4 +56,21 @@ describe('foldSyncTimeSpentDeltas', () => {
       ]),
     ).toBe(titleOnly);
   });
+
+  it('includes child deltas in a parent projection without emitting relationship fields', () => {
+    expect(
+      foldSyncTimeSpentDeltas(
+        'parent',
+        changes,
+        [
+          deltaOp({ taskId: 'child', date: DAY, duration: 50 }),
+          deltaOp({ taskId: 'other-task', date: DAY, duration: 100 }),
+        ],
+        ['child'],
+      ),
+    ).toEqual({
+      timeSpent: 950,
+      timeSpentOnDay: { [DAY]: 650, [PREV_DAY]: 300 },
+    });
+  });
 });

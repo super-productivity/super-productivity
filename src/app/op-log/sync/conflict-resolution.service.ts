@@ -46,7 +46,6 @@ import { WorkContextType } from '../../features/work-context/work-context.model'
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import {
-  type MixedSourceOperationBatch,
   type MixedSourceWrittenOperation,
   OperationLogStoreService,
 } from '../persistence/operation-log-store.service';
@@ -95,7 +94,12 @@ import {
 import { ConflictJournalService } from './conflict-journal.service';
 import { SyncConflictBannerService } from './sync-conflict-banner.service';
 import { buildConflictJournalEntry } from './conflict-journal-emission.util';
-import { foldSyncTimeSpentDeltas, isSyncTimeSpentOp } from './fold-sync-time-spent.util';
+import {
+  buildTimeAwareResolutionBatches,
+  foldSyncTimeSpentDeltas,
+  isSyncTimeSpentOp,
+} from './fold-sync-time-spent.util';
+import type { Task } from '../../features/tasks/task.model';
 import {
   hasOpaqueChanges,
   isAdditiveTimeOp,
@@ -991,6 +995,7 @@ export class ConflictResolutionService {
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 1: Resolve each conflict using LWW
     // ─────────────────────────────────────────────────────────────────────────
+    const nonConflictingTimeOps = nonConflictingOps.filter(isSyncTimeSpentOp);
     const {
       lwwResolutions: resolutions,
       mergedResolutions,
@@ -1477,31 +1482,17 @@ export class ConflictResolutionService {
       remoteOpsToReject = remoteOpsToReject.filter(
         (opId) => !compensatedRemoteOpIds.has(opId),
       );
-      const resolutionBatches: MixedSourceOperationBatch[] = [];
-      if (unappliedRemoteLosers.length > 0) {
-        resolutionBatches.push({ ops: unappliedRemoteLosers, source: 'remote' });
-      }
-      if (compensatedRemoteOps.size > 0) {
-        resolutionBatches.push({
-          ops: [...compensatedRemoteOps.values()],
-          source: 'remote',
-          options: { pendingApply: true },
-        });
-      }
-      resolutionBatches.push({ ops: newLocalWinOps, source: 'local' });
-      if (remoteWinsOps.length > 0) {
-        resolutionBatches.push({
-          ops: remoteWinsOps,
-          source: 'remote',
-          options: { pendingApply: true },
-        });
-      }
-      if (localMultiReconciliationOps.length > 0) {
-        // After the remote winners: these fold in winning time deltas (#10215).
-        resolutionBatches.push({ ops: localMultiReconciliationOps, source: 'local' });
-      }
-      const result =
-        await this.opLogStore.appendMixedSourceBatchSkipDuplicates(resolutionBatches);
+      const { batches, foldedTimeOps } = await buildTimeAwareResolutionBatches({
+        unappliedRemoteLosers,
+        compensatedRemoteOps: [...compensatedRemoteOps.values()],
+        newLocalWinOps,
+        remoteWinsOps,
+        localMultiReconciliationOps,
+        nonConflictingTimeOps,
+        getTask: (id) => this.getCurrentEntityState('TASK', id),
+      });
+      const result = await this.opLogStore.appendMixedSourceBatchSkipDuplicates(batches);
+      nonConflictingOps = nonConflictingOps.filter((op) => !foldedTimeOps.includes(op));
       writtenLocalWinOps = result.written
         .filter((entry) => entry.source === 'local')
         .map((entry) => entry.op);
@@ -1518,7 +1509,7 @@ export class ConflictResolutionService {
       }
 
       const replayableRemoteEntries = await this._resolveReplayableOperations(
-        [...compensatedRemoteOps.values(), ...remoteWinsOps],
+        [...compensatedRemoteOps.values(), ...foldedTimeOps, ...remoteWinsOps],
         'remote',
         result.written,
       );
@@ -2416,7 +2407,12 @@ export class ConflictResolutionService {
         this.createLWWUpdateOp(
           candidate.entityType,
           entityId,
-          foldSyncTimeSpentDeltas(entityId, fieldValues, winnerTimeDeltas),
+          foldSyncTimeSpentDeltas(
+            entityId,
+            fieldValues,
+            winnerTimeDeltas,
+            (stateRecord as Partial<Task>).subTaskIds,
+          ),
           clientId,
           this.mergeAndIncrementClocks(candidate.clocks, clientId),
           candidate.timestamp,

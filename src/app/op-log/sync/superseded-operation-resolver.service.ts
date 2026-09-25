@@ -2,7 +2,6 @@ import { inject, Injectable } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import {
   ActionType,
-  extractActionPayload,
   isLwwUpdatePayload,
   Operation,
   OperationLogEntry,
@@ -190,11 +189,10 @@ export class SupersededOperationResolverService {
         subTasks.push(subTask as Task);
       }
     }
-    const actionPayload = {
-      ...extractActionPayload(sourceOp.payload),
-      task: liveTask,
-      subTasks,
-    };
+    // Scheduling is already materialized in liveTask. Replaying the original
+    // restoreToToday would undo later Planner moves, whose PLANNER ops do not
+    // share this restore's TASK conflict group.
+    const actionPayload = { task: liveTask, subTasks };
     return this._recreateOpWithMergedClock(
       { ...sourceOp, payload: { actionPayload, entityChanges: [] } },
       vectorClock,
