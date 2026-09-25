@@ -41,10 +41,11 @@ import {
 } from '../core/operation.types';
 import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { PROJECT_DELETE_WINS_MARKER } from '../../root-store/meta/task-shared.actions';
-import { scopeBulkArchivePayload } from './scope-bulk-archive-payload.util';
 import {
   buildArchiveWinOp,
+  buildScopedArchiveReplacementOp,
   getBulkArchiveIntentKey,
+  groupArchiveResolutionsByIntent,
   groupArchiveWinConflicts,
 } from './bulk-archive-intent.util';
 import { WorkContextType } from '../../features/work-context/work-context.model';
@@ -3308,19 +3309,22 @@ export class ConflictResolutionService {
    * agree those are archived, only the discarded local snapshot differs
    * (standard remote-archive-wins precedence).
    *
-   * Groups whose every row won locally are skipped: `buildArchiveWinOp`
-   * already re-emits the full task set as ONE op shared by all those rows
-   * (#10102). Groups key on the archive intent, so pre-#10102 duplicate
-   * copies of one bulk archive form one group. When a group mixes winners
-   * (some tasks remote-archived, others winning against plain remote edits),
-   * the archive-win rows' full-set recreation is swapped for the scoped op so
-   * the replacement cannot re-assert the remote-archived tasks' stale local
+   * Groups whose every row won locally keep `buildArchiveWinOp`'s ONE full-set
+   * recreation (#10102) unless one of their tasks was restored (below).
+   * Groups key on the archive intent, so pre-#10102 duplicate copies of one
+   * bulk archive form one group. When a group mixes winners (some tasks
+   * remote-archived, others winning against plain remote edits), the
+   * archive-win rows' full-set recreation is swapped for the scoped op so the
+   * replacement cannot re-assert the remote-archived tasks' stale local
    * snapshots.
    *
    * Retained tasks that are back in the ACTIVE store (restored after the bulk
-   * archive was captured) are dropped from the replacement; when such a task's
-   * own row won locally, a current-state compensation op re-asserts the
-   * restore (the row rejection discards the raw restoreTask op with the row).
+   * archive was captured) are dropped from the replacement — in all-local-win
+   * groups and single-task archives too (#10220). Each such task gets a
+   * current-state LWW Update re-asserting the restore: its own local-win row
+   * rejects the raw restoreTask op (and, like any local LWW win, the update
+   * overrides the concurrent remote edit); without a row, the kept
+   * restoreTask alone is a no-op on devices that never saw the archive.
    * Degenerate multi-bulk histories (two pending bulk archives, or a bulk
    * archive plus a bulk delete, sharing a CONFLICTED task) never reach this
    * method: `_assertMultiEntityPlansAreSafe` keeps the fail-closed stop for
@@ -3331,43 +3335,13 @@ export class ConflictResolutionService {
   private async _preservePartiallyRejectedLocalBulkArchives(
     resolutions: LWWResolution[],
   ): Promise<Operation[]> {
-    interface BulkArchiveResolutionGroup {
-      archiveOp: Operation;
-      resolutions: LWWResolution[];
-      remoteWinnerIds: Set<string>;
-    }
-
-    const groups = new Map<string, BulkArchiveResolutionGroup>();
-    for (const resolution of resolutions) {
-      for (const localOp of resolution.conflict.localOps) {
-        if (
-          localOp.actionType !== ActionType.TASK_SHARED_MOVE_TO_ARCHIVE ||
-          getBulkArchiveTopLevelIds(localOp).length <= 1
-        ) {
-          continue;
-        }
-        const intentKey = getBulkArchiveIntentKey(localOp);
-        const group = groups.get(intentKey) ?? {
-          archiveOp: localOp,
-          resolutions: [],
-          remoteWinnerIds: new Set<string>(),
-        };
-        // A row holding several copies of one intent joins its group once.
-        if (group.resolutions.at(-1) !== resolution) {
-          group.resolutions.push(resolution);
-        }
-        if (resolution.winner === 'remote') {
-          group.remoteWinnerIds.add(resolution.conflict.entityId);
-        }
-        groups.set(intentKey, group);
-      }
-    }
-
     const additionalOps: Operation[] = [];
-    for (const [intentKey, group] of groups) {
-      if (group.remoteWinnerIds.size === 0) {
-        continue;
-      }
+    let pendingByEntity: Map<string, Operation[]> | undefined;
+    // Rows of this batch resolve their own entity; re-assert the rest once.
+    const handledKeys = new Set(
+      resolutions.map(({ conflict: c }) => toEntityKey(c.entityType, c.entityId)),
+    );
+    for (const [intentKey, group] of groupArchiveResolutionsByIntent(resolutions)) {
       const retainedEntityIds = getBulkArchiveTopLevelIds(group.archiveOp).filter(
         (entityId) => !group.remoteWinnerIds.has(entityId),
       );
@@ -3387,6 +3361,13 @@ export class ConflictResolutionService {
         if (activeEntity === undefined || activeEntity === null) {
           stillArchivedEntityIds.push(entityId);
         }
+      }
+      // Nothing to narrow: the full-set recreation stays correct (#10220).
+      if (
+        group.remoteWinnerIds.size === 0 &&
+        stillArchivedEntityIds.length === retainedEntityIds.length
+      ) {
+        continue;
       }
 
       // With nothing left to re-assert, the replacement is skipped entirely —
@@ -3434,15 +3415,37 @@ export class ConflictResolutionService {
       if (replacementOp && !assignedToLocalWinner) {
         additionalOps.push(replacementOp);
       }
+      // A restored task WITHOUT a row keeps its restoreTask, which devices that
+      // never saw the archive ignore (isDone stays true): re-assert its state.
+      // The durable append rebases the clock above an already-uploaded restore.
+      for (const entityId of retainedEntityIds) {
+        const entityType = group.archiveOp.entityType;
+        const entityKey = toEntityKey(entityType, entityId);
+        if (stillArchivedEntityIds.includes(entityId) || handledKeys.has(entityKey)) {
+          continue;
+        }
+        handledKeys.add(entityKey);
+        pendingByEntity ??= await this.opLogStore.getUnsyncedByEntity();
+        const localOps = pendingByEntity.get(entityKey) ?? [];
+        const restoreOp = localOps.length
+          ? await this._createLocalWinUpdateOp({
+              entityType,
+              entityId,
+              localOps,
+              remoteOps: [],
+              suggestedResolution: 'local',
+            })
+          : undefined;
+        if (restoreOp) {
+          additionalOps.push(restoreOp);
+        }
+      }
     }
     return additionalOps;
   }
 
   private async _createScopedBulkArchiveReplacement(
-    group: {
-      archiveOp: Operation;
-      resolutions: LWWResolution[];
-    },
+    { archiveOp, resolutions }: { archiveOp: Operation; resolutions: LWWResolution[] },
     retainedEntityIds: string[],
   ): Promise<Operation> {
     const clientId = await this.clientIdProvider.loadClientId();
@@ -3451,24 +3454,12 @@ export class ConflictResolutionService {
         'ConflictResolutionService: Cannot preserve partial bulk archive - no client ID',
       );
     }
-
-    const allClocks = group.resolutions.flatMap(({ conflict }) => [
-      ...conflict.localOps.map((op) => op.vectorClock),
-      ...conflict.remoteOps.map((op) => op.vectorClock),
-    ]);
-    const { payload: scopedPayload, entityIds: scopedEntityIds } =
-      scopeBulkArchivePayload(group.archiveOp, retainedEntityIds);
-
-    return {
-      ...group.archiveOp,
-      id: uuidv7(),
-      entityId: scopedEntityIds[0],
-      entityIds: scopedEntityIds,
-      payload: scopedPayload,
+    const conflicts = resolutions.map(({ conflict }) => conflict);
+    return buildScopedArchiveReplacementOp(
+      { archiveOp, conflicts },
+      retainedEntityIds,
       clientId,
-      vectorClock: this.mergeAndIncrementClocks(allClocks, clientId),
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-    };
+    );
   }
 
   /**

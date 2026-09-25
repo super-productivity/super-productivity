@@ -26,6 +26,8 @@ import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { getDueDateNotificationOffsetMs } from '../due-date-notification-offset';
+import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 
 const DELAY_PERMISSIONS = 2000;
 const DELAY_SCHEDULE = 5000;
@@ -85,6 +87,13 @@ export class MobileNotificationEffects {
       map((c) => c?.reminder),
       distinctUntilChanged(),
     );
+
+  // Only SuperSync alarms run a stale-check GET on firing, so only SuperSync
+  // users gain from the due-date offset — everyone else would just be delayed.
+  private _isSuperSyncActive$: Observable<boolean> = this._globalConfigService.cfg$.pipe(
+    map((c) => !!c?.sync?.isEnabled && c.sync.syncProvider === SyncProviderId.SuperSync),
+    distinctUntilChanged(),
+  );
 
   /**
    * Check notification permissions on startup for mobile platforms.
@@ -355,9 +364,10 @@ export class MobileNotificationEffects {
             combineLatest([
               this._store.select(selectUndoneTasksWithDueDayNoReminder),
               this._reminderCfg$,
+              this._isSuperSyncActive$,
             ]),
           ),
-          tap(async ([tasks, reminderCfg]) => {
+          tap(async ([tasks, reminderCfg, isSuperSyncActive]) => {
             try {
               const notifyOnDueDate = reminderCfg?.notifyOnDueDate ?? true;
               const disableReminders = reminderCfg?.disableReminders ?? false;
@@ -398,12 +408,18 @@ export class MobileNotificationEffects {
               await this._warnIfExactAlarmPermissionDeniedOnce();
 
               const now = Date.now();
+              // Android + SuperSync only: those alarms hit the server on firing,
+              // iOS ones and those without SuperSync credentials don't.
+              const offsetMs =
+                isSuperSyncActive && this._platformService.isAndroid()
+                  ? getDueDateNotificationOffsetMs()
+                  : 0;
               for (const task of tasks) {
                 // Build trigger time: dueDay at configured hour, local timezone
                 const triggerDate = new Date(
                   task.dueDay + 'T' + String(dueDateHour).padStart(2, '0') + ':00:00',
                 );
-                const triggerAtMs = triggerDate.getTime();
+                const triggerAtMs = triggerDate.getTime() + offsetMs;
 
                 // Skip if in the past
                 if (triggerAtMs <= now) {

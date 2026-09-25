@@ -6,7 +6,9 @@ import {
 import { ActionType, EntityConflict, Operation, OpType } from '../core/operation.types';
 import {
   buildArchiveWinOp,
+  buildScopedArchiveReplacementOp,
   getBulkArchiveIntentKey,
+  groupArchiveResolutionsByIntent,
   groupArchiveWinConflicts,
 } from './bulk-archive-intent.util';
 
@@ -145,5 +147,75 @@ describe('buildArchiveWinOp', () => {
         VectorClockComparison.GREATER_THAN,
       );
     }
+  });
+});
+
+describe('buildScopedArchiveReplacementOp', () => {
+  it('narrows the archive to the retained tasks and dominates every row', () => {
+    const bulk = archiveOp({
+      payload: {
+        actionPayload: { tasks: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] },
+        entityChanges: [],
+      },
+    });
+    const restoreA: Operation = {
+      ...remoteEdit('a', 0),
+      id: 'restore-a',
+      actionType: ActionType.TASK_SHARED_RESTORE,
+      clientId: 'local',
+      vectorClock: { local: 2 },
+    };
+    const editA = remoteEdit('a', 3);
+    const editB = remoteEdit('b', 4);
+    const conflicts = [row([bulk, restoreA], editA), row([bulk], editB)];
+
+    const op = buildScopedArchiveReplacementOp(
+      { archiveOp: bulk, conflicts },
+      ['b', 'c'],
+      'local',
+    );
+
+    expect(op.id).not.toBe(bulk.id);
+    expect(op.entityId).toBe('b');
+    expect(op.entityIds).toEqual(['b', 'c']);
+    expect(op.payload).toEqual({
+      actionPayload: { tasks: [{ id: 'b' }, { id: 'c' }] },
+      entityChanges: [],
+    });
+    expect(op.timestamp).toBe(bulk.timestamp);
+    expect(op.vectorClock).toEqual({ local: 3, remote: 4 });
+    for (const dominated of [bulk, restoreA, editA, editB]) {
+      expect(compareVectorClocks(op.vectorClock, dominated.vectorClock)).toBe(
+        VectorClockComparison.GREATER_THAN,
+      );
+    }
+  });
+});
+
+describe('groupArchiveResolutionsByIntent', () => {
+  const single = archiveOp({
+    id: 'single',
+    entityId: 's',
+    entityIds: ['s'],
+    timestamp: 3_000,
+    payload: { actionPayload: { tasks: [{ id: 's' }] } },
+  });
+
+  it('groups single-task archives unless a remote archive won their task', () => {
+    const bulk = archiveOp();
+    const groups = groupArchiveResolutionsByIntent([
+      { conflict: row([bulk], remoteEdit('a', 1)), winner: 'local' },
+      { conflict: row([bulk], remoteEdit('b', 2)), winner: 'remote' },
+      { conflict: row([single], remoteEdit('s', 3)), winner: 'local' },
+    ]);
+    const byOpId = new Map([...groups.values()].map((g) => [g.archiveOp.id, g]));
+    expect(byOpId.get('archive-op')!.resolutions.length).toBe(2);
+    expect([...byOpId.get('archive-op')!.remoteWinnerIds]).toEqual(['b']);
+    expect(byOpId.get('single')!.resolutions.length).toBe(1);
+
+    const remoteWon = groupArchiveResolutionsByIntent([
+      { conflict: row([single], remoteEdit('s', 3)), winner: 'remote' },
+    ]);
+    expect(remoteWon.size).toBe(0);
   });
 });

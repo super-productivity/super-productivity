@@ -302,6 +302,7 @@
           <button
             mat-icon-button
             class="reset-cycles-btn"
+            [disabled]="isResetCyclesDisabled()"
             [matTooltip]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
             [attr.aria-label]="T.F.FOCUS_MODE.RESET_CYCLES | translate"
             (click)="resetCycles()"
@@ -352,6 +353,7 @@
     @if (isShowCompleteSessionButton() && isPomodoro()) {
       <button
         mat-menu-item
+        [disabled]="isResetCyclesDisabled()"
         (click)="resetCycles()"
       >
         <mat-icon>restart_alt</mat-icon>
