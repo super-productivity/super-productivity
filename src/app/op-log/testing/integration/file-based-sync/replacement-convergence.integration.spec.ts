@@ -33,10 +33,10 @@ const STORAGE_KEY = FILE_BASED_SYNC_CONSTANTS.SYNC_VERSION_STORAGE_KEY_PREFIX + 
 const SEEDS_PER_VARIANT = 40;
 const STEPS = 40;
 /**
- * Known gap, predates #9170 (listed in #10226): a single-file upload that merges
+ * Known gap #10256, predates #9170: a single-file upload that merges
  * ops it never downloaded writes its own state as the monolith, yet a seq-0
  * download marks every retained op as included, so a hydrating device drops
- * them. These seeds hit it; re-enable once the monolith records what it holds.
+ * them. These seeds hit it; re-enable them with the #10256 fix.
  */
 const SINGLE_FILE_STALE_MONOLITH_SEEDS = [2, 14];
 
