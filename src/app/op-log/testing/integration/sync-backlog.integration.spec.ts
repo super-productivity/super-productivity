@@ -44,13 +44,11 @@ import { MockSyncServer } from './helpers/mock-sync-server.helper';
 import { resetTestUuidCounter, TestClient } from './helpers/test-client.helper';
 
 /**
- * SuperSync provider backed by MockSyncServer, with the two server behaviours
- * these regressions depend on:
- * - the per-op clientId check of `ValidationService.validateOp` (an op authored
- *   under another id than the request's is rejected as INVALID_CLIENT_ID);
- * - a configurable page size, so a backlog longer than one download pass can
- *   be served without building tens of thousands of ops. It also caps upload
- *   piggybacks, as the server's PIGGYBACK_LIMIT does (`hasMorePiggyback`).
+ * SuperSync provider backed by MockSyncServer, with a configurable page size so
+ * a backlog longer than one download pass can be served without building tens
+ * of thousands of ops. It also caps upload piggybacks, as the server's
+ * PIGGYBACK_LIMIT does (`hasMorePiggyback`), and can reject chosen ops as
+ * CONFLICT_CONCURRENT.
  */
 class ServerBackedProvider
   implements SyncProviderBase<SyncProviderId>, OperationSyncCapable
@@ -61,7 +59,7 @@ class ServerBackedProvider
   maxConcurrentRequests = 1;
   privateCfg = { load: async () => ({ isEncryptionEnabled: false }) } as never;
   pageSize = 500;
-  readonly uploadRequests: { clientId: string; opIds: string[] }[] = [];
+  readonly uploadRequests: { opIds: string[] }[] = [];
   /** Ops the server rejects as CONFLICT_CONCURRENT with a newer entity op. */
   readonly concurrentOpIds = new Set<string>();
   private _lastServerSeq = 0;
@@ -85,10 +83,18 @@ class ServerBackedProvider
     clientId: string,
     lastKnownServerSeq?: number,
   ): Promise<OpUploadResponse> {
-    this.uploadRequests.push({ clientId, opIds: ops.map((op) => op.id) });
+    this.uploadRequests.push({ opIds: ops.map((op) => op.id) });
     const isConcurrent = (op: SyncOperation): boolean => this.concurrentOpIds.has(op.id);
-    const matching = ops.filter((op) => op.clientId === clientId && !isConcurrent(op));
-    const response = this.server.uploadOps(matching, clientId, lastKnownServerSeq);
+    const response = this.server.uploadOps(
+      ops.filter((op) => !isConcurrent(op)),
+      clientId,
+      lastKnownServerSeq,
+    );
+    const piggyback = response.newOps ?? [];
+    if (piggyback.length > this.pageSize) {
+      response.newOps = piggyback.slice(0, this.pageSize);
+      response.hasMorePiggyback = true;
+    }
     const concurrent = ops.filter(isConcurrent).map((op) => ({
       opId: op.id,
       accepted: false,
@@ -96,20 +102,7 @@ class ServerBackedProvider
       errorCode: 'CONFLICT_CONCURRENT',
       existingClock: { peerClient: this.server.getLatestSeq() },
     }));
-    const piggyback = response.newOps ?? [];
-    if (piggyback.length > this.pageSize) {
-      response.newOps = piggyback.slice(0, this.pageSize);
-      response.hasMorePiggyback = true;
-    }
-    const rejected = ops
-      .filter((op) => op.clientId !== clientId)
-      .map((op) => ({
-        opId: op.id,
-        accepted: false,
-        error: `Operation clientId "${op.clientId}" does not match request clientId "${clientId}"`,
-        errorCode: 'INVALID_CLIENT_ID',
-      }));
-    return { ...response, results: [...response.results, ...rejected, ...concurrent] };
+    return { ...response, results: [...response.results, ...concurrent] };
   }
 
   async downloadOps(
@@ -152,7 +145,7 @@ const createTaskUpdate = (author: TestClient, n: number): Operation =>
     payload: { task: { id: `task-${n}`, changes: { title: `t${n}` } } },
   });
 
-describe('Sync backlog and clientId rotation (integration)', () => {
+describe('Sync backlog longer than one download pass (integration)', () => {
   let syncService: OperationLogSyncService;
   let opLogStore: OperationLogStoreService;
   let server: MockSyncServer;
@@ -354,6 +347,7 @@ describe('Sync backlog and clientId rotation (integration)', () => {
       expect(await provider.getLastServerSeq()).toBe(server.getLatestSeq());
       expect(await remoteOpIdsInLog()).toEqual(backlog.map((op) => op.id));
     }, 30000);
+
     it('leaves a CONCURRENT-rejected op pending while the conflicting op is unseen', async () => {
       const peer = new TestClient('peer-client');
       const me = new TestClient('my-client');
@@ -380,48 +374,5 @@ describe('Sync backlog and clientId rotation (integration)', () => {
       expect(entry?.syncedAt).toBeUndefined();
       expect(entry?.rejectedAt).toBeUndefined();
     }, 30000);
-  });
-
-  describe('outbox spanning a clientId rotation (#9371)', () => {
-    it('uploads every pending op, one author per request, and rejects none', async () => {
-      const before = new TestClient('client-before');
-      const after = new TestClient('client-after');
-      // Pending ops from two identities, interleaved as they would be when the
-      // id rotates while earlier edits are still waiting to upload.
-      const outbox = [
-        createTaskUpdate(before, 1),
-        createTaskUpdate(before, 2),
-        createTaskUpdate(after, 3),
-        createTaskUpdate(before, 4),
-      ];
-      for (const op of outbox) {
-        await opLogStore.append(op, 'local');
-      }
-
-      await syncService.uploadPendingOps(provider);
-
-      // One request per run of same-author ops: before×2, after, before.
-      expect(provider.uploadRequests.map((request) => request.clientId)).toEqual([
-        'client-before',
-        'client-after',
-        'client-before',
-      ]);
-
-      for (const request of provider.uploadRequests) {
-        const authors = new Set(
-          request.opIds.map((id) => outbox.find((op) => op.id === id)?.clientId),
-        );
-        expect([...authors]).toEqual([request.clientId]);
-      }
-      // Log order survives the split, so the server never sees a later edit
-      // before an earlier one.
-      expect(server.getAllOps().map((stored) => stored.op.id)).toEqual(
-        outbox.map((op) => op.id),
-      );
-      expect(await opLogStore.getUnsynced()).toEqual([]);
-      for (const op of outbox) {
-        expect((await opLogStore.getOpById(op.id))?.rejectedAt).toBeUndefined();
-      }
-    });
   });
 });

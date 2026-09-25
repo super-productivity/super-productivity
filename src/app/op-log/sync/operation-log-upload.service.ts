@@ -195,6 +195,8 @@ export class OperationLogUploadService {
         return;
       }
 
+      // Get the clientId from the first operation
+      const clientId = pendingOps[0].op.clientId;
       // Use let so we can update between chunks to avoid duplicate piggybacked ops
       let lastKnownServerSeq = await syncProvider.getLastServerSeq();
       // Track highest received sequence across ALL chunks to prevent regression
@@ -477,24 +479,14 @@ export class OperationLogUploadService {
       // A file upload embeds one full snapshot. Keep its atomically captured op
       // set in one request so a partial chunk failure cannot publish state that
       // already contains operations left for a later retry.
-      // A SuperSync request carries one clientId and the server permanently
-      // rejects (INVALID_CLIENT_ID) any op authored under another. After a
-      // clientId rotation the outbox can span two ids, so start a new chunk at
-      // every author change, keeping log order (#9371).
-      const runStarts = syncOps.flatMap((op, i) =>
-        i === 0 || op.clientId !== syncOps[i - 1].clientId ? [i] : [],
-      );
-      const toChunks = <T>(items: T[]): T[][] =>
+      const chunks =
         syncProvider.providerMode === 'fileSnapshotOps'
-          ? [items]
-          : runStarts.flatMap((runStart, r) =>
-              chunkArray(
-                items.slice(runStart, runStarts[r + 1] ?? items.length),
-                MAX_OPS_PER_UPLOAD_REQUEST,
-              ),
-            );
-      const chunks = toChunks(syncOps);
-      const correspondingEntries = toChunks(uploadEntries);
+          ? [syncOps]
+          : chunkArray(syncOps, MAX_OPS_PER_UPLOAD_REQUEST);
+      const correspondingEntries =
+        syncProvider.providerMode === 'fileSnapshotOps'
+          ? [uploadEntries]
+          : chunkArray(uploadEntries, MAX_OPS_PER_UPLOAD_REQUEST);
 
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
@@ -508,7 +500,7 @@ export class OperationLogUploadService {
         try {
           response = await syncProvider.uploadOps(
             chunk,
-            chunk[0].clientId,
+            clientId,
             lastKnownServerSeq,
             localStateSnapshot,
           );

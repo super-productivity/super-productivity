@@ -6,7 +6,6 @@ import { LockService } from './lock.service';
 import {
   SyncProviderBase,
   OperationSyncCapable,
-  SyncOperation,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
@@ -404,64 +403,6 @@ describe('OperationLogUploadService', () => {
           await service.uploadPendingOps(mockApiProvider);
 
           expect(mockApiProvider.uploadOps).toHaveBeenCalledTimes(1);
-        });
-      });
-
-      // The server rejects every op whose clientId differs from the request's
-      // (INVALID_CLIENT_ID → permanently rejected), so an outbox spanning a
-      // clientId rotation must never share one request (#9371).
-      describe('pending ops from more than one clientId (#9371)', () => {
-        const mixedOutbox = (): OperationLogEntry[] => [
-          createMockEntry(1, 'op-old-1', 'client-old'),
-          createMockEntry(2, 'op-new', 'client-new'),
-          createMockEntry(3, 'op-old-2', 'client-old'),
-        ];
-
-        it('sends one request per same-author run, in log order, in one call', async () => {
-          mockOpLogStore.getUnsynced.and.resolveTo(mixedOutbox());
-          mockApiProvider.uploadOps.and.callFake(async (ops: SyncOperation[]) => ({
-            results: ops.map((op) => ({ opId: op.id, accepted: true })),
-            latestSeq: 10,
-            newOps: [],
-          }));
-
-          const result = await service.uploadPendingOps(mockApiProvider);
-
-          const requests = mockApiProvider.uploadOps.calls
-            .allArgs()
-            .map(([ops, requestClientId]) => ({
-              requestClientId,
-              ids: (ops as SyncOperation[]).map((op) => op.id),
-            }));
-          expect(requests).toEqual([
-            { requestClientId: 'client-old', ids: ['op-old-1'] },
-            { requestClientId: 'client-new', ids: ['op-new'] },
-            { requestClientId: 'client-old', ids: ['op-old-2'] },
-          ]);
-          expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
-          expect(result.uploadedCount).toBe(3);
-          expect(result.rejectedOps).toEqual([]);
-        });
-
-        it('keeps the whole outbox in one file-based upload (no per-op clientId check there)', async () => {
-          mockApiProvider.providerMode = 'fileSnapshotOps';
-          mockOpLogStore.getUnsynced.and.resolveTo(mixedOutbox());
-          mockApiProvider.uploadOps.and.resolveTo({
-            results: [
-              { opId: 'op-old-1', accepted: true },
-              { opId: 'op-new', accepted: true },
-              { opId: 'op-old-2', accepted: true },
-            ],
-            latestSeq: 10,
-            newOps: [],
-          });
-
-          await service.uploadPendingOps(mockApiProvider);
-
-          const [ops] = mockApiProvider.uploadOps.calls.mostRecent().args as unknown as [
-            SyncOperation[],
-          ];
-          expect(ops.map((op) => op.id)).toEqual(['op-old-1', 'op-new', 'op-old-2']);
         });
       });
 
