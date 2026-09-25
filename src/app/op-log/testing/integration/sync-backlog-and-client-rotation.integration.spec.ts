@@ -49,7 +49,8 @@ import { resetTestUuidCounter, TestClient } from './helpers/test-client.helper';
  * - the per-op clientId check of `ValidationService.validateOp` (an op authored
  *   under another id than the request's is rejected as INVALID_CLIENT_ID);
  * - a configurable page size, so a backlog longer than one download pass can
- *   be served without building tens of thousands of ops.
+ *   be served without building tens of thousands of ops. It also caps upload
+ *   piggybacks, as the server's PIGGYBACK_LIMIT does (`hasMorePiggyback`).
  */
 class ServerBackedProvider
   implements SyncProviderBase<SyncProviderId>, OperationSyncCapable
@@ -85,6 +86,11 @@ class ServerBackedProvider
     this.uploadRequests.push({ clientId, opIds: ops.map((op) => op.id) });
     const matching = ops.filter((op) => op.clientId === clientId);
     const response = this.server.uploadOps(matching, clientId, lastKnownServerSeq);
+    const piggyback = response.newOps ?? [];
+    if (piggyback.length > this.pageSize) {
+      response.newOps = piggyback.slice(0, this.pageSize);
+      response.hasMorePiggyback = true;
+    }
     const rejected = ops
       .filter((op) => op.clientId !== clientId)
       .map((op) => ({
@@ -301,6 +307,34 @@ describe('Sync backlog and clientId rotation (integration)', () => {
       expect(await remoteOpIdsInLog()).toEqual(backlog.map((op) => op.id));
       // A thousand page requests plus real IndexedDB writes exceed the default.
     }, 30000);
+
+    it('uploads after a truncated pass without skipping the unseen tail', async () => {
+      const peer = new TestClient('peer-client');
+      const me = new TestClient('my-client');
+      const backlog = Array.from({ length: MAX_DOWNLOAD_ITERATIONS + 100 }, (_, i) =>
+        createTaskUpdate(peer, i),
+      );
+      server.receiveUpload(backlog as SyncOperation[]);
+      const localOp = createTaskUpdate(me, 9999);
+      await opLogStore.append(localOp, 'local');
+      provider.pageSize = 1;
+
+      // One sync cycle: the download stops at the pass cap, then the upload
+      // piggybacks only part of the tail (hasMorePiggyback).
+      await syncService.downloadRemoteOps(provider);
+      await syncService.uploadPendingOps(provider);
+
+      const cursorAfterUpload = await provider.getLastServerSeq();
+      expect(cursorAfterUpload).toBeGreaterThanOrEqual(MAX_DOWNLOAD_ITERATIONS);
+      expect(cursorAfterUpload).toBeLessThan(server.getLatestSeq());
+      expect(await opLogStore.getUnsynced()).toEqual([]);
+
+      await syncService.downloadRemoteOps(provider);
+
+      expect(await provider.getLastServerSeq()).toBe(server.getLatestSeq());
+      expect(await remoteOpIdsInLog()).toEqual(backlog.map((op) => op.id));
+      expect(server.getAllOps().map((stored) => stored.op.id)).toContain(localOp.id);
+    }, 30000);
   });
 
   describe('outbox spanning a clientId rotation (#9371)', () => {
@@ -319,8 +353,10 @@ describe('Sync backlog and clientId rotation (integration)', () => {
         await opLogStore.append(op, 'local');
       }
 
-      await syncService.uploadPendingOps(provider);
-      await syncService.uploadPendingOps(provider);
+      // One round per run of same-author ops: before×2, after, before.
+      for (let round = 0; round < 3; round++) {
+        await syncService.uploadPendingOps(provider);
+      }
 
       for (const request of provider.uploadRequests) {
         const authors = new Set(
@@ -328,8 +364,10 @@ describe('Sync backlog and clientId rotation (integration)', () => {
         );
         expect([...authors]).toEqual([request.clientId]);
       }
+      // Log order survives the split, so the server never sees a later edit
+      // before an earlier one.
       expect(server.getAllOps().map((stored) => stored.op.id)).toEqual(
-        jasmine.arrayWithExactContents(outbox.map((op) => op.id)),
+        outbox.map((op) => op.id),
       );
       expect(await opLogStore.getUnsynced()).toEqual([]);
       for (const op of outbox) {

@@ -196,18 +196,22 @@ export class OperationLogUploadService {
       // One request carries one clientId, and SuperSync permanently rejects
       // (INVALID_CLIENT_ID) every op authored under another one. After a
       // clientId rotation the outbox can span two ids: upload the oldest
-      // author's ops now and leave the rest pending for the next sync (#9371).
-      // File-based providers do no per-op check and must keep the whole set,
-      // since their snapshot already reflects every pending op.
+      // author's leading run now and leave the rest pending for the next sync
+      // (#9371). A run, not a filter, so ops still reach the server in log
+      // order. File-based providers do no per-op check and must keep the whole
+      // set, since their snapshot already reflects every pending op.
       const clientId = pendingOps[0].op.clientId;
+      const otherAuthorIdx = pendingOps.findIndex(
+        (entry) => entry.op.clientId !== clientId,
+      );
       const roundOps =
-        syncProvider.providerMode === 'fileSnapshotOps'
+        syncProvider.providerMode === 'fileSnapshotOps' || otherAuthorIdx === -1
           ? pendingOps
-          : pendingOps.filter((entry) => entry.op.clientId === clientId);
+          : pendingOps.slice(0, otherAuthorIdx);
       if (roundOps.length < pendingOps.length) {
         OpLog.warn(
           `OperationLogUploadService: ${pendingOps.length - roundOps.length} pending op(s) ` +
-            'belong to another clientId; deferring them to the next sync.',
+            'follow a clientId change; deferring them to the next sync.',
         );
       }
       // Use let so we can update between chunks to avoid duplicate piggybacked ops

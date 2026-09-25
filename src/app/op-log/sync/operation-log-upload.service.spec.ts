@@ -381,13 +381,10 @@ describe('OperationLogUploadService', () => {
           createMockEntry(3, 'op-old-2', 'client-old'),
         ];
 
-        it('uploads only the oldest op author and leaves the rest pending', async () => {
+        it("uploads only the oldest author's leading run and leaves the rest pending", async () => {
           mockOpLogStore.getUnsynced.and.resolveTo(mixedOutbox());
           mockApiProvider.uploadOps.and.resolveTo({
-            results: [
-              { opId: 'op-old-1', accepted: true },
-              { opId: 'op-old-2', accepted: true },
-            ],
+            results: [{ opId: 'op-old-1', accepted: true }],
             latestSeq: 10,
             newOps: [],
           });
@@ -398,13 +395,11 @@ describe('OperationLogUploadService', () => {
           const [ops, requestClientId] = mockApiProvider.uploadOps.calls.mostRecent()
             .args as unknown as [SyncOperation[], string];
           expect(requestClientId).toBe('client-old');
-          expect(ops.map((op) => op.id)).toEqual(['op-old-1', 'op-old-2']);
-          expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1, 3]);
-          expect(mockOpLogStore.markSynced).not.toHaveBeenCalledWith(
-            jasmine.arrayContaining([2]),
-          );
+          // op-old-2 waits behind op-new so the server still sees log order.
+          expect(ops.map((op) => op.id)).toEqual(['op-old-1']);
+          expect(mockOpLogStore.markSynced).toHaveBeenCalledOnceWith([1]);
           expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
-          expect(result.uploadedCount).toBe(2);
+          expect(result.uploadedCount).toBe(1);
           expect(result.rejectedOps).toEqual([]);
         });
 
