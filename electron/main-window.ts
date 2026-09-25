@@ -795,6 +795,8 @@ const appCloseHandler = (app: App): void => {
     if (ids.length === 0) {
       // Destroy task widget before closing main window
       destroyTaskWidget();
+      // The quit request can time out while the user answers the finish-day prompt
+      setIsQuitRequested(true);
       mainWin.close();
     }
   });
