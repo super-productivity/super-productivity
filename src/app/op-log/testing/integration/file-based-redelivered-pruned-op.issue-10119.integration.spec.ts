@@ -489,8 +489,9 @@ for (const isUseSplitSyncFiles of [false, true]) {
       // Linux uploads without downloading first: the cursor passes that op.
       // Needs a cold in-cycle cache (a warm one fails the rev check). In
       // production: the Dropbox/OneDrive rev pre-check (no cache fill), a
-      // same-cycle re-upload after the cache was cleared, or a >30s cycle.
-      // Expiring the cache stands in for all three.
+      // same-cycle re-upload after the cache was cleared (only when a local op
+      // was created mid-cycle), or a >30s cycle. Expiring the cache stands in
+      // for all three.
       const realNow = Date.now();
       spyOn(Date, 'now').and.returnValue(realNow + 60_000);
       await linuxUploads(
