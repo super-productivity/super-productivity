@@ -56,27 +56,6 @@ export class PluginMenuRegistryService {
     });
   }
 
-  /**
-   * Run a task context menu entry. A plugin's error stays the plugin's: it is
-   * logged instead of reaching the global error handler, whose crash dialog
-   * would invite bug reports against the app for a plugin's bug.
-   */
-  runTaskContextMenuEntry(entry: PluginTaskContextMenuEntryCfg, taskId: string): void {
-    const logError = (e: unknown): void =>
-      PluginLog.err('PluginBridge: Task context menu entry failed', {
-        pluginId: entry.pluginId,
-        error: e instanceof Error ? e.name : typeof e,
-      });
-    try {
-      const result: unknown = entry.onClick(taskId);
-      if (result instanceof Promise) {
-        result.catch(logError);
-      }
-    } catch (e) {
-      logError(e);
-    }
-  }
-
   /** Remove every menu entry a plugin registered (on disable/unload). */
   removePluginEntries(pluginId: string): void {
     this._menuEntries.update((entries) => entries.filter((e) => e.pluginId !== pluginId));
