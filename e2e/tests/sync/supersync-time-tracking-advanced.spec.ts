@@ -11,6 +11,8 @@ import {
   markTaskDone,
   recordTaskTimeDelta,
   expectExactTaskTime,
+  renameTask,
+  getTaskTitleFromState,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { waitForAppReady } from '../../utils/waits';
@@ -416,4 +418,105 @@ test.describe('@supersync Time Tracking Advanced Sync', () => {
       if (clientC) await closeClient(clientC);
     }
   });
+
+  // #10214: a remote delta crossing a pending local [delta, rename] must keep
+  // both deltas and the rename, whichever side reaches the real server first.
+  for (const firstUploader of ['delta', 'delta+rename'] as const) {
+    test(`Crossing timer delta keeps both deltas and a rename (${firstUploader} uploads first, #10214)`, async ({
+      browser,
+      baseURL,
+      testRunId,
+    }) => {
+      test.setTimeout(240000);
+
+      const initialTime = 10000;
+      const renamingDelta = 3000;
+      const plainDelta = 5000;
+      const expectedTime = initialTime + renamingDelta + plainDelta;
+      const taskDate = '2026-07-13';
+      const taskName = `CrossingDelta-${Date.now()}`;
+      const renamedTitle = `${taskName}-Renamed`;
+      let renamingClient: SimulatedE2EClient | null = null;
+      let deltaClient: SimulatedE2EClient | null = null;
+
+      try {
+        const syncConfig = getSuperSyncConfig(await createTestUser(testRunId));
+        renamingClient = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+        await renamingClient.sync.setupSuperSync(syncConfig);
+        await renamingClient.workView.addTask(taskName);
+        await waitForTask(renamingClient.page, taskName);
+        await recordTaskTimeDelta(renamingClient, taskName, taskDate, initialTime);
+        await renamingClient.sync.syncAndWait();
+
+        deltaClient = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+        await deltaClient.sync.setupSuperSync(syncConfig);
+        await deltaClient.sync.syncAndWait();
+        await waitForTask(deltaClient.page, taskName);
+        await expectExactTaskTime(deltaClient, taskName, initialTime);
+
+        // Rejections show whether the server or the downloading client resolved
+        // the crossing; either path must converge, so they are reported, not asserted.
+        const rejections: string[] = [];
+        for (const client of [renamingClient, deltaClient]) {
+          client.page.on('response', async (response) => {
+            if (
+              response.request().method() !== 'POST' ||
+              !response.url().includes('/api/sync/ops')
+            ) {
+              return;
+            }
+            const body: unknown = await response.json().catch(() => null);
+            const results =
+              isRecord(body) && Array.isArray(body.results) ? body.results : [];
+            for (const result of results) {
+              if (isRecord(result) && result.accepted === false) {
+                rejections.push(`${client.clientName}:${String(result.errorCode)}`);
+              }
+            }
+          });
+        }
+
+        // Both sides edit against the same base before seeing each other.
+        await recordTaskTimeDelta(renamingClient, taskName, taskDate, renamingDelta);
+        await renameTask(renamingClient, taskName, renamedTitle);
+        await recordTaskTimeDelta(deltaClient, taskName, taskDate, plainDelta);
+
+        const [first, second] =
+          firstUploader === 'delta'
+            ? [deltaClient, renamingClient]
+            : [renamingClient, deltaClient];
+        await first.sync.syncAndWait();
+        await second.sync.syncAndWait();
+        await first.sync.syncAndWait();
+        await second.sync.syncAndWait();
+
+        const clients = [renamingClient, deltaClient];
+        const expectConverged = async (): Promise<void> => {
+          for (const client of clients) {
+            await expectExactTaskTime(client, taskName, expectedTime);
+            await expect
+              .poll(() => getTaskTitleFromState(client, taskName), { timeout: 30000 })
+              .toBe(renamedTitle);
+          }
+        };
+        await expectConverged();
+
+        // Replay from the persisted op log must reach the same state.
+        for (const client of clients) {
+          await client.page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+          await waitForAppReady(client.page);
+          await waitForTask(client.page, taskName);
+        }
+        await expectConverged();
+
+        test.info().annotations.push({
+          type: 'server rejections',
+          description: rejections.join(', ') || 'none',
+        });
+      } finally {
+        if (renamingClient) await closeClient(renamingClient);
+        if (deltaClient) await closeClient(deltaClient);
+      }
+    });
+  }
 });
