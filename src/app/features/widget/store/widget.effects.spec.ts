@@ -3,6 +3,7 @@ import {
   drainDestructiveWidgetDoneQueueOutsideSyncWindow,
   drainWidgetDoneQueue,
   getTaskDoneChangesToApply,
+  waitUntilOutsideSyncWindow,
 } from './widget.effects';
 import { Task } from '../../tasks/task.model';
 import { Dictionary } from '@ngrx/entity';
@@ -375,5 +376,26 @@ describe('drainWidgetDoneQueue', () => {
 
     expect(readCount).toBe(2);
     expect(setDone).not.toHaveBeenCalled();
+  });
+});
+
+describe('waitUntilOutsideSyncWindow', () => {
+  it('waits while the live window is open even if the observable replays false', async () => {
+    let isInSyncWindow = true;
+    let isResolved = false;
+    const waiting = waitUntilOutsideSyncWindow(() => isInSyncWindow).then(() => {
+      isResolved = true;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(isResolved).toBe(false);
+
+    isInSyncWindow = false;
+    await waiting;
+    expect(isResolved).toBe(true);
+  });
+
+  it('resolves immediately when the live window is closed', async () => {
+    await expectAsync(waitUntilOutsideSyncWindow(() => false)).toBeResolved();
   });
 });

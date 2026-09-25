@@ -203,6 +203,23 @@ export const drainWidgetDoneQueue = async (
   return changes.length;
 };
 
+const SYNC_WINDOW_POLL_MS = 100;
+
+/**
+ * Resolves once the sync window is closed. Polls the live signal instead of
+ * `isInSyncWindow$`: toObservable() replays a stale `false` right after
+ * openSyncWindow() (e.g. on Android resume), which turned the drain loops'
+ * re-check into a microtask spin that froze the WebView, and it emits nothing
+ * for an open/close round trip inside one task, which would stall the wait.
+ */
+export const waitUntilOutsideSyncWindow = async (
+  isInSyncWindow: () => boolean,
+): Promise<void> => {
+  while (isInSyncWindow()) {
+    await new Promise((resolve) => setTimeout(resolve, SYNC_WINDOW_POLL_MS));
+  }
+};
+
 @Injectable()
 export class WidgetEffects {
   private _store = inject(Store);
@@ -295,7 +312,8 @@ export class WidgetEffects {
           hasUnrecoveredPersistFailure: () =>
             this._operationCaptureService.hasUnrecoveredPersistFailure(),
           isInSyncWindow: () => this._hydrationState.isInSyncWindow(),
-          waitUntilOutsideSyncWindow: () => this._waitUntilOutsideSyncWindow(),
+          waitUntilOutsideSyncWindow: () =>
+            waitUntilOutsideSyncWindow(() => this._hydrationState.isInSyncWindow()),
           setDone: (taskId) => this._taskService.setDone(taskId),
           setUnDone: (taskId) => this._taskService.setUnDone(taskId),
         });
@@ -310,7 +328,8 @@ export class WidgetEffects {
           hasUnrecoveredPersistFailure: () =>
             this._operationCaptureService.hasUnrecoveredPersistFailure(),
           isInSyncWindow: () => this._hydrationState.isInSyncWindow(),
-          waitUntilOutsideSyncWindow: () => this._waitUntilOutsideSyncWindow(),
+          waitUntilOutsideSyncWindow: () =>
+            waitUntilOutsideSyncWindow(() => this._hydrationState.isInSyncWindow()),
           pushSnapshot: () => this._widgetDataService.pushCurrent(),
           acknowledgeQueue: (lease) =>
             this._widgetDataService.acknowledgeDoneQueue(lease),
@@ -328,17 +347,6 @@ export class WidgetEffects {
         msg: T.F.ANDROID.WIDGET_TASKS_UPDATED,
         translateParams: { count: changeCount },
       });
-    }
-  }
-
-  private async _waitUntilOutsideSyncWindow(): Promise<void> {
-    if (this._hydrationState.isInSyncWindow()) {
-      await firstValueFrom(
-        this._hydrationState.isInSyncWindow$.pipe(
-          filter((isInSyncWindow) => !isInSyncWindow),
-          first(),
-        ),
-      );
     }
   }
 }
