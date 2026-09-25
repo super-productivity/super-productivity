@@ -397,20 +397,9 @@ class CapacitorMainActivity : BridgeActivity() {
             // Full-screen-intent launch (alarm-style reminder fired with the screen
             // off): let this activity turn the screen on and draw over the keyguard
             // so the reminder is actually seen instead of buried in the drawer
-            // (#10071). Set only on the FSI path; the flags then persist for the
-            // activity's lifetime, but they only take effect while this activity is
-            // on top — which in practice it only is right after a reminder fired.
+            // (#10071). Set only on the FSI path and cleared again in onStop().
             if (intent.action == ReminderNotificationHelper.ACTION_SHOW_REMINDER_FSI) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                    setShowWhenLocked(true)
-                    setTurnScreenOn(true)
-                } else {
-                    @Suppress("DEPRECATION")
-                    window.addFlags(
-                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-                    )
-                }
+                setShowOverLockScreen(true)
             }
             // Sanitize to prevent JS injection (only allow alphanumeric, dash, underscore)
             val sanitizedId = reminderTaskId.replace(Regex("[^a-zA-Z0-9_-]"), "")
@@ -534,6 +523,26 @@ class CapacitorMainActivity : BridgeActivity() {
         super.onResume()
         Log.v("TW", "CapacitorFullscreenActivity: onResume")
         callJSInterfaceFunctionIfExists("next", "onResume$")
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Drop the reminder's lock-screen flags once it is out of view (screen off,
+        // app left). Left set, every later screen-on while this activity is on top
+        // would skip the keyguard and expose the whole app without unlocking.
+        setShowOverLockScreen(false)
+    }
+
+    @Suppress("DEPRECATION") // window-flag fallback for API 24-26
+    private fun setShowOverLockScreen(enabled: Boolean) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(enabled)
+            setTurnScreenOn(enabled)
+        } else {
+            val flags = WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            if (enabled) window.addFlags(flags) else window.clearFlags(flags)
+        }
     }
 
     /**
