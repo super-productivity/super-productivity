@@ -641,10 +641,12 @@ export class OneDrive implements FileSyncProvider<
    * strips `Origin`, so web/Electron keep using fetch.
    *
    * shortcut: iOS included, although CapacitorHttp there uses
-   * URLSession.shared (-1005 issues, see Dropbox) — WKWebView cannot drop
-   * `Origin`, so there is no working alternative; transient errors on refresh
-   * are retried. Upgrade path if -1005 shows up: pass `disableRedirects` to
-   * get a fresh URLSession.
+   * URLSession.shared, whose stale connections caused persistent -1005 errors
+   * for Dropbox that retries did not fix (#6333). WKWebView cannot drop
+   * `Origin`, so there is no working alternative. Upgrade path if -1005 shows
+   * up: add a `disableRedirects` field to `NativeHttpRequestConfig`, pass it
+   * through in `executeNativeRequestWithRetry` and set it here on iOS —
+   * Capacitor then uses a fresh URLSession per request.
    */
   private async _postOAuthToken(
     url: string,
