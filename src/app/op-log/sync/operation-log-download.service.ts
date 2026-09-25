@@ -1,4 +1,5 @@
 import { inject, Injectable, OnDestroy } from '@angular/core';
+import { Observable, Subject } from 'rxjs';
 import {
   planDownloadFullStateUpload,
   planDownloadGapReset,
@@ -84,6 +85,17 @@ export class OperationLogDownloadService implements OnDestroy {
   private hasWarnedClockDrift = false;
   /** The last API pass stopped at a checkpoint with ops left on the server. */
   private _hasUnseenRemoteOps = false;
+  /** Highest checkpoint announced on {@link remoteBacklogRemains$}; 0 at head. */
+  private _lastAnnouncedCheckpointSeq = 0;
+  private _remoteBacklogRemains$ = new Subject<void>();
+
+  /**
+   * Emits when a pass stops at a new checkpoint (#8763). SuperSync has no
+   * interval timer, so without a follow-up sync the rest of the backlog would
+   * wait for an unrelated trigger.
+   */
+  readonly remoteBacklogRemains$: Observable<void> =
+    this._remoteBacklogRemains$.asObservable();
 
   /** Timeout handle for clock drift retry check (cleaned up on destroy) */
   private clockDriftTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -625,9 +637,15 @@ export class OperationLogDownloadService implements OnDestroy {
     }
 
     this._hasUnseenRemoteOps = checkpointSeq !== undefined;
-    // Mark that we successfully checked the remote server (not when more is left)
     if (checkpointSeq === undefined) {
+      // Mark that we successfully checked the remote server (not when more is left)
       this.superSyncStatusService.markRemoteChecked();
+      this._lastAnnouncedCheckpointSeq = 0;
+    } else if (checkpointSeq > this._lastAnnouncedCheckpointSeq) {
+      // A pass that stops at an already announced seq made no progress (e.g.
+      // applying the batch keeps failing); announcing it again would loop.
+      this._lastAnnouncedCheckpointSeq = checkpointSeq;
+      this._remoteBacklogRemains$.next();
     }
 
     OpLog.verbose(

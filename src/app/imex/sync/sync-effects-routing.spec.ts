@@ -13,6 +13,7 @@ import { ExecBeforeCloseService } from '../../core/electron/exec-before-close.se
 import { InitialPwaUpdateCheckService } from '../../core/initial-pwa-update-check.service';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { SYNC_INITIAL_SYNC_TRIGGER } from './sync.const';
+import { OperationLogDownloadService } from '../../op-log/sync/operation-log-download.service';
 
 /**
  * Task 3 routing. The split is the whole behaviour change: background triggers
@@ -29,6 +30,7 @@ describe('SyncEffects routing (Task 3)', () => {
   let backgroundTrigger$: Subject<string | null>;
   let initialUpdateCheck$: Subject<void>;
   let isOnline$: BehaviorSubject<boolean>;
+  let remoteBacklogRemains$: Subject<void>;
   let schedulerRequest: jasmine.Spy;
   let sync: jasmine.Spy;
   let subs: { unsubscribe: () => void }[];
@@ -42,6 +44,7 @@ describe('SyncEffects routing (Task 3)', () => {
     backgroundTrigger$ = new Subject<string | null>();
     initialUpdateCheck$ = new Subject<void>();
     isOnline$ = new BehaviorSubject(true);
+    remoteBacklogRemains$ = new Subject<void>();
     schedulerRequest = jasmine.createSpy('request');
     sync = jasmine.createSpy('sync').and.resolveTo('InSync');
 
@@ -49,6 +52,10 @@ describe('SyncEffects routing (Task 3)', () => {
       providers: [
         SyncEffects,
         { provide: IS_ONLINE$, useValue: isOnline$ },
+        {
+          provide: OperationLogDownloadService,
+          useValue: { remoteBacklogRemains$: remoteBacklogRemains$.asObservable() },
+        },
         {
           provide: BackgroundSyncSchedulerService,
           useValue: { request: schedulerRequest },
@@ -165,6 +172,20 @@ describe('SyncEffects routing (Task 3)', () => {
       await flush();
 
       expect(schedulerRequest).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('remote backlog continuation (#8763)', () => {
+    it('asks the scheduler for a follow-up sync when a pass stops short of the head', async () => {
+      subs.push(effects.continueRemoteBacklog$.subscribe());
+
+      remoteBacklogRemains$.next();
+      await flush();
+
+      // Through the scheduler, not sync(): the pass that announced the backlog
+      // still holds the cycle, and the scheduler defers until it settles.
+      expect(schedulerRequest).toHaveBeenCalledTimes(1);
+      expect(sync).not.toHaveBeenCalled();
     });
   });
 

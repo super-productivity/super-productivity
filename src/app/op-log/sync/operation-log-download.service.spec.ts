@@ -224,6 +224,39 @@ describe('OperationLogDownloadService', () => {
           expect(service.hasUnseenRemoteOps()).toBeFalse();
         });
 
+        it('announces each new checkpoint once, so a stalled pass cannot loop', async () => {
+          let announcements = 0;
+          const sub = service.remoteBacklogRemains$.subscribe(() => announcements++);
+          serveEndlessBacklog(1);
+
+          await service.downloadRemoteOps(mockApiProvider);
+          expect(announcements).toBe(1);
+
+          // Cursor did not advance (e.g. the apply failed): same checkpoint again.
+          await service.downloadRemoteOps(mockApiProvider);
+          expect(announcements).toBe(1);
+
+          mockApiProvider.getLastServerSeq.and.resolveTo(MAX_DOWNLOAD_ITERATIONS);
+          await service.downloadRemoteOps(mockApiProvider);
+          expect(announcements).toBe(2);
+          sub.unsubscribe();
+        });
+
+        it('does not announce a pass that reaches the head', async () => {
+          let announcements = 0;
+          const sub = service.remoteBacklogRemains$.subscribe(() => announcements++);
+          mockApiProvider.downloadOps.and.resolveTo({
+            ops: pageOfOps(0, 3),
+            hasMore: false,
+            latestSeq: 3,
+          });
+
+          await service.downloadRemoteOps(mockApiProvider);
+
+          expect(announcements).toBe(0);
+          sub.unsubscribe();
+        });
+
         it('returns the downloaded prefix once the page-iteration cap is reached', async () => {
           serveEndlessBacklog(1);
 
