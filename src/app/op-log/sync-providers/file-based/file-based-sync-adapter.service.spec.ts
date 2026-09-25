@@ -1396,6 +1396,8 @@ describe('FileBasedSyncAdapterService', () => {
       await expectAsync(
         adapter.uploadOps([createMockSyncOp()], 'client1'),
       ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+      // Refused before anything is written: no .bak, no primary.
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
 
       const writes = captureWrites();
       await uploadRepair();
@@ -4068,10 +4070,6 @@ describe('FileBasedSyncAdapterService', () => {
         [C.SYNC_FILE]: addPrefix(legacy, 2),
         // ops/state files not present yet
       });
-      // Read-only bootstrap from the legacy file, committed once hydrated: its
-      // snapshot base is then seen, so the migrating upload is not refused.
-      const bootstrap = await adapter.downloadOps(0);
-      await adapter.setLastServerSeq(bootstrap.latestSeq);
 
       await adapter.uploadOps([createMockSyncOp()], 'client1');
 

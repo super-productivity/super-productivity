@@ -829,10 +829,11 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    last-seen clock does not cover this base, it must hydrate the snapshot before
    consuming the tail, regardless of the watermark. After commit, the last-seen
    clock covers the base and incremental sync resumes. Writers apply the same
-   rule: once it has a recorded clock, an upload that finds an unseen base is
-   refused as a retryable conflict, so a stale client cannot append to a
-   replacement it never hydrated (in v2, overwriting its snapshot with stale
-   state).
+   rule: once a writer has a recorded clock, an upload that finds an unseen
+   base is refused as a retryable conflict, so a stale client cannot append to
+   a replacement it never hydrated (in v2, overwriting its snapshot with stale
+   state). Before the first recorded clock (e.g. the first sync after
+   upgrading) the upload is not guarded, to avoid refusing it indefinitely.
    This optional metadata requires no schema bump: older readers ignore it,
    but older writers can omit it. Masked dominating replacements written by,
    or subsequently rewritten by, those clients remain a mixed-version gap;
