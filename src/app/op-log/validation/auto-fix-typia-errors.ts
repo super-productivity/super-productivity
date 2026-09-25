@@ -5,6 +5,7 @@ import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-conf
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { getDefaultWorkContextTheme } from '../../features/work-context/work-context-default-theme.util';
 import { WorkContextType } from '../../features/work-context/work-context.model';
+import { WORKLOG_EXPORT_DEFAULTS } from '../../features/work-context/work-context.const';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
 import { devError } from '../../util/dev-error';
@@ -307,6 +308,32 @@ export const autoFixTypiaErrors = (
           'work-context-theme-undefined-to-default',
           value,
           theme,
+        );
+      } else if (
+        (keys[0] === 'tag' || keys[0] === 'project') &&
+        keys[1] === 'entities' &&
+        keys[3] === 'advancedCfg' &&
+        keys[4] === 'worklogExportSettings' &&
+        keys.length >= 6 &&
+        Object.hasOwn(WORKLOG_EXPORT_DEFAULTS, keys[5])
+      ) {
+        // Issue #8279: a synced project carried an invalid worklog-export
+        // `groupBy` enum, so every sync ended in "validation failed". A missing
+        // `groupBy` is reachable from projects saved before the field existed
+        // (early 2019). Reset only the offending top-level field — deeper
+        // errors (e.g. one bad `cols[i]`) reset the whole field — so the rest
+        // of the user's export preferences survive. Copy so the repaired state
+        // never aliases the shared defaults.
+        const fieldKeys = keys.slice(0, 6);
+        const field = keys[5] as keyof typeof WORKLOG_EXPORT_DEFAULTS;
+        const defaultValue = structuredClone(WORKLOG_EXPORT_DEFAULTS[field]);
+        setValueByPath(data, fieldKeys, defaultValue);
+        logAutoFixApplied(
+          path,
+          keys,
+          'work-context-worklog-export-setting-default',
+          value,
+          defaultValue,
         );
       } else if (
         keys[0] === 'metric' &&

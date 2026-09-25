@@ -34,7 +34,7 @@ import {
   selectTodayStr,
 } from '../../../root-store/app-state/app-state.selectors';
 import { isTodayWithOffset } from '../../../util/is-today.util';
-import { selectTaskRepeatCfgsForExactDay } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { getTaskRepeatCfgsForExactDayCached } from '../../task-repeat-cfg/store/get-task-repeat-cfgs-for-exact-day-cached.util';
 
 export const selectPlannerState = createFeatureSelector<fromPlanner.PlannerState>(
   fromPlanner.plannerFeatureKey,
@@ -118,6 +118,16 @@ export const selectPlannerDays = (
         activeTasks.values(),
         startOfNextDayDiffMs,
       );
+      // Bucket once instead of re-scanning every planned task and calendar
+      // event for each visible day; this reruns every time-tracking tick.
+      const plannedTasksByDay = groupPlannedTasksByDay(
+        allPlannedTasks,
+        startOfNextDayDiffMs,
+      );
+      const calendarEventsByDay = groupCalendarEventsByDay(
+        calendarEvents,
+        startOfNextDayDiffMs,
+      );
 
       return dayDates.map((dayDate) =>
         getPlannerDay(
@@ -126,8 +136,8 @@ export const selectPlannerDays = (
           activeTasks,
           plannerState,
           taskRepeatCfgs,
-          allPlannedTasks,
-          calendarEvents,
+          plannedTasksByDay.get(dayDate) || [],
+          calendarEventsByDay.get(dayDate) || [],
           unplannedTaskIdsToday,
           deadlineMap,
           scheduleConfig,
@@ -159,8 +169,8 @@ const getPlannerDay = (
   taskMap: Map<string, Task>,
   plannerState: any,
   taskRepeatCfgs: TaskRepeatCfg[],
-  allPlannedTasks: TaskWithDueTime[],
-  calendarEvents: ScheduleCalendarMapEntry[],
+  plannedTasksForDay: TaskWithDueTime[],
+  calendarEventsForDay: ScheduleFromCalendarEvent[],
   unplannedTaskIdsToday: string[] | false,
   deadlineTasksByDay: Record<string, TaskCopy[]>,
   scheduleConfig?: ScheduleConfig,
@@ -184,11 +194,7 @@ const getPlannerDay = (
     noStartTimeRepeatProjections: allNoStartTimeRepeatProjections,
   } = getAllRepeatableTasksForDay(taskRepeatCfgs, currentDayTimestamp);
 
-  const scheduledTaskItems = getScheduledTaskItems(
-    allPlannedTasks,
-    dayDate,
-    startOfNextDayDiffMs,
-  );
+  const scheduledTaskItems = getScheduledTaskItems(plannedTasksForDay);
 
   // A recurring task can already have a real instance in this day, either in
   // normalTasks (untimed instance, or any non-Today column) or in
@@ -212,11 +218,7 @@ const getPlannerDay = (
   const noStartTimeRepeatProjections = allNoStartTimeRepeatProjections.filter(
     (rp) => !coveredRepeatCfgIds.has(rp.repeatCfg.id),
   );
-  const { timedEvents, allDayEvents } = getIcalEventsForDay(
-    calendarEvents,
-    dayDate,
-    startOfNextDayDiffMs,
-  );
+  const { timedEvents, allDayEvents } = getIcalEventsForDay(calendarEventsForDay);
 
   const deadlineTasks = deadlineTasksByDay[dayDate] || [];
 
@@ -297,11 +299,9 @@ const getAllRepeatableTasksForDay = (
 } => {
   const repeatProjectionsForDay: ScheduleItemRepeatProjection[] = [];
   const noStartTimeRepeatProjections: NoStartTimeRepeatProjection[] = [];
-  const allRepeatableTasksForDay = selectTaskRepeatCfgsForExactDay.projector(
+  const allRepeatableTasksForDay = getTaskRepeatCfgsForExactDayCached(
     taskRepeatCfgs,
-    {
-      dayDate: currentDayTimestamp,
-    },
+    currentDayTimestamp,
   );
 
   allRepeatableTasksForDay.forEach((repeatCfg) => {
@@ -332,67 +332,90 @@ const getAllRepeatableTasksForDay = (
   };
 };
 
-const getScheduledTaskItems = (
+const groupPlannedTasksByDay = (
   allPlannedTasks: TaskWithDueTime[],
-  dayDate: string,
-  startOfNextDayDiffMs: number = 0,
+  startOfNextDayDiffMs: number,
+): Map<string, TaskWithDueTime[]> => {
+  const byDay = new Map<string, TaskWithDueTime[]>();
+  for (const task of allPlannedTasks) {
+    const dayKey = getDbDateStr(new Date(task.dueWithTime - startOfNextDayDiffMs));
+    const tasksForDay = byDay.get(dayKey);
+    if (tasksForDay) {
+      tasksForDay.push(task);
+    } else {
+      byDay.set(dayKey, [task]);
+    }
+  }
+  return byDay;
+};
+
+const getScheduledTaskItems = (
+  plannedTasksForDay: TaskWithDueTime[],
 ): ScheduleItemTask[] =>
-  allPlannedTasks
-    .filter(
-      (task) =>
-        getDbDateStr(new Date(task.dueWithTime - startOfNextDayDiffMs)) === dayDate,
-    )
-    .map((task) => {
-      const start = task.dueWithTime;
-      // Mirror normalTasks: a done task contributes 0 remaining time. Without
-      // this, a done timed task still adds its full estimate to the day total
-      // (and a done timed recurring task double-counted with its projection
-      // before the dedup above). See #8232.
-      const end = start + (task.isDone ? 0 : getTimeLeftForTask(task));
-      return {
-        id: task.id,
-        type: ScheduleItemType.Task,
-        start,
-        end,
-        task,
-      };
-    });
+  plannedTasksForDay.map((task) => {
+    const start = task.dueWithTime;
+    // Mirror normalTasks: a done task contributes 0 remaining time. Without
+    // this, a done timed task still adds its full estimate to the day total
+    // (and a done timed recurring task double-counted with its projection
+    // before the dedup above). See #8232.
+    const end = start + (task.isDone ? 0 : getTimeLeftForTask(task));
+    return {
+      id: task.id,
+      type: ScheduleItemType.Task,
+      start,
+      end,
+      task,
+    };
+  });
 
 interface IcalEventsForDayResult {
   timedEvents: ScheduleItemEvent[];
   allDayEvents: ScheduleFromCalendarEvent[];
 }
 
-const getIcalEventsForDay = (
+const groupCalendarEventsByDay = (
   calendarEvents: ScheduleCalendarMapEntry[],
-  dayDate: string,
-  startOfNextDayDiffMs: number = 0,
+  startOfNextDayDiffMs: number,
+): Map<string, ScheduleFromCalendarEvent[]> => {
+  const byDay = new Map<string, ScheduleFromCalendarEvent[]>();
+  calendarEvents.forEach((icalMapEntry) => {
+    icalMapEntry.items.forEach((calEv) => {
+      const dayKey = getDbDateStr(new Date(calEv.start - startOfNextDayDiffMs));
+      const eventsForDay = byDay.get(dayKey);
+      if (eventsForDay) {
+        eventsForDay.push(calEv);
+      } else {
+        byDay.set(dayKey, [calEv]);
+      }
+    });
+  });
+  return byDay;
+};
+
+const getIcalEventsForDay = (
+  calendarEventsForDay: ScheduleFromCalendarEvent[],
 ): IcalEventsForDayResult => {
   const timedEvents: ScheduleItemEvent[] = [];
   const allDayEvents: ScheduleFromCalendarEvent[] = [];
 
-  calendarEvents.forEach((icalMapEntry) => {
-    icalMapEntry.items.forEach((calEv) => {
-      const start = calEv.start;
-      if (getDbDateStr(new Date(start - startOfNextDayDiffMs)) === dayDate) {
-        if (isAllDayCalendarEvent(calEv)) {
-          // Some providers expose all-day events as 24h timed events.
-          allDayEvents.push({ ...calEv, isAllDay: true });
-        } else {
-          // Timed events go to scheduled items
-          const end = calEv.start + calEv.duration;
-          timedEvents.push({
-            id: calEv.id,
-            type: ScheduleItemType.CalEvent,
-            start,
-            end,
-            calendarEvent: {
-              ...calEv,
-            },
-          });
-        }
-      }
-    });
+  calendarEventsForDay.forEach((calEv) => {
+    const start = calEv.start;
+    if (isAllDayCalendarEvent(calEv)) {
+      // Some providers expose all-day events as 24h timed events.
+      allDayEvents.push({ ...calEv, isAllDay: true });
+    } else {
+      // Timed events go to scheduled items
+      const end = calEv.start + calEv.duration;
+      timedEvents.push({
+        id: calEv.id,
+        type: ScheduleItemType.CalEvent,
+        start,
+        end,
+        calendarEvent: {
+          ...calEv,
+        },
+      });
+    }
   });
   return { timedEvents, allDayEvents };
 };
