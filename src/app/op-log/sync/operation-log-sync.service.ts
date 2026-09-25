@@ -650,8 +650,8 @@ export class OperationLogSyncService {
       );
     }
     const outcome = await this._processDownloadResult(syncProvider, result, options);
-    // #9256: the kept prefix is applied and its cursor persisted; report the page
-    // that failed to decrypt now, so this cycle ends in the decrypt-error flow.
+    // #9256: the kept prefix is applied and its cursor persisted; report the failed
+    // page now, unless this cycle's outcome supersedes the decrypt error.
     if (
       result.decryptErrorAfterKeptPrefix &&
       !isKeptPrefixDecryptErrorSuperseded(outcome, {

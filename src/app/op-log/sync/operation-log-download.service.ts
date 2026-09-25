@@ -496,7 +496,9 @@ export class OperationLogDownloadService implements OnDestroy {
               ) {
                 // The caller applies the prefix, persists the cursor (which stops
                 // before this page) and then throws the error, so this cycle still
-                // reports it and the next download starts at the failing page.
+                // reports it and the next download starts at the failing page
+                // (unless the cycle's outcome supersedes it — see
+                // `isKeptPrefixDecryptErrorSuperseded`).
                 OpLog.warn(
                   `OperationLogDownloadService: Keeping ${allNewOps.length} op(s) decrypted ` +
                     `before the failing page; cursor stops at ${sinceSeq}.`,
