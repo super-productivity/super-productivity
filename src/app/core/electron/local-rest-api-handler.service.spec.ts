@@ -1091,7 +1091,7 @@ describe('LocalRestApiHandlerService', () => {
         });
 
         it('should create a literal subtask without the parsing path', async () => {
-          (taskServiceMock as any).createNewTaskWithDefaults.and.returnValue(
+          taskServiceMock.createNewTaskWithDefaults.and.returnValue(
             createMockTask('literal-sub', { title: 'Child #x' }),
           );
 
@@ -1107,6 +1107,13 @@ describe('LocalRestApiHandlerService', () => {
 
           expect(response.status).toBe(201);
           expect(taskServiceMock.addSubTaskTo).not.toHaveBeenCalled();
+          // Same arguments addSubTaskTo would pass — incl. the dueDay key, whose
+          // presence stops a Today context from giving the subtask a due date.
+          const factoryArgs = taskServiceMock.createNewTaskWithDefaults.calls.mostRecent()
+            .args[0] as { title: string; additional: Record<string, unknown> };
+          expect(factoryArgs.title).toBe('Child #x');
+          expect('dueDay' in factoryArgs.additional).toBe(true);
+          expect(factoryArgs.additional.title).toBe('Child #x');
           const action = dispatchSpy.calls.mostRecent().args[0];
           expect(action.type).toBe(addSubTask.type);
           expect(action.parentId).toBe('parent-1');
@@ -1138,6 +1145,31 @@ describe('LocalRestApiHandlerService', () => {
               isIgnoreShortSyntax: true,
             }),
           );
+        });
+
+        it('should reject a non-boolean flag on PATCH', async () => {
+          const response = await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { title: 'T', isIgnoreShortSyntax: 1 },
+            }),
+          );
+
+          expect(response.status).toBe(400);
+          expect(taskServiceMock.update).not.toHaveBeenCalled();
+          expect(dispatchSpy).not.toHaveBeenCalled();
+        });
+
+        it('should keep non-title changes on the regular update path', async () => {
+          await sendRequestAndWait(
+            createRequest('PATCH', '/tasks/task-1', {
+              body: { title: 'Renamed #tag', notes: 'n', isIgnoreShortSyntax: true },
+            }),
+          );
+
+          expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+            title: 'Renamed #tag',
+            notes: 'n',
+          });
         });
 
         it('should keep parsing by default', async () => {
@@ -1380,6 +1412,21 @@ describe('LocalRestApiHandlerService', () => {
           expect(response.status).toBe(200);
           expect(issueServiceMock.issueLink).not.toHaveBeenCalled();
           expect('issueUrl' in getData(response)).toBe(false);
+        });
+
+        it('should accept a repeated include parameter', async () => {
+          mockGetTask(issueTask);
+          issueServiceMock.issueLink.and.returnValue(
+            Promise.resolve('https://github.com/o/r/issues/42'),
+          );
+
+          const response = await sendRequestAndWait(
+            createRequest('GET', '/tasks/task-1', {
+              query: { include: ['subTasks', 'issueUrl'] },
+            }),
+          );
+
+          expect(getData(response).issueUrl).toBe('https://github.com/o/r/issues/42');
         });
 
         it('should accept issueUrl in a comma-separated include list', async () => {

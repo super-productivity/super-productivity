@@ -12,7 +12,7 @@ import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
 import { isTodayWithOffset } from '../../util/is-today.util';
 import { isValidDBDateStr } from '../../util/get-db-date-str';
-import { IssueLog } from '../log';
+import { IssueLog, TaskLog } from '../log';
 
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { addSubTask } from '../../features/tasks/store/task.actions';
@@ -931,10 +931,12 @@ export class LocalRestApiHandlerService {
         }
 
         if (Object.keys(changes).length > 0) {
-          // Short syntax only ever runs on title-only updates, which never
-          // carry a project move, so the flagged path needs none of update()'s
-          // subtask bookkeeping.
-          if (patchShortSyntaxFlag.value && !hasOwn(changes, 'projectId')) {
+          // Short syntax only parses a title-only change set, so that is the
+          // only shape the flag changes; everything else keeps going through
+          // update() and whatever bookkeeping it does.
+          const isTitleOnly =
+            Object.keys(changes).length === 1 && hasOwn(changes, 'title');
+          if (patchShortSyntaxFlag.value && isTitleOnly) {
             this._store.dispatch(
               TaskSharedActions.updateTask({
                 task: { id: taskId, changes },
@@ -1068,6 +1070,7 @@ export class LocalRestApiHandlerService {
       title: additional.title || '',
       additional: { dueDay: additional.dueDay || undefined, ...additional },
     });
+    TaskLog.log('addSubTaskTo', { taskId: task.id, parentId });
     this._store.dispatch(addSubTask({ task, parentId, isIgnoreShortSyntax: true }));
     return task.id;
   }
