@@ -918,7 +918,16 @@ describe('LocalBackupService', () => {
 
         await restore();
 
-        expect(backupServiceSpy.importCompleteBackup).toHaveBeenCalled();
+        // Own backup: restored even if still invalid after repair (#8279).
+        expect(backupServiceSpy.importCompleteBackup).toHaveBeenCalledWith(
+          jasmine.any(Object),
+          false,
+          true,
+          true,
+          false,
+          undefined,
+          true,
+        );
       });
 
       it('does not import when the user declines', async () => {
@@ -963,6 +972,9 @@ describe('LocalBackupService', () => {
         jasmine.any(Object),
         false,
         true,
+        true,
+        false,
+        undefined,
         true,
       );
     });
@@ -1041,6 +1053,9 @@ describe('LocalBackupService', () => {
         }),
         false,
         true,
+        true,
+        false,
+        undefined,
         true,
       );
       expect(snackServiceSpy.open).toHaveBeenCalledWith({
@@ -1156,6 +1171,9 @@ describe('LocalBackupService', () => {
         }),
         false,
         true,
+        true,
+        false,
+        undefined,
         true,
       );
       expect(snackServiceSpy.open).toHaveBeenCalledWith({

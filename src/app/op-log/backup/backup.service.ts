@@ -98,8 +98,8 @@ export class BackupService {
    *   single slot while restoring that exact backup.
    * @param requiredImportBackupId - Abort the destructive commit unless this
    *   backup still occupies the single recovery slot.
-   * @param isOwnStateRestore - Restoring this device's own recovery point: do
-   *   not refuse state that is still invalid after repair (#8279).
+   * @param isOwnStateRestore - Restoring this device's own recovery point or
+   *   auto-backup: do not refuse state still invalid after repair (#8279).
    */
   async importCompleteBackup(
     data: AppDataComplete | CompleteBackup<AllModelConfig>,
@@ -204,14 +204,14 @@ export class BackupService {
           validatedData = dataRepair(backupData, errors).data;
           // The import is persisted and broadcast as BACKUP_IMPORT, so state that
           // repair could not fix would fail validation on every client (#8279).
-          // A device's own recovery point was already live here, so it is
-          // restored anyway: refusing would strand the user with no way back.
+          // A device's own recovery point or auto-backup was already live here,
+          // so it is restored anyway: refusing would strand the user.
           if (!validateFull(validatedData).isValid) {
             if (!isOwnStateRestore) {
               OpLog.err('BackupService: backup refused, still invalid after repair');
               throw new BackupRepairFailedError();
             }
-            OpLog.err('BackupService: restoring own recovery point still invalid');
+            OpLog.err('BackupService: restoring own state still invalid after repair');
           }
         } else {
           throw new BackupRepairFailedError();
