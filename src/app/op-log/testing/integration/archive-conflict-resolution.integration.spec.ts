@@ -32,6 +32,19 @@ import {
   ApplyOperationsResult,
 } from '../../core/types/apply.types';
 import { resetTestUuidCounter, TestClient } from './helpers/test-client.helper';
+import { ActionReducer } from '@ngrx/store';
+import { convertOpToAction } from '../../apply/operation-converter.util';
+import {
+  TASK_FEATURE_NAME,
+  taskReducer,
+} from '../../../features/tasks/store/task.reducer';
+import { RootState } from '../../../root-store/root-state';
+import { createStateWithExistingTasks } from '../../../root-store/meta/task-shared-meta-reducers/test-utils';
+import {
+  createCombinedTaskSharedMetaReducer,
+  updateTaskEntity,
+} from '../../../root-store/meta/task-shared-meta-reducers/test-helpers';
+import { lwwUpdateMetaReducer } from '../../../root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer';
 
 /**
  * #9537 / #9405: both devices archiving overlapping done tasks concurrently
@@ -697,6 +710,34 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
     const subPayload = subSnapshot!.payload as { actionPayload?: Partial<Task> };
     expect(subPayload.actionPayload?.dueDay).toBeUndefined();
     expectDominates(subSnapshot!, restoreOp!);
+
+    // A receiver that never saw the rejected archive: B still active and
+    // done, the subtask still scheduled. Replaying the uploads converges it.
+    let receiver = createStateWithExistingTasks([TASK_A, TASK_B, SUB_B, TASK_C]);
+    for (const id of [TASK_A, TASK_B, TASK_C]) {
+      receiver = updateTaskEntity(receiver, id, { isDone: true, doneOn: 1_000 });
+    }
+    receiver = updateTaskEntity(receiver, TASK_B, { subTaskIds: [SUB_B] });
+    receiver = updateTaskEntity(receiver, SUB_B, {
+      parentId: TASK_B,
+      dueDay: '2026-09-01',
+    });
+    const rootReducer: ActionReducer<RootState, Action> = (state = receiver, action) => ({
+      ...state,
+      [TASK_FEATURE_NAME]: taskReducer(state[TASK_FEATURE_NAME], action),
+    });
+    const reducer = createCombinedTaskSharedMetaReducer(
+      lwwUpdateMetaReducer(rootReducer),
+    ) as ActionReducer<RootState, Action>;
+    for (const op of pending) {
+      receiver = reducer(receiver, convertOpToAction(op));
+    }
+    const receivedTask = (id: string): Task =>
+      receiver[TASK_FEATURE_NAME].entities[id] as Task;
+    expect(receivedTask(TASK_B).isDone).toBe(false);
+    expect(receivedTask(SUB_B).dueDay).toBeUndefined();
+    expect(receivedTask(SUB_B).parentId).toBe(TASK_B);
+    expect(receivedTask(TASK_A)).toBeUndefined();
   });
 
   it('compensates a restored task instead of wedging when a remote BULK delete shares its row', async () => {
