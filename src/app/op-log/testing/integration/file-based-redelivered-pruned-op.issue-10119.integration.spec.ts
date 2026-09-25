@@ -444,5 +444,72 @@ for (const isUseSplitSyncFiles of [false, true]) {
       expect(appliedOpIdsPassedToApplier()).toContain('android-unseen');
       expect(appliedOpIdsPassedToApplier()).toContain('android-after');
     });
+
+    // Known gap (operation-log-architecture.md B.2): an author whose own
+    // counter regressed (USE_REMOTE onto a stale USE_LOCAL snapshot) re-uses a
+    // counter this device already covers. If an own upload also merged that op
+    // past the cursor, cursor + clock both say "delivered".
+    // Pending until #10239 stops the cursor advancing past unseen versions.
+    xit('known gap: delivers a new op from an author whose counter regressed via USE_LOCAL/USE_REMOTE', async () => {
+      const DESKTOP = 'desktop-client';
+      const newDesktopAdapter = (): OperationSyncCapable =>
+        runInInjectionContext(
+          TestBed.inject(EnvironmentInjector),
+          () => new FileBasedSyncAdapterService(),
+        ).createAdapter(remote, FILE_CFG, undefined);
+      const desktop = newDesktopAdapter();
+
+      await seedRemoteFromLinux();
+      // Android authors counters 1 and 2; Linux applies both (clock covers A:2).
+      await androidUploads(
+        otherAddTask('android-1', 'task-1', { [OTHER]: 1 }),
+        otherAddTask('android-2', 'task-2', { [OTHER]: 2 }),
+      );
+      await syncService.downloadRemoteOps(linux);
+      expect(appliedOpIdsPassedToApplier()).toContain('android-2');
+      expect((await opLogStore.getVectorClock())?.[OTHER]).toBe(2);
+
+      // Desktop only knew A:1 and picks USE_LOCAL: snapshot replaces the file.
+      await desktop.downloadOps(0, DESKTOP);
+      await desktop.uploadSnapshot(
+        createValidAppData(),
+        DESKTOP,
+        'recovery',
+        { [OTHER]: 1, [DESKTOP]: 1 },
+        CURRENT_SCHEMA_VERSION,
+        false,
+        'desktop-import',
+      );
+      // Android picks USE_REMOTE: its clock resets to the snapshot's, so its
+      // next op re-uses counter 2 — a genuinely new op.
+      await android.downloadOps(0, OTHER);
+      await androidUploads(
+        otherAddTask('android-after-reset', 'task-after-reset', {
+          [OTHER]: 2,
+          [DESKTOP]: 1,
+        }),
+      );
+
+      // Linux uploads without downloading first: the cursor passes that op.
+      // Only possible once the 30s in-cycle cache expired (e.g. a dialog was
+      // open); a warm cache would reject the upload on the rev check.
+      const realNow = Date.now();
+      spyOn(Date, 'now').and.returnValue(realNow + 60_000);
+      await linuxUploads(
+        taskOp(
+          'linux-edit',
+          ownClientId,
+          ActionType.TASK_SHARED_UPDATE,
+          OpType.Update,
+          'linux-seed-task',
+          { actionPayload: {}, entityChanges: [] },
+          { [OTHER]: 2, [ownClientId]: 2 },
+        ),
+      );
+      applierSpy.applyOperations.calls.reset();
+      await syncService.downloadRemoteOps(linux);
+
+      expect(appliedOpIdsPassedToApplier()).toContain('android-after-reset');
+    });
   });
 }
