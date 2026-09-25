@@ -451,12 +451,11 @@ for (const isUseSplitSyncFiles of [false, true]) {
     // counter this device already covers. If an own upload also merged that op
     // past the cursor, cursor + clock both say "delivered".
     // Pending until #10239 stops the cursor advancing past unseen versions.
-    xit('known gap: delivers a new op from an author whose counter regressed via USE_LOCAL/USE_REMOTE', async () => {
-      const DESKTOP = 'desktop-client';
-      const desktop = newAdapter();
+    const DESKTOP = 'desktop-client';
 
+    /** Android authors counters 1 and 2; Linux applies both (clock covers A:2). */
+    const linuxAppliesAndroidCounters1And2 = async (): Promise<void> => {
       await seedRemoteFromLinux();
-      // Android authors counters 1 and 2; Linux applies both (clock covers A:2).
       await androidUploads(
         otherAddTask('android-1', 'task-1', { [OTHER]: 1 }),
         otherAddTask('android-2', 'task-2', { [OTHER]: 2 }),
@@ -464,8 +463,11 @@ for (const isUseSplitSyncFiles of [false, true]) {
       await syncService.downloadRemoteOps(linux);
       expect(appliedOpIdsPassedToApplier()).toContain('android-2');
       expect((await opLogStore.getVectorClock())?.[OTHER]).toBe(2);
+    };
 
+    const regressAndroidCounterViaUseLocalUseRemote = async (): Promise<void> => {
       // Desktop only knew A:1 and picks USE_LOCAL: snapshot replaces the file.
+      const desktop = newAdapter();
       await desktop.downloadOps(0, DESKTOP);
       await desktop.uploadSnapshot(
         createValidAppData(),
@@ -485,15 +487,10 @@ for (const isUseSplitSyncFiles of [false, true]) {
           [DESKTOP]: 1,
         }),
       );
+    };
 
-      // Linux uploads without downloading first: the cursor passes that op.
-      // Needs a cold in-cycle cache (a warm one fails the rev check). In
-      // production: the Dropbox/OneDrive rev pre-check (no cache fill), a
-      // same-cycle re-upload after the cache was cleared (only when a local op
-      // was created mid-cycle), or a >30s cycle. Expiring the cache stands in
-      // for all three.
-      const realNow = Date.now();
-      spyOn(Date, 'now').and.returnValue(realNow + 60_000);
+    /** Linux uploads and then downloads; the new Android op must arrive. */
+    const expectLinuxStillGetsRegressedOpAfterUpload = async (): Promise<void> => {
       await linuxUploads(
         taskOp(
           'linux-edit',
@@ -505,10 +502,54 @@ for (const isUseSplitSyncFiles of [false, true]) {
           { [OTHER]: 2, [ownClientId]: 2 },
         ),
       );
+      // Another device writes again. Without it, Dropbox/OneDrive would skip
+      // the next download entirely (rev unchanged since Linux's own upload).
+      await androidUploads(
+        otherAddTask('android-later', 'task-later', { [OTHER]: 3, [DESKTOP]: 1 }),
+      );
       applierSpy.applyOperations.calls.reset();
       await syncService.downloadRemoteOps(linux);
 
+      expect(appliedOpIdsPassedToApplier()).toContain('android-later');
       expect(appliedOpIdsPassedToApplier()).toContain('android-after-reset');
+    };
+
+    xit('known gap: delivers a new op from an author whose counter regressed via USE_LOCAL/USE_REMOTE', async () => {
+      await linuxAppliesAndroidCounters1And2();
+      await regressAndroidCounterViaUseLocalUseRemote();
+
+      // Linux uploads without downloading first: the cursor passes that op.
+      // Needs a cold in-cycle cache (a warm one fails the rev check). In
+      // production: the Dropbox/OneDrive rev pre-check (no cache fill), a
+      // same-cycle re-upload after the cache was cleared (only when a local op
+      // was created mid-cycle), or a >30s cycle. Expiring the cache stands in
+      // for all three.
+      const realNow = Date.now();
+      spyOn(Date, 'now').and.returnValue(realNow + 60_000);
+      await expectLinuxStillGetsRegressedOpAfterUpload();
+    });
+
+    // The same gap inside ONE normal sync cycle, no expired cache: on
+    // Dropbox/OneDrive an unchanged rev short-circuits the download without
+    // filling the in-cycle cache, so the upload right after re-reads the file
+    // and merges whatever landed in between.
+    xit('known gap: same, within one Dropbox sync cycle via the rev pre-check', async () => {
+      remote = new MockFileProvider(SyncProviderId.Dropbox);
+      linux = newAdapter();
+      android = newAdapter();
+      await linuxAppliesAndroidCounters1And2();
+
+      // Next sync cycle (minutes later): the previous cycle's cache is gone.
+      const realNow = Date.now();
+      spyOn(Date, 'now').and.returnValue(realNow + 60_000);
+      remote.clearHistory();
+      expect((await syncService.downloadRemoteOps(linux)).kind).toBe('no_new_ops');
+      expect(remote.getCallsTo('getFileRev').length).toBe(1);
+      expect(remote.getCallsTo('downloadFile').length).toBe(0);
+
+      // Within the same cycle (time frozen), before Linux's upload step.
+      await regressAndroidCounterViaUseLocalUseRemote();
+      await expectLinuxStillGetsRegressedOpAfterUpload();
     });
   });
 }
