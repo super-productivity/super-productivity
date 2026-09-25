@@ -1237,10 +1237,11 @@ describe('FileBasedSyncAdapterService', () => {
           sv: syncVersion,
         });
 
-        // A establishes its baseline: syncVersion 3, vector clock {clientA: 3}.
+        // Both clients once synced at {clientA: 1, clientB: 1}. A then
+        // uploaded two more ops and established its baseline at syncVersion 3.
         const established = createMockSyncData({
           syncVersion: 3,
-          vectorClock: { clientA: 3 },
+          vectorClock: { clientA: 3, clientB: 1 },
           clientId: 'client-a',
           recentOps: [],
         });
@@ -1250,15 +1251,16 @@ describe('FileBasedSyncAdapterService', () => {
         await adapter.downloadOps(0, 'client-a');
         await adapter.setLastServerSeq(3);
 
-        // B replaces the remote with its own state (USE_LOCAL) and then
-        // uploads two tail ops, landing syncVersion back at 3 with a vector
-        // clock that shares no history with A's ({clientB: 3} is CONCURRENT
-        // with {clientA: 3}) — a genuine lineage break.
+        // B, still on the shared ancestor plus its own offline edits, replaces
+        // the remote with its own state (USE_LOCAL) and then uploads two tail
+        // ops, landing syncVersion back at 3. Its clock descends from the
+        // shared ancestor but not from A's last two ops, so it is CONCURRENT
+        // with A's baseline — a genuine lineage break.
         const replacedWithTail = createMockSyncData({
           syncVersion: 3,
-          vectorClock: { clientB: 3 },
+          vectorClock: { clientA: 1, clientB: 4 },
           clientId: 'client-b',
-          recentOps: [compactOp('op-b3', { clientB: 3 }, 3)],
+          recentOps: [compactOp('op-b3', { clientA: 1, clientB: 4 }, 3)],
           oldestOpSyncVersion: 3,
           state: { tasks: [{ id: 'task-b' }] },
         });
