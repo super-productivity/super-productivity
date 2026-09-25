@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import type { DeferredLocalActionsPort } from '@sp/sync-core';
-import { ALL_ACTIONS } from '../../util/local-actions.token';
+import { ALL_ACTIONS, LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { concatMap, filter, tap } from 'rxjs/operators';
 import { LockService } from '../sync/lock.service';
 import {
@@ -84,6 +84,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
   private readonly STORAGE_QUOTA_SNACK_DEDUPE_MS = 5000;
   // Uses ALL_ACTIONS because this effect captures all persistent actions and handles isRemote filtering internally
   private actions$ = inject(ALL_ACTIONS);
+  private localActions$ = inject(LOCAL_ACTIONS);
   private lockService = inject(LockService);
   private opLogStore = inject(OperationLogStoreService);
   private vectorClockService = inject(VectorClockService);
@@ -140,7 +141,7 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
    */
   notifyStuckDeferredBuffer$ = createEffect(
     () =>
-      this.actions$.pipe(
+      this.localActions$.pipe(
         filter(() => consumeDeferredBufferStuckNotice()),
         tap(() =>
           this.snackService.open({

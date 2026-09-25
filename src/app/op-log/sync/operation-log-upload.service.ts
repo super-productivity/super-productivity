@@ -193,27 +193,6 @@ export class OperationLogUploadService {
         return;
       }
 
-      // One request carries one clientId, and SuperSync permanently rejects
-      // (INVALID_CLIENT_ID) every op authored under another one. After a
-      // clientId rotation the outbox can span two ids: upload the oldest
-      // author's leading run now and leave the rest pending for the next sync
-      // (#9371). A run, not a filter, so ops still reach the server in log
-      // order. File-based providers do no per-op check and must keep the whole
-      // set, since their snapshot already reflects every pending op.
-      const clientId = pendingOps[0].op.clientId;
-      const otherAuthorIdx = pendingOps.findIndex(
-        (entry) => entry.op.clientId !== clientId,
-      );
-      const roundOps =
-        syncProvider.providerMode === 'fileSnapshotOps' || otherAuthorIdx === -1
-          ? pendingOps
-          : pendingOps.slice(0, otherAuthorIdx);
-      if (roundOps.length < pendingOps.length) {
-        OpLog.warn(
-          `OperationLogUploadService: ${pendingOps.length - roundOps.length} pending op(s) ` +
-            'follow a clientId change; deferring them to the next sync.',
-        );
-      }
       // Use let so we can update between chunks to avoid duplicate piggybacked ops
       let lastKnownServerSeq = await syncProvider.getLastServerSeq();
       // Track highest received sequence across ALL chunks to prevent regression
@@ -278,7 +257,7 @@ export class OperationLogUploadService {
       const isGenesisToSkip = (entry: OperationLogEntry): boolean =>
         syncProvider.providerMode !== 'fileSnapshotOps' &&
         isGenesisEntityType(entry.op.entityType);
-      const uploadableOps = roundOps.filter((entry) => !isGenesisToSkip(entry));
+      const uploadableOps = pendingOps.filter((entry) => !isGenesisToSkip(entry));
 
       // Separate full-state operations (backup imports, repairs) from regular ops
       // Full-state ops are uploaded via snapshot endpoint for better efficiency
@@ -403,7 +382,7 @@ export class OperationLogUploadService {
       // just dropped in favour of a remote one, the pending genesis op is what
       // makes the incoming-import gate prompt on the next cycle instead of
       // silently replacing this client's state. (#9921)
-      const genesisSeqs = roundOps.filter(isGenesisToSkip).map((entry) => entry.seq);
+      const genesisSeqs = pendingOps.filter(isGenesisToSkip).map((entry) => entry.seq);
       if (genesisSeqs.length > 0 && droppedFullStateOnExists) {
         OpLog.normal(
           'OperationLogUploadService: Keeping genesis op(s) pending — the local SYNC_IMPORT ' +
@@ -486,14 +465,24 @@ export class OperationLogUploadService {
       // A file upload embeds one full snapshot. Keep its atomically captured op
       // set in one request so a partial chunk failure cannot publish state that
       // already contains operations left for a later retry.
-      const chunks =
+      // A SuperSync request carries one clientId and the server permanently
+      // rejects (INVALID_CLIENT_ID) any op authored under another. After a
+      // clientId rotation the outbox can span two ids, so start a new chunk at
+      // every author change, keeping log order (#9371).
+      const runStarts = syncOps.flatMap((op, i) =>
+        i === 0 || op.clientId !== syncOps[i - 1].clientId ? [i] : [],
+      );
+      const toChunks = <T>(items: T[]): T[][] =>
         syncProvider.providerMode === 'fileSnapshotOps'
-          ? [syncOps]
-          : chunkArray(syncOps, MAX_OPS_PER_UPLOAD_REQUEST);
-      const correspondingEntries =
-        syncProvider.providerMode === 'fileSnapshotOps'
-          ? [uploadEntries]
-          : chunkArray(uploadEntries, MAX_OPS_PER_UPLOAD_REQUEST);
+          ? [items]
+          : runStarts.flatMap((runStart, r) =>
+              chunkArray(
+                items.slice(runStart, runStarts[r + 1] ?? items.length),
+                MAX_OPS_PER_UPLOAD_REQUEST,
+              ),
+            );
+      const chunks = toChunks(syncOps);
+      const correspondingEntries = toChunks(uploadEntries);
 
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
@@ -507,7 +496,7 @@ export class OperationLogUploadService {
         try {
           response = await syncProvider.uploadOps(
             chunk,
-            clientId,
+            chunk[0].clientId,
             lastKnownServerSeq,
             localStateSnapshot,
           );

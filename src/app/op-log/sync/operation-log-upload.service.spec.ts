@@ -381,25 +381,29 @@ describe('OperationLogUploadService', () => {
           createMockEntry(3, 'op-old-2', 'client-old'),
         ];
 
-        it("uploads only the oldest author's leading run and leaves the rest pending", async () => {
+        it('sends one request per same-author run, in log order, in one call', async () => {
           mockOpLogStore.getUnsynced.and.resolveTo(mixedOutbox());
-          mockApiProvider.uploadOps.and.resolveTo({
-            results: [{ opId: 'op-old-1', accepted: true }],
+          mockApiProvider.uploadOps.and.callFake(async (ops: SyncOperation[]) => ({
+            results: ops.map((op) => ({ opId: op.id, accepted: true })),
             latestSeq: 10,
             newOps: [],
-          });
+          }));
 
           const result = await service.uploadPendingOps(mockApiProvider);
 
-          expect(mockApiProvider.uploadOps).toHaveBeenCalledTimes(1);
-          const [ops, requestClientId] = mockApiProvider.uploadOps.calls.mostRecent()
-            .args as unknown as [SyncOperation[], string];
-          expect(requestClientId).toBe('client-old');
-          // op-old-2 waits behind op-new so the server still sees log order.
-          expect(ops.map((op) => op.id)).toEqual(['op-old-1']);
-          expect(mockOpLogStore.markSynced).toHaveBeenCalledOnceWith([1]);
+          const requests = mockApiProvider.uploadOps.calls
+            .allArgs()
+            .map(([ops, requestClientId]) => ({
+              requestClientId,
+              ids: (ops as SyncOperation[]).map((op) => op.id),
+            }));
+          expect(requests).toEqual([
+            { requestClientId: 'client-old', ids: ['op-old-1'] },
+            { requestClientId: 'client-new', ids: ['op-new'] },
+            { requestClientId: 'client-old', ids: ['op-old-2'] },
+          ]);
           expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
-          expect(result.uploadedCount).toBe(1);
+          expect(result.uploadedCount).toBe(3);
           expect(result.rejectedOps).toEqual([]);
         });
 

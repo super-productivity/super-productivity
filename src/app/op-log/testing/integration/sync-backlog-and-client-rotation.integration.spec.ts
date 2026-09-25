@@ -361,10 +361,14 @@ describe('Sync backlog and clientId rotation (integration)', () => {
         await opLogStore.append(op, 'local');
       }
 
-      // One round per run of same-author ops: before×2, after, before.
-      for (let round = 0; round < 3; round++) {
-        await syncService.uploadPendingOps(provider);
-      }
+      await syncService.uploadPendingOps(provider);
+
+      // One request per run of same-author ops: before×2, after, before.
+      expect(provider.uploadRequests.map((request) => request.clientId)).toEqual([
+        'client-before',
+        'client-after',
+        'client-before',
+      ]);
 
       for (const request of provider.uploadRequests) {
         const authors = new Set(
