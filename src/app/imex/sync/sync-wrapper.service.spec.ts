@@ -2385,11 +2385,13 @@ describe('SyncWrapperService', () => {
         expect(data.local.lastUpdateAction).not.toContain('0 local changes');
       });
 
-      it('keeps a 0 pending count when a remote snapshot exists', async () => {
+      it('reports a fresh snapshot conflict local count as unknown, not 0 (#9391)', async () => {
+        // File-based fresh join: meaningful store data, no pending ops, remote snapshot.
         const conflictError = new LocalDataConflictError(
           0,
           { tasks: [] },
           { clientB: 5 },
+          null,
         );
         mockSyncService.downloadRemoteOps.and.rejectWith(conflictError);
         mockMatDialog.open.and.returnValue({
@@ -2401,7 +2403,8 @@ describe('SyncWrapperService', () => {
         const { data } = mockMatDialog.open.calls.mostRecent().args[1] as {
           data: ConflictData;
         };
-        expect(data.localUnsyncedOpsCount).toBe(0);
+        expect(data.localUnsyncedOpsCount).toBeUndefined();
+        expect(data.local.lastUpdateAction).toBe('?');
       });
 
       it('still presents a remote snapshot as full data', async () => {
@@ -2425,6 +2428,7 @@ describe('SyncWrapperService', () => {
           tasks: [{ id: 'remote-task' }],
         } as unknown as ConflictData['remote']['mainModelData']);
         expect(dialogConfig.data.remote.lastUpdateAction).toBe('Remote data');
+        expect(dialogConfig.data.localUnsyncedOpsCount).toBe(3);
       });
 
       it('should call forceUploadLocalState when user chooses USE_LOCAL', async () => {
