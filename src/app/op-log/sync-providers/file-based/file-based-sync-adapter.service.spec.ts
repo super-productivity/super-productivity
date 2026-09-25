@@ -3129,6 +3129,60 @@ describe('FileBasedSyncAdapterService', () => {
       ).toBeResolved();
     });
 
+    it('does not flag a snapshot base as a gap before a clock is recorded (#9170)', async () => {
+      const base = { client2: 5 };
+      const replaced = createMockSyncData({
+        syncVersion: 2,
+        vectorClock: base,
+        snapshotBaseClock: base,
+        clientId: 'client2',
+      });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(replaced), rev: 'rev-1' }),
+      );
+      await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(2);
+      // First sync after upgrading: persisted state predates last-seen clocks.
+      service['_lastSeenVectorClocks'].clear();
+      crossPollBoundary();
+
+      // An ordinary tail on top of that base. A gap would force a seq-0
+      // download, and with pending local ops a conflict dialog.
+      const tail = createMockSyncData({
+        syncVersion: 3,
+        vectorClock: { client2: 6 },
+        snapshotBaseClock: base,
+        clientId: 'client2',
+        recentOps: [
+          {
+            id: 'op-tail',
+            c: 'client2',
+            a: 'HA',
+            o: 'ADD',
+            e: 'TASK',
+            d: 'task-1',
+            v: { client2: 6 },
+            t: Date.now(),
+            s: 1,
+            p: { title: 'Task 1' },
+            sv: 3,
+          } as never,
+        ],
+      });
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE) return { rev: 'rev-2' };
+        throw new RemoteFileNotFoundAPIError('not found');
+      });
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(tail), rev: 'rev-2' }),
+      );
+
+      const result = await adapter.downloadOps(2);
+
+      expect(result.gapDetected).toBeFalsy();
+      expect(result.ops.map(({ op }) => op.id)).toEqual(['op-tail']);
+    });
+
     it('(b) proceeds with the full download when the remote rev changed', async () => {
       const seed = createMockSyncData({ syncVersion: 2, recentOps: [] });
       mockProvider.downloadFile.and.returnValue(

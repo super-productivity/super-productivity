@@ -259,8 +259,8 @@ export class FileBasedSyncAdapterService {
         if (state.revs) {
           this._lastSeenRevs = new Map(Object.entries(state.revs));
         }
-        // #9170: back-compat — until a clock is recorded, lineage checks stay off
-        // and any snapshot base counts as unseen (one extra seq-0 re-download).
+        // #9170: back-compat — until a clock is recorded, lineage and snapshot
+        // base checks stay off (#10258).
         if (state.lastSeenClocks) {
           this._lastSeenVectorClocks = new Map(Object.entries(state.lastSeenClocks));
         }
@@ -3029,7 +3029,7 @@ export class FileBasedSyncAdapterService {
     snapshotBaseClock: VectorClock | undefined,
   ): void {
     const lastSeenClock = this._lastSeenVectorClocks.get(providerKey);
-    if (lastSeenClock && isSnapshotBaseUnseen(snapshotBaseClock, lastSeenClock)) {
+    if (isSnapshotBaseUnseen(snapshotBaseClock, lastSeenClock)) {
       throw new UploadRevToMatchMismatchAPIError(
         'FileBasedSyncAdapter: Remote was replaced by a snapshot this client has not ' +
           'loaded. Next sync cycle will download it before uploading.',

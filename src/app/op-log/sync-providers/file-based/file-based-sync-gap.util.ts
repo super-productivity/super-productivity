@@ -36,15 +36,18 @@ export interface GapDetectionResult {
 /**
  * Whether a remote replacement's base clock is not covered by the last file
  * clock this client committed, i.e. it has not hydrated that snapshot (#9170).
+ * Without a recorded clock (first sync after upgrading) there is no baseline to
+ * judge by: flagging would force a seq-0 download and, with pending local ops, a
+ * conflict dialog. The resulting blind spot is tracked in #10258.
  */
 export const isSnapshotBaseUnseen = (
   snapshotBaseClock: VectorClock | undefined,
   lastSeenClock: VectorClock | undefined,
 ): boolean => {
-  if (!snapshotBaseClock) {
+  if (!snapshotBaseClock || !lastSeenClock) {
     return false;
   }
-  const comparison = compareVectorClocks(snapshotBaseClock, lastSeenClock ?? {});
+  const comparison = compareVectorClocks(snapshotBaseClock, lastSeenClock);
   return comparison === 'GREATER_THAN' || comparison === 'CONCURRENT';
 };
 
