@@ -1,7 +1,7 @@
 # S1 result: stale v2 snapshots (#10256)
 
-**Status:** implemented and verified locally; ready for user review. No push,
-public post, merge, or format rollout. Full scheduled CI remains outstanding.
+**Status:** implemented and verified locally; prepared for draft PR review.
+Full scheduled CI remains outstanding; no integration or format rollout.
 
 - Starting SHA: `9177c3afed6429934632b23de936cda8c6603fde`.
 - Validated final implementation SHA: `7cd8d48c9a79bd70b2b612e0a5f2be13db07b655`.
@@ -41,7 +41,8 @@ before uploading, or assert refusal and retry. The #10119 cursor test retains
 v3's original path and checks v2's refusal before its cursor advances.
 No mock applier establishes convergence; the browser test provides that evidence.
 
-The service remains 3,292 physical lines, its baseline size. No overlap with
+The service stays at its respective baseline size: 3,292 physical lines in the
+original task and 3,285 on the newer PR base. No overlap with
 S2's conflict-resolution implementation, package manifests, v3 defaults,
 journal, SQLite, or agent-control files. The pre-existing injected `AGENTS.md`
 working-tree change is excluded from all commits.
@@ -112,6 +113,32 @@ confidence for that provider remains medium. No production or test changes
 resulted from this pass, so the recorded implementation SHA and test results
 remain applicable. Claude did not run tests; no authenticated OneDrive check
 or full scheduled CI run is claimed.
+
+### PR branch validation
+
+Prepared `fix/sync-stale-v2-snapshots-10256` from current `master`,
+`b9c3c4f6473f2a4a03a150a30d3c05403b35db8d`. Only the five S1 commits were copied;
+`git range-diff` confirms unchanged patches. The PR excludes the inherited
+architecture-review material and S2 reproductions. The original task branch
+and other tasks' worktrees remain untouched.
+
+Tested PR SHA: `fd7b7c9f88950b1f7c38a1c7e7857b700470fdc2`. The same focused
+adapter/integration command below passed **469 tests with 8 existing skips**;
+the extra cases come from the newer base. All ten `checkFile` commands and
+`git diff --check origin/master...HEAD` passed. The ignored Karma config used
+port 9891 because 9877 was occupied. The provider package is unchanged from the
+recorded 450-test/typecheck run.
+
+At the user's instruction, the local WebDAV rerun was stopped and further E2E
+validation is assigned to CI. That interrupted run (one interrupted case,
+three not run) is not a pass. The previous four passing WebDAV cases remain
+evidence on the original tested implementation; the full scheduled suites must
+validate the PR branch. Only the S1 frontend and S1-owned WebDAV container were
+stopped. PR preparation evidence is in `.tmp/sync-S1/pr-{focused,check-files,webdav}.log`
+inside the isolated PR worktree. Subsequent report changes are documentation only.
+
+The following table records the original task-branch validation; the PR-base
+rerun results are above.
 
 | Check                                                           | Baseline                                                          | Final result                         |
 | --------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------ |
@@ -249,9 +276,10 @@ local edits and the existing first-contact conflict decision.
 
 Adds real three-client WebDAV regressions with v3 controls, empty-revision
 adapter coverage, and a strengthened backup-healing test. Re-enables the existing
-stale-monolith seeds. Validation: all four WebDAV cases, 464 focused
-adapter/integration tests, 450 provider tests plus typecheck, and per-file
-formatting/lint pass. Eight
-pre-existing unrelated cases remain skipped; full scheduled CI is outstanding.
+stale-monolith seeds. Validation: 469 focused adapter/integration tests on the PR
+branch and per-file formatting/lint pass. Earlier evidence covers all four
+WebDAV cases and 450 provider tests plus typecheck; the provider package is
+unchanged. Eight pre-existing unrelated cases remain skipped. Further E2E runs
+are assigned to CI; the full scheduled gate is outstanding.
 No schema/format changes. Old writers and already-inconsistent snapshots remain
 a compatibility limit. OneDrive revision-source equality remains unverified.
