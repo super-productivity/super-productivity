@@ -2,6 +2,7 @@ import { WorkContextType } from '../../features/work-context/work-context.model'
 import { NoteState } from '../../features/note/note.model';
 import { SimpleCounterState } from '../../features/simple-counter/simple-counter.model';
 import { BoardsState } from '../../features/boards/store/boards.reducer';
+import { IssueProviderState } from '../../features/issue/issue.model';
 import {
   ActionType,
   extractActionPayload,
@@ -20,6 +21,7 @@ export interface ReorderReplaySnapshot extends SectionReplaySnapshot {
   note: NoteState;
   simpleCounter: SimpleCounterState;
   boards: BoardsState;
+  issueProvider: IssueProviderState;
 }
 
 const reorderTypes = new Map<ActionType, Operation['entityType']>([
@@ -27,6 +29,7 @@ const reorderTypes = new Map<ActionType, Operation['entityType']>([
   [ActionType.COUNTER_UPDATE_ORDER, 'SIMPLE_COUNTER'],
   [ActionType.BOARDS_SORT, 'BOARD'],
   [ActionType.SECTION_UPDATE_ORDER, 'SECTION'],
+  [ActionType.ISSUE_PROVIDER_SORT_FIRST, 'ISSUE_PROVIDER'],
 ]);
 
 const payloadOf = (op: Operation): Record<string, unknown> =>
@@ -117,6 +120,41 @@ const isOrderAndContent = (order: Operation, edit: Operation): boolean => {
         hasOnlyFields(section?.changes, ['title'])
       );
     }
+    case ActionType.ISSUE_PROVIDER_UPDATE: {
+      const provider = p?.['issueProvider'] as
+        | { id?: string; changes?: Record<string, unknown> }
+        | undefined;
+      const changes = provider?.changes;
+      // The GitLab editor submits its full model. Admit only this reproduced
+      // shape, with an unchanged identity: updateOne may otherwise change ids.
+      return (
+        order.entityType === 'ISSUE_PROVIDER' &&
+        provider?.id === edit.entityId &&
+        changes?.['id'] === edit.entityId &&
+        changes?.['issueProviderKey'] === 'GITLAB' &&
+        typeof changes?.['isEnabled'] === 'boolean' &&
+        hasOnlyFields(changes, [
+          'id',
+          'issueProviderKey',
+          'isEnabled',
+          'isAutoPoll',
+          'isAutoAddToBacklog',
+          'isIntegratedAddTaskBar',
+          'defaultProjectId',
+          'pinnedSearch',
+          'pollingMode',
+          'defaultTagIds',
+          'defaultNote',
+          'project',
+          'gitlabBaseUrl',
+          'token',
+          'filterUsername',
+          'scope',
+          'filter',
+          'isEnableTimeTracking',
+        ])
+      );
+    }
     default:
       return false;
   }
@@ -133,6 +171,7 @@ export const isReorderConflictOperation = (op: Operation): boolean =>
     ActionType.COUNTER_SET_FOR_DATE,
     ActionType.BOARDS_UPDATE,
     ActionType.SECTION_UPDATE,
+    ActionType.ISSUE_PROVIDER_UPDATE,
   ].includes(op.actionType);
 
 /** Only these reproduced content writes commute with the corresponding reorder. */
@@ -179,13 +218,17 @@ export const projectReorderConflictAgainstState = (
           ? 'note'
           : operation.entityType === 'SECTION'
             ? 'section'
-            : 'updates';
+            : operation.entityType === 'ISSUE_PROVIDER'
+              ? 'issueProvider'
+              : 'updates';
       const entity =
         operation.entityType === 'NOTE'
           ? snapshot.note.entities[id]
           : operation.entityType === 'SECTION'
             ? snapshot.section.entities[id]
-            : snapshot.boards.boardCfgs.find((board) => board.id === id);
+            : operation.entityType === 'ISSUE_PROVIDER'
+              ? snapshot.issueProvider.entities[id]
+              : snapshot.boards.boardCfgs.find((board) => board.id === id);
       if (!entity) return { kind: 'superseded' };
       const original =
         key === 'updates' ? p[key] : (p[key] as { changes: unknown }).changes;
@@ -223,6 +266,11 @@ export const projectReorderConflictAgainstState = (
       break;
     case ActionType.BOARDS_SORT:
       ids = snapshot.boards.boardCfgs.map((board) => board.id);
+      break;
+    case ActionType.ISSUE_PROVIDER_SORT_FIRST:
+      // Sort-first appends unlisted providers. Carry the entire current list so
+      // a replacement preserves later additions, deletions and their positions.
+      ids = snapshot.issueProvider.ids;
       break;
     case ActionType.SECTION_UPDATE_ORDER:
       return projectSectionReplayAgainstState(operation, snapshot);

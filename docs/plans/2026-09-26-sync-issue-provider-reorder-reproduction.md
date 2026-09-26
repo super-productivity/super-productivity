@@ -1,5 +1,12 @@
 # Issue-provider reorder/settings sync-stop reproduction
 
+**Follow-up:** This branch now includes the narrow GitLab reorder/settings fix
+and its regression suite. The report below records the original reproduction-only
+assignment and failing baseline; its original scope restrictions are historical.
+See [fix validation](#fix-validation) for the subsequent implementation and checks.
+
+## Original reproduction
+
 Evidence deliverable only; no production fix. Rechecked on published master
 `db3549b114ed3954f70add9cf8388af676cb2bfb` (2026-09-26), after S5 retirement
 and #10288. The empty task branch was refreshed from `9177c3afed` without a
@@ -276,3 +283,82 @@ A later fix must preserve these observed contracts and supply its own evidence:
 No production, shared-helper, habit/WebDAV-spec, model/action/schema/wire,
 dependency or agent-control change is part of this deliverable. No new resolver
 allowlist, generic fallback or recovery storage is proposed.
+
+## Fix validation
+
+The follow-up admits only the reproduced identity-preserving GitLab editor
+shape through the existing order/content commutativity and retained-evidence
+checks. Rejected provider operations are projected against durable current
+state: a reorder carries the complete current provider list, while an update
+carries current values of its original fields. This preserves later additions,
+deletions and settings changes without recreating a deleted provider.
+
+Production changes are confined to `reorder-conflict.util.ts` and the resolver's
+snapshot selection. There is no schema bump, new persisted field, action,
+dependency or public API. Other provider kinds, competing reorders, unknown
+settings fields and identity-changing updates remain outside this exception.
+
+The checked-in regression is
+[`supersync-issue-provider-reorder-conflict.spec.ts`](../../e2e/tests/sync/supersync-issue-provider-reorder-conflict.spec.ts).
+Its matrix covers both pending-local directions and timestamp winners,
+interrupted upload/restart/retry, compaction that removes the causal proof,
+fresh-client replay, and both released-client replacement histories. Compaction
+intentionally retains the unsupported pending reorder and the recovery dialog;
+it does not silently acknowledge it or replace the dataset.
+
+Released-client checks use unmodified v19.1.0 assets from the official
+[`app-play-release.apk`](https://github.com/super-productivity/super-productivity/releases/download/v19.1.0/app-play-release.apk).
+SHA-256 is `127af90995763d88a502eae428af9dc395dcdf17d3f8f1be498f56dfa4aab9dc`,
+matching the GitHub release asset digest. All 1,229 extracted `assets/public`
+files match the APK bytes, with no extra files. The released asset server uses
+an ephemeral port so separate compatibility specs can run concurrently.
+
+The fixed client must own conflict resolution. A released client encountering
+the crossing first still opens its safety dialog; the matrix verifies pending
+work, provider state and visible tabs/tasks survive Cancel and restart. This is
+a compatibility limit, not successful convergence on an unchanged old client.
+
+Checks completed on 2026-09-26:
+
+- `npm run test:file src/app/op-log/testing/integration/reorder-conflict-wedge.integration.spec.ts`:
+  **46 passed**, including status-blind replay and later provider mutations.
+- `npm run test:file src/app/op-log/sync/superseded-operation-resolver.service.spec.ts`:
+  **67 passed**.
+- `npm run test:file src/app/op-log/sync/conflict-resolution.service.spec.ts`:
+  **242 passed**.
+- All **11 browser scenarios verified**, with zero skips/retries. The full
+  matrix initially passed 10; the last old-client case observed the error icon
+  before its asynchronous dialog. Its failure screenshot already showed the
+  expected dialog. After changing that assertion to wait for the visible
+  dialog, both old-client-first cases passed in the focused rerun.
+- Negative control: restoring both production files from the pre-fix `HEAD`
+  (`15340ac3e8f`, identical here to `db3549b114`) made the unchanged
+  `local-order / remote-newer` regression fail at its desired success assertion
+  with `UnsupportedMultiEntityConflictError`. The reviewed source bytes were
+  restored automatically and the fixed app rebuilt afterward.
+- `npm run checkFile` passed for all five changed TypeScript files; strict
+  standalone E2E TypeScript checking, documentation links, Markdown formatting
+  and `git diff --check` passed.
+
+The browser run used the same task-isolated server and runner as the original
+reproduction, with the fixed source and released assets:
+
+```bash
+SUPERSYNC_E2E_URL=http://127.0.0.1:1942 E2E_REQUIRE_SUPERSYNC=true \
+  COMPAT_OLD_ASSETS=/tmp/sync-s2-release-v19.1.0/assets/public \
+  node_modules/.bin/playwright test \
+  --config /tmp/issue-provider-repro-20260926/playwright.config.cjs
+# The focused assertion rerun used the same command plus:
+# --grep 'old resolves first'
+```
+
+Follow-up logs are under `/tmp/issue-provider-repro-20260926/`:
+`integration-pr-review.log`, `resolver-pr-review.log`,
+`conflict-resolution-pr-review.log`, `e2e-pr-review.log`,
+`released-first-pr-review.log`, `baseline-pr-review.log`, `typecheck-pr-review.log` and
+`docs-links-pr-review.log`. The full matrix's traces/evidence are in
+`reruns/1790455814116/`, the focused rerun is in `reruns/1790457081252/`, and
+the negative control is in `reruns/1790457230349/`.
+Sandbox-blocked launch attempts and the initially incomplete test-state type
+are excluded from passing validation. No full provider suite or WebDAV run is
+claimed.

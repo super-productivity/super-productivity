@@ -274,6 +274,7 @@ export class SupersededOperationResolverService {
       note: snapshot.note as ReorderReplaySnapshot['note'],
       simpleCounter: snapshot.simpleCounter as ReorderReplaySnapshot['simpleCounter'],
       boards: snapshot.boards as ReorderReplaySnapshot['boards'],
+      issueProvider: snapshot.issueProvider as ReorderReplaySnapshot['issueProvider'],
     };
   }
 
