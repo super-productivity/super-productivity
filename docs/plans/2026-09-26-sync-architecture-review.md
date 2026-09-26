@@ -595,7 +595,7 @@ Independent of the conflict work:
     `SYNC_MULTI_ENTITY_UNSUPPORTED side=local actionType=[Note] Update Note Order entityCount=2`.
 - **Not affected:** `updateProjectOrder` and `updateTagOrder` have the same
   shape but no caller today.
-- **Issue:** _to be filed_.
+- **Issue:** #10264.
 
 ### Bug 2 — File-sync upload writes a stale snapshot (already filed)
 

@@ -9,8 +9,8 @@ import {
 } from '../../utils/supersync-helpers';
 
 /**
- * KNOWN GAP — pending (`test.fixme`) until the multi-entity reorder class is
- * fixed. See docs/plans/2026-09-26-sync-architecture-review.md ("Bugs found").
+ * KNOWN GAP (#10264) — pending (`test.fixme`) until the multi-entity reorder
+ * class is fixed. See docs/plans/2026-09-26-sync-architecture-review.md ("Bugs found").
  *
  * Dragging a note in the notes panel dispatches `updateNoteOrder`
  * (`NotesComponent.drop` → `NoteService.updateOrder`), a multi-entity operation

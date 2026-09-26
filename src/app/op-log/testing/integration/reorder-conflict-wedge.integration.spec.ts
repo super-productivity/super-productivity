@@ -36,7 +36,7 @@ import { ValidateStateService } from '../../validation/validate-state.service';
 import { resetTestUuidCounter, TestClient } from './helpers/test-client.helper';
 
 /**
- * KNOWN GAP (see docs/plans/2026-09-26-sync-architecture-review.md, "Bugs found").
+ * KNOWN GAP (#10264; see docs/plans/2026-09-26-sync-architecture-review.md, "Bugs found").
  *
  * The UI reorder actions for notes, habits (simple counters), boards and
  * sections are multi-entity operations: `entityIds` lists every reordered id.
