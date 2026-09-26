@@ -58,7 +58,7 @@ add/update/overwrite modes. This is the only shared-provider production edit.
   selection, target-scoped cache, explicit-migration guard and initial tombstone.
 - `src/app/op-log/sync-providers/file-based/file-based-sync-format.ts`:
   extracted legacy reader/revision annotation plus discovery. The adapter shrinks
-  from 3,284 to 3,235 physical lines; its grandfathered ceiling is not increased.
+  from 3,284 to 3,236 physical lines; its grandfathered ceiling is not increased.
 - `src/app/features/config/default-global-config.const.ts`: omit the old default
   `false`; `global-config.model.ts`: document the existing optional field.
 - `packages/sync-providers/src/file-based/dropbox/dropbox.ts`: preserve caller
@@ -68,7 +68,7 @@ add/update/overwrite modes. This is the only shared-provider production edit.
   selection, error, target-switch, late-v2 and real Dropbox/API regression tests.
 - `e2e/pages/sync.page.ts`: narrowly allow untouched product format defaults;
   explicitly toggle the checkbox for deliberate v2/v3 fixtures.
-- `e2e/tests/sync/webdav-format-rollout.spec.ts`: six real-app/server cases,
+- `e2e/tests/sync/webdav-format-rollout.spec.ts`: seven real-app/server cases,
   independent of `E2E_WEBDAV_FORMAT`.
 - `src/assets/i18n/en.json`,
   `docs/wiki/3.08-Sync-Integration-Comparison.md`,
@@ -110,19 +110,19 @@ WebDAV server, and this worktree's Angular app at `http://localhost:4256`.
 from other tasks. Browser commands start with
 `npx playwright test --config e2e/playwright.config.ts`.
 
-| Check                                                                                                                                       | Result / evidence                                                                                                                                                                                                                     |
-| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run test:file -- src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.spec.ts --no-progress`                       | 166 passed; `/tmp/sync-s6b-unit-cache-final.log`                                                                                                                                                                                      |
-| `npm run test:file -- src/app/imex/sync/sync-config.service.spec.ts --include src/app/op-log/validation/frozen-state.spec.ts --no-progress` | 48 passed; `/tmp/sync-s6b-config-frozen.log`                                                                                                                                                                                          |
-| `npm run sync-providers:test` (includes package typecheck)                                                                                  | 451 passed; `/tmp/sync-s6b-providers-final.log`                                                                                                                                                                                       |
-| `npx tsc --noEmit -p src/tsconfig.app.json`                                                                                                 | Passed; `/tmp/sync-s6b-type-app-cache-final.log`                                                                                                                                                                                      |
-| `npx tsc --noEmit -p src/tsconfig.spec.json`                                                                                                | Passed; `/tmp/sync-s6b-type-spec-cache-final.log`                                                                                                                                                                                     |
-| `npx tsc --noEmit -p e2e/tsconfig.json --baseUrl .`                                                                                         | Passed; `/tmp/sync-s6b-type-e2e-baseurl.log`                                                                                                                                                                                          |
-| `npx tsc --noEmit -p e2e/tsconfig.json`                                                                                                     | Reproduces the known baseline absolute `src/...` import-resolution error; `/tmp/sync-s6b-type-e2e.log`. S6A already reproduced it on unmodified master.                                                                               |
-| `npm run checkFile <file>` for every modified/added TS file                                                                                 | Passed; `/tmp/sync-s6b-check*.log` (latest reruns supersede intermediate fixture/lint errors).                                                                                                                                        |
-| `--grep @webdav --list`, once per mode                                                                                                      | Identical: 67 tests in 23 files (61 existing + 6 rollout), `/tmp/sync-s6b-discovery-v2.log` and `-v3.log`. No exclusions added.                                                                                                       |
-| Focused existing regressions, `E2E_WEBDAV_FORMAT=v3 --workers=2`                                                                            | 17 passed, no skips/retries; `/tmp/sync-s6b-regressions-v3.log`.                                                                                                                                                                      |
-| Final rollout runs                                                                                                                          | 6 passed in v3 mode after the final cache correction, no skips/retries; `/tmp/sync-s6b-rollout-cache-final.log`. 10 passed in v2 mode (six rollout plus generic sync and encryption), no skips/retries; `/tmp/sync-s6b-v2-green.log`. |
+| Check                                                                                                                                       | Result / evidence                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run test:file -- src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.spec.ts --no-progress`                       | 167 passed; `/tmp/sync-s6b-switch-unit-green.log`                                                                                                                                                                                                                                                                            |
+| `npm run test:file -- src/app/imex/sync/sync-config.service.spec.ts --include src/app/op-log/validation/frozen-state.spec.ts --no-progress` | 48 passed; `/tmp/sync-s6b-config-frozen.log`                                                                                                                                                                                                                                                                                 |
+| `npm run sync-providers:test` (includes package typecheck)                                                                                  | 451 passed; `/tmp/sync-s6b-providers-final.log`                                                                                                                                                                                                                                                                              |
+| `npx tsc --noEmit -p src/tsconfig.app.json`                                                                                                 | Passed; `/tmp/sync-s6b-switch-type-app.log`                                                                                                                                                                                                                                                                                  |
+| `npx tsc --noEmit -p src/tsconfig.spec.json`                                                                                                | Passed; `/tmp/sync-s6b-switch-type-spec.log`                                                                                                                                                                                                                                                                                 |
+| `npx tsc --noEmit -p e2e/tsconfig.json --baseUrl .`                                                                                         | Passed; `/tmp/sync-s6b-switch-type-e2e.log`                                                                                                                                                                                                                                                                                  |
+| `npx tsc --noEmit -p e2e/tsconfig.json`                                                                                                     | Reproduces the known baseline absolute `src/...` import-resolution error; `/tmp/sync-s6b-type-e2e.log`. S6A already reproduced it on unmodified master.                                                                                                                                                                      |
+| `npm run checkFile <file>` for every modified/added TS file                                                                                 | Passed; `/tmp/sync-s6b-check*.log` (latest reruns supersede intermediate fixture/lint errors).                                                                                                                                                                                                                               |
+| `--grep @webdav --list`, once per mode                                                                                                      | Identical: 68 tests in 23 files (61 existing + 7 rollout), `/tmp/sync-s6b-switch-discovery-v2.log` and `-v3.log`. No exclusions added.                                                                                                                                                                                       |
+| Focused existing regressions, `E2E_WEBDAV_FORMAT=v3 --workers=2`                                                                            | 17 passed, no skips/retries; `/tmp/sync-s6b-regressions-v3.log`.                                                                                                                                                                                                                                                             |
+| Final rollout runs                                                                                                                          | 7 passed in v3 mode after the review fix, no skips/retries; `/tmp/sync-s6b-switch-green.log`. The new target-switch case also passed in v2 mode; `/tmp/sync-s6b-switch-v2.log`. Earlier implementation: 10 passed in v2 mode (six rollout plus generic sync and encryption), no skips/retries; `/tmp/sync-s6b-v2-green.log`. |
 
 The 17-case command selects `webdav-surgical-sync.spec.ts` (all six migration/
 restart cases), `webdav-stale-monolith.spec.ts` (all four #10256 cases),
@@ -171,13 +171,50 @@ included.
   preserved. Explicit whole-dataset replacement retains its existing semantics
   and transport race limits.
 
+## Review follow-up: stale format cache on target switch
+
+The first independent subagent review found a P2 at the late-v2 upload guard:
+a legacy read finishing after target invalidation could cache `v2` under the
+shared provider key. The next sync then created v2 in a new empty folder.
+The fix discards that cached choice and lets the next sync rediscover the
+current remote; it adds no generation plumbing or persistent contract.
+
+- Unit red: `/tmp/sync-s6b-switch-unit-red.log` (1 failed, 166 passed).
+- Real app/server red on `ba3f2b2c745652f5e194b778da35189fa1d4cdfa`:
+  `/tmp/sync-s6b-switch-real-red.log` and `.tmp/s6b-switch-real-red/`.
+  The test seeds a real v2 payload, holds its final upload read in flight,
+  switches folders through the settings UI, then releases the old response.
+  The old code retries as v2; the new folder lacks `sync-ops.json`.
+- An initial browser attempt passed because it paused the fourth legacy GET,
+  an earlier server-migration read protected by the epoch guard. The corrected
+  fixture pauses the sixth GET, after both discovery/bootstrap pairs and upload
+  discovery. The existing late-v2 case now exercises this final upload read too.
+  Diagnostic logs are `/tmp/sync-s6b-switch-diagnostic-2.log`; temporary console
+  diagnostics were removed from the test.
+- Green adapter suite: 167 passed, `/tmp/sync-s6b-switch-unit-green.log`.
+- New regression with v2 suite selection: 1 passed, no retries/skips,
+  `/tmp/sync-s6b-switch-v2.log`.
+- Full local rollout: 7 passed in v3 mode, no retries/skips,
+  `/tmp/sync-s6b-switch-green.log`.
+- Fix commit: `96e050e40ba4485d7d77cb047a9821b5dfef861a`
+  (`fix(sync): rediscover folder format after a late legacy read`).
+- Second independent subagent review of fix `96e050e40b` and the overall
+  rollout: no actionable introduced defects found. The reviewer checked
+  selection, explicit preferences, migration, invalidation, marker writes,
+  Dropbox creation, and the recorded red/green evidence. Review was read-only;
+  it did not rerun suites or replace the final scheduled gates.
+- All three changed TS files passed `checkFile`:
+  `/tmp/sync-s6b-switch-check-{service,unit,e2e}.log`. App/spec/E2E typechecks
+  passed; the E2E command still needs the documented baseline `--baseUrl .`.
+
 ## Handoff gate
 
 Local implementation commit: `6e32a5ba13a6375ec32f4133b23d655c62f356bb`
 (`feat(sync): default new empty file sync folders to v3`), directly on the
-required S6A baseline. This handoff document is committed separately afterward.
+required S6A baseline. The review fix above follows this implementation;
+handoff updates are committed separately.
 The only remaining worktree modification is runtime-injected `AGENTS.md`, which
-is deliberately excluded from both commits. All local implementation checks
+is deliberately excluded from all commits. All local implementation checks
 listed above are complete; no local blocker remains.
 
 The parent must arrange
