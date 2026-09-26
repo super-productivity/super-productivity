@@ -46,6 +46,8 @@ const getRepairSummary = (payload: unknown): RepairSummary | undefined => {
   return summaryRecord as unknown as RepairSummary;
 };
 
+const MAX_LOGGED_REJECTION_CLOCK_SAMPLES = 5;
+
 // Re-export for consumers that import from this service
 export type {
   DownloadResultForRejection,
@@ -485,6 +487,7 @@ export class RejectedOpsHandlerService {
           // Normal download returned 0 ops but concurrent ops still pending.
           // This means our local clock is likely missing entries the server has.
           // Try a FORCE download from seq 0 to get ALL op clocks.
+          await this._logUnexplainedRejectionClocks(stillPendingOps);
           OpLog.normal(
             `RejectedOpsHandlerService: Download returned no new ops but ${stillPendingOps.length} ` +
               `concurrent ops still pending. Forcing full download from seq 0...`,
@@ -618,6 +621,58 @@ export class RejectedOpsHandlerService {
       mergedOpsCreated,
       retryExceededCount: opsExceededRetries.length,
     };
+  }
+
+  /**
+   * Diagnostics for a rejection the server could not explain with a newer op:
+   * the download returned nothing, yet the server's entity clock is not below
+   * ours. Logs clocks only (client ids + counters, no user content) so the
+   * missing entry can be read off an exported log — e.g. whether this client's
+   * own counter is already behind what the server has seen from it.
+   */
+  private async _logUnexplainedRejectionClocks(
+    ops: Array<{ opId: string; op: Operation; existingClock?: VectorClock }>,
+  ): Promise<void> {
+    try {
+      const localClock = (await this.opLogStore.getVectorClock()) ?? {};
+      const ownCounterBehindServerCount = ops.filter(
+        ({ op, existingClock }) =>
+          (existingClock?.[op.clientId] ?? 0) >= (op.vectorClock[op.clientId] ?? 0),
+      ).length;
+      OpLog.warn('RejectedOpsHandlerService: Rejected ops not explained by remote ops', {
+        count: ops.length,
+        ownCounterBehindServerCount,
+        localClockSize: Object.keys(localClock).length,
+        samples: ops
+          .slice(0, MAX_LOGGED_REJECTION_CLOCK_SAMPLES)
+          .map(({ opId, op, existingClock }) => {
+            // [server, op, local] counter per client id where the server's
+            // entity clock is ahead of this op — the entries it is missing.
+            const serverAhead: Record<string, [number, number, number]> = {};
+            for (const [clientId, serverCounter] of Object.entries(existingClock ?? {})) {
+              const opCounter = op.vectorClock[clientId] ?? 0;
+              if (serverCounter > opCounter) {
+                serverAhead[clientId] = [
+                  serverCounter,
+                  opCounter,
+                  localClock[clientId] ?? 0,
+                ];
+              }
+            }
+            return {
+              opId,
+              entityType: op.entityType,
+              opClientId: op.clientId,
+              serverAhead,
+            };
+          }),
+      });
+    } catch (e) {
+      // Diagnostics only — never let them block conflict resolution.
+      OpLog.warn('RejectedOpsHandlerService: Could not log rejection clocks', {
+        name: (e as Error | undefined)?.name,
+      });
+    }
   }
 
   private _rollbackResolutionAttempts(ops: ReadonlyArray<{ op: Operation }>): void {

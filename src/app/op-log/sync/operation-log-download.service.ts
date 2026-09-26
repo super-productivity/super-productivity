@@ -8,6 +8,7 @@ import {
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { LockService } from './lock.service';
 import { Operation, VectorClock } from '../core/operation.types';
+import { mergeVectorClocks } from '../../core/util/vector-clock';
 import { OpLog } from '../../core/log';
 import {
   OperationSyncCapable,
@@ -55,6 +56,34 @@ const isOpCoveredByLocalClock = (
     authorCounter <= knownCounter
   );
 };
+
+/**
+ * Resume point of an interrupted rejected-ops forced seq-0 download.
+ *
+ * That download re-fetches the server history (after its latest full-state op)
+ * only to collect op clocks; on a long history it spans dozens of pages. On
+ * mobile, backgrounding the app cuts the network mid-way, and restarting from
+ * seq 0 on every sync meant it never finished: the rejected ops stayed pending
+ * and sync never completed.
+ *
+ * A checkpoint only covers pages that yielded NO new op — pages whose ops are
+ * all already applied here. Skipping them on resume therefore loses nothing but
+ * their clocks, which are kept merged in `mergedClock` (every consumer of
+ * `allOpClocks` folds them into one clock anyway). The first page with a new op
+ * freezes the checkpoint, so unapplied ops are always re-downloaded.
+ *
+ * In memory only, keyed on the client id and the persisted cursor: any download
+ * that advances the cursor, a gap reset, or a completed forced download
+ * invalidates it.
+ */
+interface ForcedDownloadCheckpoint {
+  key: string;
+  sinceSeq: number;
+  mergedClock: VectorClock;
+  snapshotVectorClock?: VectorClock;
+  sawAnyOps: boolean;
+  sawEncryptedOp: boolean;
+}
 
 // Re-export for consumers that import from this service
 export type { DownloadResult } from '../core/types/sync-results.types';
@@ -147,6 +176,8 @@ export class OperationLogDownloadService implements OnDestroy {
   /** Timeout handle for clock drift retry check (cleaned up on destroy) */
   private clockDriftTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private clockDriftRetryServerTimestamp: number | null = null;
+
+  private forcedDownloadCheckpoint: ForcedDownloadCheckpoint | null = null;
 
   /**
    * True while a SuperSync backlog is only partly downloaded (#8763). The
@@ -295,6 +326,33 @@ export class OperationLogDownloadService implements OnDestroy {
         ? await this.opLogStore.getVectorClock()
         : null;
       let reDeliveredCount = 0;
+      // Only the rejected-ops re-delivery retry resumes: its result is used for
+      // clocks, never to replace local state (unlike a provider switch or raw
+      // rebuild, which must always see the whole history).
+      const checkpointKey =
+        forceFromSeq0 &&
+        !!options?.isReDeliveryRetry &&
+        isReDeliveryFilterActive &&
+        syncProvider.providerMode === 'superSyncOps'
+          ? `${clientId ?? ''}|${deliveredUpToSeq}`
+          : undefined;
+      const resumeFrom =
+        checkpointKey !== undefined &&
+        this.forcedDownloadCheckpoint?.key === checkpointKey
+          ? this.forcedDownloadCheckpoint
+          : undefined;
+      // Any other seq-0 download (provider switch, raw rebuild) re-baselines
+      // local state, so a checkpoint taken before it must not be resumed after.
+      if (forceFromSeq0 && !resumeFrom) {
+        this.forcedDownloadCheckpoint = null;
+      }
+      let checkpointClock: VectorClock = resumeFrom ? { ...resumeFrom.mergedClock } : {};
+      if (resumeFrom) {
+        allOpClocks.push({ ...resumeFrom.mergedClock });
+        snapshotVectorClock = resumeFrom.snapshotVectorClock;
+        sawAnyOps = resumeFrom.sawAnyOps;
+        sawEncryptedOp = resumeFrom.sawEncryptedOp;
+      }
       OpLog.verbose(
         `OperationLogDownloadService: [DEBUG] Starting download. ` +
           `lastServerSeq=${lastServerSeq}, appliedOpIds.size=${appliedOpIds.size}, clientId=${clientId}`,
@@ -306,9 +364,15 @@ export class OperationLogDownloadService implements OnDestroy {
         );
       }
 
+      if (resumeFrom) {
+        OpLog.normal(
+          `OperationLogDownloadService: Resuming interrupted forced download at seq ${resumeFrom.sinceSeq}`,
+        );
+      }
+
       // Download ops in pages
       let hasMore = true;
-      let sinceSeq = lastServerSeq;
+      let sinceSeq = resumeFrom ? resumeFrom.sinceSeq : lastServerSeq;
       let hasResetForGap = false;
       let iterationCount = 0;
       // Run-level password evidence for the failure log: ops decrypted on
@@ -386,6 +450,9 @@ export class OperationLogDownloadService implements OnDestroy {
           // for the rest of this download (every real serverSeq is >= 1).
           deliveredUpToSeq = 0;
           reDeliveredCount = 0; // pre-reset skips belong to the discarded epoch
+          // The checkpoint belongs to the old epoch too; the gap-reset
+          // re-download is never checkpointed (see `hasResetForGap` below).
+          this.forcedDownloadCheckpoint = null;
           snapshotVectorClock = undefined; // Clear snapshot clock to capture fresh one after reset
           snapshotState = undefined; // Clear snapshot state to capture fresh one after reset
           snapshotAppliedOpIds = undefined; // Clear snapshot boundary with the stale state
@@ -429,10 +496,12 @@ export class OperationLogDownloadService implements OnDestroy {
 
         // When force downloading from seq 0, capture ALL op clocks (including duplicates)
         // This allows rebuilding vector clock state from all known ops on the server
+        const pageClocks: VectorClock[] = [];
         if (forceFromSeq0) {
           for (const serverOp of response.ops) {
             if (serverOp.op.vectorClock) {
               allOpClocks.push(serverOp.op.vectorClock);
+              pageClocks.push(serverOp.op.vectorClock);
             }
           }
         }
@@ -555,6 +624,20 @@ export class OperationLogDownloadService implements OnDestroy {
         sinceSeq = nextSinceSeq;
         hasMore = response.hasMore;
 
+        if (checkpointKey !== undefined && !hasResetForGap && allNewOps.length === 0) {
+          for (const clock of pageClocks) {
+            checkpointClock = mergeVectorClocks(checkpointClock, clock);
+          }
+          this.forcedDownloadCheckpoint = {
+            key: checkpointKey,
+            sinceSeq,
+            mergedClock: checkpointClock,
+            ...(snapshotVectorClock ? { snapshotVectorClock } : {}),
+            sawAnyOps,
+            sawEncryptedOp,
+          };
+        }
+
         // Monotonicity check: warn if server seq decreased (indicates potential server bug)
         // Skip after gap reset: server was reset/replaced, so lower seq is expected
         if (response.latestSeq < lastServerSeq && !hasResetForGap) {
@@ -594,6 +677,12 @@ export class OperationLogDownloadService implements OnDestroy {
           }
           break;
         }
+      }
+
+      // The paging loop ended without throwing: the forced download is done (or
+      // failed for a reason a resume would not fix), so never resume it.
+      if (checkpointKey !== undefined) {
+        this.forcedDownloadCheckpoint = null;
       }
 
       // NOTE: We don't call acknowledgeOps here anymore.
