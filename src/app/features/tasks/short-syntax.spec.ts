@@ -13,6 +13,7 @@ import {
 import { Tag } from '../tag/tag.model';
 import { DEFAULT_TAG } from '../tag/tag.const';
 import { Project } from '../project/project.model';
+import { Section } from '../section/section.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { INBOX_PROJECT } from '../project/project.const';
 import { RepeatQuickSetting } from '../task-repeat-cfg/task-repeat-cfg.model';
@@ -1749,6 +1750,917 @@ describe('shortSyntax', () => {
         });
       }
     }
+  });
+
+  describe('project sections (+Project/Section)', () => {
+    let projects: Project[];
+    let sections: Section[];
+    beforeEach(() => {
+      projects = [
+        {
+          title: 'Work',
+          id: 'WorkID',
+        },
+        {
+          title: 'A/B Testing',
+          id: 'SlashProjectID',
+        },
+      ] as any;
+      sections = [
+        {
+          id: 'DesignSectionID',
+          contextId: 'WorkID',
+          contextType: 'PROJECT',
+          title: 'Design Reviews',
+          taskIds: [],
+        },
+        {
+          id: 'OtherProjectSectionID',
+          contextId: 'OtherProjectID',
+          contextType: 'PROJECT',
+          title: 'Design Reviews',
+          taskIds: [],
+        },
+      ] as any;
+    });
+
+    it('should match a section within the matched project', async () => {
+      const t = {
+        ...TASK,
+        title: 'Review mockups +Work/Design Reviews',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        false,
+        sections,
+      );
+      expect(r?.projectId).toBe('WorkID');
+      expect(r?.sectionId).toBe('DesignSectionID');
+      expect(r?.taskChanges.title).toBe('Review mockups');
+    });
+
+    it('should match a section by prefix', async () => {
+      const t = {
+        ...TASK,
+        title: 'Review mockups +Work/des',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        false,
+        sections,
+      );
+      expect(r?.projectId).toBe('WorkID');
+      expect(r?.sectionId).toBe('DesignSectionID');
+      expect(r?.taskChanges.title).toBe('Review mockups');
+    });
+
+    it('should match section by first word with trailing text kept in title', async () => {
+      const t = {
+        ...TASK,
+        title: '+Work/design fix the login flow',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        false,
+        sections,
+      );
+      expect(r?.projectId).toBe('WorkID');
+      expect(r?.sectionId).toBe('DesignSectionID');
+      expect(r?.taskChanges.title).toBe('fix the login flow');
+    });
+
+    it('should only match sections belonging to the matched project', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task +Work/Design',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        false,
+        sections,
+      );
+      expect(r?.sectionId).toBe('DesignSectionID');
+      expect(r?.sectionId).not.toBe('OtherProjectSectionID');
+    });
+
+    it('should prefer a project whose title contains "/" over section syntax', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task +A/B Testing',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        false,
+        sections,
+      );
+      expect(r?.projectId).toBe('SlashProjectID');
+      expect(r?.sectionId).toBeUndefined();
+      expect(r?.taskChanges.title).toBe('Task');
+    });
+
+    it('should prefer a project whose title contains "/" with trailing words', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task +A/B Testing extra words',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        false,
+        sections,
+      );
+      expect(r?.projectId).toBe('SlashProjectID');
+      expect(r?.sectionId).toBeUndefined();
+      // The word-wise matcher (#9679) consumes the fully typed project title
+      // "+A/B Testing", so only the actual task content remains.
+      expect(r?.taskChanges.title).toBe('Task extra words');
+    });
+
+    it('should match the project without a section when the section part matches nothing', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task +Work/nonexistent',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        false,
+        sections,
+      );
+      expect(r?.projectId).toBe('WorkID');
+      expect(r?.sectionId).toBeUndefined();
+      // Regression (PR #9014 review): the whole "+Work/" must be stripped —
+      // leaving "/nonexistent" in the title orphans a stray slash.
+      expect(r?.taskChanges.title).toBe('Task nonexistent');
+    });
+
+    it('should not leave a slash residue for an unmatched section mid-title', async () => {
+      const t = {
+        ...TASK,
+        title: 'buy milk +Work/grocer',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        false,
+        sections,
+      );
+      expect(r?.projectId).toBe('WorkID');
+      expect(r?.sectionId).toBeUndefined();
+      expect(r?.taskChanges.title).toBe('buy milk grocer');
+    });
+
+    it('should not leave a slash residue when the token leads the title', async () => {
+      const t = {
+        ...TASK,
+        title: '+Work/review the Q3 numbers',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        projects,
+        undefined,
+        'combine',
+        false,
+        sections,
+      );
+      expect(r?.projectId).toBe('WorkID');
+      expect(r?.taskChanges.title).toBe('review the Q3 numbers');
+    });
+
+    it('should clean the full token for a multi-word project with a section', async () => {
+      const multiProjects = [
+        ...projects,
+        { title: 'Work Space', id: 'WorkSpaceID' },
+      ] as any;
+      const multiSections = [
+        ...sections,
+        {
+          id: 'WsDesignID',
+          contextId: 'WorkSpaceID',
+          contextType: 'PROJECT',
+          title: 'Design',
+          taskIds: [],
+        },
+      ] as any;
+      const t = {
+        ...TASK,
+        title: 'Task +Work Space/Design',
+      };
+      const r = await shortSyntax(
+        t,
+        CONFIG,
+        [],
+        multiProjects,
+        undefined,
+        'combine',
+        false,
+        multiSections,
+      );
+      expect(r?.projectId).toBe('WorkSpaceID');
+      expect(r?.sectionId).toBe('WsDesignID');
+      expect(r?.taskChanges.title).toBe('Task');
+    });
+
+    it('should not return a section when no sections are passed', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task +Work/Design',
+      };
+      const r = await shortSyntax(t, CONFIG, [], projects);
+      expect(r?.projectId).toBe('WorkID');
+      expect(r?.sectionId).toBeUndefined();
+    });
+
+    describe('standalone /Section (context project)', () => {
+      it('should match a section of the context project without a + token', async () => {
+        const t = {
+          ...TASK,
+          title: 'Review mockups /Design',
+        };
+        const r = await shortSyntax(
+          t,
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          sections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBe('DesignSectionID');
+        expect(r?.projectId).toBeUndefined();
+        expect(r?.taskChanges.title).toBe('Review mockups');
+      });
+
+      it('should let an explicit +Project/Section win over the context project', async () => {
+        const t = {
+          ...TASK,
+          title: 'Task +Work/Design',
+        };
+        const r = await shortSyntax(
+          t,
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          sections,
+          'OtherProjectID',
+        );
+        expect(r?.projectId).toBe('WorkID');
+        expect(r?.sectionId).toBe('DesignSectionID');
+      });
+
+      it('should leave the title untouched when nothing matches', async () => {
+        const t = {
+          ...TASK,
+          title: 'Deploy w/ care /nonexistent',
+        };
+        const r = await shortSyntax(
+          t,
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          sections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBeUndefined();
+        expect(r?.taskChanges.title ?? t.title).toBe('Deploy w/ care /nonexistent');
+      });
+
+      it('should ignore slashes inside words and after spaces', async () => {
+        const t = {
+          ...TASK,
+          title: 'either/or / Design',
+        };
+        const r = await shortSyntax(
+          t,
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          sections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBeUndefined();
+      });
+
+      it('should do nothing without a context project', async () => {
+        const t = {
+          ...TASK,
+          title: 'Task /Design',
+        };
+        const r = await shortSyntax(
+          t,
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          sections,
+        );
+        expect(r?.sectionId).toBeUndefined();
+      });
+
+      it('should not break time estimate syntax with slashes', async () => {
+        const t = {
+          ...TASK,
+          title: 'Task 1h/2h /Design',
+        };
+        const r = await shortSyntax(
+          t,
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          sections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBe('DesignSectionID');
+        expect(r?.taskChanges.timeSpentOnDay).toBeDefined();
+        expect(r?.taskChanges.timeEstimate).toBe(2 * 60 * 60 * 1000);
+      });
+    });
+
+    describe('round-3 review regressions (PR #9014)', () => {
+      it('should not treat "+/" as a project token — "+/-" is ordinary text', async () => {
+        for (const title of [
+          'temp +/- 5 degrees',
+          'budget +/-10% ok',
+          'review PR +/- comments',
+        ]) {
+          const r = await shortSyntax(
+            { ...TASK, title },
+            CONFIG,
+            [],
+            projects,
+            undefined,
+            'combine',
+            false,
+            sections,
+            'WorkID',
+          );
+          expect(r?.projectId)
+            .withContext(`"${title}" must not match a project`)
+            .toBeUndefined();
+          expect(r?.taskChanges?.title)
+            .withContext(`"${title}" must keep its title`)
+            .toBeUndefined();
+        }
+      });
+
+      it('should not match a half-deleted "+/Section" against any project', async () => {
+        // Backspacing the project name out of "+Work/Design" passes through
+        // this state; it must stay inert instead of jumping to the
+        // shortest-titled project.
+        const r = await shortSyntax(
+          { ...TASK, title: 'buy milk +/Design' },
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          sections,
+          'WorkID',
+        );
+        expect(r).toBeUndefined();
+      });
+
+      it('should not let the shortest project title win for an empty left side', async () => {
+        // The project picked used to depend on title length — assert no
+        // match for several project sets instead of a lucky fixture.
+        const projectSets = [
+          [
+            { title: 'Work', id: 'WorkID' },
+            { title: 'Personal Stuff', id: 'PersonalID' },
+          ],
+          [
+            { title: 'Work', id: 'WorkID' },
+            { title: 'Zoo', id: 'ZooID' },
+          ],
+          [
+            { title: 'Work', id: 'WorkID' },
+            { title: 'Ab', id: 'AbID' },
+          ],
+        ] as any[];
+        for (const set of projectSets) {
+          const r = await shortSyntax(
+            { ...TASK, title: 'temp +/- 5 degrees' },
+            CONFIG,
+            [],
+            set,
+            undefined,
+            'combine',
+            false,
+            sections,
+          );
+          expect(r)
+            .withContext(set.map((p: Project) => p.title).join(','))
+            .toBeUndefined();
+        }
+      });
+
+      it('should strip a multi-word section fully with trailing task text (+Project form)', async () => {
+        const r = await shortSyntax(
+          { ...TASK, title: 'Task +Work/Design Reviews finish draft' },
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          sections,
+        );
+        expect(r?.projectId).toBe('WorkID');
+        expect(r?.sectionId).toBe('DesignSectionID');
+        expect(r?.taskChanges.title).toBe('Task finish draft');
+      });
+
+      it('should strip a multi-word section fully with trailing task text (standalone form)', async () => {
+        const r = await shortSyntax(
+          { ...TASK, title: 'Task /Design Reviews finish draft' },
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          sections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBe('DesignSectionID');
+        expect(r?.taskChanges.title).toBe('Task finish draft');
+      });
+
+      it('should consume the longest matching word span, not the whole remainder', async () => {
+        const roadMapSections = [
+          ...sections,
+          {
+            id: 'RoadMapID',
+            contextId: 'WorkID',
+            contextType: 'PROJECT',
+            title: 'Road Map',
+            taskIds: [],
+          },
+        ] as any;
+        const r = await shortSyntax(
+          { ...TASK, title: 'Task +Work/Road Map finish draft' },
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          roadMapSections,
+        );
+        expect(r?.projectId).toBe('WorkID');
+        expect(r?.sectionId).toBe('RoadMapID');
+        expect(r?.taskChanges.title).toBe('Task finish draft');
+      });
+
+      it('should let a slash-titled project claim its slash over a section reading', async () => {
+        // "+Work/Design fix login" with a project literally titled
+        // "Work/Design Archive": the first word including the slash prefixes
+        // that project, so it wins — reading Work + section "Design Reviews"
+        // instead would silently change which PROJECT the task lands in
+        // (round-4 review finding on PR #9014).
+        const archiveProjects = [
+          ...projects,
+          { title: 'Work/Design Archive', id: 'ArchiveID' },
+        ] as any;
+        const r = await shortSyntax(
+          { ...TASK, title: 'Task +Work/Design fix login' },
+          CONFIG,
+          [],
+          archiveProjects,
+          undefined,
+          'combine',
+          false,
+          sections,
+        );
+        expect(r?.projectId).toBe('ArchiveID');
+        expect(r?.sectionId).toBeUndefined();
+        expect(r?.taskChanges.title).toBe('Task fix login');
+      });
+
+      it('should never flip the project when a trailing word is added (+Dev/Ops fix)', async () => {
+        // Round-4 repro: projects Dev + Dev/Ops, section "Ops" inside Dev.
+        // "+Dev/Ops" and "+Dev/Ops fix" must both resolve to the Dev/Ops
+        // PROJECT — never to Dev + section Ops.
+        const devProjects = [
+          { title: 'Dev', id: 'DevID' },
+          { title: 'Dev/Ops', id: 'DevOpsID' },
+        ] as any;
+        const devSections = [
+          {
+            id: 'OpsSectionID',
+            contextId: 'DevID',
+            contextType: 'PROJECT',
+            title: 'Ops',
+            taskIds: [],
+          },
+        ] as any;
+        for (const [title, expectedTitle] of [
+          ['deploy +Dev/Ops', 'deploy'],
+          ['deploy +Dev/Ops fix', 'deploy fix'],
+        ]) {
+          const r = await shortSyntax(
+            { ...TASK, title },
+            CONFIG,
+            [],
+            devProjects,
+            undefined,
+            'combine',
+            false,
+            devSections,
+          );
+          expect(r?.projectId).withContext(title).toBe('DevOpsID');
+          expect(r?.sectionId).withContext(title).toBeUndefined();
+          expect(r?.taskChanges.title).withContext(title).toBe(expectedTitle);
+        }
+      });
+
+      it('should not change the project when the slash resolves no section', async () => {
+        // "+Work Inbox/whatever": the left side matches project "Work Inbox"
+        // but "whatever" is no section — the slash reading explained nothing,
+        // so the plain word-wise match ("Work") must win exactly like master
+        // (round-4 rule: section syntax never changes project resolution).
+        const inboxProjects = [
+          ...projects,
+          { title: 'Work Inbox', id: 'WorkInboxID' },
+        ] as any;
+        const r = await shortSyntax(
+          { ...TASK, title: 'Task +Work Inbox/whatever y' },
+          CONFIG,
+          [],
+          inboxProjects,
+          undefined,
+          'combine',
+          false,
+          sections,
+        );
+        expect(r?.projectId).toBe('WorkID');
+        expect(r?.sectionId).toBeUndefined();
+        expect(r?.taskChanges.title).toBe('Task Inbox/whatever y');
+      });
+
+      it('should still pick the multi-word left project when its section matches', async () => {
+        const inboxProjects = [
+          ...projects,
+          { title: 'Work Inbox', id: 'WorkInboxID' },
+        ] as any;
+        const inboxSections = [
+          ...sections,
+          {
+            id: 'TriageID',
+            contextId: 'WorkInboxID',
+            contextType: 'PROJECT',
+            title: 'Triage',
+            taskIds: [],
+          },
+        ] as any;
+        const r = await shortSyntax(
+          { ...TASK, title: 'Task +Work Inbox/Triage y' },
+          CONFIG,
+          [],
+          inboxProjects,
+          undefined,
+          'combine',
+          false,
+          inboxSections,
+        );
+        expect(r?.projectId).toBe('WorkInboxID');
+        expect(r?.sectionId).toBe('TriageID');
+        expect(r?.taskChanges.title).toBe('Task y');
+      });
+
+      it('should strip a section containing non-space whitespace fully', async () => {
+        // Same class as the multi-word residue bug, with a tab instead of a
+        // space (round-4 review note): "/Road\tMap" must match "Road Map"
+        // and strip both words.
+        const roadMapSections = [
+          ...sections,
+          {
+            id: 'RoadMapID',
+            contextId: 'WorkID',
+            contextType: 'PROJECT',
+            title: 'Road Map',
+            taskIds: [],
+          },
+        ] as any;
+        const r = await shortSyntax(
+          { ...TASK, title: 'x /Road\tMap y' },
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          roadMapSections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBe('RoadMapID');
+        expect(r?.taskChanges.title).toBe('x y');
+      });
+
+      it('should not read a section out of a slash-titled project token', async () => {
+        // "+A/B Testing extra words": the left side "A" and the first word
+        // "A/B" both prefix the project "A/B Testing" — the "/" belongs to
+        // the project's own title, so its right side must never be matched
+        // as a section ("B" would prefix-match "Backlog").
+        const abSections = [
+          ...sections,
+          {
+            id: 'AbBacklogID',
+            contextId: 'SlashProjectID',
+            contextType: 'PROJECT',
+            title: 'Backlog',
+            taskIds: [],
+          },
+        ] as any;
+        const r = await shortSyntax(
+          { ...TASK, title: 'Task +A/B Testing extra words' },
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          abSections,
+        );
+        expect(r?.projectId).toBe('SlashProjectID');
+        expect(r?.sectionId).toBeUndefined();
+        // Full project title consumed by the word-wise matcher (#9679)
+        expect(r?.taskChanges.title).toBe('Task extra words');
+      });
+
+      it('should still prefer an exact whole-token project over a section interpretation', async () => {
+        const archiveProjects = [
+          ...projects,
+          { title: 'Work/Design Archive', id: 'ArchiveID' },
+        ] as any;
+        const r = await shortSyntax(
+          { ...TASK, title: 'Task +Work/Design Archive' },
+          CONFIG,
+          [],
+          archiveProjects,
+          undefined,
+          'combine',
+          false,
+          sections,
+        );
+        expect(r?.projectId).toBe('ArchiveID');
+        expect(r?.sectionId).toBeUndefined();
+        expect(r?.taskChanges.title).toBe('Task');
+      });
+    });
+
+    describe('round-5 review regressions (PR #9014)', () => {
+      // Section titles containing chars the old standalone character class
+      // accidentally excluded ("(", ")", "|", "+", "!") — the capture now runs
+      // to the end of the line and the word-span walk finds the boundary,
+      // exactly like the "+Project/Section" path.
+      let specialSections: Section[];
+      beforeEach(() => {
+        specialSections = [
+          ...sections,
+          {
+            id: 'V2SectionID',
+            contextId: 'WorkID',
+            contextType: 'PROJECT',
+            title: 'Design (v2)',
+            taskIds: [],
+          },
+          {
+            id: 'ShipItSectionID',
+            contextId: 'WorkID',
+            contextType: 'PROJECT',
+            title: 'Ship it!',
+            taskIds: [],
+          },
+          {
+            id: 'CSectionID',
+            contextId: 'WorkID',
+            contextType: 'PROJECT',
+            title: 'C',
+            taskIds: [],
+          },
+          {
+            id: 'CppSectionID',
+            contextId: 'WorkID',
+            contextType: 'PROJECT',
+            title: 'C++',
+            taskIds: [],
+          },
+        ] as any;
+      });
+
+      it('should match a standalone section whose title contains parentheses', async () => {
+        const r = await shortSyntax(
+          { ...TASK, title: 'x /Design (v2) y' },
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          specialSections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBe('V2SectionID');
+        expect(r?.taskChanges.title).toBe('x y');
+      });
+
+      it('should match a standalone section whose title contains "!"', async () => {
+        const r = await shortSyntax(
+          { ...TASK, title: 'x /Ship it! y' },
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          specialSections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBe('ShipItSectionID');
+        expect(r?.taskChanges.title).toBe('x y');
+      });
+
+      it('should pick "C++" over "C" when "/C++" is typed', async () => {
+        const r = await shortSyntax(
+          { ...TASK, title: 'fix /C++ crash' },
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          specialSections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBe('CppSectionID');
+        expect(r?.taskChanges.title).toBe('fix crash');
+      });
+
+      it('should still pick "C" (shortest title) when only "/C" is typed', async () => {
+        const r = await shortSyntax(
+          { ...TASK, title: 'fix /C crash' },
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          specialSections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBe('CSectionID');
+        expect(r?.taskChanges.title).toBe('fix crash');
+      });
+
+      it('should behave like the +Project/Section path for special-char titles', async () => {
+        const r = await shortSyntax(
+          { ...TASK, title: 'x +Work/Design (v2) y' },
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          specialSections,
+        );
+        expect(r?.projectId).toBe('WorkID');
+        expect(r?.sectionId).toBe('V2SectionID');
+        expect(r?.taskChanges.title).toBe('x y');
+      });
+
+      // A slash token that resolves no section must fall through to a later
+      // one instead of swallowing it.
+      it('should fall through a non-resolving slash token to a later real one', async () => {
+        const r = await shortSyntax(
+          { ...TASK, title: 'review PR /9014 /Design' },
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          sections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBe('DesignSectionID');
+        expect(r?.taskChanges.title).toBe('review PR /9014');
+      });
+
+      it('should leave the title untouched when no slash token resolves', async () => {
+        const t = { ...TASK, title: 'a /todo b /nope c' };
+        const r = await shortSyntax(
+          t,
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          sections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBeUndefined();
+        expect(r?.taskChanges.title ?? t.title).toBe('a /todo b /nope c');
+      });
+    });
+
+    describe('round-6 review regressions (PR #9014)', () => {
+      it('should still match a section name typed across a split word', async () => {
+        const r = await shortSyntax(
+          { ...TASK, title: 'x /Des ign y' },
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          sections,
+          'WorkID',
+        );
+        expect(r?.sectionId).toBe('DesignSectionID');
+        expect(r?.taskChanges.title).toBe('x y');
+      });
+
+      // Every non-resolving slash token hands the rest of the line to the
+      // section matcher; its span walk must be bounded by section-title
+      // length, not line length (2000 words took ~3s before the bound).
+      it('should parse a long line full of slash tokens quickly', async () => {
+        const words = Array.from({ length: 2000 }, (_, i) =>
+          i % 10 === 9 ? `/path${i}` : `word${i}`,
+        );
+        const start = performance.now();
+        const r = await shortSyntax(
+          { ...TASK, title: `${words.join(' ')} /Design` },
+          CONFIG,
+          [],
+          projects,
+          undefined,
+          'combine',
+          false,
+          sections,
+          'WorkID',
+        );
+        expect(performance.now() - start).toBeLessThan(500);
+        expect(r?.sectionId).toBe('DesignSectionID');
+      });
+    });
   });
 
   // This group of tests address Chrono's parsing the format "<date> <month> <yy}>" as year
