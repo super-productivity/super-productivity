@@ -4,6 +4,12 @@ import {
   toggleStart,
 } from '../features/tasks/store/task.actions';
 import {
+  addTaskRepeatCfgToTask,
+  deleteTaskRepeatCfg,
+  updateTaskRepeatCfg,
+  upsertTaskRepeatCfg,
+} from '../features/task-repeat-cfg/store/task-repeat-cfg.actions';
+import {
   hideFocusOverlay,
   showFocusOverlay,
 } from '../features/focus-mode/store/focus-mode.actions';
@@ -50,6 +56,16 @@ export const ALLOWED_PLUGIN_ACTIONS = [
   setCurrentTask,
   setSelectedTask,
   // addSubTask,
+
+  // Task Repeat Configuration
+  // Plugins can manage recurring task templates (create/update/delete repeat
+  // configs and attach them to existing tasks). Mirrors the scope of the
+  // existing task-mutation actions; required for MCP-style integrations that
+  // configure recurrences from outside the UI.
+  addTaskRepeatCfgToTask,
+  updateTaskRepeatCfg,
+  upsertTaskRepeatCfg,
+  deleteTaskRepeatCfg,
 
   // Project Management
   // addProject,
