@@ -154,8 +154,9 @@ export const projectReorderConflictAgainstState = (
       : actionPayload,
   });
   // Retain only the fields carried by the rejected edit, with their current
-  // values. Whole-entity LWW strips SimpleCounter.type and stamps modified;
-  // these idempotent updates preserve both content and unrelated state.
+  // values. Whole-entity LWW overwrites unrelated fields and stamps modified
+  // (and released clients strip SimpleCounter.type); these idempotent updates
+  // preserve both content and unrelated state.
   if (!isContentReorderOperation(operation)) {
     const id = operation.entityId!;
     let actionPayload: Record<string, unknown>;

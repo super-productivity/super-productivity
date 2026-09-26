@@ -69,8 +69,9 @@ non-commuting evidence does not admit replay. Recognized content reorders
 (including section reorders) then remain pending with
 `UnsupportedMultiEntityConflictError`: generic entity LWW loses list writes.
 `COUNTER_SET_TODAY` needs no causal proof: it is always reissued with the
-day's current count (a local no-op), because generic entity LWW would lose the
-habit's type and stopping sync would block every habit click. Other actions
+day's current count (a local no-op), because a whole-habit LWW snapshot
+overwrites unrelated fields (released receivers also drop the habit's type) and
+stopping sync would block every habit click. Other actions
 retain their existing fallback. Never broaden recognition merely because two
 actions appear harmless in one fixture.
 

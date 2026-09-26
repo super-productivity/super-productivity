@@ -356,8 +356,9 @@ export class SupersededOperationResolverService {
         let projectedWorkContextState: WorkContextStateProjection | undefined;
         let projectedOrder: SectionReplayOrder | undefined;
         // An absolute counter-today set needs no causal proof: reissuing its
-        // current value is a local no-op and, unlike entity LWW, keeps
-        // SimpleCounter.type. Stopping sync for it would block habit clicks.
+        // current value is a local no-op and, unlike a whole-habit LWW snapshot,
+        // leaves every other field (and released receivers' SimpleCounter.type)
+        // alone. Stopping sync for it would block habit clicks.
         const isCounterSetToday = item.op.actionType === ActionType.COUNTER_SET_TODAY;
         if (
           isCounterSetToday ||

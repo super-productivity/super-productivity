@@ -470,6 +470,9 @@ const filterOrphanedTaskIdsFromEntityData = (
  */
 const ARRAY_RECREATE_UNSAFE_ENTITY_TYPES: ReadonlySet<string> = new Set(['REMINDER']);
 
+/** Action-envelope keys that shadow same-named entity fields (convertOpToAction). */
+const ENVELOPE_SHADOWED_KEYS = ['type', 'meta'] as const;
+
 const applyArrayEntityLwwUpdate = (options: {
   rootState: RootState;
   featureName: string;
@@ -575,8 +578,9 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     }
 
     // Extract entity data from action (exclude 'type' and 'meta').
-    // NOTE: This assumes no entity state has top-level 'type' or 'meta' keys.
-    // If a singleton or adapter state gains such a key, it would be silently dropped.
+    // Entity fields named 'type'/'meta' are shadowed by the envelope: adapter
+    // updates keep the existing values (ENVELOPE_SHADOWED_KEYS); a singleton
+    // or recreated entity with such a key would still lose it.
     const actionAny = action as unknown as Record<string, unknown>;
     const actionMeta = actionAny['meta'] as
       | {
@@ -901,6 +905,15 @@ export const lwwUpdateMetaReducer: MetaReducer = (
         // `modified` is for UI display of "when this client last saw this change"
         modified: Date.now(),
       };
+      // The flat action envelope shadows entity fields named `type`/`meta`, so
+      // a replace snapshot can never carry them. Keep the existing values
+      // rather than drop them (SimpleCounter.type would fail validation and
+      // repair would reset e.g. a Stopwatch habit to ClickCounter).
+      for (const key of ENVELOPE_SHADOWED_KEYS) {
+        if (Object.prototype.hasOwnProperty.call(existingEntity, key)) {
+          entityWithLocalModified[key] = existingEntity[key];
+        }
+      }
       updatedFeatureState =
         actionMeta?.lwwUpdateMode === 'replace'
           ? (adapter as EntityAdapter<any>).setOne(

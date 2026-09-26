@@ -1083,6 +1083,48 @@ describe('lwwUpdateMetaReducer', () => {
       }
       expect(result.success).toBe(true);
     });
+
+    // A local-win conflict resolution ships the whole habit as a 'replace'
+    // snapshot. The action envelope's `type` shadows SimpleCounter.type, so a
+    // plain setOne on the receiver dropped it; typia then failed and repair
+    // reset a Stopwatch habit to ClickCounter.
+    it('keeps the existing type when a real replace op replaces an existing counter', () => {
+      const existing = {
+        id: 'cnt_watch',
+        title: 'Old title',
+        isEnabled: true,
+        icon: null,
+        type: SimpleCounterType.StopWatch,
+        countOnDay: {},
+        isOn: false,
+      };
+      const state = makeStateWithCounters({ cnt_watch: existing });
+      const op: Operation = {
+        id: 'op-counter-lww',
+        actionType: '[SIMPLE_COUNTER] LWW Update' as ActionType,
+        opType: OpType.Update,
+        entityType: 'SIMPLE_COUNTER',
+        entityId: 'cnt_watch',
+        payload: {
+          actionPayload: { ...existing, title: 'Winning title' },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+        },
+        clientId: 'clientA',
+        vectorClock: { clientA: 3 },
+        timestamp: 1700000000000,
+        schemaVersion: 1,
+      };
+
+      reducer(state, convertOpToAction(op));
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const counterState = updatedState[SIMPLE_COUNTER_FEATURE_NAME];
+      const counter = counterState?.entities['cnt_watch'] as SimpleCounter;
+      expect(counter.title).toBe('Winning title');
+      expect(counter.type).toBe(SimpleCounterType.StopWatch);
+      expect(appDataValidators.simpleCounter(counterState as never).success).toBe(true);
+    });
   });
 
   describe('[PROJECT] LWW Update', () => {
