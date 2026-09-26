@@ -157,7 +157,7 @@
       <span class="key-i">{{ kb.togglePlay }}</span>
     </button>
   }
-  @if (isTouchActive() || !isAdvancedControls()) {
+  @if (!isTouchActive() && !isAdvancedControls()) {
     <button
       (click)="toggleTaskDone()"
       mat-menu-item
