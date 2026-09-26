@@ -260,6 +260,34 @@ describe('OperationLogDownloadService', () => {
           sub.unsubscribe();
         });
 
+        it('announces a lower checkpoint after a server reset without retrying a stalled apply', async () => {
+          let announcements = 0;
+          const sub = service.remoteBacklogRemains$.subscribe(() => announcements++);
+          mockApiProvider.getLastServerSeq.and.resolveTo(MAX_DOWNLOAD_ITERATIONS);
+          serveEndlessBacklog(1);
+          await service.downloadRemoteOps(mockApiProvider);
+          expect(announcements).toBe(1);
+
+          const oldCursor = 2 * MAX_DOWNLOAD_ITERATIONS;
+          mockApiProvider.getLastServerSeq.and.resolveTo(oldCursor);
+          mockApiProvider.downloadOps.and.callFake(async (sinceSeq: number) => ({
+            ops: sinceSeq === oldCursor ? [] : pageOfOps(sinceSeq, 1),
+            gapDetected: sinceSeq === oldCursor,
+            hasMore: true,
+            latestSeq: MAX_DOWNLOAD_ITERATIONS + 100,
+          }));
+
+          const result = await service.downloadRemoteOps(mockApiProvider);
+          expect(result.latestServerSeq).toBe(MAX_DOWNLOAD_ITERATIONS - 1);
+          expect(announcements).toBe(2);
+
+          // A failed apply leaves the old cursor behind: the same gap and
+          // checkpoint must not schedule another automatic retry forever.
+          await service.downloadRemoteOps(mockApiProvider);
+          expect(announcements).toBe(2);
+          sub.unsubscribe();
+        });
+
         it('returns the downloaded prefix once the page-iteration cap is reached', async () => {
           serveEndlessBacklog(1);
 

@@ -132,7 +132,7 @@ export class OperationLogDownloadService implements OnDestroy {
   private hasWarnedClockDrift = false;
   /** The last API pass stopped at a checkpoint with ops left on the server. */
   private _hasUnseenRemoteOps = false;
-  /** Highest checkpoint announced on {@link remoteBacklogRemains$}; 0 at head. */
+  /** Last checkpoint announced on {@link remoteBacklogRemains$}; 0 at head. */
   private _lastAnnouncedCheckpointSeq = 0;
   private _remoteBacklogRemains$ = new Subject<void>();
 
@@ -705,9 +705,9 @@ export class OperationLogDownloadService implements OnDestroy {
         this.superSyncStatusService.markRemoteChecked();
       }
       this._lastAnnouncedCheckpointSeq = 0;
-    } else if (checkpointSeq > this._lastAnnouncedCheckpointSeq) {
-      // A pass that stops at an already announced seq made no progress (e.g.
-      // applying the batch keeps failing); announcing it again would loop.
+    } else if (checkpointSeq !== this._lastAnnouncedCheckpointSeq) {
+      // A server restore can lower the checkpoint. Repeating the SAME checkpoint
+      // means apply made no progress; announcing that again would loop.
       this._lastAnnouncedCheckpointSeq = checkpointSeq;
       this._remoteBacklogRemains$.next();
     }

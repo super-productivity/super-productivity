@@ -2683,8 +2683,10 @@ describe('FileBasedSyncAdapterService', () => {
     it('(b) never recovers over a primary written in a NEWER format (#8764)', async () => {
       // A newer app version's file is not corrupt. Adopting the older .bak would
       // make this cycle's upload overwrite ("heal") the newer file.
-      const newerPrimary = createMockSyncData();
-      (newerPrimary as any).version = FILE_BASED_SYNC_CONSTANTS.FILE_VERSION + 2;
+      const newerPrimary = {
+        ...createMockSyncData(),
+        version: FILE_BASED_SYNC_CONSTANTS.FILE_VERSION + 2,
+      };
       mockProvider.downloadFile.and.callFake((path: string) => {
         if (path === FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE) {
           return Promise.resolve({
@@ -3441,8 +3443,13 @@ describe('FileBasedSyncAdapterService', () => {
     });
 
     it('(a) never recovers over an ops file written in a NEWER format (#8764)', async () => {
-      const newerOpsFile = makeOpsFile({ syncVersion: 3, recentOps: [] });
-      (newerOpsFile as any).version = C.SPLIT_FILE_VERSION + 1;
+      const newerOpsFile = {
+        ...makeOpsFile({
+          syncVersion: 3,
+          recentOps: [],
+        }),
+        version: C.SPLIT_FILE_VERSION + 1,
+      };
       routeDownloads({
         [C.OPS_FILE]: addPrefix(newerOpsFile, 3),
         [C.OPS_BACKUP_FILE]: addPrefix(makeOpsFile({ syncVersion: 2 }), 3),
@@ -3801,6 +3808,58 @@ describe('FileBasedSyncAdapterService', () => {
       // No throw, no conflict — recovered the referenced snapshot from .bak.
       expect(res.snapshotState).toBeDefined();
       expect((res.snapshotState as { tasks: string[] }).tasks).toEqual(['from-bak']);
+    });
+
+    it('(c) does not adopt a v3 backup over a v4 state file', async () => {
+      routeDownloads({
+        [C.OPS_FILE]: addPrefix(makeOpsFile(), 3),
+        [C.STATE_FILE]: addPrefix({ ...makeStateFile(), version: 4 }, 4),
+        [C.STATE_BACKUP_FILE]: addPrefix(makeStateFile(), 3),
+      });
+
+      await expectAsync(adapter.downloadOps(0, 'client2')).toBeRejectedWith(
+        jasmine.objectContaining({ isRemoteNewer: true }),
+      );
+      expect(mockProvider.downloadFile).not.toHaveBeenCalledWith(C.STATE_BACKUP_FILE);
+    });
+
+    it('(c) does not adopt a v3 fixed state file over a v4 immutable snapshot', async () => {
+      const genFile = 'sync-state__1__future.json';
+      routeDownloads({
+        [C.OPS_FILE]: addPrefix(
+          makeOpsFile({
+            snapshotRef: {
+              syncVersion: 1,
+              vectorClock: { client1: 1 },
+              rev: 'state-rev-1',
+              file: genFile,
+            },
+          }),
+          3,
+        ),
+        [genFile]: addPrefix({ ...makeStateFile(), version: 4 }, 4),
+        [C.STATE_FILE]: addPrefix(makeStateFile(), 3),
+      });
+
+      await expectAsync(adapter.downloadOps(0, 'client2')).toBeRejectedWith(
+        jasmine.objectContaining({ isRemoteNewer: true }),
+      );
+      expect(mockProvider.downloadFile).not.toHaveBeenCalledWith(C.STATE_FILE);
+    });
+
+    it('(c) aborts compaction before overwriting a v4 fixed state file', async () => {
+      const recentOps = Array.from({ length: C.MAX_RECENT_OPS }, (_, i) =>
+        makeCompactOp({ id: `op-${i}`, sv: i + 1 }),
+      );
+      routeDownloads({
+        [C.OPS_FILE]: addPrefix(makeOpsFile({ syncVersion: 2000, recentOps }), 3),
+        [C.STATE_FILE]: addPrefix({ ...makeStateFile(), version: 4 }, 4),
+      });
+
+      await expectAsync(
+        adapter.uploadOps([createMockSyncOp({ id: 'fresh-op' })], 'client1'),
+      ).toBeRejectedWith(jasmine.objectContaining({ isRemoteNewer: true }));
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
     });
 
     it('(c) encrypted download rejects a plaintext state file without adopting its backup', async () => {

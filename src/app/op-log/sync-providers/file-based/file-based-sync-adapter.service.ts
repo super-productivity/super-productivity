@@ -1776,13 +1776,13 @@ export class FileBasedSyncAdapterService {
     try {
       current = await this._downloadStateFile(provider, cfg, encryptKey);
     } catch (e) {
-      // A plaintext primary while encryption is expected is a downgrade signal,
-      // not a missing/corrupt optional backup source. Let it abort compaction so
-      // the encrypted client cannot silently overwrite the remote state file.
-      if (e instanceof PlaintextWhenEncryptionExpectedError) {
+      // Never overwrite a newer state file or a plaintext encryption downgrade.
+      if (
+        e instanceof PlaintextWhenEncryptionExpectedError ||
+        (e instanceof SyncDataCorruptedError && e.isRemoteNewer)
+      ) {
         throw e;
       }
-      // Non-fatal — e.g. first compaction has no existing state file to back up.
       OpLog.normal('FileBasedSyncAdapter: state-file backup skipped (non-fatal)', e);
       return;
     }
@@ -1856,13 +1856,12 @@ export class FileBasedSyncAdapterService {
           'FileBasedSyncAdapter: immutable snapshot does not match snapshotRef; trying sync-state.json',
         );
       } catch (e) {
-        // Same rule as the fixed-file read below (GHSA-vrc7-775g-ggqc): the
-        // referenced immutable snapshot is a PRIMARY source, so a plaintext one
-        // is a downgrade signal, not ordinary corruption — surface it instead of
-        // silently falling through to sync-state.json. No legitimate flow leaves
-        // the REFERENCED gen snapshot plaintext while local encryption is on
-        // (a real disable rewrites the ops file too, which fails decode first).
-        if (e instanceof PlaintextWhenEncryptionExpectedError) {
+        // The referenced immutable snapshot is primary: do not adopt an older copy
+        // over a newer format or a plaintext encryption downgrade.
+        if (
+          e instanceof PlaintextWhenEncryptionExpectedError ||
+          (e instanceof SyncDataCorruptedError && e.isRemoteNewer)
+        ) {
           throw e;
         }
         OpLog.warn(
@@ -1878,10 +1877,11 @@ export class FileBasedSyncAdapterService {
         'FileBasedSyncAdapter: sync-state.json does not match snapshotRef; trying .bak',
       );
     } catch (e) {
-      // Do not treat a plaintext primary as ordinary corruption. Falling back to
-      // an encrypted .bak would hide the downgrade and hydrate data after the
-      // fail-closed decoder explicitly rejected the remote state file.
-      if (e instanceof PlaintextWhenEncryptionExpectedError) {
+      // Do not hide a newer format or an encryption downgrade behind an old .bak.
+      if (
+        e instanceof PlaintextWhenEncryptionExpectedError ||
+        (e instanceof SyncDataCorruptedError && e.isRemoteNewer)
+      ) {
         throw e;
       }
       OpLog.warn('FileBasedSyncAdapter: sync-state.json unreadable; trying .bak', e);
