@@ -64,6 +64,8 @@ import {
   VectorClockComparison,
 } from '../../../core/util/vector-clock';
 
+const actionPayloadOf = (op: Operation): unknown =>
+  (op.payload as { actionPayload: unknown }).actionPayload;
 type TestState = RootState & { section: SectionState; simpleCounter: SimpleCounterState };
 const IDS = ['a', 'b', 'untouched'];
 const PROJECT = 'project1';
@@ -425,18 +427,59 @@ describe('reorder conflicts: real store, applier, reducers and durable replay (#
           await db.deleteOpsWhere((row) => row.op.id === remote.id);
           const retained = await db.getOpsAfterSeq(0);
           expect(retained.map((row) => row.op.id)).toEqual([local.id]);
-          await expectAsync(
-            TestBed.inject(SupersededOperationResolverService).resolveSupersededLocalOps(
-              [{ opId: local.id, op: local, existingClock: remote.vectorClock }],
-              [remote.vectorClock],
-              snapshotClock,
-            ),
-          ).toBeRejectedWithError(UnsupportedMultiEntityConflictError);
-          expect(await db.getOpsAfterSeq(0)).toEqual(retained);
-          expect((await db.getUnsynced()).map((row) => row.op.id)).toEqual([local.id]);
+          const resolve = TestBed.inject(
+            SupersededOperationResolverService,
+          ).resolveSupersededLocalOps(
+            [{ opId: local.id, op: local, existingClock: remote.vectorClock }],
+            [remote.vectorClock],
+            snapshotClock,
+          );
+          if (!pendingContent) {
+            await expectAsync(resolve).toBeRejectedWithError(
+              UnsupportedMultiEntityConflictError,
+            );
+            expect(await db.getOpsAfterSeq(0)).toEqual(retained);
+            expect((await db.getUnsynced()).map((row) => row.op.id)).toEqual([local.id]);
+            expect(await state()).toEqual(before);
+            return;
+          }
+          // An absolute counter-today set needs no causal proof: reissue its
+          // current value instead of stopping sync or falling back to entity LWW.
+          await resolve;
+          const [replacement, ...others] = (await db.getUnsynced()).map((row) => row.op);
+          expect(others).toEqual([]);
+          expect(replacement.id).not.toBe(local.id);
+          expect(replacement.actionType).toBe(local.actionType);
+          expect(actionPayloadOf(replacement)).toEqual(actionPayloadOf(local));
+          for (const clock of [local.vectorClock, remote.vectorClock]) {
+            expect(compareVectorClocks(replacement.vectorClock, clock)).toBe(
+              VectorClockComparison.GREATER_THAN,
+            );
+          }
           expect(await state()).toEqual(before);
         },
       );
+    }
+
+    if (family === 'habits') {
+      it('habits: reissues a pending counter set rejected without an entity clock', async () => {
+        const pair = actionsFor(family);
+        const local = capture(pair.edit, 'local', 1000);
+        store.dispatch(pair.edit);
+        await db.append(local, 'local');
+        const before = await state();
+        await TestBed.inject(
+          SupersededOperationResolverService,
+        ).resolveSupersededLocalOps([{ opId: local.id, op: local }]);
+        const [replacement, ...others] = (await db.getUnsynced()).map((row) => row.op);
+        expect(others).toEqual([]);
+        expect(replacement.actionType).toBe(local.actionType);
+        expect(actionPayloadOf(replacement)).toEqual(actionPayloadOf(local));
+        expect(compareVectorClocks(replacement.vectorClock, local.vectorClock)).toBe(
+          VectorClockComparison.GREATER_THAN,
+        );
+        expect(await state()).toEqual(before);
+      });
     }
 
     for (const remoteReorder of [false, true]) {

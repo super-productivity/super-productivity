@@ -347,6 +347,7 @@ export class SupersededOperationResolverService {
       // against one stable live-state frontier so anchors and every later local
       // successor are represented without an action-family allowlist. A recognized
       // reorder without this proof must stay pending: entity LWW cannot carry it.
+      // COUNTER_SET_TODAY is projected without the proof (see below).
       const regularSupersededOps: SupersededOperation[] = [];
       let sectionReplayContext: SectionCausalReplayContext | undefined;
       let sectionReplaySnapshot: ReorderReplaySnapshot | undefined;
@@ -354,19 +355,26 @@ export class SupersededOperationResolverService {
         let projectedSectionOp: Operation | undefined;
         let projectedWorkContextState: WorkContextStateProjection | undefined;
         let projectedOrder: SectionReplayOrder | undefined;
+        // An absolute counter-today set needs no causal proof: reissuing its
+        // current value is a local no-op and, unlike entity LWW, keeps
+        // SimpleCounter.type. Stopping sync for it would block habit clicks.
+        const isCounterSetToday = item.op.actionType === ActionType.COUNTER_SET_TODAY;
         if (
-          (CAUSALLY_REPLAYABLE_SECTION_ACTIONS.has(item.op.actionType) ||
+          isCounterSetToday ||
+          ((CAUSALLY_REPLAYABLE_SECTION_ACTIONS.has(item.op.actionType) ||
             isReorderConflictOperation(item.op)) &&
-          item.existingClock
+            item.existingClock)
         ) {
-          if (!sectionReplayContext) {
-            const retainedEntries = await this.opLogStore.getOpsAfterSeq(0);
-            sectionReplayContext = buildSectionCausalReplayContext(retainedEntries);
+          let replayDecision: SectionCausalReplayDecision = 'replay';
+          if (!isCounterSetToday) {
+            sectionReplayContext ??= buildSectionCausalReplayContext(
+              await this.opLogStore.getOpsAfterSeq(0),
+            );
+            replayDecision = this._getSectionCausalReplayDecision(
+              item,
+              sectionReplayContext,
+            );
           }
-          const replayDecision = this._getSectionCausalReplayDecision(
-            item,
-            sectionReplayContext,
-          );
           if (replayDecision === 'replay') {
             sectionReplaySnapshot ??= this._getStableSectionReplaySnapshot();
             const projection = isReorderConflictOperation(item.op)
@@ -375,7 +383,7 @@ export class SupersededOperationResolverService {
             if (projection.kind === 'superseded') {
               opsToReject.push(item.opId);
               OpLog.normal(
-                `SupersededOperationResolverService: SECTION intent ${item.opId} ` +
+                `SupersededOperationResolverService: Replayable intent ${item.opId} ` +
                   'was superseded by the current durable state.',
               );
               continue;
@@ -396,11 +404,9 @@ export class SupersededOperationResolverService {
         }
 
         // Compaction can remove the applied conflict row while retaining the
-        // unsynced reorder. Entity LWW cannot carry that list write and also loses
-        // SimpleCounter.type during action conversion. Keep both intents pending.
+        // unsynced reorder. Entity LWW cannot carry that list write: keep it pending.
         if (
-          (isContentReorderOperation(item.op) ||
-            item.op.actionType === ActionType.COUNTER_SET_TODAY) &&
+          isContentReorderOperation(item.op) &&
           !projectedSectionOp &&
           !projectedWorkContextState
         ) {

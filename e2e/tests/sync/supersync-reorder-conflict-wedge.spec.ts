@@ -479,9 +479,9 @@ test.describe('@supersync reorder crossing content (#10264)', () => {
     for (const pendingContent of family === 'habits' ? [false, true] : [false]) {
       test(
         family +
-          ': keeps the ' +
-          (pendingContent ? 'content' : 'reorder') +
-          ' pending after interrupted sync and compaction',
+          (pendingContent
+            ? ': reissues the content after interrupted sync and compaction'
+            : ': keeps the reorder pending after interrupted sync and compaction'),
         async ({ browser, baseURL, testRunId }) => {
           test.setTimeout(240000);
           const ids = ['a', 'b', 'untouched'].map((id) => id + '-' + testRunId);
@@ -603,7 +603,7 @@ test.describe('@supersync reorder crossing content (#10264)', () => {
             expect(await snapshot(a.page, family, ids)).toEqual(interrupted);
             offline = false;
             allowUpload = true;
-            for (let attempt = 0; attempt < 4; attempt++) {
+            const expectOriginalRejected = async (): Promise<void> => {
               const rejected = a.page.waitForResponse(
                 (response) =>
                   response.url().includes('/api/sync/ops') &&
@@ -621,15 +621,30 @@ test.describe('@supersync reorder crossing content (#10264)', () => {
                 }),
               );
               await expect(a.sync.syncSpinner).toBeHidden();
-              if (pendingContent) {
-                // Flush a fallback replacement too, if recovery silently succeeded.
-                if (!(await a.sync.conflictDialog.isVisible())) await sync(a);
-                await sync(b);
-                // Generic counter LWW must never erase the receiver's required type.
-                expect((await snapshot(b.page, family, ids)).entities[ids[0]].type).toBe(
-                  interrupted.entities[ids[0]].type,
-                );
-              }
+            };
+            if (pendingContent) {
+              // An absolute counter-today set is reissued with its current value:
+              // sync must neither stop nor fall back to type-stripping entity LWW.
+              await expectOriginalRejected();
+              await expect(a.sync.conflictDialog).toBeHidden();
+              expect(await a.sync.hasSyncError()).toBe(false);
+              await sync(a);
+              await sync(b);
+              const converged = await snapshot(a.page, family, ids);
+              expect(converged).toEqual(interrupted);
+              expect(await snapshot(b.page, family, ids)).toEqual(converged);
+              expect(converged.entities[ids[0]].type).toBe('StopWatch');
+              const replaced = (await readRows(a.page)).find(
+                (row) => row.op.id === original.op.id,
+              )!;
+              expect(replaced.rejectedAt).toBeDefined();
+              await a.page.reload();
+              await waitForAppReady(a.page);
+              expect(await snapshot(a.page, family, ids)).toEqual(converged);
+              return;
+            }
+            for (let attempt = 0; attempt < 4; attempt++) {
+              await expectOriginalRejected();
               await expect(a.sync.conflictDialog).toBeVisible();
               await a.sync.conflictDialog
                 .getByRole('button', { name: 'Cancel', exact: true })
@@ -643,10 +658,8 @@ test.describe('@supersync reorder crossing content (#10264)', () => {
             }
             await sync(b);
             const peer = await snapshot(b.page, family, ids);
-            expect(peer.entities).toEqual(
-              pendingContent ? before.entities : interrupted.entities,
-            );
-            expect(peer.order).toEqual(pendingContent ? reversed : before.order);
+            expect(peer.entities).toEqual(interrupted.entities);
+            expect(peer.order).toEqual(before.order);
             await a.page.reload();
             await waitForAppReady(a.page);
             expect(await snapshot(a.page, family, ids)).toEqual(interrupted);

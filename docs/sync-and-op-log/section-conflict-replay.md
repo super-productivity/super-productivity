@@ -41,7 +41,9 @@ Only these action families are candidates:
 - `NOTE_UPDATE_ORDER`, `COUNTER_UPDATE_ORDER`, `BOARDS_SORT`
 - `NOTE_UPDATE`, `COUNTER_SET_TODAY`, `BOARDS_UPDATE`, `SECTION_UPDATE`
 
-Replay is admitted only when all of the following hold:
+`COUNTER_SET_TODAY` is the one exception to the proof below; see the end of
+this section. For every other candidate, replay is admitted only when all of
+the following hold:
 
 1. The rejected operation has an existing entity frontier concurrent with its clock.
 2. Exactly one retained operation matches the affected entity/clock frontier.
@@ -64,10 +66,13 @@ The recognized crossings are intentionally limited to:
 Note pinning/moving, habit configuration changes and competing reorders are not
 recognized as commuting content crossings. Missing, ambiguous, malformed or
 non-commuting evidence does not admit replay. Recognized content reorders
-(including section reorders) and `COUNTER_SET_TODAY` then remain pending with
-`UnsupportedMultiEntityConflictError`: generic entity LWW loses list writes or
-the habit's type. Other actions retain their existing fallback. Never broaden
-recognition merely because two actions appear harmless in one fixture.
+(including section reorders) then remain pending with
+`UnsupportedMultiEntityConflictError`: generic entity LWW loses list writes.
+`COUNTER_SET_TODAY` needs no causal proof: it is always reissued with the
+day's current count (a local no-op), because generic entity LWW would lose the
+habit's type and stopping sync would block every habit click. Other actions
+retain their existing fallback. Never broaden recognition merely because two
+actions appear harmless in one fixture.
 
 ## State-based projection
 
@@ -97,7 +102,8 @@ hydration also replays rejected originals.
 Replacement ordering is scoped by owner list, work-context task order or content
 action/entity (and day for habit counts).
 Replacements use a merged, incremented clock that dominates the rejected and
-retained frontiers. The client must not prune that clock before the server
+retained frontiers (for an unproven habit count, the rejected frontier and
+every clock the rejection download collected). The client must not prune that clock before the server
 performs conflict detection.
 
 The resolver appends all replacement/compensation operations and rejects their

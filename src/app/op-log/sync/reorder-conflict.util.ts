@@ -119,8 +119,9 @@ const isOrderAndContent = (order: Operation, edit: Operation): boolean => {
   }
 };
 
-// Admission still requires an exact commuting retained remote row; this list
-// only selects candidates for that existing fail-closed causal proof.
+// Admission still requires an exact commuting retained remote row (except
+// COUNTER_SET_TODAY, reissued without proof); this list only selects
+// candidates for that existing fail-closed causal proof.
 export const isReorderConflictOperation = (op: Operation): boolean =>
   isContentReorderOperation(op) ||
   [
