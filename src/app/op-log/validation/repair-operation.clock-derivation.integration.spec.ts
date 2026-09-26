@@ -3,12 +3,14 @@ import { RepairOperationService } from './repair-operation.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
-import { OpLogDbAdapter } from '../persistence/op-log-db-adapter';
+import { DbKey, OpLogDbAdapter } from '../persistence/op-log-db-adapter';
 import { SINGLETON_KEY, STORE_NAMES } from '../persistence/db-keys.const';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { TranslateService } from '@ngx-translate/core';
 import { RepairSummary } from '../core/operation.types';
+import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
+import { DEFAULT_TASK } from '../../features/tasks/task.model';
 
 /**
  * Regression tests for #8939: the REPAIR clock must be derived from the
@@ -115,4 +117,82 @@ describe('RepairOperationService clock derivation (#8939)', () => {
       otherTab: 2,
     });
   });
+
+  for (const failedStore of [STORE_NAMES.ARCHIVE_YOUNG, STORE_NAMES.ARCHIVE_OLD]) {
+    it(`rolls back the repair, clock and both archives when ${failedStore} fails`, async () => {
+      const archive = (id: string): ArchiveModel => ({
+        task: {
+          ids: [id],
+          entities: { [id]: { ...DEFAULT_TASK, id, projectId: 'INBOX' } },
+        },
+        timeTracking: { project: {}, tag: {} },
+      });
+      const before = {
+        ...repairedState,
+        archiveYoung: archive('before-young'),
+        archiveOld: archive('before-old'),
+      };
+      const after = {
+        ...repairedState,
+        archiveYoung: archive('after-young'),
+        archiveOld: archive('after-old'),
+      };
+      await service.createRepairOperation(before, repairSummary, 'testClient');
+      const pendingBefore = await opLogStore.getUnsynced();
+      const clockBefore = await opLogStore.getVectorClock();
+      const cacheBefore = await opLogStore.loadStateCache();
+      const adapter = (opLogStore as unknown as { _adapter: OpLogDbAdapter })._adapter;
+      const transaction = adapter.transaction.bind(adapter);
+      const fail = spyOn(adapter, 'transaction').and.callFake((stores, mode, callback) =>
+        transaction(stores, mode, (tx) =>
+          callback(
+            new Proxy(tx, {
+              get: (target, property): unknown => {
+                if (property === 'put') {
+                  return async (name: string, value: unknown, key?: DbKey) => {
+                    await target.put(name, value, key);
+                    if (name === failedStore) throw new Error('injected archive failure');
+                  };
+                }
+                const value = Reflect.get(target, property);
+                return typeof value === 'function' ? value.bind(target) : value;
+              },
+            }),
+          ),
+        ),
+      );
+
+      await expectAsync(
+        service.createRepairOperation(after, repairSummary, 'testClient'),
+      ).toBeRejectedWithError('injected archive failure');
+      opLogStore.clearVectorClockCache();
+      expect(await opLogStore.getVectorClock()).toEqual(clockBefore);
+      expect(await opLogStore.getUnsynced()).toEqual(pendingBefore);
+      expect(await opLogStore.loadStateCache()).toEqual(cacheBefore);
+      expect((await opLogStore.getLatestFullStateOp())?.id).toBe(pendingBefore[0].op.id);
+      for (const [name, data] of [
+        [STORE_NAMES.ARCHIVE_YOUNG, before.archiveYoung],
+        [STORE_NAMES.ARCHIVE_OLD, before.archiveOld],
+      ] as const) {
+        expect(await adapter.get(name, SINGLETON_KEY)).toEqual({
+          id: SINGLETON_KEY,
+          data,
+        });
+      }
+
+      // The aborted transaction does not consume the counter or strand retry.
+      fail.and.callThrough();
+      await service.createRepairOperation(after, repairSummary, 'testClient');
+      expect(await opLogStore.getVectorClock()).toEqual({ testClient: 2 });
+      expect(await opLogStore.getUnsynced()).toHaveSize(2);
+      expect(await adapter.get(STORE_NAMES.ARCHIVE_YOUNG, SINGLETON_KEY)).toEqual({
+        id: SINGLETON_KEY,
+        data: after.archiveYoung,
+      });
+      expect(await adapter.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY)).toEqual({
+        id: SINGLETON_KEY,
+        data: after.archiveOld,
+      });
+    });
+  }
 });

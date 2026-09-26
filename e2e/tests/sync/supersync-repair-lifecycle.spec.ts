@@ -6,14 +6,18 @@ import {
   closeClient,
   createSimulatedClient,
   createTestUser,
+  expectExactTaskTime,
   getSuperSyncConfig,
   parseSuperSyncRequestBody,
+  recordTaskTimeDelta,
   renameTask,
   SUPERSYNC_BASE_URL,
   type SimulatedE2EClient,
   waitForTask,
 } from '../../utils/supersync-helpers';
 import { waitForAppReady } from '../../utils/waits';
+import type { Task } from '../../../src/app/features/tasks/task.model';
+import type { ArchiveModel } from '../../../src/app/features/time-tracking/time-tracking.model';
 
 interface SnapshotUploadRequest {
   opId?: string;
@@ -260,14 +264,231 @@ const expectConvergedTask = async (
     .poll(() => getTaskSnapshots(client.page, taskTitle), {
       message: `${client.clientName} did not converge to exactly one repaired task`,
     })
-    .toHaveLength(1);
-  expect((await getTaskSnapshots(client.page, taskTitle))[0].tagIds).not.toContain(
-    ghostTagId,
-  );
+    .toEqual([
+      expect.objectContaining({ tagIds: expect.not.arrayContaining([ghostTagId]) }),
+    ]);
 };
+
+// Seed real task shapes into both durable archive partitions. Retain unrelated
+// entries by default; the empty-partition case exercises the compatibility policy.
+const seedArchiveDuplicates = async (
+  page: Page,
+  taskTitles: string[],
+  keepUnrelatedTasks = true,
+): Promise<string[][]> =>
+  page.evaluate(
+    async ({ titles, keepUnrelated }) => {
+      type State = { tasks: { entities: Record<string, Task | undefined> } };
+      type Store = {
+        subscribe: (next: (state: State) => void) => { unsubscribe: () => void };
+      };
+      const store = (window as unknown as { __e2eTestHelpers: { store: Store } })
+        .__e2eTestHelpers.store;
+      let state!: State;
+      store.subscribe((value) => (state = value)).unsubscribe();
+      const tasks = titles.map((title) => {
+        const task = Object.values(state.tasks.entities).find((t) => t?.title === title);
+        if (!task) throw new Error(`Missing fixture task: ${title}`);
+        return task;
+      });
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('SUP_OPS');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const retainedIds: string[][] = [];
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const transaction = db.transaction(
+            ['archive_young', 'archive_old'],
+            'readwrite',
+          );
+          transaction.oncomplete = () => resolve();
+          transaction.onabort = () => reject(transaction.error);
+          for (const [index, name] of ['archive_young', 'archive_old'].entries()) {
+            const duplicate = tasks[index];
+            const retained = {
+              ...duplicate,
+              id: `retained-${duplicate.id}`,
+              title: `Unrelated archived ${index}`,
+              tagIds: [],
+              dueDay: undefined,
+              dueWithTime: undefined,
+              isDone: true,
+            };
+            retainedIds.push([keepUnrelated ? retained.id : duplicate.id]);
+            const data: ArchiveModel = {
+              task: {
+                ids: keepUnrelated ? [duplicate.id, retained.id] : [duplicate.id],
+                entities: {
+                  [duplicate.id]: duplicate,
+                  ...(keepUnrelated ? { [retained.id]: retained } : {}),
+                },
+              },
+              timeTracking: { project: {}, tag: {} },
+            };
+            transaction.objectStore(name).put({ id: 'current', data });
+          }
+        });
+        return retainedIds;
+      } finally {
+        db.close();
+      }
+    },
+    { titles: taskTitles, keepUnrelated: keepUnrelatedTasks },
+  );
+
+const getArchiveIds = async (page: Page): Promise<string[][]> =>
+  page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('SUP_OPS');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      return await Promise.all(
+        ['archive_young', 'archive_old'].map(
+          (name) =>
+            new Promise<string[]>((resolve, reject) => {
+              const request = db.transaction(name).objectStore(name).get('current');
+              request.onsuccess = () => {
+                const entry = request.result as { data?: ArchiveModel } | undefined;
+                resolve((entry?.data?.task.ids ?? []) as string[]);
+              };
+              request.onerror = () => reject(request.error);
+            }),
+        ),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+const failRepairCacheWrite = async (page: Page, keepFailing: boolean): Promise<void> =>
+  page.evaluate((failUntilReload) => {
+    const originalAdd = IDBObjectStore.prototype.add;
+    const originalPut = IDBObjectStore.prototype.put;
+    let repairAppended = false;
+    IDBObjectStore.prototype.add = function (value: unknown, key?: IDBValidKey) {
+      const entry = value as { source?: string; op?: { o?: string } };
+      if (this.name === 'ops' && entry.source === 'local' && entry.op?.o === 'REPAIR') {
+        repairAppended = true;
+      }
+      return originalAdd.call(this, value, key);
+    };
+    IDBObjectStore.prototype.put = function (value: unknown, key?: IDBValidKey) {
+      if (this.name === 'state_cache' && repairAppended) {
+        if (!failUntilReload) {
+          IDBObjectStore.prototype.add = originalAdd;
+          IDBObjectStore.prototype.put = originalPut;
+        }
+        (window as unknown as { __repairCacheFailed: boolean }).__repairCacheFailed =
+          true;
+        throw new Error('Injected repair cache write failure');
+      }
+      return originalPut.call(this, value, key);
+    };
+  }, keepFailing);
 
 test.describe('@supersync REPAIR lifecycle', () => {
   test.describe.configure({ mode: 'serial' });
+
+  for (const scenario of [
+    'originating client',
+    'cache-write interruption',
+    'cache unavailable until reload',
+    'empty repair partition',
+  ]) {
+    test(`persists repaired archives: ${scenario}, across offline reloads`, async ({
+      browser,
+      baseURL,
+      testRunId,
+    }) => {
+      const titles = [`A-${testRunId}-RepairYoung`, `A-${testRunId}-RepairOld`];
+      const pendingTitle = `A-${testRunId}-UnrelatedWork`;
+      const ghostTagId = `ghost-archive-${testRunId}`;
+      const clients: SimulatedE2EClient[] = [];
+      try {
+        const config = getSuperSyncConfig(await createTestUser(testRunId));
+        for (const name of ['A', 'B']) {
+          const client = await createSimulatedClient(browser, baseURL!, name, testRunId);
+          clients.push(client);
+          await client.workView.waitForTaskList();
+          await client.sync.setupSuperSync(config);
+        }
+        const [origin, peer] = clients;
+        for (const title of titles) await origin.workView.addTask(title);
+        await recordTaskTimeDelta(origin, titles[0], '2026-09-20', 5000);
+        await origin.sync.syncAndWait();
+        await peer.sync.syncAndWait();
+        await waitForTask(peer.page, titles[1]);
+        const keepUnrelated = scenario !== 'empty repair partition';
+        const retainedIds = await seedArchiveDuplicates(
+          origin.page,
+          titles,
+          keepUnrelated,
+        );
+        expect(await seedArchiveDuplicates(peer.page, titles, keepUnrelated)).toEqual(
+          retainedIds,
+        );
+
+        // Active corruption triggers the normal post-download validator; archive
+        // duplicates alone do not trigger its cheap active-state validation gate.
+        await addGhostTagReference(peer.page, titles[0], ghostTagId);
+        await peer.sync.syncAndWait();
+        await origin.workView.addTask(pendingTitle);
+        if (scenario.startsWith('cache')) {
+          await failRepairCacheWrite(
+            origin.page,
+            scenario === 'cache unavailable until reload',
+          );
+          await origin.sync.syncBtn.click();
+          await expect
+            .poll(() =>
+              origin.page.evaluate(
+                () =>
+                  (window as unknown as { __repairCacheFailed?: boolean })
+                    .__repairCacheFailed,
+              ),
+            )
+            .toBe(true);
+          // Reboot before successful sync can redo repair. Persistent cache
+          // failure additionally forces boot to use the committed REPAIR tail.
+          await origin.page.route('**/api/**', (route) => route.abort());
+          await origin.page.reload();
+          await waitForAppReady(origin.page);
+          await expectConvergedTask(origin, titles[0], ghostTagId);
+          expect(await getArchiveIds(origin.page)).toEqual(retainedIds);
+          await origin.page.unroute('**/api/**');
+        } else {
+          await origin.sync.syncAndWait({ timeout: 60000 });
+        }
+        await expectConvergedTask(origin, titles[0], ghostTagId);
+        expect(await getStoredRepairOperations(origin.page)).not.toHaveLength(0);
+        expect(await getArchiveIds(origin.page)).toEqual(retainedIds);
+
+        await origin.sync.syncAndWait();
+        await peer.sync.syncAndWait({ timeout: 60000 });
+        for (const client of clients) {
+          expect(await getArchiveIds(client.page)).toEqual(retainedIds);
+          await waitForTask(client.page, pendingTitle);
+          await expectExactTaskTime(client, titles[0], 5000);
+          // Keep the app itself available while preventing sync on restart.
+          await client.page.route('**/api/**', (route) => route.abort());
+          for (let restart = 0; restart < 2; restart++) {
+            await client.page.reload();
+            await waitForAppReady(client.page);
+            await expectConvergedTask(client, titles[0], ghostTagId);
+            expect(await getArchiveIds(client.page)).toEqual(retainedIds);
+            await waitForTask(client.page, pendingTitle);
+            await expectExactTaskTime(client, titles[0], 5000);
+          }
+        }
+      } finally {
+        for (const client of clients) await closeClient(client);
+      }
+    });
+  }
 
   test('rebases a stale repair, retries it after reload, and converges all clients', async ({
     browser,

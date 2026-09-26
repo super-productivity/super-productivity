@@ -22,6 +22,7 @@ import { RepairSyncContextService } from './repair-sync-context.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { TabSeqFrontierService } from '../persistence/tab-seq-frontier.service';
+import type { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
 
 export interface RebaseStaleRepairOptions {
   staleRepairOpId: string;
@@ -56,6 +57,7 @@ export class RepairOperationService {
   /**
    * Creates a REPAIR operation with the repaired state and saves it to the operation log.
    * Also updates the state cache to the repaired state for faster future hydration.
+   * For archives, the caller must hold TASK_ARCHIVE from snapshot capture through commit.
    *
    * @param repairedState - The fully repaired application state
    * @param repairSummary - Summary of what was repaired (counts by category)
@@ -67,7 +69,7 @@ export class RepairOperationService {
    * @returns The sequence number of the created operation
    */
   async createRepairOperation(
-    repairedState: unknown,
+    repairedState: Record<string, unknown>,
     repairSummary: RepairSummary,
     clientId: string,
     options?: { skipLock?: boolean; interactive?: boolean },
@@ -86,13 +88,25 @@ export class RepairOperationService {
         this.repairSyncContext.baseServerSeq,
       );
 
-      // 1. Append via the mixed-source batch: its in-transaction rebase derives
+      // 1. Commit the repaired archives with their replayable REPAIR operation.
+      // The validator holds TASK_ARCHIVE across snapshot capture and this write.
+      // The mixed-source batch's in-transaction rebase derives
       // the final clock from the durable clock, so a stale in-memory clock
       // cache (e.g. another tab advanced the clock since our last read) can
       // never regress the durable clock or reuse counters (#8939).
-      const { written } = await this.opLogStore.appendMixedSourceBatchSkipDuplicates([
-        { ops: [op], source: 'local' },
-      ]);
+      const { archiveYoung, archiveOld } = repairedState as {
+        archiveYoung?: ArchiveModel;
+        archiveOld?: ArchiveModel;
+      };
+      const { written } = await this.opLogStore.appendMixedSourceBatchSkipDuplicates(
+        [{ ops: [op], source: 'local' }],
+        {
+          // Match ArchiveOperationHandler and released receivers: an empty
+          // REPAIR partition must not clear an existing nonempty archive.
+          archiveYoung: archiveYoung?.task.ids.length ? archiveYoung : undefined,
+          archiveOld: archiveOld?.task.ids.length ? archiveOld : undefined,
+        },
+      );
       const writtenOp = written[0];
       if (!writtenOp) {
         throw new Error('REPAIR operation was not appended');
@@ -101,13 +115,20 @@ export class RepairOperationService {
 
       // 2. Save state cache with repaired state for fast hydration.
       // Use the rebased clock that was actually written, not the proposed one.
-      await this.opLogStore.saveStateCache({
-        state: repairedState,
-        lastAppliedOpSeq: seq,
-        vectorClock: writtenOp.op.vectorClock,
-        compactedAt: Date.now(),
-        schemaVersion: CURRENT_SCHEMA_VERSION,
-      });
+      try {
+        await this.opLogStore.saveStateCache({
+          state: repairedState,
+          lastAppliedOpSeq: seq,
+          vectorClock: writtenOp.op.vectorClock,
+          compactedAt: Date.now(),
+          schemaVersion: CURRENT_SCHEMA_VERSION,
+        });
+      } catch (error) {
+        // The operation and archives are already durable. Still let the caller
+        // install the repaired live state: otherwise later compaction can cache
+        // the unrepaired projection at this REPAIR's seq and hide it on restart.
+        OpLog.warn('[RepairOperationService] Failed to cache committed repair', error);
+      }
 
       // #9438: this is a full-state baseline install — REPAIR supersedes all
       // earlier ops on replay and the caller dispatches repairedState as the
