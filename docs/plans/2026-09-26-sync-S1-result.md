@@ -101,6 +101,18 @@ Confidence is high for the two reproduced windows and the narrow correction:
 one adapter guard uses existing apply/commit, cache, revision, and retry behavior.
 The compatibility limits and outstanding CI gate below bound that assessment.
 
+### Requested Claude review
+
+The regular Claude CLI independently reviewed `9177c3afed..1ac23b5ebb` with
+read/search tools only. It found no confirmed actionable defect and assessed
+minimality and the scoped WebDAV correction with high confidence. I rechecked
+the guard, retry handler, and provider revision paths against the source. Its
+one new question concerns OneDrive's different revision sources, detailed below;
+confidence for that provider remains medium. No production or test changes
+resulted from this pass, so the recorded implementation SHA and test results
+remain applicable. Claude did not run tests; no authenticated OneDrive check
+or full scheduled CI run is claimed.
+
 | Check                                                           | Baseline                                                          | Final result                         |
 | --------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------ |
 | WebDAV cache expiry, v2 + v3                                    | v2 fails after C restart; v3 passes                               | 2 pass                               |
@@ -170,6 +182,9 @@ the shared WebDAV server stopped during one run, restarting the S1 container
 needed recreation to restore its port mapping, and first-contact fixture
 assertions were corrected for the setup config op and existing conflict policy.
 Only S1's own container was restarted/recreated; no shared server was stopped.
+The Claude review prompt, complete output and final review are retained as
+`claude-review-prompt.txt`, `claude-review-online.jsonl`, and
+`claude-review-result.md` in the same ignored evidence directory.
 
 ## Compatibility and remaining limits
 
@@ -193,6 +208,19 @@ Only S1's own container was restarted/recreated; no shared server was stopped.
   OneDrive then uses `conflictBehavior=fail`, which can refuse replacing an
   existing file. Provider CAS and read-to-write races, including servers that
   ignore preconditions, are unchanged.
+- **OneDrive revision-source equality (unverified):** `downloadFile` prefers the
+  content response's ETag, while `getFileRev` and `uploadFile` return the metadata
+  `eTag`. If those strings differ for the same file version, the cheap unchanged
+  check could repeatedly skip downloading, followed by the new guard refusing
+  the upload-side read. No captured same-version mismatch was found in the repo.
+  Microsoft's [download API documentation](https://learn.microsoft.com/en-us/graph/api/driveitem-get-content?view=graph-rest-1.0)
+  describes the redirect to a content URL, and the
+  [driveItem documentation](https://learn.microsoft.com/en-us/graph/api/resources/driveitem?view=graph-rest-1.0)
+  distinguishes content `cTag` from item `eTag`; neither establishes equality of
+  that response header and the metadata field. This remains a conditional risk,
+  not an observed provider failure. Before claiming OneDrive retry termination,
+  compare those tokens across two consecutive edit/sync cycles on the real
+  provider in web, Electron and Android. The adapter fake does not prove this.
 - **Snapshot replacements / #10258:** the new check concerns retained operations.
   Empty buffers remain under the existing snapshot-base guard. An initially
   broader revision refusal changed an empty-snapshot first-contact history and
@@ -226,4 +254,4 @@ adapter/integration tests, 450 provider tests plus typecheck, and per-file
 formatting/lint pass. Eight
 pre-existing unrelated cases remain skipped; full scheduled CI is outstanding.
 No schema/format changes. Old writers and already-inconsistent snapshots remain
-a compatibility limit.
+a compatibility limit. OneDrive revision-source equality remains unverified.
