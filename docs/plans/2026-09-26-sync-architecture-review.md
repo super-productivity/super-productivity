@@ -1,7 +1,7 @@
 # Sync Architecture Review: Why Every Fix Is Expensive
 
 **Status:** Proposal for discussion — nothing here is accepted. Revised after
-an adversarial review. · **Date:** 2026-09-26
+two adversarial reviews. · **Date:** 2026-09-26
 **Baseline commit:** `6169df9e9` (`origin/master`)
 **Question:** Did the sync architecture go in the wrong direction? Could we throw
 away half of it?
@@ -11,8 +11,9 @@ sync UI (`src/app/imex/sync/`), and the sync-facing meta-reducers.
 
 ## 1. Verdict
 
-Mostly no — with one important exception, and one missing capability that
-blocks every fix for it.
+**Short answer:** the architecture has one real design flaw. It is locked in
+by compatibility with released clients. It does not justify a rewrite now, and
+the evidence does not support throwing away half of the sync code.
 
 - **Sound, keep:**
   - the op-log itself: persistent actions captured into a durable log,
@@ -23,43 +24,50 @@ blocks every fix for it.
 
   Most of that code would exist under any design.
 
-- **The recurring cost:** operations are replayed **intents** whose reducers
-  write many entities, but conflicts are detected and resolved **per declared
-  entity**. 64 of the 132 persistent actions write outside the key that conflict
-  detection sees (§2.5). Every such action that can meet a concurrent edit needs
-  hand-written compensation, or it stops sync. This is the largest single root
-  cause in the fix history (about a fifth of fix lines) and the only one that
-  repeatedly wedged users. It was amplified by answering each audit finding
-  with per-action compensation.
-- **Why it cannot be fixed by deletion or by a better algorithm today:**
-  every released version must stay compatible forever. There is no desktop
-  auto-updater (ADR #8), and nothing lets a sync target leave an old protocol
-  behind. Each candidate fix runs into this:
-  - replaying intents in one total order diverges as soon as two app versions'
-    reducers differ (§4.1);
-  - deriving list membership retires only ~400–600 lines while released clients
-    still read, validate and repair from the arrays (§4.2);
-  - correcting what ops declare, or making reducers deterministic, changes what
-    old clients do with the same op (sync rule 10).
-- **What to do:**
-  1. Stop adding per-action compensation (Phase 0).
-  2. Delete the dead code (Phase 1).
-  3. Add **sync protocol generations** (Phase 2). A sync target moves to a new
-     generation only when every active device of that account supports it —
-     SuperSync already gates retention this way (`checkpoint-gate.ts`, #9962).
-     Old generations get a sunset date, as the v16 sync format and User Profiles
-     had.
-  4. Define generation 2 so the mismatch cannot exist: ops that declare exactly
-     what they write, deterministic apply, derived membership (Phase 3).
-  5. Delete generation 1's compensation after its sunset (Phase 4).
-- **Half?** Only with a sunset.
-  - ~2.3k production lines can go now; another ~6–8k need a decision each
-    (Phase 1).
-  - After a generation-1 sunset, most of the conflict compensation, the list
-    upkeep and the compatibility readers can go — an estimated 7–10k more lines,
-    plus most of the ~27k lines of conflict unit tests.
-  - Together that is roughly a third of the client op-log, possibly more.
-  - Without a sunset, the transition adds code instead.
+- **The flaw:** operations are replayed **intents** whose reducers write many
+  entities, but conflicts are detected and resolved **per declared entity**.
+  - 64 of the 132 persistent actions write outside the key that conflict
+    detection sees (§2.5).
+  - Every such action that can meet a concurrent edit needs hand-written
+    compensation, or it stops sync.
+  - It is the largest single root cause in the fix history, at most a fifth of
+    fix lines (§2.2).
+  - The fail-closed gate turned it into the class that most often wedged
+    users' sync (§2.4).
+- **Locked in:** there is no desktop auto-updater, so every released version
+  stays in use.
+  - Every structural fix — replaying in one order (§4.1), deriving list
+    membership (§4.2), correcting what ops declare, making reducers
+    deterministic — changes what old clients do with the same op. So none of
+    them can delete the compensation code.
+  - Only a **protocol-generation change** with a sunset could (§5, Phase 3).
+    That needs:
+    - a multi-month sunset;
+    - a new file format with a migration for file providers;
+    - a request-level lockout for old SuperSync clients;
+    - a migration that keeps offline edits.
+  - It would save at most ~5k lines gross, before the new generation's own
+    code. Not worth starting now.
+- **The urgency has dropped:**
+  - `conflict-resolution.service.ts` has not grown since mid-August (4,825 →
+    4,817 lines);
+  - `src/app/op-log/` grew +3.9k lines from August 1 to the baseline, against
+    +15.9k in July alone;
+  - July's growth was an audit-driven burst, and the new contributor rules
+    target exactly that (§2.6, §3.5).
+- **Do now:**
+  1. Contributor rules that stop per-action compensation (Phase 0).
+  2. Close the remaining fail-closed surface locally, starting with the
+     reorder bug found in this review (#10264), through the existing
+     ordering-only path (Phase 2).
+  3. Delete dead code: ~2.3k lines unconditionally; ~6–8k more after a
+     decision each (Phase 1).
+  4. Consolidate local persistence, an estimated ~3–4k lines (parallel
+     track).
+- **Half?** No. Realistic: roughly 11–14k production lines over time — a
+  fifth to a quarter of the ~52k-line client op-log, some of it outside
+  `op-log/`, plus a larger share of tests. Most of it comes from deletions and
+  consolidation, not from a new model.
 
 ## 2. Evidence
 
@@ -144,6 +152,11 @@ for multi-entity writes rather than generic LWW (method ranges, ±10%):
 | Commuting exemptions (sections, time deltas)                                                                                                                                       | 25 (+~850 in section helpers) |
 | Other (E2EE footprint auth, banner/journal hooks, dead helpers)                                                                                                                    |                           345 |
 
+The conflict area also carries ~27.7k lines of unit specs (the conflict, LWW,
+superseded, rejected-op and journal specs in `src/app/op-log/sync/`, plus the
+`lww-update` and bulk-archive specs). Appendix D splits the same file by a
+different method (by purpose rather than by feature), so its numbers differ.
+
 The same compensation leaks into `lww-update.meta-reducer.ts` (1,017 lines, of
 which ~380–435 rebuild project/tag/Today/parent relationships that the
 original action's reducer would have maintained) and
@@ -216,28 +229,53 @@ that handles it, with owned lists counted as writes to their owner:
 - **The code already says so:** `tag.effects.ts:241` repairs TODAY_TAG because
   of "state divergence caused by per-entity conflict resolution during sync".
 
-### 2.6 What blocks simplification
+### 2.6 Growth has slowed since July
 
-- **Compatibility is load-bearing everywhere:**
-  - the July simplification plan kept almost every surface "for compatibility";
+| Measure                                          | July 2026 | 2026-08-01 → baseline |
+| ------------------------------------------------ | --------: | --------------------: |
+| `src/app/op-log/` production lines               |   +15,868 |                +3,930 |
+| `conflict-resolution.service.ts` (07-01 → 08-16) |    +3,721 | −8 (08-16 → baseline) |
+
+Most of the conflict service's growth landed in the audit burst of 07-13 to
+07-16. The rules added since then ("hardening needs an observed instance", an
+E2E reproduction for every sync fix) address that process.
+
+### 2.7 What locks the design in
+
+- **Compatibility is load-bearing:**
+  - the July simplification plan kept almost every surface "for
+    compatibility", and judged the readers' "maintenance cost … tiny relative
+    to data-loss risk";
   - schema v3/v4 barriers, LWW replace-versus-patch modes and singleton-id
     compatibility for v18.15.0/1 stay;
-  - sync rule 10 says a schema bump never protects the released fleet;
+  - sync rule 10: a schema bump never protects the released fleet;
   - ADR #8: "Any policy gated on 'wait for the old fleet to shrink' is a
     permanent no in disguise."
+
+  Compatibility blocks _deleting_ code; it did not make individual fixes
+  expensive.
+
 - **The desktop app cannot update itself:** the Electron auto-updater is
   commented out (`electron/start-app.ts:526-538`), and the update banner's
   dismissal is persisted.
-- **Per-account version gating already exists:**
-  - SuperSync clients report `appVersion` on download since v19.0.0;
-  - the server records it per device (`DeviceService.touchDevice`);
-  - `isAccountCheckpointSafe` (`checkpoint-gate.ts:97`) enables history
-    pruning only for accounts whose every active device runs at least
-    v18.21.2, and a device that reports nothing counts as old.
-- **Deliberate breaks have precedent:** v17 detects a v16-format sync target
-  and asks the user to "update all your devices"
-  (`LegacySyncFormatDetectedError`), and User Profiles were removed "after an
-  export-warning period" (`db-upgrade.ts`, IndexedDB v11).
+- **Version data exists, gating does not:**
+  - SuperSync clients report `appVersion` on download since v19.0.0, and
+    `DeviceService` records it per device;
+  - `isAccountCheckpointSafe` only feeds a fleet-wide summary for the daily
+    cleanup log (`cleanup.ts:64`), so no per-account gate is enforced anywhere;
+  - devices unseen for 45 days are deleted (`RETENTION_DAYS`,
+    `deleteStaleDevices`);
+  - `app_version` is deliberately kept out of the device list, and devices
+    have no names (`device.service.ts:58-66`).
+- **The only precedent that stopped released file clients** is a format
+  break: the SPAP-11 v3 tombstone ("a truly-old shipped client hits the strict
+  `version !== 2` check and hard-errors",
+  `packages/sync-providers/src/file-based-sync-data.ts`). It needed follow-up
+  fixes for `.bak` healing and forked folders (#8857, #9047, #9089).
+- **The weaker precedents:**
+  - the v16 detection (`LegacySyncFormatDetectedError`) offers "Force
+    overwrite", which leaves old devices diverging silently;
+  - the User Profiles removal was local-only.
 
 ## 3. Root causes
 
@@ -318,13 +356,13 @@ answering each follow-up with per-action compensation. The rules added in
 `CLAUDE.md` ("hardening needs an observed instance"; an E2E reproduction for
 every sync fix, `6169df9e9`) address this.
 
-### 3.6 No way to retire a protocol version (the multiplier)
+### 3.6 The lock-in
 
 Every shipped op shape, payload mode and reducer behaviour stays live for as
-long as any device might still run it, and nothing bounds that time (§2.6). So
-each fix adds a path for new ops while keeping the old ones, and none of the
-structural fixes in §4 can remove code. This is why fixes pile up rather than
-replace each other.
+long as any device might still run it, and nothing bounds that time (§2.7).
+This does not make each fix expensive — the audit-driven process did that
+(§3.5). It makes the structural fixes in §4 unable to _delete_ anything: each
+would add a path for new ops while the old one stays.
 
 ## 4. Options for the convergence model
 
@@ -371,7 +409,7 @@ for the day the fleet can be updated.
 
 ### 4.2 Why normalizing lists alone is modest
 
-A desk audit of the compensation code (appendix D) classified 10,364 lines by
+A desk audit of the compensation code (appendix D) classified ~10,200 lines by
 purpose. Only ~2,830 (27%) keep denormalized lists consistent, and only ~530
 of the 4,817 lines in `conflict-resolution.service.ts` do. Most of that file
 handles delete/archive cascades and recreation (~1,560) or field-level LWW
@@ -404,30 +442,37 @@ not in front of it.
 
 ### 4.3 Options compared
 
-|                                | A. Status quo + discipline                         | B. Normalize lists (dual-write)            | C. Per-field LWW on captured effects                                           | D. Total order + rebase                     |
-| ------------------------------ | -------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------- |
-| What an op is                  | intent                                             | intent                                     | field patch, declared = written by construction                                | intent                                      |
-| Convergence                    | per-entity LWW; arrival order for undetected pairs | as A                                       | per-field, order-independent; apply does not depend on the receiver's reducers | total order + identical reducers            |
-| Same-field conflict            | newest timestamp                                   | newest timestamp                           | newest timestamp per field (the disjoint merge becomes the rule)               | last to reach the server                    |
-| Released clients               | unchanged                                          | keep reading and repairing from the arrays | already apply `LwwUpdatePayload` patch ops (#9101), but keep emitting intents  | diverge on any reducer difference           |
-| Deletes code without a sunset? | Phase 1 only                                       | ~400–600 lines                             | no — both paths live until the old generation is retired                       | no — LWW stays as the fallback              |
-| Deletes code after a sunset?   | —                                                  | list upkeep (~2.8k)                        | most per-entity compensation, the fail-closed gate, list upkeep                | most compensation; reducer lockstep remains |
-| Hard part                      | the class stays open-ended                         | lists feed synced fields; repair direction | cascades and tombstones; diff cost; op volume for bulk actions                 | see §4.1                                    |
+|                             | A. Status quo + discipline | E. Close the fail-closed surface locally             | B. Normalize lists (dual-write)            | C. Protocol generation: field patches                                                            | D. Total order + rebase                   |
+| --------------------------- | -------------------------- | ---------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| What changes                | contributor rules          | route blocked action types to existing generic paths | read membership from child fields          | new op kind, new file format, lockout and migration                                              | apply in server order, replay pending ops |
+| User-visible harm addressed | stops new cases            | the remaining sync wedges                            | little                                     | the whole class, after migration                                                                 | the whole class, in theory                |
+| Released clients            | unchanged                  | unchanged (resolution-side only)                     | keep reading and repairing from the arrays | locked out of migrated accounts (raw HTTP error in released code)                                | diverge on any reducer difference         |
+| Code deleted                | Phase 1 only               | none (prevents growth)                               | ~400–600 lines                             | after a sunset: gross ≤ ~5k (list upkeep, the gate, mixed-winner code), minus generation 2's own | none — LWW stays as the fallback          |
+| Risk                        | the class stays open-ended | low; each routing needs its reducer check and E2E    | lists feed synced fields; repair direction | high: lockout mechanics, migration, archive/cascade/time rules still needed                      | see §4.1                                  |
+
+Also considered and rejected:
+
+- **Generations for SuperSync only** (ADR #10's revisit condition) — deletes
+  nothing while file providers exist.
+- **A CRDT library** — ruled out by the root-dependency rule and
+  `operation-log-architecture.md`.
+- **Server-side validation or merging** — impossible under mandatory E2EE.
 
 ### 4.4 Recommendation
 
-- **Now:** A (Phases 0–1).
-- **Then:** build the enabler — protocol generations with a per-account floor
-  and a sunset policy (Phase 2).
-- **Generation 2:** design it around C plus derived membership (Phase 3). C is
-  preferred over D because a field patch applies the same way whatever reducer
-  version the receiver runs, which matters as long as accounts mix app
-  versions within a generation.
+- **Now:** A + E + Phase 1 + the persistence track. Nothing on the wire
+  changes, and released clients are unaffected.
+- **Decide later:** a protocol-generation change (C, Phase 3) only if both
+  hold:
+  1. the product decision in §7 question 1 is yes — a sunset in months, and
+     ideally a desktop auto-updater;
+  2. a quarter of fix data under the new rules shows the class still
+     producing fixes.
 - **Keep D parked** (appendix C).
 
-None of this changes ADR #10 or the invariants of
-`operation-log-architecture.md`: vector clocks keep detecting concurrency, and
-per-field resolution classifies independent edits before overwriting them.
+None of the "now" steps changes an ADR. A generation change would amend ADR
+#8's fleet assumption and revisit ADR #5 (a cross-entity patch envelope is its
+reverted `affectedEntities`) and ADR #7 (cascades).
 
 ## 5. Plan
 
@@ -436,10 +481,11 @@ per-field resolution classifies independent edits before overwriting them.
 Proposed for the maintainer to adopt or reject; this plan does not edit
 `CLAUDE.md`:
 
-1. No new per-action special case in `ConflictResolutionService`. Fix a
-   multi-entity conflict bug in the action or its data shape (rule 2). The
-   existing size ratchet on the file stays; a fix that must add lines removes
-   more elsewhere in the conflict area.
+1. No new per-action resolution path in `ConflictResolutionService`. A
+   multi-entity conflict bug is fixed by routing the action through an existing
+   generic path (ordering-only, independent multi-delete, …) after checking its
+   reducers, or by changing the action — a new action or a payload marker that
+   old clients degrade on (ADR #8). The file's size ratchet stays.
 2. A new action should not add a new denormalized list or a new undeclared
    cross-entity write. Store the fact on the child and derive the rest (the ADR
    #2 pattern). Sync rule 3 (multi-entity change = meta-reducer) is unchanged
@@ -471,90 +517,93 @@ Proposed for the maintainer to adopt or reject; this plan does not edit
 | v2/v3 file-format duplication                               | ~300 (factor) / ~1,500 (retire one) | Pick the long-term format.                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Legacy pfapi → op-log migration and pre-v14 backup import   | ~2,200                              | A sunset date plus an "import your JSON backup" message.                                                                                                                                                                                                                                                                                                                                                                                          |
 
-### Phase 2 — Sync protocol generations (the enabler)
+### Phase 2 — Close the fail-closed surface locally (option E)
 
-**Goal:** make it possible to change sync semantics for an account without
-breaking its older devices, and to delete old semantics after a bounded
-time. Sketch:
+Resolution-side only: released clients are unchanged, and nothing on the wire
+changes.
 
-1. **Generation marker per sync target:**
-   - SuperSync: a per-account field on the server.
-   - File providers: an envelope field. Old uploaders rebuild the envelope and
-     drop unknown fields, so a missing marker reads as generation 1 — the safe
-     default.
-2. **Floor per account.**
-   - SuperSync: the lowest `appVersion` among active devices. This generalizes
-     `isAccountCheckpointSafe`; a device that reports nothing counts as old.
-   - File providers: a per-device version map in the envelope, where a missing
-     entry counts as old.
-3. **Migration:** when the floor reaches generation 2's minimum version, a
-   current client moves the target to generation 2 in one crash-safe step. The
-   exact mechanism is part of the design work, for example a marker flip plus a
-   full-state baseline.
-4. **Lagging devices:**
-   - a calm note in sync settings or the SuperSync device list ("Phone runs
-     v18.20 — update it to enable …"), with no nagging, per the manifesto;
-   - after migration, the server refuses generation-1 uploads to that account
-     with a clear "update this device" error, and file providers use the v16
-     precedent: detect the newer generation and ask to update.
-5. **Sunset:** each generation gets a support window, announced in release
-   notes. After it ends, current releases stop reading that generation and its
-   code is deleted.
-6. **Cost:** during the window both generations' code is live, so there is
-   more code for a while. The sunset date bounds it. Without committing to a
-   sunset, do not start Phase 3.
+1. **Bug 1 (#10264).** Add the four UI reorders (`updateNoteOrder`,
+   `updateSimpleCounterOrder`, `sortBoards`, `updateSectionOrder`) to
+   `ORDERING_ONLY_MULTI_ACTIONS` (#9426: "loses ordering only: cosmetic,
+   self-healing"), after checking that their reducers write only order.
+   - `updateNoteOrder` writes `project.noteIds`, so check that path too.
+   - Enable the committed E2E and integration repros.
+   - Decide whether the reordering device's order must survive (§7,
+     question 2).
+2. **Triage the rest of the blocked set.** About half of the 16 blocked
+   creators are these four reorders or actions with no caller or legacy-only
+   shapes. For each remaining one, either prove it unreachable, route it to an
+   existing generic path, or change the action. Each needs its E2E, as the
+   rules require.
+3. **Evaluate a less destructive fallback** than whole-dataset replacement for
+   a shape that is still unsupported, so one row cannot force a user to
+   discard all local or all remote changes.
 
-This is a product decision before it is an engineering one (§7, question 1).
-The device-version plumbing and per-account gating already exist.
+### Phase 3 — Protocol generations (deferred; decision gate in §4.4)
 
-### Phase 3 — Generation 2 semantics (design, then prototype)
+What it would take, so the decision can be made on facts:
 
-Designed so the §2.5 mismatch cannot exist, and validated with a desk audit
-before any prototype:
+- **File providers:** a new file format (new `version` and file names),
+  migrated with the SPAP-11 recipe:
+  - neutralise `.bak` first;
+  - tombstone every legacy file;
+  - migrate under a lock with conditional writes.
 
-- **Ops declare exactly what they write.** Preferred: capture each action's
-  effects (changed entities and fields, found by reference comparison of the
-  changed slices) as field patches with per-field timestamps. Apply is then
-  independent of the receiver's reducers, and concurrent edits merge per field.
-- **Deterministic by construction.** Patches carry values, so `nanoid()` and
-  `Date.now()` inside reducers (§4.1) run only on the originating device.
-- **Membership derived, not stored twice.** Membership comes from
-  `task.projectId`, `task.tagIds`, `task.dueDay`, `task.parentId` and
-  `note.projectId`, with new child fields for backlog and sections. Order lives
-  in tolerant hints or per-child order keys, and aggregates are computed. No
-  dual-write is needed within generation 2.
-- **Hard parts to design first:**
-  - cascades and tombstones (ADR #7's payload-size concern for
-    `deleteProject`);
-  - diff cost at 10k+ tasks;
-  - op volume for bulk actions;
-  - the vector-clock envelope for patches that span entity types;
-  - the migration baseline.
-- **Acceptance:**
-  - the committed reorder repro and the existing `@supersync` suite pass on a
-    generation-2 account;
-  - a mixed account stays on generation 1 and keeps working;
-  - the `supersync-released-client-compatibility.spec.ts` harness covers the
-    boundary.
+  An envelope marker would not stop released clients: they ignore it and
+  drop it when they rewrite the envelope. LocalFile and weak-ETag WebDAV have
+  no compare-and-swap, so a residual race remains. Download-only devices are
+  invisible; the format break is what protects them.
 
-### Phase 4 — Sunset generation 1
+- **SuperSync:**
+  - **Lockout:** after migration, the server answers every request —
+    downloads included — from a device below the floor with a non-auth 4xx,
+    keyed on its recorded `appVersion` (no version counts as old).
+  - **What not to use:** per-op rejections permanently drop the device's edits
+    (`rejected-ops-handler.service.ts:270-279`), and 401/403 signs the user out
+    after three failures (`sync-wrapper.service.ts:969-977`).
+  - **Generation-2 ops:** a new `opType`, so a generation-1 receiver blocks
+    instead of misapplying them. Recent releases stop on an unknown op type
+    (#8764); older ones wedge.
+  - **Self-hosted servers:** advertise the capability to clients, as
+    `supportsCausalRepairSnapshots` does.
+  - **Floor:** devices unseen for 45 days are not counted and must be handled
+    when they come back.
+  - **What old devices show:** a raw HTTP error. Only releases that know
+    about generations can show a calm message.
+- **Migration:**
+  - The baseline needs REPAIR semantics, not `SYNC_IMPORT`: older ops are
+    represented and concurrent ops survive (sync rule 7).
+  - A device that finds its account migrated converts its own pending
+    generation-1 ops once, by replaying them on the baseline and capturing
+    patches. No pending op is dropped.
+  - An E2E covers a device that is offline across the migration.
+- **Generation-2 semantics:** field patches with per-field timestamps
+  (declared = written by construction). Field values then apply the same way
+  on any receiver. Still needing per-generation receiver rules:
+  - archive ops applied into IndexedDB, outside NgRx;
+  - cascades the sender never saw (ADR #7);
+  - additive time-tracking deltas (`syncTimeSpent`) — "newest timestamp per
+    field" would drop tracked time;
+  - validation and repair;
+  - plugin writes to the arrays.
 
-After the window: delete generation 1's per-entity compensation,
-`lww-update.meta-reducer.ts` relationship rebuild, list upkeep and repair
-paths, the fail-closed gate, and compatibility readers for payload shapes that
-no retained data can still contain. This is where most of the savings in §1
-come from.
+  Per-field timestamps must be persisted in state, snapshots and full-state
+  ops, which is a persisted-model and wire change (rule 11). The plan would
+  also have to answer `operation-log-architecture.md`'s rejection of
+  "delta / state-diff sync". The diff scan itself is cheap, because every
+  `@ngrx/entity` update already copies `ids` and `entities`.
 
-### Independent of the phases: Bug 1
-
-Reorders are pure order writes, so they should never block sync. Fix them now,
-by op shape rather than by adding them to the allowlist, and pin the fix with
-the committed E2E. Released clients that still throw on a crossing behave as
-they do today, so the fix creates no new divergence.
+- **Sunset:** releases ship roughly weekly, so the window must be stated in
+  months. Every account with one un-updated device stays on generation 1 for
+  the whole window. File-provider fleets cannot be counted (no telemetry).
+- **Net savings:** gross ≤ ~5k production lines (list upkeep, the gate,
+  mixed-winner code) after the sunset. Cascade and field-level code (~5k)
+  comes back in generation 2, and the new generation's code is not subtracted.
 
 ### Parallel track — Persistence consolidation
 
-Independent of the conflict work:
+Independent of the conflict work. Estimated at ~3–4k lines by the persistence
+audit; not yet adversarially reviewed:
 
 1. One `commitBaseline()` primitive (state, clock, applied-op ids and cursor in
    one transaction) for the six "replace the whole state" paths.
@@ -564,8 +613,7 @@ Independent of the conflict work:
 3. Evaluate repair as a local, read-time normalization instead of a synced
    `REPAIR` op. Caveat: repair logic differs between app versions, which is why
    it is synced today; a local normalization must be safe when two versions
-   disagree. Generation 2's derived membership (Phase 3) removes much of what
-   repair fixes today.
+   disagree.
 
 ## 6. Bugs found during this review
 
@@ -595,6 +643,7 @@ Independent of the conflict work:
     `SYNC_MULTI_ENTITY_UNSUPPORTED side=local actionType=[Note] Update Note Order entityCount=2`.
 - **Not affected:** `updateProjectOrder` and `updateTagOrder` have the same
   shape but no caller today.
+- **Fix direction:** Phase 2, step 1.
 - **Issue:** #10264.
 
 ### Bug 2 — File-sync upload writes a stale snapshot (already filed)
@@ -627,18 +676,23 @@ restart.
 
 ## 7. Open questions for the maintainer
 
-1. **Would you accept a bounded support window for old sync protocol
-   generations?** This gates everything past Phase 1. Related: should the
-   desktop auto-updater come back, and what window is acceptable (for example
-   two to three stable releases after the prompt starts)?
-2. Is per-account gating the right unit? SuperSync can see every device;
-   file providers only see devices that wrote the file recently.
-3. Conflict journal: drop the few internal-track rows, or keep a one-off
+1. **Would you ever accept a sunset for old sync protocol generations?** This
+   only matters if Phase 3 is to happen.
+   - How long a window, in months?
+   - Should the desktop auto-updater come back?
+   - Is it acceptable that an old device shows a raw HTTP error, or a newer
+     format error, until it is updated?
+2. **Bug 1:** when a reorder crosses an edit, must the reordering device's
+   order survive, or is "both devices converge, either order" enough? The
+   ordering-only path makes the reorder lose.
+3. **Conflict journal:** drop the few internal-track rows, or keep a one-off
    export?
-4. v2 or v3 as the long-term file format? SQLite: ship or park? A sunset date
-   for the legacy pfapi migration?
-5. For Bug 1: should a reorder that crosses an edit keep the reordering
-   device's order, or is "both devices converge, either order" enough?
+4. **Other decisions:**
+   - v2 or v3 as the long-term file format?
+   - SQLite: ship or park?
+   - A sunset date for the legacy pfapi migration?
+5. **Priority against feature work:** Phases 0–2 are small; the persistence
+   track is a few weeks.
 
 ## Appendix A — How the numbers were measured
 
@@ -672,8 +726,10 @@ restart.
   - §2.3 anatomy;
   - the §3.2 counts;
   - every "≈ lines" figure.
-- **Hypotheses:** the Phase 2 migration mechanism, option C's cost at 10k+
-  tasks, and the savings after a sunset.
+- **Hypotheses:**
+  - the persistence-track estimate, which has not been reviewed;
+  - every Phase 3 figure;
+  - whether the slower growth since August holds.
 
 ## Appendix C — Rebase on a total order (parked)
 
@@ -715,7 +771,7 @@ identical reducers) or SuperSync becomes the only backend.
 ## Appendix D — List-upkeep audit
 
 Classification of the compensation and repair code by purpose (method ranges,
-±10%): **L** = keeps denormalized lists or roll-ups consistent; **C** =
+±10%; the rows sum to ~10,200 lines): **L** = keeps denormalized lists or roll-ups consistent; **C** =
 cascade, delete or recreate semantics; **F** = field-level or generic LWW;
 **O** = other (security footprint, journal, plumbing).
 
