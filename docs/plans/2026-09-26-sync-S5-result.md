@@ -286,4 +286,41 @@ made for cleanup while every old connection remains open. No new persisted marke
 registry, timeout, broad wipe or polling service is introduced.
 
 Only S5 files are included in local commits. Injected `AGENTS.md` is preserved and
-excluded; integration awaits user review and Parallel Code `signal_done`.
+excluded; the initial Parallel Code `signal_done` succeeded. Integration awaits
+user review.
+
+## Parent coordination checkpoint
+
+The resumed parent checkpoint introduces no runtime change or new assignment.
+Branch remains `task/sync-s5-retire-conflict-journal-93cd24`.
+
+- Original inherited baseline: `9177c3afed6429934632b23de936cda8c6603fde`.
+- Verified integrated baseline: `f84259fcaa66a9bb9512d1c048a299d230740c04`.
+- Preparation commit: `8c687017fed68f4ae43c1e7afda8d1de50889778`.
+- Committed, tested runtime and HEAD entering this checkpoint:
+  `b2b1f78d2e13d0331a909cdb88edf3cb00759a53`.
+- Integrated merge ancestry was rechecked successfully at this checkpoint.
+  The only pre-existing working-tree change is injected `AGENTS.md`, preserved
+  uncommitted. This follow-up commit updates only this result artifact.
+
+The seeded-upgrade red remains the direct journal-presence failure on the
+integrated baseline; its machine runner metadata still reports failed. The five
+retirement cases and four focused provider cases still have saved passed runner
+metadata with empty failure lists. Exact commands, artifacts, the additional three
+archive E2E passes, 838 unit/integration passes and compilation/lint/build checks
+are recorded above. No runtime file changed since those checks, so this checkpoint
+requires only Markdown formatting and diff validation.
+
+There is no remaining local S5 implementation blocker. Parent actions remain:
+
+- Review the local commits before authorizing integration. No push, PR, merge or
+  publication is performed or authorized by the coordination resume.
+- Run the full scheduled SuperSync and WebDAV suites at the later publication
+  gate described in the assignment. These are outstanding parent validation,
+  separate from the completed local checks.
+- Retain the separately reproduced upstream full-E2E typecheck TS2307 as an
+  explicit unresolved validation limitation; S5's strict focused typecheck passes.
+
+S6B continues to own file-format selection/setup and WebDAV rollout tests. This
+checkpoint adds no work in that scope and does not reopen the accepted journal
+data-loss decision or the documented blocked-deletion limitations.
