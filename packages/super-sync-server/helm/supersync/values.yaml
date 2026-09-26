@@ -43,6 +43,9 @@ supersync:
   cors:
     # -- Comma-separated list of allowed CORS origins
     origins: "https://app.super-productivity.com"
+  # -- Peers whose X-Forwarded-* headers are trusted (proxy-addr keywords, IPs or
+  # CIDR ranges). Empty keeps the server default of "loopback,uniquelocal".
+  trustProxy: ""
   cleanup:
     # -- Max old operation ids selected/deleted for one user in a cleanup pass.
     oldOpsDeleteBatchSize: 5000
