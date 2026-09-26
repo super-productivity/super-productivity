@@ -389,12 +389,14 @@ describe('FileBasedSyncAdapterService', () => {
 
     it('should download an unseen revision before retrying without piggybacking', async () => {
       mockProvider.id = SyncProviderId.Dropbox;
+      adapter = service.createAdapter(mockProvider, mockCfg, mockEncryptKey);
       // First, download to set expected version
       const syncData = createMockSyncData({ syncVersion: 1 });
       mockProvider.downloadFile.and.returnValue(
         Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
       );
-      await adapter.downloadOps(0); // Sets expected version to 1
+      await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(1);
 
       // Now configure for upload - upload will download again and expect version 1
       mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-2' }));
@@ -451,8 +453,9 @@ describe('FileBasedSyncAdapterService', () => {
     });
 
     for (const rev of ['remote-rev', '']) {
-      it(`should terminate a cache-less upload retry with an unrecorded revision (${JSON.stringify(rev)})`, async () => {
+      it(`should require applied data or a reliable revision before retrying (${JSON.stringify(rev)})`, async () => {
         mockProvider.id = SyncProviderId.OneDrive;
+        adapter = service.createAdapter(mockProvider, mockCfg, mockEncryptKey);
         mockProvider.downloadFile.and.resolveTo({
           dataStr: addPrefix(
             createMockSyncData({
@@ -475,7 +478,8 @@ describe('FileBasedSyncAdapterService', () => {
           ),
           rev,
         });
-        mockProvider.uploadFile.and.resolveTo({ rev });
+        // OneDrive can omit a read eTag, but a successful upload requires one.
+        mockProvider.uploadFile.and.resolveTo({ rev: 'uploaded-rev' });
         const op = createMockSyncOp();
 
         await expectAsync(adapter.uploadOps([op], 'client1')).toBeRejectedWithError(
@@ -483,13 +487,17 @@ describe('FileBasedSyncAdapterService', () => {
         );
         expect(mockProvider.uploadFile).not.toHaveBeenCalled();
         const downloaded = await adapter.downloadOps(0);
+        // A migration probe downloads too, but its cache has not been applied.
+        await expectAsync(adapter.uploadOps([op], 'client1')).toBeRejectedWithError(
+          UploadRevToMatchMismatchAPIError,
+        );
+        expect(mockProvider.uploadFile).not.toHaveBeenCalled();
         await adapter.setLastServerSeq(downloaded.latestSeq);
-        expect((await adapter.uploadOps([op], 'client1')).results[0].accepted).toBe(true);
+        service['_syncCycleCache'].clear();
 
         // OneDrive's missing eTag becomes ''. It cannot prove unchanged content
-        // after the successful upload cleared the cache, even when it equals the
-        // recorded revision. A normal download supplies the cache for the retry.
-        mockProvider.uploadFile.calls.reset();
+        // after cache expiry, even when it equals the recorded revision.
+        // A normal download supplies the cache for the retry.
         if (!rev) {
           await expectAsync(adapter.uploadOps([op], 'client1')).toBeRejectedWithError(
             UploadRevToMatchMismatchAPIError,
@@ -2847,7 +2855,8 @@ describe('FileBasedSyncAdapterService', () => {
       });
 
       // Populate the sync-cycle cache (mirrors a real download→upload cycle).
-      await adapter.downloadOps(0);
+      const downloaded = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(downloaded.latestSeq);
 
       const op = createMockSyncOp();
       await adapter.uploadOps([op], 'client1');
@@ -3097,7 +3106,10 @@ describe('FileBasedSyncAdapterService', () => {
       // Regression for the self-perpetuating degraded state: recovery must seed the
       // cache with the CORRUPT PRIMARY rev, not the .bak rev, so the follow-up
       // conditional upload matches sync-data.json and overwrites (heals) it.
-      const backupData = createMockSyncData({ syncVersion: 2 });
+      const backupData = createMockSyncData({
+        syncVersion: 2,
+        recentOps: [compactOp('recovered-op') as never],
+      });
       const CORRUPT_MAIN_REV = 'corrupt-main-rev-42';
       const undecodableMain =
         getSyncFilePrefix({ isCompress: true, isEncrypt: false, modelVersion: 2 }) +
@@ -3120,7 +3132,8 @@ describe('FileBasedSyncAdapterService', () => {
       );
 
       // Download recovers from .bak; a subsequent upload should heal the primary.
-      await adapter.downloadOps(0);
+      const downloaded = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(downloaded.latestSeq);
       await adapter.uploadOps([createMockSyncOp()], 'client1');
 
       expect(mainRevToMatch).toContain(CORRUPT_MAIN_REV);

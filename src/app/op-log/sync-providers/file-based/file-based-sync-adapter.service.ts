@@ -80,7 +80,7 @@ import {
  * modify different entities, both changes are preserved.
  *
  * ## Optimistic Locking
- * Uploads use the download cache or an already-applied revision. A cache-less
+ * Uploads use an applied download cache or an already-applied revision. A cache-less
  * read of unseen retained ops defers the upload until the next download cycle.
  * The provider's conditional write checks the revision again before replacing.
  *
@@ -929,17 +929,17 @@ export class FileBasedSyncAdapterService {
 
     this._assertSnapshotBaseSeen(providerKey, currentData?.snapshotBaseClock);
 
-    // #10256: a cache-less upload read can find ops absent from our snapshot.
-    // For retained ops, reuse an applied revision or this cycle's download cache
-    // (including .bak recovery). Otherwise let the next cycle download first.
-    // Do not cache/commit this read: the rev pre-check must see the change again.
+    // #10256: snapshots must include retained remote ops. A download only stages
+    // its baseline; migration probes do not apply it. After apply, use its cache
+    // (also .bak) or a matching non-empty rev. Never commit an upload-side read.
     if (
       currentData?.recentOps.length &&
-      !this._getCachedSyncData(providerKey) &&
-      (!revToMatch || revToMatch !== this._lastSeenRevs.get(providerKey))
+      (this._pendingExpectedSyncVersions.has(providerKey) ||
+        (!this._getCachedSyncData(providerKey) &&
+          (!revToMatch || revToMatch !== this._lastSeenRevs.get(providerKey))))
     ) {
       throw new UploadRevToMatchMismatchAPIError(
-        'FileBasedSyncAdapter: Unseen remote revision. Download before uploading a snapshot.',
+        'FileBasedSyncAdapter: Unapplied remote data. Download before uploading a snapshot.',
       );
     }
 

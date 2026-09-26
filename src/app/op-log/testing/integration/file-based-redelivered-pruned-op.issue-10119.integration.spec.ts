@@ -134,7 +134,8 @@ for (const isUseSplitSyncFiles of [false, true]) {
 
     /** Another device writes ops to the shared file (its own sync cycle). */
     const androidUploads = async (...ops: Operation[]): Promise<void> => {
-      await android.downloadOps(0, OTHER);
+      const downloaded = await android.downloadOps(0, OTHER);
+      await android.setLastServerSeq(downloaded.latestSeq);
       await android.uploadOps(ops as SyncOperation[], OTHER);
     };
 

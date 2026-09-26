@@ -32,7 +32,8 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
       await clientA.uploadOps([opA1]);
 
       // Client B downloads to get in sync
-      await clientB.downloadOps(0);
+      const downloaded = await clientB.downloadOps(0);
+      await clientB.adapter.setLastServerSeq(downloaded.latestSeq);
 
       // Client B syncs while A has stale view
       const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
@@ -56,7 +57,8 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
       await expectAsync(clientA.uploadOps([opA2])).toBeRejectedWithError(
         UploadRevToMatchMismatchAPIError,
       );
-      await clientA.downloadOps();
+      const retryDownload = await clientA.downloadOps();
+      await clientA.adapter.setLastServerSeq(retryDownload.latestSeq);
       const response = await clientA.uploadOps([opA2]);
 
       // Upload should succeed
@@ -78,7 +80,8 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
       await clientA.uploadOps([opA]);
 
       // Client B downloads
-      await clientB.downloadOps(0);
+      const downloaded = await clientB.downloadOps(0);
+      await clientB.adapter.setLastServerSeq(downloaded.latestSeq);
 
       // Simulate race condition: inject rev mismatch error on first upload attempt
       provider.injectNextError(
@@ -309,7 +312,8 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
         { title: 'Initial' },
       );
       await clientA.uploadOps([initialOp]);
-      await clientB.downloadOps(0);
+      const downloaded = await clientB.downloadOps(0);
+      await clientB.adapter.setLastServerSeq(downloaded.latestSeq);
 
       // Both clients create operations concurrently (different entities)
       const opA = clientA.createOp('Task', 'task-a', 'CRT', 'TaskActionTypes.ADD_TASK', {
@@ -329,7 +333,8 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
       );
 
       // Client B downloads (next sync cycle: picks up A's new op and fresh rev)
-      await clientB.downloadOps();
+      const retryDownload = await clientB.downloadOps();
+      await clientB.adapter.setLastServerSeq(retryDownload.latestSeq);
 
       // Client B retries upload with the fresh state — succeeds
       const responseB = await clientB.uploadOps([opB]);
@@ -356,7 +361,8 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
       const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
         title: 'B',
       });
-      await clientB.downloadOps(0);
+      const downloaded = await clientB.downloadOps(0);
+      await clientB.adapter.setLastServerSeq(downloaded.latestSeq);
       await clientB.uploadOps([opB]);
 
       // Download and check merged vector clock contains knowledge of both clients
@@ -437,7 +443,8 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
       await clientA.uploadOps([initialOp]);
 
       // Client B downloads before uploading its independent local edit.
-      await clientB.downloadOps(0);
+      const downloaded = await clientB.downloadOps(0);
+      await clientB.adapter.setLastServerSeq(downloaded.latestSeq);
       const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
         title: 'B',
       });

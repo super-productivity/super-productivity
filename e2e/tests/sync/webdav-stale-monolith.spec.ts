@@ -48,8 +48,16 @@ test.describe('@webdav stale monolith #10256', () => {
     expect(webdavServerUp).toBe(true);
   });
 
-  for (const isUseSplitSyncFiles of [false, true]) {
-    test(`fresh client retains both writers after upload cache expiry (split=${isUseSplitSyncFiles})`, async ({
+  for (const { isUseSplitSyncFiles, firstSync } of [
+    { isUseSplitSyncFiles: false, firstSync: false },
+    { isUseSplitSyncFiles: true, firstSync: false },
+    { isUseSplitSyncFiles: false, firstSync: true },
+    { isUseSplitSyncFiles: true, firstSync: true },
+  ]) {
+    const scenario = firstSync
+      ? 'migration probe preserves local and remote data'
+      : 'fresh client retains both writers after upload cache expiry';
+    test(`${scenario} (split=${isUseSplitSyncFiles})`, async ({
       browser,
       baseURL,
       request,
@@ -91,7 +99,11 @@ test.describe('@webdav stale monolith #10256', () => {
         await c.sync.triggerSync();
         expect(await waitForSyncComplete(c.page, c.sync)).toBe('success');
       };
-      const titles = ['Shared baseline', 'Writer A task', 'Writer B pending task'];
+      const aTask = 'Writer A task';
+      const bTask = 'Writer B pending task';
+      const titles = firstSync ? [aTask, bTask] : ['Shared baseline', aTask, bTask];
+      const requiresFirstSyncDecision = firstSync && !isUseSplitSyncFiles;
+      const remoteTitles = requiresFirstSyncDecision ? [aTask] : titles;
       try {
         const a = await client();
         let remoteUrl = '';
@@ -103,18 +115,17 @@ test.describe('@webdav stale monolith #10256', () => {
             remoteUrl = req.url();
           }
         });
-        await a.work.addTask(titles[0]);
-        await a.sync.setupWebdavSync(config);
-        expect(await waitForSyncComplete(a.page, a.sync)).toBe('success');
-
         const b = await client();
-        await b.sync.setupWebdavSync(config);
-        expect(await waitForSyncComplete(b.page, b.sync)).toBe('success');
-        await expect(b.page.locator('task')).toHaveCount(1);
-        await b.work.addTask(titles[2]);
+        if (!firstSync) {
+          await a.work.addTask('Shared baseline');
+          await a.sync.setupWebdavSync(config);
+          expect(await waitForSyncComplete(a.page, a.sync)).toBe('success');
+          await b.sync.setupWebdavSync(config);
+          expect(await waitForSyncComplete(b.page, b.sync)).toBe('success');
+          await expect(b.page.locator('task')).toHaveCount(1);
+        }
+        await b.work.addTask(bTask);
         await waitForStatePersistence(b.page);
-        const pending = await pendingIds(b.page);
-        expect(pending).toHaveLength(1);
 
         // Hold the real upload lock: the ordinary download and cursor commit
         // finish first, while snapshot capture/upload waits. No adapter or
@@ -133,7 +144,11 @@ test.describe('@webdav stale monolith #10256', () => {
               );
             }),
         );
-        await b.sync.triggerSync();
+        if (firstSync) {
+          await b.sync.setupWebdavSync(config);
+        } else {
+          await b.sync.triggerSync();
+        }
         await expect
           .poll(() =>
             b.page.evaluate(async () =>
@@ -143,19 +158,30 @@ test.describe('@webdav stale monolith #10256', () => {
             ),
           )
           .toBe(true);
+        // First-time setup also captures a config operation. Record all pending
+        // work after setup, before the competing writer changes the remote.
+        const pending = await pendingIds(b.page);
+        expect(pending).toHaveLength(firstSync ? 2 : 1);
 
-        await a.work.addTask(titles[1]);
+        await a.work.addTask(aTask);
         await waitForStatePersistence(a.page);
-        await syncOnce(a);
-        await expect(b.page.locator('task', { hasText: titles[1] })).toHaveCount(0);
+        if (firstSync) {
+          await a.sync.setupWebdavSync(config);
+          expect(await waitForSyncComplete(a.page, a.sync)).toBe('success');
+        } else {
+          await syncOnce(a);
+        }
+        await expect(b.page.locator('task', { hasText: aTask })).toHaveCount(0);
         let initialUploadWrites = 0;
         b.page.on('request', (req) => {
           if (req.method() === 'PUT') initialUploadWrites++;
         });
 
-        // Advance Date.now without firing timers/auto-sync: this expires the
-        // adapter's actual 30-second cache and forces its upload-side GET.
-        await b.page.clock.setFixedTime(new Date(Date.now() + 31_000));
+        if (!firstSync) {
+          // Expire the actual cache without firing timers/auto-sync. On first
+          // sync the migration probe instead seeds an unapplied, fresh cache.
+          await b.page.clock.setFixedTime(new Date(Date.now() + 31_000));
+        }
         const uploadRead = b.page.waitForResponse(
           (response) =>
             response.request().method() === 'GET' && response.url() === remoteUrl,
@@ -172,13 +198,27 @@ test.describe('@webdav stale monolith #10256', () => {
         const remaining = await pendingIds(b.page);
         if (remaining.length > 0) {
           // The fixed v2 writer refuses the stale snapshot and leaves the
-          // original edit pending. Exactly one normal download/upload retries it.
+          // original work pending for the next normal download/upload cycle.
           expect(remaining).toEqual(pending);
           expect(initialUploadWrites).toBe(0);
-          await expect(b.page.locator('task', { hasText: titles[2] })).toBeVisible();
-          await syncOnce(b);
+          await expect(b.page.locator('task', { hasText: bTask })).toBeVisible();
+          if (requiresFirstSyncDecision) {
+            // Independent first-time datasets use the existing conflict policy.
+            // Cancelling must preserve both sides rather than silently overwrite.
+            await b.sync.triggerSync();
+            expect(await waitForSyncComplete(b.page, b.sync)).toBe('conflict');
+            const dialog = b.page.locator('dialog-sync-conflict');
+            await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+            await expect(dialog).toBeHidden();
+            await expect(b.sync.syncSpinner).toBeHidden();
+            expect(initialUploadWrites).toBe(0);
+          } else {
+            await syncOnce(b);
+          }
         }
-        expect(await pendingIds(b.page)).toEqual([]);
+        expect(await pendingIds(b.page)).toEqual(
+          requiresFirstSyncDecision ? pending : [],
+        );
         const remote = await request.get(remoteUrl, {
           headers: {
             Authorization: `Basic ${Buffer.from('admin:admin').toString('base64')}`,
@@ -203,22 +243,28 @@ test.describe('@webdav stale monolith #10256', () => {
         await c.page.reload();
         await waitForAppReady(c.page);
         await c.work.waitForTaskList();
-        await expect(c.page.locator('task')).toHaveCount(3);
-        for (const title of titles) {
+        await expect(c.page.locator('task')).toHaveCount(remoteTitles.length);
+        for (const title of remoteTitles) {
           await expect(c.page.locator('task', { hasText: title })).toBeVisible();
         }
         expect(remaining).toEqual(isUseSplitSyncFiles ? [] : pending);
 
         for (const writer of [a, b]) {
-          await syncOnce(writer);
+          if (!requiresFirstSyncDecision) await syncOnce(writer);
           await waitForStatePersistence(writer.page);
           await writer.page.reload();
           await waitForAppReady(writer.page);
           await writer.work.waitForTaskList();
-          await expect(writer.page.locator('task')).toHaveCount(3);
-          for (const title of titles) {
+          const writerTitles = requiresFirstSyncDecision
+            ? [writer === a ? aTask : bTask]
+            : titles;
+          await expect(writer.page.locator('task')).toHaveCount(writerTitles.length);
+          for (const title of writerTitles) {
             await expect(writer.page.locator('task', { hasText: title })).toBeVisible();
           }
+        }
+        if (requiresFirstSyncDecision) {
+          expect(await pendingIds(b.page)).toEqual(pending);
         }
       } finally {
         await closeContextsSafely(...contexts);

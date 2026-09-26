@@ -157,6 +157,7 @@ for (const isUseSplitSyncFiles of [false, true]) {
         expect(
           (await reader.adapter.downloadOps(full.latestSeq, readerClientId)).gapDetected,
         ).toBeFalse();
+        await reader.adapter.setLastServerSeq(full.latestSeq);
       };
 
       for (const restart of [false, true]) {
