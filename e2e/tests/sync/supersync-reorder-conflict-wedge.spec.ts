@@ -101,8 +101,27 @@ const getCrossingOutcome = async (
     return 'error';
   }
   const spinning = await client.sync.syncSpinner.isVisible().catch(() => false);
-  const checked = await client.sync.syncCheckIcon.isVisible().catch(() => false);
+  const checked = await client.sync.syncCheckIcon
+    .filter({ hasText: /^done_all$/ })
+    .isVisible()
+    .catch(() => false);
   return !spinning && checked ? 'in-sync' : 'pending';
+};
+
+/** Every sync after the crossing must fail on a dialog, never choose a side. */
+const syncWithoutResolvingConflicts = async (
+  client: SimulatedE2EClient,
+): Promise<void> => {
+  const downloaded = client.page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/sync/ops') && response.request().method() === 'GET',
+  );
+  await client.sync.clickSyncBtn();
+  expect((await downloaded).ok()).toBe(true);
+  await expect
+    .poll(async () => getCrossingOutcome(client), { timeout: 30000 })
+    .not.toBe('pending');
+  expect(await getCrossingOutcome(client)).toBe('in-sync');
 };
 
 const addNoteAction = (id: string, content: string): PersistentAction => ({
@@ -204,22 +223,12 @@ test.describe('@supersync reorder crossing a concurrent edit', () => {
           multiEntityErrors.push(message.text());
         }
       });
-      const downloaded = clientA.page.waitForResponse(
-        (response) =>
-          response.url().includes('/api/sync/ops') &&
-          response.request().method() === 'GET',
-      );
-      await clientA.sync.clickSyncBtn();
-      await downloaded;
-      await expect
-        .poll(async () => getCrossingOutcome(clientA!), { timeout: 30000 })
-        .not.toBe('pending');
-      expect(await getCrossingOutcome(clientA)).toBe('in-sync');
+      await syncWithoutResolvingConflicts(clientA);
 
       // Both devices converge and keep B's edit. Which order survives is for the
-      // fix to decide (plan section 7, question 5); keeping A's order is preferred.
-      await clientB.sync.syncAndWait();
-      await clientA.sync.syncAndWait();
+      // fix to decide (plan section 7, question 2); keeping A's order is preferred.
+      await syncWithoutResolvingConflicts(clientB);
+      await syncWithoutResolvingConflicts(clientA);
       const snapshotA = await getNotesSnapshot(clientA.page, [noteA, noteB]);
       const snapshotB = await getNotesSnapshot(clientB.page, [noteA, noteB]);
       expect(snapshotA).toEqual(snapshotB);

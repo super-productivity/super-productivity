@@ -58,8 +58,8 @@ the evidence does not support throwing away half of the sync code.
 - **Do now:**
   1. Contributor rules that stop per-action compensation (Phase 0).
   2. Close the remaining fail-closed surface locally, starting with the
-     reorder bug found in this review (#10264), through the existing
-     ordering-only path (Phase 2).
+     reorder bug found in this review (#10264), after proving both order and
+     content convergence (Phase 2). The ordering-only allowlist alone is insufficient.
   3. Delete dead code: ~2.3k lines unconditionally; ~6–8k more after a
      decision each (Phase 1).
   4. Consolidate local persistence, an estimated ~3–4k lines (parallel
@@ -442,13 +442,13 @@ not in front of it.
 
 ### 4.3 Options compared
 
-|                             | A. Status quo + discipline | E. Close the fail-closed surface locally             | B. Normalize lists (dual-write)            | C. Protocol generation: field patches                                                            | D. Total order + rebase                   |
-| --------------------------- | -------------------------- | ---------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------ | ----------------------------------------- |
-| What changes                | contributor rules          | route blocked action types to existing generic paths | read membership from child fields          | new op kind, new file format, lockout and migration                                              | apply in server order, replay pending ops |
-| User-visible harm addressed | stops new cases            | the remaining sync wedges                            | little                                     | the whole class, after migration                                                                 | the whole class, in theory                |
-| Released clients            | unchanged                  | unchanged (resolution-side only)                     | keep reading and repairing from the arrays | locked out of migrated accounts (raw HTTP error in released code)                                | diverge on any reducer difference         |
-| Code deleted                | Phase 1 only               | none (prevents growth)                               | ~400–600 lines                             | after a sunset: gross ≤ ~5k (list upkeep, the gate, mixed-winner code), minus generation 2's own | none — LWW stays as the fallback          |
-| Risk                        | the class stays open-ended | low; each routing needs its reducer check and E2E    | lists feed synced fields; repair direction | high: lockout mechanics, migration, archive/cascade/time rules still needed                      | see §4.1                                  |
+|                             | A. Status quo + discipline | E. Close the fail-closed surface locally                          | B. Normalize lists (dual-write)            | C. Protocol generation: field patches                                                            | D. Total order + rebase                   |
+| --------------------------- | -------------------------- | ----------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| What changes                | contributor rules          | resolve blocked actions with verified convergence                 | read membership from child fields          | new op kind, new file format, lockout and migration                                              | apply in server order, replay pending ops |
+| User-visible harm addressed | stops new cases            | the remaining sync wedges                                         | little                                     | the whole class, after migration                                                                 | the whole class, in theory                |
+| Released clients            | unchanged                  | unchanged (resolution-side only)                                  | keep reading and repairing from the arrays | locked out of migrated accounts (raw HTTP error in released code)                                | diverge on any reducer difference         |
+| Code deleted                | Phase 1 only               | none (prevents growth)                                            | ~400–600 lines                             | after a sunset: gross ≤ ~5k (list upkeep, the gate, mixed-winner code), minus generation 2's own | none — LWW stays as the fallback          |
+| Risk                        | the class stays open-ended | high until both conflict directions preserve content and converge | lists feed synced fields; repair direction | high: lockout mechanics, migration, archive/cascade/time rules still needed                      | see §4.1                                  |
 
 Also considered and rejected:
 
@@ -481,11 +481,11 @@ reverted `affectedEntities`) and ADR #7 (cascades).
 Proposed for the maintainer to adopt or reject; this plan does not edit
 `CLAUDE.md`:
 
-1. No new per-action resolution path in `ConflictResolutionService`. A
-   multi-entity conflict bug is fixed by routing the action through an existing
-   generic path (ordering-only, independent multi-delete, …) after checking its
-   reducers, or by changing the action — a new action or a payload marker that
-   old clients degrade on (ADR #8). The file's size ratchet stays.
+1. Prefer an existing generic resolution path over new per-action machinery in
+   `ConflictResolutionService`, but require convergence and content-preservation
+   tests in both conflict directions. Merely removing a safety stop is not a
+   fix (Phase 2). If no path fits, design the smallest safe change, including
+   compatibility with old clients (ADR #8). The file's size ratchet stays.
 2. A new action should not add a new denormalized list or a new undeclared
    cross-entity write. Store the fact on the child and derive the rest (the ADR
    #2 pattern). Sync rule 3 (multi-entity change = meta-reducer) is unchanged
@@ -508,28 +508,39 @@ Proposed for the maintainer to adopt or reject; this plan does not edit
 
 **Needs a decision (~6–8k lines):**
 
-| Item                                                        | ≈ Lines                             | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ----------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Conflict journal + review UI/page/banner                    | ~1,800                              | Every journal write sits behind a flag that is off at the only caller (`remote-ops-processing.service.ts:516`). The freeze (#9061, `71a9a4338`) and the feature (`962c5bbeb`) first shipped together in v18.15.0, so no stable release wrote journal rows — only master/internal-track builds from 2026-07-11 to 07-16 could have (this corrects the premise banner of `2026-07-13-sync-simplification-plan.md`). Drop, or keep a one-off export. |
-| `_syncVectorClockToPfapi`                                   | ~30                                 | Confirm the one-time pfapi migration can never re-run.                                                                                                                                                                                                                                                                                                                                                                                            |
-| Inactive SQLite adapter                                     | ~1,100 (+1,600 spec)                | The DB-adapter factory returns IndexedDB everywhere. Ship behind a flag or park on a branch.                                                                                                                                                                                                                                                                                                                                                      |
-| Duplicate WebSocket-download and immediate-upload pipelines | ~550                                | Tasks 4–5 of `2026-07-13-sync-simplification-plan.md`, with that plan's gates.                                                                                                                                                                                                                                                                                                                                                                    |
-| v2/v3 file-format duplication                               | ~300 (factor) / ~1,500 (retire one) | Pick the long-term format.                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Legacy pfapi → op-log migration and pre-v14 backup import   | ~2,200                              | A sunset date plus an "import your JSON backup" message.                                                                                                                                                                                                                                                                                                                                                                                          |
+| Item                                                        | ≈ Lines                             | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Conflict journal + review UI/page/banner                    | ~1,800                              | Every journal write sits behind a flag that is off at the only caller (`remote-ops-processing.service.ts:516`). The freeze (#9061, `71a9a4338`) and the feature (`962c5bbeb`) first shipped together in v18.15.0, so no stable release wrote journal rows. Master builds from 2026-07-11 to 07-16 could have, including Snap edge and Play internal-track releases on real users' devices; the number of retained rows is unknown. Drop, or keep a one-off export. |
+| `_syncVectorClockToPfapi`                                   | ~30                                 | Confirm the one-time pfapi migration can never re-run.                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Inactive SQLite adapter                                     | ~1,100 (+1,600 spec)                | The DB-adapter factory returns IndexedDB everywhere. Ship behind a flag or park on a branch.                                                                                                                                                                                                                                                                                                                                                                       |
+| Duplicate WebSocket-download and immediate-upload pipelines | ~550                                | Tasks 4–5 of `2026-07-13-sync-simplification-plan.md`, with that plan's gates.                                                                                                                                                                                                                                                                                                                                                                                     |
+| v2/v3 file-format duplication                               | ~300 (factor) / ~1,500 (retire one) | Pick the long-term format.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Legacy pfapi → op-log migration and pre-v14 backup import   | ~2,200                              | A sunset date plus an "import your JSON backup" message.                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 ### Phase 2 — Close the fail-closed surface locally (option E)
 
 Resolution-side only: released clients are unchanged, and nothing on the wire
 changes.
 
-1. **Bug 1 (#10264).** Add the four UI reorders (`updateNoteOrder`,
-   `updateSimpleCounterOrder`, `sortBoards`, `updateSectionOrder`) to
-   `ORDERING_ONLY_MULTI_ACTIONS` (#9426: "loses ordering only: cosmetic,
-   self-healing"), after checking that their reducers write only order.
-   - `updateNoteOrder` writes `project.noteIds`, so check that path too.
-   - Enable the committed E2E and integration repros.
-   - Decide whether the reordering device's order must survive (§7,
-     question 2).
+1. **Bug 1 (#10264).** Find a resolution that preserves content and converges
+   ordering for the four UI reorders (`updateNoteOrder`,
+   `updateSimpleCounterOrder`, `sortBoards`, `updateSectionOrder`). Adding them
+   to `ORDERING_ONLY_MULTI_ACTIONS` alone is insufficient:
+   - With a local note reorder and a newer remote content edit, rejecting the
+     reorder does not undo its optimistic `project.noteIds` write. The remote
+     `updateNote` does not write that list, leaving the two devices in different
+     orders with no pending reorder to upload.
+   - In the reverse direction, a newer remote reorder can win LWW and reject
+     the pending local content edit. Replaying the reorder changes no content,
+     so the edit remains visible locally but never reaches the other device.
+   - The Today-specific "cosmetic, self-healing" rationale from #9426 is not
+     proof that these reorders are safe. Check each reducer's written state,
+     both timestamp winners, both directions, and replay after restart.
+   - Extend the E2E to cover the reverse crossing before implementing the fix,
+     then enable the committed repros. The integration specs currently pin only
+     removal of the safety stop; their mocked applier cannot prove convergence.
+   - Decide which order should survive (§7, question 2). Either choice still
+     requires both devices to agree and unrelated content edits to survive.
 2. **Triage the rest of the blocked set.** About half of the 16 blocked
    creators are these four reorders or actions with no caller or legacy-only
    shapes. For each remaining one, either prove it unreachable, route it to an
@@ -590,8 +601,9 @@ What it would take, so the decision can be made on facts:
   Per-field timestamps must be persisted in state, snapshots and full-state
   ops, which is a persisted-model and wire change (rule 11). The plan would
   also have to answer `operation-log-architecture.md`'s rejection of
-  "delta / state-diff sync". The diff scan itself is cheap, because every
-  `@ngrx/entity` update already copies `ids` and `entities`.
+  "delta / state-diff sync". Reference comparison can skip unchanged slices,
+  but patch extraction and serialization add work beyond NgRx's existing
+  copies; benchmark that cost at 10k+ tasks before calling it cheap.
 
 - **Sunset:** releases ship roughly weekly, so the window must be stated in
   months. Every account with one un-updated device stays on generation 1 for
@@ -684,15 +696,17 @@ restart.
      format error, until it is updated?
 2. **Bug 1:** when a reorder crosses an edit, must the reordering device's
    order survive, or is "both devices converge, either order" enough? The
-   ordering-only path makes the reorder lose.
-3. **Conflict journal:** drop the few internal-track rows, or keep a one-off
-   export?
+   existing ordering-only path alone guarantees neither order convergence nor
+   content preservation (Phase 2).
+3. **Conflict journal:** drop rows retained from pre-freeze master builds
+   (including Snap edge and Play internal track), or keep a one-off export?
 4. **Other decisions:**
    - v2 or v3 as the long-term file format?
    - SQLite: ship or park?
    - A sunset date for the legacy pfapi migration?
-5. **Priority against feature work:** Phases 0–2 are small; the persistence
-   track is a few weeks.
+5. **Priority against feature work:** Phase 0 and individual Phase 1 deletions
+   are bounded; estimate Phase 2 after its convergence design is validated.
+   The persistence track's few-week estimate is still unverified.
 
 ## Appendix A — How the numbers were measured
 
