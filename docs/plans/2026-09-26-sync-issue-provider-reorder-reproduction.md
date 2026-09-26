@@ -56,7 +56,7 @@ All references describe `db3549b114`, not the older audit checkout.
   The [shared provider reducer](../../src/app/root-store/meta/task-shared-meta-reducers/issue-provider-shared.reducer.ts)
   handles deletion/unlinking, not this reorder/update crossing.
 - [Conflict detection and preflight](../../src/app/op-log/sync/conflict-resolution.service.ts):
-  `_detectConflictForEntity()` checks exact commuting predicates for concurrent
+  `_checkEntityForConflict()` checks exact commuting predicates for concurrent
   pending operations. `reorder-conflict.util.ts` admits notes, counters, boards
   and sections, not issue providers. `_resolveConflictsWithLWW()` invokes
   `_assertMultiEntityPlansAreSafe()` before reconciliation, disjoint merging,
@@ -117,10 +117,19 @@ the crossing. The existing setup helper is used only before concurrent edits.
 
 ## Execution evidence
 
-The final bounded run executed all three cases, with zero skips/retries:
+The recorded bounded run executed all three cases, with zero skips/retries:
 **3 expected failures at the desired success assertion**, each receiving
 `conflict-dialog` instead of `in-sync`. None failed on setup, action capture,
 payload/clock checks, or preservation assertions.
+
+The final handoff rerun repeated all three cases with the same result and zero
+skips/retries after tightening the success-path check to require the exact
+reordered stored IDs. Pending operations and state preservation were checked
+again, including Cancel and restart. Formatting/lint and strict TypeScript
+checks passed again. Successful convergence assertions remain unexecuted on
+this failing baseline. The rerun evidence is indexed in
+`resumed-evidence-summary.json`; `matrix-resumed-verified.log` records the run.
+The earlier sandbox-blocked Chromium attempt is excluded from this evidence.
 
 | Pending on A / incoming from B | Newer timestamp | Order / edit timestamps (ms)      | Diagnostic side | Artifact directory token |
 | ------------------------------ | --------------- | --------------------------------- | --------------- | ------------------------ |
@@ -185,10 +194,17 @@ Artifacts are local to this task, under `/tmp/issue-provider-repro-20260926/`:
 
 - `supersync-issue-provider-reorder-conflict.spec.ts` and matching `.patch`:
   runnable red reproduction; restore only to its original `e2e/tests/sync/` path.
+- `matrix-final.spec.ts`: exact spec used for the original recorded matrix;
+  the handoff spec strengthens only its later success-path order assertion.
 - `playwright.config.cjs`, `compose.yaml`: isolated runner and services.
 - `results/`: per-case `evidence.json`, `browser.log`, `safety-stop.png`,
   Playwright `trace.zip`, failure screenshots and error context.
 - `evidence-summary.json`, `SHA256SUMS`: checked case summary and artifact hashes.
+- `reruns/`, `resumed-evidence-summary.json`, `matrix-resumed-verified.log`:
+  final handoff rerun, preserving the original `results/` evidence. The runner
+  uses fresh timestamped output directories; the summary identifies each case.
+- `checkFile-resumed-verified.log`, `typecheck-resumed.log`, `app-resumed.log`:
+  final handoff checks and frontend build output.
 - `matrix-final.log`, `server-build.log`, `server.log`, `app.log`, `checkFile.log`,
   `typecheck.log`: commands' captured output.
 - `attempt-1.log`, `attempt-2.log`, `attempt-3.log`, `matrix.log` and
