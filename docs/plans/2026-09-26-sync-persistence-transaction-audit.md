@@ -2,19 +2,21 @@
 
 **Date:** 2026-09-26. **Audited starting/source SHA:**
 `9177c3afed6429934632b23de936cda8c6603fde`.
-**Result:** documentation-only audit, ready for review; no persistence refactor
-is justified by the evidence collected here. The smallest next step is a
-separately scoped reproduction of originating-client repair/archive persistence.
+**Status:** the original documentation-only audit was committed as `b47603be1a`.
+A subsequently authorized adversarial review reproduced two P7 defects and led
+to a narrow repair-persistence fix; see the follow-up below. A general replacement
+refactor remains unsupported.
 
 The inputs were the exact `/tmp/sync-architecture-orchestration-20260926-9177c3afed/`
 `review.md` and `work-sessions.md` snapshots, particularly “Persistence — Audit
 now” and S7, rather than the older committed review. S1/S2 changes in other
-worktrees are outside this baseline. All source links below are pinned to it.
+worktrees are outside this baseline. The eleven-flow tables and their source links describe that baseline; the
+follow-up records the implementation and executed evidence separately.
 
 **Evidence standard:** “confirmed” means verified control flow/store membership
-in source, not a crash experiment performed in this session. Tests below were
-inspected, not run. Hypotheses explicitly need real-app reproduction; no new
-data-loss or cross-device convergence claim is established by this audit.
+in source, not a crash experiment performed in this session. The original coverage inventory lists inspected tests, not executed results.
+The follow-up distinguishes the subsequently reproduced failures and test runs
+from the original hypotheses; it does not claim user-data loss was observed.
 
 ## Actual callers and durable boundaries
 
@@ -48,7 +50,7 @@ part of the IDB transaction. The [fallback mutex][locks] only protects one proce
 | **P6 — incoming `SYNC_IMPORT`/`BACKUP_IMPORT`/`REPAIR`.** Downloads/piggyback/raw rebuild → `RemoteOpsProcessingService.processRemoteOps` → core `applyRemoteOperations` ([orchestration][remote-flow], [core][remote-core]).                                                                                 | Normally UPLOAD→flush→L→recheck; reuses L when caller owns it. Local-action hold and final conflict gate. O/(M) pending append Tx; V pre-merge; reducer outcome + V/M checkpoint Tx; separate A-locked archive Tx; O applied status; old full-state cleanup. No state-cache replacement Tx is required: full-state row is the replay anchor.               | I unchanged. Import/backup semantics discard causally obsolete/concurrent work; repair normally preserves concurrent work, with `repairBaseServerSeq` handling ([filter][filter]). Deferred new local actions drain after apply. Archive handler preserves a missing partition and refuses empty `SYNC_IMPORT`/`REPAIR` over nonempty A; explicit `BACKUP_IMPORT` may empty it ([archive handler][archive-load]).                                      |
 | **P7 — ordinary post-apply repair.** `validateAndRepairCurrentState` → `createRepairOperation` → repaired `loadAllData` ([validator][validate], [writer][repair], [append Tx][mixed]).                                                                                                                        | L acquired or inherited; archive-inclusive projected snapshot after active-state validation fails. O/V/M mixed-source append Tx rebases clock on durable V, then **separate S put**, then dispatch. No tail compare.                                                                                                                                       | I unchanged; old rows retained. Repair carries full A in its payload/cache, but this originating path writes no A stores. Remote-marked dispatch suppresses local effects; ordinary local `loadAllData` archive handling also returns early. See hypothesis H1 below.                                                                                                                                                                                  |
 | **P8 — rejected stale repair rebase.** `RejectedOpsHandlerService` downloads missing suffix → `rebaseStaleRepair` → `replaceRejectedRepair` ([rejection flow][rejected], [writer][repair], [Tx][repair-replace]).                                                                                             | L; reads current archive-inclusive state. One O/V/M/S Tx verifies stale row exists, rejects it, appends replacement, rebases V against durable V, and anchors S at replacement seq. No tail compare; no A-lock in this writer.                                                                                                                             | I/A unchanged; other rows and pending work retained. It snapshots the state after download, rather than re-running `dataRepair` or dispatching another replacement. The stale repair's rejection is atomic with its replacement **inside this helper**; do not generalize that to every upstream stale-repair retirement path.                                                                                                                         |
-| **P9 — seed empty/reset server or USE_LOCAL.** `handleServerMigration` (also called by force-upload coordinator); repaired-state branch dispatches `loadAllData` ([migration][server-migration]).                                                                                                             | Flush→L→recheck and pending-server-migration recheck; creates local `SYNC_IMPORT` using ordinary `append` (O/V/M Tx), not a cache helper. If validation repaired state, dispatch occurs **before** client-ID lookup and durable append.                                                                                                                    | I unchanged; existing rows kept, earlier effects represented in the full-state op. A is read into payload, not replaced locally. New captures append after the cutoff. A pre-append crash leaves the old durable baseline, not the repaired live projection.                                                                                                                                                                                           |
+| **P9 — seed empty/reset server or USE_LOCAL.** `handleServerMigration` (also called by force-upload coordinator); repaired-state branch dispatches `loadAllData` ([migration][server-migration]).                                                                                                             | Flush→L→recheck and pending-server-migration recheck; creates local `SYNC_IMPORT` using ordinary `append` ([O/M Tx][plain-append]), not a cache helper; it does not update durable V. If validation repaired state, dispatch occurs **before** client-ID lookup and durable append.                                                                        | I unchanged; existing rows kept, earlier effects represented in the full-state op. A is read into payload, not replaced locally. New captures append after the cutoff. A pre-append crash leaves the old durable baseline, not the repaired live projection.                                                                                                                                                                                           |
 | **P10 — legacy pf genesis migration.** Startup without cache → `checkAndMigrate` → `_performMigration` → `appendOperationAndSnapshot` ([migration][legacy]).                                                                                                                                                  | L and legacy migration lock; rechecks cache/first row. If legacy data exists and first row is not genesis, “orphan” O rows are cleared **in an earlier Tx**. O/S/V genesis anchor Tx rebases onto durable clock; validation/backup/identity writes are outside it.                                                                                         | Legacy ID copied or initialized separately; no destructive rotation. Archive migration separately copies missing A partitions from pf ([archive migration][archive-migrate]). Earlier non-genesis rows can be discarded; this is a different precondition from P11's strict emptiness rule. pf remains available; backup download is best effort.                                                                                                      |
 | **P11 — legacy disaster recovery.** Hydrator catch/recovery → `attemptRecovery` → `recoverFromLegacyData` → `appendRecoveryOperationAndSnapshot` ([recovery][legacy-recover], [anchor][anchor]).                                                                                                              | L; refuses unless both S and O are absent and inspection succeeds; validate real legacy state. One O/S/V Tx installs `RECOVERY` genesis and exact clock, then dispatch. No in-Tx emptiness recheck; relies on callers honoring L.                                                                                                                          | Existing I required, unchanged; no A writes in anchor Tx (startup archive migration is separate). No local O may exist; no new import-backup marker. pf is the preserved source on an aborted anchor write.                                                                                                                                                                                                                                            |
 
@@ -60,19 +62,19 @@ tracks a tab's projection. Plain appends observe their seq; a baseline install
 can establish it and clear sticky divergence. A zero baseline remains
 unestablished/default-open. None of these calls synchronizes another tab's NgRx.
 
-| Path    | Backup/marker and provider cursor                                                                                                                                                                                                                                                      | Cache/frontier; crash and restart semantics                                                                                                                                                                                                                                                                                                                                                                                             |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **P1**  | No recovery-ring capture or raw-rebuild marker in this flow. Downloaded file version/clock/revision stay staged; promote only after baseline, deferred work and post-snapshot suffix succeed.                                                                                          | File commit clears applied/unsynced caches, updates V cache, establishes frontier. Failure inside Tx leaves old state **and uploadable pending ops**. After Tx/before dispatch, restart reads committed snapshot + tail. After apply/before cursor, retry re-downloads; a zero cursor can request the full snapshot again, so this is not merely an ID-dedup case.                                                                      |
-| **P2**  | Mandatory FORCE_DOWNLOAD safety capture on first attempt; verify token in replacement Tx. `rawRebuildIncomplete` includes preserved ops and backup reference. Cursor promoted after included/suffix/local replay; completion swaps marker for recovery token ([completion][complete]). | Clear applied/unsynced caches, replace V cache, reset frontier at initial replacement; re-establish after completed replay. Any crash after first Tx retains marker, forcing another raw seq-0 download even if cursor was already promoted. Original backup is reused, not overwritten with partial rebuilt data. File's intermediate commits are covered by this marker.                                                              |
-| **P3**  | Same marker/backup policy as P2; cursor after raw replay, then marker completion. Resume runs before normal download/upload ([gate][resume]).                                                                                                                                          | Same reset/re-establish policy. An offline restart can display the partial/default durable baseline; finishing needs remote access. Safety backup/Undo remains the recovery route if replay cannot finish. Do not describe the workflow as one transaction.                                                                                                                                                                             |
-| **P4**  | Pre-import recovery ring or identity-checked restoration slot. Tx clears interrupted/completed raw-rebuild markers. **After commit**, `_resetAllLastServerSeqs` removes only `super_sync_last_server_seq_*`; file adapter metadata is not reset here ([reset][backup-commit]).         | Destructive commit clears applied/unsynced caches, updates V cache/frontier, invalidates client-ID cache. Tx abort preserves old ID/O/S/V/A. Crash after commit/before cursor reset loads the imported state and pending `BACKUP_IMPORT`, with old provider cursor still possible; later snapshot upload/filtering must resolve it. No dedicated reset-resume marker. End-to-end coverage of that precise interval was not established. |
-| **P5**  | No recovery-ring capture or replacement marker; destructive Tx clears raw-rebuild markers. No provider cursor change here; subsequent full-state upload owns acknowledgement.                                                                                                          | Same destructive cache/identity handling. Abort leaves prior baseline; committed crash boots current-state snapshot with one pending `SYNC_IMPORT`. No local state rollback is intended. Remote upload/encryption workflow is outside this Tx.                                                                                                                                                                                          |
-| **P6**  | Meaningful pre-state captured as REMOTE_IMPORT before a new full-state apply (skipped by raw rebuild, which already owns a backup). Per-row `pending`→`archive_pending`/`failed`→`applied` is the recovery protocol. Cursor stays behind a thrown/incompatible/incomplete apply.       | Appends observe frontier; V cache changes with durable clock commits; full-state cleanup invalidates relevant row caches. Restart reconstructs reducers from snapshot + retained tail, then retries only unfinished archive work. Crash after A commit/before `applied` repeats archive work, so idempotence is required; no general exactly-once transaction spans reducer/A/cursor.                                                   |
-| **P7**  | No recovery-ring capture or dedicated marker in repair creation. `repairBaseServerSeq` is payload/server causal context, **not** a provider-cursor write.                                                                                                                              | Mixed append updates V cache and observes seq; its new tail refreshes row caches on read; S success establishes frontier. Crash between append and S is recoverable from full-state REPAIR; a split Tx alone is not a defect (also explicitly dropped in the supplied review). Crash after S uses repaired cache. Durable originating A equivalence remains H1.                                                                         |
-| **P8**  | No new backup/marker. Uses downloaded base cursor in replacement payload; download has its own acknowledgement order.                                                                                                                                                                  | Updates V/unsynced cache and establishes frontier. Aborted Tx retains pre-call rows/cache; committed Tx has replacement anchor and rejected predecessor. Further upload failure leaves replacement pending for retry. A is outside this Tx.                                                                                                                                                                                             |
-| **P9**  | No recovery ring/marker or cursor write in this method. Caller uploads the full-state op; prior rows remain until normal upload bookkeeping.                                                                                                                                           | Ordinary append observes seq and updates V cache; its new tail refreshes row caches on read; no S/frontier establishment here. Pre-append repair can disappear on restart; post-append restart loads/replays full-state op. Whether subsequent failed-append processing can persist the repaired live projection needs a separate reproduction.                                                                                         |
-| **P10** | Best-effort downloaded legacy backup and retained pf; legacy lock/skip marker belong to legacy owner. No provider metadata write.                                                                                                                                                      | Clear-O resets row caches/frontier; successful anchor updates V/unsynced cache and establishes frontier. Crash before anchor retries migration, but an earlier orphan-clear/ID write is already durable. Crash after anchor has matching O/S/V. Concurrent edits after genesis remain tail.                                                                                                                                             |
-| **P11** | No provider metadata or extra recovery marker. pf retained.                                                                                                                                                                                                                            | Successful anchor updates V/unsynced cache and establishes frontier; aborted O/S/V Tx leaves recovery retryable. Present/corrupt cache or nonempty O blocks legacy overwrite, even if recovery would otherwise be convenient.                                                                                                                                                                                                           |
+| Path    | Backup/marker and provider cursor                                                                                                                                                                                                                                                      | Cache/frontier; crash and restart semantics                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **P1**  | No recovery-ring capture or raw-rebuild marker in this flow. Downloaded file version/clock/revision stay staged; promote only after baseline, deferred work and post-snapshot suffix succeed.                                                                                          | File commit clears applied/unsynced caches, updates V cache, establishes frontier. Failure inside Tx leaves old state **and uploadable pending ops**. After Tx/before dispatch, restart reads committed snapshot + tail. After apply/before cursor, retry re-downloads; a zero cursor can request the full snapshot again, so this is not merely an ID-dedup case.                                                                                      |
+| **P2**  | Mandatory FORCE_DOWNLOAD safety capture on first attempt; verify token in replacement Tx. `rawRebuildIncomplete` includes preserved ops and backup reference. Cursor promoted after included/suffix/local replay; completion swaps marker for recovery token ([completion][complete]). | Clear applied/unsynced caches, replace V cache, reset frontier at initial replacement; re-establish after completed replay. Any crash after first Tx retains marker, forcing another raw seq-0 download even if cursor was already promoted. Original backup is reused, not overwritten with partial rebuilt data. File's intermediate commits are covered by this marker.                                                                              |
+| **P3**  | Same marker/backup policy as P2; cursor after raw replay, then marker completion. Resume runs before normal download/upload ([gate][resume]).                                                                                                                                          | Same reset/re-establish policy. An offline restart can display the partial/default durable baseline; finishing needs remote access. Safety backup/Undo remains the recovery route if replay cannot finish. Do not describe the workflow as one transaction.                                                                                                                                                                                             |
+| **P4**  | Pre-import recovery ring or identity-checked restoration slot. Tx clears interrupted/completed raw-rebuild markers. **After commit**, `_resetAllLastServerSeqs` removes only `super_sync_last_server_seq_*`; file adapter metadata is not reset here ([reset][backup-commit]).         | Destructive commit clears applied/unsynced caches, updates V cache/frontier, invalidates client-ID cache. Tx abort preserves old ID/O/S/V/A. Crash after commit/before cursor reset loads the imported state and pending `BACKUP_IMPORT`, with old provider cursor still possible; later snapshot upload/filtering must resolve it. No dedicated reset-resume marker. End-to-end coverage of that precise interval was not established.                 |
+| **P5**  | No recovery-ring capture or replacement marker; destructive Tx clears raw-rebuild markers. No provider cursor change here; subsequent full-state upload owns acknowledgement.                                                                                                          | Same destructive cache/identity handling. Abort leaves prior baseline; committed crash boots current-state snapshot with one pending `SYNC_IMPORT`. No local state rollback is intended. Remote upload/encryption workflow is outside this Tx.                                                                                                                                                                                                          |
+| **P6**  | Meaningful pre-state captured as REMOTE_IMPORT before a new full-state apply (skipped by raw rebuild, which already owns a backup). Per-row `pending`→`archive_pending`/`failed`→`applied` is the recovery protocol. Cursor stays behind a thrown/incompatible/incomplete apply.       | Appends observe frontier; V cache changes with durable clock commits; full-state cleanup invalidates relevant row caches. Restart reconstructs reducers from snapshot + retained tail, then retries only unfinished archive work. Crash after A commit/before `applied` repeats archive work, so idempotence is required; no general exactly-once transaction spans reducer/A/cursor.                                                                   |
+| **P7**  | No recovery-ring capture or dedicated marker in repair creation. `repairBaseServerSeq` is payload/server causal context, **not** a provider-cursor write.                                                                                                                              | Mixed append updates V cache and observes seq; its new tail refreshes row caches on read; S success establishes frontier. The full-state REPAIR remains available after a failed S write, but a later stale snapshot can hide it if the repaired live state was never installed. The original unconditional recovery claim was disproved by the follow-up. Crash after a successful S write uses repaired cache. Originating A persistence is H1 below. |
+| **P8**  | No new backup/marker. Uses downloaded base cursor in replacement payload; download has its own acknowledgement order.                                                                                                                                                                  | Updates V/unsynced cache and establishes frontier. Aborted Tx retains pre-call rows/cache; committed Tx has replacement anchor and rejected predecessor. Further upload failure leaves replacement pending for retry. A is outside this Tx.                                                                                                                                                                                                             |
+| **P9**  | No recovery ring/marker or cursor write in this method. Caller uploads the full-state op; prior rows remain until normal upload bookkeeping.                                                                                                                                           | Ordinary append observes seq; its new tail refreshes row caches on read; it does not update V cache; no S/frontier establishment here. Pre-append repair can disappear on restart; post-append restart loads/replays full-state op. Whether subsequent failed-append processing can persist the repaired live projection needs a separate reproduction.                                                                                                 |
+| **P10** | Best-effort downloaded legacy backup and retained pf; legacy lock/skip marker belong to legacy owner. No provider metadata write.                                                                                                                                                      | Clear-O resets row caches/frontier; successful anchor updates V/unsynced cache and establishes frontier. Crash before anchor retries migration, but an earlier orphan-clear/ID write is already durable. Crash after anchor has matching O/S/V. Concurrent edits after genesis remain tail.                                                                                                                                                             |
+| **P11** | No provider metadata or extra recovery marker. pf retained.                                                                                                                                                                                                                            | Successful anchor updates V/unsynced cache and establishes frontier; aborted O/S/V Tx leaves recovery retryable. Present/corrupt cache or nonempty O blocks legacy overwrite, even if recovery would otherwise be convenient.                                                                                                                                                                                                                           |
 
 ### Startup and checkpoint paths are not additional remote imports
 
@@ -149,20 +151,22 @@ already use the adapter transaction wrapper. Their differing policies earn their
 place: exact file-tail check, raw-rebuild continuation, destructive identity
 rotation, strict-empty legacy recovery, and stale-repair replacement are not
 interchangeable. A universal helper would need policy switches without removing
-these invariants. The proposed 3–4k-line saving remains unvalidated. The ordinary
-REPAIR append/cache split is recoverable; it is not a reason to refactor.
+these invariants. The proposed 3–4k-line saving remains unvalidated. The original claim that the
+REPAIR append/cache split was harmless was too strong: retained data alone does
+not prevent a later snapshot from hiding it. The follow-up fixes the failed-cache
+control flow without consolidating all replacement transactions.
 
-**H1 — bounded unresolved question:** an originating repair can change archive
+**H1 — original hypothesis, subsequently reproduced:** an originating repair can change archive
 partitions: [`dataRepair` removes duplicate archived entities][repair-archives].
 P7 commits that repaired archive image inside O/S but does not write A, and boot's
 direct full-state shortcut only dispatches NgRx. The [archive effect][archive-effect]
 cannot fill that gap: it consumes local actions, while sync repair dispatch is
-remote-marked; the handler skips local `loadAllData` too. This confirms a boundary
-to exercise, not a reproduced divergence. P1 also commits the originally
+remote-marked; the handler skips local `loadAllData` too. This was a source-level boundary
+to exercise; the follow-up supplies the reproduction. P1 also commits the originally
 downloaded archives even when validation supplies repaired `dataToLoad`; include
 that as a later follow-up, not another implementation in the first task.
 
-Propose **one reproduction-only task for P7** after rebasing onto reviewed S1/S2
+The original recommendation was **one reproduction-only task for P7** after rebasing onto reviewed S1/S2
 and any intervening persistence changes. Use a real app/IndexedDB fixture with
 an active/archive duplicate **and an active-state validation error** (archive-only
 corruption does not trigger the cheap validation gate). Trigger normal remote
@@ -190,9 +194,9 @@ The task's invariants and failure cases are:
   cursor-storage move, snapshot-production replacement or local-only repair
   semantics are selected by this audit.
 
-## Validation record and draft PR description
+## Original audit validation record and draft PR description
 
-**Scope:** only this audit document. No product/test/config/schema/dependency or
+**Original audit scope:** only this document. No product/test/config/schema/dependency or
 agent-control-file edits. Starting and source-validated SHA is
 `9177c3afed6429934632b23de936cda8c6603fde`; the audit commit changes no executable
 source. Existing fixes in local history include atomic destructive identity
@@ -234,6 +238,155 @@ and diff checks; no runtime behavior or compatibility surface changed. Remaining
 limits: source inspection cannot prove crash convergence; S1 and subsequent
 changes require rechecking the affected rows before implementation.
 
+## Follow-up: adversarial review and implementation
+
+After the documentation-only audit, the user requested adversarial review and
+implementation of justified changes. The eleven-flow inventory remains scoped
+to the original SHA. This follow-up changes P7 only; it does not select a common
+replacement abstraction. The implementation was first committed as
+`3afd6013b465258b465b65239cb33d1f5c08fc7b`, based on audit commit
+`b47603be1a8a99b01541fbfe39b8217d7a83fc2c` (unchanged product source from
+`9177c3afed6429934632b23de936cda8c6603fde`).
+
+For PR preparation, the three task commits were rebased onto
+`master` at `0a909ad3b60bee08089925bd7ef23b0d7b184446`, after the parent PR
+was squash-merged. The current implementation SHA is
+`38868ab6ac47cdd22a26fbd2120b628df5d91d9c`; the fixed-source links below use
+that revision. The product fix is unchanged, and the E2E retains master's
+`APIResponse` type correction.
+
+| Adversarial finding                                                                                                        | Executed evidence and disposition                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Originating repair omitted durable archives.** The repaired payload/cache alone did not update A.                        | The new real-app E2E failed against unchanged baseline product code: duplicate active-task IDs remained in both archive partitions after repair. Persist accepted partitions with the REPAIR row.                                                                                                                              |
+| **Cache failure could hide a durable repair.** The audit's unconditional “harmless split” reasoning was incorrect.         | With the archive fix but the original cache-error behavior, a one-shot S-write failure prevented repaired live-state installation. After offline reload the ghost tag remained; diagnostic reads found cache seq 7 and the REPAIR at seq 7. Finish live repair after durable commit even when this optional cache write fails. |
+| **Empty-partition handling must match existing receivers.** Unconditionally replacing A in the first draft changed policy. | The empty-partition E2E failed against that draft. The final implementation leaves empty incoming REPAIR partitions untouched, matching the [existing handler][archive-load]. `git tag --contains cabf266574c5` confirms this receiver policy in `v18.11.0` and later local tags.                                              |
+| **P9 transaction inventory overstated V persistence.**                                                                     | Source inspection confirms ordinary `append` writes O/M, not V; its cache does not update V either. The baseline tables are corrected. No P9 failure was reproduced and no P9 code changed.                                                                                                                                    |
+
+The [validator][fixed-validator] acquires L then A-lock and holds A-lock from the
+archive-inclusive snapshot through repair, durable commit and live dispatch.
+The [existing mixed-source append][fixed-mixed] commits O/V/M and each supplied
+nonempty archive partition in one Tx. The [repair writer][fixed-repair] then
+attempts S; a failed optional cache write is logged without preventing live
+repair. If S remains unavailable, restart can recover the retained REPAIR tail.
+Other pending rows remain uploadable. The two new [real-IDB failure tests][fixed-rollback]
+throw after each archive partition's actual put and verify rollback of O/V/M/A,
+unchanged S, and a successful retry without consuming a clock counter.
+
+This uses the existing append transaction, not a new baseline service. To comply
+with the service-size ratchet, the unchanged pure clock-rebase function moved
+into a [small utility][fixed-clock]; clock pruning stays in the store. The store's
+physical size and lint allowance decrease from 3212 to 3203 lines. Most added
+lines are real-app fixtures and failure tests.
+
+**Compatibility limits:** no wire, schema, persisted-model, client-ID, provider
+cursor, backup or rejected-repair behavior changes. Empty REPAIR partitions still
+cannot clear a nonempty archive; the new empty-partition case deliberately
+preserves that policy. Archive-only corruption still does not trigger P7's cheap
+active-state validation gate. These tests exercise current clients and inspect
+released receiver behavior; no released binary was executed. They do not prove
+every crash boundary or exactly-once delivery. The original cursor invariant
+remains: acknowledgement may lag durable work but must not lead it.
+
+### Executed validation
+
+The [repair lifecycle E2E][fixed-e2e] uses two real browser clients, app-created
+task shapes, actual archive IndexedDB stores and a real SuperSync server. Four
+new cases cover ordinary origin repair, a one-shot cache failure, cache failure
+until reload, and the empty-partition policy. They check both archives, retained
+unrelated work, an additive time delta of exactly 5000 ms, peer convergence and
+two offline reloads per client. The two existing stale-repair/offline-client
+cases also pass. No mocked applier is used.
+
+| Gate                                                  | Result                                                                                                                                                               |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Baseline origin-archive E2E, before product edits     | **Failed**, duplicate IDs still in both archives; `repair-e2e-baseline.log` and `repair-e2e-baseline-trace.zip`.                                                     |
+| One-shot cache interruption, before cache-error fix   | **Failed** on intermediate archive-only fix; ghost tag survived offline reload at the cached REPAIR seq; `repair-e2e-boundaries.log`.                                |
+| Empty-partition policy, before draft correction       | **Failed** on the intermediate unconditional-archive-write draft; `repair-e2e-empty-baseline.log`. This is a caught draft regression, not a baseline product defect. |
+| Final focused unit/integration run                    | **387 passed**, including both new archive transaction rollback tests; `repair-unit-final.log`.                                                                      |
+| Final whole repair-lifecycle E2E file                 | **6 passed**, one worker, zero retries, 7.7 minutes; `repair-e2e-final.log`.                                                                                         |
+| All seven edited `.ts` files                          | Required `npm run checkFile` passed. `eslint.config.js` also passed its file check.                                                                                  |
+| Audit formatting, pinned source links and diff checks | Passed; commands below. The original coverage inventory remains inspected evidence, not newly executed tests.                                                        |
+
+All logs above are under `/tmp/sync-s7-audit/`. Runtime verification used the
+implementation committed as `3afd6013b465258b465b65239cb33d1f5c08fc7b`; only
+comments were clarified afterward, with affected file checks repeated. The local
+app used port 4517, the isolated server used 1917 and PostgreSQL used 55477.
+The task-built server image used unchanged server source. An ignored Karma
+wrapper used port 9847 and an automatically allocated Chrome debug port.
+
+**PR revalidation:** after rebasing, both runtime commands below were repeated on
+`38868ab6ac47cdd22a26fbd2120b628df5d91d9c`: **387 unit/integration tests passed**
+and **6 E2Es passed** (8.3 minutes, one worker, zero retries). Logs:
+`/tmp/sync-s7-audit/pr-repair-unit.log` and
+`/tmp/sync-s7-audit/pr-repair-e2e.log`. The E2E file's required file check was
+repeated after master's type correction; the other edited source/test files are
+byte-identical to the previously checked implementation. Source-link, formatting
+and diff checks also passed again.
+
+Exact final runtime commands:
+
+```sh
+npm run test:file -- src/app/op-log/persistence/operation-log-store.service.spec.ts \
+  --include src/app/op-log/validation/repair-operation.service.spec.ts \
+  --include src/app/op-log/validation/repair-operation.clock-derivation.integration.spec.ts \
+  --include src/app/op-log/validation/validate-state.service.spec.ts \
+  --include src/app/op-log/validation/sync-repair-non-blocking.integration.spec.ts \
+  --include src/app/op-log/apply/archive-operation-handler.service.spec.ts \
+  --karma-config .tmp/s7/karma.conf.cjs
+
+E2E_BASE_URL=http://127.0.0.1:4517 SUPERSYNC_E2E_URL=http://127.0.0.1:1917 \
+  E2E_REQUIRE_SUPERSYNC=true node_modules/.bin/playwright test \
+  --config e2e/playwright.config.ts e2e/tests/sync/supersync-repair-lifecycle.spec.ts \
+  --workers=1 --retries=0 --reporter=line
+```
+
+The baseline origin-archive run used that Playwright command with
+`--grep 'persists repaired archives'`, while only the new reproduction existed.
+Required file/document checks:
+
+```sh
+npm run checkFile src/app/op-log/persistence/operation-log-store.service.ts
+npm run checkFile src/app/op-log/persistence/operation-log-clock.util.ts
+npm run checkFile src/app/op-log/validation/repair-operation.service.ts
+npm run checkFile src/app/op-log/validation/validate-state.service.ts
+npm run checkFile src/app/op-log/validation/repair-operation.service.spec.ts
+npm run checkFile src/app/op-log/validation/repair-operation.clock-derivation.integration.spec.ts
+npm run checkFile e2e/tests/sync/supersync-repair-lifecycle.spec.ts
+npm run checkFile eslint.config.js
+python3 /tmp/sync-s7-audit/validate-followup-links.py
+node_modules/.bin/prettier --check docs/plans/2026-09-26-sync-persistence-transaction-audit.md
+git diff --check
+git diff --cached --check
+```
+
+The follow-up link validator resolves every reference against its own pinned
+Git revision, checks tracked files/line bounds and verifies fixed-source links
+against the checkout. Its negative control must reject an unresolved reference.
+It replaces the original validator's assumption that all source remains at the
+starting SHA. **Not run:** full scheduled SuperSync/WebDAV suites, a released
+binary compatibility run, and broader crash/cursor fault matrices. The original
+implementation session used local verification; PR publication was authorized
+subsequently. Integration with intervening S1/S2 changes requires
+review and focused retesting of the resulting tree; the general refactor remains
+unjustified.
+
+**Draft PR:** `fix(sync): persist originating repair archives safely`
+
+Automatic repair could leave the originating client's archives unchanged and,
+after a cache-write failure, leave unrepaired live state eligible for a later
+snapshot. Commit accepted archive partitions with the REPAIR operation under
+the existing locks, and finish live repair when the optional cache write fails.
+Preserve released receivers' empty-partition policy and existing repair format.
+Validation: baseline real-app failure, six passing repair lifecycle E2Es, 387
+focused unit/integration tests, and file/document checks. Full scheduled suites
+and released-binary verification remain unrun.
+
+[fixed-validator]: https://github.com/super-productivity/super-productivity/blob/38868ab6ac47cdd22a26fbd2120b628df5d91d9c/src/app/op-log/validation/validate-state.service.ts#L98-L213
+[fixed-mixed]: https://github.com/super-productivity/super-productivity/blob/38868ab6ac47cdd22a26fbd2120b628df5d91d9c/src/app/op-log/persistence/operation-log-store.service.ts#L1242-L1404
+[fixed-repair]: https://github.com/super-productivity/super-productivity/blob/38868ab6ac47cdd22a26fbd2120b628df5d91d9c/src/app/op-log/validation/repair-operation.service.ts#L57-L164
+[fixed-rollback]: https://github.com/super-productivity/super-productivity/blob/38868ab6ac47cdd22a26fbd2120b628df5d91d9c/src/app/op-log/validation/repair-operation.clock-derivation.integration.spec.ts#L121-L198
+[fixed-clock]: https://github.com/super-productivity/super-productivity/blob/38868ab6ac47cdd22a26fbd2120b628df5d91d9c/src/app/op-log/persistence/operation-log-clock.util.ts#L1-L22
+[fixed-e2e]: https://github.com/super-productivity/super-productivity/blob/38868ab6ac47cdd22a26fbd2120b628df5d91d9c/e2e/tests/sync/supersync-repair-lifecycle.spec.ts#L272-L490
 [idb-tx]: https://github.com/super-productivity/super-productivity/blob/9177c3afed6429934632b23de936cda8c6603fde/src/app/op-log/persistence/indexed-db-op-log-adapter.ts#L368-L388
 [factory]: https://github.com/super-productivity/super-productivity/blob/9177c3afed6429934632b23de936cda8c6603fde/src/app/op-log/persistence/op-log-db-adapter.token.ts#L15-L30
 [locks]: https://github.com/super-productivity/super-productivity/blob/9177c3afed6429934632b23de936cda8c6603fde/src/app/op-log/sync/lock.service.ts#L30-L77
@@ -313,3 +466,4 @@ changes require rechecking the affected rows before implementation.
 [test-frontier]: https://github.com/super-productivity/super-productivity/blob/9177c3afed6429934632b23de936cda8c6603fde/src/app/op-log/testing/integration/multi-tab-frontier-guard.integration.spec.ts#L123-L233
 [test-adapter-cancel]: https://github.com/super-productivity/super-productivity/blob/9177c3afed6429934632b23de936cda8c6603fde/src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.spec.ts#L3860-L3893
 [test-adapter-partition]: https://github.com/super-productivity/super-productivity/blob/9177c3afed6429934632b23de936cda8c6603fde/src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.spec.ts#L3700-L3840
+[plain-append]: https://github.com/super-productivity/super-productivity/blob/9177c3afed6429934632b23de936cda8c6603fde/src/app/op-log/persistence/operation-log-store.service.ts#L782-L808
