@@ -439,6 +439,19 @@ export class ModelValidationError extends Error {
   }
 }
 
+/**
+ * A backup import refused because its data is invalid and repair cannot fix it,
+ * so importing would persist and broadcast state every client rejects (#8279).
+ * UI paths map it to a translated "use an older backup" message.
+ */
+export class BackupRepairFailedError extends Error {
+  override name = 'BackupRepairFailedError';
+
+  constructor() {
+    super('Data validation failed and repair not possible');
+  }
+}
+
 export class DataValidationFailedError extends Error {
   override name = 'DataValidationFailedError';
   additionalLog?: string;

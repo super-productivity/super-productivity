@@ -804,14 +804,18 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    here since. The clock half is needed because the cursor can run ahead of
    applied ops: an upload merges into the freshly read file and sets the
    cursor to the new version. Legacy ops without `sv` use the file's
-   `syncVersion` as an upper bound. Seq-0 downloads and downloads after a gap
-   reset do not use this filter. Known gaps: the guard assumes each author's
-   counter never goes backwards (a device that keeps its clientId but adopts
-   a lower own clock, e.g. USE_REMOTE after another device's USE_LOCAL, could
-   have a new op skipped when the cursor also ran ahead; reproduced by
-   pending tests in the #10119 integration spec, fix tracked in #10239); and a
-   remote op whose apply failed is no longer retried once compaction prunes it,
-   matching SuperSync.
+   `syncVersion` as a conservative upper bound. After local compaction prunes
+   such an op's applied ID, a later file write advances this upper bound past
+   the cursor, so the old op can be re-applied (reproduced for v2 and v3 with
+   an archived task). Skipping it on clock coverage alone is unsafe: conflict
+   resolution can merge a remote clock even when its op was not applied locally.
+   Seq-0 downloads and downloads after a gap reset do not use this filter. Other
+   known gaps: the guard assumes each author's counter never goes backwards (a
+   device that keeps its clientId but adopts a lower own clock, e.g. USE_REMOTE
+   after another device's USE_LOCAL, could have a new op skipped when the cursor
+   also ran ahead; reproduced by pending tests in the #10119 integration spec,
+   fix tracked in #10239); and a remote op whose apply failed is no longer
+   retried once compaction prunes it, matching SuperSync.
 2. **Fresh client / forced seq-0:** return a full state/archive baseline. In v2,
    that baseline represents the monolith and its retained ops. In v3, the ops
    file points to a validated snapshot generation; retained ops newer than the
@@ -819,6 +823,28 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
 3. **Gap:** a version reset, snapshot replacement, or trimmed operation needed by
    this client signals a gap. The caller retries from seq 0 and installs the
    causal baseline instead of pretending the remaining buffer is complete.
+   A replacement's tail ops can advance the watermark back past this client's
+   and refill the buffer, hiding all three. So the file's vector clock must
+   also equal or dominate the last-seen one, which is persisted and also
+   recorded on upload. Otherwise the lineage broke (#9170).
+   A replacement can also dominate the reader's clock. Explicit snapshot uploads
+   therefore record `snapshotBaseClock` in the file envelope; ordinary uploads,
+   trimming, split compaction, and format migration preserve it. If the reader's
+   last-seen clock does not cover this base, it must hydrate the snapshot before
+   consuming the tail, regardless of the watermark. After commit, the last-seen
+   clock covers the base and incremental sync resumes. Writers apply the same
+   rule: an upload that finds an unseen base is refused as a retryable
+   conflict, so a stale client cannot append to a replacement it never
+   hydrated (in v2, overwriting its snapshot with stale state). Before the
+   first recorded clock (e.g. the first sync after upgrading) neither check
+   runs: there is no baseline to judge by, a forced seq-0 download would show
+   a conflict dialog whenever local ops are pending, and a refused upload
+   could stay refused behind the rev pre-check. A replacement that lands in
+   that window goes unnoticed (known gap, #10258).
+   This optional metadata requires no schema bump: older readers ignore it,
+   but older writers can omit it. Masked dominating replacements written by,
+   or subsequently rewritten by, those clients remain a mixed-version gap;
+   the older version/lineage/trim checks still apply to files without the marker.
 4. **Commit:** the downloaded `rev`, vector clock, and expected synthetic
    watermark remain staged until the caller confirms that baseline and ops were
    durably applied. Cancelling a data-conflict decision does not advance the
@@ -1044,7 +1070,7 @@ Same-batch restores (#10220) — restart replay is status-blind, so a rejected b
 - A `restoreTask` whose root is already active is ignored, as `handleRestoreTask` ignores it: its payload subtasks are not treated as restored and the restore point does not move.
 - Ordinary task updates do not create missing tasks in the pre-scan: a rejected update between archive and restore cannot make the restore look like a duplicate or suppress a later winning update.
 - Logs replayed after upgrading may apply an LWW Update the pre-#10220 filter skipped; state moves to what op-by-op apply produces.
-- Known gaps (no observed occurrence yet): a subtask restored on its own under a still-archived parent is not detected; `restoreDeletedTask` (undo delete) is not treated as a restore, so a same-batch LWW Update after it is still skipped.
+- Known gaps (no observed occurrence yet): a subtask restored on its own under a still-archived parent is not detected; `restoreDeletedTask` (undo delete) is not treated as a restore, so a same-batch LWW Update after it is still skipped; the pre-scan keeps one restore point per task, so when one batch archives and restores the same task more than once, an LWW Update between an earlier restore and a later archive is still skipped (as before #10220).
 
 Both levels only work if the archive op DECLARES the entity. A client awake on
 the websocket downloads one op per trigger, so an LWW Update that escaped level

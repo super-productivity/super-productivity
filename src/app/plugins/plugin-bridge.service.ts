@@ -13,6 +13,7 @@ import {
   PluginHeaderBtnCfg,
   PluginHookHandler,
   PluginMenuEntryCfg,
+  PluginTaskContextMenuEntryCfg,
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
   PluginShortcutCfg,
@@ -90,6 +91,7 @@ import { PluginSecretService } from './secret/plugin-secret.service';
 import { ISSUE_PROVIDER_TYPES } from '../features/issue/issue.const';
 import { PluginService } from './plugin.service';
 import { PluginI18nService } from './plugin-i18n.service';
+import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
 import { formatDateForPlugin } from './plugin-i18n-date.util';
 
 /**
@@ -167,6 +169,7 @@ export class PluginBridgeService implements OnDestroy {
   private _pluginSecretService = inject(PluginSecretService);
   private _dataInitService = inject(DataInitService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _taskContextMenuRegistry = inject(PluginTaskContextMenuRegistryService);
   readonly #nodeExecutionGrantTokens = new Map<string, string>();
   readonly #nodeExecutionApi = this._consumeNodeExecutionApi();
 
@@ -244,6 +247,7 @@ export class PluginBridgeService implements OnDestroy {
     downloadFile: (filename: string, data: string) => Promise<void>;
     registerHeaderButton: (cfg: PluginHeaderBtnCfg) => void;
     registerMenuEntry: (cfg: Omit<PluginMenuEntryCfg, 'pluginId'>) => void;
+    registerTaskContextMenuEntry: (cfg: PluginTaskContextMenuEntryCfg) => void;
     registerSidePanelButton: (cfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>) => void;
     registerWorkContextHeaderButton: (
       cfg: Omit<PluginWorkContextHeaderBtnCfg, 'pluginId'>,
@@ -308,6 +312,8 @@ export class PluginBridgeService implements OnDestroy {
         this._registerHeaderButton(pluginId, cfg),
       registerMenuEntry: (cfg: Omit<PluginMenuEntryCfg, 'pluginId'>) =>
         this._registerMenuEntry(pluginId, cfg),
+      registerTaskContextMenuEntry: (cfg: PluginTaskContextMenuEntryCfg) =>
+        this._taskContextMenuRegistry.register(pluginId, cfg),
       registerSidePanelButton: (cfg: Omit<PluginSidePanelBtnCfg, 'pluginId'>) =>
         this._registerSidePanelButton(pluginId, cfg),
       registerWorkContextHeaderButton: (
@@ -1471,6 +1477,7 @@ export class PluginBridgeService implements OnDestroy {
     this._removePluginMenuEntries(pluginId);
     this._removePluginSidePanelButtons(pluginId);
     this._removePluginWorkContextHeaderButtons(pluginId);
+    this._taskContextMenuRegistry.unregisterPlugin(pluginId);
     this.unregisterPluginShortcuts(pluginId);
     this._configHandlers.delete(pluginId);
 
@@ -1626,11 +1633,7 @@ export class PluginBridgeService implements OnDestroy {
    * Remove all header buttons for a specific plugin
    */
   private _removePluginHeaderButtons(pluginId: string): void {
-    const currentButtons = this._headerButtons();
-    const filteredButtons = currentButtons.filter(
-      (button) => button.pluginId !== pluginId,
-    );
-    this._headerButtons.set(filteredButtons);
+    this._headerButtons.update((bs) => bs.filter((b) => b.pluginId !== pluginId));
 
     PluginLog.log('PluginBridge: Header buttons removed for plugin', { pluginId });
   }
@@ -1647,9 +1650,7 @@ export class PluginBridgeService implements OnDestroy {
    * Remove all menu entries for a specific plugin
    */
   private _removePluginMenuEntries(pluginId: string): void {
-    const currentEntries = this._menuEntries();
-    const filteredEntries = currentEntries.filter((entry) => entry.pluginId !== pluginId);
-    this._menuEntries.set(filteredEntries);
+    this._menuEntries.update((entries) => entries.filter((e) => e.pluginId !== pluginId));
 
     PluginLog.log('PluginBridge: Menu entries removed for plugin', { pluginId });
   }
@@ -1707,11 +1708,7 @@ export class PluginBridgeService implements OnDestroy {
    * Remove all side panel buttons for a specific plugin
    */
   private _removePluginSidePanelButtons(pluginId: string): void {
-    const currentButtons = this._sidePanelButtons();
-    const filteredButtons = currentButtons.filter(
-      (button) => button.pluginId !== pluginId,
-    );
-    this._sidePanelButtons.set(filteredButtons);
+    this._sidePanelButtons.update((bs) => bs.filter((b) => b.pluginId !== pluginId));
 
     PluginLog.log('PluginBridge: Side panel buttons removed for plugin', { pluginId });
   }

@@ -7,6 +7,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { RestorePoint } from '../../op-log/sync-providers/provider.interface';
 import { T } from '../../t.const';
+import { BackupRepairFailedError } from '../../op-log/core/errors/sync-errors';
 import { SyncLog } from '../../core/log';
 
 describe('SuperSyncRestoreService', () => {
@@ -292,6 +293,18 @@ describe('SuperSyncRestoreService', () => {
       expect(mockSnackService.open).toHaveBeenCalledWith({
         type: 'ERROR',
         msg: T.F.SYNC.S.RESTORE_ERROR,
+      });
+    });
+
+    it('should explain an unrepairable server snapshot instead of the generic error (#8279)', async () => {
+      const error = new BackupRepairFailedError();
+      mockBackupService.importCompleteBackup.and.rejectWith(error);
+
+      await expectAsync(service.restoreToPoint(100)).toBeRejectedWith(error);
+
+      expect(mockSnackService.open).toHaveBeenCalledWith({
+        type: 'ERROR',
+        msg: T.FILE_IMEX.S_ERR_IMPORT_UNREPAIRABLE,
       });
     });
 

@@ -26,6 +26,7 @@ import {
 } from './backup-ring.util';
 import { DEFAULT_MAX_BACKUP_FILES } from '../../../../electron/shared-with-frontend/backup-file-cleanup.util';
 import { SnackService } from '../../core/snack/snack.service';
+import { BackupRepairFailedError } from '../../op-log/core/errors/sync-errors';
 import { Log } from '../../core/log';
 import { confirmDialog } from '../../util/native-dialogs';
 import { CapacitorPlatformService } from '../../core/platform/capacitor-platform.service';
@@ -633,6 +634,13 @@ export class LocalBackupService {
         false,
         true,
         true,
+        false, // isSkipPreImportBackup
+        undefined, // requiredImportBackupId
+        // Every caller restores this device's own auto-backup (Electron backup
+        // dir, mobile ring slots): state that was already live here. Refusing
+        // it for errors repair cannot fix would leave the user no way back
+        // after local data loss (#8279). Picked files use FileImexComponent.
+        true, // isOwnStateRestore
       );
       // This profile's notes were just replaced wholesale (Electron startup
       // restore, mobile auto-restore, Android Settings restore all funnel
@@ -643,7 +651,10 @@ export class LocalBackupService {
     } catch (e) {
       this._snackService.open({
         type: 'ERROR',
-        msg: T.FILE_IMEX.S_ERR_IMPORT_FAILED,
+        msg:
+          e instanceof BackupRepairFailedError
+            ? T.FILE_IMEX.S_ERR_IMPORT_UNREPAIRABLE
+            : T.FILE_IMEX.S_ERR_IMPORT_FAILED,
       });
       return false;
     }

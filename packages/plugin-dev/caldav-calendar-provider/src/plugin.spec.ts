@@ -1560,7 +1560,7 @@ END:VCALENDAR</cal:calendar-data>
       expect(http.request).toHaveBeenCalledTimes(1);
     });
 
-    it('keeps calendars with an omitted component set but filters an empty set', async () => {
+    it('accepts absent component sets but filters empty and VTODO-only sets', async () => {
       const componentVariants = `<?xml version="1.0"?>
 <d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
   <d:response>
@@ -1571,12 +1571,30 @@ END:VCALENDAR</cal:calendar-data>
     </d:prop></d:propstat>
   </d:response>
   <d:response>
+    <d:href>/calendars/missing/</d:href>
+    <d:propstat><d:prop>
+      <d:displayname>Missing component property</d:displayname>
+      <d:resourcetype><d:collection/><cal:calendar/></d:resourcetype>
+    </d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>
+    <d:propstat><d:prop>
+      <cal:supported-calendar-component-set/>
+    </d:prop><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat>
+  </d:response>
+  <d:response>
     <d:href>/calendars/empty/</d:href>
     <d:propstat><d:prop>
       <d:displayname>Invalid empty component set</d:displayname>
       <d:resourcetype><d:collection/><cal:calendar/></d:resourcetype>
       <cal:supported-calendar-component-set/>
-    </d:prop></d:propstat>
+    </d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/calendars/todo/</d:href>
+    <d:propstat><d:prop>
+      <d:displayname>Tasks only</d:displayname>
+      <d:resourcetype><d:collection/><cal:calendar/></d:resourcetype>
+      <cal:supported-calendar-component-set><cal:comp name="VTODO"/></cal:supported-calendar-component-set>
+    </d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>
   </d:response>
 </d:multistatus>`;
       const http = makeHttp({
@@ -1594,6 +1612,7 @@ END:VCALENDAR</cal:calendar-data>
 
       expect(result).toEqual([
         { label: 'Implicit event support', value: '/calendars/implicit/' },
+        { label: 'Missing component property', value: '/calendars/missing/' },
       ]);
     });
 

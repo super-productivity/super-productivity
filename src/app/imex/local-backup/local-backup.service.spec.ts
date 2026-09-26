@@ -18,6 +18,7 @@ import { Action } from '@ngrx/store';
 import { DEFAULT_MAX_BACKUP_FILES } from '../../../../electron/shared-with-frontend/backup-file-cleanup.util';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { Log } from '../../core/log';
+import { BackupRepairFailedError } from '../../op-log/core/errors/sync-errors';
 
 const BACKUP_INTERVAL = 5 * 60 * 1000;
 const DATA_CHANGE_DEBOUNCE = 30 * 1000;
@@ -917,7 +918,16 @@ describe('LocalBackupService', () => {
 
         await restore();
 
-        expect(backupServiceSpy.importCompleteBackup).toHaveBeenCalled();
+        // Own backup: restored even if still invalid after repair (#8279).
+        expect(backupServiceSpy.importCompleteBackup).toHaveBeenCalledWith(
+          jasmine.any(Object),
+          false,
+          true,
+          true,
+          false,
+          undefined,
+          true,
+        );
       });
 
       it('does not import when the user declines', async () => {
@@ -963,6 +973,9 @@ describe('LocalBackupService', () => {
         false,
         true,
         true,
+        false,
+        undefined,
+        true,
       );
     });
 
@@ -985,6 +998,20 @@ describe('LocalBackupService', () => {
       await (service as any)._importBackup(JSON.stringify({ task: { ids: [] } }));
 
       expect(localDraftServiceSpy.deleteAllDrafts).not.toHaveBeenCalled();
+    });
+
+    it('should explain an unrepairable backup instead of the generic error (#8279)', async () => {
+      backupServiceSpy.importCompleteBackup.and.rejectWith(new BackupRepairFailedError());
+
+      const didImport = await (service as any)._importBackup(
+        JSON.stringify({ task: { ids: [] } }),
+      );
+
+      expect(didImport).toBe(false);
+      expect(snackServiceSpy.open).toHaveBeenCalledWith({
+        type: 'ERROR',
+        msg: T.FILE_IMEX.S_ERR_IMPORT_UNREPAIRABLE,
+      });
     });
   });
 
@@ -1026,6 +1053,9 @@ describe('LocalBackupService', () => {
         }),
         false,
         true,
+        true,
+        false,
+        undefined,
         true,
       );
       expect(snackServiceSpy.open).toHaveBeenCalledWith({
@@ -1141,6 +1171,9 @@ describe('LocalBackupService', () => {
         }),
         false,
         true,
+        true,
+        false,
+        undefined,
         true,
       );
       expect(snackServiceSpy.open).toHaveBeenCalledWith({

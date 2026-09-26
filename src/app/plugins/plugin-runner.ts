@@ -125,6 +125,7 @@ export class PluginRunner {
           });
         }
       } catch (error) {
+        this._pluginBridge.unregisterPluginHooks(manifest.id);
         pluginInstance.error =
           error instanceof Error ? error.message : 'Failed to load plugin';
         PluginLog.err(`Plugin ${manifest.id} error:`, error);
