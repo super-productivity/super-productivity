@@ -1,7 +1,7 @@
 # Sync Architecture Review: Why Every Fix Is Expensive
 
 **Status:** Proposal, revised after two adversarial reviews. The maintainer
-decided four of its questions on 2026-09-26 (§7); the rest is still proposed.
+decided five of its questions on 2026-09-26 (§7); the rest is still proposed.
 **Date:** 2026-09-26
 **Baseline commit:** `6169df9e9` (`origin/master`); rebased onto `41324d290`.
 The four intervening master commits leave the findings unchanged, although
@@ -65,7 +65,7 @@ the evidence does not support throwing away half of the sync code.
      reorder bug found in this review (#10264), after proving both order and
      content convergence (Phase 2). The ordering-only allowlist alone is insufficient.
   3. Delete dead code: ~2.3k lines unconditionally; ~5–6k more after a
-     decision each, three of them now made (Phase 1).
+     decision each, four of them now made (Phase 1).
   4. Consolidate local persistence, an estimated ~3–4k lines (parallel
      track).
 - **Half?** No. Realistic: roughly 10–12k production lines over time — about
@@ -468,7 +468,7 @@ Also considered and rejected:
   changes, and released clients are unaffected.
 - **Decide later:** a protocol-generation change (C, Phase 3) only if both
   hold:
-  1. the product decision in §7 (open question 2) is yes — a sunset in
+  1. the product decision in §7 (open question 1) is yes — a sunset in
      months, and ideally a desktop auto-updater;
   2. a quarter of fix data under the new rules shows the class still
      producing fixes.
@@ -542,9 +542,25 @@ Proposed for the maintainer to adopt or reject; this plan does not edit
   - Existing v2 folders stay v2 (no forced migration) and still get data-loss
     fixes such as #10256.
   - Retiring v2 (~1,500) is a later, separate decision.
-- **Inactive SQLite adapter (~1,100, +1,600 spec) — open (§7).** The
-  DB-adapter factory returns IndexedDB everywhere. Ship behind a flag, keep
-  dormant, or park on a branch.
+- **Inactive SQLite adapter (~1,100, +1,600 spec) — Decided: park.** Delete
+  the SQLite adapter, the backend migration, their specs and the `sql.js`
+  devDependency. Keep the `OpLogDbAdapter` port, which the IndexedDB backend
+  uses. Mark `sqlite-migration.md` as parked, name the last commit with the
+  code, and note it on #7931. Reopen on a confirmed eviction loss that the
+  native backups did not cover.
+  - Only the foundation exists: the DB-adapter factory returns IndexedDB
+    everywhere, and there is no native wrapper, migration trigger, flag or
+    device validation. The dormant code still needed two follow-up PRs (#8849,
+    #9920).
+  - #7931 plans to add `@capacitor-community/sqlite`, which the
+    no-new-dependencies rule excludes, so shipping needs an in-repo native
+    wrapper per platform. Android already has one SQLite store
+    (`KeyValStore.kt`).
+  - The motivating total loss (#7892) is mitigated by the native backups and
+    informed restore (#7924, #7925, #8401). No eviction report was found after
+    June, though missing reports are not proof.
+  - Shipping would move every Android user's op-log to a new backend, which is
+    a high-risk state replacement.
 - **Duplicate WebSocket-download and immediate-upload pipelines (~550):**
   tasks 4–5 of `2026-07-13-sync-simplification-plan.md`, with that plan's
   gates.
@@ -735,35 +751,19 @@ restart.
 4. **File format:** v3 is the long-term format. New setups default to v3 after
    one full WebDAV E2E run with v3 enabled. Existing v2 folders are not
    migrated and keep getting data-loss fixes (Phase 1).
+5. **SQLite op-log backend:** park it. Delete the inactive foundation from
+   master and reopen on a confirmed eviction loss that the native backups did
+   not cover (Phase 1).
 
 ### Still open
 
-1. **SQLite: ship, keep dormant, or park?**
-   - **Facts:**
-     - Only the foundation exists: no native wrapper, no migration trigger, no
-       flag and no device validation (`docs/sync-and-op-log/sqlite-migration.md`).
-     - The dormant code already needed two follow-up PRs (#8849, #9920).
-     - #7931 plans to add `@capacitor-community/sqlite`, which the
-       no-new-dependencies rule excludes. Shipping therefore needs an in-repo
-       native wrapper per platform. Android already has one SQLite store
-       (`KeyValStore.kt`).
-     - The motivating total loss (#7892) is mitigated by the native backups
-       and informed restore (#7924, #7925, #8401). No eviction report was found
-       after June, though missing reports are not proof.
-     - Shipping moves every Android user's op-log to a new backend, which is a
-       high-risk state replacement.
-   - **Recommendation: park.** Delete the SQLite adapter, the backend
-     migration, their specs and the `sql.js` devDependency. Keep the
-     `OpLogDbAdapter` port, which the IndexedDB backend uses. Mark
-     `sqlite-migration.md` as parked and name the last commit with the code.
-     Reopen on a confirmed eviction loss that the backups did not cover.
-2. **Sunset for old sync protocol generations.** This only matters if Phase 3
+1. **Sunset for old sync protocol generations.** This only matters if Phase 3
    is to happen.
    - How long a window, in months?
    - Should the desktop auto-updater come back?
    - Is it acceptable that an old device shows a raw HTTP error, or a newer
      format error, until it is updated?
-3. **Priority against feature work:** Phase 0 and individual Phase 1 deletions
+2. **Priority against feature work:** Phase 0 and individual Phase 1 deletions
    are bounded; estimate Phase 2 after its convergence design is validated.
    The persistence track's few-week estimate is still unverified.
 
