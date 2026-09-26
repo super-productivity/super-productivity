@@ -7,6 +7,7 @@
 // every platform.
 const { execFileSync } = require('child_process');
 const path = require('path');
+const { ESLint } = require('eslint');
 
 const file = process.argv[2];
 if (!file) {
@@ -30,31 +31,49 @@ const run = (jsEntry, args) =>
     cwd: repoRoot,
   });
 
-try {
-  // Run prettier
-  console.log(`🎨 Formatting ${path.basename(file)}...`);
-  run(binOf('prettier', 'bin/prettier.cjs'), ['--write', absolutePath]);
+const main = async () => {
+  try {
+    if (!file.endsWith('.scss')) {
+      const eslint = new ESLint({ cwd: repoRoot });
+      if (await eslint.isPathIgnored(absolutePath)) {
+        const guidance = path
+          .relative(repoRoot, absolutePath)
+          .startsWith(`packages${path.sep}`)
+          ? 'Use the package-specific validation documented in packages/README.md.'
+          : "Use the file's owning linter or generator; checkFile did not validate it.";
+        throw new Error(
+          `${file} is not linted by root ESLint (ignored or unconfigured). ${guidance}`,
+        );
+      }
+    }
 
-  // Run lint based on file type
-  console.log(`🔍 Linting ${path.basename(file)}...`);
+    // Run prettier
+    console.log(`🎨 Formatting ${path.basename(file)}...`);
+    run(binOf('prettier', 'bin/prettier.cjs'), ['--write', absolutePath]);
 
-  if (file.endsWith('.scss')) {
-    // Use stylelint for SCSS files
-    run(binOf('stylelint', 'bin/stylelint.mjs'), [absolutePath]);
-  } else {
-    // Use ng lint for TypeScript/JavaScript files
-    run(binOf('@angular/cli', 'bin/ng.js'), [
-      'lint',
-      '--lint-file-patterns',
-      absolutePath,
-    ]);
+    // Run lint based on file type
+    console.log(`🔍 Linting ${path.basename(file)}...`);
+
+    if (file.endsWith('.scss')) {
+      // Use stylelint for SCSS files
+      run(binOf('stylelint', 'bin/stylelint.mjs'), [absolutePath]);
+    } else {
+      // Use ng lint for TypeScript/JavaScript files
+      run(binOf('@angular/cli', 'bin/ng.js'), [
+        'lint',
+        '--lint-file-patterns',
+        absolutePath,
+      ]);
+    }
+
+    // If we get here, both commands succeeded
+    console.log(`✅ ${path.basename(file)} - All checks passed!`);
+  } catch (error) {
+    // If there's an error, show the full output
+    console.error('\n❌ Errors found:\n');
+    console.error(error.stdout || error.stderr || error.message);
+    process.exit(1);
   }
+};
 
-  // If we get here, both commands succeeded
-  console.log(`✅ ${path.basename(file)} - All checks passed!`);
-} catch (error) {
-  // If there's an error, show the full output
-  console.error('\n❌ Errors found:\n');
-  console.error(error.stdout || error.stderr || error.message);
-  process.exit(1);
-}
+main();
