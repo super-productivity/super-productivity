@@ -9,7 +9,39 @@
 
 import { execSync } from 'child_process';
 
-type Sharp = typeof import('sharp');
+interface SharpImage {
+  metadata(): Promise<{ width?: number; height?: number }>;
+  ensureAlpha(): SharpImage;
+  composite(
+    images: { input: Buffer; blend?: string; left?: number; top?: number }[],
+  ): SharpImage;
+  blur(sigma: number): SharpImage;
+  png(): SharpImage;
+  jpeg(options: {
+    quality: number;
+    mozjpeg: boolean;
+    progressive: boolean;
+    chromaSubsampling: string;
+  }): SharpImage;
+  toBuffer(): Promise<Buffer>;
+}
+
+type Sharp = (
+  input:
+    | string
+    | Buffer
+    | {
+        create: {
+          width: number;
+          height: number;
+          channels: 4;
+          background: { r: number; g: number; b: number; alpha: number };
+        };
+      },
+) => SharpImage;
+
+// A variable module name keeps this optional dependency out of static resolution.
+const sharpModuleName: string = 'sharp';
 
 let cached: Sharp | undefined;
 
@@ -21,11 +53,11 @@ const resolveModule = (mod: unknown): Sharp => {
 export const loadSharp = async (): Promise<Sharp> => {
   if (cached) return cached;
   try {
-    cached = resolveModule(await import('sharp'));
+    cached = resolveModule(await import(sharpModuleName));
   } catch {
     console.log('sharp not found, installing (dev-only screenshot tool)...');
     execSync('npm install --no-save --no-package-lock sharp', { stdio: 'inherit' });
-    cached = resolveModule(await import('sharp'));
+    cached = resolveModule(await import(sharpModuleName));
   }
   return cached;
 };

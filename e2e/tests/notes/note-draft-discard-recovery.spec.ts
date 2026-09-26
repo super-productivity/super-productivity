@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '../../fixtures/test.fixture';
+import { type Page } from '@playwright/test';
+import { test, expect } from '../../fixtures/test.fixture';
 import { fillMarkdownEditor, markdownEditor } from '../../utils/markdown-editor';
 
 /**

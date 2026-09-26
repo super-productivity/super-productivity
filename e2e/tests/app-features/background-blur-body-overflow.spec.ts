@@ -31,7 +31,7 @@ type StoreLike = {
 const setBackground = (
   page: import('@playwright/test').Page,
   blur: number,
-): Promise<boolean> =>
+): Promise<void> =>
   expect
     .poll(() =>
       page.evaluate((blurPx) => {

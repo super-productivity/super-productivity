@@ -363,7 +363,7 @@ export class ProjectPage extends BasePage {
     // Wait for the project to appear in the navigation - use improved approach from project.spec.ts
     await this.page.waitForTimeout(1000); // Allow time for project to appear
 
-    let newProject;
+    let newProject: Locator | undefined;
     let projectFound = false;
 
     // Check if the Projects tree's .nav-children container exists after expansion.
@@ -420,7 +420,7 @@ export class ProjectPage extends BasePage {
     }
 
     // Verify the project is found and click it
-    if (!projectFound) {
+    if (!projectFound || !newProject) {
       throw new Error(`Project "${projectName}" not found in navigation after creation`);
     }
 
