@@ -54,13 +54,7 @@ export class DialogAddNoteComponent extends DialogFullscreenMarkdownComponent {
 
   override close(isSkipSave: boolean = false, isEscapeClose: boolean = false): void {
     if (isSkipSave && !isEscapeClose) {
-      this._confirmDiscardIfNeeded(() => {
-        this._clearSessionStorage();
-        if (IS_MOBILE) {
-          window.history.back();
-        }
-        this._matDialogRef.close();
-      });
+      this._confirmDiscardIfNeeded(() => this.closeAfterConfirmedDiscard());
       return;
     }
     if (IS_MOBILE) {
@@ -79,6 +73,14 @@ export class DialogAddNoteComponent extends DialogFullscreenMarkdownComponent {
         ico: 'comment',
       });
       this._clearSessionStorage();
+    }
+    this._matDialogRef.close();
+  }
+
+  closeAfterConfirmedDiscard(): void {
+    this._clearSessionStorage();
+    if (IS_MOBILE) {
+      window.history.back();
     }
     this._matDialogRef.close();
   }

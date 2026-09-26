@@ -266,19 +266,24 @@ describe('ShortcutService', () => {
       content: string,
     ): {
       close: jasmine.Spy;
+      closeAfterConfirmedDiscard: jasmine.Spy;
     } => {
       const noteComponent = Object.create(
         DialogAddNoteComponent.prototype,
       ) as DialogAddNoteComponent;
       noteComponent.data = { content };
       const close = spyOn(noteComponent, 'close');
+      const closeAfterConfirmedDiscard = spyOn(
+        noteComponent,
+        'closeAfterConfirmedDiscard',
+      );
       mockMatDialog.openDialogs = [
         {
           componentInstance: noteComponent,
           afterClosed: () => of(undefined),
         },
       ];
-      return { close };
+      return { close, closeAfterConfirmedDiscard };
     };
 
     it('should discard an empty note before showing the add-task bar', async () => {
@@ -286,7 +291,7 @@ describe('ShortcutService', () => {
 
       await showAddTaskBarFromDesktopCommand();
 
-      expect(note.close).toHaveBeenCalledWith(true);
+      expect(note.closeAfterConfirmedDiscard).toHaveBeenCalled();
       expect(mockLayoutService.showAddTaskBar).toHaveBeenCalled();
     });
 
@@ -305,7 +310,8 @@ describe('ShortcutService', () => {
           cancelTxt: 'G.DISCARD',
         },
       });
-      expect(note.close).toHaveBeenCalledWith(false);
+      expect(note.close).toHaveBeenCalledWith();
+      expect(note.closeAfterConfirmedDiscard).not.toHaveBeenCalled();
       expect(mockLayoutService.showAddTaskBar).toHaveBeenCalled();
     });
 
@@ -317,7 +323,7 @@ describe('ShortcutService', () => {
 
       await showAddTaskBarFromDesktopCommand();
 
-      expect(note.close).toHaveBeenCalledWith(true);
+      expect(note.closeAfterConfirmedDiscard).toHaveBeenCalled();
       expect(mockLayoutService.showAddTaskBar).toHaveBeenCalled();
     });
 

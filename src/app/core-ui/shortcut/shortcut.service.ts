@@ -141,9 +141,13 @@ export class ShortcutService {
         return;
       }
 
-      addNoteDialog.close(!shouldSave);
+      if (shouldSave) {
+        addNoteDialog.close();
+      } else {
+        addNoteDialog.closeAfterConfirmedDiscard();
+      }
     } else {
-      addNoteDialog.close(true);
+      addNoteDialog.closeAfterConfirmedDiscard();
     }
 
     await firstValueFrom(addNoteDialogRef.afterClosed());
