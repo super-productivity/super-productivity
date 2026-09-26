@@ -14,7 +14,10 @@ import { buildEntityRegistry, ENTITY_REGISTRY } from '../../core/entity-registry
 import { PersistentAction } from '../../core/persistent-action.interface';
 import { EntityConflict, Operation } from '../../core/operation.types';
 import { convertOpToAction } from '../../apply/operation-converter.util';
-import { roundTimeSpentForDay } from '../../../features/tasks/store/task.actions';
+import {
+  removeTimeSpent,
+  roundTimeSpentForDay,
+} from '../../../features/tasks/store/task.actions';
 import { taskReducer } from '../../../features/tasks/store/task.reducer';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { syncTimeSpent } from '../../../features/time-tracking/store/time-tracking.actions';
@@ -755,11 +758,15 @@ describe('round-time conflict convergence integration (#8944)', () => {
   for (const scenario of [
     'task',
     'parent',
+    'child-absolute-then-delta',
+    'child-remove-then-delta',
+    'child-round-then-delta',
     'unrelated-create',
     'third-client',
   ] as const) {
     it(`preserves incoming timer deltas beside a losing rename (${scenario})`, async () => {
-      if (scenario === 'parent') {
+      const hasParent = scenario === 'parent' || scenario.startsWith('child-');
+      if (hasParent) {
         initialState = updateTaskEntity(initialState, TASK_X, { parentId: TASK_Y });
         initialState = updateTaskEntity(initialState, TASK_Y, {
           subTaskIds: [TASK_X],
@@ -773,7 +780,7 @@ describe('round-time conflict convergence integration (#8944)', () => {
       const resolver = TestBed.inject(ConflictResolutionService);
       const clientA = new TestClient(CLIENT_A);
       const clientB = new TestClient(CLIENT_B);
-      const renameId = scenario === 'parent' ? TASK_Y : TASK_X;
+      const renameId = hasParent ? TASK_Y : TASK_X;
       // The rename's author may not have seen the timer delta: the snapshot
       // that folds it in must still dominate it.
       const deltaClient =
@@ -787,6 +794,40 @@ describe('round-time conflict convergence integration (#8944)', () => {
         'local',
       );
 
+      let predecessorAction: PersistentAction | undefined;
+      if (scenario === 'child-absolute-then-delta') {
+        predecessorAction = TaskSharedActions.updateTask({
+          task: {
+            id: TASK_X,
+            changes: {
+              timeSpent: 20 * MINUTE,
+              timeSpentOnDay: { [DAY]: 20 * MINUTE },
+            },
+          },
+        }) as PersistentAction;
+      } else if (scenario === 'child-remove-then-delta') {
+        predecessorAction = removeTimeSpent({
+          id: TASK_X,
+          date: DAY,
+          duration: 2 * MINUTE,
+        }) as PersistentAction;
+      } else if (scenario === 'child-round-then-delta') {
+        predecessorAction = roundTimeSpentForDay({
+          day: DAY,
+          taskIds: [TASK_X],
+          roundTo: 'QUARTER',
+          isRoundUp: true,
+        }) as PersistentAction;
+      }
+      let remotePredecessor = predecessorAction
+        ? captureOperation(predecessorAction, clientB, capture, 900)
+        : undefined;
+      if (scenario === 'child-round-then-delta' && remotePredecessor) {
+        remotePredecessor = {
+          ...remotePredecessor,
+          payload: { ...(remotePredecessor.payload as object), entityChanges: [] },
+        };
+      }
       const remoteDelta = captureOperation(
         syncTimeSpent({
           taskId: TASK_X,
@@ -805,9 +846,14 @@ describe('round-time conflict convergence integration (#8944)', () => {
         capture,
         2_000,
       );
-      let remoteState = reducer(initialState, convertOpToAction(remoteDelta));
+      let remoteState = remotePredecessor
+        ? reducer(initialState, convertOpToAction(remotePredecessor))
+        : initialState;
+      remoteState = reducer(remoteState, convertOpToAction(remoteDelta));
       remoteState = reducer(remoteState, convertOpToAction(remoteRename));
-      const nonConflicting = [remoteDelta];
+      const nonConflicting = remotePredecessor
+        ? [remotePredecessor, remoteDelta]
+        : [remoteDelta];
       if (scenario === 'unrelated-create') {
         // This delta needs its CREATE; only deltas folded into snapshots may
         // move into the earlier atomic resolution batch.
@@ -856,6 +902,22 @@ describe('round-time conflict convergence integration (#8944)', () => {
       const detection = await resolver.checkOpForConflicts(remoteRename, context);
       expect(detection.conflicts.length).toBe(1);
       await resolver.autoResolveConflictsLWW(detection.conflicts, nonConflicting);
+      const expectedTime =
+        scenario === 'child-absolute-then-delta'
+          ? 23
+          : scenario === 'child-remove-then-delta'
+            ? 11
+            : scenario === 'child-round-then-delta'
+              ? 18
+              : 13;
+      if (remotePredecessor) {
+        expect(getTask(localState, TASK_X).timeSpent)
+          .withContext('live child must retain the preceding edit followed by the delta')
+          .toBe(expectedTime * MINUTE);
+        expect(getTask(localState, TASK_Y).timeSpent)
+          .withContext('live parent must retain its child contribution')
+          .toBe(expectedTime * MINUTE);
+      }
       const snapshots = (await opLogStore.getUnsynced())
         .map(({ op }) => op)
         .filter((op) => op.entityId === renameId);
@@ -870,8 +932,8 @@ describe('round-time conflict convergence integration (#8944)', () => {
       for (const entry of await opLogStore.getOpsAfterSeq(0)) {
         restartedState = reducer(restartedState, convertOpToAction(entry.op));
       }
-      expect(getTask(localState, TASK_X).timeSpent).toBe(13 * MINUTE);
-      expect(getTask(remoteState, TASK_X).timeSpent).toBe(13 * MINUTE);
+      expect(getTask(localState, TASK_X).timeSpent).toBe(expectedTime * MINUTE);
+      expect(getTask(remoteState, TASK_X).timeSpent).toBe(expectedTime * MINUTE);
       const ids =
         scenario === 'unrelated-create' ? [TASK_X, TASK_Y, 'new-task'] : [TASK_X, TASK_Y];
       for (const taskId of ids) {

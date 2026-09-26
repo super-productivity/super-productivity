@@ -3,6 +3,12 @@ import { mergeVectorClocks } from '../../core/util/vector-clock';
 import { ActionType, isLwwUpdatePayload, Operation } from '../core/operation.types';
 import { Task, TimeSpentOnDay } from '../../features/tasks/task.model';
 import { calcTotalTimeSpent } from '../../features/tasks/util/calc-total-time-spent';
+import { initialTaskState, taskReducer } from '../../features/tasks/store/task.reducer';
+import { taskAdapter } from '../../features/tasks/store/task.adapter';
+import { updateTimeSpentForTask } from '../../features/tasks/store/task.reducer.util';
+import { mergeChangedFields } from './conflict-disjoint-merge.util';
+import { convertOpToAction } from '../apply/operation-converter.util';
+import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 import type { MixedSourceOperationBatch } from '../persistence/operation-log-store.service';
 
 /** True for a `syncTimeSpent` op: an additive delta, not a field write. */
@@ -64,9 +70,10 @@ export const foldSyncTimeSpentDeltas = (
 };
 
 /**
- * A local winner can share an entity with an incoming nonconflicting timer
- * delta. Its snapshot must include that delta, and durable replay must put the
- * delta BEFORE the snapshot; the reverse order would count it twice on restart.
+ * A local winner can share an entity with incoming nonconflicting time edits
+ * (including edits to its children). Project those edits in their received
+ * order and persist the incoming prefix BEFORE the snapshot. Hoisting only a
+ * delta can put it ahead of an absolute edit and silently erase tracked time.
  * Keep both decisions together. Live apply still uses the written remote rows
  * and only the local snapshots needed for compensation.
  */
@@ -76,7 +83,7 @@ export const buildTimeAwareResolutionBatches = async ({
   newLocalWinOps,
   remoteWinsOps,
   localMultiReconciliationOps,
-  nonConflictingTimeOps,
+  nonConflictingOps,
   getTask,
 }: {
   unappliedRemoteLosers: Operation[];
@@ -84,9 +91,9 @@ export const buildTimeAwareResolutionBatches = async ({
   newLocalWinOps: Operation[];
   remoteWinsOps: Operation[];
   localMultiReconciliationOps: Operation[];
-  nonConflictingTimeOps: Operation[];
+  nonConflictingOps: Operation[];
   getTask: (taskId: string) => Promise<unknown>;
-}): Promise<{ batches: MixedSourceOperationBatch[]; foldedTimeOps: Operation[] }> => {
+}): Promise<{ batches: MixedSourceOperationBatch[]; precedingOps: Operation[] }> => {
   const foldedIds = new Set<string>();
   const foldSnapshots = (ops: Operation[], timeOps: Operation[]): Promise<Operation[]> =>
     Promise.all(
@@ -100,26 +107,50 @@ export const buildTimeAwareResolutionBatches = async ({
           (fields as Partial<Task>).subTaskIds ??
           ((await getTask(op.entityId)) as Partial<Task> | undefined)?.subTaskIds ??
           [];
-        const deltas = timeOps.filter((delta) => {
-          const taskId = extractActionPayload(delta.payload)?.['taskId'];
-          return (
-            taskId === op.entityId ||
-            (typeof taskId === 'string' && subTaskIds.includes(taskId))
-          );
-        });
-        const actionPayload = foldSyncTimeSpentDeltas(
-          op.entityId,
-          fields,
-          deltas,
-          subTaskIds,
+        const task = { ...((await getTask(op.entityId)) as Task), ...fields } as Task;
+        const children = await Promise.all(subTaskIds.map((id) => getTask(id)));
+        let projected = taskAdapter.setAll(
+          [task, ...children.filter((child): child is Task => !!child)],
+          initialTaskState,
         );
-        if (actionPayload === fields) return op;
-        deltas.forEach((delta) => foldedIds.add(delta.id));
-        // The snapshot now carries each delta, so it must dominate them: the
-        // server compares only against an entity's latest op, so a merely
-        // concurrent snapshot can land and then lose to the delta's author.
-        const vectorClock = deltas.reduce(
-          (clock, delta) => mergeVectorClocks(clock, delta.vectorClock),
+        const folded: Operation[] = [];
+        for (const incoming of timeOps) {
+          if (incoming.entityType !== 'TASK') continue;
+          const ids = getOpEntityIds(incoming).filter((id) => projected.entities[id]);
+          if (ids.length === 0) continue;
+          const before = projected;
+          // Replay semantic time actions with their real reducer, including
+          // removal clamping, deferred rounding and child-to-parent totals.
+          if (
+            isSyncTimeSpentOp(incoming) ||
+            incoming.actionType === ActionType.TASK_REMOVE_TIME_SPENT ||
+            incoming.actionType === ActionType.TASK_ROUND_TIME_SPENT
+          ) {
+            projected = taskReducer(projected, convertOpToAction(incoming));
+          } else {
+            for (const id of ids) {
+              const changes = mergeChangedFields([incoming], 'task', id);
+              const timeSpentOnDay = changes['timeSpentOnDay'] as
+                | TimeSpentOnDay
+                | undefined;
+              if (timeSpentOnDay) {
+                projected = updateTimeSpentForTask(id, timeSpentOnDay, projected);
+              }
+            }
+          }
+          if (projected !== before) folded.push(incoming);
+        }
+        if (folded.length === 0) return op;
+        const projectedTask = projected.entities[op.entityId]!;
+        const actionPayload = {
+          ...fields,
+          timeSpentOnDay: projectedTask.timeSpentOnDay,
+          ...('timeSpent' in fields ? { timeSpent: projectedTask.timeSpent } : {}),
+        };
+        folded.forEach((incoming) => foldedIds.add(incoming.id));
+        // The snapshot carries these edits, so its clock must dominate them.
+        const vectorClock = folded.reduce(
+          (clock, incoming) => mergeVectorClocks(clock, incoming.vectorClock),
           op.vectorClock,
         );
         return { ...op, vectorClock, payload: { ...op.payload, actionPayload } };
@@ -130,21 +161,21 @@ export const buildTimeAwareResolutionBatches = async ({
   // Reconciliations already fold their winning deltas.
   const winningTimeOps = remoteWinsOps.filter(isSyncTimeSpentOp);
   const [localWins, reconciliations] = await Promise.all([
-    foldSnapshots(newLocalWinOps, [...nonConflictingTimeOps, ...winningTimeOps]),
-    foldSnapshots(localMultiReconciliationOps, nonConflictingTimeOps),
+    foldSnapshots(newLocalWinOps, [...nonConflictingOps, ...winningTimeOps]),
+    foldSnapshots(localMultiReconciliationOps, nonConflictingOps),
   ]);
-  // Leave unrelated deltas in their original batch: a preceding CREATE may be
-  // required before their task exists, so blindly hoisting every delta loses it.
+  // Keep the incoming prefix intact: hoisting a delta alone can move it ahead
+  // of an absolute time edit (losing the delta) or the task's CREATE.
   const isFolded = (op: Operation): boolean => foldedIds.has(op.id);
-  const foldedTimeOps = nonConflictingTimeOps.filter(isFolded);
+  const lastFoldedIndex = nonConflictingOps.reduce(
+    (last, op, index) => (isFolded(op) ? index : last),
+    -1,
+  );
+  const precedingOps = nonConflictingOps.slice(0, lastFoldedIndex + 1);
   const batches: MixedSourceOperationBatch[] = [
     { ops: unappliedRemoteLosers, source: 'remote' },
     {
-      ops: [
-        ...compensatedRemoteOps,
-        ...foldedTimeOps,
-        ...winningTimeOps.filter(isFolded),
-      ],
+      ops: [...compensatedRemoteOps, ...precedingOps, ...winningTimeOps.filter(isFolded)],
       source: 'remote',
       options: { pendingApply: true },
     },
@@ -156,5 +187,5 @@ export const buildTimeAwareResolutionBatches = async ({
     },
     { ops: reconciliations, source: 'local' },
   ];
-  return { foldedTimeOps, batches: batches.filter((batch) => batch.ops.length > 0) };
+  return { precedingOps, batches: batches.filter((batch) => batch.ops.length > 0) };
 };

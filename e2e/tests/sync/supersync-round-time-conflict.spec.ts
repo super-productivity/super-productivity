@@ -229,7 +229,10 @@ test.describe('@supersync Round Time Spent Conflict Resolution', () => {
 
       // Client A must not see B's delta before its rounding is captured.
       await clientA.page.evaluate(
-        () => ((globalThis as any).__SP_E2E_BLOCK_WS_DOWNLOAD = true),
+        () =>
+          ((
+            globalThis as typeof globalThis & { __SP_E2E_BLOCK_WS_DOWNLOAD?: boolean }
+          ).__SP_E2E_BLOCK_WS_DOWNLOAD = true),
       );
       await clientA.page.goto('/#/tag/TODAY/daily-summary');
       await clientA.page
@@ -248,7 +251,10 @@ test.describe('@supersync Round Time Spent Conflict Resolution', () => {
       await clientB.sync.syncAndWait();
 
       await clientA.page.evaluate(
-        () => ((globalThis as any).__SP_E2E_BLOCK_WS_DOWNLOAD = false),
+        () =>
+          ((
+            globalThis as typeof globalThis & { __SP_E2E_BLOCK_WS_DOWNLOAD?: boolean }
+          ).__SP_E2E_BLOCK_WS_DOWNLOAD = false),
       );
       await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();
@@ -276,4 +282,121 @@ test.describe('@supersync Round Time Spent Conflict Resolution', () => {
       if (clientB) await closeClient(clientB);
     }
   });
+
+  for (const edit of ['absolute', 'remove', 'round'] as const) {
+    test(`parent rename conflict preserves a child ${edit} followed by a timer delta @supersync`, async ({
+      browser,
+      baseURL,
+      testRunId,
+    }) => {
+      test.setTimeout(240000);
+      const parentName = `TimeOrderParent-${Date.now()}`;
+      const childName = `TimeOrderChild-${Date.now()}`;
+      const day = localDateStr();
+      const expectedTime =
+        (edit === 'absolute' ? 23 : edit === 'remove' ? 11 : 18) * 60_000;
+      let clientA: SimulatedE2EClient | null = null;
+      let clientB: SimulatedE2EClient | null = null;
+      try {
+        const config = getSuperSyncConfig(await createTestUser(testRunId));
+        clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+        await clientA.sync.setupSuperSync(config);
+        await clientA.workView.addTask(parentName);
+        await clientA.workView.addSubTask(
+          clientA.page.locator('task', { hasText: parentName }).first(),
+          childName,
+        );
+        await recordTaskTimeDelta(clientA, childName, day, 10 * 60_000);
+        await clientA.sync.syncAndWait();
+        clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+        await clientB.sync.setupSuperSync(config);
+        await clientB.sync.syncAndWait();
+        await expectExactTaskTime(clientB, childName, 10 * 60_000);
+        await clientA.page.evaluate(() => {
+          (
+            globalThis as typeof globalThis & { __SP_E2E_BLOCK_WS_DOWNLOAD?: boolean }
+          ).__SP_E2E_BLOCK_WS_DOWNLOAD = true;
+        });
+
+        // B edits the child's time, then tracks more. These causal operations
+        // must stay in this order even when A wins a conflict on their parent.
+        await clientB.page.evaluate(
+          ({ name, date, kind }) => {
+            type TaskLike = { id: string; title: string };
+            type StoreLike = {
+              subscribe: (
+                next: (state: { tasks: { entities: Record<string, TaskLike> } }) => void,
+              ) => { unsubscribe: () => void };
+              dispatch: (action: unknown) => void;
+            };
+            const store = (
+              window as unknown as { __e2eTestHelpers: { store: StoreLike } }
+            ).__e2eTestHelpers.store;
+            let task: TaskLike | undefined;
+            store
+              .subscribe((state) => {
+                task = Object.values(state.tasks.entities).find((t) => t?.title === name);
+              })
+              .unsubscribe();
+            if (!task) throw new Error('Child task missing');
+            const payload =
+              kind === 'absolute'
+                ? {
+                    type: '[Task Shared] updateTask',
+                    task: {
+                      id: task.id,
+                      changes: {
+                        timeSpent: 20 * 60_000,
+                        timeSpentOnDay: { [date]: 20 * 60_000 },
+                      },
+                    },
+                  }
+                : kind === 'remove'
+                  ? {
+                      type: '[Task] Remove time spent',
+                      id: task.id,
+                      date,
+                      duration: 2 * 60_000,
+                    }
+                  : {
+                      type: '[Task] RoundTimeSpentForDay',
+                      day: date,
+                      taskIds: [task.id],
+                      roundTo: 'QUARTER',
+                      isRoundUp: true,
+                    };
+            store.dispatch({
+              ...payload,
+              meta: {
+                isPersistent: true,
+                entityType: 'TASK',
+                entityId: task.id,
+                opType: 'UPD',
+              },
+            });
+          },
+          { name: childName, date: day, kind: edit },
+        );
+        await recordTaskTimeDelta(clientB, childName, day, 3 * 60_000);
+        await renameTask(clientB, parentName, `${parentName}-B`);
+        await renameTask(clientA, parentName, `${parentName}-A`);
+        await clientB.sync.syncAndWait();
+        await clientA.sync.syncAndWait();
+        await clientB.sync.syncAndWait();
+        await clientA.sync.syncAndWait();
+
+        for (const client of [clientA, clientB]) {
+          await expectExactTaskTime(client, childName, expectedTime);
+          await expectExactTaskTime(client, parentName, expectedTime);
+          await client.page.reload({ waitUntil: 'domcontentloaded' });
+          await waitForAppReady(client.page);
+          await expectExactTaskTime(client, childName, expectedTime);
+          await expectExactTaskTime(client, parentName, expectedTime);
+        }
+      } finally {
+        if (clientA) await closeClient(clientA);
+        if (clientB) await closeClient(clientB);
+      }
+    });
+  }
 });

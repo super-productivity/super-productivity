@@ -1005,7 +1005,6 @@ export class ConflictResolutionService {
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 1: Resolve each conflict using LWW
     // ─────────────────────────────────────────────────────────────────────────
-    const nonConflictingTimeOps = nonConflictingOps.filter(isSyncTimeSpentOp);
     const {
       lwwResolutions: resolutions,
       mergedResolutions,
@@ -1492,17 +1491,17 @@ export class ConflictResolutionService {
       remoteOpsToReject = remoteOpsToReject.filter(
         (opId) => !compensatedRemoteOpIds.has(opId),
       );
-      const { batches, foldedTimeOps } = await buildTimeAwareResolutionBatches({
+      const { batches, precedingOps } = await buildTimeAwareResolutionBatches({
         unappliedRemoteLosers,
         compensatedRemoteOps: [...compensatedRemoteOps.values()],
         newLocalWinOps,
         remoteWinsOps,
         localMultiReconciliationOps,
-        nonConflictingTimeOps,
+        nonConflictingOps,
         getTask: (id) => this.getCurrentEntityState('TASK', id),
       });
       const result = await this.opLogStore.appendMixedSourceBatchSkipDuplicates(batches);
-      nonConflictingOps = nonConflictingOps.filter((op) => !foldedTimeOps.includes(op));
+      nonConflictingOps = nonConflictingOps.filter((op) => !precedingOps.includes(op));
       writtenLocalWinOps = result.written
         .filter((entry) => entry.source === 'local')
         .map((entry) => entry.op);
@@ -1519,7 +1518,7 @@ export class ConflictResolutionService {
       }
 
       const replayableRemoteEntries = await this._resolveReplayableOperations(
-        [...compensatedRemoteOps.values(), ...foldedTimeOps, ...remoteWinsOps],
+        [...compensatedRemoteOps.values(), ...precedingOps, ...remoteWinsOps],
         'remote',
         result.written,
       );

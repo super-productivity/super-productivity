@@ -1013,6 +1013,13 @@ When local state is newer, we can't just reject the remote ops - that would caus
 
 A warning-level log is emitted: `OpLog.warn('LWW local wins - creating update op for ${entityType}:${entityId}')`
 
+When a replacement snapshot includes incoming task-time changes (including a
+subtask's contribution to its parent), project them in received order using the
+time reducers. Persist the incoming prefix before the replacement: moving only
+a timer delta ahead of an earlier absolute edit, removal, or rounding can lose
+tracked time or make parent totals differ between live state and restart replay.
+The replacement's clock must include every time operation it incorporates.
+
 ### Rejected Operations
 
 When operations are rejected (either local or remote):

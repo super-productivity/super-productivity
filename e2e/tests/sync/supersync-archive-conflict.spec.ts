@@ -505,7 +505,10 @@ test.describe('@supersync Archive Conflict Resolution', () => {
 
         // Client A must not see the edit before its own archive and restore.
         await clientA.page.evaluate(
-          () => ((globalThis as any).__SP_E2E_BLOCK_WS_DOWNLOAD = true),
+          () =>
+            ((
+              globalThis as typeof globalThis & { __SP_E2E_BLOCK_WS_DOWNLOAD?: boolean }
+            ).__SP_E2E_BLOCK_WS_DOWNLOAD = true),
         );
         await renameTask(clientB, names[editedTask], `${names[editedTask]}-edited`);
         await clientB.sync.syncAndWait();
@@ -524,7 +527,10 @@ test.describe('@supersync Archive Conflict Resolution', () => {
         await waitForTask(clientA.page, names.T2);
 
         await clientA.page.evaluate(
-          () => ((globalThis as any).__SP_E2E_BLOCK_WS_DOWNLOAD = false),
+          () =>
+            ((
+              globalThis as typeof globalThis & { __SP_E2E_BLOCK_WS_DOWNLOAD?: boolean }
+            ).__SP_E2E_BLOCK_WS_DOWNLOAD = false),
         );
         await clientA.sync.syncAndWait();
         await clientA.sync.syncAndWait();
