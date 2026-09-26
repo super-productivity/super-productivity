@@ -177,6 +177,9 @@ test('settings update reads current task tray setting from tasks config', async 
       isMinimizeToTray: true,
       isTrayShowCurrentTask: true,
       isTrayShowCurrentCountdown: false,
+      // Synced from another device: must not reach the REST API listener, whose
+      // switch is device-local now.
+      isLocalRestApiEnabled: true,
     },
   };
 
@@ -186,7 +189,7 @@ test('settings update reads current task tray setting from tasks config', async 
   assert.equal(sharedState.isTrayShowCurrentTask, false);
   assert.equal(sharedState.isTrayShowCurrentCountdown, false);
   assert.equal(refreshIndicatorCalls, 1);
-  assert.equal(localRestApiConfig, cfg);
+  assert.equal(localRestApiConfig, undefined);
 });
 
 test('settings update falls back to legacy misc tray task setting', async () => {

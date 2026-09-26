@@ -26,7 +26,8 @@ import { RepeatSectionTypeComponent } from '../features/config/repeat-section-ty
 import { FormlySliderComponent } from './formly-slider/formly-slider.component';
 import { FormlyTagSelectionComponent } from './formly-tag-selection/formly-tag-selection.component';
 import { FormlyBtnComponent } from './formly-button/formly-btn.component';
-import { FormlyLocalRestApiTokenComponent } from './formly-local-rest-api-token/formly-local-rest-api-token.component';
+import { FormlyLocalRestApiSettingsComponent } from './formly-local-rest-api-settings/formly-local-rest-api-settings.component';
+import { FormlyAssistantAccessSettingsComponent } from './formly-assistant-access-settings/formly-assistant-access-settings.component';
 import { FormlyImageInputComponent } from './formly-image-input/formly-image-input.component';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { ColorInputComponent } from '../features/config/color-input/color-input.component';
@@ -77,8 +78,13 @@ import { FormlyDatePickerComponent } from './formly-date-picker/formly-date-pick
         { name: 'collapsible', component: FormlyCollapsibleComponent, wrappers: [] },
         { name: 'btn', component: FormlyBtnComponent, wrappers: [] },
         {
-          name: 'local-rest-api-token',
-          component: FormlyLocalRestApiTokenComponent,
+          name: 'local-rest-api-settings',
+          component: FormlyLocalRestApiSettingsComponent,
+          wrappers: [],
+        },
+        {
+          name: 'assistant-access-settings',
+          component: FormlyAssistantAccessSettingsComponent,
           wrappers: [],
         },
         {

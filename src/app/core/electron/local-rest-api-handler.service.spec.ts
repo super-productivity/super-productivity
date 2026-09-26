@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { LocalRestApiHandlerService } from './local-rest-api-handler.service';
 import { TaskService } from '../../features/tasks/task.service';
 import { TaskArchiveService } from '../../features/archive/task-archive.service';
@@ -14,6 +14,7 @@ import {
 } from './local-rest-api-feature-bridge';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
+import { DataInitStateService } from '../data-init/data-init-state.service';
 import { Task, TaskWithSubTasks, TaskArchive } from '../../features/tasks/task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import {
@@ -34,6 +35,7 @@ import {
 } from '../../features/focus-mode/store/focus-mode.reducer';
 
 describe('LocalRestApiHandlerService', () => {
+  let isDataLoaded$: BehaviorSubject<boolean>;
   let service: LocalRestApiHandlerService;
   let taskServiceMock: jasmine.SpyObj<TaskService>;
   let taskArchiveServiceMock: jasmine.SpyObj<TaskArchiveService>;
@@ -196,6 +198,7 @@ describe('LocalRestApiHandlerService', () => {
       ['add', 'update', 'remove', 'archive'],
       {
         list$: of([]),
+        archived$: of([]),
       },
     );
     Object.defineProperty(projectServiceMock, 'list', {
@@ -218,11 +221,16 @@ describe('LocalRestApiHandlerService', () => {
     dateServiceMock.todayStr.and.returnValue('2026-05-12');
     dateServiceMock.getStartOfNextDayDiffMs.and.returnValue(0);
 
+    isDataLoaded$ = new BehaviorSubject<boolean>(true);
     featureBridgeMock = jasmine.createSpyObj<LocalRestApiFeatureBridge>(
       'LocalRestApiFeatureBridge',
-      ['issueLink', 'addLiteralSubTask'],
+      ['issueLink', 'addLiteralSubTask', 'captureAssistantTask'],
     );
     featureBridgeMock.issueLink.and.returnValue(Promise.resolve(''));
+    featureBridgeMock.captureAssistantTask.and.resolveTo({
+      status: 'created',
+      id: 'captured',
+    });
 
     TestBed.configureTestingModule({
       providers: [
@@ -233,6 +241,10 @@ describe('LocalRestApiHandlerService', () => {
         { provide: TagService, useValue: tagServiceMock },
         { provide: DateService, useValue: dateServiceMock },
         { provide: LOCAL_REST_API_FEATURE_BRIDGE, useValue: featureBridgeMock },
+        {
+          provide: DataInitStateService,
+          useValue: { isAllDataLoadedInitially$: isDataLoaded$ },
+        },
         provideMockStore({ initialState: { focusMode: initialFocusModeState } }),
       ],
     });
@@ -258,6 +270,66 @@ describe('LocalRestApiHandlerService', () => {
       const firstHandler = requestHandler;
       service.init();
       expect(requestHandler).toBe(firstHandler);
+    });
+  });
+
+  describe('readiness', () => {
+    beforeEach(() => {
+      service.init();
+    });
+
+    it('answers APP_NOT_READY until the app data has loaded', async () => {
+      isDataLoaded$.next(false);
+      const notReady = await sendRequestAndWait(createRequest('GET', '/tasks'));
+      expect(notReady.status).toBe(503);
+      expect(notReady.body).toEqual(
+        jasmine.objectContaining({
+          ok: false,
+          error: jasmine.objectContaining({ code: 'APP_NOT_READY' }),
+        }),
+      );
+      expect(taskServiceMock.add).not.toHaveBeenCalled();
+
+      isDataLoaded$.next(true);
+      const ready = await sendRequestAndWait(createRequest('GET', '/tasks'));
+      expect(ready.status).toBe(200);
+    });
+  });
+
+  describe('assistant capture route', () => {
+    beforeEach(() => {
+      service.init();
+    });
+
+    it('does not exist for plain REST requests', async () => {
+      const res = await sendRequestAndWait(
+        createRequest('POST', '/assistant/capture', { body: { title: 'x' } }),
+      );
+      expect(res.status).toBe(404);
+      expect(featureBridgeMock.captureAssistantTask).not.toHaveBeenCalled();
+    });
+
+    it('captures for requests the main process marked as assistant calls', async () => {
+      const res = await sendRequestAndWait({
+        ...createRequest('POST', '/assistant/capture', { body: { title: ' x ' } }),
+        source: 'mcp',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ok: true, data: { status: 'created', id: 'captured' } });
+      expect(featureBridgeMock.captureAssistantTask).toHaveBeenCalledOnceWith({
+        title: 'x',
+      });
+    });
+
+    it('rejects an invalid capture', async () => {
+      const res = await sendRequestAndWait({
+        ...createRequest('POST', '/assistant/capture', {
+          body: { title: 'x', tagIds: [] },
+        }),
+        source: 'mcp',
+      });
+      expect(res.status).toBe(400);
+      expect(featureBridgeMock.captureAssistantTask).not.toHaveBeenCalled();
     });
   });
 
@@ -648,6 +720,21 @@ describe('LocalRestApiHandlerService', () => {
         expect(response.body.ok).toBe(true);
         expect(response.status).toBe(200);
         expectTaskIds(response, ['task-1', 'task-2']);
+      });
+
+      it('should leave out tasks of archived projects by default', async () => {
+        const tasks = [
+          createMockTask('task-1', { projectId: 'live' }),
+          createMockTask('task-2', { projectId: 'shelved' }),
+        ];
+        Object.defineProperty(taskServiceMock, 'allTasks$', { get: () => of(tasks) });
+        Object.defineProperty(projectServiceMock, 'archived$', {
+          get: () => of([{ id: 'shelved', isArchived: true } as Project]),
+        });
+
+        const response = await sendRequestAndWait(createRequest('GET', '/tasks'));
+
+        expectTaskIds(response, ['task-1']);
       });
 
       it('should filter tasks by query', async () => {

@@ -1,0 +1,69 @@
+<div class="local-rest-api-settings">
+  <mat-checkbox
+    [checked]="isEnabled()"
+    [disabled]="isToggling() || state() === null"
+    (change)="toggle($event.checked)"
+    >{{ T.GCF.MISC.IS_LOCAL_REST_API_ENABLED | translate }}</mat-checkbox
+  >
+  <p class="hint">{{ T.GCF.MISC.IS_LOCAL_REST_API_ENABLED_HINT | translate }}</p>
+
+  @if (isEnabled()) {
+    <!-- Status changes after the first render, so it is a live region. -->
+    <p
+      class="status"
+      [class.is-error]="!!state()?.error"
+      role="status"
+    >
+      @switch (state()?.error) {
+        @case ('PORT_IN_USE') {
+          {{ T.GCF.MISC.LOCAL_REST_API_STATUS_PORT_IN_USE | translate: { port } }}
+        }
+        @case ('PERMISSION_DENIED') {
+          {{ T.GCF.MISC.LOCAL_REST_API_STATUS_PERMISSION_DENIED | translate }}
+        }
+        @case ('UNKNOWN') {
+          {{ T.GCF.MISC.LOCAL_REST_API_STATUS_ERROR | translate }}
+        }
+        @case ('TOKEN_STORAGE') {
+          {{ T.GCF.MISC.LOCAL_REST_API_TOKEN_ERROR | translate }}
+        }
+        @default {
+          @if (state()?.isListening) {
+            {{ T.GCF.MISC.LOCAL_REST_API_STATUS_LISTENING | translate: { url } }}
+          }
+        }
+      }
+    </p>
+
+    <h3 class="sub-section-heading">{{ T.GCF.MISC.LOCAL_REST_API_TOKEN | translate }}</h3>
+    @if (token()) {
+      <input
+        class="token-value"
+        type="text"
+        readonly
+        [value]="token()"
+        (focus)="selectText($event)"
+        [attr.aria-label]="T.GCF.MISC.LOCAL_REST_API_TOKEN | translate"
+      />
+    }
+    @if (hasTokenError() && state()?.error !== 'TOKEN_STORAGE') {
+      <!-- The message is inserted after the panel has rendered, so without a live
+           region a screen reader never announces that the token is unavailable. -->
+      <p
+        class="token-error"
+        role="alert"
+      >
+        {{ T.GCF.MISC.LOCAL_REST_API_TOKEN_ERROR | translate }}
+      </p>
+    }
+    <button
+      mat-stroked-button
+      color="primary"
+      type="button"
+      [disabled]="isRegenerating()"
+      (click)="regenerate()"
+    >
+      {{ T.GCF.MISC.LOCAL_REST_API_TOKEN_REGENERATE | translate }}
+    </button>
+  }
+</div>

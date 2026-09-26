@@ -14,7 +14,13 @@ import {
 import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
+  LocalRestApiState,
 } from './shared-with-frontend/local-rest-api.model';
+import {
+  AssistantAccessCredentialResult,
+  AssistantAccessScope,
+  AssistantAccessState,
+} from './shared-with-frontend/assistant-access.model';
 import {
   createJiraPreloadApiConsumer,
   toPayloadOnlyIpcListener,
@@ -298,6 +304,20 @@ const ea: ElectronAPI = {
   getLocalRestApiToken: () => _invoke(IPC.LOCAL_REST_API_GET_TOKEN) as Promise<string>,
   regenerateLocalRestApiToken: () =>
     _invoke(IPC.LOCAL_REST_API_REGENERATE_TOKEN) as Promise<string>,
+  getLocalRestApiState: () =>
+    _invoke(IPC.LOCAL_REST_API_GET_STATE) as Promise<LocalRestApiState>,
+  setLocalRestApiEnabled: (isEnabled: boolean) =>
+    _invoke(IPC.LOCAL_REST_API_SET_ENABLED, isEnabled) as Promise<LocalRestApiState>,
+  getAssistantAccessState: () =>
+    _invoke(IPC.ASSISTANT_ACCESS_GET_STATE) as Promise<AssistantAccessState>,
+  setAssistantAccessEnabled: (isEnabled: boolean) =>
+    _invoke(IPC.ASSISTANT_ACCESS_SET_ENABLED, isEnabled) as Promise<AssistantAccessState>,
+  setAssistantAccessScopes: (scopes: AssistantAccessScope[]) =>
+    _invoke(IPC.ASSISTANT_ACCESS_SET_SCOPES, scopes) as Promise<AssistantAccessState>,
+  rotateAssistantAccessCredential: () =>
+    _invoke(
+      IPC.ASSISTANT_ACCESS_ROTATE_CREDENTIAL,
+    ) as Promise<AssistantAccessCredentialResult>,
 };
 
 // Expose ea to window for ipc-event.ts using contextBridge for context isolation

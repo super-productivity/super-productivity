@@ -1,4 +1,4 @@
-.local-rest-api-token {
+.assistant-access-settings {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -6,12 +6,18 @@
   margin-bottom: var(--s2);
 }
 
-.token-error {
+.hint,
+.status {
   margin: 0;
+  color: var(--text-color-muted);
+}
+
+.status.is-error {
   color: var(--color-danger);
 }
 
-.token-value {
+.key-value,
+.snippet {
   width: 100%;
   padding: var(--s);
   font-family: monospace;
@@ -19,4 +25,8 @@
   border-radius: var(--radius-xs);
   background: transparent;
   color: inherit;
+}
+
+.snippet {
+  resize: vertical;
 }

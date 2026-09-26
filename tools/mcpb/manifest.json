@@ -1,0 +1,40 @@
+{
+  "manifest_version": "0.3",
+  "name": "super-productivity",
+  "display_name": "Super Productivity",
+  "version": "1.0.0",
+  "description": "Lets Claude read your Super Productivity tasks or add tasks to your Inbox, limited to the permissions you grant in the app.",
+  "long_description": "Connects Claude Desktop to the Super Productivity desktop app running on this computer (Settings → Misc → Enable assistant access). The app decides what Claude may do: read task summaries, also read notes, and/or add tasks to the Inbox. This extension only relays messages to http://127.0.0.1:3876/mcp; it stores no data. Super Productivity must be running.",
+  "author": {
+    "name": "Super Productivity",
+    "url": "https://super-productivity.com"
+  },
+  "homepage": "https://github.com/super-productivity/super-productivity",
+  "license": "MIT",
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": {
+        "SP_ACCESS_KEY": "${user_config.access_key}"
+      }
+    }
+  },
+  "user_config": {
+    "access_key": {
+      "type": "string",
+      "title": "Access key",
+      "description": "Generate it in Super Productivity: Settings → Misc → Assistant access → Generate access key.",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}

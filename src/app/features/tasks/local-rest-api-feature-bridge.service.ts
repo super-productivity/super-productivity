@@ -1,12 +1,15 @@
 import { Injectable, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { LocalRestApiFeatureBridge } from '../../core/electron/local-rest-api-feature-bridge';
+import { AssistantCaptureInput } from '../../core/electron/assistant-capture-input';
+import { AssistantCaptureResult } from '../../../../electron/shared-with-frontend/assistant-access.model';
 import { TaskLog } from '../../core/log';
 import { IssueService } from '../issue/issue.service';
 import { IssueProviderKey } from '../issue/issue.model';
 import { addSubTask } from './store/task.actions';
 import { Task } from './task.model';
 import { TaskService } from './task.service';
+import { AssistantCaptureService } from './assistant-capture/assistant-capture.service';
 
 /** Features-side implementation of `LOCAL_REST_API_FEATURE_BRIDGE`. */
 @Injectable()
@@ -14,6 +17,7 @@ export class LocalRestApiFeatureBridgeService implements LocalRestApiFeatureBrid
   private readonly _issueService = inject(IssueService);
   private readonly _taskService = inject(TaskService);
   private readonly _store = inject(Store);
+  private readonly _assistantCaptureService = inject(AssistantCaptureService);
 
   issueLink(
     issueType: IssueProviderKey,
@@ -35,5 +39,9 @@ export class LocalRestApiFeatureBridgeService implements LocalRestApiFeatureBrid
     TaskLog.log('addSubTaskTo', { taskId: task.id, parentId });
     this._store.dispatch(addSubTask({ task, parentId, isIgnoreShortSyntax: true }));
     return task.id;
+  }
+
+  captureAssistantTask(input: AssistantCaptureInput): Promise<AssistantCaptureResult> {
+    return this._assistantCaptureService.capture(input);
   }
 }

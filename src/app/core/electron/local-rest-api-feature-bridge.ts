@@ -1,4 +1,6 @@
 import { InjectionToken } from '@angular/core';
+import { AssistantCaptureResult } from '../../../../electron/shared-with-frontend/assistant-access.model';
+import { AssistantCaptureInput } from './assistant-capture-input';
 
 /**
  * Feature calls the Local REST API handler makes without importing features/
@@ -15,6 +17,9 @@ export interface LocalRestApiFeatureBridge {
 
   /** Adds a subtask whose title is kept as is (no short syntax); returns its id. */
   addLiteralSubTask(parentId: string, fields: object): string;
+
+  /** Adds an assistant capture to the Inbox; see AssistantCaptureService. */
+  captureAssistantTask(input: AssistantCaptureInput): Promise<AssistantCaptureResult>;
 }
 
 export const LOCAL_REST_API_FEATURE_BRIDGE =

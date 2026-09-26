@@ -1,14 +1,32 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormlyModule } from '@ngx-formly/core';
 import { TranslateModule } from '@ngx-translate/core';
-import { FormlyLocalRestApiTokenComponent } from './formly-local-rest-api-token.component';
+import { FormlyLocalRestApiSettingsComponent } from './formly-local-rest-api-settings.component';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 
-describe('FormlyLocalRestApiTokenComponent', () => {
-  let fixture: ComponentFixture<FormlyLocalRestApiTokenComponent>;
-  let component: FormlyLocalRestApiTokenComponent;
+describe('FormlyLocalRestApiSettingsComponent', () => {
+  let fixture: ComponentFixture<FormlyLocalRestApiSettingsComponent>;
+  let component: FormlyLocalRestApiSettingsComponent;
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
+
+  const ENABLED_STATE = { isEnabled: true, isListening: true };
+  /** Installs a bridge whose API is switched on unless `api` says otherwise. */
+  const setEa = (api: Record<string, unknown>): void => {
+    (window as unknown as { ea: unknown }).ea = {
+      getLocalRestApiState: jasmine.createSpy().and.resolveTo(ENABLED_STATE),
+      ...api,
+    };
+  };
+
+  // Loading reads the state and then the token, two awaited IPC calls, so let
+  // the whole chain run before asserting.
+  const settle = async (): Promise<void> => {
+    for (let i = 0; i < 10; i++) {
+      await Promise.resolve();
+    }
+    await fixture.whenStable();
+  };
 
   const tokenInputValue = (): string | undefined =>
     fixture.nativeElement.querySelector('.token-value')?.value;
@@ -18,14 +36,14 @@ describe('FormlyLocalRestApiTokenComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [
-        FormlyLocalRestApiTokenComponent,
+        FormlyLocalRestApiSettingsComponent,
         FormlyModule.forRoot(),
         TranslateModule.forRoot(),
       ],
       providers: [{ provide: SnackService, useValue: snackServiceSpy }],
     }).compileComponents();
 
-    fixture = TestBed.createComponent(FormlyLocalRestApiTokenComponent);
+    fixture = TestBed.createComponent(FormlyLocalRestApiSettingsComponent);
     component = fixture.componentInstance;
     // Keyless display field: no formControl, only the wrapper field object.
     component.field = { props: {}, templateOptions: {} } as never;
@@ -39,10 +57,10 @@ describe('FormlyLocalRestApiTokenComponent', () => {
     const getLocalRestApiToken = jasmine
       .createSpy('getLocalRestApiToken')
       .and.resolveTo('TOKEN_FROM_IPC');
-    (window as unknown as { ea: unknown }).ea = { getLocalRestApiToken };
+    setEa({ getLocalRestApiToken });
 
     fixture.detectChanges(); // ngOnInit
-    await fixture.whenStable();
+    await settle();
     fixture.detectChanges();
 
     expect(getLocalRestApiToken).toHaveBeenCalled();
@@ -59,13 +77,13 @@ describe('FormlyLocalRestApiTokenComponent', () => {
     const regenerateLocalRestApiToken = jasmine
       .createSpy('regenerateLocalRestApiToken')
       .and.resolveTo('NEW_TOKEN');
-    (window as unknown as { ea: unknown }).ea = {
+    setEa({
       getLocalRestApiToken,
       regenerateLocalRestApiToken,
-    };
+    });
 
     fixture.detectChanges();
-    await fixture.whenStable();
+    await settle();
 
     await component.regenerate();
     fixture.detectChanges();
@@ -82,13 +100,13 @@ describe('FormlyLocalRestApiTokenComponent', () => {
     const regenerateLocalRestApiToken = jasmine
       .createSpy('regenerateLocalRestApiToken')
       .and.rejectWith(new Error('EACCES'));
-    (window as unknown as { ea: unknown }).ea = {
+    setEa({
       getLocalRestApiToken: jasmine.createSpy().and.resolveTo('OLD_TOKEN'),
       regenerateLocalRestApiToken,
-    };
+    });
 
     fixture.detectChanges();
-    await fixture.whenStable();
+    await settle();
 
     await component.regenerate();
     fixture.detectChanges();
@@ -107,12 +125,12 @@ describe('FormlyLocalRestApiTokenComponent', () => {
     // The main process throws here when it could not store the first token — it
     // then failed closed, so the API is switched on in settings and not running.
     // An empty field would read as "no token yet", which is not what happened.
-    (window as unknown as { ea: unknown }).ea = {
+    setEa({
       getLocalRestApiToken: jasmine.createSpy().and.rejectWith(new Error('ENOENT')),
-    };
+    });
 
     fixture.detectChanges();
-    await fixture.whenStable();
+    await settle();
     fixture.detectChanges();
 
     expect(component.hasTokenError()).toBe(true);
@@ -128,13 +146,13 @@ describe('FormlyLocalRestApiTokenComponent', () => {
     const regenerateLocalRestApiToken = jasmine
       .createSpy('regenerateLocalRestApiToken')
       .and.rejectWith(new Error('ENOSPC'));
-    (window as unknown as { ea: unknown }).ea = {
+    setEa({
       getLocalRestApiToken: jasmine.createSpy().and.rejectWith(new Error('ENOSPC')),
       regenerateLocalRestApiToken,
-    };
+    });
 
     fixture.detectChanges();
-    await fixture.whenStable();
+    await settle();
     await component.regenerate();
     fixture.detectChanges();
 
@@ -153,13 +171,13 @@ describe('FormlyLocalRestApiTokenComponent', () => {
     const regenerateLocalRestApiToken = jasmine
       .createSpy('regenerateLocalRestApiToken')
       .and.resolveTo('RECOVERED_TOKEN');
-    (window as unknown as { ea: unknown }).ea = {
+    setEa({
       getLocalRestApiToken: jasmine.createSpy().and.rejectWith(new Error('ENOSPC')),
       regenerateLocalRestApiToken,
-    };
+    });
 
     fixture.detectChanges();
-    await fixture.whenStable();
+    await settle();
     expect(component.hasTokenError()).toBe(true);
 
     await component.regenerate();
@@ -180,10 +198,10 @@ describe('FormlyLocalRestApiTokenComponent', () => {
             resolveFirst = r;
           }),
       );
-    (window as unknown as { ea: unknown }).ea = {
+    setEa({
       getLocalRestApiToken: jasmine.createSpy().and.resolveTo(null),
       regenerateLocalRestApiToken,
-    };
+    });
     fixture.detectChanges();
 
     const first = component.regenerate();
@@ -199,8 +217,86 @@ describe('FormlyLocalRestApiTokenComponent', () => {
   it('does not throw when the Electron bridge is unavailable', async () => {
     delete (window as unknown as { ea?: unknown }).ea;
     fixture.detectChanges();
-    await fixture.whenStable();
+    await settle();
     await component.regenerate();
     expect(component.token()).toBeNull();
+  });
+
+  it('does not read (and thereby mint) a token while the API is off', async () => {
+    const getLocalRestApiToken = jasmine.createSpy('getLocalRestApiToken');
+    setEa({
+      getLocalRestApiState: jasmine
+        .createSpy()
+        .and.resolveTo({ isEnabled: false, isListening: false }),
+      getLocalRestApiToken,
+    });
+
+    fixture.detectChanges();
+    await settle();
+    fixture.detectChanges();
+
+    expect(getLocalRestApiToken).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('.token-value')).toBeNull();
+  });
+
+  it('switches the API on over IPC and then shows the token', async () => {
+    const setLocalRestApiEnabled = jasmine
+      .createSpy('setLocalRestApiEnabled')
+      .and.resolveTo(ENABLED_STATE);
+    setEa({
+      getLocalRestApiState: jasmine
+        .createSpy()
+        .and.resolveTo({ isEnabled: false, isListening: false }),
+      setLocalRestApiEnabled,
+      getLocalRestApiToken: jasmine.createSpy().and.resolveTo('TOKEN'),
+    });
+    fixture.detectChanges();
+    await settle();
+
+    await component.toggle(true);
+    fixture.detectChanges();
+
+    expect(setLocalRestApiEnabled).toHaveBeenCalledOnceWith(true);
+    expect(component.isEnabled()).toBe(true);
+    expect(tokenInputValue()).toBe('TOKEN');
+  });
+
+  it('shows why an enabled API is not running', async () => {
+    setEa({
+      getLocalRestApiState: jasmine.createSpy().and.resolveTo({
+        isEnabled: true,
+        isListening: false,
+        error: 'PORT_IN_USE',
+      }),
+      getLocalRestApiToken: jasmine.createSpy().and.resolveTo('TOKEN'),
+    });
+
+    fixture.detectChanges();
+    await settle();
+    fixture.detectChanges();
+
+    const status = fixture.nativeElement.querySelector('.status');
+    expect(status.classList).toContain('is-error');
+    expect(status.textContent).toContain(T.GCF.MISC.LOCAL_REST_API_STATUS_PORT_IN_USE);
+  });
+
+  it('reports a toggle that could not be saved', async () => {
+    setEa({
+      getLocalRestApiState: jasmine
+        .createSpy()
+        .and.resolveTo({ isEnabled: false, isListening: false }),
+      setLocalRestApiEnabled: jasmine.createSpy().and.rejectWith(new Error('EACCES')),
+    });
+    fixture.detectChanges();
+    await settle();
+
+    await component.toggle(true);
+
+    expect(snackServiceSpy.open).toHaveBeenCalledWith({
+      type: 'ERROR',
+      msg: T.GCF.MISC.LOCAL_REST_API_TOGGLE_ERROR,
+    });
+    expect(component.isEnabled()).toBe(false);
+    expect(component.isToggling()).toBe(false);
   });
 });
