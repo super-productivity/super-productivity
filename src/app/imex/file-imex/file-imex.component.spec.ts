@@ -14,6 +14,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { BackupService } from '../../op-log/backup/backup.service';
 import { LocalDraftService } from '../../core/draft/local-draft.service';
 import { T } from '../../t.const';
+import { BackupRepairFailedError } from '../../op-log/core/errors/sync-errors';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { ConfirmUrlImportDialogComponent } from '../dialog-confirm-url-import/dialog-confirm-url-import.component';
 import { DialogImportFromUrlComponent } from '../dialog-import-from-url/dialog-import-from-url.component';
@@ -395,6 +396,19 @@ describe('FileImexComponent', () => {
       expect(mockSnackService.open).toHaveBeenCalledWith({
         type: 'ERROR',
         msg: T.FILE_IMEX.S_ERR_IMPORT_FAILED,
+      });
+    });
+
+    it('should explain an unrepairable backup instead of the generic error (#8279)', async () => {
+      mockBackupService.importCompleteBackup.and.rejectWith(
+        new BackupRepairFailedError(),
+      );
+
+      await component['_processAndImportData'](JSON.stringify(mockAppData));
+
+      expect(mockSnackService.open).toHaveBeenCalledWith({
+        type: 'ERROR',
+        msg: T.FILE_IMEX.S_ERR_IMPORT_UNREPAIRABLE,
       });
     });
 

@@ -358,6 +358,21 @@
     </button>
   }
 
+  @if (pluginTaskContextMenuEntries().length) {
+    <button
+      #pluginTaskActionsMenuTrigger="matMenuTrigger"
+      [matMenuTriggerFor]="pluginTaskActionsMenu"
+      mat-menu-item
+      [menuTouchFix]="pluginTaskActionsMenuTrigger"
+      (menuOpened)="focusFirstSubmenuItem(pluginTaskActionsMenu)"
+    >
+      <span class="menuItemLeft">
+        <mat-icon>extension</mat-icon>
+        {{ T.PLUGINS.TASK_CONTEXT_MENU_ACTIONS | translate }}
+      </span>
+    </button>
+  }
+
   <button
     (click)="deleteTask()"
     class="color-warn"
@@ -372,6 +387,26 @@
     </span>
     <span class="key-i">{{ kb.taskDelete }}</span>
   </button>
+</mat-menu>
+
+<mat-menu #pluginTaskActionsMenu="matMenu">
+  <ng-template matMenuContent>
+    @for (
+      entry of pluginTaskContextMenuEntries();
+      track entry.pluginId + ':' + entry.entryId
+    ) {
+      <button
+        mat-menu-item
+        menuTouchFix
+        (click)="runPluginTaskContextMenuEntry(entry)"
+      >
+        @if (entry.icon) {
+          <mat-icon>{{ entry.icon }}</mat-icon>
+        }
+        {{ entry.label }}
+      </button>
+    }
+  </ng-template>
 </mat-menu>
 
 <mat-menu #estimateMenu="matMenu">

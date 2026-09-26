@@ -575,8 +575,15 @@ const parseCalendarList = (xml: string): CalendarInfo[] => {
       CALDAV_NS,
       'supported-calendar-component-set',
     )[0];
+    // PROPFIND also includes a requested but absent property as an empty
+    // element inside a 404 propstat. That is absence, not an empty component set.
+    const propstat = compSet?.parentNode?.parentNode as Element | undefined;
+    const compSetStatus = propstat?.getElementsByTagNameNS(DAV_NS, 'status')[0]
+      ?.textContent;
+    const isAbsentCompSet = /\s404(?:\s|$)/.test(compSetStatus ?? '');
     const supportsVevent =
       !compSet ||
+      isAbsentCompSet ||
       Array.from(compSet.getElementsByTagNameNS(CALDAV_NS, 'comp')).some(
         (comp) => comp.getAttribute('name')?.toUpperCase() === 'VEVENT',
       );

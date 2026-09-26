@@ -3,7 +3,7 @@ import { safeIsVisible } from '../utils/element-helpers';
 
 export abstract class BasePage {
   protected page: Page;
-  protected routerWrapper: Locator;
+  readonly routerWrapper: Locator;
   protected backdrop: Locator;
   protected testPrefix: string;
 

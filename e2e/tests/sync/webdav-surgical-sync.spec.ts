@@ -754,10 +754,12 @@ test.describe('@webdav @surgical WebDAV Surgical sync', () => {
       await waitForAppReady(clientB.page);
       await syncB.triggerSync();
       await waitForSyncComplete(clientB.page, syncB);
+      const restartedClientB = clientB;
       await expect
         .poll(
           async () =>
-            (await getLocalOperationState(clientB.page, committedOperationId))?.syncedAt,
+            (await getLocalOperationState(restartedClientB.page, committedOperationId))
+              ?.syncedAt,
         )
         .not.toBeUndefined();
       await expect(clientB.page.locator('task', { hasText: taskB })).toHaveCount(1);

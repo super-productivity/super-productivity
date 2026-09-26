@@ -2271,11 +2271,11 @@ describe('SyncWrapperService', () => {
       expect(callArgs['actionFn']).toBeUndefined();
     });
 
-    it('should handle SyncDataCorruptedError for newer remote version (no force-overwrite, same message)', async () => {
+    it('should ask to update the app for a newer remote version (no force-overwrite) (#8764)', async () => {
       // version 3 > FILE_VERSION 2 — remote is from a future app version
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.reject(
-          new SyncDataCorruptedError('Unsupported version: 3', 'sync-data.json'),
+          new SyncDataCorruptedError('Unsupported version: 3', 'sync-data.json', true),
         ),
       );
 
@@ -2284,7 +2284,7 @@ describe('SyncWrapperService', () => {
       expect(result).toBe('HANDLED_ERROR');
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
-          msg: T.F.SYNC.S.ERROR_SYNC_VERSION_MISMATCH,
+          msg: T.F.SYNC.S.VERSION_TOO_OLD,
           type: 'ERROR',
         }),
       );
@@ -2365,6 +2365,48 @@ describe('SyncWrapperService', () => {
         expect(dialogConfig.data.localUnsyncedOpsCount).toBe(1);
       });
 
+      it('reports a wholly fresh ops-only local count as unknown, not 0 (#9391)', async () => {
+        // Wholly fresh client: meaningful store data but no pending ops at all.
+        const conflictError = new LocalDataConflictError(0, null, undefined, null);
+        mockSyncService.downloadRemoteOps.and.rejectWith(conflictError);
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of(undefined),
+        } as MatDialogRef<DialogSyncConflictComponent>);
+
+        await service.sync();
+
+        const { data } = mockMatDialog.open.calls.mostRecent().args[1] as {
+          data: ConflictData;
+        };
+        // Undefined + no last-synced clock → the dialog renders "unknown" and
+        // confirms both overwrite choices.
+        expect(data.localUnsyncedOpsCount).toBeUndefined();
+        expect(data.local.lastSyncedVectorClock).toBeNull();
+        expect(data.local.lastUpdateAction).toBe('?');
+      });
+
+      it('reports a fresh snapshot conflict local count as unknown, not 0 (#9391)', async () => {
+        // File-based fresh join: meaningful store data, no pending ops, remote snapshot.
+        const conflictError = new LocalDataConflictError(
+          0,
+          { tasks: [] },
+          { clientB: 5 },
+          null,
+        );
+        mockSyncService.downloadRemoteOps.and.rejectWith(conflictError);
+        mockMatDialog.open.and.returnValue({
+          afterClosed: () => of(undefined),
+        } as MatDialogRef<DialogSyncConflictComponent>);
+
+        await service.sync();
+
+        const { data } = mockMatDialog.open.calls.mostRecent().args[1] as {
+          data: ConflictData;
+        };
+        expect(data.localUnsyncedOpsCount).toBeUndefined();
+        expect(data.local.lastUpdateAction).toBe('?');
+      });
+
       it('still presents a remote snapshot as full data', async () => {
         const conflictError = new LocalDataConflictError(
           3,
@@ -2386,6 +2428,7 @@ describe('SyncWrapperService', () => {
           tasks: [{ id: 'remote-task' }],
         } as unknown as ConflictData['remote']['mainModelData']);
         expect(dialogConfig.data.remote.lastUpdateAction).toBe('Remote data');
+        expect(dialogConfig.data.localUnsyncedOpsCount).toBe(3);
       });
 
       it('should call forceUploadLocalState when user chooses USE_LOCAL', async () => {

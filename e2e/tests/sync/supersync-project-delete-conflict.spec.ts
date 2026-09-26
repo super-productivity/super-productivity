@@ -419,10 +419,12 @@ test.describe('@supersync Project delete-wins conflict resolution', () => {
       await deleteProject(clientB.page, projectName);
       await deleteProject(tabB2, projectName);
 
+      const pollingClientA = clientA;
+      const pollingClientB = clientB;
       let localDeleteOps: ProjectDeleteOpSnapshot[] = [];
       await expect
         .poll(async () => {
-          localDeleteOps = (await getProjectDeleteOps(clientB.page)).filter(
+          localDeleteOps = (await getProjectDeleteOps(pollingClientB.page)).filter(
             (op) => op.source === 'local',
           );
           return localDeleteOps.length;
@@ -449,7 +451,7 @@ test.describe('@supersync Project delete-wins conflict resolution', () => {
       let activeLocalDeletes: ProjectDeleteOpSnapshot[] = [];
       await expect
         .poll(async () => {
-          activeLocalDeletes = (await getProjectDeleteOps(clientB.page)).filter(
+          activeLocalDeletes = (await getProjectDeleteOps(pollingClientB.page)).filter(
             (op) => op.projectId === projectId && op.source === 'local',
           );
           return activeLocalDeletes.map((op) => ({
@@ -472,7 +474,7 @@ test.describe('@supersync Project delete-wins conflict resolution', () => {
 
       await expect
         .poll(async () => {
-          const receivedDeletes = (await getProjectDeleteOps(clientA.page)).filter(
+          const receivedDeletes = (await getProjectDeleteOps(pollingClientA.page)).filter(
             (op) => op.projectId === projectId && op.source === 'remote',
           );
           return receivedDeletes.map((op) => ({

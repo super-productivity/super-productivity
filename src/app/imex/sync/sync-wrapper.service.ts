@@ -1059,12 +1059,12 @@ export class SyncWrapperService {
         });
         return 'HANDLED_ERROR';
       } else if (error instanceof SyncDataCorruptedError) {
-        // Remote file format version is incompatible (could be older or newer than local).
-        // Do NOT offer force-upload: if remote is newer, overwriting would destroy newer data.
-        // Users should ensure all devices run the same app version.
+        // Incompatible remote format. No force-upload: it would destroy a newer one (#8764).
         this._providerManager.setSyncStatus('ERROR');
         this._snackService.open({
-          msg: T.F.SYNC.S.ERROR_SYNC_VERSION_MISMATCH,
+          msg: error.isRemoteNewer
+            ? T.F.SYNC.S.VERSION_TOO_OLD
+            : T.F.SYNC.S.ERROR_SYNC_VERSION_MISMATCH,
           type: 'ERROR',
           config: { duration: 12000 },
         });
@@ -1671,6 +1671,8 @@ export class SyncWrapperService {
         error instanceof LocalDataConflictError ? error : undefined;
       const unsyncedCount =
         snapshotConflict?.unsyncedCount ?? (await this._opLogStore.getUnsynced()).length;
+      // #9391: LocalDataConflictError w/ 0 pending ops = fresh client w/ store data.
+      const countUnknown = !!snapshotConflict && !unsyncedCount;
       const vcEntry = await this._opLogStore.getVectorClockEntry();
       const localClock = vcEntry?.clock;
       const localLastUpdate = vcEntry?.lastUpdate || Date.now();
@@ -1694,7 +1696,7 @@ export class SyncWrapperService {
         },
         local: {
           lastUpdate: localLastUpdate,
-          lastUpdateAction: `${unsyncedCount} local changes pending`,
+          lastUpdateAction: countUnknown ? '?' : `${unsyncedCount} local changes pending`,
           revMap: {},
           crossModelVersion: 1,
           // Op-log errors lack a last-synced timestamp; the dialog shows Never.
@@ -1703,7 +1705,7 @@ export class SyncWrapperService {
           vectorClock: localClock,
           lastSyncedVectorClock: snapshotConflict?.lastSyncedVectorClock ?? null,
         },
-        localUnsyncedOpsCount: unsyncedCount,
+        localUnsyncedOpsCount: countUnknown ? undefined : unsyncedCount,
       };
 
       SyncLog.log('SyncWrapperService: Opening data conflict dialog', {

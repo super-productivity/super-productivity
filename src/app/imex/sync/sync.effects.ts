@@ -18,6 +18,7 @@ import {
 } from 'rxjs/operators';
 import { SyncTriggerService } from './sync-trigger.service';
 import { BackgroundSyncSchedulerService } from './background-sync-scheduler.service';
+import { OperationLogDownloadService } from '../../op-log/sync/operation-log-download.service';
 import {
   INITIAL_SYNC_DELAY_MS,
   SYNC_BEFORE_CLOSE_ID,
@@ -45,6 +46,7 @@ export class SyncEffects {
   private _syncWrapperService = inject(SyncWrapperService);
   private _syncTriggerService = inject(SyncTriggerService);
   private _backgroundSyncScheduler = inject(BackgroundSyncSchedulerService);
+  private _downloadService = inject(OperationLogDownloadService);
   private _isOnline$ = inject(IS_ONLINE$);
   private _snackService = inject(SnackService);
   private _taskService = inject(TaskService);
@@ -191,6 +193,19 @@ export class SyncEffects {
         // Offline background triggers were already no-ops; requesting here would
         // only queue work that fails. I_IS_ONLINE re-triggers on reconnect.
         filter(([, isOnline]) => !!isOnline),
+        tap(() => this._backgroundSyncScheduler.request()),
+      ),
+    { dispatch: false },
+  );
+
+  /**
+   * A download pass stopped at its in-memory cap with ops left on the server
+   * (#8763). The scheduler runs the follow-up once the current sync work
+   * settles, so the backlog drains without waiting for an unrelated trigger.
+   */
+  continueRemoteBacklog$ = createEffect(
+    () =>
+      this._downloadService.remoteBacklogRemains$.pipe(
         tap(() => this._backgroundSyncScheduler.request()),
       ),
     { dispatch: false },

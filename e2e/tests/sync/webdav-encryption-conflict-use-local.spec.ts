@@ -12,6 +12,22 @@ import {
   confirmSyncConflictOverwriteIfShown,
 } from '../../utils/sync-helpers';
 import { waitForAppReady } from '../../utils/waits';
+import type { Page } from '@playwright/test';
+
+/** Exact oracle: exactly these tasks, so a stale pre-replacement task fails it. */
+const expectExactTasks = async (
+  page: Page,
+  present: string[],
+  absent: string[],
+): Promise<void> => {
+  await expect(page.locator('task')).toHaveCount(present.length);
+  for (const title of present) {
+    await expect(page.locator('task', { hasText: title })).toBeVisible();
+  }
+  for (const title of absent) {
+    await expect(page.locator('task', { hasText: title })).not.toBeVisible();
+  }
+};
 
 /**
  * Tests for encryption + USE_LOCAL conflict resolution.
@@ -148,11 +164,6 @@ test.describe('@webdav @encryption WebDAV Encryption + USE_LOCAL Conflict', () =
     await expect(pageB.locator('task', { hasText: taskA })).not.toBeVisible();
     console.log('[Test] Verified Client B has local task, not remote task');
 
-    // Deliberately NOT asserting that pre-existing Client A converges here:
-    // a pre-existing client can miss the replacement snapshot when sequence
-    // numbers align (#9170), which is orthogonal to this test. The fresh
-    // Client C below is the remote oracle for the USE_LOCAL replacement.
-
     // --- KEY REGRESSION: No repeated conflict on subsequent sync ---
     const taskB2 = 'Second Task B - ' + Date.now();
     await workViewPageB.addTask(taskB2);
@@ -170,15 +181,27 @@ test.describe('@webdav @encryption WebDAV Encryption + USE_LOCAL Conflict', () =
     console.log('[Test] Verified NO conflict dialog on second sync');
     console.log('[Test] Second sync completed without conflict');
 
-    // Verify both tasks present on Client B
-    await expect(pageB.locator('task', { hasText: taskB })).toBeVisible();
-    await expect(pageB.locator('task', { hasText: taskB2 })).toBeVisible();
+    await expectExactTasks(pageB, [taskB, taskB2], [taskA]);
+
+    // --- #9170: pre-existing Client A must hydrate B's replacement snapshot ---
+    // B's tail op advanced syncVersion back to what A expects and repopulated
+    // recentOps, so A must detect the replacement via the vector clock instead
+    // of applying B2 on top of its stale task A.
+    await syncPageA.triggerSync();
+    expect(await waitForSyncComplete(pageA, syncPageA, 30000)).toBe('success');
+    await expectExactTasks(pageA, [taskB, taskB2], [taskA]);
+
+    // Converged state must survive a reload on both clients.
+    for (const page of [pageA, pageB]) {
+      await page.reload();
+      await waitForAppReady(page);
+      await new WorkViewPage(page).waitForTaskList();
+      await expectExactTasks(page, [taskB, taskB2], [taskA]);
+    }
 
     // --- Fresh Client C joins → encrypted snapshot must be readable ---
-    // A pre-existing client can miss the replacement snapshot when sequence
-    // numbers align, which is orthogonal to this test. A fresh client reads from
-    // seq 0 and directly verifies that USE_LOCAL did not double-encrypt or corrupt
-    // the remote snapshot.
+    // A fresh client reads from seq 0 and directly verifies that USE_LOCAL did
+    // not double-encrypt or corrupt the remote snapshot.
     const { context: contextC, page: pageC } = await setupSyncClient(browser, url);
     const syncPageC = new SyncPage(pageC);
     const workViewPageC = new WorkViewPage(pageC);

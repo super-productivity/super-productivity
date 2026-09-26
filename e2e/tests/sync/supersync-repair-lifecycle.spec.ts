@@ -1,5 +1,5 @@
 import { expect, test } from '../../fixtures/supersync.fixture';
-import type { Page, Response, Route } from '@playwright/test';
+import type { APIResponse, Page, Route } from '@playwright/test';
 import { SuperSyncPage } from '../../pages/supersync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
 import {
@@ -242,7 +242,7 @@ const getStoredRepairOperations = async (page: Page): Promise<StoredRepairOperat
 
 const forwardResponse = async (
   route: Route,
-  response: Response,
+  response: APIResponse,
 ): Promise<SnapshotUploadResponse> => {
   const body = await response.body();
   const decoded = JSON.parse(body.toString('utf8')) as SnapshotUploadResponse;

@@ -1,4 +1,5 @@
 import { inject, Injectable, OnDestroy } from '@angular/core';
+import { Observable, Subject } from 'rxjs';
 import {
   planDownloadFullStateUpload,
   planDownloadGapReset,
@@ -129,10 +130,32 @@ export class OperationLogDownloadService implements OnDestroy {
 
   /** Track if we've already warned about clock drift this session */
   private hasWarnedClockDrift = false;
+  /** The last API pass stopped at a checkpoint with ops left on the server. */
+  private _hasUnseenRemoteOps = false;
+  /** Last checkpoint announced on {@link remoteBacklogRemains$}; 0 at head. */
+  private _lastAnnouncedCheckpointSeq = 0;
+  private _remoteBacklogRemains$ = new Subject<void>();
+
+  /**
+   * Emits when a pass stops at a new checkpoint (#8763). SuperSync has no
+   * interval timer, so without a follow-up sync the rest of the backlog would
+   * wait for an unrelated trigger.
+   */
+  readonly remoteBacklogRemains$: Observable<void> =
+    this._remoteBacklogRemains$.asObservable();
 
   /** Timeout handle for clock drift retry check (cleaned up on destroy) */
   private clockDriftTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private clockDriftRetryServerTimestamp: number | null = null;
+
+  /**
+   * True while a SuperSync backlog is only partly downloaded (#8763). The
+   * rejection handler must not resolve conflicts locally meanwhile: judged
+   * without the unseen ops, a local edit could silently win over a newer one.
+   */
+  hasUnseenRemoteOps(): boolean {
+    return this._hasUnseenRemoteOps;
+  }
 
   ngOnDestroy(): void {
     this._clearClockDriftTimeout();
@@ -181,6 +204,9 @@ export class OperationLogDownloadService implements OnDestroy {
     const allNewOps: Operation[] = [];
     const allOpClocks: import('../core/operation.types').VectorClock[] = [];
     let downloadFailed = false;
+    // Set when a bounds check stops the download early with more left on the
+    // server; returned instead of the server's head seq (#8763).
+    let checkpointSeq: number | undefined;
     let needsFullStateUpload = false;
     let finalLatestSeq = 0;
     let snapshotVectorClock: import('../core/operation.types').VectorClock | undefined;
@@ -292,14 +318,6 @@ export class OperationLogDownloadService implements OnDestroy {
 
       while (hasMore) {
         iterationCount++;
-        if (iterationCount > MAX_DOWNLOAD_ITERATIONS) {
-          OpLog.error(
-            `OperationLogDownloadService: Exceeded max iterations (${MAX_DOWNLOAD_ITERATIONS}). ` +
-              `Server may have a bug returning hasMore=true indefinitely.`,
-          );
-          downloadFailed = true;
-          break;
-        }
 
         const response = await syncProvider.downloadOps(
           sinceSeq,
@@ -523,21 +541,6 @@ export class OperationLogDownloadService implements OnDestroy {
         const newOps = syncOps.map((op) => syncOpToOperation(op));
         allNewOps.push(...newOps);
 
-        // Bounds check: prevent memory exhaustion
-        if (allNewOps.length > MAX_DOWNLOAD_OPS_IN_MEMORY) {
-          OpLog.error(
-            `OperationLogDownloadService: Too many operations to download (${allNewOps.length}). ` +
-              `Stopping at ${MAX_DOWNLOAD_OPS_IN_MEMORY} to prevent memory exhaustion.`,
-          );
-          this.snackService.open({
-            type: 'ERROR',
-            msg: T.F.SYNC.S.TOO_MANY_OPS_TO_DOWNLOAD,
-          });
-          // Process what we have so far rather than failing completely
-          downloadFailed = true;
-          break;
-        }
-
         // Update cursors. A page that claims more data must advance the cursor;
         // otherwise accepting the accumulated prefix would silently skip the
         // unseen suffix (or spin until the iteration cap).
@@ -563,6 +566,34 @@ export class OperationLogDownloadService implements OnDestroy {
 
         // NOTE: Don't persist lastServerSeq here - caller will persist it after ops are
         // stored in IndexedDB. This ensures localStorage and IndexedDB stay in sync.
+
+        // Bounds check (memory / runaway paging). Ops are served in serverSeq
+        // order, so the pages so far are a complete prefix: hand them over with
+        // the cursor at the last page so the caller applies and checkpoints them
+        // and the next sync resumes there. Discarding them instead made a large
+        // backlog re-download the same prefix forever (#8763).
+        if (
+          hasMore &&
+          (allNewOps.length >= MAX_DOWNLOAD_OPS_IN_MEMORY ||
+            iterationCount >= MAX_DOWNLOAD_ITERATIONS)
+        ) {
+          // A seq-0 download (clock rebuild, provider switch, raw rebuild) needs
+          // the WHOLE history; a prefix would be treated as all of it.
+          if (forceFromSeq0 || options?.includeOwnAndAppliedOps) {
+            OpLog.error(
+              `OperationLogDownloadService: Download limit reached (${allNewOps.length} ops, ` +
+                `${iterationCount} pages) during a full-history download. Aborting.`,
+            );
+            downloadFailed = true;
+          } else {
+            OpLog.warn(
+              `OperationLogDownloadService: Download limit reached (${allNewOps.length} ops, ` +
+                `${iterationCount} pages). Processing up to seq ${sinceSeq}; the rest follows on the next sync.`,
+            );
+            checkpointSeq = sinceSeq;
+          }
+          break;
+        }
       }
 
       // NOTE: We don't call acknowledgeOps here anymore.
@@ -666,10 +697,19 @@ export class OperationLogDownloadService implements OnDestroy {
       return { newOps: [], success: false, failedFileCount: 0 };
     }
 
-    // Mark that we successfully checked the remote server. A kept prefix stopped
-    // short of the server head, so it must not count as a completed check.
-    if (!decryptErrorAfterKeptPrefix) {
-      this.superSyncStatusService.markRemoteChecked();
+    this._hasUnseenRemoteOps = checkpointSeq !== undefined;
+    if (checkpointSeq === undefined) {
+      // Mark that we successfully checked the remote server. A kept prefix stopped
+      // short of the server head, so it must not count as a completed check.
+      if (!decryptErrorAfterKeptPrefix) {
+        this.superSyncStatusService.markRemoteChecked();
+      }
+      this._lastAnnouncedCheckpointSeq = 0;
+    } else if (checkpointSeq !== this._lastAnnouncedCheckpointSeq) {
+      // A server restore can lower the checkpoint. Repeating the SAME checkpoint
+      // means apply made no progress; announcing that again would loop.
+      this._lastAnnouncedCheckpointSeq = checkpointSeq;
+      this._remoteBacklogRemains$.next();
     }
 
     OpLog.verbose(
@@ -693,7 +733,7 @@ export class OperationLogDownloadService implements OnDestroy {
       success: true as const,
       failedFileCount: 0,
       needsFullStateUpload,
-      latestServerSeq: finalLatestSeq,
+      latestServerSeq: checkpointSeq ?? finalLatestSeq,
       // Include all op clocks when force downloading from seq 0
       ...(forceFromSeq0 && allOpClocks.length > 0 ? { allOpClocks } : {}),
       // Include snapshot vector clock when snapshot optimization was used

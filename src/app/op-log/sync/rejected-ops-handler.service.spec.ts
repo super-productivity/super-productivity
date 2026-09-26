@@ -12,6 +12,7 @@ import { Operation, OpType, ActionType } from '../core/operation.types';
 import { T } from '../../t.const';
 import { MAX_CONCURRENT_RESOLUTION_ATTEMPTS } from '../core/operation-log.const';
 import { RepairOperationService } from '../validation/repair-operation.service';
+import { OperationLogDownloadService } from './operation-log-download.service';
 
 describe('RejectedOpsHandlerService', () => {
   let service: RejectedOpsHandlerService;
@@ -561,6 +562,51 @@ describe('RejectedOpsHandlerService', () => {
         );
 
         expect(downloadCallback).toHaveBeenCalled();
+      });
+
+      it('should leave ops pending while the backlog is only partly downloaded (#8763)', async () => {
+        const op = createOp({ id: 'op-1' });
+        opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+        downloadCallback.and.resolveTo({ kind: 'completed', newOpsCount: 1 });
+        spyOn(
+          TestBed.inject(OperationLogDownloadService),
+          'hasUnseenRemoteOps',
+        ).and.returnValue(true);
+
+        const result = await service.handleRejectedOps(
+          [{ opId: 'op-1', error: 'concurrent', errorCode: 'CONFLICT_CONCURRENT' }],
+          downloadCallback,
+        );
+
+        expect(downloadCallback).toHaveBeenCalledTimes(1);
+        expect(
+          supersededOperationResolverSpy.resolveSupersededLocalOps,
+        ).not.toHaveBeenCalled();
+        expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
+        expect(result).toEqual({
+          kind: 'completed',
+          mergedOpsCreated: 0,
+          permanentRejectionCount: 0,
+        });
+      });
+
+      it('should not spend the resolution-attempt budget across partial backlog passes', async () => {
+        const op = createOp({ id: 'op-1' });
+        opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+        downloadCallback.and.resolveTo({ kind: 'completed', newOpsCount: 1 });
+        spyOn(
+          TestBed.inject(OperationLogDownloadService),
+          'hasUnseenRemoteOps',
+        ).and.returnValue(true);
+
+        for (let i = 0; i <= MAX_CONCURRENT_RESOLUTION_ATTEMPTS; i++) {
+          await service.handleRejectedOps(
+            [{ opId: 'op-1', error: 'concurrent', errorCode: 'CONFLICT_CONCURRENT' }],
+            downloadCallback,
+          );
+        }
+
+        expect(opLogStoreSpy.markRejected).not.toHaveBeenCalled();
       });
 
       it('should stop rejection handling when the nested download is cancelled', async () => {

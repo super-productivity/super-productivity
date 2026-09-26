@@ -16,6 +16,7 @@ import { COMPACTION_THRESHOLD } from '../core/operation-log.const';
 import {
   bufferDeferredAction,
   clearDeferredActions,
+  DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD,
   getDeferredActions,
 } from './operation-capture.meta-reducer';
 import { ClientIdService } from '../../core/util/client-id.service';
@@ -23,6 +24,7 @@ import { reducerFailureGuardMetaReducer } from '../../root-store/meta/reducer-fa
 import { OperationCaptureService } from './operation-capture.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { T } from '../../t.const';
+import { SnackParams } from '../../core/snack/snack.model';
 import { updateGlobalConfigSection } from '../../features/config/store/global-config.actions';
 
 describe('OperationLogEffects', () => {
@@ -126,6 +128,73 @@ describe('OperationLogEffects', () => {
   afterEach(() => {
     // Clean up deferred actions buffer after each test
     clearDeferredActions();
+  });
+
+  describe('notifyStuckDeferredBuffer$ (#8297)', () => {
+    beforeEach(() => {
+      // devError (dev build) alerts and throws when confirm() returns true.
+      if (!jasmine.isSpy(window.alert)) {
+        spyOn(window, 'alert');
+      }
+      const confirmSpy = jasmine.isSpy(window.confirm)
+        ? (window.confirm as jasmine.Spy)
+        : spyOn(window, 'confirm');
+      confirmSpy.and.returnValue(false);
+    });
+
+    afterEach(() => {
+      (window.confirm as jasmine.Spy).and.returnValue(true);
+    });
+
+    it('should show one sticky error once the deferred buffer looks stuck', () => {
+      const actions = Array.from(
+        { length: DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD },
+        () => createPersistentAction(ActionType.TASK_SHARED_UPDATE),
+      );
+      actions.forEach((a) => bufferDeferredAction(a));
+      actions$ = of(actions[actions.length - 1], actions[0]);
+
+      effects.notifyStuckDeferredBuffer$.subscribe();
+
+      expect(mockSnackService.open).toHaveBeenCalledTimes(1);
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          msg: T.F.SYNC.S.DEFERRED_ACTIONS_STUCK,
+          config: { duration: 0 },
+        }),
+      );
+    });
+
+    it('should close the notice once the deferred buffer drains', async () => {
+      const actions = Array.from(
+        { length: DEFERRED_ACTIONS_RELOAD_WARNING_THRESHOLD },
+        () => createPersistentAction(ActionType.TASK_SHARED_UPDATE),
+      );
+      actions.forEach((a) => bufferDeferredAction(a));
+      actions$ = of(actions[actions.length - 1]);
+      effects.notifyStuckDeferredBuffer$.subscribe();
+      const { showWhile$ } = mockSnackService.open.calls.mostRecent()
+        .args[0] as SnackParams;
+      const shown: unknown[] = [];
+      (showWhile$ as Observable<unknown>).subscribe((v) => shown.push(v));
+
+      await effects.processDeferredActions();
+      // The settle ping runs on the serialization chain, one tick after `run`.
+      await Promise.resolve();
+
+      expect(shown).toEqual([true, false]);
+    });
+
+    it('should stay quiet below the threshold', () => {
+      const action = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
+      bufferDeferredAction(action);
+      actions$ = of(action);
+
+      effects.notifyStuckDeferredBuffer$.subscribe();
+
+      expect(mockSnackService.open).not.toHaveBeenCalled();
+    });
   });
 
   describe('persistOperation$', () => {

@@ -13,7 +13,12 @@ import {
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { ActionType, OpType } from '../core/operation.types';
-import { CLOCK_DRIFT_THRESHOLD_MS } from '../core/operation-log.const';
+import {
+  CLOCK_DRIFT_THRESHOLD_MS,
+  DOWNLOAD_PAGE_SIZE,
+  MAX_DOWNLOAD_ITERATIONS,
+  MAX_DOWNLOAD_OPS_IN_MEMORY,
+} from '../core/operation-log.const';
 import { OpLog } from '../../core/log';
 import { T } from '../../t.const';
 import {
@@ -154,6 +159,156 @@ describe('OperationLogDownloadService', () => {
         // The download layer never advances the cursor; that decision belongs
         // to the caller after RemoteOpsProcessingService reports the block.
         expect(mockApiProvider.setLastServerSeq).not.toHaveBeenCalled();
+      });
+
+      describe('backlog larger than one download pass (#8763)', () => {
+        const pageOfOps = (
+          sinceSeq: number,
+          pageSize: number,
+        ): { serverSeq: number; receivedAt: number; op: SyncOperation }[] =>
+          Array.from({ length: pageSize }, (_, i) => ({
+            serverSeq: sinceSeq + i + 1,
+            receivedAt: 0,
+            op: {
+              id: `op-${sinceSeq + i + 1}`,
+              clientId: 'other-client',
+              actionType: '[Task] Update' as ActionType,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              entityId: 'task-1',
+              payload: {},
+              vectorClock: { otherClient: sinceSeq + i + 1 },
+              timestamp: 0,
+              schemaVersion: 1,
+            },
+          }));
+
+        const serveEndlessBacklog = (pageSize: number): void => {
+          mockApiProvider.downloadOps.and.callFake(async (sinceSeq: number) => ({
+            ops: pageOfOps(sinceSeq, pageSize),
+            hasMore: true,
+            latestSeq: Number.MAX_SAFE_INTEGER,
+          }));
+        };
+
+        it('returns the downloaded prefix with a checkpoint cursor once the memory cap is reached', async () => {
+          serveEndlessBacklog(DOWNLOAD_PAGE_SIZE);
+
+          const result = await service.downloadRemoteOps(mockApiProvider);
+
+          expect(result.success).toBeTrue();
+          expect(result.newOps.length).toBe(MAX_DOWNLOAD_OPS_IN_MEMORY);
+          expect(result.newOps[result.newOps.length - 1].id).toBe(
+            `op-${MAX_DOWNLOAD_OPS_IN_MEMORY}`,
+          );
+          // The cursor must stop at the last op handed to the caller, not at the
+          // server's head, so the next sync resumes where this one stopped.
+          expect(result.latestServerSeq).toBe(MAX_DOWNLOAD_OPS_IN_MEMORY);
+          expect(mockApiProvider.downloadOps).toHaveBeenCalledTimes(
+            MAX_DOWNLOAD_OPS_IN_MEMORY / DOWNLOAD_PAGE_SIZE,
+          );
+          // More remains on the server, so the remote was not fully checked.
+          expect(mockSuperSyncStatusService.markRemoteChecked).not.toHaveBeenCalled();
+          expect(service.hasUnseenRemoteOps()).toBeTrue();
+        });
+
+        it('clears the unseen-backlog flag once a pass reaches the head', async () => {
+          serveEndlessBacklog(1);
+          await service.downloadRemoteOps(mockApiProvider);
+          expect(service.hasUnseenRemoteOps()).toBeTrue();
+
+          mockApiProvider.downloadOps.and.resolveTo({
+            ops: [],
+            hasMore: false,
+            latestSeq: MAX_DOWNLOAD_ITERATIONS,
+          });
+          await service.downloadRemoteOps(mockApiProvider);
+
+          expect(service.hasUnseenRemoteOps()).toBeFalse();
+        });
+
+        it('announces each new checkpoint once, so a stalled pass cannot loop', async () => {
+          let announcements = 0;
+          const sub = service.remoteBacklogRemains$.subscribe(() => announcements++);
+          serveEndlessBacklog(1);
+
+          await service.downloadRemoteOps(mockApiProvider);
+          expect(announcements).toBe(1);
+
+          // Cursor did not advance (e.g. the apply failed): same checkpoint again.
+          await service.downloadRemoteOps(mockApiProvider);
+          expect(announcements).toBe(1);
+
+          mockApiProvider.getLastServerSeq.and.resolveTo(MAX_DOWNLOAD_ITERATIONS);
+          await service.downloadRemoteOps(mockApiProvider);
+          expect(announcements).toBe(2);
+          sub.unsubscribe();
+        });
+
+        it('does not announce a pass that reaches the head', async () => {
+          let announcements = 0;
+          const sub = service.remoteBacklogRemains$.subscribe(() => announcements++);
+          mockApiProvider.downloadOps.and.resolveTo({
+            ops: pageOfOps(0, 3),
+            hasMore: false,
+            latestSeq: 3,
+          });
+
+          await service.downloadRemoteOps(mockApiProvider);
+
+          expect(announcements).toBe(0);
+          sub.unsubscribe();
+        });
+
+        it('announces a lower checkpoint after a server reset without retrying a stalled apply', async () => {
+          let announcements = 0;
+          const sub = service.remoteBacklogRemains$.subscribe(() => announcements++);
+          mockApiProvider.getLastServerSeq.and.resolveTo(MAX_DOWNLOAD_ITERATIONS);
+          serveEndlessBacklog(1);
+          await service.downloadRemoteOps(mockApiProvider);
+          expect(announcements).toBe(1);
+
+          const oldCursor = 2 * MAX_DOWNLOAD_ITERATIONS;
+          mockApiProvider.getLastServerSeq.and.resolveTo(oldCursor);
+          mockApiProvider.downloadOps.and.callFake(async (sinceSeq: number) => ({
+            ops: sinceSeq === oldCursor ? [] : pageOfOps(sinceSeq, 1),
+            gapDetected: sinceSeq === oldCursor,
+            hasMore: true,
+            latestSeq: MAX_DOWNLOAD_ITERATIONS + 100,
+          }));
+
+          const result = await service.downloadRemoteOps(mockApiProvider);
+          expect(result.latestServerSeq).toBe(MAX_DOWNLOAD_ITERATIONS - 1);
+          expect(announcements).toBe(2);
+
+          // A failed apply leaves the old cursor behind: the same gap and
+          // checkpoint must not schedule another automatic retry forever.
+          await service.downloadRemoteOps(mockApiProvider);
+          expect(announcements).toBe(2);
+          sub.unsubscribe();
+        });
+
+        it('returns the downloaded prefix once the page-iteration cap is reached', async () => {
+          serveEndlessBacklog(1);
+
+          const result = await service.downloadRemoteOps(mockApiProvider);
+
+          expect(result.success).toBeTrue();
+          expect(result.newOps.length).toBe(MAX_DOWNLOAD_ITERATIONS);
+          expect(result.latestServerSeq).toBe(MAX_DOWNLOAD_ITERATIONS);
+        });
+
+        it('still fails a forced seq-0 download instead of returning a partial history', async () => {
+          serveEndlessBacklog(DOWNLOAD_PAGE_SIZE);
+          spyOn(OpLog, 'error');
+
+          const result = await service.downloadRemoteOps(mockApiProvider, {
+            forceFromSeq0: true,
+          });
+
+          expect(result.success).toBeFalse();
+          expect(result.newOps).toEqual([]);
+        });
       });
 
       describe('encrypted ops with no key — log severity (Fix B)', () => {

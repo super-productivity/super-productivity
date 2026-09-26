@@ -3,7 +3,17 @@ import path from 'path';
 import os from 'os';
 
 const IS_WEBKIT_SMOKE_ENABLED = process.env.E2E_WEBKIT_SMOKE === 'true';
-const IPHONE_13 = devices['iPhone 13'];
+// Playwright's runtime descriptor includes `screen`, but its type omits it.
+const IPHONE_13 = devices['iPhone 13'] as (typeof devices)['iPhone 13'] & {
+  screen: { width: number; height: number };
+};
+const DOWNLOADS_PATH = path.join(
+  __dirname,
+  '..',
+  '.tmp',
+  'e2e-test-results',
+  'downloads',
+);
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -85,9 +95,6 @@ export default defineConfig({
      */
     locale: 'en-GB',
 
-    /* Configure downloads to go to test output directory, not ~/Downloads */
-    downloadsPath: path.join(__dirname, '..', '.tmp', 'e2e-test-results', 'downloads'),
-
     /* Collect trace on failure for better debugging. See https://playwright.dev/docs/trace-viewer */
     trace: 'retain-on-failure',
 
@@ -119,6 +126,7 @@ export default defineConfig({
           geolocation: { longitude: 0, latitude: 0 },
         },
         launchOptions: {
+          downloadsPath: DOWNLOADS_PATH,
           args: [
             '--disable-dev-shm-usage',
             '--disable-browser-side-navigation',
@@ -142,6 +150,9 @@ export default defineConfig({
             testMatch: /mobile-webkit-smoke\.spec\.ts/,
             use: {
               browserName: 'webkit' as const,
+              launchOptions: {
+                downloadsPath: DOWNLOADS_PATH,
+              },
               // The custom isolated-context fixture consumes contextOptions,
               // so keep the mobile/touch descriptor nested here.
               contextOptions: {
