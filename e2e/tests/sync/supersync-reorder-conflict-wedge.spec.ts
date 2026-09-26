@@ -22,9 +22,11 @@ import {
  * is pinned by
  * src/app/op-log/testing/integration/reorder-conflict-wedge.integration.spec.ts.
  *
- * `syncAndWait()` resolves that dialog with "remote" on its own, which would
- * hide exactly this failure, so the crossing sync is triggered with
- * `clickSyncBtn()` and its outcome observed directly.
+ * The test dispatches the action `NotesComponent.drop` dispatches rather than
+ * dragging. `syncAndWait()` resolves the conflict dialog with "remote" on its
+ * own, which would hide exactly this failure, so the crossing sync is
+ * triggered with `clickSyncBtn()`, its outcome observed directly, and the
+ * console watched for the error code.
  */
 
 const INBOX_PROJECT_ID = 'INBOX_PROJECT';
@@ -193,22 +195,37 @@ test.describe('@supersync reorder crossing a concurrent edit', () => {
       await clientB.sync.syncAndWait();
 
       // Device A syncs. Today this stops with UnsupportedMultiEntityConflictError
-      // and opens the whole-dataset conflict dialog instead of merging.
+      // and opens the whole-dataset conflict dialog instead of merging. Watch the
+      // console as well: a later syncAndWait() would resolve that dialog with
+      // "remote" on its own and hide the stop.
+      const multiEntityErrors: string[] = [];
+      clientA.page.on('console', (message) => {
+        if (message.text().includes('SYNC_MULTI_ENTITY_UNSUPPORTED')) {
+          multiEntityErrors.push(message.text());
+        }
+      });
+      const downloaded = clientA.page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/sync/ops') &&
+          response.request().method() === 'GET',
+      );
       await clientA.sync.clickSyncBtn();
+      await downloaded;
       await expect
         .poll(async () => getCrossingOutcome(clientA!), { timeout: 30000 })
         .not.toBe('pending');
       expect(await getCrossingOutcome(clientA)).toBe('in-sync');
 
-      // Both devices converge on A's order and B's content.
+      // Both devices converge and keep B's edit. Which order survives is for the
+      // fix to decide (plan section 7, question 5); keeping A's order is preferred.
       await clientB.sync.syncAndWait();
       await clientA.sync.syncAndWait();
-      const expected: NotesSnapshot = {
-        inboxNoteIds: reordered,
-        contents: { [noteA]: editedOnB, [noteB]: 'note B' },
-      };
-      expect(await getNotesSnapshot(clientA.page, [noteA, noteB])).toEqual(expected);
-      expect(await getNotesSnapshot(clientB.page, [noteA, noteB])).toEqual(expected);
+      const snapshotA = await getNotesSnapshot(clientA.page, [noteA, noteB]);
+      const snapshotB = await getNotesSnapshot(clientB.page, [noteA, noteB]);
+      expect(snapshotA).toEqual(snapshotB);
+      expect(snapshotA.contents).toEqual({ [noteA]: editedOnB, [noteB]: 'note B' });
+      expect([...snapshotA.inboxNoteIds].sort()).toEqual([noteA, noteB].sort());
+      expect(multiEntityErrors).toEqual([]);
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
