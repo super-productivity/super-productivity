@@ -85,5 +85,15 @@ Residual risk is a missed dynamic consumer; tracked name/build/export checks,
 real app/spec compilation, member comparison, and focused runtime coverage found
 none. This is unreachable-code removal, not a sync bug fix, so no artificial
 failing E2E was added and no E2E run is claimed. S5 journal removal and all other
-cleanup remain outside this change. Ready for user integration review only;
-no push, merge, PR publication, or workflow dispatch.
+cleanup remain outside this change. The initial handoff was local-only: no push,
+merge, PR publication, or workflow dispatch.
+
+## Independent review
+
+At the user's follow-up request, a separate subagent reviewed commit
+`be93b21f1802b011d14c71dfe2097747cfd879cf` against the pinned baseline and found
+no actionable defects or lost meaningful coverage. It independently verified
+the consumer search, unchanged surviving members, retained exports/contracts,
+test relocation, artifact hashes, and recorded test results; it did not rerun
+the suites. No product-code changes were warranted. The user authorized pushing
+the reviewed branch and opening a PR; integration remains subject to review.
