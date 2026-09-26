@@ -67,7 +67,12 @@ import { StateSnapshotService } from '../../backup/state-snapshot.service';
 import { OperationCaptureService } from '../../capture/operation-capture.service';
 import { OperationLogEffects } from '../../capture/operation-log.effects';
 import { buildEntityRegistry, ENTITY_REGISTRY } from '../../core/entity-registry';
-import { ActionType, extractActionPayload, Operation, OpType } from '../../core/operation.types';
+import {
+  ActionType,
+  extractActionPayload,
+  Operation,
+  OpType,
+} from '../../core/operation.types';
 import { UnsupportedMultiEntityConflictError } from '../../core/errors/sync-errors';
 import { PersistentAction } from '../../core/persistent-action.interface';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
@@ -81,8 +86,7 @@ import {
   VectorClockComparison,
 } from '../../../core/util/vector-clock';
 
-const actionPayloadOf = (op: Operation): unknown =>
-  extractActionPayload(op.payload);
+const actionPayloadOf = (op: Operation): unknown => extractActionPayload(op.payload);
 type TestState = RootState & {
   section: SectionState;
   simpleCounter: SimpleCounterState;
@@ -505,7 +509,6 @@ describe('reorder conflicts: real store, applier, reducers and durable replay (#
     })),
   ];
   for (const unsupported of unsupportedCrossings) {
-
     it('keeps the safety stop for ' + unsupported.name, async () => {
       const localAction = actionsFor(unsupported.family).order;
       const local = capture(localAction, 'local', 1000);
@@ -719,7 +722,6 @@ describe('reorder conflicts: real store, applier, reducers and durable replay (#
       },
     );
   }
-
 
   for (const family of families) {
     for (const pendingContent of family.startsWith('habit') ? [false, true] : [false]) {
@@ -948,7 +950,7 @@ describe('reorder conflicts: real store, applier, reducers and durable replay (#
             const replacements = (await db.getUnsynced()).map((entry) => entry.op);
             expect(replacements.length).toBe(1);
             expect((await db.getOpById(local.id))?.rejectedAt).toBeDefined();
-            if (family === 'habit date counts') {
+            if (scenario.family === 'habit date counts') {
               expect((remoteReorder ? local : remote).actionType).toBe(
                 ActionType.COUNTER_SET_FOR_DATE,
               );
@@ -975,7 +977,7 @@ describe('reorder conflicts: real store, applier, reducers and durable replay (#
               issueProvider: s.issueProvider,
             });
             expect(projection(converged)).toEqual(projection(expected));
-            if (family === 'habit date counts') {
+            if (scenario.family === 'habit date counts') {
               const habit = converged.simpleCounter.entities[IDS[0]]!;
               expect(habit.countOnDay).toEqual({ [EDIT_DATE]: 3, [OTHER_DATE]: 7 });
               expect(habit.type).toBe(SimpleCounterType.StopWatch);

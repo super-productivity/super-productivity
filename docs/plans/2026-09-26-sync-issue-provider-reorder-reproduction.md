@@ -431,3 +431,49 @@ The released-client limit is unchanged: a fixed client must resolve the crossing
 an old resolver can still stop safely. Compacted causal history also retains the
 pending operation instead of guessing. No full provider-suite or WebDAV run is
 claimed for this follow-up.
+
+## Rebase with dated-habit recovery
+
+On 2026-09-27, PR #10294 head `85571104ddf89471950dacfcd51f4937635e92a1`
+was rebased locally onto master `f936a3db13dbb00d4a9720e0856a2c0821bda919`,
+which includes dated-habit recovery from #10295. The two production files combine
+without changing either recovery rule. Documentation and integration-test conflicts
+retain both families, including habit safety stops, dated replacements and provider
+identity checks. The provider scenario loop renamed `family` to `scenario.family`;
+two dated-habit assertions needed that same change. The first focused compile caught
+those references, and its failure log is retained.
+
+Fresh validation of the combined source:
+
+- **386 focused Angular tests passed**: 77 reorder integration, 67 superseded-operation
+  resolver and 242 conflict-resolution tests.
+- **32 browser scenarios passed** in 13.5 minutes, with zero retries or skips: all
+  19 provider cases and 13 Today/For-Date habit cases, including unmodified v19.1.0
+  receivers, interrupted upload, compaction, restart and fresh replay.
+- `npm run checkFile` passed for all five TypeScript files in the provider PR.
+  Strict focused E2E TypeScript checking, documentation links, Markdown formatting
+  and `git diff --check` passed.
+
+The isolated clone is `/tmp/sync-pr-10294-repair-20260927`; logs, traces, runner
+configuration and `tested-source.json` are in
+`/tmp/sync-pr-10294-repair-20260927-artifacts/`. The app used port 4394, Karma 9894,
+and the private Compose project `sync-pr-10294-repair-20260927` used SuperSync port
+1964 with an unexposed fresh PostgreSQL database. The server was rebuilt from this
+rebased checkout, including master's WebSocket fix, as image
+`sha256:cf7af31ec4509155a89bc3e383c0105f1bd911569939b050f768af93f755dd4b`.
+The earlier provider image was replaced before browser testing.
+
+The browser command used the saved runner and the same verified release assets:
+
+```bash
+SUPERSYNC_E2E_URL=http://127.0.0.1:1964 E2E_REQUIRE_SUPERSYNC=true \
+  COMPAT_OLD_ASSETS=/tmp/sync-s2-release-v19.1.0/assets/public \
+  node_modules/.bin/playwright test \
+  --config /tmp/sync-pr-10294-repair-20260927-artifacts/playwright.config.cjs \
+  --workers=3 --grep 'issue.provider|dated habit|habits:'
+```
+
+This is conflict reconciliation, not a new sync behavior change; the original red
+reproductions remain the baseline evidence. Released clients resolving first can
+still stop safely, and provider reorder recovery still requires retained causal
+proof. No full WebDAV or unrelated browser-suite run is claimed for this rebase.
