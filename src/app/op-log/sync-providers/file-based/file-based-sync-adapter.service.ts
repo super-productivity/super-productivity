@@ -2178,7 +2178,8 @@ export class FileBasedSyncAdapterService {
     }
 
     if (!this._isSplitSyncEnabled()) {
-      this._remoteFormats.set(this._getProviderKey(provider), 'v2');
+      // Rediscover on retry: the target may have changed during the legacy read.
+      this._remoteFormats.delete(this._getProviderKey(provider));
       throw new UploadRevToMatchMismatchAPIError('Remote v2 data appeared; retry sync.');
     }
 

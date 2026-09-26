@@ -182,86 +182,127 @@ test.describe('@webdav automatic file format rollout', () => {
     });
   }
 
-  test('does not migrate v2 appearing after empty-folder discovery', async ({
-    browser,
-    baseURL,
-    request,
-  }) => {
-    const seedFolder = generateSyncFolderName('rollout-race-seed');
-    const folder = `${seedFolder}-target`;
-    const root = WEBDAV_CONFIG_TEMPLATE.baseUrl;
-    const remote = `${root}${folder}/DEV/`;
-    await createSyncFolder(request, seedFolder);
-    await createSyncFolder(request, folder);
-    await createSyncFolder(request, `${folder}/DEV`);
-    const seed = await setupSyncClient(browser, baseURL);
-    let joining: Awaited<ReturnType<typeof setupSyncClient>> | undefined;
-    try {
-      const seedSync = new SyncPage(seed.page);
-      const seedWork = new WorkViewPage(seed.page);
-      await seedWork.waitForTaskList();
-      await seedWork.addTask(`Concurrent legacy task ${folder}`);
-      await waitForStatePersistence(seed.page);
-      await seedSync.setupWebdavSync({
-        ...WEBDAV_CONFIG_TEMPLATE,
-        syncFolderPath: `/${seedFolder}`,
-        isUseSplitSyncFiles: false,
-      });
-      await waitForSyncComplete(seed.page, seedSync);
-      const legacyResponse = await request.get(
-        `${root}${seedFolder}/DEV/sync-data.json`,
-        {
-          headers: { Authorization: authorization },
-        },
-      );
-      expect(legacyResponse.ok()).toBe(true);
-      const legacy = await legacyResponse.text();
-      joining = await setupSyncClient(browser, baseURL);
-      const sync = new SyncPage(joining.page);
-      const work = new WorkViewPage(joining.page);
-      await work.waitForTaskList();
-      const localTitle = `Preserved pending task ${folder}`;
-      await work.addTask(localTitle);
-      await waitForStatePersistence(joining.page);
-      let legacyReads = 0;
-      let concurrentV2Created = false;
-      await joining.page.route(`**/${folder}/DEV/sync-data.json`, async (route) => {
-        if (route.request().method() === 'GET' && ++legacyReads === 4) {
-          // Download discovery, read-only bootstrap, and upload discovery saw
-          // no v2. Publish a real v2 file before the upload path's final read.
-          const seeded = await request.put(`${remote}sync-data.json`, {
-            headers: { Authorization: authorization },
-            data: legacy,
+  for (const switchTarget of [false, true]) {
+    test(
+      switchTarget
+        ? 'rediscovers an empty folder after switching during a late legacy read'
+        : 'does not migrate v2 appearing after empty-folder discovery',
+      async ({ browser, baseURL, request }) => {
+        const seedFolder = generateSyncFolderName('rollout-race-seed');
+        const folder = `${seedFolder}-target`;
+        const nextFolder = `${folder}-next`;
+        const root = WEBDAV_CONFIG_TEMPLATE.baseUrl;
+        const remote = `${root}${folder}/DEV/`;
+        await createSyncFolder(request, seedFolder);
+        await createSyncFolder(request, folder);
+        await createSyncFolder(request, `${folder}/DEV`);
+        if (switchTarget) await createSyncFolder(request, nextFolder);
+        const seed = await setupSyncClient(browser, baseURL);
+        let joining: Awaited<ReturnType<typeof setupSyncClient>> | undefined;
+        try {
+          const seedSync = new SyncPage(seed.page);
+          const seedWork = new WorkViewPage(seed.page);
+          await seedWork.waitForTaskList();
+          await seedWork.addTask(`Concurrent legacy task ${folder}`);
+          await waitForStatePersistence(seed.page);
+          await seedSync.setupWebdavSync({
+            ...WEBDAV_CONFIG_TEMPLATE,
+            syncFolderPath: `/${seedFolder}`,
+            isUseSplitSyncFiles: false,
           });
-          expect(seeded.ok()).toBe(true);
-          concurrentV2Created = true;
-        }
-        await route.continue();
-      });
-      await sync.setupWebdavSync(
-        { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${folder}` },
-        { useProductFormatDefault: true },
-      );
-      await expect.poll(() => concurrentV2Created).toBe(true);
-      await expect(sync.syncSpinner).toBeHidden();
-      const preserved = await request.get(`${remote}sync-data.json`, {
-        headers: { Authorization: authorization },
-      });
-      expect(await preserved.text()).toBe(legacy);
-      expect(
-        (
-          await request.get(`${remote}sync-ops.json`, {
+          await waitForSyncComplete(seed.page, seedSync);
+          const legacyResponse = await request.get(
+            `${root}${seedFolder}/DEV/sync-data.json`,
+            {
+              headers: { Authorization: authorization },
+            },
+          );
+          expect(legacyResponse.ok()).toBe(true);
+          const legacy = await legacyResponse.text();
+          joining = await setupSyncClient(browser, baseURL);
+          const sync = new SyncPage(joining.page);
+          const work = new WorkViewPage(joining.page);
+          await work.waitForTaskList();
+          const localTitle = `Preserved pending task ${folder}`;
+          await work.addTask(localTitle);
+          await waitForStatePersistence(joining.page);
+          let legacyReads = 0;
+          let concurrentV2Created = false;
+          let releaseLegacyRead: (() => void) | undefined;
+          await joining.page.route(`**/${folder}/DEV/sync-data.json`, async (route) => {
+            if (route.request().method() === 'GET' && ++legacyReads === 6) {
+              // Download and migration-check discovery/bootstrap plus upload
+              // discovery saw no v2. Publish before the final upload read.
+              const seeded = await request.put(`${remote}sync-data.json`, {
+                headers: { Authorization: authorization },
+                data: legacy,
+              });
+              expect(seeded.ok()).toBe(true);
+              if (switchTarget) {
+                const response = await route.fetch();
+                const released = new Promise<void>((resolve) => {
+                  releaseLegacyRead = resolve;
+                });
+                concurrentV2Created = true;
+                await released;
+                await route.fulfill({ response });
+                return;
+              }
+              concurrentV2Created = true;
+            }
+            await route.continue();
+          });
+          await sync.setupWebdavSync(
+            { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${folder}` },
+            { useProductFormatDefault: true },
+          );
+          await expect.poll(() => concurrentV2Created).toBe(true);
+          if (switchTarget) {
+            // Use the real settings UI while the old GET is deliberately in flight.
+            // The full setup helper waits for networkidle, which this test prevents.
+            await sync.syncBtn.click({ button: 'right' });
+            await sync.syncFolderInput.fill(`/${nextFolder}`);
+            await sync.saveBtn.click();
+            await expect(joining.page.locator('mat-dialog-container')).toBeHidden();
+            releaseLegacyRead!();
+          }
+          await expect(sync.syncSpinner).toBeHidden();
+          const preserved = await request.get(`${remote}sync-data.json`, {
             headers: { Authorization: authorization },
-          })
-        ).status(),
-      ).toBe(404);
-      await expect(
-        joining.page.locator('task').filter({ hasText: localTitle }),
-      ).toBeVisible();
-    } finally {
-      await closeContextsSafely(seed.context, joining?.context);
-    }
-  });
+          });
+          expect(await preserved.text()).toBe(legacy);
+          expect(
+            (
+              await request.get(`${remote}sync-ops.json`, {
+                headers: { Authorization: authorization },
+              })
+            ).status(),
+          ).toBe(404);
+          if (switchTarget) {
+            await sync.triggerSync();
+            await waitForSyncComplete(joining.page, sync);
+            const nextRemote = `${root}${nextFolder}/DEV/`;
+            const ops = await readPrefixedFile<{
+              version: number;
+              snapshotRef: { file: string };
+            }>(request, `${nextRemote}sync-ops.json`, authorization);
+            expect(ops.version).toBe(3);
+            const snapshot = await readPrefixedFile<{ state: unknown }>(
+              request,
+              `${nextRemote}${ops.snapshotRef.file}`,
+              authorization,
+            );
+            expect(JSON.stringify(snapshot.state)).toContain(localTitle);
+          }
+          await expect(
+            joining.page.locator('task').filter({ hasText: localTitle }),
+          ).toBeVisible();
+        } finally {
+          await closeContextsSafely(seed.context, joining?.context);
+        }
+      },
+    );
+  }
 
   test('does not write when format discovery fails, then retries the same folder', async ({
     browser,

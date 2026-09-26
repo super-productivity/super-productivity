@@ -310,6 +310,30 @@ describe('FileBasedSyncAdapterService', () => {
       expect(files.has(C.OPS_FILE)).toBeFalse();
     });
 
+    it('rediscovers the new target after a late legacy read from the old target', async () => {
+      const legacy = addPrefix(createMockSyncData());
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        if (path === C.SYNC_FILE) {
+          service.invalidateAllTargets();
+          return { dataStr: legacy, rev: 'old-target-rev' };
+        }
+        throw new RemoteFileNotFoundAPIError(path);
+      });
+      await expectAsync(
+        adapter.uploadOps([createMockSyncOp()], 'client1'),
+      ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        const dataStr = files.get(path);
+        if (dataStr === undefined) throw new RemoteFileNotFoundAPIError(path);
+        return { dataStr, rev: path + '-rev' };
+      });
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+      expect(files.has(C.OPS_FILE)).toBeTrue();
+      expect(files.get(C.SYNC_FILE)).toContain('"format":"split"');
+    });
+
     it('does not migrate v2 that appears after empty-folder discovery', async () => {
       const legacy = addPrefix(createMockSyncData());
       mockProvider.downloadFile.and.callFake(async (path: string) => {
