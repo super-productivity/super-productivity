@@ -264,20 +264,31 @@ describe('SyncConflictBannerService', () => {
       await journal.record(e);
     }
     await service.maybeShowSummaryBanner();
+    // Drain revisions from setup before counting refresh-driven reads.
+    await flushAsync();
 
     bannerService.isShown.and.returnValue(true);
     // Spy AFTER the open so only refresh-driven reads are counted.
     const listSpy = spyOn(journal, 'list').and.callThrough();
 
-    // Bulk "Keep All": a burst of mutations. Each bumps the journal revision.
-    for (const e of entries) {
-      await journal.markKept(e.id);
-    }
-    await flushAsync();
+    // Keep the 100ms audit window open while IndexedDB writes complete; their
+    // wall-clock duration varies under CI load.
+    jasmine.clock().install();
+    try {
+      // Bulk "Keep All": a burst of mutations. Each bumps the journal revision.
+      for (const e of entries) {
+        await journal.markKept(e.id);
+      }
+      expect(listSpy).not.toHaveBeenCalled();
+      jasmine.clock().tick(100);
+      await Promise.resolve();
 
-    // Coalesced: the whole burst collapses to a single trailing refresh (one
-    // scan), not one full journal scan per entry.
-    expect(listSpy).toHaveBeenCalledTimes(1);
+      // Coalesced: the whole burst collapses to a single trailing refresh (one
+      // scan), not one full journal scan per entry.
+      expect(listSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      jasmine.clock().uninstall();
+    }
   });
 });
 
