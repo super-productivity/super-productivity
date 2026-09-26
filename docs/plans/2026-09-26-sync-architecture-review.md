@@ -1,7 +1,8 @@
 # Sync Architecture Review: Why Every Fix Is Expensive
 
-**Status:** Proposal for discussion — nothing here is accepted. Revised after
-two adversarial reviews. · **Date:** 2026-09-26
+**Status:** Proposal, revised after two adversarial reviews. The maintainer
+decided four of its questions on 2026-09-26 (§7); the rest is still proposed.
+**Date:** 2026-09-26
 **Baseline commit:** `6169df9e9` (`origin/master`); rebased onto `41324d290`.
 The four intervening master commits leave the findings unchanged, although
 #10249 shrank `file-based-sync-adapter.service.ts` from 3,356 to 3,292 lines.
@@ -63,14 +64,14 @@ the evidence does not support throwing away half of the sync code.
   2. Close the remaining fail-closed surface locally, starting with the
      reorder bug found in this review (#10264), after proving both order and
      content convergence (Phase 2). The ordering-only allowlist alone is insufficient.
-  3. Delete dead code: ~2.3k lines unconditionally; ~6–8k more after a
-     decision each (Phase 1).
+  3. Delete dead code: ~2.3k lines unconditionally; ~5–6k more after a
+     decision each, three of them now made (Phase 1).
   4. Consolidate local persistence, an estimated ~3–4k lines (parallel
      track).
-- **Half?** No. Realistic: roughly 11–14k production lines over time — a
-  fifth to a quarter of the ~52k-line client op-log, some of it outside
-  `op-log/`, plus a larger share of tests. Most of it comes from deletions and
-  consolidation, not from a new model.
+- **Half?** No. Realistic: roughly 10–12k production lines over time — about
+  a fifth of the ~52k-line client op-log, some of it outside `op-log/`, plus a
+  larger share of tests. Most of it comes from deletions and consolidation,
+  not from a new model.
 
 ## 2. Evidence
 
@@ -467,8 +468,8 @@ Also considered and rejected:
   changes, and released clients are unaffected.
 - **Decide later:** a protocol-generation change (C, Phase 3) only if both
   hold:
-  1. the product decision in §7 question 1 is yes — a sunset in months, and
-     ideally a desktop auto-updater;
+  1. the product decision in §7 (open question 2) is yes — a sunset in
+     months, and ideally a desktop auto-updater;
   2. a quarter of fix data under the new rules shows the class still
      producing fixes.
 - **Keep D parked** (appendix C).
@@ -509,16 +510,44 @@ Proposed for the maintainer to adopt or reject; this plan does not edit
 | Test-only private helpers in `conflict-resolution.service.ts` (`_deepEqual`, `_extractEntityFromPayload`, `_extractUpdateChanges`)                                 |      35 | only reached from specs via `as any`                                                                              |
 | Dead entry points `ProjectService.updateOrder`, `TagService.updateOrder`, `SimpleCounterService.updateAll`                                                         |      15 | no callers (the actions and reducers stay: old ops still replay)                                                  |
 
-**Needs a decision (~6–8k lines):**
+**Decision-gated (~5–6k lines).** Decisions of 2026-09-26 are marked
+**Decided**:
 
-| Item                                                        | ≈ Lines                             | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ----------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Conflict journal + review UI/page/banner                    | ~1,800                              | Every journal write sits behind a flag that is off at the only caller (`remote-ops-processing.service.ts:516`). The freeze (#9061, `71a9a4338`) and the feature (`962c5bbeb`) first shipped together in v18.15.0, so no stable release wrote journal rows. Master builds from 2026-07-11 to 07-16 could have, including Snap edge and Play internal-track releases on real users' devices; the number of retained rows is unknown. Drop, or keep a one-off export. |
-| `_syncVectorClockToPfapi`                                   | ~30                                 | Confirm the one-time pfapi migration can never re-run.                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Inactive SQLite adapter                                     | ~1,100 (+1,600 spec)                | The DB-adapter factory returns IndexedDB everywhere. Ship behind a flag or park on a branch.                                                                                                                                                                                                                                                                                                                                                                       |
-| Duplicate WebSocket-download and immediate-upload pipelines | ~550                                | Tasks 4–5 of `2026-07-13-sync-simplification-plan.md`, with that plan's gates.                                                                                                                                                                                                                                                                                                                                                                                     |
-| v2/v3 file-format duplication                               | ~300 (factor) / ~1,500 (retire one) | Pick the long-term format.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Legacy pfapi → op-log migration and pre-v14 backup import   | ~2,200                              | A sunset date plus an "import your JSON backup" message.                                                                                                                                                                                                                                                                                                                                                                                                           |
+- **Conflict journal + review UI/page/banner (~1,800) — Decided: drop, without
+  an export.** Delete the journal, its review page, the Settings button and the
+  banner, and delete the `SUP_CONFLICT_JOURNAL` database on upgrade.
+  - Every journal write sits behind a flag that is off at the only caller
+    (`remote-ops-processing.service.ts:516`). The freeze (#9061, `71a9a4338`)
+    and the feature (`962c5bbeb`) first shipped together in v18.15.0, so no
+    stable release wrote journal rows.
+  - Accepted loss: rows that master builds from 2026-07-11 to 07-16 may have
+    written, including Snap edge and Play internal-track releases on real
+    users' devices. They hold values that sync overwrote more than two months
+    ago.
+- **Legacy pfapi → op-log migration (~1,200) — Decided: retire it 12 months
+  after v17.** Announce it now. The first release after 2027-01-23 replaces
+  the in-place v16 → op-log migration with a detector message such as "Data
+  from v16 or older found. Install vX.Y once to migrate it, or import a JSON
+  backup.", where vX.Y is the last release that still migrates.
+  - The legacy JSON backup import (`migrate-legacy-backup.ts`, ~820 lines)
+    stays, so old backups remain importable. That is why this row is ~1,200
+    lines instead of the ~2,200 first estimated.
+  - `_syncVectorClockToPfapi` (~30) goes at the same time: its only reader is
+    that migration (`operation-log-migration.service.ts:340`).
+- **v2/v3 file-format duplication (~300 to factor, ~1,500 to retire one) —
+  Decided: v3 is the long-term format.**
+  - New work targets v3.
+  - v3 becomes the default for new sync setups after one full WebDAV E2E run
+    with v3 enabled.
+  - Existing v2 folders stay v2 (no forced migration) and still get data-loss
+    fixes such as #10256.
+  - Retiring v2 (~1,500) is a later, separate decision.
+- **Inactive SQLite adapter (~1,100, +1,600 spec) — open (§7).** The
+  DB-adapter factory returns IndexedDB everywhere. Ship behind a flag, keep
+  dormant, or park on a branch.
+- **Duplicate WebSocket-download and immediate-upload pipelines (~550):**
+  tasks 4–5 of `2026-07-13-sync-simplification-plan.md`, with that plan's
+  gates.
 
 ### Phase 2 — Close the fail-closed surface locally (option E)
 
@@ -542,8 +571,10 @@ changes.
    - Extend the E2E to cover the reverse crossing before implementing the fix,
      then enable the committed repros. The integration specs currently pin only
      removal of the safety stop; their mocked applier cannot prove convergence.
-   - Decide which order should survive (§7, question 2). Either choice still
-     requires both devices to agree and unrelated content edits to survive.
+   - Order (decided 2026-09-26, §7): either device's order may survive, as
+     long as both devices agree and unrelated content edits survive. Keeping
+     the reordering device's order is a later improvement, not part of the
+     fix.
 2. **Triage the rest of the blocked set.** About half of the 16 blocked
    creators are these four reorders or actions with no caller or legacy-only
    shapes. For each remaining one, either prove it unreachable, route it to an
@@ -689,25 +720,50 @@ separate transactions (`repair-operation.service.ts:93-110`). A crash between
 them is harmless, because the REPAIR op carries the full state and replays on
 restart.
 
-## 7. Open questions for the maintainer
+## 7. Decisions and open questions
 
-1. **Would you ever accept a sunset for old sync protocol generations?** This
-   only matters if Phase 3 is to happen.
+### Decided by the maintainer (2026-09-26)
+
+1. **Bug 1 (#10264):** "both devices converge, either order" is enough. Keeping
+   the reordering device's order can come later. Content edits must still
+   survive in both conflict directions (Phase 2).
+2. **Conflict journal:** drop it without an export, and delete its database on
+   upgrade (Phase 1).
+3. **Legacy pfapi migration:** retire the in-place v16 → op-log migration in
+   the first release after 2027-01-23, 12 months after v17, and announce it
+   now. Old JSON backups stay importable (Phase 1).
+4. **File format:** v3 is the long-term format. New setups default to v3 after
+   one full WebDAV E2E run with v3 enabled. Existing v2 folders are not
+   migrated and keep getting data-loss fixes (Phase 1).
+
+### Still open
+
+1. **SQLite: ship, keep dormant, or park?**
+   - **Facts:**
+     - Only the foundation exists: no native wrapper, no migration trigger, no
+       flag and no device validation (`docs/sync-and-op-log/sqlite-migration.md`).
+     - The dormant code already needed two follow-up PRs (#8849, #9920).
+     - #7931 plans to add `@capacitor-community/sqlite`, which the
+       no-new-dependencies rule excludes. Shipping therefore needs an in-repo
+       native wrapper per platform. Android already has one SQLite store
+       (`KeyValStore.kt`).
+     - The motivating total loss (#7892) is mitigated by the native backups
+       and informed restore (#7924, #7925, #8401). No eviction report was found
+       after June, though missing reports are not proof.
+     - Shipping moves every Android user's op-log to a new backend, which is a
+       high-risk state replacement.
+   - **Recommendation: park.** Delete the SQLite adapter, the backend
+     migration, their specs and the `sql.js` devDependency. Keep the
+     `OpLogDbAdapter` port, which the IndexedDB backend uses. Mark
+     `sqlite-migration.md` as parked and name the last commit with the code.
+     Reopen on a confirmed eviction loss that the backups did not cover.
+2. **Sunset for old sync protocol generations.** This only matters if Phase 3
+   is to happen.
    - How long a window, in months?
    - Should the desktop auto-updater come back?
    - Is it acceptable that an old device shows a raw HTTP error, or a newer
      format error, until it is updated?
-2. **Bug 1:** when a reorder crosses an edit, must the reordering device's
-   order survive, or is "both devices converge, either order" enough? The
-   existing ordering-only path alone guarantees neither order convergence nor
-   content preservation (Phase 2).
-3. **Conflict journal:** drop rows retained from pre-freeze master builds
-   (including Snap edge and Play internal track), or keep a one-off export?
-4. **Other decisions:**
-   - v2 or v3 as the long-term file format?
-   - SQLite: ship or park?
-   - A sunset date for the legacy pfapi migration?
-5. **Priority against feature work:** Phase 0 and individual Phase 1 deletions
+3. **Priority against feature work:** Phase 0 and individual Phase 1 deletions
    are bounded; estimate Phase 2 after its convergence design is validated.
    The persistence track's few-week estimate is still unverified.
 

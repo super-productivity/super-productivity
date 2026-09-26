@@ -225,8 +225,9 @@ test.describe('@supersync reorder crossing a concurrent edit', () => {
       });
       await syncWithoutResolvingConflicts(clientA);
 
-      // Both devices converge and keep B's edit. Which order survives is for the
-      // fix to decide (plan section 7, question 2); keeping A's order is preferred.
+      // Both devices converge and keep B's edit. Either device's order may
+      // survive (decided 2026-09-26, plan section 7); keeping A's order is a
+      // later improvement.
       await syncWithoutResolvingConflicts(clientB);
       await syncWithoutResolvingConflicts(clientA);
       const snapshotA = await getNotesSnapshot(clientA.page, [noteA, noteB]);
