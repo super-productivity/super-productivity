@@ -13,6 +13,7 @@ import { T } from '../../t.const';
 import { MAX_CONCURRENT_RESOLUTION_ATTEMPTS } from '../core/operation-log.const';
 import { RepairOperationService } from '../validation/repair-operation.service';
 import { OperationLogDownloadService } from './operation-log-download.service';
+import { OpLog } from '../../core/log';
 
 describe('RejectedOpsHandlerService', () => {
   let service: RejectedOpsHandlerService;
@@ -47,7 +48,9 @@ describe('RejectedOpsHandlerService', () => {
       'getOpById',
       'markRejected',
       'markSynced',
+      'getVectorClock',
     ]);
+    opLogStoreSpy.getVectorClock.and.resolveTo(null);
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
     supersededOperationResolverSpy = jasmine.createSpyObj(
       'SupersededOperationResolverService',
@@ -69,6 +72,10 @@ describe('RejectedOpsHandlerService', () => {
           useValue: supersededOperationResolverSpy,
         },
         { provide: RepairOperationService, useValue: repairOperationServiceSpy },
+        {
+          provide: OperationLogDownloadService,
+          useValue: { hasUnseenRemoteOps: () => false },
+        },
       ],
     });
 
@@ -855,6 +862,45 @@ describe('RejectedOpsHandlerService', () => {
           forceFromSeq0: true,
           isReDeliveryRetry: true,
         });
+      });
+
+      it('should log the clocks of rejections no remote op explains', async () => {
+        const warnSpy = spyOn(OpLog, 'warn');
+        const op = createOp({
+          id: 'op-1',
+          clientId: 'local',
+          vectorClock: { local: 5, remote: 2 },
+        });
+        opLogStoreSpy.getOpById.and.resolveTo(mockEntry(op));
+        opLogStoreSpy.getVectorClock.and.resolveTo({ local: 5, remote: 2 });
+        downloadCallback.and.resolveTo({ kind: 'completed', newOpsCount: 0 });
+
+        await service.handleRejectedOps(
+          [
+            {
+              opId: 'op-1',
+              error: 'superseded',
+              errorCode: 'CONFLICT_SUPERSEDED',
+              existingClock: { local: 7, remote: 2 },
+            },
+          ],
+          downloadCallback,
+        );
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          'RejectedOpsHandlerService: Rejected ops not explained by remote ops',
+          jasmine.objectContaining({
+            count: 1,
+            samples: [
+              {
+                opId: 'op-1',
+                opClientId: 'local',
+                // [server, op, local]: the server saw local:7, this client is at 5.
+                serverAhead: { local: [7, 5, 5] },
+              },
+            ],
+          }),
+        );
       });
 
       it('should not resolve an op already retired by the forced download', async () => {

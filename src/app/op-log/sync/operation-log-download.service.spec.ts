@@ -28,6 +28,7 @@ import {
 import { SuperSyncStatusService } from './super-sync-status.service';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { OperationIntegrityError } from '../core/errors/sync-errors';
+import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 
 describe('OperationLogDownloadService', () => {
   let service: OperationLogDownloadService;
@@ -37,6 +38,7 @@ describe('OperationLogDownloadService', () => {
   let mockEncryptionService: jasmine.SpyObj<OperationEncryptionService>;
   let mockSuperSyncStatusService: jasmine.SpyObj<SuperSyncStatusService>;
   let mockClientIdProvider: { loadClientId: jasmine.Spy };
+  let mockProviderManager: { configEpoch: number };
 
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
@@ -57,6 +59,8 @@ describe('OperationLogDownloadService', () => {
         .createSpy('loadClientId')
         .and.returnValue(Promise.resolve('test-client-id')),
     };
+
+    mockProviderManager = { configEpoch: 0 };
 
     // Mock OpLog
     spyOn(OpLog, 'warn');
@@ -80,6 +84,7 @@ describe('OperationLogDownloadService', () => {
         { provide: OperationEncryptionService, useValue: mockEncryptionService },
         { provide: SuperSyncStatusService, useValue: mockSuperSyncStatusService },
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
+        { provide: SyncProviderManager, useValue: mockProviderManager },
       ],
     });
 
@@ -1716,6 +1721,211 @@ describe('OperationLogDownloadService', () => {
 
           // No ops means no clocks to collect
           expect(result.allOpClocks).toBeUndefined();
+        });
+
+        describe('resuming an interrupted re-delivery retry', () => {
+          // The rejected-ops forced download spans many pages on a long history;
+          // on mobile it is cut off whenever the app is backgrounded. Restarting
+          // from seq 0 each time meant it never finished.
+          const CURSOR = 20;
+          const makeOp = (
+            serverSeq: number,
+            counter: number,
+            clientId = 'remoteClient',
+          ): { serverSeq: number; receivedAt: number; op: SyncOperation } => ({
+            serverSeq,
+            receivedAt: Date.now(),
+            op: {
+              id: `op-${serverSeq}`,
+              clientId,
+              actionType: '[Task] Update' as ActionType,
+              opType: OpType.Update,
+              entityType: 'TASK',
+              payload: {},
+              vectorClock: { [clientId]: counter },
+              timestamp: Date.now(),
+              schemaVersion: 1,
+            },
+          });
+          const networkError = new Error('network down');
+          const forcedRetry: RemoteOpsDownloadOptions = {
+            forceFromSeq0: true,
+            isReDeliveryRetry: true,
+          };
+          // remoteClient:10 is covered by the local clock; higher counters are new.
+          let pages: Map<number, { ops: ReturnType<typeof makeOp>[]; hasMore: boolean }>;
+          let failAtSinceSeq: number | undefined;
+
+          beforeEach(() => {
+            mockOpLogStore.getVectorClock.and.returnValue(
+              Promise.resolve({ remoteClient: 10 }),
+            );
+            mockApiProvider.getLastServerSeq.and.returnValue(Promise.resolve(CURSOR));
+            pages = new Map([
+              [0, { ops: [makeOp(1, 1), makeOp(2, 2)], hasMore: true }],
+              [2, { ops: [makeOp(3, 3), makeOp(4, 4)], hasMore: true }],
+              [4, { ops: [makeOp(5, 5), makeOp(6, 6)], hasMore: false }],
+            ]);
+            failAtSinceSeq = undefined;
+            mockApiProvider.downloadOps.and.callFake((sinceSeq: number) => {
+              if (sinceSeq === failAtSinceSeq) {
+                return Promise.reject(networkError);
+              }
+              const page = pages.get(sinceSeq);
+              if (!page) {
+                return Promise.reject(new Error(`unexpected sinceSeq ${sinceSeq}`));
+              }
+              return Promise.resolve({ ...page, latestSeq: CURSOR });
+            });
+          });
+
+          const requestedSinceSeqs = (): number[] =>
+            mockApiProvider.downloadOps.calls.allArgs().map((args) => args[0]);
+
+          it('should continue after the last completed page instead of seq 0', async () => {
+            pages.set(0, {
+              ops: [makeOp(1, 1, 'pageOneClient'), makeOp(2, 2)],
+              hasMore: true,
+            });
+            mockOpLogStore.getVectorClock.and.resolveTo({
+              remoteClient: 10,
+              pageOneClient: 1,
+            });
+            failAtSinceSeq = 4;
+            await expectAsync(
+              service.downloadRemoteOps(mockApiProvider, forcedRetry),
+            ).toBeRejectedWith(networkError);
+
+            failAtSinceSeq = undefined;
+            mockApiProvider.downloadOps.calls.reset();
+            const result = await service.downloadRemoteOps(mockApiProvider, forcedRetry);
+
+            expect(requestedSinceSeqs()).toEqual([4]);
+            expect(result.success).toBeTrue();
+            expect(result.newOps).toEqual([]);
+            // The skipped pages' clocks survive (merged); page 1 alone carries
+            // `pageOneClient`, so dropping them would lose that entry.
+            const merged = (result.allOpClocks ?? []).reduce<Record<string, number>>(
+              (acc, clock) => {
+                for (const [id, c] of Object.entries(clock)) {
+                  acc[id] = Math.max(acc[id] ?? 0, c);
+                }
+                return acc;
+              },
+              {},
+            );
+            expect(merged).toEqual({ remoteClient: 6, pageOneClient: 1 });
+          });
+
+          it('should re-download a page holding a new op rather than skip it', async () => {
+            pages.set(2, { ops: [makeOp(3, 3), makeOp(4, 11)], hasMore: true });
+            failAtSinceSeq = 4;
+            await expectAsync(
+              service.downloadRemoteOps(mockApiProvider, forcedRetry),
+            ).toBeRejectedWith(networkError);
+
+            failAtSinceSeq = undefined;
+            mockApiProvider.downloadOps.calls.reset();
+            const result = await service.downloadRemoteOps(mockApiProvider, forcedRetry);
+
+            expect(requestedSinceSeqs()).toEqual([2, 4]);
+            expect(result.newOps.map((op) => op.id)).toEqual(['op-4']);
+          });
+
+          it('should start from seq 0 again once a forced download completed', async () => {
+            await service.downloadRemoteOps(mockApiProvider, forcedRetry);
+            mockApiProvider.downloadOps.calls.reset();
+
+            await service.downloadRemoteOps(mockApiProvider, forcedRetry);
+
+            expect(requestedSinceSeqs()).toEqual([0, 2, 4]);
+          });
+
+          it('should still resume after the persisted cursor moved', async () => {
+            // An accepted upload or another device's ops move the cursor between
+            // attempts; that only means more is applied here.
+            failAtSinceSeq = 4;
+            await expectAsync(
+              service.downloadRemoteOps(mockApiProvider, forcedRetry),
+            ).toBeRejectedWith(networkError);
+
+            failAtSinceSeq = undefined;
+            mockApiProvider.getLastServerSeq.and.returnValue(Promise.resolve(CURSOR + 1));
+            mockApiProvider.downloadOps.calls.reset();
+            await service.downloadRemoteOps(mockApiProvider, forcedRetry);
+
+            expect(requestedSinceSeqs()).toEqual([4]);
+          });
+
+          it('should not resume after the sync target or credentials changed', async () => {
+            failAtSinceSeq = 4;
+            await expectAsync(
+              service.downloadRemoteOps(mockApiProvider, forcedRetry),
+            ).toBeRejectedWith(networkError);
+
+            failAtSinceSeq = undefined;
+            mockProviderManager.configEpoch++;
+            mockApiProvider.downloadOps.calls.reset();
+            await service.downloadRemoteOps(mockApiProvider, forcedRetry);
+
+            expect(requestedSinceSeqs()).toEqual([0, 2, 4]);
+          });
+
+          it('should adopt a newer snapshot clock when the resumed page skips to a new full-state op', async () => {
+            pages.set(0, {
+              ops: [makeOp(1, 1), makeOp(2, 2)],
+              hasMore: true,
+              snapshotVectorClock: { oldSnapshot: 1 },
+            } as never);
+            failAtSinceSeq = 4;
+            await expectAsync(
+              service.downloadRemoteOps(mockApiProvider, forcedRetry),
+            ).toBeRejectedWith(networkError);
+
+            failAtSinceSeq = undefined;
+            pages.set(4, {
+              ops: [makeOp(5, 5), makeOp(6, 6)],
+              hasMore: false,
+              snapshotVectorClock: { newSnapshot: 1 },
+            } as never);
+            const result = await service.downloadRemoteOps(mockApiProvider, forcedRetry);
+
+            expect(result.snapshotVectorClock).toEqual({ newSnapshot: 1 });
+          });
+
+          it('should drop the checkpoint when the resumed download hits a gap', async () => {
+            failAtSinceSeq = 4;
+            await expectAsync(
+              service.downloadRemoteOps(mockApiProvider, forcedRetry),
+            ).toBeRejectedWith(networkError);
+
+            // Resume hits a gap (server reset); the gap re-download from seq 0
+            // is itself cut off before the end-of-run clear.
+            mockApiProvider.downloadOps.and.callFake((sinceSeq: number) =>
+              sinceSeq === 4
+                ? Promise.resolve({
+                    ops: [],
+                    hasMore: false,
+                    latestSeq: 3,
+                    gapDetected: true,
+                  })
+                : Promise.reject(networkError),
+            );
+            await expectAsync(
+              service.downloadRemoteOps(mockApiProvider, forcedRetry),
+            ).toBeRejectedWith(networkError);
+
+            // The old epoch's checkpoint must not be resumed.
+            mockApiProvider.downloadOps.and.resolveTo({
+              ops: [],
+              hasMore: false,
+              latestSeq: 3,
+            });
+            mockApiProvider.downloadOps.calls.reset();
+            await service.downloadRemoteOps(mockApiProvider, forcedRetry);
+
+            expect(requestedSinceSeqs()).toEqual([0]);
+          });
         });
 
         describe('re-delivered ops already covered by the local vector clock', () => {

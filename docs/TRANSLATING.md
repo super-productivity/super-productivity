@@ -12,6 +12,28 @@ Super Productivity uses JSON files for translations, located in `src/assets/i18n
 2. Run the i18n script to propagate changes to other locales (see [i18n-script-usage.md](i18n-script-usage.md))
 3. Submit a pull request
 
+## Using translations in code
+
+[T](../src/app/t.const.ts) contains translation keys, not display text. After
+editing [en.json](../src/assets/i18n/en.json), run `npm run int` to regenerate T;
+this command does not propagate locale files. Use the workflow above for those.
+
+Translate both template text and attributes (ensure the component exposes T and
+imports the translate pipe as neighboring components do):
+
+```html
+<button [title]="T.G.SAVE | translate">{{ T.G.SAVE | translate }}</button>
+```
+
+In TypeScript, use `TranslateService` where an API expects display text. APIs
+that already translate keys, such as [SnackService](../src/app/core/snack/snack.service.ts),
+should receive the key directly; check the receiving API before replacing a string.
+Reuse existing keys and their nested naming structure before adding new ones.
+
+Run `npm run int:test` for locale/placeholder consistency and the applicable
+[code checks](../AGENTS.md#core-commands). These checks do not prove that text is
+translated on screen; verify the changed UI as well.
+
 ## Important Notes
 
 ### Fallback Language

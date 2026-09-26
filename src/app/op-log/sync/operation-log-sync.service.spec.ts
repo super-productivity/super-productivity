@@ -152,7 +152,6 @@ describe('OperationLogSyncService', () => {
       'markSynced',
       'markRejected',
       'setVectorClock',
-      'clearFullStateOps',
       'getVectorClock',
       'appendBatchSkipDuplicates',
       'appendSnapshotIncludedOps',
@@ -180,7 +179,6 @@ describe('OperationLogSyncService', () => {
     opLogStoreSpy.getFailedRemoteOps.and.resolveTo([]);
     opLogStoreSpy.markSynced.and.resolveTo();
     opLogStoreSpy.setVectorClock.and.resolveTo();
-    opLogStoreSpy.clearFullStateOps.and.resolveTo();
     opLogStoreSpy.getVectorClock.and.resolveTo(null);
     opLogStoreSpy.appendBatchSkipDuplicates.and.resolveTo({
       seqs: [],

@@ -8,6 +8,8 @@ research note does not override the current code, tests, or an accepted decision
 
 Update these alongside the behavior or workflow they describe:
 
+- [Repository content map](repository-map.md) — task keywords → code entry points,
+  relevant constraints, and focused tests; start here to select what to read
 - [`src/app` layer map](../src/app/README.md) — where things live, which way
   dependencies point, and which of those directions are lint-enforced
 - [Documentation guide](documentation-guide.md)

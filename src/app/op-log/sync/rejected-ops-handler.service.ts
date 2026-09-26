@@ -46,6 +46,8 @@ const getRepairSummary = (payload: unknown): RepairSummary | undefined => {
   return summaryRecord as unknown as RepairSummary;
 };
 
+const MAX_LOGGED_REJECTION_CLOCK_SAMPLES = 5;
+
 // Re-export for consumers that import from this service
 export type {
   DownloadResultForRejection,
@@ -485,6 +487,7 @@ export class RejectedOpsHandlerService {
           // Normal download returned 0 ops but concurrent ops still pending.
           // This means our local clock is likely missing entries the server has.
           // Try a FORCE download from seq 0 to get ALL op clocks.
+          await this._logUnexplainedRejectionClocks(stillPendingOps);
           OpLog.normal(
             `RejectedOpsHandlerService: Download returned no new ops but ${stillPendingOps.length} ` +
               `concurrent ops still pending. Forcing full download from seq 0...`,
@@ -618,6 +621,38 @@ export class RejectedOpsHandlerService {
       mergedOpsCreated,
       retryExceededCount: opsExceededRetries.length,
     };
+  }
+
+  /**
+   * Diagnostics for rejections no downloaded op explains: per sampled op, the
+   * [server, op, local] counters of each client where the server is ahead.
+   * Ids and counters only — no user content.
+   */
+  private async _logUnexplainedRejectionClocks(
+    ops: Array<{ opId: string; op: Operation; existingClock?: VectorClock }>,
+  ): Promise<void> {
+    try {
+      const localClock = (await this.opLogStore.getVectorClock()) ?? {};
+      OpLog.warn('RejectedOpsHandlerService: Rejected ops not explained by remote ops', {
+        count: ops.length,
+        samples: ops
+          .slice(0, MAX_LOGGED_REJECTION_CLOCK_SAMPLES)
+          .map(({ opId, op, existingClock }) => ({
+            opId,
+            opClientId: op.clientId,
+            serverAhead: Object.fromEntries(
+              Object.entries(existingClock ?? {})
+                .filter(([id, counter]) => counter > (op.vectorClock[id] ?? 0))
+                .map(([id, counter]) => [
+                  id,
+                  [counter, op.vectorClock[id] ?? 0, localClock[id] ?? 0],
+                ]),
+            ),
+          })),
+      });
+    } catch {
+      // Diagnostics only — never block conflict resolution.
+    }
   }
 
   private _rollbackResolutionAttempts(ops: ReadonlyArray<{ op: Operation }>): void {

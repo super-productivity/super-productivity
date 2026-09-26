@@ -104,7 +104,6 @@ describe('RemoteOpsProcessingService', () => {
       'getLatestFullStateOpEntry',
       'getOpById',
       'markRejected',
-      'clearFullStateOps',
       'clearFullStateOpsExcept',
       'getVectorClock',
     ]);
@@ -129,8 +128,6 @@ describe('RemoteOpsProcessingService', () => {
     // By default, both durable clock transitions succeed
     opLogStoreSpy.mergeRemoteOpClocks.and.resolveTo();
     opLogStoreSpy.markReducersCommittedAndMergeClocks.and.resolveTo();
-    // By default, clearFullStateOps returns 0 (no ops cleared)
-    opLogStoreSpy.clearFullStateOps.and.resolveTo(0);
     // By default, clearFullStateOpsExcept returns 0 (no ops cleared)
     opLogStoreSpy.clearFullStateOpsExcept.and.resolveTo(0);
     vectorClockServiceSpy = jasmine.createSpyObj('VectorClockService', [

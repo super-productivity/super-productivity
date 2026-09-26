@@ -4,32 +4,24 @@ Guidance for AI agents working in this repository. Super Productivity is a todo 
 
 ## Repo map
 
-- `src/app/features/` — feature modules (tasks, planner, project, schedule, boards, …); `tasks/` is the hot core
-- `src/app/root-store/` — NgRx root store; `meta/` holds the cross-entity meta-reducers
-- `src/app/op-log/` — operation-log sync pipeline (capture, apply, persistence, validation)
-- `src/app/pfapi/` — low-level persistence layer (model/database controllers)
-- `src/app/imex/` — import/export and sync setup UI
-- `src/app/core/`, `core-ui/`, `ui/` — core services and shared UI building blocks; `util/` — pure helpers
-- `packages/` — workspace packages: `sync-core` + `sync-providers` (shared sync logic), `shared-schema`, `super-sync-server`, `plugin-api` + `plugin-dev`
-- `electron/` — Electron main process (tests are `*.test.cjs`); `android/` + `ios/` — Capacitor shells
-- `e2e/` — Playwright suite (see [`e2e/CLAUDE.md`](e2e/CLAUDE.md))
+For task keywords, code entry points, and focused tests, start with the [repository content map](docs/repository-map.md). Follow only the relevant links; this is navigation, not additional required reading in full.
+
+For layer boundaries see the [app map](src/app/README.md); for package ownership and checks see [packages](packages/README.md).
 
 ## Product principles
 
-From the project manifesto (_Deep Work, Your Way_), kept to what changes a build decision — weigh them on every feature, and surface the leaner path when a request fights them:
-
-- **Avoid feature creep:** prefer the smallest change that solves the real problem. New UI, settings, and sync surface are permanent costs, so extend existing building blocks before adding new ones, and let a feature ship only if it makes users _faster_, not busier. When scope outgrows the problem, propose the leaner option rather than silently building the larger one — it's still the user's call. Scope guard: this is a personal deep-work tool, not a team-management or reporting product.
-- **Less noise, more depth:** reject _constant_ alerts, vanity dashboards, streaks, and dopamine loops. Opt-in reminders and notifications are core to the app, but anything attention-grabbing ships off by default and stays quiet (flow, not friction).
-- **Adapt, don't impose:** people plan, track, and reflect differently, so ship new behavior as building blocks. Prefer one calm default over a new toggle; add a setting only when real workflows genuinely diverge, never to dodge a default decision (don't build it → calm default → opt-in setting).
-- **Privacy & offline first:** no analytics, tracking, or telemetry (see Project rules → Privacy). Core task and time tracking must work fully offline; sync and online integrations are optional layers that degrade gracefully, never prerequisites.
+- **Avoid feature creep:** extend existing building blocks; new UI, settings, and sync surface must make users faster. This is a personal deep-work tool, not team management or reporting. Surface the leaner alternative when scope outgrows the problem.
+- **Less noise, more depth:** no constant alerts, vanity dashboards, streaks, or dopamine loops. Attention-grabbing behavior ships off by default; reminders remain opt-in.
+- **Adapt, don't impose:** prefer one calm default; add a setting only when real workflows diverge. Prefer not building a feature over adding a toggle to dodge a decision.
+- **Privacy & offline first:** no analytics, tracking, or telemetry. Core tasks and time tracking work offline; sync and integrations are optional and degrade gracefully.
 
 ## Required reading per task
 
 - Styling changes → [`docs/styling-guide.md`](docs/styling-guide.md)
 - User-facing functionality changes → [`docs/documentation-guide.md`](docs/documentation-guide.md)
-- Sync, op-log, vector clocks → [`docs/sync-and-op-log/`](docs/sync-and-op-log/)
+- Sync, op-log, vector clocks → [sync index](docs/sync-and-op-log/README.md), then only the relevant contracts
 - Effects/reducers/bulk-dispatch touching synced state → [`docs/sync-and-op-log/contributor-sync-model.md`](docs/sync-and-op-log/contributor-sync-model.md)
-- E2E tests → [`e2e/CLAUDE.md`](e2e/CLAUDE.md)
+- E2E tests → [`e2e/AGENTS.md`](e2e/AGENTS.md); marketing videos → [`e2e/store-video/AGENTS.md`](e2e/store-video/AGENTS.md)
 - Load-bearing decisions → [`ARCHITECTURE-DECISIONS.md`](ARCHITECTURE-DECISIONS.md)
 - Reviewing a feature or PR → [`docs/feature-review-guide.md`](docs/feature-review-guide.md)
 - Editing a type in `packages/plugin-api/`, `packages/shared-schema/`, `packages/sync-core/`, `src/app/op-log/core/`, or a model a `MODEL_CONFIGS` slice persists → [`docs/feature-review-guide.md`](docs/feature-review-guide.md) § Long-term cost of a change
@@ -37,31 +29,33 @@ From the project manifesto (_Deep Work, Your Way_), kept to what changes a build
 
 ## Core commands
 
-**ALWAYS run `npm run checkFile <filepath>` on every `.ts` or `.scss` file you modify** before reporting work as done.
+**Run `npm run checkFile <filepath>` on every modified `.ts` or `.scss` file before reporting work as done.** If root ESLint excludes a package, use formatting plus that package's checks in [packages/README.md](packages/README.md#validation) instead; an ignored file is not a lint pass. Generated files should be regenerated through their owner script.
 
 ```bash
 npm run checkFile <filepath>   # prettier + lint a single file
 npm run prettier               # multi-file format
 npm run lint                   # multi-file lint
-npm test                       # all unit tests (Jasmine/Karma, .spec.ts co-located)
-npm run test:file <filepath>   # single spec
+npm test                       # shared packages + release tooling + Angular specs (Berlin/LA)
+npm run test:file <filepath>   # single Angular spec; package tests use package scripts
 npm run test:electron          # main-process tests — `electron/*.test.cjs`, NOT .spec.ts
                                # (tsconfig.electron.json excludes *.spec.ts, so a spec
                                #  placed under electron/ silently never runs)
-npm run e2e                    # all E2E (Playwright, slow)
-npm run e2e:file <path> -- --retries=0   # single E2E (~20s/test); add --grep "name" for one test
+npm run e2e                    # browser E2E, excludes SuperSync/WebDAV
+npm run e2e:file <path> -- --retries=0   # single non-sync E2E; add --grep "name"
+npm run e2e:supersync:file <path> -- --retries=0   # starts and requires SuperSync
+npm run e2e:webdav:file <path> -- --retries=0      # starts and requires WebDAV
 npm start                      # Electron dev
-ng serve                       # web dev (or npm run startFrontend)
-npm run dist                   # production build (all platforms available locally)
+npm run startFrontend          # web dev, generates environment constants first
+npm run dist                   # validated Electron distribution for the host platform
 ```
 
-**Run the full SuperSync and WebDAV E2E suites via GitHub Actions:** manually dispatch [`E2E Tests (Scheduled)`](.github/workflows/e2e-scheduled.yml) for your branch. This should be preferred over running the full suites locally; the workflow provides dedicated WebDAV and sharded SuperSync jobs. The optional `grep` input filters the SuperSync job only.
+Prefer the [scheduled E2E workflow](.github/workflows/e2e-scheduled.yml) for full provider suites on your branch: `grep` filters SuperSync, `webdav_grep` filters WebDAV, and `run_webdav` enables that job. For focused local runs and prerequisites, read [e2e/AGENTS.md](e2e/AGENTS.md). Provider-switch tests need both servers and both required flags; a single-provider runner alone can still skip them. Skipped tests do not validate a fix.
 
-For local SuperSync E2E (docker-compose) and the full E2E reference, see [`e2e/CLAUDE.md`](e2e/CLAUDE.md).
+Do not use `tsc -p tsconfig.json --noEmit` as validation: the root config has `files: []`. Use the relevant app/spec/Electron config or package checks; see [the observed failure](docs/hardening-earns-its-place.md#the-three-failure-modes-worth-remembering).
 
 ## Project rules
 
-- **Translations:** UI strings go through `T` / `TranslateService`. Edit only `en.json`; never other locales — **except placeholders**: when an English string gains a `{{placeholder}}`, hand-edit every locale that already translates that string, because the i18n script only fills in keys that are missing entirely → [`docs/TRANSLATING.md`](docs/TRANSLATING.md).
+- **Translations:** `T` holds keys; render with the translate pipe or `TranslateService`. Edit only `en.json`, except when adding placeholders: update every existing translation to interpolate them too. See [translation workflow](docs/TRANSLATING.md).
 - **Privacy:** no analytics or tracking — user data stays local unless explicitly synced.
 - **Dependencies:** PRs must not add new packages to the root project's `dependencies` or `devDependencies`; use platform APIs, existing packages, or a small in-repo implementation instead. Dependencies scoped to an individual plugin are allowed when they are necessary and remain isolated to that plugin.
 - **Electron:** check `IS_ELECTRON` before using Electron-specific APIs.
@@ -70,22 +64,19 @@ For local SuperSync E2E (docker-compose) and the full E2E reference, see [`e2e/C
 - **Strict TypeScript:** no `any` (use `unknown` if truly unknown).
 - **State:** never mutate NgRx state — return new objects in reducers. Prefer Signals to Observables.
 - **Tests:** add unit tests for new services and state logic.
-- **Service size cap:** no service may exceed 1200 lines (physical lines — blanks and comments count), lint-enforced via `max-lines` on `**/*.service.ts`; specs are exempt. Split by responsibility before crossing the line — extract collaborators, move pure logic to utils or `packages/` — and never grow a service past it. The pre-existing offenders grandfathered to warnings in `eslint.config.js` are debt to pay down when touched, never a license to add lines: that list may only shrink, never grow.
+- **Service size:** at most 1200 physical lines in `*.service.ts` (specs exempt), enforced by ESLint `max-lines`. Split by responsibility before crossing the cap. Never grow grandfathered offenders; the warning list in `eslint.config.js` may only shrink.
 - **Agent-control files:** never modify `AGENTS.md`, `CLAUDE.md`, `.agents/**`, or `.codex/**` unless the user explicitly requests it in the current task. Keep such changes isolated from product/code changes in a dedicated commit or PR, and describe how they alter future agent behavior. When adding an incident-derived rule to this file, keep it to invariant + enforcement + issue/doc pointers and move the narrative to `docs/` — this file must stay skimmable — and date any statistics you cite ("measured YYYY-MM").
-- **Hardening needs an observed instance:** before adding a guard — a lint-rule branch, a runtime assertion, a defensive check — grep this repo for a real occurrence of the shape it catches; zero occurrences → record a known gap instead. A generated allowlist may only shrink: never grow it to absorb a false positive, fix the check or scope a disable with a reason. Before trusting a check that passed, confirm it can fail. Generalises the sync section's "start from a reproducible problem" → [`docs/hardening-earns-its-place.md`](docs/hardening-earns-its-place.md).
-- **Does it earn its place?** For a new feature, the first review question is whether it should exist at all — not whether the diff is correct. Complexity added is permanent, so the burden is on the change to justify it, and a correct, well-tested implementation of something that doesn't earn its place is still a decline. Treat the stated motivation as a claim to verify, never as context to accept → [`docs/feature-review-guide.md`](docs/feature-review-guide.md).
-- **Code review:** weigh the long-term costs a change introduces — maintenance burden, hard-to-reverse choices (data shapes, public/plugin APIs, sync formats), locked-in dependencies, footguns that surface only at scale or across synced clients — not just whether the immediate diff is correct. Persisted models, the sync wire and the plugin API are permanent once shipped: check them explicitly on every PR that touches them, however small → [`docs/feature-review-guide.md`](docs/feature-review-guide.md).
+- **Hardening needs evidence:** grep for an observed instance before adding a guard; zero instances → record a gap instead. Allowlists may only shrink: fix false positives or scope a justified disable. Verify a check can fail before trusting a pass. [Evidence and rejected approaches](docs/hardening-earns-its-place.md).
+- **Does it earn its place?** Verify demand and motivation before judging implementation. A correct feature that adds unjustified complexity should be declined. [Review guide](docs/feature-review-guide.md).
+- **Code review:** assess maintenance cost, dependencies, scale, and cross-client behavior. Explicitly check persisted models, the sync wire, and public/plugin APIs on every change touching them, however small. [Long-term cost review](docs/feature-review-guide.md#long-term-cost-of-a-change).
 - **Task component is a hot path:** every change to `src/app/features/tasks/task/task.component.*` (rendered once per task in long, scrollable lists) must be double-checked for negative performance impact — avoid function/getter calls in the template, extra change-detection work, and uncleaned subscriptions; verify against a large task list.
 
 ## Sync-correctness rules
 
-Touched on most state-related PRs. Read the linked source/doc for full reasoning before editing. Rules 1–3 and 6 are one invariant — _one user intent = one op; replayed/remote ops must not re-trigger effects_ — fully explained in [`docs/sync-and-op-log/contributor-sync-model.md`](docs/sync-and-op-log/contributor-sync-model.md).
+These apply to state-related work, including feature code. **One user intent = one op; replayed/remote ops must not re-trigger effects.** Read [the contributor model](docs/sync-and-op-log/contributor-sync-model.md) before editing. Sync changes are high-risk: check replay determinism, concurrent/remote edits, vector-clock conflicts, and data-loss failure modes; report material risks before marking the work done.
 
-**Every change to the sync system is high-risk:** a subtle bug can silently corrupt or lose user data across devices and is hard to recover from. Carefully check each change for correctness and possible failure modes (replay determinism, concurrent/remote edits, vector-clock conflicts) and call out the risks before reporting work as done.
-
-**Judging a sync bug's severity** (before you call one low-risk): `master` ships to real users — Play internal track, Snap `edge`, and `supersync:latest` all auto-publish from every push. Never infer "shipped" from dates or the latest tag; prove it with `git tag --contains`. An unreproduced finding is not a false one. → [`docs/sync-and-op-log/sync-severity-triage.md`](docs/sync-and-op-log/sync-severity-triage.md).
-
-**Start from a reproducible problem:** any change to the sync system must begin with a reproducible failure against real data shapes (a fixture or seeded DB state), not a mocked seam. **Every sync bug fix requires an E2E test that exactly reproduces the reported failure** — written first, failing without the fix, passing with it; a unit test may additionally pin the mechanism, never replace the E2E. Only when the failure is unreachable from the app — `super-sync-server` internals, or behaviour specific to a provider with no E2E harness (Dropbox, OneDrive today) — use the narrowest test that exercises the real code path, and state in the PR why E2E can't reach it. Hardening added without an observed end-to-end failure is how the sync layer accumulates overly defensive complexity; if you cannot reproduce the problem in an E2E test, question the change instead of piling on guards.
+- **Released clients:** `master` auto-publishes to Play internal, Snap `edge`, and `supersync:latest`. Prove release inclusion with `git tag --contains`; an unreproduced finding is not a false one. [Severity triage](docs/sync-and-op-log/sync-severity-triage.md).
+- **Reproduce first:** every sync change starts from a reproducible failure using real data shapes, not a mocked seam. Every sync bug fix needs an exact E2E reproduction written first, failing without the fix and passing with it. Unit tests may supplement it. Only app-unreachable server internals or providers without an E2E harness may use the narrowest real-path test instead; state why in the PR. Question unreproducible hardening rather than adding guards.
 
 1. **Effects inject `LOCAL_ACTIONS`**, never `Actions` (`ALL_ACTIONS` only for the op-log capture effect; remote archive side effects → `ArchiveOperationHandler`, not `ALL_ACTIONS`). Lint-enforced (`no-actions-in-effects`). → [contributor-sync-model.md](docs/sync-and-op-log/contributor-sync-model.md), `src/app/util/local-actions.token.ts`.
 2. **Prefer action-based effects**; a selector-based effect needs `skipDuringSyncWindow()`. Lint-enforced (`require-hydration-guard`). → [contributor-sync-model.md](docs/sync-and-op-log/contributor-sync-model.md).
@@ -96,8 +87,8 @@ Touched on most state-related PRs. Read the linked source/doc for full reasoning
 7. **`SYNC_IMPORT` / `BACKUP_IMPORT`** replace state and intentionally drop concurrent ops (CONCURRENT or LESS_THAN by vector clock) — by design, not a bug. → `SyncImportFilterService`.
 8. **Vector clocks:** `MAX_VECTOR_CLOCK_SIZE = 20`. Server prunes after conflict detection, before storage. → `docs/sync-and-op-log/vector-clocks.md`.
 9. **Logging:** `Log.log({ id: task.id })`, never `Log.log(task)` or `Log.log(title)` — log history is exportable, never log user content.
-10. **A schema bump never protects the released fleet, is near-irreversible, and is not free even when safe — default to NOT bumping `CURRENT_SCHEMA_VERSION`.** New op semantics MUST degrade gracefully on older clients (`LwwUpdatePayload` envelope / inert-marker pattern). A change old clients would misapply must not ship behind a bump alone; a change they can tolerate must not ship behind a bump at all. → `packages/shared-schema/src/schema-version.ts`, normative policy in [operation-log-architecture.md](docs/sync-and-op-log/operation-log-architecture.md) §A.7.11 "Bump Policy".
-11. **A new REQUIRED field on a persisted model breaks every existing install — type it optional (`?`) plus a runtime default.** Data already on users' disks lacks the field and typia rejects it on hydration; TypeScript guards only _new_ data, so the build goes green while every existing install fails validation, and the failure stays latent until an unrelated bump drags old data onto the migration path. **Do not assume a heal exists.** Guarded by `src/app/op-log/validation/frozen-state.spec.ts` — if it fails, fix the model, never the fixture. → full analysis: [persisted-model-fields.md](docs/sync-and-op-log/persisted-model-fields.md), #9125, #9124.
+10. **Do not bump `CURRENT_SCHEMA_VERSION` by default.** A bump does not protect released clients. New semantics must degrade gracefully (`LwwUpdatePayload` / inert markers); incompatible semantics cannot ship behind a bump alone, and compatible changes do not justify a bump. [Normative bump policy](docs/sync-and-op-log/operation-log-architecture.md#bump-policy--a-bump-does-not-protect-the-released-fleet).
+11. **New persisted fields must be optional (`?`) with a runtime default.** Existing on-disk data lacks them; do not assume a heal exists. If [frozen-state.spec.ts](src/app/op-log/validation/frozen-state.spec.ts) fails, fix the model, never the fixture. [Failure analysis and rules](docs/sync-and-op-log/persisted-model-fields.md), #9125, #9124.
 
 ## Anti-patterns
 

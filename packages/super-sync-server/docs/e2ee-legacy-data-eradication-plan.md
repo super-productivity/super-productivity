@@ -69,7 +69,11 @@ The cleanup list is built from two detectors, run in primary-key batches on a
 session without the application `statement_timeout`:
 
 - the flag query: accounts with any `is_payload_encrypted IS NOT TRUE` row or
-  a non-null `snapshot_data` (the server only ever caches plaintext state);
+  a non-null `snapshot_data`. A non-null cache is not proof of plaintext:
+  before 2026-05-12 (`9b965f2c357`) the upload path also cached encrypted
+  snapshots, so tell them apart by content (gzip of a JSON string is
+  ciphertext, of an object plaintext), never by the column alone — measured
+  2026-09: 1,747 ciphertext vs. 85 plaintext caches;
 - the Step 1 classifier over all retained rows, which also catches rows
   flagged encrypted whose payload is not a canonical-base64 AES-GCM envelope.
 
@@ -282,7 +286,7 @@ SELECT count(*) AS non_string_payloads
 FROM operations
 WHERE jsonb_typeof(payload) IS DISTINCT FROM 'string';
 
-SELECT count(*) AS cached_plaintext_snapshots
+SELECT count(*) AS cached_snapshots
 FROM user_sync_state
 WHERE snapshot_data IS NOT NULL;
 ```

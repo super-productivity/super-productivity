@@ -1688,20 +1688,6 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   }
 
   /**
-   * Deletes all full-state operations (SYNC_IMPORT, BACKUP_IMPORT, REPAIR) from the local store.
-   *
-   * This is used when force-downloading remote state (USE_REMOTE in conflict resolution).
-   * The local import operation must be removed so that incoming remote ops aren't filtered
-   * against it.
-   *
-   * @returns Number of operations deleted
-   */
-  async clearFullStateOps(): Promise<number> {
-    // Deleting all full-state ops is the no-exclusion case of clearFullStateOpsExcept.
-    return this.clearFullStateOpsExcept([]);
-  }
-
-  /**
    * Deletes all full-state operations (SYNC_IMPORT, BACKUP_IMPORT, REPAIR) from the local store,
    * EXCEPT for the operation(s) with the specified ID(s).
    *
@@ -1880,29 +1866,6 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         if (entry) {
           entry.rejectedAt = now;
           await tx.put(STORE_NAMES.OPS, entry);
-        }
-      }
-    });
-    this._invalidateUnsyncedCache();
-  }
-
-  /**
-   * Clears all unsynced local operations by marking them as rejected.
-   * Used when force-downloading remote state to discard local changes.
-   */
-  async clearUnsyncedOps(): Promise<void> {
-    await this._ensureInit();
-
-    const unsynced = await this.getUnsynced();
-    if (unsynced.length === 0) return;
-
-    const now = Date.now();
-    await this._adapter.transaction([STORE_NAMES.OPS], 'readwrite', async (tx) => {
-      for (const entry of unsynced) {
-        const stored = await tx.get<StoredOperationLogEntry>(STORE_NAMES.OPS, entry.seq);
-        if (stored) {
-          stored.rejectedAt = now;
-          await tx.put(STORE_NAMES.OPS, stored);
         }
       }
     });
@@ -2200,19 +2163,6 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         id: BACKUP_KEY,
       });
     }
-  }
-
-  /**
-   * Loads the backup state cache, if one exists.
-   * Used for crash recovery during migration.
-   */
-  async loadStateCacheBackup(): Promise<StateCacheEntry | null> {
-    await this._ensureInit();
-    const backup = await this._adapter.get<StateCacheEntry>(
-      STORE_NAMES.STATE_CACHE,
-      BACKUP_KEY,
-    );
-    return backup || null;
   }
 
   /**
