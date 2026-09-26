@@ -72,6 +72,10 @@ describe('RejectedOpsHandlerService', () => {
           useValue: supersededOperationResolverSpy,
         },
         { provide: RepairOperationService, useValue: repairOperationServiceSpy },
+        {
+          provide: OperationLogDownloadService,
+          useValue: { hasUnseenRemoteOps: () => false },
+        },
       ],
     });
 
