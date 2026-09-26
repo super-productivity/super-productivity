@@ -67,5 +67,4 @@ ruleTester.run('no-actions-in-effects', rule, {
   ],
 });
 
-// eslint-disable-next-line no-console
 console.log('no-actions-in-effects: all RuleTester cases passed');

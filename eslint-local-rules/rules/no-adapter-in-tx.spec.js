@@ -193,5 +193,4 @@ ruleTester.run('no-adapter-in-tx', rule, {
   ],
 });
 
-// eslint-disable-next-line no-console
 console.log('no-adapter-in-tx: all RuleTester cases passed');
