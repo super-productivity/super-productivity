@@ -67,7 +67,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
         with:
-          images: ghcr.io/super-productivity/supersync
+          images: ghcr.io/${{ github.repository }}/supersync
           tags: |
             type=raw,value=latest
             type=sha,prefix={{branch}}-
@@ -103,7 +103,7 @@ jobs:
           build-args: |
             VCS_REF=${{ steps.source-ref.outputs.revision }}
           no-cache: ${{ github.event_name == 'workflow_dispatch' && inputs.no_cache || false }}
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           # Buildx would otherwise attach a provenance attestation, turning every push
           # into an OCI index with an untagged child version. Nobody consumes the
           # attestation (deploys verify the VCS_REF revision label instead), and a flat
@@ -117,8 +117,6 @@ jobs:
 
       # Keep the registry from accumulating a version per master push forever. 15
       # newest versions ≈ weeks of rollback targets at the current push cadence.
-      # Safe to count naively because the build is single-arch with provenance off:
-      # one version per build, no untagged children a deletion could orphan.
       # Requires the package to grant this repo write access (it does — this same
       # workflow publishes it with GITHUB_TOKEN).
       - name: Prune old package versions
@@ -127,4 +125,4 @@ jobs:
         with:
           package-name: supersync
           package-type: container
-          min-versions-to-keep: 15
+          min-versions-to-keep: 30  # delete-package-version is not multi-arch aware, so with two archs, double the keep count
