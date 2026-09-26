@@ -95,3 +95,4 @@ app/src/main/res/xml/config.xml
 
 ###############
 .idea/deploymentTargetSelector.xml
+.kotlin/
