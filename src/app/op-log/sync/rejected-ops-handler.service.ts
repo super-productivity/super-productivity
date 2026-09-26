@@ -635,13 +635,13 @@ export class RejectedOpsHandlerService {
   ): Promise<void> {
     try {
       const localClock = (await this.opLogStore.getVectorClock()) ?? {};
-      const ownCounterBehindServerCount = ops.filter(
+      const ownCounterNotAheadOfServerCount = ops.filter(
         ({ op, existingClock }) =>
           (existingClock?.[op.clientId] ?? 0) >= (op.vectorClock[op.clientId] ?? 0),
       ).length;
       OpLog.warn('RejectedOpsHandlerService: Rejected ops not explained by remote ops', {
         count: ops.length,
-        ownCounterBehindServerCount,
+        ownCounterNotAheadOfServerCount,
         localClockSize: Object.keys(localClock).length,
         samples: ops
           .slice(0, MAX_LOGGED_REJECTION_CLOCK_SAMPLES)

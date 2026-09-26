@@ -28,6 +28,7 @@ import {
 import { SuperSyncStatusService } from './super-sync-status.service';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { OperationIntegrityError } from '../core/errors/sync-errors';
+import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 
 describe('OperationLogDownloadService', () => {
   let service: OperationLogDownloadService;
@@ -37,6 +38,7 @@ describe('OperationLogDownloadService', () => {
   let mockEncryptionService: jasmine.SpyObj<OperationEncryptionService>;
   let mockSuperSyncStatusService: jasmine.SpyObj<SuperSyncStatusService>;
   let mockClientIdProvider: { loadClientId: jasmine.Spy };
+  let mockProviderManager: { configEpoch: number };
 
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
@@ -57,6 +59,8 @@ describe('OperationLogDownloadService', () => {
         .createSpy('loadClientId')
         .and.returnValue(Promise.resolve('test-client-id')),
     };
+
+    mockProviderManager = { configEpoch: 0 };
 
     // Mock OpLog
     spyOn(OpLog, 'warn');
@@ -80,6 +84,7 @@ describe('OperationLogDownloadService', () => {
         { provide: OperationEncryptionService, useValue: mockEncryptionService },
         { provide: SuperSyncStatusService, useValue: mockSuperSyncStatusService },
         { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
+        { provide: SyncProviderManager, useValue: mockProviderManager },
       ],
     });
 
@@ -1822,7 +1827,9 @@ describe('OperationLogDownloadService', () => {
             expect(requestedSinceSeqs()).toEqual([0, 2, 4]);
           });
 
-          it('should not resume once the persisted cursor moved', async () => {
+          it('should still resume after the persisted cursor moved', async () => {
+            // An accepted upload or another device's ops move the cursor between
+            // attempts; that only means more is applied here.
             failAtSinceSeq = 4;
             await expectAsync(
               service.downloadRemoteOps(mockApiProvider, forcedRetry),
@@ -1833,7 +1840,43 @@ describe('OperationLogDownloadService', () => {
             mockApiProvider.downloadOps.calls.reset();
             await service.downloadRemoteOps(mockApiProvider, forcedRetry);
 
+            expect(requestedSinceSeqs()).toEqual([4]);
+          });
+
+          it('should not resume after the sync target or credentials changed', async () => {
+            failAtSinceSeq = 4;
+            await expectAsync(
+              service.downloadRemoteOps(mockApiProvider, forcedRetry),
+            ).toBeRejectedWith(networkError);
+
+            failAtSinceSeq = undefined;
+            mockProviderManager.configEpoch++;
+            mockApiProvider.downloadOps.calls.reset();
+            await service.downloadRemoteOps(mockApiProvider, forcedRetry);
+
             expect(requestedSinceSeqs()).toEqual([0, 2, 4]);
+          });
+
+          it('should adopt a newer snapshot clock when the resumed page skips to a new full-state op', async () => {
+            pages.set(0, {
+              ops: [makeOp(1, 1), makeOp(2, 2)],
+              hasMore: true,
+              snapshotVectorClock: { oldSnapshot: 1 },
+            } as never);
+            failAtSinceSeq = 4;
+            await expectAsync(
+              service.downloadRemoteOps(mockApiProvider, forcedRetry),
+            ).toBeRejectedWith(networkError);
+
+            failAtSinceSeq = undefined;
+            pages.set(4, {
+              ops: [makeOp(5, 5), makeOp(6, 6)],
+              hasMore: false,
+              snapshotVectorClock: { newSnapshot: 1 },
+            } as never);
+            const result = await service.downloadRemoteOps(mockApiProvider, forcedRetry);
+
+            expect(result.snapshotVectorClock).toEqual({ newSnapshot: 1 });
           });
 
           it('should not resume after a forced download that is not a re-delivery retry', async () => {

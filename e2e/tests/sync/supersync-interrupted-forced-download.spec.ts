@@ -69,6 +69,9 @@ interface UploadBody {
  *   spans many pages, and each sync may fetch only PAGES_PER_SYNC of them before
  *   its network "drops" (every further GET is aborted).
  *
+ * - Between B's attempts, A keeps adding tasks, so B's cursor moves on every
+ *   sync (as with an active user or a second device) — resuming must survive it.
+ *
  * Without resuming, every sync restarts at seq 0 and never gets past page
  * PAGES_PER_SYNC. With it, each sync continues where the last one stopped.
  *
@@ -83,7 +86,7 @@ test.describe('@supersync Interrupted forced download', () => {
     test.setTimeout(420000);
     const appUrl = baseURL || 'http://localhost:4242';
     const PAGES_PER_SYNC = 3;
-    const MAX_SYNCS = 8;
+    const MAX_SYNCS = 12;
     const EXTRA_TASKS = 10;
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
@@ -118,6 +121,7 @@ test.describe('@supersync Interrupted forced download', () => {
       let abortedForcedGets = 0;
       let injectedRejections = 0;
       let acceptedReplacementUploads = 0;
+      let mixedUploads = 0;
 
       await routeSuperSyncOps(clientB.page, async (route: Route) => {
         const request = route.request();
@@ -161,7 +165,9 @@ test.describe('@supersync Interrupted forced download', () => {
             await route.fulfill({ response, json });
             return;
           }
-          expect(staleOps.length).toBe(body.ops.length);
+          if (staleOps.length !== body.ops.length) {
+            mixedUploads++;
+          }
           injectedRejections++;
           await route.fulfill({
             status: 200,
@@ -188,20 +194,32 @@ test.describe('@supersync Interrupted forced download', () => {
 
       // 3. Sync repeatedly; each sync's forced download is cut off after
       //    PAGES_PER_SYNC pages. Failed syncs are expected until it completes.
+      let syncsNeeded = 0;
       for (let i = 0; i < MAX_SYNCS && acceptedReplacementUploads === 0; i++) {
+        // Another device keeps working, so B's cursor moves between attempts.
+        await clientA.workView.addTask(`Meanwhile-${i}-${testRunId}`);
+        await clientA.sync.syncAndWait();
         pagesThisSync = 0;
+        syncsNeeded = i + 1;
         try {
           await clientB.sync.syncAndWait();
         } catch {
           console.log(`[Interrupted] sync ${i + 1} failed (network cut)`);
         }
       }
+      console.log(
+        `[Interrupted] syncs=${syncsNeeded} forcedPagesServed=${forcedPagesServed} ` +
+          `abortedForcedGets=${abortedForcedGets}`,
+      );
 
       // Setup guards: the rejection was injected and the forced download was
       // really cut off at least once, otherwise a pass would prove nothing.
       expect(injectedRejections).toBeGreaterThanOrEqual(1);
       expect(abortedForcedGets).toBeGreaterThanOrEqual(1);
       expect(forcedPagesServed).toBeGreaterThan(PAGES_PER_SYNC);
+      // Every rejected upload held only the stale op, so the fake rejection
+      // never swallowed an unrelated op.
+      expect(mixedUploads).toBe(0);
 
       // 4. The forced download completed, the stale op was replaced by a
       //    merged op, and that op was accepted by the real server.

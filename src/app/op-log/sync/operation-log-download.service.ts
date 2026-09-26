@@ -34,6 +34,7 @@ import { assertOpsEncryptedWhenExpected } from './assert-ops-encryption-expected
 import { SuperSyncStatusService } from './super-sync-status.service';
 import { DownloadResult } from '../core/types/sync-results.types';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
+import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 
 /**
  * True when this client's vector clock already accounts for `op`: an author's
@@ -72,9 +73,13 @@ const isOpCoveredByLocalClock = (
  * `allOpClocks` folds them into one clock anyway). The first page with a new op
  * freezes the checkpoint, so unapplied ops are always re-downloaded.
  *
- * In memory only, keyed on the client id and the persisted cursor: any download
- * that advances the cursor, a gap reset, or a completed forced download
- * invalidates it.
+ * In memory only, keyed on the client id and the provider manager's
+ * `configEpoch`, which moves on every sync-target or credential change (an
+ * account switch must never resume another account's history). The persisted
+ * cursor is deliberately NOT part of the key: an active user or a second device
+ * moves it between attempts, and cursor progress only means more ops are
+ * applied here — it cannot make an already-scanned page hold an unapplied op.
+ * A gap reset, a completed forced download or any other seq-0 download drops it.
  */
 interface ForcedDownloadCheckpoint {
   key: string;
@@ -156,6 +161,7 @@ export class OperationLogDownloadService implements OnDestroy {
   private encryptionService = inject(OperationEncryptionService);
   private superSyncStatusService = inject(SuperSyncStatusService);
   private clientIdProvider = inject(CLIENT_ID_PROVIDER);
+  private providerManager = inject(SyncProviderManager);
 
   /** Track if we've already warned about clock drift this session */
   private hasWarnedClockDrift = false;
@@ -334,7 +340,7 @@ export class OperationLogDownloadService implements OnDestroy {
         !!options?.isReDeliveryRetry &&
         isReDeliveryFilterActive &&
         syncProvider.providerMode === 'superSyncOps'
-          ? `${clientId ?? ''}|${deliveredUpToSeq}`
+          ? `${clientId ?? ''}|${this.providerManager.configEpoch}`
           : undefined;
       const resumeFrom =
         checkpointKey !== undefined &&
@@ -347,6 +353,10 @@ export class OperationLogDownloadService implements OnDestroy {
         this.forcedDownloadCheckpoint = null;
       }
       let checkpointClock: VectorClock = resumeFrom ? { ...resumeFrom.mergedClock } : {};
+      // A resumed page can still start with a server snapshot skip when a newer
+      // full-state op landed since the checkpoint; that response's clock and
+      // encryption state then supersede the restored ones.
+      let isSnapshotStateFromResume = !!resumeFrom;
       if (resumeFrom) {
         allOpClocks.push({ ...resumeFrom.mergedClock });
         snapshotVectorClock = resumeFrom.snapshotVectorClock;
@@ -396,12 +406,21 @@ export class OperationLogDownloadService implements OnDestroy {
         );
 
         // Capture snapshot vector clock from first response (only present when snapshot optimization used)
-        if (!snapshotVectorClock && response.snapshotVectorClock) {
+        if (
+          response.snapshotVectorClock &&
+          (!snapshotVectorClock || isSnapshotStateFromResume)
+        ) {
+          if (isSnapshotStateFromResume) {
+            sawAnyOps = false;
+            sawEncryptedOp = false;
+          }
           snapshotVectorClock = response.snapshotVectorClock;
           OpLog.normal(
             `OperationLogDownloadService: Received snapshotVectorClock with ${Object.keys(snapshotVectorClock).length} entries`,
           );
         }
+        // Only the first page of a resumed run can carry that skip.
+        isSnapshotStateFromResume = false;
 
         // Capture snapshot state from first response (file-based sync providers only)
         // This is only present when downloading from seq 0 (fresh download)
