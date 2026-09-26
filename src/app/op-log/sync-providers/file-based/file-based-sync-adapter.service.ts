@@ -30,6 +30,11 @@ import {
   FILE_BASED_SYNC_CONSTANTS,
   SyncFileCompactOp,
 } from './file-based-sync.types';
+import {
+  discoverFileSyncFormat,
+  downloadLegacySyncFile,
+  annotatePrimaryRev,
+} from './file-based-sync-format';
 import { assertSyncFileVersion } from './assert-sync-file-version';
 import { OpLog } from '../../../core/log';
 import {
@@ -38,7 +43,6 @@ import {
   FileSyncTargetChangedError,
   InvalidDataSPError,
   JsonParseError,
-  LegacySyncFormatDetectedError,
   PlaintextWhenEncryptionExpectedError,
   RemoteFileNotFoundAPIError,
   SplitSyncFormatDetectedError,
@@ -207,6 +211,9 @@ export class FileBasedSyncAdapterService {
 
   /** Cache TTL - 30 seconds (sync cycle should complete within this) */
   private readonly _CACHE_TTL_MS = 30_000;
+
+  // Discovered remote formats are target-scoped and never persisted.
+  private _remoteFormats = new Map<string, 'v2' | 'v3'>();
 
   /**
    * SPAP-11: within-cycle cache for the split-format ops file (`sync-ops.json`),
@@ -400,6 +407,7 @@ export class FileBasedSyncAdapterService {
       this._pendingRevs,
       this._syncCycleCache,
       this._splitOpsCache,
+      this._remoteFormats,
     ] as Map<string, unknown>[];
   }
 
@@ -891,8 +899,8 @@ export class FileBasedSyncAdapterService {
     const provider = this._withTargetGuard(rawProvider, this._targetGeneration);
     const providerKey = this._getProviderKey(provider);
 
-    // Split-file ("Surgical sync") uploads are opt-in; single-file is the default.
-    if (this._isSplitSyncEnabled()) {
+    // Follow the remote format unless the user explicitly selected a format.
+    if (await this._shouldUseSplitSync(provider)) {
       return this._uploadOpsSplit(
         provider,
         cfg,
@@ -1022,8 +1030,8 @@ export class FileBasedSyncAdapterService {
     const provider = this._withTargetGuard(rawProvider, capturedGeneration);
     const providerKey = this._getProviderKey(provider);
 
-    // Split-file downloads are opt-in; single-file is the default.
-    if (this._isSplitSyncEnabled()) {
+    // The default discovers the remote format; it does not migrate v2.
+    if (await this._shouldUseSplitSync(provider)) {
       return this._downloadOpsSplit(
         provider,
         cfg,
@@ -1104,6 +1112,23 @@ export class FileBasedSyncAdapterService {
       this._setCachedSyncData(providerKey, syncData, rev);
     } catch (e) {
       if (e instanceof SplitSyncFormatDetectedError) {
+        if (
+          this._injector.get(GlobalConfigService, null)?.sync()?.isUseSplitSyncFiles ===
+          undefined
+        ) {
+          this._abortDownloadIfTargetChanged(capturedGeneration, providerKey);
+          this._remoteFormats.set(providerKey, 'v3');
+          return this._downloadOpsSplit(
+            provider,
+            cfg,
+            encryptKey,
+            sinceSeq,
+            excludeClient,
+            limit,
+            providerKey,
+            capturedGeneration,
+          );
+        }
         // SPAP-11: OFF client hit a migrated (split-format) folder. Surface an
         // actionable notice and pause safely (no upload, no divergence).
         this._notifySplitFormatDetected();
@@ -1325,7 +1350,7 @@ export class FileBasedSyncAdapterService {
     // SPAP-11: split-file force-upload / recovery / initial — write both files
     // (state THEN ops) so the ops file's snapshotRef always points at a snapshot
     // that is already on the remote.
-    if (this._isSplitSyncEnabled()) {
+    if (await this._shouldUseSplitSync(provider)) {
       return this._uploadSnapshotSplit(
         provider,
         cfg,
@@ -1501,27 +1526,34 @@ export class FileBasedSyncAdapterService {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SPAP-11: SPLIT-FILE ("SURGICAL SYNC") FORMAT (opt-in)
+  // SPLIT-FILE ("SURGICAL SYNC") FORMAT
   // ═══════════════════════════════════════════════════════════════════════════
 
   /**
-   * Whether the opt-in split-file sync setting is ON. Resolved lazily via the
-   * injector (like SnackService) so the single-file unit harness — which does not
-   * provide GlobalConfigService — keeps working and defaults to OFF.
+   * Whether the user explicitly requested v3, including migration of existing v2.
    */
   private _isSplitSyncEnabled(): boolean {
     const svc = this._injector.get(GlobalConfigService, null);
     return svc?.sync()?.isUseSplitSyncFiles === true;
   }
 
-  /** True when a decoded sync-data.json body is a v3 split-format tombstone. */
-  private _isSplitTombstone(data: unknown): data is FileBasedSplitTombstone {
-    const d = data as Partial<FileBasedSplitTombstone> | null;
-    return (
-      !!d &&
-      d.version === FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION &&
-      d.format === FILE_BASED_SYNC_CONSTANTS.SPLIT_TOMBSTONE_FORMAT
-    );
+  /** Explicit false preserves saved v2 settings; only an absent option auto-selects. */
+  private async _shouldUseSplitSync(provider: GuardedFileSyncProvider): Promise<boolean> {
+    const setting = this._injector
+      .get(GlobalConfigService, null)
+      ?.sync()?.isUseSplitSyncFiles;
+    const key = this._getProviderKey(provider);
+    if (setting !== undefined) {
+      this._remoteFormats.delete(key);
+      return setting;
+    }
+    const generation = this._targetGeneration;
+    const format =
+      this._remoteFormats.get(key) ?? (await discoverFileSyncFormat(provider));
+    this._abortDownloadIfTargetChanged(generation, key);
+    // Never remember emptiness: a different client may create v2 before upload.
+    if (format !== 'empty') this._remoteFormats.set(key, format);
+    return format !== 'v2';
   }
 
   private _isPendingSplitMigration(data: FileBasedOpsFile): boolean {
@@ -1592,7 +1624,7 @@ export class FileBasedSyncAdapterService {
     } catch (decodeErr) {
       // Annotate the corrupt file's rev so the .bak recovery path can seed the
       // heal cache with IT (mirrors _downloadSyncFile).
-      throw this._annotatePrimaryRev(decodeErr, response.rev);
+      throw annotatePrimaryRev(decodeErr, response.rev);
     }
   }
 
@@ -1862,7 +1894,7 @@ export class FileBasedSyncAdapterService {
     provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
-    expectedLegacyRev?: string,
+    expectedLegacyRev?: string | null,
   ): Promise<void> {
     const tombstone: FileBasedSplitTombstone = {
       version: FILE_BASED_SYNC_CONSTANTS.SPLIT_FILE_VERSION,
@@ -1891,7 +1923,16 @@ export class FileBasedSyncAdapterService {
     // tombstone conditional. A mismatch leaves the pending ops marker intact;
     // the recovery loop imports the newer v2 payload and retries. Explicit
     // snapshot replacement omits the rev and intentionally force-overwrites.
-    await provider.uploadFile(FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE, encoded, null, true);
+    // null reserves a new folder with a conditional create, before publishing ops.
+    // There is no prior v2 primary to back up in that case.
+    if (expectedLegacyRev !== null) {
+      await provider.uploadFile(
+        FILE_BASED_SYNC_CONSTANTS.BACKUP_FILE,
+        encoded,
+        null,
+        true,
+      );
+    }
     // Overwrite the legacy single file in place (never remove it).
     await provider.uploadFile(
       FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
@@ -2123,12 +2164,23 @@ export class FileBasedSyncAdapterService {
     try {
       legacy = await this._downloadSyncFile(provider, cfg, encryptKey);
     } catch (e) {
-      if (e instanceof RemoteFileNotFoundAPIError) return null; // truly fresh
+      if (e instanceof RemoteFileNotFoundAPIError) {
+        // Reserve the legacy filename too: v2 clients must see the tombstone,
+        // and a concurrent v2 creator must win a conditional-write conflict.
+        await this._writeTombstoneAndNeutralizeBak(provider, cfg, encryptKey, null);
+        return null;
+      }
       // Already a tombstone but the ops file is missing (migration crashed before
       // the ops write, or ops file was deleted): treat as fresh split — there is
       // no v2 payload left to preserve.
       if (e instanceof SplitSyncFormatDetectedError) return null;
       throw e; // legacy pfapi (__meta_) etc. must propagate
+    }
+
+    if (!this._isSplitSyncEnabled()) {
+      // Rediscover on retry: the target may have changed during the legacy read.
+      this._remoteFormats.delete(this._getProviderKey(provider));
+      throw new UploadRevToMatchMismatchAPIError('Remote v2 data appeared; retry sync.');
     }
 
     OpLog.warn(
@@ -3080,19 +3132,6 @@ export class FileBasedSyncAdapterService {
   }
 
   /**
-   * Annotates a decode error with the corrupt primary file's rev so the .bak
-   * recovery path can seed the heal cache with IT (not the .bak rev) and heal
-   * the primary via a matching conditional overwrite. Returns the error for
-   * rethrowing.
-   */
-  private _annotatePrimaryRev(e: unknown, rev: string): unknown {
-    if (e && typeof e === 'object' && !('primaryRev' in e)) {
-      (e as { primaryRev?: string }).primaryRev = rev;
-    }
-    return e;
-  }
-
-  /**
    * Whether a download error indicates a corrupt/empty/unparseable primary file
    * that we should attempt to recover from the .bak artifact. Missing files are
    * NOT included — that is a legitimate fresh-start signal handled separately.
@@ -3119,106 +3158,19 @@ export class FileBasedSyncAdapterService {
     );
   }
 
-  /**
-   * Downloads and decrypts the sync file.
-   *
-   * When sync-data.json is not found, checks for a legacy __meta_ file (written
-   * by v16.x pfapi clients) and throws LegacySyncFormatDetectedError instead of
-   * treating the missing file as a fresh start. This prevents silent divergence
-   * when a new client first syncs to a provider still used by an old client.
-   *
-   * @returns The sync data and its revision (ETag) for conditional upload
-   */
-  private async _downloadSyncFile(
+  private _downloadSyncFile(
     provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
     encryptKey: string | undefined,
   ): Promise<{ data: FileBasedSyncData; rev: string }> {
-    let response: Awaited<ReturnType<typeof provider.downloadFile>>;
-    try {
-      response = await provider.downloadFile(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE);
-    } catch (e) {
-      if (e instanceof RemoteFileNotFoundAPIError) {
-        // sync-data.json not found. Check for a legacy pfapi __meta_ file before
-        // treating this as a fresh start — a v16.x device may be writing to the
-        // same provider, causing silent divergence if we proceed.
-        let legacyFileFound = false;
-        try {
-          await provider.getFileRev(FILE_BASED_SYNC_CONSTANTS.LEGACY_META_FILE, null);
-          legacyFileFound = true;
-        } catch (innerE) {
-          // Why: WebDAV surfaces a corrupt/empty legacy __meta_ body as
-          // InvalidDataSPError (not RemoteFileNotFoundAPIError). The presence
-          // of the file — even if unreadable — still proves a v16.x client
-          // touched this target, so treat it the same as a successful probe
-          // rather than letting the unfriendly InvalidDataSPError escape.
-          if (innerE instanceof InvalidDataSPError) {
-            legacyFileFound = true;
-          } else if (!(innerE instanceof RemoteFileNotFoundAPIError)) {
-            throw innerE;
-          }
-          // __meta_ not found either → genuine fresh start
-        }
-        if (legacyFileFound) throw new LegacySyncFormatDetectedError();
-      }
-      throw e;
-    }
-    let data: FileBasedSyncData;
-    try {
-      data =
-        await this._encryptAndCompressHandler.decompressAndDecryptData<FileBasedSyncData>(
-          cfg,
-          encryptKey,
-          response.dataStr,
-        );
-
-      // SPAP-11: if sync-data.json is a v3 SPLIT tombstone, this folder was
-      // migrated to the split format by another client. Signal that specifically
-      // (distinct from generic corruption) so the caller can surface an actionable
-      // "enable Surgical sync" notice and pause without re-creating a v2 file.
-      // Checked before the version gate so a v3 tombstone doesn't read as corrupt.
-      if (this._isSplitTombstone(data)) {
-        throw new SplitSyncFormatDetectedError();
-      }
-
-      assertSyncFileVersion(
-        data,
-        FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
-        FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
-      );
-    } catch (decodeErr) {
-      // A split tombstone is a valid signal, not corruption — let it propagate
-      // by type without being annotated as a corrupt primary.
-      if (decodeErr instanceof SplitSyncFormatDetectedError) {
-        throw decodeErr;
-      }
-      // We already hold the corrupt primary's rev (from the download above), so
-      // no extra request is needed to enable the heal-via-conditional-overwrite.
-      throw this._annotatePrimaryRev(decodeErr, response.rev);
-    }
-
-    // SPAP-11 (Q4): a valid v2 sync-data.json can still coexist with a
-    // sync-ops.json when a migration crashed after the ops commit but before the
-    // tombstone write. A split-sync-OFF client must NOT proceed on the stale v2
-    // file (it would diverge from the already-committed ops). Probe for the ops
-    // file; if present, treat it exactly like the tombstone case (actionable
-    // notice + pause). Skipped when split-sync is ON, because the migrator
-    // legitimately reads the v2 file here to complete the migration. Best-effort:
-    // any probe failure falls through to the normal single-file path.
-    if (!this._isSplitSyncEnabled()) {
-      let opsFilePresent = false;
-      try {
-        await provider.getFileRev(FILE_BASED_SYNC_CONSTANTS.OPS_FILE, null);
-        opsFilePresent = true;
-      } catch {
-        // absent / probe failed → proceed on the single-file path
-      }
-      if (opsFilePresent) {
-        throw new SplitSyncFormatDetectedError();
-      }
-    }
-
-    return { data, rev: response.rev };
+    return downloadLegacySyncFile(
+      provider,
+      this._encryptAndCompressHandler,
+      cfg,
+      encryptKey,
+      this._isSplitSyncEnabled() ||
+        this._remoteFormats.get(this._getProviderKey(provider)) === 'v3',
+    );
   }
 
   /**

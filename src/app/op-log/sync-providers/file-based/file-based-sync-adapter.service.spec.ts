@@ -13,6 +13,8 @@ import {
   FileBasedStateFile,
 } from './file-based-sync.types';
 import {
+  AuthFailSPError,
+  LegacySyncFormatDetectedError,
   EncryptNoPasswordError,
   FileSyncTargetChangedError,
   InvalidDataSPError,
@@ -43,7 +45,7 @@ describe('FileBasedSyncAdapterService', () => {
   // SPAP-11: toggles the opt-in split-file ("Surgical sync") setting for the
   // adapter under test. Default OFF so every existing test runs the single-file
   // path unchanged; split tests flip it ON.
-  let splitSyncEnabled = false;
+  let splitSyncEnabled: boolean | undefined = false;
 
   const mockCfg: EncryptAndCompressCfg = {
     isEncrypt: false,
@@ -218,6 +220,173 @@ describe('FileBasedSyncAdapterService', () => {
     );
 
     adapter = service.createAdapter(mockProvider, mockCfg, mockEncryptKey);
+  });
+
+  describe('automatic remote format selection', () => {
+    const C = FILE_BASED_SYNC_CONSTANTS;
+    let files: Map<string, string>;
+    beforeEach(() => {
+      splitSyncEnabled = undefined;
+      files = new Map();
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        const dataStr = files.get(path);
+        if (dataStr === undefined) throw new RemoteFileNotFoundAPIError(path);
+        return { dataStr, rev: path + '-rev' };
+      });
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (!files.has(path)) throw new RemoteFileNotFoundAPIError(path);
+        return { rev: path + '-rev' };
+      });
+      mockProvider.uploadFile.and.callFake(async (path: string, data: string) => {
+        files.set(path, data);
+        return { rev: path + '-rev' };
+      });
+    });
+
+    it('creates v3 from an absent setting and reuses discovery for later polls', async () => {
+      expect(DEFAULT_GLOBAL_CONFIG.sync.isUseSplitSyncFiles).toBeUndefined();
+      await adapter.downloadOps(0);
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+      expect(files.has(C.OPS_FILE)).toBeTrue();
+      expect(files.get(C.OPS_FILE)).toContain('"version":3');
+      expect(files.get(C.SYNC_FILE)).toContain('"format":"split"');
+      const marker = mockProvider.uploadFile.calls
+        .allArgs()
+        .find(([path]) => path === C.SYNC_FILE)!;
+      expect(marker.slice(2)).toEqual([null, false]);
+      await adapter.downloadOps(0);
+      mockProvider.getFileRev.calls.reset();
+      await adapter.downloadOps(0);
+      expect(mockProvider.getFileRev).not.toHaveBeenCalled();
+    });
+
+    it('honors explicit v2 after auto-detecting a split folder', async () => {
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+      await adapter.downloadOps(0);
+      // A pending migration can contain both a legacy primary and an ops file.
+      files.set(C.SYNC_FILE, addPrefix(createMockSyncData()));
+      splitSyncEnabled = false;
+      mockProvider.uploadFile.calls.reset();
+
+      await expectAsync(adapter.downloadOps(0)).toBeRejectedWithError(
+        SplitSyncFormatDetectedError,
+      );
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+    });
+
+    it('retains v2 and its snapshot when the setting is absent', async () => {
+      files.set(C.SYNC_FILE, addPrefix(createMockSyncData()));
+      const result = await adapter.downloadOps(0);
+      expect(result.snapshotState).toEqual(jasmine.objectContaining({ tasks: [] }));
+      await adapter.setLastServerSeq!(result.latestSeq);
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+      expect(parseWithPrefix(files.get(C.SYNC_FILE)!).version).toBe(2);
+      expect(files.has(C.OPS_FILE)).toBeFalse();
+    });
+
+    it('rediscovers after a target switch', async () => {
+      files.set(C.SYNC_FILE, addPrefix(createMockSyncData()));
+      await adapter.downloadOps(0);
+      service.invalidateAllTargets();
+      files.clear();
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+      expect(files.has(C.OPS_FILE)).toBeTrue();
+    });
+
+    it('does not cache discovery from a target switched during the probe', async () => {
+      mockProvider.getFileRev.and.callFake(async () => {
+        service.invalidateAllTargets();
+        return { rev: 'old-target' };
+      });
+      await expectAsync(adapter.downloadOps(0)).toBeRejectedWithError(
+        FileSyncTargetChangedError,
+      );
+      files.set(C.SYNC_FILE, addPrefix(createMockSyncData()));
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (!files.has(path)) throw new RemoteFileNotFoundAPIError(path);
+        return { rev: path + '-rev' };
+      });
+      expect((await adapter.downloadOps(0)).snapshotState).toBeDefined();
+      expect(files.has(C.OPS_FILE)).toBeFalse();
+    });
+
+    it('rediscovers the new target after a late legacy read from the old target', async () => {
+      const legacy = addPrefix(createMockSyncData());
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        if (path === C.SYNC_FILE) {
+          service.invalidateAllTargets();
+          return { dataStr: legacy, rev: 'old-target-rev' };
+        }
+        throw new RemoteFileNotFoundAPIError(path);
+      });
+      await expectAsync(
+        adapter.uploadOps([createMockSyncOp()], 'client1'),
+      ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        const dataStr = files.get(path);
+        if (dataStr === undefined) throw new RemoteFileNotFoundAPIError(path);
+        return { dataStr, rev: path + '-rev' };
+      });
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+      expect(files.has(C.OPS_FILE)).toBeTrue();
+      expect(files.get(C.SYNC_FILE)).toContain('"format":"split"');
+    });
+
+    it('does not migrate v2 that appears after empty-folder discovery', async () => {
+      const legacy = addPrefix(createMockSyncData());
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        // A legacy writer commits after the metadata probes saw an empty folder.
+        files.set(C.SYNC_FILE, legacy);
+        if (path === C.SYNC_FILE) return { dataStr: legacy, rev: 'legacy-rev' };
+        throw new RemoteFileNotFoundAPIError(path);
+      });
+      await expectAsync(
+        adapter.uploadOps([createMockSyncOp()], 'client1'),
+      ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+      expect(files.get(C.SYNC_FILE)).toBe(legacy);
+      expect(files.has(C.OPS_FILE)).toBeFalse();
+    });
+
+    for (const path of [C.SYNC_FILE, C.OPS_FILE]) {
+      it(`does not treat corrupt ${path} as an empty folder`, async () => {
+        files.set(path, 'pf_2__{broken');
+        await expectAsync(adapter.downloadOps(0)).toBeRejected();
+        expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+        expect(files.size).toBe(1);
+      });
+    }
+
+    it('blocks unreadable legacy metadata rather than creating v3', async () => {
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (path === C.LEGACY_META_FILE) throw new InvalidDataSPError('invalid prefix');
+        throw new RemoteFileNotFoundAPIError(path);
+      });
+      await expectAsync(adapter.downloadOps(0)).toBeRejectedWithError(
+        LegacySyncFormatDetectedError,
+      );
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+    });
+
+    for (const path of [C.OPS_FILE, C.SYNC_FILE, C.LEGACY_META_FILE]) {
+      it(`propagates a discovery error at ${path} without writing`, async () => {
+        const failure = new AuthFailSPError('Authentication failed (HTTP 401)');
+        mockProvider.getFileRev.and.callFake(async (file: string) => {
+          if (file === path) throw failure;
+          throw new RemoteFileNotFoundAPIError(file);
+        });
+        await expectAsync(adapter.downloadOps(0)).toBeRejectedWith(failure);
+        await expectAsync(
+          adapter.uploadOps([createMockSyncOp()], 'client1'),
+        ).toBeRejectedWith(failure);
+        await expectAsync(
+          adapter.uploadSnapshot!({}, 'client1', 'initial', {}, 1, false, 'id'),
+        ).toBeRejectedWith(failure);
+        expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+      });
+    }
   });
 
   describe('createAdapter', () => {
