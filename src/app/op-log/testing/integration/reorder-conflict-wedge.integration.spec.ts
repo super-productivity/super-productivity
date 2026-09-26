@@ -47,11 +47,13 @@ import { resetTestUuidCounter, TestClient } from './helpers/test-client.helper';
  * replaces the whole dataset on one side. The same class already reached
  * users through the Today-list actions (#9405, #9426).
  *
- * These specs assert the desired behavior (the crossing resolves) and are
- * pending (`xit`) until the class is fixed. Verified failing on 6169df9e9 with
+ * These specs only pin that resolution no longer throws. They mock the
+ * operation applier, so they cannot prove order convergence or that the
+ * other side's content edit survives; the end-to-end reproduction
+ * (e2e/tests/sync/supersync-reorder-conflict-wedge.spec.ts) and the plan's
+ * Phase 2 cover that. Pending (`xit`) until the class is fixed. Verified
+ * failing on 6169df9e9 and 41324d290 with
  * `SYNC_MULTI_ENTITY_UNSUPPORTED side=<local|remote> actionType=<reorder>`.
- * The end-to-end reproduction is
- * e2e/tests/sync/supersync-reorder-conflict-wedge.spec.ts.
  */
 describe('reorder crossing a concurrent edit (known gap: sync stops)', () => {
   const LOCAL_CLIENT_ID = 'reorder-local-client';

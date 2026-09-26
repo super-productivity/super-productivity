@@ -2,7 +2,10 @@
 
 **Status:** Proposal for discussion — nothing here is accepted. Revised after
 two adversarial reviews. · **Date:** 2026-09-26
-**Baseline commit:** `6169df9e9` (`origin/master`)
+**Baseline commit:** `6169df9e9` (`origin/master`); rebased onto `41324d290`.
+The four intervening master commits leave the findings unchanged, although
+#10249 shrank `file-based-sync-adapter.service.ts` from 3,356 to 3,292 lines.
+Measurements below are at the baseline.
 **Question:** Did the sync architecture go in the wrong direction? Could we throw
 away half of it?
 **Scope:** client op-log (`src/app/op-log/`), `packages/sync-core`,
@@ -500,7 +503,7 @@ Proposed for the maintainer to adopt or reject; this plan does not edit
 | Item                                                                                                                                                               | ≈ Lines | Evidence                                                                                                          |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------: | ----------------------------------------------------------------------------------------------------------------- |
 | `src/app/pfapi/**/*.js` (compiled legacy JS, 4 files)                                                                                                              |   1,777 | imported nowhere (grep)                                                                                           |
-| Concurrent-snapshot auto-merge branch (`_tryConcurrentSnapshotMerge`)                                                                                              |     110 | `AUTO_MERGE_CONCURRENT_SNAPSHOT: false` is a constant (`packages/sync-providers/src/file-based-sync-data.ts:224`) |
+| Concurrent-snapshot auto-merge branch (`_tryConcurrentSnapshotMerge`)                                                                                              |     110 | `AUTO_MERGE_CONCURRENT_SNAPSHOT: false` is a constant (`packages/sync-providers/src/file-based-sync-data.ts:233`) |
 | `listFiles` in six providers                                                                                                                                       |     150 | no production caller                                                                                              |
 | Uncalled store methods (`clearFullStateOps`, `clearUnsyncedOps`, `filterNewOps`, `loadStateCacheBackup`, `incrementCompactionCounter`; `appendBatch` is test-only) |    ~200 | no production callers                                                                                             |
 | Test-only private helpers in `conflict-resolution.service.ts` (`_deepEqual`, `_extractEntityFromPayload`, `_extractUpdateChanges`)                                 |      35 | only reached from specs via `as any`                                                                              |
