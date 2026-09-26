@@ -80,9 +80,10 @@ import {
  * modify different entities, both changes are preserved.
  *
  * ## Optimistic Locking
- * Uploads use an applied download cache or an already-applied revision. A cache-less
- * read of unseen retained ops defers the upload until the next download cycle.
- * The provider's conditional write checks the revision again before replacing.
+ * Uploads extend an applied baseline. A cold read of a changed revision or an
+ * unapplied download cache defers upload until the next download/apply cycle.
+ * Conditional writes protect against changes after that read; `syncVersion`
+ * identifies upload batches for incremental downloads.
  *
  * @see FileBasedSyncData for the file schema
  */
@@ -657,13 +658,6 @@ export class FileBasedSyncAdapterService {
     };
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // UPLOAD OPERATIONS
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  /**
-   * Gets the current sync state from cache or by downloading.
-   */
   private async _getCurrentSyncState(
     provider: GuardedFileSyncProvider,
     cfg: EncryptAndCompressCfg,
@@ -675,7 +669,6 @@ export class FileBasedSyncAdapterService {
     fileExists: boolean;
     revToMatch: string | null;
   }> {
-    // Try to use cached data from _downloadOps() first
     const cached = this._getCachedSyncData(providerKey);
     if (cached) {
       OpLog.normal('FileBasedSyncAdapter: Using cached sync data (saved 1 download)');
@@ -687,9 +680,12 @@ export class FileBasedSyncAdapterService {
       };
     }
 
-    // Fallback: download if no cache
     try {
       const result = await this._downloadSyncFile(provider, cfg, encryptKey);
+      const lastSeenRev = this._lastSeenRevs.get(providerKey);
+      if (lastSeenRev && result.rev !== lastSeenRev) {
+        throw new UploadRevToMatchMismatchAPIError('Remote data changed; retry sync.');
+      }
       return {
         currentData: result.data,
         currentSyncVersion: result.data.syncVersion,
@@ -706,7 +702,6 @@ export class FileBasedSyncAdapterService {
       if (!(e instanceof RemoteFileNotFoundAPIError)) {
         throw e;
       }
-      // No file exists yet - this is first sync
       OpLog.normal('FileBasedSyncAdapter: No existing sync file, creating new');
       return {
         currentData: null,
@@ -2255,6 +2250,10 @@ export class FileBasedSyncAdapterService {
     } else {
       try {
         const r = await this._downloadOpsFile(provider, cfg, encryptKey);
+        const lastSeenRev = this._lastSeenRevs.get(providerKey);
+        if (lastSeenRev && r.rev !== lastSeenRev) {
+          throw new UploadRevToMatchMismatchAPIError('Remote data changed; retry sync.');
+        }
         opsFile = r.data;
         opsRev = r.rev;
       } catch (e) {

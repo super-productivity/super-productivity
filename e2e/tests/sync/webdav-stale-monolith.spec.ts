@@ -197,8 +197,8 @@ test.describe('@webdav stale monolith #10256', () => {
 
         const remaining = await pendingIds(b.page);
         if (remaining.length > 0) {
-          // The fixed v2 writer refuses the stale snapshot and leaves the
-          // original work pending for the next normal download/upload cycle.
+          // A writer with an unapplied baseline leaves the original work pending
+          // for the next normal download/upload cycle.
           expect(remaining).toEqual(pending);
           expect(initialUploadWrites).toBe(0);
           await expect(b.page.locator('task', { hasText: bTask })).toBeVisible();
@@ -247,7 +247,9 @@ test.describe('@webdav stale monolith #10256', () => {
         for (const title of remoteTitles) {
           await expect(c.page.locator('task', { hasText: title })).toBeVisible();
         }
-        expect(remaining).toEqual(isUseSplitSyncFiles ? [] : pending);
+        // A changed cold-read revision defers both formats; a fresh split migration
+        // can still append to its initial baseline without publishing a snapshot.
+        expect(remaining).toEqual(isUseSplitSyncFiles && firstSync ? [] : pending);
 
         for (const writer of [a, b]) {
           if (!requiresFirstSyncDecision) await syncOnce(writer);

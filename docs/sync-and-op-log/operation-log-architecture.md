@@ -801,21 +801,27 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    also skips an op when its `sv` is at or below the persisted cursor **and**
    the local vector clock covers its author counter (#10119). Otherwise an old
    create op still in the buffer would re-create an entity archived or deleted
-   here since. The clock half is needed because the cursor can run ahead of
-   applied ops: an upload merges into the freshly read file and sets the
-   cursor to the new version. Legacy ops without `sv` use the file's
+   here since. Keep both checks: older clients could advance their cursor past
+   unseen ops during upload, and a restored local log can lag its saved cursor.
+   Ordinary uploads now reject a cold read whose revision differs from the last
+   committed revision (#10239). The next cycle downloads/applies that baseline
+   before retrying; rejection does not acknowledge local ops, write the file, or
+   advance the cursor. Warm-cache uploads retain the conditional PUT check.
+   Legacy ops without `sv` use the file's
    `syncVersion` as a conservative upper bound. After local compaction prunes
    such an op's applied ID, a later file write advances this upper bound past
    the cursor, so the old op can be re-applied (reproduced for v2 and v3 with
    an archived task). Skipping it on clock coverage alone is unsafe: conflict
    resolution can merge a remote clock even when its op was not applied locally.
-   Seq-0 downloads and downloads after a gap reset do not use this filter. Other
-   known gaps: the guard assumes each author's counter never goes backwards (a
-   device that keeps its clientId but adopts a lower own clock, e.g. USE_REMOTE
-   after another device's USE_LOCAL, could have a new op skipped when the cursor
-   also ran ahead; reproduced by pending tests in the #10119 integration spec,
-   fix tracked in #10239); and a remote op whose apply failed is no longer
-   retried once compaction prunes it, matching SuperSync.
+   Seq-0 downloads and downloads after a gap reset do not use this filter. A
+   remote op whose apply failed is no longer retried once compaction prunes it,
+   matching SuperSync. Counter reuse remains a separate concern for snapshot
+   hydration: its local-clock-dominates shortcut assumes equal/covered counters
+   represent the same operations. A reset that violates that assumption needs
+   its own app-level reproduction. The #10239 browser replacement has an unseen
+   snapshot base and a file clock that dominates the last committed remote
+   clock, but is concurrent with the observer's pending local edit. This does
+   not establish safety when the local clock already covers the replacement.
 2. **Fresh client / forced seq-0:** return a full state/archive baseline. In v2,
    that baseline represents the monolith and its retained ops. In v3, the ops
    file points to a validated snapshot generation; retained ops newer than the

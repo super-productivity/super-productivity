@@ -53,11 +53,12 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
         },
       );
 
-      // A stale snapshot cannot be published with unseen operations (#10256).
+      // Retry through download before acknowledging the unseen remote baseline.
       await expectAsync(clientA.uploadOps([opA2])).toBeRejectedWithError(
         UploadRevToMatchMismatchAPIError,
       );
       const retryDownload = await clientA.downloadOps();
+      expect(retryDownload.ops.map(({ op }) => op.id)).toContain(opB.id);
       await clientA.adapter.setLastServerSeq(retryDownload.latestSeq);
       const response = await clientA.uploadOps([opA2]);
 

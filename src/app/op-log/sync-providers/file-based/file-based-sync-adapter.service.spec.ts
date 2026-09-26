@@ -442,13 +442,12 @@ describe('FileBasedSyncAdapterService', () => {
       const download = await adapter.downloadOps(2);
       expect(download.ops.map(({ op }) => op.id)).toEqual(['other-op']);
       await adapter.setLastServerSeq(download.latestSeq);
+      mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-4' }));
       const result = await adapter.uploadOps([op2], 'client1');
 
-      // Should succeed (not throw)
       expect(result.results.length).toBe(1);
       expect(result.results[0].accepted).toBe(true);
 
-      // Should NOT return piggybacked ops (piggybacking removed)
       expect(result.newOps).toBeUndefined();
     });
 
@@ -676,12 +675,13 @@ describe('FileBasedSyncAdapterService', () => {
       const op = createMockSyncOp();
       await adapter.uploadOps([op], 'client1');
 
+      const primaryWrite = mockProvider.uploadFile.calls
+        .allArgs()
+        .find(([path]) => path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE)!;
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: primaryWrite[1], rev: 'rev-2' }),
+      );
       mockProvider.downloadFile.calls.reset();
-      // The successful write changed the real remote revision to rev-2.
-      mockProvider.downloadFile.and.resolveTo({
-        dataStr: addPrefix(syncData),
-        rev: 'rev-2',
-      });
 
       // Another upload should re-download since cache was cleared
       const op2 = createMockSyncOp({ id: 'op-2' });
@@ -2194,23 +2194,6 @@ describe('FileBasedSyncAdapterService', () => {
     });
 
     it('should NOT detect gap when own client uploads snapshot (with excludeClient)', async () => {
-      // This test verifies false positive prevention using clientId-based detection.
-      // Scenario:
-      // 1. Client A uploads a snapshot: syncVersion=1, recentOps=[], clientId=client-a
-      // 2. Client A immediately downloads with excludeClient='client-a'
-      // Expected: Should NOT detect gap because snapshot.clientId === excludeClient
-
-      // Step 1: Upload snapshot as client-a
-      const snapshotData = createMockSyncData({
-        syncVersion: 1,
-        clientId: 'client-a',
-        recentOps: [],
-        state: { tasks: [] },
-      });
-
-      mockProvider.downloadFile.and.returnValue(
-        Promise.resolve({ dataStr: addPrefix(snapshotData), rev: 'rev-1' }),
-      );
       mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-2' }));
 
       await adapter.uploadSnapshot(
@@ -2222,16 +2205,19 @@ describe('FileBasedSyncAdapterService', () => {
         undefined,
         'test-op-id-snapshot',
       );
+      // The server returns the snapshot and revision this client just wrote.
+      const primaryWrite = mockProvider.uploadFile.calls
+        .allArgs()
+        .find(([path]) => path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE)!;
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: primaryWrite[1], rev: 'rev-2' }),
+      );
 
       const seqAfterUpload = await adapter.getLastServerSeq();
       expect(seqAfterUpload).toBe(1);
 
-      // Step 2: Download with excludeClient='client-a' (same client that uploaded)
       const result = await adapter.downloadOps(1, 'client-a');
 
-      // Should NOT detect gap because:
-      // - syncData.clientId ('client-a') === excludeClient ('client-a')
-      // - This means we just uploaded, so no gap
       expect(result.gapDetected).toBe(false);
       expect(result.snapshotState).toBeUndefined(); // No snapshot state when sinceSeq > 0
     });
@@ -4108,18 +4094,31 @@ describe('FileBasedSyncAdapterService', () => {
     it('(b2) does NOT recompact on every op-bearing sync between the threshold and the cap', async () => {
       // Buffer sits between the trim target (1000) and the trigger (2000).
       const between = C.SPLIT_COMPACTION_THRESHOLD + 200;
-      let recentOps = Array.from({ length: between }, () => ({ sv: 1 }) as never);
+      let remoteOps = {
+        dataStr: addPrefix(
+          makeOpsFile({
+            syncVersion: 5,
+            recentOps: Array.from({ length: between }, () => ({ sv: 1 }) as never),
+          }),
+          3,
+        ),
+        rev: 'ops-5',
+      };
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        if (path === C.OPS_FILE) return remoteOps;
+        throw new RemoteFileNotFoundAPIError(path);
+      });
+      let revision = 5;
+      mockProvider.uploadFile.and.callFake(async (path: string, dataStr: string) => {
+        const rev = `ops-${++revision}`;
+        if (path === C.OPS_FILE) remoteOps = { dataStr, rev };
+        return { rev };
+      });
 
       // Two consecutive op-bearing syncs, each appending one op (1201, then 1202) —
       // both still under MAX_RECENT_OPS, so neither may rebuild the snapshot.
       for (let sync = 0; sync < 2; sync++) {
-        const opsFile = makeOpsFile({ syncVersion: 5 + sync, recentOps });
-        routeDownloads({
-          [C.OPS_FILE]: addPrefix(opsFile, 3),
-          [C.STATE_FILE]: addPrefix(makeStateFile({ syncVersion: 1 }), 3),
-        });
-        await adapter.uploadOps([createMockSyncOp()], 'client1');
-        recentOps = [...recentOps, { sv: 1 } as never];
+        await adapter.uploadOps([createMockSyncOp({ id: `op-${sync}` })], 'client1');
       }
 
       // At most one snapshot build across both syncs — ideally zero here.
