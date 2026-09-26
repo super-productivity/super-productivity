@@ -6,13 +6,7 @@ import {
   selectTagById,
   selectTagsByIds,
 } from './store/tag.reducer';
-import {
-  addTag,
-  deleteTag,
-  deleteTags,
-  updateTag,
-  updateTagOrder,
-} from './store/tag.actions';
+import { addTag, deleteTag, deleteTags, updateTag } from './store/tag.actions';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Tag, TagState } from './tag.model';
@@ -81,10 +75,6 @@ export class TagService {
 
   updateColor(id: string, color: string): void {
     this._store$.dispatch(updateTag({ tag: { id, changes: { color } } }));
-  }
-
-  updateOrder(ids: string[]): void {
-    this._store$.dispatch(updateTagOrder({ ids }));
   }
 
   deleteTags(ids: string[]): void {

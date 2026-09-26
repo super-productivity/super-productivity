@@ -74,6 +74,6 @@ core-ui/ · pages/ · routes/     the shell — composes features
 
 ## Legacy
 
-`pfapi/` is dead code, not a live layer. It is four compiled `.js` files from the pre-op-log sync system, its own header reads `LEGACY CODE — do not modify`, and **nothing imports it** — every `pfapi` mention in `.ts` sources is a comment or a string describing the legacy on-disk `__meta_` format written by v16.x clients. It cannot even load (`api/index.js` requires modules absent from the tree) and is excluded from the TS build, so it ships in no bundle. Despite the name it is **not** the current persistence layer; that is `op-log/persistence/`.
+The unused compiled files from the pre-op-log `pfapi/` sync system have been removed. Current persistence lives in `op-log/persistence/`.
 
-Note that `core/persistence/legacy-pf-db.service.ts` is unrelated to it — that service reads the legacy `pf` IndexedDB directly and is live migration code.
+`core/persistence/legacy-pf-db.service.ts` remains live migration code: it reads the legacy `pf` IndexedDB directly.
