@@ -1001,4 +1001,127 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect('startDate' in changes()).toBe(false);
     });
   });
+
+  describe('next occurrence and inherited subtasks (issue #10233)', () => {
+    const dailyCfg: TaskRepeatCfg = {
+      ...mockRepeatCfg,
+      quickSetting: 'CUSTOM',
+      repeatCycle: 'DAILY',
+      repeatEvery: 1,
+      startDate: '2026-06-01',
+      lastTaskCreationDay: '2026-06-09',
+    };
+    const expectedDate = new Date(2026, 5, 10).toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+
+    let instantCalls: { key: string | string[]; params?: object }[];
+
+    const setup = async (
+      dialogData: Parameters<typeof setupTestBed>[0],
+    ): Promise<DialogEditTaskRepeatCfgComponent> => {
+      const fixture = await setupTestBed(dialogData);
+      instantCalls = [];
+      spyOn(TestBed.inject(TranslateService), 'instant').and.callFake(
+        (key: string | string[], params?: object) => {
+          instantCalls.push({ key, params });
+          return key;
+        },
+      );
+      return fixture.componentInstance;
+    };
+
+    beforeEach(() => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2026, 5, 9, 10, 0, 0));
+    });
+
+    afterEach(() => {
+      jasmine.clock().uninstall();
+    });
+
+    it('shows the next occurrence of the saved config', async () => {
+      const component = await setup({ repeatCfg: dailyCfg });
+
+      expect(component.nextOccurrenceText()).toBe(T.F.TASK_REPEAT.D_EDIT.NEXT_OCCURRENCE);
+      expect(instantCalls.at(-1)!.params).toEqual({ date: expectedDate });
+    });
+
+    it('qualifies the date for wait-for-completion configs', async () => {
+      const component = await setup({
+        repeatCfg: { ...dailyCfg, waitForCompletion: true },
+      });
+
+      expect(component.nextOccurrenceText()).toBe(
+        T.F.TASK_REPEAT.D_EDIT.NEXT_OCCURRENCE_WAIT_FOR_COMPLETION,
+      );
+    });
+
+    it('qualifies the date for configs repeating from the completion date', async () => {
+      const component = await setup({
+        repeatCfg: { ...dailyCfg, repeatFromCompletionDate: true },
+      });
+
+      expect(component.nextOccurrenceText()).toBe(
+        T.F.TASK_REPEAT.D_EDIT.NEXT_OCCURRENCE_FROM_COMPLETION,
+      );
+    });
+
+    it('withholds the date while schedule changes are unsaved', async () => {
+      const component = await setup({ repeatCfg: dailyCfg });
+
+      component.repeatCfg.update((cfg) => ({ ...cfg, repeatEvery: 3 }));
+
+      expect(component.nextOccurrenceText()).toBe(
+        T.F.TASK_REPEAT.D_EDIT.NEXT_OCCURRENCE_UNSAVED,
+      );
+    });
+
+    it('treats a changed quick setting as an unsaved schedule change', async () => {
+      const component = await setup({ repeatCfg: dailyCfg });
+
+      component.repeatCfg.update((cfg) => ({ ...cfg, quickSetting: 'MONDAY_TO_FRIDAY' }));
+
+      expect(component.hasUnsavedScheduleChanges()).toBe(true);
+    });
+
+    it('keeps the date when only non-schedule fields change', async () => {
+      const component = await setup({ repeatCfg: dailyCfg });
+
+      component.repeatCfg.update((cfg) => ({ ...cfg, title: 'Renamed' }));
+
+      expect(component.nextOccurrenceText()).toBe(T.F.TASK_REPEAT.D_EDIT.NEXT_OCCURRENCE);
+    });
+
+    it('shows nothing for a paused config', async () => {
+      const component = await setup({ repeatCfg: { ...dailyCfg, isPaused: true } });
+
+      expect(component.nextOccurrenceText()).toBeNull();
+    });
+
+    it('shows nothing when creating a new config', async () => {
+      const component = await setup({ task: mockTask });
+
+      expect(component.nextOccurrenceText()).toBeNull();
+    });
+
+    it('lists the subtasks new instances inherit', async () => {
+      const component = await setup({
+        repeatCfg: {
+          ...dailyCfg,
+          shouldInheritSubtasks: true,
+          subTaskTemplates: [{ title: 'Pack bag' }, { title: 'Water plants' }],
+        },
+      });
+
+      expect(component.inheritedSubtaskTitles()).toEqual(['Pack bag', 'Water plants']);
+
+      component.repeatCfg.update((cfg) => ({ ...cfg, shouldInheritSubtasks: false }));
+
+      expect(component.inheritedSubtaskTitles()).toEqual([]);
+    });
+  });
 });
