@@ -173,7 +173,8 @@ export class WebdavApi {
 
   /**
    * Retrieve metadata for a file or folder via PROPFIND.
-   * Used for testConnection() and listFiles(), not for revision tracking.
+   * Only caller: the #9030 upload pre-check, which swallows failures and falls
+   * back to GET — hence errors log at `normal`, not `critical`.
    */
   async getFileMeta(path: string): Promise<FileMeta> {
     const cfg = await this._deps.getCfg();
@@ -197,7 +198,7 @@ export class WebdavApi {
         }
       }
     } catch (e) {
-      this._deps.logger.critical(
+      this._deps.logger.normal(
         `${WebdavApi.L}.getFileMeta() error`,
         errorMeta(e, { path }),
       );
@@ -295,6 +296,9 @@ export class WebdavApi {
           throw e;
         }
       }
+      if (!isForceOverwrite && strongExpectedRev) {
+        await this._assertStrongRevUnchanged(path, fullPath, strongExpectedRev);
+      }
 
       const headers: Record<string, string> = {
         [WebDavHttpHeader.CONTENT_TYPE]: 'application/octet-stream',
@@ -377,6 +381,47 @@ export class WebdavApi {
       return { rev: verifiedRev };
     } catch (e) {
       this._deps.logger.critical(`${WebdavApi.L}.upload() error`, errorMeta(e, { path }));
+      throw e;
+    }
+  }
+
+  /**
+   * #9030: some servers serve strong ETags but PUT unconditionally, ignoring
+   * `If-Match` (e.g. hacdias/webdav v5, our E2E server), which would silently
+   * clobber a concurrent write. This best-effort pre-check narrows that to the
+   * PROPFIND→PUT window; on compliant servers `If-Match` still closes it.
+   */
+  private async _assertStrongRevUnchanged(
+    path: string,
+    fullPath: string,
+    expectedRev: string,
+  ): Promise<void> {
+    // Cheap path: PROPFIND carries no file body. Any failure falls through to
+    // the GET below, which reports a missing file as a conflict.
+    const propfindRev = await this.getFileMeta(path).then(
+      (meta) => meta.data['etag'],
+      () => undefined,
+    );
+    if (propfindRev === expectedRev) {
+      return;
+    }
+
+    // `getetag` may be formatted differently from the served `ETag` (e.g.
+    // without mod_deflate's -gzip suffix, #9154), so only the same GET that
+    // produced `expectedRev` may report a conflict — else it recurs every sync.
+    try {
+      const response = await this._makeRequest({
+        url: fullPath,
+        method: WebDavHttpMethod.GET,
+      });
+      const currentRev =
+        this._readStrongRevision(response.headers) ??
+        (await this._computeContentHash(response.data));
+      if (currentRev !== expectedRev) {
+        throw this._remoteChanged(path);
+      }
+    } catch (e) {
+      if (e instanceof RemoteFileNotFoundAPIError) throw this._remoteChanged(path);
       throw e;
     }
   }

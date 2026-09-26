@@ -369,9 +369,27 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     await expect(pageB.locator('task', { hasText: taskB2 })).toBeVisible();
     console.log('[Test] Verified both tasks are present on Client B');
 
-    // Note: We don't verify Client A receives the data here because that's
-    // testing sync propagation, not the conflict dialog regression.
-    // The key assertion is that NO conflict dialog appeared on the second sync.
+    // #9170 (unencrypted variant of webdav-encryption-conflict-use-local):
+    // B's tail op repopulated recentOps after its replacement, so pre-existing
+    // Client A must detect the replacement via the vector clock and hydrate it
+    // instead of applying B2 on top of its stale task A.
+    await syncPageA.triggerSync();
+    expect(await waitForSyncComplete(pageA, syncPageA, 30000)).toBe('success');
+    await expect(pageA.locator('task')).toHaveCount(2);
+    await expect(pageA.locator('task', { hasText: taskB })).toBeVisible();
+    await expect(pageA.locator('task', { hasText: taskB2 })).toBeVisible();
+    await expect(pageA.locator('task', { hasText: taskA })).not.toBeVisible();
+
+    // Converged state must survive a reload on both clients.
+    for (const page of [pageA, pageB]) {
+      await page.reload();
+      await waitForAppReady(page);
+      await new WorkViewPage(page).waitForTaskList();
+      await expect(page.locator('task')).toHaveCount(2);
+      await expect(page.locator('task', { hasText: taskB })).toBeVisible();
+      await expect(page.locator('task', { hasText: taskB2 })).toBeVisible();
+      await expect(page.locator('task', { hasText: taskA })).not.toBeVisible();
+    }
 
     await closeContextsSafely(contextA, contextB);
   });

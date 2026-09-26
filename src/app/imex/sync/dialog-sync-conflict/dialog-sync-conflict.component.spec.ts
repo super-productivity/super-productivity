@@ -185,6 +185,27 @@ describe('DialogSyncConflictComponent', () => {
       expect(component.localChangeCount).toBeNull();
       expect(component.remoteChangeCount).toBeNull();
     });
+
+    it('shows a wholly fresh ops-only client as unknown and confirms both choices (#9391)', () => {
+      // Shape SyncWrapperService builds for this case: no pending-op count, no
+      // remote clock, no last-synced baseline.
+      const component = createComponent(
+        buildConflictData({
+          localVectorClock: { clientA: 3 },
+          remoteVectorClock: undefined,
+          lastSyncedVectorClock: null,
+          remoteLastUpdate: null,
+        }),
+      );
+      const shouldConfirm = (r: string): boolean =>
+        (
+          component as unknown as { shouldConfirmOverwrite(r: string): boolean }
+        ).shouldConfirmOverwrite(r);
+
+      expect(component.localChangeCount).toBeNull();
+      expect(shouldConfirm('USE_LOCAL')).toBe(true);
+      expect(shouldConfirm('USE_REMOTE')).toBe(true);
+    });
   });
 
   describe('getConfirmationMessage() / shouldConfirmOverwrite()', () => {

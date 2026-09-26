@@ -13,6 +13,12 @@ import { LockService } from '../sync/lock.service';
 import { ConflictJournalService } from '../sync/conflict-journal.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
 import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
+import { WORKLOG_EXPORT_DEFAULTS } from '../../features/work-context/work-context.const';
+import { migrateState } from '@sp/shared-schema';
+import { BackupRepairFailedError } from '../core/errors/sync-errors';
+import legacyV10Backup from './test-fixtures/legacy-v10-backup.json';
+import legacyPfV13Partial from '../validation/test-fixtures/legacy-pf-v13-partial-models.json';
+import frozenV18State from '../validation/test-fixtures/frozen-state-v18.15.json';
 
 describe('BackupService', () => {
   let service: BackupService;
@@ -40,12 +46,21 @@ describe('BackupService', () => {
           noteIds: [],
           isHiddenFromMenu: false,
           isArchived: false,
+          advancedCfg: { worklogExportSettings: { ...WORKLOG_EXPORT_DEFAULTS } },
         },
       },
     },
     tag: {
       ids: ['TODAY'],
-      entities: { TODAY: { id: 'TODAY', title: 'Today', taskIds: [], icon: 'wb_sunny' } },
+      entities: {
+        TODAY: {
+          id: 'TODAY',
+          title: 'Today',
+          taskIds: [],
+          icon: 'wb_sunny',
+          advancedCfg: { worklogExportSettings: { ...WORKLOG_EXPORT_DEFAULTS } },
+        },
+      },
     },
     globalConfig: {
       misc: { isDisableInitialDialog: true },
@@ -64,6 +79,15 @@ describe('BackupService', () => {
     pluginMetadata: [],
     pluginUserData: [],
   });
+
+  // A project title typia rejects that neither dataRepair nor any
+  // autoFixTypiaErrors branch touches. Keep it outside every autofix: once a
+  // branch heals it, the refusal specs pass without exercising the refusal.
+  const createBackupInvalidAfterRepair = (): any => {
+    const backup = createMinimalValidBackup() as any;
+    backup.project.entities.INBOX_PROJECT.title = 42;
+    return backup;
+  };
 
   const createEmptyArchiveModel = (): ArchiveModel => ({
     task: { ids: [], entities: {} },
@@ -181,6 +205,19 @@ describe('BackupService', () => {
     expect(mockStore.dispatch).not.toHaveBeenCalled();
   });
 
+  // #8279: a backup whose errors dataRepair cannot fix was persisted and
+  // broadcast as BACKUP_IMPORT, so every receiving client failed validation.
+  it('should refuse a backup that is still invalid after repair', async () => {
+    const backup = createBackupInvalidAfterRepair();
+
+    await expectAsync(
+      service.importCompleteBackup(backup, true, true),
+    ).toBeRejectedWithError(BackupRepairFailedError);
+
+    expect(mockOpLogStore.runDestructiveStateReplacement).not.toHaveBeenCalled();
+    expect(mockStore.dispatch).not.toHaveBeenCalled();
+  });
+
   it('should log that a refused backup was legacy, since the migration line never runs', async () => {
     // The refusal returns the same message on the legacy and modern paths, so
     // the exported log is the only place the two can be told apart.
@@ -200,6 +237,36 @@ describe('BackupService', () => {
     await service.importCompleteBackup(createMinimalValidBackup() as any, true, true);
 
     expect(mockTaskTimeSyncService.clear).toHaveBeenCalledBefore(mockStore.dispatch);
+  });
+
+  // Real backups from older app versions, run through the real legacy
+  // migration, validation and repair: the post-repair refusal (#8279) must
+  // never turn a backup that imported before into one that is refused.
+  describe('real legacy backup fixtures still import', () => {
+    const migrateFrozen = (): unknown => {
+      const migrated = migrateState(
+        structuredClone(frozenV18State.state),
+        frozenV18State.__frozenAtSchemaVersion,
+      );
+      if (!migrated.success) {
+        throw new Error(`migration of frozen fixture failed: ${migrated.error}`);
+      }
+      return migrated.data;
+    };
+    const fixtures: [string, () => unknown][] = [
+      ['v10 legacy backup', () => structuredClone(legacyV10Backup)],
+      ['v13 pf partial-model backup', () => structuredClone(legacyPfV13Partial)],
+      ['v18.15 frozen state', migrateFrozen],
+    ];
+
+    fixtures.forEach(([name, load]) => {
+      it(`imports the ${name}`, async () => {
+        await service.importCompleteBackup(load() as any, true, true);
+
+        expect(mockOpLogStore.runDestructiveStateReplacement).toHaveBeenCalledTimes(1);
+        expect(mockStore.dispatch).toHaveBeenCalledTimes(1);
+      });
+    });
   });
 
   describe('captureRecoveryPointIfMeaningful (local-recovery-points.md)', () => {
@@ -299,6 +366,19 @@ describe('BackupService', () => {
       expect(mockOpLogStore.pruneImportBackups).toHaveBeenCalledOnceWith(1, 'r1');
     });
 
+    it('should restore a recovery point that is still invalid after repair (#8279)', async () => {
+      const saved = createBackupInvalidAfterRepair();
+      mockOpLogStore.loadImportBackupById.and.resolveTo({
+        backupId: 'r1',
+        savedAt: 1,
+        state: saved,
+      });
+
+      await expectAsync(service.restoreImportBackupById('r1')).toBeResolvedTo(true);
+
+      expect(mockOpLogStore.runDestructiveStateReplacement).toHaveBeenCalledTimes(1);
+    });
+
     it('should still fail when the retry after pruning fails too', async () => {
       mockStateSnapshotService.getStateSnapshotAsync.and.resolveTo(
         snapshotWithTask() as any,
@@ -374,6 +454,7 @@ describe('BackupService', () => {
         true,
         true,
         backupRef.backupId,
+        true,
       );
     });
 
@@ -413,6 +494,7 @@ describe('BackupService', () => {
         true,
         true,
         expectedRef.backupId,
+        true,
       );
     });
 
@@ -450,6 +532,32 @@ describe('BackupService', () => {
       expect(mockOpLogStore.clearImportBackup).not.toHaveBeenCalled();
       importSpy.and.resolveTo();
       await expectAsync(service.restoreImportBackup(backupRef)).toBeResolvedTo(true);
+    });
+
+    // The recovery slot holds this device's own earlier live state; refusing it
+    // for errors repair cannot fix would leave the user no way back (#8279).
+    it('should restore own state that is still invalid after repair', async () => {
+      const saved = createBackupInvalidAfterRepair();
+      mockOpLogStore.loadImportBackup.and.resolveTo({ state: saved, ...backupRef });
+
+      await expectAsync(service.restoreImportBackup(backupRef)).toBeResolvedTo(true);
+
+      expect(mockOpLogStore.runDestructiveStateReplacement).toHaveBeenCalledTimes(1);
+      expect(mockOpLogStore.clearImportBackup).toHaveBeenCalledWith(backupRef.backupId);
+    });
+
+    it('should leave the recovery slot intact when the restore is refused', async () => {
+      const saved = createMinimalValidBackup() as any;
+      delete saved.task;
+      delete saved.project;
+      mockOpLogStore.loadImportBackup.and.resolveTo({ state: saved, ...backupRef });
+
+      await expectAsync(service.restoreImportBackup(backupRef)).toBeRejectedWithError(
+        BackupRepairFailedError,
+      );
+
+      expect(mockOpLogStore.runDestructiveStateReplacement).not.toHaveBeenCalled();
+      expect(mockOpLogStore.clearImportBackup).not.toHaveBeenCalled();
     });
   });
 

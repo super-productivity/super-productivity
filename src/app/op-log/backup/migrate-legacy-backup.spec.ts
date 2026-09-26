@@ -7,6 +7,8 @@ import { AppDataComplete, MODEL_CONFIGS } from '../model/model-config';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import fixture from './test-fixtures/legacy-v10-backup.json';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { WORKLOG_EXPORT_DEFAULTS } from '../../features/work-context/work-context.const';
+import { WorklogGrouping } from '../../features/worklog/worklog.model';
 
 /**
  * Creates a minimal v10-era legacy backup structure.
@@ -656,6 +658,74 @@ describe('migrate-legacy-backup', () => {
       expect(result.task.ids.length).toBe(0);
       expect(result.archiveYoung.task.ids.length).toBe(0);
       expect(result.archiveOld.task.ids.length).toBe(0);
+    });
+
+    describe('legacy entity defaults', () => {
+      const createWithEntities = (
+        repeatCfgs: Record<string, Record<string, unknown>>,
+      ): Record<string, any> => {
+        const data = createLegacyBackup();
+        data.note.ids = ['note-1'];
+        data.note.entities = {
+          'note-1': { id: 'note-1', content: 'n', created: 1000, projectId: 'proj-1' },
+        };
+        data.taskRepeatCfg.ids = Object.keys(repeatCfgs);
+        data.taskRepeatCfg.entities = repeatCfgs;
+        return data;
+      };
+
+      it('should fill advancedCfg, note.modified and repeat fields when absent', () => {
+        const data = createWithEntities({
+          'rc-top': { id: 'rc-top', title: 'Top' },
+          'rc-bottom': { id: 'rc-bottom', title: 'Bottom', isAddToBottom: true },
+        });
+
+        const result = migrateLegacyBackup(data) as any;
+
+        const defaultAdvancedCfg = { worklogExportSettings: WORKLOG_EXPORT_DEFAULTS };
+        expect(result.project.entities['proj-1'].advancedCfg).toEqual(defaultAdvancedCfg);
+        expect(result.tag.entities.TODAY.advancedCfg).toEqual(defaultAdvancedCfg);
+        // A copy, so editing one context's settings cannot touch the defaults.
+        expect(
+          result.project.entities['proj-1'].advancedCfg.worklogExportSettings,
+        ).not.toBe(WORKLOG_EXPORT_DEFAULTS);
+        expect(result.note.entities['note-1'].modified).toBe(1000);
+        expect(result.taskRepeatCfg.entities['rc-top']).toEqual(
+          jasmine.objectContaining({ repeatCycle: 'WEEKLY', repeatEvery: 1, order: 0 }),
+        );
+        // The pre-v14 migration mapped legacy isAddToBottom to order 1.
+        expect(result.taskRepeatCfg.entities['rc-bottom'].order).toBe(1);
+      });
+
+      it('should keep existing advancedCfg, note.modified and repeat fields', () => {
+        const data = createWithEntities({
+          'rc-1': {
+            id: 'rc-1',
+            title: 'Kept',
+            repeatCycle: 'MONTHLY',
+            repeatEvery: 3,
+            // An explicit order wins over the legacy flag.
+            order: 0,
+            isAddToBottom: true,
+          },
+        });
+        const customAdvancedCfg = {
+          worklogExportSettings: {
+            ...WORKLOG_EXPORT_DEFAULTS,
+            groupBy: WorklogGrouping.TASK,
+          },
+        };
+        data.project.entities['proj-1'].advancedCfg = structuredClone(customAdvancedCfg);
+        data.note.entities['note-1'].modified = 2000;
+
+        const result = migrateLegacyBackup(data) as any;
+
+        expect(result.project.entities['proj-1'].advancedCfg).toEqual(customAdvancedCfg);
+        expect(result.note.entities['note-1'].modified).toBe(2000);
+        expect(result.taskRepeatCfg.entities['rc-1']).toEqual(
+          jasmine.objectContaining({ repeatCycle: 'MONTHLY', repeatEvery: 3, order: 0 }),
+        );
+      });
     });
   });
 

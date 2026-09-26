@@ -42,7 +42,10 @@ import {
 } from '../dialog-confirm-url-import/dialog-confirm-url-import.component';
 import { Log } from '../../core/log';
 import { DialogArchiveCompressionComponent } from '../../features/archive/dialog-archive-compression/dialog-archive-compression.component';
-import { DataValidationFailedError } from '../../op-log/core/errors/sync-errors';
+import {
+  BackupRepairFailedError,
+  DataValidationFailedError,
+} from '../../op-log/core/errors/sync-errors';
 import { alertDialog } from '../../util/native-dialogs';
 import { PluginService } from '../../plugins/plugin.service';
 
@@ -258,7 +261,12 @@ export class FileImexComponent implements OnInit {
     } catch (e) {
       Log.err('Import process failed', e);
 
-      if (e instanceof DataValidationFailedError) {
+      if (e instanceof BackupRepairFailedError) {
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.FILE_IMEX.S_ERR_IMPORT_UNREPAIRABLE,
+        });
+      } else if (e instanceof DataValidationFailedError) {
         this._snackService.open({
           type: 'ERROR',
           msg: `Import failed: ${e.message}`,

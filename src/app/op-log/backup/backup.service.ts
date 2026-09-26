@@ -18,6 +18,7 @@ import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { isDataRepairPossible } from '../validation/is-data-repair-possible.util';
 import { recordCriticalErrorTime } from '../../util/critical-error-signal';
 import { OpLog } from '../../core/log';
+import { BackupRepairFailedError } from '../core/errors/sync-errors';
 import {
   AppDataComplete,
   CROSS_MODEL_VERSION,
@@ -97,6 +98,8 @@ export class BackupService {
    *   single slot while restoring that exact backup.
    * @param requiredImportBackupId - Abort the destructive commit unless this
    *   backup still occupies the single recovery slot.
+   * @param isOwnStateRestore - Restoring this device's own recovery point or
+   *   auto-backup: do not refuse state still invalid after repair (#8279).
    */
   async importCompleteBackup(
     data: AppDataComplete | CompleteBackup<AllModelConfig>,
@@ -105,6 +108,7 @@ export class BackupService {
     isForceConflict: boolean = false,
     isSkipPreImportBackup: boolean = false,
     requiredImportBackupId?: string,
+    isOwnStateRestore: boolean = false,
   ): Promise<void> {
     if (isSkipPreImportBackup !== (requiredImportBackupId !== undefined)) {
       throw new Error(
@@ -137,7 +141,7 @@ export class BackupService {
           // modern-path refusal. Fixed string: log history is exportable.
           OpLog.err('BackupService: legacy backup refused, core slice missing');
           recordCriticalErrorTime();
-          throw new Error('Data validation failed and repair not possible');
+          throw new BackupRepairFailedError();
         }
         OpLog.normal(
           'BackupService: Detected legacy backup format, running migration...',
@@ -154,7 +158,7 @@ export class BackupService {
       // all-defaults empty store — on every import path (JSON import,
       // local-backup restore, SuperSync restore).
       if (!isDataRepairPossible(backupData)) {
-        throw new Error('Data validation failed and repair not possible');
+        throw new BackupRepairFailedError();
       }
 
       // A pre-migration `pf` backup carries only the model keys that database
@@ -198,8 +202,19 @@ export class BackupService {
               : [];
           const { dataRepair } = await import('../validation/data-repair');
           validatedData = dataRepair(backupData, errors).data;
+          // The import is persisted and broadcast as BACKUP_IMPORT, so state that
+          // repair could not fix would fail validation on every client (#8279).
+          // A device's own recovery point or auto-backup was already live here,
+          // so it is restored anyway: refusing would strand the user.
+          if (!validateFull(validatedData).isValid) {
+            if (!isOwnStateRestore) {
+              OpLog.err('BackupService: backup refused, still invalid after repair');
+              throw new BackupRepairFailedError();
+            }
+            OpLog.err('BackupService: restoring own state still invalid after repair');
+          }
         } else {
-          throw new Error('Data validation failed and repair not possible');
+          throw new BackupRepairFailedError();
         }
       }
 
@@ -345,6 +360,9 @@ export class BackupService {
         true, // isSkipLegacyWarnings
         true, // isSkipReload - loadAllData updates state live
         true, // isForceConflict
+        false, // isSkipPreImportBackup
+        undefined, // requiredImportBackupId
+        true, // isOwnStateRestore
       );
     } finally {
       this._protectedBackupId = null;
@@ -384,6 +402,7 @@ export class BackupService {
       true, // isForceConflict
       true, // keep this exact recovery backup until the full restore succeeds
       backup.backupId,
+      true, // isOwnStateRestore
     );
     // Retire the restored slot only if it still has the same opaque identity.
     // The import path or another tab may have created a newer safety backup

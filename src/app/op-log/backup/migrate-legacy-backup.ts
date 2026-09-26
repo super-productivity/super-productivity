@@ -33,6 +33,8 @@ import {
   INBOX_PROJECT,
   LEGACY_NO_LIST_TAG_ID,
 } from '../../features/project/project.const';
+import { WORK_CONTEXT_DEFAULT_COMMON } from '../../features/work-context/work-context.const';
+import { DEFAULT_TASK_REPEAT_CFG } from '../../features/task-repeat-cfg/task-repeat-cfg.model';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { isTodayWithOffset } from '../../util/is-today.util';
 // Matches DateService.setStartOfNextDayDiff semantics for legacy backup normalization.
@@ -113,6 +115,9 @@ export const migrateLegacyBackup = (
 
   // === Migration 4.5: Lowercase language codes ===
   data = _migration45LowercaseLanguageCodes(data);
+
+  // === Entity fields the pre-v14 per-model migrations used to fill ===
+  data = _fillLegacyEntityDefaults(data);
 
   // === Final: Ensure all v17-required keys exist with defaults ===
   data = _ensureV17Defaults(data);
@@ -756,6 +761,39 @@ function _migration45LowercaseLanguageCodes(
       ...data.globalConfig.localization,
       dateTimeLocale: oldDateTimeLocale.toLocaleLowerCase(),
     };
+  }
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Entity defaults — required fields that pre-v14 per-model migrations filled
+// ---------------------------------------------------------------------------
+
+/**
+ * dataRepair cannot fill these, and a backup still invalid after repair is
+ * refused (#8279), so a legacy file missing them would no longer import at all.
+ * Only absent fields are filled; existing values are kept as-is.
+ */
+function _fillLegacyEntityDefaults(data: Record<string, any>): Record<string, any> {
+  for (const key of ['project', 'tag']) {
+    for (const ctx of Object.values(data[key]?.entities ?? {}) as any[]) {
+      if (ctx && ctx.advancedCfg === undefined) {
+        ctx.advancedCfg = structuredClone(WORK_CONTEXT_DEFAULT_COMMON.advancedCfg);
+      }
+    }
+  }
+  for (const note of Object.values(data.note?.entities ?? {}) as any[]) {
+    if (note && note.modified === undefined) {
+      note.modified = note.created;
+    }
+  }
+  for (const cfg of Object.values(data.taskRepeatCfg?.entities ?? {}) as any[]) {
+    if (!cfg) continue;
+    cfg.repeatCycle ??= DEFAULT_TASK_REPEAT_CFG.repeatCycle;
+    cfg.repeatEvery ??= DEFAULT_TASK_REPEAT_CFG.repeatEvery;
+    // Before `order`, the placement was the boolean `isAddToBottom`; the
+    // pre-v14 migration mapped it to 1 (bottom), else 0 (top).
+    cfg.order ??= cfg.isAddToBottom ? 1 : DEFAULT_TASK_REPEAT_CFG.order;
   }
   return data;
 }

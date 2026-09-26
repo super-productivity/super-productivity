@@ -2480,6 +2480,7 @@
     "PRIVACY_EXPORT_DESCRIPTION": "Export anonymized data (to send to contact@super-productivity.com for debugging)",
     "S_BACKUP_DOWNLOADED": "Backup exported",
     "S_ERR_IMPORT_FAILED": "Importing data failed",
+    "S_ERR_IMPORT_UNREPAIRABLE": "Import failed: this backup contains data that can't be repaired. Please try an older backup, and export your logs and report the issue.",
     "S_ERR_INVALID_DATA": "Import failed: Invalid JSON",
     "S_ERR_INVALID_URL": "Import failed: Invalid URL provided",
     "S_ERR_NETWORK": "Import failed: Network error while fetching data from URL",
