@@ -1783,6 +1783,14 @@ describe('OperationLogDownloadService', () => {
             mockApiProvider.downloadOps.calls.allArgs().map((args) => args[0]);
 
           it('should continue after the last completed page instead of seq 0', async () => {
+            pages.set(0, {
+              ops: [makeOp(1, 1, 'pageOneClient'), makeOp(2, 2)],
+              hasMore: true,
+            });
+            mockOpLogStore.getVectorClock.and.resolveTo({
+              remoteClient: 10,
+              pageOneClient: 1,
+            });
             failAtSinceSeq = 4;
             await expectAsync(
               service.downloadRemoteOps(mockApiProvider, forcedRetry),
@@ -1795,12 +1803,18 @@ describe('OperationLogDownloadService', () => {
             expect(requestedSinceSeqs()).toEqual([4]);
             expect(result.success).toBeTrue();
             expect(result.newOps).toEqual([]);
-            // Clocks of the skipped pages survive, merged into one.
-            const merged = (result.allOpClocks ?? []).reduce(
-              (max, clock) => Math.max(max, clock['remoteClient'] ?? 0),
-              0,
+            // The skipped pages' clocks survive (merged); page 1 alone carries
+            // `pageOneClient`, so dropping them would lose that entry.
+            const merged = (result.allOpClocks ?? []).reduce<Record<string, number>>(
+              (acc, clock) => {
+                for (const [id, c] of Object.entries(clock)) {
+                  acc[id] = Math.max(acc[id] ?? 0, c);
+                }
+                return acc;
+              },
+              {},
             );
-            expect(merged).toBe(6);
+            expect(merged).toEqual({ remoteClient: 6, pageOneClient: 1 });
           });
 
           it('should re-download a page holding a new op rather than skip it', async () => {
@@ -1879,42 +1893,38 @@ describe('OperationLogDownloadService', () => {
             expect(result.snapshotVectorClock).toEqual({ newSnapshot: 1 });
           });
 
-          it('should not resume after a forced download that is not a re-delivery retry', async () => {
-            failAtSinceSeq = 4;
-            await expectAsync(
-              service.downloadRemoteOps(mockApiProvider, forcedRetry),
-            ).toBeRejectedWith(networkError);
-
-            failAtSinceSeq = undefined;
-            // Provider switch: always the whole history, and it re-baselines
-            // local state, so the old checkpoint must be dropped.
-            await service.downloadRemoteOps(mockApiProvider, { forceFromSeq0: true });
-            mockApiProvider.downloadOps.calls.reset();
-            await service.downloadRemoteOps(mockApiProvider, forcedRetry);
-
-            expect(requestedSinceSeqs()).toEqual([0, 2, 4]);
-          });
-
           it('should drop the checkpoint when the resumed download hits a gap', async () => {
             failAtSinceSeq = 4;
             await expectAsync(
               service.downloadRemoteOps(mockApiProvider, forcedRetry),
             ).toBeRejectedWith(networkError);
 
-            failAtSinceSeq = undefined;
-            const gapPage = { ops: [], hasMore: false, latestSeq: 3, gapDetected: true };
+            // Resume hits a gap (server reset); the gap re-download from seq 0
+            // is itself cut off before the end-of-run clear.
             mockApiProvider.downloadOps.and.callFake((sinceSeq: number) =>
-              Promise.resolve(
-                sinceSeq === 4
-                  ? gapPage
-                  : { ops: [makeOp(1, 1)], hasMore: false, latestSeq: 3 },
-              ),
+              sinceSeq === 4
+                ? Promise.resolve({
+                    ops: [],
+                    hasMore: false,
+                    latestSeq: 3,
+                    gapDetected: true,
+                  })
+                : Promise.reject(networkError),
             );
+            await expectAsync(
+              service.downloadRemoteOps(mockApiProvider, forcedRetry),
+            ).toBeRejectedWith(networkError);
+
+            // The old epoch's checkpoint must not be resumed.
+            mockApiProvider.downloadOps.and.resolveTo({
+              ops: [],
+              hasMore: false,
+              latestSeq: 3,
+            });
             mockApiProvider.downloadOps.calls.reset();
             await service.downloadRemoteOps(mockApiProvider, forcedRetry);
 
-            // Gap reset re-downloads the new epoch from seq 0.
-            expect(requestedSinceSeqs()).toEqual([4, 0]);
+            expect(requestedSinceSeqs()).toEqual([0]);
           });
         });
 

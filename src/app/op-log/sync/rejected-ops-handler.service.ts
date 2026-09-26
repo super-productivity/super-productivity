@@ -624,54 +624,34 @@ export class RejectedOpsHandlerService {
   }
 
   /**
-   * Diagnostics for a rejection the server could not explain with a newer op:
-   * the download returned nothing, yet the server's entity clock is not below
-   * ours. Logs clocks only (client ids + counters, no user content) so the
-   * missing entry can be read off an exported log — e.g. whether this client's
-   * own counter is already behind what the server has seen from it.
+   * Diagnostics for rejections no downloaded op explains: per sampled op, the
+   * [server, op, local] counters of each client where the server is ahead.
+   * Ids and counters only — no user content.
    */
   private async _logUnexplainedRejectionClocks(
     ops: Array<{ opId: string; op: Operation; existingClock?: VectorClock }>,
   ): Promise<void> {
     try {
       const localClock = (await this.opLogStore.getVectorClock()) ?? {};
-      const ownCounterNotAheadOfServerCount = ops.filter(
-        ({ op, existingClock }) =>
-          (existingClock?.[op.clientId] ?? 0) >= (op.vectorClock[op.clientId] ?? 0),
-      ).length;
       OpLog.warn('RejectedOpsHandlerService: Rejected ops not explained by remote ops', {
         count: ops.length,
-        ownCounterNotAheadOfServerCount,
-        localClockSize: Object.keys(localClock).length,
         samples: ops
           .slice(0, MAX_LOGGED_REJECTION_CLOCK_SAMPLES)
-          .map(({ opId, op, existingClock }) => {
-            // [server, op, local] counter per client id where the server's
-            // entity clock is ahead of this op — the entries it is missing.
-            const serverAhead: Record<string, [number, number, number]> = {};
-            for (const [clientId, serverCounter] of Object.entries(existingClock ?? {})) {
-              const opCounter = op.vectorClock[clientId] ?? 0;
-              if (serverCounter > opCounter) {
-                serverAhead[clientId] = [
-                  serverCounter,
-                  opCounter,
-                  localClock[clientId] ?? 0,
-                ];
-              }
-            }
-            return {
-              opId,
-              entityType: op.entityType,
-              opClientId: op.clientId,
-              serverAhead,
-            };
-          }),
+          .map(({ opId, op, existingClock }) => ({
+            opId,
+            opClientId: op.clientId,
+            serverAhead: Object.fromEntries(
+              Object.entries(existingClock ?? {})
+                .filter(([id, counter]) => counter > (op.vectorClock[id] ?? 0))
+                .map(([id, counter]) => [
+                  id,
+                  [counter, op.vectorClock[id] ?? 0, localClock[id] ?? 0],
+                ]),
+            ),
+          })),
       });
-    } catch (e) {
-      // Diagnostics only — never let them block conflict resolution.
-      OpLog.warn('RejectedOpsHandlerService: Could not log rejection clocks', {
-        name: (e as Error | undefined)?.name,
-      });
+    } catch {
+      // Diagnostics only — never block conflict resolution.
     }
   }
 

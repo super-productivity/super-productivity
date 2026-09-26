@@ -59,35 +59,23 @@ const isOpCoveredByLocalClock = (
 };
 
 /**
- * Resume point of an interrupted rejected-ops forced seq-0 download.
+ * Resume point of the rejected-ops forced seq-0 download, which only collects
+ * op clocks and on a long history spans dozens of pages. On mobile the network
+ * drops when the app is backgrounded; restarting from seq 0 every sync meant it
+ * never finished.
  *
- * That download re-fetches the server history (after its latest full-state op)
- * only to collect op clocks; on a long history it spans dozens of pages. On
- * mobile, backgrounding the app cuts the network mid-way, and restarting from
- * seq 0 on every sync meant it never finished: the rejected ops stayed pending
- * and sync never completed.
- *
- * A checkpoint only covers pages that yielded NO new op — pages whose ops are
- * all already applied here. Skipping them on resume therefore loses nothing but
- * their clocks, which are kept merged in `mergedClock` (every consumer of
- * `allOpClocks` folds them into one clock anyway). The first page with a new op
- * freezes the checkpoint, so unapplied ops are always re-downloaded.
- *
- * In memory only, keyed on the client id and the provider manager's
- * `configEpoch`, which moves on every sync-target or credential change (an
- * account switch must never resume another account's history). The persisted
- * cursor is deliberately NOT part of the key: an active user or a second device
- * moves it between attempts, and cursor progress only means more ops are
- * applied here — it cannot make an already-scanned page hold an unapplied op.
- * A gap reset, a completed forced download or any other seq-0 download drops it.
+ * Only pages that yielded NO new op are covered (all their ops are applied
+ * here), so resuming skips nothing but their clocks, kept merged in
+ * `mergedClock`. In memory, keyed on client id + `configEpoch` (moves on any
+ * sync-target or credential change) — not on the cursor, which an active user
+ * or another device moves between attempts without making a scanned page
+ * unsafe.
  */
 interface ForcedDownloadCheckpoint {
   key: string;
   sinceSeq: number;
   mergedClock: VectorClock;
   snapshotVectorClock?: VectorClock;
-  sawAnyOps: boolean;
-  sawEncryptedOp: boolean;
 }
 
 // Re-export for consumers that import from this service
@@ -332,14 +320,11 @@ export class OperationLogDownloadService implements OnDestroy {
         ? await this.opLogStore.getVectorClock()
         : null;
       let reDeliveredCount = 0;
-      // Only the rejected-ops re-delivery retry resumes: its result is used for
-      // clocks, never to replace local state (unlike a provider switch or raw
-      // rebuild, which must always see the whole history).
+      // Only the rejected-ops retry (forced + re-delivery filter = SuperSync
+      // re-delivery retry) resumes: it only collects clocks, never replaces
+      // local state.
       const checkpointKey =
-        forceFromSeq0 &&
-        !!options?.isReDeliveryRetry &&
-        isReDeliveryFilterActive &&
-        syncProvider.providerMode === 'superSyncOps'
+        forceFromSeq0 && isReDeliveryFilterActive
           ? `${clientId ?? ''}|${this.providerManager.configEpoch}`
           : undefined;
       const resumeFrom =
@@ -347,21 +332,13 @@ export class OperationLogDownloadService implements OnDestroy {
         this.forcedDownloadCheckpoint?.key === checkpointKey
           ? this.forcedDownloadCheckpoint
           : undefined;
-      // Any other seq-0 download (provider switch, raw rebuild) re-baselines
-      // local state, so a checkpoint taken before it must not be resumed after.
-      if (forceFromSeq0 && !resumeFrom) {
-        this.forcedDownloadCheckpoint = null;
-      }
       let checkpointClock: VectorClock = resumeFrom ? { ...resumeFrom.mergedClock } : {};
-      // A resumed page can still start with a server snapshot skip when a newer
-      // full-state op landed since the checkpoint; that response's clock and
-      // encryption state then supersede the restored ones.
-      let isSnapshotStateFromResume = !!resumeFrom;
+      // A newer full-state op since the checkpoint makes the server skip ahead
+      // on the first resumed page; its snapshot clock then replaces ours.
+      let isSnapshotClockFromResume = !!resumeFrom;
       if (resumeFrom) {
         allOpClocks.push({ ...resumeFrom.mergedClock });
         snapshotVectorClock = resumeFrom.snapshotVectorClock;
-        sawAnyOps = resumeFrom.sawAnyOps;
-        sawEncryptedOp = resumeFrom.sawEncryptedOp;
       }
       OpLog.verbose(
         `OperationLogDownloadService: [DEBUG] Starting download. ` +
@@ -408,19 +385,14 @@ export class OperationLogDownloadService implements OnDestroy {
         // Capture snapshot vector clock from first response (only present when snapshot optimization used)
         if (
           response.snapshotVectorClock &&
-          (!snapshotVectorClock || isSnapshotStateFromResume)
+          (!snapshotVectorClock || isSnapshotClockFromResume)
         ) {
-          if (isSnapshotStateFromResume) {
-            sawAnyOps = false;
-            sawEncryptedOp = false;
-          }
           snapshotVectorClock = response.snapshotVectorClock;
           OpLog.normal(
             `OperationLogDownloadService: Received snapshotVectorClock with ${Object.keys(snapshotVectorClock).length} entries`,
           );
         }
-        // Only the first page of a resumed run can carry that skip.
-        isSnapshotStateFromResume = false;
+        isSnapshotClockFromResume = false;
 
         // Capture snapshot state from first response (file-based sync providers only)
         // This is only present when downloading from seq 0 (fresh download)
@@ -469,8 +441,8 @@ export class OperationLogDownloadService implements OnDestroy {
           // for the rest of this download (every real serverSeq is >= 1).
           deliveredUpToSeq = 0;
           reDeliveredCount = 0; // pre-reset skips belong to the discarded epoch
-          // The checkpoint belongs to the old epoch too; the gap-reset
-          // re-download is never checkpointed (see `hasResetForGap` below).
+          // The checkpoint belongs to the old epoch too (and the re-download
+          // may itself be cut off before the end-of-run clear).
           this.forcedDownloadCheckpoint = null;
           snapshotVectorClock = undefined; // Clear snapshot clock to capture fresh one after reset
           snapshotState = undefined; // Clear snapshot state to capture fresh one after reset
@@ -652,8 +624,6 @@ export class OperationLogDownloadService implements OnDestroy {
             sinceSeq,
             mergedClock: checkpointClock,
             ...(snapshotVectorClock ? { snapshotVectorClock } : {}),
-            sawAnyOps,
-            sawEncryptedOp,
           };
         }
 
@@ -698,8 +668,7 @@ export class OperationLogDownloadService implements OnDestroy {
         }
       }
 
-      // The paging loop ended without throwing: the forced download is done (or
-      // failed for a reason a resume would not fix), so never resume it.
+      // Loop ended without throwing: done, or failed in a way a resume won't fix.
       if (checkpointKey !== undefined) {
         this.forcedDownloadCheckpoint = null;
       }

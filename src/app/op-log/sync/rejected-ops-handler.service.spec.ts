@@ -887,12 +887,9 @@ describe('RejectedOpsHandlerService', () => {
           'RejectedOpsHandlerService: Rejected ops not explained by remote ops',
           jasmine.objectContaining({
             count: 1,
-            ownCounterNotAheadOfServerCount: 1,
-            localClockSize: 2,
             samples: [
               {
                 opId: 'op-1',
-                entityType: 'TASK',
                 opClientId: 'local',
                 // [server, op, local]: the server saw local:7, this client is at 5.
                 serverAhead: { local: [7, 5, 5] },

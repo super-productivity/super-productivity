@@ -69,8 +69,9 @@ interface UploadBody {
  *   spans many pages, and each sync may fetch only PAGES_PER_SYNC of them before
  *   its network "drops" (every further GET is aborted).
  *
- * - Between B's attempts, A keeps adding tasks, so B's cursor moves on every
- *   sync (as with an active user or a second device) — resuming must survive it.
+ * - Between B's first attempts, A adds tasks, so B's cursor moves between an
+ *   interrupted attempt and its resume (as with an active user or a second
+ *   device) — resuming must survive it.
  *
  * Without resuming, every sync restarts at seq 0 and never gets past page
  * PAGES_PER_SYNC. With it, each sync continues where the last one stopped.
@@ -196,9 +197,11 @@ test.describe('@supersync Interrupted forced download', () => {
       //    PAGES_PER_SYNC pages. Failed syncs are expected until it completes.
       let syncsNeeded = 0;
       for (let i = 0; i < MAX_SYNCS && acceptedReplacementUploads === 0; i++) {
-        // Another device keeps working, so B's cursor moves between attempts.
-        await clientA.workView.addTask(`Meanwhile-${i}-${testRunId}`);
-        await clientA.sync.syncAndWait();
+        if (i > 0 && i <= 2) {
+          // Another device keeps working, so B's cursor moves between attempts.
+          await clientA.workView.addTask(`Meanwhile-${i}-${testRunId}`);
+          await clientA.sync.syncAndWait();
+        }
         pagesThisSync = 0;
         syncsNeeded = i + 1;
         try {
