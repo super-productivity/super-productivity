@@ -5,7 +5,6 @@ import {
   convertLocalDeleteRemoteUpdatesToLww,
   deepEqual,
   extractEntityFromPayload as extractEntityFromPayloadCore,
-  extractUpdateChanges as extractUpdateChangesCore,
   getEntityConfig as getEntityConfigFromRegistry,
   getPayloadKey as getPayloadKeyFromRegistry,
   isAdapterEntity,
@@ -948,18 +947,6 @@ export class ConflictResolutionService {
    */
   isIdenticalConflict(conflict: EntityConflict): boolean {
     return isIdenticalConflictCore(conflict, this.syncLogger);
-  }
-
-  /**
-   * Deep equality check for payloads.
-   * Handles nested objects, arrays, and primitives.
-   * Includes protection against circular references and deep nesting.
-   *
-   * @param a First value to compare
-   * @param b Second value to compare
-   */
-  private _deepEqual(a: unknown, b: unknown): boolean {
-    return deepEqual(a, b, { logger: this.syncLogger });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -4193,29 +4180,6 @@ export class ConflictResolutionService {
       getPayloadKeyFromRegistry(this.entityRegistry, entityType) ||
       entityType.toLowerCase()
     );
-  }
-
-  /**
-   * Extracts entity state from an operation payload.
-   * Handles both MultiEntityPayload format and flat payloads.
-   */
-  private _extractEntityFromPayload(
-    payload: unknown,
-    entityType: EntityType,
-  ): Record<string, unknown> | undefined {
-    return extractEntityFromPayloadCore(payload, this._resolvePayloadKey(entityType));
-  }
-
-  /**
-   * Extracts the changed fields from an UPDATE operation payload.
-   * Handles NgRx entity adapter format: { task: { id, changes: {...} } }
-   * and flat format: { task: { id, field: value } }
-   */
-  private _extractUpdateChanges(
-    payload: unknown,
-    entityType: EntityType,
-  ): Record<string, unknown> {
-    return extractUpdateChangesCore(payload, this._resolvePayloadKey(entityType));
   }
 
   /**

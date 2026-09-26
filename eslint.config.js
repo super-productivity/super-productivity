@@ -434,7 +434,7 @@ module.exports = tseslint.config(
   // never grow. When you shrink one, lower its cap to lock the cleanup in; a
   // cap may only ever go down. Delete an entry once its file is under 1200.
   ...Object.entries({
-    'src/app/op-log/sync/conflict-resolution.service.ts': 4775,
+    'src/app/op-log/sync/conflict-resolution.service.ts': 4738,
     'src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts': 3284,
     'src/app/op-log/persistence/operation-log-store.service.ts': 3153,
     'src/app/op-log/sync/operation-log-sync.service.ts': 2588,

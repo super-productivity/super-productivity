@@ -63,7 +63,13 @@ const isArchiveAction = (op: Operation): boolean => op.actionType === ARCHIVE_AC
 describe('deepEqual', () => {
   it('compares primitives, objects, and arrays', () => {
     expect(deepEqual(1, 1)).toBe(true);
+    expect(deepEqual('hello', 'hello')).toBe(true);
+    expect(deepEqual(true, true)).toBe(true);
+    expect(deepEqual(null, null)).toBe(true);
+    expect(deepEqual(1, 2)).toBe(false);
+    expect(deepEqual(true, false)).toBe(false);
     expect(deepEqual('a', 'b')).toBe(false);
+    expect(deepEqual([{ a: 1 }], [{ a: 1 }])).toBe(true);
     expect(deepEqual({ a: 1, b: { c: [1, 2] } }, { a: 1, b: { c: [1, 2] } })).toBe(true);
     expect(deepEqual({ a: 1 }, { a: 2 })).toBe(false);
     expect(deepEqual([1, 2, 3], [1, 3, 2])).toBe(false);
@@ -82,6 +88,19 @@ describe('deepEqual', () => {
     const b: Record<string, unknown> = { value: 1 };
     a['self'] = a;
     b['self'] = b;
+
+    expect(deepEqual(a, b, { logger })).toBe(false);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'sync-core.deepEqual detected circular reference, returning false',
+    );
+  });
+
+  it('returns false and logs for circular arrays', () => {
+    const logger = createLogger();
+    const a: unknown[] = [1, 2];
+    const b: unknown[] = [1, 2];
+    a.push(a);
+    b.push(b);
 
     expect(deepEqual(a, b, { logger })).toBe(false);
     expect(logger.warn).toHaveBeenCalledWith(
@@ -135,6 +154,22 @@ describe('deepEqual', () => {
     expect(deepEqual(makeCyclicViaDag(), makeCyclicViaDag(), { logger })).toBe(false);
     expect(logger.warn).toHaveBeenCalledWith(
       'sync-core.deepEqual detected circular reference, returning false',
+    );
+  });
+
+  it('returns false and logs when the default max depth is exceeded', () => {
+    const logger = createLogger();
+    let a: Record<string, unknown> = { value: 'deep' };
+    let b: Record<string, unknown> = { value: 'deep' };
+    for (let i = 0; i < 60; i++) {
+      a = { nested: a };
+      b = { nested: b };
+    }
+
+    expect(deepEqual(a, b, { logger })).toBe(false);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'sync-core.deepEqual exceeded max depth, returning false',
+      { maxDepth: 50 },
     );
   });
 
@@ -826,6 +861,16 @@ describe('delete-loses-to-update payload helpers', () => {
   });
 
   it('extracts update changes from multi-entity payloads', () => {
+    expect(
+      extractUpdateChanges(
+        {
+          actionPayload: { task: { id: 'task-1', title: 'New' } },
+          entityChanges: [],
+        },
+        'task',
+      ),
+    ).toEqual({ title: 'New' });
+
     expect(
       extractUpdateChanges(
         {
