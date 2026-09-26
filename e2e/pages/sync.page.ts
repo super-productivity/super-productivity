@@ -90,7 +90,7 @@ export class SyncPage extends BasePage {
        */
       encryptAtSetup?: boolean;
     },
-    options: { isReconfigure?: boolean } = {},
+    options: { isReconfigure?: boolean; useProductFormatDefault?: boolean } = {},
   ): Promise<void> {
     const isUseSplitSyncFiles = config.isUseSplitSyncFiles ?? WEBDAV_SYNC_FORMAT === 'v3';
     // Try entire setup flow up to 2 times (dialog-level retry)
@@ -248,12 +248,17 @@ export class SyncPage extends BasePage {
         await this.passwordInput.fill(config.password);
         await this.syncFolderInput.fill(config.syncFolderPath);
 
-        await this.expandAdvancedSettings();
-        const splitSyncCheckbox = dialog.getByRole('checkbox', {
-          name: /Surgical sync/i,
-        });
-        await splitSyncCheckbox.setChecked(isUseSplitSyncFiles);
-        await expect(splitSyncCheckbox).toBeChecked({ checked: isUseSplitSyncFiles });
+        if (!options.useProductFormatDefault) {
+          await this.expandAdvancedSettings();
+          const splitSyncCheckbox = dialog.getByRole('checkbox', {
+            name: /Surgical sync/i,
+          });
+          // Exercise an explicit choice even when the default checkbox is unchecked.
+          // This preserves deliberate v2 fixtures when the product default is automatic.
+          await splitSyncCheckbox.setChecked(!isUseSplitSyncFiles);
+          await splitSyncCheckbox.setChecked(isUseSplitSyncFiles);
+          await expect(splitSyncCheckbox).toBeChecked({ checked: isUseSplitSyncFiles });
+        }
 
         // Saving a new provider configuration starts the initial sync. Arm the
         // response witness before clicking so a fast response cannot be missed.

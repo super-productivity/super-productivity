@@ -221,10 +221,9 @@ export type SyncConfig = Readonly<{
   isEncryptionEnabled?: boolean;
   isCompressionEnabled?: boolean;
   /**
-   * SPAP-11: opt-in "Surgical sync" — store file-based sync as a small always-read
-   * ops file (`sync-ops.json`) plus a rarely-rewritten snapshot (`sync-state.json`)
-   * for O(delta) syncs. Default OFF. One-way per sync folder: once a client with
-   * this ON migrates the folder, other clients must also turn it on to continue.
+   * Absent: use the remote format, or v3 for a new empty folder.
+   * false: retain legacy v2 behavior. true: explicitly migrate v2 to v3.
+   * The migration is one-way per sync folder.
    */
   isUseSplitSyncFiles?: boolean;
   syncProvider: SyncProviderId | null;

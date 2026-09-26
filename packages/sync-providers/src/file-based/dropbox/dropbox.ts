@@ -208,33 +208,13 @@ export class Dropbox implements FileSyncProvider<
     revToMatch: string | null,
     isForceOverwrite: boolean = false,
   ): Promise<{ rev: string }> {
-    let effectiveRev = revToMatch;
-
-    // If no rev provided and not force overwrite, get current rev first
-    if (!effectiveRev && !isForceOverwrite) {
-      try {
-        const current = await this.getFileRev(targetPath, '');
-        effectiveRev = current.rev;
-        this._deps.logger.normal(
-          `${Dropbox.L}.uploadFile got current rev for conditional upload`,
-          { targetPath, hasRev: !!effectiveRev },
-        );
-      } catch (e) {
-        if (!(e instanceof RemoteFileNotFoundAPIError)) {
-          throw e;
-        }
-        // File doesn't exist - proceed without rev (will create new)
-        this._deps.logger.normal(`${Dropbox.L}.uploadFile file does not exist`, {
-          targetPath,
-        });
-      }
-    }
-
+    // Preserve create-only intent. Fetching a newer rev here would overwrite a
+    // concurrent writer that appeared after the caller observed a missing file.
     const r = await this._withTokenRefresh(() =>
       this._api.upload({
         path: this._getPath(targetPath),
         data: dataStr,
-        revToMatch: effectiveRev,
+        revToMatch,
         isForceOverwrite,
         targetPath,
       }),
