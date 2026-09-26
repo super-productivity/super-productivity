@@ -1419,7 +1419,8 @@ export class FileBasedSyncAdapterService {
       );
     }
 
-    // Reset local state
+    // Reset local state; same-round ops must re-read, not reuse the older cache.
+    this._clearCachedSyncData(providerKey);
     this._expectedSyncVersions.set(providerKey, newSyncVersion);
     this._localSeqCounters.set(providerKey, newSyncVersion);
     // SPAP-10: record the rev of the snapshot we just wrote as the last-seen rev

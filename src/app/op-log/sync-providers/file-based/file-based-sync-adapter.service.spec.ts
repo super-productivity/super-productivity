@@ -1146,6 +1146,59 @@ describe('FileBasedSyncAdapterService', () => {
       expect(uploads[bakIdx].data).toBe(uploads[mainIdx].data);
     });
 
+    it('does not build a same-round ops upload on the pre-snapshot download cache', async () => {
+      // One upload round sends full-state ops as a snapshot, then regular ops.
+      // The ops upload must start from the snapshot just written, not the
+      // download cached before it (stale base + stale If-Match rev).
+      const remote = new Map<string, { dataStr: string; rev: string }>();
+      remote.set(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE, {
+        dataStr: addPrefix(createMockSyncData({ syncVersion: 1 })),
+        rev: 'rev-1',
+      });
+      let revCounter = 1;
+      mockProvider.downloadFile.and.callFake(async (path: string) => {
+        const file = remote.get(path);
+        if (!file) throw new RemoteFileNotFoundAPIError(path);
+        return file;
+      });
+      const conditionalRevs: (string | null)[] = [];
+      mockProvider.uploadFile.and.callFake(
+        async (path: string, dataStr: string, rev: string | null, force?: boolean) => {
+          if (!force && path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE) {
+            conditionalRevs.push(rev);
+          }
+          const current = remote.get(path);
+          if (!force && current && rev !== current.rev) {
+            throw new UploadRevToMatchMismatchAPIError(path);
+          }
+          const next = { dataStr, rev: `rev-${++revCounter}` };
+          remote.set(path, next);
+          return { rev: next.rev };
+        },
+      );
+
+      await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(1);
+      await adapter.uploadSnapshot(
+        {},
+        'client1',
+        'recovery',
+        { client1: 2 },
+        1,
+        undefined, // isPayloadEncrypted
+        'snapshot-op',
+      );
+      const snapshotRev = remote.get(FILE_BASED_SYNC_CONSTANTS.SYNC_FILE)!.rev;
+
+      const result = await adapter.uploadOps(
+        [createMockSyncOp({ id: 'after-snapshot', vectorClock: { client1: 3 } })],
+        'client1',
+      );
+
+      expect(result.results[0].accepted).toBe(true);
+      expect(conditionalRevs).toEqual([snapshotRev]);
+    });
+
     describe('uploadSnapshot gap detection', () => {
       it('should not trigger false gap detection after snapshot upload when own client uploaded', async () => {
         // Step 1: Download to set expected sync version
