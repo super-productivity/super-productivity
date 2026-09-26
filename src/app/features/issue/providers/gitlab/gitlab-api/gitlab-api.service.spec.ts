@@ -9,6 +9,8 @@ import { GitlabCfg } from '../gitlab.model';
 import { DEFAULT_GITLAB_CFG } from '../gitlab.const';
 import { GitlabOriginalIssue, GitlabOriginalUser } from './gitlab-api-responses';
 import { SearchResultItem } from '../../../issue.model';
+import { Log } from 'src/app/core/log';
+import { GitlabIssue } from '../gitlab-issue.model';
 
 const USER: GitlabOriginalUser = {
   id: 1,
@@ -94,7 +96,34 @@ describe('GitlabApiService', () => {
     httpMock = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => httpMock.verify());
+  afterEach(() => {
+    httpMock.verify();
+    Log.clearLogHistory();
+  });
+
+  it('keeps a private GitLab host and project path out of exported logs during lookup', () => {
+    const privateHost = 'private-gitlab.example.test';
+    const privateProject = 'private-group/private-project';
+    const privateCfg = { ...cfg, gitlabBaseUrl: `https://${privateHost}` };
+    let result: GitlabIssue | undefined;
+    Log.clearLogHistory();
+
+    service.getById$(`${privateProject}#1`, privateCfg).subscribe((issue) => {
+      result = issue;
+    });
+
+    const issueReq = httpMock.expectOne((req) => req.url.includes(privateHost));
+    expect(issueReq.request.url).toContain('private-group%2Fprivate-project');
+    issueReq.flush([makeOriginalIssue(1)]);
+
+    const commentsReq = httpMock.expectOne((req) => req.url.includes('/notes'));
+    commentsReq.flush([]);
+
+    expect(result?.number).toBe(1);
+    expect(result?.comments).toEqual([]);
+    expect(Log.exportLogHistory()).not.toContain(privateHost);
+    expect(Log.exportLogHistory()).not.toContain(privateProject);
+  });
 
   describe('searchIssueInProject$', () => {
     it('fetches only the first page and never requests per-issue notes/comments (#9034)', () => {
