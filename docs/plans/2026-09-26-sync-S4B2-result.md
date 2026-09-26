@@ -95,6 +95,15 @@ Ports 9897/9247 were verified free; shared services were untouched. The first
 sandboxed Karma launch could not bind; the elevated rerun passed. The existing
 Chrome 107 Browserslist warning remains.
 
+## Independent review
+
+A fresh GPT-6 Astra subagent reviewed commit `d1c34728153dc544ed4085df682fca13e25f4755`
+against the pinned baseline, assignment, caller/export evidence and test coverage.
+It found no introduced defects or necessary code changes. The primary agent
+also verified the discovery/results and that all four tested code/config hashes
+still match the commit. No additional runtime changes or test reruns were needed.
+Confidence is high for this bounded deletion, subject to the limits below.
+
 ## Residual risk and integration gates
 
 This is unreachable-code removal, not a sync bug fix; no artificial E2E failure
