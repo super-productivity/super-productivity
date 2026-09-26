@@ -14,6 +14,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { NavigationStart, Router, RouterModule } from '@angular/router';
 import { NavItemComponent } from './nav-item/nav-item.component';
 import { NavListTreeComponent } from './nav-list/nav-list-tree.component';
@@ -54,6 +55,7 @@ const INITIAL_ENTER_ANIMATION_DURATION_MS = 425;
   standalone: true,
   imports: [
     RouterModule,
+    NgTemplateOutlet,
     NavItemComponent,
     NavListTreeComponent,
     MatMenuModule,
@@ -88,6 +90,27 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
 
   // Use service's computed signal directly
   readonly config = this._sideNavConfigService.navConfig;
+  // Projects and tags scroll on their own so the items above and below stay visible
+  readonly navSections = computed<{
+    top: NavItem[];
+    scroll: NavItem[];
+    bottom: NavItem[];
+  }>(() => {
+    const items = this.config().items;
+    const start = items.findIndex((item) => item.type === 'tree');
+    if (start === -1) {
+      return { top: items, scroll: [], bottom: [] };
+    }
+    let end = start + 1;
+    while (items[end]?.type === 'tree') {
+      end++;
+    }
+    return {
+      top: items.slice(0, start),
+      scroll: items.slice(start, end),
+      bottom: items.slice(end),
+    };
+  });
   private readonly _isDataLoaded = toSignal(
     this._dataInitStateService.isAllDataLoadedInitially$,
     { initialValue: false },

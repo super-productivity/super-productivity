@@ -14,7 +14,14 @@ import { LayoutService } from '../layout/layout.service';
 import { TaskService } from '../../features/tasks/task.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { ScheduleExternalDragService } from '../../features/schedule/schedule-week/schedule-external-drag.service';
-import { NavActionItem, NavConfig, NavPluginItem } from './magic-side-nav.model';
+import {
+  NavActionItem,
+  NavConfig,
+  NavItem,
+  NavPluginItem,
+  NavTreeItem,
+} from './magic-side-nav.model';
+import { MenuTreeKind } from '../../features/menu-tree/store/menu-tree.model';
 
 describe('MagicSideNavComponent', () => {
   let fixture: ComponentFixture<MagicSideNavComponent>;
@@ -210,6 +217,60 @@ describe('MagicSideNavComponent', () => {
     );
 
     expect(fixture.componentInstance.showMobileMenuOverlay()).toBe(false);
+  });
+
+  describe('navSections', () => {
+    const action = (id: string): NavActionItem => ({
+      id,
+      label: id,
+      icon: 'bug_report',
+      type: 'action',
+      action: () => undefined,
+    });
+    const tree = (id: string): NavTreeItem => ({
+      id,
+      label: id,
+      icon: 'expand_more',
+      type: 'tree',
+      treeKind: MenuTreeKind.PROJECT,
+      tree: [],
+    });
+    const ids = (items: NavItem[]): string[] => items.map((item) => item.id);
+
+    it('puts the trees in the scroll section and keeps the rest above and below it', () => {
+      navConfigServiceMock.navConfig.set({
+        ...navConfig,
+        items: [
+          action('today'),
+          { type: 'separator', id: 'sep-2' },
+          tree('projects'),
+          tree('tags'),
+          { type: 'separator', id: 'sep-3', mtAuto: true },
+          action('settings'),
+        ],
+      });
+      fixture = TestBed.createComponent(MagicSideNavComponent);
+
+      const sections = fixture.componentInstance.navSections();
+
+      expect(ids(sections.top)).toEqual(['today', 'sep-2']);
+      expect(ids(sections.scroll)).toEqual(['projects', 'tags']);
+      expect(ids(sections.bottom)).toEqual(['sep-3', 'settings']);
+    });
+
+    it('leaves everything in the top section when there are no trees', () => {
+      navConfigServiceMock.navConfig.set({
+        ...navConfig,
+        items: [action('today'), action('settings')],
+      });
+      fixture = TestBed.createComponent(MagicSideNavComponent);
+
+      const sections = fixture.componentInstance.navSections();
+
+      expect(ids(sections.top)).toEqual(['today', 'settings']);
+      expect(sections.scroll).toEqual([]);
+      expect(sections.bottom).toEqual([]);
+    });
   });
 
   describe('onItemClick', () => {
