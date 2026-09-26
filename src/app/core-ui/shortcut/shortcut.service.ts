@@ -129,7 +129,7 @@ export class ShortcutService {
         this._matDialog
           .open(DialogConfirmComponent, {
             data: {
-              message: T.F.NOTE.C.CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK,
+              message: T.F.NOTE.D_FULLSCREEN.CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK,
               okTxt: T.G.SAVE,
               cancelTxt: T.G.DISCARD,
             },
