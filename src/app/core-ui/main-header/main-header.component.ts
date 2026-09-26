@@ -27,7 +27,6 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 import { KeyboardConfig, keyboardConfigOrEmpty } from '@sp/keyboard-config';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { MatBadge } from '@angular/material/badge';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 import { SimpleCounterButtonComponent } from '../../features/simple-counter/simple-counter-button/simple-counter-button.component';
@@ -49,7 +48,6 @@ import { DesktopPanelButtonsComponent } from './desktop-panel-buttons/desktop-pa
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FocusButtonComponent } from './focus-button/focus-button.component';
 import { EmlDropDirective } from '../../core/drop-paste-input/eml-drop.directive';
-import { ConflictJournalService } from '../../op-log/sync/conflict-journal.service';
 
 /** One `DOM_DELTA_LINE` notch, in CSS pixels. Matches the row's icon metrics. */
 const WHEEL_LINE_HEIGHT_PX = 16;
@@ -70,7 +68,6 @@ const ACTION_ROW_REVEAL_PIN_MS = 400;
   imports: [
     MatIconButton,
     MatIcon,
-    MatBadge,
     MatTooltip,
     TranslatePipe,
     SimpleCounterButtonComponent,
@@ -104,15 +101,10 @@ export class MainHeaderComponent implements OnDestroy {
   private readonly _snackService = inject(SnackService);
   private readonly _configService = inject(GlobalConfigService);
   private readonly _dataInitStateService = inject(DataInitStateService);
-  private readonly _conflictJournal = inject(ConflictJournalService);
 
   readonly isDataLoaded = toSignal(this._dataInitStateService.isAllDataLoadedInitially$, {
     initialValue: false,
   });
-
-  // SPAP-15: persistent badge on the sync icon — count of unreviewed
-  // auto-resolved sync conflicts awaiting review.
-  readonly unreviewedConflictCount = this._conflictJournal.unreviewedCount;
 
   T: typeof T = T;
 

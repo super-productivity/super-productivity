@@ -1288,15 +1288,6 @@
                 running UI state.
               </p>
             </article>
-            <article class="card local">
-              <span class="card-label">Dormant capability / journal</span>
-              <h3>Conflict review store</h3>
-              <p>
-                <code>SUP_CONFLICT_JOURNAL</code> is separate, device-local, best effort,
-                and never allowed to influence conflict outcomes. The main remote-conflict
-                path currently disables emission, so it is not complete evidence.
-              </p>
-            </article>
           </div>
         </details>
 
@@ -1354,7 +1345,7 @@
                 href="../../src/app/op-log/persistence/operation-log-compaction.service.ts"
                 >compaction</a
               >, and
-              <a href="./conflict-journal-and-review.md">conflict journal contract</a>.
+              <a href="./conflict-journal-and-review.md">conflict merge contract</a>.
             </p>
           </div>
         </details>
@@ -2186,23 +2177,6 @@
             </p>
           </div>
         </details>
-
-        <details>
-          <summary>Deep / conflict evidence and manual review</summary>
-          <div class="detail-body">
-            <p>
-              The device-local journal and review UI are observe-only capabilities:
-              recording never affects the winner and is intentionally not atomic with the
-              op log. The main production remote-resolution path currently disables
-              journal emission, so the journal must not be treated as a complete audit
-              trail. Where entries exist, “flip” dispatches a new ordinary edit when the
-              discarded delta can be reapplied safely. See
-              <a href="./conflict-journal-and-review.md"
-                >Conflict Journal, Disjoint-Field Auto-Merge &amp; Review UI</a
-              >.
-            </p>
-          </div>
-        </details>
       </section>
 
       <section
@@ -2658,7 +2632,9 @@
               </li>
               <li><a href="./vector-clocks.md">vector-clock contract</a></li>
               <li>
-                <a href="./conflict-journal-and-review.md">conflict policy and review</a>
+                <a href="./conflict-journal-and-review.md"
+                  >conflict policy and composition</a
+                >
               </li>
             </ul>
           </article>

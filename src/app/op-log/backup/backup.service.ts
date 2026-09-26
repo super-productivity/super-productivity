@@ -30,7 +30,6 @@ import { normalizeGlobalConfigStartOfNextDay } from '../../features/config/norma
 import { extractEntityKeysFromState } from '../persistence/extract-entity-keys';
 import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
 import { LockService } from '../sync/lock.service';
-import { ConflictJournalService } from '../sync/conflict-journal.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
 import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
 
@@ -61,7 +60,6 @@ export class BackupService {
   private _protectedBackupId: string | null = null;
   private _operationWriteFlushService = inject(OperationWriteFlushService);
   private _lockService = inject(LockService);
-  private _conflictJournalService = inject(ConflictJournalService);
   private _taskTimeSyncService = inject(TaskTimeSyncService);
 
   /**
@@ -226,17 +224,6 @@ export class BackupService {
           isSkipPreImportBackup,
           requiredImportBackupId,
         );
-
-        // 4b. The conflict journal is a device-local side store describing
-        // conflicts in the op history that was JUST replaced — every import
-        // path (JSON import, local-backup restore, SuperSync
-        // restore) funnels through here, and without this the badge keeps its
-        // pre-restore count and the review page lists entries from the
-        // replaced dataset. Cleared INSIDE the op-log lock: a concurrent
-        // (cross-tab) conflict resolution serializes on this lock, so its
-        // fresh post-import journal entries cannot land before the clear and
-        // be wiped. clearAll swallows its own errors (must not fail the import).
-        await this._conflictJournalService.clearAll();
 
         // The imported full state replaces the live task totals. Any batch from
         // the pre-import state must not flush later onto that new baseline.

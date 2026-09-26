@@ -56,7 +56,6 @@ describe('no-pending CONCURRENT crossing convergence integration (#9073)', () =>
   const CLIENT_B = 'crossing-client-b';
   const FREEZE_FLAGS = {
     disableDisjointMerge: true,
-    disableConflictJournal: true,
   } as const;
 
   let opLogStore: OperationLogStoreService;

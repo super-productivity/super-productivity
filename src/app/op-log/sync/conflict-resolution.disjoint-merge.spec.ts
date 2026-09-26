@@ -1,7 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { ConflictResolutionService } from './conflict-resolution.service';
-import { ConflictJournalService } from './conflict-journal.service';
 import { Action, Store } from '@ngrx/store';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { convertOpToAction } from '../apply/operation-converter.util';
@@ -77,9 +76,8 @@ const buildRootStateWithTask = (task: Record<string, unknown>): unknown => ({
 /**
  * Disjoint-field auto-merge acceptance tests.
  *
- * (a) title-vs-notes concurrent edit → merged entity keeps BOTH; journal
- *     merged/disjoint-merge/info; not in unreviewed.
- * (b) title-vs-title (same field) → LWW unchanged; journal unreviewed.
+ * (a) title-vs-notes concurrent edit → merged entity keeps BOTH.
+ * (b) title-vs-title (same field) → LWW unchanged.
  * (c) disjoint real fields + both bumped a NOISE field → still merges; noise
  *     field resolved deterministically.
  * (d) edit-vs-delete → delete wins, NO merge.
@@ -88,7 +86,6 @@ const buildRootStateWithTask = (task: Record<string, unknown>): unknown => ({
  */
 describe('ConflictResolutionService — disjoint-field merge', () => {
   let service: ConflictResolutionService;
-  let journal: ConflictJournalService;
   let mockStore: jasmine.SpyObj<Store>;
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
   let mockOperationApplier: jasmine.SpyObj<OperationApplierService>;
@@ -206,7 +203,6 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     });
 
     service = TestBed.inject(ConflictResolutionService);
-    journal = TestBed.inject(ConflictJournalService);
   });
 
   // ── regression: checkpoint contract vs synthetic merged ops (#8900 seam) ───
@@ -356,14 +352,6 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     expect(compareVectorClocks(merged!.vectorClock, { B: 1 })).toBe(
       VectorClockComparison.GREATER_THAN,
     );
-
-    // Journal: merged / disjoint-merge / info, and NOT counted as unreviewed.
-    const entries = await journal.list('history');
-    expect(entries.length).toBe(1);
-    expect(entries[0].winner).toBe('merged');
-    expect(entries[0].reason).toBe('disjoint-merge');
-    expect(entries[0].status).toBe('info');
-    expect((await journal.list('unreviewed')).length).toBe(0);
   });
 
   // ── (a-time) #10147 regression: pending edit vs remote syncTimeSpent ───────
@@ -445,10 +433,6 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
           'patch',
         );
       }
-      const entries = await journal.list('history');
-      expect(entries.length).toBe(1);
-      expect(entries[0].winner).not.toBe('merged');
-      expect(entries[0].reason).not.toBe('disjoint-merge');
     };
 
     for (const form of ['direct', 'deferred'] as const) {
@@ -692,7 +676,6 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalled();
     expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
-    expect(await journal.list('history')).toEqual([]);
   });
 
   it('(a1 mirror) refuses disjoint merge for a legacy local bulk op', async () => {
@@ -762,15 +745,6 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     await service.autoResolveConflictsLWW([
       conflictOf([localBulkOp], [remoteOp], 'task-2'),
     ]);
-
-    const entries = await journal.list('history');
-    expect(entries.length).toBe(1);
-    expect(entries[0].winner).toBe('remote');
-    expect(entries[0].reason).not.toBe('disjoint-merge');
-    const timeSpentDiff = entries[0].fieldDiffs.find(
-      (diff) => diff.field === 'timeSpent',
-    );
-    expect(timeSpentDiff?.localVal).toBe(222);
 
     const localBatches = mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
       .allArgs()
@@ -914,7 +888,6 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalled();
     expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
-    expect(await journal.list('history')).toEqual([]);
   });
 
   it('fails closed when a remote winner is opaque for a local bulk target', async () => {
@@ -962,7 +935,6 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalled();
     expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
-    expect(await journal.list('history')).toEqual([]);
   });
 
   it('does not recreate a bulk sibling deleted by a later local operation', async () => {
@@ -1054,7 +1026,6 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     expect(mockOpLogStore.appendBatchSkipDuplicates).not.toHaveBeenCalled();
     expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
     expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
-    expect(await journal.list('history')).toEqual([]);
   });
 
   it('re-emits a decomposable local bulk sibling when the local bulk wins', async () => {
@@ -1305,17 +1276,15 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
 
     // detectConflicts emits one conflict per remote op → two conflicts, same
     // entity. Merging each independently would let the clock-dominating sibling
-    // silently drop the other's field, falsely journaled as "kept both".
+    // silently drop the other's field.
     await service.autoResolveConflictsLWW([
       conflictOf([localEst], [remoteTitle]),
       conflictOf([localEst], [remoteNotes]),
     ]);
-
-    // No merged op was synthesized; both conflicts fell back to whole-entity LWW.
-    const entries = await journal.list('history');
-    expect(entries.length).toBeGreaterThan(0);
-    expect(entries.every((e) => e.winner !== 'merged')).toBe(true);
-    expect((await journal.list('unreviewed')).length).toBeGreaterThan(0);
+    expect(mergedOpArgs()).toBeUndefined();
+    expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(
+      jasmine.arrayContaining(['local-est']),
+    );
   });
 
   it('(a5) refuses disjoint-merge for a multi-entity remote operation (#8956)', async () => {
@@ -1343,7 +1312,6 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     ).toBeRejectedWithError(UnsupportedMultiEntityConflictError);
     expect(mergedOpArgs()).toBeUndefined();
     expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
-    expect(await journal.list('history')).toEqual([]);
   });
 
   // ── (a5) disjoint-merge fix: refuse merge for fallback-less entity types ───────────
@@ -1352,7 +1320,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     // recreate a schema-INVALID NOTE (no RECREATE_FALLBACK). So NOTE disjoint
     // conflicts must fall back to whole-entity LWW, not merge.
     mockStore.select.and.returnValue(
-      of({ id: 'note-1', content: 'base', backgroundColor: 'base' }),
+      of({ id: 'note-1', content: 'Local content', backgroundColor: 'base' }),
     );
     const localOp = op({
       id: 'local-note',
@@ -1382,17 +1350,16 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
         suggestedResolution: 'manual',
       },
     ]);
-
-    const entries = await journal.list('history');
-    expect(entries.length).toBeGreaterThan(0);
-    expect(entries.every((e) => e.winner !== 'merged')).toBe(true);
+    const replacement = mergedOpArgs('note-1');
+    expect(replacement).toBeDefined();
+    expect(extractActionPayload(replacement!.payload)['content']).toBe('Local content');
+    expect((replacement!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe(
+      'replace',
+    );
+    expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-note']);
   });
 
-  // ── (a6) merge journaled only AFTER the merged op is durably appended ──────
-  it('(a6) does not journal a merge when appending the merged op fails', async () => {
-    // A `merged` entry claims "both sides kept" — that is only true once the
-    // merged op is persisted. If the append throws, the journal must not
-    // contain a phantom merge (STEP 3b journals post-append, not at plan time).
+  it('(a6) aborts resolution when appending the merged op fails', async () => {
     mockStore.select.and.returnValue(
       of({ id: 'task-1', title: 'Local title', notes: 'base' }),
     );
@@ -1418,13 +1385,11 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     await expectAsync(
       service.autoResolveConflictsLWW([conflictOf([localOp], [remoteOp])]),
     ).toBeRejected();
-
-    const history = await journal.list('history');
-    expect(history.filter((e) => e.winner === 'merged')).toEqual([]);
+    expect(mockOperationApplier.applyOperations).not.toHaveBeenCalled();
   });
 
   // ── (b) title vs title → LWW unchanged ─────────────────────────────────────
-  it('(b) leaves same-field (title-vs-title) conflicts to LWW (journal unreviewed)', async () => {
+  it('(b) leaves same-field (title-vs-title) conflicts to LWW', async () => {
     mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Local title' }));
 
     const localOp = op({
@@ -1443,13 +1408,13 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     });
 
     await service.autoResolveConflictsLWW([conflictOf([localOp], [remoteOp])]);
-
-    const entries = await journal.list('history');
-    expect(entries.length).toBe(1);
-    expect(entries[0].reason).toBe('newer'); // local ts newer, same field
-    expect(entries[0].winner).toBe('local');
-    expect(entries[0].status).toBe('unreviewed');
-    expect((await journal.list('unreviewed')).length).toBe(1);
+    const replacement = mergedOpArgs();
+    expect(replacement).toBeDefined();
+    expect(extractActionPayload(replacement!.payload)['title']).toBe('Local title');
+    expect((replacement!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe(
+      'replace',
+    );
+    expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-1']);
   });
 
   // ── (c) disjoint real fields + both bumped a noise field → still merges ─────
@@ -1487,10 +1452,6 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     // The noise field resolves to the greater-(timestamp) side, NOT simply the
     // local current-state value.
     expect(payload['modified']).toBe(2222);
-
-    const entries = await journal.list('history');
-    expect(entries[0].reason).toBe('disjoint-merge');
-    expect(entries[0].status).toBe('info');
   });
 
   // ── (d) edit vs delete → delete wins, NO merge ─────────────────────────────
@@ -1522,11 +1483,6 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     ).toBe(false);
 
     await service.autoResolveConflictsLWW([conflictOf([localOp], [remoteDelete])]);
-
-    const entries = await journal.list('history');
-    expect(entries.length).toBe(1);
-    expect(entries[0].reason).toBe('delete-wins');
-    expect(entries[0].reason).not.toBe('disjoint-merge');
     // No synthesized merged UPDATE op was created for this entity.
     expect(mergedOpArgs()).toBeUndefined();
   });
@@ -1571,12 +1527,6 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
 
     // No synthesized merged UPDATE op — the archive wins the WHOLE entity.
     expect(mergedOpArgs()).toBeUndefined();
-
-    const entries = await journal.list('history');
-    expect(entries.length).toBe(1);
-    expect(entries[0].reason).toBe('delete-wins');
-    expect(entries[0].reason).not.toBe('disjoint-merge');
-    expect(entries[0].winner).toBe('remote');
   });
 
   // ── (e) two-client convergence ─────────────────────────────────────────────

@@ -35,7 +35,6 @@ import {
   SimpleCounter,
   SimpleCounterType,
 } from '../../features/simple-counter/simple-counter.model';
-import { ConflictJournalService } from '../../op-log/sync/conflict-journal.service';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
 import { BannerService } from '../../core/banner/banner.service';
 import { NavigateToTaskService } from '../navigate-to-task/navigate-to-task.service';
@@ -519,7 +518,6 @@ describe('MainHeaderComponent action placement', () => {
         },
         { provide: MetricService, useValue: { getFocusSummaryForDay: () => null } },
         { provide: DateService, useValue: { todayStr: () => '2026-06-09' } },
-        { provide: ConflictJournalService, useValue: { unreviewedCount: signal(0) } },
         {
           provide: FocusModeService,
           useValue: {

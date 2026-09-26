@@ -766,8 +766,8 @@ describe('SupersededOperationResolverService', () => {
       await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
 
       // SPAP-15: the LWW_CONFLICTS_AUTO_RESOLVED snack was replaced by the
-      // journal-driven summary banner. Superseded-merge ops are self-healing
-      // local wins and are not journaled, so no count snack fires here.
+      // quiet resolution path. Superseded-merge ops are self-healing
+      // local wins, so no count snack fires here.
       expect(mockSnackService.open).not.toHaveBeenCalledWith(
         jasmine.objectContaining({
           translateParams: { localWins: 1, remoteWins: 0 },
@@ -2558,7 +2558,7 @@ describe('SupersededOperationResolverService', () => {
         expect(updateOp?.opType).toBe(OpType.Update);
       });
 
-      it('no longer emits a bare count snack for DELETE ops (SPAP-15 journal-driven banner)', async () => {
+      it('keeps self-healing DELETE replacements quiet', async () => {
         const supersededDeleteOp = createMockDeleteOperation('op-1', 'TASK', 'task-1', {
           clientA: 1,
         });
@@ -2569,8 +2569,7 @@ describe('SupersededOperationResolverService', () => {
           { opId: 'op-1', op: supersededDeleteOp },
         ]);
 
-        // SPAP-15: the bare count snack was replaced by the journal-driven summary
-        // banner. Superseded self-heals are not journaled, so no count notification
+        // Superseded self-heals are routine, so no count notification
         // fires for them (behavior change — flagged for review).
         expect(mockSnackService.open).not.toHaveBeenCalledWith(
           jasmine.objectContaining({

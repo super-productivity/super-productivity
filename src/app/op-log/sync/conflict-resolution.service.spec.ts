@@ -1,7 +1,6 @@
 import { OperationCaptureService } from '../capture/operation-capture.service';
 import { PersistentAction } from '../core/persistent-action.interface';
 import { TestBed } from '@angular/core/testing';
-import { SyncConflictBannerService } from './sync-conflict-banner.service';
 import {
   ConflictResolutionService,
   getLatestTaskProjectMoveEntityIds,
@@ -13,7 +12,6 @@ import { OperationLogStoreService } from '../persistence/operation-log-store.ser
 import { SnackService } from '../../core/snack/snack.service';
 import { BannerService } from '../../core/banner/banner.service';
 import { BannerId } from '../../core/banner/banner.model';
-import { T } from '../../t.const';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { of } from 'rxjs';
 import {
@@ -43,7 +41,6 @@ import {
   IncompleteRemoteOperationsError,
   UnsupportedMultiEntityConflictError,
 } from '../core/errors/sync-errors';
-import { ConflictJournalService } from './conflict-journal.service';
 import {
   isLwwUpdateActionType,
   toLwwUpdateActionType,
@@ -541,9 +538,7 @@ describe('ConflictResolutionService', () => {
       );
       // Local ops should be rejected
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-1']);
-      // SPAP-15: the generic count snack was replaced by the journal-driven
-      // summary banner. These ops carry no real field changes (noise), so
-      // nothing unreviewed is journaled and no snack fires.
+      // Routine self-healing remains quiet.
       expect(mockSnackService.open).not.toHaveBeenCalled();
     });
 
@@ -566,8 +561,7 @@ describe('ConflictResolutionService', () => {
         jasmine.arrayContaining([jasmine.objectContaining({ id: 'remote-1' })]),
       );
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-1']);
-      // SPAP-15: count snack replaced by the journal-driven summary banner;
-      // noise-only resolutions journal nothing unreviewed, so no snack fires.
+      // Routine self-healing remains quiet.
       expect(mockSnackService.open).not.toHaveBeenCalled();
     });
 
@@ -618,12 +612,7 @@ describe('ConflictResolutionService', () => {
       expect(mockSnackService.open).not.toHaveBeenCalled();
     });
 
-    describe('content-conflict banner REVIEW action', () => {
-      // This banner fires off the resolutions, NOT off the journal, so its
-      // REVIEW action has to be gated on the journal actually holding rows —
-      // otherwise the producer freeze (or a swallowed record() failure) sends
-      // the user to an empty review page at the exact moment they are worried
-      // about a discarded edit.
+    describe('content-conflict banner without journal review', () => {
       const buildContentLossConflicts = (): EntityConflict[] => {
         const now = Date.now();
         return [
@@ -655,10 +644,6 @@ describe('ConflictResolutionService', () => {
         ];
       };
 
-      const getJournal = (): ConflictJournalService =>
-        (service as unknown as { conflictJournal: ConflictJournalService })
-          .conflictJournal;
-
       const openContentBanner = async (): Promise<jasmine.Spy<BannerService['open']>> => {
         const openBannerSpy = spyOn(TestBed.inject(BannerService), 'open');
         mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Remote title' }));
@@ -670,11 +655,7 @@ describe('ConflictResolutionService', () => {
         return openBannerSpy;
       };
 
-      it('omits the REVIEW action when the journal has nothing to review', async () => {
-        // record() no-ops, so the unreviewed count stays 0 — the state produced
-        // both by the producer freeze and by a swallowed record() failure.
-        spyOn(getJournal(), 'record').and.resolveTo();
-
+      it('preserves the content-loss warning without a review action', async () => {
         const openBannerSpy = await openContentBanner();
 
         const banner = openBannerSpy.calls.mostRecent().args[0];
@@ -682,48 +663,6 @@ describe('ConflictResolutionService', () => {
         // Message + built-in dismiss = exactly the released v18.14.0 banner.
         expect(banner.action).toBeUndefined();
       });
-
-      it('keeps the REVIEW action when the journal holds unreviewed entries', async () => {
-        spyOn(getJournal(), 'record').and.resolveTo();
-        (
-          getJournal() as unknown as {
-            _unreviewedCount: { set: (v: number) => void };
-          }
-        )._unreviewedCount.set(2);
-
-        const openBannerSpy = await openContentBanner();
-
-        const banner = openBannerSpy.calls.mostRecent().args[0];
-        expect(banner.action?.label).toBe(T.F.SYNC.CONFLICT_REVIEW.BANNER_REVIEW);
-      });
-    });
-
-    // Callee half of the producer freeze: remote-ops-processing.service.spec.ts
-    // asserts the production caller PASSES the flag, but without this, deleting
-    // the gate inside autoResolveConflictsLWW leaves every spec green while the
-    // fleet silently resumes persisting the discarded side of every conflict.
-    // The journal-ON default is already covered by the #8956 multi-entity test.
-    it('records nothing when disableConflictJournal is set (producer freeze)', async () => {
-      const journal = (service as unknown as { conflictJournal: ConflictJournalService })
-        .conflictJournal;
-      const recordSpy = spyOn(journal, 'record').and.resolveTo();
-      const now = Date.now();
-      const conflicts = [
-        createConflict(
-          'task-1',
-          [createOpWithTimestamp('local-1', 'client-a', now - 1000)],
-          [createOpWithTimestamp('remote-1', 'client-b', now)],
-        ),
-      ];
-      mockOperationApplier.applyOperations.and.resolveTo({
-        appliedOps: conflicts[0].remoteOps,
-      });
-
-      await service.autoResolveConflictsLWW(conflicts, [], {
-        disableConflictJournal: true,
-      });
-
-      expect(recordSpy).not.toHaveBeenCalled();
     });
 
     it('escapes task titles before putting them in the innerHTML banner (XSS guard)', async () => {
@@ -859,7 +798,7 @@ describe('ConflictResolutionService', () => {
       expect(taskList).toContain('&lt;img');
     });
 
-    it('surfaces the journal-driven summary banner (not the content banner or count snack) for routine field resolutions (SPAP-15)', async () => {
+    it('keeps routine field resolutions quiet', async () => {
       const bannerService = TestBed.inject(BannerService);
       const openBannerSpy = spyOn(bannerService, 'open');
       const now = Date.now();
@@ -896,13 +835,9 @@ describe('ConflictResolutionService', () => {
 
       await service.autoResolveConflictsLWW(conflicts);
 
-      // A dueDay reschedule is a real (non-noise) discarded edit → journaled
-      // unreviewed → the summary banner (NOT the named content banner) surfaces
-      // it, and the old count snack is gone.
+      // Routine rescheduling remains quiet.
       expect(mockSnackService.open).not.toHaveBeenCalled();
-      expect(openBannerSpy).toHaveBeenCalledWith(
-        jasmine.objectContaining({ id: BannerId.SyncConflictsAutoResolved }),
-      );
+      expect(openBannerSpy).not.toHaveBeenCalled();
     });
 
     it('should auto-resolve as remote when timestamps are equal (tie-breaker)', async () => {
@@ -1006,9 +941,7 @@ describe('ConflictResolutionService', () => {
         jasmine.arrayContaining([jasmine.objectContaining({ id: 'remote-2' })]),
       );
 
-      // SPAP-15: the generic count snack was removed. Both conflicts here carry
-      // no real field changes (noise), so nothing unreviewed is journaled and
-      // neither the snack nor the summary banner fires.
+      // Routine self-healing remains quiet.
       expect(mockSnackService.open).not.toHaveBeenCalled();
     });
 
@@ -1589,10 +1522,6 @@ describe('ConflictResolutionService', () => {
         mockStore.select.and.returnValue(
           of({ id: 'task-2', title: 'Local winning task' }),
         );
-        const journal = (
-          service as unknown as { conflictJournal: ConflictJournalService }
-        ).conflictJournal;
-        spyOn(journal, 'record').and.resolveTo();
         mockOperationApplier.applyOperations.and.callFake(async (ops, options) => {
           await options?.onReducersCommitted?.(ops);
           return { appliedOps: ops };
@@ -1637,7 +1566,6 @@ describe('ConflictResolutionService', () => {
           [jasmine.any(Number)],
           [remoteMultiOp],
         );
-        expect(journal.record).toHaveBeenCalledTimes(2);
       });
 
       it('applies a remote multi-entity op for unaffected siblings and compensates the local winner', async () => {
@@ -4635,11 +4563,6 @@ describe('ConflictResolutionService', () => {
           appliedOps: [conflicts[0].remoteOps[0], conflicts[2].remoteOps[0]],
         });
 
-        const bannerSpy = spyOn(
-          TestBed.inject(SyncConflictBannerService),
-          'maybeShowSummaryBanner',
-        ).and.resolveTo();
-
         await service.autoResolveConflictsLWW(conflicts);
 
         // Task: remote wins (newer), Tag: remote wins (tie goes to remote).
@@ -4660,11 +4583,6 @@ describe('ConflictResolutionService', () => {
 
         // Project: local wins - remote op rejected separately
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-project']);
-
-        // SPAP-15: the mixed-result count notification is now the journal-driven
-        // summary banner (win-count VALUES are covered by
-        // sync-conflict-banner.service.spec).
-        expect(bannerSpy).toHaveBeenCalled();
       });
     });
 
@@ -5409,22 +5327,17 @@ describe('ConflictResolutionService', () => {
         const mergedOp = createOpWithTimestamp('merged-1', TEST_CLIENT_ID, now + 1);
         const conflict = createConflict('task-1', [localOp], [remoteOp]);
         const serviceInternals = service as unknown as {
-          _journalMergedResolution: () => Promise<unknown>;
-          _journalResolution: () => Promise<unknown>;
           _resolveConflictsWithLWW: (
             conflicts: EntityConflict[],
             disableDisjointMerge?: boolean,
           ) => Promise<unknown>;
         };
-        spyOn(serviceInternals, '_journalMergedResolution').and.resolveTo();
-        spyOn(serviceInternals, '_journalResolution').and.resolveTo();
         spyOn(serviceInternals, '_resolveConflictsWithLWW').and.callFake(
           async (_conflicts, disableDisjointMerge = false) =>
             disableDisjointMerge
               ? {
                   lwwResolutions: [{ conflict, winner: 'remote' }],
                   mergedResolutions: [],
-                  lwwPlans: [{ conflict }],
                 }
               : {
                   lwwResolutions: [],
@@ -5432,10 +5345,8 @@ describe('ConflictResolutionService', () => {
                     {
                       conflict,
                       mergedOp,
-                      plan: { conflict },
                     },
                   ],
-                  lwwPlans: [],
                 },
         );
         mockOpLogStore.appendBatchSkipDuplicates.and.resolveTo({
@@ -5485,8 +5396,6 @@ describe('ConflictResolutionService', () => {
           [remoteOp],
         );
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith([localOp.id]);
-        expect(serviceInternals._journalMergedResolution).not.toHaveBeenCalled();
-        expect(serviceInternals._journalResolution).toHaveBeenCalled();
       });
 
       it('should keep deferred user actions outside a failed merge fallback rejection', async () => {
@@ -5501,27 +5410,21 @@ describe('ConflictResolutionService', () => {
         );
         const conflict = createConflict('task-1', [localOp], [remoteOp]);
         const serviceInternals = service as unknown as {
-          _journalMergedResolution: () => Promise<unknown>;
-          _journalResolution: () => Promise<unknown>;
           _resolveConflictsWithLWW: (
             conflicts: EntityConflict[],
             disableDisjointMerge?: boolean,
           ) => Promise<unknown>;
         };
-        spyOn(serviceInternals, '_journalMergedResolution').and.resolveTo();
-        spyOn(serviceInternals, '_journalResolution').and.resolveTo();
         spyOn(serviceInternals, '_resolveConflictsWithLWW').and.callFake(
           async (_conflicts, disableDisjointMerge = false) =>
             disableDisjointMerge
               ? {
                   lwwResolutions: [{ conflict, winner: 'remote' }],
                   mergedResolutions: [],
-                  lwwPlans: [{ conflict }],
                 }
               : {
                   lwwResolutions: [],
-                  mergedResolutions: [{ conflict, mergedOp, plan: { conflict } }],
-                  lwwPlans: [],
+                  mergedResolutions: [{ conflict, mergedOp }],
                 },
         );
         mockOpLogStore.appendBatchSkipDuplicates.and.resolveTo({

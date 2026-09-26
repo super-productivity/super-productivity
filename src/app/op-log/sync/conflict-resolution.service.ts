@@ -100,9 +100,6 @@ import {
   IncompleteRemoteOperationsError,
   UnsupportedMultiEntityConflictError,
 } from '../core/errors/sync-errors';
-import { ConflictJournalService } from './conflict-journal.service';
-import { SyncConflictBannerService } from './sync-conflict-banner.service';
-import { buildConflictJournalEntry } from './conflict-journal-emission.util';
 import {
   buildTimeAwareResolutionBatches,
   foldSyncTimeSpentDeltas,
@@ -116,8 +113,8 @@ import {
   isDisjointMergeEligible,
   mergeChangedFields,
   synthesizeMergedChanges,
+  NOISE_FIELDS,
 } from './conflict-disjoint-merge.util';
-import { NOISE_FIELDS } from './conflict-journal.model';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
 import { areCommutingSectionOperations } from './section-conflict-commutativity.util';
 import { areCommutingReorderAndContentOperations } from './reorder-conflict.util';
@@ -136,8 +133,6 @@ type LWWResolution = LwwResolvedConflict<Operation, EntityConflict>;
 interface MergedResolution {
   conflict: EntityConflict;
   mergedOp: Operation;
-  /** Kept so the merge is journaled only after its reducer work succeeds. */
-  plan: LwwConflictResolutionPlan<EntityConflict>;
 }
 
 interface MultiEntityRemoteOpWinners {
@@ -165,28 +160,11 @@ interface ResolvedConflicts {
   lwwResolutions: LWWResolution[];
   mergedResolutions: MergedResolution[];
   localMultiReconciliationOps: Operation[];
-  lwwPlans: LwwConflictResolutionPlan<EntityConflict>[];
 }
 
 interface AutoResolveConflictsLwwOptions {
   callerHoldsOperationLogLock?: boolean;
   disableDisjointMerge?: boolean;
-  /**
-   * Skip conflict-journal emission entirely (observe-only hook, so this can
-   * never change which op resolution picks).
-   *
-   * Set by the production caller as a PRODUCER FREEZE ahead of the
-   * conflict-review rollback: journal rows capture the discarded side of a
-   * conflict verbatim (titles, arbitrary field values), and that device-local
-   * data obligation must not expand to the stable fleet on the next release
-   * tag while the feature is still slated for removal.
-   *
-   * Ceiling: rows already written on edge/internal builds stay readable and
-   * expire on their own (14 days / 200 rows). Upgrade path: the store, reader,
-   * UI and the `SUP_CONFLICT_JOURNAL_CLEARED_BEFORE` marker are deleted
-   * together in the conflict-review rollback, after which this option goes too.
-   */
-  disableConflictJournal?: boolean;
   remoteApplyLifecycleOwnedByCaller?: boolean;
 }
 
@@ -506,25 +484,6 @@ export class ConflictResolutionService {
   private syncLogger = inject(SYNC_LOGGER);
   private entityRegistry = inject(ENTITY_REGISTRY);
   private injector = inject(Injector);
-  private conflictJournal = inject(ConflictJournalService);
-  private syncConflictBanner = inject(SyncConflictBannerService);
-
-  /**
-   * SPAP-13 (observe-only): conflicts whose CONCURRENT status was FORCED by
-   * `_adjustForClockCorruption` escalation. Tagged here at detection time and
-   * read at resolution time so the journal can attribute those resolutions to
-   * `clock-corruption-suspected`. Keyed by the live EntityConflict object (the
-   * same reference flows detection → autoResolveConflictsLWW), so a WeakSet
-   * both avoids mutating the shared type and cannot leak across sync cycles.
-   * Purely a side-channel: it never changes which op resolution picks.
-   *
-   * FRAGILE: attribution depends on the SAME EntityConflict reference surviving
-   * from detection (`.add`) to resolution (`.has`). A future refactor that
-   * clones or rebuilds the conflict object between those points would silently
-   * drop the `clock-corruption-suspected` classification (no error, just wrong
-   * journal reason). Keep the reference stable or switch to an explicit flag.
-   */
-  private readonly _corruptionSuspectedConflicts = new WeakSet<EntityConflict>();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // LWW OPERATION FACTORY METHODS
@@ -997,7 +956,6 @@ export class ConflictResolutionService {
       lwwResolutions: resolutions,
       mergedResolutions,
       localMultiReconciliationOps = [],
-      lwwPlans,
     } = await this._resolveConflictsWithLWW(
       conflicts,
       options.disableDisjointMerge ?? false,
@@ -1267,14 +1225,6 @@ export class ConflictResolutionService {
         // fall through: the compensated-remote-op flow below re-classifies the
         // row (partition booked it as a rejected loser) so its remote-win and
         // uncontested sibling entities still get it applied.
-        //
-        // KNOWN INACCURACY (bounded): the SPAP-13 journal emits from the
-        // untouched plans, so a degraded conflict is journaled winner=local
-        // although the row applied as a remote win. Confined to
-        // journal-enabled builds — the production entry point passes
-        // `disableConflictJournal: true` (producer freeze, see
-        // RemoteOpsProcessingService) — and fixing it means re-plumbing plan
-        // mutation; revisit when the journal producer is unfrozen.
         OpLog.err(
           `ConflictResolutionService: ${uncoveredLocalWinnerKeys.length} local winner(s) of ` +
             `Today-list op ${remoteOp.id} have no compensation snapshot; applying as remote win.`,
@@ -1891,17 +1841,6 @@ export class ConflictResolutionService {
       );
     }
 
-    if (!options.disableConflictJournal) {
-      for (const plan of lwwPlans) {
-        await this._journalResolution(plan);
-      }
-      for (const merged of successfulMergedResolutions) {
-        if (writtenMergedOpIds.has(merged.mergedOp.id)) {
-          await this._journalMergedResolution(merged.plan);
-        }
-      }
-    }
-
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 5: Show non-blocking notification
     //
@@ -1956,10 +1895,6 @@ export class ConflictResolutionService {
     );
 
     if (contentConflicts.length === 0) {
-      // SPAP-15: no named content loss to surface here. If the sync journaled
-      // any (non-content) unreviewed conflicts, the summary banner names the
-      // count + REVIEW link; otherwise it stays silent (replaces the old snack).
-      await this.syncConflictBanner.maybeShowSummaryBanner();
       return;
     }
 
@@ -1989,25 +1924,11 @@ export class ConflictResolutionService {
     const named = labels.join(', ');
     const taskList = contentConflicts.length > MAX_NAMED ? `${named} …` : named;
 
-    // This banner fires off the resolutions, not off the journal, so REVIEW must
-    // be gated on the journal actually holding rows: under the producer freeze
-    // (or a swallowed `record()` failure) it would otherwise land the user on the
-    // review page's empty state. Without the action this is exactly the released
-    // v18.14.0 banner — message + built-in dismiss (no action2). Count is fresh:
-    // the journal loop awaits `record()`, which refreshes it, before this step.
-    const hasEntriesToReview = this.conflictJournal.unreviewedCount() > 0;
-
     this.bannerService.open({
       id: BannerId.SyncConflictContentResolved,
       ico: 'sync_problem',
       msg: T.F.SYNC.B.CONTENT_CONFLICT_RESOLVED,
       translateParams: { taskList },
-      action: hasEntriesToReview
-        ? {
-            label: T.F.SYNC.CONFLICT_REVIEW.BANNER_REVIEW,
-            fn: () => this.syncConflictBanner.navigateToReview(),
-          }
-        : undefined,
     });
   }
 
@@ -2072,7 +1993,6 @@ export class ConflictResolutionService {
   ): Promise<ResolvedConflicts> {
     const resolutions: LWWResolution[] = [];
     const mergedResolutions: MergedResolution[] = [];
-    const lwwPlans: LwwConflictResolutionPlan<EntityConflict>[] = [];
 
     const plans = planLwwConflictResolutions(conflicts, {
       isArchiveAction: (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
@@ -2086,8 +2006,6 @@ export class ConflictResolutionService {
     // A rejected local bulk op was already applied optimistically. If the
     // remote winner changes only part of one entity, rejecting the whole row
     // would strand its other entity/field changes locally with no uploadable op.
-    // Build safe replacements BEFORE journaling any plan, so a failed safety
-    // preflight cannot leave a phantom "resolved" journal entry.
     const localMultiReconciliationOps =
       await this._createLocalMultiReconciliationOps(plans);
 
@@ -2096,9 +2014,8 @@ export class ConflictResolutionService {
     // per-entity aggregation, so an entity with ≥2 concurrent remote ops (e.g.
     // one device edited title then notes offline) would synthesize multiple
     // merged ops for the same entity; their clocks dominate one another, so a
-    // dominated sibling can be superseded and its field silently dropped —
-    // falsely journaled as a successful "kept both" merge. Refuse the merge for
-    // any entity with >1 conflict this batch and fall back to whole-entity LWW
+    // dominated sibling can be superseded and its field silently dropped. Refuse
+    // the merge for any entity with >1 conflict this batch and fall back to whole-entity LWW
     // (baseline behaviour, no false merge). Per-entity aggregation into one op is
     // a possible future improvement; refusal is the safe floor.
     const conflictCountByEntity = new Map<string, number>();
@@ -2128,7 +2045,7 @@ export class ConflictResolutionService {
       // when both sides edited the same entity but DIFFERENT real fields, keep
       // BOTH instead of discarding the loser. Delete/archive, same-field
       // (overlapping), and multi-remote-op-per-entity conflicts are NOT eligible
-      // and fall through to the exact LWW + SPAP-13 path below, byte-unchanged.
+      // and fall through to the whole-entity LWW path below.
       const entityKey = toEntityKey(
         plan.conflict.entityType as EntityType,
         plan.conflict.entityId,
@@ -2138,10 +2055,7 @@ export class ConflictResolutionService {
           ? undefined
           : await this._tryCreateDisjointMergeOp(plan);
       if (mergedOp) {
-        // NOT journaled here: a `merged` entry claims "both sides kept", which
-        // is only true once the merged op enters state. All journal entries are
-        // emitted after the chosen reducer work succeeds.
-        mergedResolutions.push({ conflict: plan.conflict, mergedOp, plan });
+        mergedResolutions.push({ conflict: plan.conflict, mergedOp });
         OpLog.normal(
           `ConflictResolutionService: Disjoint-field merge for ` +
             `${plan.conflict.entityType}:${plan.conflict.entityId} (kept both sides)`,
@@ -2171,7 +2085,6 @@ export class ConflictResolutionService {
         winner: plan.winner,
         localWinOp,
       });
-      lwwPlans.push(plan);
 
       if (
         plan.reason === 'remote-archive' ||
@@ -2209,7 +2122,6 @@ export class ConflictResolutionService {
       lwwResolutions: resolutions,
       mergedResolutions,
       localMultiReconciliationOps,
-      lwwPlans,
     };
   }
 
@@ -2593,35 +2505,6 @@ export class ConflictResolutionService {
   }
 
   /**
-   * SPAP-13 (observe-only): builds and records one conflict-journal entry for an
-   * already-decided LWW plan. Classification is pure (see
-   * `buildConflictJournalEntry`); `conflictJournal.record` swallows its own
-   * errors. This method therefore cannot alter which op resolution picks — it
-   * only logs the outcome (and preserves the discarded side's field values).
-   */
-  private async _journalResolution(
-    plan: LwwConflictResolutionPlan<EntityConflict>,
-  ): Promise<void> {
-    // Belt-and-suspenders observe-only guard: neither classification nor the
-    // DB write may ever throw back into resolution and change what LWW picked.
-    try {
-      const entry = buildConflictJournalEntry({
-        entityType: plan.conflict.entityType,
-        entityId: plan.conflict.entityId,
-        winner: plan.winner,
-        planReason: plan.reason,
-        localOps: plan.conflict.localOps,
-        remoteOps: plan.conflict.remoteOps,
-        isCorruptionSuspected: this._corruptionSuspectedConflicts.has(plan.conflict),
-        resolvePayloadKey: (entityType) => this._resolvePayloadKey(entityType),
-      });
-      await this.conflictJournal.record(entry);
-    } catch (err) {
-      OpLog.err('ConflictResolutionService: conflict-journal hook failed (ignored)', err);
-    }
-  }
-
-  /**
    * SPAP-14: whether this plan must win the WHOLE entity and so is excluded from
    * disjoint-field merge. Both archive and project-delete-wins have this
    * property — the winner replaces the entity outright, never partially merged
@@ -2790,36 +2673,6 @@ export class ConflictResolutionService {
       // clients' independently-synthesized merged ops field-identical.
       true,
     );
-  }
-
-  /**
-   * SPAP-14 (observe-only): journal a disjoint-field merge as `merged` /
-   * `disjoint-merge` / `info`. Nothing was discarded, so it must NOT count toward
-   * the unreviewed count. Like `_journalResolution`, any failure is swallowed and
-   * can never affect resolution. It is called only after the merged op's reducer
-   * work succeeds, so the entry never describes a failed merge.
-   */
-  private async _journalMergedResolution(
-    plan: LwwConflictResolutionPlan<EntityConflict>,
-  ): Promise<void> {
-    try {
-      const entry = buildConflictJournalEntry({
-        entityType: plan.conflict.entityType,
-        entityId: plan.conflict.entityId,
-        winner: 'merged',
-        planReason: plan.reason,
-        localOps: plan.conflict.localOps,
-        remoteOps: plan.conflict.remoteOps,
-        isCorruptionSuspected: this._corruptionSuspectedConflicts.has(plan.conflict),
-        resolvePayloadKey: (entityType) => this._resolvePayloadKey(entityType),
-      });
-      await this.conflictJournal.record(entry);
-    } catch (err) {
-      OpLog.err(
-        'ConflictResolutionService: disjoint-merge journal hook failed (ignored)',
-        err,
-      );
-    }
   }
 
   /**
@@ -4344,13 +4197,6 @@ export class ConflictResolutionService {
       localFrontierIsEmpty,
     });
 
-    // SPAP-13 (observe-only): remember when the ONLY reason this became a
-    // conflict is that clock-corruption escalation flipped a non-CONCURRENT
-    // comparison to CONCURRENT. Does not affect the returned comparison.
-    const corruptionEscalated =
-      rawComparison !== VectorClockComparison.CONCURRENT &&
-      vcComparison === VectorClockComparison.CONCURRENT;
-
     // Skip superseded operations (local already has newer state)
     if (vcComparison === VectorClockComparison.GREATER_THAN) {
       OpLog.verbose(
@@ -4433,9 +4279,6 @@ export class ConflictResolutionService {
         remoteOps: [remoteOp],
         suggestedResolution: this._suggestResolution(ctx.localOpsForEntity, [remoteOp]),
       };
-      if (corruptionEscalated) {
-        this._corruptionSuspectedConflicts.add(conflict);
-      }
       return { isSupersededOrDuplicate: false, conflict };
     }
 

@@ -76,7 +76,7 @@ The Operation Log enables two types of synchronization:
 - **Resolution:** Semantic precedence and eligible disjoint-field merge run first;
   remaining conflicts resolve deterministically with LWW. Ordinary operation
   conflicts do not block on a winner dialog. Rejected rows are retained only until
-  compaction, and production conflict-journal emission is currently disabled.
+  compaction. The device-local conflict journal and review UI are retired.
 
 **B. File-provider operation transport**
 
@@ -212,7 +212,7 @@ the application in
 those interfaces into design docs: both the envelope and row metadata evolve.
 
 Synced application-model recovery data lives in `SUP_OPS`. Provider credentials,
-conflict-journal records, plugin caches, and local UI/browser settings have
+plugin caches, and local UI/browser settings have
 separate owners; see the [user-data reference](../wiki/3.06-User-Data.md).
 
 ### Remote Apply Checkpoints
@@ -999,7 +999,7 @@ Arrival-order behavior remains only where the client cannot construct a safe,
 deterministic local side: for example, its evidence was compacted into the
 snapshot frontier, an operation is multi-entity, or the retained side is a local
 delete/archive that needs compensation machinery. Those fallback cases do not
-create a conflict object or journal row. See
+create a conflict object. See
 [Composition residual (pre-existing class)](./conflict-journal-and-review.md#composition-residual-pre-existing-class)
 for the remaining composition and mixed-receiver limitations.
 
@@ -1013,8 +1013,8 @@ Conflicts first apply explicit semantic precedence and eligible disjoint-field m
 fall back to Last-Write-Wins (LWW) via
 `ConflictResolutionService.autoResolveConflictsLWW()`. For the current high-level policy, see
 the field guide's [causality section](./sync-architecture.html#causality); the focused
-[conflict journal and review contract](./conflict-journal-and-review.md) owns the more volatile
-merge and review details.
+[conflict merge contract](./conflict-journal-and-review.md) owns the more volatile
+merge and composition details.
 
 ### LWW Resolution Strategy
 
@@ -1024,11 +1024,10 @@ merge and review details.
    the maximum-timestamp operations chooses the winner, so either the local or remote side can
    win deterministically
 
-Winner selection and disjoint-field merging remain active in production. Conflict journaling is
-an observe-only capability and is not required for resolution: the production remote-processing
-path currently sets `disableConflictJournal: true`, so it does not emit journal entries. The
-journal store and review UI therefore remain dormant/incomplete rather than a complete record of
-resolved conflicts. See the focused contract above for current status and lifecycle details.
+Winner selection and disjoint-field merging remain active in production. The
+former journal was device-local observation only; its removal changes neither
+resolution nor the sync wire. See the focused contract above for retirement and
+composition limits.
 
 ### When Local Wins
 

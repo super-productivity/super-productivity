@@ -158,6 +158,7 @@ const prepareAndReloadUpgrade = async (
   workViewPage: WorkViewPage,
   taskPage: TaskPage,
   testInfo: TestInfo,
+  beforeReload?: () => Promise<void>,
 ): Promise<void> => {
   await workViewPage.waitForTaskList();
   await workViewPage.addTask('S5 backup witness');
@@ -203,6 +204,7 @@ const prepareAndReloadUpgrade = async (
   expect(seeded.storedRows).toEqual(expect.arrayContaining(seeded.rows));
   expect(seeded.marker).toBe(String(seeded.clearedBefore));
 
+  await beforeReload?.();
   await page.reload();
   await waitForAppReady(page);
   await workViewPage.waitForTaskList();
@@ -264,5 +266,128 @@ test.describe('Conflict journal retirement', () => {
     expect(
       await page.evaluate((key) => localStorage.getItem(key), CLEAR_MARKER),
     ).toBeNull();
+  });
+
+  test('fresh and repeated startup never creates the journal', async ({
+    page,
+    workViewPage,
+    taskPage,
+  }) => {
+    for (let startup = 0; startup < 3; startup++) {
+      await workViewPage.waitForTaskList();
+      expect(
+        await page.evaluate(async () =>
+          (await indexedDB.databases()).map((db) => db.name),
+        ),
+      ).not.toContain(JOURNAL_DB);
+      expect(
+        await page.evaluate((key) => localStorage.getItem(key), CLEAR_MARKER),
+      ).toBeNull();
+      if (startup === 0) {
+        await workViewPage.addTask('S5 repeated startup witness');
+      }
+      await expect(taskPage.getTaskByText('S5 repeated startup witness')).toBeVisible();
+      if (startup < 2) {
+        await page.reload();
+        await waitForAppReady(page);
+      }
+    }
+  });
+
+  test('an old open connection cannot block startup and closing it permits cleanup', async ({
+    page,
+    workViewPage,
+    taskPage,
+  }, testInfo) => {
+    const blocker = await page.context().newPage();
+    try {
+      // Same-origin document without an app bootstrap: only this deliberate
+      // legacy IDB connection can block the new app's deletion request.
+      await blocker.route('**/s5-journal-blocker.html', (route) =>
+        route.fulfill({ contentType: 'text/html', body: '<html></html>' }),
+      );
+      await blocker.goto(new URL('/s5-journal-blocker.html', page.url()).href);
+      await prepareAndReloadUpgrade(page, workViewPage, taskPage, testInfo, async () => {
+        await blocker.evaluate(async (name) => {
+          const state = window as unknown as {
+            s5JournalConnection?: IDBDatabase;
+            s5DeleteRequested?: boolean;
+          };
+          const db = await new Promise<IDBDatabase>((resolve, reject) => {
+            const request = indexedDB.open(name, 1);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+          });
+          state.s5JournalConnection = db;
+          db.onversionchange = (event) => {
+            state.s5DeleteRequested = event.newVersion === null;
+            // Deliberately keep the connection open like a running old client.
+          };
+        }, JOURNAL_DB);
+      });
+      expect(
+        await blocker.evaluate(
+          () => (window as unknown as { s5DeleteRequested?: boolean }).s5DeleteRequested,
+        ),
+      ).toBe(true);
+      expect(
+        await page.evaluate(async () =>
+          (await indexedDB.databases()).map((db) => db.name),
+        ),
+      ).toContain(JOURNAL_DB);
+      expect(
+        await page.evaluate((key) => localStorage.getItem(key), CLEAR_MARKER),
+      ).toBeNull();
+      await workViewPage.addTask('S5 usable during blocked deletion');
+      await expect(
+        taskPage.getTaskByText('S5 usable during blocked deletion'),
+      ).toBeVisible();
+      const backupId = (await readRecoveryRing(page))[0].backupId;
+      await expect
+        .poll(async () =>
+          (await readWitnesses(page, backupId)).pending.some((entry) =>
+            JSON.stringify(entry.op.p ?? entry.op.payload).includes(
+              'S5 usable during blocked deletion',
+            ),
+          ),
+        )
+        .toBe(true);
+      await blocker.evaluate(() =>
+        (
+          window as unknown as { s5JournalConnection?: IDBDatabase }
+        ).s5JournalConnection!.close(),
+      );
+      await expect
+        .poll(() =>
+          page.evaluate(async () => (await indexedDB.databases()).map((db) => db.name)),
+        )
+        .not.toContain(JOURNAL_DB);
+      await expect(
+        taskPage.getTaskByText('S5 usable during blocked deletion'),
+      ).toBeVisible();
+    } finally {
+      await blocker.close();
+    }
+  });
+
+  test('retired review route and Settings entry disappear while backup controls remain', async ({
+    page,
+  }) => {
+    const importPage = new ImportPage(page);
+    await importPage.navigateToImportPage();
+    await expect(
+      page.locator(
+        'config-page a[href*="sync-conflicts"], config-page button[routerLink="/sync-conflicts"]',
+      ),
+    ).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Review sync conflicts' })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.locator('config-page').getByRole('button', { name: 'Browse backups' }),
+    ).toBeVisible();
+    await page.goto('/#/sync-conflicts');
+    await waitForAppReady(page);
+    await expect(page.locator('sync-conflicts-page')).toHaveCount(0);
   });
 });

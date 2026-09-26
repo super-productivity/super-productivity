@@ -23,9 +23,15 @@ import {
   extractUpdateChanges,
   isMultiEntityPayload,
 } from '@sp/sync-core';
-import { ConflictJournalFieldDiff, NOISE_FIELDS } from './conflict-journal.model';
 import { isMultiEntityOperation } from '../util/get-op-entity-ids.util';
 import { applyClearedFields } from '../../util/cleared-update-fields';
+
+/** Metadata timestamps excluded from real-field overlap checks. */
+export const NOISE_FIELDS: ReadonlySet<string> = new Set<string>([
+  'modified',
+  'lastModified',
+  'created',
+]);
 
 /** Identity of one side of the conflict for the deterministic noise tiebreak. */
 export interface MergeSideMeta {
@@ -145,8 +151,7 @@ const readClearedFields = (payload: unknown): string[] | undefined => {
 /**
  * Union of the changed-field maps across a set of ops on one side.
  *
- * Mirrors the SPAP-13 `mergeChangedFields` pattern (was private to the journal
- * emission util). DELETE ops carry no meaningful field changes and are skipped —
+ * DELETE ops carry no meaningful field changes and are skipped —
  * though disjoint-merge eligibility already excludes any side with a DELETE.
  */
 export const mergeChangedFields = (
@@ -176,7 +181,7 @@ export const isOpaqueChangeOp = (
 /**
  * True when the side contains at least one op whose mutation is real but not
  * expressible as field values (see `extractOpChanges`). A side with opaque
- * changes must never be classified as "changed nothing real" (journal `noise`)
+ * changes must never be classified as "changed nothing real"
  * nor auto-merged (the synthesized entity would silently drop the opaque
  * mutation and the two clients would diverge).
  */
@@ -400,43 +405,4 @@ export const synthesizeMergedChanges = (
   }
 
   return changes;
-};
-
-/**
- * Per-field journal diffs for a merged resolution. Each field records which
- * side's value the merge kept: `local` for local-changed fields, `remote` for
- * remote-changed fields, and the deterministic tiebreak winner for a noise field
- * both sides changed.
- */
-export const buildMergedFieldDiffs = (
-  localChanges: Record<string, unknown>,
-  remoteChanges: Record<string, unknown>,
-  localMeta: MergeSideMeta,
-  remoteMeta: MergeSideMeta,
-): ConflictJournalFieldDiff[] => {
-  const winner = noiseTiebreakSide(localMeta, remoteMeta);
-  const fieldNames = Array.from(
-    new Set([...Object.keys(localChanges), ...Object.keys(remoteChanges)]),
-  );
-  return fieldNames.map((field) => {
-    const localHas = field in localChanges;
-    const remoteHas = field in remoteChanges;
-    let pickedSide: 'local' | 'remote';
-    if (localHas && remoteHas) {
-      // Only NOISE fields can be on both sides (real fields are disjoint).
-      pickedSide = winner;
-    } else if (localHas) {
-      pickedSide = 'local';
-    } else {
-      pickedSide = 'remote';
-    }
-    return {
-      field,
-      localVal: localChanges[field],
-      remoteVal: remoteChanges[field],
-      localChanged: localHas,
-      remoteChanged: remoteHas,
-      pickedSide,
-    };
-  });
 };

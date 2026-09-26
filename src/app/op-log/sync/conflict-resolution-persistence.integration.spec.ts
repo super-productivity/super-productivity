@@ -1,4 +1,3 @@
-import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Action, ActionReducer, Store } from '@ngrx/store';
 import { of } from 'rxjs';
@@ -45,9 +44,7 @@ import { ClientIdService } from '../../core/util/client-id.service';
 import { VectorClockService } from './vector-clock.service';
 import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 import { ValidateStateService } from '../validation/validate-state.service';
-import { ConflictJournalService } from './conflict-journal.service';
 import { ConflictResolutionService } from './conflict-resolution.service';
-import { SyncConflictBannerService } from './sync-conflict-banner.service';
 import { SyncSessionValidationService } from './sync-session-validation.service';
 
 describe('ConflictResolutionService persistence (integration, real store)', () => {
@@ -240,19 +237,6 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
       ['processDeferredActions'],
     );
     operationLogEffects.processDeferredActions.and.resolveTo();
-    const conflictJournal = jasmine.createSpyObj<ConflictJournalService>(
-      'ConflictJournalService',
-      ['record'],
-      // Real signal, not a spy: `unreviewedCount` is a signal on the service, and
-      // the content-conflict banner reads it to decide whether to offer REVIEW.
-      { unreviewedCount: signal(0) },
-    );
-    conflictJournal.record.and.resolveTo();
-    const syncConflictBanner = jasmine.createSpyObj<SyncConflictBannerService>(
-      'SyncConflictBannerService',
-      ['maybeShowSummaryBanner', 'navigateToReview'],
-    );
-    syncConflictBanner.maybeShowSummaryBanner.and.resolveTo();
 
     TestBed.configureTestingModule({
       providers: [
@@ -286,8 +270,6 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
           useValue: jasmine.createSpyObj('SyncSessionValidationService', ['setFailed']),
         },
         { provide: OperationLogEffects, useValue: operationLogEffects },
-        { provide: ConflictJournalService, useValue: conflictJournal },
-        { provide: SyncConflictBannerService, useValue: syncConflictBanner },
         { provide: CLIENT_ID_PROVIDER, useValue: clientIdProvider },
         { provide: ENTITY_REGISTRY, useValue: buildEntityRegistry() },
       ],

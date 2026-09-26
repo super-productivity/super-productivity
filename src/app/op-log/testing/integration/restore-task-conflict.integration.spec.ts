@@ -1,4 +1,3 @@
-import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Action, ActionReducer, createSelector, Store } from '@ngrx/store';
 import { of } from 'rxjs';
@@ -31,11 +30,9 @@ import { buildEntityRegistry, ENTITY_REGISTRY } from '../../core/entity-registry
 import { EntityConflict, Operation } from '../../core/operation.types';
 import { PersistentAction } from '../../core/persistent-action.interface';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
-import { ConflictJournalService } from '../../sync/conflict-journal.service';
 import { ConflictResolutionService } from '../../sync/conflict-resolution.service';
 import { SupersededOperationResolverService } from '../../sync/superseded-operation-resolver.service';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
-import { SyncConflictBannerService } from '../../sync/sync-conflict-banner.service';
 import { SyncSessionValidationService } from '../../sync/sync-session-validation.service';
 import { CLIENT_ID_PROVIDER } from '../../util/client-id.provider';
 import { ValidateStateService } from '../../validation/validate-state.service';
@@ -227,17 +224,6 @@ describe('restoreTask delete-conflict integration (#9263)', () => {
       ['processDeferredActions'],
     );
     operationLogEffects.processDeferredActions.and.resolveTo();
-    const conflictJournal = jasmine.createSpyObj<ConflictJournalService>(
-      'ConflictJournalService',
-      ['record'],
-      { unreviewedCount: signal(0) },
-    );
-    conflictJournal.record.and.resolveTo();
-    const syncConflictBanner = jasmine.createSpyObj<SyncConflictBannerService>(
-      'SyncConflictBannerService',
-      ['maybeShowSummaryBanner', 'navigateToReview'],
-    );
-    syncConflictBanner.maybeShowSummaryBanner.and.resolveTo();
     const snack = jasmine.createSpyObj<SnackService>('SnackService', [
       'open',
       'hasPendingPersistentAction',
@@ -266,8 +252,6 @@ describe('restoreTask delete-conflict integration (#9263)', () => {
         { provide: OperationApplierService, useValue: operationApplier },
         { provide: ValidateStateService, useValue: validateState },
         { provide: OperationLogEffects, useValue: operationLogEffects },
-        { provide: ConflictJournalService, useValue: conflictJournal },
-        { provide: SyncConflictBannerService, useValue: syncConflictBanner },
         { provide: SnackService, useValue: snack },
         {
           provide: BannerService,

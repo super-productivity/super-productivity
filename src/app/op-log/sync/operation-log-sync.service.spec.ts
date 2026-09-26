@@ -32,7 +32,6 @@ import { SyncImportFilterService } from './sync-import-filter.service';
 import { ServerMigrationService } from './server-migration.service';
 import { SupersededOperationResolverService } from './superseded-operation-resolver.service';
 import { RemoteOpsProcessingService } from './remote-ops-processing.service';
-import { ConflictJournalService } from './conflict-journal.service';
 import { LocalDraftService } from '../../core/draft/local-draft.service';
 import { RejectedOpsHandlerService } from './rejected-ops-handler.service';
 import { OperationWriteFlushService } from './operation-write-flush.service';
@@ -97,7 +96,6 @@ describe('OperationLogSyncService', () => {
   let opLogStoreSpy: jasmine.SpyObj<OperationLogStoreService>;
   let serverMigrationServiceSpy: jasmine.SpyObj<ServerMigrationService>;
   let remoteOpsProcessingServiceSpy: jasmine.SpyObj<RemoteOpsProcessingService>;
-  let conflictJournalServiceSpy: jasmine.SpyObj<ConflictJournalService>;
   let localDraftServiceSpy: jasmine.SpyObj<LocalDraftService>;
   let rejectedOpsHandlerServiceSpy: jasmine.SpyObj<RejectedOpsHandlerService>;
   let writeFlushServiceSpy: jasmine.SpyObj<OperationWriteFlushService>;
@@ -259,10 +257,6 @@ describe('OperationLogSyncService', () => {
       'validateAfterSync',
     ]);
     remoteOpsProcessingServiceSpy.validateAfterSync.and.resolveTo(true);
-    conflictJournalServiceSpy = jasmine.createSpyObj('ConflictJournalService', [
-      'clearAll',
-    ]);
-    conflictJournalServiceSpy.clearAll.and.resolveTo();
     localDraftServiceSpy = jasmine.createSpyObj('LocalDraftService', ['deleteAllDrafts']);
     remoteOpsProcessingServiceSpy.processRemoteOps.and.resolveTo({
       localWinOpsCreated: 0,
@@ -398,10 +392,6 @@ describe('OperationLogSyncService', () => {
           ]),
         },
         { provide: RemoteOpsProcessingService, useValue: remoteOpsProcessingServiceSpy },
-        {
-          provide: ConflictJournalService,
-          useValue: conflictJournalServiceSpy,
-        },
         { provide: LocalDraftService, useValue: localDraftServiceSpy },
         { provide: RejectedOpsHandlerService, useValue: rejectedOpsHandlerServiceSpy },
         { provide: OperationWriteFlushService, useValue: writeFlushServiceSpy },

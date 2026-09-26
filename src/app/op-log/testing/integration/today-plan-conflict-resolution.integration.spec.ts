@@ -20,7 +20,6 @@ import {
 } from '../../core/persistent-action.interface';
 import { OperationLogCompactionService } from '../../persistence/operation-log-compaction.service';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
-import { ConflictJournalService } from '../../sync/conflict-journal.service';
 import { ConflictResolutionService } from '../../sync/conflict-resolution.service';
 import { ImmediateUploadService } from '../../sync/immediate-upload.service';
 import { OperationWriteFlushService } from '../../sync/operation-write-flush.service';
@@ -66,7 +65,6 @@ describe('today-list multi-entity conflict resolution integration (#9426)', () =
   let capture: OperationCaptureService;
   let writeFlush: OperationWriteFlushService;
   let resolver: ConflictResolutionService;
-  let journal: ConflictJournalService;
   let operationApplier: jasmine.SpyObj<OperationApplierService>;
   let store: jasmine.SpyObj<Store>;
   let actions$: Subject<Action>;
@@ -174,7 +172,6 @@ describe('today-list multi-entity conflict resolution integration (#9426)', () =
     capture = TestBed.inject(OperationCaptureService);
     writeFlush = TestBed.inject(OperationWriteFlushService);
     resolver = TestBed.inject(ConflictResolutionService);
-    journal = TestBed.inject(ConflictJournalService);
     capture.clear();
     store.dispatch.and.callFake(((action: Action): void => {
       if (!isPersistentAction(action)) {
@@ -186,7 +183,6 @@ describe('today-list multi-entity conflict resolution integration (#9426)', () =
 
     await opLogStore.init();
     await opLogStore._clearAllDataForTesting();
-    await journal.clearAll();
     effectSubscription =
       TestBed.inject(OperationLogEffects).persistOperation$.subscribe();
   });
@@ -198,7 +194,6 @@ describe('today-list multi-entity conflict resolution integration (#9426)', () =
     capture.clear();
     clearDeferredActions();
     await opLogStore._clearAllDataForTesting();
-    await journal.clearAll();
     TestBed.resetTestingModule();
   });
 

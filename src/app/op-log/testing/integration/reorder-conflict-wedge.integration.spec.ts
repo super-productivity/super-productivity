@@ -53,7 +53,6 @@ import { Operation } from '../../core/operation.types';
 import { UnsupportedMultiEntityConflictError } from '../../core/errors/sync-errors';
 import { PersistentAction } from '../../core/persistent-action.interface';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
-import { ConflictJournalService } from '../../sync/conflict-journal.service';
 import { ConflictResolutionService } from '../../sync/conflict-resolution.service';
 import { SupersededOperationResolverService } from '../../sync/superseded-operation-resolver.service';
 import { CLIENT_ID_PROVIDER } from '../../util/client-id.provider';
@@ -115,7 +114,6 @@ const actionsFor = (
 describe('reorder conflicts: real store, applier, reducers and durable replay (#10264)', () => {
   let store: Store<TestState>;
   let db: OperationLogStoreService;
-  let journal: ConflictJournalService;
   let initial: TestState;
   let reducer: ActionReducer<TestState>;
   const state = (): Promise<TestState> => firstValueFrom(store);
@@ -293,14 +291,11 @@ describe('reorder conflicts: real store, applier, reducers and durable replay (#
     });
     store = TestBed.inject(Store);
     db = TestBed.inject(OperationLogStoreService);
-    journal = TestBed.inject(ConflictJournalService);
     await db.init();
     await db._clearAllDataForTesting();
-    await journal.clearAll();
   });
   afterEach(async () => {
     await db._clearAllDataForTesting();
-    await journal.clearAll();
     TestBed.resetTestingModule();
   });
 

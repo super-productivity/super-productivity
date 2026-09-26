@@ -1,5 +1,4 @@
 import {
-  buildMergedFieldDiffs,
   hasOpaqueChanges,
   isAdditiveTimeOp,
   isDisjointMergeEligible,
@@ -448,72 +447,6 @@ describe('conflict-disjoint-merge.util', () => {
           { timestamp: 1000, clientId: 'A' },
         ),
       ).toBe('local');
-    });
-  });
-
-  describe('buildMergedFieldDiffs', () => {
-    const localMeta: MergeSideMeta = { timestamp: 1000, clientId: 'A' };
-    const remoteMeta: MergeSideMeta = { timestamp: 2000, clientId: 'B' };
-
-    it('captures each side verbatim and attributes disjoint real fields to their side', () => {
-      const diffs = buildMergedFieldDiffs(
-        { title: 'Local' },
-        { notes: 'Remote' },
-        localMeta,
-        remoteMeta,
-      );
-
-      expect(diffs).toContain({
-        field: 'title',
-        localVal: 'Local',
-        remoteVal: undefined,
-        localChanged: true,
-        remoteChanged: false,
-        pickedSide: 'local',
-      });
-      expect(diffs).toContain({
-        field: 'notes',
-        localVal: undefined,
-        remoteVal: 'Remote',
-        localChanged: false,
-        remoteChanged: true,
-        pickedSide: 'remote',
-      });
-      expect(diffs.length).toBe(2);
-    });
-
-    it('resolves a field changed on BOTH sides (only noise can be) via the timestamp tiebreak', () => {
-      const diffs = buildMergedFieldDiffs(
-        { modified: 1111 },
-        { modified: 2222 },
-        localMeta, // ts 1000
-        remoteMeta, // ts 2000 → newer wins
-      );
-
-      expect(diffs.length).toBe(1);
-      expect(diffs[0]).toEqual({
-        field: 'modified',
-        localVal: 1111,
-        remoteVal: 2222,
-        localChanged: true,
-        remoteChanged: true,
-        pickedSide: 'remote',
-      });
-    });
-
-    it('resolves a both-sides field by clientId when timestamps are equal', () => {
-      const diffs = buildMergedFieldDiffs(
-        { modified: 1111 },
-        { modified: 2222 },
-        { timestamp: 1000, clientId: 'B' }, // greater clientId → local wins
-        { timestamp: 1000, clientId: 'A' },
-      );
-
-      expect(diffs[0].pickedSide).toBe('local');
-    });
-
-    it('returns an empty array when neither side changed anything', () => {
-      expect(buildMergedFieldDiffs({}, {}, localMeta, remoteMeta)).toEqual([]);
     });
   });
 

@@ -65,7 +65,6 @@ import { StoreModule, Store } from '@ngrx/store';
 import { META_REDUCERS } from './app/root-store/meta/meta-reducer-registry';
 import { setOperationCaptureService } from './app/root-store/meta/task-shared-meta-reducers';
 import { OperationCaptureService } from './app/op-log/capture/operation-capture.service';
-import { ConflictJournalService } from './app/op-log/sync/conflict-journal.service';
 import { LocalDraftService } from './app/core/draft/local-draft.service';
 import { EncryptionPasswordDialogOpenerService } from './app/imex/sync/encryption-password-dialog-opener.service';
 import { DataInitService } from './app/core/data-init/data-init.service';
@@ -340,22 +339,26 @@ bootstrapApplication(AppComponent, {
       deps: [AppUriQuickActionsService],
       multi: true,
     },
-    // SPAP-13: prune the device-local conflict journal to its retention bound
-    // (14 days / 200 entries) on app start. Fire-and-forget — pruneOnStart opens
-    // its own IndexedDB lazily and swallows its own errors, so it can never block
-    // or fail bootstrap.
-    {
-      provide: APP_INITIALIZER,
-      useFactory: (journal: ConflictJournalService) => {
-        return () => {
-          void journal.pruneOnStart();
-        };
-      },
-      deps: [ConflictJournalService],
-      multi: true,
-    },
+    // Retire only the obsolete device-local journal. Never await deletion:
+    // an older tab can hold its connection open until that tab closes.
+    provideAppInitializer(() => {
+      try {
+        localStorage.removeItem('SUP_CONFLICT_JOURNAL_CLEARED_BEFORE');
+      } catch (error) {
+        Log.err('Failed to remove obsolete conflict journal marker', error);
+      }
+      try {
+        const request = indexedDB.deleteDatabase('SUP_CONFLICT_JOURNAL');
+        request.onerror = () =>
+          Log.err('Failed to retire conflict journal', request.error);
+        request.onblocked = () =>
+          Log.log('Conflict journal retirement awaits an older tab');
+      } catch (error) {
+        Log.err('Failed to retire conflict journal', error);
+      }
+    }),
     // Remove crash-leftover note drafts past their retention window on app
-    // start, same rationale as the conflict journal above. Synchronous
+    // start. Synchronous
     // localStorage sweep over a handful of keys; swallows its own errors.
     {
       provide: APP_INITIALIZER,

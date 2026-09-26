@@ -22,7 +22,6 @@ import {
 } from '../../core/persistent-action.interface';
 import { OperationLogCompactionService } from '../../persistence/operation-log-compaction.service';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
-import { ConflictJournalService } from '../../sync/conflict-journal.service';
 import { ConflictResolutionService } from '../../sync/conflict-resolution.service';
 import { ImmediateUploadService } from '../../sync/immediate-upload.service';
 import { OperationWriteFlushService } from '../../sync/operation-write-flush.service';
@@ -42,7 +41,6 @@ describe('unsupported archive multi-entity conflict integration (#9405)', () => 
   let capture: OperationCaptureService;
   let writeFlush: OperationWriteFlushService;
   let resolver: ConflictResolutionService;
-  let journal: ConflictJournalService;
   let operationApplier: jasmine.SpyObj<OperationApplierService>;
   let store: jasmine.SpyObj<Store>;
   let actions$: Subject<Action>;
@@ -137,7 +135,6 @@ describe('unsupported archive multi-entity conflict integration (#9405)', () => 
     capture = TestBed.inject(OperationCaptureService);
     writeFlush = TestBed.inject(OperationWriteFlushService);
     resolver = TestBed.inject(ConflictResolutionService);
-    journal = TestBed.inject(ConflictJournalService);
     capture.clear();
     store.dispatch.and.callFake(((action: Action): void => {
       if (!isPersistentAction(action)) {
@@ -149,7 +146,6 @@ describe('unsupported archive multi-entity conflict integration (#9405)', () => 
 
     await opLogStore.init();
     await opLogStore._clearAllDataForTesting();
-    await journal.clearAll();
     await archiveDb.saveArchiveYoung(archiveModel([createArchivedTask(YOUNG_TASK_ID)]));
     await archiveDb.saveArchiveOld(archiveModel([createArchivedTask(OLD_TASK_ID)]));
     effectSubscription =
@@ -165,7 +161,6 @@ describe('unsupported archive multi-entity conflict integration (#9405)', () => 
     await archiveDb.saveArchiveYoung(archiveModel([]));
     await archiveDb.saveArchiveOld(archiveModel([]));
     await opLogStore._clearAllDataForTesting();
-    await journal.clearAll();
     TestBed.resetTestingModule();
   });
 
@@ -247,7 +242,6 @@ describe('unsupported archive multi-entity conflict integration (#9405)', () => 
       localOperation.id,
     ]);
     expect(operationApplier.applyOperations).not.toHaveBeenCalled();
-    expect(await journal.list('history')).toEqual([]);
   });
 
   describe('reachability of the guard beyond bulk actions', () => {

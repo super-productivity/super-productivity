@@ -24,7 +24,6 @@ import {
 } from '../../core/persistent-action.interface';
 import { OperationLogCompactionService } from '../../persistence/operation-log-compaction.service';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
-import { ConflictJournalService } from '../../sync/conflict-journal.service';
 import { ConflictResolutionService } from '../../sync/conflict-resolution.service';
 import { ImmediateUploadService } from '../../sync/immediate-upload.service';
 import { OperationWriteFlushService } from '../../sync/operation-write-flush.service';
@@ -97,7 +96,6 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
   let capture: OperationCaptureService;
   let writeFlush: OperationWriteFlushService;
   let resolver: ConflictResolutionService;
-  let journal: ConflictJournalService;
   let operationApplier: jasmine.SpyObj<OperationApplierService>;
   let store: jasmine.SpyObj<Store>;
   let actions$: Subject<Action>;
@@ -201,7 +199,6 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
     capture = TestBed.inject(OperationCaptureService);
     writeFlush = TestBed.inject(OperationWriteFlushService);
     resolver = TestBed.inject(ConflictResolutionService);
-    journal = TestBed.inject(ConflictJournalService);
     capture.clear();
     store.dispatch.and.callFake(((action: Action): void => {
       if (!isPersistentAction(action)) {
@@ -213,7 +210,6 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
 
     await opLogStore.init();
     await opLogStore._clearAllDataForTesting();
-    await journal.clearAll();
     effectSubscription =
       TestBed.inject(OperationLogEffects).persistOperation$.subscribe();
   });
@@ -225,7 +221,6 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
     capture.clear();
     clearDeferredActions();
     await opLogStore._clearAllDataForTesting();
-    await journal.clearAll();
     TestBed.resetTestingModule();
   });
 
@@ -1341,7 +1336,6 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
         `actionType=${ActionType.TASK_SHARED_MOVE_TO_ARCHIVE} entityCount=3`,
     );
     expect(operationApplier.applyOperations).not.toHaveBeenCalled();
-    expect(await journal.list('history')).toEqual([]);
     // Fail-closed means pre-mutation: both bulk rows stay pending untouched.
     expect((await unsyncedOps()).map(({ id }) => id)).toEqual([bulkOp1.id, bulkOp2.id]);
   });
@@ -1383,7 +1377,6 @@ describe('bulk archive conflict resolution integration (#9537)', () => {
         `actionType=${ActionType.TASK_SHARED_MOVE_TO_ARCHIVE} entityCount=2`,
     );
     expect(operationApplier.applyOperations).not.toHaveBeenCalled();
-    expect(await journal.list('history')).toEqual([]);
     // Fail-closed means pre-mutation: both bulk rows stay pending untouched.
     expect((await unsyncedOps()).map(({ id }) => id)).toEqual([
       bulkArchiveOp.id,

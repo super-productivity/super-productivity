@@ -1,9 +1,8 @@
-# S5 conflict journal retirement — Phase A preparation
+# S5 conflict journal retirement — review handoff
 
-Status: preparation only. Production removal is gated on verified integration
-of PR #10284. No production or existing shared test files have been edited.
-The retirement regression is deliberately red until Phase B; do not publish
-this preparation commit or treat it as full S5 completion.
+Status: Phase B implementation and validation complete; the local retirement
+commit following preparation `8c687017fe` is ready for review. Integration requires user review. No push, PR, merge, scheduled
+workflow dispatch or other publication is authorized or performed.
 
 ## Baseline and authority
 
@@ -13,7 +12,7 @@ this preparation commit or treat it as full S5 completion.
   differed. Its change remains preserved and excluded from commits.
 - Empty-range rebase, with autostash, onto the assignment's published baseline:
   `git rebase --autostash --onto c292e32a98ee2d1fbfdc70d8c021e5f6e97ccc19 9177c3afed6429934632b23de936cda8c6603fde`.
-- Tested production baseline: `c292e32a98ee2d1fbfdc70d8c021e5f6e97ccc19`.
+- Phase A tested production baseline: `c292e32a98ee2d1fbfdc70d8c021e5f6e97ccc19`.
 - Initial fresh `gh api repos/super-productivity/super-productivity/pulls/10284`
   returned `state: open`, `merged: false`, `merged_at: null`, head
   `dbc2dfb4170f8b35b8af5d2d484b44665e1fef15`. The API's non-null
@@ -90,37 +89,20 @@ An initial authoring run failed because IndexedDB returns rows in key order,
 not insertion order. The assertion now checks exact row count and unordered
 contents. That fixture failure is not counted as the required red regression.
 
-## Required remaining cases after integration
+## Completed retirement cases
 
-- **Fresh/repeated startup:** isolated empty context, wait for ready app, assert
-  journal database absent without opening it; create a task, reload twice,
-  assert task still visible and database/marker absent each time.
-- **Blocked deletion:** reuse the upgrade seed and preservation witnesses.
-  Open a second page at the same origin with a test-served empty HTML document;
-  hold a real `indexedDB.open('SUP_CONFLICT_JOURNAL', 1)` connection there with
-  a `versionchange` listener that records the event but deliberately does not
-  close. Reload the app page, wait for usable tasks and create another task
-  while the blocker remains open. Verify the versionchange event, retained
-  pending ops/backup and marker cleanup. Close the blocker connection and poll
-  `indexedDB.databases()` for disappearance without restarting the app. A native
-  delete request remains pending until all connections close; an old running
-  client can keep deletion blocked or later recreate its old DB. Report this
-  limitation, without polling services or permanent migration flags.
-- **UI:** Settings no longer links to `/sync-conflicts`; direct obsolete route
-  uses established fallback behavior; no journal badge or summary REVIEW
-  action. Keep error/offline/progress button behavior, content-loss warning,
-  safety conflict controls and Browse backups/Restore working. Fixture-validity
-  already exercises the real backup controls.
-- **Integration gate:** recheck fresh PR metadata; only when `merged: true`,
-  fetch master and prove returned merge SHA is an ancestor of refreshed master.
-  Rebase only the preparation commits with unrelated/injected edits preserved.
-  Record exact integrated baseline and rerun the red upgrade regression there
-  before any production or existing-test edits. Never stack the open PR.
-- **Phase B checks:** focused resolver/disjoint-merge/S2 reorder integration,
-  affected superseded-resolver/backup/header/startup coverage, every changed
-  TS/SCSS checkFile, app/spec/E2E typechecks and applicable lint/build checks;
-  red/green new E2E without retries or skips and relevant route/backup E2E.
-  Full scheduled provider suites remain a later coordinator publication gate.
+- **Fresh/repeated startup:** an isolated context starts, creates a real task,
+  and reloads twice. Each start leaves the journal absent; the task survives.
+- **Blocked deletion:** a second same-origin page holds a real legacy database
+  connection open and deliberately retains it on `versionchange`. The app
+  reloads, retains all upgrade witnesses, removes the marker and creates another
+  usable persisted task while deletion remains blocked. Closing that connection
+  completes deletion without another restart. This is a native IndexedDB request,
+  with no deletion mock or production polling service.
+- **UI:** Settings has no retired review entry, Browse backups remains available,
+  and the obsolete route takes the existing app fallback. Real backup Restore
+  works in the fixture-validity case. Resolver specs keep the content-loss warning
+  and assert its removed review action; header tests retain active sync controls.
 
 ## Risk boundary
 
@@ -130,8 +112,8 @@ Startup retirement must be fire-and-forget and narrowly target the exact old
 database and marker. Journal schema is device-local, excluded from backup and
 sync; no schema/wire bump or released-client LWW/replay change is required.
 Keep disjoint-field merging, LWW readers/creation, delete-wins, historical action
-replay and S2 reorder behavior. Phase A changes no runtime behavior and cannot
-establish Phase B safety or completion.
+replay and S2 reorder behavior. The removal changes no persisted application-model field, schema version,
+operation shape, winner rule, dependency or public/plugin API.
 
 ## Phase A verification and gate transition
 
@@ -165,3 +147,143 @@ establish Phase B safety or completion.
   `git fetch origin master` fetched that exact master HEAD;
   `git merge-base --is-ancestor f84259fcaa66a9bb9512d1c048a299d230740c04 origin/master`
   passed. Phase B is now authorized after preparation rebase and repeated red.
+
+## Verified integrated baseline
+
+Fresh GitHub metadata confirmed #10284 merged at `2026-09-26T17:05:28Z` as
+`f84259fcaa66a9bb9512d1c048a299d230740c04`. Refreshed `origin/master` was exactly
+that commit, and its ancestry check passed. The empty task's Phase A commit was
+rebased with `git rebase --autostash --onto f84259fcaa66a9bb9512d1c048a299d230740c04 c292e32a98ee2d1fbfdc70d8c021e5f6e97ccc19`,
+replaying only this task's preparation commit, now `8c687017fe`. Injected
+`AGENTS.md` remained intact and uncommitted. `git merge-base --is-ancestor
+f84259fcaa66a9bb9512d1c048a299d230740c04 HEAD` passed before production edits.
+
+Before touching production or existing specs, repeated the regression:
+
+```bash
+npm run e2e:file e2e/tests/sync/conflict-journal-retirement.spec.ts -- --retries=0 --workers=1 --grep 'seeded upgrade'
+```
+
+It failed directly because `SUP_CONFLICT_JOURNAL` remained, after all task,
+pending-operation and backup comparisons passed. Integrated-baseline red log and
+screenshots, error context, trace, app-created backup and upgrade witnesses are
+preserved in `/tmp/sync-s5-integrated-f84259fcaa66-red/`.
+
+## Implemented scope and consumer check
+
+Removed the journal-only services/models/emission/review helpers, exclusive specs,
+page/styles, route/export, Settings entry, header badge, summary-banner identity
+and English review strings. Removed observation/clear hooks only from resolver,
+remote processing, superseded resolution, sync and backup owners. The surviving
+merge utility now owns the unchanged `NOISE_FIELDS`; journal presentation diffs
+are gone. Meaningful shared algorithm/state/error tests remain; tests that relied
+only on journal entries now check emitted LWW payloads or rejection/application.
+
+The existing startup hook now removes only the obsolete clear marker and requests
+`indexedDB.deleteDatabase('SUP_CONFLICT_JOURNAL')`. It returns immediately and
+logs blocked/storage errors without rejecting bootstrap. It does not open or wipe
+`SUP_OPS`, `pf`, credentials, archives, backups or any other database.
+
+Updated current capability claims in the focused conflict contract, sync index,
+architecture documentation/HTML, local-recovery contract and data-management
+wiki. The historical conflict-contract filename and active composition anchors
+remain usable. Historical plans and other locales remain untouched. S6B's file
+format selection/setup and WebDAV rollout remain outside this task.
+
+Final production consumer searches for `ConflictJournal`, `SyncConflictBanner`,
+`disableConflictJournal`, `sync-conflicts`, `CONFLICT_REVIEW`,
+`SyncConflictsAutoResolved` and `buildMergedFieldDiffs` find no active consumers
+(excluding inert untranslated locale keys). The exact old database/marker names
+appear only in the targeted startup retirement. Additional shared consumers
+beyond the assignment's listed leads were the superseded resolver and banner enum;
+only their journal code changed. Broad deletion scope is required by exclusive
+journal ownership; it removes thousands of lines and adds no cleanup framework.
+
+## Phase B validation
+
+The tested work is based on integrated SHA `f84259fcaa66a9bb9512d1c048a299d230740c04`
+plus preparation `8c687017fe` and the final retirement diff.
+
+```bash
+npm run e2e:file e2e/tests/sync/conflict-journal-retirement.spec.ts -- --retries=0 --workers=1
+```
+
+**5 passed, 0 skipped, no retries**: valid/usable backup, seeded upgrade,
+fresh/repeated startup, real blocked connection/eventual deletion, removed UI and
+fallback route. Green witness/backup attachments for the upgrade, restore and
+blocked cases are preserved in `/tmp/sync-s5-f84259fcaa66-green/test-results/`.
+
+Applicable provider regressions, using the isolated required-provider stack:
+
+```bash
+SUPERSYNC_E2E_URL=http://localhost:1915 E2E_REQUIRE_SUPERSYNC=true npm run e2e:file e2e/tests/sync/supersync-lww-conflict.spec.ts e2e/tests/sync/supersync-reorder-conflict-wedge.spec.ts -- --retries=0 --workers=1 --grep 'Remote wins when remote timestamp|Local wins when local timestamp|project notes: (local|remote) reorder preserves content and order'
+```
+
+**4 passed, 0 skipped, no retries**: local and remote LWW winners propagate,
+and local/remote project-note reorder conflicts preserve content and ordering,
+including fresh-client replay. The successful runner metadata is preserved in
+`/tmp/sync-s5-supersync-green/test-results/`. Only this task's isolated containers
+were stopped afterward. Across new and applicable existing E2E files, **12 pass**.
+
+Focused Karma commands (all relevant shared specs retained):
+
+```bash
+npm run test:file src/app/op-log/sync/conflict-resolution.disjoint-merge.spec.ts -- --include=src/app/op-log/sync/conflict-disjoint-merge.util.spec.ts --include=src/app/op-log/sync/conflict-resolution.service.spec.ts --include=src/app/op-log/testing/integration/reorder-conflict-wedge.integration.spec.ts --include=src/app/op-log/sync/conflict-resolution-persistence.integration.spec.ts
+npm run test:file src/app/op-log/backup/backup.service.spec.ts -- --include=src/app/core-ui/main-header/main-header.component.spec.ts --include=src/app/op-log/sync/operation-log-sync.service.spec.ts --include=src/app/op-log/sync/remote-ops-processing.service.spec.ts --include=src/app/op-log/sync/superseded-operation-resolver.service.spec.ts --include=src/app/op-log/testing/integration/archive-conflict-resolution.integration.spec.ts --include=src/app/op-log/testing/integration/no-pending-crossing-convergence.integration.spec.ts --include=src/app/op-log/testing/integration/restore-task-conflict.integration.spec.ts --include=src/app/op-log/testing/integration/round-time-conflict-convergence.integration.spec.ts --include=src/app/op-log/testing/integration/round-time-conflict-resolution.integration.spec.ts --include=src/app/op-log/testing/integration/today-plan-conflict-resolution.integration.spec.ts --include=src/app/op-log/testing/integration/unsupported-multi-entity-conflict.integration.spec.ts
+```
+
+**347 + 491 = 838 passed.** Coverage includes disjoint/LWW/delete/archive winners,
+S2 reorder, failed merge/persistence, deferred actions, crossing convergence,
+unsupported multi-entity safety, restore, clock adjustment, backup and header.
+
+- Every added/modified non-generated TS file passed `npm run checkFile <file>`.
+  The retired SCSS file is deleted; no surviving SCSS changed.
+- `src/app/t.const.ts`: ran the required checkFile, which correctly rejects it as
+  root-ESLint-ignored; this is not recorded as a lint pass. Regenerated through
+  `npm run int`, then formatted with Prettier. Excluded the unrelated existing
+  `F.IOS_SHARE` generation drift so its final diff removes only review keys.
+  App/spec typechecks and template compilation validate consumers.
+- `node_modules/.bin/tsc --project src/tsconfig.app.json --noEmit` passed.
+- `node_modules/.bin/tsc --project src/tsconfig.spec.json --noEmit` passed.
+- Focused strict E2E typecheck shown in Phase A passed again for the final spec.
+- `npm run buildFrontend:dev` passed (log `/tmp/sync-s5-build-dev.log`).
+- `npm run lint:ts` passed (log `/tmp/sync-s5-lint-ts-final.log`), after
+  checkFile formatted the three initially flagged touched lines.
+- Prettier checks passed for changed Markdown, JSON, templates and generated T.
+  A structural comparison verifies T equals its baseline minus only
+  `F.SYNC.CONFLICT_REVIEW`, and every retained constant maps to an English key.
+- `git diff --check` passed.
+- `npm run e2e:file e2e/tests/import-export/archive-import-persistence.spec.ts -- --retries=0 --workers=1`: **3 passed, 0 skipped**. Real imports retain both
+  archive tiers and time tracking across reload.
+- Full E2E typecheck's separately reproduced upstream TS2307 remains as documented
+  above; no unrelated fix was added. Full scheduled provider suites remain a later
+  coordinator publication gate.
+- Node child-process spawning under sandbox returned EPERM for checkFile; reran
+  the required checks with explicit tool escalation and they passed. A redirected
+  archive E2E run hit the same webServer exit-127 startup issue noted in Phase A;
+  the ordinary command was rerun. Neither startup failure counts as test evidence.
+- The first required-provider LWW/reorder run on the shared port 1901 was
+  interrupted after the initially healthy service disappeared during client setup
+  (`ERR_CONNECTION_REFUSED`; Docker status confirmed no SuperSync container).
+  Its artifacts are preserved in `/tmp/sync-s5-supersync-interrupted/`. It is not
+  counted as regression evidence. Rebuilt an isolated Compose project
+  `sync-s5-retirement` on loopback port 1915 using an ignored task-only override;
+  no other worker's server or repository files were changed.
+
+## Residual risks and review boundary
+
+This is a high-risk sync/startup deletion. Accepted irreversible loss is only the
+old journal rows, without export. Real upgrade witnesses prove task data, actual
+pending operations and the recovery snapshot survive; the real Restore flow proves
+that snapshot usable. Direct algorithm tests and convergence E2E cover preserved
+resolution/replay behavior. No journal DB data was ever in the sync wire or backups,
+so mixed-client resolution semantics do not change.
+
+An older running tab can postpone deletion indefinitely, or an older client can
+recreate the retired journal; a later new-client startup requests deletion again.
+Browser storage failures log and retry only on another startup. No guarantee is
+made for cleanup while every old connection remains open. No new persisted marker,
+registry, timeout, broad wipe or polling service is introduced.
+
+Only S5 files are included in local commits. Injected `AGENTS.md` is preserved and
+excluded; integration awaits user review and Parallel Code `signal_done`.

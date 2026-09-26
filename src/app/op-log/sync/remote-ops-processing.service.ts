@@ -492,15 +492,6 @@ export class RemoteOpsProcessingService {
         // Auto-resolve conflicts using Last-Write-Wins strategy.
         // Piggyback non-conflicting ops so they're applied with resolved conflicts.
         // Validation failure is surfaced via the session-validation latch.
-        //
-        // PRODUCER FREEZE (journal half) for the conflict-review rollback, set
-        // here at the only production entry point so the producer stops at the
-        // fleet boundary while the service keeps the capability intact:
-        //  - disableConflictJournal: stop persisting the discarded side of a
-        //    conflict verbatim, so that device-local data obligation does not
-        //    expand beyond the edge/internal builds that already carry it.
-        // Reverting the freeze = drop that line.
-        //
         // The disjoint-merge half of the original #9061 freeze was UNFROZEN for
         // #9095: with the merge disabled, concurrent edits to DIFFERENT fields
         // of one entity resolve by whole-entity LWW and the earlier side's edit
@@ -513,7 +504,6 @@ export class RemoteOpsProcessingService {
           nonConflicting,
           {
             callerHoldsOperationLogLock: true,
-            disableConflictJournal: true,
           },
         );
         localWinOpsCreated = lwwResult.localWinOpsCreated;

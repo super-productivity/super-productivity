@@ -1,143 +1,26 @@
-# Conflict Journal, Disjoint-Field Auto-Merge & Review UI
+# Disjoint-Field Auto-Merge and Conflict Composition
 
-How LWW conflict auto-resolutions are recorded (conflict journal), when two
-concurrent edits are kept instead of one discarded (disjoint-field auto-merge),
-and how the user reviews what happened (`/sync-conflicts` page, banner, badge).
+Concurrent edits to different fields can be combined safely; overlapping edits
+use deterministic LWW. The implementation lives in
+`src/app/op-log/sync/conflict-disjoint-merge.util.ts` and
+`conflict-resolution.service.ts`.
 
-> **Current production status:** the journal store and review UI exist, but the
-> main remote-conflict processing path currently sets
-> `disableConflictJournal: true`. Treat the journal as a dormant, best-effort
-> review capability—not as complete evidence of current conflict resolutions.
-> The disjoint-field merge and winner selection remain active independently of
-> journal emission.
->
-> The journal is also not a no-silent-loss guarantee. The #9073 mitigation turns
-> supported no-pending overlaps with retained local evidence into ordinary LWW
-> conflicts, but the
-> [remaining composition residual](#composition-residual-pre-existing-class)
-> cannot always construct a safe local side. Such a fallback produces neither a
-> conflict object nor a journal row.
+## Conflict journal retirement
 
-Code lives in `src/app/op-log/sync/`:
+The device-local journal, review page, badge and summary banner have been
+removed. Startup deletes only the old `SUP_CONFLICT_JOURNAL` IndexedDB database
+and `SUP_CONFLICT_JOURNAL_CLEARED_BEFORE` localStorage marker. Old journal rows
+are discarded without export; task data, pending operations and local backups
+are retained. This changes no sync schema, wire operation or winner semantics.
 
-| Concern                        | Files                                                               |
-| ------------------------------ | ------------------------------------------------------------------- |
-| Journal data model + store     | `conflict-journal.model.ts`, `conflict-journal.service.ts`          |
-| Classification (taxonomy)      | `conflict-journal-emission.util.ts`                                 |
-| Disjoint-field auto-merge      | `conflict-disjoint-merge.util.ts`, `conflict-resolution.service.ts` |
-| Review UI derivation + actions | `sync-conflict-review.util.ts`, `sync-conflict-ui.service.ts`       |
-| Banner / badge                 | `sync-conflict-banner.service.ts`                                   |
-| Page                           | `src/app/pages/sync-conflicts-page/`                                |
+Deletion does not delay startup. If a running older tab holds a connection open,
+the browser completes the pending deletion once all old connections close.
+An older client can recreate its own journal database; a subsequent new-client
+startup requests its deletion again. A browser storage error leaves cleanup for
+another startup and is logged without failing bootstrap.
 
-## Conflict journal
-
-When emission is enabled, an LWW conflict auto-resolution is recorded as a
-`ConflictJournalEntry` in a **standalone IndexedDB database
-`SUP_CONFLICT_JOURNAL`** — deliberately separate from `SUP_OPS` so journaling
-can never touch op-log schema/versioning or risk its data.
-
-Contracts:
-
-- **Observe-only.** Recording an entry never influences which op LWW picked,
-  and every journal write swallows its own errors — a journal failure must
-  never throw back into conflict resolution. Corollary: the op-log write and
-  the journal write are **not atomic**. The op log is the source of truth; the
-  journal is a best-effort record, and a crash between the two can lose a
-  journal entry but never an operation. The never-throw contract covers reads
-  and status writes too (`list` → `[]`, `getEntry` → `undefined`, mark
-  kept/flipped swallowed): `list()` is awaited inside the post-resolution
-  notification step, so a journal failure degrades the badge/review surface,
-  never the sync. One asymmetry: a `merged` entry claims "both sides kept", so
-  it is journaled only AFTER the merged op is durably appended — the journal
-  can under-report a merge, but never report one that didn't happen.
-- **Device-local, never synced.** Entries capture field values and opaque action
-  payloads from both sides of a conflict verbatim — including the discarded
-  side that the op log intentionally dropped. Uploading them would resurrect
-  discarded data; they are also excluded from backups/exports (see wiki
-  `3.06-User-Data`).
-- **Cleared on full dataset replacement.** Journal entries describe conflicts
-  in the op history; when that history is replaced wholesale the entries are
-  stale and may expose values from a dataset that has been replaced.
-  `BackupService.importCompleteBackup` — the chokepoint every replacement path
-  funnels through (JSON import, local-backup restore, SuperSync
-  restore) — calls `ConflictJournalService.clearAll()`.
-- **Retention.** Each prune applies whichever bound binds first: entries older
-  than 14 days (`JOURNAL_RETENTION_DAYS`), then anything beyond the newest 200
-  (`JOURNAL_MAX_ENTRIES`). Pruning runs on app start, and opportunistically
-  mid-session from `record()` — but the mid-session prune is **count-triggered**:
-  it fires only once the store grows past the soft cap `JOURNAL_MAX_ENTRIES +
-JOURNAL_PRUNE_SLACK` (220), then prunes back to the newest 200. So a
-  long-running low-volume session (few entries, never crossing the soft cap)
-  relies on the next app start to enforce the 14-day age bound.
-
-### Security boundary before re-enabling emission
-
-`SUP_CONFLICT_JOURNAL` is ordinary, plaintext device-local IndexedDB. It does
-not use the sync provider's transport encryption or SuperSync E2EE. Any rows
-already present remain readable in the local browser profile until retention,
-dataset replacement, or an explicit clear removes them.
-
-Because field and action values are stored verbatim, an `ISSUE_PROVIDER`
-conflict can persist API keys, access/refresh tokens, client secrets, or similar
-credentials in that database and expose them through the review UI. Normal
-production emission must remain disabled until secret-aware exclusion or
-redaction is implemented and tested for both adapter-shaped field diffs and
-opaque action payloads. Merely hiding a value in the UI is insufficient; the
-stored journal row itself must not contain the secret.
-
-### Classification taxonomy
-
-`buildConflictJournalEntry` classifies each resolved conflict
-(precedence order): `clock-corruption-suspected` → `delete-wins` →
-`delete-lost` → `noise` → `newer`/`tie`. `noise` (status `info`) fires only
-when the DISCARDED side changed nothing but NOISE_FIELDS (`modified`,
-`lastModified`, `created`) — i.e. no real content was lost. Everything else is
-status `unreviewed` and counts toward the badge.
-
-### Field diffs and per-side presence
-
-`fieldDiffs` is the union of both sides' changed fields, each value captured
-verbatim, plus `localChanged`/`remoteChanged` flags recording whether each side
-actually touched the field. The flags distinguish "this side never changed the
-field" from "changed it to some value" — without them, a union diff stores the
-untouched side as `undefined`, and Flip would dispatch `{ field: undefined }`,
-clearing a winner-only field. Entries persisted before the flags existed lack
-them; readers (`loserChangesFor`/`winnerChangesFor`) fall back to
-value-presence, which is exact for that data because op payloads are pure JSON
-and cannot encode a real `undefined`.
-
-### Non-adapter ("opaque") ops
-
-Not every persistent action is adapter-shaped (`{ [payloadKey]: { id,
-changes } }` or a flat entity). `convertToSubTask` persists
-`{ taskId, targetParentId, afterTaskId }`; scheduling/ordering/advanced-config
-actions have similar domain-specific shapes. Extraction resolves each op's
-delta from two sources in order:
-
-1. the adapter-shaped action payload (`extractUpdateChanges`);
-2. the capture-time `entityChanges` computed by `OperationCaptureService`
-   (covers TIME_TRACKING and `syncTimeSpent`).
-
-Extraction is scoped to the entity currently in conflict. `entityId` and
-`entityIds` are treated as one deduplicated set, matching server conflict
-detection even for inconsistent legacy metadata. For a multi-entity op, only a
-matching `entityChanges` entry with `opType: UPDATE`, a plain-object delta, and
-no identity (`id`) field is accepted. A multi-entity op without such a safe
-target delta is opaque; it must not borrow the primary entity's adapter payload
-because doing so could attribute one entity's values to another. Direct-format
-legacy bulk payloads are therefore opaque for non-primary entities.
-
-An op with neither is **opaque** (`hasOpaqueChanges`). Opaque ops still
-represent real state changes, so:
-
-- a loser side with opaque ops is **never** classified `noise` — the loss
-  surfaces as `unreviewed`;
-- the raw action payload is preserved in the entry as a `kind: 'action'`
-  field diff (field = action type), so the discarded change stays reviewable
-  after the op itself is gone;
-- `kind: 'action'` diffs are excluded from flip/stale computations — they are
-  not entity fields;
-- a side with opaque ops is **never disjoint-merge eligible** (see below).
+This document keeps its historical filename so existing merge/composition links
+continue to resolve.
 
 ## Disjoint-field auto-merge
 
@@ -209,9 +92,7 @@ on top of both sides' history like a normal edit — there is no history rewind.
 outside the delta keep their own values on each client. Because the payload is
 flat (not `{ changes }`-shaped), `extractUpdateChanges` yields `{}` for it, so
 a merged op can never itself become disjoint-merge eligible: merges do not
-cascade or re-merge on later syncs. Merged resolutions are journaled with
-`winner: 'merged'`, status `info` (nothing was discarded), recording per-field
-which side supplied each value.
+cascade or re-merge on later syncs.
 
 ### Composition residual (pre-existing class)
 
@@ -227,66 +108,9 @@ compacted away or cannot be decomposed safely (multi-entity, local
 delete/archive, and merged/opaque or noise-shaped composition cases). A mixed
 fleet adds another limit: receivers predating replacement-mode LWW apply the
 reconciling full snapshot as a patch and can retain fields that a current client
-clears. Only cases that successfully build a synthetic conflict reach journal
-classification; fallback cases remain invisible to the review UI.
+clears. Fallback cases cannot always construct a synthetic conflict and retain the
+arrival-order limitation above.
 
 Class-level fixes — per-field timestamps, a guaranteed reconciling operation on
 every concurrent apply, or carrying parent-op identity so later resolution can
 decompose a merge — belong to a follow-up at the op-log level.
-
-## Review UI (`/sync-conflicts`)
-
-Entry points: a banner after a sync that auto-resolved conflicts, an
-unreviewed-count badge, and a link in Settings → Sync. Two views: unreviewed
-and history (everything, newest first).
-
-Per-entry actions (`SyncConflictUiService`):
-
-- **KEEP** confirms the auto-resolution (`status: 'kept'`). Bulk keep-all
-  exists.
-- **FLIP** re-applies the discarded side by dispatching a NORMAL entity update
-  action — the same action a manual edit dispatches — so the operation-capture
-  meta-reducer turns it into a synced op that propagates everywhere. No history
-  rewind; a flip is a brand-new edit on top of current state. Before applying,
-  a **stale guard** asks for confirmation if the entity was edited after the
-  conflict resolved. It checks a winner-changed field whose current value
-  diverged from the journaled winner value, plus — for **remote-won** entries
-  only — a **loser-only** field (one the flip writes but the winner never
-  changed, so it is invisible to the winner values) whose current value is not
-  already what the flip would write. The loser-only check is scoped to
-  `winner === 'remote'` because only then did the loser's (local, optimistically
-  applied) value persist in current state, giving a valid "unedited" baseline;
-  for a local win the loser (remote) value was never applied and no base is
-  journaled, so `current !== flipVal` there is the normal post-resolution state,
-  not an edit. The bulk flip path shows no dialog, so it **skips** stale entries
-  rather than overwriting them.
-
-  KNOWN GAP: a post-resolution edit to a **loser-only field on a LOCAL-won
-  entry** is not yet detectable (no journaled base), so a flip there can still
-  overwrite it silently — a follow-up needs a per-field post-resolution baseline
-  in the journal.
-
-**Flip capability is deliberately narrow** (`canFlip`); everything else
-returns `unsupported`, keeps the entry `unreviewed`, and shows an error snack —
-an entry is only ever marked `flipped` when an op was actually dispatched:
-
-- only TASK / PROJECT / NOTE / TAG (types whose flip is expressible as a
-  normal `{ id, changes }` update);
-- not for `delete-lost` / `delete-wins` — re-applying a delete or resurrecting
-  a deleted entity needs delete/restore semantics a plain update cannot
-  express (deferred);
-- not when the loser has no re-appliable field values (empty diffs, opaque
-  `kind: 'action'` diffs);
-- not when the loser's changes touch unsafe fields (`FLIP_UNSAFE_FIELDS`):
-  relationship-bearing fields (`projectId`, `parentId`, `subTaskIds`,
-  `tagIds`, `taskIds`, `backlogTaskIds`, `noteIds`) are kept consistent across
-  entities by meta-reducers, and re-applying one side of the pair via a bare
-  adapter update would corrupt the other entity's membership lists;
-  schedule/reminder fields (`dueDay`, `dueWithTime`, `deadlineDay`,
-  `deadlineWithTime`, `reminderId`, `remindAt`, `deadlineRemindAt`) have
-  invariants (mutual exclusivity, TODAY_TAG membership, reminder create/cancel)
-  that live in dedicated flows.
-
-A flipped TASK title is dispatched with `isIgnoreShortSyntax: true` — it is a
-journaled literal value, not user input, so `#tag`/`+project`/`@schedule`
-tokens in the discarded title must NOT re-parse into cross-entity mutations.

@@ -10,7 +10,6 @@ import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { OpType } from '../core/operation.types';
 import { OperationWriteFlushService } from '../sync/operation-write-flush.service';
 import { LockService } from '../sync/lock.service';
-import { ConflictJournalService } from '../sync/conflict-journal.service';
 import { LOCK_NAMES } from '../core/operation-log.const';
 import { TaskTimeSyncService } from '../../features/tasks/task-time-sync.service';
 import { WORKLOG_EXPORT_DEFAULTS } from '../../features/work-context/work-context.const';
@@ -28,7 +27,6 @@ describe('BackupService', () => {
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
   let mockOperationWriteFlushService: jasmine.SpyObj<OperationWriteFlushService>;
   let mockLockService: jasmine.SpyObj<LockService>;
-  let mockConflictJournal: jasmine.SpyObj<ConflictJournalService>;
   const backupRef = { backupId: 'backup-123', savedAt: 123 };
   let mockTaskTimeSyncService: jasmine.SpyObj<TaskTimeSyncService>;
 
@@ -143,8 +141,6 @@ describe('BackupService', () => {
       'flushPendingWrites',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
-    mockConflictJournal = jasmine.createSpyObj('ConflictJournalService', ['clearAll']);
-    mockConflictJournal.clearAll.and.resolveTo();
     mockTaskTimeSyncService = jasmine.createSpyObj('TaskTimeSyncService', ['clear']);
 
     // Default mock returns
@@ -170,7 +166,6 @@ describe('BackupService', () => {
           useValue: mockOperationWriteFlushService,
         },
         { provide: LockService, useValue: mockLockService },
-        { provide: ConflictJournalService, useValue: mockConflictJournal },
         { provide: TaskTimeSyncService, useValue: mockTaskTimeSyncService },
       ],
     });
@@ -608,17 +603,6 @@ describe('BackupService', () => {
       expect((dispatchedAction.appDataComplete as any).task).toEqual(
         jasmine.objectContaining(backupData.task),
       );
-    });
-
-    it('should clear the conflict journal (full dataset replacement)', async () => {
-      // Journal entries reference entities of the REPLACED dataset. Every
-      // import path (JSON import, local-backup restore,
-      // SuperSync restore) funnels through here — without the clear, the badge
-      // keeps its pre-restore count and the review page lists conflicts from
-      // the old dataset.
-      await service.importCompleteBackup(createMinimalValidBackup() as any, true, true);
-
-      expect(mockConflictJournal.clearAll).toHaveBeenCalledTimes(1);
     });
 
     it('should persist import to operation log', async () => {

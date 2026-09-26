@@ -121,30 +121,11 @@
         </div>
 
         @if (isSyncIconEnabled()) {
-          <!--
-            matBadgeHidden only hides the badge VISUALLY (CSS) — MatBadge keeps
-            an aria description active regardless of hidden state. So at count 0
-            the badge description must be empty (not a stale "0 conflicts"
-            announced to screen readers on every encounter). '' is the
-            type-correct "no description" value; MatBadge removes the
-            aria-describedby for it.
-          -->
           <button
             class="sync-btn secondary-header-action"
             [class.is-error]="syncIsEnabledAndReady() && syncState() === 'ERROR'"
             [class.is-offline]="syncIsEnabledAndReady() && !isOnline()"
             [class.is-in-progress]="syncIsEnabledAndReady() && isSyncInProgress()"
-            [matBadge]="unreviewedConflictCount()"
-            [matBadgeHidden]="unreviewedConflictCount() === 0"
-            matBadgeColor="accent"
-            matBadgeSize="small"
-            matBadgeOverlap="true"
-            [matBadgeDescription]="
-              unreviewedConflictCount() > 0
-                ? (T.F.SYNC.CONFLICT_REVIEW.BADGE_TOOLTIP
-                  | translate: { count: unreviewedConflictCount() })
-                : ''
-            "
             [attr.aria-label]="syncTooltip() | translate"
             matTooltip="{{ syncTooltip() | translate }}"
             (click)="onSyncButtonClick()"

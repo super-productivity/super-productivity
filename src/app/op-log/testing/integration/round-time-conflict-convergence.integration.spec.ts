@@ -2,7 +2,6 @@ import { TestBed } from '@angular/core/testing';
 import { Action, ActionReducer, createSelector, Store } from '@ngrx/store';
 import { of } from 'rxjs';
 import { ConflictResolutionService } from '../../sync/conflict-resolution.service';
-import { ConflictJournalService } from '../../sync/conflict-journal.service';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
 import { OperationApplierService } from '../../apply/operation-applier.service';
 import { OperationCaptureService } from '../../capture/operation-capture.service';
@@ -35,7 +34,6 @@ import { compareVectorClocks, VectorClockComparison } from '@sp/sync-core';
 import { MockSyncServer } from './helpers/mock-sync-server.helper';
 import { mergeVectorClocks } from '../../../core/util/vector-clock';
 import { SupersededOperationResolverService } from '../../sync/superseded-operation-resolver.service';
-import { SyncConflictBannerService } from '../../sync/sync-conflict-banner.service';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
 import { isSyncTimeSpentOp } from '../../sync/fold-sync-time-spent.util';
 import { resetTestUuidCounter, TestClient } from './helpers/test-client.helper';
@@ -49,7 +47,6 @@ describe('round-time conflict convergence integration (#8944)', () => {
   const CLIENT_B = 'title-client-b';
 
   let opLogStore: OperationLogStoreService;
-  let journal: ConflictJournalService;
   let initialState: RootState;
   let localState: RootState;
   let reducer: ActionReducer<RootState, Action>;
@@ -196,27 +193,17 @@ describe('round-time conflict convergence integration (#8944)', () => {
           },
         },
         { provide: ENTITY_REGISTRY, useValue: entityRegistry },
-        {
-          provide: SyncConflictBannerService,
-          useValue: jasmine.createSpyObj<SyncConflictBannerService>(
-            'SyncConflictBannerService',
-            ['maybeShowSummaryBanner', 'navigateToReview'],
-          ),
-        },
         { provide: StateSnapshotService, useValue: {} },
       ],
     });
 
     opLogStore = TestBed.inject(OperationLogStoreService);
-    journal = TestBed.inject(ConflictJournalService);
     await opLogStore.init();
     await opLogStore._clearAllDataForTesting();
-    await journal.clearAll();
   });
 
   afterEach(async () => {
     await opLogStore._clearAllDataForTesting();
-    await journal.clearAll();
     TestBed.resetTestingModule();
   });
 

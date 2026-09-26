@@ -23,7 +23,6 @@ import { LockService } from './lock.service';
 import { toEntityKey } from '../util/entity-key.util';
 import { LOCK_NAMES } from '../core/operation-log.const';
 import { SnackService } from '../../core/snack/snack.service';
-import { SyncConflictBannerService } from './sync-conflict-banner.service';
 import { T } from '../../t.const';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { uuidv7 } from '../../util/uuid-v7';
@@ -143,7 +142,6 @@ export class SupersededOperationResolverService {
   private conflictResolutionService = inject(ConflictResolutionService);
   private lockService = inject(LockService);
   private snackService = inject(SnackService);
-  private syncConflictBanner = inject(SyncConflictBannerService);
   private clientIdProvider = inject(CLIENT_ID_PROVIDER);
   private stateSnapshotService = inject(StateSnapshotService);
   private operationCapture = inject(OperationCaptureService);
@@ -664,12 +662,6 @@ export class SupersededOperationResolverService {
         OpLog.normal(
           `SupersededOperationResolverService: Marked ${opsToReject.length} superseded ops as rejected`,
         );
-      }
-
-      if (newOpsCreated.length > 0) {
-        // SPAP-15: surface via the journal-driven summary banner (with REVIEW)
-        // instead of a bare snack.
-        await this.syncConflictBanner.maybeShowSummaryBanner();
       }
 
       // Notify user if local changes were discarded because entities no longer exist
