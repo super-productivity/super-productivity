@@ -47,25 +47,25 @@
     <mat-menu #calFilterMenu="matMenu">
       <ng-template matMenuContent>
         <div (click)="$event.stopPropagation()">
-          @for (provider of enabledCalendarProviders(); track provider.id) {
+          @for (row of calProviderRows(); track row.id) {
             <button
               mat-menu-item
               role="menuitemcheckbox"
-              [attr.aria-checked]="!hiddenCalendarProviderIds().includes(provider.id)"
-              (click)="toggleCalProvider(provider.id)"
+              [attr.aria-checked]="!hiddenCalendarProviderIds().includes(row.id)"
+              (click)="toggleCalProvider(row.id)"
             >
-              @if (hiddenCalendarProviderIds().includes(provider.id)) {
+              @if (hiddenCalendarProviderIds().includes(row.id)) {
                 <mat-icon>check_box_outline_blank</mat-icon>
               } @else {
                 <mat-icon>check_box</mat-icon>
               }
-              @if (provider.color) {
+              <span class="cal-provider-row">
                 <span
                   class="cal-color-dot"
-                  [style.background]="provider.color"
+                  [style.background]="row.color"
                 ></span>
-              }
-              {{ calProviderLabel(provider) }}
+                <span class="cal-provider-label">{{ row.label }}</span>
+              </span>
             </button>
           }
         </div>
