@@ -216,7 +216,4 @@ export const FILE_BASED_SYNC_CONSTANTS = {
   SPLIT_TOMBSTONE_FORMAT: 'split' as const,
   SYNC_VERSION_STORAGE_KEY_PREFIX: 'FILE_SYNC_VERSION_',
   LEGACY_META_FILE: '__meta_',
-  // Retained for export compatibility. The app uses the conflict dialog for
-  // concurrent snapshots; the disabled snapshot auto-merge path was removed.
-  AUTO_MERGE_CONCURRENT_SNAPSHOT: false,
 } as const;

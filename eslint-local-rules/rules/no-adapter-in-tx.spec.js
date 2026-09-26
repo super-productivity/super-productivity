@@ -53,8 +53,8 @@ ruleTester.run('no-adapter-in-tx', rule, {
       `,
     },
     // A DIFFERENT adapter identifier inside the callback is a different
-    // connection (op-log-backend-migration.ts: source reads inside dest's tx
-    // would be legal; only dest re-entry deadlocks).
+    // connection (e.g. a backend migration: source reads inside dest's tx
+    // are legal; only dest re-entry is flagged).
     {
       code: `
         const migrate = async (source, dest) => {

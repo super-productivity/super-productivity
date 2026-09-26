@@ -13,7 +13,7 @@ import { FileSnapshotOpDownloadResponse } from '../../../sync-providers/provider
  * `snapshotState` instead of an incremental op list.
  *
  * A client holding unsynced ops then classifies that snapshot CONCURRENT and,
- * with `AUTO_MERGE_CONCURRENT_SNAPSHOT` false, dead-ends in the binary conflict
+ * with no snapshot auto-merge, dead-ends in the binary conflict
  * dialog whose either answer discards data (that half lives in
  * OperationLogSyncService and has its own specs). So invalidating on a save that
  * did not move the target is a data-loss hazard, not an "extra full read".

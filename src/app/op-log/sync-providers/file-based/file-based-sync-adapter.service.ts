@@ -427,12 +427,11 @@ export class FileBasedSyncAdapterService {
    * (`providerConfigChanged$`'s `isTargetChanged`, via `isSyncTargetChanged`),
    * never on every config save. This drops `_localSeqCounters`, and a cursor back
    * at 0 makes the next download return a `snapshotState` (`isForceFromZero`);
-   * for a client holding unsynced ops that classifies CONCURRENT and, with
-   * `AUTO_MERGE_CONCURRENT_SNAPSHOT` false, dead-ends in a binary conflict dialog
-   * whose either answer discards data. (The same hazard is documented from the
-   * other direction at the `latestSeq` computation in `_downloadOps`.) A real
-   * target move has no cursor worth keeping, so the reset is correct there and
-   * only there.
+   * for a client holding unsynced ops that classifies CONCURRENT and, with no
+   * snapshot auto-merge, dead-ends in a binary conflict dialog whose either
+   * answer discards data. (The same hazard is documented from the other direction
+   * at the `latestSeq` computation in `_downloadOps`.) A real target move has no
+   * cursor worth keeping, so the reset is correct there and only there.
    *
    * Not wired to machine-only writes for an UNCHANGED account: OAuth token
    * refresh goes through the provider credential store directly (never
@@ -1789,8 +1788,8 @@ export class FileBasedSyncAdapterService {
           'FileBasedSyncAdapter: immutable snapshot does not match snapshotRef; trying sync-state.json',
         );
       } catch (e) {
-        // The referenced immutable snapshot is primary: do not adopt an older copy
-        // over a newer format or a plaintext encryption downgrade.
+        // The referenced snapshot is primary (GHSA-vrc7-775g-ggqc): never adopt an
+        // older copy over a newer format or a plaintext encryption downgrade.
         if (
           e instanceof PlaintextWhenEncryptionExpectedError ||
           (e instanceof SyncDataCorruptedError && e.isRemoteNewer)

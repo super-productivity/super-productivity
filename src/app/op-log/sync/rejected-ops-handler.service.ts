@@ -650,8 +650,9 @@ export class RejectedOpsHandlerService {
             ),
           })),
       });
-    } catch {
+    } catch (e) {
       // Diagnostics only — never block conflict resolution.
+      OpLog.verbose('RejectedOpsHandlerService: rejection clock diagnostics failed', e);
     }
   }
 

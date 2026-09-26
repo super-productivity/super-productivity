@@ -283,7 +283,8 @@ those. What remains is the judgment a linter cannot make.
   startOfNextDayDiffMs as an argument so replay stays deterministic.
 - Never log user content: Log.log({ id: task.id }), never Log.log(task).
 - No new packages in the root dependencies or devDependencies.
-- UI strings go through T/TranslateService, and only en.json is edited.
+- UI strings go through T/TranslateService, and only en.json is edited, except that
+  adding placeholders updates every existing translation too.
 - No local restyling of Angular Material or shared src/app/ui/ components
   (.mat-_, .mdc-_, button[mat-*] overrides).
 - src/app/features/tasks/task/task.component.\* is a hot path rendered per task —
@@ -305,7 +306,7 @@ existing rules are repository-wide and the root file is the right home.
 | Bot noise on contributor PRs, especially drafts and dependabot                                                                            | Stage the rollout; on-demand is an acceptable end state                                                         |
 | Overlap with the existing `@claude` workflow — two bots reviewing the same PR                                                             | Decide which owns PR review before Phase 3; `claude.yml` is mention-triggered, so no conflict yet               |
 | Contributors read an advisory bot comment as a merge blocker                                                                              | Never make it a required check; consider a note in `CONTRIBUTING.md` if automatic is enabled                    |
-| False positives on sync/op-log code, where `AGENTS.md` already warns audit findings are ~89% real but low-precision                       | Rules section front-loads the real invariants; treat findings as leads to verify, never as fixes to apply blind |
+| False positives on sync/op-log code, where `sync-severity-triage.md` already warns audit findings are low-precision, not low-yield        | Rules section front-loads the real invariants; treat findings as leads to verify, never as fixes to apply blind |
 | Managed integration cannot run the test suite                                                                                             | Accepted — CI already gates the mechanical checks                                                               |
 | External contributors can trigger `@codex review` on their own fork PRs, spending the owner's quota (observed on entgra#200, t3code#6454) | Not practical to abuse at Pro's 400–1,000 reviews / 5h against ~9 PRs/day; revisit only if it happens           |
 | Fork-PR review is empirical, not documented, so it could regress without notice                                                           | Rollback is one toggle and no repository state depends on it                                                    |

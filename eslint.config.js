@@ -316,9 +316,8 @@ module.exports = tseslint.config(
   // disable whose reason says why this value holds no user content.
 
   // Op-log persistence: inside an adapter.transaction() callback only the tx
-  // handle may be used — adapter methods enqueue behind the transaction's own
-  // FIFO queue slot on the SQLite backend and deadlock (see
-  // SqliteOpLogAdapter._serialize()).
+  // handle may be used — an adapter method runs outside the transaction, so
+  // its write is not atomic with it (see eslint-local-rules/rules/no-adapter-in-tx.js).
   {
     files: ['src/app/op-log/**/*.ts'],
     plugins: {

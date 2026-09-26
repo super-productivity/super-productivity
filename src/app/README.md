@@ -20,11 +20,11 @@ Operation capture is **Phase 1 of the meta-reducer registry — the outermost wr
   feature reducers               OperationLogStoreService
         │                               │
         ▼                    OP_LOG_DB_ADAPTER_FACTORY
-  live projection                ┌──────┴──────┐
-  (what the UI renders)          ▼             ▼
-                             IndexedDB      SQLite
-                                      │
-                                      ▼
+  live projection                       │
+  (what the UI renders)                 ▼
+                                    IndexedDB
+                                        │
+                                        ▼
                     op-log/sync → op-log/sync-providers
                           (SuperSync | file-based)
 ```
@@ -40,7 +40,7 @@ A **remote** operation runs this in reverse: `op-log/apply` converts it back int
 | Understand or reorder meta-reducers                   | [`root-store/meta/meta-reducer-registry.ts`](root-store/meta/meta-reducer-registry.ts) — documents phases 1, 2, 2.5, 3, 3.5, 4–8 and throws in dev on violation |
 | Know how a change becomes durable and syncable        | `op-log/capture/`, then `op-log/persistence/operation-log-store.service.ts`                                                                                     |
 | Trace how a remote change is applied                  | `op-log/apply/operation-applier.service.ts`                                                                                                                     |
-| Change where bytes actually land                      | `op-log/persistence/` — `indexed-db-op-log-adapter.ts` / `sqlite-op-log-adapter.ts`, both behind `op-log-db-adapter.token.ts`                                   |
+| Change where bytes actually land                      | `op-log/persistence/` — `indexed-db-op-log-adapter.ts`, behind `op-log-db-adapter.token.ts`                                                                     |
 | Work on sync transport, conflicts, or a provider      | `op-log/sync/`, `op-log/sync-providers/`, plus `packages/sync-core` and `packages/sync-providers`                                                               |
 | Change import/export, backup, or the sync setup UI    | `imex/`                                                                                                                                                         |
 | Add a reusable, feature-agnostic widget               | `ui/`                                                                                                                                                           |

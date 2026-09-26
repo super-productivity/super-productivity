@@ -73,9 +73,9 @@ tests, or a focused contract.
 
 ## Active plans
 
-| Document                                     | Scope                                                                                  |
-| -------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [sqlite-migration.md](./sqlite-migration.md) | Current native SQLite durability rationale, landed foundation, remaining rollout gates |
+| Document                                     | Scope                                                                       |
+| -------------------------------------------- | --------------------------------------------------------------------------- |
+| [sqlite-migration.md](./sqlite-migration.md) | Parked native SQLite migration: durability rationale and why it was stopped |
 
 ## Related
 

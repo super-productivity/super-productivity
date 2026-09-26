@@ -2783,8 +2783,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       }
     }
 
-    // Foreign awaits must stay OUTSIDE the transaction (IDB auto-commits,
-    // SQLite would deadlock on the connection queue).
+    // Foreign awaits must stay OUTSIDE the transaction (IDB auto-commits).
     const currentClientId = await this.clientIdProvider.loadClientId();
     if (!currentClientId) {
       Log.warn(

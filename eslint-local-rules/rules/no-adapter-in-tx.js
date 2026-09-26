@@ -2,28 +2,27 @@
  * ESLint rule: no-adapter-in-tx
  *
  * Code inside an `adapter.transaction(async (tx) => { ... })` callback MUST use
- * only the `tx` handle. The SQLite backend (`SqliteOpLogAdapter`) serializes
- * every public entry point through a per-connection FIFO queue; a transaction
- * holds one queue slot for its whole BEGIN…COMMIT. Awaiting any adapter method
- * inside the callback (`this._adapter.get(...)` instead of `tx.get(...)`)
- * enqueues behind the very slot the callback runs in and silently deadlocks all
- * op-log persistence. A runtime guard cannot enforce this (a legal concurrent
- * call and an illegal re-entrant one are indistinguishable at the queue), so
- * enforcement lives here. See `SqliteOpLogAdapter._serialize()` in
- * src/app/op-log/persistence/sqlite-op-log-adapter.ts.
+ * only the `tx` handle. An adapter method (`this._adapter.get(...)` instead of
+ * `tx.get(...)`) runs in its own implicit transaction, so its read/write is not
+ * atomic with the enclosing one, and awaiting it can let the IndexedDB
+ * transaction auto-commit early. The now-removed SQLite backend serialized
+ * entry points through a FIFO queue, where the same call deadlocked all op-log
+ * persistence (see docs/sync-and-op-log/sqlite-migration.md). A runtime guard
+ * cannot tell a legal concurrent call from an illegal re-entrant one, so
+ * enforcement lives here.
  *
  * Heuristic (deliberately simple, low-false-positive):
  * - Inside any function passed as an argument to a `.transaction(...)` call
  *   (nested functions included), flag member access on the SAME receiver the
  *   transaction was opened on — both plain identifiers (`dest.put(...)` inside
- *   `dest.transaction(...)` in op-log-backend-migration.ts) and `this.<field>`
+ *   `dest.transaction(...)`) and `this.<field>`
  *   receivers (`this.<anyField>.get(...)` inside
  *   `this.<anyField>.transaction(...)`), so the rule survives field renames.
  *   Access to a DIFFERENT receiver (e.g. `source.get(...)` inside
  *   `dest.transaction`) stays legal — that is a different connection.
  * - Additionally flag `this._adapter` / `this.adapter` (the conventional shared
  *   adapter fields in this dir) inside ANY tx callback, since a second adapter
- *   instance over the same connection shares the queue.
+ *   instance over the same connection also runs outside the transaction.
  *
  * Known gaps (accepted — heuristic, not proof): a callback EXTRACTED to a named
  * function/method and passed by reference is not analyzed; aliasing
@@ -38,13 +37,13 @@ module.exports = {
     type: 'problem',
     docs: {
       description:
-        'Inside a .transaction() callback use only the tx handle; adapter methods enqueue behind this transaction’s queue slot and deadlock',
+        'Inside a .transaction() callback use only the tx handle; adapter methods run outside the transaction',
       category: 'Possible Errors',
       recommended: true,
     },
     messages: {
       noAdapterInTx:
-        'Do not call adapter methods inside a `.transaction()` callback — use the `tx` handle. On the SQLite backend every adapter entry point enqueues behind this transaction’s own FIFO queue slot and deadlocks op-log persistence. See SqliteOpLogAdapter._serialize().',
+        'Do not call adapter methods inside a `.transaction()` callback — use the `tx` handle. Adapter methods run in their own transaction, so the write is not atomic with this one.',
     },
     schema: [],
   },
