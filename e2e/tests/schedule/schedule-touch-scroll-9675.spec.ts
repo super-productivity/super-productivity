@@ -109,6 +109,12 @@ test.describe('Schedule touch scrolling (#9675)', () => {
     page,
     workViewPage,
   }) => {
+    // Install the clock before app timers exist; replacing live timers can leave
+    // RxJS holding timer IDs that the clock cannot cancel.
+    await page.goto('about:blank');
+    await page.clock.setSystemTime(Date.now());
+    await page.goto('/');
+
     const event = await seedScheduledTaskAndOpenSchedule(
       page,
       workViewPage,
@@ -136,20 +142,26 @@ test.describe('Schedule touch scrolling (#9675)', () => {
     const y = box!.y + halfHeight;
 
     const touch = await touchDriver(page);
+    // CDK measures the delay with Date.now(). Control that clock so tracing and
+    // CDP round trips on a busy runner cannot turn the swipe into a long press.
+    // setFixedTime leaves browser timers and native touch scrolling running.
+    const touchStartTime = Date.now();
+    await page.clock.setFixedTime(touchStartTime);
     await touch.start(x, y);
 
-    // Creep below CDK's 5px threshold for ~120ms. CDK only decides scroll-vs-drag at
+    // Creep below CDK's 5px threshold for 120ms. CDK only decides scroll-vs-drag at
     // the moment the threshold is crossed: if the drag start delay has elapsed by then
     // it drags, otherwise it abandons the sequence and the browser keeps the scroll.
     // This is what a slow, deliberate swipe looks like, and it is why the old 75ms
     // delay moved the task while the app-wide 500ms long press does not.
     for (let i = 1; i <= 4; i++) {
-      await page.waitForTimeout(30);
+      const elapsed = i * 30;
+      await page.clock.setFixedTime(touchStartTime + elapsed);
       await touch.move(x, y - i);
     }
 
     // first move past the threshold — the decision point
-    await page.waitForTimeout(15);
+    await page.clock.setFixedTime(touchStartTime + 135);
     await touch.move(x, y - 30);
 
     for (let i = 2; i <= 8; i++) {
@@ -160,6 +172,7 @@ test.describe('Schedule touch scrolling (#9675)', () => {
     }
     await touch.end();
     await touch.detach();
+    await page.clock.setSystemTime(Date.now());
 
     // With the drag delay too short, the swipe is consumed as a task move: the
     // schedule does not scroll and the task lands on a different grid row.
