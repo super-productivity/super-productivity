@@ -177,6 +177,7 @@ describe('RepairOperationService clock derivation (#8939)', () => {
         expect(await adapter.get(name, SINGLETON_KEY)).toEqual({
           id: SINGLETON_KEY,
           data,
+          lastModified: jasmine.any(Number),
         });
       }
 
@@ -188,10 +189,12 @@ describe('RepairOperationService clock derivation (#8939)', () => {
       expect(await adapter.get(STORE_NAMES.ARCHIVE_YOUNG, SINGLETON_KEY)).toEqual({
         id: SINGLETON_KEY,
         data: after.archiveYoung,
+        lastModified: jasmine.any(Number),
       });
       expect(await adapter.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY)).toEqual({
         id: SINGLETON_KEY,
         data: after.archiveOld,
+        lastModified: jasmine.any(Number),
       });
     });
   }

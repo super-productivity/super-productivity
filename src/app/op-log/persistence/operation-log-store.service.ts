@@ -1257,8 +1257,8 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
     batches: readonly MixedSourceOperationBatch[],
     options?: {
       rejectOpIds?: readonly string[];
-      archiveYoung?: unknown;
-      archiveOld?: unknown;
+      archiveYoung?: ArchiveStoreEntry['data'];
+      archiveOld?: ArchiveStoreEntry['data'];
     },
   ): Promise<{ written: MixedSourceWrittenOperation[]; skippedCount: number }> {
     const nonEmptyBatches = batches.filter((batch) => batch.ops.length > 0);
@@ -1378,7 +1378,7 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
         }
         for (const [name, data] of archives) {
           if (data !== undefined) {
-            await tx.put(name, { id: SINGLETON_KEY, data });
+            await tx.put(name, { id: SINGLETON_KEY, data, lastModified: committedAt });
           }
         }
       });
