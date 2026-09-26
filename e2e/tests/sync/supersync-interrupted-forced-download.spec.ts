@@ -123,6 +123,7 @@ test.describe('@supersync Interrupted forced download', () => {
       let injectedRejections = 0;
       let acceptedReplacementUploads = 0;
       let mixedUploads = 0;
+      const forcedStartSeqs: number[] = [];
 
       await routeSuperSyncOps(clientB.page, async (route: Route) => {
         const request = route.request();
@@ -144,6 +145,9 @@ test.describe('@supersync Interrupted forced download', () => {
             abortedForcedGets++;
             await route.abort('failed');
             return;
+          }
+          if (pagesThisSync === 0) {
+            forcedStartSeqs.push(sinceSeq);
           }
           pagesThisSync++;
           forcedPagesServed++;
@@ -208,6 +212,11 @@ test.describe('@supersync Interrupted forced download', () => {
           await clientB.sync.syncAndWait();
         } catch {
           console.log(`[Interrupted] sync ${i + 1} failed (network cut)`);
+        }
+        // Prove each retry resumes, rather than merely counting re-fetched pages.
+        expect(forcedStartSeqs).toHaveLength(syncsNeeded);
+        if (i > 0) {
+          expect(forcedStartSeqs[i]).toBeGreaterThan(forcedStartSeqs[i - 1]);
         }
       }
       console.log(
