@@ -33,13 +33,6 @@ const STORAGE_KEY = FILE_BASED_SYNC_CONSTANTS.SYNC_VERSION_STORAGE_KEY_PREFIX + 
 const SEEDS_PER_VARIANT = 40;
 const STEPS = 40;
 /**
- * Known gap #10256, predates #9170: a single-file upload that merges
- * ops it never downloaded writes its own state as the monolith, yet a seq-0
- * download marks every retained op as included, so a hydrating device drops
- * them. These seeds hit it; re-enable them with the #10256 fix.
- */
-const SINGLE_FILE_STALE_MONOLITH_SEEDS = [2, 14];
-/**
  * Known gap #10258: without a recorded clock (upgrade-restart) a device cannot
  * judge a snapshot base, so it misses a masked replacement instead of risking
  * a conflict dialog on every first sync after upgrading.
@@ -386,9 +379,7 @@ for (const isUseSplitSyncFiles of [false, true]) {
       };
 
       for (let seed = 1; seed <= SEEDS_PER_VARIANT; seed++) {
-        const isKnownGap =
-          NO_CLOCK_SEEDS.includes(seed) ||
-          (!isUseSplitSyncFiles && SINGLE_FILE_STALE_MONOLITH_SEEDS.includes(seed));
+        const isKnownGap = NO_CLOCK_SEEDS.includes(seed);
         (isKnownGap ? xit : it)(`converges for seed ${seed}`, () => runSeed(seed));
       }
     });

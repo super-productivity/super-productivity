@@ -47,6 +47,7 @@ import { createValidAppData } from '../../validation/state-validity-test-utils';
 import { DEFAULT_GLOBAL_CONFIG } from '../../../features/config/default-global-config.const';
 import { selectSyncConfig } from '../../../features/config/store/global-config.reducer';
 import { CLIENT_ID_PROVIDER } from '../../util/client-id.provider';
+import { UploadRevToMatchMismatchAPIError } from '../../core/errors/sync-errors';
 
 /**
  * #10119: file-based providers (Dropbox/WebDAV/local file) return the WHOLE
@@ -133,6 +134,7 @@ for (const isUseSplitSyncFiles of [false, true]) {
 
     /** Another device writes ops to the shared file (its own sync cycle). */
     const androidUploads = async (...ops: Operation[]): Promise<void> => {
+      await android.downloadOps(0, OTHER);
       await android.uploadOps(ops as SyncOperation[], OTHER);
     };
 
@@ -414,27 +416,29 @@ for (const isUseSplitSyncFiles of [false, true]) {
       expect(appliedOpIdsPassedToApplier()).not.toContain('android-add-old');
     });
 
-    // The dangerous direction: the cursor can run AHEAD of what this device
-    // applied, because an upload merges into the freshly read remote file and
-    // its new syncVersion becomes the cursor. A remote op merged that way was
-    // never applied here and must still be delivered by the next download.
-    it('still delivers a remote op that an own upload merged past the cursor before it was downloaded', async () => {
+    // v3 can merge remote ops past the cursor. v2 now refuses that stale
+    // snapshot (#10256) and must download first. Both must deliver the op.
+    it('delivers a remote op when an upload races a version not yet downloaded', async () => {
       await seedRemoteFromLinux();
       await androidUploads(otherAddTask('android-unseen', 'unseen-task', { [OTHER]: 1 }));
 
-      // Linux uploads WITHOUT downloading first (e.g. the in-cycle cache
-      // expired while a dialog was open): the cursor jumps past android-unseen.
-      await linuxUploads(
-        taskOp(
-          'linux-edit',
-          ownClientId,
-          ActionType.TASK_SHARED_UPDATE,
-          OpType.Update,
-          'linux-seed-task',
-          { actionPayload: {}, entityChanges: [] },
-          { [ownClientId]: 2 },
-        ),
+      const edit = taskOp(
+        'linux-edit',
+        ownClientId,
+        ActionType.TASK_SHARED_UPDATE,
+        OpType.Update,
+        'linux-seed-task',
+        { actionPayload: {}, entityChanges: [] },
+        { [ownClientId]: 2 },
       );
+      if (!isUseSplitSyncFiles) {
+        await expectAsync(linuxUploads(edit)).toBeRejectedWithError(
+          UploadRevToMatchMismatchAPIError,
+        );
+        expect(await linux.getLastServerSeq()).toBe(1);
+        await syncService.downloadRemoteOps(linux);
+      }
+      await linuxUploads(edit);
       expect(await linux.getLastServerSeq()).toBe(3);
 
       await androidUploads(

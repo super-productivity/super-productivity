@@ -387,7 +387,8 @@ describe('FileBasedSyncAdapterService', () => {
       );
     });
 
-    it('should handle version mismatch gracefully without piggybacking', async () => {
+    it('should download an unseen revision before retrying without piggybacking', async () => {
+      mockProvider.id = SyncProviderId.Dropbox;
       // First, download to set expected version
       const syncData = createMockSyncData({ syncVersion: 1 });
       mockProvider.downloadFile.and.returnValue(
@@ -423,8 +424,22 @@ describe('FileBasedSyncAdapterService', () => {
         Promise.resolve({ dataStr: addPrefix(syncDataV3), rev: 'rev-3' }),
       );
 
-      // Our next upload should succeed — no piggybacked ops returned
+      // Refuse the stale monolith before even writing its backup.
+      mockProvider.uploadFile.calls.reset();
       const op2 = createMockSyncOp({ id: 'op-456' });
+      await expectAsync(adapter.uploadOps([op2], 'client1')).toBeRejectedWithError(
+        UploadRevToMatchMismatchAPIError,
+      );
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+
+      // The refused read must not make the rev pre-check skip the next download.
+      mockProvider.getFileRev.and.callFake(async (path) => {
+        if (path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE) return { rev: 'rev-3' };
+        throw new RemoteFileNotFoundAPIError(path);
+      });
+      const download = await adapter.downloadOps(2);
+      expect(download.ops.map(({ op }) => op.id)).toEqual(['other-op']);
+      await adapter.setLastServerSeq(download.latestSeq);
       const result = await adapter.uploadOps([op2], 'client1');
 
       // Should succeed (not throw)
@@ -434,6 +449,67 @@ describe('FileBasedSyncAdapterService', () => {
       // Should NOT return piggybacked ops (piggybacking removed)
       expect(result.newOps).toBeUndefined();
     });
+
+    for (const rev of ['remote-rev', '']) {
+      it(`should terminate a cache-less upload retry with an unrecorded revision (${JSON.stringify(rev)})`, async () => {
+        mockProvider.id = SyncProviderId.OneDrive;
+        mockProvider.downloadFile.and.resolveTo({
+          dataStr: addPrefix(
+            createMockSyncData({
+              vectorClock: { remote: 1 },
+              recentOps: [
+                {
+                  id: 'remote-op',
+                  c: 'remote',
+                  a: '[Task] Add',
+                  o: 'CRT',
+                  e: 'TASK',
+                  d: 'remote-task',
+                  p: { task: { id: 'remote-task' } },
+                  v: { remote: 1 },
+                  t: Date.now(),
+                  s: 1,
+                },
+              ],
+            }),
+          ),
+          rev,
+        });
+        mockProvider.uploadFile.and.resolveTo({ rev });
+        const op = createMockSyncOp();
+
+        await expectAsync(adapter.uploadOps([op], 'client1')).toBeRejectedWithError(
+          UploadRevToMatchMismatchAPIError,
+        );
+        expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+        const downloaded = await adapter.downloadOps(0);
+        await adapter.setLastServerSeq(downloaded.latestSeq);
+        expect((await adapter.uploadOps([op], 'client1')).results[0].accepted).toBe(true);
+
+        // OneDrive's missing eTag becomes ''. It cannot prove unchanged content
+        // after the successful upload cleared the cache, even when it equals the
+        // recorded revision. A normal download supplies the cache for the retry.
+        mockProvider.uploadFile.calls.reset();
+        if (!rev) {
+          await expectAsync(adapter.uploadOps([op], 'client1')).toBeRejectedWithError(
+            UploadRevToMatchMismatchAPIError,
+          );
+          expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+          const next = await adapter.downloadOps(downloaded.latestSeq);
+          await adapter.setLastServerSeq(next.latestSeq);
+        } else {
+          // An unchanged non-empty revision can still use the cheap pre-check.
+          mockProvider.getFileRev.and.callFake(async (path) => {
+            if (path === FILE_BASED_SYNC_CONSTANTS.SYNC_FILE) return { rev };
+            throw new RemoteFileNotFoundAPIError(path);
+          });
+          mockProvider.downloadFile.calls.reset();
+          expect((await adapter.downloadOps(downloaded.latestSeq)).ops).toEqual([]);
+          expect(mockProvider.downloadFile).not.toHaveBeenCalled();
+        }
+        expect((await adapter.uploadOps([op], 'client1')).results[0].accepted).toBe(true);
+      });
+    }
 
     it('should merge vector clocks from all ops', async () => {
       mockProvider.downloadFile.and.throwError(
@@ -593,6 +669,11 @@ describe('FileBasedSyncAdapterService', () => {
       await adapter.uploadOps([op], 'client1');
 
       mockProvider.downloadFile.calls.reset();
+      // The successful write changed the real remote revision to rev-2.
+      mockProvider.downloadFile.and.resolveTo({
+        dataStr: addPrefix(syncData),
+        rev: 'rev-2',
+      });
 
       // Another upload should re-download since cache was cleared
       const op2 = createMockSyncOp({ id: 'op-2' });

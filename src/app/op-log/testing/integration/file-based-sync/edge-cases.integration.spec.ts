@@ -381,6 +381,7 @@ describe('File-Based Sync Integration - Edge Cases', () => {
         ),
       ];
       await staleClientA.uploadOps([staleOps[0]]);
+      await staleClientB.downloadOps(0);
       await staleClientB.uploadOps([staleOps[1]]);
 
       const download = await importClient.downloadOps(0);

@@ -79,12 +79,10 @@ import {
  * conflict resolution using the operations in `recentOps`. When two clients
  * modify different entities, both changes are preserved.
  *
- * ## Content-Based Optimistic Locking
- * Instead of relying on server ETags (which vary by WebDAV implementation),
- * we use a `syncVersion` counter inside the file itself. On upload:
- * 1. Download current file to get syncVersion
- * 2. If syncVersion !== expected, conflict detected → merge and retry
- * 3. If match, increment syncVersion and upload
+ * ## Optimistic Locking
+ * Uploads use the download cache or an already-applied revision. A cache-less
+ * read of unseen retained ops defers the upload until the next download cycle.
+ * The provider's conditional write checks the revision again before replacing.
  *
  * @see FileBasedSyncData for the file schema
  */
@@ -931,11 +929,17 @@ export class FileBasedSyncAdapterService {
 
     this._assertSnapshotBaseSeen(providerKey, currentData?.snapshotBaseClock);
 
-    // Log version mismatch (not an error, just informational)
-    const expectedVersion = this._expectedSyncVersions.get(providerKey) || 0;
-    if (currentData && currentSyncVersion !== expectedVersion) {
-      OpLog.normal(
-        `FileBasedSyncAdapter: Version changed (expected ${expectedVersion}, got ${currentSyncVersion}). Merging.`,
+    // #10256: a cache-less upload read can find ops absent from our snapshot.
+    // For retained ops, reuse an applied revision or this cycle's download cache
+    // (including .bak recovery). Otherwise let the next cycle download first.
+    // Do not cache/commit this read: the rev pre-check must see the change again.
+    if (
+      currentData?.recentOps.length &&
+      !this._getCachedSyncData(providerKey) &&
+      (!revToMatch || revToMatch !== this._lastSeenRevs.get(providerKey))
+    ) {
+      throw new UploadRevToMatchMismatchAPIError(
+        'FileBasedSyncAdapter: Unseen remote revision. Download before uploading a snapshot.',
       );
     }
 
@@ -976,16 +980,12 @@ export class FileBasedSyncAdapterService {
     // Step 4: Post-upload processing
     this._clearCachedSyncData(providerKey);
     this._expectedSyncVersions.set(providerKey, finalSyncVersion);
-    // SPAP-10: the remote is now what we just uploaded; recording its rev lets the
-    // next poll short-circuit if no other client writes. Caveat (#10239): that also
-    // defers ops this upload merged from other clients. Persisted via _persistState().
+    // The remote now matches our snapshot; unchanged-rev polls can skip download.
     this._commitLastSeenRev(providerKey, finalRev);
     // #9170: an upload-only client must still recognize a later replacement.
     this._lastSeenVectorClocks.set(providerKey, newData.vectorClock);
 
-    // Use finalSyncVersion (NOT mergedOps.length) to match download behavior.
-    // mergedOps.length is the total ops count, which can be much larger than syncVersion
-    // after many syncs, causing false "Server sequence decreased" warnings.
+    // Match download's watermark, not the unrelated retained operation count.
     const latestSeq = finalSyncVersion;
 
     OpLog.normal(

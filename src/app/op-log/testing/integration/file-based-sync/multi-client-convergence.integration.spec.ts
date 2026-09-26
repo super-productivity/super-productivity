@@ -100,9 +100,11 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
         title: 'C',
       });
 
-      // All upload (with potential conflicts/merges)
+      // Each upload follows a download, as in the real sync cycle.
       await clientA.uploadOps([opA]);
+      await clientB.downloadOps(0);
       await clientB.uploadOps([opB]);
+      await clientC.downloadOps(0);
       await clientC.uploadOps([opC]);
 
       // All download to get final state
@@ -439,18 +441,21 @@ describe('File-Based Sync Integration - Multi-Client Convergence', () => {
       const clientC = harness.createClient('client-c');
       const observer = harness.createClient('observer');
 
-      // Rapid sequential uploads
+      // Rapid sequential download/upload cycles
       for (let i = 0; i < 3; i++) {
+        await clientA.downloadOps();
         await clientA.uploadOps([
           clientA.createOp('Task', `task-a-${i}`, 'CRT', 'TaskActionTypes.ADD_TASK', {
             title: `A${i}`,
           }),
         ]);
+        await clientB.downloadOps();
         await clientB.uploadOps([
           clientB.createOp('Task', `task-b-${i}`, 'CRT', 'TaskActionTypes.ADD_TASK', {
             title: `B${i}`,
           }),
         ]);
+        await clientC.downloadOps();
         await clientC.uploadOps([
           clientC.createOp('Task', `task-c-${i}`, 'CRT', 'TaskActionTypes.ADD_TASK', {
             title: `C${i}`,

@@ -52,8 +52,11 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
         },
       );
 
-      // This should succeed due to merging (no piggybacking — remote ops
-      // are discovered via downloadOps on the next sync cycle)
+      // A stale snapshot cannot be published with unseen operations (#10256).
+      await expectAsync(clientA.uploadOps([opA2])).toBeRejectedWithError(
+        UploadRevToMatchMismatchAPIError,
+      );
+      await clientA.downloadOps();
       const response = await clientA.uploadOps([opA2]);
 
       // Upload should succeed
@@ -353,6 +356,7 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
       const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
         title: 'B',
       });
+      await clientB.downloadOps(0);
       await clientB.uploadOps([opB]);
 
       // Download and check merged vector clock contains knowledge of both clients
@@ -432,14 +436,14 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
       );
       await clientA.uploadOps([initialOp]);
 
-      // Client B uploads without downloading first
+      // Client B downloads before uploading its independent local edit.
+      await clientB.downloadOps(0);
       const opB = clientB.createOp('Task', 'task-b', 'CRT', 'TaskActionTypes.ADD_TASK', {
         title: 'B',
       });
       const uploadResponse = await clientB.uploadOps([opB]);
 
-      // File-based adapter no longer piggybacks — remote ops are only
-      // discovered via downloadOps on the next sync cycle
+      // Remote ops came through the download, not the upload response.
       expect(uploadResponse.newOps).toBeUndefined();
     });
 
