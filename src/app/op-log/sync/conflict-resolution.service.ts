@@ -121,6 +121,7 @@ import {
 import { NOISE_FIELDS } from './conflict-journal.model';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
 import { areCommutingSectionOperations } from './section-conflict-commutativity.util';
+import { areCommutingReorderAndContentOperations } from './reorder-conflict.util';
 import { selectPlannerState } from '../../features/planner/store/planner.selectors';
 
 /**
@@ -4439,15 +4440,14 @@ export class ConflictResolutionService {
       return { isSupersededOrDuplicate: false, conflict: null };
     }
 
-    // CONCURRENT = true conflict
     if (vcComparison === VectorClockComparison.CONCURRENT) {
-      // The no-pending side already applies these exact crossings as-is because
-      // generic multi-entity LWW cannot split them safely. Applying every pair
-      // is lossless and commutative, so the pending side must do the same to
-      // converge. Any differently shaped local op keeps the conflict path.
+      // Preserve commuting intents. Server rejection subsequently reissues a
+      // pending reorder from current state; entity LWW would lose its list write.
       if (
-        ctx.localOpsForEntity.every((localOp) =>
-          areCommutingSectionOperations(remoteOp, localOp),
+        ctx.localOpsForEntity.every(
+          (localOp) =>
+            areCommutingSectionOperations(remoteOp, localOp) ||
+            areCommutingReorderAndContentOperations(remoteOp, localOp),
         )
       ) {
         return { isSupersededOrDuplicate: false, conflict: null };
