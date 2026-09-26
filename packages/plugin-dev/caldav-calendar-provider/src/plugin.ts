@@ -916,8 +916,21 @@ const veventToOccurrence = (
 };
 
 /**
+ * Overlap test matching CalDAV time-range semantics: an occurrence that began
+ * before the window but is still running stays visible. A zero-length event
+ * counts when it starts inside the window.
+ */
+const overlapsRange = (
+  startMs: number,
+  durationMs: number,
+  range: { startMs: number; endMs: number },
+): boolean =>
+  startMs < range.endMs &&
+  (startMs >= range.startMs || startMs + durationMs > range.startMs);
+
+/**
  * Parse iCal data with ical.js and emit one PluginSearchResult per occurrence
- * within [rangeStartMs, rangeEndMs). Handles RRULE, EXDATE, and RECURRENCE-ID
+ * overlapping [rangeStartMs, rangeEndMs). Handles RRULE, EXDATE, and RECURRENCE-ID
  * exception instances (overrides + cancellations).
  */
 const expandIcalToSearchResults = (
@@ -968,6 +981,7 @@ const expandIcalToSearchResults = (
 
   const exceptionMap = buildExceptionMap(vevents);
   const out: PluginSearchResult[] = [];
+  const range = { startMs: rangeStartMs, endMs: rangeEndMs };
 
   for (const ve of vevents) {
     // Per-event guard: a single malformed VEVENT must not drop the rest of
@@ -985,7 +999,7 @@ const expandIcalToSearchResults = (
 
       const rrule = ve.getFirstPropertyValue('rrule');
       if (!rrule) {
-        if (startMs >= rangeStartMs && startMs < rangeEndMs) {
+        if (overlapsRange(startMs, durationMs, range)) {
           out.push(
             veventToOccurrence(
               ve,
@@ -1033,7 +1047,7 @@ const expandIcalToSearchResults = (
         const ms = next.toJSDate().getTime();
         if (isNaN(ms)) continue;
         if (ms >= rangeEndMs) break;
-        if (ms < rangeStartMs) continue;
+        if (!overlapsRange(ms, durationMs, range)) continue;
         if (exceptionTimes.has(ms)) continue;
         out.push(
           veventToOccurrence(ve, ms, durationMs, isAllDay, calendarHref, eventHref, ms),
@@ -1045,12 +1059,13 @@ const expandIcalToSearchResults = (
         if (ex.isCancelled) continue;
         const exStartMs = icalTimeToMs(ex.vevent.getFirstPropertyValue('dtstart'));
         if (exStartMs === null) continue;
-        if (exStartMs < rangeStartMs || exStartMs >= rangeEndMs) continue;
+        const exDurationMs = calcDurationMs(ex.vevent, exStartMs);
+        if (!overlapsRange(exStartMs, exDurationMs, range)) continue;
         out.push(
           veventToOccurrence(
             ex.vevent,
             exStartMs,
-            calcDurationMs(ex.vevent, exStartMs),
+            exDurationMs,
             isAllDayIcal(ex.vevent),
             calendarHref,
             eventHref,

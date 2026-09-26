@@ -1018,7 +1018,7 @@ END:VCALENDAR`;
       it('caps a high-frequency unbounded RRULE with far-past DTSTART instead of spinning', async () => {
         // FREQ=MINUTELY anchored two years before the window would step through
         // ~1.05M pre-window occurrences one-by-one. The pre-window skip branch
-        // (`ms < rangeStartMs → continue`) doesn't count toward the emitted cap,
+        // (`!overlapsRange(...) → continue`) doesn't count toward the emitted cap,
         // so without an absolute bound this pins the thread at 100% CPU (the app
         // freeze). MAX_ITERATIONS_PER_EVENT must stop it.
         const ics = `BEGIN:VCALENDAR
@@ -1115,6 +1115,40 @@ END:VCALENDAR</cal:calendar-data>
       const toIcal = (iso: string): string =>
         iso.replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 
+      const fetchWindow = async (ics: string) => {
+        const mockHttp = {
+          get: vi.fn(),
+          post: vi.fn(),
+          put: vi.fn(),
+          patch: vi.fn(),
+          delete: vi.fn(),
+          request: vi.fn().mockResolvedValue(`<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/remote.php/dav/calendars/admin/personal/earlier.ics</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>"e1"</d:getetag>
+        <cal:calendar-data>${ics}</cal:calendar-data>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>`),
+        };
+        const events = await definition.getNewIssuesForBacklog!(
+          {
+            serverUrl: 'https://example.com/dav',
+            username: 'admin',
+            password: 'pass',
+            readCalendarIds: ['/remote.php/dav/calendars/admin/personal/'],
+            syncRangeWeeks: '2',
+          } as any,
+          mockHttp as any,
+        );
+        return { events, mockHttp };
+      };
+
       it.each([
         {
           label: 'UTC: 15:00-16:00 meeting, polled at 16:05',
@@ -1182,43 +1216,82 @@ DTEND:${toIcal(eventEnd)}
 SUMMARY:Earlier Meeting
 END:VEVENT
 END:VCALENDAR`;
-          const mockHttp = {
-            get: vi.fn(),
-            post: vi.fn(),
-            put: vi.fn(),
-            patch: vi.fn(),
-            delete: vi.fn(),
-            request: vi.fn().mockResolvedValue(`<?xml version="1.0"?>
-<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
-  <d:response>
-    <d:href>/remote.php/dav/calendars/admin/personal/earlier.ics</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:getetag>"e1"</d:getetag>
-        <cal:calendar-data>${ics}</cal:calendar-data>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-</d:multistatus>`),
-          };
-
-          const events = await definition.getNewIssuesForBacklog!(
-            {
-              serverUrl: 'https://example.com/dav',
-              username: 'admin',
-              password: 'pass',
-              readCalendarIds: ['/remote.php/dav/calendars/admin/personal/'],
-              syncRangeWeeks: '2',
-            } as any,
-            mockHttp as any,
-          );
+          const { events, mockHttp } = await fetchWindow(ics);
 
           expect(events.map((e) => e.title)).toEqual(['Earlier Meeting']);
           const body = mockHttp.request.mock.calls[0][2] as string;
           expect(body).toContain(`<c:time-range start="${expectedStart}"`);
         },
       );
+
+      // CalDAV time-range matches by overlap, so the server returns an event
+      // that began before the window but is still running; the client-side
+      // filter must keep it too (like the Google provider's end-time filter).
+      // Window start at 02:30 UTC is 00:00 UTC (local midnight < now - 2h).
+      it.each([
+        {
+          label: 'single event from yesterday evening',
+          vevents: `BEGIN:VEVENT
+UID:overnight-uid
+DTSTART:20260514T200000Z
+DTEND:20260515T030000Z
+SUMMARY:Overnight
+END:VEVENT`,
+        },
+        {
+          label: 'recurring occurrence from yesterday evening',
+          vevents: `BEGIN:VEVENT
+UID:overnight-rrule-uid
+DTSTART:20260510T200000Z
+DTEND:20260511T030000Z
+RRULE:FREQ=DAILY;COUNT=5
+SUMMARY:Overnight
+END:VEVENT`,
+        },
+        {
+          label: 'overridden occurrence from yesterday evening',
+          vevents: `BEGIN:VEVENT
+UID:overnight-ex-uid
+DTSTART:20260512T200000Z
+DTEND:20260513T030000Z
+RRULE:FREQ=DAILY;COUNT=3
+SUMMARY:Overnight
+END:VEVENT
+BEGIN:VEVENT
+UID:overnight-ex-uid
+RECURRENCE-ID:20260514T200000Z
+DTSTART:20260514T210000Z
+DTEND:20260515T033000Z
+SUMMARY:Overnight
+END:VEVENT`,
+        },
+      ])('keeps an in-progress $label', async ({ vevents }) => {
+        vi.stubEnv('TZ', 'UTC');
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-05-15T02:30:00Z'));
+        const { events } = await fetchWindow(
+          `BEGIN:VCALENDAR\nVERSION:2.0\n${vevents}\nEND:VCALENDAR`,
+        );
+
+        expect(events.map((e) => e.title)).toEqual(['Overnight']);
+      });
+
+      it('drops an event that ended before the window', async () => {
+        vi.stubEnv('TZ', 'UTC');
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-05-15T02:30:00Z'));
+        const { events } = await fetchWindow(`BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:ended-uid
+DTSTART:20260514T200000Z
+DTEND:20260515T000000Z
+SUMMARY:Ended
+END:VEVENT
+END:VCALENDAR`);
+
+        expect(events).toEqual([]);
+      });
     });
   });
 
