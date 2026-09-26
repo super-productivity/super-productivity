@@ -40,13 +40,8 @@
       font: inherit;
       letter-spacing: inherit;
       @include truncateText();
-      // smooth collapse/expand for title
       display: inline-block;
       max-width: 100%;
-      transition:
-        opacity var(--transition-duration-m, 0.25s) var(--ani-standard-timing),
-        max-width var(--transition-duration-m, 0.25s) var(--ani-standard-timing),
-        margin var(--transition-duration-m, 0.25s) var(--ani-standard-timing);
     }
 
     .ico-wrapper {
@@ -88,6 +83,13 @@
   color: var(--text-color-muted);
   // avoid affecting drag handle
   pointer-events: none;
+  // Follows the label it sits beside (see the label choreography above): it is
+  // right-aligned, so in a collapsed rail it would otherwise reappear on top of
+  // the icon. Expanding: it stays hidden until the rail has room, then fades in.
+  transition:
+    opacity var(--transition-duration-s, 0.15s) var(--ani-standard-timing)
+      var(--transition-duration-xs, 0.09s),
+    visibility 0s linear var(--transition-duration-xs, 0.09s);
 }
 
 // On touch devices the .additional-btn is always visible, so let the counter
@@ -139,12 +141,44 @@ button[mat-menu-item].nav-link.active {
   }
 }
 
+// Collapse/expand choreography for the labels, in two beats — `.label-hidden`
+// clips the text with `max-width`, so dimming and clipping on the same curve
+// makes the user watch the text squash into an ellipsis on the way out and
+// burst back in on the way in.
+//
+// Expanding (here): the width comes back with the panel and the text fades in
+// behind its leading edge — delayed, so it only shows up once the rail has room
+// for it. Collapsing reads its timing from the rule below. Width and margin
+// follow the panel's own timing, which the side nav publishes as
+// `--sidenav-transition-duration`.
+//
+// Deliberately not scoped to `button:first-of-type` like the rule above: anchor
+// rows (`container: 'route'` / `'href'`) need the same choreography.
+.nav-label {
+  transition:
+    opacity var(--transition-duration-s, 0.15s) var(--ani-standard-timing)
+      var(--transition-duration-xs, 0.09s),
+    max-width var(--sidenav-transition-duration, var(--transition-duration-m, 0.25s))
+      var(--sidenav-transition-timing, var(--ani-standard-timing)),
+    margin var(--sidenav-transition-duration, var(--transition-duration-m, 0.25s))
+      var(--sidenav-transition-timing, var(--ani-standard-timing));
+}
+
 .nav-label.label-hidden,
 .text.label-hidden {
   opacity: 0;
   max-width: 0;
   margin-left: 0 !important;
   pointer-events: none;
+  // Collapsing: the text is gone almost immediately and the space closes
+  // afterwards, in step with the panel. See the `.nav-label` rule above for the
+  // expanding half of the choreography.
+  transition:
+    opacity var(--transition-duration-xs, 0.09s) linear,
+    max-width var(--sidenav-transition-duration, var(--transition-duration-m, 0.25s))
+      var(--sidenav-transition-timing, var(--ani-standard-timing)),
+    margin var(--sidenav-transition-duration, var(--transition-duration-m, 0.25s))
+      var(--sidenav-transition-timing, var(--ani-standard-timing));
 }
 
 .drag-handle {
@@ -346,12 +380,21 @@ button[mat-menu-item].nav-link.active {
     display: none !important;
   }
 
-  // Hide only text labels, not icons in compact mode
-  .nav-label {
-    display: none !important;
-  }
-
+  // Deliberately no `display: none` for `.nav-label` here: the labels are bound
+  // to `.label-hidden` (`showLabels()`), which already takes them out of sight
+  // with `max-width: 0` + `aria-hidden`. Hiding them with `display` would snap
+  // the text out of existence on the first frame of a collapse and make the label
+  // transition unreachable. Icons are untouched in both cases.
+  //
+  // The badge fades instead of disappearing for the same reason — it is
+  // right-aligned and would otherwise blink out of and back into the rail.
+  // `pointer-events: none` is already set, and `visibility` drops it from the
+  // a11y tree once the fade has run.
   .task-count {
-    display: none;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity var(--transition-duration-xs, 0.09s) linear,
+      visibility 0s linear var(--transition-duration-xs, 0.09s);
   }
 }

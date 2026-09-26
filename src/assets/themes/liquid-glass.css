@@ -628,14 +628,36 @@ magic-side-nav {
   margin: 8px 0 8px 8px;
   position: relative;
   isolation: isolate;
+  /* Corner radius of the panel, published for the resize indicator so
+   * its fade ends exactly where the panel's edge straightens out
+   * (`.resize-handle::after` in magic-side-nav.component.scss). */
+  --sidenav-panel-radius: var(--lg-radius-lg);
 }
 
 /* On macOS Electron the traffic lights sit at ~y=14–28 in the
  * frameless title-bar area (`titleBarStyle: hiddenInset`). Push
  * the panel down so its top edge clears the controls with a
- * comfortable gap above. */
+ * comfortable gap above.
+ *
+ * Padding, not margin: the band has to sit inside the host box so
+ * the component's `.title-bar-drag-strip` — which reads the same
+ * height from `--title-bar-drag-height` — can cover it and keep
+ * the window draggable from its top-left corner (the panel itself
+ * is `no-drag`, see #6435). The host is a stretched flex item, so
+ * the border box still fills the column and the panel below
+ * shrinks by exactly the same amount the margin used to.
+ *
+ * The outer gap above the panel is part of that height too, so the
+ * host box reaches the window's top edge. Left as a margin it took
+ * the drag strip down with it, and the first 8px of the window sat
+ * above every drag region — a dead strip with no drag and no hand
+ * cursor. Only the vertical margin folds in here: a padding-left
+ * instead of `margin-left` would eat into the panel's own width
+ * (the host `width` is a fixed value bound by the component). */
 body.isMac.isElectron magic-side-nav {
-  margin-top: calc(var(--mac-title-bar-padding) + 12px);
+  --title-bar-drag-height: calc(8px + var(--mac-title-bar-padding) + 12px);
+  margin-top: 0;
+  padding-top: var(--title-bar-drag-height);
 }
 
 magic-side-nav .nav-sidenav {
@@ -682,7 +704,7 @@ magic-side-nav .mode-toggle {
 }
 
 /* On macOS Electron we've moved the panel itself below the
- * title bar via the host margin, so the inner mac-title-bar
+ * title bar via the host padding, so the inner mac-title-bar
  * padding the component adds to the toggle's `top` would push
  * it down twice. Match the existing `right: 8px` so the button
  * sits equidistant from the top and right corners of the panel,

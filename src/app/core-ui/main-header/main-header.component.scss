@@ -189,6 +189,16 @@ button {
   align-items: center;
   gap: var(--header-nav-button-gap);
   flex-shrink: 0;
+  // The header is a drag region on Electron with a custom title bar, and a drag
+  // region swallows pointer input at the OS level — without this a touch drag
+  // across the action row moves the window instead of scrolling the row.
+  //
+  // On the GROUP rather than on `.action-nav-scroll`: the rect follows the
+  // element's box, and this one is the buttons' own band, while the scroller's
+  // is 8px taller (see there). Signing the scroller no-drag put a dead band
+  // along the top of every icon — where the window's top edge is — for no gain
+  // in return.
+  -webkit-app-region: no-drag;
 
   &:empty {
     display: none;
@@ -330,10 +340,15 @@ button {
       // Horizontal overscroll here would otherwise reach the platform's
       // back-gesture, which is a steep price for flicking a button row.
       overscroll-behavior-x: contain;
-      // The header is a drag region on Electron with a custom title bar, and a
-      // drag region swallows pointer input at the OS level — without this a
-      // touch drag across the row moves the window instead of scrolling it.
-      -webkit-app-region: no-drag;
+      // No `-webkit-app-region: no-drag` here, and that is load-bearing: the
+      // rect follows this element's box, which is 4px taller than the buttons
+      // on each side (the padding above, bought back from its own clip). Marked
+      // no-drag it punches two 4px bands of dead space through the header's
+      // drag region — and on macOS, where the theme zeroes the header's own top
+      // padding, the upper band lands right against the window's top edge: the
+      // strip above the icons shows the grab cursor and cannot move the window.
+      // The action groups carry `no-drag` instead — their boxes hug the
+      // buttons, so a finger on a button still scrolls the row.
 
       &::-webkit-scrollbar {
         display: none;
