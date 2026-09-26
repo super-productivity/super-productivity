@@ -73,6 +73,18 @@ export const MOBILE_BACKGROUND_IDLE_CAP_MS = 4 * 60 * 60 * 1000;
 // counter.
 export const ANDROID_BACKGROUND_TICK_CAP_MS = 8 * 60 * 60 * 1000;
 
+// How long the "task deleted" snack offers UNDO. The remote-issue delete in
+// issue-two-way-sync.effects.ts waits this out before firing, so that an UNDO
+// cancels it. Both sites must read this value: if the snack ever outlives the
+// defer, UNDO is live after the remote issue is already gone.
+export const TASK_DELETE_UNDO_WINDOW_MS = 5000;
+
+// The snack's UNDO stays clickable longer than its duration. The grace covers
+// SnackService's 100ms open debounce, MatSnackBar arming the duration only
+// after its enter animation (up to 200ms), the button staying live through the
+// exit animation (up to 200ms) and timer jitter.
+export const REMOTE_ISSUE_DELETE_DEFER_MS = TASK_DELETE_UNDO_WINDOW_MS + 1000;
+
 // TODO use
 // const CORS_SKIP_EXTRA_HEADER_PROP = 'sp_cors_skip' as const;
 // export const CORS_SKIP_EXTRA_HEADERS: { [name: string]: string } = IS_ANDROID_WEB_VIEW

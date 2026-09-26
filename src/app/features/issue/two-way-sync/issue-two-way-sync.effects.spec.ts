@@ -23,6 +23,10 @@ import { DeletedTaskIssueSidecarService } from './deleted-task-issue-sidecar.ser
 import { DeletedTagTitlesSidecarService } from './deleted-tag-titles-sidecar.service';
 import { deleteTag } from '../../tag/store/tag.actions';
 import { selectAllTasks } from '../../tasks/store/task.selectors';
+import {
+  REMOTE_ISSUE_DELETE_DEFER_MS,
+  TASK_DELETE_UNDO_WINDOW_MS,
+} from '../../../app.constants';
 
 describe('IssueTwoWaySyncEffects', () => {
   let effects: IssueTwoWaySyncEffects;
@@ -998,7 +1002,7 @@ describe('IssueTwoWaySyncEffects', () => {
 
       actions$.next(TaskSharedActions.deleteTask({ task }));
 
-      tick();
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS);
 
       expect(deleteIssueSpy).toHaveBeenCalledWith('issue-1', cfg);
 
@@ -1076,7 +1080,7 @@ describe('IssueTwoWaySyncEffects', () => {
 
       actions$.next(TaskSharedActions.deleteTask({ task }));
 
-      tick();
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS);
 
       expect(snackServiceSpy.open).toHaveBeenCalledWith(
         jasmine.objectContaining({ type: 'ERROR' }),
@@ -1110,9 +1114,183 @@ describe('IssueTwoWaySyncEffects', () => {
 
       actions$.next(TaskSharedActions.deleteTask({ task }));
 
-      tick();
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS);
 
       expect(snackServiceSpy.open).not.toHaveBeenCalled();
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+    it('should not call deleteIssue before the undo window has elapsed', fakeAsync(() => {
+      const deleteIssueSpy = jasmine.createSpy('deleteIssue').and.resolveTo(undefined);
+      const adapter = createMockAdapter({ deleteIssue: deleteIssueSpy });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const cfg = createMockIssueProvider();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+      }) as TaskWithSubTasks;
+      (task as any).subTasks = [];
+
+      effects.deleteIssueOnTaskDelete$.subscribe();
+
+      actions$.next(TaskSharedActions.deleteTask({ task }));
+
+      tick(TASK_DELETE_UNDO_WINDOW_MS);
+      expect(deleteIssueSpy).not.toHaveBeenCalled();
+
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS - TASK_DELETE_UNDO_WINDOW_MS);
+      expect(deleteIssueSpy).toHaveBeenCalledWith('issue-1', cfg);
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should not call deleteIssue when the task is restored within the undo window (#10155)', fakeAsync(() => {
+      const deleteIssueSpy = jasmine.createSpy('deleteIssue').and.resolveTo(undefined);
+      const adapter = createMockAdapter({ deleteIssue: deleteIssueSpy });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const cfg = createMockIssueProvider();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+      }) as TaskWithSubTasks;
+      (task as any).subTasks = [];
+
+      effects.deleteIssueOnTaskDelete$.subscribe();
+
+      actions$.next(TaskSharedActions.deleteTask({ task }));
+      actions$.next(
+        TaskSharedActions.restoreDeletedTask({
+          task,
+          tagTaskIdMap: {},
+          deletedTaskEntities: {},
+        }),
+      );
+
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS * 2);
+
+      expect(deleteIssueSpy).not.toHaveBeenCalled();
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should not call deleteIssue when UNDO is clicked as the snack exits', fakeAsync(() => {
+      const deleteIssueSpy = jasmine.createSpy('deleteIssue').and.resolveTo(undefined);
+      const adapter = createMockAdapter({ deleteIssue: deleteIssueSpy });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const cfg = createMockIssueProvider();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+      }) as TaskWithSubTasks;
+      (task as any).subTasks = [];
+
+      effects.deleteIssueOnTaskDelete$.subscribe();
+
+      actions$.next(TaskSharedActions.deleteTask({ task }));
+
+      // snack debounce, enter animation fallback, exit animation
+      tick(TASK_DELETE_UNDO_WINDOW_MS + 100 + 200 + 75);
+      actions$.next(
+        TaskSharedActions.restoreDeletedTask({
+          task,
+          tagTaskIdMap: {},
+          deletedTaskEntities: {},
+        }),
+      );
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS);
+
+      expect(deleteIssueSpy).not.toHaveBeenCalled();
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should still call deleteIssue when a different task is restored', fakeAsync(() => {
+      const deleteIssueSpy = jasmine.createSpy('deleteIssue').and.resolveTo(undefined);
+      const adapter = createMockAdapter({ deleteIssue: deleteIssueSpy });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const cfg = createMockIssueProvider();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+      }) as TaskWithSubTasks;
+      (task as any).subTasks = [];
+
+      const otherTask = createMockTask({
+        id: 'task-2',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-2',
+        issueProviderId: 'provider-1',
+      }) as TaskWithSubTasks;
+      (otherTask as any).subTasks = [];
+
+      effects.deleteIssueOnTaskDelete$.subscribe();
+
+      actions$.next(TaskSharedActions.deleteTask({ task }));
+      actions$.next(
+        TaskSharedActions.restoreDeletedTask({
+          task: otherTask,
+          tagTaskIdMap: {},
+          deletedTaskEntities: {},
+        }),
+      );
+
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS);
+
+      expect(deleteIssueSpy).toHaveBeenCalledWith('issue-1', cfg);
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should overlap the undo windows of concurrent deletes rather than queue them', fakeAsync(() => {
+      const deleteIssueSpy = jasmine.createSpy('deleteIssue').and.resolveTo(undefined);
+      const adapter = createMockAdapter({ deleteIssue: deleteIssueSpy });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const cfg = createMockIssueProvider();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+
+      const mk = (id: string, issueId: string): TaskWithSubTasks => {
+        const t = createMockTask({
+          id,
+          issueType: 'TEST_PROVIDER' as any,
+          issueId,
+          issueProviderId: 'provider-1',
+        }) as TaskWithSubTasks;
+        (t as any).subTasks = [];
+        return t;
+      };
+
+      effects.deleteIssueOnTaskDelete$.subscribe();
+
+      actions$.next(TaskSharedActions.deleteTask({ task: mk('task-1', 'issue-1') }));
+      actions$.next(TaskSharedActions.deleteTask({ task: mk('task-2', 'issue-2') }));
+
+      // One window, not two: concatMap would only have flushed the first.
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS);
+
+      expect(deleteIssueSpy).toHaveBeenCalledTimes(2);
+      expect(deleteIssueSpy).toHaveBeenCalledWith('issue-1', cfg);
+      expect(deleteIssueSpy).toHaveBeenCalledWith('issue-2', cfg);
 
       adapterRegistry.unregister('TEST_PROVIDER');
     }));
