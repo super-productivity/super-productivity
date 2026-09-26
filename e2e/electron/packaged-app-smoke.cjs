@@ -202,5 +202,12 @@ run()
     process.exitCode = 1;
   })
   .finally(() => {
-    fs.rmSync(userDataDir, { recursive: true, force: true });
+    // Late Electron profile writes can cause transient ENOTEMPTY after exit.
+    // Async removal retries traversal too, picking up newly created files.
+    return fs.promises.rm(userDataDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
   });
