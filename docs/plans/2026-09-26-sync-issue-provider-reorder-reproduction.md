@@ -1,9 +1,11 @@
 # Issue-provider reorder/settings sync-stop reproduction
 
-**Follow-up:** This branch now includes the narrow GitLab reorder/settings fix
-and its regression suite. The report below records the original reproduction-only
-assignment and failing baseline; its original scope restrictions are historical.
-See [fix validation](#fix-validation) for the subsequent implementation and checks.
+**Follow-up:** This branch now includes provider-independent reorder/settings
+recovery and its regression suite. The report below records the original
+reproduction-only assignment and failing baseline; its original scope restrictions
+are historical.
+See [fix validation](#fix-validation) for the initial GitLab fix and
+[provider-independent recovery](#provider-independent-recovery) for its follow-up.
 
 ## Original reproduction
 
@@ -286,8 +288,9 @@ allowlist, generic fallback or recovery storage is proposed.
 
 ## Fix validation
 
-The follow-up admits only the reproduced identity-preserving GitLab editor
-shape through the existing order/content commutativity and retained-evidence
+The initial fix (`d00bb723cde9c448553a03ad529101fe232ba5b5`) admits only the
+reproduced identity-preserving GitLab editor shape through the existing
+order/content commutativity and retained-evidence
 checks. Rejected provider operations are projected against durable current
 state: a reorder carries the complete current provider list, while an update
 carries current values of its original fields. This preserves later additions,
@@ -362,3 +365,69 @@ the negative control is in `reruns/1790457230349/`.
 Sandbox-blocked launch attempts and the initially incomplete test-state type
 are excluded from passing validation. No full provider suite or WebDAV run is
 claimed.
+
+## Provider-independent recovery
+
+The GitLab-specific restriction in `d00bb723cde9` was a coverage boundary, not a
+provider-specific conflict. The follow-up adds real UI reproductions for the
+Jira editor's full model and GitLab's partial pinned-search update. Jira keeps
+its nested `transitionConfig` and `availableTransitions`; pinning emits only
+`{ pinnedSearch: 'synthetic search' }`, without `changes.id`. Both cross a
+three-provider reorder whose primary ID is not the edited provider's ID.
+
+`ISSUE_PROVIDER_UPDATE` reaches the shared unsorted entity adapter's
+`updateOne`. It leaves the ordered IDs unchanged unless `changes.id` changes
+identity. The fix therefore removes the provider-name/settings allowlist and
+requires a nonempty changes object whose `id` is absent or matches the declared
+provider. Existing action metadata, single-update footprint and retained causal
+proof checks still apply. Deletions, competing reorders, malformed changes and
+identity changes remain unsupported. Replacement projection is unchanged.
+
+The same browser harness now covers Jira in both pending directions and both
+timestamp orders, pinned search in both pending directions, and both Jira
+replacement histories consumed by unmodified v19.1.0. Every successful case
+checks settings, membership, disabled siblings, independent tasks/configuration,
+pending retirement, restart and fresh replay without dataset replacement.
+The original GitLab retry, compaction and old-client-first cases remain in the
+matrix. Real-store tests also cover optional settings and a valid GitHub plugin
+provider with nested `pluginConfig`; plugin behavior has integration coverage,
+not real-plugin UI coverage.
+
+Validation on 2026-09-26–27 (Europe/Berlin), starting from `d00bb723cde9`:
+
+- Before changing production code, both new UI cases failed at the desired
+  successful-sync assertion with `UnsupportedMultiEntityConflictError`. Jira
+  emitted its complete 32-field model; the pinned-search case emitted one field.
+  Both retained all three pending local operations and the exact local state
+  through restart. The earlier launch while the app was still starting produced
+  browser runtime errors and was excluded; the clean red rerun is the evidence.
+- The expanded real-store integration suite passed **63 tests**. The two shared
+  resolver suites passed **309 tests** (67 superseded-operation and 242 conflict
+  resolution tests), for **372 focused Angular tests** in total.
+- The complete **19-scenario browser matrix passed** in 12.3 minutes, with zero
+  skips and retries, including all six unmodified v19.1.0 cases.
+- `npm run checkFile` passed for all three TypeScript files changed in this
+  follow-up. Strict standalone E2E type-checking, documentation links, Markdown
+  formatting and `git diff --check` passed. `tested-source.json` records the
+  tested TypeScript hashes; the production predicate is smaller by 18 lines.
+
+New artifacts are separate from the original reproduction in
+`/tmp/issue-provider-generalize-20260926/`: `red-ready.log`, `integration.log`,
+`resolvers.log`, `green.log`, and `docs-links.log`. The clean red traces and
+captured rows are in `reruns/1790458903950/` (Jira) and
+`reruns/1790458903996/` (pinned search). Rerun the expanded suite with the same
+task-isolated server and verified release assets:
+
+```bash
+SUPERSYNC_E2E_URL=http://127.0.0.1:1942 E2E_REQUIRE_SUPERSYNC=true \
+  COMPAT_OLD_ASSETS=/tmp/sync-s2-release-v19.1.0/assets/public \
+  node_modules/.bin/playwright test \
+  --config /tmp/issue-provider-generalize-20260926/playwright.config.cjs --workers=3
+# The clean negative control used the same runner on d00bb723cde9 plus:
+# --grep 'local-order / remote-newer / (JIRA|pinned search)$' --workers=2
+```
+
+The released-client limit is unchanged: a fixed client must resolve the crossing;
+an old resolver can still stop safely. Compacted causal history also retains the
+pending operation instead of guessing. No full provider-suite or WebDAV run is
+claimed for this follow-up.

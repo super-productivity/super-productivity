@@ -122,37 +122,19 @@ const isOrderAndContent = (order: Operation, edit: Operation): boolean => {
     }
     case ActionType.ISSUE_PROVIDER_UPDATE: {
       const provider = p?.['issueProvider'] as
-        | { id?: string; changes?: Record<string, unknown> }
+        | { id?: string; changes?: unknown }
         | undefined;
       const changes = provider?.changes;
-      // The GitLab editor submits its full model. Admit only this reproduced
-      // shape, with an unchanged identity: updateOne may otherwise change ids.
+      // The unsorted adapter changes ordered membership only when id changes.
+      // Both full editor models and partial settings updates otherwise commute.
       return (
         order.entityType === 'ISSUE_PROVIDER' &&
         provider?.id === edit.entityId &&
-        changes?.['id'] === edit.entityId &&
-        changes?.['issueProviderKey'] === 'GITLAB' &&
-        typeof changes?.['isEnabled'] === 'boolean' &&
-        hasOnlyFields(changes, [
-          'id',
-          'issueProviderKey',
-          'isEnabled',
-          'isAutoPoll',
-          'isAutoAddToBacklog',
-          'isIntegratedAddTaskBar',
-          'defaultProjectId',
-          'pinnedSearch',
-          'pollingMode',
-          'defaultTagIds',
-          'defaultNote',
-          'project',
-          'gitlabBaseUrl',
-          'token',
-          'filterUsername',
-          'scope',
-          'filter',
-          'isEnableTimeTracking',
-        ])
+        !!changes &&
+        typeof changes === 'object' &&
+        !Array.isArray(changes) &&
+        Object.keys(changes).length > 0 &&
+        (!('id' in changes) || changes.id === edit.entityId)
       );
     }
     default:

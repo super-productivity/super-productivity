@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
-import type { IssueProviderGitlab } from '../../../src/app/features/issue/issue.model';
+import type { IssueProvider } from '../../../src/app/features/issue/issue.model';
+import { JiraWorklogExportDefaultTime } from '../../../src/app/features/issue/providers/jira/jira.model';
 import type { CompactOperationLogEntry } from '../../../src/app/op-log/persistence/compact/compact-operation.types';
 import { expect, test } from '../../fixtures/supersync.fixture';
 import {
@@ -15,10 +16,10 @@ import { readMigratedState } from '../../utils/legacy-migration-helpers';
 import { serveReleasedClientAssets } from '../../utils/released-client-assets';
 
 // Seeds and witnesses use the established store fixture path. Both conflicted
-// operations MUST come from the real panel drag and provider edit dialog.
+// operations MUST come from the real panel drag and editor or pinned search.
 type Row = CompactOperationLogEntry;
 interface Snapshot {
-  issueProvider: { ids: string[]; entities: Record<string, IssueProviderGitlab> };
+  issueProvider: { ids: string[]; entities: Record<string, IssueProvider> };
   tasks: string[];
   config: { animations: boolean; hideEvaluation: boolean };
 }
@@ -164,31 +165,91 @@ const edit = async (page: Page): Promise<void> => {
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(dialog).toBeHidden();
 };
-const provider = (id: string, index: number): IssueProviderGitlab => ({
-  id,
-  issueProviderKey: 'GITLAB',
-  isEnabled: index !== 2,
-  isAutoPoll: false,
-  isAutoAddToBacklog: false,
-  isIntegratedAddTaskBar: false,
-  defaultProjectId: 'INBOX_PROJECT',
-  pinnedSearch: null,
-  pollingMode: 'whenProjectOpen',
-  defaultTagIds: [],
-  defaultNote: `Synthetic note ${index}`,
-  project: `synthetic/provider-${index}`,
-  gitlabBaseUrl: 'https://issues.example.invalid/',
-  token: 'synthetic-only-not-a-credential',
-  filterUsername: 'synthetic-user',
-  scope: 'all',
-  filter: 'state=opened',
-  isEnableTimeTracking: false,
-});
-const seedProviders = async (page: Page, ids: string[]): Promise<void> => {
+const pinSearch = async (page: Page): Promise<void> => {
+  await openPanel(page);
+  await page.locator('issue-panel [role="tab"]').nth(0).click();
+  const tab = page.locator('issue-provider-tab:visible');
+  await tab
+    .getByRole('textbox', { name: 'Search', exact: true })
+    .fill('synthetic search');
+  await tab.locator('mat-icon', { hasText: /^bookmark_add$/ }).click();
+  await expect(tab.locator('mat-icon', { hasText: /^bookmark$/ })).toBeVisible();
+};
+type ProviderKey = 'GITLAB' | 'JIRA';
+const provider = (id: string, index: number, providerKey: ProviderKey): IssueProvider => {
+  const common = {
+    id,
+    isEnabled: index !== 2,
+    isAutoPoll: false,
+    isAutoAddToBacklog: false,
+    isIntegratedAddTaskBar: false,
+    defaultProjectId: 'INBOX_PROJECT',
+    pinnedSearch: null,
+    pollingMode: 'whenProjectOpen' as const,
+    defaultTagIds: [],
+    defaultNote: `Synthetic note ${index}`,
+  };
+  // Keep the two siblings on GitLab to exercise mixed provider membership too.
+  return providerKey === 'JIRA' && index === 0
+    ? {
+        ...common,
+        issueProviderKey: 'JIRA',
+        _isBlockAccess: false,
+        host: 'https://jira.example.invalid/',
+        userName: 'synthetic-user',
+        password: 'synthetic-only-not-a-credential',
+        usePAT: false,
+        allowFetchFallback: true,
+        altPublicLinkHost: null,
+        isAllowSelfSignedCertificate: false,
+        searchJqlQuery: '',
+        autoAddBacklogJqlQuery: '',
+        isWorklogEnabled: false,
+        isAddWorklogOnSubTaskDone: false,
+        worklogDialogDefaultTime: JiraWorklogExportDefaultTime.AllTime,
+        isUpdateIssueFromLocal: false,
+        isShowComponents: true,
+        isCheckToReAssignTicketOnTaskStart: false,
+        storyPointFieldId: null,
+        isTransitionIssuesEnabled: false,
+        transitionConfig: { IN_PROGRESS: 'ALWAYS_ASK', DONE: 'ALWAYS_ASK' },
+        availableTransitions: [],
+        userToAssignOnDone: null,
+      }
+    : {
+        ...common,
+        issueProviderKey: 'GITLAB',
+        project: `synthetic/provider-${index}`,
+        gitlabBaseUrl: 'https://issues.example.invalid/',
+        token: 'synthetic-only-not-a-credential',
+        filterUsername: 'synthetic-user',
+        scope: 'all',
+        filter: 'state=opened',
+        isEnableTimeTracking: false,
+      };
+};
+const mockProviderRequests = async (page: Page): Promise<void> => {
+  await page.route('https://*.example.invalid/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        new URL(route.request().url()).hostname === 'jira.example.invalid'
+          ? { issues: [], total: 0, startAt: 0, maxResults: 50 }
+          : [],
+      ),
+    }),
+  );
+};
+const seedProviders = async (
+  page: Page,
+  ids: string[],
+  providerKey: ProviderKey = 'GITLAB',
+): Promise<void> => {
   for (const [index, id] of ids.entries()) {
     await dispatch(page, {
       type: '[IssueProvider/API] Add IssueProvider',
-      issueProvider: provider(id, index),
+      issueProvider: provider(id, index, providerKey),
       meta: {
         isPersistent: true,
         entityType: 'ISSUE_PROVIDER',
@@ -220,6 +281,8 @@ interface Scenario {
   remoteNewer: boolean;
   interrupted?: boolean;
   compact?: boolean;
+  providerKey?: ProviderKey;
+  pinnedSearch?: boolean;
 }
 const scenarios: Scenario[] = [
   { pendingOrder: true, remoteNewer: true },
@@ -229,9 +292,15 @@ const scenarios: Scenario[] = [
   { pendingOrder: true, remoteNewer: true, interrupted: true },
   { pendingOrder: false, remoteNewer: true, interrupted: true },
   { pendingOrder: true, remoteNewer: true, interrupted: true, compact: true },
+  { pendingOrder: true, remoteNewer: true, providerKey: 'JIRA' },
+  { pendingOrder: false, remoteNewer: true, providerKey: 'JIRA' },
+  { pendingOrder: true, remoteNewer: false, providerKey: 'JIRA' },
+  { pendingOrder: false, remoteNewer: false, providerKey: 'JIRA' },
+  { pendingOrder: true, remoteNewer: true, pinnedSearch: true },
+  { pendingOrder: false, remoteNewer: false, pinnedSearch: true },
 ];
 for (const scenario of scenarios) {
-  test(`@supersync provider ${scenario.pendingOrder ? 'local-order' : 'local-edit'} / ${scenario.remoteNewer ? 'remote-newer' : 'local-newer'}${scenario.compact ? ' / compacted missing proof' : scenario.interrupted ? ' / interrupted upload retry' : ''}`, async ({
+  test(`@supersync provider ${scenario.pendingOrder ? 'local-order' : 'local-edit'} / ${scenario.remoteNewer ? 'remote-newer' : 'local-newer'}${scenario.providerKey ? ' / ' + scenario.providerKey : ''}${scenario.pinnedSearch ? ' / pinned search' : ''}${scenario.compact ? ' / compacted missing proof' : scenario.interrupted ? ' / interrupted upload retry' : ''}`, async ({
     browser,
     baseURL,
     testRunId,
@@ -250,9 +319,7 @@ for (const scenario of scenarios) {
         const client = await createSimulatedClient(browser, baseURL!, name, testRunId);
         clients.push(client);
         client.page.on('console', (m) => logs.push(`${name}: ${m.text()}`));
-        await client.page.route('https://issues.example.invalid/**', (route) =>
-          route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
-        );
+        await mockProviderRequests(client.page);
         await client.workView.waitForTaskList();
         await client.sync.setupSuperSync(config);
         // Keep restart under manual control as well as the current page.
@@ -267,7 +334,7 @@ for (const scenario of scenarios) {
       const ids = ['provider-a', 'provider-b', 'provider-witness'].map(
         (id) => `${id}-${testRunId}`,
       );
-      await seedProviders(a.page, ids);
+      await seedProviders(a.page, ids, scenario.providerKey);
       await a.workView.addTask('baseline witness');
       if (scenario.compact) await a.workView.addTask('Compaction activity');
       await sync(a);
@@ -296,7 +363,11 @@ for (const scenario of scenarios) {
       await configWitness(b.page, 'B');
       const perform = async (client: SimulatedE2EClient): Promise<void> => {
         const isOrder = (client === a) === scenario.pendingOrder;
-        await (isOrder ? drag(client.page) : edit(client.page));
+        await (isOrder
+          ? drag(client.page)
+          : scenario.pinnedSearch
+            ? pinSearch(client.page)
+            : edit(client.page));
         await expect
           .poll(
             async () =>
@@ -331,12 +402,12 @@ for (const scenario of scenarios) {
         actionPayload: { ids: reordered },
         entityChanges: [],
       });
-      const expectedProvider = {
-        ...before.issueProvider.entities[ids[0]],
-        isEnabled: false,
-      };
+      const changes = scenario.pinnedSearch
+        ? { pinnedSearch: 'synthetic search' }
+        : { ...before.issueProvider.entities[ids[0]], isEnabled: false };
+      const expectedProvider = { ...before.issueProvider.entities[ids[0]], ...changes };
       expect(update.op.p).toEqual({
-        actionPayload: { issueProvider: { id: ids[0], changes: expectedProvider } },
+        actionPayload: { issueProvider: { id: ids[0], changes } },
         entityChanges: [],
       });
       const local = scenario.pendingOrder ? order : update;
@@ -627,13 +698,15 @@ test.describe('@supersync released provider reorder compatibility', () => {
   });
   test.afterAll(async () => assets?.close());
 
-  for (const { oldReorders, oldResolvesFirst } of [
-    { oldReorders: false, oldResolvesFirst: false },
-    { oldReorders: true, oldResolvesFirst: false },
-    { oldReorders: false, oldResolvesFirst: true },
-    { oldReorders: true, oldResolvesFirst: true },
+  for (const { oldReorders, oldResolvesFirst, providerKey } of [
+    { oldReorders: false, oldResolvesFirst: false, providerKey: 'GITLAB' as const },
+    { oldReorders: true, oldResolvesFirst: false, providerKey: 'GITLAB' as const },
+    { oldReorders: false, oldResolvesFirst: true, providerKey: 'GITLAB' as const },
+    { oldReorders: true, oldResolvesFirst: true, providerKey: 'GITLAB' as const },
+    { oldReorders: false, oldResolvesFirst: false, providerKey: 'JIRA' as const },
+    { oldReorders: true, oldResolvesFirst: false, providerKey: 'JIRA' as const },
   ]) {
-    test(`${oldResolvesFirst ? 'old resolves first and retains pending work' : 'old uploads first, new resolves, old receives'} / old ${oldReorders ? 'order' : 'update'}`, async ({
+    test(`${oldResolvesFirst ? 'old resolves first and retains pending work' : 'old uploads first, new resolves, old receives'} / old ${oldReorders ? 'order' : 'update'} / ${providerKey}`, async ({
       browser,
       baseURL,
       testRunId,
@@ -649,15 +722,13 @@ test.describe('@supersync released provider reorder compatibility', () => {
           testRunId,
         );
         clients.push(current);
-        await current.page.route('https://issues.example.invalid/**', (route) =>
-          route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
-        );
+        await mockProviderRequests(current.page);
         await current.sync.setupSuperSync(config);
         const ids = ['provider-a', 'provider-b', 'provider-witness'].map(
           (id) => id + '-' + testRunId,
         );
         const reordered = [ids[1], ids[0], ids[2]];
-        await seedProviders(current.page, ids);
+        await seedProviders(current.page, ids, providerKey);
         await current.workView.addTask('baseline witness');
         await sync(current);
         const released = await createSimulatedClient(
@@ -670,9 +741,7 @@ test.describe('@supersync released provider reorder compatibility', () => {
           },
         );
         clients.push(released);
-        await released.page.route('https://issues.example.invalid/**', (route) =>
-          route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
-        );
+        await mockProviderRequests(released.page);
         await released.sync.setupSuperSync(config);
         await sync(released);
         await sync(current);
@@ -856,7 +925,11 @@ test.describe('@supersync released provider reorder compatibility', () => {
             await expect.poll(() => releasedSnapshot(client.page)).toEqual(final);
             await openPanel(client.page);
             const tabs = client.page.locator('issue-panel .tab-header-item.cdk-drag');
-            await expect(tabs.locator('.initials')).toHaveText(['P1', 'P0', 'P2']);
+            await expect(tabs.locator('.initials')).toHaveText([
+              'P1',
+              providerKey === 'JIRA' ? 'JI' : 'P0',
+              'P2',
+            ]);
             await expect(tabs.nth(0)).not.toHaveClass(/disabled/);
             await expect(tabs.nth(1)).toHaveClass(/disabled/);
             await expect(tabs.nth(2)).toHaveClass(/disabled/);

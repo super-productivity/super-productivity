@@ -64,12 +64,15 @@ The recognized crossings are intentionally limited to:
 - a habit reorder crossing a day's count update;
 - a board reorder crossing an identity-preserving board configuration update;
 - a section reorder crossing a title edit; and
-- an issue-provider reorder crossing the reproduced GitLab editor update: the
-  payload and declared provider IDs agree, the full model keeps that ID, and its
-  fields are limited to the observed GitLab settings with a boolean `isEnabled`.
+- an issue-provider reorder crossing an identity-preserving settings update:
+  the payload and declared provider IDs agree, and the nonempty changes object
+  either omits `id` or keeps that ID. This includes full editor models and partial
+  updates such as pinned searches, regardless of provider kind.
 
-The provider exception does not admit other provider kinds, unknown settings
-fields, identity-changing updates, deletions or competing reorders.
+The unsorted provider adapter updates settings in place; only an ID change can
+change ordered membership. Identity-changing updates, deletions and competing
+reorders remain outside this exception. These checks establish commutativity;
+they do not replace normal operation or model validation.
 
 Note pinning/moving, habit configuration changes and competing reorders are not
 recognized as commuting content crossings. Missing, ambiguous, malformed or
@@ -146,11 +149,11 @@ their original safety gate; see the [S2 validation report](../plans/2026-09-26-s
 and [dated-habit result](../plans/2026-09-26-sync-habit-date-reorder-result.md)
 for released-asset provenance and the tested limits.
 
-The provider suite checks both GitLab replacement histories against unmodified
-v19.1.0 assets, including restart and the rendered tab order. If that released
-client encounters the conflict first, it still stops with pending work intact;
+The provider suite checks both GitLab and Jira replacement histories against
+unmodified v19.1.0 assets, including restart and the rendered tab order. If that
+released client encounters the conflict first, it still stops with pending work intact;
 the new resolver cannot change old-client behavior. See the
-[provider fix validation](../plans/2026-09-26-sync-issue-provider-reorder-reproduction.md#fix-validation).
+[provider fix validation](../plans/2026-09-26-sync-issue-provider-reorder-reproduction.md#provider-independent-recovery).
 
 ## Verification
 

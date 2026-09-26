@@ -3,6 +3,8 @@ import { Action, ActionReducer, provideStore, Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import { SnackService } from '../../../core/snack/snack.service';
 import {
+  IssueProvider,
+  IssueProviderGithub,
   IssueProviderGitlab,
   IssueProviderState,
 } from '../../../features/issue/issue.model';
@@ -121,6 +123,17 @@ const provider = (id: string): IssueProviderGitlab => ({
   filter: 'state=opened',
   isEnableTimeTracking: false,
 });
+const pluginProvider: IssueProviderGithub = {
+  id: IDS[0],
+  issueProviderKey: 'GITHUB',
+  isEnabled: true,
+  pluginId: 'github-issue-provider',
+  pluginConfig: {
+    repo: 'synthetic/provider',
+    token: 'synthetic-only-not-a-credential',
+    twoWaySync: { title: 'off', isDone: 'off' },
+  },
+};
 
 const actionsFor = (
   family: Family,
@@ -431,8 +444,7 @@ describe('reorder conflicts: real store, applier, reducers and durable replay (#
     },
     ...[
       { name: 'provider identity change', changes: { id: 'renamed' } },
-      { name: 'provider key change', changes: { issueProviderKey: 'JIRA' as const } },
-      { name: 'unobserved provider field', changes: { migratedFromProjectId: PROJECT } },
+      { name: 'provider undefined identity', changes: { id: undefined } },
     ].map(({ name, changes }) => ({
       name,
       family: 'issue providers' as const,
@@ -440,22 +452,35 @@ describe('reorder conflicts: real store, applier, reducers and durable replay (#
         issueProvider: { id: IDS[0], changes: { ...provider(IDS[0]), ...changes } },
       }),
     })),
+    {
+      name: 'competing provider order',
+      family: 'issue providers',
+      edit: IssueProviderActions.sortIssueProvidersFirst({ ids: [...IDS].reverse() }),
+    },
+    {
+      name: 'provider deletion',
+      family: 'issue providers',
+      edit: TaskSharedActions.deleteIssueProvider({
+        issueProviderId: IDS[0],
+        taskIdsToUnlink: [],
+      }),
+    },
     ...[
-      {
-        name: 'provider non-boolean enabled flag',
+      ...[undefined, null, ['invalid'], 'invalid', {}].map((changes) => ({
+        name: 'provider malformed changes ' + JSON.stringify(changes),
         mutate: (op: Operation): Operation => ({
           ...op,
           payload: {
             actionPayload: {
               issueProvider: {
                 id: IDS[0],
-                changes: { ...provider(IDS[0]), isEnabled: 'false' },
+                changes,
               },
             },
             entityChanges: [],
           },
         }),
-      },
+      })),
       {
         name: 'provider plural update footprint',
         mutate: (op: Operation): Operation => ({ ...op, entityIds: [...IDS] }),
@@ -822,18 +847,68 @@ describe('reorder conflicts: real store, applier, reducers and durable replay (#
         expect(await state()).toEqual(before);
       });
     }
+  }
 
+  const convergenceCases: {
+    family: Family;
+    name: string;
+    seed?: IssueProvider;
+    changes?: Partial<IssueProvider>;
+  }[] = [
+    ...families.map((family) => ({ family, name: family })),
+    {
+      family: 'issue providers',
+      name: 'issue providers: partial pinned search',
+      changes: { pinnedSearch: 'assigned to me' },
+    },
+    {
+      family: 'issue providers',
+      name: 'issue providers: optional settings field',
+      changes: { ...provider(IDS[0]), migratedFromProjectId: PROJECT },
+    },
+    {
+      family: 'issue providers',
+      name: 'issue providers: nested plugin settings',
+      seed: pluginProvider,
+      changes: {
+        ...pluginProvider,
+        pluginConfig: {
+          ...pluginProvider.pluginConfig,
+          twoWaySync: { title: 'pullOnly', isDone: 'off' },
+        },
+      },
+    },
+  ];
+  for (const scenario of convergenceCases) {
     for (const remoteReorder of [false, true]) {
       for (const remoteNewer of [false, true]) {
         it(
-          family +
+          scenario.name +
             ': ' +
             (remoteReorder ? 'remote' : 'local') +
             ' reorder, ' +
             (remoteNewer ? 'remote' : 'local') +
             ' timestamp wins',
           async () => {
-            const pair = actionsFor(family);
+            if (scenario.seed) {
+              initial = {
+                ...initial,
+                issueProvider: {
+                  ...initial.issueProvider,
+                  entities: {
+                    ...initial.issueProvider.entities,
+                    [scenario.seed.id]: scenario.seed,
+                  },
+                },
+              };
+              resetProjection(initial);
+            }
+            const pair = actionsFor(scenario.family);
+            if (scenario.changes) {
+              pair.edit = IssueProviderActions.updateIssueProvider({
+                issueProvider: { id: IDS[0], changes: scenario.changes },
+              });
+            }
             const localAction = (
               remoteReorder ? pair.edit : pair.order
             ) as PersistentAction;
