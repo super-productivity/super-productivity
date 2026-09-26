@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { Observable, from, throwError } from 'rxjs';
 import { catchError, map, first } from 'rxjs/operators';
 import { NextcloudDeckCfg } from './nextcloud-deck.model';
@@ -296,12 +296,16 @@ export class NextcloudDeckApiService {
         issueProviderName: ISSUE_PROVIDER_HUMANIZED[NEXTCLOUD_DECK_TYPE],
       },
     });
+    // The request URL Angular bakes into `message` can carry a token, and the
+    // handled error is logged whole, so mask it.
     const errMsg =
-      err instanceof Error
-        ? err.message
-        : typeof err === 'object' && err !== null && 'message' in err
-          ? (err as { message: string }).message
-          : String(err);
+      err instanceof HttpErrorResponse && err.url
+        ? err.message.split(err.url).join('…')
+        : err instanceof Error
+          ? err.message
+          : typeof err === 'object' && err !== null && 'message' in err
+            ? (err as { message: string }).message
+            : String(err);
     return throwError(() => ({
       [HANDLED_ERROR_PROP_STR]: 'Nextcloud Deck: ' + errMsg,
     }));

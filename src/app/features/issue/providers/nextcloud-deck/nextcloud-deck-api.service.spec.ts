@@ -7,6 +7,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { NextcloudDeckApiService } from './nextcloud-deck-api.service';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { NextcloudDeckCfg } from './nextcloud-deck.model';
+import { HANDLED_ERROR_PROP_STR } from '../../../../app.constants';
 
 describe('NextcloudDeckApiService', () => {
   let service: NextcloudDeckApiService;
@@ -109,5 +110,21 @@ describe('NextcloudDeckApiService', () => {
         },
       ]);
     });
+  });
+
+  it('keeps the request URL out of the handled error on an HTTP failure', (done) => {
+    service.getStacks$(mockCfg, 1).subscribe({
+      next: () => done.fail('expected an error'),
+      error: (err) => {
+        const txt: string = err[HANDLED_ERROR_PROP_STR];
+        expect(txt).toContain('401');
+        expect(txt).not.toContain('nc.example.com');
+        done();
+      },
+    });
+
+    httpMock
+      .expectOne(stacksUrl)
+      .flush(null, { status: 401, statusText: 'Unauthorized' });
   });
 });
