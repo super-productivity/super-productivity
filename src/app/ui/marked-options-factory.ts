@@ -49,17 +49,64 @@ export const parseImageDimensionsFromTitle = (
  * Converts: ![alt](url =WIDTHxHEIGHT) -> ![alt](url "WIDTH|HEIGHT")
  * This allows marked.js to parse it as a valid image with a title.
  */
+// Match: ![alt](url =WIDTHxHEIGHT) or ![alt](url =WIDTHx) or ![alt](url =xHEIGHT)
+// Capture groups: 1=alt, 2=url, 3=width, 4=height
+const SIZED_IMAGE_RE = /!\[([^\]]*)\]\(([^\s)]+)\s+=(\d*)x(\d*)\)/g;
+
+/** An opening or closing code fence: up to three spaces, then ``` or ~~~. */
+const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+
+const rewriteSizedImages = (text: string): string =>
+  text.replace(SIZED_IMAGE_RE, (match, alt, url, width, height) => {
+    // Create title attribute with width|height format
+    const dimensions = `${width || ''}|${height || ''}`;
+    return `![${alt}](${url} "${dimensions}")`;
+  });
+
 export const preprocessMarkdown = (markdown: string): string => {
-  // Match: ![alt](url =WIDTHxHEIGHT) or ![alt](url =WIDTHx) or ![alt](url =xHEIGHT)
-  // Capture groups: 1=alt, 2=url, 3=width, 4=height
-  return markdown.replace(
-    /!\[([^\]]*)\]\(([^\s)]+)\s+=(\d*)x(\d*)\)/g,
-    (match, alt, url, width, height) => {
-      // Create title attribute with width|height format
-      const dimensions = `${width || ''}|${height || ''}`;
-      return `![${alt}](${url} "${dimensions}")`;
-    },
-  );
+  // Fenced code is left verbatim: a note documenting the `=WxH` syntax should
+  // show what was typed, not the rewritten title form.
+  const out: string[] = [];
+  let pending: string[] = [];
+  let openFence: string | null = null;
+
+  const flushPending = (): void => {
+    if (pending.length > 0) {
+      out.push(rewriteSizedImages(pending.join('\n')));
+      pending = [];
+    }
+  };
+
+  for (const line of markdown.split('\n')) {
+    const fence = FENCE_RE.exec(line);
+
+    if (openFence) {
+      out.push(line);
+      // a closing fence uses the same character and is at least as long,
+      // with nothing after it
+      if (
+        fence &&
+        fence[1][0] === openFence[0] &&
+        fence[1].length >= openFence.length &&
+        fence[2].trim() === ''
+      ) {
+        openFence = null;
+      }
+      continue;
+    }
+
+    if (fence) {
+      flushPending();
+      out.push(line);
+      openFence = fence[1];
+      continue;
+    }
+
+    pending.push(line);
+  }
+
+  flushPending();
+  return out.join('\n');
 };
 
 const WEBEX_TEAMS_URI_PREFIX = 'webexteams://';
