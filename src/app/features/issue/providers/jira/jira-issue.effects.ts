@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { select, Store } from '@ngrx/store';
 import {
+  catchError,
   concatMap,
   filter,
   map,
@@ -34,6 +35,7 @@ import { TrackTimeSubmitParams } from '../../shared/dialog-track-time/track-time
 import { assertTruthy } from '../../../../util/assert-truthy';
 import { devError } from '../../../../util/dev-error';
 import { LOCAL_ACTIONS } from '../../../../util/local-actions.token';
+import { getDbDateStr } from '../../../../util/get-db-date-str';
 
 @Injectable()
 export class JiraIssueEffects {
@@ -91,6 +93,42 @@ export class JiraIssueEffects {
                 }),
               )
             : EMPTY,
+        ),
+      ),
+    { dispatch: false },
+  );
+
+  syncDeadlineToJira$ = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(TaskSharedActions.setDeadline, TaskSharedActions.removeDeadline),
+        concatMap(({ taskId }) => this._taskService.getByIdOnce$(taskId)),
+        filter(
+          (task): task is Task =>
+            !!task &&
+            task.issueType === JIRA_TYPE &&
+            !!task.issueId &&
+            !!task.issueProviderId,
+        ),
+        concatMap((task) =>
+          this._getCfgOnce$(assertTruthy(task.issueProviderId)).pipe(
+            map((jiraCfg) => ({ jiraCfg, task })),
+          ),
+        ),
+        filter(({ jiraCfg }) => isJiraEnabled(jiraCfg) && !!jiraCfg.isSyncDeadlineToJira),
+        concatMap(({ jiraCfg, task }) =>
+          this._jiraApiService
+            .updateIssueFields$(
+              assertTruthy(task.issueId),
+              { duedate: getJiraDueDate(task) },
+              jiraCfg,
+            )
+            .pipe(
+              concatMap(() =>
+                from(this._issueService.refreshIssueTask(task, false, false)),
+              ),
+              catchError(() => EMPTY),
+            ),
         ),
       ),
     { dispatch: false },
@@ -416,3 +454,12 @@ export class JiraIssueEffects {
     return this._issueProviderService.getCfgOnce$(issueProviderId, 'JIRA');
   }
 }
+
+/**
+ * Jira's `duedate` is a date without a time, so a deadline with a time is reduced to its local day.
+ * `null` clears the field.
+ */
+const getJiraDueDate = (task: Task): string | null =>
+  task.deadlineWithTime
+    ? getDbDateStr(task.deadlineWithTime)
+    : (task.deadlineDay ?? null);

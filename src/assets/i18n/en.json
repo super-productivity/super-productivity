@@ -652,6 +652,7 @@
         "AUTO_ADD_BACKLOG_JQL_QUERY": "JQL used for importing issues to Super Productivity automatically",
         "IS_ADD_WORKLOG_ON_SUB_TASK_DONE": "Open dialog to submit worklog to Jira when subtask is completed",
         "IS_CHECK_TO_RE_ASSIGN_TICKET_ON_TASK_START": "Check if the currently worked on issue is assigned to current user",
+        "IS_SYNC_DEADLINE_TO_JIRA": "Set the Jira due date from the task deadline",
         "IS_WORKLOG_ENABLED": "Open dialog to submit worklog to Jira when task is completed",
         "SEARCH_JQL_QUERY": "JQL Query for limiting searching tasks",
         "WORKLOG_DEFAULT_ALL_TIME": "Fill in all time spent on task",

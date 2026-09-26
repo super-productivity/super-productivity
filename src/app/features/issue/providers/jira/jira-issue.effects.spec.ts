@@ -113,6 +113,7 @@ describe('JiraIssueEffects', () => {
       'getReducedIssueById$',
       'transitionIssue$',
       'updateAssignee$',
+      'updateIssueFields$',
     ]);
     issueProviderService = jasmine.createSpyObj<IssueProviderService>(
       'IssueProviderService',
@@ -208,4 +209,98 @@ describe('JiraIssueEffects', () => {
     expect(snackService.open).toHaveBeenCalled();
     expect(issueService.refreshIssueTask).toHaveBeenCalledWith(task, false, false);
   }));
+
+  describe('syncDeadlineToJira$', () => {
+    const setupDeadlineSync = (taskChanges: Partial<Task>): void => {
+      task = { ...task, ...taskChanges };
+      taskService.getByIdOnce$.and.returnValue(of(task));
+      jiraCfg = { ...jiraCfg, isSyncDeadlineToJira: true };
+      issueProviderService.getCfgOnce$.and.returnValue(of(jiraCfg));
+      jiraApiService.updateIssueFields$.and.returnValue(of({}));
+      issueService.refreshIssueTask.and.resolveTo();
+      TestBed.inject(JiraIssueEffects).syncDeadlineToJira$.subscribe();
+    };
+
+    it('sets the Jira due date when a deadline day is set', fakeAsync(() => {
+      setupDeadlineSync({ deadlineDay: '2026-10-05' });
+
+      actions$.next(
+        TaskSharedActions.setDeadline({ taskId: task.id, deadlineDay: '2026-10-05' }),
+      );
+      tick();
+
+      expect(jiraApiService.updateIssueFields$).toHaveBeenCalledWith(
+        'issue-1',
+        { duedate: '2026-10-05' },
+        jiraCfg,
+      );
+    }));
+
+    it('refreshes the task after writing the due date', fakeAsync(() => {
+      setupDeadlineSync({ deadlineDay: '2026-10-05' });
+
+      actions$.next(
+        TaskSharedActions.setDeadline({ taskId: task.id, deadlineDay: '2026-10-05' }),
+      );
+      tick();
+
+      expect(issueService.refreshIssueTask).toHaveBeenCalledWith(task, false, false);
+    }));
+
+    it('reduces a deadline with a time to its day', fakeAsync(() => {
+      const deadlineWithTime = new Date(2026, 9, 5, 17, 30).getTime();
+      setupDeadlineSync({ deadlineWithTime });
+
+      actions$.next(TaskSharedActions.setDeadline({ taskId: task.id, deadlineWithTime }));
+      tick();
+
+      expect(jiraApiService.updateIssueFields$).toHaveBeenCalledWith(
+        'issue-1',
+        { duedate: '2026-10-05' },
+        jiraCfg,
+      );
+    }));
+
+    it('clears the Jira due date when the deadline is removed', fakeAsync(() => {
+      setupDeadlineSync({ deadlineDay: null, deadlineWithTime: null });
+
+      actions$.next(TaskSharedActions.removeDeadline({ taskId: task.id }));
+      tick();
+
+      expect(jiraApiService.updateIssueFields$).toHaveBeenCalledWith(
+        'issue-1',
+        { duedate: null },
+        jiraCfg,
+      );
+    }));
+
+    it('does nothing when the option is off', fakeAsync(() => {
+      setupDeadlineSync({ deadlineDay: '2026-10-05' });
+      jiraCfg = { ...jiraCfg, isSyncDeadlineToJira: false };
+      issueProviderService.getCfgOnce$.and.returnValue(of(jiraCfg));
+
+      actions$.next(
+        TaskSharedActions.setDeadline({ taskId: task.id, deadlineDay: '2026-10-05' }),
+      );
+      tick();
+
+      expect(jiraApiService.updateIssueFields$).not.toHaveBeenCalled();
+    }));
+
+    it('ignores tasks that are not linked to a Jira issue', fakeAsync(() => {
+      setupDeadlineSync({
+        deadlineDay: '2026-10-05',
+        issueType: undefined,
+        issueId: undefined,
+      });
+
+      actions$.next(
+        TaskSharedActions.setDeadline({ taskId: task.id, deadlineDay: '2026-10-05' }),
+      );
+      tick();
+
+      expect(issueProviderService.getCfgOnce$).not.toHaveBeenCalled();
+      expect(jiraApiService.updateIssueFields$).not.toHaveBeenCalled();
+    }));
+  });
 });

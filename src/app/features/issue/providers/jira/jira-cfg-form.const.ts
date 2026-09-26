@@ -168,6 +168,13 @@ export const JIRA_CONFIG_FORM_SECTION: ConfigFormSection<IssueProviderJira> = {
           },
         },
         {
+          key: 'isSyncDeadlineToJira',
+          type: 'checkbox',
+          templateOptions: {
+            label: T.F.JIRA.FORM_ADV.IS_SYNC_DEADLINE_TO_JIRA,
+          },
+        },
+        {
           key: 'isWorklogEnabled',
           type: 'checkbox',
           templateOptions: {
