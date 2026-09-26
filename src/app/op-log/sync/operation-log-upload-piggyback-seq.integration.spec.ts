@@ -158,7 +158,6 @@ describe('OperationLogSyncService + OperationLogUploadService — piggyback seq 
       'getLastSeq',
       'getOpById',
       'setVectorClock',
-      'clearFullStateOps',
       'getVectorClock',
       'appendBatchSkipDuplicates',
       'hasSyncedOps',
@@ -174,7 +173,6 @@ describe('OperationLogSyncService + OperationLogUploadService — piggyback seq 
     opLogStoreSpy.markSynced.and.resolveTo(undefined);
     opLogStoreSpy.markRejected.and.resolveTo(undefined);
     opLogStoreSpy.setVectorClock.and.resolveTo();
-    opLogStoreSpy.clearFullStateOps.and.resolveTo();
     opLogStoreSpy.getVectorClock.and.resolveTo(null);
     opLogStoreSpy.deleteOpsWhere.and.resolveTo();
     opLogStoreSpy.appendBatchSkipDuplicates.and.resolveTo({

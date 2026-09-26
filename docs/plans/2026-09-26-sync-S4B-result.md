@@ -1,9 +1,9 @@
-# S4B — shared-internals preflight
+# S4B — shared-internals audit and store cleanup
 
-**Preflight complete; S4B cleanup is not implemented.** This change contains only
-this report. Three internal store methods qualify for a small subsequent deletion;
-adapter/resolver work and public-contract decisions remain gated. No runtime tests
-or builds were run, and no prior task's test results are claimed here.
+**The independent three-method store cleanup is implemented and validated.**
+Adapter/resolver work and public-contract decisions remain deferred. The preflight
+below records the original audit at `c24c5e7ef5`; the implementation and its own
+validation are recorded in the final section. Full S4B cleanup is not complete.
 
 Starting HEAD was `9177c3afed6429934632b23de936cda8c6603fde`. The branch had zero
 task commits, an empty index, no product changes, and only the injected
@@ -49,9 +49,10 @@ Do not resurrect them or use those older trees as the deletion baseline.
 
 ## Consumer evidence and disposition
 
-Source links below pin the audited master. **Remove** means eligible for a later
-implementation, not deleted here. **Defer** means leave unchanged pending the
-named gate or preservation of existing coverage.
+Source links below pin the audited master and this table records the preflight
+decisions. **Remove** identified the three candidates implemented in the final
+section. **Defer** means leave unchanged pending the named gate or preservation
+of existing coverage.
 
 | Candidate                        | Production and test consumers                                                                                                                                                                                                                                                                                                                                         | Build/export/dynamic contract; decision                                                                                                                                                                                                                                                                                                           |
 | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -78,7 +79,7 @@ string-named spies/private spec calls are included above. Provider contracts,
 in contrast, are explicit emitted API. In-repository searches cannot certify
 unknown external package consumers.
 
-## Minimal next change and verification
+## Approved preflight plan
 
 Propose **only `clearFullStateOps`, `clearUnsyncedOps`, and
 `loadStateCacheBackup`** for the first independent implementation: one production
@@ -96,12 +97,81 @@ cleanup and recovery paths are unchanged. Re-audit and separately validate the
 adapter/resolver candidates only after their integrated fixes; preserve meaningful
 default-behavior tests. This preflight is not evidence of runtime equivalence.
 
-Preflight validation: read-only caller/contract searches and local ancestry/diff
-checks; report source links checked against their pinned blobs; `git diff --check`
-and report formatting checked. Runtime tests/builds and TS `checkFile` are not
-applicable because no runtime/TS/SCSS files changed. Exact committed file:
-`docs/plans/2026-09-26-sync-S4B-result.md`. Completion requests user review of this
-audit only; full S4B implementation and integration remain pending.
+Preflight commit `7372e981d40d4a93a711b8531f2d64298d20d14b` changed this report
+only. It verified caller/contracts, ancestry/diffs, 28 pinned source links,
+formatting and whitespace; it did not run runtime tests or builds.
+
+## Store-only implementation and validation
+
+The follow-up started at `7372e981d40d4a93a711b8531f2d64298d20d14b`, with only
+the original injected `AGENTS.md` block uncommitted. Local master remained
+`c24c5e7ef5a320b376efc34958a8670b3727aa6b`; S3/S7 were integrated. Rechecked the
+three methods' tracked callers and export evidence on this actual baseline before
+editing. No rebase or pending-PR integration was needed.
+
+Exact changed files (relative to the preflight commit):
+
+| File                                                                         | Change                                                                                                                                                                                         |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/op-log/persistence/operation-log-store.service.ts`                  | Remove only `clearFullStateOps`, `clearUnsyncedOps` and `loadStateCacheBackup`, including their exclusive comments: **50 production lines removed**, none added; 3,203 → 3,153 physical lines. |
+| `src/app/op-log/persistence/operation-log-store.service.spec.ts`             | Remove the six exclusive `clearUnsyncedOps` cases: 134 lines.                                                                                                                                  |
+| `src/app/op-log/sync/remote-ops-processing.service.spec.ts`                  | Remove the stale `clearFullStateOps` spy, setup and comment: 3 lines.                                                                                                                          |
+| `src/app/op-log/sync/operation-log-sync.service.spec.ts`                     | Remove the stale spy and setup: 2 lines.                                                                                                                                                       |
+| `src/app/op-log/sync/operation-log-upload-piggyback-seq.integration.spec.ts` | Remove the stale spy and setup: 2 lines.                                                                                                                                                       |
+| `eslint.config.js`                                                           | Lower the existing store size limit from 3,203 to 3,153, as the existing ratchet requires. This one-line tooling update was missing from the preflight plan.                                   |
+| `docs/plans/2026-09-26-sync-S4B-result.md`                                   | Update status and record this implementation/validation.                                                                                                                                       |
+
+Review confirms all **99 surviving store members** and every module-level
+statement are textually identical to the starting commit, using the TypeScript
+parser to compare members. No removed method references remain in production,
+tests or tooling. `clearFullStateOpsExcept`, recovery readers/writers and backup
+data, all replacement transactions, batch/compaction behavior, persisted
+actions/reducers, schema/wire contracts, migration/import and provider APIs are
+unchanged. The larger test deletion consists only of the six now-inapplicable
+method tests; meaningful regression suites remain. This removes unreachable code,
+not a reproduced sync bug, so no artificial failing E2E or replacement test was
+added.
+
+Validation on the final product diff:
+
+- `npm run checkFile <path>` — passed for all five changed TypeScript files.
+- `node /home/johannes/www/super-productivity/node_modules/typescript/bin/tsc -p
+src/tsconfig.app.json --noEmit` and the same command with
+  `src/tsconfig.spec.json` — both passed.
+- `npm run test:file -- '<focused glob>' --karma-config=<temporary config>
+--source-map=false` — **670 passed, zero skipped/failed**. The installed Angular
+  Karma runner's `findTests` discovered exactly nine files: the store, remote
+  processing, sync, upload-piggyback and snapshot specs; hydrator service, retry and
+  failed-op-boot specs; and IndexedDB store concurrency. The temporary config calls
+  the repository config and changes only its source base path and verified-free
+  Karma/debug ports to **9883/9233**. The first sandboxed run failed to bind; the
+  elevated rerun completed successfully. Existing Chrome 107 Browserslist warning.
+- The size limit rejects a one-line increase supplied in memory; no source file
+  was changed for this check. The read-only member comparison needed elevation
+  after the sandbox blocked Node's Git subprocess.
+- Report/config formatting, pinned source links, `git diff --check`, and final
+  scope review passed. The tested TS/config file hashes are recorded alongside the
+  test log and checked against the committed result. No other task's tests are
+  claimed and no shared service was stopped.
+
+The exact test command, discovery list, isolated config, log and tested-file
+hashes are in `/home/johannes/tmp/sync-s4b-store-20260926-_j28em65/` (`focused.log`,
+`discovered-specs.json`, `karma.cjs`, `tested-file-hashes.json`). The final commit
+SHA is supplied in the handoff; its product files match this validated tree.
+
+Remaining gates (updated from the parent's follow-up, not polled): S1
+[#10270](https://github.com/super-productivity/super-productivity/pull/10270)
+at `a59e9496a7`, overlapping adapter fix
+[#10272](https://github.com/super-productivity/super-productivity/pull/10272)
+at `e1eedbcb96`, and S2
+[#10275](https://github.com/super-productivity/super-productivity/pull/10275)
+at `7d88866e91563a979149df7cade257d61ba4fd18` are open. S4A is separately owned in
+[#10274](https://github.com/super-productivity/super-productivity/pull/10274)
+at `42bdf11c15d1aaa41b36fbb431e7ec1c8e7b8ce7`. Adapter/resolver deletion still
+requires integration and re-audit; public-contract and meaningful-test consumers
+remain deferred/retained. The parent's #10267 download/rejection-handler fix does
+not overlap this subset. S5/S6 are outside this follow-up. Completion requests
+review of this store-only implementation, not approval or completion of full S4B.
 
 [sync]: https://github.com/super-productivity/super-productivity/blob/c24c5e7ef5a320b376efc34958a8670b3727aa6b/src/app/op-log/sync/operation-log-sync.service.ts#L1785
 [sync-spec]: https://github.com/super-productivity/super-productivity/blob/c24c5e7ef5a320b376efc34958a8670b3727aa6b/src/app/op-log/sync/operation-log-sync.service.spec.ts#L4649

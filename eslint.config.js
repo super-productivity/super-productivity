@@ -436,7 +436,7 @@ module.exports = tseslint.config(
   ...Object.entries({
     'src/app/op-log/sync/conflict-resolution.service.ts': 4775,
     'src/app/op-log/sync-providers/file-based/file-based-sync-adapter.service.ts': 3292,
-    'src/app/op-log/persistence/operation-log-store.service.ts': 3203,
+    'src/app/op-log/persistence/operation-log-store.service.ts': 3153,
     'src/app/op-log/sync/operation-log-sync.service.ts': 2704,
     'src/app/plugins/plugin-bridge.service.ts': 2351,
     'src/app/imex/sync/sync-wrapper.service.ts': 2084,
