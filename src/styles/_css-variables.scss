@@ -65,18 +65,15 @@
   --safe-area-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
 
   // Bottom clearance reserved by the mobile bottom nav and everything stacked
-  // above it (scroll content, snackbars). Half the inset by default: iOS's home
-  // indicator is thin and translucent, so a full inset reads as an oversized gap.
-  // Native Android's system bars (3-button / gesture) are opaque and must be
-  // cleared in full or the nav buttons draw under them (#8792) — overridden to
-  // the full inset for native Android in styles.scss. Reads through the shared
-  // --safe-area-bottom (not raw env()) so this tracks the same source as the
-  // header/side-nav/body insets and all bottom-inset UI behaves uniformly across
-  // SystemBars WebView bands. Caveat: on the narrow API >= 35 / WebView < 140
-  // band the shared source can double-count vs SystemBars' native padding (a
-  // cosmetic gap, not an overlap — see the device-matrix risks in
-  // docs/android-edge-to-edge-keyboard.md).
-  --bottom-nav-safe-area: calc(var(--safe-area-bottom) / 2);
+  // above it (scroll content, snackbars): the full inset on every platform. iOS
+  // reserves a system-gesture region well above the drawn home indicator, and
+  // taps landing in it can be swallowed; Android's system bars are opaque
+  // (#8792). Reads through the shared --safe-area-bottom (not raw env()) so it
+  // tracks the same source as the other insets. Caveat: on the narrow
+  // API >= 35 / WebView < 140 band that source can double-count vs SystemBars'
+  // native padding (a cosmetic gap, not an overlap — see the device-matrix risks
+  // in docs/android-edge-to-edge-keyboard.md).
+  --bottom-nav-safe-area: var(--safe-area-bottom);
 
   // Keyboard geometry. Android / mobile web write `--keyboard-height` here from
   // JS (GlobalThemeService). On iOS these are fallbacks only: the live values
