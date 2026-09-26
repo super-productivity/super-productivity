@@ -1,8 +1,9 @@
 # S5 conflict journal retirement — review handoff
 
-Status: Phase B implementation and validation complete; the local retirement
-commit following preparation `8c687017fe` is ready for review. Integration requires user review. No push, PR, merge, scheduled
-workflow dispatch or other publication is authorized or performed.
+Status: Phase B implementation, validation and independent review are complete.
+The user has now authorized committing, pushing this task branch and creating a
+PR. Merge and full scheduled provider validation remain outstanding. Earlier
+handoff sections below record the authority and checks at those checkpoints.
 
 ## Baseline and authority
 
@@ -20,7 +21,8 @@ workflow dispatch or other publication is authorized or performed.
 - Read the assignment and accepted decision/context (§5 and §7), root/E2E
   guidance, documentation/review guides, architecture decisions, contributor
   sync model, journal/review and local recovery-point contracts, relevant op-log
-  architecture sections and severity guidance. No delegation or external writes.
+  architecture sections and severity guidance. Initial preparation performed no
+  delegation or external writes.
 
 ## Removal inventory at the tested baseline
 
@@ -324,3 +326,21 @@ There is no remaining local S5 implementation blocker. Parent actions remain:
 S6B continues to own file-format selection/setup and WebDAV rollout tests. This
 checkpoint adds no work in that scope and does not reopen the accepted journal
 data-loss decision or the documented blocked-deletion limitations.
+
+## Independent review and PR handoff
+
+At the user's request, one read-only sub-agent reviewed
+`f84259fcaa66a9bb9512d1c048a299d230740c04..ac5f7a2ec28d0fa50c4d0928f8ca65a85f9b70ea`
+and found no concrete defects. It independently passed the app/spec and focused
+E2E typechecks, ancestry and diff checks, verified the saved red/green evidence
+and absence of stale runtime consumers, and reproduced the upstream full-E2E
+TS2307 with and without the new spec. It did not rerun all 838 unit/integration
+and 12 E2E cases. Confidence in the scoped S5 change is high; full provider suites
+and platform coverage beyond the tested Chromium browser remain validation limits.
+
+The subsequent user request explicitly authorizes a branch push and PR creation.
+This changes publication authority only; it introduces no runtime edits and
+does not authorize merging or manually dispatching the scheduled suites. The PR
+must disclose the accepted loss of journal entries, blocked/storage cleanup
+limitations, passing local checks and outstanding full provider/typecheck gates.
+Injected `AGENTS.md` remains uncommitted, and S6B retains its separate scope.
