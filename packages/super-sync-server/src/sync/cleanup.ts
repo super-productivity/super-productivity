@@ -57,15 +57,14 @@ const runDailyCleanup = async (): Promise<void> => {
     Logger.error(`Cleanup [stale-devices] failed: ${error}`);
   }
 
-  // 2b. Checkpoint gate (#9962), read-only. Logged unconditionally: this count
-  // is what decides when an automatic client checkpoint cadence can be enabled,
-  // and it should be visible falling toward "all safe" run by run.
+  // 2b. Checkpoint diagnostics (#9962), read-only. Aged-out devices and clients
+  // arriving during checkpoint acceptance need a separate compatibility design.
   try {
     const gate = await syncService.summarizeCheckpointGate(cutoffTime);
     Logger.info(
       `Cleanup [checkpoint-gate]: ${gate.safeAccounts} of ${gate.totalAccounts} account(s) ` +
-        `with a device inside retention run only clients >= ${MIN_CHECKPOINT_SAFE_APP_VERSION}; ` +
-        `${gate.unversionedDevices} device(s) report no version.`,
+        `with devices inside retention report only versions >= ${MIN_CHECKPOINT_SAFE_APP_VERSION}; ` +
+        `${gate.unversionedDevices} device(s) report no version; diagnostic only.`,
     );
   } catch (error) {
     Logger.error(`Cleanup [checkpoint-gate] failed: ${error}`);

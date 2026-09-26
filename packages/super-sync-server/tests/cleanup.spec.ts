@@ -235,7 +235,7 @@ describe('Cleanup Jobs', () => {
       expect(mockSyncService.summarizeCheckpointGate).toHaveBeenCalledWith(cutoffCall);
       expect(Logger.info).toHaveBeenCalledWith(
         expect.stringMatching(
-          /Cleanup \[checkpoint-gate\]: 3 of 10 account\(s\) .* >= 18\.21\.2; 7 device\(s\) report no version/,
+          /Cleanup \[checkpoint-gate\]: 3 of 10 account\(s\) .* report only versions >= 18\.21\.2; 7 device\(s\) report no version; diagnostic only\./,
         ),
       );
     });

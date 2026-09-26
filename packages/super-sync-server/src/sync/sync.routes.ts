@@ -134,10 +134,14 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
 
         // `excludeClient` is the caller's own id (it means "don't echo my ops
         // back"), so a caller that omits it simply isn't recorded. `appVersion`
-        // rides along for the checkpoint gate (#9962); a malformed one is
-        // dropped rather than failing the download.
+        // rides along for checkpoint diagnostics (#9962). Missing/invalid
+        // versions clear the remembered version; only heartbeats preserve it.
         if (excludeClient) {
-          syncService.touchDevice(userId, excludeClient, parseAppVersion(appVersion));
+          syncService.touchDevice(
+            userId,
+            excludeClient,
+            parseAppVersion(appVersion) ?? null,
+          );
         }
 
         Logger.debug(

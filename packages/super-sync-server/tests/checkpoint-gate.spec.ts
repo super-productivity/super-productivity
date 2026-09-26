@@ -8,8 +8,9 @@ import {
 } from '../src/sync/checkpoint-gate';
 
 describe('checkpoint gate (#9962)', () => {
-  it('pins the cut to the first release with concurrent-safe REPAIR', () => {
-    // 78a459294104 landed the narrower REPAIR semantics; v18.21.2 first shipped it.
+  it('keeps the conservative diagnostic cutoff for the known REPAIR fixes', () => {
+    // Filtering changed in v18.15.0; conflict-gate and failed-heal fixes followed
+    // in v18.21.0 and v18.21.2. This cutoff alone does not authorize checkpoints.
     expect(MIN_CHECKPOINT_SAFE_APP_VERSION).toBe('18.21.2');
   });
 

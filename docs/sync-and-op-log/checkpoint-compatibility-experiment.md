@@ -62,8 +62,13 @@ these tests when the asset-directory variables are absent.
 This is evidence for a possible upgrade-required policy, not authorization to
 deploy it. It does not test native Android background sync, Electron/SQLite,
 restoring an older browser profile, or every intermediate release. In particular,
-the direct browser downgrade never reaches the versionless sync request that
-would exercise the server's stale remembered-version gap.
+the direct browser downgrade never reaches a versionless sync request.
+Server-side coverage in
+[`device-touch-sql.pglite.spec.ts`](../../packages/super-sync-server/tests/device-touch-sql.pglite.spec.ts)
+exercises the real download route and device SQL: a missing or invalid version
+clears the remembered version even inside the write throttle, while heartbeats
+preserve it. This fixes reporting for same-ID downgrades; it does not protect an
+old client from a checkpoint already stored before its return.
 
 A production gate still needs an account-level compatibility boundary, enforcement
 before every relevant upload/download, and atomic handling of clients arriving
