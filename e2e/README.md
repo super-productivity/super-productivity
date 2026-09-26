@@ -2,6 +2,9 @@
 
 This guide provides comprehensive information for writing and maintaining end-to-end tests for Super Productivity using Playwright.
 
+For current command selection, provider prerequisites, and agent instructions,
+start with [AGENTS.md](AGENTS.md).
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -35,7 +38,7 @@ Our E2E tests are built with Playwright and follow the Page Object Model (POM) p
 ### Basic Commands
 
 ```bash
-# Run all tests
+# Run regular browser tests (excludes SuperSync and WebDAV)
 npm run e2e
 
 # Run tests in UI mode (interactive)
