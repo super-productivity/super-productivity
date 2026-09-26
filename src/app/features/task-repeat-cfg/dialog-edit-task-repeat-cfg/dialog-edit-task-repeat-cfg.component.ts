@@ -465,7 +465,8 @@ export class DialogEditTaskRepeatCfgComponent {
     }
 
     // Normalize the monthly anchor fields at the boundary: convert the form's
-    // `null` sentinel to `undefined`, and strip a stale `monthlyLastDay` flag.
+    // `null` sentinels (incl. a cleared end date) to `undefined`, and strip a
+    // stale `monthlyLastDay` flag.
     const finalRepeatCfg = this._normalizeMonthlyAnchor(this.repeatCfg());
 
     if (this.isEdit()) {
@@ -514,6 +515,7 @@ export class DialogEditTaskRepeatCfgComponent {
       monthlyWeekOfMonth?: unknown;
       monthlyLastDay?: boolean;
       quickSetting?: string;
+      repeatUntilDay?: string | null;
     },
   >(cfg: T): T {
     let result = cfg;
@@ -530,6 +532,11 @@ export class DialogEditTaskRepeatCfgComponent {
     // preset — strip it for any other quick setting (#7726).
     if (result.monthlyLastDay && result.quickSetting !== 'MONTHLY_LAST_DAY') {
       result = { ...result, monthlyLastDay: undefined };
+    }
+    // A cleared end-date picker can leave `null`; persist `undefined` so the
+    // clear is sent via `clearedFields` (#10091).
+    if (result.repeatUntilDay === null) {
+      result = { ...result, repeatUntilDay: undefined };
     }
     return result;
   }

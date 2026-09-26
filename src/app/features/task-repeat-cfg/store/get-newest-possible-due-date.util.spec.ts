@@ -918,3 +918,60 @@ describe('getNewestPossibleDueDate()', () => {
     );
   });
 });
+
+describe('getNewestPossibleDueDate with repeatUntilDay (#10091)', () => {
+  const daily = (fields: Partial<TaskRepeatCfg>): TaskRepeatCfg =>
+    dummyRepeatable('UNTIL', {
+      repeatCycle: 'DAILY',
+      repeatEvery: 1,
+      startDate: '2022-01-10',
+      lastTaskCreationDay: '2022-01-12',
+      ...fields,
+    });
+  const today = new Date(2022, 0, 20, 10);
+
+  it('is unaffected while today is on or before the end day', () => {
+    const result = getNewestPossibleDueDate(
+      daily({ repeatUntilDay: '2022-01-25' }),
+      today,
+    );
+    expect(getDbDateStr(result!)).toBe('2022-01-20');
+  });
+
+  it('treats the end day as inclusive', () => {
+    const result = getNewestPossibleDueDate(
+      daily({ repeatUntilDay: '2022-01-20' }),
+      today,
+    );
+    expect(getDbDateStr(result!)).toBe('2022-01-20');
+  });
+
+  it('still returns an uncreated occurrence on the end day once past it', () => {
+    const result = getNewestPossibleDueDate(
+      daily({ repeatUntilDay: '2022-01-15' }),
+      today,
+    );
+    expect(getDbDateStr(result!)).toBe('2022-01-15');
+  });
+
+  it('returns null once the last occurrence up to the end day was created', () => {
+    const result = getNewestPossibleDueDate(
+      daily({ repeatUntilDay: '2022-01-15', lastTaskCreationDay: '2022-01-15' }),
+      today,
+    );
+    expect(result).toBeNull();
+  });
+
+  it('never returns a day after the end day for weekly schedules', () => {
+    // Mondays only; end on Wed 2022-01-19 -> newest allowed Monday is 01-17.
+    const result = getNewestPossibleDueDate(
+      daily({
+        repeatCycle: 'WEEKLY',
+        monday: true,
+        repeatUntilDay: '2022-01-19',
+      }),
+      new Date(2022, 0, 31, 10),
+    );
+    expect(getDbDateStr(result!)).toBe('2022-01-17');
+  });
+});

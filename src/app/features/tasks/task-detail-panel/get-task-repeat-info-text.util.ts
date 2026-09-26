@@ -18,6 +18,32 @@ export const getTaskRepeatInfoText = (
   dateTimeFormatService: DateTimeFormatService | undefined,
   translateService: TranslateService,
 ): [string, { [key: string]: string | number }] => {
+  const [key, params] = getOpenEndedRepeatInfoText(
+    repeatCfg,
+    locale,
+    dateTimeFormatService,
+    translateService,
+  );
+  if (!repeatCfg.repeatUntilDay) {
+    return [key, params];
+  }
+  // An end date must not read as an open-ended repeat (#10091).
+  const untilDate = dateStrToUtcDate(repeatCfg.repeatUntilDay);
+  const untilStr = dateTimeFormatService
+    ? dateTimeFormatService.formatDate(untilDate)
+    : untilDate.toLocaleDateString(locale);
+  return [
+    T.F.TASK_REPEAT.ADD_INFO_PANEL.UNTIL,
+    { repeatStr: translateService.instant(key, params), untilStr },
+  ];
+};
+
+const getOpenEndedRepeatInfoText = (
+  repeatCfg: TaskRepeatCfg,
+  locale: string | undefined,
+  dateTimeFormatService: DateTimeFormatService | undefined,
+  translateService: TranslateService,
+): [string, { [key: string]: string | number }] => {
   // Spelled-out weekday names follow the UI language under the ISO 8601 option
   // (the `sv` sentinel would otherwise leak Swedish, e.g. "mån"); numeric day/
   // month below stay on `locale` so ISO day-first ordering is kept. #8987 f/u.

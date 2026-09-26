@@ -4,6 +4,7 @@ import {
   findMonthlyNthWeekdayOccurrence,
   hasNthWeekdayAnchor,
 } from './get-nth-weekday-of-month.util';
+import { isAfterRepeatUntilDay } from './repeat-until-day.util';
 
 /**
  * Returns the first valid repeat occurrence on or after `cfg.startDate`.
@@ -21,6 +22,13 @@ import {
  * @returns The first valid occurrence date at noon, or null if none found
  */
 export const getFirstRepeatOccurrence = (taskRepeatCfg: TaskRepeatCfg): Date | null => {
+  const first = getFirstRepeatOccurrenceIgnoringEnd(taskRepeatCfg);
+  return first && isAfterRepeatUntilDay(taskRepeatCfg, first) ? null : first;
+};
+
+const getFirstRepeatOccurrenceIgnoringEnd = (
+  taskRepeatCfg: TaskRepeatCfg,
+): Date | null => {
   if (!Number.isInteger(taskRepeatCfg.repeatEvery) || taskRepeatCfg.repeatEvery < 1) {
     return null;
   }

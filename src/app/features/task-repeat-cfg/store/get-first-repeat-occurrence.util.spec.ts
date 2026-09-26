@@ -349,3 +349,29 @@ describe('getFirstRepeatOccurrence', () => {
     });
   });
 });
+
+describe('getFirstRepeatOccurrence with repeatUntilDay (#10091)', () => {
+  const weeklyFriday = (repeatUntilDay?: string): TaskRepeatCfg =>
+    mkCfg({
+      repeatCycle: 'WEEKLY',
+      repeatEvery: 1,
+      // Wed 2025-01-15; first Friday is 2025-01-17
+      startDate: '2025-01-15',
+      // DEFAULT enables Mon–Fri; keep Friday only
+      monday: false,
+      tuesday: false,
+      wednesday: false,
+      thursday: false,
+      friday: true,
+      repeatUntilDay,
+    });
+
+  it('returns the first occurrence when it is on the end day', () => {
+    const result = getFirstRepeatOccurrence(weeklyFriday('2025-01-17'));
+    expect(result!.getDate()).toBe(17);
+  });
+
+  it('returns null when the first occurrence falls after the end day', () => {
+    expect(getFirstRepeatOccurrence(weeklyFriday('2025-01-16'))).toBeNull();
+  });
+});

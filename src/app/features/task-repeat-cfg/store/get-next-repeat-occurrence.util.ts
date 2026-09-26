@@ -11,8 +11,18 @@ import {
   hasNthWeekdayAnchor,
 } from './get-nth-weekday-of-month.util';
 import { Log } from '../../../core/log';
+import { isAfterRepeatUntilDay } from './repeat-until-day.util';
 
 export const getNextRepeatOccurrence = (
+  taskRepeatCfg: TaskRepeatCfg,
+  fromDate: Date = new Date(),
+  opts: { inclusive?: boolean } = {},
+): Date | null => {
+  const next = getNextRepeatOccurrenceIgnoringEnd(taskRepeatCfg, fromDate, opts);
+  return next && isAfterRepeatUntilDay(taskRepeatCfg, next) ? null : next;
+};
+
+const getNextRepeatOccurrenceIgnoringEnd = (
   taskRepeatCfg: TaskRepeatCfg,
   fromDate: Date = new Date(),
   // When `inclusive` is true the scan starts from `fromDate` itself instead of

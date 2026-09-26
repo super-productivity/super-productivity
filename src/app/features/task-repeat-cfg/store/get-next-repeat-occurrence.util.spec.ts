@@ -1085,3 +1085,40 @@ describe('getNextRepeatOccurrence()', () => {
     });
   });
 });
+
+describe('getNextRepeatOccurrence with repeatUntilDay (#10091)', () => {
+  const cfg = (repeatUntilDay?: string): TaskRepeatCfg => ({
+    ...DUMMY_REPEATABLE_TASK,
+    repeatCycle: 'DAILY',
+    repeatEvery: 1,
+    startDate: '2022-01-10',
+    lastTaskCreationDay: '2022-01-10',
+    repeatUntilDay,
+  });
+  const from = new Date(2022, 0, 14, 10);
+
+  it('returns the next day when no end day is set', () => {
+    expect(getDbDateStr(getNextRepeatOccurrence(cfg(), from)!)).toBe('2022-01-15');
+  });
+
+  it('allows an occurrence on the end day itself', () => {
+    expect(getDbDateStr(getNextRepeatOccurrence(cfg('2022-01-15'), from)!)).toBe(
+      '2022-01-15',
+    );
+  });
+
+  it('returns null when the next occurrence is after the end day', () => {
+    expect(getNextRepeatOccurrence(cfg('2022-01-14'), from)).toBeNull();
+  });
+
+  it('respects the end day for inclusive lookups too', () => {
+    expect(
+      getDbDateStr(
+        getNextRepeatOccurrence(cfg('2022-01-14'), from, { inclusive: true })!,
+      ),
+    ).toBe('2022-01-14');
+    expect(
+      getNextRepeatOccurrence(cfg('2022-01-13'), from, { inclusive: true }),
+    ).toBeNull();
+  });
+});
