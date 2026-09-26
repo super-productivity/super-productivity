@@ -878,13 +878,15 @@ describe('PluginIssueProviderAdapterService', () => {
         expect(result!.taskChanges['isDone' as keyof Task]).toBeUndefined();
       });
 
-      // _buildBaseIssueTask turns a numeric `start` into a dueDay with no
-      // mapping and no direction behind it, so a refresh must not reschedule
-      // a task the user has already planned.
-      it('should not set a due date from the raw issue on refresh', async () => {
+      // _buildBaseIssueTask turns a numeric `start` into a dueDay and a
+      // calendar's 'confirmed' state into isDone: false, with no mapping and no
+      // direction behind either, so a refresh must not reschedule a task the
+      // user has already planned or un-complete one they finished (#9905).
+      it('should not set a due date or completion from the raw issue on refresh', async () => {
         const freshIssue = {
           id: 'ISS-1',
           title: 'Unchanged',
+          state: 'confirmed',
           start: new Date('2026-03-20T10:00:00.000Z').getTime(),
           lastUpdated: 2000,
         } as unknown as PluginIssue;
@@ -901,6 +903,7 @@ describe('PluginIssueProviderAdapterService', () => {
           issueId: 'ISS-1',
           issueProviderId: PROVIDER_ID,
           issueLastUpdated: 1000,
+          isDone: true,
           issueLastSyncedValues: {},
         } as unknown as Task;
 
@@ -909,6 +912,7 @@ describe('PluginIssueProviderAdapterService', () => {
         expect(result).not.toBeNull();
         expect(result!.taskChanges['dueDay' as keyof Task]).toBeUndefined();
         expect(result!.taskChanges['dueWithTime' as keyof Task]).toBeUndefined();
+        expect(result!.taskChanges['isDone' as keyof Task]).toBeUndefined();
       });
 
       // The direction is `both` here, so this is the local-edit guard rather
