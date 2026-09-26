@@ -16,6 +16,14 @@ on:
         required: false
         type: string
         default: '@webdav'
+      webdav_format:
+        description: 'Format for generic WebDAV tests (explicit per-case formats are preserved)'
+        required: false
+        type: choice
+        default: v2
+        options:
+          - v2
+          - v3
       run_webdav:
         description: 'Run the WebDAV job (uncheck to skip it instead of passing a no-match grep)'
         required: false
@@ -125,7 +133,7 @@ jobs:
 
   # Job 2: WebDAV E2E tests
   e2e-webdav:
-    name: E2E Tests (WebDAV)
+    name: E2E Tests (WebDAV ${{ inputs.webdav_format || 'v2' }})
     needs: [build]
     # Skip the job outright rather than handing it a no-match grep: Playwright
     # exits 1 on "No tests found", which reds the whole run. `inputs` is empty
@@ -171,6 +179,7 @@ jobs:
       - name: Run WebDAV E2E Tests
         env:
           E2E_REQUIRE_WEBDAV: 'true'
+          E2E_WEBDAV_FORMAT: ${{ inputs.webdav_format || 'v2' }}
         run: npm run e2e:all -- --grep "${{ inputs.webdav_grep || '@webdav' }}"
 
       - name: Print Docker Logs on Failure

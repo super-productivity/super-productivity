@@ -44,6 +44,30 @@ export const WEBDAV_CONFIG_TEMPLATE = {
   password: 'admin',
 };
 
+// Test-only default. Individual migration/regression cases can override it via
+// setupWebdavSync({ isUseSplitSyncFiles: ... }). Scheduled runs remain v2.
+export const WEBDAV_SYNC_FORMAT = process.env.E2E_WEBDAV_FORMAT ?? 'v2';
+export const WEBDAV_SYNC_FILE =
+  WEBDAV_SYNC_FORMAT === 'v3' ? 'sync-ops.json' : 'sync-data.json';
+
+/** Read an unencrypted, uncompressed remote fixture (including its real prefix). */
+export const readPrefixedFile = async <T>(
+  request: APIRequestContext,
+  url: string,
+  authorization: string,
+): Promise<T> => {
+  const response = await request.get(url, {
+    headers: { Authorization: authorization },
+  });
+  expect(response.ok(), `Expected remote sync file: ${url}`).toBe(true);
+  const encoded = await response.text();
+  const prefixEnd = encoded.indexOf('__');
+  if (prefixEnd < 0) {
+    throw new Error(`${url} is missing its format prefix`);
+  }
+  return JSON.parse(encoded.slice(prefixEnd + 2)) as T;
+};
+
 /**
  * Generates a unique sync folder name for test isolation.
  * @param prefix - Folder name prefix (default: 'e2e-test')

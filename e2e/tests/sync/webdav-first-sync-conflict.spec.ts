@@ -4,6 +4,7 @@ import { WorkViewPage } from '../../pages/work-view.page';
 import { waitForStatePersistence } from '../../utils/waits';
 import {
   WEBDAV_CONFIG_TEMPLATE,
+  WEBDAV_SYNC_FILE,
   setupSyncClient,
   createSyncFolder,
   waitForSyncComplete,
@@ -118,7 +119,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     const snapshotUploadResponse = pageB.waitForResponse(
       (response) =>
         response.request().method() === 'PUT' &&
-        new URL(response.url()).pathname.endsWith('/sync-data.json'),
+        new URL(response.url()).pathname.endsWith(`/${WEBDAV_SYNC_FILE}`),
       { timeout: 60000 },
     );
     await confirmDialog.locator('[e2e="confirmBtn"]').click();
@@ -496,7 +497,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     const snapshotUploadResponse = pageC.waitForResponse(
       (response) =>
         response.request().method() === 'PUT' &&
-        new URL(response.url()).pathname.endsWith('/sync-data.json'),
+        new URL(response.url()).pathname.endsWith(`/${WEBDAV_SYNC_FILE}`),
       { timeout: 60000 },
     );
     syncPageC.prepareForNextSyncCycle('write');

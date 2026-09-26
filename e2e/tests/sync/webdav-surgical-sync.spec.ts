@@ -6,6 +6,7 @@ import {
   closeContextsSafely,
   createSyncFolder,
   generateSyncFolderName,
+  readPrefixedFile,
   setupSyncClient,
   waitForSyncComplete,
   WEBDAV_CONFIG_TEMPLATE,
@@ -129,23 +130,6 @@ const MIGRATION_RESPONSE_LOSS_SCENARIOS: readonly MigrationResponseLossScenario[
     markerPending: false,
   },
 ];
-
-const readPrefixedFile = async <T>(
-  request: APIRequestContext,
-  url: string,
-  authorization: string,
-): Promise<T> => {
-  const response = await request.get(url, {
-    headers: { Authorization: authorization },
-  });
-  expect(response.ok()).toBe(true);
-  const encoded = await response.text();
-  const prefixEnd = encoded.indexOf('__');
-  if (prefixEnd < 0) {
-    throw new Error(`${url} is missing its format prefix`);
-  }
-  return JSON.parse(encoded.slice(prefixEnd + 2)) as T;
-};
 
 const readSurgicalOpsFile = (
   request: APIRequestContext,

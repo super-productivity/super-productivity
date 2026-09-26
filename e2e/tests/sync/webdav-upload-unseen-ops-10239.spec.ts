@@ -29,6 +29,7 @@ interface TaskOperation {
   p: { actionPayload: { task: TaskData } };
 }
 interface SyncFile {
+  version: number;
   syncVersion: number;
   vectorClock: Record<string, number>;
   snapshotBaseClock?: Record<string, number>;
@@ -83,7 +84,12 @@ test.describe('@webdav Upload must not acknowledge unseen operations (#10239)', 
       void webdavServerUp;
       const folder = generateSyncFolderName('e2e-unseen-10239');
       await createSyncFolder(request, folder);
-      const config = { ...WEBDAV_CONFIG_TEMPLATE, syncFolderPath: `/${folder}` };
+      const config = {
+        ...WEBDAV_CONFIG_TEMPLATE,
+        syncFolderPath: `/${folder}`,
+        // This regression seeds a v2 counter/snapshot, regardless of suite mode.
+        isUseSplitSyncFiles: false,
+      };
       const fileUrl = `${config.baseUrl}${folder}/DEV/sync-data.json`;
       const headers = {
         Authorization: `Basic ${Buffer.from('admin:admin').toString('base64')}`,
@@ -121,7 +127,9 @@ test.describe('@webdav Upload must not acknowledge unseen operations (#10239)', 
         await authorWork.addTask('Original author task');
         await authorSync.triggerSync();
         await waitForSyncComplete(author.page, authorSync);
-        const original = (await readFile()).data.recentOps.find(
+        const initialFile = (await readFile()).data;
+        expect(initialFile.version).toBe(2);
+        const original = initialFile.recentOps.find(
           (op) => op.p?.actionPayload?.task?.title === 'Original author task',
         );
         expect(original).toBeDefined();
