@@ -72,10 +72,7 @@ describe('TaskDuplicateService', () => {
       projectId: timedSubTask.projectId,
     };
     taskService.add.and.returnValue('new-parent-task');
-    taskService.createNewTaskWithDefaults.and.returnValues(
-      newSubTask,
-      newTimedSubTask,
-    );
+    taskService.createNewTaskWithDefaults.and.returnValues(newSubTask, newTimedSubTask);
 
     const result = service.duplicate(parentTask);
 
@@ -110,7 +107,7 @@ describe('TaskDuplicateService', () => {
         projectId: 'project-1',
         dueWithTime: 1_757_000_000_000,
         timeEstimate: 0,
-        notes: '',
+        notes: undefined,
       },
     });
     expect(store.dispatch).toHaveBeenCalledWith(
