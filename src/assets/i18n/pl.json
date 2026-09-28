@@ -1862,7 +1862,7 @@
         "DEADLINE": "Termin ostateczny",
         "DEADLINE_DUE_BY": "Termin do",
         "DEADLINE_OVERDUE": "Po terminie!",
-        "DUE": "Zaplanowane na",
+        "DUE": "Zaplanowano na",
         "FROM_PARENT": "(od rodzica)",
         "ISSUE": "Link zgłoszenia",
         "LOCAL_ATTACHMENTS": "Lokalne załączniki",
@@ -1972,7 +1972,7 @@
         "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Odrzuć wszystkie przypomnienia (Zachowaj w Dzisiaj)",
         "DISMISS_REMINDER_KEEP_TODAY": "Odrzuć przypomnienie (Zachowaj w Dzisiaj)",
         "DONE": "Gotowe",
-        "DUE_SECTION": "Zaplanowane na",
+        "DUE_SECTION": "Zaplanowano na",
         "DUE_TASK": "Zaplanowane zadanie",
         "DUE_TASKS": "Zaplanowane zadania",
         "RESCHEDULE_EDIT": "Edytuj (Zmień harmonogram)",
@@ -3143,7 +3143,7 @@
       "ONE": "{{count}} ukończone zadanie nadrzędne zostało zarchiwizowane",
       "OTHER": "{{count}} ukończone zadania nadrzędne zostały zarchiwizowane"
     },
-    "BREAK_LABEL": "Przewy (nr / czas)",
+    "BREAK_LABEL": "Przerwy (nr / czas)",
     "CELEBRATE": "Czas na <i>świętowanie!</i>",
     "CLEAR_ALL_CONTINUE": "Wyczyść wszystkie zakończone i kontynuuj",
     "D_CONFIRM_APP_CLOSE": {
