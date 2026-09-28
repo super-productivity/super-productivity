@@ -33,8 +33,10 @@ import { TranslateService } from '@ngx-translate/core';
 import { SyncWrapperService } from '../imex/sync/sync-wrapper.service';
 import { GlobalThemeService } from '../core/theme/global-theme.service';
 import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
+import { IssueProviderPluginDefinition } from './issue-provider/plugin-issue-provider.model';
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
 import { PluginHttpService } from './issue-provider/plugin-http.service';
+import { PluginService } from './plugin.service';
 import { getDbDateStr } from '../util/get-db-date-str';
 import { DataInitService } from '../core/data-init/data-init.service';
 import { Log } from '../core/log';
@@ -97,10 +99,18 @@ describe('PluginBridgeService - Counter Methods', () => {
         { provide: Router, useValue: {} },
         { provide: TranslateService, useValue: {} },
         { provide: SyncWrapperService, useValue: {} },
-        { provide: GlobalThemeService, useValue: {} },
+        {
+          provide: GlobalThemeService,
+          useValue: jasmine.createSpyObj('GlobalThemeService', ['hasPluginIcon']),
+        },
+        {
+          provide: PluginService,
+          useValue: jasmine.createSpyObj('PluginService', ['getPluginPath']),
+        },
         {
           provide: PluginIssueProviderRegistryService,
           useValue: jasmine.createSpyObj('PluginIssueProviderRegistryService', [
+            'register',
             'getRegisteredKey',
             'unregister',
           ]),
@@ -372,6 +382,60 @@ describe('PluginBridgeService - Counter Methods', () => {
 
       expect(taskContextMenuRegistry.unregisterPlugin).toHaveBeenCalledOnceWith(
         manifest.id,
+      );
+    });
+  });
+
+  describe('issue provider key reservation (#8842)', () => {
+    const definition = {
+      getHeaders: () => ({}),
+      searchIssues: async () => [],
+      getById: async () => ({}),
+      getIssueLink: () => '',
+      issueDisplay: [],
+      configFields: [],
+    } as unknown as IssueProviderPluginDefinition;
+    let registry: jasmine.SpyObj<PluginIssueProviderRegistryService>;
+
+    const registerAs = (pluginPath: string, issueProviderKey: string): void => {
+      const pluginService = TestBed.inject(
+        PluginService,
+      ) as jasmine.SpyObj<PluginService>;
+      pluginService.getPluginPath.and.returnValue(pluginPath);
+      const manifest = {
+        id: 'test-plugin',
+        name: 'Test Plugin',
+        issueProvider: { issueProviderKey },
+      } as PluginManifest;
+      service.createBoundMethods(manifest.id, manifest).registerIssueProvider(definition);
+    };
+
+    beforeEach(() => {
+      registry = TestBed.inject(
+        PluginIssueProviderRegistryService,
+      ) as jasmine.SpyObj<PluginIssueProviderRegistryService>;
+    });
+
+    it('rejects a custom key from an uploaded plugin', () => {
+      for (const key of ['GITHUB', 'plugin:caldav-calendar-provider']) {
+        expect(() => registerAs('uploaded://test-plugin', key)).toThrowError(
+          /Plugin cannot register under/,
+        );
+      }
+      expect(registry.register).not.toHaveBeenCalled();
+    });
+
+    it('lets a bundled plugin register under its migrated key', () => {
+      registerAs('assets/bundled-plugins/github-issue-provider', 'GITHUB');
+
+      expect(registry.register).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({ issueProviderKey: 'GITHUB' }),
+      );
+    });
+
+    it('rejects a built-in key even from a bundled plugin', () => {
+      expect(() => registerAs('assets/bundled-plugins/test-plugin', 'JIRA')).toThrowError(
+        /Plugin cannot register under/,
       );
     });
   });
