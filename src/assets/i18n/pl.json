@@ -3,7 +3,7 @@
     "B_INSTALL": {
       "IGNORE": "Ignoruj",
       "INSTALL": "Zainstaluj",
-      "MSG": "Czy chcesz zinstalować Super Productivity jako aplikację PWA?"
+      "MSG": "Czy chcesz zainstalować Super Productivity jako aplikację PWA?"
     },
     "B_OFFLINE": "Zostałeś odłączony od internetu. Synchronizacja nie będzie działać.",
     "B_RECOVERY_POINT": {
@@ -29,7 +29,7 @@
       "ERROR": "Nie udało się sprawdzić dostępności aktualizacji. Spróbuj ponownie później.",
       "UP_TO_DATE": "Masz najnowszą wersję ({{version}})."
     },
-    "UPDATE_WEB_APP": "Dostępna jest nowa wersja. Czy chcesz są załadować?",
+    "UPDATE_WEB_APP": "Dostępna jest nowa wersja. Czy chcesz ją załadować?",
     "B_SUPER_SYNC_ENCRYPTION": {
       "ALREADY_ENCRYPTED": "To konto jest już zaszyfrowane na innym urządzeniu. Wprowadź dotychczasowe hasło, aby kontynuować synchronizację.",
       "ENABLE": "Włącz szyfrowanie",
@@ -50,12 +50,12 @@
     "SHOW_SCHEDULE": "Harmonogram"
   },
   "CONFIRM": {
-    "AUTO_FIX": "Twoje dane są uszkodzone (\"{{validityError}}\"). Czy chcesz dokonać automatycznek naprawy? To działanie może spowodować utratę danych.",
+    "AUTO_FIX": "Twoje dane są uszkodzone (\"{{validityError}}\"). Czy chcesz dokonać automatycznej naprawy? To działanie może spowodować utratę danych.",
     "RELOAD_AFTER_IDB_ERROR": "Nie można uzyskać dostępu do bazy danych :( Możliwe przyczyny to aktualizacja aplikacji w tle lub mało miejsca na dysku. Jeśli zainstalowałeś aplikację na systemie Linux za pomocą 'snap', musisz włączyć odświeżania poświadczeń 'snap set core experimental.refresh-app-awareness=true', dopóki ten problem nie zostanie naprawiony po stronie developera. Naciśnij OK, aby ponownie załadować aplikację (może wymagać ręcznego ponownego uruchomienia aplikacji na niektórych platformach).",
     "RESTORE_FILE_BACKUP": "Wygląda na to, że aplikacja nie posiada żadnych danych, ale istnieje kopia zapasowa w \"{{dir}}\". Czy chcesz przywrócić kopię z {{from}}?",
     "RESTORE_FILE_BACKUP_ANDROID": "Wygląda na to, że w aplikacji NIE MA ŻADNYCH DANYCH, ale dostępna jest kopia zapasowa. Czy chcesz ją przywrócić?",
     "RESTORE_FILE_BACKUP_WITH_COUNTS": "Wygląda na to, że NIE MA ŻADNYCH DANYCH, ale w \"{{dir}}\" dostępne są kopie zapasowe. Czy chcesz przywrócić najnowszą kopię z {{from}} (zadania: {{tasks}}, projekty: {{projects}})?",
-    "RESTORE_STRAY_BACKUP": "Podczas ostatniej synchronizacja wystąpił błąd. Czy chcesz odtworzyć ostatnią kopię zapasową?",
+    "RESTORE_STRAY_BACKUP": "Podczas ostatniej synchronizacji wystąpił błąd. Czy chcesz odtworzyć ostatnią kopię zapasową?",
     "DELETE_SECTION": "Czy na pewno chcesz usunąć tę sekcję? Zadania w niej zostaną przeniesione na listę zadań.",
     "RESTORE_FILE_BACKUP_MOBILE": "Na tym urządzeniu nie znaleziono danych, ale dostępna jest kopia zapasowa do przywrócenia (zadania: {{tasks}}, projekty: {{projects}}). Przywrócić ją?",
     "RESTORE_FILE_BACKUP_MOBILE_FROM_SETTINGS": "Przywrócić najnowszą automatyczną kopię zapasową (zadania: {{tasks}}, projekty: {{projects}})? Spowoduje to zastąpienie wszystkich bieżących danych na tym urządzeniu, a jeśli korzystasz z synchronizacji — nadpisanie danych na innych urządzeniach podczas następnej synchronizacji."
@@ -133,12 +133,12 @@
         "EISENHAUER_MATRIX": "Macierz Eisenhowera",
         "IN_PROGRESS": "W trakcie",
         "KANBAN": "Kanban",
-        "NOT_URGENT_IMPORTANT": "Niepilne ale Ważne",
+        "NOT_URGENT_IMPORTANT": "Niepilne, lecz Ważne",
         "NOT_URGENT_NOT_IMPORTANT": "Niepilne i Nieważne",
         "TO_DO": "Do zrobienia",
         "URGENT": "Pilne",
         "URGENT_IMPORTANT": "Pilne i Ważne",
-        "URGENT_NOT_IMPORTANT": "Pilne ale Nieważne"
+        "URGENT_NOT_IMPORTANT": "Pilne, lecz Nieważne"
       },
       "FORM": {
         "ADD_NEW_PANEL": "Dodaj nowy panel",
@@ -226,10 +226,10 @@
       "BANNER": {
         "ADD_AS_TASK": "Dodaj jako zadanie",
         "SHOW_TASK": "Pokaż zadanie",
-        "TXT": "<strong>{{title}}</strong> zaczyna się od <strong>{{start}}</strong>!",
+        "TXT": "<strong>{{title}}</strong> zaczyna się o <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": {
           "ONE": "<strong>{{title}}</strong> zaczyna się o <strong>{{start}}</strong>!<br> (i {{nrOfOtherBanners}} inne wydarzenie jest zaplanowane)",
-          "OTHER": "<strong>{{title}}</strong> zaczyna się od <strong>{{start}}</strong>!<br> (i {{nrOfOtherBanners}} inne zdarzenia są należne)"
+          "OTHER": "<strong>{{title}}</strong> zaczyna się o <strong>{{start}}</strong>!<br> (i {{nrOfOtherBanners}} inne zdarzenia są należne)"
         },
         "TXT_PAST": "<strong>{{title}}</strong> rozpoczął się w <strong>{{start}}</strong>!",
         "TXT_PAST_MULTIPLE": {
@@ -409,7 +409,7 @@
         "HELP": "<p>Tutaj można skonfigurować SuperProductivity tak, aby wyświetlał listę otwartych zgłoszeń Gitea dla określonego repozytorium w panelu tworzenia zadań w widoku planowania dziennego. Będą one wyświetlane jako sugestie i będą zawierać link do zgłoszenia oraz więcej informacji na jego temat.</p> <p>Ponadto możesz automatycznie dodawać i importować wszystkie otwarte zgłoszenia.</p><p>Aby ominąć limity użytkowania i uzyskać dostęp, możesz podać token dostępu."
       },
       "ISSUE_CONTENT": {
-        "ASSIGNEE": "Odbiorca",
+        "ASSIGNEE": "Osoba przypisana",
         "DESCRIPTION": "Opis",
         "LABELS": "Etykiety",
         "MARK_AS_CHECKED": "Oznaczanie aktualizacji jako sprawdzonych",
@@ -432,9 +432,9 @@
         "FILTER": "Filtr niestandardowy",
         "FILTER_DESCRIPTION": "Zobacz https://docs.gitlab.com/ee/api/issues.html#list-issues. Wielokrotność może być łączona przez &",
         "FILTER_USER": "Nazwa użytkownika (e.g. to filter out changes by yourself)",
-        "GITLAB_BASE_URL": "Custom GitLab base URL",
+        "GITLAB_BASE_URL": "Własne URL do GitLab",
         "PROJECT": "ID projektu lub nazwa użytkownika/projekt",
-        "PROJECT_HINT": "np. johannesjo/super-produktywność",
+        "PROJECT_HINT": "np. johannesjo/super-superproductivity",
         "SCOPE": "Zakres",
         "SCOPE_ALL": "Wszystkie",
         "SCOPE_ASSIGNED": "Przypisane do mnie",
@@ -472,8 +472,8 @@
         "ISSUES_STR": "zgłoszenia"
       },
       "DEFAULT_NOTE_LABEL": "Domyślna notatka dla zaimportowanych zadań",
-      "DEFAULT_PROJECT_DESCRIPTION": "Projekt przypisany do zadań utworzonych ze spraw.",
-      "DEFAULT_PROJECT_LABEL": "Domyślny projekt super produktywności",
+      "DEFAULT_PROJECT_DESCRIPTION": "Projekt przypisany do zadań utworzonych ze zgłoszeń.",
+      "DEFAULT_PROJECT_LABEL": "Domyślny projekt Super Productivity",
       "DEFAULT_TAGS_LABEL": "Domyślne tagi dla zaimportowanych zadań",
       "FORM": {
         "AUTO_ADD_TO_BACKLOG": "Automatyczny import do domyślnego projektu (wymaga domyślnego projektu)",
@@ -669,7 +669,7 @@
         "ASSIGNEE": "Przypisany",
         "AT": "o",
         "ATTACHMENTS": "Załączniki",
-        "CHANGED": "zamiana",
+        "CHANGED": "zmieniono",
         "COMMENTS": "Komentarze",
         "COMPONENTS": "Komponenty",
         "DESCRIPTION": "Opis",
@@ -867,7 +867,7 @@
         "NO_NOTES": "Obecnie nie ma żadnych notatek"
       },
       "S": {
-        "NOTE_ADDED": "Uwaga zapisana"
+        "NOTE_ADDED": "Notatka zapisana"
       }
     },
     "OPEN_PROJECT": {
@@ -895,7 +895,7 @@
       },
       "DIALOG_TRANSITION": {
         "CHOOSE_STATUS": "Wybierz status do przypisania",
-        "CURRENT_ASSIGNEE": "Obecny cesjonariusz:",
+        "CURRENT_ASSIGNEE": "Obecnie przypisany:",
         "CURRENT_STATUS": "Obecny status:",
         "PERCENTAGE_DONE": "Postęp:",
         "TASK_NAME": "Nazwa zadania:",
@@ -929,15 +929,15 @@
         "UPLOAD_ATTACHMENT": "Prześlij do zadania"
       },
       "ISSUE_STRINGS": {
-        "ISSUE_STR": "pakiet roboczy",
-        "ISSUES_STR": "pakiety robocze"
+        "ISSUE_STR": "zgłoszenie",
+        "ISSUES_STR": "zgłoszenia"
       },
       "S": {
         "ERR_NO_FILE": "Nie wybrano pliku",
         "ERR_UNKNOWN": "OpenProject: Nieznany błąd {{statusCode}} {{errorMsg}}. Czy CORS jest poprawnie skonfigurowany dla serwera?",
         "POST_TIME_SUCCESS": "OpenProject: Pomyślnie utworzono wpis czasu dla {{issueTitle}}",
-        "TRANSITION": "OpenProject: Ustaw wydanie \"{{issueKey}}\" na \"{{name}}\"",
-        "TRANSITION_SUCCESS": "OpenProject: Ustaw wydanie {{issueKey}} na <strong>{{chosenTransition}}</strong>",
+        "TRANSITION": "OpenProject: Ustaw zgłoszenie \"{{issueKey}}\" na \"{{name}}\"",
+        "TRANSITION_SUCCESS": "OpenProject: Ustaw zgłoszenie {{issueKey}} na <strong>{{chosenTransition}}</strong>",
         "TRANSITIONS_LOADED": "Załadowane przejścia. Użyj poniższych opcji wyboru, aby je przypisać"
       }
     },
@@ -1105,7 +1105,7 @@
         "SCOPE_CREATED": "Utworzone przeze mnie"
       },
       "FORM_SECTION": {
-        "HELP": "<p>W tym miejscu można skonfigurować SuperProductivity do wyświetlania listy otwartych zgłoszeń Redmine (w wersji online lub w instancji hostowanej samodzielnie) dla określonego projektu w panelu tworzenia zadań w widoku planowania dziennego. Będą one wymienione jako sugestie i będą zawierać link do zgłoszenia, a także więcej informacji na jego temat.</p><p>Ponadto można automatycznie importować wszystkie otwarte sprawy.</p>",
+        "HELP": "<p>W tym miejscu można skonfigurować SuperProductivity do wyświetlania listy otwartych zgłoszeń Redmine (w wersji online lub w instancji hostowanej samodzielnie) dla określonego projektu w panelu tworzenia zadań w widoku planowania dziennego. Będą one wymienione jako sugestie i będą zawierać link do zgłoszenia, a także więcej informacji na jego temat.</p><p>Ponadto można automatycznie importować wszystkie otwarte zgłoszenia.</p>",
         "TITLE": "Redmine"
       },
       "ISSUE_CONTENT": {
@@ -1129,10 +1129,10 @@
         "TXT": "<strong>{{title}}<\\/strong> zaczyna się o <strong>{{start}}<\\/strong>!",
         "TXT_MULTIPLE": {
           "ONE": "<strong>{{title}}</strong> zaczyna się o <strong>{{start}}</strong>!<br> (i {{nrOfOtherBanners}} inne zadanie jest zaplanowane)",
-          "OTHER": "<strong>{{title}}</strong> zaczyna się od <strong>{{start}}</strong>!<br> (i {{nrOfOtherBanners}} inne zadania są wymagalne)"
+          "OTHER": "<strong>{{title}}</strong> zaczyna się o <strong>{{start}}</strong>!<br> (i {{nrOfOtherBanners}} inne zadania są wymagalne)"
         }
       },
-      "S_ACTIVE_TASK_DUE": "Zadanie, nad którym obecnie pracujesz, jest już gotowe!<br/> ({{title}})",
+      "S_ACTIVE_TASK_DUE": "Termin zadania, nad którym obecnie pracujesz, właśnie minął!<br/> ({{title}})",
       "S_REMINDER_ERR": "Błąd interfejsu przypomnień"
     },
     "SCHEDULE": {
@@ -1623,8 +1623,8 @@
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Dane zdalne są obecnie zapisywane",
         "ERROR_PAYLOAD_TOO_LARGE": "Błąd synchronizacji: Twoje dane są zbyt duże, aby je przesłać.\n\nTo się zdarza, gdy masz wiele zarchiwizowanych zadań. Twoje dane NIE zostały zsynchronizowane!\n\nSkontaktuj się z pomocą techniczną.",
         "ERROR_PERMISSION": "Dostęp do pliku zabroniony. Proszę sprawdzić uprawnienia systemu plików.",
-        "ERROR_PERMISSION_FLATPAK": "Dostęp do pliku zabroniony. Przyznaj uprawnienia do systemu plików za pomocą Flatseal lub użyj ścieżki wewnątrz ~\\/var\\/app\\/",
-        "ERROR_PERMISSION_SNAP": "Dostęp do pliku zabroniony. Uruchom 'snap connect super-productivity:home' lub użyj ścieżki wewnątrz ~\\/snap\\/super-productivity\\/common\\/",
+        "ERROR_PERMISSION_FLATPAK": "Dostęp do pliku zabroniony. Przyznaj uprawnienia do systemu plików za pomocą Flatseal lub użyj ścieżki wewnątrz ~/var/app/",
+        "ERROR_PERMISSION_SNAP": "Dostęp do pliku zabroniony. Uruchom 'snap connect super-productivity:home' lub użyj ścieżki wewnątrz ~/snap/super-productivity/common/",
         "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "Serwer synchronizacji odpowiedział stroną internetową zamiast Twoimi danymi synchronizacji (np. stroną logowania, proxy lub błędu). Dane zdalne są prawdopodobnie nienaruszone — sprawdź adres serwera, dane logowania i sieć, a następnie spróbuj ponownie. Jeśli problem się powtarza, możesz nadpisać dane zdalne przez Ustawienia synchronizacji → Wymuś nadpisanie.",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Błąd podczas synchronizacji. Nie można odczytać danych zdalnych. Być może włączyłeś szyfrowanie, a lokalne hasło nie odpowiada temu, którego użyto do zaszyfrowania danych zdalnych?",
         "FINISH_DAY_SYNC_ERROR": "Błąd synchronizacji podczas kończenia dnia. Spróbuj ponownie.",
@@ -1824,14 +1824,14 @@
     },
     "TASK": {
       "ADD_TASK_BAR": {
-        "ADD_EXISTING_TASK": "Dodaj existing task \"{{taskTitle}}\"",
+        "ADD_EXISTING_TASK": "Dodaj istniejące zadanie \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "Utwórz nowe tagi",
         "DUE_BUTTON": "Zaplanuj",
         "ESTIMATE_BUTTON": "Szacowanie",
         "PLACEHOLDER_CREATE": "Tytuł zadania #tag @16:00",
-        "PLACEHOLDER_SEARCH": "Dodaj istniejące zadanie lub problemy...",
+        "PLACEHOLDER_SEARCH": "Dodaj istniejące zadanie lub zgłoszenia...",
         "REPEAT_BUTTON": "Powtórz",
-        "SEARCH_INFO_TEXT": "Wyszukaj i dodaj problemy oraz zadania z archiwum i innych projektów",
+        "SEARCH_INFO_TEXT": "Wyszukaj i dodaj zgłoszenia oraz zadania z archiwum i innych projektów",
         "TAGS_BUTTON": "Tagi",
         "TODAY": "Dzisiaj",
         "TOGGLE_ADD_TO_BACKLOG_TODAY": "Przełącz dodawanie zadania do backlogu / dzisiejszej listy",
@@ -1846,8 +1846,8 @@
         "TOOLTIP_CLEAR_ESTIMATE": "Wyczyść szacowanie",
         "TOOLTIP_CLEAR_REPEAT": "Wyczyść ustawienie powtarzania",
         "TOOLTIP_CLEAR_TAGS": "Wyczyść tagi",
-        "TOOLTIP_DISABLE_SEARCH": "Wyłącz wyszukiwanie problemów (Ctrl+2)",
-        "TOOLTIP_ENABLE_SEARCH": "Włącz wyszukiwanie problemów (Ctrl+2)",
+        "TOOLTIP_DISABLE_SEARCH": "Wyłącz wyszukiwanie zgłoszeń (Ctrl+2)",
+        "TOOLTIP_ENABLE_SEARCH": "Włącz wyszukiwanie zgłoszeń (Ctrl+2)",
         "NOTE_PLACEHOLDER": "Dodaj notatkę… (Ctrl+Enter dodaje zadanie)",
         "TOOLTIP_CLEAR_DEADLINE": "Wyczyść termin",
         "TOOLTIP_NOTE": "Notatka (Ctrl+2)"
@@ -1858,7 +1858,7 @@
         "ATTACHMENTS": "Załączniki ({{nr}})",
         "CHECKLIST": "Lista kontrolna",
         "COMPLETED_ON": "Ukończono",
-        "CREATED_ON": "Utworzone na ",
+        "CREATED_ON": "Utworzono",
         "DEADLINE": "Termin ostateczny",
         "DEADLINE_DUE_BY": "Termin do",
         "DEADLINE_OVERDUE": "Po terminie!",
@@ -2133,8 +2133,8 @@
       "SELECT_OR_CREATE": "Wybierz lub utwórz zadanie",
       "SUMMARY_TABLE": {
         "ESTIMATE": "Szacowanie",
-        "SPENT_TODAY": "Spędzone dziś",
-        "SPENT_TOTAL": "Spędzone łącznie",
+        "SPENT_TODAY": "Spędzono dziś",
+        "SPENT_TOTAL": "Spędzono łącznie",
         "TASK": "Zadanie",
         "TOGGLE_DONE": "Oznacz/odznacz jako ukończone"
       }
@@ -2146,7 +2146,7 @@
         "CUSTOM_WEEKLY": "{{daysStr}}",
         "CUSTOM_WEEKLY_AND_TIME": "{{daysStr}}, {{timeStr}}",
         "DAILY": "Codziennie",
-        "DAILY_AND_TIME": "Każdego dnia, {{timeStr}}",
+        "DAILY_AND_TIME": "Codziennie, {{timeStr}}",
         "EVERY_X_DAILY": "Co {{x}} dni",
         "EVERY_X_DAILY_AND_TIME": "Co {{x}} dni, {{timeStr}}",
         "EVERY_X_MONTHLY": "Co {{x}} miesięcy",
@@ -2155,16 +2155,16 @@
         "EVERY_X_YEARLY_AND_TIME": "Co {{x}} lat, {{timeStr}}",
         "MONDAY_TO_FRIDAY": "Od poniedziałku do piątku",
         "MONDAY_TO_FRIDAY_AND_TIME": "Poniedziałek-piątek, {{timeStr}}",
-        "MONTHLY_CURRENT_DATE": "Miesięcznie {{dateDayStr}}dnia",
-        "MONTHLY_CURRENT_DATE_AND_TIME": "Miesięcznie w dniu {{dateDayStr}}th, {{timeStr}}",
-        "WEEKLY_CURRENT_WEEKDAY": "Co tydzień na {{weekdayStr}}",
-        "WEEKLY_CURRENT_WEEKDAY_AND_TIME": "Tygodniowo na {{weekdayStr}}, {{timeStr}}",
-        "YEARLY_CURRENT_DATE": "Rocznie na {{dayAndMonthStr}}",
-        "YEARLY_CURRENT_DATE_AND_TIME": "Rocznie {{dayAndMonthStr}}, {{timeStr}}",
-        "MONTHLY_LAST_DAY": "Co miesiąc w ostatnim dniu",
-        "MONTHLY_LAST_DAY_AND_TIME": "Co miesiąc w ostatnim dniu, {{timeStr}}",
-        "MONTHLY_NTH_WEEKDAY": "Co miesiąc: {{weekdayStr}} — {{ordinalStr}}",
-        "MONTHLY_NTH_WEEKDAY_AND_TIME": "Co miesiąc: {{weekdayStr}} — {{ordinalStr}}, {{timeStr}}"
+        "MONTHLY_CURRENT_DATE": "Co miesiąc, {{dateDayStr}}. dnia",
+        "MONTHLY_CURRENT_DATE_AND_TIME": "Co miesiąc, {{dateDayStr}}. dnia, {{timeStr}}",
+        "WEEKLY_CURRENT_WEEKDAY": "{{weekdayStr}} co tydzień",
+        "WEEKLY_CURRENT_WEEKDAY_AND_TIME": "{{weekdayStr}} co tydzień, {{timeStr}}",
+        "YEARLY_CURRENT_DATE": "Co rok, {{dayAndMonthStr}}",
+        "YEARLY_CURRENT_DATE_AND_TIME": "Co rok, {{dayAndMonthStr}}, {{timeStr}}",
+        "MONTHLY_LAST_DAY": "Co miesiąc, ostatniego dnia",
+        "MONTHLY_LAST_DAY_AND_TIME": "Co miesiąc, ostatniego dnia o {{timeStr}}",
+        "MONTHLY_NTH_WEEKDAY": "Co miesiąc, {{ordinalStr}} {{weekdayStr}}",
+        "MONTHLY_NTH_WEEKDAY_AND_TIME": "Co miesiąc, {{ordinalStr}} {{weekdayStr}}, {{timeStr}}"
       },
       "D_CONFIRM_MOVE_TO_PROJECT": {
         "MSG": "Dla tego powtarzalnego zadania utworzono {{tasksNr}} instancji. Czy chcesz przenieść je wszystkie do projektu \"{{projectName}}\"?",
@@ -2210,14 +2210,14 @@
         "Q_DAILY": "Codziennie",
         "Q_EVERY_X_DAYS": "Co {{count}} dni",
         "Q_EVERY_X_MONTHS": "Co {{count}} miesięcy",
-        "Q_EVERY_X_WEEKS": "Co {{count}} tygodni w {{weekdayStr}}",
+        "Q_EVERY_X_WEEKS": "Co {{count}} tygodni, {{weekdayStr}}",
         "Q_EVERY_X_YEARS": "Co {{count}} lat",
         "Q_MONDAY_TO_FRIDAY": "Od poniedziałku do piątku",
-        "Q_MONTHLY_CURRENT_DATE": "Co miesiąc {{dateDayStr}}. dnia",
-        "Q_MONTHLY_FIRST_DAY": "Co miesiąc w pierwszy dzień",
-        "Q_MONTHLY_LAST_DAY": "Co miesiąc w ostatni dzień",
+        "Q_MONTHLY_CURRENT_DATE": "Co miesiąc, {{dateDayStr}}. dnia",
+        "Q_MONTHLY_FIRST_DAY": "Co miesiąc, pierwszego dnia",
+        "Q_MONTHLY_LAST_DAY": "Co miesiąc, ostatniego dnia",
         "Q_WEEKLY_CURRENT_WEEKDAY": "Każdy/a {{weekdayStr}}",
-        "Q_YEARLY_CURRENT_DATE": "Co rok w dniu {{dayAndMonthStr}}",
+        "Q_YEARLY_CURRENT_DATE": "Co rok, {{dayAndMonthStr}}",
         "QUICK_SETTING": "Konfiguracja powtarzania",
         "REMIND_AT": "Przypomnienie na stronie",
         "REMIND_AT_PLACEHOLDER": "Wybierz, kiedy przypomnieć",
@@ -2243,15 +2243,15 @@
         "ORD_LAST": "ostatni",
         "ORD_SECOND": "drugi",
         "ORD_THIRD": "trzeci",
-        "Q_MONTHLY_NTH_WEEKDAY": "Co miesiąc: {{weekdayStr}} — {{ordinalStr}}",
+        "Q_MONTHLY_NTH_WEEKDAY": "Co miesiąc, {{ordinalStr}} {{weekdayStr}}",
         "WEEK_OF_MONTH": "Tydzień miesiąca",
         "WEEKDAY": "Dzień tygodnia",
         "MONTHLY_MODE_DAY_OF_MONTH_DESCRIPTION": "„Dzień miesiąca” używa dnia wskazanego w polu Data rozpoczęcia.",
-        "ORD_FIRST_NTH": "pierwsze wystąpienie",
-        "ORD_FOURTH_NTH": "czwarte wystąpienie",
-        "ORD_LAST_NTH": "ostatnie wystąpienie",
-        "ORD_SECOND_NTH": "drugie wystąpienie",
-        "ORD_THIRD_NTH": "trzecie wystąpienie",
+        "ORD_FIRST_NTH": "pierwszy/a",
+        "ORD_FOURTH_NTH": "czwarty/a",
+        "ORD_LAST_NTH": "ostatni/a",
+        "ORD_SECOND_NTH": "drugi/a",
+        "ORD_THIRD_NTH": "trzeci/a",
         "WAIT_FOR_COMPLETION": "Utwórz następne zadanie dopiero po ukończeniu",
         "WAIT_FOR_COMPLETION_DESCRIPTION": "Zapobiega gromadzeniu się wielu oczekujących zadań cyklicznych. Następne wystąpienie zostanie utworzone dopiero po ukończeniu bieżącego zadania",
         "WEEKDAY_REQUIRED": "Wybierz co najmniej jeden dzień tygodnia"
@@ -2339,7 +2339,7 @@
         "IDLE_FOR": "Nie pracowałeś przez:",
         "RESET_BREAK_REMINDER_TIMER": "Zresetuj timer przypomnienia o przerwie",
         "SIMPLE_CONFIRM_COUNTER_CANCEL": "Pomiń",
-        "SIMPLE_CONFIRM_COUNTER_OK": "Ścieżka",
+        "SIMPLE_CONFIRM_COUNTER_OK": "Śledź",
         "SIMPLE_COUNTER_CONFIRM_TXT": "Wybrałeś pomijanie, ale aktywowałeś {{nr}} przyciski prostego licznika. Czy chcesz śledzić czas bezczynności?",
         "SIMPLE_COUNTER_TOOLTIP": "Kliknij, aby przejść do {{title}}.",
         "SIMPLE_COUNTER_TOOLTIP_DISABLE": "Kliknij, aby NIE śledzić do {{title}}.",
@@ -2395,7 +2395,7 @@
       "CMP": {
         "DAYS_WORKED": "Przepracowane dni:",
         "MONTH_WORKED": "Przepracowany miesiąc:",
-        "REPEATING_TASK": "Powtarzające zadanie",
+        "REPEATING_TASK": "Powtarzające się zadanie",
         "RESTORE_TASK_FROM_ARCHIVE": "Przywróć zadanie z archiwum",
         "TASKS": "Zadania",
         "TOTAL_TIME": "Całkowity czas spędzony:",
@@ -2418,8 +2418,8 @@
         "GROUP_BY": "Grupuj według",
         "O": {
           "DATE": "Data",
-          "ENDED_WORKING": "Zakończono pracę",
-          "ESTIMATE_AS_CLOCK": "Szacowanie jako zegar (np. 5:23)",
+          "ENDED_WORKING": "Koniec pracy",
+          "ESTIMATE_AS_CLOCK": "Szacowanie jako godzina (np. 5:23)",
           "ESTIMATE_AS_MILLISECONDS": "Szacowanie w milisekundach",
           "ESTIMATE_AS_STRING": "Szacowanie jako tekst (np. 5h 23m)",
           "FULL_HALF_HOURS": "Pełne pół godziny",
@@ -2427,28 +2427,28 @@
           "FULL_QUARTERS": "Pełne kwadranse",
           "NOTES": "Opisy zadań",
           "PARENT_TASK": "Zadanie nadrzędne",
-          "PARENT_TASK_TITLES_ONLY": "Tylko tytuły zadań nadrzędnych",
+          "PARENT_TASK_TITLES_ONLY": "Tytuły zadań nadrzędnych",
           "PROJECTS": "Nazwy projektów",
-          "STARTED_WORKING": "Rozpoczęto pracę",
+          "STARTED_WORKING": "Start pracy",
           "TAGS": "Tagi",
           "TASK_SUBTASK": "Zadanie/podzadanie",
-          "TIME_AS_CLOCK": "Czas jako zegar (np. 5:23)",
-          "TIME_AS_MILLISECONDS": "Czas w milisekundach",
-          "TIME_AS_STRING": "Czas jako tekst (np. 5h 23m)",
-          "TITLES_AND_SUB_TASK_TITLES": "Tytuły oraz tytuły podzadań",
+          "TIME_AS_CLOCK": "Czas pracy jako godzina (np. 5:23)",
+          "TIME_AS_MILLISECONDS": "Czas pracy w milisekundach",
+          "TIME_AS_STRING": "Czas pracy jako tekst (np. 5h 23m)",
+          "TITLES_AND_SUB_TASK_TITLES": "Tytuły zadań i podzadań",
           "WORKLOG": "Dziennik pracy"
         },
         "OPTIONS": "Opcje",
-        "ROUND_END_TIME_TO": "Zaokrąglaj czas zakończenia do",
-        "ROUND_START_TIME_TO": "Zaokrąglaj czas rozpoczęcia do",
-        "ROUND_TIME_WORKED_TO": "Zaokrąglaj czas pracy do",
+        "ROUND_END_TIME_TO": "Zaokrąglij koniec pracy",
+        "ROUND_START_TIME_TO": "Zaokrąglij start pracy",
+        "ROUND_TIME_WORKED_TO": "Zaokrąglij czas pracy",
         "SAVE_TO_FILE": "Zapisz do pliku",
-        "SEPARATE_TASKS_BY": "Rozdzielaj zadania przez",
+        "SEPARATE_TASKS_BY": "Oddziel zadania za pomocą",
         "SHOW_AS_TEXT": "Pokaż jako tekst"
       },
       "WEEK": {
-        "EXPORT": "Eksport danych tygodnia",
-        "FOCUS_SUMMARY": "Sesje skupienia (nr / czas)",
+        "EXPORT": "Eksportuj dane tygodnia",
+        "FOCUS_SUMMARY": "Sesje skupienia (liczba / czas)",
         "NO_DATA": "Brak zadań w tym tygodniu.",
         "TITLE": "Tytuł"
       }
@@ -2738,7 +2738,7 @@
       "TOGGLE_BACKLOG": "Pokaż/ukryj Zadanie Backlogu",
       "TOGGLE_ISSUE_PANEL": "Pokaż/ukryj panel zgłoszeń",
       "TOGGLE_PLAY": "Start/stop zliczania czasu",
-      "TOGGLE_SIDE_NAV": "Wyróżnij panel boczny",
+      "TOGGLE_SIDE_NAV": "Pokaż/ukryj panel boczny",
       "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "Przełącz panel filtrów/grup/sortowania",
       "TRIGGER_SYNC": "Synchronizuj (gdy skonfigurowane)",
       "ZOOM_DEFAULT": "Domyślne powiększenie (tylko desktop)",
@@ -2755,7 +2755,7 @@
     },
     "LANG": {
       "AR": "عربى",
-      "CS": "Czechy",
+      "CS": "Czeski",
       "DE": "Deutsch",
       "EN": "Angielski",
       "ES": "Español",
@@ -2909,7 +2909,7 @@
       "ADD_NEW_IMG": "Dodaj motywujący obraz",
       "FULL_SCREEN_BLOCKER_DURATION": "Czas wyświetlania okna pełnoekranowego (tylko desktop)",
       "HELP": "<div><p>Pozwala skonfigurować powiadomienie o przerwie, gdy pracujesz przez określony czas bez przerwy.</p></div>",
-      "IS_ENABLED": "Włącz take a break reminder",
+      "IS_ENABLED": "Włącz przypomnienie o przerwie",
       "IS_FOCUS_WINDOW": "Uaktywnij okno aplikacji, gdy przypomnienie jest aktywne (tylko desktop)",
       "IS_FULL_SCREEN_BLOCKER": "Wyświetlanie wiadomości w oknie pełnoekranowym (tylko desktop)",
       "IS_LOCK_SCREEN": "Zablokuj ekran, gdy pora na przerwę (tylko desktop)",
@@ -2950,7 +2950,7 @@
     }
   },
   "GLOBAL": {
-    "COPY_SUFFIX": " (kopiuj)"
+    "COPY_SUFFIX": " (kopia)"
   },
   "GLOBAL_RELATIVE_TIME": {
     "FUTURE": {
@@ -3086,7 +3086,7 @@
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Czy chcesz pobrać kopię zapasową starszych danych (może być używana ze starszymi wersjami Super Productivity)?",
-    "DETECTED_LEGACY": "Wykryto starsze dane. Przeniesiemy go za Ciebie!",
+    "DETECTED_LEGACY": "Wykryto starsze dane. Przeniesiemy je za Ciebie!",
     "DIALOG_MESSAGE": "Aktualizujemy sposób przechowywania danych w celu poprawy niezawodności synchronizacji. Kopia zapasowa zostanie pobrana automatycznie.",
     "DIALOG_TITLE": "Migracja danych",
     "DIALOG_TITLE_ERROR": "Migracja nie powiodła się",
@@ -3138,12 +3138,12 @@
     "SYNC_CTA_LINK": "Skonfiguruj synchronizację"
   },
   "PDS": {
-    "ADD_TASKS_FROM_TODAY": "Dodawanie zadań od listy Dzisiaj",
+    "ADD_TASKS_FROM_TODAY": "Dodaj zadania z listy Dzisiaj",
     "ARCHIVED_TASKS": {
       "ONE": "{{count}} ukończone zadanie nadrzędne zostało zarchiwizowane",
-      "OTHER": "{{count}} ukończone zadania nadrzędne zostały zarchiwizowane"
+      "OTHER": "{{count}} ukończonych zadań nadrzędnych zostało zarchiwizowanych"
     },
-    "BREAK_LABEL": "Przerwy (nr / czas)",
+    "BREAK_LABEL": "Przerwy (liczba / czas)",
     "CELEBRATE": "Czas na <i>świętowanie!</i>",
     "CLEAR_ALL_CONTINUE": "Wyczyść wszystkie zakończone i kontynuuj",
     "D_CONFIRM_APP_CLOSE": {
@@ -3151,30 +3151,30 @@
       "MSG": "Zamknąć aplikację?",
       "OK": "Zamknij"
     },
-    "END_OF_DAYS_RITUALS_PLACEHOLDER": "Możesz użyć tej przestrzeni, aby zapisać własne rytuały końca dnia, o których chcesz być przypominany.",
+    "END_OF_DAYS_RITUALS_PLACEHOLDER": "Możesz w tym miejscu zapisać swoje osobiste rytuały na koniec dnia, o których chcesz być przypominany.",
     "ESTIMATE_TOTAL": "Łączna wartość szacunkowa:",
     "EVALUATE_DAY": "OCENA",
-    "EXPORT_TASK_LIST": "Eksportuj listę Zadań",
+    "EXPORT_TASK_LIST": "Eksportuj listę zadań",
     "FOCUS_SUMMARY": "Sesje skupienia",
     "NO_TASKS": "Nie ma żadnych zadań na dziś",
     "PLAN_TOMORROW": "Plan",
     "REVIEW_TASKS": "Recenzja",
-    "ROUND_5M": "Zaokrągl czas zadań do 5 minut",
-    "ROUND_15M": "Zaokrągl czas zadań do 15 minut",
-    "ROUND_30M": "Zaokrągl czas zadań do 30 minut",
-    "ROUND_TIME_SPENT": "Zaokrągl Spęczony Czas",
-    "ROUND_TIME_SPENT_TITLE": "Zaokrągl czas dla wszystkich zadań. Bądź ostroży, bo tego nie zofniesz!",
-    "ROUND_TIME_WARNING": "!!! Uważaj, bo tego nie da się odwrócić !!!",
-    "ROUND_UP_5M": "Zaokrągl czas zadań W GÓRĘ do 5 minut",
-    "ROUND_UP_15M": "Zaokrągl czas zadań W GÓRĘ do 15 minut",
-    "ROUND_UP_30M": "Zaokrągl czas zadań W GÓRĘ do 30 minut",
+    "ROUND_5M": "Zaokrąglij czas zadań do 5 minut",
+    "ROUND_15M": "Zaokrąglij czas zadań do 15 minut",
+    "ROUND_30M": "Zaokrąglij czas zadań do 30 minut",
+    "ROUND_TIME_SPENT": "Zaokrąglij spędzony czas",
+    "ROUND_TIME_SPENT_TITLE": "Zaokrąglij czas dla wszystkich zadań. Bądź ostrożny, bo tego nie cofniesz!",
+    "ROUND_TIME_WARNING": "!!! Uważaj, bo tego nie da się cofnąć !!!",
+    "ROUND_UP_5M": "Zaokrąglij czas zadań W GÓRĘ do 5 minut",
+    "ROUND_UP_15M": "Zaokrąglij czas zadań W GÓRĘ do 15 minut",
+    "ROUND_UP_30M": "Zaokrąglij czas zadań W GÓRĘ do 30 minut",
     "SAVE_AND_GO_HOME": "Zakończ dzień",
     "SAVE_AND_GO_HOME_TOOLTIP": "Przenieś wszystkie wykonane zadania do archiwum (dziennika zadań) i opcjonalnie zsynchronizuj wszystkie dane, a następnie zamknij aplikację.",
     "START_END": "Start – Koniec",
-    "SUMMARY_FOR": "Dzienne Podsumiwanie {{dayStr}}",
+    "SUMMARY_FOR": "Dzienne podsumowanie {{dayStr}}",
     "TASKS_COMPLETED": "Zadania ukończone",
     "TIME_SPENT_AND_ESTIMATE_LABEL": "Czas spędzony / Estymacja",
-    "TIME_SPENT_ESTIMATE_TITLE": "Czas spędzony: Całkowity czas spędzony. Nie liczymy zadań zarchiwowanych. – Estymacja: Czas zaplanowany na wykonane zadania bez czasu pracy wykonanym w innych dniach.",
+    "TIME_SPENT_ESTIMATE_TITLE": "Czas spędzony: Całkowity czas spędzony. Nie liczymy zadań zarchiwizowanych. – Estymacja: Czas zaplanowany na wykonane zadania bez czasu pracy wykonanym w innych dniach.",
     "TIME_SPENT_TODAY_BY_TAG": "Czas spędzony dzisiaj według tagów",
     "WEEK": "Tydzień"
   },
@@ -3250,8 +3250,8 @@
     "RISK_PERFORMANCE": "Źle napisane wtyczki mogą powodować problemy z wydajnością lub awarie",
     "RISK_SYSTEM_ACCESS": "Wtyczki na pulpicie z uprawnieniami Node.js mogą wykonywać polecenia systemowe",
     "SECURITY_WARNING": "Wtyczki mają znaczący dostęp do Twoich danych i systemu. Instalowanie niezaufanych wtyczek stanowi poważne ryzyko bezpieczeństwa:",
-    "SIDE_PANEL_LABEL_REQUIRED": "Wymagany jest etykieta przycisku panelu bocznego",
-    "SIDE_PANEL_ONCLICK_REQUIRED": "Wymagany jest obsługiwacz zdarzenia onClick przycisku panelu bocznego",
+    "SIDE_PANEL_LABEL_REQUIRED": "Wymagana jest etykieta przycisku panelu bocznego",
+    "SIDE_PANEL_ONCLICK_REQUIRED": "Wymagana jest obsługa zdarzenia onClick przycisku panelu bocznego",
     "SYSTEM_ACCESS_REQUEST_DESC": "Ta wtyczka żąda uprawnienia do wykonywania kodu Node.js na Twoim systemie. Pozwoli to na:",
     "SYSTEM_ACCESS_REQUEST_TITLE": "Żądanie dostępu do systemu",
     "TAGS_DO_NOT_EXIST": "Jeden lub więcej tagów nie istnieje",
