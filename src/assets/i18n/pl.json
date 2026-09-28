@@ -434,7 +434,7 @@
         "FILTER_USER": "Nazwa użytkownika (e.g. to filter out changes by yourself)",
         "GITLAB_BASE_URL": "Własne URL do GitLab",
         "PROJECT": "ID projektu lub nazwa użytkownika/projekt",
-        "PROJECT_HINT": "np. johannesjo/super-superproductivity",
+        "PROJECT_HINT": "Ścieżka projektu (namespace/project-slug) lub numeryczny identyfikator projektu, a nie wyświetlana nazwa (np.johannesjo/super-superproductivity lub 12345)",
         "SCOPE": "Zakres",
         "SCOPE_ALL": "Wszystkie",
         "SCOPE_ASSIGNED": "Przypisane do mnie",
