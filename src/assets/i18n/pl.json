@@ -1703,7 +1703,7 @@
         "CREATED_SUCCESS": "Ręczna kopia zapasowa została pomyślnie utworzona",
         "DELETE_FAILED": "Nie udało się usunąć kopii zapasowej",
         "DELETED_SUCCESS": "Kopia zapasowa została pomyślnie usunięta",
-        "DESCRIPTION": "Automatyczne kopie zapasowe są tworzone przed pobraniem danych zdalnych podczas operacji synchronizacji. Kopie zapasowe są organizowane w 4 inteligentnych slotach: 2 najnowsze, 1 pierwsza z dzisiaj i 1 pierwsza z dnia przed dzisiaj.",
+        "DESCRIPTION": "Automatyczne kopie zapasowe są tworzone przed pobraniem danych zdalnych podczas operacji synchronizacji. Kopie zapasowe są organizowane w 4 inteligentnych slotach: 2 najnowsze, 1 pierwsza z Dzisiaj i 1 pierwsza z dnia przed Dzisiaj.",
         "LAST_CHANGE_PREFIX": "Ostatnia zmiana:",
         "LOADING": "Ładowanie...",
         "NO_BACKUPS": "Brak dostępnych kopii zapasowych bezpieczeństwa. Kopie zapasowe są tworzone automatycznie przed operacjami synchronizacji.",
@@ -1961,18 +1961,18 @@
         "SET_DEADLINE": "Ustaw termin"
       },
       "D_REMINDER_VIEW": {
-        "ADD_ALL_TO_TODAY": "Dodaj wszystkie do dzisiaj",
-        "ADD_TO_TODAY": "Dodaj to today",
+        "ADD_ALL_TO_TODAY": "Dodaj wszystkie do Dzisiaj",
+        "ADD_TO_TODAY": "Dodaj to Dzisiaj",
         "CLEAR_ALL_REMINDERS": "Wyczyść wszystkie przypomnienia",
         "CLEAR_REMINDER": "Wyczyść przypomnienie",
         "COMPLETE": "Zakończ",
         "COMPLETE_ALL": "Zakończ wszystkie",
         "DEADLINE_REMINDER": "Przypomnienie o terminie",
         "DEADLINE_SECTION": "Terminy",
-        "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Odrzuć wszystkie przypomnienia (Zachowaj w dzisiaj)",
-        "DISMISS_REMINDER_KEEP_TODAY": "Odrzuć przypomnienie (Zachowaj w dzisiaj)",
+        "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Odrzuć wszystkie przypomnienia (Zachowaj w Dzisiaj)",
+        "DISMISS_REMINDER_KEEP_TODAY": "Odrzuć przypomnienie (Zachowaj w Dzisiaj)",
         "DONE": "Gotowe",
-        "DUE_SECTION": "Zaplanowany",
+        "DUE_SECTION": "Zaplanowane na",
         "DUE_TASK": "Zaplanowane zadanie",
         "DUE_TASKS": "Zaplanowane zadania",
         "RESCHEDULE_EDIT": "Edytuj (Zmień harmonogram)",
@@ -2922,7 +2922,7 @@
     },
     "TASKS": {
       "DEFAULT_PROJECT": "Domyślny projekt dla nowych zadań",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Automatycznie dodawaj zadania, nad którymi pracowano, do dzisiaj",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Automatycznie dodawaj zadania, nad którymi pracowano, do listy Dzisiaj",
       "IS_AUTO_MARK_PARENT_AS_DONE": "Automatycznie oznaczaj zadanie nadrzędne jako ukończone, gdy ukończono wszystkie podzadania",
       "IS_CONFIRM_BEFORE_DELETE": "Potwierdzaj przed usunięciem zadań",
       "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Włącz formatowanie Markdown w notatkach zadań",
@@ -2997,7 +2997,7 @@
     "SHARE_FAILED": "Udostępnianie nie powiodło się. Proszę skopiować ręcznie.",
     "SHARE_FAILED_FALLBACK": "Udostępnianie nie powiodło się. Zamiast tego skopiowano do schowka.",
     "SHARE_UNAVAILABLE_FALLBACK": "Skopiowano do schowka.",
-    "UNPLANNED_TODAY_TASKS": "Odplanowano wszystkie zadania z Dzisiaj"
+    "UNPLANNED_TODAY_TASKS": "Odplanowano wszystkie zadania z listy Dzisiaj"
   },
   "GPB": {
     "ASSETS": "Ładowanie zasobów...",
@@ -3138,7 +3138,7 @@
     "SYNC_CTA_LINK": "Skonfiguruj synchronizację"
   },
   "PDS": {
-    "ADD_TASKS_FROM_TODAY": "Dodawanie zadań od dzisiaj",
+    "ADD_TASKS_FROM_TODAY": "Dodawanie zadań od listy Dzisiaj",
     "ARCHIVED_TASKS": {
       "ONE": "{{count}} ukończone zadanie nadrzędne zostało zarchiwizowane",
       "OTHER": "{{count}} ukończone zadania nadrzędne zostały zarchiwizowane"
