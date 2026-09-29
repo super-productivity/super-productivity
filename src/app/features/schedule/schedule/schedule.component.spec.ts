@@ -421,6 +421,45 @@ describe('ScheduleComponent', () => {
       expect(newDate?.getDate()).toBe(1); // First of month
     });
 
+    it('should allow month navigation when today appears only as a padding day in the next month grid', () => {
+      // Arrange - reproduce #10451:
+      // Sep 29, 2026 is Tuesday and the week starts on Monday.
+      // October's first calendar row therefore starts on Sep 28,
+      // making Sep 29 visible as a padding day.
+      component['_todayDateStr'] = signal('2026-09-29');
+
+      mockLayoutService.selectedTimeView.set('month');
+
+      mockScheduleService.getMonthDaysToShow.and.returnValue([
+        '2026-09-28',
+        '2026-09-29',
+        '2026-09-30',
+        '2026-10-01',
+        '2026-10-02',
+        '2026-10-03',
+        '2026-10-04',
+      ]);
+
+      component['_selectedDate'].set(new Date(2026, 9, 1));
+      fixture.detectChanges();
+
+      // Today is technically visible because Sep 29 is a padding day.
+      expect(component.isViewingToday()).toBe(true);
+
+      // But October is not the current month, so month navigation controls
+      // should remain available.
+      expect(component['_isPreviousPeriodDisabled']()).toBe(false);
+      expect(component['_isTodayButtonDisabled']()).toBe(false);
+
+      // Previous should navigate from October back to September.
+      component.goToPreviousPeriod();
+
+      const newDate = component['_selectedDate']();
+      expect(newDate?.getFullYear()).toBe(2026);
+      expect(newDate?.getMonth()).toBe(8); // September
+      expect(newDate?.getDate()).toBe(1);
+    });
+
     it('should go to previous year when navigating from January in month view', () => {
       // Arrange
       mockLayoutService.selectedTimeView.set('month');

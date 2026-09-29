@@ -123,6 +123,52 @@ export class ScheduleComponent {
     return todayStr ? this.daysToShow().includes(todayStr) : false;
   });
 
+  protected _isPreviousPeriodDisabled = computed(() => {
+    if (!this.isMonthView()) {
+      return this.isViewingToday();
+    }
+
+    const selectedDate = this._selectedDate();
+
+    if (selectedDate === null) {
+      return true;
+    }
+
+    const todayStr = this._todayDateStr();
+    if (!todayStr) {
+      return false;
+    }
+
+    const [year, month] = todayStr.split('-').map(Number);
+
+    const selectedMonth = selectedDate.getFullYear() * 12 + selectedDate.getMonth();
+    const currentMonth = year * 12 + (month - 1);
+
+    return selectedMonth <= currentMonth;
+  });
+
+  protected _isTodayButtonDisabled = computed(() => {
+    if (!this.isMonthView()) {
+      return this.isViewingToday();
+    }
+
+    const selectedDate = this._selectedDate();
+
+    // null means we're already viewing the current month.
+    if (selectedDate === null) {
+      return true;
+    }
+
+    const todayStr = this._todayDateStr();
+    if (!todayStr) {
+      return false;
+    }
+
+    const [year, month] = todayStr.split('-').map(Number);
+
+    return selectedDate.getFullYear() === year && selectedDate.getMonth() === month - 1;
+  });
+
   protected _todayDateStr = toSignal(this._globalTrackingIntervalService.todayDateStr$);
   private _windowSize = toSignal(
     fromEvent(window, 'resize').pipe(
@@ -318,9 +364,6 @@ export class ScheduleComponent {
   });
 
   goToPreviousPeriod(): void {
-    // Never navigate into the past — the displayed range must include today or later
-    if (this.isViewingToday()) return;
-
     const currentDate = this._selectedDate() || new Date();
     const selectedView = this._currentTimeViewMode();
 
@@ -332,6 +375,8 @@ export class ScheduleComponent {
       );
       this._selectedDate.set(previousMonth);
     } else {
+      if (this.isViewingToday()) return;
+
       const daysToSkip = this.daysToShow().length;
       const previousPeriod = new Date(currentDate);
       previousPeriod.setDate(currentDate.getDate() - daysToSkip);
@@ -340,6 +385,7 @@ export class ScheduleComponent {
       // If going back would land on or before today, snap to "today view" (null)
       const todayMidnight = new Date();
       todayMidnight.setHours(0, 0, 0, 0);
+
       if (previousPeriod.getTime() <= todayMidnight.getTime()) {
         this._selectedDate.set(null);
       } else {
