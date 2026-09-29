@@ -296,9 +296,10 @@ const priorityPresets: BaseOption<FILTER_COMMON | FILTER_PRIORITY>[] = [
     type: FILTER_COMMON.NOT_SPECIFIED,
     label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_NOT_SPECIFIED,
   },
-  { type: FILTER_PRIORITY.high, label: T.F.TASK.CMP.PRIORITY_HIGH },
-  { type: FILTER_PRIORITY.medium, label: T.F.TASK.CMP.PRIORITY_MEDIUM },
+  // Lowest first, like the priority menus.
   { type: FILTER_PRIORITY.low, label: T.F.TASK.CMP.PRIORITY_LOW },
+  { type: FILTER_PRIORITY.medium, label: T.F.TASK.CMP.PRIORITY_MEDIUM },
+  { type: FILTER_PRIORITY.high, label: T.F.TASK.CMP.PRIORITY_HIGH },
 ];
 
 export const OPTIONS = {

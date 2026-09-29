@@ -416,6 +416,22 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     menu.focusFirstItem('program');
   }
 
+  /**
+   * For radio-style submenus: focus the checked item so opening the menu and
+   * pressing Enter keeps the current choice. Falls back to the first item.
+   * `MatMenuItem.focus()` also moves the menu's key manager to that item.
+   */
+  focusCheckedSubmenuItem(menu: MatMenu): void {
+    const checked = menu._allItems.find(
+      (item) => item._getHostElement().getAttribute('aria-checked') === 'true',
+    );
+    if (checked) {
+      checked.focus('program');
+    } else {
+      menu.focusFirstItem('program');
+    }
+  }
+
   /** Touch entry point into multi-selection (there is no modifier key). */
   enterSelectionMode(): void {
     // The detail panel is single-task UI (a bottom sheet on touch); close it.

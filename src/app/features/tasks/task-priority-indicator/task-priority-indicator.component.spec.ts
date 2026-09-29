@@ -90,6 +90,10 @@ describe('TaskPriorityIndicatorComponent', () => {
     });
   }
 
+  it('takes up space for a known level', () => {
+    expect(getComputedStyle(create(2).nativeElement).display).toBe('inline-flex');
+  });
+
   it('uses the iconPreset input over the configured preset', () => {
     setPreset('chevrons');
     const fixture = TestBed.createComponent(TaskPriorityIndicatorComponent);
@@ -134,6 +138,8 @@ describe('TaskPriorityIndicatorComponent', () => {
       expect(() => (fixture = create('high' as unknown as TaskPriority))).not.toThrow();
       expect(glyph(fixture!)).toBeNull();
       expect(fixture!.nativeElement.textContent.trim()).toBe('');
+      // No empty 18px gap left in the row.
+      expect(getComputedStyle(fixture!.nativeElement).display).toBe('none');
     });
   }
 });

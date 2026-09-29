@@ -353,6 +353,8 @@ describe('TaskContextMenuInnerComponent', () => {
         'false',
       ]);
       expect(items[2].textContent).toContain('check');
+      // Opening focuses the current level, so Enter keeps it.
+      expect(document.activeElement).toBe(items[2]);
       expect(items[1].querySelector('task-priority-indicator')).not.toBeNull();
       closeMenus();
     }));
@@ -574,6 +576,38 @@ describe('TaskContextMenuInnerComponent', () => {
       component.focusFirstSubmenuItem(menu);
 
       expect(menu.focusFirstItem).toHaveBeenCalledWith('program');
+    });
+  });
+
+  describe('focusCheckedSubmenuItem()', () => {
+    const fakeItem = (
+      ariaChecked: string | null,
+    ): { focus: jasmine.Spy; _getHostElement: () => HTMLElement } => {
+      const el = document.createElement('button');
+      if (ariaChecked !== null) {
+        el.setAttribute('aria-checked', ariaChecked);
+      }
+      return { focus: jasmine.createSpy('focus'), _getHostElement: () => el };
+    };
+
+    it('focuses the checked item', () => {
+      const items = [fakeItem('false'), fakeItem('true'), fakeItem('false')];
+      const menu = { _allItems: items, focusFirstItem: jasmine.createSpy() };
+
+      component.focusCheckedSubmenuItem(menu as unknown as MatMenu);
+
+      expect(items[1].focus).toHaveBeenCalledWith('program');
+      expect(menu.focusFirstItem).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the first item when nothing is checked', () => {
+      const items = [fakeItem(null), fakeItem('false')];
+      const menu = { _allItems: items, focusFirstItem: jasmine.createSpy() };
+
+      component.focusCheckedSubmenuItem(menu as unknown as MatMenu);
+
+      expect(menu.focusFirstItem).toHaveBeenCalledWith('program');
+      expect(items[0].focus).not.toHaveBeenCalled();
     });
   });
 

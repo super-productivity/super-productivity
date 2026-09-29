@@ -7,6 +7,12 @@
   height: 18px;
 }
 
+// An unknown value (e.g. a stale test-build string) renders no glyph; don't
+// leave an empty 18px gap in the row.
+:host:empty {
+  display: none;
+}
+
 .glyph {
   display: inline-flex;
   align-items: center;
@@ -16,9 +22,9 @@
   height: 100%;
 }
 
-// Specific enough (0,3,1) to stay ahead of Material's global menu/option icon
-// rules, including their RTL variants (`[dir=rtl] .mat-mdc-menu-item .mat-icon`,
-// (0,3,0)), when the indicator sits in a menu item or select option.
+// `:host .glyph` makes this more specific than Material's global menu/option
+// icon rules, including their RTL variants (`[dir=rtl] .mat-mdc-menu-item
+// .mat-icon`), when the indicator sits in a menu item or select option.
 :host .glyph mat-icon {
   width: 18px;
   height: 18px;
@@ -62,8 +68,10 @@
 //
 // Each base colour is mixed toward the theme's strongest ink (black in light,
 // white in dark) to lift contrast against the task-row surface — the raw warning
-// orange is only ~2:1 on the light surface. High and Medium clear 4.5:1 in the
-// built-in themes; Low follows the user-chosen primary colour, so it is only
+// orange is only ~2:1 on the light surface. High and Medium clear 4.5:1 on the
+// default task-row surface in the built-in themes; on raised dark surfaces
+// (current/selected row, menu panels) High drops to ~3.4–4.3:1, still above the
+// 3:1 needed for icons. Low follows the user-chosen primary colour, so it is only
 // guaranteed ~3:1 (e.g. 3.4:1 for a yellow primary on white).
 :host[data-priority='3'] {
   color: color-mix(in srgb, var(--color-danger) 80%, var(--ink-strong));

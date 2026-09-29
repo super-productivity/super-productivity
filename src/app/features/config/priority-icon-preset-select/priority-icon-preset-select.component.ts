@@ -18,7 +18,7 @@ const PRESET_LABEL_KEY: Record<TaskPriorityIconPreset, string> = {
 
 /**
  * Select for `tasks.priorityIconPreset` that previews each preset with the real
- * priority indicator (High, Medium, Low), both in the options and in the closed
+ * priority indicator (Low, Medium, High), both in the options and in the closed
  * field. Registered as the `priority-icon-preset-select` formly type (see
  * `PRIORITY_ICON_PRESET_SELECT_FORMLY_CONFIG`).
  */
