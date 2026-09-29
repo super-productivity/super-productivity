@@ -38,6 +38,8 @@ const SYNCABLE_TASK_FIELDS: ReadonlySet<string> = new Set([
   'notes',
   'dueWithTime',
   'dueDay',
+  'deadlineWithTime',
+  'deadlineDay',
   'timeEstimate',
   'tagIds',
 ]);
@@ -92,6 +94,23 @@ const ACTION_EXTRACTORS: Record<
     const a = action as ReturnType<typeof TaskSharedActions.unscheduleTask>;
     return { taskId: a.id, changes: { dueWithTime: undefined } };
   },
+  // Both keys, so the pushed values are read from the post-reducer task (which
+  // enforces deadlineDay/deadlineWithTime exclusivity). autoPlanToday is not
+  // forwarded: automatic planning stays out of two-way sync (#10099).
+  [TaskSharedActions.setDeadline.type]: (action) => {
+    const a = action as ReturnType<typeof TaskSharedActions.setDeadline>;
+    return {
+      taskId: a.taskId,
+      changes: { deadlineDay: a.deadlineDay, deadlineWithTime: a.deadlineWithTime },
+    };
+  },
+  [TaskSharedActions.removeDeadline.type]: (action) => {
+    const a = action as ReturnType<typeof TaskSharedActions.removeDeadline>;
+    return {
+      taskId: a.taskId,
+      changes: { deadlineDay: undefined, deadlineWithTime: undefined },
+    };
+  },
   [TaskSharedActions.updateTask.type]: (action) => {
     const a = action as ReturnType<typeof TaskSharedActions.updateTask>;
     return {
@@ -144,6 +163,8 @@ export class IssueTwoWaySyncEffects {
           TaskSharedActions.scheduleTaskWithTime,
           TaskSharedActions.reScheduleTaskWithTime,
           TaskSharedActions.unscheduleTask,
+          TaskSharedActions.setDeadline,
+          TaskSharedActions.removeDeadline,
           TaskSharedActions.addTagToTask,
           PlannerActions.planTaskForDay,
           PlannerActions.transferTask,

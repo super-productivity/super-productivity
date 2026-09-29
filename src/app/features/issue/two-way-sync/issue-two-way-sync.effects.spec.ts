@@ -117,6 +117,22 @@ describe('IssueTwoWaySyncEffects', () => {
     toTaskValue: (val: unknown) => val,
   };
 
+  const deadlineWithTimeFieldMapping: FieldMapping = {
+    taskField: 'deadlineWithTime',
+    issueField: 'due',
+    defaultDirection: 'both',
+    toIssueValue: (val: unknown) => (val == null ? null : val),
+    toTaskValue: (val: unknown) => val,
+  };
+
+  const deadlineDayFieldMapping: FieldMapping = {
+    taskField: 'deadlineDay',
+    issueField: 'due',
+    defaultDirection: 'both',
+    toIssueValue: (val: unknown) => (val == null ? null : val),
+    toTaskValue: (val: unknown) => val,
+  };
+
   beforeEach(() => {
     actions$ = new Subject<any>();
 
@@ -941,6 +957,115 @@ describe('IssueTwoWaySyncEffects', () => {
         { dtstart: '2026-10-05' },
         jasmine.anything(),
       );
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    const setUpDeadlineAdapter = (baselineDue: unknown): IssueSyncAdapter<unknown> => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([deadlineWithTimeFieldMapping, deadlineDayFieldMapping]),
+        fetchIssue: jasmine.createSpy('fetchIssue').and.resolveTo({ due: baselineDue }),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ due: baselineDue }),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+      return adapter;
+    };
+
+    const linkedTask = (o: Partial<Task>): Task =>
+      createMockTask({
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        ...o,
+      });
+
+    it('pushes a deadline set via setDeadline', fakeAsync(() => {
+      const adapter = setUpDeadlineAdapter(null);
+      taskServiceSpy.getByIdOnce$.and.returnValue(
+        of(
+          linkedTask({ deadlineDay: '2026-10-05', issueLastSyncedValues: { due: null } }),
+        ),
+      );
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(
+        TaskSharedActions.setDeadline({ taskId: 'task-1', deadlineDay: '2026-10-05' }),
+      );
+      tick();
+      expect(adapter.pushChanges).toHaveBeenCalledWith(
+        'issue-1',
+        { due: '2026-10-05' },
+        jasmine.anything(),
+      );
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('pushes a timed deadline replacing an all-day one (reducer cleared deadlineDay)', fakeAsync(() => {
+      const adapter = setUpDeadlineAdapter('2026-10-05');
+      taskServiceSpy.getByIdOnce$.and.returnValue(
+        of(
+          linkedTask({
+            deadlineWithTime: 1790000000000,
+            deadlineDay: undefined,
+            issueLastSyncedValues: { due: '2026-10-05' },
+          }),
+        ),
+      );
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(
+        TaskSharedActions.setDeadline({
+          taskId: 'task-1',
+          deadlineWithTime: 1790000000000,
+        }),
+      );
+      tick();
+      expect(adapter.pushChanges).toHaveBeenCalledWith(
+        'issue-1',
+        { due: 1790000000000 },
+        jasmine.anything(),
+      );
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('pushes a clear for removeDeadline', fakeAsync(() => {
+      const adapter = setUpDeadlineAdapter('2026-10-05');
+      taskServiceSpy.getByIdOnce$.and.returnValue(
+        of(linkedTask({ issueLastSyncedValues: { due: '2026-10-05' } })),
+      );
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(TaskSharedActions.removeDeadline({ taskId: 'task-1' }));
+      tick();
+      expect(adapter.pushChanges).toHaveBeenCalledWith(
+        'issue-1',
+        { due: null },
+        jasmine.anything(),
+      );
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('does not overwrite a newer server deadline on snooze (provider-changed)', fakeAsync(() => {
+      const adapter = setUpDeadlineAdapter('2026-10-09'); // changed on the server
+      taskServiceSpy.getByIdOnce$.and.returnValue(
+        of(
+          linkedTask({
+            deadlineDay: '2026-10-05',
+            issueLastSyncedValues: { due: '2026-10-05' },
+          }),
+        ),
+      );
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(
+        TaskSharedActions.setDeadline({
+          taskId: 'task-1',
+          deadlineDay: '2026-10-05',
+          deadlineRemindAt: Date.now() + 600000,
+        }),
+      );
+      tick();
+      expect(adapter.pushChanges).not.toHaveBeenCalled();
       adapterRegistry.unregister('TEST_PROVIDER');
     }));
   });
