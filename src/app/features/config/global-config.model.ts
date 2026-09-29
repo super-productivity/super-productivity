@@ -318,6 +318,9 @@ export type FocusModeConfig = Readonly<{
 }>;
 
 export type TaskWidgetConfig = Readonly<{
+  isTaskListEnabled?: boolean;
+  taskListFilter?: 'all' | 'today';
+  isTaskListCollapsed?: boolean;
   isEnabled?: boolean;
   isAlwaysShow?: boolean;
   opacity?: number;

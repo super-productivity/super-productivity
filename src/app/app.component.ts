@@ -17,6 +17,7 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ShortcutService } from './core-ui/shortcut/shortcut.service';
 import { GlobalConfigService } from './features/config/global-config.service';
+import { TaskListWidgetService } from './features/tasks/task-list-widget.service';
 import { TaskWidgetSettingsService } from './features/config/task-widget-settings.service';
 import { LayoutService } from './core-ui/layout/layout.service';
 import { SnackService } from './core/snack/snack.service';
@@ -166,6 +167,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   // localStorage and pushes them to the Electron main process at app boot,
   // before the user opens the (lazy-loaded) Settings page.
   private _taskWidgetSettingsService = inject(TaskWidgetSettingsService);
+  private _taskListWidgetService = IS_ELECTRON ? inject(TaskListWidgetService) : null;
   private _keyboardLayoutService = inject(KeyboardLayoutService);
   private _dataInitStateService = inject(DataInitStateService);
   private _materialIconsLoaderService = inject(MaterialIconsLoaderService);
