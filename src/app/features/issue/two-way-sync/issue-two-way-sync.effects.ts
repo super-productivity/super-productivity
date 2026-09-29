@@ -556,10 +556,13 @@ export class IssueTwoWaySyncEffects {
         const taskFieldChanges: Record<string, unknown> = {};
         for (const mapping of fieldMappings) {
           if (mapping.taskField in changes) {
-            // Use current task value (post-parsing) not raw action value
-            taskFieldChanges[mapping.taskField] =
-              currentTask?.[mapping.taskField as keyof Task] ??
-              changes[mapping.taskField];
+            // Read from the post-reducer task whenever it exists: a `??` fallback
+            // would resurrect a value the reducer deliberately cleared (e.g. the
+            // stale time on day-only short syntax). Fall back to the action only
+            // when the task is gone.
+            taskFieldChanges[mapping.taskField] = currentTask
+              ? currentTask[mapping.taskField as keyof Task]
+              : changes[mapping.taskField];
           }
         }
 

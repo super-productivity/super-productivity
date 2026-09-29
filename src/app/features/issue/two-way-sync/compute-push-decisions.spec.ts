@@ -463,4 +463,64 @@ describe('computePushDecisions', () => {
       reason: 'provider changed (provider wins)',
     });
   });
+
+  describe('set + clear of one date pair in a single change', () => {
+    const sharedTimed: FieldMapping = {
+      taskField: 'dueWithTime',
+      issueField: 'start',
+      defaultDirection: 'both',
+      toIssueValue: (v: unknown) => (v == null ? null : v),
+      toTaskValue: (v: unknown) => v,
+    };
+    const sharedDay: FieldMapping = {
+      taskField: 'dueDay',
+      issueField: 'start',
+      defaultDirection: 'both',
+      toIssueValue: (v: unknown) => (v == null ? null : v),
+      toTaskValue: (v: unknown) => v,
+    };
+
+    it('shared issue field: the set wins even when the clearing mapping is listed first', () => {
+      const decisions = computePushDecisions(
+        { dueWithTime: undefined, dueDay: '2026-10-05' },
+        [sharedTimed, sharedDay],
+        {},
+        { start: null },
+        { start: null },
+        ctx,
+      );
+      expect(decisions.map((d) => [d.field, d.action, d.issueValue])).toEqual([
+        ['start', 'push', '2026-10-05'],
+      ]);
+    });
+
+    it('separate issue fields: pushes the set and clears only the partner', () => {
+      const decisions = computePushDecisions(
+        { dueWithTime: undefined, dueDay: '2026-10-05' },
+        [dueWithTimeMapping, dueDayMapping],
+        {},
+        { start_date: null, start_datetime: null },
+        { start_date: null, start_datetime: null },
+        ctx,
+      );
+      expect(decisions.map((d) => [d.field, d.action, d.issueValue])).toEqual([
+        ['start_date', 'push', '2026-10-05'],
+        ['start_datetime', 'push', undefined],
+      ]);
+    });
+
+    it('two clears still clear', () => {
+      const decisions = computePushDecisions(
+        { dueWithTime: undefined, dueDay: undefined },
+        [sharedTimed, sharedDay],
+        {},
+        { start: '2026-10-05' },
+        { start: '2026-10-05' },
+        ctx,
+      );
+      expect(decisions.map((d) => [d.field, d.action, d.issueValue])).toEqual([
+        ['start', 'push', null],
+      ]);
+    });
+  });
 });

@@ -899,6 +899,50 @@ describe('IssueTwoWaySyncEffects', () => {
 
       adapterRegistry.unregister('TEST_PROVIDER');
     }));
+
+    it('pushes the post-reducer date pair, not a value the reducer cleared', fakeAsync(() => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([dueWithTimeFieldMapping, dueDayFieldMapping]),
+        fetchIssue: jasmine.createSpy('fetchIssue').and.resolveTo({ dtstart: null }),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ dtstart: null }),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      // Reducer outcome of day-only short syntax: dueDay set, dueWithTime cleared.
+      const task = createMockTask({
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastSyncedValues: { dtstart: null },
+        dueDay: '2026-10-05',
+        dueWithTime: undefined,
+      });
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      // The action still carries the parser's stale time.
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: {
+            id: 'task-1',
+            changes: { dueWithTime: 1790000000000, dueDay: '2026-10-05' },
+          },
+        }),
+      );
+      tick();
+
+      expect(adapter.pushChanges).toHaveBeenCalledWith(
+        'issue-1',
+        { dtstart: '2026-10-05' },
+        jasmine.anything(),
+      );
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
   });
 
   describe('pushTagChangesAfterTagDelete$', () => {
