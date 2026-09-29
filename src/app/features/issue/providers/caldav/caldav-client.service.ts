@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { CaldavCfg } from './caldav.model';
+import type { CaldavFieldUpdates } from './caldav-sync-adapter.service';
 // @ts-ignore
 import DavClient, { namespaces as NS } from '@nextcloud/cdav-library';
 // @ts-ignore
@@ -404,7 +405,7 @@ export class CaldavClientService {
   updateFields$(
     caldavCfg: CaldavCfg,
     issueId: string,
-    fields: { completed?: boolean; summary?: string; note?: string },
+    fields: CaldavFieldUpdates,
   ): Observable<void> {
     return from(this._updateTask(caldavCfg, issueId, fields)).pipe(
       catchError((err) => throwError({ [HANDLED_ERROR_PROP_STR]: 'Caldav: ' + err })),
