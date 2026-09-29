@@ -26,6 +26,10 @@ import { TaskPriorityIconPreset } from '../../config/global-config.model';
  * span: the colour rules then live inside this component's own encapsulation and
  * cannot reach a nested sub-task row. Menus reuse it as their item icon with
  * `isDecorative`, since the item's own text already names the level.
+ *
+ * The glyph is drawn without text nodes (ligature via `fontIcon`, digit via CSS
+ * `content`), so a host's `textContent` — e.g. a mat-option's announced
+ * `viewValue` — never includes icon names or digits.
  */
 @Component({
   selector: 'task-priority-indicator',
@@ -38,7 +42,10 @@ import { TaskPriorityIconPreset } from '../../config/global-config.model';
     >
       @switch (preset()) {
         @case ('numbers') {
-          <span class="number">{{ priority() }}</span>
+          <span
+            class="number"
+            [attr.data-level]="priority()"
+          ></span>
         }
         @case ('dots') {
           @for (dot of dots(); track dot) {
@@ -46,7 +53,7 @@ import { TaskPriorityIconPreset } from '../../config/global-config.model';
           }
         }
         @default {
-          <mat-icon>{{ icon() }}</mat-icon>
+          <mat-icon [fontIcon]="icon()"></mat-icon>
         }
       }
     </span>

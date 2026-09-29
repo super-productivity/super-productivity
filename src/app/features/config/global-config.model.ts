@@ -78,8 +78,12 @@ export type TasksConfig = Readonly<{
   isMarkdownFormattingInNotesEnabled: boolean;
   defaultProjectId?: string | null | false; // allow 'false' because of #569
   notesTemplate: string;
-  /** Optional: older data lacks it; readers fall back to `'chevrons'`. */
-  priorityIconPreset?: TaskPriorityIconPreset;
+  /**
+   * A `TaskPriorityIconPreset`, typed as an opaque string so a preset added by a
+   * newer client does not fail validation (and get reset) on older ones. Optional:
+   * older data lacks it; readers fall back to `'chevrons'` for missing/unknown.
+   */
+  priorityIconPreset?: string;
 }>;
 
 export type ShortSyntaxConfig = Readonly<{

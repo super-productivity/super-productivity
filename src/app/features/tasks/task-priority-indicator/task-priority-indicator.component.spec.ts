@@ -48,7 +48,7 @@ describe('TaskPriorityIndicatorComponent', () => {
         const fixture = create(priority);
         const icon: HTMLElement = fixture.nativeElement.querySelector('mat-icon');
 
-        expect(icon.textContent?.trim()).toBe(TASK_PRIORITY_CHEVRON_ICON[priority]);
+        expect(icon.getAttribute('fontIcon')).toBe(TASK_PRIORITY_CHEVRON_ICON[priority]);
       });
 
       it('renders the stored number for the numbers preset', () => {
@@ -56,7 +56,7 @@ describe('TaskPriorityIndicatorComponent', () => {
         const fixture = create(priority);
 
         expect(fixture.nativeElement.querySelector('mat-icon')).toBeNull();
-        expect(fixture.nativeElement.querySelector('.number').textContent.trim()).toBe(
+        expect(fixture.nativeElement.querySelector('.number').dataset.level).toBe(
           `${priority}`,
         );
       });
@@ -79,6 +79,33 @@ describe('TaskPriorityIndicatorComponent', () => {
       });
     });
   }
+
+  // Hosts read `textContent` as a label (e.g. mat-option's announced viewValue),
+  // so the glyph must not add icon names or digits to it.
+  for (const preset of ['chevrons', 'numbers', 'dots'] as const) {
+    it(`adds no text content in the ${preset} preset`, () => {
+      setPreset(preset);
+
+      expect(create(3).nativeElement.textContent.trim()).toBe('');
+    });
+  }
+
+  it('uses the iconPreset input over the configured preset', () => {
+    setPreset('chevrons');
+    const fixture = TestBed.createComponent(TaskPriorityIndicatorComponent);
+    fixture.componentRef.setInput('priority', 2);
+    fixture.componentRef.setInput('iconPreset', 'dots');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('mat-icon')).toBeNull();
+    expect(fixture.nativeElement.querySelectorAll('.dot').length).toBe(2);
+  });
+
+  it('falls back to chevrons for an unknown configured preset', () => {
+    cfg.set({ tasks: { priorityIconPreset: 'sparkles' } });
+
+    expect(create(1).nativeElement.querySelector('mat-icon')).not.toBeNull();
+  });
 
   it('switches every rendered glyph when the preset changes', () => {
     const fixture = create(3);

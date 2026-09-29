@@ -16,9 +16,10 @@
   height: 100%;
 }
 
-// `:host` in the selector keeps these ahead of Material's global
-// `.mat-mdc-menu-item .mat-icon` sizing/colour when the indicator is a menu icon.
-:host mat-icon {
+// Specific enough (0,3,1) to stay ahead of Material's global menu/option icon
+// rules, including their RTL variants (`[dir=rtl] .mat-mdc-menu-item .mat-icon`,
+// (0,3,0)), when the indicator sits in a menu item or select option.
+:host .glyph mat-icon {
   width: 18px;
   height: 18px;
   margin: 0;
@@ -31,6 +32,10 @@
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-bold);
   line-height: 1;
+
+  &::before {
+    content: attr(data-level);
+  }
 }
 
 .dot {

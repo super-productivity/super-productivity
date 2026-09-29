@@ -334,16 +334,16 @@ describe('TaskContextMenuInnerComponent', () => {
       flush();
     };
 
-    it('lists High, Medium, Low, None and checks only the current level', fakeAsync(() => {
+    it('lists Low, Medium, High, None and checks only the current level', fakeAsync(() => {
       component.taskSet = { ...DEFAULT_TASK, id: 'task-1', priority: 2 } as Task;
       fixture.detectChanges();
 
       const items = openPriorityMenu();
 
       expect(items.map((el) => el.textContent)).toEqual([
-        jasmine.stringContaining(T.F.TASK.CMP.PRIORITY_HIGH),
-        jasmine.stringContaining(T.F.TASK.CMP.PRIORITY_MEDIUM),
         jasmine.stringContaining(T.F.TASK.CMP.PRIORITY_LOW),
+        jasmine.stringContaining(T.F.TASK.CMP.PRIORITY_MEDIUM),
+        jasmine.stringContaining(T.F.TASK.CMP.PRIORITY_HIGH),
         jasmine.stringContaining(T.F.TASK.CMP.PRIORITY_NONE),
       ]);
       expect(items.map((el) => el.getAttribute('aria-checked'))).toEqual([
@@ -361,7 +361,7 @@ describe('TaskContextMenuInnerComponent', () => {
       component.taskSet = { ...DEFAULT_TASK, id: 'task-1', priority: 2 } as Task;
       fixture.detectChanges();
 
-      openPriorityMenu()[0].click();
+      openPriorityMenu()[2].click();
       flush();
       expect(taskService.update).toHaveBeenCalledWith('task-1', { priority: 3 });
 

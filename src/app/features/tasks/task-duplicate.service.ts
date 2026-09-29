@@ -21,7 +21,7 @@ export class TaskDuplicateService {
       projectId: task.projectId || undefined,
       tagIds: task.tagIds || [],
       ...(task.notes && { notes: task.notes }),
-      ...(task.priority && { priority: task.priority }),
+      ...(typeof task.priority === 'number' && { priority: task.priority }),
     };
     const timeData = {
       ...(task.dueDay && { dueDay: task.dueDay }),
@@ -43,7 +43,7 @@ export class TaskDuplicateService {
           projectId: subTask.projectId,
           timeEstimate: subTask.timeEstimate,
           notes: subTask.notes,
-          ...(subTask.priority && { priority: subTask.priority }),
+          ...(typeof subTask.priority === 'number' && { priority: subTask.priority }),
         },
       });
       this._store.dispatch(

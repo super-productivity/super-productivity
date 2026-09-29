@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FieldType } from '@ngx-formly/material';
-import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
+import { ConfigOption, FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatOption, MatSelect, MatSelectTrigger } from '@angular/material/select';
@@ -19,7 +19,8 @@ const PRESET_LABEL_KEY: Record<TaskPriorityIconPreset, string> = {
 /**
  * Select for `tasks.priorityIconPreset` that previews each preset with the real
  * priority indicator (High, Medium, Low), both in the options and in the closed
- * field. Registered as the `priority-icon-preset-select` formly type in main.ts.
+ * field. Registered as the `priority-icon-preset-select` formly type (see
+ * `PRIORITY_ICON_PRESET_SELECT_FORMLY_CONFIG`).
  */
 @Component({
   selector: 'priority-icon-preset-select',
@@ -44,3 +45,15 @@ export class PriorityIconPresetSelectComponent extends FieldType<FormlyFieldConf
   readonly PRESET_LABEL_KEY = PRESET_LABEL_KEY;
   readonly LEVELS = TASK_PRIORITY_LEVELS;
 }
+
+/** Formly config registering this field type; provided once in main.ts. */
+export const PRIORITY_ICON_PRESET_SELECT_FORMLY_CONFIG: ConfigOption = {
+  types: [
+    {
+      name: 'priority-icon-preset-select',
+      component: PriorityIconPresetSelectComponent,
+      extends: 'input',
+      wrappers: ['form-field'],
+    },
+  ],
+};

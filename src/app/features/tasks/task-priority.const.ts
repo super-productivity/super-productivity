@@ -2,13 +2,13 @@ import { T } from '../../t.const';
 import { TaskPriorityIconPreset } from '../config/global-config.model';
 import { TaskPriority } from './task.model';
 
-/** Every priority level, most important first — the order menus list them in. */
-export const TASK_PRIORITY_LEVELS: readonly TaskPriority[] = [3, 2, 1];
+/** Every priority level, lowest first — the order menus and previews list them in. */
+export const TASK_PRIORITY_LEVELS: readonly TaskPriority[] = [1, 2, 3];
 
 // Records keyed by the numeric `TaskPriority` levels.
 /* eslint-disable @typescript-eslint/naming-convention */
 
-/** Translation key of each priority's label (the same keys the context menu uses). */
+/** Translation key of each priority's label. */
 export const TASK_PRIORITY_LABEL_KEY: Record<TaskPriority, string> = {
   3: T.F.TASK.CMP.PRIORITY_HIGH,
   2: T.F.TASK.CMP.PRIORITY_MEDIUM,
