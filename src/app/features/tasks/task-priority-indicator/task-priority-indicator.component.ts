@@ -15,6 +15,7 @@ import {
   TASK_PRIORITY_LABEL_KEY,
 } from '../task-priority.const';
 import { GlobalConfigService } from '../../config/global-config.service';
+import { TaskPriorityIconPreset } from '../../config/global-config.model';
 
 /**
  * Renders a task's priority as a single coloured glyph in the user's chosen
@@ -67,9 +68,12 @@ export class TaskPriorityIndicatorComponent {
 
   readonly priority = input.required<TaskPriority>();
   readonly isDecorative = input(false);
+  /** Overrides the configured preset, e.g. to preview each preset in settings. */
+  readonly iconPreset = input<TaskPriorityIconPreset | undefined>(undefined);
 
   readonly preset = computed(
     () =>
+      this.iconPreset() ??
       this._globalConfigService.cfg()?.tasks?.priorityIconPreset ??
       DEFAULT_TASK_PRIORITY_ICON_PRESET,
   );

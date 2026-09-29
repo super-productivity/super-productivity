@@ -1,0 +1,41 @@
+<ng-template
+  #preview
+  let-preset
+>
+  <span class="preset">
+    <span>{{ PRESET_LABEL_KEY[preset] | translate }}</span>
+    <span class="levels">
+      @for (level of LEVELS; track level) {
+        <task-priority-indicator
+          [priority]="level"
+          [iconPreset]="preset"
+          [isDecorative]="true"
+        ></task-priority-indicator>
+      }
+    </span>
+  </span>
+</ng-template>
+
+<mat-select
+  [errorStateMatcher]="errorStateMatcher"
+  [formControl]="formControl"
+  [formlyAttributes]="field"
+  [id]="id"
+>
+  @if (PRESET_LABEL_KEY[formControl.value]) {
+    <mat-select-trigger>
+      <ng-container
+        [ngTemplateOutlet]="preview"
+        [ngTemplateOutletContext]="{ $implicit: formControl.value }"
+      ></ng-container>
+    </mat-select-trigger>
+  }
+  @for (preset of PRESETS; track preset) {
+    <mat-option [value]="preset">
+      <ng-container
+        [ngTemplateOutlet]="preview"
+        [ngTemplateOutletContext]="{ $implicit: preset }"
+      ></ng-container>
+    </mat-option>
+  }
+</mat-select>

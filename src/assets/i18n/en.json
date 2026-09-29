@@ -2880,7 +2880,7 @@
       "PRIORITY_ICON_PRESET": "Priority icons",
       "PRIORITY_ICON_PRESET_CHEVRONS": "Chevrons",
       "PRIORITY_ICON_PRESET_DOTS": "Dots",
-      "PRIORITY_ICON_PRESET_NUMBERS": "Numbers (3 = high, 1 = low)",
+      "PRIORITY_ICON_PRESET_NUMBERS": "Numbers",
       "TITLE": "Tasks"
     },
     "TIME_TRACKING": {
