@@ -10,53 +10,32 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { TaskPriority } from '../task.model';
 import {
   DEFAULT_TASK_PRIORITY_ICON_PRESET,
-  TASK_PRIORITY_CHEVRON_ICON,
-  TASK_PRIORITY_DOTS,
+  TASK_PRIORITY_ICONS,
   TASK_PRIORITY_LABEL_KEY,
 } from '../task-priority.const';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { TaskPriorityIconPreset } from '../../config/global-config.model';
 
 /**
- * Renders a task's priority as a single coloured glyph in the user's chosen
- * preset (chevrons, numbers or dots), the way the overdue schedule icon and the
- * time-conflict "!" already read.
+ * A task's priority as one coloured icon in the user's chosen preset, like the
+ * overdue schedule icon and the time-conflict "!".
  *
- * Both the task row and the Planner card render this instead of styling a local
- * span: the colour rules then live inside this component's own encapsulation and
- * cannot reach a nested sub-task row. Menus reuse it as their item icon with
- * `isDecorative`, since the item's own text already names the level.
- *
- * The glyph is drawn without text nodes (ligature via `fontIcon`, digit via CSS
- * `content`), so a host's `textContent` — e.g. a mat-option's announced
- * `viewValue` — never includes icon names or digits.
+ * The colour rules live in this component's own encapsulation, so they cannot
+ * reach a nested sub-task row. Menus put `aria-hidden="true"` on it, since the
+ * item's own text already names the level. The icon is drawn via `fontIcon`
+ * (no text node), so a host's `textContent` — e.g. mat-option's announced
+ * `viewValue` — never includes the icon name.
  */
 @Component({
   selector: 'task-priority-indicator',
-  template: `@if (labelKey()) {
-    <span
-      class="glyph"
-      [attr.role]="isDecorative() ? null : 'img'"
-      [attr.aria-label]="isDecorative() ? null : (labelKey() | translate)"
-      [attr.aria-hidden]="isDecorative() ? 'true' : null"
-    >
-      @switch (preset()) {
-        @case ('numbers') {
-          <span
-            class="number"
-            [attr.data-level]="priority()"
-          ></span>
-        }
-        @case ('dots') {
-          @for (dot of dots(); track dot) {
-            <span class="dot"></span>
-          }
-        }
-        @default {
-          <mat-icon [fontIcon]="icon()"></mat-icon>
-        }
-      }
-    </span>
+  template: `@if (icon(); as icon) {
+    <mat-icon
+      class="icon"
+      role="img"
+      aria-hidden="false"
+      [attr.aria-label]="labelKey() | translate"
+      [fontIcon]="icon"
+    ></mat-icon>
   }`,
   styleUrl: './task-priority-indicator.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -64,8 +43,7 @@ import { TaskPriorityIconPreset } from '../../config/global-config.model';
   imports: [MatIcon, TranslatePipe],
   /* eslint-disable @typescript-eslint/naming-convention */
   host: {
-    // The colour anchor. It sits on this component's OWN host, inside its own
-    // encapsulation, so no descendant selector can reach another task row.
+    // The colour anchor, on this component's own host.
     '[attr.data-priority]': 'priority()',
   },
   /* eslint-enable @typescript-eslint/naming-convention */
@@ -74,20 +52,19 @@ export class TaskPriorityIndicatorComponent {
   private readonly _globalConfigService = inject(GlobalConfigService);
 
   readonly priority = input.required<TaskPriority>();
-  readonly isDecorative = input(false);
   /** Overrides the configured preset, e.g. to preview each preset in settings. */
-  readonly iconPreset = input<TaskPriorityIconPreset | undefined>(undefined);
+  readonly iconPreset = input<TaskPriorityIconPreset>();
 
-  readonly preset = computed(
+  // The synced preset is an opaque string; unknown values fall back to the default.
+  private readonly _icons = computed(
     () =>
-      this.iconPreset() ??
-      this._globalConfigService.cfg()?.tasks?.priorityIconPreset ??
-      DEFAULT_TASK_PRIORITY_ICON_PRESET,
+      TASK_PRIORITY_ICONS[
+        (this.iconPreset() ??
+          this._globalConfigService.cfg()?.tasks
+            ?.priorityIconPreset) as TaskPriorityIconPreset
+      ] ?? TASK_PRIORITY_ICONS[DEFAULT_TASK_PRIORITY_ICON_PRESET],
   );
-
-  // A value outside 1–3 (e.g. a string written by an old test build) has no
-  // label, so the template renders nothing for it instead of throwing.
-  readonly icon = computed(() => TASK_PRIORITY_CHEVRON_ICON[this.priority()] ?? '');
-  readonly dots = computed(() => TASK_PRIORITY_DOTS[this.priority()] ?? []);
-  readonly labelKey = computed(() => TASK_PRIORITY_LABEL_KEY[this.priority()] ?? '');
+  // Empty for a value outside 1–3 (e.g. a stale test-build string): renders nothing.
+  readonly icon = computed(() => this._icons()[this.priority()]);
+  readonly labelKey = computed(() => TASK_PRIORITY_LABEL_KEY[this.priority()]);
 }

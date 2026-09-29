@@ -15,21 +15,22 @@ export const TASK_PRIORITY_LABEL_KEY: Record<TaskPriority, string> = {
   1: T.F.TASK.CMP.PRIORITY_LOW,
 };
 
-/** Material icon per priority for the default `chevrons` preset. */
-export const TASK_PRIORITY_CHEVRON_ICON: Record<TaskPriority, string> = {
-  3: 'keyboard_double_arrow_up',
-  2: 'keyboard_arrow_up',
-  1: 'keyboard_arrow_down',
-};
-
-/**
- * Dot count per priority for the `dots` preset, pre-built so the indicator
- * (rendered once per task row) never allocates an array per change detection.
- */
-export const TASK_PRIORITY_DOTS: Record<TaskPriority, readonly number[]> = {
-  3: [0, 1, 2],
-  2: [0, 1],
-  1: [0],
+/** Material Symbols icon for each preset and level. */
+export const TASK_PRIORITY_ICONS: Record<
+  TaskPriorityIconPreset,
+  Record<TaskPriority, string>
+> = {
+  chevrons: {
+    1: 'keyboard_arrow_down',
+    2: 'keyboard_arrow_up',
+    3: 'keyboard_double_arrow_up',
+  },
+  numbers: { 1: 'counter_1', 2: 'counter_2', 3: 'counter_3' },
+  bars: {
+    1: 'signal_cellular_alt_1_bar',
+    2: 'signal_cellular_alt_2_bar',
+    3: 'signal_cellular_alt',
+  },
 };
 
 /* eslint-enable @typescript-eslint/naming-convention */

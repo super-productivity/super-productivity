@@ -1,31 +1,12 @@
 :host {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
 }
 
-// An unknown value (e.g. a stale test-build string) renders no glyph; don't
-// leave an empty 18px gap in the row.
-:host:empty {
-  display: none;
-}
-
-.glyph {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s-quarter);
-  width: 100%;
-  height: 100%;
-}
-
-// `:host .glyph` makes this more specific than Material's global menu/option
-// icon rules, including their RTL variants (`[dir=rtl] .mat-mdc-menu-item
-// .mat-icon`), when the indicator sits in a menu item or select option.
-:host .glyph mat-icon {
+// `mat-icon.icon` under `:host` outranks Material's global menu/option icon
+// rules, including their RTL variants (`[dir=rtl] .mat-mdc-menu-item .mat-icon`).
+:host mat-icon.icon {
   width: 18px;
   height: 18px;
   margin: 0;
@@ -34,26 +15,10 @@
   color: inherit;
 }
 
-.number {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-bold);
-  line-height: 1;
-
-  &::before {
-    content: attr(data-level);
-  }
-}
-
-.dot {
-  width: var(--s-half);
-  height: var(--s-half);
-  border-radius: 50%;
-  background: currentColor;
-}
-
 // Used as a menu item icon: take the same slot and spacing Material gives its
 // own menu icons, so the labels of all items line up.
 :host[matMenuItemIcon] {
+  justify-content: center;
   width: var(--s3);
   height: var(--s3);
   // Logical property so the gap stays between icon and label in RTL languages.
@@ -61,18 +26,13 @@
 }
 
 // Keyed on this component's own host attribute, so the rule can never match a
-// nested sub-task row. The previous `:host.priority-* .priority-indicator` form
-// lived in task.component's stylesheet, where `:host` is the task row: under
-// emulated encapsulation a sub-task row carries the same content attribute, so
-// a high-priority parent recoloured every indicator in its subtree.
-//
-// Each base colour is mixed toward the theme's strongest ink (black in light,
-// white in dark) to lift contrast against the task-row surface — the raw warning
-// orange is only ~2:1 on the light surface. High and Medium clear 4.5:1 on the
-// default task-row surface in the built-in themes; on raised dark surfaces
-// (current/selected row, menu panels) High drops to ~3.4–4.3:1, still above the
-// 3:1 needed for icons. Low follows the user-chosen primary colour, so it is only
-// guaranteed ~3:1 (e.g. 3.4:1 for a yellow primary on white).
+// nested sub-task row. Each base colour is mixed toward the theme's strongest ink
+// (black in light, white in dark) to lift contrast against the task-row surface —
+// the raw warning orange is only ~2:1 on the light surface. High and Medium clear
+// 4.5:1 on the default task-row surface in the built-in themes; on raised dark
+// surfaces (current/selected row, menu panels) High drops to ~3.4–4.3:1, still
+// above the 3:1 needed for icons. Low follows the user-chosen primary colour, so
+// it is only guaranteed ~3:1 (e.g. 3.4:1 for a yellow primary on white).
 :host[data-priority='3'] {
   color: color-mix(in srgb, var(--color-danger) 80%, var(--ink-strong));
 }

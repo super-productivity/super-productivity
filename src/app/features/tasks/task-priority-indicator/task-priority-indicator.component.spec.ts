@@ -2,10 +2,7 @@ import { signal, WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { TaskPriorityIndicatorComponent } from './task-priority-indicator.component';
-import {
-  TASK_PRIORITY_CHEVRON_ICON,
-  TASK_PRIORITY_LABEL_KEY,
-} from '../task-priority.const';
+import { TASK_PRIORITY_ICONS, TASK_PRIORITY_LABEL_KEY } from '../task-priority.const';
 import { TaskPriority } from '../task.model';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { TaskPriorityIconPreset, TasksConfig } from '../../config/global-config.model';
@@ -15,18 +12,20 @@ describe('TaskPriorityIndicatorComponent', () => {
 
   const create = (
     priority: TaskPriority,
-    isDecorative = false,
+    iconPreset?: TaskPriorityIconPreset,
   ): ComponentFixture<TaskPriorityIndicatorComponent> => {
     const fixture = TestBed.createComponent(TaskPriorityIndicatorComponent);
     fixture.componentRef.setInput('priority', priority);
-    fixture.componentRef.setInput('isDecorative', isDecorative);
+    if (iconPreset) {
+      fixture.componentRef.setInput('iconPreset', iconPreset);
+    }
     fixture.detectChanges();
     return fixture;
   };
-  const setPreset = (preset: TaskPriorityIconPreset | undefined): void =>
+  const icon = (fixture: ComponentFixture<unknown>): HTMLElement | null =>
+    fixture.nativeElement.querySelector('mat-icon');
+  const setConfiguredPreset = (preset: string | undefined): void =>
     cfg.set({ tasks: { priorityIconPreset: preset } });
-  const glyph = (fixture: ComponentFixture<unknown>): HTMLElement =>
-    fixture.nativeElement.querySelector('.glyph');
 
   beforeEach(() => {
     cfg = signal<{ tasks?: Partial<TasksConfig> } | undefined>(undefined);
@@ -36,110 +35,76 @@ describe('TaskPriorityIndicatorComponent', () => {
     });
   });
 
-  for (const priority of [3, 2, 1] as const) {
-    describe(`priority ${priority}`, () => {
-      it('exposes the priority as a host attribute, so only its own styles colour it', () => {
-        const fixture = create(priority);
+  for (const priority of [1, 2, 3] as const) {
+    it(`exposes priority ${priority} as a host attribute for its colour`, () => {
+      expect(create(priority).nativeElement.getAttribute('data-priority')).toBe(
+        `${priority}`,
+      );
+    });
 
-        expect(fixture.nativeElement.getAttribute('data-priority')).toBe(`${priority}`);
-      });
+    it(`labels priority ${priority} for screen readers`, () => {
+      const el = icon(create(priority))!;
 
-      it('renders the chevron glyph when no preset is configured', () => {
-        const fixture = create(priority);
-        const icon: HTMLElement = fixture.nativeElement.querySelector('mat-icon');
-
-        expect(icon.getAttribute('fontIcon')).toBe(TASK_PRIORITY_CHEVRON_ICON[priority]);
-      });
-
-      it('renders the stored number for the numbers preset', () => {
-        setPreset('numbers');
-        const fixture = create(priority);
-
-        expect(fixture.nativeElement.querySelector('mat-icon')).toBeNull();
-        expect(fixture.nativeElement.querySelector('.number').dataset.level).toBe(
-          `${priority}`,
-        );
-      });
-
-      it('renders one dot per level for the dots preset', () => {
-        setPreset('dots');
-        const fixture = create(priority);
-
-        expect(fixture.nativeElement.querySelectorAll('.dot').length).toBe(priority);
-      });
-
-      it('labels the glyph for screen readers', () => {
-        const fixture = create(priority);
-
-        // With `TranslateModule.forRoot()` and no loader the pipe echoes the key.
-        expect(glyph(fixture).getAttribute('role')).toBe('img');
-        expect(glyph(fixture).getAttribute('aria-label')).toBe(
-          TASK_PRIORITY_LABEL_KEY[priority],
-        );
-      });
+      // With `TranslateModule.forRoot()` and no loader the pipe echoes the key.
+      expect(el.getAttribute('role')).toBe('img');
+      expect(el.getAttribute('aria-label')).toBe(TASK_PRIORITY_LABEL_KEY[priority]);
+      // MatIcon force-sets aria-hidden="true" unless a static value is present.
+      expect(el.getAttribute('aria-hidden')).toBe('false');
     });
   }
 
-  // Hosts read `textContent` as a label (e.g. mat-option's announced viewValue),
-  // so the glyph must not add icon names or digits to it.
-  for (const preset of ['chevrons', 'numbers', 'dots'] as const) {
-    it(`adds no text content in the ${preset} preset`, () => {
-      setPreset(preset);
+  for (const preset of ['chevrons', 'numbers', 'bars'] as const) {
+    it(`renders the ${preset} icon for each level, without a text node`, () => {
+      setConfiguredPreset(preset);
 
-      expect(create(3).nativeElement.textContent.trim()).toBe('');
+      for (const priority of [1, 2, 3] as const) {
+        const fixture = create(priority);
+        expect(icon(fixture)!.getAttribute('fontIcon')).toBe(
+          TASK_PRIORITY_ICONS[preset][priority],
+        );
+        // Hosts read textContent as a label (e.g. mat-option's viewValue).
+        expect(fixture.nativeElement.textContent.trim()).toBe('');
+      }
     });
   }
 
-  it('takes up space for a known level', () => {
-    expect(getComputedStyle(create(2).nativeElement).display).toBe('inline-flex');
-  });
-
-  it('uses the iconPreset input over the configured preset', () => {
-    setPreset('chevrons');
-    const fixture = TestBed.createComponent(TaskPriorityIndicatorComponent);
-    fixture.componentRef.setInput('priority', 2);
-    fixture.componentRef.setInput('iconPreset', 'dots');
-    fixture.detectChanges();
-
-    expect(fixture.nativeElement.querySelector('mat-icon')).toBeNull();
-    expect(fixture.nativeElement.querySelectorAll('.dot').length).toBe(2);
+  it('uses chevrons when no preset is configured', () => {
+    expect(icon(create(3))!.getAttribute('fontIcon')).toBe(
+      TASK_PRIORITY_ICONS.chevrons[3],
+    );
   });
 
   it('falls back to chevrons for an unknown configured preset', () => {
-    cfg.set({ tasks: { priorityIconPreset: 'sparkles' } });
+    setConfiguredPreset('sparkles');
 
-    expect(create(1).nativeElement.querySelector('mat-icon')).not.toBeNull();
+    expect(icon(create(1))!.getAttribute('fontIcon')).toBe(
+      TASK_PRIORITY_ICONS.chevrons[1],
+    );
   });
 
-  it('switches every rendered glyph when the preset changes', () => {
+  it('prefers the iconPreset input over the configured preset', () => {
+    setConfiguredPreset('chevrons');
+
+    expect(icon(create(2, 'bars'))!.getAttribute('fontIcon')).toBe(
+      TASK_PRIORITY_ICONS.bars[2],
+    );
+  });
+
+  it('follows a change of the configured preset', () => {
     const fixture = create(3);
-    setPreset('dots');
+    setConfiguredPreset('numbers');
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.querySelector('mat-icon')).toBeNull();
-    expect(fixture.nativeElement.querySelectorAll('.dot').length).toBe(3);
-  });
-
-  it('hides itself from screen readers when decorative', () => {
-    const fixture = create(2, true);
-
-    expect(glyph(fixture).getAttribute('aria-hidden')).toBe('true');
-    expect(glyph(fixture).getAttribute('role')).toBeNull();
-    expect(glyph(fixture).getAttribute('aria-label')).toBeNull();
+    expect(icon(fixture)!.getAttribute('fontIcon')).toBe(TASK_PRIORITY_ICONS.numbers[3]);
   });
 
   // A string priority written by an old test build is only repaired on sync, so a
   // local-only user can still render one. It must not throw, and shows nothing.
-  for (const preset of ['chevrons', 'numbers', 'dots'] as const) {
-    it(`renders nothing for an unexpected value (${preset})`, () => {
-      setPreset(preset);
-      let fixture: ComponentFixture<TaskPriorityIndicatorComponent> | undefined;
+  it('renders nothing for an unexpected value', () => {
+    let fixture: ComponentFixture<TaskPriorityIndicatorComponent> | undefined;
 
-      expect(() => (fixture = create('high' as unknown as TaskPriority))).not.toThrow();
-      expect(glyph(fixture!)).toBeNull();
-      expect(fixture!.nativeElement.textContent.trim()).toBe('');
-      // No empty 18px gap left in the row.
-      expect(getComputedStyle(fixture!.nativeElement).display).toBe('none');
-    });
-  }
+    expect(() => (fixture = create('high' as unknown as TaskPriority))).not.toThrow();
+    expect(icon(fixture!)).toBeNull();
+    expect(fixture!.nativeElement.getBoundingClientRect().width).toBe(0);
+  });
 });

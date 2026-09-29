@@ -470,7 +470,7 @@
       <task-priority-indicator
         matMenuItemIcon
         [priority]="level"
-        [isDecorative]="true"
+        aria-hidden="true"
       ></task-priority-indicator>
       <span>{{ PRIORITY_LABEL_KEY[level] | translate }}</span>
       @if (task.priority === level) {

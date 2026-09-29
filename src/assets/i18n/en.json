@@ -2878,8 +2878,8 @@
       "IS_TRAY_SHOW_CURRENT": "Show current task in the tray / status menu (macOS/Windows only)",
       "NOTES_TEMPLATE": "Task description template",
       "PRIORITY_ICON_PRESET": "Priority icons",
+      "PRIORITY_ICON_PRESET_BARS": "Bars",
       "PRIORITY_ICON_PRESET_CHEVRONS": "Chevrons",
-      "PRIORITY_ICON_PRESET_DOTS": "Dots",
       "PRIORITY_ICON_PRESET_NUMBERS": "Numbers",
       "TITLE": "Tasks"
     },

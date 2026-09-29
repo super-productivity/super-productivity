@@ -13,7 +13,7 @@ import { TASK_PRIORITY_LEVELS } from '../../tasks/task-priority.const';
 const PRESET_LABEL_KEY: Record<TaskPriorityIconPreset, string> = {
   chevrons: T.GCF.TASKS.PRIORITY_ICON_PRESET_CHEVRONS,
   numbers: T.GCF.TASKS.PRIORITY_ICON_PRESET_NUMBERS,
-  dots: T.GCF.TASKS.PRIORITY_ICON_PRESET_DOTS,
+  bars: T.GCF.TASKS.PRIORITY_ICON_PRESET_BARS,
 };
 
 /**

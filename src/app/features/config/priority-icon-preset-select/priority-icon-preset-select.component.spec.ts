@@ -13,12 +13,19 @@ import { GlobalConfigService } from '../global-config.service';
 import { T } from '../../../t.const';
 import { TaskPriorityIconPreset } from '../global-config.model';
 import { TASKS_SETTINGS_FORM_CFG } from '../form-cfgs/tasks-settings-form.const';
+import { TASK_PRIORITY_ICONS } from '../../tasks/task-priority.const';
 
 // The configured preset is chevrons: previews must ignore it.
 const GLOBAL_CONFIG_MOCK = {
   provide: GlobalConfigService,
   useValue: { cfg: signal({ tasks: { priorityIconPreset: 'chevrons' } }) },
 };
+
+// Low, Medium, High — the order every preview lists them in.
+const levelIcons = (preset: TaskPriorityIconPreset): string[] =>
+  ([1, 2, 3] as const).map((level) => TASK_PRIORITY_ICONS[preset][level]);
+const iconsOf = (el: Element): (string | null)[] =>
+  Array.from(el.querySelectorAll('mat-icon')).map((i) => i.getAttribute('fontIcon'));
 
 const openOptions = (fixture: ComponentFixture<unknown>): HTMLElement[] => {
   fixture.nativeElement.querySelector('.mat-mdc-select-trigger').click();
@@ -42,7 +49,7 @@ describe('PriorityIconPresetSelectComponent', () => {
     }).compileComponents();
 
     fixture = TestBed.createComponent(PriorityIconPresetSelectComponent);
-    formControl = new FormControl<TaskPriorityIconPreset | null>('dots');
+    formControl = new FormControl<TaskPriorityIconPreset | null>('bars');
     Object.defineProperty(fixture.componentInstance, 'formControl', {
       get: () => formControl,
       configurable: true,
@@ -61,26 +68,16 @@ describe('PriorityIconPresetSelectComponent', () => {
     const trigger: HTMLElement =
       fixture.nativeElement.querySelector('mat-select-trigger');
 
-    expect(trigger.textContent).toContain(T.GCF.TASKS.PRIORITY_ICON_PRESET_DOTS);
-    expect(trigger.querySelectorAll('task-priority-indicator').length).toBe(3);
-    expect(trigger.querySelectorAll('.dot').length).toBe(1 + 2 + 3);
-    expect(trigger.querySelector('mat-icon')).toBeNull();
+    expect(trigger.textContent).toContain(T.GCF.TASKS.PRIORITY_ICON_PRESET_BARS);
+    expect(iconsOf(trigger)).toEqual(levelIcons('bars'));
   });
 
   it('previews Low, Medium and High, in that order, for every preset option', () => {
-    const [chevrons, numbers, dots] = openOptions(fixture);
+    const [chevrons, numbers, bars] = openOptions(fixture);
 
-    expect(chevrons.querySelectorAll('mat-icon').length).toBe(3);
-    expect(
-      Array.from(numbers.querySelectorAll<HTMLElement>('.number')).map(
-        (n) => n.dataset.level,
-      ),
-    ).toEqual(['1', '2', '3']);
-    expect(
-      Array.from(dots.querySelectorAll('task-priority-indicator')).map(
-        (i) => i.querySelectorAll('.dot').length,
-      ),
-    ).toEqual([1, 2, 3]);
+    expect(iconsOf(chevrons)).toEqual(levelIcons('chevrons'));
+    expect(iconsOf(numbers)).toEqual(levelIcons('numbers'));
+    expect(iconsOf(bars)).toEqual(levelIcons('bars'));
   });
 
   // MatSelect announces an option's textContent (viewValue) on arrow keys.
@@ -90,7 +87,7 @@ describe('PriorityIconPresetSelectComponent', () => {
     expect(options.map((o) => o.textContent?.trim())).toEqual([
       T.GCF.TASKS.PRIORITY_ICON_PRESET_CHEVRONS,
       T.GCF.TASKS.PRIORITY_ICON_PRESET_NUMBERS,
-      T.GCF.TASKS.PRIORITY_ICON_PRESET_DOTS,
+      T.GCF.TASKS.PRIORITY_ICON_PRESET_BARS,
     ]);
   });
 
@@ -162,8 +159,8 @@ describe('PriorityIconPresetSelectComponent in the tasks settings form', () => {
 
     const trigger: HTMLElement =
       fixture.nativeElement.querySelector('mat-select-trigger');
-    expect(fixture.componentInstance.model.priorityIconPreset).toBe('dots');
-    expect(trigger.textContent).toContain(T.GCF.TASKS.PRIORITY_ICON_PRESET_DOTS);
-    expect(trigger.querySelectorAll('.dot').length).toBe(6);
+    expect(fixture.componentInstance.model.priorityIconPreset).toBe('bars');
+    expect(trigger.textContent).toContain(T.GCF.TASKS.PRIORITY_ICON_PRESET_BARS);
+    expect(iconsOf(trigger)).toEqual(levelIcons('bars'));
   });
 });
