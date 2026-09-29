@@ -241,6 +241,15 @@
 
 <mat-menu #priorityMenu="matMenu">
   <ng-template matMenuContent>
+    <button
+      (click)="bulk.setPriority(null)"
+      menuTouchFix
+      mat-menu-item
+    >
+      <mat-icon>clear</mat-icon>
+      {{ T.F.TASK.CMP.PRIORITY_NONE | translate }}
+    </button>
+    <mat-divider></mat-divider>
     @for (level of PRIORITY_LEVELS; track level) {
       <button
         (click)="bulk.setPriority(level)"
@@ -255,15 +264,6 @@
         {{ PRIORITY_LABEL_KEY[level] | translate }}
       </button>
     }
-    <mat-divider></mat-divider>
-    <button
-      (click)="bulk.setPriority(null)"
-      menuTouchFix
-      mat-menu-item
-    >
-      <mat-icon>clear</mat-icon>
-      {{ T.F.TASK.CMP.PRIORITY_NONE | translate }}
-    </button>
   </ng-template>
 </mat-menu>
 

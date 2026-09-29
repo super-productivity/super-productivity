@@ -446,6 +446,19 @@
 </mat-menu>
 
 <mat-menu #priorityMenu="matMenu">
+  <button
+    mat-menu-item
+    menuTouchFix
+    role="menuitemradio"
+    [attr.aria-checked]="!task.priority"
+    (click)="setPriority(null)"
+  >
+    <mat-icon>clear</mat-icon>
+    <span>{{ T.F.TASK.CMP.PRIORITY_NONE | translate }}</span>
+    @if (!task.priority) {
+      <div><mat-icon>check</mat-icon></div>
+    }
+  </button>
   @for (level of PRIORITY_LEVELS; track level) {
     <button
       mat-menu-item
@@ -465,19 +478,6 @@
       }
     </button>
   }
-  <button
-    mat-menu-item
-    menuTouchFix
-    role="menuitemradio"
-    [attr.aria-checked]="!task.priority"
-    (click)="setPriority(null)"
-  >
-    <mat-icon>clear</mat-icon>
-    <span>{{ T.F.TASK.CMP.PRIORITY_NONE | translate }}</span>
-    @if (!task.priority) {
-      <div><mat-icon>check</mat-icon></div>
-    }
-  </button>
 </mat-menu>
 
 <mat-menu #projectMenu="matMenu">
