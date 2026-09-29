@@ -53,7 +53,7 @@ describe('TaskPriorityIndicatorComponent', () => {
     });
   }
 
-  for (const preset of ['chevrons', 'numbers', 'bars'] as const) {
+  for (const preset of ['chevrons', 'numbers'] as const) {
     it(`renders the ${preset} icon for each level, without a text node`, () => {
       setConfiguredPreset(preset);
 
@@ -85,8 +85,8 @@ describe('TaskPriorityIndicatorComponent', () => {
   it('prefers the iconPreset input over the configured preset', () => {
     setConfiguredPreset('chevrons');
 
-    expect(icon(create(2, 'bars'))!.getAttribute('fontIcon')).toBe(
-      TASK_PRIORITY_ICONS.bars[2],
+    expect(icon(create(2, 'numbers'))!.getAttribute('fontIcon')).toBe(
+      TASK_PRIORITY_ICONS.numbers[2],
     );
   });
 

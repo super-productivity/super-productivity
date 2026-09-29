@@ -49,7 +49,7 @@ describe('PriorityIconPresetSelectComponent', () => {
     }).compileComponents();
 
     fixture = TestBed.createComponent(PriorityIconPresetSelectComponent);
-    formControl = new FormControl<TaskPriorityIconPreset | null>('bars');
+    formControl = new FormControl<TaskPriorityIconPreset | null>('numbers');
     Object.defineProperty(fixture.componentInstance, 'formControl', {
       get: () => formControl,
       configurable: true,
@@ -68,16 +68,15 @@ describe('PriorityIconPresetSelectComponent', () => {
     const trigger: HTMLElement =
       fixture.nativeElement.querySelector('mat-select-trigger');
 
-    expect(trigger.textContent).toContain(T.GCF.TASKS.PRIORITY_ICON_PRESET_BARS);
-    expect(iconsOf(trigger)).toEqual(levelIcons('bars'));
+    expect(trigger.textContent).toContain(T.GCF.TASKS.PRIORITY_ICON_PRESET_NUMBERS);
+    expect(iconsOf(trigger)).toEqual(levelIcons('numbers'));
   });
 
   it('previews Low, Medium and High, in that order, for every preset option', () => {
-    const [chevrons, numbers, bars] = openOptions(fixture);
+    const [chevrons, numbers] = openOptions(fixture);
 
     expect(iconsOf(chevrons)).toEqual(levelIcons('chevrons'));
     expect(iconsOf(numbers)).toEqual(levelIcons('numbers'));
-    expect(iconsOf(bars)).toEqual(levelIcons('bars'));
   });
 
   // MatSelect announces an option's textContent (viewValue) on arrow keys.
@@ -87,14 +86,13 @@ describe('PriorityIconPresetSelectComponent', () => {
     expect(options.map((o) => o.textContent?.trim())).toEqual([
       T.GCF.TASKS.PRIORITY_ICON_PRESET_CHEVRONS,
       T.GCF.TASKS.PRIORITY_ICON_PRESET_NUMBERS,
-      T.GCF.TASKS.PRIORITY_ICON_PRESET_BARS,
     ]);
   });
 
   it('writes the picked preset to the form control', () => {
-    openOptions(fixture)[1].click();
+    openOptions(fixture)[0].click();
 
-    expect(formControl.value).toBe('numbers');
+    expect(formControl.value).toBe('chevrons');
   });
 });
 
@@ -152,15 +150,15 @@ describe('PriorityIconPresetSelectComponent in the tasks settings form', () => {
   });
 
   it('updates the model and the closed-field preview when a preset is picked', async () => {
-    openOptions(fixture)[2].click();
+    openOptions(fixture)[1].click();
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
     const trigger: HTMLElement =
       fixture.nativeElement.querySelector('mat-select-trigger');
-    expect(fixture.componentInstance.model.priorityIconPreset).toBe('bars');
-    expect(trigger.textContent).toContain(T.GCF.TASKS.PRIORITY_ICON_PRESET_BARS);
-    expect(iconsOf(trigger)).toEqual(levelIcons('bars'));
+    expect(fixture.componentInstance.model.priorityIconPreset).toBe('numbers');
+    expect(trigger.textContent).toContain(T.GCF.TASKS.PRIORITY_ICON_PRESET_NUMBERS);
+    expect(iconsOf(trigger)).toEqual(levelIcons('numbers'));
   });
 });

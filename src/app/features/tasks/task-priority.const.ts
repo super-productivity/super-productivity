@@ -26,11 +26,6 @@ export const TASK_PRIORITY_ICONS: Record<
     3: 'keyboard_double_arrow_up',
   },
   numbers: { 1: 'counter_1', 2: 'counter_2', 3: 'counter_3' },
-  bars: {
-    1: 'signal_cellular_alt_1_bar',
-    2: 'signal_cellular_alt_2_bar',
-    3: 'signal_cellular_alt',
-  },
 };
 
 /* eslint-enable @typescript-eslint/naming-convention */
