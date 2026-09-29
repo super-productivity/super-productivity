@@ -269,7 +269,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     effect(() => {
       const val = this._languageService.isLangRTL();
       this.isRTL = val;
-      document.dir = this.isRTL ? 'rtl' : 'ltr';
+      document.documentElement.dir = val ? 'rtl' : 'ltr';
     });
 
     this._subs.add(

@@ -1,34 +1,35 @@
-@if (resolvedBgImage(); as bgImage) {
-  <div
-    [style.background]="'url(' + bgImage + ')'"
-    [style.filter]="bgImageBlurFilter()"
-    [class.is-blurred]="bgImageBlur() > 0"
-    class="bg-image"
-  ></div>
-  <div
-    class="bg-overlay"
-    [style.opacity]="bgOverlayOpacity()"
-  ></div>
-}
-<!--TODO move inside page container somehow -->
-@if (layoutService.isShowAddTaskBar()) {
-  <add-task-bar
-    (closed)="layoutService.hideAddTaskBar()"
-    (done)="layoutService.hideAddTaskBar()"
-    (afterTaskAdd)="onTaskAdded($event)"
-    [isGlobalBarVariant]="true"
-    class="global"
-  ></add-task-bar>
-}
-@if (layoutService.isShowAddTaskBar()) {
-  <div
-    (click)="layoutService.hideAddTaskBar()"
-    @fade
-    class="backdrop"
-  ></div>
-}
-<!-- -->
-<!--
+<div [dir]="isRTL ? 'rtl' : 'ltr'">
+  @if (resolvedBgImage(); as bgImage) {
+    <div
+      [style.background]="'url(' + bgImage + ')'"
+      [style.filter]="bgImageBlurFilter()"
+      [class.is-blurred]="bgImageBlur() > 0"
+      class="bg-image"
+    ></div>
+    <div
+      class="bg-overlay"
+      [style.opacity]="bgOverlayOpacity()"
+    ></div>
+  }
+  <!--TODO move inside page container somehow -->
+  @if (layoutService.isShowAddTaskBar()) {
+    <add-task-bar
+      (closed)="layoutService.hideAddTaskBar()"
+      (done)="layoutService.hideAddTaskBar()"
+      (afterTaskAdd)="onTaskAdded($event)"
+      [isGlobalBarVariant]="true"
+      class="global"
+    ></add-task-bar>
+  }
+  @if (layoutService.isShowAddTaskBar()) {
+    <div
+      (click)="layoutService.hideAddTaskBar()"
+      @fade
+      class="backdrop"
+    ></div>
+  }
+  <!-- -->
+  <!--
   Perf note: the @else branch means toggling the focus overlay destroys and
   rebuilds the entire app shell (side nav, router outlet, work view, every task
   row). @defer only delays loading the overlay; it does not keep the shell
@@ -36,80 +37,79 @@
   the shell with CSS would avoid the teardown. Only visible when profiling
   overlay *close*.
 -->
-@if (isShowFocusOverlay()) {
-  @defer (on immediate) {
-    <focus-mode-overlay @warp></focus-mode-overlay>
-  }
-} @else {
-  <div
-    class="app-container"
-    [style.height]="iosShellHeight()"
-    [style.min-height]="iosShellHeight()"
-    [class.has-mobile-bottom-nav]="isShowMobileButtonNav()"
-    [class.is-multi-selecting]="isMultiSelecting()"
-    [class.has-vertical-action-bar]="isVerticalActionBar()"
-    [class.app-entrance]="isAppEntrance()"
-    [class.is-onboarding]="isShowOnboardingPresets()"
-    [dir]="isRTL ? 'rtl' : 'ltr'"
-  >
-    <magic-side-nav
-      #magicSideNav
-      [activeWorkContextId]="getActiveWorkContextId()"
-    >
-    </magic-side-nav>
-
-    <main class="main-content">
-      <right-panel>
-        <header
-          [class.isNotScrolled]="!layoutService.isWorkViewScrolled()"
-          class="header-wrapper"
-        >
-          <main-header></main-header>
-
-          <banner></banner>
-        </header>
-
-        <div
-          #routeWrapper
-          [@warpRoute]="getPage(o)"
-          class="route-wrapper"
-        >
-          <router-outlet #o="outlet"></router-outlet>
-        </div>
-      </right-panel>
-      <global-progress-bar></global-progress-bar>
-      <task-multi-select-bar></task-multi-select-bar>
-    </main>
-
-    <!-- Mobile Bottom Navigation -->
-    @if (isShowMobileButtonNav()) {
-      <mobile-bottom-nav
-        [isEntrance]="isAppEntrance()"
-        (toggleMobileNavEvent)="magicSideNav.toggleMobileNav()"
-      ></mobile-bottom-nav>
+  @if (isShowFocusOverlay()) {
+    @defer (on immediate) {
+      <focus-mode-overlay @warp></focus-mode-overlay>
     }
-  </div>
-}
-<!-- -->
+  } @else {
+    <div
+      class="app-container"
+      [style.height]="iosShellHeight()"
+      [style.min-height]="iosShellHeight()"
+      [class.has-mobile-bottom-nav]="isShowMobileButtonNav()"
+      [class.is-multi-selecting]="isMultiSelecting()"
+      [class.has-vertical-action-bar]="isVerticalActionBar()"
+      [class.app-entrance]="isAppEntrance()"
+      [class.is-onboarding]="isShowOnboardingPresets()"
+    >
+      <magic-side-nav
+        #magicSideNav
+        [activeWorkContextId]="getActiveWorkContextId()"
+      >
+      </magic-side-nav>
 
-@if (isShowOnboardingPresets()) {
-  <onboarding-preset-selection
-    (presetSelected)="onPresetSelected()"
-    (dismissed)="onOnboardingDismissed()"
-  ></onboarding-preset-selection>
-}
+      <main class="main-content">
+        <right-panel>
+          <header
+            [class.isNotScrolled]="!layoutService.isWorkViewScrolled()"
+            class="header-wrapper"
+          >
+            <main-header></main-header>
 
-@if (onboardingHintService.currentStep()) {
-  <onboarding-hint></onboarding-hint>
-}
+            <banner></banner>
+          </header>
 
-<!-- Background context menu -->
-@if (routeWrapper) {
-  <context-menu
-    [contextMenu]="backgroundContextMenu"
-    [rightClickTriggerEl]="routeWrapper.nativeElement"
-    [isEnabled]="isWorkViewPage()"
-    [allowedSelectors]="'
+          <div
+            #routeWrapper
+            [@warpRoute]="getPage(o)"
+            class="route-wrapper"
+          >
+            <router-outlet #o="outlet"></router-outlet>
+          </div>
+        </right-panel>
+        <global-progress-bar></global-progress-bar>
+        <task-multi-select-bar></task-multi-select-bar>
+      </main>
+
+      <!-- Mobile Bottom Navigation -->
+      @if (isShowMobileButtonNav()) {
+        <mobile-bottom-nav
+          [isEntrance]="isAppEntrance()"
+          (toggleMobileNavEvent)="magicSideNav.toggleMobileNav()"
+        ></mobile-bottom-nav>
+      }
+    </div>
+  }
+  <!-- -->
+
+  @if (isShowOnboardingPresets()) {
+    <onboarding-preset-selection
+      (presetSelected)="onPresetSelected()"
+      (dismissed)="onOnboardingDismissed()"
+    ></onboarding-preset-selection>
+  }
+
+  @if (onboardingHintService.currentStep()) {
+    <onboarding-hint></onboarding-hint>
+  }
+
+  <!-- Background context menu -->
+  @if (routeWrapper) {
+    <context-menu
+      [contextMenu]="backgroundContextMenu"
+      [rightClickTriggerEl]="routeWrapper.nativeElement"
+      [isEnabled]="isWorkViewPage()"
+      [allowedSelectors]="'
       .route-wrapper,
       .today,
       .task-list-wrapper,
@@ -122,38 +122,39 @@
       .no-tasks-illu-wrapper,
       .no-tasks-illu-wrapper *,
       .finish-day-button-wrapper'"
-  ></context-menu>
-}
+    ></context-menu>
+  }
 
-<ng-template #backgroundContextMenu>
-  <div style="min-width: 200px; max-width: 300px">
-    <button
-      mat-menu-item
-      (click)="openSettings()"
-      class="background-menu-item"
-      style="width: 100%; overflow: hidden"
-    >
-      <mat-icon>settings</mat-icon>
-      <span>{{
-        (workContextService.activeWorkContextType === 'PROJECT'
-          ? T.APP.CONTEXT_MENU.CHANGE_PROJECT_SETTINGS
-          : T.APP.CONTEXT_MENU.CHANGE_TAG_SETTINGS
-        ) | translate
-      }}</span>
-    </button>
-    @if (
-      workContextService.activeWorkContextType === 'PROJECT' ||
-      workContextService.activeWorkContextId === TODAY_TAG_ID
-    ) {
+  <ng-template #backgroundContextMenu>
+    <div style="min-width: 200px; max-width: 300px">
       <button
         mat-menu-item
-        (click)="addSection()"
+        (click)="openSettings()"
         class="background-menu-item"
         style="width: 100%; overflow: hidden"
       >
-        <mat-icon>list</mat-icon>
-        <span>{{ T.MH.ADD_SECTION | translate }}</span>
+        <mat-icon>settings</mat-icon>
+        <span>{{
+          (workContextService.activeWorkContextType === 'PROJECT'
+            ? T.APP.CONTEXT_MENU.CHANGE_PROJECT_SETTINGS
+            : T.APP.CONTEXT_MENU.CHANGE_TAG_SETTINGS
+          ) | translate
+        }}</span>
       </button>
-    }
-  </div>
-</ng-template>
+      @if (
+        workContextService.activeWorkContextType === 'PROJECT' ||
+        workContextService.activeWorkContextId === TODAY_TAG_ID
+      ) {
+        <button
+          mat-menu-item
+          (click)="addSection()"
+          class="background-menu-item"
+          style="width: 100%; overflow: hidden"
+        >
+          <mat-icon>list</mat-icon>
+          <span>{{ T.MH.ADD_SECTION | translate }}</span>
+        </button>
+      }
+    </div>
+  </ng-template>
+</div>
