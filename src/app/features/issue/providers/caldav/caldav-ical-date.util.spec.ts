@@ -3,6 +3,7 @@ import {
   applyIcalDate,
   IcalApiLike,
   IcalComponentLike,
+  isValidDatePair,
   toCaldavDateValue,
   truncateToSeconds,
 } from './caldav-ical-date.util';
@@ -136,6 +137,42 @@ describe('caldav-ical-date.util', () => {
       ]);
       applyIcalDate(ical, vcal, todo, 'dtstart', null);
       expect(dateLines(todo)).toEqual([]);
+    });
+  });
+
+  describe('isValidDatePair', () => {
+    it('is valid when both are null', () => {
+      expect(isValidDatePair(null, null)).toBeTrue();
+    });
+
+    it('is valid when only DTSTART is null', () => {
+      expect(isValidDatePair(null, '2026-09-25')).toBeTrue();
+    });
+
+    it('is valid when only DUE is null', () => {
+      expect(isValidDatePair('2026-09-25', null)).toBeTrue();
+    });
+
+    it('is valid for same-type ordered all-day values', () => {
+      expect(isValidDatePair('2026-09-25', '2026-09-30')).toBeTrue();
+    });
+
+    it('is valid for same-type ordered timed values', () => {
+      expect(isValidDatePair(NOON_UTC, NOON_UTC + 1000)).toBeTrue();
+    });
+
+    it('is valid when DTSTART and DUE are equal', () => {
+      expect(isValidDatePair('2026-09-25', '2026-09-25')).toBeTrue();
+      expect(isValidDatePair(NOON_UTC, NOON_UTC)).toBeTrue();
+    });
+
+    it('is invalid when DUE is before DTSTART', () => {
+      expect(isValidDatePair('2026-09-30', '2026-09-25')).toBeFalse();
+    });
+
+    it('is invalid when DTSTART and DUE have different value types', () => {
+      expect(isValidDatePair('2026-09-25', NOON_UTC)).toBeFalse();
+      expect(isValidDatePair(NOON_UTC, '2026-09-25')).toBeFalse();
     });
   });
 });

@@ -68,7 +68,9 @@ export const toCaldavDateValue = (
 
 const pad2 = (n: number): string => String(n).padStart(2, '0');
 
-const readIcalDateValue = (prop: IcalPropertyLike | null): CaldavDateValue | null => {
+export const readIcalDateValue = (
+  prop: IcalPropertyLike | null,
+): CaldavDateValue | null => {
   const time = prop?.getFirstValue() as IcalTimeLike | null | undefined;
   if (!time) {
     return null;
@@ -76,6 +78,20 @@ const readIcalDateValue = (prop: IcalPropertyLike | null): CaldavDateValue | nul
   return time.isDate
     ? `${time.year}-${pad2(time.month)}-${pad2(time.day)}`
     : truncateToSeconds(time.toJSDate().getTime());
+};
+
+/** RFC 5545: DUE and DTSTART must share a value type, and DUE must not be earlier. */
+export const isValidDatePair = (
+  dtstart: CaldavDateValue | null,
+  due: CaldavDateValue | null,
+): boolean => {
+  if (dtstart === null || due === null) {
+    return true;
+  }
+  if (typeof dtstart !== typeof due) {
+    return false;
+  }
+  return due >= dtstart;
 };
 
 /**
