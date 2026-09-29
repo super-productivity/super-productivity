@@ -52,6 +52,19 @@ export const TASKS_SETTINGS_FORM_CFG: ConfigFormSection<TasksConfig> = {
       },
     },
     {
+      key: 'priorityIconPreset',
+      type: 'select',
+      defaultValue: 'chevrons',
+      templateOptions: {
+        label: T.GCF.TASKS.PRIORITY_ICON_PRESET,
+        options: [
+          { label: T.GCF.TASKS.PRIORITY_ICON_PRESET_CHEVRONS, value: 'chevrons' },
+          { label: T.GCF.TASKS.PRIORITY_ICON_PRESET_NUMBERS, value: 'numbers' },
+          { label: T.GCF.TASKS.PRIORITY_ICON_PRESET_DOTS, value: 'dots' },
+        ],
+      },
+    },
+    {
       key: 'notesTemplate',
       type: 'textarea',
       templateOptions: {

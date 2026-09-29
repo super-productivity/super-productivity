@@ -70,7 +70,8 @@ export interface IssueFieldsForTask {
   issueLastSyncedValues?: Record<string, unknown>;
 }
 
-export type TaskPriority = 'high' | 'medium' | 'low';
+/** 1 = Low, 2 = Medium, 3 = High. Higher numbers are more important. */
+export type TaskPriority = 1 | 2 | 3;
 
 // Extend the plugin Task type with app-specific fields
 // Omit issue fields from PluginTask to avoid conflict with IssueFieldsForTask
@@ -94,8 +95,8 @@ export interface TaskCopy
   // Additional app-specific fields
 
   /**
-   * Optional High / Medium / Low priority. `undefined` and `null` both mean "no
-   * priority" and are treated the same by sorting and filtering.
+   * Optional priority: 1 = Low, 2 = Medium, 3 = High. `undefined` and `null` both
+   * mean "no priority" and are treated the same by sorting and filtering.
    * Persisted as an optional field (no schema bump); older clients carry it as
    * an unknown field.
    */

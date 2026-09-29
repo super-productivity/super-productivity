@@ -935,7 +935,7 @@ describe('PlannerTaskComponent', () => {
 
   describe('priority indicator', () => {
     it('renders the shared indicator only when the task has a priority', () => {
-      const withPriority = create(makeTask({ priority: 'high' }));
+      const withPriority = create(makeTask({ priority: 3 }));
       expect(
         withPriority.fixture.nativeElement.querySelector('task-priority-indicator'),
       ).toBeTruthy();

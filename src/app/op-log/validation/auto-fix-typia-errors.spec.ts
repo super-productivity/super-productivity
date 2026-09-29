@@ -899,3 +899,43 @@ describe('autoFixTypiaErrors — invalid worklogExportSettings (#8279)', () => {
     expect(cols).not.toBe(DEFAULT_PROJECT.advancedCfg.worklogExportSettings.cols);
   });
 });
+
+// String priorities ('high' | 'medium' | 'low') were only written by test builds
+// before priority became numeric. Driven through the REAL validator so the test
+// fails if typia reports the value at a different path. Dropped, never mapped.
+describe('autoFixTypiaErrors — stale string task priority', () => {
+  beforeEach(() => {
+    spyOn(OP_LOG_SYNC_LOGGER, 'err').and.stub();
+    spyOn(OP_LOG_SYNC_LOGGER, 'warn').and.stub();
+  });
+
+  const withTaskPriority = (priority: unknown): AppDataComplete => {
+    const d = createAppDataCompleteMock();
+    const task = { ...DEFAULT_TASK, id: 't1', projectId: INBOX_PROJECT.id, priority };
+    return {
+      ...d,
+      task: { ...initialTaskState, ids: ['t1'], entities: { t1: task } },
+    } as unknown as AppDataComplete;
+  };
+
+  it('drops a string priority to undefined so the state validates again', () => {
+    const d = withTaskPriority('high');
+    const before = validateAllData(d);
+    expect(before.success).toBe(false);
+    const errors = (before as IValidation.IFailure).errors;
+    expect(errors.map((e) => e.path)).toEqual(['$input.task.entities.t1.priority']);
+
+    const result = autoFixTypiaErrors(d, errors);
+
+    expect(result.task.entities.t1!.priority).toBeUndefined();
+    expect(result.task.entities.t1!.timeSpentOnDay).toEqual(DEFAULT_TASK.timeSpentOnDay);
+    expect(validateAllData(result).success).toBe(true);
+  });
+
+  it('leaves valid numeric priorities untouched', () => {
+    const d = withTaskPriority(3);
+
+    expect(validateAllData(d).success).toBe(true);
+    expect(d.task.entities.t1!.priority).toBe(3);
+  });
+});

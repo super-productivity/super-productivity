@@ -70,11 +70,11 @@ export enum FILTER_TIME {
   MIN_120 = '7200000',
 }
 
-/** Values must equal the `TaskPriority` strings — they are matched against `task.priority`. */
+/** Values are `TaskPriority` levels as strings; the filter compares `+value` to `task.priority`. */
 export enum FILTER_PRIORITY {
-  high = 'high',
-  medium = 'medium',
-  low = 'low',
+  high = '3',
+  medium = '2',
+  low = '1',
 }
 
 export enum FILTER_COMMON {

@@ -266,9 +266,9 @@ describe('TaskViewCustomizerService', () => {
 
   it('should filter by priority', () => {
     const tasks: TaskWithSubTasks[] = [
-      { ...mockTasks[0], id: 'high', priority: 'high' },
-      { ...mockTasks[1], id: 'medium', priority: 'medium' },
-      { ...mockTasks[2], id: 'high-2', priority: 'high' },
+      { ...mockTasks[0], id: 'high', priority: 3 },
+      { ...mockTasks[1], id: 'medium', priority: 2 },
+      { ...mockTasks[2], id: 'high-2', priority: 3 },
       { ...mockTasks[3], id: 'none' },
     ];
 
@@ -285,7 +285,7 @@ describe('TaskViewCustomizerService', () => {
     const tasks: TaskWithSubTasks[] = [
       { ...mockTasks[0], id: 'undefined-priority' },
       { ...mockTasks[1], id: 'null-priority', priority: null },
-      { ...mockTasks[2], id: 'low', priority: 'low' },
+      { ...mockTasks[2], id: 'low', priority: 1 },
     ];
 
     const filtered = service['applyFilter'](
@@ -315,10 +315,10 @@ describe('TaskViewCustomizerService', () => {
   it('should sort by priority with stable equal-rank ordering', () => {
     const tasks: TaskWithSubTasks[] = [
       { ...mockTasks[0], id: 'none' },
-      { ...mockTasks[1], id: 'low', priority: 'low' },
-      { ...mockTasks[2], id: 'medium-first', priority: 'medium' },
-      { ...mockTasks[3], id: 'high', priority: 'high' },
-      { ...mockTasks[0], id: 'medium-second', priority: 'medium' },
+      { ...mockTasks[1], id: 'low', priority: 1 },
+      { ...mockTasks[2], id: 'medium-first', priority: 2 },
+      { ...mockTasks[3], id: 'high', priority: 3 },
+      { ...mockTasks[0], id: 'medium-second', priority: 2 },
     ];
 
     const asc = service['applySort'](tasks, SORT_OPTION_TYPE.priority);

@@ -7,11 +7,45 @@
   height: 18px;
 }
 
-mat-icon {
+.glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-quarter);
+  width: 100%;
+  height: 100%;
+}
+
+// `:host` in the selector keeps these ahead of Material's global
+// `.mat-mdc-menu-item .mat-icon` sizing/colour when the indicator is a menu icon.
+:host mat-icon {
   width: 18px;
   height: 18px;
+  margin: 0;
   font-size: 18px;
   line-height: 18px;
+  color: inherit;
+}
+
+.number {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+
+.dot {
+  width: var(--s-half);
+  height: var(--s-half);
+  border-radius: 50%;
+  background: currentColor;
+}
+
+// Used as a menu item icon: take the same slot and spacing Material gives its
+// own menu icons, so the labels of all items line up.
+:host[matMenuItemIcon] {
+  width: var(--s3);
+  height: var(--s3);
+  margin-right: var(--mat-menu-item-spacing, var(--s2));
 }
 
 // Keyed on this component's own host attribute, so the rule can never match a
@@ -19,14 +53,18 @@ mat-icon {
 // lived in task.component's stylesheet, where `:host` is the task row: under
 // emulated encapsulation a sub-task row carries the same content attribute, so
 // a high-priority parent recoloured every indicator in its subtree.
-:host[data-priority='high'] {
-  color: var(--color-danger);
+//
+// Each base colour is mixed toward the theme's strongest ink (black in light,
+// white in dark) so the glyph clears 4.5:1 against the task-row surface in both
+// themes — the raw warning orange is only ~2:1 on the light surface.
+:host[data-priority='3'] {
+  color: color-mix(in srgb, var(--color-danger) 80%, var(--ink-strong));
 }
 
-:host[data-priority='medium'] {
-  color: var(--color-warning);
+:host[data-priority='2'] {
+  color: color-mix(in srgb, var(--color-warning) 60%, var(--ink-strong));
 }
 
-:host[data-priority='low'] {
-  color: var(--c-primary);
+:host[data-priority='1'] {
+  color: color-mix(in srgb, var(--c-primary) 60%, var(--ink-strong));
 }

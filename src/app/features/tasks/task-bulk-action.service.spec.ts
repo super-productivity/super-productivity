@@ -566,13 +566,13 @@ describe('TaskBulkActionService', () => {
 
   describe('setPriority', () => {
     it('updates only the tasks whose priority differs', async () => {
-      select([t('a'), t('same', { priority: 'high' }), t('low', { priority: 'low' })]);
+      select([t('a'), t('same', { priority: 3 }), t('low', { priority: 1 })]);
 
-      await service.setPriority('high');
+      await service.setPriority(3);
 
       expect(taskService.update).toHaveBeenCalledTimes(2);
-      expect(taskService.update).toHaveBeenCalledWith('a', { priority: 'high' });
-      expect(taskService.update).toHaveBeenCalledWith('low', { priority: 'high' });
+      expect(taskService.update).toHaveBeenCalledWith('a', { priority: 3 });
+      expect(taskService.update).toHaveBeenCalledWith('low', { priority: 3 });
       expect(snackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
           msg: 'F.TASK.MULTI_SELECT.S.PRIORITY_SET.OTHER',
@@ -585,9 +585,9 @@ describe('TaskBulkActionService', () => {
     });
 
     it('does nothing when every task already has that priority', async () => {
-      select([t('a', { priority: 'medium' }), t('b', { priority: 'medium' })]);
+      select([t('a', { priority: 2 }), t('b', { priority: 2 })]);
 
-      await service.setPriority('medium');
+      await service.setPriority(2);
 
       expect(taskService.update).not.toHaveBeenCalled();
       expect(snackService.open).toHaveBeenCalledWith(
@@ -596,7 +596,7 @@ describe('TaskBulkActionService', () => {
     });
 
     it('clears the priority and says so', async () => {
-      select([t('a', { priority: 'high' }), t('none')]);
+      select([t('a', { priority: 3 }), t('none')]);
 
       await service.setPriority(null);
 

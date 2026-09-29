@@ -304,7 +304,7 @@ export class TaskViewCustomizerService {
           return tasks.filter((t) => !t.priority);
         }
 
-        return tasks.filter((t) => t.priority === value);
+        return tasks.filter((t) => t.priority === +value);
       default:
         return tasks;
     }
@@ -372,9 +372,9 @@ export class TaskViewCustomizerService {
 
       case SORT_OPTION_TYPE.priority: {
         const getPriorityRank = (priority: TaskWithSubTasks['priority']): number => {
-          if (priority === 'high') return 0;
-          if (priority === 'medium') return 1;
-          if (priority === 'low') return 2;
+          if (priority === 3) return 0;
+          if (priority === 2) return 1;
+          if (priority === 1) return 2;
           return 3;
         };
         return tasksCopy.sort(

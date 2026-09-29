@@ -67,6 +67,9 @@ export type MiscConfig = Readonly<{
   overlayIndicatorOpacity?: number; // Deprecated – moved to taskWidget.opacity
 }>;
 
+/** How a task's priority is drawn next to its title. */
+export type TaskPriorityIconPreset = 'chevrons' | 'numbers' | 'dots';
+
 export type TasksConfig = Readonly<{
   isAutoMarkParentAsDone: boolean;
   isAutoAddWorkedOnToToday: boolean;
@@ -75,6 +78,8 @@ export type TasksConfig = Readonly<{
   isMarkdownFormattingInNotesEnabled: boolean;
   defaultProjectId?: string | null | false; // allow 'false' because of #569
   notesTemplate: string;
+  /** Optional: older data lacks it; readers fall back to `'chevrons'`. */
+  priorityIconPreset?: TaskPriorityIconPreset;
 }>;
 
 export type ShortSyntaxConfig = Readonly<{

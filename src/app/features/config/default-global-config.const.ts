@@ -47,6 +47,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     defaultProjectId: INBOX_PROJECT.id,
     isMarkdownFormattingInNotesEnabled: true,
     notesTemplate: defaultTaskNotesTemplate,
+    priorityIconPreset: 'chevrons',
   },
   misc: {
     isConfirmBeforeExit: false,

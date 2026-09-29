@@ -1,3 +1,5 @@
+import { TaskPriorityIndicatorComponent } from '../../task-priority-indicator/task-priority-indicator.component';
+import { TASK_PRIORITY_LABEL_KEY, TASK_PRIORITY_LEVELS } from '../../task-priority.const';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -104,6 +106,7 @@ import { PluginTaskContextMenuTarget } from '@super-productivity/plugin-api';
     IssueIconPipe,
     MenuTouchFixDirective,
     SelectOptionRowComponent,
+    TaskPriorityIndicatorComponent,
   ],
   templateUrl: './task-context-menu-inner.component.html',
   styleUrl: './task-context-menu-inner.component.scss',
@@ -139,6 +142,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
+  protected readonly PRIORITY_LEVELS = TASK_PRIORITY_LEVELS;
+  protected readonly PRIORITY_LABEL_KEY = TASK_PRIORITY_LABEL_KEY;
   readonly ESTIMATE_OPTIONS = ESTIMATE_OPTIONS;
   readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
 
