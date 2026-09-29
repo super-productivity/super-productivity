@@ -109,11 +109,6 @@
     "F.SYNC.S.UNKNOWN_ERROR": ["err"],
     "F.TASK.S.REMINDER_ADDED": ["date"]
   },
-  "pl.json": {
-    "F.SCHEDULE.PLAN_END_DAY": ["date"],
-    "F.SCHEDULE.PLAN_START_DAY": ["date"],
-    "F.TASK.S.REMINDER_ADDED": ["date"]
-  },
   "pt.json": {
     "F.PLANNER.S.TASK_PLANNED_FOR": ["extra"],
     "F.SCHEDULE.PLAN_END_DAY": ["date"],
