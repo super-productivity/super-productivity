@@ -67,6 +67,7 @@ describe('TaskContextMenuInnerComponent', () => {
       'remove',
       'getTasksWithSubTasksByRepeatCfgId$',
       'getArchiveTasksForRepeatCfgId',
+      'update',
     ]);
     taskService.currentTaskId.and.returnValue('some-id');
     taskDuplicateService = jasmine.createSpyObj<TaskDuplicateService>(
@@ -308,6 +309,67 @@ describe('TaskContextMenuInnerComponent', () => {
         component.pluginTaskContextMenuEntries().map((entry) => entry.entryId),
       ).toEqual(['subtask-action']);
     });
+  });
+
+  describe('priority submenu', () => {
+    const menuItems = (selector: string): HTMLElement[] =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>(`.cdk-overlay-container ${selector}`),
+      );
+    const openPriorityMenu = (): HTMLElement[] => {
+      component.contextMenuTrigger()?.openMenu();
+      fixture.detectChanges();
+      tick();
+      const trigger = menuItems('[mat-menu-item]').find((el) =>
+        el.textContent?.trim().endsWith(T.F.TASK.CMP.PRIORITY),
+      );
+      expect(trigger).toBeDefined();
+      trigger!.click();
+      fixture.detectChanges();
+      tick();
+      return menuItems('[role="menuitemradio"]');
+    };
+    const closeMenus = (): void => {
+      component.contextMenuTrigger()?.closeMenu();
+      flush();
+    };
+
+    it('lists High, Medium, Low, None and checks only the current level', fakeAsync(() => {
+      component.taskSet = { ...DEFAULT_TASK, id: 'task-1', priority: 2 } as Task;
+      fixture.detectChanges();
+
+      const items = openPriorityMenu();
+
+      expect(items.map((el) => el.textContent)).toEqual([
+        jasmine.stringContaining(T.F.TASK.CMP.PRIORITY_HIGH),
+        jasmine.stringContaining(T.F.TASK.CMP.PRIORITY_MEDIUM),
+        jasmine.stringContaining(T.F.TASK.CMP.PRIORITY_LOW),
+        jasmine.stringContaining(T.F.TASK.CMP.PRIORITY_NONE),
+      ]);
+      expect(items.map((el) => el.getAttribute('aria-checked'))).toEqual([
+        'false',
+        'true',
+        'false',
+        'false',
+      ]);
+      expect(items[1].textContent).toContain('check');
+      expect(items[0].querySelector('task-priority-indicator')).not.toBeNull();
+      closeMenus();
+    }));
+
+    it('sets the numeric level, and clears with null', fakeAsync(() => {
+      component.taskSet = { ...DEFAULT_TASK, id: 'task-1', priority: 2 } as Task;
+      fixture.detectChanges();
+
+      openPriorityMenu()[0].click();
+      flush();
+      expect(taskService.update).toHaveBeenCalledWith('task-1', { priority: 3 });
+
+      openPriorityMenu()[3].click();
+      flush();
+      expect(taskService.update).toHaveBeenCalledWith('task-1', { priority: null });
+      closeMenus();
+    }));
   });
 
   describe('duplicate()', () => {

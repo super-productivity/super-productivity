@@ -28,26 +28,28 @@ import { GlobalConfigService } from '../../config/global-config.service';
  */
 @Component({
   selector: 'task-priority-indicator',
-  template: `<span
-    class="glyph"
-    [attr.role]="isDecorative() ? null : 'img'"
-    [attr.aria-label]="isDecorative() ? null : (labelKey() | translate)"
-    [attr.aria-hidden]="isDecorative() ? 'true' : null"
-  >
-    @switch (preset()) {
-      @case ('numbers') {
-        <span class="number">{{ priority() }}</span>
-      }
-      @case ('dots') {
-        @for (dot of dots(); track dot) {
-          <span class="dot"></span>
+  template: `@if (labelKey()) {
+    <span
+      class="glyph"
+      [attr.role]="isDecorative() ? null : 'img'"
+      [attr.aria-label]="isDecorative() ? null : (labelKey() | translate)"
+      [attr.aria-hidden]="isDecorative() ? 'true' : null"
+    >
+      @switch (preset()) {
+        @case ('numbers') {
+          <span class="number">{{ priority() }}</span>
+        }
+        @case ('dots') {
+          @for (dot of dots(); track dot) {
+            <span class="dot"></span>
+          }
+        }
+        @default {
+          <mat-icon>{{ icon() }}</mat-icon>
         }
       }
-      @default {
-        <mat-icon>{{ icon() }}</mat-icon>
-      }
-    }
-  </span>`,
+    </span>
+  }`,
   styleUrl: './task-priority-indicator.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
@@ -72,8 +74,8 @@ export class TaskPriorityIndicatorComponent {
       DEFAULT_TASK_PRIORITY_ICON_PRESET,
   );
 
-  // Lookups fall back to empty values so a value outside 1–3 (e.g. a string
-  // written by an old test build) renders an empty glyph instead of throwing.
+  // A value outside 1–3 (e.g. a string written by an old test build) has no
+  // label, so the template renders nothing for it instead of throwing.
   readonly icon = computed(() => TASK_PRIORITY_CHEVRON_ICON[this.priority()] ?? '');
   readonly dots = computed(() => TASK_PRIORITY_DOTS[this.priority()] ?? []);
   readonly labelKey = computed(() => TASK_PRIORITY_LABEL_KEY[this.priority()] ?? '');

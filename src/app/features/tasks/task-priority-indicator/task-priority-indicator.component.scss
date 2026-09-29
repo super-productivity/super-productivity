@@ -45,7 +45,8 @@
 :host[matMenuItemIcon] {
   width: var(--s3);
   height: var(--s3);
-  margin-right: var(--mat-menu-item-spacing, var(--s2));
+  // Logical property so the gap stays between icon and label in RTL languages.
+  margin-inline-end: var(--mat-menu-item-spacing, var(--s2));
 }
 
 // Keyed on this component's own host attribute, so the rule can never match a
@@ -55,8 +56,10 @@
 // a high-priority parent recoloured every indicator in its subtree.
 //
 // Each base colour is mixed toward the theme's strongest ink (black in light,
-// white in dark) so the glyph clears 4.5:1 against the task-row surface in both
-// themes — the raw warning orange is only ~2:1 on the light surface.
+// white in dark) to lift contrast against the task-row surface — the raw warning
+// orange is only ~2:1 on the light surface. High and Medium clear 4.5:1 in the
+// built-in themes; Low follows the user-chosen primary colour, so it is only
+// guaranteed ~3:1 (e.g. 3.4:1 for a yellow primary on white).
 :host[data-priority='3'] {
   color: color-mix(in srgb, var(--color-danger) 80%, var(--ink-strong));
 }

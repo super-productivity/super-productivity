@@ -932,10 +932,13 @@ describe('autoFixTypiaErrors — stale string task priority', () => {
     expect(validateAllData(result).success).toBe(true);
   });
 
-  it('leaves valid numeric priorities untouched', () => {
-    const d = withTaskPriority(3);
+  it('keeps an unknown numeric priority, which only a newer client could write', () => {
+    const d = withTaskPriority(4);
+    const before = validateAllData(d);
+    expect(before.success).toBe(false);
 
-    expect(validateAllData(d).success).toBe(true);
-    expect(d.task.entities.t1!.priority).toBe(3);
+    const result = autoFixTypiaErrors(d, (before as IValidation.IFailure).errors);
+
+    expect(result.task.entities.t1!.priority as unknown).toBe(4);
   });
 });

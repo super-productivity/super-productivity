@@ -98,12 +98,15 @@ describe('TaskPriorityIndicatorComponent', () => {
   });
 
   // A string priority written by an old test build is only repaired on sync, so a
-  // local-only user can still render one. It must not throw in any preset.
+  // local-only user can still render one. It must not throw, and shows nothing.
   for (const preset of ['chevrons', 'numbers', 'dots'] as const) {
-    it(`renders an unexpected value without throwing (${preset})`, () => {
+    it(`renders nothing for an unexpected value (${preset})`, () => {
       setPreset(preset);
+      let fixture: ComponentFixture<TaskPriorityIndicatorComponent> | undefined;
 
-      expect(() => create('high' as unknown as TaskPriority)).not.toThrow();
+      expect(() => (fixture = create('high' as unknown as TaskPriority))).not.toThrow();
+      expect(glyph(fixture!)).toBeNull();
+      expect(fixture!.nativeElement.textContent.trim()).toBe('');
     });
   }
 });
