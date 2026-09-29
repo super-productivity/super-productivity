@@ -111,4 +111,24 @@ describe('CaldavSyncAdapterService dates', () => {
       ['due', 'push', null],
     ]);
   });
+
+  it('links the four date fields so a held-back date is re-sent with its partner', () => {
+    const dateMappings = adapter
+      .getFieldMappings()
+      .filter((m) => ['dtstart', 'due'].includes(m.issueField));
+    for (const m of dateMappings) {
+      expect([...(m.pushTogetherWith ?? [])].sort()).toEqual([
+        'deadlineDay',
+        'deadlineWithTime',
+        'dueDay',
+        'dueWithTime',
+      ]);
+    }
+    expect(
+      adapter
+        .getFieldMappings()
+        .filter((m) => !['dtstart', 'due'].includes(m.issueField))
+        .every((m) => m.pushTogetherWith === undefined),
+    ).toBeTrue();
+  });
 });

@@ -147,6 +147,13 @@ export class IssueTwoWaySyncEffects {
   private _syncOriginatedTaskIds = new Set<string>();
   private static readonly _MAX_SYNC_ORIGINATED_IDS = 1000;
 
+  /**
+   * Linked (`pushTogetherWith`) task fields whose last push an adapter held
+   * back, per task id. In memory only: after a restart a held-back field is
+   * re-sent only when it is edited again.
+   */
+  private _heldBackFields = new Map<string, Set<string>>();
+
   constructor() {
     const caldavAdapter = inject(CaldavSyncAdapterService);
     this._adapterRegistry.register('CALDAV', caldavAdapter);
@@ -556,13 +563,41 @@ export class IssueTwoWaySyncEffects {
         const fieldMappings = adapter.getFieldMappings();
         const syncConfig = adapter.getSyncConfig(cfg);
 
-        // Early exit: check if any changed field is pushable before fetching
-        const hasPushableField = fieldMappings.some((m) => {
-          if (!(m.taskField in changes)) {
-            return false;
-          }
+        const canPush = (m: FieldMapping): boolean => {
           const dir = syncConfig[m.taskField] ?? m.defaultDirection;
           return dir === 'pushOnly' || dir === 'both';
+        };
+
+        // Fields to push: the changed ones plus held-back pushTogetherWith partners.
+        // Partners are only linked when the changed mapping itself can push, and
+        // only if an earlier push of that partner was held back: an automatic
+        // change of a partner (e.g. Add to Today) must not reach the provider.
+        const heldBack = this._heldBackFields.get(task.id);
+        const fieldsToPush = new Set<string>(Object.keys(changes));
+        for (const m of fieldMappings) {
+          if (m.taskField in changes && canPush(m)) {
+            for (const partner of m.pushTogetherWith ?? []) {
+              if (!heldBack?.has(partner)) {
+                continue;
+              }
+              // The partner itself must still be push-enabled: a direction
+              // flipped to pull-only since the hold-back must not resurrect it.
+              const partnerMappings = fieldMappings.filter(
+                (pm) => pm.taskField === partner,
+              );
+              if (partnerMappings.some((pm) => canPush(pm))) {
+                fieldsToPush.add(partner);
+              }
+            }
+          }
+        }
+
+        // Early exit: check if any changed field is pushable before fetching
+        const hasPushableField = fieldMappings.some((m) => {
+          if (!fieldsToPush.has(m.taskField)) {
+            return false;
+          }
+          return canPush(m);
         });
         if (!hasPushableField) {
           return;
@@ -576,15 +611,18 @@ export class IssueTwoWaySyncEffects {
         const currentTask = await firstValueFrom(this._taskService.getByIdOnce$(task.id));
         const taskFieldChanges: Record<string, unknown> = {};
         for (const mapping of fieldMappings) {
-          if (mapping.taskField in changes) {
-            // Read from the post-reducer task whenever it exists: a `??` fallback
-            // would resurrect a value the reducer deliberately cleared (e.g. the
-            // stale time on day-only short syntax). Fall back to the action only
-            // when the task is gone.
-            taskFieldChanges[mapping.taskField] = currentTask
-              ? currentTask[mapping.taskField as keyof Task]
-              : changes[mapping.taskField];
+          const isChanged = mapping.taskField in changes;
+          if (!isChanged && (!fieldsToPush.has(mapping.taskField) || !currentTask)) {
+            // Partners are only read from a live task.
+            continue;
           }
+          // Read from the post-reducer task whenever it exists: a `??` fallback
+          // would resurrect a value the reducer deliberately cleared (e.g. the
+          // stale time on day-only short syntax). Fall back to the action only
+          // when the task is gone.
+          taskFieldChanges[mapping.taskField] = currentTask
+            ? currentTask[mapping.taskField as keyof Task]
+            : changes[mapping.taskField];
         }
 
         const parsed = parseInt(issueId, 10);
@@ -607,15 +645,35 @@ export class IssueTwoWaySyncEffects {
           }
         }
 
+        const pushedDecisions = decisions.filter((d) => d.action === 'push');
+        const pushedIssueFields = new Set(pushedDecisions.map((d) => d.field));
+
         const didPush = Object.keys(toPush).length > 0;
         if (didPush) {
-          await adapter.pushChanges(issueId, toPush, cfg);
+          // Only fields actually decided to push this round: a partner present in
+          // taskFieldChanges can still have been skipped (provider-changed,
+          // direction-skip), and must be neither remembered nor forgotten then.
+          const linkedFields = fieldMappings
+            .filter(
+              (m) =>
+                m.pushTogetherWith &&
+                m.taskField in taskFieldChanges &&
+                pushedIssueFields.has(m.issueField),
+            )
+            .map((m) => m.taskField as string);
+          try {
+            await adapter.pushChanges(issueId, toPush, cfg);
+          } catch (err) {
+            if (isExpectedSyncSkipError(err) && linkedFields.length) {
+              this._rememberHeldBack(task.id, linkedFields);
+            }
+            throw err;
+          }
+          this._forgetHeldBack(task.id, linkedFields);
         } else {
           return;
         }
 
-        const pushedDecisions = decisions.filter((d) => d.action === 'push');
-        const pushedIssueFields = new Set(pushedDecisions.map((d) => d.field));
         const hasProviderOwnedSkip = decisions.some(
           (d) =>
             d.action === 'skip' &&
@@ -677,6 +735,30 @@ export class IssueTwoWaySyncEffects {
         }
       }),
     );
+  }
+
+  private _rememberHeldBack(taskId: string, fields: string[]): void {
+    const set = this._heldBackFields.get(taskId) ?? new Set<string>();
+    fields.forEach((f) => set.add(f));
+    this._heldBackFields.delete(taskId);
+    this._heldBackFields.set(taskId, set);
+    if (this._heldBackFields.size > IssueTwoWaySyncEffects._MAX_SYNC_ORIGINATED_IDS) {
+      const oldest = this._heldBackFields.keys().next().value;
+      if (oldest !== undefined) {
+        this._heldBackFields.delete(oldest);
+      }
+    }
+  }
+
+  private _forgetHeldBack(taskId: string, fields: string[]): void {
+    const set = this._heldBackFields.get(taskId);
+    if (!set) {
+      return;
+    }
+    fields.forEach((f) => set.delete(f));
+    if (!set.size) {
+      this._heldBackFields.delete(taskId);
+    }
   }
 
   private _trackSyncOriginatedTask(taskId: string): void {

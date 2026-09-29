@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { IssueSyncAdapter } from '../../two-way-sync/issue-sync-adapter.interface';
 import { FieldMapping, FieldSyncConfig } from '../../two-way-sync/issue-sync.model';
+import { Task } from '../../../tasks/task.model';
 import { CaldavCfg } from './caldav.model';
 import { CaldavClientService } from './caldav-client.service';
 import {
@@ -28,6 +29,14 @@ const toTimedTaskValue = (v: unknown): number | null =>
   typeof v === 'number' ? v : null;
 const toDayTaskValue = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 
+/** DTSTART and DUE are only valid as a pair, so a held-back date is re-sent with its partner. */
+const CALDAV_DATE_TASK_FIELD_LIST: (keyof Task)[] = [
+  'dueDay',
+  'dueWithTime',
+  'deadlineDay',
+  'deadlineWithTime',
+];
+
 /**
  * Each date pair shares one issue field, so computePushDecisions makes exactly
  * one decision per VTODO property. Timed values are `number`, all-day values
@@ -41,6 +50,7 @@ const CALDAV_DATE_FIELD_MAPPINGS: FieldMapping[] = [
     defaultDirection: 'pullOnly',
     toIssueValue: toTimedIssueValue,
     toTaskValue: toTimedTaskValue,
+    pushTogetherWith: CALDAV_DATE_TASK_FIELD_LIST,
   },
   {
     taskField: 'dueDay',
@@ -48,6 +58,7 @@ const CALDAV_DATE_FIELD_MAPPINGS: FieldMapping[] = [
     defaultDirection: 'pullOnly',
     toIssueValue: toDayIssueValue,
     toTaskValue: toDayTaskValue,
+    pushTogetherWith: CALDAV_DATE_TASK_FIELD_LIST,
   },
   {
     taskField: 'deadlineWithTime',
@@ -55,6 +66,7 @@ const CALDAV_DATE_FIELD_MAPPINGS: FieldMapping[] = [
     defaultDirection: 'pullOnly',
     toIssueValue: toTimedIssueValue,
     toTaskValue: toTimedTaskValue,
+    pushTogetherWith: CALDAV_DATE_TASK_FIELD_LIST,
   },
   {
     taskField: 'deadlineDay',
@@ -62,11 +74,12 @@ const CALDAV_DATE_FIELD_MAPPINGS: FieldMapping[] = [
     defaultDirection: 'pullOnly',
     toIssueValue: toDayIssueValue,
     toTaskValue: toDayTaskValue,
+    pushTogetherWith: CALDAV_DATE_TASK_FIELD_LIST,
   },
 ];
 
 export const CALDAV_DATE_TASK_FIELDS: ReadonlySet<string> = new Set(
-  CALDAV_DATE_FIELD_MAPPINGS.map((m) => m.taskField),
+  CALDAV_DATE_TASK_FIELD_LIST,
 );
 export const CALDAV_DEADLINE_TASK_FIELDS: ReadonlySet<string> = new Set([
   'deadlineDay',
