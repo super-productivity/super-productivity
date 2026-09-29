@@ -141,7 +141,13 @@ export const setupSyncClient = async (
   browser: Browser,
   baseURL: string | undefined,
 ): Promise<{ context: BrowserContext; page: Page }> => {
-  const context = await browser.newContext({ baseURL });
+  // A context created here does not inherit the config's user agent; the app
+  // needs PLAYWRIGHT in it to start with every app feature on (as in the
+  // regular suite) instead of the new-install set.
+  const context = await browser.newContext({
+    baseURL,
+    userAgent: 'PLAYWRIGHT WEBDAV-SYNC-CLIENT',
+  });
   const page = await context.newPage();
   const pageErrors = attachPageErrorCollector(page, 'WebDAV sync client');
   installDevErrorDialogHandler(page, 'WebDAV sync client');
