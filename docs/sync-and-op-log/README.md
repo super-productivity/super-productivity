@@ -73,9 +73,10 @@ tests, or a focused contract.
 
 ## Active plans
 
-| Document                                     | Scope                                                                       |
-| -------------------------------------------- | --------------------------------------------------------------------------- |
-| [sqlite-migration.md](./sqlite-migration.md) | Parked native SQLite migration: durability rationale and why it was stopped |
+| Document                                                         | Scope                                                                                       |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [sqlite-migration.md](./sqlite-migration.md)                     | Parked native SQLite migration: durability rationale and why it was stopped                 |
+| [lww-field-level-resolution.md](./lww-field-level-resolution.md) | Proposal: LWW resolutions that carry only the fields that must win (#10379, #10260, #10385) |
 
 ## Related
 
