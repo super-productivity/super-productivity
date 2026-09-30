@@ -28,8 +28,9 @@ All of this is in
 unless noted.
 
 1. `autoResolveConflictsLWW` calls `_resolveConflictsWithLWW` first, and that
-   builds every resolution op. Only afterwards are the batch's non-conflicting
-   remote ops appended and applied, so any store read is pre-batch (#10385).
+   builds every resolution op from the store. Only afterwards are the batch's
+   non-conflicting remote ops applied, so every store read is pre-batch
+   (#10385).
 2. `_resolveConflictsWithLWW` plans the winners with sync-core's
    `planLwwConflictResolutions`, which uses the max timestamp and then the
    clientId of that op. It then tries `_tryCreateDisjointMergeOp`, which
@@ -53,14 +54,15 @@ unless noted.
      `'patch'` with `clearedFields` instead (`asPatchSnapshotIfTypeShadowed`).
    - `buildTimeAwareResolutionBatches`
      ([`fold-sync-time-spent.util.ts`](../../src/app/op-log/sync/fold-sync-time-spent.util.ts))
-     folds the batch's non-conflicting and winning remote `syncTimeSpent`
-     deltas into TASK snapshots.
+     folds the batch's non-conflicting and winning remote time ops (deltas,
+     rounding, absolute `timeSpentOnDay` edits) into TASK snapshots.
    - The deltas of a remote side that **lost** are rejected, and their time is
      gone.
 5. A second producer is `SupersededOperationResolverService`
    ([`superseded-operation-resolver.service.ts`](../../src/app/op-log/sync/superseded-operation-resolver.service.ts)).
-   It rebuilds every server-rejected pending op, merged patches included, as a
-   `'replace'` snapshot from the store. The pin "done status is lost when both
+   It rebuilds every server-rejected field-update op, merged patches included,
+   as a `'replace'` snapshot from the store. It rebases a commuting time delta
+   in place instead (`rebasePendingLocalOps`). The pin "done status is lost when both
    devices also rename the task" runs through it.
 6. Sync-core's `partitionLwwResolutions`
    ([`conflict-resolution.ts`](../../packages/sync-core/src/conflict-resolution.ts))
@@ -100,15 +102,15 @@ Its pieces:
    patches, or equal-timestamp patches tie and diverge (why more than one
    conflict per entity is refused today). A both-devices-resolve test is
    required.
-2. **Keep time out of the patch** (option C's rule).
+2. **Keep time out of the patch** (option C's patch rule).
 3. **Route `SupersededOperationResolverService` through the same builder.**
    Otherwise a server-rejected patch comes back as a replace snapshot.
 
-| Fixes                                                   | Does not fix                                                                   |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| **#10385**: no store snapshot                           | Opaque ops: habit counts, `planTasksForToday`                                  |
-| **#10379** overlap cases: pin "done status…"            | Delete and archive paths                                                       |
-| **#10379** time pin, through piece 2's re-emitted delta | #10260 for tasks: no reproduction of a readable-field remote win yet (rule 15) |
+| Fixes                                                   | Does not fix                                                                    |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **#10385** for merge-eligible shapes: no store snapshot | Opaque, multi-entity and fallback-less types still use the pre-batch store read |
+| **#10379** overlap cases: pin "done status…"            | Opaque ops: habit counts, `planTasksForToday`; delete and archive paths         |
+| **#10379** time pin, through piece 2's rebased delta    | #10260 for tasks: no reproduction of a readable-field remote win yet (rule 15)  |
 
 ### B. Keep replace, but build the snapshot correctly
 
@@ -134,18 +136,22 @@ hydration must replay identically.
 - **A patch:**
   - omits the time fields;
   - applies the remote deltas;
-  - re-emits a rejected local delta as a new `syncTimeSpent` op, which is not
-    applied locally.
-- **The re-emitted op must stay out of restart replay the way pending local
-  deltas already do.** Hydration applies tail ops as remote, so it would add
-  the time again.
-- **Residual:** a released client's replace snapshot that wins still wipes the
-  local time. The re-emitted delta then reaches everyone except this device.
+  - keeps the local delta out of the rejected set and rebases it in place past
+    the resolution clock (`rebasePendingLocalOps`, as
+    `SupersededOperationResolverService` already does). Its id, seq and
+    payload stay, so it uploads once and replays once.
+- **Not a new op.** Restart replay is status-blind
+  ([`operation-log-hydrator.service.ts`](../../src/app/op-log/persistence/operation-log-hydrator.service.ts)),
+  so a rejected original plus a re-sent copy would add the time twice.
+- **Open: a remote win by a replace snapshot.** A released client's winning
+  snapshot wipes this device's time while the rebased delta still reaches the
+  others. The delta must be re-applied after the winner, or the device
+  diverges. The design has no rule for this yet.
 
-| Fixes                                               | Does not fix                                                               |
-| --------------------------------------------------- | -------------------------------------------------------------------------- |
-| Time lost to a losing remote side                   | Non-time fields                                                            |
-| **#10378** time, independent of `planTasksForToday` | Per-day work start and end times on `TIME_TRACKING` (#10382, low severity) |
+| Fixes                                     | Does not fix                                                               |
+| ----------------------------------------- | -------------------------------------------------------------------------- |
+| Time lost to a losing remote side         | Non-time fields                                                            |
+| **#10378** time, local-win direction only | Per-day work start and end times on `TIME_TRACKING` (#10382, low severity) |
 
 ### Independent of A and B: admit NOTE
 
@@ -187,7 +193,9 @@ Checked with `git show v18.15.0:` and `git show v19.1.0:`.
 
 - A v19.1.0 device that resolves a conflict still emits a replace snapshot.
 - v18.15.0 and v19.1.0 lack the `isAdditiveTimeOp` refusal, so they can still
-  merge a delta into a patch (#10147).
+  merge a delta into a patch (#10147). C puts more standalone deltas on the
+  wire at contention time, so this exposure grows on receivers with pending
+  edits.
 - A mixed fleet in which both devices resolve is unverified, because the
   harness can't run v19.1.0.
 
@@ -201,14 +209,14 @@ Expected outcomes are by code reading and have not been run. Each fix PR turns
 its pins into regression pins and leaves all others unchanged, including those
 of #10380 and #10381.
 
-| Pin                                                         | A (pieces 1–3)                  | B                                | C          | NOTE admission                         |
-| ----------------------------------------------------------- | ------------------------------- | -------------------------------- | ---------- | -------------------------------------- |
-| done status lost when both devices rename                   | fixed                           | fixed                            | —          | —                                      |
-| tracked time lost to a later concurrent rename              | fixed, via the re-emitted delta | —                                | with A     | —                                      |
-| note lock lost to an unpin; note content loses to an unpin  | —                               | lock only; `todayOrder` diverges | —          | fixed, if `todayOrder` is kept in step |
-| habit count lost to a rename; habit rename loses to a count | —                               | —                                | —          | —                                      |
-| two devices tracking one unscheduled task (#10378)          | —                               | —                                | time fixed | —                                      |
-| task rename loses to tracking (#10260)                      | —                               | —                                | —          | —                                      |
+| Pin                                                         | A (pieces 1–3)               | B                                | C                         | NOTE admission                         |
+| ----------------------------------------------------------- | ---------------------------- | -------------------------------- | ------------------------- | -------------------------------------- |
+| done status lost when both devices rename                   | fixed                        | — (superseded path unchanged)    | —                         | —                                      |
+| tracked time lost to a later concurrent rename              | fixed, via the rebased delta | —                                | with A                    | —                                      |
+| note lock lost to an unpin; note content loses to an unpin  | —                            | lock only; `todayOrder` diverges | —                         | fixed, if `todayOrder` is kept in step |
+| habit count lost to a rename; habit rename loses to a count | —                            | —                                | —                         | —                                      |
+| two devices tracking one unscheduled task (#10378)          | —                            | —                                | time, local-win direction | —                                      |
+| task rename loses to tracking (#10260)                      | —                            | —                                | —                         | —                                      |
 
 **Start from an E2E** (rule 12: both conflict directions, both timestamp
 winners):
@@ -227,13 +235,15 @@ winners):
 
 **Option A with C's time rule, in steps.** It extends the existing generic
 path (rule 12) and removes the store read behind #10385 instead of reordering
-it. Every release applies its payload as a merge. B is the smaller change for
+it for merge-eligible shapes. Every release applies its payload as a merge,
+except for clears on v18.15.0–v18.21.x. B is the smaller change for
 #10385 alone, but it leaves #10260, and a later resolver's snapshot still
 erases.
 
 1. **PR 1:** pieces 1–3, proven by #10385's E2E and a #10379 task E2E. It
-   replaces a separate fix for #10385 (queue item 3).
-2. **PR 2:** C for #10378, where a losing side's deltas survive.
+   covers #10385's reproduced shape (a readable done toggle). Queue item 3
+   still owns the fallback paths.
+2. **PR 2:** C for #10378, once the remote-win rule is designed.
 3. **Separately, if decided:** admit NOTE, with `todayOrder` upkeep.
 
 Opaque ops stay out of scope: each needs a per-action field contract, which
@@ -253,3 +263,6 @@ reproduction.
    op's `actionPayload` as fields? That would end the no-re-merge contract.
 5. **Opaque ops:** confirm that habit counts and `planTasksForToday` stay on
    whole-entity LWW for now.
+6. **Time on a remote win:** re-apply the rebased local delta after a winning
+   replace snapshot, or accept that #10378 is fixed only in the local-win
+   direction?
