@@ -33,20 +33,17 @@ unless noted.
 2. `_resolveConflictsWithLWW` plans the winners with sync-core's
    `planLwwConflictResolutions`, which uses the max timestamp and then the
    clientId of that op. It then tries `_tryCreateDisjointMergeOp`, which
-   refuses in these cases:
-   - an entity has more than one conflict in the batch;
-   - a delete or archive plan, a delete on either side, or a multi-entity op;
-   - the type has no
+   refuses:
+   - more than one conflict per entity in the batch;
+   - any delete, archive or multi-entity op;
+   - a type without a
      [`RECREATE_FALLBACK`](../../src/app/op-log/core/recreate-fallback.const.ts)
-     entry. Only TASK, PROJECT, TAG and SIMPLE_COUNTER have one.
-   - an additive time op on either side (`isAdditiveTimeOp`, #10147);
-   - any case where `isDisjointMergeEligible` fails
+     entry (only TASK, PROJECT, TAG and SIMPLE_COUNTER have one);
+   - an additive time op (`isAdditiveTimeOp`, #10147);
+   - a failed `isDisjointMergeEligible` check
      ([`conflict-disjoint-merge.util.ts`](../../src/app/op-log/sync/conflict-disjoint-merge.util.ts)):
-     - an opaque op, meaning no readable fields: the habit count
-       `setSimpleCounterCounterToday`, or `planTasksForToday`;
-     - a side that changes only noise fields;
-     - both sides writing the same field;
-   - the entity state is unavailable.
+     an opaque op (habit count `setSimpleCounterCounterToday`,
+     `planTasksForToday`), a noise-only side, or a field both sides wrote.
 3. A merge emits one `lwwUpdateMode: 'patch'` op whose delta comes only from
    the two sides' ops (`synthesizeMergedChanges`). This is why both resolvers
    build the same bytes. Both originals are rejected; the patch is applied
@@ -64,8 +61,7 @@ unless noted.
    ([`superseded-operation-resolver.service.ts`](../../src/app/op-log/sync/superseded-operation-resolver.service.ts)).
    It rebuilds every server-rejected pending op, merged patches included, as a
    `'replace'` snapshot from the store. The pin "done status is lost when both
-   devices also rename the task" runs through it (`CONFLICT_CONCURRENT [TASK]
-LWW Update`).
+   devices also rename the task" runs through it.
 6. Sync-core's `partitionLwwResolutions`
    ([`conflict-resolution.ts`](../../packages/sync-core/src/conflict-resolution.ts))
    rejects **every local op of every conflict, whoever wins**. A remote win
@@ -100,11 +96,10 @@ LWW Update`).
 Its pieces:
 
 1. **Allow overlap, and aggregate one entity's conflicts into one side each.**
-   - Convergence must be proven, not assumed: two resolvers with staggered
-     batches must build byte-identical patches. Otherwise patches with equal
-     timestamps tie and diverge, which is the reason for today's refusal of
-     more than one conflict per entity.
-   - A test in which both devices resolve is required.
+   Two resolvers with staggered batches must provably build byte-identical
+   patches, or equal-timestamp patches tie and diverge (why more than one
+   conflict per entity is refused today). A both-devices-resolve test is
+   required.
 2. **Keep time out of the patch** (option C's rule).
 3. **Route `SupersededOperationResolverService` through the same builder.**
    Otherwise a server-rejected patch comes back as a replace snapshot.
@@ -162,17 +157,11 @@ hydration must replay identically.
 
 ## Released clients and graceful degradation
 
-Checked with `git show v18.15.0:` / `v19.1.0:` on
-`lww-update.meta-reducer.ts`, `operation-converter.util.ts`,
-`conflict-resolution.service.ts`, `conflict-disjoint-merge.util.ts`,
-`task.reducer.ts` and sync-core's `operation.types.ts`.
+Checked with `git show v18.15.0:` and `git show v19.1.0:`.
 
-**What receivers do:**
-
-- **Existing entity:** `'patch'` → `updateOne` and `'replace'` → `setOne` in
-  both tags. v18.15.0 already emits `'patch'` for merges.
-- **Remote `syncTimeSpent`:** additive in both tags.
-- **Unknown envelope keys:** dropped.
+- **Both tags:** `'patch'` → `updateOne`, `'replace'` → `setOne`, remote
+  `syncTimeSpent` is additive, and unknown envelope keys are dropped.
+  v18.15.0 already emits `'patch'` for merges.
 - **No new wire key, action type or persisted field, and no schema bump
   (rule 10).**
 
@@ -202,13 +191,9 @@ Checked with `git show v18.15.0:` / `v19.1.0:` on
 - A mixed fleet in which both devices resolve is unverified, because the
   harness can't run v19.1.0.
 
-**Long-term cost (feature review guide):**
-
-- **Persisted model:** unchanged.
-- **Sync wire:** unchanged; `'patch'` and `syncTimeSpent` are reused.
-- **Plugin API:** untouched.
-- **Maintenance:** A extends the generic merge (rule 12). B adds ordering
-  machinery to a service that is grandfathered past the 1200-line cap.
+**Long-term cost (feature review guide):** persisted model, sync wire and
+plugin API are unchanged. A extends the generic merge (rule 12). B adds
+ordering machinery to a service grandfathered past the 1200-line cap.
 
 ## Fuzz pins and E2E proof
 
@@ -231,19 +216,12 @@ winners):
 - **#10385:** `e2e/tests/sync/supersync-commuting-edit-beside-local-win.spec.ts`
   on `ccr-211e334d-0r60po`. It is `test.fixme`, red 4 of 4, and queue item 2
   ports it.
-- **New specs:**
-  - #10379's done and time pins, with a restart after the time case;
-  - a both-devices-resolve case;
-  - #10378;
-  - the note pins, if NOTE is admitted.
-- **Must stay green:**
-  - `supersync.spec.ts` "3.1";
-  - `supersync-lww-conflict.spec.ts`;
-  - `supersync-time-delta-rename-crossing.spec.ts`;
-  - `supersync-time-tracking-advanced.spec.ts`;
-  - `supersync-round-time-conflict.spec.ts`;
-  - `supersync-simple-counter-lww-type.spec.ts`;
-  - `supersync-clear-field-9776.spec.ts`.
+- **New specs:** #10379's done and time pins (with a restart after the time
+  case), a both-devices-resolve case, #10378, and the note pins if NOTE is
+  admitted.
+- **Must stay green:** `supersync.spec.ts` "3.1" and the `supersync-*` specs
+  for `lww-conflict`, `time-delta-rename-crossing`, `time-tracking-advanced`,
+  `round-time-conflict`, `simple-counter-lww-type` and `clear-field-9776`.
 
 ## Recommendation
 
