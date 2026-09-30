@@ -44,7 +44,8 @@ unless noted.
    - a failed `isDisjointMergeEligible` check
      ([`conflict-disjoint-merge.util.ts`](../../src/app/op-log/sync/conflict-disjoint-merge.util.ts)):
      an opaque op (habit count `setSimpleCounterCounterToday`,
-     `planTasksForToday`), a noise-only side, or a field both sides wrote.
+     `planTasksForToday`), a noise-only side, or a field both sides wrote;
+   - a whole-entity-win plan, or missing entity state or clientId.
 3. A merge emits one `lwwUpdateMode: 'patch'` op whose delta comes only from
    the two sides' ops (`synthesizeMergedChanges`). This is why both resolvers
    build the same bytes. Both originals are rejected; the patch is applied
@@ -74,7 +75,7 @@ unless noted.
 8. Receivers apply the op in
    [`lwwUpdateMetaReducer`](../../src/app/root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer.ts):
    - `'replace'` → `setOne`;
-   - `'patch'` → `updateOne`;
+   - `'patch'` or any other mode, including none → `updateOne`;
    - an absent entity → `addOne` with the `RECREATE_FALLBACK` backfill. NOTE is
      added raw, and a marked `recreatesEntityAfterDelete` patch is ignored.
    - Tasks keep their project, tag and Today lists in step. Nothing keeps
@@ -91,8 +92,11 @@ unless noted.
 
 - **Every update-vs-update resolution becomes a merge:** a `'patch'` that
   holds the union of both sides' fields as read from their ops.
-- **A field both sides wrote** takes the value of the planner's winner, so no
-  second tiebreak is needed.
+- **A field both sides wrote** takes the value of `plan.winner` (sync-core's
+  planner: max timestamp, then the clientId of that op). Today
+  `synthesizeMergedChanges` lets the remote value win a shared key, and its
+  noise tiebreak uses `localOps[0].clientId`; both must switch to the planner's
+  rule so two resolvers agree on equal-timestamp ties.
 - **The loser's other fields upload too,** so this covers both directions.
 
 Its pieces:
@@ -100,17 +104,18 @@ Its pieces:
 1. **Allow overlap, and aggregate one entity's conflicts into one side each.**
    Two resolvers with staggered batches must provably build byte-identical
    patches, or equal-timestamp patches tie and diverge (why more than one
-   conflict per entity is refused today). A both-devices-resolve test is
-   required.
+   conflict per entity is refused today). A both-devices-resolve test with a
+   timestamp tie is required.
 2. **Keep time out of the patch** (option C's patch rule).
 3. **Route `SupersededOperationResolverService` through the same builder.**
    Otherwise a server-rejected patch comes back as a replace snapshot.
 
-| Fixes                                                   | Does not fix                                                                    |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| **#10385** for merge-eligible shapes: no store snapshot | Opaque, multi-entity and fallback-less types still use the pre-batch store read |
-| **#10379** overlap cases: pin "done status…"            | Opaque ops: habit counts, `planTasksForToday`; delete and archive paths         |
-| **#10379** time pin, through piece 2's rebased delta    | #10260 for tasks: no reproduction of a readable-field remote win yet (rule 15)  |
+| Fixes                                                   | Does not fix                                                                                                                                                                  |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **#10385** for merge-eligible shapes: no store snapshot | Opaque, multi-entity and fallback-less types still use the pre-batch store read                                                                                               |
+| **#10379** overlap cases: pin "done status…"            | Opaque ops: habit counts, `planTasksForToday`; delete and archive paths                                                                                                       |
+| **#10379** time pin, through piece 2's rebased delta    | #10260's pins: habit (opaque count), task (opaque `planTasksForToday` on the winner), note (needs NOTE admission); the readable-field shape has no reproduction yet (rule 15) |
+|                                                         | Regresses: a device that applied a concurrent delete recreates TASK, PROJECT or TAG from the patch with defaults for every other field                                        |
 
 ### B. Keep replace, but build the snapshot correctly
 
@@ -185,6 +190,8 @@ Checked with `git show v18.15.0:` and `git show v19.1.0:`.
    - TASK becomes valid but content-less (defaults);
    - NOTE is added raw and invalid, so REPAIR runs (#10380 shape);
    - a replace would have recreated it fully.
+   - Under A this widens from today's disjoint merges to every overlapping
+     resolution. The resolving device usually cannot know about the delete.
 
    Recreate snapshots must stay `'replace'`, as `asPatchSnapshotIfTypeShadowed`
    already keeps them.
@@ -222,8 +229,8 @@ of #10380 and #10381.
 winners):
 
 - **#10385:** `e2e/tests/sync/supersync-commuting-edit-beside-local-win.spec.ts`
-  on `ccr-211e334d-0r60po`. It is `test.fixme`, red 4 of 4, and queue item 2
-  ports it.
+  on `ccr-211e334d-0r60po`. It is `test.fixme`, red 4 of 4 per the issue, and
+  queue item 2 ports it.
 - **New specs:** #10379's done and time pins (with a restart after the time
   case), a both-devices-resolve case, #10378, and the note pins if NOTE is
   admitted.
@@ -238,12 +245,19 @@ path (rule 12) and removes the store read behind #10385 instead of reordering
 it for merge-eligible shapes. Every release applies its payload as a merge,
 except for clears on v18.15.0–v18.21.x. B is the smaller change for
 #10385 alone, but it leaves #10260, and a later resolver's snapshot still
-erases.
+erases. For #10260, A addresses only the readable-field shape, by construction;
+no current pin shows it.
 
-1. **PR 1:** pieces 1–3, proven by #10385's E2E and a #10379 task E2E. It
-   covers #10385's reproduced shape (a readable done toggle). Queue item 3
-   still owns the fallback paths.
-2. **PR 2:** C for #10378, once the remote-win rule is designed.
+**Revert first?** #10385 is an unreleased regression from #10252, but
+reverting #10252's crossing rule brings back #10214, which v19.1.0 has (per
+#10385 and #10340). So it needs a fix forward (rule 15).
+
+1. **PR 1:** pieces 1–3, including C's patch rule (the local delta rebased in
+   place). Proof: #10385's E2E, a #10379 task E2E, and the restart after the
+   time case. It covers #10385's reproduced shape (a readable done toggle).
+   Queue item 3 still owns the fallback paths.
+2. **PR 2:** the rest of C: fold losing deltas into replace snapshots, and the
+   remote-win rule once designed (#10378).
 3. **Separately, if decided:** admit NOTE, with `todayOrder` upkeep.
 
 Opaque ops stay out of scope: each needs a per-action field contract, which
@@ -253,16 +267,19 @@ reproduction.
 ## Decisions for @johannesjo
 
 1. **Direction:** A, B, or neither? If A, does #10385 ship as its PR 1?
-2. **Clears on v18.15.0–v18.21.x:** accept that those receivers keep a stale
+2. **Recreate from a patch:** accept that a device which applied a concurrent
+   delete recreates a TASK, PROJECT or TAG with defaults for the fields outside
+   the patch, where today's replace recreates it fully?
+3. **Clears on v18.15.0–v18.21.x:** accept that those receivers keep a stale
    optional value when a resolution becomes a patch? The alternative is to
    keep replace for resolutions that clear a field.
-3. **NOTE:** admit it, accepting that a released device that applied a
+4. **NOTE:** admit it, accepting that a released device that applied a
    concurrent note delete recreates an invalid note that REPAIR must fix? Or
    keep notes on whole-entity LWW until v19.1.0 leaves the fleet?
-4. **Resolution ops as input:** should a later conflict read a `'patch'`
+5. **Resolution ops as input:** should a later conflict read a `'patch'`
    op's `actionPayload` as fields? That would end the no-re-merge contract.
-5. **Opaque ops:** confirm that habit counts and `planTasksForToday` stay on
+6. **Opaque ops:** confirm that habit counts and `planTasksForToday` stay on
    whole-entity LWW for now.
-6. **Time on a remote win:** re-apply the rebased local delta after a winning
+7. **Time on a remote win:** re-apply the rebased local delta after a winning
    replace snapshot, or accept that #10378 is fixed only in the local-win
    direction?
