@@ -169,8 +169,8 @@ Checked with `git show v18.15.0:` and `git show v19.1.0:`.
 
 1. **Clears.** v18.15.0 ignores `clearedFields`, and v19.1.0 applies it. The
    v18.22.0 boundary is from
-   [contributor-sync-model.md](./contributor-sync-model.md#clearing-a-field--undefined-does-not-survive-the-wire-9776),
-   not checked against a tag.
+   [contributor-sync-model.md](./contributor-sync-model.md) ("Clearing a
+   field", #9776), not checked against a tag.
    - An older receiver keeps a stale value, e.g. a cleared `dueWithTime` or
      `reminderId`, where `setOne` cleared it.
    - This is the same documented residual as `asPatchSnapshotIfTypeShadowed`.
