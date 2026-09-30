@@ -989,6 +989,35 @@ test('recovering a token does not start a server the user disabled', async () =>
   }
 });
 
+test('--headless serves the API with the persisted token while the synced setting is off', async () => {
+  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-lra-headless-'));
+  const port = takeIsolatedPort();
+  const ctx = createContext({ port, userDataDir: profileDir });
+  const isolated = loadModule(ctx);
+  const originalArgv = process.argv;
+  process.argv = [...originalArgv, '--headless'];
+
+  try {
+    isolated.initLocalRestApi();
+    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: false } });
+    await settleListen();
+
+    const token = fs
+      .readFileSync(path.join(profileDir, 'local-rest-api-token'), 'utf8')
+      .trim();
+    const res = await makeRequest(
+      { method: 'GET', path: '/status', headers: { Authorization: `Bearer ${token}` } },
+      undefined,
+      port,
+    );
+    assert.equal(res.status, 200);
+  } finally {
+    process.argv = originalArgv;
+    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: false } });
+    fs.rmSync(profileDir, { recursive: true, force: true });
+  }
+});
+
 test('SP_FORCE_LOCAL_REST_API can use an explicit dev token', async () => {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalForce = process.env.SP_FORCE_LOCAL_REST_API;

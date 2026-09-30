@@ -17,7 +17,7 @@ import { isExternalUrlSchemeAllowed } from './shared-with-frontend/is-external-u
 import { isLocalFileUrl, openLocalPath } from './open-url';
 import { readFileSync, stat } from 'fs';
 import { error, log } from 'electron-log/main';
-import { IS_MAC, IS_GNOME_WAYLAND } from './common.const';
+import { IS_MAC, IS_GNOME_WAYLAND, isHeadless } from './common.const';
 import {
   destroyTaskWidget,
   getIsTaskWidgetAlwaysShow,
@@ -415,6 +415,12 @@ export const createWindow = async ({
 
   // show gracefully
   mainWin.once('ready-to-show', () => {
+    // Headless still boots the renderer (it owns the store and sync); the
+    // window only appears when opened from the tray.
+    if (isHeadless()) {
+      log('Headless: keeping the main window hidden');
+      return;
+    }
     mainWin.show();
 
     // Workaround for Windows phantom focus bug (electron#20464):

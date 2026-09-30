@@ -18,6 +18,7 @@ import {
 } from 'fs';
 import { dirname, join } from 'path';
 import { IPC } from './shared-with-frontend/ipc-events.const';
+import { isHeadless } from './common.const';
 import { getIsAppReady, getWin } from './main-window';
 import { GlobalConfigState } from '../src/app/features/config/global-config.model';
 import {
@@ -741,7 +742,10 @@ const stopServer = (): void => {
 
 export const updateLocalRestApiConfig = (cfg: GlobalConfigState): void => {
   const isForcedForDev = isForceEnabledForDev();
-  const nextEnabled = isForcedForDev || !!cfg.misc.isLocalRestApiEnabled;
+  // Headless serves the API without flipping the synced setting, which would
+  // switch it on for every other device too. It uses the regular persisted
+  // token, not the dev one.
+  const nextEnabled = isForcedForDev || isHeadless() || !!cfg.misc.isLocalRestApiEnabled;
   isEnabledDesired = nextEnabled;
   // Ensure a token exists whenever the server is (about to be) serving, so
   // enabling the API never starts an unreachable server with no credential.

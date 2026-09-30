@@ -31,5 +31,9 @@ export const isGnomeWaylandEnv = (
 ): boolean => isGnomeDesktopEnv(platform, env) && isWaylandEnv(platform, env);
 
 export const IS_MAC = process.platform === 'darwin';
+// `--headless`: never show the main window, and serve the local REST API
+// regardless of the synced setting. For a box that only serves the API and
+// syncs; the flag is per-launch, so it never reaches other devices.
+export const isHeadless = (): boolean => process.argv.includes('--headless');
 export const IS_GNOME_DESKTOP = isGnomeDesktopEnv(process.platform, process.env);
 export const IS_GNOME_WAYLAND = isGnomeWaylandEnv(process.platform, process.env);
