@@ -372,11 +372,12 @@ export const isCommutingTimeDeltaCrossing = (params: {
  * task that writes no time field (#10421, #10408). The delta then adds to
  * whatever the row leaves, so both apply as they are.
  *
- * Only the row's KEYS are read: its values never become merge input, and rows
- * never merge with each other (#10393 decision 5). A row that writes or clears
- * `timeSpent`/`timeSpentOnDay` keeps whole-entity LWW, whatever its mode: a
- * patch row can write absolute time, and a replace row (v19.1.0 resolvers,
- * recreate snapshots) carries it.
+ * Only which top-level keys a `'patch'` row writes or clears is read, never
+ * its values; no op is built from the row and rows never merge (decision 5a
+ * in docs/sync-and-op-log/lww-field-level-resolution.md). A patch that writes
+ * or clears `timeSpent`/`timeSpentOnDay` keeps whole-entity LWW, and so does
+ * every `'replace'` row: `setOne` rewrites all fields, time included, whatever
+ * keys it carries.
  */
 const isTimeDeltaBesideTimelessRow = ({
   localOps,
@@ -395,7 +396,8 @@ const isTimeDeltaBesideTimelessRow = ({
     if (
       op.entityType !== 'TASK' ||
       op.opType !== OpType.Update ||
-      !isLwwUpdatePayload(payload)
+      !isLwwUpdatePayload(payload) ||
+      payload.lwwUpdateMode !== 'patch'
     ) {
       return false;
     }

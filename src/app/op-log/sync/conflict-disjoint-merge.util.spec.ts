@@ -417,12 +417,17 @@ describe('conflict-disjoint-merge.util', () => {
       expect(commutes([syncTimeSpentOp(), deferredSyncTimeSpentOp()], [notesRow])).toBe(
         true,
       );
+    });
+
+    // `setOne` rewrites every field, so a replace row writes time whatever
+    // keys it carries.
+    it('is false for any replace row', () => {
       expect(
         commutes(
           [syncTimeSpentOp()],
           [row({ id: 'task-1', title: 'T' }, { lwwUpdateMode: 'replace' })],
         ),
-      ).toBe(true);
+      ).toBe(false);
     });
 
     it('is false for a row that writes or clears a time field', () => {

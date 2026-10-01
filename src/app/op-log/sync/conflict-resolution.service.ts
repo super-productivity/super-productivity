@@ -1525,7 +1525,8 @@ export class ConflictResolutionService {
       }
     } else if (remoteWinsOps.length > 0) {
       const ops = remoteWinsInServerOrder(nonConflictingOps, remoteWinsOps);
-      nonConflictingOps = nonConflictingOps.filter((op) => !ops.includes(op));
+      const hoisted = new Set(ops);
+      nonConflictingOps = nonConflictingOps.filter((op) => !hoisted.has(op));
       const result = await this._filterAndAppendOpsWithRetry(ops, 'remote', {
         pendingApply: true,
       });

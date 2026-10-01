@@ -119,12 +119,9 @@ const touchesTask = (op: Operation, taskId: string): boolean =>
   getOpEntityIds(op).includes(taskId) ||
   JSON.stringify(op.payload).includes(JSON.stringify(taskId));
 
-/** True when `later` causally dominates `earlier` on an entity they share. */
-const dominates = (later: Operation, earlier: Operation): boolean =>
-  later.entityType === earlier.entityType &&
-  getOpEntityIds(later).some((id) => getOpEntityIds(earlier).includes(id)) &&
-  compareVectorClocks(earlier.vectorClock, later.vectorClock) ===
-    VectorClockComparison.LESS_THAN;
+/** The `type:id` keys of the entities an op declares. */
+const entityKeys = (op: Operation): Set<string> =>
+  new Set(getOpEntityIds(op).map((id) => `${op.entityType}:${id}`));
 
 /**
  * #10423: the incoming prefix to persist ahead of the resolution's local rows,
@@ -140,6 +137,14 @@ export const orderIncomingPrefix = (
   remoteWinsOps: Operation[],
   minLength = 0,
 ): { ordered: Operation[]; precedingOps: Operation[]; moved: Set<Operation> } => {
+  const keysOf = new Map(
+    [...nonConflictingOps, ...remoteWinsOps].map((op) => [op, entityKeys(op)]),
+  );
+  // True when `later` causally dominates `earlier` on an entity they share.
+  const dominates = (later: Operation, earlier: Operation): boolean =>
+    [...keysOf.get(later)!].some((key) => keysOf.get(earlier)!.has(key)) &&
+    compareVectorClocks(earlier.vectorClock, later.vectorClock) ===
+      VectorClockComparison.LESS_THAN;
   const placed = remoteWinsOps.map((winner) => ({
     winner,
     pos: nonConflictingOps.reduce(
