@@ -228,6 +228,51 @@ describe('conflict-field-patch.util', () => {
       expect(isFieldPatchEligible(sides(local, [row('patch')]))).toBeTrue();
     });
 
+    it("counts a patch row's cleared fields as written", () => {
+      const clearingRow = op({
+        id: 'row-clear',
+        actionType: '[TASK] LWW Update' as ActionType,
+        clientId: 'B',
+        timestamp: 4,
+        payload: {
+          actionPayload: { id: 'task-1', title: 'B' },
+          entityChanges: [],
+          lwwUpdateMode: 'patch',
+          clearedFields: ['notes'],
+        },
+      });
+      expect(
+        localWinningFieldGroups(sides([at({ notes: 'C' }, 'C', 3)], [clearingRow])),
+      ).toEqual([]);
+    });
+
+    it('refuses a local time delta beside a row that may write time', () => {
+      const rowOf = (
+        mode: 'patch' | 'replace',
+        fields: Record<string, unknown>,
+      ): Operation =>
+        op({
+          id: `row-${mode}`,
+          actionType: '[TASK] LWW Update' as ActionType,
+          clientId: 'B',
+          timestamp: 4,
+          payload: {
+            actionPayload: { id: 'task-1', ...fields },
+            entityChanges: [],
+            lwwUpdateMode: mode,
+          },
+        });
+      const local = [at({ notes: 'C' }, 'C', 3), delta({ clientId: 'C' })];
+      const titleRow = rowOf('patch', { title: 'B' });
+      expect(isFieldPatchEligible(sides(local, [titleRow]))).toBeTrue();
+      expect(
+        isFieldPatchEligible(sides(local, [rowOf('patch', { timeSpent: 9 })])),
+      ).toBeFalse();
+      expect(
+        isFieldPatchEligible(sides(local, [rowOf('replace', { title: 'B' })])),
+      ).toBeFalse();
+    });
+
     it('carries the doneOn a done toggle derives', () => {
       expect(
         localWinningFieldGroups(
