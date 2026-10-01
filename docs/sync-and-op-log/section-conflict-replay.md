@@ -138,16 +138,26 @@ lists are `project.noteIds`, `note.todayOrder` and `simpleCounter.ids`:
   download (`RemoteOpsProcessingService`) and before every upload
   (`OperationLogUploadService`), scanning every retained applied remote row.
   Without it, competing orders diverge on WebDAV (verified by disabling it).
+  While live state may hold an unpersisted change the reissue is deferred and
+  the upload holds the crossed order back, so a stale original never uploads.
+  A crossed order without the proof keeps the safety stop. Known gap: a held
+  order whose remote row is compacted away before the next sync is no longer
+  seen as crossed and uploads as it is. SuperSync rejects it and stops as
+  before; on a file-based provider receivers that already hold the remote op
+  skip it as superseded, so the holding device keeps its own order.
 
 A pending note or habit order that commutes with a concurrent remote op stays
 out of a conflict over the entity's other pending ops (`nonCommutingPendingOps`,
 #10420). The edit conflict resolves as it would without the order, and neither
 winner rejects the order. Like a kept time delta, the order then moves in place
 past the remote clocks of the conflicts it crosses, together with every later
-pending op of the device (`keptCommutingReorders`, `rebaseKeptReorders`), so the
-server accepts it after either winner. Its payload does not change. A crash
-before the move leaves the old clock, and the server rejects the order into the
-paths above; without causal proof (the remote row lost) that keeps the stop.
+pending op of the device on an entity it lists (`keptCommutingReorders`,
+`rebaseKeptReorders`), so the server accepts it after either winner. Its
+payload does not change. A crash before the move leaves the old clock: SuperSync
+rejects the order into the paths above, and without causal proof (the remote
+row lost) that keeps the stop. A file-based provider uploads it with the old
+clock; no E2E covers that crash window. Board, section and issue-provider
+orders stay in the conflict and keep the stop.
 An order whose conflict's remote op is an order or note delete it crosses
 (`isReissuedReorderCrossing`) does not move when that op applies: the reissue
 above runs only while the order is concurrent with it, and a moved order
@@ -159,13 +169,6 @@ the habit: the LWW meta-reducer writes the habit only, and no habit field is
 list-routed, so neither the row's mode nor its keys are read (decision 5). A
 note row keeps the stop, since a note snapshot carries `projectId` and
 `isPinnedToToday`; so do board, section and issue-provider orders.
-While live state may hold an unpersisted change the reissue is deferred and
-the upload holds the crossed order back, so a stale original never uploads.
-A crossed order without the proof keeps the safety stop. Known gap: a held
-order whose remote row is compacted away before the next sync is no longer
-seen as crossed and uploads as it is. SuperSync rejects it and stops as
-before; on a file-based provider receivers that already hold the remote op
-skip it as superseded, so the holding device keeps its own order.
 
 A habit delete keeps the stop: a habit order fills the slots of the habits it
 lists, so a delete shifts them around an unlisted (disabled) habit and the two
