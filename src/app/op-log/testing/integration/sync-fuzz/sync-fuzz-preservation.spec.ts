@@ -176,6 +176,23 @@ describe('sync fuzz preservation oracles', () => {
         expect(signatures(converged, [notesB, notesC, track(300, true)])).toEqual([]);
       });
 
+      it('does not account for a value the winning device never held', () => {
+        // D's notes reached neither A nor C; A's whole-entity snapshot cannot
+        // carry them (second review of #10428, nit 4).
+        const notesD: LedgerEntry = {
+          ...entry('D', { D: 1 }, ['editTaskNotes', 't1', 'D notes']),
+          time: 0, // older than C's notes
+        };
+        const unseen = {
+          tasks: {
+            t1: { id: 't1', notes: 'D notes', timeSpentOnDay: { [fuzzDay()]: 1000 } },
+          },
+        };
+        expect(signatures(unseen, [notesD, notesB, notesC, track(100)])).toEqual([
+          'older-write-won:task.notes',
+        ]);
+      });
+
       it('does not when its plain delta is local to the resolver', () => {
         // A uploads last: A resolves with its own delta, through the patch,
         // which writes no notes.
@@ -238,7 +255,7 @@ describe('sync fuzz preservation oracles', () => {
   });
 
   describe('deleted tasks', () => {
-    it('counts a deleted task that came back apart, as recreated', () => {
+    it('counts a task recreated after its delete crossed an edit apart, as recreated', () => {
       const rename = entry('A', { A: 1 }, ['renameTask', 't1', 'renamed']);
       const del = entry('B', { B: 1 }, ['deleteTask', 't1']);
       // Gone: nothing to check.
@@ -251,6 +268,28 @@ describe('sync fuzz preservation oracles', () => {
       expect(signatures({ tasks: { t1: { id: 't1', title: 'old' } } }, [rename])).toEqual(
         ['field-reverted:task.title'],
       );
+    });
+
+    it('reports a task that comes back although its delete crossed nothing', () => {
+      // B deleted after seeing A's rename (second review of #10428, finding 2).
+      const rename = entry('A', { A: 1 }, ['renameTask', 't1', 'renamed']);
+      const del = entry('B', { A: 1, B: 1 }, ['deleteTask', 't1']);
+      expect(signatures({}, [rename, del])).toEqual([]);
+      expect(
+        signatures({ tasks: { t1: { id: 't1', title: 'renamed' } } }, [rename, del]),
+      ).toEqual(['resurrected:task']);
+      expect(
+        signatures({ tasks: { t1: { id: 't1', title: 'old' } } }, [rename, del]),
+      ).toEqual(['resurrected:task', 'field-reverted:task.title']);
+    });
+
+    it('keeps a newer write beaten on a recreated task out of the recreated count', () => {
+      const renameA = entry('A', { A: 1 }, ['renameTask', 't1', 'A']);
+      const del = entry('B', { B: 1 }, ['deleteTask', 't1']);
+      const renameC = entry('C', { C: 1 }, ['renameTask', 't1', 'C']);
+      expect(
+        signatures({ tasks: { t1: { id: 't1', title: 'A' } } }, [renameA, del, renameC]),
+      ).toEqual(['older-write-won:task.title']);
     });
   });
 

@@ -514,7 +514,7 @@
   },
   {
     "class": "restart-changes-state",
-    "ref": "#10381; the recreated title is decision 2 (counted as recreated:, #10428)",
+    "ref": "#10381; the title loss is a time-only local side winning with a snapshot read before the batch (#10421), seen since #10428",
     "name": "after a delete, a recreate and concurrent renames, a restart moves the task in Today; title and time stay",
     "steps": [
       {
@@ -551,7 +551,7 @@
     "signatures": [
       "divergence:.tag.entities.*.taskIds.*",
       "divergence:.task.ids.*",
-      "recreated:older-write-won:task.title",
+      "older-write-won:task.title",
       "restart-changed:.tag.entities.*.taskIds.*",
       "restart-changed:.task.ids.*"
     ],
