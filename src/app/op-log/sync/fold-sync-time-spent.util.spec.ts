@@ -370,8 +370,6 @@ describe('buildTimeAwareResolutionBatches: readable fields of nonconflicting ops
   });
 });
 
-// #10423: on one entity, server order is causal order. A remote winner goes
-// after the incoming ops it dominates and before those that dominate it.
 describe('buildTimeAwareResolutionBatches: field-patch re-sends (#10422)', () => {
   const taskOp = (
     id: string,
@@ -454,6 +452,8 @@ describe('buildTimeAwareResolutionBatches: field-patch re-sends (#10422)', () =>
   });
 });
 
+// #10423: on one entity, server order is causal order. A remote winner goes
+// after the incoming ops it dominates and before those that dominate it.
 describe('orderIncomingPrefix', () => {
   const taskOp = (
     id: string,
