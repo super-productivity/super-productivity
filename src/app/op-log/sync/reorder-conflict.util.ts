@@ -454,7 +454,9 @@ export const nonCommutingPendingOps = (
  * pending and move past those conflicts' remote clocks in place
  * (`rebaseKeptReorders`), so the server accepts them after either winner.
  * `reissuedCrossings` holds each kept order's remote ops that it crosses as a
- * competing order or a listed note delete (`isReissuedReorderCrossing`).
+ * competing order or a listed note delete (`isReissuedReorderCrossing`): those
+ * of its conflicts, and the concurrent ones applied in the same batch
+ * (`appliedAlongside`), whose clock a conflict's remote clock may dominate.
  */
 export interface KeptReorders {
   opIds: Set<string>;
@@ -465,6 +467,7 @@ export interface KeptReorders {
 export const keptCommutingReorders = (
   conflicts: EntityConflict[],
   pendingByEntity: Map<string, Operation[]>,
+  appliedAlongside: Operation[] = [],
 ): KeptReorders => {
   const inConflict = new Set(conflicts.flatMap((c) => c.localOps.map((op) => op.id)));
   const opIds = new Set<string>();
@@ -482,6 +485,21 @@ export const keptCommutingReorders = (
           reissuedCrossings.set(op.id, [...(reissuedCrossings.get(op.id) ?? []), remote]);
         }
       }
+    }
+  }
+  for (const op of new Set([...pendingByEntity.values()].flat())) {
+    if (!opIds.has(op.id)) continue;
+    const crossings = appliedAlongside.filter(
+      (remote) =>
+        isReissuedReorderCrossing(op, remote) &&
+        compareVectorClocks(op.vectorClock, remote.vectorClock) ===
+          VectorClockComparison.CONCURRENT,
+    );
+    if (crossings.length > 0) {
+      reissuedCrossings.set(op.id, [
+        ...(reissuedCrossings.get(op.id) ?? []),
+        ...crossings,
+      ]);
     }
   }
   return { opIds, clockToDominate, reissuedCrossings };

@@ -1029,8 +1029,8 @@ export class ConflictResolutionService {
     // A patched conflict's local time deltas stay pending (rebased in STEP 3b).
     const keptDeltas = keptLocalTimeDeltas(mergedResolutions.map((m) => m.conflict));
     const protectedLocalResolutionOpIds = new Set<string>(keptDeltas.opIds);
-    const pendingAtStart = await this.opLogStore.getUnsyncedByEntity();
-    const keptReorders = keptCommutingReorders(conflicts, pendingAtStart);
+    const pending = await this.opLogStore.getUnsyncedByEntity();
+    const keptReorders = keptCommutingReorders(conflicts, pending, nonConflictingOps);
     let writtenLocalWinOps: Operation[] = [];
     const writtenMergedOpIds = new Set<string>();
 

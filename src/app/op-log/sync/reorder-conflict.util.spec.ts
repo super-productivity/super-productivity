@@ -877,6 +877,65 @@ describe('a pending order beside a conflict on a listed entity (#10420)', () => 
     );
   });
 
+  it('leaves an order to the reissue when its conflict dominates a delete applied beside it', async () => {
+    const order = {
+      ...toOp(
+        updateNoteOrder({
+          ids: ['b', 'a', 'w'],
+          activeContextType: WorkContextType.PROJECT,
+          activeContextId: P,
+        }),
+      ),
+      vectorClock: { local: 2 },
+    };
+    const edit = {
+      ...toOp(updateNote({ note: { id: 'a', changes: { content: 'x' } } })),
+      vectorClock: { local: 3 },
+    };
+    // The other device deleted `w`, then edited `a`: the edit's clock dominates
+    // the delete, which applies outside the conflict.
+    const remoteDelete = {
+      ...toOp(deleteNote({ id: 'w', projectId: P, isPinnedToToday: false })),
+      id: 'remote-delete',
+      vectorClock: { other: 1 },
+    };
+    const remoteEdit = {
+      ...toOp(updateNote({ note: { id: 'a', changes: { content: 'y' } } })),
+      id: 'remote-edit',
+      vectorClock: { other: 2 },
+    };
+    const kept = keptCommutingReorders(
+      [
+        {
+          entityType: 'NOTE',
+          entityId: 'a',
+          localOps: [edit],
+          remoteOps: [remoteEdit],
+          suggestedResolution: 'remote',
+        },
+      ],
+      new Map([
+        ['NOTE:a', [order, edit]],
+        ['NOTE:b', [order]],
+        ['NOTE:w', [order]],
+      ]),
+      [remoteDelete],
+    );
+    expect([...kept.opIds]).toEqual([order.id]);
+    expect(kept.reissuedCrossings.get(order.id)).toEqual([remoteDelete]);
+    const store = {
+      getUnsynced: jasmine.createSpy().and.resolveTo([
+        { seq: 1, source: 'local', op: order },
+        { seq: 2, source: 'local', op: edit },
+      ]),
+      rebasePendingLocalOps: jasmine.createSpy().and.resolveTo([]),
+    };
+    // Moved past the edit, the order would dominate the delete, skip the
+    // reissue and upload the deleted id.
+    await rebaseKeptReorders(store, kept, new Set([remoteEdit.id]));
+    expect(store.rebasePendingLocalOps).not.toHaveBeenCalled();
+  });
+
   it('moves the kept orders with every later pending op of this client on a listed entity', async () => {
     const op = (id: string): Operation => ({ ...toOp(habitOrder), id });
     const entries = [
