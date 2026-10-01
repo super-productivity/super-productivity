@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   compareReports,
+  describeRun,
   formatComparison,
   harnessDifferences,
   parseReport,
@@ -10,9 +11,13 @@ const {
 
 test('parses the report between its markers in Karma output', () => {
   const output =
-    'FAILED\n  Failed: SYNC_FUZZ_REPORT_START{"time-loss:task":["all:1","tasks:2"]}' +
+    'FAILED\n  Failed: SYNC_FUZZ_REPORT_START{"signatures":{"time-loss:task":["all:1"]},' +
+    '"runs":{"all:1":{"steps":"3:ab","values":{"task:t1.title":"x"}}}}' +
     'SYNC_FUZZ_REPORT_END\n    at <Jasmine>';
-  assert.deepEqual(parseReport(output), { 'time-loss:task': ['all:1', 'tasks:2'] });
+  assert.deepEqual(parseReport(output), {
+    signatures: { 'time-loss:task': ['all:1'] },
+    runs: { 'all:1': { steps: '3:ab', values: { 'task:t1.title': 'x' } } },
+  });
 });
 
 test('reads a missing report as undefined', () => {
@@ -51,6 +56,61 @@ test('formats both sections', () => {
       'Newly failing (1)',
       '  a: all:4',
       'No longer failing (0)',
+    ].join('\n'),
+  );
+});
+
+test('describes a seed by its executed steps and differing final values', () => {
+  const base = {
+    steps: '30:aa',
+    values: { 'task:t1.notes': 'C2', 'task:t1.title': 'B' },
+  };
+  assert.deepEqual(describeRun(base, { ...base }), [
+    '  same executed steps (30:aa)',
+    "  same final field values (device C's live state)",
+  ]);
+  assert.deepEqual(
+    describeRun(base, {
+      steps: '30:bb',
+      values: { 'task:t1.notes': 'A0', 'task:t1.title': 'B', 'note:n1.isLock': true },
+    }),
+    [
+      '  executed steps differ: base 30:aa, head 30:bb',
+      '  note:n1.isLock: base undefined, head true',
+      '  task:t1.notes: base "C2", head "A0"',
+    ],
+  );
+});
+
+test('lists each newly failing seed with how its run differs', () => {
+  const run = { steps: '30:aa', values: { 'task:t1.notes': 'C2' } };
+  const text = formatComparison(
+    {
+      newFailures: [
+        { signature: 'a', seeds: ['all:4'] },
+        { signature: 'b', seeds: ['all:4'] },
+      ],
+      fixed: [],
+    },
+    'working tree vs origin/master',
+    {
+      base: { 'all:4': run },
+      head: { 'all:4': { ...run, values: { 'task:t1.notes': 'A0' } } },
+    },
+  );
+  assert.equal(
+    text,
+    [
+      'Sync fuzz signatures: working tree vs origin/master',
+      'Newly failing (2)',
+      '  a: all:4',
+      '  b: all:4',
+      'No longer failing (0)',
+      'Executed steps: 1 of 1 seeds identical',
+      'Newly failing seeds, base vs head (1)',
+      'all:4',
+      '  same executed steps (30:aa)',
+      '  task:t1.notes: base "C2", head "A0"',
     ].join('\n'),
   );
 });

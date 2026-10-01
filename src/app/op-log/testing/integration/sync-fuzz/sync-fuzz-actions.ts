@@ -312,8 +312,9 @@ export const executeIntent = async (
       const archive = await TestBed.inject(ArchiveDbAdapter).loadArchiveYoung();
       const archived = archive?.task.entities[id];
       if (!archived) return undefined;
+      // handleRestoreTask (task-shared-lifecycle.reducer.ts) restores it undone.
       await run(TaskSharedActions.restoreTask({ task: archived, subTasks: [] }));
-      return [];
+      return [{ entity: `task:${id}`, field: 'isDone', value: false }];
     }
     case 'addNote': {
       const [, id, ctx] = intent;

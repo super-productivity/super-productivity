@@ -4,7 +4,9 @@ import { Note } from '../../../../features/note/note.model';
 import { Project } from '../../../../features/project/project.model';
 import { SimpleCounter } from '../../../../features/simple-counter/simple-counter.model';
 import { Task } from '../../../../features/tasks/task.model';
+import { classifyOpAgainstSyncImport } from '@sp/sync-core';
 import { compareVectorClocks } from '../../../../core/util/vector-clock';
+import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { FULL_STATE_OP_TYPES, VectorClock } from '../../../core/operation.types';
 import {
   AppStateSnapshot,
@@ -112,7 +114,7 @@ export const createRandom = (seed: number): (() => number) => {
 };
 
 /** One executed intent, with the acting device's vector clock after it. */
-interface LedgerEntry {
+export interface LedgerEntry {
   intent: Intent;
   writes: FuzzWrite[];
   device: string;
@@ -120,41 +122,181 @@ interface LedgerEntry {
   clock: VectorClock;
   /** The device's own counter before the intent: its ops are above it. */
   counterBefore: number;
+  /**
+   * The latest timestamp of the intent's own ops: its edit time, which LWW
+   * compares (with the clientId on a tie).
+   */
+  time: number;
+  /**
+   * The runner's sync count after which its device first synced, so its ops
+   * uploaded (Infinity: never). Intents of one device with the same value
+   * were pending together: one side of a conflict. A sync that stopped or
+   * halted stamps it too, though its ops may stay pending; such a run already
+   * fails for the stop.
+   */
+  uploadedAt: number;
+  /** One of its ops is opaque to the field patch (`planTasksForToday`). */
+  opaque: boolean;
   /** One of its ops was still unsynced when its device answered USE_REMOTE. */
   discarded?: boolean;
 }
 
+/** A value an intent wrote, with the intent that wrote it. */
+interface LedgerWrite {
+  value: unknown;
+  entry: LedgerEntry;
+}
+
+/**
+ * Intents whose ops always take a whole-entity conflict path, so a crossing
+ * with one can carry any value its winning side held: habit counts are
+ * opaque (decision 6 of docs/sync-and-op-log/lww-field-level-resolution.md),
+ * and no field patch reads a delete, archive or restore (an archive also wins
+ * over a concurrent edit, by sync-core's planner). A `track` is whole-entity
+ * when it plans the task for today (`opaque`, decision 6); its plain delta
+ * refuses the patch only from the remote side (see `crossing`).
+ */
+const WHOLE_ENTITY_INTENTS: ReadonlySet<Intent[0]> = new Set([
+  'countHabit',
+  'deleteTask',
+  'archiveTask',
+  'restoreTask',
+]);
+
+/** The losses a recreate with defaults explains (see checkPreservation). */
+const RECREATE_LOSS = /^(field-reverted|field-unwritten|time-loss|import-field-changed):/;
+
+/** Action types the field patch cannot read (decision 6). */
+export const OPAQUE_ACTION_TYPES: ReadonlySet<string> = new Set([
+  TaskSharedActions.planTasksForToday.type,
+]);
+
+/** The latest of a side's intents: the side's LWW key. */
+const latestOf = (side: readonly LedgerEntry[]): LedgerEntry =>
+  side.reduce((latest, e) => (isLaterWrite(e, latest) ? e : latest));
+
+const entityOfIntent = (intent: Intent): string => {
+  const [kind, id] = intent;
+  const type = /Task|^track$/.test(kind) ? 'task' : /Note$/.test(kind) ? 'note' : 'habit';
+  return `${type}:${id}`;
+};
+
+const isConcurrent = (a: LedgerEntry, b: LedgerEntry): boolean =>
+  compareVectorClocks(a.clock, b.clock) === 'CONCURRENT';
+
+/** Whether `b`'s device had seen `a` (or `a` is `b`) when it wrote `b`. */
+const isCausalPastOf = (a: LedgerEntry, b: LedgerEntry): boolean => {
+  const comparison = compareVectorClocks(a.clock, b.clock);
+  return comparison === 'LESS_THAN' || comparison === 'EQUAL';
+};
+
+/**
+ * Whether `a` wins LWW over `b`: the later timestamp, then the larger
+ * clientId (planLwwConflictResolutions in packages/sync-core).
+ */
+const isLaterWrite = (
+  a: Pick<LedgerEntry, 'time' | 'clientId'>,
+  b: Pick<LedgerEntry, 'time' | 'clientId'>,
+): boolean => a.time > b.time || (a.time === b.time && a.clientId > b.clientId);
+
 /** What the executed intents imply, for the preservation oracles. */
-class Ledger {
+export class Ledger {
   readonly created = new Set<string>();
   readonly deleted = new Set<string>();
-  readonly archivedEver = new Set<string>();
-  readonly tracked = new Map<string, number>();
-  readonly writes = new Map<string, unknown[]>();
+  /** Per entity, the intents that targeted it, in execution order. */
+  readonly byEntity = new Map<string, LedgerEntry[]>();
+  readonly writes = new Map<string, LedgerWrite[]>();
 
   constructor(entries: readonly LedgerEntry[]) {
-    for (const { intent, writes } of entries) this._note(intent, writes);
+    for (const entry of entries) this._note(entry);
   }
 
-  private _note(intent: Intent, writes: FuzzWrite[]): void {
-    const [kind, id] = intent;
-    if (REPLACEMENT_INTENTS.has(kind)) return;
-    const type = /Task|^track$/.test(kind)
-      ? 'task'
-      : /Note$/.test(kind)
-        ? 'note'
-        : 'habit';
-    const entity = `${type}:${id}`;
+  private _note(entry: LedgerEntry): void {
+    const { intent, writes } = entry;
+    const [kind] = intent;
+    if (REPLACEMENT_INTENTS.has(kind) || kind.startsWith('reorder')) return;
+    const entity = entityOfIntent(intent);
     if (kind.startsWith('add')) this.created.add(entity);
     if (kind.startsWith('delete')) this.deleted.add(entity);
-    if (kind === 'archiveTask') this.archivedEver.add(entity);
-    if (intent[0] === 'track') {
-      this.tracked.set(entity, (this.tracked.get(entity) ?? 0) + intent[2]);
-    }
+    this.byEntity.set(entity, [...(this.byEntity.get(entity) ?? []), entry]);
     for (const write of writes) {
       const key = `${write.entity}|${write.field}`;
-      this.writes.set(key, [...(this.writes.get(key) ?? []), write.value]);
+      this.writes.set(key, [
+        ...(this.writes.get(key) ?? []),
+        { value: write.value, entry },
+      ]);
     }
+  }
+
+  /**
+   * Whether `entry` crosses an archive of its entity: the archive wins over a
+   * concurrent edit by design (sync-core's planner), so what the edit wrote
+   * or tracked is not expected to survive.
+   */
+  crossesArchive(entity: string, entry: LedgerEntry): boolean {
+    return (this.byEntity.get(entity) ?? []).some(
+      (other) => other.intent[0] === 'archiveTask' && isConcurrent(other, entry),
+    );
+  }
+
+  /** Whether some intent on the entity is concurrent with one of its deletes. */
+  deleteWasCrossed(entity: string): boolean {
+    const entries = this.byEntity.get(entity) ?? [];
+    return entries.some(
+      (del) =>
+        del.intent[0].startsWith('delete') && entries.some((e) => isConcurrent(e, del)),
+    );
+  }
+
+  /** The time tracked on the entity, without what crossed an archive. */
+  trackedTime(entity: string): number | undefined {
+    const tracks = (this.byEntity.get(entity) ?? []).filter(
+      (entry) => entry.intent[0] === 'track',
+    );
+    if (tracks.length === 0) return undefined;
+    return tracks
+      .filter((entry) => !this.crossesArchive(entity, entry))
+      .reduce((sum, entry) => sum + (entry.intent[2] as number), 0);
+  }
+
+  /**
+   * The two sides of the conflict in which `a` and `b`, concurrent intents
+   * on `entity` from two devices, meet, as SuperSync resolves it: the device
+   * that uploads later resolves, with the intents it had pending together
+   * (one upload) against the other device's intents it has not seen and that
+   * were uploaded before. `whole` says the conflict takes a whole-entity
+   * path: an opaque or whole-entity intent on either side, or a plain time
+   * delta on the remote side, which refuses the field patch (the design
+   * note's "Time" rule). The model takes one other device at a time; the
+   * app's remote side is everything it downloads for the entity, so a third
+   * device's remote delta in the same download is not seen here. And only
+   * the later uploader resolves, as on SuperSync; on a file-based provider
+   * both devices can.
+   */
+  crossing(
+    entity: string,
+    a: LedgerEntry,
+    b: LedgerEntry,
+  ): { aSide: LedgerEntry[]; bSide: LedgerEntry[]; whole: boolean } {
+    const entries = this.byEntity.get(entity) ?? [];
+    const [resolver, other] = a.uploadedAt >= b.uploadedAt ? [a, b] : [b, a];
+    const local = entries.filter(
+      (e) => e.device === resolver.device && e.uploadedAt === resolver.uploadedAt,
+    );
+    const remote = entries.filter(
+      (e) =>
+        e.device === other.device &&
+        e.uploadedAt < resolver.uploadedAt &&
+        isConcurrent(e, resolver),
+    );
+    const isWholeEntity = (e: LedgerEntry): boolean =>
+      WHOLE_ENTITY_INTENTS.has(e.intent[0]) || e.opaque;
+    const whole =
+      [...local, ...remote].some(isWholeEntity) ||
+      remote.some((e) => e.intent[0] === 'track');
+    return resolver === a
+      ? { aSide: local, bSide: remote, whole }
+      : { aSide: remote, bSide: local, whole };
   }
 }
 
@@ -166,11 +308,25 @@ class Ledger {
  * whose device clock is at or after the replacement's, on top of the
  * replacement's own content: its entities and tracked time.
  */
-interface Replacement {
+export interface Replacement {
   clock: VectorClock;
+  /** The client that created it. */
+  clientId: string;
   entities: Set<string>;
   time: Map<string, number>;
+  /**
+   * The replacement's value of every field an intent can write, by
+   * `<entity>|<field>` as in the ledger.
+   */
+  fields: Map<string, unknown>;
 }
+
+/** The fields the intents write (FuzzWrite), per entity type. */
+const WRITTEN_FIELDS: Readonly<Record<string, readonly string[]>> = {
+  task: ['title', 'notes', 'isDone'],
+  note: ['content', 'isPinnedToToday', 'isLock'],
+  habit: ['title', 'isEnabled'],
+};
 
 const lastReplacement = (harness: SyncFuzzHarness): Replacement | undefined => {
   const row = [...harness.server.rows]
@@ -180,24 +336,47 @@ const lastReplacement = (harness: SyncFuzzHarness): Replacement | undefined => {
   const state = row.op.payload as unknown as Partial<CheckedState>;
   const entities = new Set<string>();
   const time = new Map<string, number>();
+  const fields = new Map<string, unknown>();
   const day = fuzzDay();
+  const add = (entity: string, value: Record<string, unknown>): void => {
+    entities.add(entity);
+    const type = entity.split(':')[0];
+    for (const field of WRITTEN_FIELDS[type]) {
+      fields.set(`${entity}|${field}`, value[field]);
+    }
+  };
   for (const task of [
     ...Object.values(state.task?.entities ?? {}),
     ...Object.values(state.archiveYoung?.task.entities ?? {}),
   ]) {
     if (!task) continue;
-    entities.add(`task:${task.id}`);
+    add(`task:${task.id}`, task as unknown as Record<string, unknown>);
     time.set(`task:${task.id}`, task.timeSpentOnDay?.[day] ?? 0);
   }
-  for (const id of state.note?.ids ?? []) entities.add(`note:${id}`);
-  for (const id of state.simpleCounter?.ids ?? []) entities.add(`habit:${id}`);
-  return { clock: row.op.vectorClock, entities, time };
+  for (const id of state.note?.ids ?? []) {
+    const note = state.note?.entities[id];
+    if (note) add(`note:${id}`, note as unknown as Record<string, unknown>);
+  }
+  for (const id of state.simpleCounter?.ids ?? []) {
+    const habit = state.simpleCounter?.entities[id];
+    if (!habit) continue;
+    add(`habit:${id}`, habit as unknown as Record<string, unknown>);
+    fields.set(`habit:${id}|countOnDay.${day}`, habit.countOnDay?.[day]);
+  }
+  return { clock: row.op.vectorClock, clientId: row.op.clientId, entities, time, fields };
 };
 
-const isAtOrAfter = (clock: VectorClock, replacement: VectorClock): boolean => {
-  const comparison = compareVectorClocks(clock, replacement);
-  return comparison === 'GREATER_THAN' || comparison === 'EQUAL';
-};
+/**
+ * Whether the replacement keeps the intent, by rule 7's own classifier
+ * (SyncImportFilterService): at or after the replacement's clock, or
+ * CONCURRENT but provably after it (a later op of the replacing client, or
+ * one whose reset clock holds the replacing client's counter).
+ */
+const isKeptBy = (entry: LedgerEntry, replacement: Replacement): boolean =>
+  classifyOpAgainstSyncImport(
+    { vectorClock: entry.clock, clientId: entry.clientId },
+    { vectorClock: replacement.clock, clientId: replacement.clientId },
+  ).shouldKeep;
 
 const valueAt = (source: unknown, path: string[]): unknown =>
   path.reduce<unknown>(
@@ -319,10 +498,15 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
     (await TestBed.inject(OperationLogStoreService).getVectorClock()) ?? {};
   /** Runs the intent on the current device and records it in the ledger. */
   const executeAndNote = async (intent: Intent): Promise<FuzzWrite[] | undefined> => {
+    const store = TestBed.inject(OperationLogStoreService);
     const before = await ownClock();
+    const seqBefore = await store.getLastSeq();
     const writes = await executeIntent(harness, intent);
     if (!writes) return undefined;
     const device = harness.current!;
+    const ownOps = (await store.getOpsAfterSeq(seqBefore)).filter(
+      (e) => e.op.clientId === device.clientId,
+    );
     entries.push({
       intent,
       writes,
@@ -330,9 +514,14 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
       clientId: device.clientId,
       clock: await ownClock(),
       counterBefore: before[device.clientId] ?? 0,
+      time: Math.max(0, ...ownOps.map((e) => e.op.timestamp)),
+      uploadedAt: Infinity,
+      opaque: ownOps.some((e) => OPAQUE_ACTION_TYPES.has(e.op.actionType)),
     });
     return writes;
   };
+  /** How many syncs ran; an intent's `uploadedAt` is its device's next one. */
+  let syncCount = 0;
   /** Per device, the ledger length at its last USE_REMOTE rebuild. */
   const rebuiltAt = new Map<string, number>();
   /**
@@ -359,6 +548,12 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
     harness.importDialogAnswer = importAnswer;
     harness.stopDialogAnswer = stopAnswer;
     await harness.sync(device);
+    syncCount++;
+    for (const entry of entries) {
+      if (entry.device === device.name && entry.uploadedAt === Infinity) {
+        entry.uploadedAt = syncCount;
+      }
+    }
     harness.importDialogAnswer = undefined;
     harness.stopDialogAnswer = undefined;
     const answeredLocal = harness.events
@@ -588,9 +783,7 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
     reference,
     new Ledger(
       entries.filter(
-        (entry) =>
-          !entry.discarded &&
-          (!replacement || isAtOrAfter(entry.clock, replacement.clock)),
+        (entry) => !entry.discarded && (!replacement || isKeptBy(entry, replacement)),
       ),
     ),
     replacement,
@@ -744,7 +937,30 @@ const checkTodayNotes = (
   }
 };
 
-const checkPreservation = (
+/**
+ * Preservation of what the kept intents and the last replacement wrote.
+ *
+ * A deleted entity that is gone is not lost (`lost-entity`). One that
+ * exists afterwards must have been recreated: its delete crossed a
+ * concurrent intent on it and lost, and the entity came back from the
+ * winning side's ops, with defaults outside them (decision 2 of
+ * docs/sync-and-op-log/lww-field-level-resolution.md, accepted, "the fuzz
+ * harness should count it"). Its fields and time are checked like any
+ * other; the losses a recreate explains (a field reverted or not written,
+ * lost time, a changed import value) are prefixed `recreated:`, so that
+ * accepted residual is counted apart. A value some intent wrote that beats
+ * a newer one (`older-write-won`) is not a recreate default and keeps its
+ * own signature. A deleted entity that exists although no intent crossed its
+ * delete came back unexplained: `resurrected:<type>`.
+ *
+ * Kept out, by design:
+ * - what an edit or a tracked delta wrote while crossing an archive of its
+ *   task: the archive wins (sync-core's planner);
+ * - in the latest-write check below, the shapes LWW does not promise per
+ *   field (see there).
+ * Archived tasks are checked in the archive, like live ones.
+ */
+export const checkPreservation = (
   snapshot: AppStateSnapshot,
   ledger: Ledger,
   replacement: Replacement | undefined,
@@ -769,42 +985,86 @@ const checkPreservation = (
       fail(`lost-entity:${entity.split(':')[0]}`, `${entity} was never deleted`);
     }
   }
-
-  const day = fuzzDay();
-  const trackedTasks = new Set([
-    ...ledger.tracked.keys(),
-    ...(replacement?.time.keys() ?? []),
-  ]);
-  for (const entity of trackedTasks) {
-    if (ledger.deleted.has(entity) || ledger.archivedEver.has(entity)) continue;
-    const expected =
-      (replacement?.time.get(entity) ?? 0) + (ledger.tracked.get(entity) ?? 0);
-    if (!ledger.tracked.has(entity) && expected === 0) continue;
-    const task = entityOf(entity) as Task | undefined;
-    const actual = task?.timeSpentOnDay?.[day] ?? 0;
-    if (actual !== expected) {
-      fail('time-loss:task', `${entity}: tracked ${expected}, converged ${actual}`);
+  for (const entity of ledger.deleted) {
+    if (entityOf(entity) && !ledger.deleteWasCrossed(entity)) {
+      fail(
+        `resurrected:${entity.split(':')[0]}`,
+        `${entity} was deleted after every intent on it, and exists`,
+      );
     }
   }
 
-  for (const [key, values] of ledger.writes) {
+  /** The losses a recreate explains are counted apart (see above). */
+  const signatureOf = (entity: string, signature: string): string =>
+    ledger.deleted.has(entity) &&
+    ledger.deleteWasCrossed(entity) &&
+    RECREATE_LOSS.test(signature)
+      ? `recreated:${signature}`
+      : signature;
+  const failOn =
+    (entity: string) =>
+    (signature: string, detail: string): void =>
+      fail(signatureOf(entity, signature), detail);
+
+  const day = fuzzDay();
+  const trackedTasks = new Set([
+    ...[...ledger.byEntity.keys()].filter((e) => ledger.trackedTime(e) !== undefined),
+    ...(replacement?.time.keys() ?? []),
+  ]);
+  for (const entity of trackedTasks) {
+    const task = entityOf(entity) as Task | undefined;
+    if (ledger.deleted.has(entity) && !task) continue;
+    const tracked = ledger.trackedTime(entity);
+    const expected = (replacement?.time.get(entity) ?? 0) + (tracked ?? 0);
+    if (tracked === undefined && expected === 0) continue;
+    const actual = task?.timeSpentOnDay?.[day] ?? 0;
+    if (actual !== expected) {
+      failOn(entity)(
+        'time-loss:task',
+        `${entity}: tracked ${expected}, converged ${actual}`,
+      );
+    }
+  }
+
+  // The replacement's own field values, where no kept intent wrote the field
+  // after it.
+  for (const [key, value] of replacement?.fields ?? []) {
+    if (ledger.writes.has(key)) continue;
     const [entity, field] = key.split('|');
-    if (ledger.deleted.has(entity) || ledger.archivedEver.has(entity)) continue;
     const current = entityOf(entity);
     if (!current) continue;
+    const actual = valueAt(current, field.split('.'));
+    if (!Object.is(actual, value)) {
+      failOn(entity)(
+        `import-field-changed:${entity.split(':')[0]}.${field.split('.')[0]}`,
+        `${entity}.${field}: replacement ${shortJson(value)}, converged ${shortJson(actual)}`,
+      );
+    }
+  }
+
+  for (const [key, allWrites] of ledger.writes) {
+    const [entity, field] = key.split('|');
+    const current = entityOf(entity);
+    if (!current) continue;
+    const report = failOn(entity);
+    const writes = allWrites.filter(({ entry }) => !ledger.crossesArchive(entity, entry));
+    if (writes.length === 0) continue;
+    const values = writes.map((w) => w.value);
     const actual = valueAt(current, field.split('.'));
     const type = entity.split(':')[0];
     const fieldName = field.split('.')[0];
     if (values.length === 1 && !Object.is(actual, values[0])) {
-      fail(
+      report(
         `field-reverted:${type}.${fieldName}`,
         `${entity}.${field}: only write ${shortJson(values[0])}, converged ${shortJson(actual)}`,
       );
     } else if (!values.some((v) => Object.is(v, actual))) {
-      fail(
+      report(
         `field-unwritten:${type}.${fieldName}`,
         `${entity}.${field}: writes ${shortJson(values)}, converged ${shortJson(actual)}`,
       );
+    } else {
+      checkLatestWrite(ledger, entity, field, writes, actual, report);
     }
   }
 
@@ -819,4 +1079,63 @@ const checkPreservation = (
       fail(`duplicate:${name}`, shortJson(list));
     }
   }
+};
+
+/**
+ * Per-field last-writer-wins across devices: a field that several intents
+ * wrote converges on the value of the one with the latest own edit time
+ * (timestamp, then clientId, as sync-core's planner breaks ties). A field
+ * patch or LWW resolution is meant to give exactly that; #10422 shows a
+ * remote win's patch that re-sends the loser's older value at the winner's
+ * time and beats a third device's newer edit.
+ *
+ * The latest write may lose only a conflict that LWW lets it lose. For every
+ * intent of another device on the entity that is concurrent with it, the two
+ * meet in one conflict (`Ledger.crossing`), and each side wins by its latest
+ * intent (design A, "Overlap"). Where the other side wins:
+ * - through a field patch, a field both sides wrote takes the winning side's
+ *   value, so a write of that side with the converged value accounts for it;
+ * - on a whole-entity path, the winning side's snapshot can carry any value
+ *   its device held: the conflict accounts for any value.
+ * Where the latest write's side wins every such conflict, its value must
+ * survive.
+ *
+ * Out of scope, by design: NOTE fields, which stay on whole-entity LWW
+ * (decision 4 of docs/sync-and-op-log/lww-field-level-resolution.md), and
+ * habit counts (`countOnDay`), which are opaque (decision 6). A value no
+ * intent wrote is `field-unwritten`'s, not this check's.
+ */
+const checkLatestWrite = (
+  ledger: Ledger,
+  entity: string,
+  field: string,
+  writes: readonly LedgerWrite[],
+  actual: unknown,
+  fail: (signature: string, detail: string) => void,
+): void => {
+  const type = entity.split(':')[0];
+  if (type === 'note' || field.startsWith('countOnDay')) return;
+  const latest = writes.reduce((a, b) => (isLaterWrite(b.entry, a.entry) ? b : a));
+  if (Object.is(actual, latest.value)) return;
+  const accounted = (ledger.byEntity.get(entity) ?? []).some((other) => {
+    if (other.device === latest.entry.device || !isConcurrent(other, latest.entry)) {
+      return false;
+    }
+    const { aSide, bSide, whole } = ledger.crossing(entity, latest.entry, other);
+    if (!isLaterWrite(latestOf(bSide), latestOf(aSide))) return false;
+    // A patch carries the winning side's own writes; a whole-entity snapshot
+    // what its device held: its side's writes and their causal past.
+    const winner = latestOf(bSide);
+    return writes.some(
+      (w) =>
+        Object.is(w.value, actual) &&
+        (bSide.includes(w.entry) || (whole && isCausalPastOf(w.entry, winner))),
+    );
+  });
+  if (accounted) return;
+  fail(
+    `older-write-won:${type}.${field.split('.')[0]}`,
+    `${entity}.${field}: latest write ${shortJson(latest.value)} by ${latest.entry.device}, ` +
+      `converged ${shortJson(actual)}`,
+  );
 };

@@ -212,10 +212,20 @@ added (measured 2026-09 in
    content preservation in **both** conflict directions (the change pending
    locally against the remote edit, and the reverse) with an E2E, and check
    both timestamp winners. Also run `npm run sync-fuzz:compare` and put its
-   output in the PR: a seed that newly shows a failure signature against the
-   base is a regression unless its shrunk trace fails the same way there (the
-   tool's output says how to shrink one). The pinned traces miss a known
-   failure that becomes more frequent (#10398).
+   output in the PR. A seed that newly shows a failure signature against the
+   base is a regression until its original seed shows otherwise: first
+   compare that seed's executed steps and final field values on both
+   revisions (the tool prints both for every newly failing seed). The values
+   cover one device's live tasks, notes and habits, not the other devices or
+   the archive: the same steps reaching the same values clears an entry only
+   when its signature is about those fields on that state. A divergence,
+   restart, time or archive entry still needs its original seed compared on
+   both revisions, and different values are the change's effect and need an
+   explanation. Use a shrunk trace
+   only to diagnose: shrinking can remove the interaction that made the seed
+   worse, so a shrunk trace that fails the same way on the base does not clear
+   the entry. The pinned traces miss a known failure that becomes more
+   frequent (#10398).
    Admitting an action or removing a safety stop without that proof is not a
    fix (#10264). The `max-lines` cap on
    `conflict-resolution.service.ts` in `eslint.config.js` only goes down, but

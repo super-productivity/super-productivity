@@ -243,6 +243,28 @@ describe('SyncFuzzHarness: negative control', () => {
       .toContain('field-reverted:task.title');
   }, 60_000);
 
+  it('the oracles report an older notes edit that beats a newer concurrent one', async () => {
+    // Two concurrent notes edits: B's is newer, and every device converges
+    // on it.
+    const steps: FuzzStep[] = [
+      { d: 'A', a: ['editTaskNotes', 't1', 'older'] },
+      { d: 'B', a: ['editTaskNotes', 't1', 'newer'] },
+      { d: 'A', s: 1 },
+      { d: 'B', s: 1 },
+    ];
+    expect((await runFuzz({ steps })).failures).toEqual([]);
+
+    // ...until the server loses B's edit while acknowledging it: A's older
+    // edit then wins on every device but B.
+    loseUploadsOf('"newer"');
+
+    const { failures } = await runFuzz({ steps });
+
+    expect(failures.map((f) => f.signature))
+      .withContext(JSON.stringify(failures))
+      .toContain('older-write-won:task.notes');
+  }, 60_000);
+
   /**
    * The pinned kept stop (a Today note reorder crossing an unpin): C, the
    * unpinning device, stops at step 6 and answers the whole-dataset dialog.

@@ -4,10 +4,11 @@ import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actio
 import { FuzzDevice, SyncFuzzHarness } from './sync-fuzz-harness';
 
 /**
- * Pins TODAY's outcome of a three-device shape the fuzz oracles cannot see
- * (they only check that a converged value is one of the writes), like the
- * failing traces in sync-fuzz-pinned-traces.json. Second review of #10415,
- * finding 1; accepted as a residual on #10393, follow-up #10422.
+ * Pins TODAY's outcome of a three-device shape, like the failing traces in
+ * sync-fuzz-pinned-traces.json, with the values on every device and after a
+ * restart. Second review of #10415, finding 1; accepted as a residual on
+ * #10393, follow-up #10422. The fuzz oracles report the same shape as
+ * `older-write-won:task.notes` (the `remote-win-patch-timestamp` pins).
  *
  * A writes notes, then renames, offline. C writes newer notes, offline. B
  * renames last and syncs. A resolves its title conflict with B as a remote

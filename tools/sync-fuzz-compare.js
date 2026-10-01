@@ -16,6 +16,10 @@
 // sweep the same seeds; it warns when other harness files differ, since the
 // base then reports what its own harness detects. An interrupted run removes
 // its worktree too; after a crash, `git worktree prune` cleans up.
+//
+// For each newly failing seed it prints whether both revisions executed the
+// same steps and which final field values differ: judge the original seed by
+// those first. A shrunk trace only helps to diagnose (see JUDGE_HINT).
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -25,17 +29,53 @@ const { execFileSync, spawnSync } = require('node:child_process');
 const FUZZ_DIR = 'src/app/op-log/testing/integration/sync-fuzz';
 const REPORT_SPEC = `${FUZZ_DIR}/sync-fuzz-signature-report.benchmark.ts`;
 const SHARED_FILES = [REPORT_SPEC, `${FUZZ_DIR}/sync-fuzz-profiles.ts`];
-const SHRINK_HINT =
-  'To shrink a newly failing seed, set FIRST_SEED to it, SEED_COUNT to 1 and ' +
-  `IGNORE_PINNED to true in ${FUZZ_DIR}/sync-fuzz-seeds.benchmark.ts and run ` +
-  'it with npm run test:file; a seed whose shrunk trace fails the same way ' +
-  'on the base is no regression.';
+const JUDGE_HINT =
+  'Judge each newly failing seed on the original seed first: the lines under ' +
+  'it say whether both revisions executed the same steps and which final ' +
+  "field values differ. The values are device C's live tasks, notes and " +
+  'habits after its last restart, not the other devices or the archive: the ' +
+  'same steps reaching the same values clear only an entry about those ' +
+  'fields. A divergence, restart, time or archive entry still needs the ' +
+  'original seed compared on both revisions. A shrunk trace only helps to ' +
+  'diagnose: shrinking can remove the interaction that made the seed worse, ' +
+  'so a shrunk trace that fails the same way on the base clears nothing. To ' +
+  'shrink a seed, set FIRST_SEED to it, SEED_COUNT to 1 and IGNORE_PINNED to ' +
+  `true in ${FUZZ_DIR}/sync-fuzz-seeds.benchmark.ts and run it with npm run ` +
+  'test:file.';
 const REPORT_PATTERN = /SYNC_FUZZ_REPORT_START(\{.*?\})SYNC_FUZZ_REPORT_END/s;
 
-/** The seeds-by-signature map in a Karma run's output, or undefined. */
+/**
+ * The report in a Karma run's output, or undefined: `signatures` maps each
+ * signature to its seeds, and `runs` gives each seed's executed-steps hash
+ * and final field values.
+ */
 const parseReport = (output) => {
   const match = REPORT_PATTERN.exec(output);
   return match ? JSON.parse(match[1]) : undefined;
+};
+
+/** How a seed's run differs between the base and the head. */
+const describeRun = (base, head) => {
+  if (!base || !head) return ['  run details missing'];
+  const lines = [
+    base.steps === head.steps
+      ? `  same executed steps (${head.steps})`
+      : `  executed steps differ: base ${base.steps}, head ${head.steps}`,
+  ];
+  const keys = [...new Set([...Object.keys(base.values), ...Object.keys(head.values)])];
+  const differing = keys
+    .sort()
+    .filter(
+      (key) => JSON.stringify(base.values[key]) !== JSON.stringify(head.values[key]),
+    );
+  if (differing.length === 0)
+    lines.push("  same final field values (device C's live state)");
+  for (const key of differing) {
+    lines.push(
+      `  ${key}: base ${JSON.stringify(base.values[key])}, head ${JSON.stringify(head.values[key])}`,
+    );
+  }
+  return lines;
 };
 
 /** Seeds that newly show a signature, and seeds that no longer do. */
@@ -67,7 +107,7 @@ const harnessDifferences = (changedFiles) =>
       !file.endsWith('.json'),
   );
 
-const formatComparison = ({ newFailures, fixed }, label) => {
+const formatComparison = ({ newFailures, fixed }, label, runs) => {
   const lines = [`Sync fuzz signatures: ${label}`];
   const section = (title, entries) => {
     lines.push(`${title} (${entries.length})`);
@@ -77,6 +117,23 @@ const formatComparison = ({ newFailures, fixed }, label) => {
   };
   section('Newly failing', newFailures);
   section('No longer failing', fixed);
+  if (runs) {
+    const seeds = Object.keys(runs.head).sort();
+    const differ = seeds.filter(
+      (seed) => runs.base[seed]?.steps !== runs.head[seed].steps,
+    );
+    lines.push(
+      `Executed steps: ${seeds.length - differ.length} of ${seeds.length} seeds identical` +
+        (differ.length > 0 ? `; differing: ${differ.join(', ')}` : ''),
+    );
+  }
+  if (runs && newFailures.length > 0) {
+    const seeds = [...new Set(newFailures.flatMap(({ seeds }) => seeds))].sort();
+    lines.push(`Newly failing seeds, base vs head (${seeds.length})`);
+    for (const seed of seeds) {
+      lines.push(seed, ...describeRun(runs.base[seed], runs.head[seed]));
+    }
+  }
   return lines.join('\n');
 };
 
@@ -138,6 +195,7 @@ const main = () => {
     interrupted = true;
   });
   let comparison;
+  let runs;
   try {
     git(root, ['worktree', 'add', '--detach', worktree, baseRef]);
     fs.symlinkSync(path.join(root, 'node_modules'), path.join(worktree, 'node_modules'));
@@ -146,7 +204,8 @@ const main = () => {
     }
     const head = runReport(root, 'the working tree');
     const base = runReport(worktree, baseLabel);
-    comparison = compareReports(base, head);
+    comparison = compareReports(base.signatures, head.signatures);
+    runs = { base: base.runs, head: head.runs };
   } catch (error) {
     if (interrupted) {
       process.exitCode = 130;
@@ -156,8 +215,8 @@ const main = () => {
   } finally {
     git(root, ['worktree', 'remove', '--force', worktree]);
   }
-  console.log(formatComparison(comparison, `working tree vs ${baseLabel}`));
-  if (comparison.newFailures.length > 0) console.log(`\n${SHRINK_HINT}`);
+  console.log(formatComparison(comparison, `working tree vs ${baseLabel}`, runs));
+  if (comparison.newFailures.length > 0) console.log(`\n${JUDGE_HINT}`);
   process.exitCode = comparison.newFailures.length > 0 ? 1 : 0;
 };
 
@@ -165,4 +224,10 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { compareReports, formatComparison, harnessDifferences, parseReport };
+module.exports = {
+  compareReports,
+  describeRun,
+  formatComparison,
+  harnessDifferences,
+  parseReport,
+};
