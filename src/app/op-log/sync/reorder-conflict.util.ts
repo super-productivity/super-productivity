@@ -451,13 +451,22 @@ export const nonCommutingPendingOps = (
  * The remote winner rejects none of them. Like kept time deltas, they stay
  * pending and move past those conflicts' remote clocks in place
  * (`rebaseKeptReorders`), so the server accepts them after either winner.
+ * `reissuedCrossings` holds each kept order's remote ops that it crosses as a
+ * competing order or a listed note delete (`isReissuedReorderCrossing`).
  */
+export interface KeptReorders {
+  opIds: Set<string>;
+  clockToDominate: VectorClock;
+  reissuedCrossings: Map<string, Operation[]>;
+}
+
 export const keptCommutingReorders = (
   conflicts: EntityConflict[],
   pendingByEntity: Map<string, Operation[]>,
-): { opIds: Set<string>; clockToDominate: VectorClock } => {
+): KeptReorders => {
   const inConflict = new Set(conflicts.flatMap((c) => c.localOps.map((op) => op.id)));
   const opIds = new Set<string>();
+  const reissuedCrossings = new Map<string, Operation[]>();
   let clockToDominate: VectorClock = {};
   for (const op of new Set([...pendingByEntity.values()].flat())) {
     if (!isContentReorderOperation(op) || inConflict.has(op.id)) continue;
@@ -467,10 +476,13 @@ export const keptCommutingReorders = (
       opIds.add(op.id);
       for (const remote of c.remoteOps) {
         clockToDominate = mergeVectorClocks(clockToDominate, remote.vectorClock);
+        if (isReissuedReorderCrossing(op, remote)) {
+          reissuedCrossings.set(op.id, [...(reissuedCrossings.get(op.id) ?? []), remote]);
+        }
       }
     }
   }
-  return { opIds, clockToDominate };
+  return { opIds, clockToDominate, reissuedCrossings };
 };
 
 /**
@@ -481,6 +493,13 @@ export const keptCommutingReorders = (
  * seqs and payloads stay. Runs after the resolution is durable;
  * a crash before it leaves the reorder with its old clock, which the server
  * rejects into the existing paths (at worst the stop, never a loss).
+ *
+ * An order that crosses an applied remote order or note delete stays where it
+ * is: `reissueCrossedPendingReorders` reissues it from current state only while
+ * it is still concurrent with that op. Moved, it would upload its stale list,
+ * such as the id of a note the remote delete removed, which released reducers
+ * write as given. A crossing the local side won is rejected (`rejectedRemoteOpIds`)
+ * and never applied, so that order moves.
  */
 export const rebaseKeptReorders = async (
   store: {
@@ -490,11 +509,18 @@ export const rebaseKeptReorders = async (
       clockToDominate: VectorClock,
     ) => Promise<unknown>;
   },
-  kept: { opIds: Set<string>; clockToDominate: VectorClock },
+  kept: KeptReorders,
+  rejectedRemoteOpIds: ReadonlySet<string>,
 ): Promise<void> => {
   if (kept.opIds.size === 0) return;
+  const isLeftToReissue = (opId: string): boolean =>
+    (kept.reissuedCrossings.get(opId) ?? []).some(
+      (remote) => !rejectedRemoteOpIds.has(remote.id),
+    );
   const pending = (await store.getUnsynced()).filter((e) => e.source === 'local');
-  const orders = pending.filter((e) => kept.opIds.has(e.op.id));
+  const orders = pending.filter(
+    (e) => kept.opIds.has(e.op.id) && !isLeftToReissue(e.op.id),
+  );
   if (orders.length === 0) return;
   const first = Math.min(...orders.map((e) => e.seq));
   const listed = new Set(
@@ -503,6 +529,7 @@ export const rebaseKeptReorders = async (
   const later = pending.filter(
     (e) =>
       e.seq >= first &&
+      !isLeftToReissue(e.op.id) &&
       getOpEntityIds(e.op).some((id) => listed.has(`${e.op.entityType}:${id}`)),
   );
   await store.rebasePendingLocalOps(

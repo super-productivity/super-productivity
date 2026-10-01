@@ -73,6 +73,7 @@ import {
   areCommutingReorderAndContentOperations,
   isReissuedReorderCrossing,
   keptCommutingReorders,
+  KeptReorders,
   nonCommutingPendingOps,
   rebaseKeptReorders,
   selectCrossedPendingReorders,
@@ -795,7 +796,59 @@ describe('a pending order beside a conflict on a listed entity (#10420)', () => 
     // `otherOrder` is in a conflict (and would stop there); `order` crossed both.
     expect([...kept.opIds]).toEqual([order.id]);
     expect(kept.clockToDominate).toEqual({ r1: 1, r2: 1 });
+    expect(kept.reissuedCrossings.size).toBe(0);
     expect(keptCommutingReorders([], pendingByEntity).opIds.size).toBe(0);
+  });
+
+  it('leaves an order beside an applied note delete to the reissue, never moves it', async () => {
+    const order = toOp(
+      updateNoteOrder({
+        ids: ['b', 'a', 'w'],
+        activeContextType: WorkContextType.PROJECT,
+        activeContextId: P,
+      }),
+    );
+    const edit = toOp(updateNote({ note: { id: 'a', changes: { content: 'x' } } }));
+    const remoteDelete = {
+      ...toOp(deleteNote({ id: 'a', projectId: P, isPinnedToToday: true })),
+      id: 'remote-delete',
+    };
+    // The order commutes with the delete, the content edit does not.
+    expect(nonCommutingPendingOps(remoteDelete, [order, edit])).toEqual([edit]);
+    const kept = keptCommutingReorders(
+      [
+        {
+          entityType: 'NOTE',
+          entityId: 'a',
+          localOps: [edit],
+          remoteOps: [remoteDelete],
+          suggestedResolution: 'remote',
+        },
+      ],
+      new Map([
+        ['NOTE:a', [order, edit]],
+        ['NOTE:b', [order]],
+      ]),
+    );
+    expect([...kept.opIds]).toEqual([order.id]);
+    expect(kept.reissuedCrossings.get(order.id)).toEqual([remoteDelete]);
+    const store = {
+      getUnsynced: jasmine.createSpy().and.resolveTo([
+        { seq: 1, source: 'local', op: order },
+        { seq: 2, source: 'local', op: edit },
+      ]),
+      rebasePendingLocalOps: jasmine.createSpy().and.resolveTo([]),
+    };
+    // The delete won and applies: moved past it, the order would upload the
+    // deleted id instead of being reissued from current state.
+    await rebaseKeptReorders(store, kept, new Set());
+    expect(store.rebasePendingLocalOps).not.toHaveBeenCalled();
+    // The edit won and the delete is rejected: nothing reissues the order.
+    await rebaseKeptReorders(store, kept, new Set([remoteDelete.id]));
+    expect(store.rebasePendingLocalOps).toHaveBeenCalledOnceWith(
+      [order.id, edit.id],
+      kept.clockToDominate,
+    );
   });
 
   it('moves the kept orders with every later pending op of this client on a listed entity', async () => {
@@ -816,17 +869,22 @@ describe('a pending order beside a conflict on a listed entity (#10420)', () => 
       rebasePendingLocalOps: jasmine.createSpy().and.resolveTo([]),
     };
     const clockToDominate = { r: 1 };
-    await rebaseKeptReorders(store, { opIds: new Set(['kept']), clockToDominate });
+    const kept = (...ids: string[]): KeptReorders => ({
+      opIds: new Set(ids),
+      clockToDominate,
+      reissuedCrossings: new Map(),
+    });
+    await rebaseKeptReorders(store, kept('kept'), new Set());
     expect(store.rebasePendingLocalOps).toHaveBeenCalledOnceWith(
       ['kept', 'later'],
       clockToDominate,
     );
     store.getUnsynced.calls.reset();
-    await rebaseKeptReorders(store, { opIds: new Set(), clockToDominate });
+    await rebaseKeptReorders(store, kept(), new Set());
     expect(store.getUnsynced).not.toHaveBeenCalled();
     // A kept order that is no longer pending moves nothing.
     store.rebasePendingLocalOps.calls.reset();
-    await rebaseKeptReorders(store, { opIds: new Set(['gone']), clockToDominate });
+    await rebaseKeptReorders(store, kept('gone'), new Set());
     expect(store.rebasePendingLocalOps).not.toHaveBeenCalled();
   });
 });

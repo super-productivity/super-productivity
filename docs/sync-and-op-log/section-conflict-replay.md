@@ -148,6 +148,11 @@ pending op of the device (`keptCommutingReorders`, `rebaseKeptReorders`), so the
 server accepts it after either winner. Its payload does not change. A crash
 before the move leaves the old clock, and the server rejects the order into the
 paths above; without causal proof (the remote row lost) that keeps the stop.
+An order whose conflict's remote op is an order or note delete it crosses
+(`isReissuedReorderCrossing`) does not move when that op applies: the reissue
+above runs only while the order is concurrent with it, and a moved order
+would upload its stale list. A released receiver writes a deleted note's id
+as given and its notes panel crashes (the v19.1.0 E2E below).
 
 A remote LWW resolution row of a habit commutes with a habit order that lists
 the habit: the LWW meta-reducer writes the habit only, and no habit field is
@@ -272,7 +277,8 @@ holds the pending side still stops, as before.
 The #10420 E2E (`supersync-reorder-beside-conflict.spec.ts`) checks against
 v19.1.0 assets that a released device consumes a habit order moved past its own
 rename, and an order the current device reissues after the released device's
-whole-habit resolution row.
+whole-habit resolution row. Its note case has the released device delete a
+note that the current device edited beside its pending order.
 
 ## Verification
 

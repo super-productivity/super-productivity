@@ -1651,7 +1651,7 @@ export class ConflictResolutionService {
       }
     }
 
-    await rebaseKeptReorders(this.opLogStore, keptReorders);
+    await rebaseKeptReorders(this.opLogStore, keptReorders, new Set(remoteOpsToReject));
 
     // Re-sort the combined batch by durable seq: with fresh appends this is a
     // no-op (append order = seq order), but a pending row reused from a prior
