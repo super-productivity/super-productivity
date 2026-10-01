@@ -51,7 +51,15 @@ export const updateNote = createAction(
 
 export const deleteNote = createAction(
   '[Note] Delete Note',
-  (noteProps: { id: string; projectId: string | null; isPinnedToToday: boolean }) => ({
+  (noteProps: {
+    id: string;
+    projectId: string | null;
+    isPinnedToToday: boolean;
+    // The deleted note, so a concurrent remote edit that wins by LWW can
+    // restore it intact on this device (#10380). Optional: older clients and
+    // stored ops lack it, and reducers ignore it.
+    note?: Note;
+  }) => ({
     ...noteProps,
     meta: {
       isPersistent: true,

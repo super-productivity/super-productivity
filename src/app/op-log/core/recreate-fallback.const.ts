@@ -54,9 +54,13 @@ import { EMPTY_SIMPLE_COUNTER } from '../../features/simple-counter/simple-count
  * (`isEnabled: false`) on the deleting device only — the holder keeps its real
  * type via `updateOne` merge, so the fleet diverges on `type`. Acceptable vs.
  * the previous dead-end; a full fix needs a tombstone (snapshot) delete op.
- * NOTE, TASK_REPEAT_CFG, METRIC, ISSUE_PROVIDER still fall through to the
+ * TASK_REPEAT_CFG, METRIC, ISSUE_PROVIDER still fall through to the
  * legacy behavior — add an entry here when there is evidence the
- * partial-payload path fires for them.
+ * partial-payload path fires for them. NOTE has that evidence (#10380) but
+ * stays out on purpose: an entry would admit it to field patches, which waits
+ * until v19.1.0 leaves the fleet (#10393, decision 4). Its recreate gets the
+ * whole note from `deleteNote`'s optional `note` instead; a delete op without
+ * it (a released client, or one stored before) still recreates a partial note.
  *
  * The TASK entry layers `INBOX_PROJECT.id` on top of `DEFAULT_TASK` because
  * `DEFAULT_TASK` Omits `projectId` (it varies per task), but `TaskCopy`

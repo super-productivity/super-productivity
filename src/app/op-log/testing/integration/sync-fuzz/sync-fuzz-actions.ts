@@ -357,7 +357,12 @@ export const executeIntent = async (
       const n = note(id);
       if (!n) return undefined;
       await run(
-        deleteNote({ id, projectId: n.projectId, isPinnedToToday: n.isPinnedToToday }),
+        deleteNote({
+          id,
+          projectId: n.projectId,
+          isPinnedToToday: n.isPinnedToToday,
+          note: n,
+        }),
       );
       return [];
     }

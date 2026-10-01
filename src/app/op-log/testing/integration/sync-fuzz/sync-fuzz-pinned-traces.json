@@ -440,8 +440,8 @@
   },
   {
     "class": "note-recreated-without-content",
-    "ref": "#10380",
-    "name": "a note deleted on one device and locked on another comes back invalid",
+    "ref": "fixed for #10380 (regression pin): deleteNote carries the note, the recreate restores its project and Today lists",
+    "name": "a note deleted on one device and locked on another comes back intact",
     "steps": [
       {
         "d": "B",
@@ -453,13 +453,7 @@
         "s": 1
       }
     ],
-    "primary": "validation:state invalid after sync",
-    "signatures": [
-      "divergence:.note.entities.*.content",
-      "divergence:.note.entities.*.created",
-      "divergence:.project.entities.*.noteIds.*",
-      "validation:state invalid after sync"
-    ],
+    "signatures": [],
     "rejections": []
   },
   {

@@ -247,7 +247,11 @@ added (measured 2026-09 in
    them: a child field that shadows one goes stale (review §4.2), and a new
    action that must update one should reuse the action that already maintains
    it. True multi-entity transitions that no child fact can express, such as a
-   delete cascade, still follow the atomicity rule above.
+   delete cascade, still follow the atomicity rule above. One recorded
+   exception: an LWW recreate of a NOTE re-adds it to `project.noteIds` and,
+   when pinned, `note.todayOrder` without declaring PROJECT, the inverse of
+   `deleteNote`'s own undeclared write, as the TASK recreate does for
+   `project.taskIds` (#10380, decided on #10393).
 3. **No new crossing may reach the fail-closed stop.** A PR that adds a
    multi-entity action, or changes what one declares or writes, names the path
    that resolves its conflicts with concurrent edits of every entity it
