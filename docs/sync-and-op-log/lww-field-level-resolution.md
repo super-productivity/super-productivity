@@ -468,7 +468,10 @@ remote `'patch'` row writes, to decide which local fields it beats. Decision
 keys needs a new decision". Values are still never read, no op is built from
 a row, and rows never merge with each other: a pending local row keeps
 whole-entity LWW. The reader also covers PROJECT, TAG and SIMPLE_COUNTER
-rows, while 5a covers TASK rows only.
+rows, while 5a covers TASK rows only. Without reading keys, the path also
+admits the rows 5a's bullet keeps on whole-entity LWW: a `'replace'` row
+(counted as writing every field) and a row that writes time, unless a local
+time delta is pending.
 
 What the key read buys (measured on the 120 compare seeds of master
 `00a8aaf`, 2026-10-01): seeds with `older-write-won` drop from 18 to 5 with

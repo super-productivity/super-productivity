@@ -55,17 +55,22 @@ same field, each at that write's own timestamp (see
   Arbitrary bulk actions are not split from `entityChanges`: relationship/list
   mutations may carry atomic invariants that plain payload shape cannot prove;
 * neither side has opaque ops (their changes could not be carried into the
-  synthesized delta — merging would silently drop them and the two clients
-  would synthesize DIFFERENT results);
-* both sides changed at least one real (non-noise) field;
+  re-sent fields — merging would silently drop them and the two clients
+  would resolve DIFFERENTLY). Since #10422 a remote LWW row of the same entity
+  is admitted: it applies as itself, and only which fields it writes is read;
+  the local side must be readable `{ id, changes }` edits;
+* both sides changed at least one real (non-noise) field, or the remote
+  side holds such a row;
 * time stays out of the patch: a local `syncTimeSpent` delta is kept pending
   and rebased past the remote side instead; a remote delta, `removeTimeSpent`,
-  or a delta beside an absolute time write refuses the patch;
+  or a delta beside an absolute time write (or beside a remote row that may
+  write time) refuses the patch;
 * an overlapping patch that would clear a reminder field (`reminderId`,
   `remindAt`, `dueWithTime`, `deadlineRemindAt`) refuses: v18.15.0–v18.21.x
   receivers ignore `clearedFields`;
-* all conflicts of one entity in the batch resolve together as ONE patch.
-  `detectConflicts` emits one conflict per remote op, and per-conflict patches
+* all conflicts of one entity in the batch resolve together as ONE
+  resolution (one re-send per winning local op, each dominating the one
+  before). `detectConflicts` emits one conflict per remote op, and per-conflict patches
   would dominate one another, so a superseded sibling would drop its fields
   (`aggregateEntityConflict`);
 * the entity type has a `RECREATE_FALLBACK` (`TASK` / `PROJECT` / `TAG` /
