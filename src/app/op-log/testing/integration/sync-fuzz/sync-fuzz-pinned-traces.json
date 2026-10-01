@@ -1043,7 +1043,7 @@
   },
   {
     "class": "use-remote-app-features",
-    "ref": "fixed by #10412 (regression pin for #10399); the stop is kept by design: habit orders over different habit sets (#10364 admission matrix, #10393)",
+    "ref": "fixed by #10412 (regression pin); the habit-order stop over different sets is kept by design (#10407)",
     "name": "habit orders over different sets stop a device that then uses the remote data in the dialog, and a restart keeps its app features",
     "steps": [
       {

@@ -360,7 +360,7 @@ holds the rules; `ConflictResolutionService._tryCreateFieldPatch` builds the op.
   reducer side effects (e.g. a subtask estimate's parent total). This
   predates PR 1 for disjoint merges and now covers overlapping ones.
 - **A time delta that loses to a resolution row** is rejected, as on master
-  (#10408 keeps such deltas only against readable winners). A replace row
+  (only a field patch keeps such deltas, `keptLocalTimeDeltas`). A replace row
   wiped the device's time too; a patch row leaves it there, so the time is
   still lost for the other devices but the losing device diverges. Follow-up:
   keep the delta when the row writes no time key (#10408). The notes
