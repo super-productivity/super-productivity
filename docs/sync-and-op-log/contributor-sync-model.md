@@ -168,6 +168,13 @@ operations with stale vector clocks that immediately conflict.
   `await new Promise((r) => setTimeout(r, 0))`, to protect capture ordering
   before a dependent follow-up action. It does not chunk or bound main-thread
   reducer work, and it does not reduce the N+1 upload amplification.
+  The yield only lets queued capture work start; it does not wait until the
+  ops are written. #10441 tracks replacing it where a follow-up depends on
+  the loop's ops, evidence first. In new code, prefer one meta-reducer action
+  (no loop), or, where a loop is unavoidable and a follow-up depends on its
+  ops, await `OperationWriteFlushService.flushPendingWrites()`, which resolves
+  once every captured op's write attempt has completed (do not call it while
+  holding the operation-log lock).
 
 ⚠️ `local-rules/no-multi-entity-effect` (`warn`) flags this heuristically — it
 catches the array-literal fan-out shape (`map(() => [a(), b()])`), not every
@@ -286,10 +293,29 @@ issue with the reproduction and the affected path, not a PR. Among fixes that
 qualify, prefer the one that removes a special case or adds the least ongoing
 machinery, and say in the PR which category the fix meets.
 
-**Flow limit.** At most three sync PRs are open at a time. Each one is
-reviewed before merge by a person or a session that did not write it, so
-the next fix is not built on an unchecked one. Further work waits as a draft
-PR or an issue.
+**Flow limit.** At most five sync PRs are open at a time (raised from three
+by the maintainer on 2026-09-30, #10393), so the next fix is not built on a
+pile of unchecked ones. Further work waits as a draft PR or an issue.
+
+- A contributor's sync PR counts toward the cap only once it is ready: no
+  "needs work" label and CI green.
+- The maintainer may exclude individual PRs that do not touch sync logic
+  (on 2026-09-30: a Docker build change and two server-config PRs, #10218,
+  #10297 and #10301).
+
+**Review and improve.** Before a sync PR is marked ready, the work session
+runs a review-and-improve subagent with fresh context:
+
+- It gets only the branch, the diff, the tracker issue and
+  [the feature review guide](../feature-review-guide.md), not the session's
+  reasoning, so it checks the PR rather than the author's argument for it.
+- It verifies the PR's claims by running the tests and checks the PR cites,
+  and fixes on the branch what makes sense.
+- It reports every finding as **fixed** or **not fixed** (with a reason).
+- The outcome goes in a "Review" section of the PR body. Do not post it as
+  review comments on the PR.
+
+An agent session does not approve its own sync PR.
 
 ---
 
