@@ -1042,8 +1042,8 @@
   },
   {
     "class": "use-remote-app-features",
-    "ref": "#10399",
-    "name": "habit orders over different sets stop a device that then uses the remote data in the dialog, and a restart turns every app feature on",
+    "ref": "fixed by #10412 (regression pin); the habit-order stop over different sets is kept by design (#10407)",
+    "name": "habit orders over different sets stop a device that then uses the remote data in the dialog, and a restart keeps its app features",
     "steps": [
       {
         "d": "B",
@@ -1064,15 +1064,8 @@
         "k": "R"
       }
     ],
-    "primary": "restart-changed:.globalConfig.appFeatures.isBoardsEnabled",
+    "primary": "stop:SYNC_MULTI_ENTITY_UNSUPPORTED side=remote actionType=[SimpleCounter] Update SimpleCounter Order",
     "signatures": [
-      "restart-changed:.globalConfig.appFeatures.isBoardsEnabled",
-      "restart-changed:.globalConfig.appFeatures.isFinishDayEnabled",
-      "restart-changed:.globalConfig.appFeatures.isFocusModeEnabled",
-      "restart-changed:.globalConfig.appFeatures.isHabitsEnabled",
-      "restart-changed:.globalConfig.appFeatures.isIssuesPanelEnabled",
-      "restart-changed:.globalConfig.appFeatures.isScheduleDayPanelEnabled",
-      "restart-changed:.globalConfig.appFeatures.isSchedulerEnabled",
       "stop:SYNC_MULTI_ENTITY_UNSUPPORTED side=remote actionType=[SimpleCounter] Update SimpleCounter Order"
     ],
     "rejections": []
