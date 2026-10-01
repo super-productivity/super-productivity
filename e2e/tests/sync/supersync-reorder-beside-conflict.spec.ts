@@ -331,6 +331,98 @@ test('@supersync reorder beside a conflict: habits / a pending delete beside the
 });
 
 /**
+ * A habit LWW row that recreates a habit missing on the device holding a habit
+ * order that lists it (#10443 review). The admission covers an existing habit
+ * only: both ways the habit can be missing there end at a stop with nothing
+ * lost, as on master.
+ * - `pending delete`: the device deleted the habit itself, and the row of the
+ *   other device's later rename meets the order beside that pending delete.
+ * - `remote delete`: a third device deleted it; another device's later rename
+ *   wins over that delete and uploads the recreating row. The delete crosses
+ *   the pending order first: the kept habit-delete stop (#10407).
+ */
+for (const missing of ['pending delete', 'remote delete'] as const) {
+  test(`@supersync reorder beside a conflict: habits / a row recreating a habit missing beside the order (${missing}) keeps the stop`, async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.setTimeout(300000);
+    const harness: Harness = { clients: [], logs: [] };
+    const config = getSuperSyncConfig(await createTestUser(testRunId));
+    const join = (name: string): Promise<SimulatedE2EClient> =>
+      joinClient(
+        harness,
+        config,
+        () => createSimulatedClient(browser, baseURL!, name, testRunId),
+        name,
+      );
+    try {
+      const list: ListName = 'habits';
+      const ids = ['first', 'second', 'third', 'fourth'].map(
+        (id) => `${id}-${testRunId}`,
+      );
+      const target = ids[0];
+      const a = await join('A');
+      await dispatch(a.page, seeds(list, ids));
+      await syncStrict(a, harness);
+      const b = await join('B');
+      await syncStrict(b, harness);
+      const c = await join('C');
+      await syncStrict(c, harness);
+      await syncStrict(a, harness);
+
+      const renamed = `Edited on B ${testRunId}`;
+      if (missing === 'pending delete') {
+        // C's rename uploads first; B's later rename beats it and uploads the
+        // row while A holds its order and its delete.
+        await editListed(c.page, list, target, `Edited on C ${testRunId}`);
+        await syncStrict(c, harness);
+        await reorder(a.page, list, 0);
+        await deleteHabit(a.page, target);
+        await editListed(b.page, list, target, renamed);
+        await syncStrict(b, harness);
+      } else {
+        // C deletes; B's later rename beats the delete and uploads the row.
+        await reorder(a.page, list, 0);
+        await deleteHabit(c.page, target);
+        await syncStrict(c, harness);
+        await editListed(b.page, list, target, renamed);
+        await syncStrict(b, harness);
+      }
+      // B really resolved with a habit LWW row, synced to the server.
+      expect(
+        (await rows(b.page)).some(
+          (r) =>
+            r.source === 'local' &&
+            !!r.syncedAt &&
+            r.op.a === '[SIMPLE_COUNTER] LWW Update' &&
+            r.op.d === target,
+        ),
+      ).toBe(true);
+      const aBefore = await shot(a, list, ids);
+      const aPending = pending(await rows(a.page)).map((r) => r.op.id);
+
+      expect(await syncOutcome(a)).not.toBe('in-sync');
+      expect(harness.logs.filter((l) => l.startsWith('A: '))).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(
+            'side=local actionType=[SimpleCounter] Update SimpleCounter Order',
+          ),
+        ]),
+      );
+      // Nothing is lost: A keeps its pending ops and state, B its rename.
+      expect(pending(await rows(a.page)).map((r) => r.op.id)).toEqual(aPending);
+      expect(await shot(a, list, ids)).toEqual(aBefore);
+      expect(valueOf(await shot(b, list, ids), list, target)).toBe(renamed);
+      expect(pending(await rows(b.page))).toEqual([]);
+    } finally {
+      for (const client of harness.clients) await closeClient(client);
+    }
+  });
+}
+
+/**
  * A released (v19.1.0) device on the other side: it renames the habit first and
  * consumes the current device's moved order, or it resolves the rename conflict
  * itself and uploads a whole-habit resolution row that meets the current
