@@ -117,9 +117,7 @@ import {
 } from './conflict-disjoint-merge.util';
 import {
   aggregateEntityConflict,
-  buildFieldPatchChanges,
-  isFieldPatchEligible,
-  isRemoteWinEcho,
+  fieldPatchGroups,
   keptLocalTimeDeltas,
   rebaseKeptTimeDeltas,
   buildSurvivingFieldPatches,
@@ -139,14 +137,15 @@ import { selectPlannerState } from '../../features/planner/store/planner.selecto
 type LWWResolution = LwwResolvedConflict<Operation, EntityConflict>;
 
 /**
- * SPAP-14: one conflict resolved by a disjoint-field auto-merge. `mergedOp` is a
- * synthetic LWW Update carrying the UNION of both sides' changes; it is applied
- * locally AND uploaded, and both original sides are rejected (superseded).
+ * One entity's conflicts resolved per field (#10422): the remote ops apply as
+ * themselves, and `mergedOps` re-send the local fields that won, each at its
+ * own write's timestamp. They are applied locally AND uploaded; the original
+ * local ops are rejected (superseded).
  */
 interface MergedResolution {
   conflict: EntityConflict;
-  mergedOp: Operation;
-  /** The planner's winner; its value won every field both sides wrote. */
+  mergedOps: Operation[];
+  /** The planner's side-level winner, for the content banner only. */
   winner: 'local' | 'remote';
 }
 
@@ -1016,7 +1015,13 @@ export class ConflictResolutionService {
     const uniqueOpsById = (ops: Operation[]): Operation[] => [
       ...new Map(ops.map((op) => [op.id, op])).values(),
     ];
-    let remoteWinsOps = uniqueOpsById(lwwPartitions.remoteWinsOps);
+    // A field patch's remote side applies as itself, like a remote winner,
+    // so it takes the same server order (#10423); its re-sends go last in the
+    // same atomic batch (buildTimeAwareResolutionBatches).
+    let remoteWinsOps = uniqueOpsById([
+      ...lwwPartitions.remoteWinsOps,
+      ...mergedResolutions.flatMap((merged) => merged.conflict.remoteOps),
+    ]);
     let localWinsRemoteOps = uniqueOpsById(lwwPartitions.localWinsRemoteOps);
     let remoteOpsToReject = [...new Set(lwwPartitions.remoteOpsToReject)];
     const newLocalWinOps = uniqueOpsById([
@@ -1447,8 +1452,13 @@ export class ConflictResolutionService {
     // remote winners in live-apply order. Hydration is status-blind, so both
     // durable ordering and the absence of crash gaps are required here.
     // ─────────────────────────────────────────────────────────────────────────
+    const resendOps = mergedResolutions.flatMap((merged) => merged.mergedOps);
+    const resendIds = new Set(resendOps.map((op) => op.id));
+    let writtenResendIds: string[] = [];
     const hasLocalResolutionOps =
-      newLocalWinOps.length > 0 || localMultiReconciliationOps.length > 0;
+      newLocalWinOps.length > 0 ||
+      localMultiReconciliationOps.length > 0 ||
+      resendOps.length > 0;
     if (localWinsRemoteOps.length > 0 || hasLocalResolutionOps) {
       const compensatedRemoteOpIds = new Set(compensatedRemoteOps.keys());
       const unappliedRemoteLosers = localWinsRemoteOps.filter(
@@ -1464,14 +1474,19 @@ export class ConflictResolutionService {
         remoteWinsOps,
         localMultiReconciliationOps,
         nonConflictingOps,
+        resendOps,
         getTask: (id) => this.getCurrentEntityState('TASK', id),
       });
       const result = await this.opLogStore.appendMixedSourceBatchSkipDuplicates(batches);
       nonConflictingOps = nonConflictingOps.filter((op) => !precedingOps.includes(op));
+      const writtenResends = result.written.filter(
+        (entry) => entry.source === 'local' && resendIds.has(entry.op.id),
+      );
       writtenLocalWinOps = result.written
-        .filter((entry) => entry.source === 'local')
+        .filter((entry) => entry.source === 'local' && !resendIds.has(entry.op.id))
         .map((entry) => entry.op);
       writtenLocalWinOps.forEach((op) => protectedLocalResolutionOpIds.add(op.id));
+      resendIds.forEach((id) => protectedLocalResolutionOpIds.add(id));
       if (result.skippedCount > 0) {
         OpLog.verbose(
           `ConflictResolutionService: Skipped ${result.skippedCount} duplicate resolution op(s)`,
@@ -1514,16 +1529,26 @@ export class ConflictResolutionService {
           ...entry,
           source: 'remote' as const,
         })),
+        ...writtenResends,
       ].sort((a, b) => a.seq - b.seq);
       for (const entry of resolutionApplyEntries) {
         allOpsToApply.push(entry.op);
         applySeqByOpId.set(entry.op.id, entry.seq);
-        if (entry.source === 'remote') {
+        if (entry.source === 'remote' || resendIds.has(entry.op.id)) {
           allStoredOps.push({
             id: entry.op.id,
             seq: entry.seq,
           });
         }
+      }
+      writtenResendIds = writtenResends.map((entry) => entry.op.id);
+      // Apply/upload the WRITTEN re-sends: they carry the rebased clocks.
+      for (const { op } of writtenResends) {
+        checkpointExemptOpIds.add(op.id);
+        writtenMergedOpIds.add(op.id);
+        OpLog.normal(
+          `ConflictResolutionService: Appended disjoint-merge op ${op.id} for ${op.entityType}:${op.entityId}`,
+        );
       }
     } else if (remoteWinsOps.length > 0) {
       const ops = remoteWinsInServerOrder(nonConflictingOps, remoteWinsOps);
@@ -1586,69 +1611,19 @@ export class ConflictResolutionService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // STEP 3b (SPAP-14): Process disjoint-field merges.
-    //
-    // For each merge we: (1) reject BOTH original sides (the merged op
-    // supersedes them); (2) persist the original remote ops as rejected so they
-    // are recorded-as-seen but not applied (mirrors the local-wins remote-op
-    // bookkeeping); (3) append the synthesized merged op as a PENDING LOCAL op
-    // (so it uploads on next sync) AND queue it into the apply batch (so THIS
-    // client's state picks up the remote side's fields — local's are already
-    // optimistically applied). The op stays unsynced+not-rejected → it uploads.
+    // STEP 3b (SPAP-14, #10422): the field patches' re-sends were written last
+    // in the atomic batch above; they supersede the original local ops.
     // ─────────────────────────────────────────────────────────────────────────
+    for (const merged of mergedResolutions) {
+      for (const op of merged.conflict.localOps) {
+        if (!localOpsToRejectSet.has(op.id) && !keptDeltas.opIds.has(op.id)) {
+          localOpsToReject.push(op.id);
+          localOpsToRejectSet.add(op.id);
+        }
+      }
+    }
     if (mergedResolutions.length > 0) {
-      for (const merged of mergedResolutions) {
-        for (const op of merged.conflict.localOps) {
-          if (!localOpsToRejectSet.has(op.id) && !keptDeltas.opIds.has(op.id)) {
-            localOpsToReject.push(op.id);
-            localOpsToRejectSet.add(op.id);
-          }
-        }
-        remoteOpsToReject.push(...merged.conflict.remoteOps.map((op) => op.id));
-      }
-
-      // ONE atomic mixed-source batch for all merge writes: an original remote
-      // loser must never be durable without its superseding merged op (crash
-      // safety), and the batch rebases each merged op on the durable clock so a
-      // synthetic op cannot reuse or regress this client's counter. The rebased
-      // clock still dominates both original sides.
-      const mergeBatch = await this.opLogStore.appendMixedSourceBatchSkipDuplicates([
-        {
-          ops: mergedResolutions.flatMap((merged) => merged.conflict.remoteOps),
-          source: 'remote',
-          options: { pendingApply: true },
-        },
-        {
-          ops: mergedResolutions.map((merged) => merged.mergedOp),
-          source: 'local',
-        },
-      ]);
-      if (mergeBatch.skippedCount > 0) {
-        OpLog.verbose(
-          `ConflictResolutionService: Skipped ${mergeBatch.skippedCount} duplicate merge-resolution op(s)`,
-        );
-      }
-
-      await rebaseKeptTimeDeltas(
-        this.opLogStore,
-        keptDeltas,
-        mergeBatch.written.filter((e) => e.source === 'local').map((e) => e.op.id),
-      );
-      for (const entry of mergeBatch.written) {
-        if (entry.source !== 'local') {
-          continue;
-        }
-        // Apply/upload the WRITTEN op — it carries the rebased vector clock.
-        allStoredOps.push({ id: entry.op.id, seq: entry.seq });
-        allOpsToApply.push(entry.op);
-        applySeqByOpId.set(entry.op.id, entry.seq);
-        checkpointExemptOpIds.add(entry.op.id);
-        writtenMergedOpIds.add(entry.op.id);
-        OpLog.normal(
-          `ConflictResolutionService: Appended disjoint-merge op ${entry.op.id} for ` +
-            `${entry.op.entityType}:${entry.op.entityId}`,
-        );
-      }
+      await rebaseKeptTimeDeltas(this.opLogStore, keptDeltas, writtenResendIds);
     }
 
     await rebaseKeptReorders(this.opLogStore, keptReorders, new Set(remoteOpsToReject));
@@ -1701,8 +1676,8 @@ export class ConflictResolutionService {
           onReducersCommitted: async (reducerCommittedOps, reducerFailures = []) => {
             // Disjoint-merge ops are synthetic LOCAL rows in the apply batch.
             // Exclude successful ones from the checkpoint's pending-only seq
-            // assertion. Failed synthetic rows are quarantined; their remote
-            // originals stay pending for the LWW fallback below.
+            // assertion. Failed ones are quarantined; their remote sides are
+            // already applied (#10422) when the LWW fallback below re-resolves.
             const checkpointOps = reducerCommittedOps.filter(
               (op) => !checkpointExemptOpIds.has(op.id),
             );
@@ -1790,7 +1765,7 @@ export class ConflictResolutionService {
               .map((failure) => failure.op.id),
           );
           failedMergedResolutions = mergedResolutions.filter((merged) =>
-            failedSyntheticOpIds.has(merged.mergedOp.id),
+            merged.mergedOps.some((op) => failedSyntheticOpIds.has(op.id)),
           );
           const nonSyntheticFailure = applyResult.reducerFailures.find(
             (failure) => !failedSyntheticOpIds.has(failure.op.id),
@@ -1916,7 +1891,7 @@ export class ConflictResolutionService {
     const isValid = await this._validateAndRepairAfterResolution();
     if (!isValid) this.sessionValidation.setFailed();
 
-    // Count both LWW local-win ops AND disjoint-merge ops (STEP 3b): each merge
+    // Count both LWW local-win ops AND disjoint-merge re-sends: each merge
     // appended a synthesized pending-local op that still needs uploading. The
     // caller uses this count to trigger the immediate re-upload
     // (immediate-upload.service.ts) — omitting merges lets a merge-only sync
@@ -2610,11 +2585,11 @@ export class ConflictResolutionService {
     // NOTE (#9426): `isFieldPatchEligible` refuses multi-entity ops, which is
     // load-bearing: a patched conflict bypasses `resolutions` and would starve
     // `_preservePartiallyRejectedLocalBulkPlanOps` while rejecting the bulk row.
+    const groups = fieldPatchGroups(sides);
     if (
       !RECREATE_FALLBACK[entityType] ||
       [...entityPlans, plan].some((p) => this._isWholeEntityWinPlan(p)) ||
-      !isFieldPatchEligible(sides, plan.winner) ||
-      isRemoteWinEcho(sides, plan.winner) ||
+      !groups ||
       // A no-pending crossing (#9073) the remote side won: the local fields
       // already uploaded and the winner's device patches; a patch would echo.
       (plan.winner === 'remote' &&
@@ -2634,23 +2609,27 @@ export class ConflictResolutionService {
     const dominated = nonConflictingOps.filter(
       (op) => op.entityId === entityId && getOpEntityIds(op).length === 1,
     );
-    const mergedOp = this.createLWWUpdateOp(
-      entityType,
-      entityId,
-      buildFieldPatchChanges(sides, plan.winner),
+    let clock = this.mergeAndIncrementClocks(
+      [...allOps, ...dominated].map((op) => op.vectorClock),
       clientId,
-      this.mergeAndIncrementClocks(
-        [...allOps, ...dominated].map((op) => op.vectorClock),
-        clientId,
-      ),
-      Math.max(...allOps.map((op) => op.timestamp)),
-      'patch',
-      latestProjectMoveEntityIds(entityId, allOps),
-      // The patch re-declares clears the ops themselves declared (#9776), so
-      // two resolvers' patches stay field-identical.
-      true,
     );
-    return { conflict, mergedOp, winner: plan.winner };
+    const moves = latestProjectMoveEntityIds(entityId, allOps);
+    // Each re-send dominates the one before; it re-declares its clears (#9776).
+    const mergedOps = groups.map(({ timestamp, changes }, index) => {
+      if (index > 0) clock = this.mergeAndIncrementClocks([clock], clientId);
+      return this.createLWWUpdateOp(
+        entityType,
+        entityId,
+        changes,
+        clientId,
+        clock,
+        timestamp,
+        'patch',
+        moves,
+        true,
+      );
+    });
+    return { conflict, mergedOps, winner: plan.winner };
   }
 
   /** `survivingLocalFields` patches, built from post-apply state (no apply). */

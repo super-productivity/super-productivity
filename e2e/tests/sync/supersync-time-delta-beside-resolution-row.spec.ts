@@ -24,8 +24,10 @@ import { waitForAppReady } from '../../utils/waits';
  * - When B's tracking was earlier, the row won and B's delta was rejected: B
  *   kept the time, every other device lost it (#10408, #10415 residual 1).
  *
- * Every device must converge on the done toggle, A's notes and both devices'
- * time, also after a restart (replay is status-blind).
+ * Every device must converge on the done toggle, C's notes and both devices'
+ * time, also after a restart (replay is status-blind). C wrote its notes after
+ * A did, so they win per field (#10422); A's later time delta used to make
+ * A's whole side newer and its older notes win (#10437).
  */
 
 /** Only explicit syncs run, so every crossing happens in the stated order. */
@@ -208,7 +210,7 @@ test.describe('@supersync tracked time beside another device resolution row', ()
       }
 
       const expected: TaskView = {
-        notes: 'Notes written on A',
+        notes: 'Notes written on C',
         isDone: true,
         hasDoneOn: true,
         timeSpent: 5000,

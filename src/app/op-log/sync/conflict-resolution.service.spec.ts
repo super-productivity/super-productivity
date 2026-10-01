@@ -5462,7 +5462,7 @@ describe('ConflictResolutionService', () => {
                   mergedResolutions: [
                     {
                       conflict,
-                      mergedOp,
+                      mergedOps: [mergedOp],
                     },
                   ],
                 },
@@ -5496,14 +5496,19 @@ describe('ConflictResolutionService', () => {
         const result = await service.autoResolveConflictsLWW([conflict]);
 
         expect(result).toEqual({ localWinOpsCreated: 0 });
-        const mergeRemoteBatch =
-          mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.argsFor(0)[0][0];
-        expect(mergeRemoteBatch).toEqual(
-          jasmine.objectContaining({
-            source: 'remote',
-            options: { pendingApply: true },
-          }),
-        );
+        // The remote side and the re-sent local fields share one transaction;
+        // the fallback re-resolves the remote side alone.
+        expect(
+          mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.argsFor(0)[0],
+        ).toEqual([
+          { ops: [remoteOp], source: 'remote', options: { pendingApply: true } },
+          { ops: [mergedOp], source: 'local' },
+        ]);
+        expect(mockOpLogStore.appendBatchSkipDuplicates.calls.argsFor(0)).toEqual([
+          [remoteOp],
+          'remote',
+          { pendingApply: true },
+        ]);
         expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
           [],
           [],
@@ -5542,7 +5547,7 @@ describe('ConflictResolutionService', () => {
                 }
               : {
                   lwwResolutions: [],
-                  mergedResolutions: [{ conflict, mergedOp }],
+                  mergedResolutions: [{ conflict, mergedOps: [mergedOp] }],
                 },
         );
         mockOpLogStore.appendBatchSkipDuplicates.and.resolveTo({

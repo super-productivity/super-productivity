@@ -370,6 +370,88 @@ describe('buildTimeAwareResolutionBatches: readable fields of nonconflicting ops
   });
 });
 
+describe('buildTimeAwareResolutionBatches: field-patch re-sends (#10422)', () => {
+  const taskOp = (
+    id: string,
+    vectorClock: Record<string, number>,
+    entityId = 'task-1',
+    clientId = 'B',
+  ): Operation => ({
+    id,
+    actionType: ActionType.TASK_SHARED_UPDATE,
+    opType: OpType.Update,
+    entityType: 'TASK' as EntityType,
+    entityId,
+    payload: {
+      actionPayload: { task: { id: entityId, changes: { title: id } } },
+      entityChanges: [],
+    },
+    clientId,
+    vectorClock,
+    timestamp: 1000,
+    schemaVersion: 1,
+  });
+  const build = (
+    remoteWinsOps: Operation[],
+    nonConflictingOps: Operation[],
+    resendOps?: Operation[],
+  ): ReturnType<typeof buildTimeAwareResolutionBatches> =>
+    buildTimeAwareResolutionBatches({
+      unappliedRemoteLosers: [],
+      compensatedRemoteOps: [],
+      newLocalWinOps: [],
+      remoteWinsOps,
+      localMultiReconciliationOps: [],
+      nonConflictingOps,
+      resendOps,
+      getTask: async () => undefined,
+    });
+
+  // One transaction: a crash cannot leave the remote winners without the
+  // re-sent local fields that beat them, and the re-sends follow every
+  // incoming op in seq order, as they did when written separately.
+  it('writes the re-sends last, after the whole incoming batch', async () => {
+    const first = taskOp('first', { B: 1 });
+    const winner = taskOp('winner', { B: 2 });
+    const concurrent = taskOp('concurrent', { C: 1 }, 'task-2', 'C');
+    const later = taskOp('later', { C: 2 }, 'task-2', 'C');
+    const resend = taskOp('resend', { A: 2, B: 2 }, 'task-1', 'A');
+
+    const { batches, precedingOps } = await build(
+      [winner],
+      [first, concurrent, later],
+      [resend],
+    );
+
+    expect(
+      batches.map(({ ops, source, options }) => ({
+        ids: ops.map(({ id }) => id),
+        source,
+        pendingApply: options?.pendingApply ?? false,
+      })),
+    ).toEqual([
+      { ids: ['first', 'winner'], source: 'remote', pendingApply: true },
+      { ids: ['concurrent', 'later'], source: 'remote', pendingApply: true },
+      { ids: ['resend'], source: 'local', pendingApply: false },
+    ]);
+    expect(precedingOps).toEqual([first, concurrent, later]);
+  });
+
+  it('leaves the incoming batch alone without re-sends', async () => {
+    const first = taskOp('first', { B: 1 });
+    const winner = taskOp('winner', { B: 2 });
+    const concurrent = taskOp('concurrent', { C: 1 }, 'task-2', 'C');
+
+    const { batches, precedingOps } = await build([winner], [first, concurrent]);
+
+    expect(batches.flatMap(({ ops }) => ops.map(({ id }) => id))).toEqual([
+      'first',
+      'winner',
+    ]);
+    expect(precedingOps).toEqual([first]);
+  });
+});
+
 // #10423: on one entity, server order is causal order. A remote winner goes
 // after the incoming ops it dominates and before those that dominate it.
 describe('orderIncomingPrefix', () => {

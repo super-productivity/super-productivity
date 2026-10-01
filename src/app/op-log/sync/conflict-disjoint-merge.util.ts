@@ -10,13 +10,11 @@
  * sides wrote; this file keeps the shared field extraction and the disjoint
  * predicate that the commuting-crossing checks use.
  *
- * No Angular, no I/O — deterministic, so the merge decision and the synthesized
- * changes delta are unit-testable in isolation. Determinism is the whole point:
- * both clients must arrive at the identical field/value map regardless of
- * which one performs the merge (key insertion order may differ between the
- * author and wire shapes of a restored clear — immaterial, since the merged
- * ops carry separate ids and `updateOne` is order-independent). See
- * `synthesizeMergedChanges`.
+ * No Angular, no I/O — deterministic, so the merge decision and the extracted
+ * fields are unit-testable in isolation. Determinism is the whole point: both
+ * clients must extract the identical field set regardless of which one
+ * resolves (key insertion order may differ between the author and wire shapes
+ * of a restored clear — immaterial, since `updateOne` is order-independent).
  */
 
 import { ActionType, isLwwUpdatePayload, OpType } from '../core/operation.types';
@@ -412,37 +410,3 @@ const isTimeDeltaBesideTimelessRow = ({
       !SYNC_TIME_SPENT_FIELDS.some((field) => keys.includes(field))
     );
   });
-
-/**
- * Synthesizes the merged CHANGES DELTA — the union of both sides' changed
- * fields, applied on top of each client's current entity by `updateOne` (a
- * shallow MERGE, not a replace). This is the SINGLE source of truth both clients
- * must converge on.
- *
- * IMPORTANT — why a delta and NOT a full-entity snapshot: the delta is derived
- * purely from the two conflicting sides' ops, so both clients compute the
- * byte-identical map regardless of the rest of their entity state. A full-entity
- * snapshot (`{...currentEntity}`) would drag along fields NEITHER side touched;
- * if such an untouched field momentarily differs between the two clients (an
- * ordinary staggered-sync race — e.g. one client already applied a third
- * device's edit the other has not), the two synthesized snapshots differ, tie
- * under LWW at the identical `max(timestamp)`, and diverge PERMANENTLY. Carrying
- * only the changed fields makes the merged ops identical and leaves every
- * untouched field to its own op/LWW.
- *
- * Convergence: a field one side wrote takes that side's value; a field both
- * sides wrote (real or noise) takes the value of `winner`, the side sync-core's
- * LWW planner picks (`planLwwConflictResolutions`: max timestamp, then the
- * clientId of that op). The planner is symmetric, so two clients that resolve
- * the same two sides from opposite ends name the same global side and build
- * the identical delta.
- */
-export const synthesizeMergedChanges = (
-  localChanges: Record<string, unknown>,
-  remoteChanges: Record<string, unknown>,
-  winner: 'local' | 'remote',
-): Record<string, unknown> => {
-  const [loserChanges, winnerChanges] =
-    winner === 'local' ? [remoteChanges, localChanges] : [localChanges, remoteChanges];
-  return { ...loserChanges, ...winnerChanges };
-};
