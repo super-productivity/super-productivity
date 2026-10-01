@@ -769,6 +769,32 @@ describe('a pending order beside a conflict on a listed entity (#10420)', () => 
     expect(nonCommutingPendingOps(remoteDelete, [order, count])).toEqual([order, count]);
   });
 
+  it('keeps a section order in a conflict on a section it lists', () => {
+    const order = toOp(updateSectionOrder({ contextId: P, ids: ['beta', 'alpha'] }));
+    const rename = (title: string): Operation =>
+      toOp(updateSection({ section: { id: 'alpha', changes: { title } } }));
+    const local = rename('local');
+    // It commutes with the rename, but only note and habit orders stay out.
+    expect(areCommutingReorderAndContentOperations(rename('remote'), order)).toBeTrue();
+    expect(nonCommutingPendingOps(rename('remote'), [order, local])).toEqual([
+      order,
+      local,
+    ]);
+    const kept = keptCommutingReorders(
+      [
+        {
+          entityType: 'SECTION',
+          entityId: 'alpha',
+          localOps: [local],
+          remoteOps: [rename('remote')],
+          suggestedResolution: 'remote',
+        },
+      ],
+      new Map([['SECTION:alpha', [order, local]]]),
+    );
+    expect(kept.opIds.size).toBe(0);
+  });
+
   it('keeps the left-out orders and the clock of the conflicts they cross', () => {
     const order = { ...toOp(habitOrder), vectorClock: { local: 2 } };
     const otherOrder = toOp(updateSimpleCounterOrder({ ids: ['u', 'b'] }));

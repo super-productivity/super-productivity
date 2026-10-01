@@ -441,7 +441,9 @@ export const nonCommutingPendingOps = (
     areCommutingSectionOperations(remoteOp, op) ||
     areCommutingReorderAndContentOperations(remoteOp, op, pending) ||
     isReissuedReorderCrossing(remoteOp, op);
-  const rest = pending.filter((op) => !isContentReorderOperation(op) || !commutes(op));
+  // Only note and habit orders: no board, section or issue-provider crossing
+  // beside a conflict has an E2E, so those keep the stop.
+  const rest = pending.filter((op) => !isReissuableReorder(op) || !commutes(op));
   return rest.every(commutes) ? [] : rest;
 };
 
@@ -469,7 +471,7 @@ export const keptCommutingReorders = (
   const reissuedCrossings = new Map<string, Operation[]>();
   let clockToDominate: VectorClock = {};
   for (const op of new Set([...pendingByEntity.values()].flat())) {
-    if (!isContentReorderOperation(op) || inConflict.has(op.id)) continue;
+    if (!isReissuableReorder(op) || inConflict.has(op.id)) continue;
     const ids = getOpEntityIds(op);
     for (const c of conflicts) {
       if (c.entityType !== op.entityType || !ids.includes(c.entityId)) continue;
