@@ -767,6 +767,17 @@ describe('a pending order beside a conflict on a listed entity (#10420)', () => 
     expect(nonCommutingPendingOps(toOp(habitRows[0]), [order, count])).toEqual([count]);
     // A habit delete does not commute with the order: it stays in, and stops.
     expect(nonCommutingPendingOps(remoteDelete, [order, count])).toEqual([order, count]);
+    // A pending local delete keeps the order in too: a remote win recreates
+    // the habit at the end of the list on this device only.
+    const localDelete = toOp(deleteSimpleCounter({ id: 'a' }));
+    expect(nonCommutingPendingOps(remoteRename, [order, localDelete])).toEqual([
+      order,
+      localDelete,
+    ]);
+    expect(nonCommutingPendingOps(toOp(habitRows[1]), [order, localDelete])).toEqual([
+      order,
+      localDelete,
+    ]);
   });
 
   it('keeps a section order in a conflict on a section it lists', () => {

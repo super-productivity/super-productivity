@@ -168,19 +168,18 @@ writes a deleted note's id as given and its notes panel crashes (the v19.1.0
 E2E below).
 
 A remote LWW resolution row of a habit commutes with a habit order that lists
-the habit: the LWW meta-reducer writes the habit only, and no habit field is
+an existing habit: the LWW meta-reducer writes that habit only, and no habit field is
 list-routed, so neither the row's mode nor its keys are read (decision 5). A
 note row keeps the stop, since a note snapshot carries `projectId` and
 `isPinnedToToday`; so do board, section and issue-provider orders.
 
-Residual: the entity's other pending ops can include a local delete of it.
-When the remote side wins that conflict, this device recreates the entity at
-the end of its list (the LWW meta-reducer's recreate appends the id), while
-the kept order places it elsewhere on every other device. The order then
-differs on the deleting device only, with nothing pending; before #10420 the
-order joined the conflict and sync stopped. A SuperSync probe showed this for
-a habit renamed on the other device (measured 2026-10). The note recreate is
-#10380's.
+A pending local delete of the entity keeps the order in the conflict, and
+sync stops as before #10420. When the remote side wins that conflict, this
+device recreates the entity at the end of its list (the LWW meta-reducer's
+recreate appends the id), while a kept order would place it elsewhere on
+every other device: a SuperSync probe showed that permanent order difference
+for a habit renamed on the other device (measured 2026-10). The note
+recreate is #10380's.
 
 A habit delete keeps the stop: a habit order fills the slots of the habits it
 lists, so a delete shifts them around an unlisted (disabled) habit and the two

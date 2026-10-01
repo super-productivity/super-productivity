@@ -1,4 +1,5 @@
 import { writeFile } from 'node:fs/promises';
+import type { Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/supersync.fixture';
 import {
   closeClient,
@@ -116,6 +117,21 @@ const shot = async (
 /** The edited field of a listed entity. */
 const valueOf = (state: Snapshot, list: ListName, id: string): unknown =>
   state.entities[id]?.[list === 'habits' ? 'title' : 'content'];
+
+/** Deletes a habit (titled by its id) in the real settings dialog. */
+const deleteHabit = async (page: Page, title: string): Promise<void> => {
+  await renderedOrder(page, 'habits');
+  await page
+    .locator('.habit-row .habit-title')
+    .filter({ has: page.getByText(title, { exact: true }) })
+    .click();
+  const dialog = page.locator('dialog-simple-counter-edit-settings');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: /Delete/ }).click();
+  await page.locator('dialog-confirm button[e2e="confirmBtn"]').click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText(title, { exact: true })).toBeHidden();
+};
 
 /**
  * - `reorderer resolves`: A holds its order and its edit; B's edit uploads first.
@@ -254,6 +270,65 @@ for (const { list, direction } of cases) {
     });
   }
 }
+
+/**
+ * A pending local delete of a listed habit keeps the order in the conflict, so
+ * sync stops as before #10420. A remote win would recreate the habit at the end
+ * of this device's list while a kept order placed it elsewhere on the other
+ * device: a permanent order difference with nothing pending (review of #10443).
+ */
+test('@supersync reorder beside a conflict: habits / a pending delete beside the order keeps the stop, nothing lost', async ({
+  browser,
+  baseURL,
+  testRunId,
+}) => {
+  test.setTimeout(300000);
+  const harness: Harness = { clients: [], logs: [] };
+  const config = getSuperSyncConfig(await createTestUser(testRunId));
+  const join = (name: string): Promise<SimulatedE2EClient> =>
+    joinClient(
+      harness,
+      config,
+      () => createSimulatedClient(browser, baseURL!, name, testRunId),
+      name,
+    );
+  try {
+    const list: ListName = 'habits';
+    const ids = ['first', 'second', 'third', 'fourth'].map((id) => `${id}-${testRunId}`);
+    const target = ids[0];
+    const a = await join('A');
+    await dispatch(a.page, seeds(list, ids));
+    await syncStrict(a, harness);
+    const b = await join('B');
+    await syncStrict(b, harness);
+    await syncStrict(a, harness);
+
+    await reorder(a.page, list, 0);
+    await deleteHabit(a.page, target);
+    const renamed = `Edited on B ${testRunId}`;
+    await editListed(b.page, list, target, renamed);
+    const aBefore = await shot(a, list, ids);
+    const aPending = pending(await rows(a.page)).map((r) => r.op.id);
+    expect(aPending).toHaveLength(2);
+
+    await syncStrict(b, harness);
+    expect(await syncOutcome(a)).not.toBe('in-sync');
+    expect(harness.logs.filter((l) => l.startsWith('A: '))).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          'side=local actionType=[SimpleCounter] Update SimpleCounter Order',
+        ),
+      ]),
+    );
+    // Nothing is lost: A keeps its order and delete pending, B its rename.
+    expect(pending(await rows(a.page)).map((r) => r.op.id)).toEqual(aPending);
+    expect(await shot(a, list, ids)).toEqual(aBefore);
+    expect(valueOf(await shot(b, list, ids), list, target)).toBe(renamed);
+    expect(pending(await rows(b.page))).toEqual([]);
+  } finally {
+    for (const client of harness.clients) await closeClient(client);
+  }
+});
 
 /**
  * A released (v19.1.0) device on the other side: it renames the habit first and

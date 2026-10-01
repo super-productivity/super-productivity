@@ -444,7 +444,11 @@ export const nonCommutingPendingOps = (
   // Only note and habit orders: no board, section or issue-provider crossing
   // beside a conflict has an E2E, so those keep the stop.
   const rest = pending.filter((op) => !isReissuableReorder(op) || !commutes(op));
-  return rest.every(commutes) ? [] : rest;
+  if (rest.every(commutes)) return [];
+  // A pending delete of the entity keeps its orders in the conflict (the
+  // stop): a remote win recreates the entity at the end of the list here,
+  // while the kept order places it elsewhere on every other device.
+  return rest.some((op) => op.opType === OpType.Delete) ? pending : rest;
 };
 
 /**
