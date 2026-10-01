@@ -110,6 +110,9 @@ such a row reads only **which** fields it writes (its keys, or every field for
 a `'replace'` row), never its values: the row applies as itself, and the local
 fields newer than it, or that it does not write, are re-sent after it. Rows
 never merge with each other (a pending local row keeps whole-entity LWW).
+The re-sends are written last in the same transaction as the remote winners,
+after every incoming op of the download, so a crash cannot leave the remote
+values persisted without them.
 
 ### Composition residual (pre-existing class)
 

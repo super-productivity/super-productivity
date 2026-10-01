@@ -314,6 +314,14 @@ recommendation". As recommended:
 - `'replace'`, unreadable, legacy, multi-entity and time-writing rows keep
   whole-entity LWW. Any other use of a row's keys needs a new decision.
 
+**Decision 5a extended (2026-10-01, #10422).** @johannesjo: the per-field
+rule may read which fields a remote `'patch'` row writes or clears (the keys
+of `actionPayload` and `clearedFields`) to decide per-field winners. Never
+values, never merge rows, never build an op from a row. Scope: every entity
+type the rule handles (TASK, PROJECT, TAG, SIMPLE_COUNTER), on condition that
+`sync-fuzz:compare` shows no newly failing non-task entry other than the
+known habit trade (`noReorder:20725006`); otherwise TASK only.
+
 ## Implementation (PR 1)
 
 [`conflict-field-patch.util.ts`](../../src/app/op-log/sync/conflict-field-patch.util.ts)
@@ -462,16 +470,12 @@ the readable half of #10421 (a readable local edit against a row no longer
 builds a replace snapshot read before the batch). No per-action exception, no
 new wire key, action type or schema bump.
 
-**Decision needed (asked on #10393, not decided).** Step 3 reads which keys a
-remote `'patch'` row writes, to decide which local fields it beats. Decision
-5a allowed that only for the time-delta rule, and "any other use of a row's
-keys needs a new decision". Values are still never read, no op is built from
-a row, and rows never merge with each other: a pending local row keeps
-whole-entity LWW. The reader also covers PROJECT, TAG and SIMPLE_COUNTER
-rows, while 5a covers TASK rows only. Without reading keys, the path also
-admits the rows 5a's bullet keeps on whole-entity LWW: a `'replace'` row
-(counted as writing every field) and a row that writes time, unless a local
-time delta is pending.
+**Reading row keys (decision 5a extended).** Step 3 reads which keys a
+remote `'patch'` row writes, to decide which local fields it beats. Values are
+never read, no op is built from a row, and rows never merge with each other: a
+pending local row keeps whole-entity LWW. A `'replace'` row counts as writing
+every field, and a row that writes time keeps whole-entity LWW beside a pending
+local time delta.
 
 What the key read buys (measured on the 120 compare seeds of master
 `00a8aaf`, 2026-10-01): seeds with `older-write-won` drop from 18 to 5 with
@@ -480,6 +484,11 @@ more seeds also lose time and the pin "a done toggle beside a rename crossing
 a device that also tracked the task" fails. #10422's own three-device shape
 converges either way, so the read is justified by #10421's remaining class,
 not by #10422.
+
+**One transaction.** The re-sends are written in the atomic batch that holds
+the remote winners (`buildTimeAwareResolutionBatches`, `resendOps`), after
+every incoming op of the download, so a crash cannot persist the remote values
+without the local fields that beat them, and hydration replays the live order.
 
 **Released clients (v18.15.0, v19.1.0).** The rows are ordinary `'patch'`
 rows that every released client applies via `updateOne`. A released client
@@ -502,13 +511,6 @@ against any row; it now meets rows stamped at their fields' own, older times.
   a group with the latest timestamp of its own ops.
 - **Pending local rows** keep whole-entity LWW, so a re-send that is still
   pending when another device's row arrives loses or wins as a whole.
-- **Crash window (by reading, not reproduced):** the remote sides are
-  written with the remote winners, and the re-sends in a later transaction.
-  Before #10422 the remote ops and the patch were one atomic batch. A crash
-  between the two replays the remote values over the local fields that won,
-  and the still-pending local ops come back through
-  `SupersededOperationResolverService`, which re-emits those fields from
-  current state, so with the remote values.
 - **Failed re-send fallback:** when a re-send's reducer fails, the remote
   side has already applied, so the whole-entity fallback re-resolves over
   that state; a local-win snapshot then carries the remote values of the
