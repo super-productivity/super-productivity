@@ -1420,5 +1420,26 @@
     ],
     "signatures": [],
     "rejections": ["CONFLICT_CONCURRENT [TimeTracking] Sync time spent"]
+  },
+  {
+    "class": "whole-entity-lww-drops-fields",
+    "ref": "fixed by #10422 (regression pin): the local-win direction of #10422's shape; the resolving device re-sends only its own title at its own time, never the other side's older field",
+    "name": "a local win re-sends only its own rename at its own time, so a newer rename and notes stand on every device",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["renameTask", "t1", "B12"]
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t1", "C17"]
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A24"]
+      }
+    ],
+    "signatures": [],
+    "rejections": []
   }
 ]
