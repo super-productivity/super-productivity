@@ -354,7 +354,7 @@ holds the rules; `ConflictResolutionService._tryCreateFieldPatch` builds the op.
   reminder clear, or a local time delta beside a row that writes time) and the
   row wins, the local fields that still hold their values after the row
   applied are re-emitted as a patch, in the same transaction as their
-  rejection (`survivingLocalFields`). The row's payload is not read (decision
+  rejection (`survivingLocalFields`). That path reads no part of the row (decision
   5); a replace row used to hide this case by overwriting the fields
   everywhere.
 - **Content banner:** a patch reports a content field only where both sides
@@ -467,7 +467,16 @@ remote `'patch'` row writes, to decide which local fields it beats. Decision
 5a allowed that only for the time-delta rule, and "any other use of a row's
 keys needs a new decision". Values are still never read, no op is built from
 a row, and rows never merge with each other: a pending local row keeps
-whole-entity LWW.
+whole-entity LWW. The reader also covers PROJECT, TAG and SIMPLE_COUNTER
+rows, while 5a covers TASK rows only.
+
+What the key read buys (measured on the 120 compare seeds of master
+`00a8aaf`, 2026-10-01): seeds with `older-write-won` drop from 18 to 5 with
+it, and to 10 with every row counted as writing every field; without it, 5
+more seeds also lose time and the pin "a done toggle beside a rename crossing
+a device that also tracked the task" fails. #10422's own three-device shape
+converges either way, so the read is justified by #10421's remaining class,
+not by #10422.
 
 **Released clients (v18.15.0, v19.1.0).** The rows are ordinary `'patch'`
 rows that every released client applies via `updateOne`. A released client
