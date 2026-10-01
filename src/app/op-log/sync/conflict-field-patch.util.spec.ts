@@ -273,6 +273,29 @@ describe('conflict-field-patch.util', () => {
       ).toBeFalse();
     });
 
+    it('keeps whole-entity LWW for a pending local row, so rows never merge', () => {
+      // Two file-based resolvers' re-sends meet as a local row vs a remote row.
+      const rowOf = (clientId: string, fields: Record<string, unknown>): Operation =>
+        op({
+          id: `row-${clientId}`,
+          actionType: '[TASK] LWW Update' as ActionType,
+          clientId,
+          timestamp: 4,
+          payload: {
+            actionPayload: { id: 'task-1', ...fields },
+            entityChanges: [],
+            lwwUpdateMode: 'patch',
+          },
+        });
+      const localRow = rowOf('A', { notes: 'A' });
+      expect(
+        isFieldPatchEligible(sides([localRow], [rowOf('B', { title: 'B' })])),
+      ).toBeFalse();
+      expect(
+        isFieldPatchEligible(sides([localRow], [at({ title: 'B' }, 'B', 4)])),
+      ).toBeFalse();
+    });
+
     it('carries the doneOn a done toggle derives', () => {
       expect(
         localWinningFieldGroups(
