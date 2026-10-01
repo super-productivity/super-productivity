@@ -1072,7 +1072,7 @@
   },
   {
     "class": "remote-win-keeps-local-edit",
-    "ref": "#10421 fix: the delta commutes with the patch row and uploads (#10408); the row and the notes edit apply in server order (#10423)",
+    "ref": "#10421 fix: the delta commutes with the patch row and uploads after one rejection and rebase (#10408); the row and the notes edit apply in server order (#10423)",
     "name": "a tracked delta that loses to a field-patch row stays on its device only",
     "steps": [
       {
@@ -1095,11 +1095,11 @@
       }
     ],
     "signatures": [],
-    "rejections": []
+    "rejections": ["CONFLICT_CONCURRENT [TimeTracking] Sync time spent"]
   },
   {
     "class": "restart-changes-state",
-    "ref": "#10421 fix: a time-only delta commutes with a resolution row that writes no time, so no pre-batch local-win snapshot is built (#10421)",
+    "ref": "#10421 fix: a time-only delta commutes with a resolution row that writes no time, so no pre-batch local-win snapshot is built; the delta uploads after one rejection and rebase",
     "name": "a done toggle hoisted ahead of a stale local-win snapshot changes on restart",
     "steps": [
       {
@@ -1125,7 +1125,7 @@
       }
     ],
     "signatures": [],
-    "rejections": []
+    "rejections": ["CONFLICT_CONCURRENT [TimeTracking] Sync time spent"]
   },
   {
     "class": "remote-win-keeps-local-edit",
