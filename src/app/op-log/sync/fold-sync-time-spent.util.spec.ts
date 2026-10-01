@@ -1,6 +1,8 @@
 import {
   buildTimeAwareResolutionBatches,
   foldSyncTimeSpentDeltas,
+  orderIncomingPrefix,
+  remoteWinsInServerOrder,
 } from './fold-sync-time-spent.util';
 import { ActionType, EntityType, OpType, Operation } from '../core/operation.types';
 
@@ -246,6 +248,33 @@ describe('buildTimeAwareResolutionBatches: readable fields of nonconflicting ops
     expect(localBatchOps(batches)).toEqual([snapshot]);
   });
 
+  // #10423: a remote winner of a task without a local win goes right after
+  // the incoming op it dominates, ahead of the local rows; one beside a local
+  // win of its task stays after it, so it overrides the snapshot on replay.
+  it('orders a remote winner after the incoming op it dominates', async () => {
+    const snapshot = localWin();
+    const rename = taskUpdate('op-rename', { title: 'older' }, { entityId: 'task-2' });
+    const winner = {
+      ...localWin(),
+      id: 'op-remote-winner',
+      clientId: 'C',
+      entityId: 'task-2',
+    };
+    const besideLocalWin = { ...localWin(), id: 'op-beside', clientId: 'C' };
+    const { batches, precedingOps } = await build(
+      [snapshot],
+      [rename],
+      [winner, besideLocalWin],
+    );
+
+    expect(precedingOps).toEqual([rename]);
+    expect(batches.map(({ ops }) => ops.map(({ id }) => id))).toEqual([
+      ['op-rename', 'op-remote-winner'],
+      ['op-local-win'],
+      ['op-beside'],
+    ]);
+  });
+
   // Review of #10398, finding 1: the estimate edit is hoisted before the
   // snapshot and dominated by the notes edit's clock, but not carried.
   it('leaves the snapshot alone when an unfoldable op on the task comes before a plain edit', async () => {
@@ -338,5 +367,94 @@ describe('buildTimeAwareResolutionBatches: readable fields of nonconflicting ops
 
     expect(precedingOps).toEqual([]);
     expect(localBatchOps(batches)).toEqual([patch]);
+  });
+});
+
+// #10423: on one entity, server order is causal order. A remote winner goes
+// after the incoming ops it dominates and before those that dominate it.
+describe('orderIncomingPrefix', () => {
+  const taskOp = (
+    id: string,
+    vectorClock: Record<string, number>,
+    entityId = 'task-1',
+  ): Operation => ({
+    id,
+    actionType: ActionType.TASK_SHARED_UPDATE,
+    opType: OpType.Update,
+    entityType: 'TASK' as EntityType,
+    entityId,
+    payload: {
+      actionPayload: { task: { id: entityId, changes: {} } },
+      entityChanges: [],
+    },
+    clientId: 'B',
+    vectorClock,
+    timestamp: 1000,
+    schemaVersion: 1,
+  });
+  const ids = (ops: Operation[]): string[] => ops.map(({ id }) => id);
+
+  it('places a winner right after the last op it dominates', () => {
+    const first = taskOp('first', { B: 1 });
+    const second = taskOp('second', { B: 2 });
+    const later = taskOp('later', { B: 4 });
+    const winner = taskOp('winner', { B: 3 });
+
+    const { ordered, precedingOps, moved } = orderIncomingPrefix(
+      [first, second, later],
+      [winner],
+    );
+
+    expect(ids(ordered)).toEqual(['first', 'second', 'winner']);
+    expect(ids(precedingOps)).toEqual(['first', 'second']);
+    expect([...moved]).toEqual([winner]);
+  });
+
+  it('interleaves several winners in server order', () => {
+    const done = taskOp('done', { A: 1 });
+    const undone = taskOp('undone', { A: 1, B: 3 });
+    const patch = taskOp('patch', { A: 1, B: 2 });
+    const rename = taskOp('rename', { A: 1, B: 7 });
+
+    const { ordered } = orderIncomingPrefix([done, undone], [patch, rename]);
+
+    expect(ids(ordered)).toEqual(['done', 'patch', 'undone', 'rename']);
+  });
+
+  it('keeps winners in place that dominate no incoming op', () => {
+    const concurrent = taskOp('concurrent', { A: 1 });
+    const otherTask = taskOp('other-task', { B: 1 }, 'task-2');
+    const winner = taskOp('winner', { B: 2 });
+
+    const { ordered, precedingOps, moved } = orderIncomingPrefix(
+      [concurrent, otherTask],
+      [winner],
+    );
+
+    expect(ordered).toEqual([]);
+    expect(precedingOps).toEqual([]);
+    expect(moved.size).toBe(0);
+  });
+
+  it('puts a winner first when an op of the prefix dominates it', () => {
+    const folded = taskOp('folded', { B: 2 });
+    const winner = taskOp('winner', { B: 1 });
+
+    const { ordered, precedingOps } = orderIncomingPrefix([folded], [winner], 1);
+
+    expect(ids(ordered)).toEqual(['winner', 'folded']);
+    expect(ids(precedingOps)).toEqual(['folded']);
+  });
+
+  it('puts the other winners first when no local row is written', () => {
+    const first = taskOp('first', { B: 1 });
+    const dominating = taskOp('dominating', { B: 2 });
+    const concurrent = taskOp('concurrent', { C: 1 }, 'task-2');
+
+    expect(ids(remoteWinsInServerOrder([first], [concurrent, dominating]))).toEqual([
+      'concurrent',
+      'first',
+      'dominating',
+    ]);
   });
 });

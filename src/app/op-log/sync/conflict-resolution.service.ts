@@ -105,14 +105,15 @@ import {
   buildTimeAwareResolutionBatches,
   foldSyncTimeSpentDeltas,
   isSyncTimeSpentOp,
+  remoteWinsInServerOrder,
 } from './fold-sync-time-spent.util';
 import type { Task } from '../../features/tasks/task.model';
 import {
   hasOpaqueChanges,
   isCommutingTimeDeltaCrossing,
   isDisjointMergeEligible,
+  isNoiseOnlySide,
   mergeChangedFields,
-  NOISE_FIELDS,
 } from './conflict-disjoint-merge.util';
 import {
   aggregateEntityConflict,
@@ -1523,10 +1524,12 @@ export class ConflictResolutionService {
         }
       }
     } else if (remoteWinsOps.length > 0) {
-      const result = await this._filterAndAppendOpsWithRetry(remoteWinsOps, 'remote', {
+      const ops = remoteWinsInServerOrder(nonConflictingOps, remoteWinsOps);
+      nonConflictingOps = nonConflictingOps.filter((op) => !ops.includes(op));
+      const result = await this._filterAndAppendOpsWithRetry(ops, 'remote', {
         pendingApply: true,
       });
-      const skippedCount = remoteWinsOps.length - result.ops.length;
+      const skippedCount = ops.length - result.ops.length;
       if (skippedCount > 0) {
         OpLog.verbose(
           `ConflictResolutionService: Skipping ${skippedCount} duplicate ops (LWW remote)`,
@@ -4359,8 +4362,8 @@ export class ConflictResolutionService {
     // real field; only noise-field arrival divergence remains (status quo,
     // cosmetic). Whole-entity LWW could instead clobber the real side.
     if (
-      this._isNoiseOnlySide(localOps, payloadKey, entityId) ||
-      this._isNoiseOnlySide([remoteOp], payloadKey, entityId)
+      isNoiseOnlySide(localOps, payloadKey, entityId) ||
+      isNoiseOnlySide([remoteOp], payloadKey, entityId)
     ) {
       return null;
     }
@@ -4386,27 +4389,6 @@ export class ConflictResolutionService {
         `vs remote op ${remoteOp.id}) — routing through LWW (#9073)`,
     );
     return conflict;
-  }
-
-  /**
-   * True when every field the side changed is a NOISE field (and the side is
-   * decomposable at all — opaque ops carry real, non-extractable mutations).
-   */
-  private _isNoiseOnlySide(
-    ops: Operation[],
-    payloadKey: string,
-    entityId: string,
-  ): boolean {
-    if (ops.some((op) => op.opType === OpType.Delete)) {
-      return false;
-    }
-    if (hasOpaqueChanges(ops, payloadKey, entityId)) {
-      return false;
-    }
-    const changedFields = Object.keys(mergeChangedFields(ops, payloadKey, entityId));
-    return (
-      changedFields.length > 0 && changedFields.every((field) => NOISE_FIELDS.has(field))
-    );
   }
 
   /**

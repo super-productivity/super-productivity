@@ -1,5 +1,9 @@
 import { extractActionPayload } from '@sp/sync-core';
-import { mergeVectorClocks } from '../../core/util/vector-clock';
+import {
+  compareVectorClocks,
+  mergeVectorClocks,
+  VectorClockComparison,
+} from '../../core/util/vector-clock';
 import {
   ActionType,
   isLwwUpdatePayload,
@@ -114,6 +118,60 @@ const plainTaskFields = (
 const touchesTask = (op: Operation, taskId: string): boolean =>
   getOpEntityIds(op).includes(taskId) ||
   JSON.stringify(op.payload).includes(JSON.stringify(taskId));
+
+/** True when `later` causally dominates `earlier` on an entity they share. */
+const dominates = (later: Operation, earlier: Operation): boolean =>
+  later.entityType === earlier.entityType &&
+  getOpEntityIds(later).some((id) => getOpEntityIds(earlier).includes(id)) &&
+  compareVectorClocks(earlier.vectorClock, later.vectorClock) ===
+    VectorClockComparison.LESS_THAN;
+
+/**
+ * #10423: the incoming prefix to persist ahead of the resolution's local rows,
+ * in server order. Splitting a download into conflicts and nonconflicting ops
+ * loses that order, but on one entity it is causal: a remote winner belongs
+ * right after the last nonconflicting op it dominates, which reached the
+ * server first, and before any op that dominates it. Such winners join the
+ * prefix (`moved`); the others keep their place. The prefix covers at least
+ * the first `minLength` nonconflicting ops.
+ */
+export const orderIncomingPrefix = (
+  nonConflictingOps: Operation[],
+  remoteWinsOps: Operation[],
+  minLength = 0,
+): { ordered: Operation[]; precedingOps: Operation[]; moved: Set<Operation> } => {
+  const placed = remoteWinsOps.map((winner) => ({
+    winner,
+    pos: nonConflictingOps.reduce(
+      (last, op, index) => (dominates(winner, op) ? index + 1 : last),
+      0,
+    ),
+  }));
+  const length = Math.max(minLength, ...placed.map(({ pos }) => pos));
+  const precedingOps = nonConflictingOps.slice(0, length);
+  const inPrefix = placed.filter(
+    ({ winner, pos }) => pos > 0 || precedingOps.some((op) => dominates(op, winner)),
+  );
+  const ordered: Operation[] = [];
+  for (let index = 0; index <= length; index++) {
+    inPrefix.forEach(({ winner, pos }) => pos === index && ordered.push(winner));
+    if (index < length) ordered.push(nonConflictingOps[index]);
+  }
+  return { ordered, precedingOps, moved: new Set(inPrefix.map(({ winner }) => winner)) };
+};
+
+/**
+ * Without a local resolution row, the remote winners and the incoming prefix
+ * they dominate, in server order (`orderIncomingPrefix`); the other winners
+ * keep their place first.
+ */
+export const remoteWinsInServerOrder = (
+  nonConflictingOps: Operation[],
+  remoteWinsOps: Operation[],
+): Operation[] => {
+  const { ordered, moved } = orderIncomingPrefix(nonConflictingOps, remoteWinsOps);
+  return [...remoteWinsOps.filter((op) => !moved.has(op)), ...ordered];
+};
 
 /**
  * A local winner can share an entity with incoming nonconflicting time edits
@@ -267,17 +325,32 @@ export const buildTimeAwareResolutionBatches = async ({
     (last, op, index) => (isFolded(op) ? index : last),
     -1,
   );
-  const precedingOps = nonConflictingOps.slice(0, lastFoldedIndex + 1);
+  // A winner beside a local win of its entity stays after it: it must
+  // override the snapshot, here and on replay.
+  const localWinKeys = new Set(
+    newLocalWinOps.flatMap((op) =>
+      getOpEntityIds(op).map((id) => `${op.entityType}:${id}`),
+    ),
+  );
+  const { ordered, precedingOps, moved } = orderIncomingPrefix(
+    nonConflictingOps,
+    remoteWinsOps.filter(
+      (op) =>
+        !isFolded(op) &&
+        !getOpEntityIds(op).some((id) => localWinKeys.has(`${op.entityType}:${id}`)),
+    ),
+    lastFoldedIndex + 1,
+  );
   const batches: MixedSourceOperationBatch[] = [
     { ops: unappliedRemoteLosers, source: 'remote' },
     {
-      ops: [...compensatedRemoteOps, ...precedingOps, ...winningTimeOps.filter(isFolded)],
+      ops: [...compensatedRemoteOps, ...ordered, ...winningTimeOps.filter(isFolded)],
       source: 'remote',
       options: { pendingApply: true },
     },
     { ops: localWins, source: 'local' },
     {
-      ops: remoteWinsOps.filter((op) => !isFolded(op)),
+      ops: remoteWinsOps.filter((op) => !isFolded(op) && !moved.has(op)),
       source: 'remote',
       options: { pendingApply: true },
     },

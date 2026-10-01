@@ -187,6 +187,27 @@ export const hasOpaqueChanges = (
   entityId: string,
 ): boolean => ops.some((op) => isOpaqueChangeOp(op, payloadKey, entityId));
 
+/**
+ * True when every field the side changed is a NOISE field (and the side is
+ * decomposable at all — opaque ops carry real, non-extractable mutations).
+ */
+export const isNoiseOnlySide = (
+  ops: Operation[],
+  payloadKey: string,
+  entityId: string,
+): boolean => {
+  if (ops.some((op) => op.opType === OpType.Delete)) {
+    return false;
+  }
+  if (hasOpaqueChanges(ops, payloadKey, entityId)) {
+    return false;
+  }
+  const changedFields = Object.keys(mergeChangedFields(ops, payloadKey, entityId));
+  return (
+    changedFields.length > 0 && changedFields.every((field) => NOISE_FIELDS.has(field))
+  );
+};
+
 /** The non-NOISE keys of a changed-field map. */
 const nonNoiseKeys = (changes: Record<string, unknown>): string[] =>
   Object.keys(changes).filter((field) => !NOISE_FIELDS.has(field));
