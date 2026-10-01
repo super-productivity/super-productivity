@@ -192,6 +192,10 @@ export const remoteWinsInServerOrder = (
  * device, so its fields are overlaid onto the snapshot's content. Unlike a
  * delta it is absolute, so it needs neither the clock merge nor the hoist: it
  * stays after the snapshot and re-applies the same value there on replay.
+ *
+ * Field-patch re-sends (#10422) go last, after every incoming op, in the same
+ * transaction: a crash between the remote winners and the re-sends would
+ * otherwise hydrate the winners without the local fields that beat them.
  */
 export const buildTimeAwareResolutionBatches = async ({
   unappliedRemoteLosers,
@@ -200,6 +204,7 @@ export const buildTimeAwareResolutionBatches = async ({
   remoteWinsOps,
   localMultiReconciliationOps,
   nonConflictingOps,
+  resendOps = [],
   getTask,
 }: {
   unappliedRemoteLosers: Operation[];
@@ -208,6 +213,7 @@ export const buildTimeAwareResolutionBatches = async ({
   remoteWinsOps: Operation[];
   localMultiReconciliationOps: Operation[];
   nonConflictingOps: Operation[];
+  resendOps?: Operation[];
   getTask: (taskId: string) => Promise<unknown>;
 }): Promise<{ batches: MixedSourceOperationBatch[]; precedingOps: Operation[] }> => {
   const foldedIds = new Set<string>();
@@ -361,5 +367,14 @@ export const buildTimeAwareResolutionBatches = async ({
     },
     { ops: reconciliations, source: 'local' },
   ];
-  return { precedingOps, batches: batches.filter((batch) => batch.ops.length > 0) };
+  // Re-sends must follow the whole incoming batch, so it all joins the prefix.
+  const rest = resendOps.length > 0 ? nonConflictingOps.slice(precedingOps.length) : [];
+  batches.push(
+    { ops: rest, source: 'remote', options: { pendingApply: true } },
+    { ops: resendOps, source: 'local' },
+  );
+  return {
+    precedingOps: [...precedingOps, ...rest],
+    batches: batches.filter((batch) => batch.ops.length > 0),
+  };
 };

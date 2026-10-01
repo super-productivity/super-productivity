@@ -238,6 +238,15 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
         });
       },
     );
+    mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(async (batches) => ({
+      written: batches.flatMap((batch) =>
+        batch.ops.map((batchOp) => {
+          if (batch.options?.pendingApply) pendingAppendedIds.add(batchOp.id);
+          return { seq: ++lastSeq, op: batchOp, source: batch.source };
+        }),
+      ),
+      skippedCount: 0,
+    }));
     mockOpLogStore.markReducersCommittedAndMergeClocks.and.callFake(
       async (_seqs, ops) => {
         for (const o of ops) {
@@ -309,11 +318,13 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     expect(mockOpLogStore.appendWithVectorClockOverwrite).not.toHaveBeenCalled();
     const batches =
       mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.mostRecent().args[0];
-    expect(batches.map((b) => b.source)).toEqual(['local']);
-    expect(batches[0].ops.length).toBe(1);
-    expect(batches[0].ops[0].opType).toBe(OpType.Update);
+    // One transaction: the remote side, then the patch (#10422 crash window).
+    expect(batches.map((b) => b.source)).toEqual(['remote', 'local']);
+    expect(batches[0].ops.map((o) => o.id)).toEqual(['remote-mb']);
+    expect(batches[1].ops.length).toBe(1);
+    expect(batches[1].ops[0].opType).toBe(OpType.Update);
     // The remote side applies as itself, before the patch.
-    expect(appliedOpIds()).toEqual(['remote-mb', batches[0].ops[0].id]);
+    expect(appliedOpIds()).toEqual(['remote-mb', batches[1].ops[0].id]);
   });
 
   // ── (a) title vs notes → merge both ────────────────────────────────────────

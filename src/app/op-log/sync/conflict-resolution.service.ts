@@ -1449,8 +1449,13 @@ export class ConflictResolutionService {
     // remote winners in live-apply order. Hydration is status-blind, so both
     // durable ordering and the absence of crash gaps are required here.
     // ─────────────────────────────────────────────────────────────────────────
+    const resendOps = mergedResolutions.flatMap((merged) => merged.mergedOps);
+    const resendIds = new Set(resendOps.map((op) => op.id));
+    let writtenResendIds: string[] = [];
     const hasLocalResolutionOps =
-      newLocalWinOps.length > 0 || localMultiReconciliationOps.length > 0;
+      newLocalWinOps.length > 0 ||
+      localMultiReconciliationOps.length > 0 ||
+      resendOps.length > 0;
     if (localWinsRemoteOps.length > 0 || hasLocalResolutionOps) {
       const compensatedRemoteOpIds = new Set(compensatedRemoteOps.keys());
       const unappliedRemoteLosers = localWinsRemoteOps.filter(
@@ -1466,14 +1471,19 @@ export class ConflictResolutionService {
         remoteWinsOps,
         localMultiReconciliationOps,
         nonConflictingOps,
+        resendOps,
         getTask: (id) => this.getCurrentEntityState('TASK', id),
       });
       const result = await this.opLogStore.appendMixedSourceBatchSkipDuplicates(batches);
       nonConflictingOps = nonConflictingOps.filter((op) => !precedingOps.includes(op));
+      const writtenResends = result.written.filter(
+        (entry) => entry.source === 'local' && resendIds.has(entry.op.id),
+      );
       writtenLocalWinOps = result.written
-        .filter((entry) => entry.source === 'local')
+        .filter((entry) => entry.source === 'local' && !resendIds.has(entry.op.id))
         .map((entry) => entry.op);
       writtenLocalWinOps.forEach((op) => protectedLocalResolutionOpIds.add(op.id));
+      resendIds.forEach((id) => protectedLocalResolutionOpIds.add(id));
       if (result.skippedCount > 0) {
         OpLog.verbose(
           `ConflictResolutionService: Skipped ${result.skippedCount} duplicate resolution op(s)`,
@@ -1516,16 +1526,26 @@ export class ConflictResolutionService {
           ...entry,
           source: 'remote' as const,
         })),
+        ...writtenResends,
       ].sort((a, b) => a.seq - b.seq);
       for (const entry of resolutionApplyEntries) {
         allOpsToApply.push(entry.op);
         applySeqByOpId.set(entry.op.id, entry.seq);
-        if (entry.source === 'remote') {
+        if (entry.source === 'remote' || resendIds.has(entry.op.id)) {
           allStoredOps.push({
             id: entry.op.id,
             seq: entry.seq,
           });
         }
+      }
+      writtenResendIds = writtenResends.map((entry) => entry.op.id);
+      // Apply/upload the WRITTEN re-sends: they carry the rebased clocks.
+      for (const { op } of writtenResends) {
+        checkpointExemptOpIds.add(op.id);
+        writtenMergedOpIds.add(op.id);
+        OpLog.normal(
+          `ConflictResolutionService: Appended disjoint-merge op ${op.id} for ${op.entityType}:${op.entityId}`,
+        );
       }
     } else if (remoteWinsOps.length > 0) {
       const ops = remoteWinsInServerOrder(nonConflictingOps, remoteWinsOps);
@@ -1587,60 +1607,19 @@ export class ConflictResolutionService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // STEP 3b (SPAP-14, #10422): Process field patches.
-    //
-    // The remote sides already applied as remote winners above. For each
-    // patch we: (1) reject the original local ops (the patches supersede
-    // them); (2) append the patches re-sending the local fields that won, after
-    // every remote op, as PENDING LOCAL ops (so they upload) AND queue them
-    // into the apply batch (so the won fields override the remote values here
-    // too). They stay unsynced+not-rejected → they upload.
+    // STEP 3b (SPAP-14, #10422): the field patches' re-sends were written last
+    // in the atomic batch above; they supersede the original local ops.
     // ─────────────────────────────────────────────────────────────────────────
+    for (const merged of mergedResolutions) {
+      for (const op of merged.conflict.localOps) {
+        if (!localOpsToRejectSet.has(op.id) && !keptDeltas.opIds.has(op.id)) {
+          localOpsToReject.push(op.id);
+          localOpsToRejectSet.add(op.id);
+        }
+      }
+    }
     if (mergedResolutions.length > 0) {
-      for (const merged of mergedResolutions) {
-        for (const op of merged.conflict.localOps) {
-          if (!localOpsToRejectSet.has(op.id) && !keptDeltas.opIds.has(op.id)) {
-            localOpsToReject.push(op.id);
-            localOpsToRejectSet.add(op.id);
-          }
-        }
-      }
-
-      // ONE atomic batch for all re-sends: it rebases each on the durable clock
-      // so a synthetic op cannot reuse or regress this client's counter. The
-      // rebased clock still dominates both original sides.
-      const mergeBatch = await this.opLogStore.appendMixedSourceBatchSkipDuplicates([
-        {
-          ops: mergedResolutions.flatMap((merged) => merged.mergedOps),
-          source: 'local',
-        },
-      ]);
-      if (mergeBatch.skippedCount > 0) {
-        OpLog.verbose(
-          `ConflictResolutionService: Skipped ${mergeBatch.skippedCount} duplicate merge-resolution op(s)`,
-        );
-      }
-
-      await rebaseKeptTimeDeltas(
-        this.opLogStore,
-        keptDeltas,
-        mergeBatch.written.filter((e) => e.source === 'local').map((e) => e.op.id),
-      );
-      for (const entry of mergeBatch.written) {
-        if (entry.source !== 'local') {
-          continue;
-        }
-        // Apply/upload the WRITTEN op — it carries the rebased vector clock.
-        allStoredOps.push({ id: entry.op.id, seq: entry.seq });
-        allOpsToApply.push(entry.op);
-        applySeqByOpId.set(entry.op.id, entry.seq);
-        checkpointExemptOpIds.add(entry.op.id);
-        writtenMergedOpIds.add(entry.op.id);
-        OpLog.normal(
-          `ConflictResolutionService: Appended disjoint-merge op ${entry.op.id} for ` +
-            `${entry.op.entityType}:${entry.op.entityId}`,
-        );
-      }
+      await rebaseKeptTimeDeltas(this.opLogStore, keptDeltas, writtenResendIds);
     }
 
     // Re-sort the combined batch by durable seq: with fresh appends this is a
