@@ -1074,7 +1074,7 @@
   {
     "class": "remote-win-keeps-local-edit",
     "ref": "#10421 fix: the delta commutes with the patch row and uploads after one rejection and rebase (#10408); the row and the notes edit apply in server order (#10423)",
-    "name": "a tracked delta that loses to a field-patch row stays on its device only",
+    "name": "a tracked delta crossing a field-patch row commutes with it and reaches every device",
     "steps": [
       {
         "d": "A",
@@ -1100,8 +1100,8 @@
   },
   {
     "class": "restart-changes-state",
-    "ref": "#10421 fix: a time-only delta commutes with a resolution row that writes no time, so no pre-batch local-win snapshot is built; the delta uploads after one rejection and rebase",
-    "name": "a done toggle hoisted ahead of a stale local-win snapshot changes on restart",
+    "ref": "#10421 fix: a time-only delta commutes with a resolution row that writes no time, so no pre-batch local-win snapshot is built; the delta uploads after one rejection and rebase. The done toggle and the restart are fixed; what remains is side-level LWW: both devices wrote notes, and A's side wins whole-entity because its newest op (the time delta) is later than C's notes edit. On master the same trace diverges on notes instead",
+    "name": "a done toggle beside a tracked delta and a resolution row reaches every device and survives a restart",
     "steps": [
       {
         "d": "A",
@@ -1125,7 +1125,8 @@
         "a": ["track", "t1", 3000]
       }
     ],
-    "signatures": [],
+    "primary": "older-write-won:task.notes",
+    "signatures": ["older-write-won:task.notes"],
     "rejections": ["CONFLICT_CONCURRENT [TimeTracking] Sync time spent"]
   },
   {
@@ -1368,5 +1369,70 @@
     "primary": "older-write-won:task.title",
     "signatures": ["older-write-won:task.title"],
     "rejections": ["CONFLICT_CONCURRENT [TASK] LWW Update"]
+  },
+  {
+    "class": "stale-local-win-snapshot",
+    "ref": "#10421 (a readable local rename beats an opaque plan row with a pre-batch snapshot; same signatures on master f9330b15b). Also guards #10423's rule that a remote winner beside a local win of its entity stays after it: moving it ahead adds restart-changed:.task.entities.*.title",
+    "name": "a remote rename applied after a local-win snapshot of the same task stays on that device only",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["track", "t3", 3000],
+        "r": 1
+      },
+      {
+        "d": "B",
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t3", "C16"]
+      },
+      {
+        "d": "A",
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["renameTask", "t3", "A23"]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t3", 2000]
+      }
+    ],
+    "primary": "divergence:.task.entities.*.title",
+    "signatures": ["divergence:.task.entities.*.title", "older-write-won:task.title"],
+    "rejections": []
+  },
+  {
+    "class": "whole-entity-lww-drops-fields",
+    "ref": "#10421 (a readable notes edit beats the opaque patch row that carries a rename and a done toggle, whole-entity with a pre-batch snapshot). Accepted on 2026-10-01 (lww-field-level-resolution.md, decision 5a). On master f9330b15b the same trace keeps the rename and loses the notes instead: B's time-only snapshot, which #10421's fix no longer builds, carried the rename",
+    "name": "a notes edit that beats an opaque patch row whole-entity drops its rename and done toggle on every device",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["renameTask", "t1", "B3"]
+      },
+      {
+        "d": "A",
+        "a": ["doneTask", "t1", true]
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t1", "C26"]
+      },
+      {
+        "d": "B",
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["track", "t1", 5000]
+      }
+    ],
+    "primary": "field-reverted:task.title",
+    "signatures": ["field-reverted:task.isDone", "field-reverted:task.title"],
+    "rejections": ["CONFLICT_CONCURRENT [TimeTracking] Sync time spent"]
   }
 ]

@@ -302,6 +302,18 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
 6. **Opaque ops:** stay on whole-entity LWW.
 7. **Time on a remote win:** local-win direction only, for now.
 
+**Decision 5a (2026-10-01, #10421).** Asked whether rule 1 below stays within
+decision 5, @johannesjo answered: "Ponder in sub agent and act according to
+recommendation". As recommended:
+
+- A conflict may read **which** top-level keys a single-task LWW `'patch'`
+  row writes or clears (`actionPayload`, `clearedFields`), and only to decide
+  that a pending side of `syncTimeSpent` deltas commutes with it.
+- The row's values are never read, no op is built from it, and rows never
+  merge with each other. The no-re-merge contract of decision 5 stays.
+- `'replace'`, unreadable, legacy, multi-entity and time-writing rows keep
+  whole-entity LWW. Any other use of a row's keys needs a new decision.
+
 ## Implementation (PR 1)
 
 [`conflict-field-patch.util.ts`](../../src/app/op-log/sync/conflict-field-patch.util.ts)
@@ -360,14 +372,19 @@ holds the rules; `ConflictResolutionService._tryCreateFieldPatch` builds the op.
   reducer side effects (e.g. a subtask estimate's parent total). This
   predates PR 1 for disjoint merges and now covers overlapping ones.
 - **A time delta beside a resolution row:** a pending side of only
-  `syncTimeSpent` deltas does not conflict with a single-task LWW row whose
-  payload and `clearedFields` hold no `timeSpent`/`timeSpentOnDay` key
-  (`isCommutingTimeDeltaCrossing`, #10408, #10421). The delta stays pending
-  and is rebased after one server rejection, like a delta beside a rename; no
-  snapshot is built. Only the row's keys are read, never its values, and rows
-  still never merge (decision 5; @johannesjo's explicit word on reading keys
-  is asked on #10393). A row that writes or clears a time field still wins
-  whole-entity, as on master.
+  `syncTimeSpent` deltas does not conflict with a single-task LWW `'patch'`
+  row whose payload and `clearedFields` hold no `timeSpent`/`timeSpentOnDay`
+  key (`isCommutingTimeDeltaCrossing`, #10408, #10421). The delta stays
+  pending and is rebased after one server rejection, like a delta beside a
+  rename; no snapshot is built. Only the row's keys are read, never its
+  values, and rows still never merge (decision 5a). A `'replace'` row, which
+  `setOne` applies to every field, or a row that writes or clears a time
+  field still wins whole-entity, as on master.
+- **That rule is one-directional:** it covers a pending delta meeting an
+  incoming row. A pending row meeting an incoming delta, and the no-pending
+  path (`_buildNoPendingConcurrentConflict`, #9073), still resolve as before.
+  The WebDAV E2E converges in both directions without it, so no guard is
+  added (no evidence of harm).
 - **Opaque ops, NOTE, deletes and archives** keep whole-entity LWW, so the
   habit, note and task-tracking pins of #10379 and #10260 stay.
 - **Released resolvers:** a v19.1.0 device that resolves still emits replace
@@ -394,6 +411,14 @@ holds the rules; `ConflictResolutionService._tryCreateFieldPatch` builds the op.
   batch, so an incoming non-plain edit of the same task (a planner day, a done
   toggle) is reverted, and the row's own fields are lost (#10421, open). The
   time-only shape that kept deltas made common no longer builds one.
+- **Accepted regression (`tasks:20725028`, 2026-10-01):** a readable notes
+  edit that beats an opaque patch row (a rename and a done toggle) wins
+  whole-entity and drops the rename on every device. On master the same
+  trace keeps the rename and loses the notes instead: a later time-only
+  snapshot of the renaming device carried the rename and won, and the time
+  rule above no longer builds it. Both revisions lose the done toggle. It is
+  the opaque-row residual of decisions 5 and 6, accepted on @johannesjo's
+  word quoted under decision 5a, and pinned as a failing trace (ref #10421).
 - **Server order of remote winners (#10423):** an incoming nonconflicting op
   that a remote winner of the same entity causally dominates reached the
   server first, so it is persisted and applied before that winner
@@ -405,7 +430,14 @@ holds the rules; `ConflictResolutionService._tryCreateFieldPatch` builds the op.
   `clearedFields`, which v18.15.0–v18.21.x ignore (stale `doneOn` there).
 - **Pinned:** the tracked-winner shape is pinned as a failing trace
   (sync-fuzz-pinned-traces.json; ref #10260). The delta-versus-patch-row
-  divergence and the stale-snapshot restart change are regression pins.
+  divergence is a regression pin. The stale-snapshot restart change is fixed,
+  but its trace stays failing on `older-write-won:task.notes`: a side with a
+  notes edit and a later time delta wins whole-entity over a newer notes
+  edit (side-level LWW; master diverges on that trace instead). Two
+  failing traces (ref #10421) pin the accepted regression above and a remote
+  rename applied after a local-win snapshot of its task, which diverges the
+  same way on master; the latter also guards the local-win exception of the
+  server-order rule (without it, the title changes on restart).
 
 **Residual decisions (2026-10-01).** @johannesjo, after the residuals were
 put to him: "Double check decisions in sub agents then do everything as
