@@ -366,79 +366,90 @@ test.describe('@supersync released reorder beside a conflict (#10420)', () => {
 
   /**
    * The current device edits a note and holds a project note order; the
-   * released device deletes that note later. The delete wins the edit conflict
-   * and the order stays out of it, so it must be reissued from current state
-   * (#10377), not moved past the delete with its stale list: released reducers
-   * write a note order's ids as given, so the deleted id would dangle in the
-   * released device's project.
+   * released device deletes a listed note later. The order stays out of the
+   * edit conflict, so it must be reissued from current state (#10377), not
+   * moved past the conflict with its stale list: released reducers write a
+   * note order's ids as given, so the deleted id would dangle in the released
+   * device's project.
+   * - `edited note`: the delete wins the edit conflict.
+   * - `other note`: the released device deletes another listed note, then
+   *   edits the note too; that edit wins and its clock dominates the delete,
+   *   which applies beside the conflict.
    */
-  test('released deletes a note the current device edited beside its pending note order', async ({
-    browser,
-    baseURL,
-    testRunId,
-  }) => {
-    test.setTimeout(300000);
-    const harness: Harness = { clients: [], logs: [] };
-    const config = getSuperSyncConfig(await createTestUser(testRunId));
-    const sync = (client: SimulatedE2EClient): Promise<void> =>
-      syncStrict(client, harness);
-    try {
-      const list: ListName = 'project notes';
-      const ids = ['first', 'second', 'third', 'fourth'].map(
-        (id) => `${id}-${testRunId}`,
-      );
-      const target = ids[0];
-      const current = await joinClient(
-        harness,
-        config,
-        () => createSimulatedClient(browser, baseURL!, 'A', testRunId),
-        'A',
-      );
-      await dispatch(current.page, seeds(list, ids));
-      await sync(current);
-      const released = await joinClient(
-        harness,
-        config,
-        () =>
-          createSimulatedClient(browser, assets.url, 'Released', testRunId, {
-            serviceWorkers: 'block',
-          }),
-        'Released',
-      );
-      const releasedErrors: string[] = [];
-      released.page.on('pageerror', (e) => releasedErrors.push(e.message));
-      await sync(released);
-      await sync(current);
+  for (const deleted of ['edited note', 'other note'] as const) {
+    test(`released deletes the ${deleted} beside the current device's pending note order and edit`, async ({
+      browser,
+      baseURL,
+      testRunId,
+    }) => {
+      test.setTimeout(300000);
+      const harness: Harness = { clients: [], logs: [] };
+      const config = getSuperSyncConfig(await createTestUser(testRunId));
+      const sync = (client: SimulatedE2EClient): Promise<void> =>
+        syncStrict(client, harness);
+      try {
+        const list: ListName = 'project notes';
+        const ids = ['first', 'second', 'third', 'fourth'].map(
+          (id) => `${id}-${testRunId}`,
+        );
+        const target = ids[0];
+        const removed = deleted === 'edited note' ? target : ids[1];
+        const current = await joinClient(
+          harness,
+          config,
+          () => createSimulatedClient(browser, baseURL!, 'A', testRunId),
+          'A',
+        );
+        await dispatch(current.page, seeds(list, ids));
+        await sync(current);
+        const released = await joinClient(
+          harness,
+          config,
+          () =>
+            createSimulatedClient(browser, assets.url, 'Released', testRunId, {
+              serviceWorkers: 'block',
+            }),
+          'Released',
+        );
+        const releasedErrors: string[] = [];
+        released.page.on('pageerror', (e) => releasedErrors.push(e.message));
+        await sync(released);
+        await sync(current);
 
-      await editListed(current.page, list, target, `Edited on current ${testRunId}`);
-      await reorder(current.page, list, 0);
-      // Later than the edit: the delete wins.
-      await removeNote(released.page, target);
+        await editListed(current.page, list, target, `Edited on current ${testRunId}`);
+        await reorder(current.page, list, 0);
+        // Later than the current edit: the released side wins.
+        await removeNote(released.page, removed);
+        const releasedValue = `Edited on released ${testRunId}`;
+        if (removed !== target)
+          await editListed(released.page, list, target, releasedValue);
 
-      await sync(released);
-      await sync(current);
-      await sync(released);
-      await sync(current);
+        await sync(released);
+        await sync(current);
+        await sync(released);
+        await sync(current);
 
-      const final = await shot(current, list, ids);
-      expect(final.order).not.toContain(target);
-      expect(final.entities[target]).toBeUndefined();
-      // The released device's project lists no dangling id and renders the
-      // current device's order.
-      // Every note order the released device received.
-      const receivedOrders = (await rows(released.page))
-        .filter((r) => r.source === 'remote' && r.op.e === 'NOTE' && r.op.o === 'MOV')
-        .map((r) => JSON.stringify(r.op.p));
-      expect(receivedOrders.length).toBeGreaterThan(0);
-      for (const payload of receivedOrders) expect(payload).not.toContain(target);
-      expect(await renderedOrder(released.page, list)).toEqual(
-        await renderedOrder(current.page, list),
-      );
-      expect(releasedErrors).toEqual([]);
-      for (const client of harness.clients)
-        expect(pending(await rows(client.page))).toEqual([]);
-    } finally {
-      for (const client of harness.clients) await closeClient(client);
-    }
-  });
+        const final = await shot(current, list, ids);
+        expect(final.order).not.toContain(removed);
+        expect(final.entities[removed]).toBeUndefined();
+        if (removed !== target) expect(valueOf(final, list, target)).toBe(releasedValue);
+        // The released device's project lists no dangling id and renders the
+        // current device's order.
+        // Every note order the released device received.
+        const receivedOrders = (await rows(released.page))
+          .filter((r) => r.source === 'remote' && r.op.e === 'NOTE' && r.op.o === 'MOV')
+          .map((r) => JSON.stringify(r.op.p));
+        expect(receivedOrders.length).toBeGreaterThan(0);
+        for (const payload of receivedOrders) expect(payload).not.toContain(removed);
+        expect(await renderedOrder(released.page, list)).toEqual(
+          await renderedOrder(current.page, list),
+        );
+        expect(releasedErrors).toEqual([]);
+        for (const client of harness.clients)
+          expect(pending(await rows(client.page))).toEqual([]);
+      } finally {
+        for (const client of harness.clients) await closeClient(client);
+      }
+    });
+  }
 });
