@@ -1497,6 +1497,54 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       expect(appliedOpIds()).toEqual(['r', patch.id]);
     });
 
+    it('re-sends each winning local op as its own row at its own time, oldest first, each dominating the one before (#10422)', async () => {
+      mockStore.select.and.returnValue(
+        of({ id: 'task-1', title: 'A title', notes: 'A notes', isDone: true }),
+      );
+      const notes = op({
+        id: 'l-notes',
+        clientId: 'A',
+        vectorClock: { A: 1 },
+        timestamp: 1000,
+        payload: { task: { id: 'task-1', changes: { notes: 'A notes' } } },
+      });
+      const rename = title(
+        { id: 'l-title', clientId: 'A', vectorClock: { A: 2 }, timestamp: 3000 },
+        'A title',
+      );
+      const remote = op({
+        id: 'r',
+        clientId: 'B',
+        vectorClock: { B: 1 },
+        timestamp: 2000,
+        payload: { task: { id: 'task-1', changes: { isDone: true } } },
+      });
+
+      await service.autoResolveConflictsLWW([conflictOf([notes, rename], [remote])]);
+
+      const resends = mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
+        .allArgs()
+        .flatMap(([batches]) => batches)
+        .filter((batch) => batch.source === 'local')
+        .flatMap((batch) => [...batch.ops]);
+      expect(resends.map((o) => extractActionPayload(o.payload))).toEqual([
+        { notes: 'A notes', id: 'task-1' },
+        { title: 'A title', id: 'task-1' },
+      ]);
+      expect(resends.map((o) => o.timestamp)).toEqual([1000, 3000]);
+      expect(compareVectorClocks(resends[1].vectorClock, resends[0].vectorClock)).toBe(
+        VectorClockComparison.GREATER_THAN,
+      );
+      for (const original of [notes, rename, remote]) {
+        expect(compareVectorClocks(resends[0].vectorClock, original.vectorClock)).toBe(
+          VectorClockComparison.GREATER_THAN,
+        );
+      }
+      expect(appliedOpIds()).toEqual(['r', resends[0].id, resends[1].id]);
+      const rejected = mockOpLogStore.markRejected.calls.allArgs().flat(2);
+      expect(rejected).toEqual(jasmine.arrayWithExactContents(['l-notes', 'l-title']));
+    });
+
     it('assigns each field to the same side on both devices for a timestamp tie', async () => {
       mockStore.select.and.returnValue(of({ id: 'task-1', title: 'x' }));
       const onA = titleAndDone({
