@@ -105,6 +105,17 @@ export const snapshot = async (
     { list, ids, projectId: PROJECT },
   );
 
+/**
+ * A snapshot without `modified`, which an LWW Update sets to each device's own
+ * apply time (lww-update.meta-reducer).
+ */
+export const withoutModified = (s: Snapshot): Snapshot => ({
+  ...s,
+  entities: Object.fromEntries(
+    Object.entries(s.entities).map(([id, { modified: _m, ...rest }]) => [id, rest]),
+  ),
+});
+
 export const rows = (page: Page): Promise<Row[]> =>
   page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -247,6 +258,34 @@ export const addNoteInUi = async (page: Page, content: string): Promise<string> 
     .poll(async () => (await visibleNotes(page)).length)
     .toBe(before.length + 1);
   return (await visibleNotes(page)).find((id) => !before.includes(id))!;
+};
+
+/**
+ * Edits one listed entity in the real UI: renames a habit (titled by its id in
+ * the fixture, or by `current`) or replaces a project note's content.
+ */
+export const editListed = async (
+  page: Page,
+  list: ListName,
+  id: string,
+  value: string,
+  current = id,
+): Promise<void> => {
+  if (list === 'habits') {
+    await openHabits(page);
+    await page
+      .locator('.habit-row .habit-title')
+      .filter({ has: page.getByText(current, { exact: true }) })
+      .click();
+    const dialog = page.locator('dialog-simple-counter-edit-settings');
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('textbox', { name: 'Title' }).fill(value);
+    await dialog.getByRole('button', { name: /Save/ }).click();
+    await expect(dialog).toBeHidden();
+    return;
+  }
+  await openNotes(page, list);
+  await new NotePage(page).editNote(page.locator(`#n-${id} note`), value);
 };
 
 export const removeNote = async (page: Page, id: string): Promise<void> => {

@@ -125,10 +125,10 @@ import {
   buildSurvivingFieldPatches,
 } from './conflict-field-patch.util';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
-import { areCommutingSectionOperations } from './section-conflict-commutativity.util';
 import {
-  areCommutingReorderAndContentOperations,
-  isReissuedReorderCrossing,
+  keptCommutingReorders,
+  nonCommutingPendingOps,
+  rebaseKeptReorders,
 } from './reorder-conflict.util';
 import { asPatchSnapshotIfTypeShadowed } from './lww-snapshot-patch-mode.util';
 import { selectPlannerState } from '../../features/planner/store/planner.selectors';
@@ -1029,6 +1029,8 @@ export class ConflictResolutionService {
     // A patched conflict's local time deltas stay pending (rebased in STEP 3b).
     const keptDeltas = keptLocalTimeDeltas(mergedResolutions.map((m) => m.conflict));
     const protectedLocalResolutionOpIds = new Set<string>(keptDeltas.opIds);
+    const pendingAtStart = await this.opLogStore.getUnsyncedByEntity();
+    const keptReorders = keptCommutingReorders(conflicts, pendingAtStart);
     let writtenLocalWinOps: Operation[] = [];
     const writtenMergedOpIds = new Set<string>();
 
@@ -1553,7 +1555,8 @@ export class ConflictResolutionService {
         for (const op of pendingOps) {
           if (
             !localOpsToRejectSet.has(op.id) &&
-            !protectedLocalResolutionOpIds.has(op.id)
+            !protectedLocalResolutionOpIds.has(op.id) &&
+            !keptReorders.opIds.has(op.id)
           ) {
             localOpsToReject.push(op.id);
             localOpsToRejectSet.add(op.id);
@@ -1647,6 +1650,8 @@ export class ConflictResolutionService {
         );
       }
     }
+
+    await rebaseKeptReorders(this.opLogStore, keptReorders);
 
     // Re-sort the combined batch by durable seq: with fresh appends this is a
     // no-op (append order = seq order), but a pending row reused from a prior
@@ -4252,16 +4257,10 @@ export class ConflictResolutionService {
 
     if (vcComparison === VectorClockComparison.CONCURRENT) {
       // Preserve commuting intents. A pending reorder is then reissued from
-      // current state (#10377: also after a competing order or a delete);
-      // entity LWW would lose its list write.
-      if (
-        ctx.localOpsForEntity.every(
-          (localOp, _i, pending) =>
-            areCommutingSectionOperations(remoteOp, localOp) ||
-            areCommutingReorderAndContentOperations(remoteOp, localOp, pending) ||
-            isReissuedReorderCrossing(remoteOp, localOp),
-        )
-      ) {
+      // current state (#10377); it stays out of a conflict over the entity's
+      // other pending ops and keeps its list write (#10420).
+      const localOps = nonCommutingPendingOps(remoteOp, ctx.localOpsForEntity);
+      if (localOps.length === 0) {
         return { isSupersededOrDuplicate: false, conflict: null };
       }
 
@@ -4269,7 +4268,7 @@ export class ConflictResolutionService {
       // other and with edits of other fields, but cannot be merged into a patch,
       // so entity-level LWW would discard one side's time or edit (#10214).
       const payloadKey = this._resolvePayloadKey(remoteOp.entityType);
-      const sides = { localOps: ctx.localOpsForEntity, remoteOps: [remoteOp] };
+      const sides = { localOps, remoteOps: [remoteOp] };
       if (isCommutingTimeDeltaCrossing({ ...sides, payloadKey, entityId })) {
         return { isSupersededOrDuplicate: false, conflict: null };
       }
@@ -4277,9 +4276,8 @@ export class ConflictResolutionService {
       const conflict: EntityConflict = {
         entityType: remoteOp.entityType,
         entityId,
-        localOps: ctx.localOpsForEntity,
-        remoteOps: [remoteOp],
-        suggestedResolution: this._suggestResolution(ctx.localOpsForEntity, [remoteOp]),
+        ...sides,
+        suggestedResolution: this._suggestResolution(localOps, [remoteOp]),
       };
       return { isSupersededOrDuplicate: false, conflict };
     }

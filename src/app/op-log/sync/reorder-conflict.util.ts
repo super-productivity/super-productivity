@@ -5,6 +5,7 @@ import { BoardsState } from '../../features/boards/store/boards.reducer';
 import { IssueProviderState } from '../../features/issue/issue.model';
 import {
   ActionType,
+  EntityConflict,
   EntityType,
   extractActionPayload,
   isMultiEntityPayload,
@@ -13,7 +14,13 @@ import {
   VectorClock,
 } from '../core/operation.types';
 import { getOpEntityIds } from '../util/get-op-entity-ids.util';
-import { compareVectorClocks, VectorClockComparison } from '../../core/util/vector-clock';
+import {
+  compareVectorClocks,
+  mergeVectorClocks,
+  VectorClockComparison,
+} from '../../core/util/vector-clock';
+import { getLwwEntityType, isLwwUpdateActionType } from '../core/lww-update-action-types';
+import { areCommutingSectionOperations } from './section-conflict-commutativity.util';
 import {
   SectionReplayProjection,
   SectionReplaySnapshot,
@@ -181,19 +188,34 @@ const writesTodayOrder = (op: Operation): boolean =>
   );
 
 /**
+ * An LWW resolution row writes its own entity only (lww-update.meta-reducer).
+ * Of a type that routes no field into a list, it commutes with a note or habit
+ * order listing that entity whatever it carries, so neither its mode nor its
+ * keys are read (#10420; decision 5).
+ */
+const isUnroutedLwwRow = (order: Operation, edit: Operation): boolean =>
+  isLwwUpdateActionType(edit.actionType) &&
+  getLwwEntityType(edit.actionType) === edit.entityType &&
+  edit.opType === OpType.Update &&
+  !LIST_ROUTED_FIELDS[edit.entityType] &&
+  !!reissuedListOf(order) &&
+  getOpEntityIds(edit).length === 1;
+
+/**
  * The one rule: a reorder commutes with a single-entity patch of one of the
  * entities it lists when the patch keeps the entity's identity and writes
  * neither the reordered list nor its membership.
  */
 const isReorderAndEdit = (order: Operation, edit: Operation): boolean => {
-  const patch = readPatch(edit);
   if (
-    !patch ||
     order.entityType !== edit.entityType ||
     !isContentReorderOperation(order) ||
-    !getOpEntityIds(order).includes(patch.id)
+    !getOpEntityIds(order).includes(edit.entityId!)
   )
     return false;
+  if (isUnroutedLwwRow(order, edit)) return true;
+  const patch = readPatch(edit);
+  if (!patch) return false;
   const isTagOrder = payloadOf(order)['activeContextType'] === WorkContextType.TAG;
   return Object.keys(patch.changes).every((field) => {
     if (field === 'id') return patch.changes['id'] === patch.id;
@@ -403,4 +425,88 @@ export const projectReorderConflictAgainstState = (
       position: 0,
     },
   };
+};
+
+/**
+ * The pending ops of one entity that conflict with a concurrent remote op of
+ * it: none when each commutes with it. A pending note or habit order that
+ * commutes stays out of a conflict over the entity's other ops (#10420): it is
+ * not superseded by either winner, and entity LWW could not carry its list.
+ */
+export const nonCommutingPendingOps = (
+  remoteOp: Operation,
+  pending: Operation[],
+): Operation[] => {
+  const commutes = (op: Operation): boolean =>
+    areCommutingSectionOperations(remoteOp, op) ||
+    areCommutingReorderAndContentOperations(remoteOp, op, pending) ||
+    isReissuedReorderCrossing(remoteOp, op);
+  const rest = pending.filter((op) => !isContentReorderOperation(op) || !commutes(op));
+  return rest.every(commutes) ? [] : rest;
+};
+
+/**
+ * #10420: the pending reorders that conflict detection kept out of the
+ * conflicts of entities they list, because each commutes with the remote op.
+ * The remote winner rejects none of them. Like kept time deltas, they stay
+ * pending and move past those conflicts' remote clocks in place
+ * (`rebaseKeptReorders`), so the server accepts them after either winner.
+ */
+export const keptCommutingReorders = (
+  conflicts: EntityConflict[],
+  pendingByEntity: Map<string, Operation[]>,
+): { opIds: Set<string>; clockToDominate: VectorClock } => {
+  const inConflict = new Set(conflicts.flatMap((c) => c.localOps.map((op) => op.id)));
+  const opIds = new Set<string>();
+  let clockToDominate: VectorClock = {};
+  for (const op of new Set([...pendingByEntity.values()].flat())) {
+    if (!isContentReorderOperation(op) || inConflict.has(op.id)) continue;
+    const ids = getOpEntityIds(op);
+    for (const c of conflicts) {
+      if (c.entityType !== op.entityType || !ids.includes(c.entityId)) continue;
+      opIds.add(op.id);
+      for (const remote of c.remoteOps) {
+        clockToDominate = mergeVectorClocks(clockToDominate, remote.vectorClock);
+      }
+    }
+  }
+  return { opIds, clockToDominate };
+};
+
+/**
+ * Moves the kept reorders past their crossings' clocks in place, with every
+ * later pending op of this client on an entity they list (the resolution's own
+ * ops among them), so seq order stays causal order per entity: a later op the
+ * server checks after a rebased reorder must not look older than it. Ids,
+ * seqs and payloads stay. Runs after the resolution is durable;
+ * a crash before it leaves the reorder with its old clock, which the server
+ * rejects into the existing paths (at worst the stop, never a loss).
+ */
+export const rebaseKeptReorders = async (
+  store: {
+    getUnsynced: () => Promise<{ seq: number; source: string; op: Operation }[]>;
+    rebasePendingLocalOps: (
+      opIds: readonly string[],
+      clockToDominate: VectorClock,
+    ) => Promise<unknown>;
+  },
+  kept: { opIds: Set<string>; clockToDominate: VectorClock },
+): Promise<void> => {
+  if (kept.opIds.size === 0) return;
+  const pending = (await store.getUnsynced()).filter((e) => e.source === 'local');
+  const orders = pending.filter((e) => kept.opIds.has(e.op.id));
+  if (orders.length === 0) return;
+  const first = Math.min(...orders.map((e) => e.seq));
+  const listed = new Set(
+    orders.flatMap(({ op }) => getOpEntityIds(op).map((id) => `${op.entityType}:${id}`)),
+  );
+  const later = pending.filter(
+    (e) =>
+      e.seq >= first &&
+      getOpEntityIds(e.op).some((id) => listed.has(`${e.op.entityType}:${id}`)),
+  );
+  await store.rebasePendingLocalOps(
+    later.map((e) => e.op.id),
+    kept.clockToDominate,
+  );
 };

@@ -736,6 +736,167 @@
     "rejections": ["CONFLICT_CONCURRENT [SimpleCounter] Update SimpleCounter Order"]
   },
   {
+    "class": "reorder-beside-conflict",
+    "ref": "fixed for #10420 (regression pin)",
+    "name": "a habit order pending beside a habit count conflict syncs",
+    "steps": [
+      {
+        "d": "C",
+        "a": ["countHabit", "h2"]
+      },
+      {
+        "d": "A",
+        "a": ["countHabit", "h2"]
+      },
+      {
+        "d": "C",
+        "s": 1,
+        "c": 1
+      },
+      {
+        "d": "A",
+        "a": ["reorderHabits", 5, 3]
+      }
+    ],
+    "signatures": [],
+    "rejections": []
+  },
+  {
+    "class": "reorder-beside-conflict",
+    "ref": "fixed for #10420 (regression pin)",
+    "name": "a habit order pending against a habit LWW resolution row syncs",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["countHabit", "h3"]
+      },
+      {
+        "d": "A",
+        "a": ["countHabit", "h3"]
+      },
+      {
+        "d": "C",
+        "a": ["reorderHabits", 3, 5]
+      },
+      {
+        "d": "B",
+        "s": 1,
+        "r": 1
+      }
+    ],
+    "signatures": [],
+    "rejections": ["CONFLICT_CONCURRENT [SimpleCounter] Update SimpleCounter Order"]
+  },
+  {
+    "class": "whole-entity-lww-drops-fields",
+    "ref": "#10379 (notes stay whole-entity, decision 4); its #10420 stop is fixed",
+    "name": "a note lock is lost to a concurrent content edit beside a pending note order",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["editNote", "n2", "isLock", true]
+      },
+      {
+        "d": "C",
+        "a": ["editNote", "n2", "content", "C22"],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["reorderNotes", "P", 2, 7]
+      }
+    ],
+    "primary": "field-reverted:note.isLock",
+    "signatures": ["divergence:.note.entities.*.isLock", "field-reverted:note.isLock"],
+    "rejections": []
+  },
+  {
+    "class": "lww-update-skips-today-order",
+    "ref": "#10379; its #10420 stop is fixed",
+    "name": "a note pinned beside a pending note order after a remote delete stays pinned but out of Today",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["deleteNote", "n1"]
+      },
+      {
+        "d": "B",
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["reorderNotes", "P", 0, 3]
+      },
+      {
+        "d": "A",
+        "a": ["editNote", "n1", "isPinnedToToday", true]
+      }
+    ],
+    "primary": "today-notes:pinned-not-listed",
+    "signatures": [
+      "divergence:.note.todayOrder.*",
+      "divergence:.project.entities.*.noteIds.*",
+      "today-notes:pinned-not-listed"
+    ],
+    "rejections": []
+  },
+  {
+    "class": "whole-entity-lww-drops-fields",
+    "ref": "#10379 (habit counts are opaque, decision 6); its #10420 stop is fixed",
+    "name": "a habit count beside a pending habit order is lost to a concurrent rename",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["reorderHabits", 1, 6]
+      },
+      {
+        "d": "A",
+        "a": ["countHabit", "h1"]
+      },
+      {
+        "d": "C",
+        "a": ["editHabit", "h1", "title", "C14"]
+      },
+      {
+        "d": "C",
+        "s": 1
+      }
+    ],
+    "primary": "field-reverted:habit.countOnDay",
+    "signatures": [
+      "divergence:.simpleCounter.entities.*.countOnDay",
+      "field-reverted:habit.countOnDay"
+    ],
+    "rejections": []
+  },
+  {
+    "class": "whole-entity-lww-drops-fields",
+    "ref": "#10379 (habit counts are opaque, decision 6); its #10420 stop is fixed",
+    "name": "a habit count is lost to a rename's resolution row that meets a pending habit order",
+    "steps": [
+      {
+        "d": "C",
+        "a": ["countHabit", "h2"]
+      },
+      {
+        "d": "C",
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["reorderHabits", 5, 4]
+      },
+      {
+        "d": "B",
+        "a": ["editHabit", "h2", "title", "B21"],
+        "s": 1
+      }
+    ],
+    "primary": "field-reverted:habit.countOnDay",
+    "signatures": ["field-reverted:habit.countOnDay"],
+    "rejections": ["CONFLICT_CONCURRENT [SimpleCounter] Update SimpleCounter Order"]
+  },
+  {
     "class": "time-delta-crossing",
     "ref": "fixed by #10340 (regression pin)",
     "name": "a pending delta crossing a rename keeps every device's time",

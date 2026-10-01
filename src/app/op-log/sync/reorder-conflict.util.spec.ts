@@ -67,11 +67,14 @@ import { actionLoggerReducer } from '../../root-store/meta/action-logger.reducer
 import { createBaseState } from '../../root-store/meta/task-shared-meta-reducers/test-utils';
 import { RootState } from '../../root-store/root-state';
 import { operationCaptureMetaReducer } from '../capture/operation-capture.meta-reducer';
-import { Operation } from '../core/operation.types';
+import { EntityConflict, Operation, OpType } from '../core/operation.types';
 import { PersistentAction } from '../core/persistent-action.interface';
 import {
   areCommutingReorderAndContentOperations,
   isReissuedReorderCrossing,
+  keptCommutingReorders,
+  nonCommutingPendingOps,
+  rebaseKeptReorders,
   selectCrossedPendingReorders,
 } from './reorder-conflict.util';
 
@@ -659,5 +662,171 @@ describe('reissued reorder crossings (#10377)', () => {
     ]);
     // A remote op that already saw the pending order does not cross it.
     expect(selectCrossedPendingReorders([pending], [seen])).toEqual([]);
+  });
+});
+
+describe('a pending order beside a conflict on a listed entity (#10420)', () => {
+  let base: State;
+  beforeAll(() => {
+    base = buildBase();
+  });
+  const habitOrder = updateSimpleCounterOrder({ ids: ['b', 'a', 'u'] });
+  const lwwRow = (
+    entityType: 'SIMPLE_COUNTER' | 'NOTE',
+    id: string,
+    mode: 'replace' | 'patch',
+    fields: Record<string, unknown>,
+  ): PersistentAction =>
+    ({
+      type: `[${entityType}] LWW Update`,
+      id,
+      ...fields,
+      meta: {
+        isPersistent: true,
+        entityType,
+        entityId: id,
+        opType: OpType.Update,
+        isRemote: true,
+        lwwUpdateMode: mode,
+      },
+    }) as unknown as PersistentAction;
+  // The action's own `type` shadows a habit's: no row carries one
+  // (lww-snapshot-patch-mode.util.ts).
+  const replaced: Partial<SimpleCounterCopy> = {
+    ...EMPTY_SIMPLE_COUNTER,
+    ...COUNTER_FIELDS,
+  };
+  delete replaced.type;
+  const habitRows = [
+    lwwRow('SIMPLE_COUNTER', 'a', 'replace', replaced),
+    lwwRow('SIMPLE_COUNTER', 'a', 'patch', { title: 'changed', isEnabled: false }),
+  ];
+
+  describe('with a fixed clock', () => {
+    // A row stamps `modified` with the apply time.
+    beforeEach(() => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2026, 8, 20));
+    });
+    afterEach(() => jasmine.clock().uninstall());
+    for (const row of habitRows) {
+      it(`a habit LWW row (${(row.meta as { lwwUpdateMode: string }).lwwUpdateMode}) commutes with a habit order listing it`, () => {
+        const [order, edit] = [toOp(habitOrder), toOp(row)];
+        expect(areCommutingReorderAndContentOperations(order, edit)).toBeTrue();
+        expect(areCommutingReorderAndContentOperations(edit, order)).toBeTrue();
+        // The row writes the habit only: the order and its slots stay.
+        const edited = reduce(base, row);
+        expect(edited.simpleCounter.ids).toEqual(base.simpleCounter.ids);
+        const both = reduce(edited, habitOrder);
+        expect(reduce(reduce(base, habitOrder), row)).toEqual(both);
+        expect(reduce(both, row)).toEqual(both);
+      });
+    }
+  });
+
+  it('keeps the stop for a row of an unlisted habit, a note row and other lists', () => {
+    const order = toOp(habitOrder);
+    const unlisted = toOp(lwwRow('SIMPLE_COUNTER', 'disabled', 'patch', { title: 'x' }));
+    expect(areCommutingReorderAndContentOperations(order, unlisted)).toBeFalse();
+    // A note row carries the routed `projectId` and `isPinnedToToday`.
+    const noteOrder = toOp(
+      updateNoteOrder({
+        ids: ['b', 'a', 'w'],
+        activeContextType: WorkContextType.PROJECT,
+        activeContextId: P,
+      }),
+    );
+    const noteRow = toOp(lwwRow('NOTE', 'a', 'patch', { content: 'x' }));
+    expect(areCommutingReorderAndContentOperations(noteOrder, noteRow)).toBeFalse();
+    // Only note and habit orders are reissued after a crossing.
+    const boardOrder = toOp(BoardsActions.sortBoards({ ids: ['b', 'a', 'u'] }));
+    const boardRow = {
+      ...toOp(lwwRow('SIMPLE_COUNTER', 'a', 'patch', { title: 'x' })),
+      actionType: '[BOARD] LWW Update',
+      entityType: 'BOARD',
+    } as unknown as Operation;
+    expect(areCommutingReorderAndContentOperations(boardOrder, boardRow)).toBeFalse();
+    // A row whose action names another entity type than it declares.
+    const mismatched = { ...toOp(habitRows[1]), actionType: '[NOTE] LWW Update' };
+    expect(
+      areCommutingReorderAndContentOperations(order, mismatched as Operation),
+    ).toBeFalse();
+  });
+
+  it('leaves a commuting pending order out of the conflict, never a stopping one', () => {
+    const order = toOp(habitOrder);
+    const count = toOp(setSimpleCounterCounterToday({ id: 'a', newVal: 3, today: DAY }));
+    const remoteRename = toOp(
+      updateSimpleCounter({ simpleCounter: { id: 'a', changes: { title: 'r' } } }),
+    );
+    const remoteDelete = toOp(deleteSimpleCounter({ id: 'a' }));
+    // The count and the rename both write the habit; the order commutes.
+    expect(nonCommutingPendingOps(remoteRename, [order, count])).toEqual([count]);
+    expect(nonCommutingPendingOps(remoteRename, [order])).toEqual([]);
+    expect(nonCommutingPendingOps(toOp(habitRows[0]), [order, count])).toEqual([count]);
+    // A habit delete does not commute with the order: it stays in, and stops.
+    expect(nonCommutingPendingOps(remoteDelete, [order, count])).toEqual([order, count]);
+  });
+
+  it('keeps the left-out orders and the clock of the conflicts they cross', () => {
+    const order = { ...toOp(habitOrder), vectorClock: { local: 2 } };
+    const otherOrder = toOp(updateSimpleCounterOrder({ ids: ['u', 'b'] }));
+    const count = toOp(setSimpleCounterCounterToday({ id: 'a', newVal: 3, today: DAY }));
+    const conflict = (
+      entityId: string,
+      localOps: Operation[],
+      remote: Record<string, number>,
+    ): EntityConflict => ({
+      entityType: 'SIMPLE_COUNTER',
+      entityId,
+      localOps,
+      remoteOps: [{ ...count, id: `remote-${entityId}`, vectorClock: remote }],
+      suggestedResolution: 'remote',
+    });
+    const pendingByEntity = new Map([
+      ['SIMPLE_COUNTER:a', [order, count]],
+      ['SIMPLE_COUNTER:b', [order, otherOrder]],
+      ['SIMPLE_COUNTER:u', [order, otherOrder]],
+    ]);
+    const kept = keptCommutingReorders(
+      [conflict('a', [count], { r1: 1 }), conflict('b', [otherOrder], { r2: 1 })],
+      pendingByEntity,
+    );
+    // `otherOrder` is in a conflict (and would stop there); `order` crossed both.
+    expect([...kept.opIds]).toEqual([order.id]);
+    expect(kept.clockToDominate).toEqual({ r1: 1, r2: 1 });
+    expect(keptCommutingReorders([], pendingByEntity).opIds.size).toBe(0);
+  });
+
+  it('moves the kept orders with every later pending op of this client on a listed entity', async () => {
+    const op = (id: string): Operation => ({ ...toOp(habitOrder), id });
+    const entries = [
+      { seq: 1, source: 'local', op: op('earlier') },
+      { seq: 2, source: 'local', op: op('kept') },
+      { seq: 3, source: 'remote', op: op('remote') },
+      { seq: 4, source: 'local', op: op('later') },
+      {
+        seq: 5,
+        source: 'local',
+        op: { ...op('unlisted'), entityType: 'TASK', entityId: 'a', entityIds: ['a'] },
+      },
+    ];
+    const store = {
+      getUnsynced: jasmine.createSpy().and.resolveTo(entries),
+      rebasePendingLocalOps: jasmine.createSpy().and.resolveTo([]),
+    };
+    const clockToDominate = { r: 1 };
+    await rebaseKeptReorders(store, { opIds: new Set(['kept']), clockToDominate });
+    expect(store.rebasePendingLocalOps).toHaveBeenCalledOnceWith(
+      ['kept', 'later'],
+      clockToDominate,
+    );
+    store.getUnsynced.calls.reset();
+    await rebaseKeptReorders(store, { opIds: new Set(), clockToDominate });
+    expect(store.getUnsynced).not.toHaveBeenCalled();
+    // A kept order that is no longer pending moves nothing.
+    store.rebasePendingLocalOps.calls.reset();
+    await rebaseKeptReorders(store, { opIds: new Set(['gone']), clockToDominate });
+    expect(store.rebasePendingLocalOps).not.toHaveBeenCalled();
   });
 });

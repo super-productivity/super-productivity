@@ -79,6 +79,30 @@ describe('ConflictResolutionService', () => {
     schemaVersion: 1,
   });
 
+  // #10420: a pending habit order listing h1 and h2, and single-habit ops.
+  const listedHabitOp = (
+    id: string,
+    clientId: string,
+    actionType: ActionType,
+    actionPayload: Record<string, unknown>,
+    timestamp = Date.now(),
+  ): Operation => ({
+    ...createMockOp(id, clientId),
+    actionType,
+    entityType: 'SIMPLE_COUNTER',
+    entityId: 'h1',
+    payload: { actionPayload, entityChanges: [] },
+    timestamp,
+  });
+  const habitOrderOp = (): Operation => ({
+    ...listedHabitOp('order', 'clientA', ActionType.COUNTER_UPDATE_ORDER, {
+      ids: ['h2', 'h1'],
+    }),
+    opType: OpType.Move,
+    entityId: 'h2',
+    entityIds: ['h2', 'h1'],
+  });
+
   const getMixedLocalOps = (): readonly Operation[] =>
     mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
       .allArgs()
@@ -864,6 +888,51 @@ describe('ConflictResolutionService', () => {
       );
       // Local ops should be rejected
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-1']);
+    });
+
+    it('keeps a commuting pending habit order pending past a remote winner (#10420)', async () => {
+      const now = Date.now();
+      const order = habitOrderOp();
+      const count = listedHabitOp(
+        'count',
+        'clientA',
+        'test' as ActionType,
+        {},
+        now - 1000,
+      );
+      const remote = {
+        ...listedHabitOp('remote', 'clientB', 'test' as ActionType, {}, now),
+        vectorClock: { clientB: 4 },
+      };
+      const conflicts: EntityConflict[] = [
+        {
+          entityType: 'SIMPLE_COUNTER',
+          entityId: 'h1',
+          localOps: [count],
+          remoteOps: [remote],
+          suggestedResolution: 'manual',
+        },
+      ];
+      mockOpLogStore.getUnsyncedByEntity.and.resolveTo(
+        new Map([
+          ['SIMPLE_COUNTER:h1', [order, count]],
+          ['SIMPLE_COUNTER:h2', [order]],
+        ]),
+      );
+      const getUnsynced = jasmine.createSpy('getUnsynced').and.resolveTo([
+        { seq: 1, source: 'local', op: order },
+        { seq: 2, source: 'local', op: count },
+      ]);
+      const rebase = jasmine.createSpy('rebasePendingLocalOps').and.resolveTo([]);
+      Object.assign(mockOpLogStore, { getUnsynced, rebasePendingLocalOps: rebase });
+
+      await service.autoResolveConflictsLWW(conflicts);
+
+      expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['count']);
+      expect(mockOpLogStore.markRejected).not.toHaveBeenCalledWith(
+        jasmine.arrayContaining(['order']),
+      );
+      expect(rebase).toHaveBeenCalledOnceWith(['order', 'count'], { clientB: 4 });
     });
 
     it('should not duplicate already rejected local ops while adding superseded pending ops', async () => {
@@ -7273,6 +7342,55 @@ describe('ConflictResolutionService', () => {
       );
 
       expect(result.conflicts[0]?.entityId).toBe('task-1');
+    });
+  });
+
+  describe('checkOpForConflicts — a pending order beside a conflict (#10420)', () => {
+    const ctxFor = (
+      pending: Operation[],
+    ): Parameters<ConflictResolutionService['checkOpForConflicts']>[1] => ({
+      localPendingOpsByEntity: new Map([['SIMPLE_COUNTER:h1', pending]]),
+      appliedFrontierByEntity: new Map(),
+      retainedOpsByEntity: new Map(),
+      snapshotVectorClock: undefined,
+      snapshotEntityKeys: new Set(),
+      hasNoSnapshotClock: true,
+    });
+    const rename = (id: string, clientId: string): Operation =>
+      listedHabitOp(id, clientId, ActionType.COUNTER_UPDATE, {
+        simpleCounter: { id: 'h1', changes: { title: clientId } },
+      });
+
+    it('resolves the edit conflict without the commuting order', async () => {
+      const order = habitOrderOp();
+      const local = rename('local', 'clientA');
+      const result = await service.checkOpForConflicts(
+        rename('remote', 'clientB'),
+        ctxFor([order, local]),
+      );
+      expect(result.conflicts.length).toBe(1);
+      expect(result.conflicts[0].localOps).toEqual([local]);
+    });
+
+    it('lets a habit LWW row cross a pending habit order', async () => {
+      const row = {
+        ...listedHabitOp('row', 'clientB', '[SIMPLE_COUNTER] LWW Update' as ActionType, {
+          id: 'h1',
+          title: 'row',
+        }),
+      };
+      const result = await service.checkOpForConflicts(row, ctxFor([habitOrderOp()]));
+      expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+    });
+
+    it('keeps the order in a conflict it does not commute with', async () => {
+      const order = habitOrderOp();
+      const remoteDelete: Operation = {
+        ...listedHabitOp('delete', 'clientB', ActionType.COUNTER_DELETE, { id: 'h1' }),
+        opType: OpType.Delete,
+      };
+      const result = await service.checkOpForConflicts(remoteDelete, ctxFor([order]));
+      expect(result.conflicts[0].localOps).toEqual([order]);
     });
   });
 
