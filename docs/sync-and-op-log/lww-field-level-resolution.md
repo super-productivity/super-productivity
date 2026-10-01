@@ -359,12 +359,15 @@ holds the rules; `ConflictResolutionService._tryCreateFieldPatch` builds the op.
 - **Derived fields:** apart from `doneOn`, a patch sets fields, not their
   reducer side effects (e.g. a subtask estimate's parent total). This
   predates PR 1 for disjoint merges and now covers overlapping ones.
-- **A time delta that loses to a resolution row** is rejected, as on master
-  (only a field patch keeps such deltas, `keptLocalTimeDeltas`). A replace row
-  wiped the device's time too; a patch row leaves it there, so the time is
-  still lost for the other devices but the losing device diverges. Follow-up:
-  keep the delta when the row writes no time key (#10408). The notes
-  divergence in the same pinned trace is older than PR 1 (#10423).
+- **A time delta beside a resolution row:** a pending side of only
+  `syncTimeSpent` deltas does not conflict with a single-task LWW row whose
+  payload and `clearedFields` hold no `timeSpent`/`timeSpentOnDay` key
+  (`isCommutingTimeDeltaCrossing`, #10408, #10421). The delta stays pending
+  and is rebased after one server rejection, like a delta beside a rename; no
+  snapshot is built. Only the row's keys are read, never its values, and rows
+  still never merge (decision 5; @johannesjo's explicit word on reading keys
+  is asked on #10393). A row that writes or clears a time field still wins
+  whole-entity, as on master.
 - **Opaque ops, NOTE, deletes and archives** keep whole-entity LWW, so the
   habit, note and task-tracking pins of #10379 and #10260 stay.
 - **Released resolvers:** a v19.1.0 device that resolves still emits replace
@@ -386,17 +389,23 @@ holds the rules; `ConflictResolutionService._tryCreateFieldPatch` builds the op.
   whole-entity with a stale snapshot: the renames are lost on two devices and
   the third diverges. A fix needs #10421 first, then a readable re-send with
   a per-field winner (#10422); disjoint merges have had the same property.
-- **Stale local-win snapshot:** kept deltas upload on their own, so a third
-  device's local-win replace folds them more often. The fold hoists an
-  incoming non-plain edit (a done toggle) ahead of the snapshot, which was read
-  before the batch, so replay and the other devices revert it (#10421).
+- **Stale local-win snapshot:** a local side with a readable edit that beats
+  an opaque row still wins whole-entity with a snapshot read before the
+  batch, so an incoming non-plain edit of the same task (a planner day, a done
+  toggle) is reverted, and the row's own fields are lost (#10421, open). The
+  time-only shape that kept deltas made common no longer builds one.
+- **Server order of remote winners (#10423):** an incoming nonconflicting op
+  that a remote winner of the same entity causally dominates reached the
+  server first, so it is persisted and applied before that winner
+  (`orderIncomingPrefix`). A winner beside a local win of its entity keeps
+  its place after the local win, which it must override on replay.
 - **A winner that also tracks time:** a remote `syncTimeSpent` refuses the
   patch, so #10260 stays for a task renamed while another device times it.
 - **Undone toggles:** the `doneOn` clear beside `isDone: false` travels in
   `clearedFields`, which v18.15.0–v18.21.x ignore (stale `doneOn` there).
-- **Pinned:** the delta-versus-patch-row divergence, the stale-snapshot
-  restart change and the tracked-winner shape are pinned as failing traces
-  (sync-fuzz-pinned-traces.json; refs #10408, #10421, #10260).
+- **Pinned:** the tracked-winner shape is pinned as a failing trace
+  (sync-fuzz-pinned-traces.json; ref #10260). The delta-versus-patch-row
+  divergence and the stale-snapshot restart change are regression pins.
 
 **Residual decisions (2026-10-01).** @johannesjo, after the residuals were
 put to him: "Double check decisions in sub agents then do everything as

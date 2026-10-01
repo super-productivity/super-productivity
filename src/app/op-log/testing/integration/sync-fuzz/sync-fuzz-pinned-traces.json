@@ -347,7 +347,7 @@
   },
   {
     "class": "remote-win-keeps-local-edit",
-    "ref": "#10260 (the time loss); guards #10398's rule against folding beside a remote winner",
+    "ref": "#10260 (the time loss); guards #10398's rule against folding beside a remote winner. Since the #10421 fix the rows apply in server order (#10423), so no rejected snapshot is rebuilt",
     "name": "a notes edit folded beside a later remote rename leaves every device agreeing on notes and title",
     "steps": [
       {
@@ -383,11 +383,11 @@
     ],
     "primary": "time-loss:task",
     "signatures": ["time-loss:task"],
-    "rejections": ["CONFLICT_CONCURRENT [TASK] LWW Update"]
+    "rejections": []
   },
   {
     "class": "remote-win-keeps-local-edit",
-    "ref": "#10260 (the time loss); guards #10398's overlay of every local-win snapshot of a task; the server rejects the snapshot and it is rebuilt, as on master",
+    "ref": "#10421 fix: the tracked delta commutes with the resolution rows, so it is rebased and uploads after one rejection instead of losing to a snapshot (was #10260's time loss); guards #10398's overlay of every local-win snapshot of a task",
     "name": "a notes edit beside two local-win snapshots of a tracked, twice renamed task reaches every device",
     "steps": [
       {
@@ -414,9 +414,8 @@
         "a": ["editTaskNotes", "t1", "A28"]
       }
     ],
-    "primary": "time-loss:task",
-    "signatures": ["time-loss:task"],
-    "rejections": ["CONFLICT_CONCURRENT [TASK] LWW Update"]
+    "signatures": [],
+    "rejections": ["CONFLICT_CONCURRENT [TimeTracking] Sync time spent"]
   },
   {
     "class": "auto-plan-blocks-delta-merge",
@@ -1080,7 +1079,7 @@
   },
   {
     "class": "remote-win-keeps-local-edit",
-    "ref": "#10415 residual 1, follow-up #10408 (notes: #10423): a pending delta that loses to a resolution patch row stays on its device",
+    "ref": "#10421 fix: the delta commutes with the patch row and uploads (#10408); the row and the notes edit apply in server order (#10423)",
     "name": "a tracked delta that loses to a field-patch row stays on its device only",
     "steps": [
       {
@@ -1102,18 +1101,12 @@
         "s": 1
       }
     ],
-    "primary": "divergence:.task.entities.*.timeSpent",
-    "signatures": [
-      "divergence:.task.entities.*.notes",
-      "divergence:.task.entities.*.timeSpent",
-      "divergence:.task.entities.*.timeSpentOnDay",
-      "time-loss:task"
-    ],
+    "signatures": [],
     "rejections": []
   },
   {
     "class": "restart-changes-state",
-    "ref": "#10421 (#10415 residual 2): a kept delta reaches the local-win fold, which hoists a done toggle ahead of a stale snapshot",
+    "ref": "#10421 fix: a time-only delta commutes with a resolution row that writes no time, so no pre-batch local-win snapshot is built (#10421)",
     "name": "a done toggle hoisted ahead of a stale local-win snapshot changes on restart",
     "steps": [
       {
@@ -1138,17 +1131,7 @@
         "a": ["track", "t1", 3000]
       }
     ],
-    "primary": "restart-changed:.task.entities.*.isDone",
-    "signatures": [
-      "divergence:.task.entities.*.doneOn",
-      "divergence:.task.entities.*.isDone",
-      "divergence:.task.entities.*.notes",
-      "field-reverted:task.isDone",
-      "field-unwritten:task.notes",
-      "restart-changed:.task.entities.*.doneOn",
-      "restart-changed:.task.entities.*.isDone",
-      "restart-changed:.task.entities.*.notes"
-    ],
+    "signatures": [],
     "rejections": []
   },
   {
