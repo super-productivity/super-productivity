@@ -1016,7 +1016,8 @@ export class ConflictResolutionService {
       ...new Map(ops.map((op) => [op.id, op])).values(),
     ];
     // A field patch's remote side applies as itself, like a remote winner,
-    // so it takes the same server order (#10423); STEP 3b re-sends after it.
+    // so it takes the same server order (#10423); its re-sends go last in the
+    // same atomic batch (buildTimeAwareResolutionBatches).
     let remoteWinsOps = uniqueOpsById([
       ...lwwPartitions.remoteWinsOps,
       ...mergedResolutions.flatMap((merged) => merged.conflict.remoteOps),
@@ -1885,7 +1886,7 @@ export class ConflictResolutionService {
     const isValid = await this._validateAndRepairAfterResolution();
     if (!isValid) this.sessionValidation.setFailed();
 
-    // Count both LWW local-win ops AND disjoint-merge ops (STEP 3b): each merge
+    // Count both LWW local-win ops AND disjoint-merge re-sends: each merge
     // appended a synthesized pending-local op that still needs uploading. The
     // caller uses this count to trigger the immediate re-upload
     // (immediate-upload.service.ts) — omitting merges lets a merge-only sync
