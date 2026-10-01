@@ -337,7 +337,7 @@ for (const adderFirst of [false, true]) {
 // A released (v19.1.0) device sends the competing order or the delete first and
 // consumes the current device's reissue. A released device holding the pending
 // side still stops, as before this fix.
-test.describe('@supersync reorder crossing: released clients', () => {
+test.describe('@supersync released reorder crossing (#10377)', () => {
   test.describe.configure({ mode: 'serial' });
   const oldAssets = process.env.COMPAT_OLD_ASSETS;
   test.skip(!oldAssets, 'Set COMPAT_OLD_ASSETS to the unmodified released assets');

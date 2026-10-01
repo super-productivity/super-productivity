@@ -963,7 +963,7 @@ const renderedNotes = async (page: Page, route: string): Promise<string[]> => {
     .evaluateAll((nodes) => nodes.map((node) => node.id.slice(2)));
 };
 
-test.describe('@supersync reorder rule: released clients', () => {
+test.describe('@supersync released reorder rule (#10364)', () => {
   test.describe.configure({ mode: 'serial' });
   const oldAssets = process.env.COMPAT_OLD_ASSETS;
   test.skip(!oldAssets, 'Set COMPAT_OLD_ASSETS to the unmodified released assets');
