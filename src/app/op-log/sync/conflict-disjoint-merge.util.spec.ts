@@ -1,6 +1,7 @@
 import {
   hasOpaqueChanges,
   isAdditiveTimeOp,
+  isCommutingTimeDeltaCrossing,
   isDisjointMergeEligible,
   mergeChangedFields,
   synthesizeMergedChanges,
@@ -386,6 +387,79 @@ describe('conflict-disjoint-merge.util', () => {
       expect(isAdditiveTimeOp(deferredSyncTimeSpentOp())).toBe(true);
       expect(isAdditiveTimeOp(removeTimeSpentOp())).toBe(true);
       expect(isAdditiveTimeOp(op())).toBe(false);
+    });
+  });
+
+  // #10421, #10408: a resolution row is opaque, but a time-only side commutes
+  // with one that writes no time. Only the row's keys are read.
+  describe('isCommutingTimeDeltaCrossing (resolution rows)', () => {
+    const row = (
+      actionPayload: Record<string, unknown>,
+      extra: Record<string, unknown> = {},
+    ): Operation =>
+      op({
+        id: 'row',
+        actionType: '[TASK] LWW Update' as ActionType,
+        clientId: 'B',
+        payload: { actionPayload, entityChanges: [], lwwUpdateMode: 'patch', ...extra },
+      });
+    const commutes = (localOps: Operation[], remoteOps: Operation[]): boolean =>
+      isCommutingTimeDeltaCrossing({
+        localOps,
+        remoteOps,
+        payloadKey: 'task',
+        entityId: 'task-1',
+      });
+
+    it('is true for time deltas beside a row that writes no time', () => {
+      const notesRow = row({ id: 'task-1', notes: 'B' });
+      expect(commutes([syncTimeSpentOp()], [notesRow])).toBe(true);
+      expect(commutes([syncTimeSpentOp(), deferredSyncTimeSpentOp()], [notesRow])).toBe(
+        true,
+      );
+      expect(
+        commutes(
+          [syncTimeSpentOp()],
+          [row({ id: 'task-1', title: 'T' }, { lwwUpdateMode: 'replace' })],
+        ),
+      ).toBe(true);
+    });
+
+    it('is false for a row that writes or clears a time field', () => {
+      expect(commutes([syncTimeSpentOp()], [row({ id: 'task-1', timeSpent: 0 })])).toBe(
+        false,
+      );
+      expect(
+        commutes([syncTimeSpentOp()], [row({ id: 'task-1', timeSpentOnDay: {} })]),
+      ).toBe(false);
+      expect(
+        commutes(
+          [syncTimeSpentOp()],
+          [row({ id: 'task-1', notes: 'B' }, { clearedFields: ['timeSpentOnDay'] })],
+        ),
+      ).toBe(false);
+    });
+
+    it('is false unless the local side is only time deltas', () => {
+      const notesRow = row({ id: 'task-1', notes: 'B' });
+      const rename = op({ payload: { task: { id: 'task-1', changes: { title: 'A' } } } });
+      expect(commutes([syncTimeSpentOp(), rename], [notesRow])).toBe(false);
+      expect(commutes([removeTimeSpentOp()], [notesRow])).toBe(false);
+    });
+
+    it('is false for a row of several entities or of another task', () => {
+      expect(
+        commutes(
+          [syncTimeSpentOp()],
+          [{ ...row({ id: 'task-1', notes: 'B' }), entityIds: ['task-1', 'task-2'] }],
+        ),
+      ).toBe(false);
+      expect(
+        commutes(
+          [syncTimeSpentOp()],
+          [{ ...row({ id: 'task-2', notes: 'B' }), entityId: 'task-2' }],
+        ),
+      ).toBe(false);
     });
   });
 

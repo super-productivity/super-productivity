@@ -19,7 +19,7 @@
  * `synthesizeMergedChanges`.
  */
 
-import { ActionType, OpType } from '../core/operation.types';
+import { ActionType, isLwwUpdatePayload, OpType } from '../core/operation.types';
 import type { Operation } from '../core/operation.types';
 import {
   extractActionPayload,
@@ -27,7 +27,7 @@ import {
   extractUpdateChanges,
   isMultiEntityPayload,
 } from '@sp/sync-core';
-import { isMultiEntityOperation } from '../util/get-op-entity-ids.util';
+import { getOpEntityIds, isMultiEntityOperation } from '../util/get-op-entity-ids.util';
 import { applyClearedFields } from '../../util/cleared-update-fields';
 
 /** Metadata timestamps excluded from real-field overlap checks. */
@@ -339,9 +339,56 @@ export const isCommutingTimeDeltaCrossing = (params: {
   payloadKey: string;
   entityId: string;
 }): boolean =>
-  [...params.localOps, ...params.remoteOps].some(
+  isTimeDeltaBesideTimelessRow(params) ||
+  ([...params.localOps, ...params.remoteOps].some(
     (op) => op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
-  ) && isDisjointMergeEligible(params);
+  ) &&
+    isDisjointMergeEligible(params));
+
+/**
+ * True when every local op is a `syncTimeSpent` delta and every remote op is
+ * an LWW resolution row (patch or snapshot another device built) of this one
+ * task that writes no time field (#10421, #10408). The delta then adds to
+ * whatever the row leaves, so both apply as they are.
+ *
+ * Only the row's KEYS are read: its values never become merge input, and rows
+ * never merge with each other (#10393 decision 5). A row that writes or clears
+ * `timeSpent`/`timeSpentOnDay` keeps whole-entity LWW, whatever its mode: a
+ * patch row can write absolute time, and a replace row (v19.1.0 resolvers,
+ * recreate snapshots) carries it.
+ */
+const isTimeDeltaBesideTimelessRow = ({
+  localOps,
+  remoteOps,
+  entityId,
+}: {
+  localOps: Operation[];
+  remoteOps: Operation[];
+  entityId: string;
+}): boolean =>
+  localOps.length > 0 &&
+  remoteOps.length > 0 &&
+  localOps.every((op) => op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT) &&
+  remoteOps.every((op) => {
+    const payload = op.payload;
+    if (
+      op.entityType !== 'TASK' ||
+      op.opType !== OpType.Update ||
+      !isLwwUpdatePayload(payload)
+    ) {
+      return false;
+    }
+    const ids = getOpEntityIds(op);
+    const keys = [
+      ...Object.keys(payload.actionPayload),
+      ...(Array.isArray(payload.clearedFields) ? payload.clearedFields : []),
+    ];
+    return (
+      ids.length === 1 &&
+      ids[0] === entityId &&
+      !SYNC_TIME_SPENT_FIELDS.some((field) => keys.includes(field))
+    );
+  });
 
 /**
  * Synthesizes the merged CHANGES DELTA — the union of both sides' changed
