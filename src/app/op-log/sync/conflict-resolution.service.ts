@@ -1691,8 +1691,8 @@ export class ConflictResolutionService {
           onReducersCommitted: async (reducerCommittedOps, reducerFailures = []) => {
             // Disjoint-merge ops are synthetic LOCAL rows in the apply batch.
             // Exclude successful ones from the checkpoint's pending-only seq
-            // assertion. Failed synthetic rows are quarantined; their remote
-            // originals stay pending for the LWW fallback below.
+            // assertion. Failed ones are quarantined; their remote sides are
+            // already applied (#10422) when the LWW fallback below re-resolves.
             const checkpointOps = reducerCommittedOps.filter(
               (op) => !checkpointExemptOpIds.has(op.id),
             );

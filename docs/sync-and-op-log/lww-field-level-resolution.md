@@ -490,3 +490,14 @@ against any row; it now meets rows stamped at their fields' own, older times.
   a group with the latest timestamp of its own ops.
 - **Pending local rows** keep whole-entity LWW, so a re-send that is still
   pending when another device's row arrives loses or wins as a whole.
+- **Crash window (by reading, not reproduced):** the remote sides are
+  written with the remote winners, and the re-sends in a later transaction.
+  Before #10422 the remote ops and the patch were one atomic batch. A crash
+  between the two replays the remote values over the local fields that won,
+  and the still-pending local ops come back through
+  `SupersededOperationResolverService`, which re-emits those fields from
+  current state, so with the remote values.
+- **Failed re-send fallback:** when a re-send's reducer fails, the remote
+  side has already applied, so the whole-entity fallback re-resolves over
+  that state; a local-win snapshot then carries the remote values of the
+  shared fields. Before #10422 the remote ops stayed unapplied for it.
