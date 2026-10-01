@@ -135,6 +135,8 @@ const cases: { list: ListName; direction: Direction }[] = [
   { list: 'habits', direction: 'reorderer receives the resolution' },
   { list: 'project notes', direction: 'reorderer resolves' },
   { list: 'project notes', direction: 'other device resolves' },
+  // Every Today and tag order writes note.todayOrder.
+  { list: 'Today notes', direction: 'reorderer resolves' },
 ];
 
 for (const { list, direction } of cases) {
