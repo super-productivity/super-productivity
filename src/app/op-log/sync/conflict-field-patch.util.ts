@@ -211,10 +211,11 @@ const isNewer = (a: WriteStamp, b: WriteStamp | undefined): boolean =>
   (a.timestamp === b.timestamp && a.clientId > b.clientId);
 
 /**
- * When the remote side last wrote each field: a readable op writes the fields
- * of its change, a `'patch'` row its keys, a `'replace'` row every field.
+ * When the remote side last wrote `field`, or undefined if it never did: a
+ * readable op writes the fields of its change, a `'patch'` row its keys, a
+ * `'replace'` row every field.
  */
-const remoteWriteStamps = (
+const latestRemoteWrite = (
   { remoteOps, payloadKey, entityId }: FieldPatchSides,
   field: string,
 ): WriteStamp | undefined => {
@@ -254,7 +255,7 @@ export const localWinningFieldGroups = (
   }
   const groups = new Map<Operation, Record<string, unknown>>();
   for (const [field, op] of latestLocal) {
-    if (!isNewer(op, remoteWriteStamps(sides, field))) continue;
+    if (!isNewer(op, latestRemoteWrite(sides, field))) continue;
     const changes = groups.get(op) ?? {};
     changes[field] = sideChanges([op], payloadKey, entityId)[field];
     groups.set(op, changes);
