@@ -234,22 +234,22 @@ Settings and configuration:
 class SettingsPage extends BasePage {
   async navigateToSettings(): Promise<void>;
   async expandSection(sectionSelector: string): Promise<void>;
-  async expandPluginSection(): Promise<void>;
-  async navigateToPluginSettings(): Promise<void>;
-  async enablePlugin(pluginName: string): Promise<boolean>;
-  async disablePlugin(pluginName: string): Promise<boolean>;
-  async isPluginEnabled(pluginName: string): Promise<boolean>;
-  async uploadPlugin(pluginPath: string): Promise<void>;
+  async scrollToSection(sectionSelector: string): Promise<void>;
+  async isOnSettingsPage(): Promise<boolean>;
+  async navigateBackToWorkView(): Promise<void>;
 }
 ```
 
 **Example:**
 
 ```typescript
-await settingsPage.navigateToPluginSettings();
-await settingsPage.enablePlugin('Test Plugin');
-expect(await settingsPage.isPluginEnabled('Test Plugin')).toBeTruthy();
+await settingsPage.navigateToSettings();
+expect(await settingsPage.isOnSettingsPage()).toBeTruthy();
 ```
+
+Plugin management lives in `helpers/plugin-test.helpers.ts`
+(`waitForPluginManagementInit`, `enablePluginWithVerification`,
+`disablePluginWithVerification`, `waitForPluginInMenu`).
 
 #### 6. **DialogPage** (`dialog.page.ts`)
 
@@ -316,11 +316,10 @@ test('should create project and add tasks', async ({ projectPage, workViewPage }
 ### Pattern 3: Settings Configuration
 
 ```typescript
-test('should enable plugin', async ({ settingsPage, waitForNav }) => {
-  await settingsPage.navigateToPluginSettings();
-  await settingsPage.enablePlugin('My Plugin');
-  await waitForNav();
-  expect(await settingsPage.isPluginEnabled('My Plugin')).toBeTruthy();
+test('should enable plugin', async ({ page }) => {
+  expect(await waitForPluginManagementInit(page)).toBe(true);
+  expect(await enablePluginWithVerification(page, 'My Plugin')).toBe(true);
+  expect(await waitForPluginInMenu(page, 'My Plugin')).toBe(true);
 });
 ```
 
@@ -645,13 +644,8 @@ test('should create project with tasks', async ({
 
 ```typescript
 test('should configure plugin', async ({ settingsPage, page }) => {
-  await settingsPage.navigateToPluginSettings();
-
-  const pluginExists = await settingsPage.pluginExists('Test Plugin');
-  expect(pluginExists).toBeTruthy();
-
-  await settingsPage.enablePlugin('Test Plugin');
-  expect(await settingsPage.isPluginEnabled('Test Plugin')).toBeTruthy();
+  expect(await waitForPluginManagementInit(page)).toBe(true);
+  expect(await enablePluginWithVerification(page, 'Test Plugin')).toBe(true);
 
   await settingsPage.navigateBackToWorkView();
   await expect(page).toHaveURL(/tag\/TODAY/);

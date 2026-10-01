@@ -3,21 +3,17 @@ import { BasePage } from './base.page';
 import { cssSelectors } from '../constants/selectors';
 import { waitForAngularStability } from '../utils/waits';
 
-const { SETTINGS_BTN, PAGE_SETTINGS, PLUGIN_SECTION, PLUGIN_MANAGEMENT } = cssSelectors;
+const { SETTINGS_BTN, PAGE_SETTINGS } = cssSelectors;
 
 export class SettingsPage extends BasePage {
   readonly settingsBtn: Locator;
   readonly pageSettings: Locator;
-  readonly pluginSection: Locator;
-  readonly pluginManagement: Locator;
 
   constructor(page: Page, testPrefix: string = '') {
     super(page, testPrefix);
 
     this.settingsBtn = page.locator(SETTINGS_BTN);
     this.pageSettings = page.locator(PAGE_SETTINGS);
-    this.pluginSection = page.locator(PLUGIN_SECTION);
-    this.pluginManagement = page.locator(PLUGIN_MANAGEMENT);
   }
 
   /**
