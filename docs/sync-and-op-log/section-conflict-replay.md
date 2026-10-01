@@ -158,17 +158,29 @@ rejects the order into the paths above, and without causal proof (the remote
 row lost) that keeps the stop. A file-based provider uploads it with the old
 clock; no E2E covers that crash window. Board, section and issue-provider
 orders stay in the conflict and keep the stop.
-An order whose conflict's remote op is an order or note delete it crosses
-(`isReissuedReorderCrossing`) does not move when that op applies: the reissue
-above runs only while the order is concurrent with it, and a moved order
-would upload its stale list. A released receiver writes a deleted note's id
-as given and its notes panel crashes (the v19.1.0 E2E below).
+An order that crosses an order or note delete (`isReissuedReorderCrossing`)
+does not move when that op applies, whether the op is the conflict's remote
+op or applies beside it in the same batch: the reissue above runs only while
+the order is concurrent with it, and a moved order would upload its stale
+list. A conflict's remote clock can dominate such an op (the other device
+deleted a listed note, then edited the conflicting one). A released receiver
+writes a deleted note's id as given and its notes panel crashes (the v19.1.0
+E2E below).
 
 A remote LWW resolution row of a habit commutes with a habit order that lists
 the habit: the LWW meta-reducer writes the habit only, and no habit field is
 list-routed, so neither the row's mode nor its keys are read (decision 5). A
 note row keeps the stop, since a note snapshot carries `projectId` and
 `isPinnedToToday`; so do board, section and issue-provider orders.
+
+Residual: the entity's other pending ops can include a local delete of it.
+When the remote side wins that conflict, this device recreates the entity at
+the end of its list (the LWW meta-reducer's recreate appends the id), while
+the kept order places it elsewhere on every other device. The order then
+differs on the deleting device only, with nothing pending; before #10420 the
+order joined the conflict and sync stopped. A SuperSync probe showed this for
+a habit renamed on the other device (measured 2026-10). The note recreate is
+#10380's.
 
 A habit delete keeps the stop: a habit order fills the slots of the habits it
 lists, so a delete shifts them around an unlisted (disabled) habit and the two
@@ -281,7 +293,8 @@ The #10420 E2E (`supersync-reorder-beside-conflict.spec.ts`) checks against
 v19.1.0 assets that a released device consumes a habit order moved past its own
 rename, and an order the current device reissues after the released device's
 whole-habit resolution row. Its note case has the released device delete a
-note that the current device edited beside its pending order.
+note that the current device edited beside its pending order, or delete
+another listed note and then edit that one.
 
 ## Verification
 
