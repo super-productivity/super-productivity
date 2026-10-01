@@ -215,9 +215,13 @@ added (measured 2026-09 in
    output in the PR. A seed that newly shows a failure signature against the
    base is a regression until its original seed shows otherwise: first
    compare that seed's executed steps and final field values on both
-   revisions (the tool prints both for every newly failing seed). The same
-   steps reaching the same values means only the oracles differ; different
-   values are the change's effect and need an explanation. Use a shrunk trace
+   revisions (the tool prints both for every newly failing seed). The values
+   cover one device's live tasks, notes and habits, not the other devices or
+   the archive: the same steps reaching the same values clears an entry only
+   when its signature is about those fields on that state. A divergence,
+   restart, time or archive entry still needs its original seed compared on
+   both revisions, and different values are the change's effect and need an
+   explanation. Use a shrunk trace
    only to diagnose: shrinking can remove the interaction that made the seed
    worse, so a shrunk trace that fails the same way on the base does not clear
    the entry. The pinned traces miss a known failure that becomes more

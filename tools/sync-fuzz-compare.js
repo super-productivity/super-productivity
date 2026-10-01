@@ -32,14 +32,16 @@ const SHARED_FILES = [REPORT_SPEC, `${FUZZ_DIR}/sync-fuzz-profiles.ts`];
 const JUDGE_HINT =
   'Judge each newly failing seed on the original seed first: the lines under ' +
   'it say whether both revisions executed the same steps and which final ' +
-  'field values differ. A seed that runs the same steps to the same values ' +
-  'fails differently only because the oracles do. Otherwise the new failure ' +
-  'is a regression until the original seed shows otherwise. A shrunk trace ' +
-  'only helps to diagnose: shrinking can remove the interaction that made the ' +
-  'seed worse, so a shrunk trace that fails the same way on the base clears ' +
-  'nothing. To shrink a seed, set FIRST_SEED to it, SEED_COUNT to 1 and ' +
-  `IGNORE_PINNED to true in ${FUZZ_DIR}/sync-fuzz-seeds.benchmark.ts and run ` +
-  'it with npm run test:file.';
+  "field values differ. The values are device C's live tasks, notes and " +
+  'habits after its last restart, not the other devices or the archive: the ' +
+  'same steps reaching the same values clear only an entry about those ' +
+  'fields. A divergence, restart, time or archive entry still needs the ' +
+  'original seed compared on both revisions. A shrunk trace only helps to ' +
+  'diagnose: shrinking can remove the interaction that made the seed worse, ' +
+  'so a shrunk trace that fails the same way on the base clears nothing. To ' +
+  'shrink a seed, set FIRST_SEED to it, SEED_COUNT to 1 and IGNORE_PINNED to ' +
+  `true in ${FUZZ_DIR}/sync-fuzz-seeds.benchmark.ts and run it with npm run ` +
+  'test:file.';
 const REPORT_PATTERN = /SYNC_FUZZ_REPORT_START(\{.*?\})SYNC_FUZZ_REPORT_END/s;
 
 /**
@@ -66,7 +68,8 @@ const describeRun = (base, head) => {
     .filter(
       (key) => JSON.stringify(base.values[key]) !== JSON.stringify(head.values[key]),
     );
-  if (differing.length === 0) lines.push('  same final field values');
+  if (differing.length === 0)
+    lines.push("  same final field values (device C's live state)");
   for (const key of differing) {
     lines.push(
       `  ${key}: base ${JSON.stringify(base.values[key])}, head ${JSON.stringify(head.values[key])}`,

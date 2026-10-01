@@ -11,8 +11,17 @@ import { checkPreservation, Ledger, LedgerEntry, Replacement } from './sync-fuzz
 
 let time = 0;
 
-/** An intent of `device` with the given vector clock after it, one tick later. */
-const entry = (device: string, clock: VectorClock, intent: Intent): LedgerEntry => {
+/**
+ * An intent of `device` with the given vector clock after it, one tick
+ * later. `uploadedAt` is the sync that uploaded it (default: right after it,
+ * so each intent is its own side); `opaque` marks a planning `track`.
+ */
+const entry = (
+  device: string,
+  clock: VectorClock,
+  intent: Intent,
+  { uploadedAt, opaque = false }: { uploadedAt?: number; opaque?: boolean } = {},
+): LedgerEntry => {
   const writes =
     intent[0] === 'renameTask'
       ? [{ entity: `task:${intent[1]}`, field: 'title', value: intent[2] }]
@@ -25,6 +34,7 @@ const entry = (device: string, clock: VectorClock, intent: Intent): LedgerEntry 
             : intent[0] === 'editHabit'
               ? [{ entity: `habit:${intent[1]}`, field: intent[2], value: intent[3] }]
               : [];
+  time++;
   return {
     intent,
     writes,
@@ -34,7 +44,9 @@ const entry = (device: string, clock: VectorClock, intent: Intent): LedgerEntry 
       Object.entries(clock).map(([name, counter]) => [`fuzzDev${name}`, counter]),
     ),
     counterBefore: 0,
-    time: ++time,
+    time,
+    uploadedAt: uploadedAt ?? time,
+    opaque,
   };
 };
 
@@ -97,64 +109,80 @@ describe('sync fuzz preservation oracles', () => {
     });
 
     it('accepts an older write whose side wins by a later edit of another field', () => {
-      // A: notes, then (after C's notes) a rename on the same task, both
-      // unseen by C. A's side wins the conflict, carrying its older notes.
-      const rename = entry('A', { A: 2 }, ['renameTask', 't1', 'A title']);
+      // A's notes and rename are pending together and upload after C's
+      // notes: A resolves, its side wins by the rename and patches its notes.
+      const notesA = entry('A', { A: 1 }, ['editTaskNotes', 't1', 'A notes'], {
+        uploadedAt: 100,
+      });
+      const notesC = entry('C', { C: 1 }, ['editTaskNotes', 't1', 'C notes']);
+      const rename = entry('A', { A: 2 }, ['renameTask', 't1', 'A title'], {
+        uploadedAt: 100,
+      });
       const converged = {
         tasks: { t1: { id: 't1', notes: 'A notes', title: 'A title' } },
       };
-      expect(signatures(converged, [a, c, rename])).toEqual([]);
-      // ...but not a rename C had already seen: then it is not A's side.
-      const seen = entry('A', { A: 2 }, ['renameTask', 't1', 'A title']);
-      const cAfter = entry('C', { A: 2, C: 1 }, ['editTaskNotes', 't1', 'C notes']);
-      expect(signatures(converged, [a, seen, cAfter])).toEqual([
+      expect(signatures(converged, [notesA, notesC, rename])).toEqual([]);
+      // ...but not when A's notes uploaded before C's: that crossing was
+      // resolved earlier, and C won it. The later rename does not write notes
+      // (review of #10428, finding 2: the #10421 class).
+      const earlyNotesA = entry('A', { A: 1 }, ['editTaskNotes', 't1', 'A notes']);
+      const laterNotesC = entry('C', { C: 1 }, ['editTaskNotes', 't1', 'C notes']);
+      const laterRename = entry('A', { A: 2 }, ['renameTask', 't1', 'A title']);
+      expect(signatures(converged, [earlyNotesA, laterNotesC, laterRename])).toEqual([
         'older-write-won:task.notes',
       ]);
     });
 
-    it('leaves a field to whole-entity LWW when the latest write crosses tracking', () => {
-      const track = entry('A', { A: 2 }, ['track', 't1', 1000]);
+    it('reports a loss when the losing, resolving device only tracked locally', () => {
+      // #10422's shape with the loser tracking first (review of #10428,
+      // finding 1): A's own delta stays pending and still admits the patch,
+      // so A's side, which loses to C's newer notes, must not win.
+      const trackA = entry('A', { A: 1 }, ['track', 't1', 1000], { uploadedAt: 100 });
+      const notesA = entry('A', { A: 2 }, ['editTaskNotes', 't1', 'A notes'], {
+        uploadedAt: 100,
+      });
+      const notesC = entry('C', { C: 1 }, ['editTaskNotes', 't1', 'C notes']);
       const converged = {
         tasks: {
           t1: { id: 't1', notes: 'A notes', timeSpentOnDay: { [fuzzDay()]: 1000 } },
         },
       };
-      expect(signatures(converged, [a, c, track])).toEqual([]);
-      // ...but not tracking that the latest write had already seen.
-      const seenTrack = entry('A', { A: 2 }, ['track', 't1', 1000]);
-      const cAfter = entry('C', { A: 2, C: 1 }, ['editTaskNotes', 't1', 'C notes']);
-      expect(signatures(converged, [a, seenTrack, cAfter])).toEqual([
+      expect(signatures(converged, [trackA, notesA, notesC])).toEqual([
         'older-write-won:task.notes',
       ]);
     });
 
-    it('leaves a field to whole-entity LWW when a crossing write comes from tracking', () => {
-      // A's latest isDone comes from tracking, which reopens the task.
-      const doneB = entry('B', { B: 1 }, ['doneTask', 't1', true]);
-      const reopen: LedgerEntry = {
-        ...entry('A', { A: 1 }, ['track', 't1', 1000]),
-        writes: [{ entity: 'task:t1', field: 'isDone', value: false }],
-      };
+    describe('a whole-entity winner', () => {
+      // B's notes, then C's newer notes (C had seen B's). A, which had also
+      // seen B's notes, tracks last; its snapshot carries B's notes.
+      const notesB = entry('B', { B: 1 }, ['editTaskNotes', 't1', 'B notes']);
+      const notesC = entry('C', { B: 1, C: 1 }, ['editTaskNotes', 't1', 'C notes'], {
+        uploadedAt: 200,
+      });
+      const track = (uploadedAt: number, opaque = false): LedgerEntry =>
+        entry('A', { A: 1, B: 1 }, ['track', 't1', 1000], { uploadedAt, opaque });
       const converged = {
         tasks: {
-          t1: { id: 't1', isDone: true, timeSpentOnDay: { [fuzzDay()]: 1000 } },
+          t1: { id: 't1', notes: 'B notes', timeSpentOnDay: { [fuzzDay()]: 1000 } },
         },
       };
-      expect(signatures(converged, [doneB, reopen])).toEqual([]);
-      // ...and when the latest write's device tracks after it, so its side
-      // carries a remote delta for C: C's older notes may win whole-entity.
-      const notesC = entry('C', { C: 1 }, ['editTaskNotes', 't1', 'C notes']);
-      const notesA = entry('A', { A: 1 }, ['editTaskNotes', 't1', 'A notes']);
-      const trackAfter = entry('A', { A: 2 }, ['track', 't1', 1000]);
-      const olderWins = {
-        tasks: {
-          t1: { id: 't1', notes: 'C notes', timeSpentOnDay: { [fuzzDay()]: 1000 } },
-        },
-      };
-      expect(signatures(olderWins, [notesC, notesA, trackAfter])).toEqual([]);
-      expect(signatures(olderWins, [notesC, notesA])).toEqual([
-        'older-write-won:task.notes',
-      ]);
+
+      it('accounts for any value when its delta is remote to the resolver', () => {
+        // A uploads first: C resolves against A's remote delta, whole-entity.
+        expect(signatures(converged, [notesB, notesC, track(100)])).toEqual([]);
+      });
+
+      it('accounts for any value when its intent plans the task (opaque)', () => {
+        expect(signatures(converged, [notesB, notesC, track(300, true)])).toEqual([]);
+      });
+
+      it('does not when its plain delta is local to the resolver', () => {
+        // A uploads last: A resolves with its own delta, through the patch,
+        // which writes no notes.
+        expect(signatures(converged, [notesB, notesC, track(300)])).toEqual([
+          'older-write-won:task.notes',
+        ]);
+      });
     });
 
     it('leaves notes and habit counts to whole-entity LWW', () => {
@@ -210,14 +238,16 @@ describe('sync fuzz preservation oracles', () => {
   });
 
   describe('deleted tasks', () => {
-    it('leaves a deleted task that came back to the whole-entity delete-vs-edit win', () => {
+    it('counts a deleted task that came back apart, as recreated', () => {
       const rename = entry('A', { A: 1 }, ['renameTask', 't1', 'renamed']);
       const del = entry('B', { B: 1 }, ['deleteTask', 't1']);
+      // Gone: nothing to check.
       expect(signatures({}, [rename, del])).toEqual([]);
+      // Recreated without the rename (decision 2's defaults): counted.
       expect(
         signatures({ tasks: { t1: { id: 't1', title: 'old' } } }, [rename, del]),
-      ).toEqual([]);
-      // ...while the same task without the delete is checked.
+      ).toEqual(['recreated:field-reverted:task.title']);
+      // ...and the same task without a delete is an ordinary loss.
       expect(signatures({ tasks: { t1: { id: 't1', title: 'old' } } }, [rename])).toEqual(
         ['field-reverted:task.title'],
       );

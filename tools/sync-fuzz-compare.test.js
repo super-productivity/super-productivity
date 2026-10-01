@@ -67,7 +67,7 @@ test('describes a seed by its executed steps and differing final values', () => 
   };
   assert.deepEqual(describeRun(base, { ...base }), [
     '  same executed steps (30:aa)',
-    '  same final field values',
+    "  same final field values (device C's live state)",
   ]);
   assert.deepEqual(
     describeRun(base, {

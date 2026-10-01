@@ -347,7 +347,7 @@
   },
   {
     "class": "remote-win-keeps-local-edit",
-    "ref": "#10260 (the time loss); guards #10398's rule against folding beside a remote winner",
+    "ref": "#10260 (the time loss); guards #10398's rule against folding beside a remote winner; the title loss is a stale local-win snapshot (#10421), seen since #10428",
     "name": "a notes edit folded beside a later remote rename leaves every device agreeing on notes and title",
     "steps": [
       {
@@ -382,12 +382,12 @@
       }
     ],
     "primary": "time-loss:task",
-    "signatures": ["time-loss:task"],
+    "signatures": ["older-write-won:task.title", "time-loss:task"],
     "rejections": ["CONFLICT_CONCURRENT [TASK] LWW Update"]
   },
   {
     "class": "remote-win-keeps-local-edit",
-    "ref": "#10260 (the time loss); guards #10398's overlay of every local-win snapshot of a task; the server rejects the snapshot and it is rebuilt, as on master",
+    "ref": "#10260 (the time loss); guards #10398's overlay of every local-win snapshot of a task; the server rejects the snapshot and it is rebuilt, as on master; the title loss is a stale local-win snapshot (#10421), seen since #10428",
     "name": "a notes edit beside two local-win snapshots of a tracked, twice renamed task reaches every device",
     "steps": [
       {
@@ -415,7 +415,7 @@
       }
     ],
     "primary": "time-loss:task",
-    "signatures": ["time-loss:task"],
+    "signatures": ["older-write-won:task.title", "time-loss:task"],
     "rejections": ["CONFLICT_CONCURRENT [TASK] LWW Update"]
   },
   {
@@ -514,7 +514,7 @@
   },
   {
     "class": "restart-changes-state",
-    "ref": "#10381",
+    "ref": "#10381; the recreated title is decision 2 (counted as recreated:, #10428)",
     "name": "after a delete, a recreate and concurrent renames, a restart moves the task in Today; title and time stay",
     "steps": [
       {
@@ -551,6 +551,7 @@
     "signatures": [
       "divergence:.tag.entities.*.taskIds.*",
       "divergence:.task.ids.*",
+      "recreated:older-write-won:task.title",
       "restart-changed:.tag.entities.*.taskIds.*",
       "restart-changed:.task.ids.*"
     ],
@@ -1196,12 +1197,31 @@
     "ref": "#10422 (accepted as a residual of #10415, #10393): a remote win's field patch carries the winning side's timestamp",
     "name": "a remote win re-sends the loser's older notes at the winner's time, and they beat a third device's newer notes",
     "steps": [
-      { "d": "A", "a": ["editTaskNotes", "t1", "A0"] },
-      { "d": "A", "a": ["renameTask", "t1", "A1"] },
-      { "d": "C", "a": ["editTaskNotes", "t1", "C2"] },
-      { "d": "B", "a": ["renameTask", "t1", "B3"], "s": 1 },
-      { "d": "A", "s": 1 },
-      { "d": "C", "s": 1 }
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A0"]
+      },
+      {
+        "d": "A",
+        "a": ["renameTask", "t1", "A1"]
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t1", "C2"]
+      },
+      {
+        "d": "B",
+        "a": ["renameTask", "t1", "B3"],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "s": 1
+      },
+      {
+        "d": "C",
+        "s": 1
+      }
     ],
     "primary": "older-write-won:task.notes",
     "signatures": ["older-write-won:task.notes"],
@@ -1212,14 +1232,158 @@
     "ref": "#10422: the same inversion through a disjoint merge, which predates #10415",
     "name": "a disjoint merge re-sends the loser's older notes at the winner's time, and they beat a third device's newer notes",
     "steps": [
-      { "d": "A", "a": ["editTaskNotes", "t1", "A0"] },
-      { "d": "C", "a": ["editTaskNotes", "t1", "C1"] },
-      { "d": "B", "a": ["renameTask", "t1", "B2"], "s": 1 },
-      { "d": "A", "s": 1 },
-      { "d": "C", "s": 1 }
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A0"]
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t1", "C1"]
+      },
+      {
+        "d": "B",
+        "a": ["renameTask", "t1", "B2"],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "s": 1
+      },
+      {
+        "d": "C",
+        "s": 1
+      }
     ],
     "primary": "older-write-won:task.notes",
     "signatures": ["older-write-won:task.notes"],
     "rejections": []
+  },
+  {
+    "class": "remote-win-patch-timestamp",
+    "ref": "#10422: the loser's own pending delta still admits the patch (review of #10428, finding 1)",
+    "name": "a remote win re-sends the loser's older notes at the winner's time even when the loser also tracked the task",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["track", "t1", 1000]
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A0"]
+      },
+      {
+        "d": "A",
+        "a": ["renameTask", "t1", "A1"]
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t1", "C2"]
+      },
+      {
+        "d": "B",
+        "a": ["renameTask", "t1", "B3"],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "s": 1
+      },
+      {
+        "d": "C",
+        "s": 1
+      }
+    ],
+    "primary": "older-write-won:task.notes",
+    "signatures": ["older-write-won:task.notes"],
+    "rejections": []
+  },
+  {
+    "class": "remote-win-patch-timestamp",
+    "ref": "#10422: shrunk from sweep seed noReorder:20725017",
+    "name": "a remote win re-sends the loser's older title at the winner's time, and it beats a third device's newer rename",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["renameTask", "t2", "A7"]
+      },
+      {
+        "d": "B",
+        "a": ["renameTask", "t2", "B21"]
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t2", "C23"]
+      },
+      {
+        "d": "C",
+        "s": 1
+      }
+    ],
+    "primary": "older-write-won:task.title",
+    "signatures": ["older-write-won:task.title"],
+    "rejections": []
+  },
+  {
+    "class": "stale-local-win-snapshot",
+    "ref": "#10421: a local win against an opaque resolution row uploads a replace snapshot read before the batch (review of #10428, finding 2)",
+    "name": "a pending notes edit wins against a remote row with a stale snapshot that writes the device's older title back",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["renameTask", "t1", "A0"],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["renameTask", "t1", "B1"]
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A2"]
+      },
+      {
+        "d": "B",
+        "s": 1
+      },
+      {
+        "d": "A",
+        "s": 1
+      }
+    ],
+    "primary": "older-write-won:task.title",
+    "signatures": ["older-write-won:task.title"],
+    "rejections": []
+  },
+  {
+    "class": "stale-local-win-snapshot",
+    "ref": "#10421: shrunk from sweep seed tasks:20725006",
+    "name": "a pending notes edit wins against two remote rows with a stale snapshot that overwrites a newer rename everywhere",
+    "steps": [
+      {
+        "d": "B",
+        "a": ["renameTask", "t1", "B1"],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t1", "C25"],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["renameTask", "t1", "A27"]
+      },
+      {
+        "d": "B",
+        "a": ["editTaskNotes", "t1", "B29"]
+      }
+    ],
+    "primary": "older-write-won:task.title",
+    "signatures": ["older-write-won:task.title"],
+    "rejections": ["CONFLICT_CONCURRENT [TASK] LWW Update"]
   }
 ]
