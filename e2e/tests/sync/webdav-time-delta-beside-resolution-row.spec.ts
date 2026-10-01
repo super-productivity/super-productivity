@@ -21,7 +21,8 @@ import { waitForAppReady } from '../../utils/waits';
  * with C. A file-based provider never rejects an upload, so B's delta reaches
  * the others with its original clock, concurrent with A's row: the devices
  * that hold the row must treat the delta as commuting too, whichever side of
- * the crossing they are on.
+ * the crossing they are on. C wrote its notes after A did, so they win per
+ * field (#10422, #10437).
  */
 interface Client {
   page: Page;
@@ -177,7 +178,7 @@ test.describe('@webdav tracked time beside another device resolution row', () =>
         }
 
         const expected: TaskView = {
-          notes: 'Notes written on A',
+          notes: 'Notes written on C',
           isDone: true,
           hasDoneOn: true,
           timeSpent: 5000,

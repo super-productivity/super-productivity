@@ -4,7 +4,6 @@ import {
   isCommutingTimeDeltaCrossing,
   isDisjointMergeEligible,
   mergeChangedFields,
-  synthesizeMergedChanges,
   touchesCrossEntityTaskFields,
 } from './conflict-disjoint-merge.util';
 import { ActionType, EntityType, OpType, Operation } from '../core/operation.types';
@@ -497,50 +496,6 @@ describe('conflict-disjoint-merge.util', () => {
     });
   });
 
-  describe('synthesizeMergedChanges', () => {
-    it("keeps each side's own fields and the winner's value of a shared one", () => {
-      expect(
-        synthesizeMergedChanges(
-          { title: 'L', isDone: true, modified: 1 },
-          { title: 'R', notes: 'n', modified: 2 },
-          'remote',
-        ),
-      ).toEqual({ title: 'R', isDone: true, notes: 'n', modified: 2 });
-      expect(
-        synthesizeMergedChanges(
-          { title: 'L', isDone: true, modified: 1 },
-          { title: 'R', notes: 'n', modified: 2 },
-          'local',
-        ),
-      ).toEqual({ title: 'L', isDone: true, notes: 'n', modified: 1 });
-    });
-
-    it('builds the same delta on both clients when each names the same side', () => {
-      const x = { title: 'X', dueWithTime: undefined };
-      const y = { title: 'Y', notes: 'y' };
-      // Client 1 sees X local / Y remote; client 2 the mirror. The planner is
-      // symmetric, so both name Y.
-      expect(synthesizeMergedChanges(x, y, 'remote')).toEqual(
-        synthesizeMergedChanges(y, x, 'local'),
-      );
-    });
-
-    it("keeps a clear of the winner's shared field as an undefined key", () => {
-      const merged = synthesizeMergedChanges(
-        { dueWithTime: undefined },
-        { dueWithTime: 5 },
-        'local',
-      );
-      expect('dueWithTime' in merged).toBeTrue();
-      expect(merged['dueWithTime']).toBeUndefined();
-    });
-  });
-
-  // ── cleared fields (#9776): `changes: { field: undefined }` + out-of-band
-  // `clearedFields`. The author's op keeps the undefined key (structured clone);
-  // the same op after a JSON wire round-trip loses it. Both shapes must extract
-  // the IDENTICAL field set, or the author merges while the receiver falls back
-  // to whole-entity LWW — silent divergence on the same conflict. ──────────────
   describe('cleared fields', () => {
     /** Author-side shape: undefined key survives IndexedDB structured clone. */
     const authorClearOp = (): Operation =>

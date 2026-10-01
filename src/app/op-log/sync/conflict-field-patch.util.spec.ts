@@ -1,10 +1,9 @@
 import {
   aggregateEntityConflict,
-  buildFieldPatchChanges,
   buildSurvivingFieldPatches,
   isFieldPatchEligible,
-  isRemoteWinEcho,
   keptLocalTimeDeltas,
+  localWinningFieldGroups,
   rebaseKeptTimeDeltas,
   supersededPatchFields,
   survivingLocalFields,
@@ -73,15 +72,11 @@ describe('conflict-field-patch.util', () => {
   describe('isFieldPatchEligible', () => {
     it('admits disjoint and overlapping readable edits', () => {
       expect(
-        isFieldPatchEligible(
-          sides([edit({ title: 'a' })], [edit({ notes: 'n' })]),
-          'local',
-        ),
+        isFieldPatchEligible(sides([edit({ title: 'a' })], [edit({ notes: 'n' })])),
       ).toBeTrue();
       expect(
         isFieldPatchEligible(
           sides([edit({ title: 'a', isDone: true })], [edit({ title: 'b' })]),
-          'remote',
         ),
       ).toBeTrue();
     });
@@ -89,18 +84,17 @@ describe('conflict-field-patch.util', () => {
     it('refuses deletes, multi-entity and opaque ops', () => {
       const remote = [edit({ title: 'b' })];
       expect(
-        isFieldPatchEligible(sides([op({ opType: OpType.Delete })], remote), 'local'),
+        isFieldPatchEligible(sides([op({ opType: OpType.Delete })], remote)),
       ).toBeFalse();
       expect(
         isFieldPatchEligible(
           sides([edit({ title: 'a' }, { entityIds: ['task-1', 'task-2'] })], remote),
-          'local',
         ),
       ).toBeFalse();
       const opaque = op({
         payload: { actionPayload: { taskId: 'task-1', x: 1 }, entityChanges: [] },
       });
-      expect(isFieldPatchEligible(sides([opaque], remote), 'local')).toBeFalse();
+      expect(isFieldPatchEligible(sides([opaque], remote))).toBeFalse();
     });
 
     it("refuses an overlap with a flat-snapshot op such as moveToOtherProject's", () => {
@@ -117,9 +111,7 @@ describe('conflict-field-patch.util', () => {
             entityChanges: [],
           },
         });
-      expect(
-        isFieldPatchEligible(sides([move('P1')], [move('P1')]), 'local'),
-      ).toBeFalse();
+      expect(isFieldPatchEligible(sides([move('P1')], [move('P1')]))).toBeFalse();
       expect(
         supersededPatchFields([move('P1')], 'TASK' as EntityType, 'task', 'task-1'),
       ).toBeUndefined();
@@ -129,7 +121,6 @@ describe('conflict-field-patch.util', () => {
       expect(
         isFieldPatchEligible(
           sides([edit({ modified: 5 })], [edit({ title: 'b', modified: 6 })]),
-          'remote',
         ),
       ).toBeFalse();
     });
@@ -138,13 +129,11 @@ describe('conflict-field-patch.util', () => {
       expect(
         isFieldPatchEligible(
           sides([edit({ title: 'a' }), delta()], [edit({ title: 'b' })]),
-          'remote',
         ),
       ).toBeTrue();
       expect(
         isFieldPatchEligible(
           sides([edit({ title: 'a' })], [edit({ title: 'b' }), delta()]),
-          'remote',
         ),
       ).toBeFalse();
     });
@@ -155,23 +144,19 @@ describe('conflict-field-patch.util', () => {
       expect(
         isFieldPatchEligible(
           sides([edit({ title: 'a' }), delta()], [edit({ title: 'b' }), absolute]),
-          'remote',
         ),
       ).toBeFalse();
       const remove = op({ actionType: ActionType.TASK_REMOVE_TIME_SPENT });
       expect(
         isFieldPatchEligible(
           sides([edit({ title: 'a' }), remove], [edit({ title: 'b' })]),
-          'remote',
         ),
       ).toBeFalse();
     });
 
     it('refuses an overlapping patch that clears a reminder field', () => {
       const clear = edit({ title: 'a', reminderId: undefined });
-      expect(
-        isFieldPatchEligible(sides([clear], [edit({ title: 'b' })]), 'local'),
-      ).toBeFalse();
+      expect(isFieldPatchEligible(sides([clear], [edit({ title: 'b' })]))).toBeFalse();
       // The other side's value wins the shared field: nothing is cleared.
       expect(
         isFieldPatchEligible(
@@ -179,41 +164,76 @@ describe('conflict-field-patch.util', () => {
             [edit({ title: 'a', dueWithTime: undefined })],
             [edit({ dueWithTime: 5 })],
           ),
-          'remote',
         ),
       ).toBeTrue();
       // Today's disjoint merge already patched a clear: unchanged.
-      expect(
-        isFieldPatchEligible(sides([clear], [edit({ notes: 'n' })]), 'local'),
-      ).toBeTrue();
+      expect(isFieldPatchEligible(sides([clear], [edit({ notes: 'n' })]))).toBeTrue();
     });
   });
 
-  describe('buildFieldPatchChanges', () => {
-    it("unions both sides, the winner's value for a shared field, and skips deltas", () => {
-      const local = [edit({ title: 'a', isDone: true }), delta()];
-      const remote = [edit({ title: 'b' }), edit({ notes: 'n' })];
-      // A done toggle carries the doneOn its reducer derives (the op's time).
-      expect(buildFieldPatchChanges(sides(local, remote), 'remote')).toEqual({
-        title: 'b',
-        isDone: true,
-        doneOn: 1000,
-        notes: 'n',
-      });
-      expect(buildFieldPatchChanges(sides(local, remote), 'local')).toEqual({
-        title: 'a',
-        isDone: true,
-        doneOn: 1000,
-        notes: 'n',
-      });
+  describe('localWinningFieldGroups', () => {
+    const at = (
+      changes: Record<string, unknown>,
+      clientId: string,
+      timestamp: number,
+    ): Operation => edit(changes, { id: `${clientId}${timestamp}`, clientId, timestamp });
+
+    it('re-sends only the local fields newer than every remote write, each at its own time', () => {
+      // A: notes at 1, rename at 2. B: rename at 4 (#10422's shape).
+      const local = [at({ notes: 'A' }, 'A', 1), at({ title: 'A' }, 'A', 2), delta()];
+      expect(localWinningFieldGroups(sides(local, [at({ title: 'B' }, 'B', 4)]))).toEqual(
+        [{ timestamp: 1, changes: { notes: 'A' } }],
+      );
+      // B resolving the same two sides re-sends only its rename.
+      expect(localWinningFieldGroups(sides([at({ title: 'B' }, 'B', 4)], local))).toEqual(
+        [{ timestamp: 4, changes: { title: 'B' } }],
+      );
     });
 
-    it('is identical on both devices when each names the same winning side', () => {
-      const x = [edit({ title: 'x', notes: 'x' }, { clientId: 'X' })];
-      const y = [edit({ title: 'y', isDone: true }, { clientId: 'Y' })];
-      expect(buildFieldPatchChanges(sides(x, y), 'remote')).toEqual(
-        buildFieldPatchChanges(sides(y, x), 'local'),
-      );
+    it('wins a field per field, not per side', () => {
+      // C's notes (3) beat A's re-sent notes (1), though B's rename (4) is newer.
+      const remote = [at({ title: 'B' }, 'B', 4), at({ notes: 'A' }, 'A', 1)];
+      expect(
+        localWinningFieldGroups(sides([at({ notes: 'C' }, 'C', 3)], remote)),
+      ).toEqual([{ timestamp: 3, changes: { notes: 'C' } }]);
+    });
+
+    it('breaks an exact tie by clientId, the same way on both devices', () => {
+      const x = [at({ title: 'x' }, 'X', 5)];
+      const y = [at({ title: 'y' }, 'Y', 5)];
+      expect(localWinningFieldGroups(sides(x, y))).toEqual([]);
+      expect(localWinningFieldGroups(sides(y, x))).toEqual([
+        { timestamp: 5, changes: { title: 'y' } },
+      ]);
+    });
+
+    it("counts a patch row's keys and a replace row's every field as written at its time", () => {
+      const row = (mode: 'patch' | 'replace'): Operation =>
+        op({
+          id: `row-${mode}`,
+          actionType: '[TASK] LWW Update' as ActionType,
+          clientId: 'B',
+          timestamp: 4,
+          payload: {
+            actionPayload: { id: 'task-1', title: 'B' },
+            entityChanges: [],
+            lwwUpdateMode: mode,
+          },
+        });
+      const local = [at({ notes: 'C', title: 'C' }, 'C', 3)];
+      expect(localWinningFieldGroups(sides(local, [row('patch')]))).toEqual([
+        { timestamp: 3, changes: { notes: 'C' } },
+      ]);
+      expect(localWinningFieldGroups(sides(local, [row('replace')]))).toEqual([]);
+      expect(isFieldPatchEligible(sides(local, [row('patch')]))).toBeTrue();
+    });
+
+    it('carries the doneOn a done toggle derives', () => {
+      expect(
+        localWinningFieldGroups(
+          sides([at({ isDone: true }, 'A', 7)], [at({ title: 'B' }, 'B', 4)]),
+        ),
+      ).toEqual([{ timestamp: 7, changes: { isDone: true, doneOn: 7 } }]);
     });
   });
 
@@ -344,9 +364,8 @@ describe('conflict-field-patch.util', () => {
   });
   describe('done normalization', () => {
     it('clears doneOn beside an undone toggle, as the task reducer does', () => {
-      const changes = buildFieldPatchChanges(
-        sides([edit({ isDone: false })], [edit({ title: 'b' })]),
-        'remote',
+      const [{ changes }] = localWinningFieldGroups(
+        sides([edit({ isDone: false })], [edit({ title: 'b' }, { timestamp: 500 })]),
       );
       expect('doneOn' in changes).toBeTrue();
       expect(changes['doneOn']).toBeUndefined();
@@ -354,34 +373,13 @@ describe('conflict-field-patch.util', () => {
 
     it('keeps a doneOn the op carried', () => {
       expect(
-        buildFieldPatchChanges(
-          sides([edit({ isDone: true, doneOn: 7 })], [edit({ title: 'b' })]),
-          'remote',
-        )['doneOn'],
+        localWinningFieldGroups(
+          sides(
+            [edit({ isDone: true, doneOn: 7 })],
+            [edit({ title: 'b' }, { timestamp: 500 })],
+          ),
+        )[0].changes['doneOn'],
       ).toBe(7);
-    });
-  });
-
-  describe('isRemoteWinEcho', () => {
-    it('is true when the winning remote side wrote every local field', () => {
-      const s = sides([edit({ notes: 'a' })], [edit({ notes: 'b', title: 't' })]);
-      expect(isRemoteWinEcho(s, 'remote')).toBeTrue();
-      expect(isRemoteWinEcho(s, 'local')).toBeFalse();
-    });
-
-    it('is false when a local field survives or a local delta must be kept', () => {
-      expect(
-        isRemoteWinEcho(
-          sides([edit({ notes: 'a', isDone: true })], [edit({ notes: 'b' })]),
-          'remote',
-        ),
-      ).toBeFalse();
-      expect(
-        isRemoteWinEcho(
-          sides([edit({ notes: 'a' }), delta()], [edit({ notes: 'b' })]),
-          'remote',
-        ),
-      ).toBeFalse();
     });
   });
 

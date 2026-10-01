@@ -2,10 +2,11 @@
  * Field-level LWW resolutions (direction A of
  * docs/sync-and-op-log/lww-field-level-resolution.md, #10379, #10260).
  *
- * An update-vs-update conflict resolves as ONE `'patch'` LWW Update built only
- * from both sides' ops: every field one side wrote keeps that side's value, a
- * field both sides wrote takes the LWW planner's winner's value
- * (`synthesizeMergedChanges`). This generalizes SPAP-14's disjoint merge to
+ * An update-vs-update conflict resolves per field (#10422): the remote ops
+ * apply as themselves, and the resolver re-sends, as `'patch'` LWW Updates,
+ * only its own fields whose latest write is newer than every remote write of
+ * the same field, each at that write's own timestamp
+ * (`localWinningFieldGroups`). This generalizes SPAP-14's disjoint merge to
  * overlapping fields. Released clients since v18.15.0 apply `'patch'` as a
  * merge (`updateOne`), so no marker, wire key or schema bump is needed.
  *
@@ -27,7 +28,6 @@ import {
   NOISE_FIELDS,
   sideNonNoiseKeys,
   SYNC_TIME_SPENT_FIELDS,
-  synthesizeMergedChanges,
 } from './conflict-disjoint-merge.util';
 
 /**
@@ -78,25 +78,50 @@ export interface FieldPatchSides {
 }
 
 /**
- * True iff the conflict can resolve as a field patch. Unlike
- * `isDisjointMergeEligible`, both sides may write the same field.
+ * True for an LWW resolution row of this one entity (a patch or snapshot
+ * another device built). It applies as itself; only which fields it writes is
+ * read (`rowFields`), never its values (#10393 decision 5).
+ */
+const isEntityRow = (op: Operation, entityId: string): boolean =>
+  op.opType === OpType.Update &&
+  op.entityId === entityId &&
+  !isMultiEntityOperation(op) &&
+  isLwwUpdatePayload(op.payload);
+
+/**
+ * The top-level fields a row writes or clears: a `'patch'` row's keys, or
+ * undefined for a `'replace'` row, which `setOne` applies to every field.
+ */
+const rowFields = (op: Operation): string[] | undefined => {
+  const payload = op.payload;
+  if (!isLwwUpdatePayload(payload) || payload.lwwUpdateMode !== 'patch') {
+    return undefined;
+  }
+  return [
+    ...Object.keys(payload.actionPayload).filter((key) => key !== 'id'),
+    ...(Array.isArray(payload.clearedFields) ? payload.clearedFields : []),
+  ];
+};
+
+/**
+ * True iff the conflict resolves per field. Unlike `isDisjointMergeEligible`,
+ * both sides may write the same field.
  *
  * - No multi-entity op and no DELETE on either side (whole-entity paths).
- * - No opaque op (habit counts, `planTasksForToday`, LWW resolution rows):
- *   their change cannot be read as fields (#10393 decisions 5 and 6).
+ * - The local side is readable `{ id, changes }` field updates (its values are
+ *   re-sent); the remote side is readable ops or LWW rows of this entity,
+ *   which apply as themselves. Other opaque ops (habit counts,
+ *   `planTasksForToday`) keep whole-entity LWW (decision 6).
  * - Both sides wrote a real (non-noise) field; a noise-only side is left to
  *   whole-entity LWW, which loses nothing real.
- * - Time stays out of the patch: a local `syncTimeSpent` delta is kept and
- *   rebased instead (`keptLocalTimeDeltas`). A remote delta, `removeTimeSpent`
- *   (clamps, so it does not commute), or a delta beside an absolute write of
- *   the time fields refuses the patch.
- * - A patch that clears a reminder field of an overlapping conflict refuses
- *   (`REMINDER_FIELDS`); the caller passes the winner for that check.
+ * - Time stays out of the re-sent fields: a local `syncTimeSpent` delta is kept
+ *   and rebased instead (`keptLocalTimeDeltas`). A remote delta,
+ *   `removeTimeSpent` (clamps, so it does not commute), or a delta beside an
+ *   absolute write of the time fields refuses.
+ * - Re-sent fields that clear a reminder field refuse (`REMINDER_FIELDS`),
+ *   unless the conflict is disjoint, which patched clears before.
  */
-export const isFieldPatchEligible = (
-  sides: FieldPatchSides,
-  winner: 'local' | 'remote',
-): boolean => {
+export const isFieldPatchEligible = (sides: FieldPatchSides): boolean => {
   const { localOps, remoteOps, payloadKey, entityId } = sides;
   const allOps = [...localOps, ...remoteOps];
   if (allOps.some((op) => isMultiEntityOperation(op) || op.opType === OpType.Delete)) {
@@ -108,28 +133,39 @@ export const isFieldPatchEligible = (
   ) {
     return false;
   }
+  const rows = remoteOps.filter((op) => isEntityRow(op, entityId));
   const local = sideNonNoiseKeys(localOps, payloadKey, entityId);
-  const remote = sideNonNoiseKeys(remoteOps, payloadKey, entityId);
-  if (!local || !remote || local.absolute.size === 0 || remote.absolute.size === 0) {
+  const remote = sideNonNoiseKeys(
+    remoteOps.filter((op) => !rows.includes(op)),
+    payloadKey,
+    entityId,
+  );
+  if (!local || !remote || local.absolute.size === 0) {
+    return false;
+  }
+  if (remote.absolute.size === 0 && rows.length === 0) {
     return false;
   }
   if (
     local.additive.size > 0 &&
     SYNC_TIME_SPENT_FIELDS.some(
-      (field) => local.absolute.has(field) || remote.absolute.has(field),
+      (field) =>
+        local.absolute.has(field) ||
+        remote.absolute.has(field) ||
+        rows.some((row) => rowFields(row)?.includes(field) ?? true),
     )
   ) {
     return false;
   }
-  if (isDisjointMergeEligible(sides)) {
+  // Today's disjoint merges already re-sent such ops and clears; unchanged.
+  if (rows.length === 0 && isDisjointMergeEligible(sides)) {
     return true;
   }
-  if (!fieldOps(allOps).every((op) => isChangesShapedOp(op, payloadKey, entityId))) {
+  if (!fieldOps(localOps).every((op) => isChangesShapedOp(op, payloadKey, entityId))) {
     return false;
   }
-  const changes = buildFieldPatchChanges(sides, winner);
-  return !REMINDER_FIELDS.some(
-    (field) => field in changes && changes[field] === undefined,
+  return !localWinningFieldGroups(sides).some(({ changes }) =>
+    REMINDER_FIELDS.some((field) => field in changes && changes[field] === undefined),
   );
 };
 
@@ -163,41 +199,85 @@ const sideChanges = (
   return changes;
 };
 
-/** The non-noise fields a side writes, deltas aside. */
-const realFields = (ops: Operation[], payloadKey: string, entityId: string): string[] =>
-  Object.keys(sideChanges(ops, payloadKey, entityId)).filter(
-    (field) => !NOISE_FIELDS.has(field),
-  );
+interface WriteStamp {
+  timestamp: number;
+  clientId: string;
+}
+
+/** The planner's order: timestamp, then clientId (`planLwwConflictResolutions`). */
+const isNewer = (a: WriteStamp, b: WriteStamp | undefined): boolean =>
+  !b ||
+  a.timestamp > b.timestamp ||
+  (a.timestamp === b.timestamp && a.clientId > b.clientId);
 
 /**
- * The patch's field/value map: both sides' fields, the winner's value where
- * both wrote one. Deltas are skipped; a restored clear keeps its key with the
- * value `undefined` (the caller lists it in `clearedFields`).
+ * When the remote side last wrote each field: a readable op writes the fields
+ * of its change, a `'patch'` row its keys, a `'replace'` row every field.
  */
-export const buildFieldPatchChanges = (
-  { localOps, remoteOps, payloadKey, entityId }: FieldPatchSides,
-  winner: 'local' | 'remote',
-): Record<string, unknown> =>
-  synthesizeMergedChanges(
-    sideChanges(localOps, payloadKey, entityId),
-    sideChanges(remoteOps, payloadKey, entityId),
-    winner,
-  );
+const remoteWriteStamps = (
+  { remoteOps, payloadKey, entityId }: FieldPatchSides,
+  field: string,
+): WriteStamp | undefined => {
+  let latest: WriteStamp | undefined;
+  for (const op of remoteOps) {
+    const writes = isEntityRow(op, entityId)
+      ? (rowFields(op)?.includes(field) ?? true)
+      : field in sideChanges([op], payloadKey, entityId);
+    if (writes && isNewer(op, latest)) {
+      latest = { timestamp: op.timestamp, clientId: op.clientId };
+    }
+  }
+  return latest;
+};
 
 /**
- * True when a patch would only echo the winner: the remote side won and wrote
- * every real field the local side wrote. The plain remote-win path applies
- * the same values without a new op, which could otherwise beat another
- * device's pending edit in a later conflict. A local time delta still needs
- * the patch path, which keeps it (the plain path rejects it, #10408).
+ * Per-field last-writer-wins (#10422): the local fields whose latest local
+ * write is newer than every remote write of the same field, grouped by the
+ * local op that wrote them, oldest first. Each group is re-sent at that op's
+ * own timestamp, so no field ever travels at a time it was not written; the
+ * remote side applies as itself. A side-level winner instead re-sent the other
+ * side's older fields at the newest time, and they beat a third device's newer
+ * edit of them.
+ *
+ * Symmetric like the planner: two resolvers of the same two sides assign each
+ * field to the same side, and each re-sends only its own.
  */
-export const isRemoteWinEcho = (
-  { localOps, remoteOps, payloadKey, entityId }: FieldPatchSides,
-  winner: 'local' | 'remote',
-): boolean => {
-  if (winner !== 'remote' || localOps.some(isSyncTimeSpentOp)) return false;
-  const remote = new Set(realFields(remoteOps, payloadKey, entityId));
-  return realFields(localOps, payloadKey, entityId).every((field) => remote.has(field));
+export const localWinningFieldGroups = (
+  sides: FieldPatchSides,
+): { timestamp: number; changes: Record<string, unknown> }[] => {
+  const { localOps, payloadKey, entityId } = sides;
+  const latestLocal = new Map<string, Operation>();
+  for (const op of fieldOps(localOps)) {
+    for (const field of Object.keys(sideChanges([op], payloadKey, entityId))) {
+      latestLocal.set(field, op);
+    }
+  }
+  const groups = new Map<Operation, Record<string, unknown>>();
+  for (const [field, op] of latestLocal) {
+    if (!isNewer(op, remoteWriteStamps(sides, field))) continue;
+    const changes = groups.get(op) ?? {};
+    changes[field] = sideChanges([op], payloadKey, entityId)[field];
+    groups.set(op, changes);
+  }
+  return [...groups]
+    .map(([op, changes]) => ({ op, changes }))
+    .filter(({ changes }) => Object.keys(changes).some((f) => !NOISE_FIELDS.has(f)))
+    .sort((x, y) => x.op.timestamp - y.op.timestamp)
+    .map(({ op, changes }) => ({ timestamp: op.timestamp, changes }));
+};
+
+/**
+ * The re-sends of a per-field resolution (`localWinningFieldGroups`), or
+ * undefined for the whole-entity path: the conflict is not eligible, or no
+ * local field won and no local time delta needs keeping (#10408). The plain
+ * remote-win path then applies the same ops without a new one.
+ */
+export const fieldPatchGroups = (
+  sides: FieldPatchSides,
+): ReturnType<typeof localWinningFieldGroups> | undefined => {
+  if (!isFieldPatchEligible(sides)) return undefined;
+  const groups = localWinningFieldGroups(sides);
+  return groups.length > 0 || sides.localOps.some(isSyncTimeSpentOp) ? groups : undefined;
 };
 
 /**

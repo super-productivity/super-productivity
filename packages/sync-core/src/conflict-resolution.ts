@@ -373,8 +373,8 @@ export const suggestConflictResolution = <TOperation extends Operation<string>>(
  * devices see "local" and "remote" swapped, so comparing timestamps alone makes
  * each keep the other's value and diverge permanently. Comparing the winning
  * clientIds instead — over the same unordered pair on both devices — makes them
- * converge. The client's field patch takes this winner's value for a field
- * both sides wrote (`synthesizeMergedChanges`). A genuine cross-device tie always has exactly one op at
+ * converge. The client's per-field resolution breaks a tie on one field the
+ * same way (`localWinningFieldGroups`). A genuine cross-device tie always has exactly one op at
  * the max timestamp per side (same-client ops on one entity are never
  * vector-clock-concurrent, so they never reach here as a conflict).
  */
