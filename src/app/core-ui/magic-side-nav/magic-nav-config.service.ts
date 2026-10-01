@@ -98,6 +98,11 @@ export class MagicNavConfigService {
   private readonly isSchedulerEnabled = computed(
     () => this._configService.appFeatures().isSchedulerEnabled,
   );
+  private readonly isAllTasksEnabled = computed(
+    // `?? true` matches DEFAULT_GLOBAL_CONFIG: state persisted before the All
+    // Tasks page existed has no such key, and the feature ships enabled.
+    () => this._configService.appFeatures().isAllTasksEnabled ?? true,
+  );
   private readonly isPlannerEnabled = computed(
     () => this._configService.appFeatures().isPlannerEnabled,
   );
@@ -411,6 +416,17 @@ export class MagicNavConfigService {
         icon: 'edit_calendar',
         route: '/planner',
         featureConfigKey: 'isPlannerEnabled',
+      });
+    }
+
+    if (this.isAllTasksEnabled()) {
+      items.push({
+        type: 'route',
+        id: 'all-tasks',
+        label: T.MH.ALL_TASKS,
+        icon: 'list_alt',
+        route: '/all-tasks',
+        featureConfigKey: 'isAllTasksEnabled',
       });
     }
 

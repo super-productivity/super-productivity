@@ -172,6 +172,7 @@
         "isSchedulerEnabled": true,
         "isPlannerEnabled": true,
         "isBoardsEnabled": true,
+        "isAllTasksEnabled": true,
         "isScheduleDayPanelEnabled": true,
         "isIssuesPanelEnabled": true,
         "isProjectNotesEnabled": true,

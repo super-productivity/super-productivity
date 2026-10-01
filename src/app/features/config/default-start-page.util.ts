@@ -41,6 +41,9 @@ export const getStartPageUrlPath = (
       return appFeatures.isSchedulerEnabled ? '/schedule' : todayUrl;
     case DefaultStartPage.Boards:
       return appFeatures.isBoardsEnabled ? '/boards' : todayUrl;
+    case DefaultStartPage.AllTasks:
+      // `?? true` matches DEFAULT_GLOBAL_CONFIG for pre-All-Tasks persisted state.
+      return (appFeatures.isAllTasksEnabled ?? true) ? '/all-tasks' : todayUrl;
     case DefaultStartPage.Today:
     default:
       return todayUrl;

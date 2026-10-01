@@ -100,6 +100,7 @@ export class TaskViewCustomizerService {
     Record<string, CustomizerContextState>
   >(LS.TASK_VIEW_CUSTOMIZER_BY_CONTEXT, {});
   private _currentContextKey: string | null = null;
+  private _contextKeyOverride: string | null = null;
 
   constructor() {
     this._initProjects();
@@ -110,12 +111,8 @@ export class TaskViewCustomizerService {
     this._workContextService.activeWorkContextTypeAndId$
       .pipe(takeUntilDestroyed())
       .subscribe(({ activeId, activeType }) => {
-        this._currentContextKey = `${activeType}:${activeId}`;
-        const stored = this._stateByContext[this._currentContextKey];
-        this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
-        this.selectedGroup.set(this._sanitizeGroupForContext(stored?.group, activeType));
-        this.selectedFilter.set(this._sanitizeFilter(stored?.filter));
-        this.collapsedGroupIds.set(stored?.collapsedGroupIds ?? []);
+        if (this._contextKeyOverride) return;
+        this._loadStateForContext(`${activeType}:${activeId}`, activeType);
       });
 
     effect(() => {
@@ -130,6 +127,33 @@ export class TaskViewCustomizerService {
       };
       lsSetJSON(LS.TASK_VIEW_CUSTOMIZER_BY_CONTEXT, this._stateByContext);
     });
+  }
+
+  /** Override the context key for pages like All Tasks that aren't tied to a work context. */
+  setContextKeyOverride(key: string | null): void {
+    this._contextKeyOverride = key;
+    if (key) {
+      this._loadStateForContext(key, null);
+    } else {
+      const activeType = this._workContextService.activeWorkContextType;
+      const activeId = this._workContextService.activeWorkContextId;
+      if (activeType && activeId) {
+        this._loadStateForContext(`${activeType}:${activeId}`, activeType);
+      }
+    }
+  }
+
+  /** Shared state-load for the constructor subscription and setContextKeyOverride (rev. п.7). */
+  private _loadStateForContext(
+    contextKey: string,
+    activeType: WorkContextType | null,
+  ): void {
+    this._currentContextKey = contextKey;
+    const stored = this._stateByContext[contextKey];
+    this.selectedSort.set(stored?.sort ?? DEFAULT_OPTIONS.sort);
+    this.selectedGroup.set(this._sanitizeGroupForContext(stored?.group, activeType));
+    this.selectedFilter.set(this._sanitizeFilter(stored?.filter));
+    this.collapsedGroupIds.set(stored?.collapsedGroupIds ?? []);
   }
 
   toggleGroupExpansion(groupId: string): void {
@@ -171,7 +195,7 @@ export class TaskViewCustomizerService {
 
   private _sanitizeGroupForContext(
     stored: GroupOption | undefined,
-    activeType: WorkContextType,
+    activeType: WorkContextType | null,
   ): GroupOption {
     if (!stored) return DEFAULT_OPTIONS.group;
     if (
@@ -209,6 +233,24 @@ export class TaskViewCustomizerService {
       toObservable(this.selectedFilter),
     ]).pipe(
       map(([tasks, sort, group, filter]) => {
+        // Multi-select project filter carries its ids in `projectIds`
+        // (rev. п.6); `preset` is null for it and the JSON-blob encoding is
+        // gone.
+        if (filter.type === FILTER_OPTION_TYPE.project && filter.projectIds) {
+          const ids = filter.projectIds;
+          if (ids.length === 0) {
+            return { result: { list: tasks }, isDefault: true };
+          }
+          return {
+            result: {
+              list: tasks.filter(
+                (task) => task.projectId && ids.includes(task.projectId),
+              ),
+            },
+            isDefault: false,
+          };
+        }
+
         const normalizedFilterVal = filter.preset?.trim();
         const filterValueToUse = normalizedFilterVal ?? '';
 
@@ -270,6 +312,9 @@ export class TaskViewCustomizerService {
         if (!tag) return [];
         return tasks.filter((task) => task.tagIds?.includes(tag.id));
       case FILTER_OPTION_TYPE.project:
+        // Multi-select carries ids in `filter.projectIds` and is handled in
+        // customizeUndoneTasks; this legacy path only serves the single-value
+        // (title) preset from before the All Tasks page existed.
         const project = this._allProjects.find((p) =>
           p.title.toLowerCase().includes(value.toLowerCase().trim()),
         );

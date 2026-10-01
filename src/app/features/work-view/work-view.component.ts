@@ -26,6 +26,7 @@ import { TakeABreakService } from '../take-a-break/take-a-break.service';
 import { ActivatedRoute } from '@angular/router';
 import {
   animationFrameScheduler,
+  asapScheduler,
   from,
   fromEvent,
   Observable,
@@ -46,7 +47,7 @@ import {
   CustomizedUndoneTasks,
   TaskViewCustomizerService,
 } from '../task-view-customizer/task-view-customizer.service';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
 import {
@@ -83,6 +84,7 @@ import {
   isLaterTodayEntryUpcoming,
 } from '../tasks/util/later-today-window';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
+import { mapEstimateRemainingFromTasks } from '../work-context/work-context.util';
 import { fastArrayCompare } from '../../util/fast-array-compare';
 import { CollapsibleComponent } from '../../ui/collapsible/collapsible.component';
 import { SnackService } from '../../core/snack/snack.service';
@@ -271,8 +273,17 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     { equal: fastArrayCompare },
   );
   undoneTasks = input.required<TaskWithSubTasks[]>();
+  // Rev. п.5: `toObservable` re-emits the input's initial value synchronously
+  // on construction; combined with the selected-task deselect effect
+  // downstream, that `[]` seed caused spurious deselects on slow context
+  // switches. `observeOn(asapScheduler)` moves that seed off the synchronous
+  // tick so construction can't deselect anything, while the first real value
+  // still arrives in the same microtask-queue flush (no visible flicker) and
+  // single-emission sources keep working.
   customizedUndoneTasks = toSignal(
-    this.customizerService.customizeUndoneTasks(this.workContextService.undoneTasks$),
+    this.customizerService.customizeUndoneTasks(
+      toObservable(this.undoneTasks).pipe(observeOn(asapScheduler)),
+    ),
     { initialValue: INITIAL_CUSTOMIZED_UNDONE_TASKS },
   );
   doneTasks = input.required<TaskWithSubTasks[]>();
@@ -284,14 +295,25 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   todayRemainingInProject = toSignal(this.workContextService.todayRemainingInProject$, {
     initialValue: 0,
   });
-  estimateRemainingToday = toSignal(this.workContextService.estimateRemainingToday$, {
-    initialValue: 0,
+  private _estimateRemainingFromService = toSignal(
+    this.workContextService.estimateRemainingToday$,
+    { initialValue: 0 },
+  );
+  // For contexts without a backing work-context service computation (All
+  // Tasks), reuse mapEstimateRemainingFromTasks: per-task clamping and
+  // subtask estimates handled the same way as every other list (rev. п.2).
+  estimateRemainingToday = computed(() => {
+    if (this.isDisableTodayPanels()) {
+      return mapEstimateRemainingFromTasks(this.customizedUndoneTasks().list);
+    }
+    return this._estimateRemainingFromService();
   });
   workingToday = toSignal(this.workContextService.workingToday$, { initialValue: 0 });
   breakTimeToday = toSignal(this.workContextService.breakTimeToday$, {
     initialValue: 0,
   });
   selectedTaskId = this.taskService.selectedTaskId;
+  isDisableTodayPanels = input<boolean>(false);
   isOnTodayList = toSignal(this.workContextService.isTodayList$, { initialValue: false });
   isDoneHidden = signal(!!localStorage.getItem(LS.DONE_TASKS_HIDDEN));
   isLaterTodayHidden = signal(!!localStorage.getItem(LS.LATER_TODAY_TASKS_HIDDEN));
@@ -373,7 +395,10 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   });
 
   isShowOverduePanel = computed(
-    () => this.isOnTodayList() && this.overdueTasks().length > 0,
+    () =>
+      !this.isDisableTodayPanels() &&
+      this.isOnTodayList() &&
+      this.overdueTasks().length > 0,
   );
 
   isShowTimeWorkedWithoutBreak: boolean = true;

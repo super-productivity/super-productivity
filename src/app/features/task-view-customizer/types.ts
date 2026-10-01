@@ -42,6 +42,13 @@ export enum GROUP_OPTION_TYPE {
 
 export interface FilterOption extends BaseOption<FILTER_OPTION_TYPE> {
   preset: FILTER_SCHEDULE | FILTER_TIME | FILTER_PRIORITY | string | null;
+  /**
+   * Multi-select project filter (All Tasks): the checked project ids. Typed
+   * instead of JSON-encoded inside `preset` so there is a single source of
+   * truth and no parse/stringify round-trips (rev. п.6). `preset` stays null
+   * for this filter type.
+   */
+  projectIds?: string[];
 }
 
 export enum FILTER_OPTION_TYPE {
