@@ -863,9 +863,10 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    hydrated (in v2, overwriting its snapshot with stale state). Before the
    first recorded clock (e.g. the first sync after upgrading) neither check
    runs: there is no baseline to judge by, a forced seq-0 download would show
-   a conflict dialog whenever local ops are pending, and a refused upload
-   could stay refused behind the rev pre-check. A replacement that lands in
-   that window goes unnoticed (known gap, #10258).
+   a conflict dialog whenever local ops are pending. The rev pre-check also
+   waits for a recorded clock, so that first sync reads the file once and
+   commits its clock. A replacement that lands before that first read is
+   adopted as the baseline and goes unnoticed (known gap, #10258).
    This optional metadata requires no schema bump: older readers ignore it,
    but older writers can omit it. Masked dominating replacements written by,
    or subsequently rewritten by, those clients remain a mixed-version gap;

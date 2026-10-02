@@ -34,10 +34,14 @@ const SEEDS_PER_VARIANT = 40;
 const STEPS = 40;
 /**
  * Seeds whose upgrade-restart keeps its recorded clock, because dropping it
- * would hit known gap #10258: without a recorded clock a device cannot judge a
- * snapshot base, so it misses a masked replacement instead of risking a
+ * still hits #10258. Gating the rev pre-check on a recorded clock does not
+ * cover a masked replacement that lands after a device's last read but before
+ * its first read after upgrading: that read adopts it as the baseline, so it is
+ * never hydrated (seed 32 traces to this window). Without a recorded clock a
+ * device cannot judge a snapshot base, and flagging instead would risk a
  * conflict dialog on every first sync after upgrading. Everything else in these
- * seeds still runs. Return them to the no-clock path once #10258 is fixed.
+ * seeds still runs; both still diverge with the gate (checked 2026-10). Return
+ * them to the no-clock path once #10258 is fully fixed.
  */
 const KEEP_CLOCK_ON_UPGRADE_SEEDS = [32];
 /**
@@ -402,7 +406,8 @@ for (const isUseSplitSyncFiles of [false, true]) {
         await as(a, () => download(a, () => 'remote'));
         // First start after upgrading: the rev is persisted, last-seen clocks are not.
         await as(a, () => restart(a, true));
-        // Unchanged rev: the Dropbox pre-check may skip this download.
+        // Unchanged rev: without a recorded clock the Dropbox pre-check must still
+        // read the file, so this download records the baseline.
         await as(a, () => download(a, () => 'remote'));
 
         // Another device's Keep local lands before a's upload, masked by a tail op.

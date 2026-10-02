@@ -3062,7 +3062,7 @@ export class FileBasedSyncAdapterService {
    * would overwrite its snapshot with stale state and mark it seen for good.
    * Skipped without a recorded clock (first sync after upgrading): no baseline
    * to judge by. The rev pre-check waits for a clock (#10258), so the first
-   * download records one before any upload.
+   * committed download after upgrading records one.
    */
   private _assertSnapshotBaseSeen(
     providerKey: string,
