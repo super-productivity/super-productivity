@@ -932,11 +932,11 @@ export class FileBasedSyncAdapterService {
 
     this._assertSnapshotBaseSeen(providerKey, currentData?.snapshotBaseClock);
 
-    // #10256: snapshots must include retained remote ops. A download only stages
-    // its baseline; migration probes do not apply it. After apply, use its cache
-    // (also .bak) or a matching non-empty rev. Never commit an upload-side read.
+    // #10256: only extend a file this client applied, even a snapshot-only seed. A
+    // download only stages its baseline; migration probes do not apply it. After
+    // apply, use its cache (also .bak) or a matching rev. Never commit an upload read.
     if (
-      currentData?.recentOps.length &&
+      currentData &&
       (this._pendingExpectedSyncVersions.has(providerKey) ||
         (!this._getCachedSyncData(providerKey) &&
           (!revToMatch || revToMatch !== this._lastSeenRevs.get(providerKey))))
