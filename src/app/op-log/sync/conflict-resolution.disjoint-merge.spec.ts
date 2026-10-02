@@ -15,10 +15,12 @@ import { buildEntityRegistry, ENTITY_REGISTRY } from '../core/entity-registry';
 import {
   ActionType,
   EntityConflict,
+  EntityType,
   extractActionPayload,
   OpType,
   Operation,
 } from '../core/operation.types';
+import { ENTITY_TYPES } from '@sp/shared-schema';
 import {
   compareVectorClocks,
   incrementVectorClock,
@@ -1689,6 +1691,55 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
         VectorClockComparison.GREATER_THAN,
       );
       expect(reemitted.timestamp).toBe(900);
+    });
+
+    // Decision 5a extended (#10393, #10448) reads a remote row's keys only for
+    // TASK, PROJECT, TAG and SIMPLE_COUNTER; NOTE stays out (decision 4).
+    it('reads a remote patch row per field only for TASK, PROJECT, TAG and SIMPLE_COUNTER (decision 5a)', async () => {
+      const admitted = ['TASK', 'PROJECT', 'TAG', 'SIMPLE_COUNTER'];
+      const notEntities = ['MIGRATION', 'RECOVERY', 'ALL'];
+      const payloadKeyFor = (type: EntityType): string =>
+        (
+          service as unknown as { _resolvePayloadKey: (t: EntityType) => string }
+        )._resolvePayloadKey(type);
+      mockStore.select.and.returnValue(of({ id: 'e-1', title: 'B title', isDone: true }));
+
+      for (const type of ENTITY_TYPES.filter((t) => !notEntities.includes(t))) {
+        mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.reset();
+        const local = op({
+          id: `l-${type}`,
+          clientId: 'A',
+          entityType: type,
+          entityId: 'e-1',
+          vectorClock: { A: 2 },
+          timestamp: 900,
+          payload: { [payloadKeyFor(type)]: { id: 'e-1', changes: { isDone: true } } },
+        });
+        const row = op({
+          id: `r-${type}`,
+          clientId: 'B',
+          actionType: `[${type}] LWW Update` as ActionType,
+          entityType: type,
+          entityId: 'e-1',
+          vectorClock: { A: 1, B: 3 },
+          timestamp: 2000,
+          payload: {
+            actionPayload: { id: 'e-1', title: 'B title' },
+            entityChanges: [],
+            lwwUpdateMode: 'patch',
+          },
+        });
+
+        await service.autoResolveConflictsLWW([
+          { ...conflictOf([local], [row], 'e-1'), entityType: type },
+        ]);
+
+        const reemitted = mergedOpArgs('e-1');
+        const isPatch =
+          (reemitted?.payload as { lwwUpdateMode?: string } | undefined)
+            ?.lwwUpdateMode === 'patch';
+        expect(isPatch).withContext(type).toBe(admitted.includes(type));
+      }
     });
 
     it('refuses the patch beside a remote time delta', async () => {
