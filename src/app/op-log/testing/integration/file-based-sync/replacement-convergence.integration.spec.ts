@@ -11,7 +11,7 @@ import {
 } from '../../../sync-providers/provider.interface';
 import { SyncProviderId } from '../../../sync-providers/provider.const';
 import { UploadRevToMatchMismatchAPIError } from '../../../core/errors/sync-errors';
-import { VectorClock } from '../../../core/operation.types';
+import { OperationLogEntry, VectorClock } from '../../../core/operation.types';
 import {
   compareVectorClocks,
   mergeVectorClocks,
@@ -81,6 +81,8 @@ for (const isUseSplitSyncFiles of [false, true]) {
       let harness: FileBasedSyncTestHarness;
       /** The op-log clock of the device whose action runs now (see `as`). */
       let activeDevice: Device | undefined;
+      /** The op-log's latest full-state op (a test sets one to model a restore). */
+      let latestFullStateOp: Partial<OperationLogEntry> | undefined;
 
       beforeAll(() => {
         setArgon2ParamsForTesting({ parallelism: 1, memorySize: 8, iterations: 1 });
@@ -97,7 +99,10 @@ for (const isUseSplitSyncFiles of [false, true]) {
           'OperationLogStoreService',
           ['getLatestFullStateOpEntry', 'getVectorClock'],
         );
-        opLogStoreSpy.getLatestFullStateOpEntry.and.resolveTo(undefined);
+        latestFullStateOp = undefined;
+        opLogStoreSpy.getLatestFullStateOpEntry.and.callFake(
+          async () => latestFullStateOp as OperationLogEntry | undefined,
+        );
         activeDevice = undefined;
         opLogStoreSpy.getVectorClock.and.callFake(async () =>
           activeDevice ? { ...activeDevice.clock } : null,
@@ -503,6 +508,37 @@ for (const isUseSplitSyncFiles of [false, true]) {
             a.id,
           )) as FileSnapshotOpDownloadResponse;
           expect(res.gapDetected).withContext('seen base, pending op').toBeFalsy();
+        });
+      });
+
+      it('does not flag a seen base after a backup restore reset the local clock (#10258)', async () => {
+        const a = await createDevice('dev-a');
+        const b = await createDevice('dev-b');
+        await as(a, async () => {
+          edit(a);
+          await download(a, () => 'remote');
+          await upload(a);
+        });
+        await as(b, async () => {
+          await download(b, () => 'remote');
+          edit(b);
+          await keepLocal(b);
+          edit(b);
+          await upload(b);
+        });
+        await as(a, () => download(a, () => 'remote'));
+        await as(a, () => restart(a, true));
+        // Backup restore / clean slate: a fresh client id and clock { newId: 1 },
+        // with the pending BACKUP_IMPORT about to overwrite the remote.
+        a.clock = { devARestored: 1 };
+        latestFullStateOp = { source: 'local' };
+        await as(a, async () => {
+          const since = await a.adapter.getLastServerSeq();
+          const res = (await a.adapter.downloadOps(
+            since,
+            a.id,
+          )) as FileSnapshotOpDownloadResponse;
+          expect(res.gapDetected).withContext('seen base, reset clock').toBeFalsy();
         });
       });
 

@@ -1,4 +1,4 @@
-import { VectorClock } from '../../core/operation.types';
+import { OperationLogEntry, VectorClock } from '../../core/operation.types';
 import { compareVectorClocks } from '../../../core/util/vector-clock';
 
 /** The fields of a downloaded sync/ops file that gap detection reads. */
@@ -39,6 +39,32 @@ export interface GapDetectionResult {
   /** The syncVersion regressed, but the causal state provably did not. */
   isCosmeticReset: boolean;
 }
+
+/** The op-log reads {@link getOpLogBaselineClock} needs. */
+export interface OpLogClockSource {
+  getVectorClock(): Promise<VectorClock | null>;
+  getLatestFullStateOpEntry(): Promise<OperationLogEntry | undefined>;
+}
+
+/**
+ * The op-log clock as the snapshot-base baseline while no file clock is recorded
+ * (first sync after upgrading, #10258); none on a seq-0 download or once one is.
+ * Also none while a local full-state op is unsynced: a backup restore or clean
+ * slate resets the clock to a fresh client id, so it no longer covers bases the
+ * device has loaded, and that op's upload replaces the remote anyway.
+ */
+export const getOpLogBaselineClock = async (
+  store: OpLogClockSource,
+  sinceSeq: number,
+  lastSeenClock: VectorClock | undefined,
+): Promise<VectorClock | undefined> => {
+  if (sinceSeq === 0 || lastSeenClock) return undefined;
+  const latestFullStateOp = await store.getLatestFullStateOpEntry();
+  if (latestFullStateOp?.source === 'local' && !latestFullStateOp.syncedAt) {
+    return undefined;
+  }
+  return (await store.getVectorClock()) ?? undefined;
+};
 
 /**
  * Whether a remote replacement's base clock is not covered by the last file

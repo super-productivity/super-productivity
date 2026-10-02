@@ -47,7 +47,11 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
 import { SnackService } from '../../../core/snack/snack.service';
 import { T } from '../../../t.const';
 import { mergeVectorClocks, compareVectorClocks } from '../../../core/util/vector-clock';
-import { detectDownloadGap, isSnapshotBaseUnseen } from './file-based-sync-gap.util';
+import {
+  detectDownloadGap,
+  getOpLogBaselineClock,
+  isSnapshotBaseUnseen,
+} from './file-based-sync-gap.util';
 import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.service';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
@@ -1183,13 +1187,14 @@ export class FileBasedSyncAdapterService {
       );
     }
 
+    const lastSeenClock = this._lastSeenVectorClocks.get(providerKey);
     const { needsGapDetection, reason, isCosmeticReset } = detectDownloadGap({
       remote: syncData,
       sinceSeq,
       excludeClient,
       previousExpectedVersion,
-      lastSeenClock: this._lastSeenVectorClocks.get(providerKey),
-      localClock: await this._getLocalClockWithoutBaseline(providerKey, sinceSeq),
+      lastSeenClock,
+      localClock: await getOpLogBaselineClock(this._opLogStore, sinceSeq, lastSeenClock),
       hasSnapshot: !!syncData.state,
     });
     if (isCosmeticReset) {
@@ -2636,13 +2641,14 @@ export class FileBasedSyncAdapterService {
     }
 
     // Gap detection on the ops file (shared with the single-file logic).
+    const lastSeenClock = this._lastSeenVectorClocks.get(providerKey);
     let { needsGapDetection } = detectDownloadGap({
       remote: opsFile,
       sinceSeq,
       excludeClient,
       previousExpectedVersion: this._expectedSyncVersions.get(providerKey) ?? 0,
-      lastSeenClock: this._lastSeenVectorClocks.get(providerKey),
-      localClock: await this._getLocalClockWithoutBaseline(providerKey, sinceSeq),
+      lastSeenClock,
+      localClock: await getOpLogBaselineClock(this._opLogStore, sinceSeq, lastSeenClock),
       hasSnapshot: true,
     });
 
@@ -3068,15 +3074,6 @@ export class FileBasedSyncAdapterService {
           'loaded. Next sync cycle will download it before uploading.',
       );
     }
-  }
-
-  /** The op-log clock as the snapshot-base baseline until a file clock is recorded (#10258). */
-  private async _getLocalClockWithoutBaseline(
-    providerKey: string,
-    sinceSeq: number,
-  ): Promise<VectorClock | undefined> {
-    if (sinceSeq === 0 || this._lastSeenVectorClocks.has(providerKey)) return undefined;
-    return (await this._opLogStore.getVectorClock()) ?? undefined;
   }
 
   /**
