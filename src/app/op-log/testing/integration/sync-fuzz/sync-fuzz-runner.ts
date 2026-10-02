@@ -1118,6 +1118,11 @@ export const checkPreservation = (
  *   (sync-core's planner), and its snapshot can carry any value its device
  *   held: a write of that side or in its causal past accounts for it.
  *
+ * This is a stricter model of the shapes the fuzz covers, not an exact model
+ * of production: crossings are judged pairwise from intents, and a remote
+ * restore or LWW `'replace'` row is approximated (see `WHOLE_ENTITY_INTENTS`
+ * and `Ledger.crossing`).
+ *
  * Two documented residuals still stamp fields later than they were written
  * (superseded re-emits and `_reemitSurvivingLocalFields`, see "What it
  * leaves" in lww-field-level-resolution.md). An older value one of them
