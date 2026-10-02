@@ -290,7 +290,12 @@ const runCrossing = async (
       for (let restart = 0; restart < 2; restart++) {
         if (restart) await released.page.reload();
         await released.page.goto('/#/project/INBOX_PROJECT/tasks');
-        await expect(getTaskElement(released, expected.title).first()).toBeVisible();
+        const task = getTaskElement(released, expected.title).first();
+        await expect(task).toBeVisible();
+        // Its notes button is rendered only for a task with notes.
+        await expect(task.locator('.show-additional-info-btn')).toHaveCount(
+          expected.notes ? 1 : 0,
+        );
       }
     }
 
@@ -329,7 +334,8 @@ test.describe('@supersync remote winner beside a local-win snapshot of its task'
 
 // Supply the untouched released web assets (COMPAT_OLD_ASSETS, see
 // e2e/README.md). The fix changes only the values of C's replace row, a shape
-// v19.1.0 already applies; this checks that a released device takes them.
+// v19.1.0 already applies; this checks that a released device takes them
+// (the title, and in the notes direction whether the task has notes).
 test.describe('@supersync released receiver of a local-win snapshot with remote-winner fields', () => {
   test.describe.configure({ mode: 'serial' });
   const oldAssets = process.env.COMPAT_OLD_ASSETS;
