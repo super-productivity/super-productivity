@@ -11,7 +11,11 @@ import { SnackService } from '../../core/snack/snack.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { OperationLogEffects } from '../capture/operation-log.effects';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
-import { buildEntityRegistry, ENTITY_REGISTRY } from '../core/entity-registry';
+import {
+  buildEntityRegistry,
+  ENTITY_REGISTRY,
+  getPayloadKey,
+} from '../core/entity-registry';
 import {
   ActionType,
   EntityConflict,
@@ -1699,9 +1703,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       const admitted = ['TASK', 'PROJECT', 'TAG', 'SIMPLE_COUNTER'];
       const notEntities = ['MIGRATION', 'RECOVERY', 'ALL'];
       const payloadKeyFor = (type: EntityType): string =>
-        (
-          service as unknown as { _resolvePayloadKey: (t: EntityType) => string }
-        )._resolvePayloadKey(type);
+        getPayloadKey(type) ?? type.toLowerCase();
       mockStore.select.and.returnValue(of({ id: 'e-1', title: 'B title', isDone: true }));
 
       for (const type of ENTITY_TYPES.filter((t) => !notEntities.includes(t))) {
