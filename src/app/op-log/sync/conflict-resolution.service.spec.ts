@@ -7684,6 +7684,61 @@ describe('ConflictResolutionService', () => {
       expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
     });
 
+    // #10378: tracking an unscheduled task emits an opaque `planTasksForToday`
+    // beside its delta. Once both are synced, a concurrent delta from another
+    // device must still commute; a local LWW win would emit a snapshot whose
+    // clock claims the remote delta without its time.
+    describe('beside a synced auto-plan (#10378)', () => {
+      const deltaOp = (id: string, clientId: string, clock: VectorClock): Operation => ({
+        ...updateOp({ id, clientId, vectorClock: clock, timestamp: 1000, changes: {} }),
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        payload: {
+          actionPayload: { taskId: 'task-1', date: '2024-01-15', duration: 2000 },
+          entityChanges: [],
+        },
+      });
+      const planOp = (id: string, clientId: string, clock: VectorClock): Operation => ({
+        ...updateOp({ id, clientId, vectorClock: clock, timestamp: 3000, changes: {} }),
+        actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+        payload: {
+          actionPayload: { taskIds: ['task-1'], today: '2024-01-15' },
+          entityChanges: [],
+        },
+      });
+
+      it('applies a remote delta as-is against a retained [auto-plan, delta] side', async () => {
+        const result = await detect(deltaOp('op-time-r', 'clientB', { clientB: 1 }), [
+          planOp('op-plan-l', 'clientA', { clientA: 1 }),
+          deltaOp('op-time-l', 'clientA', { clientA: 2 }),
+        ]);
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it('applies a remote auto-plan as-is against a retained delta', async () => {
+        const result = await detect(planOp('op-plan-r', 'clientB', { clientB: 1 }), [
+          deltaOp('op-time-l', 'clientA', { clientA: 1 }),
+        ]);
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it('still routes a remote delta into a conflict against a retained absolute time write', async () => {
+        const result = await detect(deltaOp('op-time-r', 'clientB', { clientB: 1 }), [
+          planOp('op-plan-l', 'clientA', { clientA: 1 }),
+          updateOp({
+            id: 'op-time-edit',
+            clientId: 'clientA',
+            vectorClock: { clientA: 2 },
+            timestamp: 3500,
+            changes: { timeSpentOnDay: { ['2024-01-15']: 5000 } },
+          }),
+        ]);
+
+        expect(result.conflicts.length).toBe(1);
+      });
+    });
+
     // Real captured shapes of a syncTimeSpent op (#10146): a non-adapter
     // actionPayload plus the entityChanges the PRODUCTION extractor declares for
     // a direct write, or [] for a deferred write. Both must classify alike.
