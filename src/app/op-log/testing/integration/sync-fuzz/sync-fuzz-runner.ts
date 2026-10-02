@@ -7,7 +7,11 @@ import { Task } from '../../../../features/tasks/task.model';
 import { classifyOpAgainstSyncImport } from '@sp/sync-core';
 import { compareVectorClocks } from '../../../../core/util/vector-clock';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
-import { FULL_STATE_OP_TYPES, VectorClock } from '../../../core/operation.types';
+import {
+  FULL_STATE_OP_TYPES,
+  isLwwUpdatePayload,
+  VectorClock,
+} from '../../../core/operation.types';
 import {
   AppStateSnapshot,
   StateSnapshotService,
@@ -32,6 +36,7 @@ import {
   FuzzEvent,
   FuzzEventKind,
   ImportDialogAnswer,
+  RestampingResidual,
   SyncFuzzHarness,
 } from './sync-fuzz-harness';
 
@@ -149,12 +154,23 @@ interface LedgerWrite {
 
 /**
  * Intents whose ops always take a whole-entity conflict path, so a crossing
- * with one can carry any value its winning side held: habit counts are
- * opaque (decision 6 of docs/sync-and-op-log/lww-field-level-resolution.md),
- * and no field patch reads a delete, archive or restore (an archive also wins
- * over a concurrent edit, by sync-core's planner). A `track` is whole-entity
- * when it plans the task for today (`opaque`, decision 6); its plain delta
- * refuses the patch only from the remote side (see `crossing`).
+ * with one can carry any value its winning side held. Each mirrors a refusal
+ * in production:
+ * - `countHabit`: an opaque op (decision 6 of
+ *   docs/sync-and-op-log/lww-field-level-resolution.md): `sideNonNoiseKeys`
+ *   returns undefined for it, so `isFieldPatchEligible` refuses;
+ * - `deleteTask`: a DELETE refuses in `isFieldPatchEligible`, and its plan is
+ *   a whole-entity win (`ConflictResolutionService._isWholeEntityWinPlan`);
+ * - `archiveTask`: a multi-entity op (`isFieldPatchEligible`), and an archive
+ *   wins over a concurrent edit by sync-core's planner (`_isWholeEntityWinPlan`);
+ * - `restoreTask`: carries the flat archived task, not `{ id, changes }`, so a
+ *   local one refuses (`isChangesShapedOp` in `isFieldPatchEligible`). A
+ *   remote one is read per field but writes every field at its own time, as
+ *   a snapshot does; the side rule here differs only where the other side
+ *   has a later intent than the restore (kept as before, not seen in fuzz).
+ * A `track` is whole-entity when it plans the task for today (`opaque`,
+ * decision 6); its plain delta refuses the patch only from the remote side
+ * (see `crossing`).
  */
 const WHOLE_ENTITY_INTENTS: ReadonlySet<Intent[0]> = new Set([
   'countHabit',
@@ -265,9 +281,11 @@ export class Ledger {
    * that uploads later resolves, with the intents it had pending together
    * (one upload) against the other device's intents it has not seen and that
    * were uploaded before. `whole` says the conflict takes a whole-entity
-   * path: an opaque or whole-entity intent on either side, or a plain time
-   * delta on the remote side, which refuses the field patch (the design
-   * note's "Time" rule). The model takes one other device at a time; the
+   * path: an opaque or whole-entity intent on either side
+   * (`WHOLE_ENTITY_INTENTS`), or a plain time delta on the remote side, which
+   * refuses the field patch (`remoteOps.some(isSyncTimeSpentOp)` in
+   * `isFieldPatchEligible`, the design note's "Time" rule). Otherwise both
+   * sides are readable and the conflict resolves per field. The model takes one other device at a time; the
    * app's remote side is everything it downloads for the entity, so a third
    * device's remote delta in the same download is not seen here. And only
    * the later uploader resolves, as on SuperSync; on a file-based provider
@@ -327,6 +345,41 @@ const WRITTEN_FIELDS: Readonly<Record<string, readonly string[]>> = {
   note: ['content', 'isPinnedToToday', 'isLock'],
   habit: ['title', 'isEnabled'],
 };
+
+/**
+ * A field value that a residual row on the server carried at the row's
+ * time (`SyncFuzzHarness.restampedRows`), keyed like the ledger.
+ */
+export interface RestampedWrite {
+  key: string;
+  value: unknown;
+  time: number;
+  clientId: string;
+  residual: RestampingResidual;
+}
+
+const LEDGER_TYPES: Readonly<Record<string, string>> = {
+  TASK: 'task',
+  NOTE: 'note',
+  SIMPLE_COUNTER: 'habit',
+};
+
+const restampedWrites = (harness: SyncFuzzHarness): RestampedWrite[] =>
+  harness.server.rows.flatMap(({ op }) => {
+    const residual = harness.restampedRows.get(op.id);
+    const type = LEDGER_TYPES[op.entityType];
+    const payload: unknown = op.payload;
+    if (!residual || !type || !op.entityId || !isLwwUpdatePayload(payload)) return [];
+    const values: Record<string, unknown> = { ...payload.actionPayload };
+    for (const field of payload.clearedFields ?? []) values[field] = undefined;
+    return Object.entries(values).map(([field, value]) => ({
+      key: `${type}:${op.entityId}|${field}`,
+      value,
+      time: op.timestamp,
+      clientId: op.clientId,
+      residual,
+    }));
+  });
 
 const lastReplacement = (harness: SyncFuzzHarness): Replacement | undefined => {
   const row = [...harness.server.rows]
@@ -788,6 +841,7 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
     ),
     replacement,
     fail,
+    restampedWrites(harness),
   );
 
   // Oracle: a restart (hydration from the device's own database) keeps state.
@@ -965,6 +1019,7 @@ export const checkPreservation = (
   ledger: Ledger,
   replacement: Replacement | undefined,
   fail: (signature: string, detail: string) => void,
+  restamped: readonly RestampedWrite[] = [],
 ): void => {
   const state = snapshot as unknown as CheckedState;
   const tasks = state.task.entities;
@@ -1064,7 +1119,15 @@ export const checkPreservation = (
         `${entity}.${field}: writes ${shortJson(values)}, converged ${shortJson(actual)}`,
       );
     } else {
-      checkLatestWrite(ledger, entity, field, writes, actual, report);
+      checkLatestWrite(
+        ledger,
+        entity,
+        field,
+        writes,
+        actual,
+        restamped.filter((w) => w.key === key),
+        report,
+      );
     }
   }
 
@@ -1084,26 +1147,31 @@ export const checkPreservation = (
 /**
  * Per-field last-writer-wins across devices: a field that several intents
  * wrote converges on the value of the one with the latest own edit time
- * (timestamp, then clientId, as sync-core's planner breaks ties). A field
- * patch or LWW resolution is meant to give exactly that; #10422 shows a
- * remote win's patch that re-sends the loser's older value at the winner's
- * time and beats a third device's newer edit.
+ * (timestamp, then clientId, as sync-core's planner breaks ties).
  *
  * The latest write may lose only a conflict that LWW lets it lose. For every
  * intent of another device on the entity that is concurrent with it, the two
- * meet in one conflict (`Ledger.crossing`), and each side wins by its latest
- * intent (design A, "Overlap"). Where the other side wins:
- * - through a field patch, a field both sides wrote takes the winning side's
- *   value, so a write of that side with the converged value accounts for it;
- * - on a whole-entity path, the winning side's snapshot can carry any value
- *   its device held: the conflict accounts for any value.
- * Where the latest write's side wins every such conflict, its value must
- * survive.
+ * meet in one conflict (`Ledger.crossing`):
+ * - through the field patch (both sides readable), each field goes to the
+ *   side whose latest write of THAT field is newer (`localWinningFieldGroups`
+ *   in conflict-field-patch.util.ts, #10422). The latest write is the newest
+ *   write of its field on either side, so it wins every such conflict: none
+ *   accounts for another value, whatever else the other side wrote later;
+ * - on a whole-entity path (`crossing`'s `whole`, the shapes
+ *   `isFieldPatchEligible` refuses), the side with the latest intent wins
+ *   (sync-core's planner), and its snapshot can carry any value its device
+ *   held: a write of that side or in its causal past accounts for it.
+ *
+ * An older value that a documented residual row carried at a time it was
+ * not written is reported apart, by producer (`restamped-<residual>`, see
+ * `SyncFuzzHarness.restampedRows`), when that row's time beats the latest
+ * write. Main-path rows are never excused that way.
  *
  * Out of scope, by design: NOTE fields, which stay on whole-entity LWW
  * (decision 4 of docs/sync-and-op-log/lww-field-level-resolution.md), and
  * habit counts (`countOnDay`), which are opaque (decision 6). A value no
- * intent wrote is `field-unwritten`'s, not this check's.
+ * intent wrote is `field-unwritten`'s, not this check's. Pending local LWW
+ * rows (re-sends, whole-entity) are not in the ledger, which models intents.
  */
 const checkLatestWrite = (
   ledger: Ledger,
@@ -1111,6 +1179,7 @@ const checkLatestWrite = (
   field: string,
   writes: readonly LedgerWrite[],
   actual: unknown,
+  restamped: readonly RestampedWrite[],
   fail: (signature: string, detail: string) => void,
 ): void => {
   const type = entity.split(':')[0];
@@ -1122,20 +1191,25 @@ const checkLatestWrite = (
       return false;
     }
     const { aSide, bSide, whole } = ledger.crossing(entity, latest.entry, other);
-    if (!isLaterWrite(latestOf(bSide), latestOf(aSide))) return false;
-    // A patch carries the winning side's own writes; a whole-entity snapshot
-    // what its device held: its side's writes and their causal past.
+    if (!whole || !isLaterWrite(latestOf(bSide), latestOf(aSide))) return false;
+    // A whole-entity snapshot carries what its device held: its side's writes
+    // and their causal past.
     const winner = latestOf(bSide);
     return writes.some(
       (w) =>
         Object.is(w.value, actual) &&
-        (bSide.includes(w.entry) || (whole && isCausalPastOf(w.entry, winner))),
+        (bSide.includes(w.entry) || isCausalPastOf(w.entry, winner)),
     );
   });
   if (accounted) return;
-  fail(
-    `older-write-won:${type}.${field.split('.')[0]}`,
+  const detail =
     `${entity}.${field}: latest write ${shortJson(latest.value)} by ${latest.entry.device}, ` +
-      `converged ${shortJson(actual)}`,
+    `converged ${shortJson(actual)}`;
+  const residual = restamped.find(
+    (w) => Object.is(w.value, actual) && isLaterWrite(w, latest.entry),
+  );
+  fail(
+    `${residual ? `restamped-${residual.residual}` : 'older-write-won'}:${type}.${field.split('.')[0]}`,
+    residual ? `${detail}, carried by a ${residual.residual} row` : detail,
   );
 };

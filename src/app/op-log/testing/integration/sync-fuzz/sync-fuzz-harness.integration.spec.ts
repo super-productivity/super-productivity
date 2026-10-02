@@ -265,6 +265,20 @@ describe('SyncFuzzHarness: negative control', () => {
       .toContain('older-write-won:task.notes');
   }, 60_000);
 
+  it('the oracles hold a field to its own latest write, not its side’s (#10422)', async () => {
+    // A's notes stay pending while C writes newer notes and uploads; A then
+    // renames and uploads. A's side has the latest intent, but C's notes win
+    // per field, as the field patch resolves them.
+    const steps: FuzzStep[] = [
+      { d: 'A', a: ['editTaskNotes', 't1', 'A notes'] },
+      { d: 'C', a: ['editTaskNotes', 't1', 'C notes'], s: 1 },
+      { d: 'A', a: ['renameTask', 't1', 'A title'], s: 1 },
+    ];
+    const { failures } = await runFuzz({ steps });
+
+    expect(failures).withContext(JSON.stringify(failures)).toEqual([]);
+  }, 60_000);
+
   /**
    * The pinned kept stop (a Today note reorder crossing an unpin): C, the
    * unpinning device, stops at step 6 and answers the whole-dataset dialog.

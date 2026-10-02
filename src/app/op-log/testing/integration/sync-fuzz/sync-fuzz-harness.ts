@@ -93,6 +93,7 @@ import { OperationCaptureService } from '../../../capture/operation-capture.serv
 import { OperationLogEffects } from '../../../capture/operation-log.effects';
 import { UnsupportedMultiEntityConflictError } from '../../../core/errors/sync-errors';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../../core/operation-log.const';
+import { Operation } from '../../../core/operation.types';
 import { PersistentAction } from '../../../core/persistent-action.interface';
 import {
   DB_VERSION,
@@ -108,6 +109,7 @@ import { OperationLogCompactionService } from '../../../persistence/operation-lo
 import { OperationLogHydratorService } from '../../../persistence/operation-log-hydrator.service';
 import { OperationLogStoreService } from '../../../persistence/operation-log-store.service';
 import { TabSeqFrontierService } from '../../../persistence/tab-seq-frontier.service';
+import { ConflictResolutionService } from '../../../sync/conflict-resolution.service';
 import { ImmediateUploadService } from '../../../sync/immediate-upload.service';
 import { OperationLogDownloadService } from '../../../sync/operation-log-download.service';
 import { OperationLogSyncService } from '../../../sync/operation-log-sync.service';
@@ -115,6 +117,7 @@ import { OperationWriteFlushService } from '../../../sync/operation-write-flush.
 import { RemoteOpsProcessingService } from '../../../sync/remote-ops-processing.service';
 import { RejectedOpsHandlerService } from '../../../sync/rejected-ops-handler.service';
 import { ServerMigrationService } from '../../../sync/server-migration.service';
+import { SupersededOperationResolverService } from '../../../sync/superseded-operation-resolver.service';
 import { SyncSessionValidationService } from '../../../sync/sync-session-validation.service';
 import { countTransientRejections } from '../../../sync/upload-outcome.util';
 import { SyncProviderManager } from '../../../sync-providers/provider-manager.service';
@@ -437,6 +440,9 @@ const recordingDialog = (onOpen: (name: string) => unknown): Partial<MatDialog> 
  */
 export type ImportDialogAnswer = 'USE_LOCAL' | 'USE_REMOTE';
 
+/** A documented residual that stamps fields later than they were written. */
+export type RestampingResidual = 'superseded' | 'surviving';
+
 export class SyncFuzzHarness {
   /** Bumped by every new harness: an older one must no longer touch TestBed. */
   private static _generation = 0;
@@ -470,6 +476,19 @@ export class SyncFuzzHarness {
    * vector-clock counter. The runner reads and clears it after every sync.
    */
   useRemoteDiscards?: { clientId: string; counter: number }[];
+  /**
+   * The LWW rows built by the two documented residuals that stamp fields at
+   * a time they were not written (lww-field-level-resolution.md, "What it
+   * leaves" and "A later round"), by op id: a re-emitted superseded group at
+   * the latest timestamp of its ops (`SupersededOperationResolverService`),
+   * and surviving local fields at the latest local timestamp
+   * (`ConflictResolutionService._reemitSurvivingLocalFields`). The
+   * latest-write oracle counts an older value one of them carried apart, by
+   * producer, so a main-path row that does the same is not excused. A
+   * superseded re-emit of a rejected row keeps that row's attribution
+   * (`_recordRestampedRows`).
+   */
+  readonly restampedRows = new Map<string, RestampingResidual>();
   step = 0;
   private _current?: FuzzDevice;
   private readonly _clock: FuzzClock;
@@ -685,6 +704,7 @@ export class SyncFuzzHarness {
       'compactIfBloated',
     );
     this._recordUseRemoteDiscards();
+    this._recordRestampedRows();
     // Every device starts on the fuzz day, as setStartOfNextDayDiffOnLoad
     // sets it after loadAllData; the store's initial todayStr is the real
     // date when the bundle loaded.
@@ -843,6 +863,75 @@ export class SyncFuzzHarness {
 
   state(): Promise<Record<string, unknown>> {
     return firstValueFrom(TestBed.inject(Store)) as Promise<Record<string, unknown>>;
+  }
+
+  /**
+   * Records the rows `createLWWUpdateOp` builds while a residual producer
+   * runs (see `restampedRows`). Devices sync one at a time and each producer
+   * is awaited by its sync, so no other row is built inside that window.
+   *
+   * A superseded re-emit takes the latest timestamp of the ops it replaces.
+   * When that op is itself a row (a rejected resolution row), the re-emit
+   * only carries the row's stamp on: it keeps that row's attribution, so a
+   * stamp a main-path or local-win row chose is not excused as superseded.
+   */
+  private _recordRestampedRows(): void {
+    type Method = (...a: unknown[]) => unknown;
+    type Methods = Record<string, Method>;
+    const conflicts = TestBed.inject(ConflictResolutionService) as unknown as Methods;
+    const superseded = TestBed.inject(
+      SupersededOperationResolverService,
+    ) as unknown as Methods;
+    const wrap = (
+      instance: Methods,
+      method: string,
+      wrapper: (original: Method) => Method,
+    ): void => {
+      if (typeof instance[method] !== 'function') {
+        throw new Error(`SyncFuzz: ${instance.constructor.name}.${method} is gone`);
+      }
+      instance[method] = wrapper(instance[method].bind(instance));
+    };
+    /** Every row built, so a superseded re-emit of one can tell it apart. */
+    const builtRows = new Set<string>();
+    let producer: RestampingResidual | undefined;
+    let supersededInput: readonly { op: Operation }[] = [];
+    wrap(conflicts, 'createLWWUpdateOp', (original) => (...args) => {
+      const op = original(...args) as Operation;
+      builtRows.add(op.id);
+      if (producer === 'surviving') this.restampedRows.set(op.id, producer);
+      if (producer === 'superseded') {
+        const stampSource = supersededInput.find(
+          (input) =>
+            input.op.entityType === op.entityType &&
+            input.op.entityId === op.entityId &&
+            input.op.timestamp === op.timestamp &&
+            builtRows.has(input.op.id),
+        );
+        const inherited = stampSource
+          ? this.restampedRows.get(stampSource.op.id)
+          : 'superseded';
+        if (inherited) this.restampedRows.set(op.id, inherited);
+      }
+      return op;
+    });
+    const within =
+      (residual: RestampingResidual): ((original: Method) => Method) =>
+      (original) =>
+      async (...args) => {
+        const outer = { producer, supersededInput };
+        producer = residual;
+        if (residual === 'superseded') {
+          supersededInput = args[0] as readonly { op: Operation }[];
+        }
+        try {
+          return await original(...args);
+        } finally {
+          ({ producer, supersededInput } = outer);
+        }
+      };
+    wrap(conflicts, '_reemitSurvivingLocalFields', within('surviving'));
+    wrap(superseded, 'resolveSupersededLocalOps', within('superseded'));
   }
 
   /**

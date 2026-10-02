@@ -1,7 +1,13 @@
 import { AppStateSnapshot } from '../../../backup/state-snapshot.service';
 import { VectorClock } from '../../../core/operation.types';
 import { fuzzDay, Intent } from './sync-fuzz-actions';
-import { checkPreservation, Ledger, LedgerEntry, Replacement } from './sync-fuzz-runner';
+import {
+  checkPreservation,
+  Ledger,
+  LedgerEntry,
+  Replacement,
+  RestampedWrite,
+} from './sync-fuzz-runner';
 
 /**
  * Negative controls for the preservation oracles on hand-built ledgers and
@@ -108,9 +114,42 @@ describe('sync fuzz preservation oracles', () => {
       ).toEqual(['older-write-won:task.notes']);
     });
 
-    it('accepts an older write whose side wins by a later edit of another field', () => {
+    it('reports an older write whose side has a later edit of another field', () => {
       // A's notes and rename are pending together and upload after C's
-      // notes: A resolves, its side wins by the rename and patches its notes.
+      // notes: A resolves per field (#10422). C's notes are the newer write
+      // of notes, so they win; A re-sends only its title. A's later rename
+      // does not make its older notes win.
+      const notesA = entry('A', { A: 1 }, ['editTaskNotes', 't1', 'A notes'], {
+        uploadedAt: 100,
+      });
+      const notesC = entry('C', { C: 1 }, ['editTaskNotes', 't1', 'C notes']);
+      const rename = entry('A', { A: 2 }, ['renameTask', 't1', 'A title'], {
+        uploadedAt: 100,
+      });
+      const entries = [notesA, notesC, rename];
+      expect(
+        signatures(
+          { tasks: { t1: { id: 't1', notes: 'C notes', title: 'A title' } } },
+          entries,
+        ),
+      ).toEqual([]);
+      const olderNotes = {
+        tasks: { t1: { id: 't1', notes: 'A notes', title: 'A title' } },
+      };
+      expect(signatures(olderNotes, entries)).toEqual(['older-write-won:task.notes']);
+      // ...nor when A's notes uploaded before C's: that crossing was resolved
+      // earlier, and C won it (review of #10428, finding 2: the #10421 class).
+      const earlyNotesA = entry('A', { A: 1 }, ['editTaskNotes', 't1', 'A notes']);
+      const laterNotesC = entry('C', { C: 1 }, ['editTaskNotes', 't1', 'C notes']);
+      const laterRename = entry('A', { A: 2 }, ['renameTask', 't1', 'A title']);
+      expect(signatures(olderNotes, [earlyNotesA, laterNotesC, laterRename])).toEqual([
+        'older-write-won:task.notes',
+      ]);
+    });
+
+    describe('a documented residual row', () => {
+      // The shape above, where a residual row (see
+      // SyncFuzzHarness.restampedRows) carried A's notes at A's rename time.
       const notesA = entry('A', { A: 1 }, ['editTaskNotes', 't1', 'A notes'], {
         uploadedAt: 100,
       });
@@ -121,16 +160,38 @@ describe('sync fuzz preservation oracles', () => {
       const converged = {
         tasks: { t1: { id: 't1', notes: 'A notes', title: 'A title' } },
       };
-      expect(signatures(converged, [notesA, notesC, rename])).toEqual([]);
-      // ...but not when A's notes uploaded before C's: that crossing was
-      // resolved earlier, and C won it. The later rename does not write notes
-      // (review of #10428, finding 2: the #10421 class).
-      const earlyNotesA = entry('A', { A: 1 }, ['editTaskNotes', 't1', 'A notes']);
-      const laterNotesC = entry('C', { C: 1 }, ['editTaskNotes', 't1', 'C notes']);
-      const laterRename = entry('A', { A: 2 }, ['renameTask', 't1', 'A title']);
-      expect(signatures(converged, [earlyNotesA, laterNotesC, laterRename])).toEqual([
-        'older-write-won:task.notes',
-      ]);
+      const row = (at: number, value = 'A notes'): RestampedWrite => ({
+        key: 'task:t1|notes',
+        value,
+        time: at,
+        clientId: 'fuzzDevA',
+        residual: 'superseded',
+      });
+      const withRows = (rows: RestampedWrite[]): string[] => {
+        const found: string[] = [];
+        checkPreservation(
+          snapshot(converged),
+          new Ledger([notesA, notesC, rename]),
+          undefined,
+          (s) => found.push(s),
+          rows,
+        );
+        return found;
+      };
+
+      it('that stamped the older value later than the latest write is counted apart', () => {
+        expect(withRows([row(rename.time)])).toEqual(['restamped-superseded:task.notes']);
+        expect(withRows([{ ...row(rename.time), residual: 'surviving' }])).toEqual([
+          'restamped-surviving:task.notes',
+        ]);
+      });
+
+      it('does not excuse a row older than the latest write, or of another value', () => {
+        expect(withRows([row(notesA.time)])).toEqual(['older-write-won:task.notes']);
+        expect(withRows([row(rename.time, 'other')])).toEqual([
+          'older-write-won:task.notes',
+        ]);
+      });
     });
 
     it('reports a loss when the losing, resolving device only tracked locally', () => {

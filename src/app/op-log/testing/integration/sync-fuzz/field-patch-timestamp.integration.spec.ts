@@ -102,4 +102,53 @@ describe('field patch timestamps (#10422)', () => {
       expect(await taskOn(a)).toEqual(expected);
     }, 60_000);
   }
+
+  it('a side with a later rename keeps the other device’s newer notes', async () => {
+    // Two devices: A writes notes and leaves them pending, C writes newer
+    // notes and uploads, A renames and uploads after C. A's side has the
+    // latest intent (the rename), but C's notes are the newer write of notes:
+    // A resolves per field and re-sends only its title.
+    await harness.as(a, () =>
+      harness.dispatch(
+        TaskSharedActions.addTask({
+          task: {
+            ...DEFAULT_TASK,
+            id: 't1',
+            title: 'task',
+            projectId: 'INBOX_PROJECT',
+            created: Date.now(),
+          },
+          workContextId: 'INBOX_PROJECT',
+          workContextType: WorkContextType.PROJECT,
+          isAddToBacklog: false,
+          isAddToBottom: false,
+        }),
+      ),
+    );
+    for (const device of [a, c]) {
+      expect(await harness.sync(device)).toBe(true);
+    }
+
+    harness.tick();
+    await harness.as(a, () => updateTask({ notes: 'A notes' }));
+    harness.tick();
+    await harness.as(c, () => updateTask({ notes: 'C notes (newer)' }));
+    expect(await harness.sync(c)).toBe(true);
+    harness.tick();
+    await harness.as(a, () => updateTask({ title: 'A title' }));
+    expect(await harness.sync(a)).toBe(true);
+    for (let round = 0; round < 2; round++) {
+      for (const device of [a, c]) {
+        expect(await harness.sync(device)).toBe(true);
+      }
+    }
+
+    const expected = { title: 'A title', notes: 'C notes (newer)' };
+    expect({ A: await taskOn(a), C: await taskOn(c) }).toEqual({
+      A: expected,
+      C: expected,
+    });
+    await harness.restart(a);
+    expect(await taskOn(a)).toEqual(expected);
+  }, 60_000);
 });
