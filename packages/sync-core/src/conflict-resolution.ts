@@ -406,11 +406,6 @@ export const planLwwConflictResolutions = <
   const entitiesWithLocalArchive = new Set<string>();
   const entitiesWithRemoteArchive = new Set<string>();
 
-  const entitySides = new Map<
-    string,
-    { localOps: TOperation[]; remoteOps: TOperation[] }
-  >();
-
   for (const conflict of conflicts) {
     const entityKey = toEntityKey(conflict.entityType, conflict.entityId);
     if (conflict.localOps.some(options.isArchiveAction)) {
@@ -419,11 +414,6 @@ export const planLwwConflictResolutions = <
     if (conflict.remoteOps.some(options.isArchiveAction)) {
       entitiesWithRemoteArchive.add(entityKey);
     }
-    const sides = entitySides.get(entityKey);
-    entitySides.set(entityKey, {
-      localOps: [...(sides?.localOps ?? []), ...conflict.localOps],
-      remoteOps: [...(sides?.remoteOps ?? []), ...conflict.remoteOps],
-    });
   }
 
   return conflicts.map((conflict) => {
@@ -475,14 +465,8 @@ export const planLwwConflictResolutions = <
       };
     }
 
-    // One decision per entity and batch (#10438): detection emits one conflict
-    // per remote op, so a local side between two remote writes would win
-    // against the older one with a snapshot read before the batch and lose to
-    // the newer one, which then applies on this device only. Every timestamp
-    // conflict of the entity compares against all of the entity's ops.
-    const { localOps, remoteOps } = entitySides.get(entityKey) ?? conflict;
-    const localMaxTimestamp = Math.max(...localOps.map((op) => op.timestamp));
-    const remoteMaxTimestamp = Math.max(...remoteOps.map((op) => op.timestamp));
+    const localMaxTimestamp = Math.max(...conflict.localOps.map((op) => op.timestamp));
+    const remoteMaxTimestamp = Math.max(...conflict.remoteOps.map((op) => op.timestamp));
 
     // On an exact-millisecond tie, fall back to a deterministic clientId compare
     // (larger wins) so both devices converge instead of each keeping the other's
@@ -493,8 +477,8 @@ export const planLwwConflictResolutions = <
     const localWins =
       localMaxTimestamp > remoteMaxTimestamp ||
       (localMaxTimestamp === remoteMaxTimestamp &&
-        winningClientId(localOps, localMaxTimestamp) >
-          winningClientId(remoteOps, remoteMaxTimestamp));
+        winningClientId(conflict.localOps, localMaxTimestamp) >
+          winningClientId(conflict.remoteOps, remoteMaxTimestamp));
 
     if (localWins) {
       return {

@@ -10,34 +10,34 @@ import {
 
 /**
  * #10438: one download brings a device two remote ops for a task it renamed
- * locally, an opaque `planTasksForToday` and a rename. Conflicts used to be
- * resolved per remote op, so the local rename, timed between the two, won
- * against the older op with a whole-task snapshot read before the batch and
- * lost to the newer one, which then applied after the snapshot on that device
- * only. The device and everyone else ended with different tasks for good.
+ * locally: B's older, opaque `planTasksForToday` and A's newer edit. Conflicts
+ * are resolved per remote op, so C's rename beats the plan with a whole-task
+ * snapshot read before the batch and loses to A's edit, which applies after
+ * that snapshot on C only. C kept A's value; every other device took the
+ * snapshot, without it.
  *
- * Now the LWW planner makes one decision per entity and batch
- * (`planLwwConflictResolutions`): the local side compares against all of the
- * entity's remote ops, so the same batch never both wins and loses one task.
- * - `newest: 'rename'` is the pinned fuzz trace's order (sync-fuzz-pinned-
- *   traces.json, class stale-local-win-snapshot): plan, local rename, remote
- *   rename. Before the fix C kept A's title and the others C's.
- * - `newest: 'plan'` is the other direction: remote rename, local rename,
- *   plan. Before the fix C kept B's plan and the others the old day. The plan
- *   is opaque, so a newer plan wins the whole task as it would alone
- *   (#10393 decision 6), with A's rename beside it.
+ * The snapshot now carries the plain fields (title, notes) of the remote
+ * winners of its task, which follow it (`buildTimeAwareResolutionBatches`).
+ * - `remoteEdit: 'title'` is the pinned fuzz trace (sync-fuzz-pinned-
+ *   traces.json, class stale-local-win-snapshot): A's newer rename wins the
+ *   title. Before the fix C showed A's title, the others C's.
+ * - `remoteEdit: 'notes'` is the other direction: C's rename keeps the title
+ *   and A's newer notes edit wins its field. Before the fix C showed A's
+ *   notes, the others none.
+ * In both, C's rename beat the older plan whole-task (#10393 decision 6).
  */
 
 const SEED_TIME = new Date('2026-08-04T08:00:00');
-const FIRST_TIME = new Date('2026-08-04T09:00:00');
+const PLAN_TIME = new Date('2026-08-04T09:00:00');
 const LOCAL_TIME = new Date('2026-08-04T09:01:00');
-const LAST_TIME = new Date('2026-08-04T09:02:00');
+const REMOTE_EDIT_TIME = new Date('2026-08-04T09:02:00');
 const RESOLVE_TIME = new Date('2026-08-04T09:03:00');
 const TODAY = '2026-08-04';
 const FUTURE_DAY = '2026-08-08';
 
 interface TaskView {
   title: string;
+  notes: string | null;
   dueDay: string | null;
 }
 
@@ -72,7 +72,12 @@ const readTask = async (
   query: { id: string } | { title: string },
 ): Promise<TaskView & { id: string }> =>
   page.evaluate((q) => {
-    type TaskLike = { id: string; title: string; dueDay?: string | null };
+    type TaskLike = {
+      id: string;
+      title: string;
+      notes?: string;
+      dueDay?: string | null;
+    };
     type StoreLike = {
       subscribe: (next: (state: unknown) => void) => { unsubscribe: () => void };
     };
@@ -84,13 +89,23 @@ const readTask = async (
     const tasks = Object.values(state.tasks?.entities ?? {});
     const task = tasks.find((t) => ('id' in q ? t?.id === q.id : t?.title === q.title));
     if (!task) throw new Error(`Task not found: ${JSON.stringify(q)}`);
-    return { id: task.id, title: task.title, dueDay: task.dueDay ?? null };
+    return {
+      id: task.id,
+      title: task.title,
+      notes: task.notes || null,
+      dueDay: task.dueDay ?? null,
+    };
   }, query);
 
-const rename = (page: Page, id: string, title: string): Promise<void> =>
+/** `TaskService.update`'s action, as the title and notes editors dispatch it. */
+const updateTask = (
+  page: Page,
+  id: string,
+  changes: { title: string } | { notes: string },
+): Promise<void> =>
   dispatchPersistentAction(page, {
     type: '[Task Shared] updateTask',
-    task: { id, changes: { title } },
+    task: { id, changes },
     meta: { isPersistent: true, entityType: 'TASK', entityId: id, opType: 'UPD' },
   });
 
@@ -149,10 +164,10 @@ const runCrossing = async (
     baseURL,
     testRunId,
   }: { browser: Browser; baseURL?: string; testRunId: string },
-  newest: 'rename' | 'plan',
+  remoteEdit: 'title' | 'notes',
 ): Promise<void> => {
   const appUrl = baseURL || 'http://localhost:4242';
-  const titleA = `Renamed on A ${testRunId}`;
+  const editA = `Written on A ${testRunId}`;
   const titleC = `Renamed on C ${testRunId}`;
   const clients: SimulatedE2EClient[] = [];
 
@@ -185,42 +200,34 @@ const runCrossing = async (
     expect(await readTask(clientC.page, { id })).toEqual({
       id,
       title: seeded.title,
+      notes: null,
       dueDay: FUTURE_DAY,
     });
     for (const client of clients) await blockBackgroundSync(client);
 
-    // The remote ops that reach C in one download, around C's own rename.
-    const remoteRename = async (at: Date): Promise<void> => {
-      await clientA.page.clock.setFixedTime(at);
-      await clientA.sync.syncAndWait();
-      await rename(clientA.page, id, titleA);
-      await clientA.sync.syncAndWait();
-    };
-    const remotePlan = async (at: Date): Promise<void> => {
-      await clientB.page.clock.setFixedTime(at);
-      await clientB.sync.syncAndWait();
-      await planForToday(clientB.page, id);
-      await expect
-        .poll(async () => (await readTask(clientB.page, { id })).dueDay)
-        .toBe(TODAY);
-      await clientB.sync.syncAndWait();
-    };
-    const localRename = async (): Promise<void> => {
-      await clientC.page.clock.setFixedTime(LOCAL_TIME);
-      await rename(clientC.page, id, titleC);
-      await expect
-        .poll(async () => (await readTask(clientC.page, { id })).title)
-        .toBe(titleC);
-    };
-    if (newest === 'rename') {
-      await remotePlan(FIRST_TIME);
-      await localRename();
-      await remoteRename(LAST_TIME);
-    } else {
-      await remoteRename(FIRST_TIME);
-      await localRename();
-      await remotePlan(LAST_TIME);
-    }
+    // B plans the task, C renames it, A edits it: each later than the last.
+    await clientB.page.clock.setFixedTime(PLAN_TIME);
+    await clientB.sync.syncAndWait();
+    await planForToday(clientB.page, id);
+    await expect
+      .poll(async () => (await readTask(clientB.page, { id })).dueDay)
+      .toBe(TODAY);
+    await clientB.sync.syncAndWait();
+
+    await clientC.page.clock.setFixedTime(LOCAL_TIME);
+    await updateTask(clientC.page, id, { title: titleC });
+    await expect
+      .poll(async () => (await readTask(clientC.page, { id })).title)
+      .toBe(titleC);
+
+    await clientA.page.clock.setFixedTime(REMOTE_EDIT_TIME);
+    await clientA.sync.syncAndWait();
+    await updateTask(
+      clientA.page,
+      id,
+      remoteEdit === 'title' ? { title: editA } : { notes: editA },
+    );
+    await clientA.sync.syncAndWait();
 
     // C resolves both in one batch; then everyone takes what C uploaded.
     for (const client of clients) await client.page.clock.setFixedTime(RESOLVE_TIME);
@@ -229,9 +236,14 @@ const runCrossing = async (
     await clientA.sync.syncAndWait();
     await clientB.sync.syncAndWait();
 
-    // The latest write wins: A's rename over C's older one, or B's newer
-    // opaque plan over C's whole local side; A's rename applies either way.
-    const expected: TaskView & { id: string } = { id, title: titleA, dueDay: TODAY };
+    // Each field takes its latest write; C's rename beat the plan, so the
+    // task stays on the future day.
+    const expected: TaskView & { id: string } = {
+      id,
+      title: remoteEdit === 'title' ? editA : titleC,
+      notes: remoteEdit === 'notes' ? editA : null,
+      dueDay: FUTURE_DAY,
+    };
     for (const client of clients) {
       expect(await readTask(client.page, { id }), client.clientName).toEqual(expected);
     }
@@ -247,24 +259,24 @@ const runCrossing = async (
   }
 };
 
-test.describe('@supersync one LWW decision per entity and batch', () => {
+test.describe('@supersync remote winner beside a local-win snapshot of its task', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('a local rename between an older plan and a newer remote rename converges on the newer rename (#10438)', async ({
+  test('a remote rename newer than a local one, beside an older plan, converges (#10438)', async ({
     browser,
     baseURL,
     testRunId,
   }) => {
     test.setTimeout(240000);
-    await runCrossing({ browser, baseURL, testRunId }, 'rename');
+    await runCrossing({ browser, baseURL, testRunId }, 'title');
   });
 
-  test('a local rename between an older remote rename and a newer plan converges on the plan', async ({
+  test('a remote notes edit newer than a local rename, beside an older plan, converges', async ({
     browser,
     baseURL,
     testRunId,
   }) => {
     test.setTimeout(240000);
-    await runCrossing({ browser, baseURL, testRunId }, 'plan');
+    await runCrossing({ browser, baseURL, testRunId }, 'notes');
   });
 });

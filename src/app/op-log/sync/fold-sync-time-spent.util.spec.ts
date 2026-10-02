@@ -233,9 +233,38 @@ describe('buildTimeAwareResolutionBatches: readable fields of nonconflicting ops
     expect(localBatchOps(batches)).toEqual([snapshot]);
   });
 
-  // The remote winner is applied after the snapshot, so a folded field could
-  // differ from this device's post-batch value.
-  it('leaves the snapshot alone when a remote winner of the task follows it', async () => {
+  // #10438: the local side beat an older opaque op of the task with this
+  // snapshot and lost to a newer rename, which applies after the snapshot.
+  // Without the overlay every other device kept the local title.
+  it('overlays a plain remote winner of the task, which follows the snapshot', async () => {
+    const remoteRename = taskUpdate('op-remote-rename', { title: 'newer' });
+    const { batches } = await build([localWin()], [], [remoteRename]);
+
+    const [snapshot] = localBatchOps(batches);
+    expect((snapshot.payload as { actionPayload: unknown }).actionPayload).toEqual({
+      id: 'task-1',
+      title: 'newer',
+      isDone: true,
+    });
+    expect(snapshot.vectorClock).toEqual({ A: 2, B: 3 });
+    expect(batches.map((batch) => batch.source)).toEqual(['local', 'remote']);
+    expect(batches[1].ops).toEqual([remoteRename]);
+  });
+
+  it('leaves the snapshot alone when a remote winner of the task is no plain edit', async () => {
+    const snapshot = localWin();
+    const { batches } = await build(
+      [snapshot],
+      [],
+      [taskUpdate('op-reopen', { isDone: false })],
+    );
+
+    expect(localBatchOps(batches)).toEqual([snapshot]);
+  });
+
+  // An incoming edit and a remote winner of the task have no fixed order on
+  // this device, so the overlay could not tell which value is last.
+  it('leaves the snapshot alone when an edit and a remote winner of the task both follow it', async () => {
     const snapshot = localWin();
     const remoteWinner = { ...localWin(), id: 'op-remote-winner', clientId: 'C' };
     const { batches, precedingOps } = await build(

@@ -343,12 +343,13 @@ holds the rules; `ConflictResolutionService._tryCreateFieldPatch` builds the op.
   only ops whose payload is an `{ id, changes }` update. `moveToOtherProject`
   carries the full pre-move task, which would write the old `projectId` back.
 - **Aggregation:** an entity's conflicts (one per remote op) resolve together
-  as one patch of both full sides (`aggregateEntityConflict`). When they
-  take the whole-entity path instead, the timestamp winner is also decided
-  once per entity and batch (`planLwwConflictResolutions`), against all of
-  the entity's remote ops. A local side between two remote writes loses to
-  both, so no snapshot read before the batch uploads beside a remote winner
-  applied after it (#10438).
+  as one patch of both full sides (`aggregateEntityConflict`). On the
+  whole-entity path they are still planned one remote op at a time, so a
+  local side can beat an older opaque op with a snapshot and lose to a newer
+  op of the same task, which applies after the snapshot. The snapshot carries
+  that winner's plain fields (`title`, `notes`) and so the post-batch value
+  (#10438, `buildTimeAwareResolutionBatches`); any other winner leaves it
+  unchanged.
 - **Time:** a local `syncTimeSpent` delta is neither in the patch nor
   rejected. It stays pending and is rebased in place past the remote sides,
   together with the patch after it (`rebaseKeptTimeDeltas`). A remote delta,
