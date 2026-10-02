@@ -440,7 +440,7 @@
   },
   {
     "class": "note-recreated-without-content",
-    "ref": "fixed by #10452 (regression pin, #10380): deleteNote carries the note, the recreate restores its project and Today lists",
+    "ref": "fixed for #10380 (regression pin): deleteNote carries the note, the recreate restores its project and Today lists",
     "name": "a note deleted on one device and locked on another comes back intact",
     "steps": [
       {
@@ -804,9 +804,9 @@
     "rejections": []
   },
   {
-    "class": "recreate-appends-to-lists",
-    "ref": "#10379's Today half fixed by #10452 (the recreate lists the note again, appended); the reordering device keeps it at its own position, an order-only difference awaiting a decision on #10393; its #10420 stop is fixed",
-    "name": "a note pinned beside a pending note order after a remote delete is listed again, at a different position on the reordering device",
+    "class": "note-recreate-appended",
+    "ref": "kept by design: #10380's recreate appends the note to its project and Today lists, order only (decided on #10393); its #10420 stop is fixed",
+    "name": "a note pinned beside a pending note order after a remote delete comes back in Today, appended on the other devices",
     "steps": [
       {
         "d": "B",
@@ -825,7 +825,7 @@
         "a": ["editNote", "n1", "isPinnedToToday", true]
       }
     ],
-    "primary": "divergence:.note.todayOrder.*",
+    "primary": "divergence:.project.entities.*.noteIds.*",
     "signatures": [
       "divergence:.note.todayOrder.*",
       "divergence:.project.entities.*.noteIds.*"
