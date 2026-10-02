@@ -323,10 +323,12 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
    says (D10 refined, decided 2026-10-02 on #10393: a winner that writes no
    time has no total, so a covering clock proves nothing; the upload-race
    spec `time-delta-kept-beside-timeless-winner.integration.spec.ts` builds
-   such a clock). A delta that was delivered after all but never marked
-   synced is re-sent with its rebased clock; the server answers
-   `INVALID_OP_ID`, the client marks it rejected and shows one sync error.
-   Nothing is counted twice. LWW rows, `removeTimeSpent`,
+   such a clock; the concurrent op that got the delta rejected also keeps it,
+   so no loss from the old rule has been reproduced). A delta that was
+   delivered after all but never marked synced is re-sent with its rebased
+   clock; the server answers `INVALID_OP_ID`, the client marks it rejected
+   and shows one sync error, which the old rule did not show (pinned in the
+   same spec). Nothing is counted twice. LWW rows, `removeTimeSpent`,
    rounding and any other opaque op keep whole-entity LWW, so a winner that
    writes time and the resolution-row case of D10 stay open. The rule runs on
    the device that resolves the crossing: a released (v19.1.0) device that

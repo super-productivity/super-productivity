@@ -330,9 +330,10 @@ export const keptLocalTimeDeltas = (
  * stay pending and move past the winner, while the side's other ops lose as
  * before. The winner's clock is not consulted: it writes no total, so even a
  * clock that covers a delta cannot show the delta is counted (D10 refined,
- * #10393). A delta that was delivered after all is answered with
- * DUPLICATE_OPERATION on re-upload and receivers dedupe it by id. Rows and
- * other time writers keep whole-entity LWW.
+ * #10393). A delta that was delivered after all is re-sent with its rebased
+ * clock, so the server answers INVALID_OP_ID (not DUPLICATE_OPERATION) and
+ * the client marks it rejected with one sync error; it is counted once. Rows
+ * and other time writers keep whole-entity LWW.
  */
 export const timeDeltasSurvivingRemoteWins = (
   resolutions: { conflict: EntityConflict; winner: 'local' | 'remote' }[],
