@@ -1,3 +1,4 @@
+import type { Route } from '@playwright/test';
 import { test, expect } from '../../fixtures/supersync.fixture';
 import {
   createTestUser,
@@ -34,14 +35,23 @@ const blockBackgroundSync = async (client: SimulatedE2EClient): Promise<void> =>
   });
 };
 
-/** Fail on the dataset conflict dialog or an error instead of resolving it. */
-const sync = async (client: SimulatedE2EClient): Promise<void> => {
+/**
+ * Fail on the dataset conflict dialog or an error instead of resolving it.
+ * `whileSyncing` runs once the download has answered; with it, an upload
+ * left pending by the cycle (rejected ops resolved for the next one) is also
+ * accepted as settled.
+ */
+const sync = async (
+  client: SimulatedE2EClient,
+  whileSyncing?: () => Promise<void>,
+): Promise<void> => {
   const downloaded = client.page.waitForResponse(
     (response) =>
       response.url().includes('/api/sync/ops') && response.request().method() === 'GET',
   );
   await client.sync.clickSyncBtn();
   expect((await downloaded).ok()).toBe(true);
+  await whileSyncing?.();
   const outcome = async (): Promise<string> => {
     if (await client.sync.conflictDialog.isVisible()) return 'conflict-dialog';
     if (await client.sync.hasSyncError()) return 'error';
@@ -49,6 +59,7 @@ const sync = async (client: SimulatedE2EClient): Promise<void> => {
     const checked = await client.sync.syncCheckIcon
       .filter({ hasText: /^done_all$/ })
       .isVisible();
+    if (!spinning && whileSyncing) return 'in-sync';
     return !spinning && checked ? 'in-sync' : 'pending';
   };
   let observed = 'pending';
@@ -62,6 +73,41 @@ const sync = async (client: SimulatedE2EClient): Promise<void> => {
     )
     .not.toBe('pending');
   expect(observed).toBe('in-sync');
+};
+
+/**
+ * Syncs `client` with its first upload held at the network until `during`
+ * has run, so `during` can upload a concurrent edit after this client's
+ * download and before its upload reaches the server.
+ */
+const syncWithUploadHeld = async (
+  client: SimulatedE2EClient,
+  during: () => Promise<void>,
+): Promise<void> => {
+  let release = (): void => undefined;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  let markHeld = (): void => undefined;
+  const held = new Promise<void>((resolve) => (markHeld = resolve));
+  let isFirstUpload = true;
+  const handler = async (route: Route): Promise<void> => {
+    if (isFirstUpload && route.request().method() === 'POST') {
+      isFirstUpload = false;
+      markHeld();
+      await released;
+    }
+    await route.continue();
+  };
+  await client.page.route('**/api/sync/ops*', handler);
+  try {
+    await sync(client, async () => {
+      await held;
+      await during();
+      release();
+    });
+  } finally {
+    release();
+    await client.page.unroute('**/api/sync/ops*', handler);
+  }
 };
 
 type TaskStep = 'read' | 'unschedule' | 'start' | 'stop';
@@ -162,7 +208,15 @@ test.describe('@supersync time tracked concurrently on an unscheduled task (#103
   // remote side wins and B's own delta must still upload.
   // 'pending wins': A tracks first and uploads first, B tracks later, so on B
   // the local side wins and its snapshot must still count A's delta.
-  for (const direction of ['pending loses', 'pending wins'] as const) {
+  // 'no-pending crossing': B tracks first and downloads, A tracks later and
+  // uploads before B's upload arrives. The server accepts B's delta beside
+  // A's ops, so A meets it with its own auto-plan and delta already synced.
+  // There A's later side won whole-task LWW and its snapshot dropped B's time.
+  for (const direction of [
+    'pending loses',
+    'pending wins',
+    'no-pending crossing',
+  ] as const) {
     test(`both devices' time survives when the ${direction}, also after a restart`, async ({
       browser,
       baseURL,
@@ -170,7 +224,7 @@ test.describe('@supersync time tracked concurrently on an unscheduled task (#103
     }) => {
       test.setTimeout(300000);
 
-      const taskName = `AutoPlanTracking-${direction.replace(' ', '-')}-${Date.now()}`;
+      const taskName = `AutoPlanTracking-${direction.replaceAll(' ', '-')}-${Date.now()}`;
       const clients: SimulatedE2EClient[] = [];
 
       try {
@@ -202,17 +256,25 @@ test.describe('@supersync time tracked concurrently on an unscheduled task (#103
           await blockBackgroundSync(client);
         }
 
-        let trackedA: number;
+        let trackedA = 0;
         let trackedB: number;
         if (direction === 'pending loses') {
           trackedB = await track(clientB, taskName);
           trackedA = await track(clientA, taskName);
-        } else {
+        } else if (direction === 'pending wins') {
           trackedA = await track(clientA, taskName);
           trackedB = await track(clientB, taskName);
+        } else {
+          trackedB = await track(clientB, taskName);
+          await syncWithUploadHeld(clientB, async () => {
+            trackedA = await track(clientA, taskName);
+            await sync(clientA);
+          });
         }
-        await sync(clientA);
-        await sync(clientB);
+        if (direction !== 'no-pending crossing') {
+          await sync(clientA);
+          await sync(clientB);
+        }
         for (let round = 0; round < 2; round++) {
           for (const client of clients) {
             await sync(client);
