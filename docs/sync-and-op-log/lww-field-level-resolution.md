@@ -512,8 +512,8 @@ against any row; it now meets rows stamped at their fields' own, older times.
   re-emits (`_reemitSurvivingLocalFields`) the latest local timestamp. The
   fuzz latest-write oracle, which decides each field by its own latest write
   on each side, reports an older value one of their rows carried as
-  `restamped-superseded:` or `restamped-surviving:`, apart from
-  `older-write-won:`, which main-path rows never escape.
+  `older-write-won:`, like any other; no seed, pin or trace shows one yet
+  (decided on #10393: no separate signature until a real case exists).
 - **Pending local rows** keep whole-entity LWW, so a re-send that is still
   pending when another device's row arrives loses or wins as a whole.
 - **Failed re-send fallback:** when a re-send's reducer fails, the remote

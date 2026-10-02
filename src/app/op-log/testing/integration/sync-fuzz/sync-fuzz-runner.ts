@@ -7,11 +7,7 @@ import { Task } from '../../../../features/tasks/task.model';
 import { classifyOpAgainstSyncImport } from '@sp/sync-core';
 import { compareVectorClocks } from '../../../../core/util/vector-clock';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
-import {
-  FULL_STATE_OP_TYPES,
-  isLwwUpdatePayload,
-  VectorClock,
-} from '../../../core/operation.types';
+import { FULL_STATE_OP_TYPES, VectorClock } from '../../../core/operation.types';
 import {
   AppStateSnapshot,
   StateSnapshotService,
@@ -36,7 +32,6 @@ import {
   FuzzEvent,
   FuzzEventKind,
   ImportDialogAnswer,
-  RestampingResidual,
   SyncFuzzHarness,
 } from './sync-fuzz-harness';
 
@@ -346,41 +341,6 @@ const WRITTEN_FIELDS: Readonly<Record<string, readonly string[]>> = {
   note: ['content', 'isPinnedToToday', 'isLock'],
   habit: ['title', 'isEnabled'],
 };
-
-/**
- * A field value that a residual row on the server carried at the row's
- * time (`SyncFuzzHarness.restampedRows`), keyed like the ledger.
- */
-export interface RestampedWrite {
-  key: string;
-  value: unknown;
-  time: number;
-  clientId: string;
-  residual: RestampingResidual;
-}
-
-const LEDGER_TYPES: Readonly<Record<string, string>> = {
-  TASK: 'task',
-  NOTE: 'note',
-  SIMPLE_COUNTER: 'habit',
-};
-
-const restampedWrites = (harness: SyncFuzzHarness): RestampedWrite[] =>
-  harness.server.rows.flatMap(({ op }) => {
-    const residual = harness.restampedRows.get(op.id);
-    const type = LEDGER_TYPES[op.entityType];
-    const payload: unknown = op.payload;
-    if (!residual || !type || !op.entityId || !isLwwUpdatePayload(payload)) return [];
-    const values: Record<string, unknown> = { ...payload.actionPayload };
-    for (const field of payload.clearedFields ?? []) values[field] = undefined;
-    return Object.entries(values).map(([field, value]) => ({
-      key: `${type}:${op.entityId}|${field}`,
-      value,
-      time: op.timestamp,
-      clientId: op.clientId,
-      residual,
-    }));
-  });
 
 const lastReplacement = (harness: SyncFuzzHarness): Replacement | undefined => {
   const row = [...harness.server.rows]
@@ -842,7 +802,6 @@ export const runFuzz = async (options: FuzzOptions): Promise<FuzzResult> => {
     ),
     replacement,
     fail,
-    restampedWrites(harness),
   );
 
   // Oracle: a restart (hydration from the device's own database) keeps state.
@@ -1020,7 +979,6 @@ export const checkPreservation = (
   ledger: Ledger,
   replacement: Replacement | undefined,
   fail: (signature: string, detail: string) => void,
-  restamped: readonly RestampedWrite[] = [],
 ): void => {
   const state = snapshot as unknown as CheckedState;
   const tasks = state.task.entities;
@@ -1120,15 +1078,7 @@ export const checkPreservation = (
         `${entity}.${field}: writes ${shortJson(values)}, converged ${shortJson(actual)}`,
       );
     } else {
-      checkLatestWrite(
-        ledger,
-        entity,
-        field,
-        writes,
-        actual,
-        restamped.filter((w) => w.key === key),
-        report,
-      );
+      checkLatestWrite(ledger, entity, field, writes, actual, report);
     }
   }
 
@@ -1163,10 +1113,10 @@ export const checkPreservation = (
  *   (sync-core's planner), and its snapshot can carry any value its device
  *   held: a write of that side or in its causal past accounts for it.
  *
- * An older value that a documented residual row carried at a time it was
- * not written is reported apart, by producer (`restamped-<residual>`, see
- * `SyncFuzzHarness.restampedRows`), when that row's time beats the latest
- * write. Main-path rows are never excused that way.
+ * Two documented residuals still stamp fields later than they were written
+ * (superseded re-emits and `_reemitSurvivingLocalFields`, see "What it
+ * leaves" in lww-field-level-resolution.md). An older value one of them
+ * carried reports as `older-write-won` too; no seed shows one yet.
  *
  * Out of scope, by design: NOTE fields, which stay on whole-entity LWW
  * (decision 4 of docs/sync-and-op-log/lww-field-level-resolution.md), and
@@ -1180,7 +1130,6 @@ const checkLatestWrite = (
   field: string,
   writes: readonly LedgerWrite[],
   actual: unknown,
-  restamped: readonly RestampedWrite[],
   fail: (signature: string, detail: string) => void,
 ): void => {
   const type = entity.split(':')[0];
@@ -1203,14 +1152,9 @@ const checkLatestWrite = (
     );
   });
   if (accounted) return;
-  const detail =
-    `${entity}.${field}: latest write ${shortJson(latest.value)} by ${latest.entry.device}, ` +
-    `converged ${shortJson(actual)}`;
-  const residual = restamped.find(
-    (w) => Object.is(w.value, actual) && isLaterWrite(w, latest.entry),
-  );
   fail(
-    `${residual ? `restamped-${residual.residual}` : 'older-write-won'}:${type}.${field.split('.')[0]}`,
-    residual ? `${detail}, carried by a ${residual.residual} row` : detail,
+    `older-write-won:${type}.${field.split('.')[0]}`,
+    `${entity}.${field}: latest write ${shortJson(latest.value)} by ${latest.entry.device}, ` +
+      `converged ${shortJson(actual)}`,
   );
 };

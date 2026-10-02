@@ -281,9 +281,9 @@ describe('SyncFuzzHarness: negative control', () => {
 
   it('the oracles hold a re-sent field to its own write’s time (#10422)', async () => {
     // A resolves against B's newer rename and re-sends its notes, written
-    // before C's. A row stamping them at A's rename would beat C's notes, a
-    // main-path row the oracle must report as `older-write-won`, not excuse
-    // as a residual (field-patch-timestamp.integration.spec.ts pins values).
+    // before C's. A row stamping them at A's rename would beat C's notes,
+    // and the oracle would report it (`older-write-won:task.notes`;
+    // field-patch-timestamp.integration.spec.ts pins the values).
     const steps: FuzzStep[] = [
       { d: 'A', a: ['editTaskNotes', 't1', 'A notes'] },
       { d: 'C', a: ['editTaskNotes', 't1', 'C notes'] },

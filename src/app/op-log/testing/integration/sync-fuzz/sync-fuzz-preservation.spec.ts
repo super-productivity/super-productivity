@@ -1,13 +1,7 @@
 import { AppStateSnapshot } from '../../../backup/state-snapshot.service';
 import { VectorClock } from '../../../core/operation.types';
 import { fuzzDay, Intent } from './sync-fuzz-actions';
-import {
-  checkPreservation,
-  Ledger,
-  LedgerEntry,
-  Replacement,
-  RestampedWrite,
-} from './sync-fuzz-runner';
+import { checkPreservation, Ledger, LedgerEntry, Replacement } from './sync-fuzz-runner';
 
 /**
  * Negative controls for the preservation oracles on hand-built ledgers and
@@ -145,53 +139,6 @@ describe('sync fuzz preservation oracles', () => {
       expect(signatures(olderNotes, [earlyNotesA, laterNotesC, laterRename])).toEqual([
         'older-write-won:task.notes',
       ]);
-    });
-
-    describe('a documented residual row', () => {
-      // The shape above, where a residual row (see
-      // SyncFuzzHarness.restampedRows) carried A's notes at A's rename time.
-      const notesA = entry('A', { A: 1 }, ['editTaskNotes', 't1', 'A notes'], {
-        uploadedAt: 100,
-      });
-      const notesC = entry('C', { C: 1 }, ['editTaskNotes', 't1', 'C notes']);
-      const rename = entry('A', { A: 2 }, ['renameTask', 't1', 'A title'], {
-        uploadedAt: 100,
-      });
-      const converged = {
-        tasks: { t1: { id: 't1', notes: 'A notes', title: 'A title' } },
-      };
-      const row = (at: number, value = 'A notes'): RestampedWrite => ({
-        key: 'task:t1|notes',
-        value,
-        time: at,
-        clientId: 'fuzzDevA',
-        residual: 'superseded',
-      });
-      const withRows = (rows: RestampedWrite[]): string[] => {
-        const found: string[] = [];
-        checkPreservation(
-          snapshot(converged),
-          new Ledger([notesA, notesC, rename]),
-          undefined,
-          (s) => found.push(s),
-          rows,
-        );
-        return found;
-      };
-
-      it('that stamped the older value later than the latest write is counted apart', () => {
-        expect(withRows([row(rename.time)])).toEqual(['restamped-superseded:task.notes']);
-        expect(withRows([{ ...row(rename.time), residual: 'surviving' }])).toEqual([
-          'restamped-surviving:task.notes',
-        ]);
-      });
-
-      it('does not excuse a row older than the latest write, or of another value', () => {
-        expect(withRows([row(notesA.time)])).toEqual(['older-write-won:task.notes']);
-        expect(withRows([row(rename.time, 'other')])).toEqual([
-          'older-write-won:task.notes',
-        ]);
-      });
     });
 
     it('reports a loss when the losing, resolving device only tracked locally', () => {
