@@ -264,13 +264,18 @@ describe('buildTimeAwareResolutionBatches: readable fields of nonconflicting ops
 
   // An incoming edit and a remote winner of the task have no fixed order on
   // this device, so the overlay could not tell which value is last.
+  // Both are plain, so only that rule keeps the snapshot as it is.
   it('leaves the snapshot alone when an edit and a remote winner of the task both follow it', async () => {
     const snapshot = localWin();
-    const remoteWinner = { ...localWin(), id: 'op-remote-winner', clientId: 'C' };
+    const remoteRename = taskUpdate(
+      'op-remote-rename',
+      { title: 'newer' },
+      { clientId: 'C', vectorClock: { C: 1 } },
+    );
     const { batches, precedingOps } = await build(
       [snapshot],
       [taskUpdate('op-rename', { title: 'older' })],
-      [remoteWinner],
+      [remoteRename],
     );
 
     expect(precedingOps).toEqual([]);
