@@ -5,20 +5,26 @@ import {
   createSimulatedClient,
   createTestUser,
   getSuperSyncConfig,
+  getTaskElement,
   recordTaskTimeDelta,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import { serveReleasedClientAssets } from '../../utils/released-client-assets';
 
 /**
- * #10438: one download brings a device two remote ops for a task it renamed
- * locally: B's older, opaque `planTasksForToday` and A's newer edit. Conflicts
- * are resolved per remote op, so C's rename beats the plan with a whole-task
- * snapshot read before the batch and loses to A's edit, which applies after
- * that snapshot on C only. C kept A's value; every other device took the
- * snapshot, without it.
+ * #10438: C renamed a task. One download brings it B's older, opaque
+ * `planTasksForToday` (with tracked time) and A's newer edit of the task,
+ * followed by time A tracked. Conflicts are resolved per remote op, so C's
+ * rename beats the plan with a whole-task snapshot read before the batch and
+ * loses to A's edit, which applies after the snapshot on C only.
  *
- * The snapshot now carries the plain fields (title, notes) of the remote
- * winners of its task, which follow it (`buildTimeAwareResolutionBatches`).
+ * A's later time delta is folded into the snapshot together with its clock,
+ * which also covers A's edit. So the server accepts the snapshot instead of
+ * rejecting it as concurrent (which would rebuild it from post-batch state),
+ * and every other device takes it without A's edit; C keeps the edit.
+ *
+ * The snapshot now carries the plain fields (title, notes) of its task's
+ * remote winners, which follow it (`buildTimeAwareResolutionBatches`).
  * - `remoteEdit: 'title'` is the pinned fuzz trace (sync-fuzz-pinned-
  *   traces.json, class stale-local-win-snapshot): A's newer rename wins the
  *   title. Before the fix C showed A's title, the others C's.
@@ -35,6 +41,7 @@ const REMOTE_EDIT_TIME = new Date('2026-08-04T09:02:00');
 const RESOLVE_TIME = new Date('2026-08-04T09:03:00');
 const TODAY = '2026-08-04';
 const TRACKED_MS = 60000;
+const TRACKED_MS_A = 30000;
 const FUTURE_DAY = '2026-08-08';
 
 interface TaskView {
@@ -170,11 +177,13 @@ const runCrossing = async (
     testRunId,
   }: { browser: Browser; baseURL?: string; testRunId: string },
   remoteEdit: 'title' | 'notes',
+  releasedUrl?: string,
 ): Promise<void> => {
   const appUrl = baseURL || 'http://localhost:4242';
   const editA = `Written on A ${testRunId}`;
   const titleC = `Renamed on C ${testRunId}`;
   const clients: SimulatedE2EClient[] = [];
+  const releasedClients: SimulatedE2EClient[] = [];
 
   try {
     const syncConfig = getSuperSyncConfig(await createTestUser(testRunId));
@@ -210,6 +219,16 @@ const runCrossing = async (
       timeSpent: 0,
     });
     for (const client of clients) await blockBackgroundSync(client);
+    // A released (v19.1.0) receiver of C's snapshot; it reads in its UI.
+    let released: SimulatedE2EClient | undefined;
+    if (releasedUrl) {
+      released = await createSimulatedClient(browser, releasedUrl, 'D', testRunId, {
+        serviceWorkers: 'block',
+      });
+      releasedClients.push(released);
+      await released.sync.setupSuperSync(syncConfig);
+      await released.sync.syncAndWait();
+    }
 
     // B tracks time on the task, which also plans it for today; C renames
     // it; A edits it: each later than the last.
@@ -238,6 +257,11 @@ const runCrossing = async (
       id,
       remoteEdit === 'title' ? { title: editA } : { notes: editA },
     );
+    const titleOnA = (await readTask(clientA.page, { id })).title;
+    await recordTaskTimeDelta(clientA, titleOnA, TODAY, TRACKED_MS_A);
+    await expect
+      .poll(async () => (await readTask(clientA.page, { id })).timeSpent)
+      .toBe(TRACKED_MS + TRACKED_MS_A);
     await clientA.sync.syncAndWait();
 
     // C resolves both in one batch; then everyone takes what C uploaded.
@@ -247,7 +271,7 @@ const runCrossing = async (
     await clientA.sync.syncAndWait();
     await clientB.sync.syncAndWait();
 
-    // Each field takes its latest write, and B's tracked time counts once.
+    // Each field takes its latest write, and each tracked time counts once.
     // The plan is opaque, so where C's rename beat it the day is C's
     // snapshot's; every device must agree on it.
     const { dueDay } = await readTask(clientC.page, { id });
@@ -256,10 +280,18 @@ const runCrossing = async (
       title: remoteEdit === 'title' ? editA : titleC,
       notes: remoteEdit === 'notes' ? editA : null,
       dueDay,
-      timeSpent: TRACKED_MS,
+      timeSpent: TRACKED_MS + TRACKED_MS_A,
     };
     for (const client of clients) {
       expect(await readTask(client.page, { id }), client.clientName).toEqual(expected);
+    }
+    if (released) {
+      await released.sync.syncAndWait();
+      for (let restart = 0; restart < 2; restart++) {
+        if (restart) await released.page.reload();
+        await released.page.goto('/#/project/INBOX_PROJECT/tasks');
+        await expect(getTaskElement(released, expected.title).first()).toBeVisible();
+      }
     }
 
     // A restart replays each op log to the same task.
@@ -269,7 +301,7 @@ const runCrossing = async (
       expect(await readTask(client.page, { id }), client.clientName).toEqual(expected);
     }
   } finally {
-    for (const client of clients) await closeClient(client);
+    for (const client of [...clients, ...releasedClients]) await closeClient(client);
   }
 };
 
@@ -293,4 +325,29 @@ test.describe('@supersync remote winner beside a local-win snapshot of its task'
     test.setTimeout(240000);
     await runCrossing({ browser, baseURL, testRunId }, 'notes');
   });
+});
+
+// Supply the untouched released web assets (COMPAT_OLD_ASSETS, see
+// e2e/README.md). The fix changes only the values of C's replace row, a shape
+// v19.1.0 already applies; this checks that a released device takes them.
+test.describe('@supersync released receiver of a local-win snapshot with remote-winner fields', () => {
+  test.describe.configure({ mode: 'serial' });
+  const oldAssets = process.env.COMPAT_OLD_ASSETS;
+  test.skip(!oldAssets, 'Set COMPAT_OLD_ASSETS to the unmodified released assets');
+  let assets: Awaited<ReturnType<typeof serveReleasedClientAssets>>;
+  test.beforeAll(async () => {
+    assets = await serveReleasedClientAssets({ old: oldAssets!, new: oldAssets! }, 0);
+  });
+  test.afterAll(async () => assets?.close());
+
+  for (const remoteEdit of ['title', 'notes'] as const) {
+    test(`a released device takes the snapshot beside a remote ${remoteEdit} edit`, async ({
+      browser,
+      baseURL,
+      testRunId,
+    }) => {
+      test.setTimeout(300000);
+      await runCrossing({ browser, baseURL, testRunId }, remoteEdit, assets.url);
+    });
+  }
 });
