@@ -5,6 +5,7 @@ import {
   isDisjointMergeEligible,
   mergeChangedFields,
   touchesCrossEntityTaskFields,
+  writesNoTaskTime,
 } from './conflict-disjoint-merge.util';
 import { ActionType, EntityType, OpType, Operation } from '../core/operation.types';
 
@@ -464,6 +465,95 @@ describe('conflict-disjoint-merge.util', () => {
           [{ ...row({ id: 'task-2', notes: 'B' }), entityId: 'task-2' }],
         ),
       ).toBe(false);
+    });
+  });
+
+  describe('isCommutingTimeDeltaCrossing (timeless ops, #10378)', () => {
+    /** Production-shaped auto-plan op that tracking an unscheduled task emits. */
+    const planOp = (over: Partial<Operation> = {}): Operation =>
+      op({
+        actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+        entityId: undefined,
+        entityIds: ['task-1'],
+        payload: {
+          actionPayload: { taskIds: ['task-1'], today: DAY, startOfNextDayDiffMs: 0 },
+          entityChanges: [],
+        },
+        ...over,
+      });
+    const commutes = (localOps: Operation[], remoteOps: Operation[]): boolean =>
+      isCommutingTimeDeltaCrossing({
+        localOps,
+        remoteOps,
+        payloadKey: 'task',
+        entityId: 'task-1',
+      });
+
+    it('is true for time deltas beside a tick of the other device, in both directions', () => {
+      const tick = [planOp({ id: 'plan' }), syncTimeSpentOp({ id: 'delta' })];
+      expect(commutes(tick, [syncTimeSpentOp({ id: 'remote' })])).toBe(true);
+      expect(commutes([syncTimeSpentOp({ id: 'local' })], tick)).toBe(true);
+      expect(commutes([deferredSyncTimeSpentOp()], [planOp()])).toBe(true);
+    });
+
+    it('is true beside a readable edit that writes no time field', () => {
+      const rename = op({ payload: { task: { id: 'task-1', changes: { title: 'A' } } } });
+      expect(commutes([syncTimeSpentOp()], [planOp({ id: 'plan' }), rename])).toBe(true);
+    });
+
+    // Both sides hold a non-delta op, so the plans still meet in a conflict.
+    it('is false when neither side is only time deltas', () => {
+      const tick = [planOp({ id: 'plan' }), syncTimeSpentOp({ id: 'delta' })];
+      expect(commutes(tick, [planOp({ id: 'remote-plan' })])).toBe(false);
+    });
+
+    it('is false beside an op that writes or may write time', () => {
+      const timeEdit = op({
+        payload: { task: { id: 'task-1', changes: { timeSpentOnDay: { [DAY]: 1 } } } },
+      });
+      const rounding = op({
+        actionType: '[Task] RoundTimeSpentForDay' as ActionType,
+        entityId: undefined,
+        entityIds: ['task-1'],
+        payload: { actionPayload: { day: DAY, taskIds: ['task-1'] }, entityChanges: [] },
+      });
+      expect(commutes([syncTimeSpentOp()], [planOp({ id: 'plan' }), timeEdit])).toBe(
+        false,
+      );
+      expect(commutes([syncTimeSpentOp()], [rounding])).toBe(false);
+      expect(commutes([syncTimeSpentOp()], [convertToSubTaskOp()])).toBe(false);
+      expect(commutes([syncTimeSpentOp()], [removeTimeSpentOp()])).toBe(false);
+      expect(commutes([syncTimeSpentOp()], [op({ opType: OpType.Delete })])).toBe(false);
+    });
+
+    it('is false for a plan of several tasks or of another task', () => {
+      const bulk = planOp({
+        entityIds: ['task-1', 'task-2'],
+        payload: {
+          actionPayload: { taskIds: ['task-1', 'task-2'], today: DAY },
+          entityChanges: [],
+        },
+      });
+      expect(commutes([syncTimeSpentOp()], [bulk])).toBe(false);
+      expect(writesNoTaskTime(planOp({ entityIds: ['task-2'] }), 'task', 'task-1')).toBe(
+        false,
+      );
+    });
+
+    // A replace row rewrites every field; rows keep their own rule above.
+    it('never reads an LWW row as timeless', () => {
+      const replaceRow = op({
+        actionType: '[TASK] LWW Update' as ActionType,
+        payload: {
+          actionPayload: { id: 'task-1', title: 'T' },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+        },
+      });
+      expect(writesNoTaskTime(replaceRow, 'task', 'task-1')).toBe(false);
+      expect(commutes([syncTimeSpentOp()], [planOp({ id: 'plan' }), replaceRow])).toBe(
+        false,
+      );
     });
   });
 

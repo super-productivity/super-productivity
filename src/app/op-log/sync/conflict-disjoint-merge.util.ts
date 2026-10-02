@@ -359,6 +359,8 @@ export const isCommutingTimeDeltaCrossing = (params: {
   entityId: string;
 }): boolean =>
   isTimeDeltaBesideTimelessRow(params) ||
+  isTimeDeltaBesideTimelessOps(params.localOps, params.remoteOps, params) ||
+  isTimeDeltaBesideTimelessOps(params.remoteOps, params.localOps, params) ||
   ([...params.localOps, ...params.remoteOps].some(
     (op) => op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
   ) &&
@@ -410,3 +412,67 @@ const isTimeDeltaBesideTimelessRow = ({
       !SYNC_TIME_SPENT_FIELDS.some((field) => keys.includes(field))
     );
   });
+
+/**
+ * Opaque single-task actions admitted as writing no time field of the task
+ * they declare (#10378). `planTasksForToday` writes `dueDay`, `remindAt`,
+ * `dueWithTime`, the Today order and planner days; its spec runs the reducer
+ * to prove it. Every other opaque op may write time (`roundTimeSpentForDay`
+ * does) and keeps whole-entity LWW.
+ */
+export const TIMELESS_OPAQUE_TASK_ACTIONS: ReadonlySet<string> = new Set<string>([
+  ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+]);
+
+/**
+ * True when `op` provably writes no time field of task `entityId`: a
+ * non-DELETE op declaring only that task, neither an LWW row nor an additive
+ * time op, that reads as fields none of which is a time field, or is an
+ * opaque action admitted in `TIMELESS_OPAQUE_TASK_ACTIONS`.
+ */
+export const writesNoTaskTime = (
+  op: Operation,
+  payloadKey: string,
+  entityId: string,
+): boolean => {
+  const ids = getOpEntityIds(op);
+  if (
+    op.entityType !== 'TASK' ||
+    op.opType === OpType.Delete ||
+    isLwwUpdatePayload(op.payload) ||
+    isAdditiveTimeOp(op) ||
+    ids.length !== 1 ||
+    ids[0] !== entityId
+  ) {
+    return false;
+  }
+  if (isOpaqueChangeOp(op, payloadKey, entityId)) {
+    return TIMELESS_OPAQUE_TASK_ACTIONS.has(op.actionType);
+  }
+  const changes = extractOpChanges(op, payloadKey, entityId);
+  return !SYNC_TIME_SPENT_FIELDS.some((field) => field in changes);
+};
+
+/**
+ * True when `deltaSide` is only `syncTimeSpent` deltas and every op of
+ * `otherSide` is a delta too or writes no time field of the task
+ * (`writesNoTaskTime`). The deltas add to whatever the other side leaves, so
+ * both apply as they are. Unlike `isDisjointMergeEligible` this admits an
+ * other side holding a timeless opaque op: tracking an unscheduled task emits
+ * `planTasksForToday` beside its delta, which made two devices' concurrent
+ * time on one task lose to whole-entity LWW (#10378).
+ */
+const isTimeDeltaBesideTimelessOps = (
+  deltaSide: Operation[],
+  otherSide: Operation[],
+  { payloadKey, entityId }: { payloadKey: string; entityId: string },
+): boolean =>
+  deltaSide.length > 0 &&
+  otherSide.length > 0 &&
+  deltaSide.every(isSyncTimeSpentDelta) &&
+  otherSide.every(
+    (op) => isSyncTimeSpentDelta(op) || writesNoTaskTime(op, payloadKey, entityId),
+  );
+
+const isSyncTimeSpentDelta = (op: Operation): boolean =>
+  op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT;

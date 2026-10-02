@@ -7,6 +7,7 @@ import {
   rebaseKeptTimeDeltas,
   supersededPatchFields,
   survivingLocalFields,
+  timeDeltasSurvivingRemoteWins,
 } from './conflict-field-patch.util';
 import {
   ActionType,
@@ -368,6 +369,71 @@ describe('conflict-field-patch.util', () => {
       };
       await rebaseKeptTimeDeltas(store, keptLocalTimeDeltas([conflict]), ['patch']);
       expect(store.rebasePendingLocalOps).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('timeDeltasSurvivingRemoteWins (#10378)', () => {
+    const plan = (over: Partial<Operation> = {}): Operation =>
+      op({
+        actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+        entityId: undefined,
+        entityIds: ['task-1'],
+        payload: {
+          actionPayload: { taskIds: ['task-1'], today: '2026-01-01' },
+          entityChanges: [],
+        },
+        ...over,
+      });
+    const conflict = (localOps: Operation[], remoteOps: Operation[]): EntityConflict => ({
+      entityType: 'TASK' as EntityType,
+      entityId: 'task-1',
+      localOps,
+      remoteOps,
+      suggestedResolution: 'manual',
+    });
+    const tick = [
+      plan({ id: 'plan', vectorClock: { A: 1 } }),
+      delta({ id: 'd', vectorClock: { A: 2 } }),
+    ];
+    const remotePlan = plan({ id: 'remote-plan', clientId: 'B', vectorClock: { B: 1 } });
+    const survivors = (winner: 'local' | 'remote', c: EntityConflict): EntityConflict[] =>
+      timeDeltasSurvivingRemoteWins([{ conflict: c, winner }], 'task');
+
+    it('keeps the local delta beside a winner that writes no time, rebased past it', () => {
+      const [kept] = survivors('remote', conflict(tick, [remotePlan]));
+      expect(kept.localOps.map((o) => o.id)).toEqual(['d']);
+      const clocks = keptLocalTimeDeltas([kept]);
+      expect([...clocks.opIds]).toEqual(['d']);
+      expect(clocks.clockToDominate).toEqual({ B: 1 });
+    });
+
+    it('leaves a local win to its snapshot', () => {
+      expect(survivors('local', conflict(tick, [remotePlan]))).toEqual([]);
+    });
+
+    // D10: the winner's absolute value already counts a delta its clock covers.
+    it('drops a delta the winner covers, so it is not counted twice', () => {
+      const covering = plan({ id: 'covering', vectorClock: { A: 2, B: 1 } });
+      expect(survivors('remote', conflict(tick, [covering]))).toEqual([]);
+    });
+
+    it('keeps whole-entity LWW when either side writes or may write time', () => {
+      const day = '2026-01-01';
+      const timeEdit = edit(
+        { timeSpentOnDay: { [day]: 5 } },
+        { id: 'time', vectorClock: { B: 1 } },
+      );
+      const replaceRow = op({
+        id: 'row',
+        actionType: '[TASK] LWW Update' as ActionType,
+        vectorClock: { B: 1 },
+        payload: { actionPayload: { id: 'task-1' }, lwwUpdateMode: 'replace' },
+      });
+      expect(survivors('remote', conflict(tick, [timeEdit]))).toEqual([]);
+      expect(survivors('remote', conflict(tick, [replaceRow]))).toEqual([]);
+      expect(
+        survivors('remote', conflict([timeEdit, delta({ id: 'd' })], [remotePlan])),
+      ).toEqual([]);
     });
   });
 

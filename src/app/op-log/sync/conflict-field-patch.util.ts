@@ -18,7 +18,11 @@ import { ActionType, isLwwUpdatePayload, OpType } from '../core/operation.types'
 import type { EntityConflict, Operation, VectorClock } from '../core/operation.types';
 import type { EntityType } from '../core/operation.types';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
-import { mergeVectorClocks } from '../../core/util/vector-clock';
+import {
+  compareVectorClocks,
+  mergeVectorClocks,
+  VectorClockComparison,
+} from '../../core/util/vector-clock';
 import { isMultiEntityOperation } from '../util/get-op-entity-ids.util';
 import {
   isAdditiveTimeOp,
@@ -28,6 +32,7 @@ import {
   NOISE_FIELDS,
   sideNonNoiseKeys,
   SYNC_TIME_SPENT_FIELDS,
+  writesNoTaskTime,
 } from './conflict-disjoint-merge.util';
 
 /**
@@ -320,6 +325,43 @@ export const keptLocalTimeDeltas = (
   }
   return { opIds, clockToDominate };
 };
+
+/**
+ * Remote-win conflicts whose local time deltas survive the win, each narrowed
+ * to those deltas for `keptLocalTimeDeltas` (decision 7, D10, #10378). Every
+ * op of a TASK conflict is a `syncTimeSpent` delta or writes no time field
+ * (`writesNoTaskTime`), so the winner leaves the deltas' time as it is: they
+ * stay pending and move past the winner, while the side's other ops lose as
+ * before. A winner whose clock covers a delta already counts it, so that
+ * delta loses too. Rows and other time writers keep whole-entity LWW.
+ */
+export const timeDeltasSurvivingRemoteWins = (
+  resolutions: { conflict: EntityConflict; winner: 'local' | 'remote' }[],
+  payloadKey: string,
+): EntityConflict[] =>
+  resolutions.flatMap(({ conflict, winner }) => {
+    const { entityId, localOps, remoteOps } = conflict;
+    const isTimeless = (op: Operation): boolean =>
+      isSyncTimeSpentOp(op) || writesNoTaskTime(op, payloadKey, entityId);
+    if (
+      winner !== 'remote' ||
+      conflict.entityType !== 'TASK' ||
+      remoteOps.length === 0 ||
+      ![...localOps, ...remoteOps].every(isTimeless)
+    ) {
+      return [];
+    }
+    const deltas = localOps.filter(
+      (op) =>
+        isSyncTimeSpentOp(op) &&
+        remoteOps.every(
+          (remote) =>
+            compareVectorClocks(op.vectorClock, remote.vectorClock) ===
+            VectorClockComparison.CONCURRENT,
+        ),
+    );
+    return deltas.length > 0 ? [{ ...conflict, localOps: deltas }] : [];
+  });
 
 /**
  * Moves the pending kept deltas past the remote sides' clocks in place (id,

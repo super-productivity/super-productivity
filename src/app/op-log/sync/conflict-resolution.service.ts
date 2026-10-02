@@ -120,6 +120,7 @@ import {
   fieldPatchGroups,
   keptLocalTimeDeltas,
   rebaseKeptTimeDeltas,
+  timeDeltasSurvivingRemoteWins,
   buildSurvivingFieldPatches,
 } from './conflict-field-patch.util';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
@@ -1029,10 +1030,16 @@ export class ConflictResolutionService {
       ...additionalLocalIntentOps,
     ]);
     const { remoteWinnerAffectedEntityKeys } = lwwPartitions;
-    const localOpsToReject = [...new Set(lwwPartitions.localOpsToReject)];
+    // A patched conflict's local time deltas stay pending (rebased in STEP 3b),
+    // and so do those beside a remote winner that writes no time (#10378).
+    const keptDeltas = keptLocalTimeDeltas([
+      ...mergedResolutions.map((m) => m.conflict),
+      ...timeDeltasSurvivingRemoteWins(resolutions, this._resolvePayloadKey('TASK')),
+    ]);
+    const localOpsToReject = [...new Set(lwwPartitions.localOpsToReject)].filter(
+      (opId) => !keptDeltas.opIds.has(opId),
+    );
     const localOpsToRejectSet = new Set(localOpsToReject);
-    // A patched conflict's local time deltas stay pending (rebased in STEP 3b).
-    const keptDeltas = keptLocalTimeDeltas(mergedResolutions.map((m) => m.conflict));
     const protectedLocalResolutionOpIds = new Set<string>(keptDeltas.opIds);
     const pending = await this.opLogStore.getUnsyncedByEntity();
     const keptReorders = keptCommutingReorders(conflicts, pending, nonConflictingOps);
@@ -1622,7 +1629,7 @@ export class ConflictResolutionService {
         }
       }
     }
-    if (mergedResolutions.length > 0) {
+    if (keptDeltas.opIds.size > 0) {
       await rebaseKeptTimeDeltas(this.opLogStore, keptDeltas, writtenResendIds);
     }
 

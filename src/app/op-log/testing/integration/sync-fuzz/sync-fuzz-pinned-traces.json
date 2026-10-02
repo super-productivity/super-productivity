@@ -418,8 +418,8 @@
   },
   {
     "class": "auto-plan-blocks-delta-merge",
-    "ref": "#10378",
-    "name": "two devices tracking one unscheduled task lose one device's time",
+    "ref": "fixed for #10378 (regression pin): the remote winner writes no time, so the losing side's delta stays pending",
+    "name": "two devices tracking one unscheduled task keep both devices' time",
     "steps": [
       {
         "d": "B",
@@ -430,12 +430,24 @@
         "a": ["track", "t3", 2000]
       }
     ],
-    "primary": "divergence:.task.entities.*.timeSpentOnDay.*",
-    "signatures": [
-      "divergence:.task.entities.*.timeSpent",
-      "divergence:.task.entities.*.timeSpentOnDay.*",
-      "time-loss:task"
+    "signatures": [],
+    "rejections": []
+  },
+  {
+    "class": "auto-plan-blocks-delta-merge",
+    "ref": "fixed for #10378 (regression pin): the remote delta commutes with the auto-plan, so the local-win snapshot folds it in",
+    "name": "two devices tracking one unscheduled task keep both devices' time when the later tracker wins",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["track", "t3", 2000]
+      },
+      {
+        "d": "B",
+        "a": ["track", "t3", 3000]
+      }
     ],
+    "signatures": [],
     "rejections": []
   },
   {

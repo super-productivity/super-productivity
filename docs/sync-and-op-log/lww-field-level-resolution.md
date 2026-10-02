@@ -19,8 +19,9 @@ E2E reproductions trace these issues to this:
   rejected edit, which never uploads.
 - **#10385** (unreleased, since #10252): the snapshot is read before the same
   download's commuting ops apply, so it erases them on the other device.
-- **Part of the tracked-time loss** (#10378): a delta is rejected together with
-  the side that lost.
+- **Part of the tracked-time loss** (#10378, fixed for winners and sides that
+  write no time, see decision 7): a delta was rejected together with the side
+  that lost.
 
 ## How it works today
 
@@ -308,6 +309,20 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
    (per-field winners rebase it unchanged, see below). Winners that write
    time, including a winning replace snapshot (open above), and #10378 stay
    open.
+   **Extended by D10 for #10378** (2026-10-02,
+   [#10393](https://github.com/super-productivity/super-productivity/issues/10393#issuecomment-5948107121)):
+   a delta also commutes with ops that provably write no time field
+   (`writesNoTaskTime` in `conflict-disjoint-merge.util.ts`): readable
+   single-task edits without a time key, and the opaque actions admitted in
+   `TIMELESS_OPAQUE_TASK_ACTIONS`, today only the `planTasksForToday` that
+   tracking an unscheduled task emits (its reducer spec proves it writes no
+   time). So a remote delta beside a pending auto-plan applies without a
+   conflict, and a local win's snapshot folds it in; on a remote win whose
+   ops all write no time, the local deltas stay pending and are rebased past
+   the winner (`timeDeltasSurvivingRemoteWins`), unless the winner's clock
+   covers one (it already counts it, D10). LWW rows, `removeTimeSpent`,
+   rounding and any other opaque op keep whole-entity LWW, so a winner that
+   writes time and the resolution-row case of D10 stay open.
 
 **Decision 5a (2026-10-01, #10421).** Asked whether rule 1 below stays within
 decision 5, @johannesjo answered: "Ponder in sub agent and act according to
