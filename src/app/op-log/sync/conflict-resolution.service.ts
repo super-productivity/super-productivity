@@ -4359,14 +4359,11 @@ export class ConflictResolutionService {
     // convergent, while a whole-entity LWW winner would discard the loser's
     // fields fleet-wide. An overlapping crossing is forwarded: the device
     // whose side wins resolves it with a field patch (`_tryCreateFieldPatch`).
-    if (
-      isDisjointMergeEligible({
-        localOps,
-        remoteOps: [remoteOp],
-        payloadKey,
-        entityId,
-      })
-    ) {
+    // Time deltas commute as on the pending path, also beside the auto-plan
+    // that tracking an unscheduled task emits: a local win here would emit a
+    // snapshot whose clock claims the remote delta without its time.
+    const sides = { localOps, remoteOps: [remoteOp], payloadKey, entityId };
+    if (isDisjointMergeEligible(sides) || isCommutingTimeDeltaCrossing(sides)) {
       return null;
     }
 

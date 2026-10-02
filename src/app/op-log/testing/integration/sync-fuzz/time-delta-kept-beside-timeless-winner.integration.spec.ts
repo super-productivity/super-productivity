@@ -178,12 +178,12 @@ describe('time delta beside a timeless winner, through an upload race (#10378)',
     expect(times).toEqual([3000, 3000, 3000, 3000, 3000, 3000]);
   }, 60_000);
 
-  // Pins today's loss, the same on master. B's delta is rebased and accepted,
-  // but A's no-pending crossing then emits a whole-task LWW row whose merged
-  // clock claims B's knowledge while its total lacks B's 3000, and the row
-  // overwrites it everywhere: the resolution-row mechanism of #10438, outside
-  // this fix (decision 5a: row values are not read). Expected once fixed: 5000.
-  it('pins the #10438 row loss when A races its own tick', async () => {
-    expect(await raceTimes(['track', 't3', 2000])).toEqual([2000, 2000, 2000]);
+  // A tracks t3 too and uploads first, so A's auto-plan and delta are synced
+  // when B's accepted delta arrives: a no-pending crossing on A. It commutes
+  // like the pending path's. On master A won it by whole-task LWW and emitted
+  // a snapshot whose merged clock claimed B's delta while its total lacked
+  // B's 3000, so every device ended on 2000.
+  it('counts both devices tracked time when A races its own tick', async () => {
+    expect(await raceTimes(['track', 't3', 2000])).toEqual([5000, 5000, 5000]);
   }, 60_000);
 });

@@ -319,7 +319,13 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
    time). So a remote delta beside a pending auto-plan applies without a
    conflict, and a local win's snapshot folds it in; on a remote win whose
    ops all write no time, the local deltas stay pending and are rebased past
-   the winner (`timeDeltasSurvivingRemoteWins`). A delta a remote op's
+   the winner (`timeDeltasSurvivingRemoteWins`). The same crossing with
+   no pending side (#9073), where a device's own auto-plan and delta were
+   already synced when the other device's accepted delta arrives, commutes
+   too: there a local win emitted a snapshot whose merged clock claimed the
+   remote delta without its time, so every device lost it (the 2000/5000
+   history in the harness spec below; E2E in
+   `supersync-time-delta-auto-plan-crossing.spec.ts`). A delta a remote op's
    clock covers loses: that device had seen it, so it was delivered and
    counts once (keeping it re-sends it with a rebased clock, which the server
    rejects as `INVALID_OP_ID` with a sync error). D10 refined (#10393) asks to
