@@ -1525,8 +1525,8 @@
   },
   {
     "class": "stale-local-win-snapshot",
-    "ref": "#10421 (a readable local rename beats an opaque plan row with a pre-batch snapshot; same signatures on master f9330b15b). Also guards #10423's rule that a remote winner beside a local win of its entity stays after it: moving it ahead adds restart-changed:.task.entities.*.title",
-    "name": "a remote rename applied after a local-win snapshot of the same task stays on that device only",
+    "ref": "fixed for #10438 (regression pin): the local-win snapshot carries the plain fields of its task's remote winners, which apply after it. Also guards #10423's rule that a remote winner beside a local win of its entity stays after it: moving it ahead adds restart-changed:.task.entities.*.title",
+    "name": "a remote rename applied after a local-win snapshot of the same task reaches every device",
     "steps": [
       {
         "d": "B",
@@ -1554,8 +1554,7 @@
         "a": ["track", "t3", 2000]
       }
     ],
-    "primary": "divergence:.task.entities.*.title",
-    "signatures": ["divergence:.task.entities.*.title", "older-write-won:task.title"],
+    "signatures": [],
     "rejections": []
   },
   {

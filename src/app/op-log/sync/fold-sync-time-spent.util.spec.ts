@@ -233,19 +233,91 @@ describe('buildTimeAwareResolutionBatches: readable fields of nonconflicting ops
     expect(localBatchOps(batches)).toEqual([snapshot]);
   });
 
-  // The remote winner is applied after the snapshot, so a folded field could
-  // differ from this device's post-batch value.
-  it('leaves the snapshot alone when a remote winner of the task follows it', async () => {
+  // #10438: the local side beat an older opaque op of the task with this
+  // snapshot and lost to a newer rename, which applies after the snapshot.
+  // Without the overlay every other device kept the local title.
+  it('overlays a plain remote winner of the task, which follows the snapshot', async () => {
+    const remoteRename = taskUpdate('op-remote-rename', { title: 'newer' });
+    const { batches } = await build([localWin()], [], [remoteRename]);
+
+    const [snapshot] = localBatchOps(batches);
+    expect((snapshot.payload as { actionPayload: unknown }).actionPayload).toEqual({
+      id: 'task-1',
+      title: 'newer',
+      isDone: true,
+    });
+    expect(snapshot.vectorClock).toEqual({ A: 2, B: 3 });
+    expect(batches.map((batch) => batch.source)).toEqual(['local', 'remote']);
+    expect(batches[1].ops).toEqual([remoteRename]);
+  });
+
+  it('leaves the snapshot alone when a remote winner of the task is no plain edit', async () => {
     const snapshot = localWin();
-    const remoteWinner = { ...localWin(), id: 'op-remote-winner', clientId: 'C' };
+    const { batches } = await build(
+      [snapshot],
+      [],
+      [taskUpdate('op-reopen', { isDone: false })],
+    );
+
+    expect(localBatchOps(batches)).toEqual([snapshot]);
+  });
+
+  // An incoming edit and a remote winner of the task have no fixed order on
+  // this device, so the overlay could not tell which value is last.
+  // Both are plain, so only that rule keeps the snapshot as it is.
+  it('leaves the snapshot alone when an edit and a remote winner of the task both follow it', async () => {
+    const snapshot = localWin();
+    const remoteRename = taskUpdate(
+      'op-remote-rename',
+      { title: 'newer' },
+      { clientId: 'C', vectorClock: { C: 1 } },
+    );
     const { batches, precedingOps } = await build(
       [snapshot],
       [taskUpdate('op-rename', { title: 'older' })],
-      [remoteWinner],
+      [remoteRename],
     );
 
     expect(precedingOps).toEqual([]);
     expect(localBatchOps(batches)).toEqual([snapshot]);
+  });
+
+  // Only a TASK winner declaring the task applies after the snapshot; one
+  // that merely names the task keeps the edit's overlay, as on master.
+  it('still overlays an edit beside a remote winner that only names the task', async () => {
+    const tagWinner: Operation = {
+      ...taskUpdate('op-remote-tag', {}),
+      actionType: '[Tag] Update Tag' as ActionType,
+      entityType: 'TAG' as EntityType,
+      entityId: 'tag-1',
+      payload: {
+        actionPayload: { tag: { id: 'tag-1', changes: { taskIds: ['task-1'] } } },
+        entityChanges: [],
+      },
+      clientId: 'C',
+      vectorClock: { C: 1 },
+    };
+    const subTaskWinner = taskUpdate(
+      'op-remote-sub',
+      { parentId: 'task-1' },
+      { entityId: 'sub-1', clientId: 'C', vectorClock: { C: 2 } },
+    );
+    for (const winner of [tagWinner, subTaskWinner]) {
+      const { batches } = await build(
+        [localWin()],
+        [taskUpdate('op-notes', { notes: 'from A' })],
+        [winner],
+      );
+
+      const [snapshot] = localBatchOps(batches);
+      expect(
+        (snapshot.payload as { actionPayload: Record<string, unknown> }).actionPayload[
+          'notes'
+        ],
+      )
+        .withContext(winner.id)
+        .toBe('from A');
+    }
   });
 
   // #10423: a remote winner of a task without a local win goes right after
