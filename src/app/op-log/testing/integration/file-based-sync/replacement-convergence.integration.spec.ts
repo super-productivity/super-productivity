@@ -390,6 +390,49 @@ for (const isUseSplitSyncFiles of [false, true]) {
         }
       };
 
+      it('refuses an upgraded upload onto a replacement and hydrates it next (#10258)', async () => {
+        const a = await createDevice('dev-a');
+        const b = await createDevice('dev-b');
+        await as(a, async () => {
+          edit(a);
+          await download(a, () => 'remote');
+          await upload(a);
+        });
+        await as(b, () => download(b, () => 'remote'));
+        await as(a, () => download(a, () => 'remote'));
+        // First start after upgrading: the rev is persisted, last-seen clocks are not.
+        await as(a, () => restart(a, true));
+        // Unchanged rev: the Dropbox pre-check may skip this download.
+        await as(a, () => download(a, () => 'remote'));
+
+        // Another device's Keep local lands before a's upload, masked by a tail op.
+        await as(b, async () => {
+          edit(b);
+          await keepLocal(b);
+          edit(b);
+          await upload(b);
+        });
+        const replacedTask = 'dev-b-t1';
+        expect(a.tasks.has(replacedTask)).toBe(false);
+
+        await as(a, async () => {
+          edit(a);
+          await expectAsync(
+            a.adapter.uploadOps(a.pending, a.id, await a.adapter.getLastServerSeq()),
+          ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+        });
+        await as(a, async () => {
+          const since = await a.adapter.getLastServerSeq();
+          const res = (await a.adapter.downloadOps(
+            since,
+            a.id,
+          )) as FileSnapshotOpDownloadResponse;
+          expect(res.gapDetected).withContext('replacement detected').toBe(true);
+        });
+        await as(a, () => download(a, () => 'remote'));
+        expect(a.tasks.has(replacedTask)).withContext('replacement hydrated').toBe(true);
+      });
+
       for (let seed = 1; seed <= SEEDS_PER_VARIANT; seed++) {
         it(`converges for seed ${seed}`, () => runSeed(seed));
       }

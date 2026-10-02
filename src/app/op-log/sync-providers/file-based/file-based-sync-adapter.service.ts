@@ -1064,15 +1064,15 @@ export class FileBasedSyncAdapterService {
     // the cheap check failed.
     //
     // Gated on `sinceSeq > 0` (review follow-up): a `forceFromSeq0` download
-    // (sinceSeq === 0) is used to REBUILD local state from the remote snapshot
-    // (e.g. USE_REMOTE conflict resolution, which first clears local state). There
-    // "remote rev unchanged" does NOT mean "nothing to do" — the caller needs the
-    // full snapshotState even when the rev matches, so a seq-0 download must never
-    // short-circuit.
+    // REBUILDS local state from the remote snapshot (e.g. USE_REMOTE), so it needs
+    // the full snapshotState even when the rev matches. Gated on a recorded clock
+    // (#10258): the first sync after upgrading reads the file once, so its commit
+    // records the baseline the snapshot-base guards judge by.
     const lastSeenRev = this._lastSeenRevs.get(providerKey);
     if (
       sinceSeq > 0 &&
       lastSeenRev &&
+      this._lastSeenVectorClocks.has(providerKey) &&
       !this._getCachedSyncData(providerKey) &&
       this._REV_PRECHECK_PROVIDERS.has(provider.id)
     ) {
@@ -2560,14 +2560,13 @@ export class FileBasedSyncAdapterService {
     providerKey: string,
     capturedGeneration: number,
   ): Promise<FileSnapshotOpDownloadResponse> {
-    // SPAP-10 rev pre-check, extended to the ops file. Gated on `sinceSeq > 0`
-    // (review follow-up): a forceFromSeq0 download (sinceSeq === 0) re-pulls the
-    // full snapshot to REBUILD local state (e.g. USE_REMOTE), so it must never be
-    // short-circuited by an unchanged rev — the same guard as the single-file path.
+    // SPAP-10 rev pre-check, extended to the ops file, with the same `sinceSeq > 0`
+    // and recorded-clock (#10258) gates as the single-file path.
     const lastSeenRev = this._lastSeenRevs.get(providerKey);
     if (
       sinceSeq > 0 &&
       lastSeenRev &&
+      this._lastSeenVectorClocks.has(providerKey) &&
       !this._getCachedOpsData(providerKey) &&
       this._REV_PRECHECK_PROVIDERS.has(provider.id)
     ) {
@@ -3062,7 +3061,8 @@ export class FileBasedSyncAdapterService {
    * #9170: never append to a replacement this client has not hydrated; that
    * would overwrite its snapshot with stale state and mark it seen for good.
    * Skipped without a recorded clock (first sync after upgrading): no baseline
-   * to judge by, and the rev pre-check could then skip the re-download forever.
+   * to judge by. The rev pre-check waits for a clock (#10258), so the first
+   * download records one before any upload.
    */
   private _assertSnapshotBaseSeen(
     providerKey: string,
