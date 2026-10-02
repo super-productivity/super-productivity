@@ -124,7 +124,7 @@ which fields an opaque op writes, which is (1)'s extractor.
 
 | Aspect             | Assessment                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Idea**           | When resolving, learn which fields an op writes by applying its reducer to a copy of the root state and diffing the entity, instead of a hand-written per-action extractor; keep a local, never-synced per-field index of the latest write; resolve per field and emit today's `'patch'` rows. Time deltas extend the existing rebase (`keptLocalTimeDeltas`/`rebaseKeptTimeDeltas`, `conflict-field-patch.util.ts`, decision 7 replaced) instead of losing to LWW                                                                                                                                                                                                |
+| **Idea**           | When resolving, learn which fields an op writes by applying its reducer to a copy of the root state and diffing the entity, instead of a hand-written per-action extractor; keep a local, never-synced per-field index of the latest write; resolve per field and emit today's `'patch'` rows. Time deltas extend the existing rebase (`keptLocalTimeDeltas`/`rebaseKeptTimeDeltas`, `conflict-field-patch.util.ts`) instead of losing to LWW. Since #10422 the rebase covers both directions for readable sides; whole-entity resolutions, #10378's included, still lose a local delta on a remote win (decision 7: local-win direction only, for now)           |
 | **Fixes**          | The field-level residue of opaque TASK, PROJECT, TAG and habit producers (#10421, #10438's shape). Not NOTE while decision 4 holds (`note.content` 10 and `note.isLock` 6 seeds stay). The rebase extension targets #10378 and #10380's task half, which (2) does not fix                                                                                                                                                                                                                                                                                                                                                                                         |
 | **Wire / schema**  | None: rows are the existing `'patch'` shape; the index is local (the `DB_VERSION` channel, ADR #8). No bump                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **Mixed fleet**    | Converges on SuperSync, where one device resolves. On file providers it is worse than (1): the index is per device, so two resolvers of the same crossing can emit different rows. Old resolvers keep emitting `'replace'` rows with absolute `timeSpentOnDay`; a rebased delta after one can count time twice, so the rebase must not sit beside a `'replace'` row                                                                                                                                                                                                                                                                                               |
@@ -133,7 +133,7 @@ which fields an opaque op writes, which is (1)'s extractor.
 | **Effort**         | Unknown until a spike. Reducers are not pure in the needed sense: they read device-local `todayStr`, fall back to `getDbDateStr()`, and stamp `Date.now()` into `modified`/`doneOn` (`task-shared-crud.reducer.ts`, `task.reducer.util.ts`, `task-shared-scheduling.reducer.ts`, `planner-shared.reducer.ts`). Meta-reducers such as `planTasksForToday` need the root state. A diff misses writes of an equal value, so the field set depends on the base state. On SuperSync the server lets a crossing pass only when both ops are `syncTimeSpent` (`conflict.ts`), so a delta against `planTasksForToday` is still rejected and must be rebased by the client |
 | **Lets us delete** | Per-action opacity rules (`isOpaqueChangeOp`), most accepted compare entries                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
-### Membership versus order (option M, design later)
+### Membership versus order (option M, formerly (5); design later)
 
 `project.taskIds`, `project.noteIds` and `note.todayOrder` hold membership and
 order at once. A child fact exists (`task.projectId`, `note.projectId`,
@@ -180,8 +180,10 @@ defaults first posted on #10393 (comment 5944338767).
 6. Plan the file-provider format alongside any apply-time change. A partial
    lever exists: clients from v18.14.0 with split sync off pause on the
    split-file tombstone (`file-based-sync-format.ts`). Not covered: clients
-   older than v18.14.0, and split-on readers meeting a newer split version
-   (`assertSyncFileVersion` throws `SyncDataCorruptedError`, no pause).
+   older than v18.14.0, and split-on readers meeting a newer split version.
+   Released ones (v19.1.0) treat it as recoverable corruption and restore
+   from `.bak`, so by code reading their next upload can overwrite the newer
+   file; only master since #10255 (unreleased) refuses it (`isRemoteNewer`).
 7. #10438's fix shape: one decision per entity per batch, or #10421's
    post-batch field patch. Not "a time-only side needs no snapshot": on the
    resolving device the local side is a rename.
@@ -207,7 +209,10 @@ design-note session: "Do as recommend". D6 was decided earlier the same day
 This reverses the 2026-10-01 tracker line "#10437 and #10438: stopping-point
 evidence, with no separate fixes" for #10438. Not decided here, and needed
 before the (6) spike lands: whether its index may record fields written by
-incoming resolution rows (decisions 5 and 5a).
+incoming resolution rows (decisions 5 and 5a). Also open: D1 asks for
+#10378's E2E in both directions, but decision 7 keeps a whole-entity remote
+win dropping the losing device's delta; the #10378 fix needs that revisited or
+its scope limited to the local-win direction.
 
 ## Missing evidence
 
@@ -217,4 +222,5 @@ incoming resolution rows (decisions 5 and 5a).
 - Whether v19.1.0 shows #10438 (diverges or only reverts the field).
 - A per-seed split of `field-reverted`/`field-unwritten` by producer.
 - The (6) spike: field sets for meta-reducers, map fields and equal-value
-  writes, and the rebase next to `'replace'` rows.
+  writes, the rebase next to `'replace'` rows, and two file-provider
+  resolvers of one crossing.
