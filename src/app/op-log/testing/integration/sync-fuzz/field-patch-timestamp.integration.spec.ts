@@ -103,6 +103,59 @@ describe('field patch timestamps (#10422)', () => {
     }, 60_000);
   }
 
+  it('re-sends a won field at its own write’s time, not its side’s latest', async () => {
+    // A writes notes, C writes newer notes, A renames: all offline. B renames
+    // last and syncs; A resolves against B, wins its notes and re-sends them.
+    // Stamped at A's rename (its side's latest) instead of the notes' own
+    // time, that row would beat C's newer notes when C resolves against it.
+    await harness.as(a, () =>
+      harness.dispatch(
+        TaskSharedActions.addTask({
+          task: {
+            ...DEFAULT_TASK,
+            id: 't1',
+            title: 'task',
+            projectId: 'INBOX_PROJECT',
+            created: Date.now(),
+          },
+          workContextId: 'INBOX_PROJECT',
+          workContextType: WorkContextType.PROJECT,
+          isAddToBacklog: false,
+          isAddToBottom: false,
+        }),
+      ),
+    );
+    for (const device of [a, b, c]) {
+      expect(await harness.sync(device)).toBe(true);
+    }
+
+    harness.tick();
+    await harness.as(a, () => updateTask({ notes: 'A notes' }));
+    harness.tick();
+    await harness.as(c, () => updateTask({ notes: 'C notes (newer)' }));
+    harness.tick();
+    await harness.as(a, () => updateTask({ title: 'A title' }));
+    harness.tick();
+    await harness.as(b, () => updateTask({ title: 'B title' }));
+    for (const device of [b, a, c]) {
+      expect(await harness.sync(device)).toBe(true);
+    }
+    for (let round = 0; round < 2; round++) {
+      for (const device of [a, b, c]) {
+        expect(await harness.sync(device)).toBe(true);
+      }
+    }
+
+    const expected = { title: 'B title', notes: 'C notes (newer)' };
+    expect({ A: await taskOn(a), B: await taskOn(b), C: await taskOn(c) }).toEqual({
+      A: expected,
+      B: expected,
+      C: expected,
+    });
+    await harness.restart(a);
+    expect(await taskOn(a)).toEqual(expected);
+  }, 60_000);
+
   it('a side with a later rename keeps the other device’s newer notes', async () => {
     // Two devices: A writes notes and leaves them pending, C writes newer
     // notes and uploads, A renames and uploads after C. A's side has the

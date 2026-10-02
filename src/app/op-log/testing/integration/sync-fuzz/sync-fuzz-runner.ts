@@ -161,8 +161,9 @@ interface LedgerWrite {
  *   returns undefined for it, so `isFieldPatchEligible` refuses;
  * - `deleteTask`: a DELETE refuses in `isFieldPatchEligible`, and its plan is
  *   a whole-entity win (`ConflictResolutionService._isWholeEntityWinPlan`);
- * - `archiveTask`: a multi-entity op (`isFieldPatchEligible`), and an archive
- *   wins over a concurrent edit by sync-core's planner (`_isWholeEntityWinPlan`);
+ * - `archiveTask`: no `{ id, changes }` to read (`isOpaqueChangeOp`), and a
+ *   multi-entity op with subtasks; an archive also wins over a concurrent
+ *   edit by sync-core's planner (`_isWholeEntityWinPlan`);
  * - `restoreTask`: carries the flat archived task, not `{ id, changes }`, so a
  *   local one refuses (`isChangesShapedOp` in `isFieldPatchEligible`). A
  *   remote one is read per field but writes every field at its own time, as
@@ -285,11 +286,11 @@ export class Ledger {
    * (`WHOLE_ENTITY_INTENTS`), or a plain time delta on the remote side, which
    * refuses the field patch (`remoteOps.some(isSyncTimeSpentOp)` in
    * `isFieldPatchEligible`, the design note's "Time" rule). Otherwise both
-   * sides are readable and the conflict resolves per field. The model takes one other device at a time; the
-   * app's remote side is everything it downloads for the entity, so a third
-   * device's remote delta in the same download is not seen here. And only
-   * the later uploader resolves, as on SuperSync; on a file-based provider
-   * both devices can.
+   * sides are readable and the conflict resolves per field. The model takes
+   * one other device at a time; the app's remote side is everything it
+   * downloads for the entity, so a third device's remote delta in the same
+   * download is not seen here. And only the later uploader resolves, as on
+   * SuperSync; on a file-based provider both devices can.
    */
   crossing(
     entity: string,
