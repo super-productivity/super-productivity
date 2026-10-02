@@ -613,6 +613,41 @@ describe('planLwwConflictResolutions', () => {
     ]);
   });
 
+  it('makes one timestamp decision per entity across its conflicts (#10438)', () => {
+    const local = createOp({ id: 'local-rename', timestamp: 2_000 });
+    const olderRemote = createConflict(
+      [local],
+      [createOp({ id: 'remote-plan', timestamp: 1_000, clientId: 'client-b' })],
+    );
+    const newerRemote = createConflict(
+      [local],
+      [createOp({ id: 'remote-rename', timestamp: 3_000, clientId: 'client-a' })],
+    );
+    const otherEntity = createConflict(
+      [createOp({ id: 'local-other', entityId: 'task-2', timestamp: 2_000 })],
+      [
+        createOp({
+          id: 'remote-other',
+          entityId: 'task-2',
+          timestamp: 1_000,
+          clientId: 'client-b',
+        }),
+      ],
+      { entityId: 'task-2' },
+    );
+
+    const plans = planLwwConflictResolutions([olderRemote, newerRemote, otherEntity], {
+      isArchiveAction,
+    });
+
+    expect(plans.map(({ winner, reason }) => ({ winner, reason }))).toEqual([
+      { winner: 'remote', reason: 'remote-timestamp-or-tie' },
+      { winner: 'remote', reason: 'remote-timestamp-or-tie' },
+      { winner: 'local', reason: 'local-timestamp' },
+    ]);
+    expect(plans[0].remoteMaxTimestamp).toBe(3_000);
+  });
+
   it('defaults a timestamp tie to remote when both sides share a clientId', () => {
     // Degenerate case only: same-client ops on one entity are never
     // vector-clock-concurrent, so a real cross-device tie never has equal
