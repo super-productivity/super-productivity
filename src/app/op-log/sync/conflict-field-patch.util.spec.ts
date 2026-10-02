@@ -411,10 +411,12 @@ describe('conflict-field-patch.util', () => {
       expect(survivors('local', conflict(tick, [remotePlan]))).toEqual([]);
     });
 
-    // D10: the winner's absolute value already counts a delta its clock covers.
-    it('drops a delta the winner covers, so it is not counted twice', () => {
+    // D10 refined: a winner that writes no time has no total, so a clock
+    // that covers the delta (inherited knowledge, #10438) proves nothing.
+    it('keeps a delta even when the winner clock covers it', () => {
       const covering = plan({ id: 'covering', vectorClock: { A: 2, B: 1 } });
-      expect(survivors('remote', conflict(tick, [covering]))).toEqual([]);
+      const [kept] = survivors('remote', conflict(tick, [covering]));
+      expect(kept.localOps.map((o) => o.id)).toEqual(['d']);
     });
 
     it('keeps whole-entity LWW when either side writes or may write time', () => {

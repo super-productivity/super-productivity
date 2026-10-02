@@ -319,8 +319,14 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
    time). So a remote delta beside a pending auto-plan applies without a
    conflict, and a local win's snapshot folds it in; on a remote win whose
    ops all write no time, the local deltas stay pending and are rebased past
-   the winner (`timeDeltasSurvivingRemoteWins`), unless the winner's clock
-   covers one (it already counts it, D10). LWW rows, `removeTimeSpent`,
+   the winner (`timeDeltasSurvivingRemoteWins`) whatever the winner's clock
+   says (D10 refined, decided 2026-10-02 on #10393: a winner that writes no
+   time has no total, so a covering clock proves nothing; the upload-race
+   spec `time-delta-kept-beside-timeless-winner.integration.spec.ts` builds
+   such a clock). A delta that was delivered after all but never marked
+   synced is re-sent with its rebased clock; the server answers
+   `INVALID_OP_ID`, the client marks it rejected and shows one sync error.
+   Nothing is counted twice. LWW rows, `removeTimeSpent`,
    rounding and any other opaque op keep whole-entity LWW, so a winner that
    writes time and the resolution-row case of D10 stay open. The rule runs on
    the device that resolves the crossing: a released (v19.1.0) device that

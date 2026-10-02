@@ -18,11 +18,7 @@ import { ActionType, isLwwUpdatePayload, OpType } from '../core/operation.types'
 import type { EntityConflict, Operation, VectorClock } from '../core/operation.types';
 import type { EntityType } from '../core/operation.types';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
-import {
-  compareVectorClocks,
-  mergeVectorClocks,
-  VectorClockComparison,
-} from '../../core/util/vector-clock';
+import { mergeVectorClocks } from '../../core/util/vector-clock';
 import { isMultiEntityOperation } from '../util/get-op-entity-ids.util';
 import {
   isAdditiveTimeOp,
@@ -332,8 +328,11 @@ export const keptLocalTimeDeltas = (
  * op of a TASK conflict is a `syncTimeSpent` delta or writes no time field
  * (`writesNoTaskTime`), so the winner leaves the deltas' time as it is: they
  * stay pending and move past the winner, while the side's other ops lose as
- * before. A winner whose clock covers a delta already counts it, so that
- * delta loses too. Rows and other time writers keep whole-entity LWW.
+ * before. The winner's clock is not consulted: it writes no total, so even a
+ * clock that covers a delta cannot show the delta is counted (D10 refined,
+ * #10393). A delta that was delivered after all is answered with
+ * DUPLICATE_OPERATION on re-upload and receivers dedupe it by id. Rows and
+ * other time writers keep whole-entity LWW.
  */
 export const timeDeltasSurvivingRemoteWins = (
   resolutions: { conflict: EntityConflict; winner: 'local' | 'remote' }[],
@@ -351,15 +350,7 @@ export const timeDeltasSurvivingRemoteWins = (
     ) {
       return [];
     }
-    const deltas = localOps.filter(
-      (op) =>
-        isSyncTimeSpentOp(op) &&
-        remoteOps.every(
-          (remote) =>
-            compareVectorClocks(op.vectorClock, remote.vectorClock) ===
-            VectorClockComparison.CONCURRENT,
-        ),
-    );
+    const deltas = localOps.filter(isSyncTimeSpentOp);
     return deltas.length > 0 ? [{ ...conflict, localOps: deltas }] : [];
   });
 
