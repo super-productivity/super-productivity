@@ -322,7 +322,11 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
    the winner (`timeDeltasSurvivingRemoteWins`), unless the winner's clock
    covers one (it already counts it, D10). LWW rows, `removeTimeSpent`,
    rounding and any other opaque op keep whole-entity LWW, so a winner that
-   writes time and the resolution-row case of D10 stay open.
+   writes time and the resolution-row case of D10 stay open. The rule runs on
+   the device that resolves the crossing: a released (v19.1.0) device that
+   downloads the other side while its own tick is pending lacks it and still
+   resolves by whole-entity LWW, so the released E2E only covers a released
+   tracker that uploads first.
 
 **Decision 5a (2026-10-01, #10421).** Asked whether rule 1 below stays within
 decision 5, @johannesjo answered: "Ponder in sub agent and act according to
