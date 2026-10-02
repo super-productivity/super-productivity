@@ -851,6 +851,7 @@
       },
       "D_FULLSCREEN": {
         "CONFIRM_DISCARD_MSG": "You have unsaved changes. Discard them?",
+        "CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK": "Save the current note before opening a new task?",
         "TOOLBAR": {
           "BOLD": "Bold",
           "BULLET_LIST": "Bulleted list",

@@ -109,6 +109,18 @@ describe('DialogAddNoteComponent', () => {
     expect(mockDialogRef.close).not.toHaveBeenCalled();
   });
 
+  it('should close after an external discard confirmation without prompting again', () => {
+    sessionStorage.setItem(SS.NOTE_TMP, 'recovered note');
+    createComponent();
+    const confirmDialogSpy = spyOn(component['_matDialog'], 'open');
+
+    component.closeAfterConfirmedDiscard();
+
+    expect(confirmDialogSpy).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(SS.NOTE_TMP)).toBeNull();
+    expect(mockDialogRef.close).toHaveBeenCalled();
+  });
+
   it('should add the note and clear the storage on save', () => {
     createComponent();
     component.data.content = 'new note content';

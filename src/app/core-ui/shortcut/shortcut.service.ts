@@ -7,20 +7,22 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 import { ActivatedRoute, Router } from '@angular/router';
 import { LayoutService } from '../layout/layout.service';
 import { TaskService } from '../../features/tasks/task.service';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { DialogAddNoteComponent } from '../../features/note/dialog-add-note/dialog-add-note.component';
 import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const';
 import { UiHelperService } from '../../features/ui-helper/ui-helper.service';
 import { WorkContextService } from '../../features/work-context/work-context.service';
 import { WorkContextType } from '../../features/work-context/work-context.model';
+import { T } from '../../t.const';
 import { Store } from '@ngrx/store';
 import { showFocusOverlay } from '../../features/focus-mode/store/focus-mode.actions';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { first, mapTo, switchMap } from 'rxjs/operators';
-import { fromEvent, merge, Observable, of } from 'rxjs';
+import { firstValueFrom, fromEvent, merge, Observable, of } from 'rxjs';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { TaskShortcutService } from '../../features/tasks/task-shortcut.service';
 import { TODAY_TAG } from '../../features/tag/tag.const';
+import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 
 // NOTE: Relying on Angular CDK overlay CSS class names keeps shortcut suppression simple.
 // If CDK changes these class names we only need to adjust the helpers below.
@@ -97,7 +99,7 @@ export class ShortcutService {
         this._taskService.toggleStartTask();
       });
       window.ea.on(IPC.SHOW_ADD_TASK_BAR, () => {
-        this._layoutService.showAddTaskBar();
+        void this._showAddTaskBarFromDesktopCommand();
       });
       window.ea.on(IPC.ADD_NOTE, () => {
         if (this._matDialog.openDialogs.length === 0) {
@@ -110,6 +112,54 @@ export class ShortcutService {
         }
       });
     }
+  }
+
+  private async _showAddTaskBarFromDesktopCommand(): Promise<void> {
+    const addNoteDialogRef = this._getAddNoteDialogRef();
+    if (!addNoteDialogRef) {
+      this._layoutService.showAddTaskBar();
+      return;
+    }
+
+    const addNoteDialog = addNoteDialogRef.componentInstance;
+    const noteContent = addNoteDialog.data?.content?.trim() || '';
+
+    if (noteContent.length > 0) {
+      const shouldSave = await firstValueFrom(
+        this._matDialog
+          .open(DialogConfirmComponent, {
+            data: {
+              message: T.F.NOTE.D_FULLSCREEN.CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK,
+              okTxt: T.G.SAVE,
+              cancelTxt: T.G.DISCARD,
+            },
+          })
+          .afterClosed(),
+      );
+
+      if (typeof shouldSave !== 'boolean') {
+        return;
+      }
+
+      if (shouldSave) {
+        addNoteDialog.close();
+      } else {
+        addNoteDialog.closeAfterConfirmedDiscard();
+      }
+    } else {
+      addNoteDialog.closeAfterConfirmedDiscard();
+    }
+
+    await firstValueFrom(addNoteDialogRef.afterClosed());
+    this._layoutService.showAddTaskBar();
+  }
+
+  private _getAddNoteDialogRef(): MatDialogRef<DialogAddNoteComponent> | null {
+    return (
+      (this._matDialog.openDialogs.find(
+        (dialogRef) => dialogRef.componentInstance instanceof DialogAddNoteComponent,
+      ) as MatDialogRef<DialogAddNoteComponent> | undefined) || null
+    );
   }
 
   async handleKeyDown(ev: KeyboardEvent): Promise<void> {
