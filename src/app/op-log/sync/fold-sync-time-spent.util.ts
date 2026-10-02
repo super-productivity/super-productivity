@@ -222,8 +222,13 @@ export const buildTimeAwareResolutionBatches = async ({
   const foldedIds = new Set<string>();
   // A remote winner of the snapshot's task applies after it (`localWinKeys`
   // below), so its plain fields are this device's post-batch values as well
-  // (#10438). A winning delta is folded before the snapshot instead.
-  const remoteWinnerFieldOps = remoteWinsOps.filter((op) => !isSyncTimeSpentOp(op));
+  // (#10438). A winning delta is folded before the snapshot instead. Only a
+  // TASK winner that declares the task follows the snapshot; one that merely
+  // names it (a tag's task list, a subtask's parent) writes none of its plain
+  // fields and is ignored, as on master.
+  const remoteWinnerFieldOps = remoteWinsOps.filter(
+    (op) => op.entityType === 'TASK' && !isSyncTimeSpentOp(op),
+  );
   const foldFieldOps = (op: Operation, fieldOps: Operation[]): Operation => {
     if (
       op.entityType !== 'TASK' ||
@@ -247,7 +252,9 @@ export const buildTimeAwareResolutionBatches = async ({
     const edits = fieldOps.filter(
       (incoming) => touchesTask(incoming, taskId) && !foldedIds.has(incoming.id),
     );
-    const winners = remoteWinnerFieldOps.filter((winner) => touchesTask(winner, taskId));
+    const winners = remoteWinnerFieldOps.filter((winner) =>
+      getOpEntityIds(winner).includes(taskId),
+    );
     // Their relative order on this device is not fixed (a re-send moves the
     // edits after the winners), so the overlay could not tell which is last.
     if (edits.length > 0 && winners.length > 0) return op;

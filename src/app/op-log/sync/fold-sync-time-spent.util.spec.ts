@@ -282,6 +282,44 @@ describe('buildTimeAwareResolutionBatches: readable fields of nonconflicting ops
     expect(localBatchOps(batches)).toEqual([snapshot]);
   });
 
+  // Only a TASK winner declaring the task applies after the snapshot; one
+  // that merely names the task keeps the edit's overlay, as on master.
+  it('still overlays an edit beside a remote winner that only names the task', async () => {
+    const tagWinner: Operation = {
+      ...taskUpdate('op-remote-tag', {}),
+      actionType: '[Tag] Update Tag' as ActionType,
+      entityType: 'TAG' as EntityType,
+      entityId: 'tag-1',
+      payload: {
+        actionPayload: { tag: { id: 'tag-1', changes: { taskIds: ['task-1'] } } },
+        entityChanges: [],
+      },
+      clientId: 'C',
+      vectorClock: { C: 1 },
+    };
+    const subTaskWinner = taskUpdate(
+      'op-remote-sub',
+      { parentId: 'task-1' },
+      { entityId: 'sub-1', clientId: 'C', vectorClock: { C: 2 } },
+    );
+    for (const winner of [tagWinner, subTaskWinner]) {
+      const { batches } = await build(
+        [localWin()],
+        [taskUpdate('op-notes', { notes: 'from A' })],
+        [winner],
+      );
+
+      const [snapshot] = localBatchOps(batches);
+      expect(
+        (snapshot.payload as { actionPayload: Record<string, unknown> }).actionPayload[
+          'notes'
+        ],
+      )
+        .withContext(winner.id)
+        .toBe('from A');
+    }
+  });
+
   // #10423: a remote winner of a task without a local win goes right after
   // the incoming op it dominates, ahead of the local rows; one beside a local
   // win of its task stays after it, so it overrides the snapshot on replay.
