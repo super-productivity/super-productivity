@@ -57,4 +57,44 @@ describe('detectDownloadGap', () => {
 
     expect(result.needsGapDetection).toBeFalse();
   });
+
+  describe('snapshot base without a recorded clock (#10258)', () => {
+    // B replaced the remote (Keep local) and appended a tail op on top.
+    const BASE = { clientA: 3, clientB: 2 };
+    const replaced = { vectorClock: { clientA: 3, clientB: 3 }, snapshotBaseClock: BASE };
+
+    it('flags a base the local op-log clock does not cover', () => {
+      const result = detectDownloadGap(
+        input(replaced, { lastSeenClock: undefined, localClock: LAST_SEEN }),
+      );
+
+      expect(result.needsGapDetection).toBeTrue();
+      expect(result.reason).toContain('unseen causal base');
+    });
+
+    it('does not flag a base the local clock covers, even with local edits on top', () => {
+      const result = detectDownloadGap(
+        input(replaced, {
+          lastSeenClock: undefined,
+          localClock: { clientA: 5, clientB: 2 },
+        }),
+      );
+
+      expect(result.needsGapDetection).toBeFalse();
+    });
+
+    it('judges by the recorded clock once there is one', () => {
+      const result = detectDownloadGap(
+        input(replaced, { lastSeenClock: BASE, localClock: LAST_SEEN }),
+      );
+
+      expect(result.needsGapDetection).toBeFalse();
+    });
+
+    it('does not flag without any baseline', () => {
+      const result = detectDownloadGap(input(replaced, { lastSeenClock: undefined }));
+
+      expect(result.needsGapDetection).toBeFalse();
+    });
+  });
 });

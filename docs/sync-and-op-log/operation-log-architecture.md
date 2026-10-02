@@ -861,12 +861,14 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    rule: an upload that finds an unseen base is refused as a retryable
    conflict, so a stale client cannot append to a replacement it never
    hydrated (in v2, overwriting its snapshot with stale state). Before the
-   first recorded clock (e.g. the first sync after upgrading) neither check
-   runs: there is no baseline to judge by, a forced seq-0 download would show
-   a conflict dialog whenever local ops are pending. The rev pre-check also
-   waits for a recorded clock, so that first sync reads the file once and
-   commits its clock. A replacement that lands before that first read is
-   adopted as the baseline and goes unnoticed (known gap, #10258).
+   first recorded clock (e.g. the first sync after upgrading) the reader
+   judges the base by its op-log vector clock instead: every snapshot it
+   hydrated or wrote is merged into that clock, so an uncovered base is one it
+   never loaded, and pending local ops alone do not flag it (#10258). The
+   writer check still needs a recorded clock; a sync cycle downloads before it
+   uploads, so the reader check runs first. The rev pre-check also waits for a
+   recorded clock, so that first sync reads the file once and commits its
+   clock.
    This optional metadata requires no schema bump: older readers ignore it,
    but older writers can omit it. Masked dominating replacements written by,
    or subsequently rewritten by, those clients remain a mixed-version gap;

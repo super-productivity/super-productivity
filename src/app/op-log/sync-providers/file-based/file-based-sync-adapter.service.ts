@@ -14,14 +14,7 @@ import { EncryptAndCompressHandlerService } from '../../encryption/encrypt-and-c
 import { extractSyncFileStateFromPrefix } from '../../util/sync-file-prefix';
 import { EncryptAndCompressCfg } from '../../core/types/sync.types';
 import { REPAIR_STALE_ERROR_CODE } from '../../core/operation-log.const';
-import {
-  Operation,
-  VectorClock,
-  ActionType,
-  OpType,
-  EntityType,
-  SyncImportReason,
-} from '../../core/operation.types';
+import { VectorClock } from '../../core/operation.types';
 import {
   FileBasedSyncData,
   FileBasedOpsFile,
@@ -57,12 +50,9 @@ import { mergeVectorClocks, compareVectorClocks } from '../../../core/util/vecto
 import { detectDownloadGap, isSnapshotBaseUnseen } from './file-based-sync-gap.util';
 import { ArchiveDbAdapter } from '../../../core/persistence/archive-db-adapter.service';
 import { StateSnapshotService } from '../../backup/state-snapshot.service';
+import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
 import { stripLocalOnlySyncSettingsFromAppData } from '../../../features/config/local-only-sync-settings.util';
-import { CompactOperation } from '../../persistence/compact/compact-operation.types';
-import {
-  encodeOperation,
-  decodeOperation,
-} from '../../persistence/compact/operation-codec.service';
+import { compactToSyncOp, syncOpToCompact } from './file-based-sync-op-codec.util';
 
 /**
  * Adapter that enables file-based sync providers (WebDAV, Dropbox, LocalFile)
@@ -113,6 +103,7 @@ export class FileBasedSyncAdapterService {
   private _encryptAndCompressHandler = new EncryptAndCompressHandlerService();
   private _archiveDbAdapter = inject(ArchiveDbAdapter);
   private _stateSnapshotService = inject(StateSnapshotService);
+  private _opLogStore = inject(OperationLogStoreService);
   // Resolved lazily (not eagerly injected) to avoid a construction-time DI cycle:
   // SnackService's dependency graph transitively reaches the sync providers. We only
   // need it for the non-fatal backup-recovery notice, well after construction.
@@ -267,8 +258,8 @@ export class FileBasedSyncAdapterService {
         if (state.revs) {
           this._lastSeenRevs = new Map(Object.entries(state.revs));
         }
-        // #9170: back-compat — until a clock is recorded, lineage and snapshot
-        // base checks stay off (#10258).
+        // #9170: back-compat — until a clock is recorded, the lineage check stays
+        // off and the op-log clock judges snapshot bases (#10258).
         if (state.lastSeenClocks) {
           this._lastSeenVectorClocks = new Map(Object.entries(state.lastSeenClocks));
         }
@@ -734,7 +725,7 @@ export class FileBasedSyncAdapterService {
 
     // Tag each new compact op with the syncVersion of this upload batch
     const compactOps: SyncFileCompactOp[] = ops.map((op) => ({
-      ...this._syncOpToCompact(op),
+      ...syncOpToCompact(op),
       sv: newSyncVersion,
     }));
 
@@ -1198,6 +1189,7 @@ export class FileBasedSyncAdapterService {
       excludeClient,
       previousExpectedVersion,
       lastSeenClock: this._lastSeenVectorClocks.get(providerKey),
+      localClock: await this._getLocalClockWithoutBaseline(providerKey, sinceSeq),
       hasSnapshot: !!syncData.state,
     });
     if (isCosmeticReset) {
@@ -1251,7 +1243,7 @@ export class FileBasedSyncAdapterService {
         // #10119: the syncVersion the op was written at, comparable with the
         // cursor; a legacy op without `sv` gets the upper bound syncVersion.
         serverSeq: compactOp.sv ?? syncData.syncVersion,
-        op: this._compactToSyncOp(compactOp),
+        op: compactToSyncOp(compactOp),
         receivedAt: compactOp.t,
       });
     });
@@ -2366,7 +2358,7 @@ export class FileBasedSyncAdapterService {
     const newSyncVersion = currentSyncVersion + 1;
 
     const compactOps: SyncFileCompactOp[] = newOps.map((op) => ({
-      ...this._syncOpToCompact(op),
+      ...syncOpToCompact(op),
       sv: newSyncVersion,
     }));
 
@@ -2650,6 +2642,7 @@ export class FileBasedSyncAdapterService {
       excludeClient,
       previousExpectedVersion: this._expectedSyncVersions.get(providerKey) ?? 0,
       lastSeenClock: this._lastSeenVectorClocks.get(providerKey),
+      localClock: await this._getLocalClockWithoutBaseline(providerKey, sinceSeq),
       hasSnapshot: true,
     });
 
@@ -2666,7 +2659,7 @@ export class FileBasedSyncAdapterService {
     const snapshotAppliedOpIds: string[] = [];
     opsFile.recentOps.forEach((compactOp) => {
       if (excludeClient && compactOp.c === excludeClient) return;
-      const op = this._compactToSyncOp(compactOp);
+      const op = compactToSyncOp(compactOp);
       filteredOps.push({
         serverSeq: compactOp.sv ?? opsFile.syncVersion, // see _downloadOps (#10119)
         op,
@@ -2741,7 +2734,7 @@ export class FileBasedSyncAdapterService {
       data.recentOps.forEach((compactOp, index) => {
         filteredOps.push({
           serverSeq: index + 1,
-          op: this._compactToSyncOp(compactOp),
+          op: compactToSyncOp(compactOp),
           receivedAt: compactOp.t,
         });
       });
@@ -3077,6 +3070,15 @@ export class FileBasedSyncAdapterService {
     }
   }
 
+  /** The op-log clock as the snapshot-base baseline until a file clock is recorded (#10258). */
+  private async _getLocalClockWithoutBaseline(
+    providerKey: string,
+    sinceSeq: number,
+  ): Promise<VectorClock | undefined> {
+    if (sinceSeq === 0 || this._lastSeenVectorClocks.has(providerKey)) return undefined;
+    return (await this._opLogStore.getVectorClock()) ?? undefined;
+  }
+
   /**
    * SPAP-10 (review follow-up): stage a downloaded file's rev as PENDING rather
    * than committing it to `_lastSeenRevs`. It is promoted to last-seen (and
@@ -3172,59 +3174,5 @@ export class FileBasedSyncAdapterService {
    */
   private _getProviderKey(provider: FileSyncProvider<SyncProviderId>): string {
     return `${provider.id}`;
-  }
-
-  /**
-   * Converts a SyncOperation to CompactOperation format.
-   */
-  private _syncOpToCompact(op: SyncOperation): CompactOperation {
-    // Create a full Operation from SyncOperation, then encode.
-    // Type assertions are needed because SyncOperation uses string types for
-    // actionType/opType/entityType (for JSON serialization compatibility),
-    // while Operation uses the specific enum/union types.
-    const fullOp: Operation = {
-      id: op.id,
-      actionType: op.actionType as ActionType,
-      opType: op.opType as OpType,
-      entityType: op.entityType as EntityType,
-      entityId: op.entityId,
-      entityIds: op.entityIds,
-      payload: op.payload,
-      clientId: op.clientId,
-      vectorClock: op.vectorClock,
-      timestamp: op.timestamp,
-      schemaVersion: op.schemaVersion,
-      ...(op.syncImportReason
-        ? { syncImportReason: op.syncImportReason as SyncImportReason }
-        : {}),
-      ...(op.repairBaseServerSeq !== undefined
-        ? { repairBaseServerSeq: op.repairBaseServerSeq }
-        : {}),
-    };
-    return encodeOperation(fullOp);
-  }
-
-  /**
-   * Converts a CompactOperation to SyncOperation format.
-   */
-  private _compactToSyncOp(compact: CompactOperation): SyncOperation {
-    const fullOp = decodeOperation(compact);
-    return {
-      id: fullOp.id,
-      clientId: fullOp.clientId,
-      actionType: fullOp.actionType,
-      opType: fullOp.opType,
-      entityType: fullOp.entityType,
-      entityId: fullOp.entityId,
-      entityIds: fullOp.entityIds,
-      payload: fullOp.payload,
-      vectorClock: fullOp.vectorClock,
-      timestamp: fullOp.timestamp,
-      schemaVersion: fullOp.schemaVersion,
-      ...(fullOp.syncImportReason ? { syncImportReason: fullOp.syncImportReason } : {}),
-      ...(fullOp.repairBaseServerSeq !== undefined
-        ? { repairBaseServerSeq: fullOp.repairBaseServerSeq }
-        : {}),
-    };
   }
 }

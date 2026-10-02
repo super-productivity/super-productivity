@@ -19,6 +19,13 @@ export interface GapDetectionInput {
   previousExpectedVersion: number;
   lastSeenClock: VectorClock | undefined;
   /**
+   * The device's op-log clock. Judges the snapshot base only while no
+   * last-seen clock is recorded (first sync after upgrading, #10258): every
+   * snapshot this device hydrated or wrote is merged into it, so an uncovered
+   * base is one it never loaded.
+   */
+  localClock?: VectorClock;
+  /**
    * Whether the file carries a snapshot an empty buffer could stand for. The
    * single-file format requires `state`; a split ops file always references one.
    */
@@ -36,9 +43,8 @@ export interface GapDetectionResult {
 /**
  * Whether a remote replacement's base clock is not covered by the last file
  * clock this client committed, i.e. it has not hydrated that snapshot (#9170).
- * Without a recorded clock (first sync after upgrading) there is no baseline to
- * judge by: flagging would force a seq-0 download and, with pending local ops, a
- * conflict dialog. The resulting blind spot is tracked in #10258.
+ * Without any baseline it returns false: flagging every base would force a
+ * seq-0 download and, with pending local ops, a conflict dialog.
  */
 export const isSnapshotBaseUnseen = (
   snapshotBaseClock: VectorClock | undefined,
@@ -62,6 +68,7 @@ export const detectDownloadGap = ({
   excludeClient,
   previousExpectedVersion,
   lastSeenClock,
+  localClock,
   hasSnapshot,
 }: GapDetectionInput): GapDetectionResult => {
   // Detect syncVersion reset (e.g., another client uploaded a snapshot).
@@ -151,8 +158,10 @@ export const detectDownloadGap = ({
   // full-state operation that cleared recentOps, so later tail uploads cannot
   // hide that unseen baseline, even after their reused versions are trimmed.
   // Normal appends preserve this clock; once applied, lastSeenClock covers it.
+  // Before one is recorded, the local clock stands in (#10258).
   const unseenSnapshotBase =
-    sinceSeq > 0 && isSnapshotBaseUnseen(remote.snapshotBaseClock, lastSeenClock);
+    sinceSeq > 0 &&
+    isSnapshotBaseUnseen(remote.snapshotBaseClock, lastSeenClock ?? localClock);
 
   const reason = versionWasReset
     ? `sync version reset (${previousExpectedVersion} → ${remote.syncVersion})`

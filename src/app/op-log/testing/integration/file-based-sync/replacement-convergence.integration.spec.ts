@@ -30,27 +30,14 @@ import {
  * commit the cursor only after applying.
  */
 const STORAGE_KEY = FILE_BASED_SYNC_CONSTANTS.SYNC_VERSION_STORAGE_KEY_PREFIX + 'state';
+/**
+ * Every upgrade-restart drops the recorded clocks. Seeds 32 (both formats) and
+ * 39 (single-file) diverged that way until a device without one judged the
+ * snapshot base by its op-log clock (#10258); they stay in range as regression
+ * cases.
+ */
 const SEEDS_PER_VARIANT = 40;
 const STEPS = 40;
-/**
- * Seeds whose upgrade-restart keeps its recorded clock, because dropping it
- * still hits #10258. Gating the rev pre-check on a recorded clock does not
- * cover a masked replacement that lands after a device's last read but before
- * its first read after upgrading: that read adopts it as the baseline, so it is
- * never hydrated (seed 32 traces to this window). Without a recorded clock a
- * device cannot judge a snapshot base, and flagging instead would risk a
- * conflict dialog on every first sync after upgrading. Everything else in these
- * seeds still runs; both still diverge with the gate (checked 2026-10). Return
- * them to the no-clock path once #10258 is fully fixed.
- */
-const KEEP_CLOCK_ON_UPGRADE_SEEDS = [32];
-/**
- * v2 only: the upload guard that waits for an unapplied snapshot-only file
- * changes seed 39's history so it reaches #10258 later. Over 200 v2 seeds
- * without kept clocks (measured 2026-10) that guard diverges in 10 seeds
- * against master's 12: 39 is new, 44, 51 and 173 converge.
- */
-const KEEP_CLOCK_ON_UPGRADE_SEEDS_V2 = [39];
 
 interface Device {
   id: string;
@@ -92,6 +79,8 @@ for (const isUseSplitSyncFiles of [false, true]) {
   for (const isEncrypt of [false, true]) {
     describe(`#9170 replacement convergence (split=${isUseSplitSyncFiles}, encrypt=${isEncrypt})`, () => {
       let harness: FileBasedSyncTestHarness;
+      /** The op-log clock of the device whose action runs now (see `as`). */
+      let activeDevice: Device | undefined;
 
       beforeAll(() => {
         setArgon2ParamsForTesting({ parallelism: 1, memorySize: 8, iterations: 1 });
@@ -106,9 +95,13 @@ for (const isUseSplitSyncFiles of [false, true]) {
         clearSessionKeyCache();
         const opLogStoreSpy = jasmine.createSpyObj<OperationLogStoreService>(
           'OperationLogStoreService',
-          ['getLatestFullStateOpEntry'],
+          ['getLatestFullStateOpEntry', 'getVectorClock'],
         );
         opLogStoreSpy.getLatestFullStateOpEntry.and.resolveTo(undefined);
+        activeDevice = undefined;
+        opLogStoreSpy.getVectorClock.and.callFake(async () =>
+          activeDevice ? { ...activeDevice.clock } : null,
+        );
         TestBed.configureTestingModule({
           providers: [{ provide: OperationLogStoreService, useValue: opLogStoreSpy }],
         });
@@ -163,6 +156,7 @@ for (const isUseSplitSyncFiles of [false, true]) {
 
       /** Runs one device action against that device's own persisted state. */
       const as = async (device: Device, action: () => Promise<void>): Promise<void> => {
+        activeDevice = device;
         if (device.persisted === null) {
           localStorage.removeItem(STORAGE_KEY);
         } else {
@@ -325,9 +319,6 @@ for (const isUseSplitSyncFiles of [false, true]) {
       };
 
       const runSeed = async (seed: number): Promise<void> => {
-        const keepsClock =
-          KEEP_CLOCK_ON_UPGRADE_SEEDS.includes(seed) ||
-          (!isUseSplitSyncFiles && KEEP_CLOCK_ON_UPGRADE_SEEDS_V2.includes(seed));
         const random = createRandom(seed);
         const pick = <T>(items: readonly T[]): T =>
           items[Math.floor(random() * items.length)];
@@ -367,7 +358,7 @@ for (const isUseSplitSyncFiles of [false, true]) {
             if (action === 'expire') expireCaches(device);
             if (action === 'keepLocal') await keepLocal(device);
             if (action === 'restart' || action === 'upgrade') {
-              await restart(device, action === 'upgrade' && !keepsClock);
+              await restart(device, action === 'upgrade');
             }
           });
         }
@@ -436,6 +427,83 @@ for (const isUseSplitSyncFiles of [false, true]) {
         });
         await as(a, () => download(a, () => 'remote'));
         expect(a.tasks.has(replacedTask)).withContext('replacement hydrated').toBe(true);
+      });
+
+      it('hydrates a replacement that landed before the first read after upgrading (#10258)', async () => {
+        const a = await createDevice('dev-a');
+        const b = await createDevice('dev-b');
+        await as(a, async () => {
+          edit(a);
+          await download(a, () => 'remote');
+          await upload(a);
+        });
+        await as(b, () => download(b, () => 'remote'));
+        await as(a, () => download(a, () => 'remote'));
+        // First start after upgrading: the rev is persisted, last-seen clocks are not.
+        await as(a, () => restart(a, true));
+
+        // Another device's Keep local lands before a's first read, masked by a tail op.
+        await as(b, async () => {
+          edit(b);
+          await keepLocal(b);
+          edit(b);
+          await upload(b);
+        });
+        const replacedTask = 'dev-b-t1';
+
+        await as(a, async () => {
+          const since = await a.adapter.getLastServerSeq();
+          const res = (await a.adapter.downloadOps(
+            since,
+            a.id,
+          )) as FileSnapshotOpDownloadResponse;
+          expect(res.gapDetected).withContext('replacement detected').toBe(true);
+        });
+        await as(a, () => download(a, () => 'remote'));
+        expect(a.tasks.has(replacedTask)).withContext('replacement hydrated').toBe(true);
+
+        // Restarting (again without clocks) must neither lose the hydrated state
+        // nor flag the replacement it now holds.
+        await as(a, () => restart(a, true));
+        await as(a, async () => {
+          const since = await a.adapter.getLastServerSeq();
+          const res = (await a.adapter.downloadOps(
+            since,
+            a.id,
+          )) as FileSnapshotOpDownloadResponse;
+          expect(res.gapDetected).withContext('hydrated base not re-flagged').toBeFalsy();
+        });
+        await as(a, () => download(a, () => 'remote'));
+        expect(a.tasks.has(replacedTask)).withContext('still hydrated').toBe(true);
+      });
+
+      it('does not flag a replacement the device hydrated before upgrading (#10258)', async () => {
+        const a = await createDevice('dev-a');
+        const b = await createDevice('dev-b');
+        await as(a, async () => {
+          edit(a);
+          await download(a, () => 'remote');
+          await upload(a);
+        });
+        await as(b, async () => {
+          await download(b, () => 'remote');
+          edit(b);
+          await keepLocal(b);
+          edit(b);
+          await upload(b);
+        });
+        await as(a, () => download(a, () => 'remote'));
+        expect(a.tasks.has('dev-b-t1')).toBe(true);
+        await as(a, () => restart(a, true));
+        await as(a, async () => {
+          edit(a);
+          const since = await a.adapter.getLastServerSeq();
+          const res = (await a.adapter.downloadOps(
+            since,
+            a.id,
+          )) as FileSnapshotOpDownloadResponse;
+          expect(res.gapDetected).withContext('seen base, pending op').toBeFalsy();
+        });
       });
 
       for (let seed = 1; seed <= SEEDS_PER_VARIANT; seed++) {
