@@ -298,9 +298,16 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
 3. **Clears:** accepted, with a sunset. When A starts, weigh keeping
    `'replace'` for resolutions that clear `reminderId` or `dueWithTime`.
 4. **NOTE:** not admitted until v19.1.0 has left the fleet.
-5. **Resolution ops as input:** no; the no-re-merge contract stays.
+5. **Resolution ops as input:** no; the no-re-merge contract stays. Narrowed
+   by decisions 5a and 5a extended below: a conflict may read a row's keys,
+   never its values.
 6. **Opaque ops:** stay on whole-entity LWW.
-7. **Time on a remote win:** local-win direction only, for now.
+7. **Time on a remote win:** ~~local-win direction only, for now.~~ Replaced
+   on 2026-10-01 ([#10393](https://github.com/super-productivity/super-productivity/issues/10393#issuecomment-5936659621)):
+   a pending time delta survives a remote win whose winner writes no time
+   (per-field winners rebase it unchanged, see below). Winners that write
+   time, including a winning replace snapshot (open above), and #10378 stay
+   open.
 
 **Decision 5a (2026-10-01, #10421).** Asked whether rule 1 below stays within
 decision 5, @johannesjo answered: "Ponder in sub agent and act according to
