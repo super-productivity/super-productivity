@@ -110,6 +110,39 @@ const planForToday = (page: Page, id: string): Promise<void> =>
     },
   });
 
+/** The planner's own action, with the full task entity it reads. */
+const planForFutureDay = async (page: Page, id: string): Promise<void> => {
+  const dispatched = await page.evaluate(
+    ({ taskId, day }) => {
+      type StoreLike = {
+        subscribe: (next: (state: unknown) => void) => { unsubscribe: () => void };
+        dispatch: (value: unknown) => void;
+      };
+      const store = (window as unknown as { __e2eTestHelpers?: { store?: StoreLike } })
+        .__e2eTestHelpers?.store;
+      if (!store) return false;
+      let state: { tasks?: { entities?: Record<string, unknown> } } = {};
+      store.subscribe((value) => (state = value as typeof state)).unsubscribe();
+      const task = state.tasks?.entities?.[taskId];
+      if (!task) return false;
+      store.dispatch({
+        type: '[Planner] Plan Task for Day',
+        task,
+        day,
+        meta: {
+          isPersistent: true,
+          entityType: 'PLANNER',
+          entityId: taskId,
+          opType: 'UPD',
+        },
+      });
+      return true;
+    },
+    { taskId: id, day: FUTURE_DAY },
+  );
+  expect(dispatched).toBe(true);
+};
+
 const runCrossing = async (
   {
     browser,
@@ -140,12 +173,7 @@ const runCrossing = async (
     await clientA.workView.addTask('Crossing');
     const { id } = await readTask(clientA.page, { title: `A-${testRunId}-Crossing` });
     const seeded = await readTask(clientA.page, { id });
-    await dispatchPersistentAction(clientA.page, {
-      type: '[Planner] Plan Task for Day',
-      task: seeded,
-      day: FUTURE_DAY,
-      meta: { isPersistent: true, entityType: 'PLANNER', entityId: id, opType: 'UPD' },
-    });
+    await planForFutureDay(clientA.page, id);
     await expect
       .poll(async () => (await readTask(clientA.page, { id })).dueDay)
       .toBe(FUTURE_DAY);
