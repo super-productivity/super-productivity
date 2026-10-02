@@ -1,8 +1,8 @@
 # Sync protocol change: options after the stopping point
 
-**Status:** draft for decision by @johannesjo (tracker
+**Status:** decided 2026-10-02 (tracker
 [#10393](https://github.com/super-productivity/super-productivity/issues/10393),
-queue item 5). Nothing here is decided. Defaults are labelled as defaults.
+queue item 5); see [Decisions](#decisions). The options below are the input.
 
 **Why now.** The stopping point (decided 2026-10-01) says a protocol change is
 indicated when a fix needs (A) a new wire key, (B) accepted newly failing
@@ -70,8 +70,9 @@ improved (being fixed on `claude/sync-cleanup`).
 **Order-only, new since #10452.** A device that reorders a project's notes and
 pins the note keeps a re-listed note at its own position, while every other
 device appends it. Permanent, order only; before #10452 the note was missing
-from both lists. Coordinator's default (not yet decided): accept as
-order-only, like #10381.
+from both lists. Accepted as order-only on 2026-10-02 ([#10393](https://github.com/super-productivity/super-productivity/issues/10393#issuecomment-5944061436)).
+It heals on the next reorder of that list; only an order merge removes it,
+not membership derivation.
 
 ## How resolution reaches the fleet
 
@@ -104,73 +105,102 @@ clients persist it as entity fields.
 
 ## Options
 
-|                                         | (1) Readable opaque sides                                                                                                                                                                                                                    | (2) Per-field timestamps                                                                                                                                                                                                                                                                                                                                                                                                                      | (3) Server-side resolution                                                                                                         | (4) Accept the residue                               |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| **Idea**                                | A per-action extractor tells the resolver which fields each remaining opaque producer writes (habit count → `countOnDay`, `planTasksForToday` → `dueDay`/Today order, NOTE ops); conflicts resolve per field as TASK updates do since #10448 | Each field carries the timestamp of its last write, stored beside the entity and sent on the wire; every device applies a field write only if it is newer (a per-field LWW register)                                                                                                                                                                                                                                                          | The server picks winners per field                                                                                                 | Stop class fixes; fix only on user reports (rule 15) |
-| **Fixes**                               | Snapshot losses on habit counts, note locks and content, #10421's class, most `field-reverted`/`field-unwritten`; not #10378's delta, not order                                                                                              | Field-level LWW classes, including #10437/#10438 shapes, by construction; not order, not additive time (#10378, #10380 task half: deltas are not registers)                                                                                                                                                                                                                                                                                   | In principle as (2)                                                                                                                | Nothing                                              |
-| **Wire / schema**                       | None for the extractor (client logic over existing payloads); resolution rows are the existing `'patch'` shape. No bump                                                                                                                      | New optional envelope key per op (field timestamps) and a new persisted sidecar; optional + default (rule 11). No bump, but old clients' `'replace'` rows carry no timestamps, so new clients must treat them as "all fields at op time". Map fields (`timeSpentOnDay`, `countOnDay`) need per-key stamps. Wall-clock stamps alone would let a skewed clock beat a causally later write: causal order (vector clock or HLC) must decide first | Needs per-field metadata outside the E2EE payload, i.e. a plaintext channel (ADR #10 declines server entity versioning by default) | None                                                 |
-| **Mixed fleet**                         | Converges on SuperSync (resolve-time); file providers unverified (two resolvers). Old resolvers keep losing                                                                                                                                  | Diverges until every device applies the same way: needs the floor; file providers cannot get one                                                                                                                                                                                                                                                                                                                                              | Server and file-provider paths resolve differently: two resolvers                                                                  | Unchanged                                            |
-| **Floor (#10397) / v19.1.0, v18.15–21** | NOTE needs v19.1.0 gone (decision 4); habit and task producers do not                                                                                                                                                                        | Hard prerequisite: floor enforced and v19.1.0, v18.15–v18.21 gone; file providers need a format migration                                                                                                                                                                                                                                                                                                                                     | Floor plus a server rollout                                                                                                        | None                                                 |
-| **Decisions 4 and 6**                   | Reverses 6 (opaque stays whole-entity) for the listed producers; 4 unchanged until v19.1.0 leaves                                                                                                                                            | Both become moot                                                                                                                                                                                                                                                                                                                                                                                                                              | Both moot on SuperSync only                                                                                                        | Both stay                                            |
-| **Effort**                              | Medium: one extractor per producer (about 5), each with an E2E in both directions; per-action logic, which rule 12 discourages                                                                                                               | Large: persisted sidecar, compaction and snapshots carry it, `SYNC_IMPORT`/repair paths, migration, floor rollout                                                                                                                                                                                                                                                                                                                             | Large, plus server state and E2EE design                                                                                           | None                                                 |
-| **Lets us delete**                      | Little: adds extractors; removes some pins' accepted trades                                                                                                                                                                                  | Field-patch machinery (`conflict-field-patch.util.ts`), decision 5a key reading, the superseded resolver's re-emission, the opaque/readable split, most accepted compare entries; only once file providers migrate too (D7's default keeps them on today's rules, so all of it stays until then)                                                                                                                                              | Little: the client path stays for file providers                                                                                   | Nothing                                              |
+|                                         | (1) Readable opaque sides                                                                                                                                                                                                                    | (2) Per-field timestamps                                                                                                                                                                                                                                                                                                                                                                                                                      | (3) Server-side resolution                                                                                                         | (4) Accept the residue                              |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| **Idea**                                | A per-action extractor tells the resolver which fields each remaining opaque producer writes (habit count → `countOnDay`, `planTasksForToday` → `dueDay`/Today order, NOTE ops); conflicts resolve per field as TASK updates do since #10448 | Each field carries the timestamp of its last write, stored beside the entity and sent on the wire; every device applies a field write only if it is newer (a per-field LWW register)                                                                                                                                                                                                                                                          | The server picks winners per field                                                                                                 | No new mechanism; fixes only as rule 15 admits them |
+| **Fixes**                               | Snapshot losses on habit counts, note locks and content, #10421's class, most `field-reverted`/`field-unwritten`; not #10378's delta, not order                                                                                              | Field-level LWW classes, including #10437/#10438 shapes, by construction; not order, not additive time (#10378, #10380 task half: deltas are not registers)                                                                                                                                                                                                                                                                                   | In principle as (2)                                                                                                                | Nothing                                             |
+| **Wire / schema**                       | None for the extractor (client logic over existing payloads); resolution rows are the existing `'patch'` shape. No bump                                                                                                                      | New optional envelope key per op (field timestamps) and a new persisted sidecar; optional + default (rule 11). No bump, but old clients' `'replace'` rows carry no timestamps, so new clients must treat them as "all fields at op time". Map fields (`timeSpentOnDay`, `countOnDay`) need per-key stamps. Wall-clock stamps alone would let a skewed clock beat a causally later write: causal order (vector clock or HLC) must decide first | Needs per-field metadata outside the E2EE payload, i.e. a plaintext channel (ADR #10 declines server entity versioning by default) | None                                                |
+| **Mixed fleet**                         | Converges on SuperSync (resolve-time); file providers unverified (two resolvers). Old resolvers keep losing                                                                                                                                  | Diverges until every device applies the same way: needs the floor; file providers cannot get one                                                                                                                                                                                                                                                                                                                                              | Server and file-provider paths resolve differently: two resolvers                                                                  | Unchanged                                           |
+| **Floor (#10397) / v19.1.0, v18.15–21** | NOTE needs v19.1.0 gone (decision 4); habit and task producers do not                                                                                                                                                                        | Hard prerequisite: floor enforced and v19.1.0, v18.15–v18.21 gone; file providers need a format migration                                                                                                                                                                                                                                                                                                                                     | Floor plus a server rollout                                                                                                        | None                                                |
+| **Decisions 4 and 6**                   | Reverses 6 (opaque stays whole-entity) for the listed producers; 4 unchanged until v19.1.0 leaves                                                                                                                                            | Both become moot                                                                                                                                                                                                                                                                                                                                                                                                                              | Both moot on SuperSync only                                                                                                        | Both stay                                           |
+| **Effort**                              | Medium: one extractor per producer (about 5), each with an E2E in both directions; per-action logic, which rule 12 discourages                                                                                                               | Large: persisted sidecar, compaction and snapshots carry it, `SYNC_IMPORT`/repair paths, migration, floor rollout                                                                                                                                                                                                                                                                                                                             | Large, plus server state and E2EE design                                                                                           | None                                                |
+| **Lets us delete**                      | Little: adds extractors; removes some pins' accepted trades                                                                                                                                                                                  | Field-patch machinery (`conflict-field-patch.util.ts`), decision 5a key reading, the superseded resolver's re-emission, the opaque/readable split, most accepted compare entries; only once file providers migrate too (D7)                                                                                                                                                                                                                   | Little: the client path stays for file providers                                                                                   | Nothing                                             |
 
-### Membership versus order (option 5, separate or combined)
+(1) and (2) are not true alternatives: to stamp a field, (2) must also know
+which fields an opaque op writes, which is (1)'s extractor.
 
-`project.taskIds` and `project.noteIds` hold membership and order at once. A
-child fact already exists (`task.projectId`, `note.projectId`). Deriving
-membership from it and treating the list as order only, as `TODAY_TAG` does
-(ARCHITECTURE-DECISIONS.md Decision #2), would:
+### (6) Derived field sets and delta rebase (added after review)
 
-- remove both rule 13 recreate exceptions (the recreate no longer re-lists);
-- turn list conflicts into order conflicts, which a deterministic merge can
-  resolve generically (kept order, unknown ids appended by a stable key), so
-  the #10452 order-only difference and #10381's list half converge;
-- not fix any field-level loss.
+| Aspect                | Assessment                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Idea**              | When resolving, learn which fields an op writes by applying its pure reducer to the entity and diffing, instead of a per-action extractor; keep a local, never-synced per-field index of the latest write. Resolve per field and emit today's `'patch'` rows. A time delta is never resolved by LWW: it is rebased, as the server already lets concurrent deltas pass (`conflict.ts`) |
+| **Fixes**             | The field-level residue of (1) on every producer at once (opaque sides, #10421, #10438's shape); the delta rebase targets #10378 and #10380's task half, which (2) does not fix                                                                                                                                                                                                       |
+| **Wire / schema**     | None: rows are the existing `'patch'` shape; the index is local (the `DB_VERSION` channel, ADR #8). No bump                                                                                                                                                                                                                                                                           |
+| **Mixed fleet**       | Resolve-time, so it converges on SuperSync; file providers as (1) (unverified, two resolvers)                                                                                                                                                                                                                                                                                         |
+| **Floor**             | Not needed, except NOTE (decision 4)                                                                                                                                                                                                                                                                                                                                                  |
+| **Decisions 4 and 6** | Reverses 6 generically, not per action; 4 unchanged                                                                                                                                                                                                                                                                                                                                   |
+| **Effort**            | Unknown until a spike: multi-entity meta-reducers and map fields (`timeSpentOnDay`, `countOnDay`) may defeat the diff                                                                                                                                                                                                                                                                 |
+| **Lets us delete**    | Per-action opacity rules (`isOpaqueChangeOp`), most accepted compare entries                                                                                                                                                                                                                                                                                                          |
 
-| Phase | What                                                                              | Mixed fleet                                                                                   | Floor                                             |
-| ----- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| 5a    | Selectors derive membership from `projectId`, list gives order; writers unchanged | Display only; data unchanged, so it converges. A new client may show a task an old one hides  | No                                                |
-| 5b    | Order merge for list conflicts; stop treating a list as membership data           | Old clients still read lists as membership: writers must keep the lists complete (dual write) | Needed before writers stop maintaining membership |
+### Membership versus order (option M, design later)
 
-About 60 write sites in about 12 files touch these lists (rough grep), most in
-`project.reducer.ts` and `task-shared-crud.reducer.ts`.
+`project.taskIds`, `project.noteIds` and `note.todayOrder` hold membership and
+order at once. A child fact exists (`task.projectId`, `note.projectId`,
+`note.isPinnedToToday`). Deriving membership from it and keeping the list as
+order only, as `TODAY_TAG` does (ARCHITECTURE-DECISIONS.md Decision #2), only
+helps together with an order merge:
 
-## Recommendation (my defaults)
+- **Derivation alone does not converge order.** Regular tags already derive
+  membership (`computeOrderedTaskIdsForTag`, `tag.reducer.ts`), yet
+  `tag.taskIds` is the largest divergence signature (40 seeds). Convergence
+  comes only from a deterministic order merge (kept order, unknown ids
+  appended by a stable key), which also removes #10452's order-only difference.
+- **Derivation is not display-only.** Tasks have no backlog flag, so a derived
+  member needs a `taskIds` vs `backlogTaskIds` rule; `moveItemAfterAnchor`
+  silently does nothing when the anchor exists only in the derived list; about
+  96 non-spec reads use the stored lists, including the plugin API.
+- **The rule 13 recreate exceptions stay** while released clients read the
+  lists ("Existing lists stay", `contributor-sync-model.md`).
+- Data repair already treats `projectId` as the authority
+  (`_addOrphanedTasksToProjectLists`, `data-repair.ts`).
 
-1. **Default: (4) now, (2) as the target, (5a) as the first step.** Stop
-   class-by-class fixes; keep only user-reported or unreleased-regression
-   fixes (rule 15). One exception: #10438 is permanent content divergence, so
-   rule 15 admits a fix if `git tag --contains` shows its path released; its
-   shape (a time-only local side needs no snapshot) is #10421's first proposed
-   fix. (1) adds per-action logic that (2) would delete, and
-   reverses decision 6 for a partial gain.
-2. **Default: design (2) only after the version-spread numbers exist** and the
-   floor is decided (#10397). Release N carries nothing for it.
-3. **Default: (3) rejected.** E2EE and file providers keep the client
-   resolver; the server would add a second one.
-4. **Default: (5a) as a separate small PR** after release N, with an E2E that
-   an order-only crossing converges; (5b) folded into (2)'s floor rollout.
-5. **Default: accept the #10452 order-only difference** (coordinator's default).
+## Recommendation
 
-## Decisions needed from @johannesjo
+1. Apply rule 15 as written; no blanket stop. Next fixes, each with an E2E
+   first in both directions: **#10378** (tracked time lost on default
+   settings; time loss is the second-largest family, 44 seeds) and **#10438**
+   (permanent divergence).
+2. Do not commit to (2). Spike (6) first: it fixes the field-level residue
+   without a wire key or a floor, which (2) cannot offer file providers.
+3. Keep decision 6 until the spike reports; drop only the per-action form of
+   (1).
+4. Reject (3).
+5. Design membership derivation together with the order merge (option M);
+   no separate derivation PR.
+6. Plan the file-provider format alongside any apply-time change: released
+   clients since at least v18.15.0 pause on the split-file tombstone
+   (`file-based-sync-format.ts`), so a lever to move them exists. Unverified:
+   whether released split-format readers refuse a newer split version.
 
-| #   | Question                                                                                     | My default                                                     |
-| --- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| D1  | Is the stopping point reached, i.e. no more class-by-class sync fixes without a user report? | Yes                                                            |
-| D2  | Target protocol change                                                                       | (2) per-field timestamps, gated on the floor                   |
-| D3  | Drop (1) and keep decision 6                                                                 | Yes, keep decision 6                                           |
-| D4  | Reject (3)                                                                                   | Yes                                                            |
-| D5  | Membership vs order: (5a) now as its own PR, (5b) with (2)                                   | Yes                                                            |
-| D6  | Accept the #10452 order-only difference                                                      | Yes                                                            |
-| D7  | File providers under (2): migrate their format, or keep them on today's rules                | Keep them on today's rules until a format migration is planned |
-| D8  | #10438: fix it as the one class left for a fix, if its path is released                      | Yes, after the release check                                   |
+## Decisions
 
-## Missing evidence (optional before release N)
+Asked for two subagents' recommendations on D1–D8 and given the combined
+recommendation above, @johannesjo answered on 2026-10-02: "Do as recommend".
+D6 was decided earlier the same day ("Please spin up two sub agents on the
+decisions and do as they recommend",
+[#10393](https://github.com/super-productivity/super-productivity/issues/10393#issuecomment-5944061436)).
+
+| #   | Question                                  | Decided                                                                                                                                                                                                                                                                                                       |
+| --- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Stop class-by-class fixes?                | No blanket stop: rule 15 as written. #10378 and #10438 are next                                                                                                                                                                                                                                               |
+| D2  | Target protocol change                    | Not (2) yet: spike (6) first, then decide; if (2) is chosen later, HLC stamps, not wall clocks                                                                                                                                                                                                                |
+| D3  | Option (1) and decision 6                 | Keep decision 6 for now; drop only the per-action extractors                                                                                                                                                                                                                                                  |
+| D4  | Server-side resolution (3)                | Rejected (E2EE, file providers, ADR #10)                                                                                                                                                                                                                                                                      |
+| D5  | Membership vs order                       | No separate derivation PR; design membership with the order merge (option M)                                                                                                                                                                                                                                  |
+| D6  | #10452's order-only difference            | Accepted (decided earlier, see above)                                                                                                                                                                                                                                                                         |
+| D7  | File providers under an apply-time change | Plan their format change alongside it, using the existing split-file tombstone lever                                                                                                                                                                                                                          |
+| D8  | #10438                                    | Fix it. Shape: one decision per entity per batch, or #10421's post-batch field patch (not "a time-only side needs no snapshot": the resolver's local side is a rename). Every commit showing it is after v19.1.0; rule 15 admits a forward fix because reverting #10415/#10432 would bring back released bugs |
+
+This reverses the 2026-10-01 tracker line "#10437 and #10438: stopping-point
+evidence, with no separate fixes" for #10438.
+
+## Missing evidence
 
 - Version spread per app version on SuperSync (#10397), to size the mixed-fleet
-  window for (2) and (5b). v19.0–v19.1 send `appVersion` on downloads only.
-- Release inclusion of #10437 and #10438 (`git tag --contains`).
-- A per-seed split of `field-reverted`/`field-unwritten` by producer; the
-  table above names the dominant fields only.
-- An estimate of (2)'s persisted-size cost (one timestamp per written field).
+  window for any apply-time change. v19.0–v19.1 send `appVersion` on
+  downloads only.
+- Whether v19.1.0 diverges on #10438's shape or only reverts the field
+  (server-order application of remote winners came with #10432).
+- A per-seed split of `field-reverted`/`field-unwritten` by producer.
+- The (6) spike: does a reducer diff give the right field set for
+  multi-entity meta-reducers and map fields?
