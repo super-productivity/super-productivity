@@ -804,9 +804,9 @@
     "rejections": []
   },
   {
-    "class": "lww-update-skips-today-order",
-    "ref": "#10379; its #10420 stop is fixed",
-    "name": "a note pinned beside a pending note order after a remote delete stays pinned but out of Today",
+    "class": "note-recreate-appended",
+    "ref": "kept by design: #10380's recreate appends the note to its project and Today lists, order only (decided on #10393); its #10420 stop is fixed",
+    "name": "a note pinned beside a pending note order after a remote delete comes back in Today, appended on the other devices",
     "steps": [
       {
         "d": "B",
@@ -825,11 +825,10 @@
         "a": ["editNote", "n1", "isPinnedToToday", true]
       }
     ],
-    "primary": "today-notes:pinned-not-listed",
+    "primary": "divergence:.project.entities.*.noteIds.*",
     "signatures": [
       "divergence:.note.todayOrder.*",
-      "divergence:.project.entities.*.noteIds.*",
-      "today-notes:pinned-not-listed"
+      "divergence:.project.entities.*.noteIds.*"
     ],
     "rejections": []
   },
