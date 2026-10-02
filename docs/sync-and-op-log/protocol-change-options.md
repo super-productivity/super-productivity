@@ -1,8 +1,9 @@
 # Sync protocol change: options after the stopping point
 
-**Status:** decided 2026-10-02 (tracker
+**Status:** decisions D1–D8 recorded 2026-10-02 (tracker
 [#10393](https://github.com/super-productivity/super-productivity/issues/10393),
-queue item 5); see [Decisions](#decisions). The options below are the input.
+queue item 5); see [Decisions](#decisions). The protocol target itself is
+deferred until the option (6) spike reports.
 
 **Why now.** The stopping point (decided 2026-10-01) says a protocol change is
 indicated when a fix needs (A) a new wire key, (B) accepted newly failing
@@ -53,7 +54,7 @@ older value with a merged clock that dominates the newer write, so every other
 device ends on the older value while the resolver keeps the newer one.
 
 Pins: 56 of 57 pass; the one failure is the stale #10443 pin that #10452
-improved (being fixed on `claude/sync-cleanup`).
+improved; #10453 has since re-pinned it on master.
 
 ### Remaining loss classes
 
@@ -119,18 +120,18 @@ clients persist it as entity fields.
 (1) and (2) are not true alternatives: to stamp a field, (2) must also know
 which fields an opaque op writes, which is (1)'s extractor.
 
-### (6) Derived field sets and delta rebase (added after review)
+### (6) Derived field sets, extending the existing delta rebase (added after review)
 
-| Aspect                | Assessment                                                                                                                                                                                                                                                                                                                                                                            |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Idea**              | When resolving, learn which fields an op writes by applying its pure reducer to the entity and diffing, instead of a per-action extractor; keep a local, never-synced per-field index of the latest write. Resolve per field and emit today's `'patch'` rows. A time delta is never resolved by LWW: it is rebased, as the server already lets concurrent deltas pass (`conflict.ts`) |
-| **Fixes**             | The field-level residue of (1) on every producer at once (opaque sides, #10421, #10438's shape); the delta rebase targets #10378 and #10380's task half, which (2) does not fix                                                                                                                                                                                                       |
-| **Wire / schema**     | None: rows are the existing `'patch'` shape; the index is local (the `DB_VERSION` channel, ADR #8). No bump                                                                                                                                                                                                                                                                           |
-| **Mixed fleet**       | Resolve-time, so it converges on SuperSync; file providers as (1) (unverified, two resolvers)                                                                                                                                                                                                                                                                                         |
-| **Floor**             | Not needed, except NOTE (decision 4)                                                                                                                                                                                                                                                                                                                                                  |
-| **Decisions 4 and 6** | Reverses 6 generically, not per action; 4 unchanged                                                                                                                                                                                                                                                                                                                                   |
-| **Effort**            | Unknown until a spike: multi-entity meta-reducers and map fields (`timeSpentOnDay`, `countOnDay`) may defeat the diff                                                                                                                                                                                                                                                                 |
-| **Lets us delete**    | Per-action opacity rules (`isOpaqueChangeOp`), most accepted compare entries                                                                                                                                                                                                                                                                                                          |
+| Aspect             | Assessment                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Idea**           | When resolving, learn which fields an op writes by applying its reducer to a copy of the root state and diffing the entity, instead of a hand-written per-action extractor; keep a local, never-synced per-field index of the latest write; resolve per field and emit today's `'patch'` rows. Time deltas extend the existing rebase (`keptLocalTimeDeltas`/`rebaseKeptTimeDeltas`, `conflict-field-patch.util.ts`, decision 7 replaced) instead of losing to LWW                                                                                                                                                                                                |
+| **Fixes**          | The field-level residue of opaque TASK, PROJECT, TAG and habit producers (#10421, #10438's shape). Not NOTE while decision 4 holds (`note.content` 10 and `note.isLock` 6 seeds stay). The rebase extension targets #10378 and #10380's task half, which (2) does not fix                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Wire / schema**  | None: rows are the existing `'patch'` shape; the index is local (the `DB_VERSION` channel, ADR #8). No bump                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Mixed fleet**    | Converges on SuperSync, where one device resolves. On file providers it is worse than (1): the index is per device, so two resolvers of the same crossing can emit different rows. Old resolvers keep emitting `'replace'` rows with absolute `timeSpentOnDay`; a rebased delta after one can count time twice, so the rebase must not sit beside a `'replace'` row                                                                                                                                                                                                                                                                                               |
+| **Floor**          | Not needed, except for NOTE (decision 4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Decisions**      | Reverses 6 generically, not per action. If the index records fields written by incoming resolution rows, it uses them as merge input: that touches decision 5 and widens 5a, and needs its own decision                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Effort**         | Unknown until a spike. Reducers are not pure in the needed sense: they read device-local `todayStr`, fall back to `getDbDateStr()`, and stamp `Date.now()` into `modified`/`doneOn` (`task-shared-crud.reducer.ts`, `task.reducer.util.ts`, `task-shared-scheduling.reducer.ts`, `planner-shared.reducer.ts`). Meta-reducers such as `planTasksForToday` need the root state. A diff misses writes of an equal value, so the field set depends on the base state. On SuperSync the server lets a crossing pass only when both ops are `syncTimeSpent` (`conflict.ts`), so a delta against `planTasksForToday` is still rejected and must be rebased by the client |
+| **Lets us delete** | Per-action opacity rules (`isOpaqueChangeOp`), most accepted compare entries                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ### Membership versus order (option M, design later)
 
@@ -140,15 +141,19 @@ order at once. A child fact exists (`task.projectId`, `note.projectId`,
 order only, as `TODAY_TAG` does (ARCHITECTURE-DECISIONS.md Decision #2), only
 helps together with an order merge:
 
-- **Derivation alone does not converge order.** Regular tags already derive
-  membership (`computeOrderedTaskIdsForTag`, `tag.reducer.ts`), yet
-  `tag.taskIds` is the largest divergence signature (40 seeds). Convergence
-  comes only from a deterministic order merge (kept order, unknown ids
-  appended by a stable key), which also removes #10452's order-only difference.
+- **Derivation alone does not converge order.** TODAY already derives
+  membership from `dueDay` (`computeOrderedTaskIdsForToday`,
+  `work-context.selectors.ts`), yet its stored order is the largest divergence
+  signature: all 40 `tag.taskIds` seeds are TODAY (the harness has no other
+  tag). Convergence comes only from a deterministic order merge (kept order,
+  unknown ids appended by a stable key), which also removes #10452's
+  order-only difference.
 - **Derivation is not display-only.** Tasks have no backlog flag, so a derived
-  member needs a `taskIds` vs `backlogTaskIds` rule; `moveItemAfterAnchor`
-  silently does nothing when the anchor exists only in the derived list; about
-  96 non-spec reads use the stored lists, including the plugin API.
+  member needs a `taskIds` vs `backlogTaskIds` rule. `moveItemAfterAnchor`
+  (`work-context-meta.helper.ts`) does nothing when the moved item is in the
+  stored list but the anchor exists only in the derived one. More than 100
+  code lines across about 34 files read or write the stored lists, and the
+  plugin API exposes `taskIds`, `backlogTaskIds` and `noteIds`.
 - **The rule 13 recreate exceptions stay** while released clients read the
   lists ("Existing lists stay", `contributor-sync-model.md`).
 - Data repair already treats `projectId` as the authority
@@ -156,51 +161,60 @@ helps together with an order merge:
 
 ## Recommendation
 
+This is the combined recommendation of two review subagents, as given to
+@johannesjo in the design-note session on 2026-10-02. It replaces the
+defaults first posted on #10393 (comment 5944338767).
+
 1. Apply rule 15 as written; no blanket stop. Next fixes, each with an E2E
    first in both directions: **#10378** (tracked time lost on default
    settings; time loss is the second-largest family, 44 seeds) and **#10438**
    (permanent divergence).
 2. Do not commit to (2). Spike (6) first: it fixes the field-level residue
-   without a wire key or a floor, which (2) cannot offer file providers.
+   without a wire key or a floor, which (2) cannot offer file providers. If
+   (2) is chosen later, use hybrid logical clocks, not wall clocks.
 3. Keep decision 6 until the spike reports; drop only the per-action form of
    (1).
 4. Reject (3).
 5. Design membership derivation together with the order merge (option M);
    no separate derivation PR.
-6. Plan the file-provider format alongside any apply-time change: released
-   clients since at least v18.15.0 pause on the split-file tombstone
-   (`file-based-sync-format.ts`), so a lever to move them exists. Unverified:
-   whether released split-format readers refuse a newer split version.
+6. Plan the file-provider format alongside any apply-time change. A partial
+   lever exists: clients from v18.14.0 with split sync off pause on the
+   split-file tombstone (`file-based-sync-format.ts`). Not covered: clients
+   older than v18.14.0, and split-on readers meeting a newer split version
+   (`assertSyncFileVersion` throws `SyncDataCorruptedError`, no pause).
+7. #10438's fix shape: one decision per entity per batch, or #10421's
+   post-batch field patch. Not "a time-only side needs no snapshot": on the
+   resolving device the local side is a rename.
 
 ## Decisions
 
-Asked for two subagents' recommendations on D1–D8 and given the combined
-recommendation above, @johannesjo answered on 2026-10-02: "Do as recommend".
-D6 was decided earlier the same day ("Please spin up two sub agents on the
-decisions and do as they recommend",
+@johannesjo answered the recommendation above on 2026-10-02 in the
+design-note session: "Do as recommend". D6 was decided earlier the same day
+("Please spin up two sub agents on the decisions and do as they recommend",
 [#10393](https://github.com/super-productivity/super-productivity/issues/10393#issuecomment-5944061436)).
 
-| #   | Question                                  | Decided                                                                                                                                                                                                                                                                                                       |
-| --- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D1  | Stop class-by-class fixes?                | No blanket stop: rule 15 as written. #10378 and #10438 are next                                                                                                                                                                                                                                               |
-| D2  | Target protocol change                    | Not (2) yet: spike (6) first, then decide; if (2) is chosen later, HLC stamps, not wall clocks                                                                                                                                                                                                                |
-| D3  | Option (1) and decision 6                 | Keep decision 6 for now; drop only the per-action extractors                                                                                                                                                                                                                                                  |
-| D4  | Server-side resolution (3)                | Rejected (E2EE, file providers, ADR #10)                                                                                                                                                                                                                                                                      |
-| D5  | Membership vs order                       | No separate derivation PR; design membership with the order merge (option M)                                                                                                                                                                                                                                  |
-| D6  | #10452's order-only difference            | Accepted (decided earlier, see above)                                                                                                                                                                                                                                                                         |
-| D7  | File providers under an apply-time change | Plan their format change alongside it, using the existing split-file tombstone lever                                                                                                                                                                                                                          |
-| D8  | #10438                                    | Fix it. Shape: one decision per entity per batch, or #10421's post-batch field patch (not "a time-only side needs no snapshot": the resolver's local side is a rename). Every commit showing it is after v19.1.0; rule 15 admits a forward fix because reverting #10415/#10432 would bring back released bugs |
+| #   | Question                                  | Decided                                                                                                                                                                                                                                                                                                                               |
+| --- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Stop class-by-class fixes?                | No blanket stop: rule 15 as written. #10378 and #10438 are next                                                                                                                                                                                                                                                                       |
+| D2  | Target protocol change                    | Not (2) yet: spike (6) first, then decide. If (2) is chosen later, HLC stamps                                                                                                                                                                                                                                                         |
+| D3  | Option (1) and decision 6                 | Keep decision 6 for now; drop only the per-action extractors                                                                                                                                                                                                                                                                          |
+| D4  | Server-side resolution (3)                | Rejected (E2EE, file providers, ADR #10)                                                                                                                                                                                                                                                                                              |
+| D5  | Membership vs order                       | No separate derivation PR; design membership with the order merge (option M)                                                                                                                                                                                                                                                          |
+| D6  | #10452's order-only difference            | Accepted (decided earlier, see above)                                                                                                                                                                                                                                                                                                 |
+| D7  | File providers under an apply-time change | Plan their format change alongside it (the tombstone lever is partial, see recommendation 6)                                                                                                                                                                                                                                          |
+| D8  | #10438                                    | Fix it, in the shape of recommendation 7. Released status is unknown (#10438 says its per-op resolution and pre-batch snapshot predate #10432). Rule 15 admits a fix either way: as permanent divergence if released, or, if introduced after v19.1.0, as a forward fix, since reverting #10415/#10432 would bring back #10379/#10260 |
 
 This reverses the 2026-10-01 tracker line "#10437 and #10438: stopping-point
-evidence, with no separate fixes" for #10438.
+evidence, with no separate fixes" for #10438. Not decided here, and needed
+before the (6) spike lands: whether its index may record fields written by
+incoming resolution rows (decisions 5 and 5a).
 
 ## Missing evidence
 
 - Version spread per app version on SuperSync (#10397), to size the mixed-fleet
   window for any apply-time change. v19.0–v19.1 send `appVersion` on
   downloads only.
-- Whether v19.1.0 diverges on #10438's shape or only reverts the field
-  (server-order application of remote winners came with #10432).
+- Whether v19.1.0 shows #10438 (diverges or only reverts the field).
 - A per-seed split of `field-reverted`/`field-unwritten` by producer.
-- The (6) spike: does a reducer diff give the right field set for
-  multi-entity meta-reducers and map fields?
+- The (6) spike: field sets for meta-reducers, map fields and equal-value
+  writes, and the rebase next to `'replace'` rows.
