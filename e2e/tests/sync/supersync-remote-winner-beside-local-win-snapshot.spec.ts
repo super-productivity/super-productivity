@@ -5,6 +5,7 @@ import {
   createSimulatedClient,
   createTestUser,
   getSuperSyncConfig,
+  recordTaskTimeDelta,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 
@@ -33,12 +34,14 @@ const LOCAL_TIME = new Date('2026-08-04T09:01:00');
 const REMOTE_EDIT_TIME = new Date('2026-08-04T09:02:00');
 const RESOLVE_TIME = new Date('2026-08-04T09:03:00');
 const TODAY = '2026-08-04';
+const TRACKED_MS = 60000;
 const FUTURE_DAY = '2026-08-08';
 
 interface TaskView {
   title: string;
   notes: string | null;
   dueDay: string | null;
+  timeSpent: number;
 }
 
 /** Only explicit syncs run, so every crossing happens in the stated order. */
@@ -77,6 +80,7 @@ const readTask = async (
       title: string;
       notes?: string;
       dueDay?: string | null;
+      timeSpent?: number;
     };
     type StoreLike = {
       subscribe: (next: (state: unknown) => void) => { unsubscribe: () => void };
@@ -94,6 +98,7 @@ const readTask = async (
       title: task.title,
       notes: task.notes || null,
       dueDay: task.dueDay ?? null,
+      timeSpent: task.timeSpent ?? 0,
     };
   }, query);
 
@@ -202,16 +207,22 @@ const runCrossing = async (
       title: seeded.title,
       notes: null,
       dueDay: FUTURE_DAY,
+      timeSpent: 0,
     });
     for (const client of clients) await blockBackgroundSync(client);
 
-    // B plans the task, C renames it, A edits it: each later than the last.
+    // B tracks time on the task, which also plans it for today; C renames
+    // it; A edits it: each later than the last.
     await clientB.page.clock.setFixedTime(PLAN_TIME);
     await clientB.sync.syncAndWait();
     await planForToday(clientB.page, id);
     await expect
       .poll(async () => (await readTask(clientB.page, { id })).dueDay)
       .toBe(TODAY);
+    await recordTaskTimeDelta(clientB, seeded.title, TODAY, TRACKED_MS);
+    await expect
+      .poll(async () => (await readTask(clientB.page, { id })).timeSpent)
+      .toBe(TRACKED_MS);
     await clientB.sync.syncAndWait();
 
     await clientC.page.clock.setFixedTime(LOCAL_TIME);
@@ -236,13 +247,16 @@ const runCrossing = async (
     await clientA.sync.syncAndWait();
     await clientB.sync.syncAndWait();
 
-    // Each field takes its latest write; C's rename beat the plan, so the
-    // task stays on the future day.
+    // Each field takes its latest write, and B's tracked time counts once.
+    // The plan is opaque, so where C's rename beat it the day is C's
+    // snapshot's; every device must agree on it.
+    const { dueDay } = await readTask(clientC.page, { id });
     const expected: TaskView & { id: string } = {
       id,
       title: remoteEdit === 'title' ? editA : titleC,
       notes: remoteEdit === 'notes' ? editA : null,
-      dueDay: FUTURE_DAY,
+      dueDay,
+      timeSpent: TRACKED_MS,
     };
     for (const client of clients) {
       expect(await readTask(client.page, { id }), client.clientName).toEqual(expected);
