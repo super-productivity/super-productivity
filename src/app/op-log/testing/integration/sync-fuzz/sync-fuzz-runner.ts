@@ -149,12 +149,27 @@ interface LedgerWrite {
 
 /**
  * Intents whose ops always take a whole-entity conflict path, so a crossing
- * with one can carry any value its winning side held: habit counts are
- * opaque (decision 6 of docs/sync-and-op-log/lww-field-level-resolution.md),
- * and no field patch reads a delete, archive or restore (an archive also wins
- * over a concurrent edit, by sync-core's planner). A `track` is whole-entity
- * when it plans the task for today (`opaque`, decision 6); its plain delta
- * refuses the patch only from the remote side (see `crossing`).
+ * with one can carry any value its winning side held. Each mirrors a refusal
+ * in production:
+ * - `countHabit`: an opaque op (decision 6 of
+ *   docs/sync-and-op-log/lww-field-level-resolution.md): `sideNonNoiseKeys`
+ *   returns undefined for it, so `isFieldPatchEligible` refuses;
+ * - `deleteTask`: a DELETE refuses in `isFieldPatchEligible`, and its plan is
+ *   a whole-entity win (`ConflictResolutionService._isWholeEntityWinPlan`);
+ * - `archiveTask`: no `{ id, changes }` to read (`isOpaqueChangeOp`), and a
+ *   multi-entity op with subtasks; an archive also wins over a concurrent
+ *   edit by sync-core's planner (`_isWholeEntityWinPlan`);
+ * - `restoreTask`: carries the flat archived task, not `{ id, changes }`, so a
+ *   local one refuses (`isChangesShapedOp` in `isFieldPatchEligible`). A
+ *   remote one is read per field but writes every field at its own time, as
+ *   a snapshot does; the side rule here differs only where the other side
+ *   has a later intent than the restore (kept as before, not seen in fuzz).
+ * A `track` is whole-entity when it plans the task for today (`opaque`,
+ * decision 6). A plain delta is not: detection drops a remote one that is
+ * disjoint from the local side before it reaches a conflict
+ * (`isCommutingTimeDeltaCrossing` in
+ * `ConflictResolutionService._checkEntityForConflict`'s CONCURRENT branch),
+ * and a local one stays pending beside the patch (`keptLocalTimeDeltas`).
  */
 const WHOLE_ENTITY_INTENTS: ReadonlySet<Intent[0]> = new Set([
   'countHabit',
@@ -265,13 +280,19 @@ export class Ledger {
    * that uploads later resolves, with the intents it had pending together
    * (one upload) against the other device's intents it has not seen and that
    * were uploaded before. `whole` says the conflict takes a whole-entity
-   * path: an opaque or whole-entity intent on either side, or a plain time
-   * delta on the remote side, which refuses the field patch (the design
-   * note's "Time" rule). The model takes one other device at a time; the
-   * app's remote side is everything it downloads for the entity, so a third
-   * device's remote delta in the same download is not seen here. And only
-   * the later uploader resolves, as on SuperSync; on a file-based provider
-   * both devices can.
+   * path: an opaque or whole-entity intent on either side
+   * (`WHOLE_ENTITY_INTENTS`). Otherwise both sides are readable and the
+   * conflict resolves per field.
+   *
+   * Where this model and production can differ:
+   * - it takes one other device at a time; the app's remote side is everything
+   *   it downloads for the entity, so a third device's opaque op in the same
+   *   download makes production resolve whole-entity where this says per
+   *   field (a false `older-write-won`, never a missed one);
+   * - LWW rows are not intents, so a remote `'replace'` row (a stale local-win
+   *   snapshot, #10421) and a pending local row (whole-entity) are not seen;
+   * - only the later uploader resolves, as on SuperSync; on a file-based
+   *   provider both devices can.
    */
   crossing(
     entity: string,
@@ -291,9 +312,7 @@ export class Ledger {
     );
     const isWholeEntity = (e: LedgerEntry): boolean =>
       WHOLE_ENTITY_INTENTS.has(e.intent[0]) || e.opaque;
-    const whole =
-      [...local, ...remote].some(isWholeEntity) ||
-      remote.some((e) => e.intent[0] === 'track');
+    const whole = [...local, ...remote].some(isWholeEntity);
     return resolver === a
       ? { aSide: local, bSide: remote, whole }
       : { aSide: remote, bSide: local, whole };
@@ -1084,26 +1103,36 @@ export const checkPreservation = (
 /**
  * Per-field last-writer-wins across devices: a field that several intents
  * wrote converges on the value of the one with the latest own edit time
- * (timestamp, then clientId, as sync-core's planner breaks ties). A field
- * patch or LWW resolution is meant to give exactly that; #10422 shows a
- * remote win's patch that re-sends the loser's older value at the winner's
- * time and beats a third device's newer edit.
+ * (timestamp, then clientId, as sync-core's planner breaks ties).
  *
  * The latest write may lose only a conflict that LWW lets it lose. For every
  * intent of another device on the entity that is concurrent with it, the two
- * meet in one conflict (`Ledger.crossing`), and each side wins by its latest
- * intent (design A, "Overlap"). Where the other side wins:
- * - through a field patch, a field both sides wrote takes the winning side's
- *   value, so a write of that side with the converged value accounts for it;
- * - on a whole-entity path, the winning side's snapshot can carry any value
- *   its device held: the conflict accounts for any value.
- * Where the latest write's side wins every such conflict, its value must
- * survive.
+ * meet in one conflict (`Ledger.crossing`):
+ * - through the field patch (both sides readable), each field goes to the
+ *   side whose latest write of THAT field is newer (`localWinningFieldGroups`
+ *   in conflict-field-patch.util.ts, #10422). The latest write is the newest
+ *   write of its field on either side, so it wins every such conflict: none
+ *   accounts for another value, whatever else the other side wrote later;
+ * - on a whole-entity path (`crossing`'s `whole`, the shapes
+ *   `isFieldPatchEligible` refuses), the side with the latest intent wins
+ *   (sync-core's planner), and its snapshot can carry any value its device
+ *   held: a write of that side or in its causal past accounts for it.
+ *
+ * This is a stricter model of the shapes the fuzz covers, not an exact model
+ * of production: crossings are judged pairwise from intents, and a remote
+ * restore or LWW `'replace'` row is approximated (see `WHOLE_ENTITY_INTENTS`
+ * and `Ledger.crossing`).
+ *
+ * Two documented residuals still stamp fields later than they were written
+ * (superseded re-emits and `_reemitSurvivingLocalFields`, see "What it
+ * leaves" in lww-field-level-resolution.md). An older value one of them
+ * carried reports as `older-write-won` too; no seed shows one yet.
  *
  * Out of scope, by design: NOTE fields, which stay on whole-entity LWW
  * (decision 4 of docs/sync-and-op-log/lww-field-level-resolution.md), and
  * habit counts (`countOnDay`), which are opaque (decision 6). A value no
- * intent wrote is `field-unwritten`'s, not this check's.
+ * intent wrote is `field-unwritten`'s, not this check's. Pending local LWW
+ * rows (re-sends, whole-entity) are not in the ledger, which models intents.
  */
 const checkLatestWrite = (
   ledger: Ledger,
@@ -1122,14 +1151,14 @@ const checkLatestWrite = (
       return false;
     }
     const { aSide, bSide, whole } = ledger.crossing(entity, latest.entry, other);
-    if (!isLaterWrite(latestOf(bSide), latestOf(aSide))) return false;
-    // A patch carries the winning side's own writes; a whole-entity snapshot
-    // what its device held: its side's writes and their causal past.
+    if (!whole || !isLaterWrite(latestOf(bSide), latestOf(aSide))) return false;
+    // A whole-entity snapshot carries what its device held: its side's writes
+    // and their causal past.
     const winner = latestOf(bSide);
     return writes.some(
       (w) =>
         Object.is(w.value, actual) &&
-        (bSide.includes(w.entry) || (whole && isCausalPastOf(w.entry, winner))),
+        (bSide.includes(w.entry) || isCausalPastOf(w.entry, winner)),
     );
   });
   if (accounted) return;

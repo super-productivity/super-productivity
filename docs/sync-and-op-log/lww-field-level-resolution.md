@@ -457,7 +457,10 @@ holds the rules; `ConflictResolutionService._tryCreateFieldPatch` builds the op.
   (`orderIncomingPrefix`). A winner beside a local win of its entity keeps
   its place after the local win, which it must override on replay.
 - **A winner that also tracks time:** a remote `syncTimeSpent` refuses the
-  patch, so #10260 stays for a task renamed while another device times it.
+  patch only where it reaches the conflict. Beside a readable local side it is
+  disjoint, so detection drops it (`isCommutingTimeDeltaCrossing`) and the
+  remote rename resolves per field: a task renamed while another device times
+  it keeps the newer title (fuzz trace, checked 2026-10-02, #10458).
 - **Undone toggles:** the `doneOn` clear beside `isDone: false` travels in
   `clearedFields`, which v18.15.0–v18.21.x ignore (stale `doneOn` there).
 - **Pinned:** the delta-versus-patch-row divergence and the stale-snapshot
@@ -541,7 +544,12 @@ against any row; it now meets rows stamped at their fields' own, older times.
   traces fail the same way on master, and the full seeds trade those losses
   for kept done toggles, notes and time.
 - **Superseded re-emits** (`SupersededOperationResolverService`) still stamp
-  a group with the latest timestamp of its own ops.
+  a group with the latest timestamp of its own ops, and surviving-field
+  re-emits (`_reemitSurvivingLocalFields`) the latest local timestamp. The
+  fuzz latest-write oracle, which decides each field by its own latest write
+  on each side, reports an older value one of their rows carried as
+  `older-write-won:`, like any other; no seed, pin or trace shows one yet
+  (decided on #10393: no separate signature until a real case exists).
 - **Pending local rows** keep whole-entity LWW, so a re-send that is still
   pending when another device's row arrives loses or wins as a whole.
 - **Failed re-send fallback:** when a re-send's reducer fails, the remote

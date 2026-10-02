@@ -265,6 +265,38 @@ describe('SyncFuzzHarness: negative control', () => {
       .toContain('older-write-won:task.notes');
   }, 60_000);
 
+  it('the oracles hold a field to its own latest write, not its side’s (#10422)', async () => {
+    // A's notes stay pending while C writes newer notes and uploads; A then
+    // renames and uploads. A's side has the latest intent, but C's notes win
+    // per field, as the field patch resolves them.
+    const steps: FuzzStep[] = [
+      { d: 'A', a: ['editTaskNotes', 't1', 'A notes'] },
+      { d: 'C', a: ['editTaskNotes', 't1', 'C notes'], s: 1 },
+      { d: 'A', a: ['renameTask', 't1', 'A title'], s: 1 },
+    ];
+    const { failures } = await runFuzz({ steps });
+
+    expect(failures).withContext(JSON.stringify(failures)).toEqual([]);
+  }, 60_000);
+
+  it('the oracles hold a re-sent field to its own write’s time (#10422)', async () => {
+    // A resolves against B's newer rename and re-sends its notes, written
+    // before C's. A row stamping them at A's rename would beat C's notes,
+    // and the oracle would report it (`older-write-won:task.notes`;
+    // field-patch-timestamp.integration.spec.ts pins the values).
+    const steps: FuzzStep[] = [
+      { d: 'A', a: ['editTaskNotes', 't1', 'A notes'] },
+      { d: 'C', a: ['editTaskNotes', 't1', 'C notes'] },
+      { d: 'A', a: ['renameTask', 't1', 'A title'] },
+      { d: 'B', a: ['renameTask', 't1', 'B title'], s: 1 },
+      { d: 'A', s: 1 },
+      { d: 'C', s: 1 },
+    ];
+    const { failures } = await runFuzz({ steps });
+
+    expect(failures).withContext(JSON.stringify(failures)).toEqual([]);
+  }, 60_000);
+
   /**
    * The pinned kept stop (a Today note reorder crossing an unpin): C, the
    * unpinning device, stops at step 6 and answers the whole-dataset dialog.

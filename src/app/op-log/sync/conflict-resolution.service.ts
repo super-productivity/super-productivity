@@ -2561,14 +2561,16 @@ export class ConflictResolutionService {
   }
 
   /**
-   * Resolves an entity's conflicts as ONE field patch built only from both
-   * sides' ops (conflict-field-patch.util.ts), or returns undefined for the
-   * whole-entity LWW path. Its timestamp is the max of both sides and its
-   * clock dominates both, so two resolvers of the same sides build identical
-   * payloads, which meet as ordinary LWW rows and never re-merge (#10393
-   * decision 5). Types without a RECREATE_FALLBACK (NOTE, decision 4) are
-   * refused: a receiver that applied a concurrent delete recreates the entity
-   * from the partial patch (accepted residual, decision 2).
+   * Resolves an entity's conflicts per field (conflict-field-patch.util.ts,
+   * #10422), or returns undefined for the whole-entity LWW path. The remote
+   * ops apply as themselves; the re-sends are the local fields whose latest
+   * local write is newer than every remote write of the same field
+   * (`localWinningFieldGroups`), one `'patch'` row per local op that wrote
+   * them, each at that op's own timestamp. Each row's clock dominates both
+   * sides and the one before it. Rows never re-merge (#10393 decision 5).
+   * Types without a RECREATE_FALLBACK (NOTE, decision 4) are refused: a
+   * receiver that applied a concurrent delete recreates the entity from the
+   * partial patch (accepted residual, decision 2).
    */
   private async _tryCreateFieldPatch(
     entityPlans: LwwConflictResolutionPlan<EntityConflict>[],

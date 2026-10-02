@@ -108,9 +108,11 @@ describe('sync fuzz preservation oracles', () => {
       ).toEqual(['older-write-won:task.notes']);
     });
 
-    it('accepts an older write whose side wins by a later edit of another field', () => {
+    it('reports an older write whose side has a later edit of another field', () => {
       // A's notes and rename are pending together and upload after C's
-      // notes: A resolves, its side wins by the rename and patches its notes.
+      // notes: A resolves per field (#10422). C's notes are the newer write
+      // of notes, so they win; A re-sends only its title. A's later rename
+      // does not make its older notes win.
       const notesA = entry('A', { A: 1 }, ['editTaskNotes', 't1', 'A notes'], {
         uploadedAt: 100,
       });
@@ -118,17 +120,23 @@ describe('sync fuzz preservation oracles', () => {
       const rename = entry('A', { A: 2 }, ['renameTask', 't1', 'A title'], {
         uploadedAt: 100,
       });
-      const converged = {
+      const entries = [notesA, notesC, rename];
+      expect(
+        signatures(
+          { tasks: { t1: { id: 't1', notes: 'C notes', title: 'A title' } } },
+          entries,
+        ),
+      ).toEqual([]);
+      const olderNotes = {
         tasks: { t1: { id: 't1', notes: 'A notes', title: 'A title' } },
       };
-      expect(signatures(converged, [notesA, notesC, rename])).toEqual([]);
-      // ...but not when A's notes uploaded before C's: that crossing was
-      // resolved earlier, and C won it. The later rename does not write notes
-      // (review of #10428, finding 2: the #10421 class).
+      expect(signatures(olderNotes, entries)).toEqual(['older-write-won:task.notes']);
+      // ...nor when A's notes uploaded before C's: that crossing was resolved
+      // earlier, and C won it (review of #10428, finding 2: the #10421 class).
       const earlyNotesA = entry('A', { A: 1 }, ['editTaskNotes', 't1', 'A notes']);
       const laterNotesC = entry('C', { C: 1 }, ['editTaskNotes', 't1', 'C notes']);
       const laterRename = entry('A', { A: 2 }, ['renameTask', 't1', 'A title']);
-      expect(signatures(converged, [earlyNotesA, laterNotesC, laterRename])).toEqual([
+      expect(signatures(olderNotes, [earlyNotesA, laterNotesC, laterRename])).toEqual([
         'older-write-won:task.notes',
       ]);
     });
@@ -167,9 +175,13 @@ describe('sync fuzz preservation oracles', () => {
         },
       };
 
-      it('accounts for any value when its delta is remote to the resolver', () => {
-        // A uploads first: C resolves against A's remote delta, whole-entity.
-        expect(signatures(converged, [notesB, notesC, track(100)])).toEqual([]);
+      it('does not when its plain delta is remote to the resolver', () => {
+        // A uploads first: C's notes and A's delta commute, so detection
+        // drops the delta (isCommutingTimeDeltaCrossing) and no whole-entity
+        // snapshot carries B's notes (adversarial review of #10458).
+        expect(signatures(converged, [notesB, notesC, track(100)])).toEqual([
+          'older-write-won:task.notes',
+        ]);
       });
 
       it('accounts for any value when its intent plans the task (opaque)', () => {
@@ -188,7 +200,7 @@ describe('sync fuzz preservation oracles', () => {
             t1: { id: 't1', notes: 'D notes', timeSpentOnDay: { [fuzzDay()]: 1000 } },
           },
         };
-        expect(signatures(unseen, [notesD, notesB, notesC, track(100)])).toEqual([
+        expect(signatures(unseen, [notesD, notesB, notesC, track(100, true)])).toEqual([
           'older-write-won:task.notes',
         ]);
       });
