@@ -424,7 +424,10 @@ holds the rules; `ConflictResolutionService._tryCreateFieldPatch` builds the op.
   (`orderIncomingPrefix`). A winner beside a local win of its entity keeps
   its place after the local win, which it must override on replay.
 - **A winner that also tracks time:** a remote `syncTimeSpent` refuses the
-  patch, so #10260 stays for a task renamed while another device times it.
+  patch only where it reaches the conflict. Beside a readable local side it is
+  disjoint, so detection drops it (`isCommutingTimeDeltaCrossing`) and the
+  remote rename resolves per field: a task renamed while another device times
+  it keeps the newer title (fuzz trace, checked 2026-10-02, #10458).
 - **Undone toggles:** the `doneOn` clear beside `isDone: false` travels in
   `clearedFields`, which v18.15.0–v18.21.x ignore (stale `doneOn` there).
 - **Pinned:** the delta-versus-patch-row divergence and the stale-snapshot

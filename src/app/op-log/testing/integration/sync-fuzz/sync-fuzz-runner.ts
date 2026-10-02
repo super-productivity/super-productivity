@@ -165,8 +165,11 @@ interface LedgerWrite {
  *   a snapshot does; the side rule here differs only where the other side
  *   has a later intent than the restore (kept as before, not seen in fuzz).
  * A `track` is whole-entity when it plans the task for today (`opaque`,
- * decision 6); its plain delta refuses the patch only from the remote side
- * (see `crossing`).
+ * decision 6). A plain delta is not: detection drops a remote one that is
+ * disjoint from the local side before it reaches a conflict
+ * (`isCommutingTimeDeltaCrossing` in
+ * `ConflictResolutionService._checkEntityForConflict`'s CONCURRENT branch),
+ * and a local one stays pending beside the patch (`keptLocalTimeDeltas`).
  */
 const WHOLE_ENTITY_INTENTS: ReadonlySet<Intent[0]> = new Set([
   'countHabit',
@@ -278,14 +281,18 @@ export class Ledger {
    * (one upload) against the other device's intents it has not seen and that
    * were uploaded before. `whole` says the conflict takes a whole-entity
    * path: an opaque or whole-entity intent on either side
-   * (`WHOLE_ENTITY_INTENTS`), or a plain time delta on the remote side, which
-   * refuses the field patch (`remoteOps.some(isSyncTimeSpentOp)` in
-   * `isFieldPatchEligible`, the design note's "Time" rule). Otherwise both
-   * sides are readable and the conflict resolves per field. The model takes
-   * one other device at a time; the app's remote side is everything it
-   * downloads for the entity, so a third device's remote delta in the same
-   * download is not seen here. And only the later uploader resolves, as on
-   * SuperSync; on a file-based provider both devices can.
+   * (`WHOLE_ENTITY_INTENTS`). Otherwise both sides are readable and the
+   * conflict resolves per field.
+   *
+   * Where this model and production can differ:
+   * - it takes one other device at a time; the app's remote side is everything
+   *   it downloads for the entity, so a third device's opaque op in the same
+   *   download makes production resolve whole-entity where this says per
+   *   field (a false `older-write-won`, never a missed one);
+   * - LWW rows are not intents, so a remote `'replace'` row (a stale local-win
+   *   snapshot, #10421) and a pending local row (whole-entity) are not seen;
+   * - only the later uploader resolves, as on SuperSync; on a file-based
+   *   provider both devices can.
    */
   crossing(
     entity: string,
@@ -305,9 +312,7 @@ export class Ledger {
     );
     const isWholeEntity = (e: LedgerEntry): boolean =>
       WHOLE_ENTITY_INTENTS.has(e.intent[0]) || e.opaque;
-    const whole =
-      [...local, ...remote].some(isWholeEntity) ||
-      remote.some((e) => e.intent[0] === 'track');
+    const whole = [...local, ...remote].some(isWholeEntity);
     return resolver === a
       ? { aSide: local, bSide: remote, whole }
       : { aSide: remote, bSide: local, whole };

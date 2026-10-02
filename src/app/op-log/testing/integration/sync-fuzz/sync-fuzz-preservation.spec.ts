@@ -175,9 +175,13 @@ describe('sync fuzz preservation oracles', () => {
         },
       };
 
-      it('accounts for any value when its delta is remote to the resolver', () => {
-        // A uploads first: C resolves against A's remote delta, whole-entity.
-        expect(signatures(converged, [notesB, notesC, track(100)])).toEqual([]);
+      it('does not when its plain delta is remote to the resolver', () => {
+        // A uploads first: C's notes and A's delta commute, so detection
+        // drops the delta (isCommutingTimeDeltaCrossing) and no whole-entity
+        // snapshot carries B's notes (adversarial review of #10458).
+        expect(signatures(converged, [notesB, notesC, track(100)])).toEqual([
+          'older-write-won:task.notes',
+        ]);
       });
 
       it('accounts for any value when its intent plans the task (opaque)', () => {
@@ -196,7 +200,7 @@ describe('sync fuzz preservation oracles', () => {
             t1: { id: 't1', notes: 'D notes', timeSpentOnDay: { [fuzzDay()]: 1000 } },
           },
         };
-        expect(signatures(unseen, [notesD, notesB, notesC, track(100)])).toEqual([
+        expect(signatures(unseen, [notesD, notesB, notesC, track(100, true)])).toEqual([
           'older-write-won:task.notes',
         ]);
       });
