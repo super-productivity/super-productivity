@@ -94,9 +94,9 @@ describe('time delta beside a timeless winner, through an upload race (#10378)',
   // upload response is lost (the server rejects B's t3 ops and accepts the
   // rename, B learns neither) and B renames t3 again; A learns the rename and
   // edits t3, a clock that covers the delta without it. B resolves against
-  // both A edits in one pass. The concurrent first edit alone already keeps
-  // the delta, so this also passes with the dropped rule (9f78ce2): no
-  // reachable loss from that rule has been built.
+  // both A edits in one pass. The concurrent first edit keeps the delta, so
+  // the coverage rule loses nothing here: no reachable loss from that rule
+  // has been built (D10 refined, case 3).
   it('counts B tracked time once when the winner clock covers the delta', async () => {
     const harness = await SyncFuzzHarness.create();
     const [a, b, c] = [
@@ -139,12 +139,11 @@ describe('time delta beside a timeless winner, through an upload race (#10378)',
 
   // A delivered delta whose upload response was lost stays pending; B renames
   // t3 after it, so A's edit (which received the delta) is concurrent with
-  // B's frontier and covers the delta. The kept delta is rebased and re-sent
-  // under its id with a new clock: the server answers INVALID_OP_ID (not
-  // DUPLICATE_OPERATION, which needs the same clock) and B marks it rejected.
-  // Nothing is counted twice, but B shows one sync error that the dropped
-  // rule (9f78ce2) did not show: the cost of D10 refined, pinned here.
-  it('counts a delivered but unmarked delta once, with one sync error', async () => {
+  // B's frontier and covers the delta. The coverage rule drops it: it counts
+  // once and nothing is re-sent. Keeping it would re-send it under its id
+  // with a rebased clock, which the server answers with INVALID_OP_ID and B
+  // shows as a sync error (measured while the rule was removed, 375b9d9).
+  it('counts a delivered but unmarked delta once, without a sync error', async () => {
     const harness = await SyncFuzzHarness.create();
     const [a, b, c] = [
       await harness.addDevice('A'),
@@ -171,14 +170,7 @@ describe('time delta beside a timeless winner, through an upload race (#10378)',
     for (let round = 0; round < 3; round++) {
       for (const device of [b, a, c]) await harness.sync(device);
     }
-    expect(harness.events.map((e) => [e.device, e.kind, e.detail])).toEqual([
-      ['B', 'error-snack', 'F.SYNC.S.UPLOAD_OPS_REJECTED'],
-      [
-        'B',
-        'permanent-rejection',
-        '1 op(s): INVALID_OP_ID,DUPLICATE_OPERATION,DUPLICATE_OPERATION',
-      ],
-    ]);
+    expect(harness.events).toEqual([]);
     const times: (number | undefined)[] = [];
     for (const device of [a, b, c]) times.push(await timeOf(harness, device));
     for (const device of [a, b, c]) await harness.restart(device);

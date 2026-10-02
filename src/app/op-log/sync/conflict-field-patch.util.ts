@@ -18,7 +18,11 @@ import { ActionType, isLwwUpdatePayload, OpType } from '../core/operation.types'
 import type { EntityConflict, Operation, VectorClock } from '../core/operation.types';
 import type { EntityType } from '../core/operation.types';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
-import { mergeVectorClocks } from '../../core/util/vector-clock';
+import {
+  compareVectorClocks,
+  mergeVectorClocks,
+  VectorClockComparison,
+} from '../../core/util/vector-clock';
 import { isMultiEntityOperation } from '../util/get-op-entity-ids.util';
 import {
   isAdditiveTimeOp,
@@ -328,12 +332,14 @@ export const keptLocalTimeDeltas = (
  * op of a TASK conflict is a `syncTimeSpent` delta or writes no time field
  * (`writesNoTaskTime`), so the winner leaves the deltas' time as it is: they
  * stay pending and move past the winner, while the side's other ops lose as
- * before. The winner's clock is not consulted: it writes no total, so even a
- * clock that covers a delta cannot show the delta is counted (D10 refined,
- * #10393). A delta that was delivered after all is re-sent with its rebased
- * clock, so the server answers INVALID_OP_ID (not DUPLICATE_OPERATION) and
- * the client marks it rejected with one sync error; it is counted once. Rows
- * and other time writers keep whole-entity LWW.
+ * before. A delta a remote op's clock covers loses too: the remote device
+ * had seen it, so it was delivered and counts once already (a lost upload
+ * response; keeping it would re-send it with a rebased clock, which the
+ * server rejects as INVALID_OP_ID with a sync error). A clock can also cover
+ * a delta by inherited knowledge only (D10 refined, case 3); no trace has
+ * shown that losing time, since a concurrent op of the same crossing keeps
+ * the delta (time-delta-kept-beside-timeless-winner.integration.spec.ts).
+ * Rows and other time writers keep whole-entity LWW.
  */
 export const timeDeltasSurvivingRemoteWins = (
   resolutions: { conflict: EntityConflict; winner: 'local' | 'remote' }[],
@@ -351,7 +357,15 @@ export const timeDeltasSurvivingRemoteWins = (
     ) {
       return [];
     }
-    const deltas = localOps.filter(isSyncTimeSpentOp);
+    const deltas = localOps.filter(
+      (op) =>
+        isSyncTimeSpentOp(op) &&
+        remoteOps.every(
+          (remote) =>
+            compareVectorClocks(op.vectorClock, remote.vectorClock) ===
+            VectorClockComparison.CONCURRENT,
+        ),
+    );
     return deltas.length > 0 ? [{ ...conflict, localOps: deltas }] : [];
   });
 
