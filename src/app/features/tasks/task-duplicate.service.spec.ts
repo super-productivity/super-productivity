@@ -16,8 +16,16 @@ describe('TaskDuplicateService', () => {
     title: 'Sub task',
     projectId: 'project-1',
     isDone: true,
+    dueDay: '2026-09-02',
     timeEstimate: 3_600_000,
     notes: 'Sub task notes',
+  };
+  const timedSubTask: Task = {
+    ...DEFAULT_TASK,
+    id: 'timed-sub-task',
+    title: 'Timed sub task',
+    projectId: 'project-1',
+    dueWithTime: 1_757_000_000_000,
   };
   const parentTask: TaskWithSubTasks = {
     ...DEFAULT_TASK,
@@ -28,8 +36,8 @@ describe('TaskDuplicateService', () => {
     notes: 'Parent task notes',
     dueDay: '2026-09-01',
     timeEstimate: 7_200_000,
-    subTaskIds: [subTask.id],
-    subTasks: [subTask],
+    subTaskIds: [subTask.id, timedSubTask.id],
+    subTasks: [subTask, timedSubTask],
   };
 
   beforeEach(() => {
@@ -57,8 +65,14 @@ describe('TaskDuplicateService', () => {
       title: subTask.title,
       projectId: subTask.projectId,
     };
+    const newTimedSubTask: Task = {
+      ...DEFAULT_TASK,
+      id: 'new-timed-sub-task',
+      title: timedSubTask.title,
+      projectId: timedSubTask.projectId,
+    };
     taskService.add.and.returnValue('new-parent-task');
-    taskService.createNewTaskWithDefaults.and.returnValue(newSubTask);
+    taskService.createNewTaskWithDefaults.and.returnValues(newSubTask, newTimedSubTask);
 
     const result = service.duplicate(parentTask);
 
@@ -81,13 +95,30 @@ describe('TaskDuplicateService', () => {
       additional: {
         isDone: true,
         projectId: 'project-1',
+        dueDay: '2026-09-02',
         timeEstimate: 3_600_000,
         notes: 'Sub task notes',
+      },
+    });
+    expect(taskService.createNewTaskWithDefaults).toHaveBeenCalledWith({
+      title: 'Timed sub task',
+      additional: {
+        isDone: false,
+        projectId: 'project-1',
+        dueWithTime: 1_757_000_000_000,
+        timeEstimate: 0,
+        notes: undefined,
       },
     });
     expect(store.dispatch).toHaveBeenCalledWith(
       addSubTask({
         task: newSubTask,
+        parentId: 'new-parent-task',
+      }),
+    );
+    expect(store.dispatch).toHaveBeenCalledWith(
+      addSubTask({
+        task: newTimedSubTask,
         parentId: 'new-parent-task',
       }),
     );
