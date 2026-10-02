@@ -348,8 +348,10 @@ holds the rules; `ConflictResolutionService._tryCreateFieldPatch` builds the op.
   local side can beat an older opaque op with a snapshot and lose to a newer
   op of the same task, which applies after the snapshot. The snapshot carries
   that winner's plain fields (`title`, `notes`) and so the post-batch value
-  (#10438, `buildTimeAwareResolutionBatches`); any other winner leaves it
-  unchanged.
+  (#10438, `buildTimeAwareResolutionBatches`). Any other winner leaves it
+  unchanged, and so does a winner beside an incoming plain edit of the task:
+  their order on this device is not fixed, so that crossing can still diverge
+  (residual, as before #10438).
 - **Time:** a local `syncTimeSpent` delta is neither in the patch nor
   rejected. It stays pending and is rebased in place past the remote sides,
   together with the patch after it (`rebaseKeptTimeDeltas`). A remote delta,
