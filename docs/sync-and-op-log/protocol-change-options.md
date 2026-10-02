@@ -40,7 +40,17 @@ per signature, so rows overlap.
 | recreated (accepted, decision 2)           | 6                            | 5               |                                                                                                                     |
 | validation                                 | 3                            | 0               |                                                                                                                     |
 
-`older-write-won` by class: OWW_TABLE
+`older-write-won` by class, each seed read on its original 30-step trace
+(no new class; none is #10437 or #10422):
+
+| Class  | Seeds                                                                                                                                            |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| #10438 | `noReorder:20725003` (title; #10438's source seed), `tasks:20725017` (title, notes), `tasks:20725025` (notes)                                    |
+| #10421 | `noReorder:20725019` (notes; close to #10438's per-op split), `tasks:20725009` (notes; a delta beside absolute writes still sent a full replace) |
+
+In the three #10438 seeds the resolving device's `'replace'` row carries an
+older value with a merged clock that dominates the newer write, so every other
+device ends on the older value while the resolver keeps the newer one.
 
 Pins: 56 of 57 pass; the one failure is the stale #10443 pin that #10452
 improved (being fixed on `claude/sync-cleanup`).
@@ -50,9 +60,9 @@ improved (being fixed on `claude/sync-cleanup`).
 | Class                                             | Mechanism                                                                                                                                                                      | Seeds (signal)                                                          | Released                |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- | ----------------------- |
 | Opaque sides' whole-entity snapshots (decision 6) | An opaque op (habit count, `planTasksForToday`, a delta beside an absolute write) or a NOTE op wins a conflict with a full-entity `'replace'`, erasing the other side's fields | `field-reverted` 40, `field-unwritten` 13; habit counts 7, note locks 6 | yes                     |
-| #10421 remaining class                            | An opaque local side wins with a snapshot read before the batch and reverts incoming edits                                                                                     | OWW_10421                                                               | yes                     |
-| #10437                                            | A later time delta made an older notes edit "newest"                                                                                                                           | OWW_10437                                                               | not checked             |
-| #10438                                            | One batch resolves a task as both a local and a remote win; that device keeps a different title                                                                                | OWW_10438                                                               | not checked             |
+| #10421 remaining class                            | An opaque local side wins with a snapshot read before the batch and reverts incoming edits                                                                                     | `older-write-won` 2                                                     | yes                     |
+| #10437                                            | A later time delta made an older notes edit "newest"                                                                                                                           | 0 (fixed in effect by #10448)                                           | not checked             |
+| #10438                                            | One batch resolves a task as both a local and a remote win; that device keeps a different title                                                                                | `older-write-won` 3, all with permanent `divergence`                    | not checked             |
 | #10378                                            | A rejected `planTasksForToday` takes its time delta with it                                                                                                                    | `divergence:timeSpentOnDay.*` 4                                         | yes; v19.1.0 loses more |
 | #10380 task half                                  | Delete vs a tracked delta recreates the task with the delta's arguments as fields, without the time                                                                            | `divergence:task.taskId/date/duration` 2, `recreated:time-loss` 4       | yes                     |
 | Order only                                        | Lists that mix membership and order diverge in order (#10381 mechanism 1; habit adds; #10452's re-listed note, below)                                                          | `divergence:*Ids.*` up to 40                                            | yes                     |
@@ -120,7 +130,10 @@ About 60 write sites in about 12 files touch these lists (rough grep), most in
 
 1. **Default: (4) now, (2) as the target, (5a) as the first step.** Stop
    class-by-class fixes; keep only user-reported or unreleased-regression
-   fixes (rule 15). (1) adds per-action logic that (2) would delete, and
+   fixes (rule 15). One exception: #10438 is permanent content divergence, so
+   rule 15 admits a fix if `git tag --contains` shows its path released; its
+   shape (a time-only local side needs no snapshot) is #10421's first proposed
+   fix. (1) adds per-action logic that (2) would delete, and
    reverses decision 6 for a partial gain.
 2. **Default: design (2) only after the version-spread numbers exist** and the
    floor is decided (#10397). Release N carries nothing for it.
@@ -141,6 +154,7 @@ About 60 write sites in about 12 files touch these lists (rough grep), most in
 | D5  | Membership vs order: (5a) now as its own PR, (5b) with (2)                                   | Yes                                                            |
 | D6  | Accept the #10452 order-only difference                                                      | Yes                                                            |
 | D7  | File providers under (2): migrate their format, or keep them on today's rules                | Keep them on today's rules until a format migration is planned |
+| D8  | #10438: fix it as the one class left for a fix, if its path is released                      | Yes, after the release check                                   |
 
 ## Missing evidence (optional before release N)
 
