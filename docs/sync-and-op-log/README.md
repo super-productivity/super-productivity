@@ -78,6 +78,7 @@ tests, or a focused contract.
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | [sqlite-migration.md](./sqlite-migration.md)                     | Parked native SQLite migration: durability rationale and why it was stopped                 |
 | [lww-field-level-resolution.md](./lww-field-level-resolution.md) | Proposal: LWW resolutions that carry only the fields that must win (#10379, #10260, #10385) |
+| [protocol-change-options.md](./protocol-change-options.md)       | Decisions D1–D10 after the stopping point; protocol target awaits the (6) spike (#10393)    |
 
 ## Related
 

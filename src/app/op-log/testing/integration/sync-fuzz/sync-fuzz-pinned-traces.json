@@ -1226,7 +1226,7 @@
   },
   {
     "class": "remote-win-keeps-local-edit",
-    "ref": "#10421 fix: the delta commutes with the patch row and uploads after one rejection and rebase (#10408); the row and the notes edit apply in server order (#10423)",
+    "ref": "#10421 fix: the delta commutes with the patch row and uploads after one rejection and rebase (#10260); the row and the notes edit apply in server order (#10423)",
     "name": "a tracked delta crossing a field-patch row commutes with it and reaches every device",
     "steps": [
       {

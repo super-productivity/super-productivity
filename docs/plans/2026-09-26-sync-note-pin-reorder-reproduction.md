@@ -96,8 +96,8 @@ immediate uploads and WebSocket downloads. A makes its change first; B makes
 the newer change, then uploads first. A syncs with its local operation pending.
 Both vector-clock directions and the timestamp inequality are asserted. The
 strict helper requires an actual successful download and reports any dialog or
-error; it never selects Keep local/remote or calls the permissive `syncAndWait()`
-helper during the crossing. Setup's encryption/fresh-account flow runs before
+error; it never selects Keep local/remote or calls `syncAndWait()` (permissive before
+#10341) during the crossing. Setup's encryption/fresh-account flow runs before
 concurrent edits.
 
 Actual rows use schema 4 and `{ actionPayload: ..., entityChanges: [] }`.

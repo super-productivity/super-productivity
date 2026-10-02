@@ -817,6 +817,15 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    committed revision (#10239). The next cycle downloads/applies that baseline
    before retrying; rejection does not acknowledge local ops, write the file, or
    advance the cursor. Warm-cache uploads retain the conditional PUT check.
+   A v2 ops upload only extends a file this client applied, with or without
+   retained ops: a snapshot-only file (for example another device's
+   `SYNC_IMPORT` seed) that appears after this client's download is loaded
+   first instead of being replaced. Full-state snapshot uploads still write
+   unconditionally (except REPAIR), so a device answering an empty download
+   with its own `SYNC_IMPORT` can still replace a seed that landed after its
+   check. The split format does not follow this yet: it appends to a staged,
+   unapplied read (e.g. a server-migration probe) and skips the cold-read check
+   without a committed revision (#10395).
    Legacy ops without `sv` use the file's
    `syncVersion` as a conservative upper bound. After local compaction prunes
    such an op's applied ID, a later file write advances this upper bound past

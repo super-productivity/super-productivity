@@ -725,11 +725,10 @@ device bootstrapping from seq 0 then marks every op as already applied
 - Synced reducers that call `nanoid()` or `Date.now()` (§4.1) produce different
   values on each device that replays them; `boards.reducer.ts:114` generates
   panel ids.
-- `SuperSyncPage.syncAndWait()` resolves the whole-dataset conflict dialog with
-  **Keep remote** on its own. Since #10140 a manual sync that hits the fail-closed
-  error opens that dialog, where the helper used to throw, so the `@supersync`
-  suite may no longer fail loudly on this class. No false green has been observed
-  yet. First step: check whether any existing test passes through the dialog.
+- ~~`SuperSyncPage.syncAndWait()` resolves the whole-dataset conflict dialog with
+  **Keep remote** on its own.~~ Fixed by #10341: the helper now fails the sync on
+  that dialog unless a test opts in with `conflictDialog`, so the `@supersync`
+  suite fails loudly again when a manual sync hits the fail-closed error (#10140).
 
 **Checked and dropped:** the REPAIR op append and the state-cache save run in
 separate transactions (`repair-operation.service.ts:93-110`). A crash between

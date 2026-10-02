@@ -41,7 +41,7 @@ the drag preview, resulting section order, expansion value and task visibility.
 The normal SuperSync setup helper disables background uploads/downloads and
 WebSocket push. Subsequent syncs use a local strict helper that requires a
 successful operations GET and a settled completion indicator; it never invokes
-`syncAndWait()`, which can choose a whole-dataset winner. B uploads first; A then
+`syncAndWait()`, which could choose a whole-dataset winner before #10341. B uploads first; A then
 downloads while retaining its local section operation and unrelated task rename.
 Captured timestamps and vector clocks prove the selected order and concurrency.
 
