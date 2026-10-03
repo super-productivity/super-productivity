@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed, fakeAsync, flush } from '@angular/core/testing';
 import { DateAdapter } from '@angular/material/core';
-import { BehaviorSubject, of } from 'rxjs';
+import { TranslateModule } from '@ngx-translate/core';
+import { BehaviorSubject, Subject, of } from 'rxjs';
 
 import { SnackService } from '../../../core/snack/snack.service';
 import { ShareService } from '../../../core/share/share.service';
@@ -9,6 +10,24 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { Worklog, WorklogDataForDay } from '../../worklog/worklog.model';
 import { WorklogService } from '../../worklog/worklog.service';
 import { ActivityHeatmapComponent } from './activity-heatmap.component';
+
+// Stand-ins for the locale-aware names `CustomDateAdapter` returns, distinct from
+// the English defaults so a hardcoded fallback would fail the assertions.
+const LOCALIZED_MONTH_NAMES = [
+  'Jän',
+  'Feb',
+  'Mär',
+  'Apr',
+  'Mai',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Okt',
+  'Nov',
+  'Dez',
+];
+const LOCALIZED_DAY_NAMES = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
 
 describe('ActivityHeatmapComponent', () => {
   let fixture: ComponentFixture<ActivityHeatmapComponent>;
@@ -120,9 +139,17 @@ describe('ActivityHeatmapComponent', () => {
     ]);
 
     TestBed.configureTestingModule({
-      imports: [ActivityHeatmapComponent],
+      imports: [ActivityHeatmapComponent, TranslateModule.forRoot()],
       providers: [
-        { provide: DateAdapter, useValue: { getFirstDayOfWeek: () => 0 } },
+        {
+          provide: DateAdapter,
+          useValue: {
+            getFirstDayOfWeek: () => 0,
+            getMonthNames: () => LOCALIZED_MONTH_NAMES,
+            getDayOfWeekNames: () => LOCALIZED_DAY_NAMES,
+            localeChanges: new Subject<void>(),
+          },
+        },
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: ShareService, useValue: shareServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },
@@ -153,6 +180,20 @@ describe('ActivityHeatmapComponent', () => {
     expect(dayData?.timeSpent).toBe(workedMs);
     expect(dayData?.taskCount).toBe(2);
     expect(fixture.componentInstance.availableYears()).toEqual([year]);
+  }));
+
+  it('takes month and weekday abbreviations from the locale-aware date adapter', fakeAsync(() => {
+    fixture.detectChanges();
+
+    worklog$.next(createWorklogWithParentAndSubtask());
+    flush();
+    fixture.detectChanges();
+
+    // A full year always starts in January and spans every month.
+    expect(fixture.componentInstance.heatmapData()?.monthLabels).toEqual(
+      LOCALIZED_MONTH_NAMES,
+    );
+    expect(fixture.componentInstance.dayLabels()).toEqual(LOCALIZED_DAY_NAMES);
   }));
 
   it('uses recalculated selected year for the first worklog emission', fakeAsync(() => {

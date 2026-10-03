@@ -65,8 +65,14 @@ export class RepeatTaskHeatmapComponent {
     };
   });
 
+  /** Emits whenever the date locale changes so the month labels re-compute. */
+  private readonly _localeChange = toSignal(this._dateAdapter.localeChanges, {
+    initialValue: null,
+  });
+
   readonly heatmapData = computed<HeatmapData | null>(() => {
     const rawData = this._rawHeatmapData();
+    this._localeChange();
     const firstDay = this._dateAdapter.getFirstDayOfWeek();
 
     if (!rawData || !rawData.dayMap) {

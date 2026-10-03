@@ -746,8 +746,13 @@
         "DAYS_WORKED": "Days worked",
         "FOCUS_SESSION_TRENDS": "Focus sessions over time",
         "GLOBAL_METRICS": "Global Metrics",
+        "HEATMAP_SHARE_FAILED": "Failed to share heatmap",
+        "HEATMAP_SHARE_TAGLINE": "{{title}} – With the Super Productivity App",
+        "HEATMAP_SHARED_TO_DEVICE": "Heatmap saved to device storage",
+        "HEATMAP_SHARED_TO_PATH": "Heatmap saved to {{path}}",
         "NO_ADDITIONAL_DATA_YET": "No additional data collected yet. Use the form on the daily summary \"Evaluation\" panel to do so.",
         "PRODUCTIVITY_BREAKDOWN_OVER_TIME": "Productivity & Sustainability over time",
+        "SHARE_HEATMAP": "Share heatmap",
         "SIMPLE_CLICK_COUNTERS_OVER_TIME": "Click Counters over time",
         "SIMPLE_COUNTERS": "Simple Counters & Habit Tracking",
         "SIMPLE_STOPWATCH_COUNTERS_OVER_TIME": "Stopwatch Counters over time",
@@ -2949,6 +2954,14 @@
   "GPB": {
     "JIRA_LOAD_ISSUE": "Jira: Load issue data...",
     "UNKNOWN": "Loading remote data"
+  },
+  "HEATMAP": {
+    "DAY_TOOLTIP": {
+      "ONE": "{{date}}: {{taskCount}} task, {{timeSpent}}",
+      "OTHER": "{{date}}: {{taskCount}} tasks, {{timeSpent}}"
+    },
+    "LEGEND_LESS": "Less",
+    "LEGEND_MORE": "More"
   },
   "MH": {
     "ADD_NEW_TASK": "Add new Task",
