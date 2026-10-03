@@ -634,6 +634,15 @@ synced config. So collect the secret through your own UI (a config dialog
 registered via `registerConfigHandler`, or a side panel) and store it with
 `setSecret` there; do **not** add the credential as a `configFields` entry.
 
+#### Config-field visibility
+
+A `configFields` entry supports `advanced` (place the control under the
+collapsible **Advanced Config** section) and `autoImportOnly`. Use
+`autoImportOnly: true` for a field that only affects `getNewIssuesForBacklog`
+and not `searchIssues`: the host then disables the control unless the user has
+enabled **Auto import to default project**, since the setting has no effect
+otherwise.
+
 ## Best Practices
 
 ### 1. Performance

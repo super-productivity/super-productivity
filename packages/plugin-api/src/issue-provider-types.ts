@@ -117,6 +117,11 @@ export interface PluginFormField {
   advanced?: boolean;
   /** Only show this field when the specified config key is truthy */
   showIf?: string;
+  /**
+   * Marks a field as only affecting the auto-import path. The host disables it
+   * unless "Auto import to default project" is enabled.
+   */
+  autoImportOnly?: boolean;
   /** For type 'oauthButton': OAuth flow configuration */
   oauthConfig?: OAuthFlowConfig;
   /** For type 'select': dynamically load options at runtime (e.g. after OAuth) */
