@@ -231,7 +231,7 @@ describe('SyncFuzzHarness: negative control', () => {
       .toContain({ step: 3, device: 'B', kind: 'import-dialog', detail: 'USE_REMOTE' });
     expect(kept.failures.map((f) => f.signature))
       .withContext(JSON.stringify(kept.failures))
-      .not.toContain('field-reverted:task.title');
+      .not.toContain('older-write-won:task.title');
 
     // ...until the server loses the rename while acknowledging it.
     loseUploadsOf('"after"');
@@ -240,7 +240,7 @@ describe('SyncFuzzHarness: negative control', () => {
 
     expect(failures.map((f) => f.signature))
       .withContext(JSON.stringify(failures))
-      .toContain('field-reverted:task.title');
+      .toContain('older-write-won:task.title');
   }, 60_000);
 
   it('the oracles report an older notes edit that beats a newer concurrent one', async () => {
@@ -340,7 +340,7 @@ describe('SyncFuzzHarness: negative control', () => {
       expect(signatures).withContext(JSON.stringify(kept.failures)).toContain(STOP);
       expect(signatures)
         .withContext(JSON.stringify(kept.failures))
-        .not.toContain('field-reverted:task.title');
+        .not.toContain('older-write-won:task.title');
 
       // ...until the server loses the rename while acknowledging it.
       loseUploadsOf('"after"');
@@ -349,7 +349,7 @@ describe('SyncFuzzHarness: negative control', () => {
 
       expect(failures.map((f) => f.signature))
         .withContext(JSON.stringify(failures))
-        .toContain('field-reverted:task.title');
+        .toContain('older-write-won:task.title');
     }, 60_000);
   }
 
@@ -374,7 +374,7 @@ describe('SyncFuzzHarness: negative control', () => {
       .toContain({ step: 7, device: 'C', kind: 'stop-dialog', detail: 'USE_REMOTE' });
     expect(kept.failures.map((f) => f.signature))
       .withContext(JSON.stringify(kept.failures))
-      .not.toContain('field-reverted:task.title');
+      .not.toContain('older-write-won:task.title');
 
     // ...until the server loses the rename while acknowledging it.
     loseUploadsOf('"after"');
@@ -383,7 +383,7 @@ describe('SyncFuzzHarness: negative control', () => {
 
     expect(failures.map((f) => f.signature))
       .withContext(JSON.stringify(failures))
-      .toContain('field-reverted:task.title');
+      .toContain('older-write-won:task.title');
   }, 60_000);
 
   it('excuses a write dropped by a second stop answered with USE_REMOTE', async () => {
@@ -418,7 +418,7 @@ describe('SyncFuzzHarness: negative control', () => {
     expect(signatures).withContext(JSON.stringify(failures)).toContain(STOP);
     expect(signatures)
       .withContext(JSON.stringify(failures))
-      .not.toContain('field-reverted:task.title');
+      .not.toContain('older-write-won:task.title');
   }, 60_000);
 
   it('leaves a stop unanswered in a trace without a dialog answer or a replacement', async () => {

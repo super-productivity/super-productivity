@@ -145,6 +145,8 @@ export interface LedgerEntry {
 interface LedgerWrite {
   value: unknown;
   entry: LedgerEntry;
+  time: number;
+  isBaseline?: boolean;
 }
 
 /**
@@ -200,7 +202,10 @@ const isConcurrent = (a: LedgerEntry, b: LedgerEntry): boolean =>
   compareVectorClocks(a.clock, b.clock) === 'CONCURRENT';
 
 /** Whether `b`'s device had seen `a` (or `a` is `b`) when it wrote `b`. */
-const isCausalPastOf = (a: LedgerEntry, b: LedgerEntry): boolean => {
+const isCausalPastOf = (
+  a: Pick<LedgerEntry, 'clock'>,
+  b: Pick<LedgerEntry, 'clock'>,
+): boolean => {
   const comparison = compareVectorClocks(a.clock, b.clock);
   return comparison === 'LESS_THAN' || comparison === 'EQUAL';
 };
@@ -216,14 +221,24 @@ const isLaterWrite = (
 
 /** What the executed intents imply, for the preservation oracles. */
 export class Ledger {
-  readonly created = new Set<string>();
   readonly deleted = new Set<string>();
+  readonly hasNoteReorder: boolean;
   /** Per entity, the intents that targeted it, in execution order. */
   readonly byEntity = new Map<string, LedgerEntry[]>();
   readonly writes = new Map<string, LedgerWrite[]>();
 
   constructor(entries: readonly LedgerEntry[]) {
+    this.hasNoteReorder = entries.some((e) => e.intent[0] === 'reorderNotes');
     for (const entry of entries) this._note(entry);
+    // Explicit creation after a delete starts a new lifetime with new defaults.
+    // A restore carries an archived snapshot, so it does not excuse old content.
+    for (const [key, writes] of this.writes) {
+      const creation = this.causalCreation(key.split('|')[0]);
+      if (!creation) continue;
+      const kept = writes.filter((w) => !this._isBefore(w.entry, creation));
+      if (kept.length) this.writes.set(key, kept);
+      else this.writes.delete(key);
+    }
   }
 
   private _note(entry: LedgerEntry): void {
@@ -231,14 +246,18 @@ export class Ledger {
     const [kind] = intent;
     if (REPLACEMENT_INTENTS.has(kind) || kind.startsWith('reorder')) return;
     const entity = entityOfIntent(intent);
-    if (kind.startsWith('add')) this.created.add(entity);
     if (kind.startsWith('delete')) this.deleted.add(entity);
     this.byEntity.set(entity, [...(this.byEntity.get(entity) ?? []), entry]);
     for (const write of writes) {
       const key = `${write.entity}|${write.field}`;
       this.writes.set(key, [
         ...(this.writes.get(key) ?? []),
-        { value: write.value, entry },
+        {
+          value: write.value,
+          entry,
+          time: write.time ?? entry.time,
+          isBaseline: write.isBaseline,
+        },
       ]);
     }
   }
@@ -249,6 +268,8 @@ export class Ledger {
    * or tracked is not expected to survive.
    */
   crossesArchive(entity: string, entry: LedgerEntry): boolean {
+    // Concurrent archives both clear scheduling; neither is a losing edit.
+    if (entry.intent[0] === 'archiveTask') return false;
     return (this.byEntity.get(entity) ?? []).some(
       (other) => other.intent[0] === 'archiveTask' && isConcurrent(other, entry),
     );
@@ -263,10 +284,68 @@ export class Ledger {
     );
   }
 
+  /** A new lifetime causally after every retained delete, regardless of wall time. */
+  hasCausalRecreation(entity: string): boolean {
+    return !!this._afterEveryDelete(
+      entity,
+      (e) => e.intent[0].startsWith('add') || e.intent[0] === 'restoreTask',
+    );
+  }
+
+  causalCreation(entity: string): LedgerEntry | undefined {
+    return this._afterEveryDelete(entity, (e) => e.intent[0].startsWith('add'));
+  }
+
+  private _isBefore(a: LedgerEntry, b: LedgerEntry): boolean {
+    return compareVectorClocks(a.clock, b.clock) === 'LESS_THAN';
+  }
+
+  private _afterEveryDelete(
+    entity: string,
+    matches: (entry: LedgerEntry) => boolean,
+  ): LedgerEntry | undefined {
+    const entries = this.byEntity.get(entity) ?? [];
+    const deletes = entries.filter((e) => e.intent[0].startsWith('delete'));
+    if (!deletes.length) return undefined;
+    return [...entries]
+      .reverse()
+      .find((e) => matches(e) && deletes.every((del) => this._isBefore(del, e)));
+  }
+
+  /**
+   * An isolated two-device edit/delete crossing above a shared causal baseline.
+   * Do not extrapolate a winner through other pending intents, later conflict
+   * rounds, archives or a third device: those require production's resolver.
+   */
+  hasIsolatedWinningEdit(entity: string): boolean {
+    const entries = this.byEntity.get(entity) ?? [];
+    return entries.some(
+      (del) =>
+        del.intent[0].startsWith('delete') &&
+        entries.some(
+          (edit) =>
+            ['renameTask', 'editTaskNotes', 'doneTask', 'editNote', 'editHabit'].includes(
+              edit.intent[0],
+            ) &&
+            edit.device !== del.device &&
+            isConcurrent(edit, del) &&
+            isLaterWrite(edit, del) &&
+            entries.every(
+              (e) =>
+                e === edit ||
+                e === del ||
+                (isCausalPastOf(e, edit) && isCausalPastOf(e, del)),
+            ),
+        ),
+    );
+  }
+
   /** The time tracked on the entity, without what crossed an archive. */
   trackedTime(entity: string): number | undefined {
+    const creation = this.causalCreation(entity);
     const tracks = (this.byEntity.get(entity) ?? []).filter(
-      (entry) => entry.intent[0] === 'track',
+      (entry) =>
+        entry.intent[0] === 'track' && (!creation || !this._isBefore(entry, creation)),
     );
     if (tracks.length === 0) return undefined;
     return tracks
@@ -342,7 +421,7 @@ export interface Replacement {
 
 /** The fields the intents write (FuzzWrite), per entity type. */
 const WRITTEN_FIELDS: Readonly<Record<string, readonly string[]>> = {
-  task: ['title', 'notes', 'isDone'],
+  task: ['title', 'notes', 'isDone', 'dueDay', 'dueWithTime'],
   note: ['content', 'isPinnedToToday', 'isLock'],
   habit: ['title', 'isEnabled'],
 };
@@ -959,8 +1038,11 @@ const checkTodayNotes = (
 /**
  * Preservation of what the kept intents and the last replacement wrote.
  *
- * A deleted entity that is gone is not lost (`lost-entity`). One that
- * exists afterwards must have been recreated: its delete crossed a
+ * A missing entity is lost when it has no retained delete, a causally later
+ * recreate/restore, or an isolated newer edit that beats its delete. Other
+ * delete crossings remain unclassified; a global timestamp is not proof.
+ * Apart from an explicit causal recreation, a deleted entity that exists
+ * afterwards must have been recreated: its delete crossed a
  * concurrent intent on it and lost, and the entity came back from the
  * winning side's ops, with defaults outside them (decision 2 of
  * docs/sync-and-op-log/lww-field-level-resolution.md, accepted, "the fuzz
@@ -999,13 +1081,27 @@ export const checkPreservation = (
     return found as Record<string, unknown> | undefined;
   };
 
-  for (const entity of new Set([...ledger.created, ...(replacement?.entities ?? [])])) {
-    if (!ledger.deleted.has(entity) && !entityOf(entity)) {
-      fail(`lost-entity:${entity.split(':')[0]}`, `${entity} was never deleted`);
+  for (const entity of new Set([
+    ...ledger.byEntity.keys(),
+    ...(replacement?.entities ?? []),
+  ])) {
+    const reason = !ledger.deleted.has(entity)
+      ? 'was never deleted'
+      : ledger.hasCausalRecreation(entity)
+        ? 'was recreated after every delete'
+        : ledger.hasIsolatedWinningEdit(entity)
+          ? 'has a newer isolated edit that wins over its delete'
+          : undefined;
+    if (reason && !entityOf(entity)) {
+      fail(`lost-entity:${entity.split(':')[0]}`, `${entity} ${reason}`);
     }
   }
   for (const entity of ledger.deleted) {
-    if (entityOf(entity) && !ledger.deleteWasCrossed(entity)) {
+    if (
+      entityOf(entity) &&
+      !ledger.deleteWasCrossed(entity) &&
+      !ledger.hasCausalRecreation(entity)
+    ) {
       fail(
         `resurrected:${entity.split(':')[0]}`,
         `${entity} was deleted after every intent on it, and exists`,
@@ -1016,6 +1112,7 @@ export const checkPreservation = (
   /** The losses a recreate explains are counted apart (see above). */
   const signatureOf = (entity: string, signature: string): string =>
     ledger.deleted.has(entity) &&
+    !ledger.causalCreation(entity) &&
     ledger.deleteWasCrossed(entity) &&
     RECREATE_LOSS.test(signature)
       ? `recreated:${signature}`
@@ -1034,7 +1131,9 @@ export const checkPreservation = (
     const task = entityOf(entity) as Task | undefined;
     if (ledger.deleted.has(entity) && !task) continue;
     const tracked = ledger.trackedTime(entity);
-    const expected = (replacement?.time.get(entity) ?? 0) + (tracked ?? 0);
+    const expected =
+      (ledger.causalCreation(entity) ? 0 : (replacement?.time.get(entity) ?? 0)) +
+      (tracked ?? 0);
     if (tracked === undefined && expected === 0) continue;
     const actual = task?.timeSpentOnDay?.[day] ?? 0;
     if (actual !== expected) {
@@ -1050,6 +1149,7 @@ export const checkPreservation = (
   for (const [key, value] of replacement?.fields ?? []) {
     if (ledger.writes.has(key)) continue;
     const [entity, field] = key.split('|');
+    if (ledger.causalCreation(entity)) continue;
     const current = entityOf(entity);
     if (!current) continue;
     const actual = valueAt(current, field.split('.'));
@@ -1067,8 +1167,12 @@ export const checkPreservation = (
     if (!current) continue;
     const report = failOn(entity);
     const writes = allWrites.filter(({ entry }) => !ledger.crossesArchive(entity, entry));
-    if (writes.length === 0) continue;
-    const values = writes.map((w) => w.value);
+    if (writes.length === 0 || writes.every((w) => w.isBaseline)) continue;
+    const baseline =
+      replacement?.fields.has(key) && !ledger.causalCreation(entity)
+        ? { value: replacement.fields.get(key), clock: replacement.clock }
+        : undefined;
+    const values = [...writes.map((w) => w.value), ...(baseline ? [baseline.value] : [])];
     const actual = valueAt(current, field.split('.'));
     const type = entity.split(':')[0];
     const fieldName = field.split('.')[0];
@@ -1083,7 +1187,7 @@ export const checkPreservation = (
         `${entity}.${field}: writes ${shortJson(values)}, converged ${shortJson(actual)}`,
       );
     } else {
-      checkLatestWrite(ledger, entity, field, writes, actual, report);
+      checkLatestWrite(ledger, entity, field, writes, actual, report, baseline);
     }
   }
 
@@ -1128,7 +1232,7 @@ export const checkPreservation = (
  * leaves" in lww-field-level-resolution.md). An older value one of them
  * carried reports as `older-write-won` too; no seed shows one yet.
  *
- * Out of scope, by design: NOTE fields, which stay on whole-entity LWW
+ * Out of scope, by design: concurrent NOTE fields, which stay on whole-entity LWW
  * (decision 4 of docs/sync-and-op-log/lww-field-level-resolution.md), and
  * habit counts (`countOnDay`), which are opaque (decision 6). A value no
  * intent wrote is `field-unwritten`'s, not this check's. Pending local LWW
@@ -1141,11 +1245,24 @@ const checkLatestWrite = (
   writes: readonly LedgerWrite[],
   actual: unknown,
   fail: (signature: string, detail: string) => void,
+  baseline?: { value: unknown; clock: VectorClock },
 ): void => {
   const type = entity.split(':')[0];
-  if (type === 'note' || field.startsWith('countOnDay')) return;
-  const latest = writes.reduce((a, b) => (isLaterWrite(b.entry, a.entry) ? b : a));
+  if (field.startsWith('countOnDay')) return;
+  const key = (write: LedgerWrite): Pick<LedgerEntry, 'time' | 'clientId'> => ({
+    time: write.time,
+    clientId: write.entry.clientId,
+  });
+  const latest = writes.reduce((a, b) => (isLaterWrite(key(b), key(a)) ? b : a));
   if (Object.is(actual, latest.value)) return;
+  // Whole-entity NOTE conflicts promise no per-field winner. With no crossing,
+  // however, a supplied creation/import baseline must not excuse a lost edit.
+  if (
+    type === 'note' &&
+    (ledger.hasNoteReorder ||
+      (ledger.byEntity.get(entity) ?? []).some((e) => isConcurrent(e, latest.entry)))
+  )
+    return;
   const accounted = (ledger.byEntity.get(entity) ?? []).some((other) => {
     if (other.device === latest.entry.device || !isConcurrent(other, latest.entry)) {
       return false;
@@ -1155,10 +1272,15 @@ const checkLatestWrite = (
     // A whole-entity snapshot carries what its device held: its side's writes
     // and their causal past.
     const winner = latestOf(bSide);
-    return writes.some(
-      (w) =>
-        Object.is(w.value, actual) &&
-        (bSide.includes(w.entry) || isCausalPastOf(w.entry, winner)),
+    return (
+      (baseline &&
+        Object.is(baseline.value, actual) &&
+        isCausalPastOf(baseline, winner)) ||
+      writes.some(
+        (w) =>
+          Object.is(w.value, actual) &&
+          (bSide.includes(w.entry) || isCausalPastOf(w.entry, winner)),
+      )
     );
   });
   if (accounted) return;

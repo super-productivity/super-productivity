@@ -56,7 +56,7 @@
   },
   {
     "class": "remote-win-keeps-local-edit",
-    "ref": "#10260",
+    "ref": "#10260: divergence remains; the whole-entity winner carrying the creation baseline is an accepted residual (preservation oracle audit)",
     "name": "a note content edit that loses to an unpin stays on its device only",
     "steps": [
       {
@@ -82,12 +82,12 @@
       }
     ],
     "primary": "divergence:.note.entities.*.content",
-    "signatures": ["divergence:.note.entities.*.content", "field-reverted:note.content"],
+    "signatures": ["divergence:.note.entities.*.content"],
     "rejections": []
   },
   {
     "class": "remote-win-keeps-local-edit",
-    "ref": "#10260",
+    "ref": "#10260: divergence remains; the whole-entity winner carrying the creation baseline is an accepted residual (preservation oracle audit)",
     "name": "a habit rename that loses to a count stays on its device only",
     "steps": [
       {
@@ -100,15 +100,12 @@
       }
     ],
     "primary": "divergence:.simpleCounter.entities.*.title",
-    "signatures": [
-      "divergence:.simpleCounter.entities.*.title",
-      "field-reverted:habit.title"
-    ],
+    "signatures": ["divergence:.simpleCounter.entities.*.title"],
     "rejections": []
   },
   {
     "class": "remote-win-keeps-local-edit",
-    "ref": "#10260",
+    "ref": "#10260: divergence remains; the whole-entity winner carrying the creation baseline is an accepted residual (preservation oracle audit)",
     "name": "a task rename that loses to tracking stays on its device only",
     "steps": [
       {
@@ -130,7 +127,7 @@
       }
     ],
     "primary": "divergence:.task.entities.*.title",
-    "signatures": ["divergence:.task.entities.*.title", "field-reverted:task.title"],
+    "signatures": ["divergence:.task.entities.*.title"],
     "rejections": []
   },
   {
@@ -1525,7 +1522,7 @@
   },
   {
     "class": "stale-local-win-snapshot",
-    "ref": "fixed for #10438 (regression pin): the local-win snapshot carries the plain fields of its task's remote winners, which apply after it. Also guards #10423's rule that a remote winner beside a local win of its entity stays after it: moving it ahead adds restart-changed:.task.entities.*.title",
+    "ref": "fixed for #10438 (regression pin): the local-win snapshot carries the plain fields of its task's remote winners, which apply after it. Also guards #10423's rule that a remote winner beside a local win of its entity stays after it: moving it ahead adds restart-changed:.task.entities.*.title. The unscheduled baseline carried by a whole-entity winner is an accepted residual, verified by the preservation oracle audit.",
     "name": "a remote rename applied after a local-win snapshot of the same task reaches every device",
     "steps": [
       {
