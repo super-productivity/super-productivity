@@ -2128,7 +2128,7 @@
         "REMINDER_ADDED": "Запланирована задача \"{{title}}\"",
         "REMINDER_DELETED": "Удалено напоминание для задания",
         "REMINDER_UPDATED": "Обновлено напоминание для задачи \"{{title}}\"",
-        "TASK_ALREADY_EXISTS": "Задача <strong>{{title}}<\\/strong> уже существует",
+        "TASK_ALREADY_EXISTS": "Задача <strong>{{title}}</strong> уже существует",
         "TASK_CREATED": "Создано задание \"{{taskTitle}}\"",
         "DEADLINE_REMOVED": "Дедлайн удалён",
         "DEADLINE_SET": "Дедлайн установлен на {{date}}"

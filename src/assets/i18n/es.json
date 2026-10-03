@@ -2132,7 +2132,7 @@
         "REMINDER_ADDED": "Programada <strong>{{title}}</strong> el <strong>{{date}}</strong>",
         "REMINDER_DELETED": "Recordatorio eliminado para tarea",
         "REMINDER_UPDATED": "Recordatorio actualizado para tarea \"{{title}}\"",
-        "TASK_ALREADY_EXISTS": "La tarea <strong>{{title}}<\\/strong> ya existe",
+        "TASK_ALREADY_EXISTS": "La tarea <strong>{{title}}</strong> ya existe",
         "TASK_CREATED": "Tarea creada \"{{taskTitle}}\"",
         "DEADLINE_REMOVED": "Fecha límite eliminada",
         "DEADLINE_SET": "Fecha límite establecida para {{date}}"

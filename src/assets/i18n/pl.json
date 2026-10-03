@@ -1126,7 +1126,7 @@
     "REMINDER": {
       "COUNTDOWN_BANNER": {
         "START_NOW": "Zacznij teraz",
-        "TXT": "<strong>{{title}}<\\/strong> zaczyna się o <strong>{{start}}<\\/strong>!",
+        "TXT": "<strong>{{title}}</strong> zaczyna się o <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": {
           "ONE": "<strong>{{title}}</strong> zaczyna się o <strong>{{start}}</strong>!<br> (i {{nrOfOtherBanners}} inne zadanie jest zaplanowane)",
           "OTHER": "<strong>{{title}}</strong> zaczyna się od <strong>{{start}}</strong>!<br> (i {{nrOfOtherBanners}} inne zadania są wymagalne)"
@@ -2127,7 +2127,7 @@
         "REMINDER_ADDED": "Zaplanowano zadanie \"{{title}}\"",
         "REMINDER_DELETED": "Usunięto przypomnienie dla zadania",
         "REMINDER_UPDATED": "Zaktualizowano przypomnienie dla zadania \"{{title}}\"",
-        "TASK_ALREADY_EXISTS": "Zadanie <strong>{{title}}<\\/strong> już istnieje",
+        "TASK_ALREADY_EXISTS": "Zadanie <strong>{{title}}</strong> już istnieje",
         "TASK_CREATED": "Utworzono zadanie \"{{taskTitle}}\""
       },
       "SELECT_OR_CREATE": "Wybierz lub utwórz zadanie",

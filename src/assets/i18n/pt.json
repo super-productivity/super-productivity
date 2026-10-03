@@ -2120,7 +2120,7 @@
         "REMINDER_ADDED": "Tarefa agendada \"{{title}}\"",
         "REMINDER_DELETED": "Lembrete excluído da tarefa",
         "REMINDER_UPDATED": "Lembrete atualizado para a tarefa \"{{title}}\"",
-        "TASK_ALREADY_EXISTS": "A tarefa <strong>{{title}}<\\/strong> já existe",
+        "TASK_ALREADY_EXISTS": "A tarefa <strong>{{title}}</strong> já existe",
         "TASK_CREATED": "Tarefa criada \"{{taskTitle}}\"",
         "DEADLINE_REMOVED": "Prazo removido",
         "DEADLINE_SET": "Prazo definido para {{date}}"

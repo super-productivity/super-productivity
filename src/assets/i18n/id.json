@@ -1122,7 +1122,7 @@
     "REMINDER": {
       "COUNTDOWN_BANNER": {
         "START_NOW": "Mulai sekarang",
-        "TXT": "<strong>{{title}}<\\/strong> dimulai pada <strong>{{start}}<\\/strong>!",
+        "TXT": "<strong>{{title}}</strong> dimulai pada <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": {
           "OTHER": "<strong>{{title}}</strong> dimulai dari <strong>{{start}}</strong>!<br> (dan {{nrOfOtherBanners}} tugas-tugas lain yang harus diselesaikan)",
           "ONE": "<strong>{{title}}</strong> dimulai pukul <strong>{{start}}</strong>!<br> (dan {{nrOfOtherBanners}} tugas lain sudah tiba waktunya)"
@@ -2120,7 +2120,7 @@
         "REMINDER_ADDED": "Tugas \"{{title}}\" terjadwal",
         "REMINDER_DELETED": "Pengingat yang dihapus untuk tugas",
         "REMINDER_UPDATED": "Pengingat yang diperbarui untuk tugas \"{{title}}\"",
-        "TASK_ALREADY_EXISTS": "Tugas <strong>{{title}}<\\/strong> sudah ada",
+        "TASK_ALREADY_EXISTS": "Tugas <strong>{{title}}</strong> sudah ada",
         "TASK_CREATED": "tugas yang dibuat \"{{taskTitle}}\"",
         "DEADLINE_REMOVED": "Tenggat waktu dihapus",
         "DEADLINE_SET": "Tenggat waktu ditetapkan untuk {{date}}"

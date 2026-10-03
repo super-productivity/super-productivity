@@ -208,7 +208,7 @@
         "POLL_INTERVAL_MINUTES": "Pollingsintervall (minutter)"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste ufullførte CalDav-oppgaver for et spesifikt prosjekt i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til oppgaven samt mer informasjon om den.<\\/p> <p>I tillegg kan du automatisk legge til og synkronisere alle ufullførte oppgaver til oppgavelisten din.<\\/p><p>For at det skal fungere for Nextcloud i nettappen, må du kanskje hviteliste \"https:\\/\\/app.super-productivity.com\" via Nextcloud-appen <a href='https:\\/\\/apps.nextcloud.com\\/apps\\/webapppassword'>webapppassword<a>.<\\/p>"
+        "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste ufullførte CalDav-oppgaver for et spesifikt prosjekt i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til oppgaven samt mer informasjon om den.</p> <p>I tillegg kan du automatisk legge til og synkronisere alle ufullførte oppgaver til oppgavelisten din.</p><p>For at det skal fungere for Nextcloud i nettappen, må du kanskje hviteliste \"https:\\/\\/app.super-productivity.com\" via Nextcloud-appen <a href='https:\\/\\/apps.nextcloud.com\\/apps\\/webapppassword'>webapppassword<a>.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Beskrivelse",
@@ -402,7 +402,7 @@
         "FILTER_LABELS_DESCRIPTION": "Kommaseparert liste over etikettnavn. Bare saker med alle disse etikettene synkroniseres. La feltet stå tomt for å synkronisere alle saker som samsvarer med omfanget."
       },
       "FORM_SECTION": {
-        "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne Gitea-problemer for et spesifikt repository i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til problemet samt mer informasjon om det.<\\/p> <p>I tillegg kan du automatisk legge til og importere alle åpne problemer.<\\/p><p>For å komme forbi bruksgrensene og få tilgang kan du gi et tilgangstoken."
+        "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne Gitea-problemer for et spesifikt repository i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til problemet samt mer informasjon om det.</p> <p>I tillegg kan du automatisk legge til og importere alle åpne problemer.</p><p>For å komme forbi bruksgrensene og få tilgang kan du gi et tilgangstoken."
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Mottaker",
@@ -1101,7 +1101,7 @@
         "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Vis tidsregistreringsdialog når deloppgaver fullføres"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne Redmine (enten det er den nettbaserte versjonen eller en selvhostet instans) problemer for et spesifikt prosjekt i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til problemet samt mer informasjon om det.<\\/p><p>I tillegg kan du automatisk importere alle åpne problemer.<\\/p>",
+        "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne Redmine (enten det er den nettbaserte versjonen eller en selvhostet instans) problemer for et spesifikt prosjekt i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til problemet samt mer informasjon om det.</p><p>I tillegg kan du automatisk importere alle åpne problemer.</p>",
         "TITLE": "Redmine"
       },
       "ISSUE_CONTENT": {
@@ -1122,7 +1122,7 @@
     "REMINDER": {
       "COUNTDOWN_BANNER": {
         "START_NOW": "Start nå",
-        "TXT": "<strong>{{title}}<\\/strong> starter kl <strong>{{start}}<\\/strong>!",
+        "TXT": "<strong>{{title}}</strong> starter kl <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": {
           "OTHER": "<strong>{{title}}</strong> starter ved <strong>{{start}}</strong>!<br> (og {{nrOfOtherBanners}} andre oppgaver skal utføres)",
           "ONE": "<strong>{{title}}</strong> starter kl. <strong>{{start}}</strong>!<br> (og {{nrOfOtherBanners}} annen oppgave forfaller)"
@@ -1133,7 +1133,7 @@
     },
     "SCHEDULE": {
       "D_INITIAL": {
-        "TEXT": "<p>Timeplanen skal gi deg et bedre bilde av hvordan ens planlagte oppgaver utfolder seg over tid. Den genereres automatisk fra oppgavene dine og krever bare <strong>tidsestimater for å fungere</strong>.<\\/p><p>To ting skilles: <strong>Planlagte oppgaver</strong>, som vises på sitt planlagte tidspunkt, og <strong>Regelmessige oppgaver</strong>, som skal flyte rundt disse faste hendelsene.<\\/p><p>Hvis du oppgir en start- og sluttid for arbeidet (anbefalt), vil ikke regelmessige oppgaver vises utenfor disse grensene.<\\/p>",
+        "TEXT": "<p>Timeplanen skal gi deg et bedre bilde av hvordan ens planlagte oppgaver utfolder seg over tid. Den genereres automatisk fra oppgavene dine og krever bare <strong>tidsestimater for å fungere</strong>.</p><p>To ting skilles: <strong>Planlagte oppgaver</strong>, som vises på sitt planlagte tidspunkt, og <strong>Regelmessige oppgaver</strong>, som skal flyte rundt disse faste hendelsene.</p><p>Hvis du oppgir en start- og sluttid for arbeidet (anbefalt), vil ikke regelmessige oppgaver vises utenfor disse grensene.</p>",
         "TITLE": "Tidsplan"
       },
       "END": "Arbeidets slutt",
@@ -1255,7 +1255,7 @@
         "OVERWRITE_WARNING": "ADVARSEL: {{targetName}}-dataene inneholder omtrent {{targetChanges}} endringer, mens {{sourceName}}-dataene bare har {{sourceChanges}} endringer. Er du sikker på at du vil overskrive {{targetName}}-dataene med {{sourceName}}-versjonen? Denne handlingen kan ikke angres.",
         "REMOTE": "Fjernstyrt",
         "RESULT": "Resultat",
-        "TEXT": "<p>Oppdatering fra fjern. Både lokale og eksterne data ser ut til å være endret.<\\/p>",
+        "TEXT": "<p>Oppdatering fra fjern. Både lokale og eksterne data ser ut til å være endret.</p>",
         "TIME": "Tid",
         "TIMESTAMP": "Tidsstempel",
         "TITLE": "Synkronisering: Motstridende data",
@@ -1459,7 +1459,7 @@
         },
         "TITLE": "Synkroniser",
         "WEB_DAV": {
-          "CORS_INFO": "<strong>Få det til å fungere i nettleseren:<\\/strong> For å få dette til å fungere i nettleseren må du hviteliste Super Productivity for CORS-forespørselene til din Nextcloud-instans. Dette kan ha negative sikkerhetsimplikasjoner! Vennligst <a href='https:\\/\\/github.com\\/nextcloud\\/server\\/issues\\/3131'>se denne tråden for mer informasjon<\\/a>. En tilnærming for å få dette til å fungere på mobil er å hviteliste \"https:\\/\\/app.super-productivity.com\" via Nextcloud-appen <a href='https:\\/\\/apps.nextcloud.com\\/apps\\/webapppassword'>webapppassword<a>. Bruk på egen risiko!<\\/p>",
+          "CORS_INFO": "<strong>Få det til å fungere i nettleseren:</strong> For å få dette til å fungere i nettleseren må du hviteliste Super Productivity for CORS-forespørselene til din Nextcloud-instans. Dette kan ha negative sikkerhetsimplikasjoner! Vennligst <a href='https:\\/\\/github.com\\/nextcloud\\/server\\/issues\\/3131'>se denne tråden for mer informasjon</a>. En tilnærming for å få dette til å fungere på mobil er å hviteliste \"https:\\/\\/app.super-productivity.com\" via Nextcloud-appen <a href='https:\\/\\/apps.nextcloud.com\\/apps\\/webapppassword'>webapppassword<a>. Bruk på egen risiko!</p>",
           "D_SYNC_FOLDER_PATH": "Sti relativ til WebDAV-serverens rot hvor synkroniseringsfiler vil bli lagret (f.eks. '/super-productivity' eller '/'). Dette er IKKE serverens interne katalogsti.",
           "INFO": "WebDAV-implementeringer varierer dessverre mye. Super Productivity er kjent for å fungere godt med Nextcloud, <strong>men det kan hende det ikke fungerer med din leverandør</strong>.",
           "L_BASE_URL": "Base URL",
@@ -2120,7 +2120,7 @@
         "REMINDER_ADDED": "Planlagt oppgave \"{{title}}\"",
         "REMINDER_DELETED": "Slettet påminnelse for oppgaven",
         "REMINDER_UPDATED": "Oppdatert påminnelse for oppgaven \"{{title}}\"",
-        "TASK_ALREADY_EXISTS": "Oppgave <strong>{{title}}<\\/strong> finnes allerede",
+        "TASK_ALREADY_EXISTS": "Oppgave <strong>{{title}}</strong> finnes allerede",
         "TASK_CREATED": "Opprettet oppgaven \"{{taskTitle}}\"",
         "DEADLINE_REMOVED": "Frist fjernet",
         "DEADLINE_SET": "Frist satt til {{date}}"

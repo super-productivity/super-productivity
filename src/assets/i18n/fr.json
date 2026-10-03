@@ -2127,7 +2127,7 @@
         "REMINDER_ADDED": "Tâche planifiée \"{{title}}\"",
         "REMINDER_DELETED": "Rappel supprimé pour la tâche",
         "REMINDER_UPDATED": "Rappel mis à jour pour la tâche \"{{title}}\"",
-        "TASK_ALREADY_EXISTS": "La tâche <strong>{{title}}<\\/strong> existe déjà",
+        "TASK_ALREADY_EXISTS": "La tâche <strong>{{title}}</strong> existe déjà",
         "TASK_CREATED": "Tâche créée \"{{taskTitle}}\"",
         "DEADLINE_REMOVED": "Échéance supprimée",
         "DEADLINE_SET": "Échéance définie pour le {{date}}"

@@ -2120,7 +2120,7 @@
         "REMINDER_ADDED": "Geplande taak \"{{title}}\"",
         "REMINDER_DELETED": "Herinnering voor taak verwijderd",
         "REMINDER_UPDATED": "Herinnering voor taak \"{{title}}\" bijgewerkt",
-        "TASK_ALREADY_EXISTS": "Taak <strong>{{title}}<\\/strong> bestaat al",
+        "TASK_ALREADY_EXISTS": "Taak <strong>{{title}}</strong> bestaat al",
         "TASK_CREATED": "Taak \"{{taskTitle}}\" gemaakt",
         "DEADLINE_REMOVED": "Deadline verwijderd",
         "DEADLINE_SET": "Deadline ingesteld voor {{date}}"

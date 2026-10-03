@@ -2093,7 +2093,7 @@
         "REMINDER_ADDED": "Aikataulutettu <strong>{{title}}</strong> klo <strong>{{date}}</strong>",
         "REMINDER_DELETED": "Poistettiin muistutus tehtävälle",
         "REMINDER_UPDATED": "Päivitettiin muistutus tehtävälle \"{{title}}\"",
-        "TASK_ALREADY_EXISTS": "Tehtävä <strong>{{title}}<\\/strong> on jo olemassa",
+        "TASK_ALREADY_EXISTS": "Tehtävä <strong>{{title}}</strong> on jo olemassa",
         "TASK_CREATED": "Luotiin tehtävä \"{{taskTitle}}\"",
         "DEADLINE_REMOVED": "Määräaika poistettu",
         "DEADLINE_SET": "Määräaika asetettu: {{date}}"

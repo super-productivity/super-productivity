@@ -2120,7 +2120,7 @@
         "REMINDER_ADDED": "Pianificata attività <strong>{{title}}</strong> alle <strong>{{date}}</strong>",
         "REMINDER_DELETED": "Cancellato promemoria per attività",
         "REMINDER_UPDATED": "Aggiornato promemoria per attività \"{{title}}\"",
-        "TASK_ALREADY_EXISTS": "L'attività <strong>{{title}}<\\/strong> esiste già",
+        "TASK_ALREADY_EXISTS": "L'attività <strong>{{title}}</strong> esiste già",
         "TASK_CREATED": "Creata attività \"{{taskTitle}}\"",
         "DEADLINE_REMOVED": "Scadenza rimossa",
         "DEADLINE_SET": "Scadenza impostata per {{date}}"

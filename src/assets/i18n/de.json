@@ -1419,7 +1419,7 @@
       "D_PERMISSION": {
         "DISABLE_SYNC": "Synchronisierung deaktivieren",
         "PERM_FILE": "Berechtigung erteilen",
-        "TEXT": "<p>Deine Dateiberechtigung für die lokale Synchronisierung wurde widerrufen.<\\/p>",
+        "TEXT": "<p>Deine Dateiberechtigung für die lokale Synchronisierung wurde widerrufen.</p>",
         "TITLE": "Sync: Lokale Dateiberechtigung verweigert"
       },
       "D_RESTORE": {
@@ -2131,7 +2131,7 @@
         "REMINDER_ADDED": "Geplante Aufgabe \"{{title}}\"",
         "REMINDER_DELETED": "Erinnerung für Aufgabe gelöscht",
         "REMINDER_UPDATED": "Erinnerung für Aufgabe \"{{title}}\" aktualisiert",
-        "TASK_ALREADY_EXISTS": "Aufgabe <strong>{{title}}<\\/strong> existiert bereits",
+        "TASK_ALREADY_EXISTS": "Aufgabe <strong>{{title}}</strong> existiert bereits",
         "TASK_CREATED": "Erstellte Aufgabe \"{{taskTitle}}\""
       },
       "SELECT_OR_CREATE": "Aufgabe auswählen oder erstellen",

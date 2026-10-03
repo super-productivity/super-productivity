@@ -1122,7 +1122,7 @@
     "REMINDER": {
       "COUNTDOWN_BANNER": {
         "START_NOW": "Začnite hneď teraz",
-        "TXT": "<strong>{{title}}<\\/strong> začína o <strong>{{start}}<\\/strong>!",
+        "TXT": "<strong>{{title}}</strong> začína o <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": {
           "OTHER": "<strong>{{title}}</strong> začína na <strong>{{start}}</strong>!<br> (a {{nrOfOtherBanners}} ďalšie úlohy sú splatné)",
           "ONE": "<strong>{{title}}</strong> začína o <strong>{{start}}</strong>!<br> (a {{nrOfOtherBanners}} ďalšia úloha je naplánovaná)"
@@ -2121,7 +2121,7 @@
         "REMINDER_ADDED": "Scheduled task \"{{title}}\"",
         "REMINDER_DELETED": "Deleted reminder for task",
         "REMINDER_UPDATED": "Updated reminder for task \"{{title}}\"",
-        "TASK_ALREADY_EXISTS": "Úloha <strong>{{title}}<\\/strong> už existuje",
+        "TASK_ALREADY_EXISTS": "Úloha <strong>{{title}}</strong> už existuje",
         "TASK_CREATED": "Created task \"{{taskTitle}}\"",
         "DEADLINE_REMOVED": "Termín bol odstránený",
         "DEADLINE_SET": "Termín nastavený na {{date}}"
