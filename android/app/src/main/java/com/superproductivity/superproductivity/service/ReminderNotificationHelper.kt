@@ -29,6 +29,15 @@ object ReminderNotificationHelper {
     const val GROUP_KEY = "sp_reminders_group"
     const val SUMMARY_NOTIFICATION_ID = Int.MAX_VALUE
 
+    /**
+     * Action of the full-screen launch intent attached to alarm-style reminders.
+     * Distinct from the tap content intent (which carries no action) so the two
+     * PendingIntents never collide: PendingIntent identity is (requestCode,
+     * filterEquals(intent)) and extras are NOT part of filterEquals — the same
+     * request code with equal filters would overwrite the tap intent's extras.
+     */
+    const val ACTION_SHOW_REMINDER_FSI = "com.superproductivity.ACTION_SHOW_REMINDER_FSI"
+
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager = context.getSystemService(NotificationManager::class.java)
@@ -165,6 +174,33 @@ object ReminderNotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Full-screen launch for alarm-style reminders: a plain high-priority
+        // notification only plays its sound while the screen is off and is filed
+        // into the drawer unseen — the user discovers it only after unlocking
+        // (#10071). A full-screen intent makes Android wake the screen and show
+        // the reminder with its actions on the lock screen. Regular reminders
+        // stay plain notifications (calm default, opt-in intrusiveness).
+        // Deliberately no REMINDER_TASK_ID: CapacitorMainActivity treats that
+        // extra as a tap and dismisses the reminder, but this launch fires
+        // without any user action. The activity does not show over the keyguard;
+        // the system-drawn notification is what the user sees and acts on.
+        // Without USE_FULL_SCREEN_INTENT (Android 14+ via Google Play) the
+        // intent degrades to a normal heads-up.
+        val fullScreenPendingIntent = if (useAlarmStyle) {
+            val fullScreenIntent = Intent(context, CapacitorMainActivity::class.java).apply {
+                action = ACTION_SHOW_REMINDER_FSI
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            PendingIntent.getActivity(
+                context, notificationId, fullScreenIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        } else {
+            null
+        }
+
         // PendingIntent request codes use XOR with distinct high bits to ensure each action
         // gets a unique request code without integer overflow risk.
         // notificationId is used directly for the content intent.
@@ -219,7 +255,7 @@ object ReminderNotificationHelper {
 
         val category = if (useAlarmStyle) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_REMINDER
 
-        val notification = NotificationCompat.Builder(context, channelId)
+        val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_sp)
             .setContentTitle(title)
             .setContentText(when (reminderType) {
@@ -236,7 +272,28 @@ object ReminderNotificationHelper {
             .setOngoing(isOngoing)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(category)
-            .build()
+
+        if (fullScreenPendingIntent != null) {
+            // VISIBILITY_PUBLIC keeps the Done/Snooze actions usable directly on
+            // the lock screen, where this notification now appears.
+            builder
+                .setFullScreenIntent(fullScreenPendingIntent, true)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val nm = context.getSystemService(NotificationManager::class.java)
+                if (nm?.canUseFullScreenIntent() == false) {
+                    Log.w(
+                        TAG,
+                        "USE_FULL_SCREEN_INTENT not granted (on Android 14+ Google Play " +
+                            "withholds it from non-calling/alarm apps; F-Droid and sideloaded " +
+                            "installs keep it); reminder falls back to heads-up"
+                    )
+                }
+            }
+        }
+
+        val notification = builder.build()
 
         try {
             NotificationManagerCompat.from(context).notify(notificationId, notification)
