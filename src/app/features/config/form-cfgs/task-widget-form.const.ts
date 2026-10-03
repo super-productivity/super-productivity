@@ -11,6 +11,22 @@ export const TASK_WIDGET_FORM_CFG: ConfigFormSection<TaskWidgetConfig> = {
   isElectronOnly: true,
   items: [
     {
+      key: 'isTaskListEnabled',
+      type: 'checkbox',
+      templateOptions: { label: T.GCF.TASK_WIDGET.LIST.IS_ENABLED },
+    },
+    {
+      key: 'taskListFilter',
+      type: 'select',
+      templateOptions: {
+        label: T.GCF.TASK_WIDGET.LIST.FILTER,
+        options: [
+          { label: T.GCF.TASK_WIDGET.LIST.ALL, value: 'all' },
+          { label: T.GCF.TASK_WIDGET.LIST.TODAY, value: 'today' },
+        ],
+      },
+    },
+    {
       key: 'isEnabled',
       type: 'checkbox',
       templateOptions: {

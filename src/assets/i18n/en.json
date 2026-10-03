@@ -2614,10 +2614,21 @@
       "TITLE": "Focus Mode (this device)"
     },
     "TASK_WIDGET": {
-      "TITLE": "Task Widget",
+      "TITLE": "Desktop widgets (this device)",
       "IS_ENABLED": "Enable task widget",
       "IS_ALWAYS_SHOW": "Always show task widget (even when main window is visible)",
-      "OPACITY": "Task widget opacity"
+      "OPACITY": "Widget opacity",
+      "LIST": {
+        "IS_ENABLED": "Show open-task list widget (always on top)",
+        "FILTER": "Tasks shown in the list widget",
+        "ALL": "All open tasks",
+        "TODAY": "Today",
+        "EMPTY": "No open tasks in this view.",
+        "COLLAPSE": "Collapse to title bar",
+        "EXPAND": "Expand task list",
+        "HIDE": "Hide widget (enable again in Settings)",
+        "OPEN": "Open Super Productivity"
+      }
     },
     "IDLE": {
       "HELP": "<div><p>When idle time handling is enabled, a dialog will open after a specified amount of time to check if - and on which - task you want to track your time when you have been idle.</p></div>",
