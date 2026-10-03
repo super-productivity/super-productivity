@@ -40,11 +40,13 @@ export class SectionService {
     title: string,
     contextId: string,
     contextType: WorkContextType,
+    beforeSectionId?: string,
   ): string | null {
     if (!isValidSectionContext(contextId, contextType)) return null;
     const id = nanoid();
     this._store.dispatch(
       addSection({
+        ...(beforeSectionId ? { beforeSectionId } : {}),
         section: {
           id,
           contextId,

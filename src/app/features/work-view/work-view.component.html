@@ -181,6 +181,7 @@
               <div
                 class="sections-wrapper"
                 data-section-selection-scope
+                [class.has-inline-insertion]="isProjectContext()"
                 cdkDropList
                 [cdkDropListEnterPredicate]="acceptSectionDragOnly"
                 (cdkDropListDropped)="dropSection($event)"
@@ -198,6 +199,15 @@
                   ></task-list>
                 </div>
                 @for (section of sections(); track section.id) {
+                  @if (isProjectContext()) {
+                    <button
+                      type="button"
+                      class="add-section-inline focus-ring"
+                      (click)="addSection(section.id)"
+                    >
+                      <span>{{ T.MH.ADD_SECTION | translate }}</span>
+                    </button>
+                  }
                   <div
                     class="section-container"
                     cdkDrag
@@ -251,6 +261,15 @@
                       ></task-list>
                     </collapsible>
                   </div>
+                }
+                @if (isProjectContext()) {
+                  <button
+                    type="button"
+                    class="add-section-inline focus-ring"
+                    (click)="addSection()"
+                  >
+                    <span>{{ T.MH.ADD_SECTION | translate }}</span>
+                  </button>
                 }
               </div>
             } @else {

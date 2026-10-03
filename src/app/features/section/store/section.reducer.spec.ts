@@ -45,6 +45,32 @@ describe('sectionReducer', () => {
       expect(next.ids).toContain('new');
     });
 
+    for (const [anchor, expected] of [
+      ['s1', ['new', 's1', 'other', 's2']],
+      ['s2', ['s1', 'other', 'new', 's2']],
+      [undefined, ['s1', 'other', 's2', 'new']],
+      ['missing', ['s1', 'other', 's2', 'new']],
+      ['other', ['s1', 'other', 's2', 'new']],
+    ] as const) {
+      it(`inserts before ${anchor ?? 'the end'} without changing other contexts`, () => {
+        const start = stateWithSections([
+          makeSection({ id: 's1' }),
+          makeSection({ id: 'other', contextId: 'project2' }),
+          makeSection({ id: 's2' }),
+        ]);
+        const action = addSection({
+          section: makeSection({ id: 'new' }),
+          beforeSectionId: anchor,
+        });
+        // Round-trip the payload as the operation log does before replay.
+        const next = sectionReducer(start, JSON.parse(JSON.stringify(action)));
+        expect(next.ids).toEqual([...expected]);
+        expect(start.ids).toEqual(['s1', 'other', 's2']);
+        expect(next.entities['other']).toBe(start.entities['other']);
+        expect(sectionReducer(next, action)).toBe(next);
+      });
+    }
+
     it('preserves provided taskIds', () => {
       const action = addSection({
         section: makeSection({ id: 'new', taskIds: ['t1', 't2'] }),

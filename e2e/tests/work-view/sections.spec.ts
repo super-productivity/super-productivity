@@ -73,6 +73,91 @@ test.describe('Sections', () => {
       has: page.locator('.collapsible-title').filter({ hasText: title }),
     });
 
+  test.describe('touch creation', () => {
+    test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+    test('keeps project menu creation available on touch devices', async ({
+      page,
+      workViewPage,
+      projectPage,
+      testPrefix,
+    }) => {
+      await workViewPage.waitForTaskList();
+      await page
+        .locator('mobile-bottom-nav button')
+        .filter({ has: page.locator('mat-icon', { hasText: /^menu$/ }) })
+        .click();
+      await expect(page.locator('magic-side-nav .nav-sidenav')).toBeVisible();
+      const projectName = `${testPrefix} Touch Sections`;
+      await projectPage.createProject(projectName);
+      await expect(page).toHaveURL(/\/project\/[^/]+\/tasks/);
+      for (const title of ['Touch First', 'Touch Last']) {
+        await openProjectContextMenu(page);
+        await clickAddSection(page);
+        await submitPromptDialog(page, title);
+      }
+      await expect(sectionByTitle(page, 'Touch First')).toBeVisible();
+      await expect(sectionByTitle(page, 'Touch Last')).toBeVisible();
+      await expect(page.locator('.add-section-inline').first()).toBeHidden();
+    });
+  });
+
+  test('inserts sections before, between and after existing sections', async ({
+    page,
+    workViewPage,
+    projectPage,
+    testPrefix,
+  }) => {
+    await setupTestProject(workViewPage, projectPage, `${testPrefix} Inline Sections`);
+    for (const title of ['First', 'Last']) {
+      await openProjectContextMenu(page);
+      await clickAddSection(page);
+      await submitPromptDialog(page, title);
+    }
+    const controls = page.locator('.add-section-inline');
+    const titles = page.locator('.section-container .collapsible-title');
+    await expect(controls).toHaveCount(3);
+    await page.mouse.move(0, 0);
+    await expect(controls.nth(1)).toHaveCSS('opacity', '0');
+    await controls.nth(1).hover();
+    await expect(controls.nth(1)).toHaveCSS('opacity', '1');
+    await controls.nth(1).click();
+    await submitPromptDialog(page, 'Middle');
+    await expect(titles).toHaveText(['First (0)', 'Middle (0)', 'Last (0)']);
+
+    await page.mouse.move(0, 0);
+    await controls.first().focus();
+    await expect(controls.first()).toBeFocused();
+    await expect(controls.first()).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Enter');
+    await submitPromptDialog(page, 'Before');
+    await controls.last().focus();
+    await page.keyboard.press('Space');
+    await submitPromptDialog(page, 'After');
+    await expect(titles).toHaveText([
+      'Before (0)',
+      'First (0)',
+      'Middle (0)',
+      'Last (0)',
+      'After (0)',
+    ]);
+
+    await controls.nth(2).click();
+    await page
+      .locator('mat-dialog-container')
+      .getByRole('button', { name: 'Cancel' })
+      .click();
+    await expect(titles).toHaveCount(5);
+    await page.reload();
+    await expect(titles).toHaveText([
+      'Before (0)',
+      'First (0)',
+      'Middle (0)',
+      'Last (0)',
+      'After (0)',
+    ]);
+  });
+
   /**
    * Read a locator's bounding box defensively. `boundingBox()` takes a
    * one-shot snapshot and returns `null` whenever the element has no
