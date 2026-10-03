@@ -58,6 +58,8 @@ import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-mi
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { DateService } from '../../../core/date/date.service';
 import { MAT_SELECT_CONFIG } from '@angular/material/select';
+import { getNextRepeatOccurrence } from '../store/get-next-repeat-occurrence.util';
+import { SCHEDULE_AFFECTING_FIELDS } from '../store/schedule-affecting-fields.const';
 
 // Fields whose change requires offering "Update all task instances?" — covers
 // what propagates to existing tasks (vs. schedule fields, which only affect
@@ -81,6 +83,15 @@ const WEEKDAY_KEYS: (keyof TaskRepeatCfgCopy)[] = [
   'friday',
   'saturday',
   'sunday',
+];
+
+// Unsaved edits to these would move the next occurrence. quickSetting is only
+// expanded into the pattern fields on save, and repeatFromCompletionDate moves
+// the anchor, so both count here although the reschedule effect ignores them.
+const NEXT_OCCURRENCE_FIELDS: (keyof TaskRepeatCfgCopy)[] = [
+  ...SCHEDULE_AFFECTING_FIELDS,
+  'quickSetting',
+  'repeatFromCompletionDate',
 ];
 
 // TASK_REPEAT_CFG_FORM_CFG
@@ -254,6 +265,57 @@ export class DialogEditTaskRepeatCfgComponent {
       return cfg.id;
     }
     return this._data.repeatCfg?.id || this._data.task?.repeatCfgId || null;
+  });
+
+  // Computed from the saved config, like the Upcoming list's "Next" tooltip.
+  // Unsaved schedule edits are applied by the reschedule effect on save, which
+  // can also relocate the live instance, so no date is shown for them.
+  nextOccurrenceText = computed<string | null>(() => {
+    const saved = this.repeatCfgInitial();
+    const cfg = this.repeatCfg();
+    if (!this.isEdit() || !saved || cfg.isPaused) {
+      return null;
+    }
+    if (this.hasUnsavedScheduleChanges()) {
+      return this._translateService.instant(
+        T.F.TASK_REPEAT.D_EDIT.NEXT_OCCURRENCE_UNSAVED,
+      );
+    }
+    const next = getNextRepeatOccurrence(saved as TaskRepeatCfg, new Date());
+    if (!next) {
+      return null;
+    }
+    const date = next.toLocaleDateString(this._dateTimeFormatService.textLocale(), {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+    const key = cfg.waitForCompletion
+      ? T.F.TASK_REPEAT.D_EDIT.NEXT_OCCURRENCE_WAIT_FOR_COMPLETION
+      : cfg.repeatFromCompletionDate
+        ? T.F.TASK_REPEAT.D_EDIT.NEXT_OCCURRENCE_FROM_COMPLETION
+        : T.F.TASK_REPEAT.D_EDIT.NEXT_OCCURRENCE;
+    return this._translateService.instant(key, { date });
+  });
+
+  hasUnsavedScheduleChanges = computed(() => {
+    const saved = this.repeatCfgInitial();
+    if (!saved) {
+      return false;
+    }
+    const changes = getTaskRepeatCfgChanges(
+      saved,
+      this._normalizeMonthlyAnchor(this.repeatCfg()),
+    );
+    return NEXT_OCCURRENCE_FIELDS.some((field) => field in changes);
+  });
+
+  inheritedSubtaskTitles = computed(() => {
+    const cfg = this.repeatCfg();
+    return cfg.shouldInheritSubtasks
+      ? (cfg.subTaskTemplates ?? []).map((subTask) => subTask.title)
+      : [];
   });
 
   essentialFormFields = signal<FormlyFieldConfig[]>([]);
