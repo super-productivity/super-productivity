@@ -11,6 +11,12 @@ data class WidgetTask(
     val projectColor: String?
 )
 
+/** The task currently being tracked — on this device or, via SuperSync presence, a remote one. */
+data class WidgetCurrentTask(
+    val title: String,
+    val deviceLabel: String
+)
+
 /**
  * When the snapshot stops describing "today", and which day it describes.
  *
@@ -91,6 +97,27 @@ object WidgetData {
             )
         }
         return result
+    }
+
+    /**
+     * The `currentTask` field, or null when nothing is tracked (locally or, via
+     * SuperSync tracking-presence, remotely) — same degrade-to-null contract as
+     * every other field here, never a title-less stub.
+     */
+    fun parseCurrentTask(json: String): WidgetCurrentTask? {
+        return try {
+            val root = JSONObject(json)
+            if (root.optInt("v", -1) != SUPPORTED_VERSION) {
+                return null
+            }
+            val task = root.optJSONObject("currentTask") ?: return null
+            WidgetCurrentTask(
+                title = task.getString("title"),
+                deviceLabel = task.optString("deviceLabel", "")
+            )
+        } catch (e: Exception) {
+            null
+        }
     }
 
     /**

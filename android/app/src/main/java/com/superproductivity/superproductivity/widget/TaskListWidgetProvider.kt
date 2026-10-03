@@ -9,6 +9,7 @@ import android.content.Intent
 import android.net.Uri
 import android.text.format.DateUtils
 import android.util.Log
+import android.view.View
 import android.widget.RemoteViews
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.superproductivity.superproductivity.App
@@ -101,23 +102,22 @@ class TaskListWidgetProvider : AppWidgetProvider() {
          * Reads the blob itself: the header lives in the provider's RemoteViews while
          * the rows are built in a separate RemoteViewsFactory, with no shared lifetime
          * to hand it down. Call once per refresh — the result is the same for every
-         * widget id.
+         * widget id. Also returns the current-task row so both read the same blob
+         * string instead of hitting the KeyValStore twice per refresh.
          */
-        private fun headerTitle(context: Context): CharSequence {
-            val meta = try {
-                WidgetData.parseMeta(
-                    (context.applicationContext as App).keyValStore
-                        .get(WidgetData.KEYVAL_KEY, "{}")
-                )
+        private fun headerAndCurrentTask(context: Context): Pair<CharSequence, WidgetCurrentTask?> {
+            val json = try {
+                (context.applicationContext as App).keyValStore.get(WidgetData.KEYVAL_KEY, "{}")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to read widget data for header", e)
                 // Unknown stamp: keep the pre-#9098 behaviour rather than cry stale.
-                return context.getString(R.string.widget_header_title)
+                return context.getString(R.string.widget_header_title) to null
             }
+            val meta = WidgetData.parseMeta(json)
             // The verdict lives in WidgetData.headerFor (pure, tested); this only renders it.
-            return when (val header = WidgetData.headerFor(meta, System.currentTimeMillis())) {
+            val header = when (val h = WidgetData.headerFor(meta, System.currentTimeMillis())) {
                 is WidgetHeader.Today -> context.getString(R.string.widget_header_title)
-                is WidgetHeader.Outdated -> header.dayMs?.let { dayMs ->
+                is WidgetHeader.Outdated -> h.dayMs?.let { dayMs ->
                     context.getString(
                         R.string.widget_header_outdated,
                         DateUtils.formatDateTime(
@@ -129,6 +129,7 @@ class TaskListWidgetProvider : AppWidgetProvider() {
                     )
                 } ?: context.getString(R.string.widget_header_outdated_unknown)
             }
+            return header to WidgetData.parseCurrentTask(json)
         }
 
         /**
@@ -163,9 +164,9 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             appWidgetManager: AppWidgetManager,
             appWidgetIds: IntArray
         ) {
-            val header = headerTitle(context)
+            val (header, currentTask) = headerAndCurrentTask(context)
             for (appWidgetId in appWidgetIds) {
-                updateWidget(context, appWidgetManager, appWidgetId, header)
+                updateWidget(context, appWidgetManager, appWidgetId, header, currentTask)
             }
             // setRemoteAdapter alone does not re-invoke the factory's onDataSetChanged()
             // when the adapter intent is unchanged (it always is — same widget id, same
@@ -177,11 +178,26 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             context: Context,
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int,
-            header: CharSequence
+            header: CharSequence,
+            currentTask: WidgetCurrentTask?
         ) {
             val views = RemoteViews(context.packageName, R.layout.widget_task_list)
 
             views.setTextViewText(R.id.widget_header_title, header)
+
+            if (currentTask != null) {
+                views.setViewVisibility(R.id.widget_tracking_row, View.VISIBLE)
+                views.setTextViewText(
+                    R.id.widget_tracking_title,
+                    context.getString(R.string.widget_tracking_title, currentTask.title)
+                )
+                views.setTextViewText(
+                    R.id.widget_tracking_device,
+                    context.getString(R.string.widget_tracking_device, currentTask.deviceLabel)
+                )
+            } else {
+                views.setViewVisibility(R.id.widget_tracking_row, View.GONE)
+            }
 
             val serviceIntent = Intent(context, TaskListWidgetService::class.java).apply {
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
@@ -211,6 +227,7 @@ class TaskListWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_header, openAppPendingIntent)
             views.setOnClickPendingIntent(R.id.widget_empty, openAppPendingIntent)
+            views.setOnClickPendingIntent(R.id.widget_tracking_row, openAppPendingIntent)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }

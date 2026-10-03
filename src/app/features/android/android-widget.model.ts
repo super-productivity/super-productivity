@@ -19,6 +19,17 @@ export interface AndroidWidgetTask {
   projectId?: string;
 }
 
+export interface AndroidWidgetCurrentTask {
+  id: string;
+  title: string;
+  // omitted (not null) when the task has no project — see AndroidWidgetTask.projectId
+  projectId?: string;
+  /** Human-readable device currently tracking this task, e.g. 'Desktop', 'Android'. */
+  deviceLabel: string;
+  /** True when tracked on this device; false when tracked remotely (SuperSync presence). */
+  isLocal: boolean;
+}
+
 export interface AndroidWidgetData {
   v: 1;
   /**
@@ -53,4 +64,11 @@ export interface AndroidWidgetData {
   validUntil: number;
   tasks: AndroidWidgetTask[];
   projectColors: { [projectId: string]: string };
+  /**
+   * The task currently being tracked — on this device, or (SuperSync only) on a
+   * remote one via tracking-presence — or null when nothing is tracked. Not
+   * necessarily one of `tasks`: a remote device may track a task not scheduled
+   * for today.
+   */
+  currentTask: AndroidWidgetCurrentTask | null;
 }

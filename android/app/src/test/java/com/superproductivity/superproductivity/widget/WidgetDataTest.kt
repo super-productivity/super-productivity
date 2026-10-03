@@ -83,6 +83,37 @@ class WidgetDataTest {
         assertNull(WidgetData.parse(json)[0].projectColor)
     }
 
+    // --- parseCurrentTask: the "which task, which device" contract ---
+
+    @Test
+    fun parsesCurrentTask() {
+        val json =
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"Write report","deviceLabel":"Desktop","isLocal":false}}"""
+        assertEquals(WidgetCurrentTask("Write report", "Desktop"), WidgetData.parseCurrentTask(json))
+    }
+
+    @Test
+    fun nullCurrentTaskParsesToNull() {
+        assertNull(WidgetData.parseCurrentTask("""{"v":1,"tasks":[],"currentTask":null}"""))
+    }
+
+    @Test
+    fun missingCurrentTaskParsesToNull() {
+        assertNull(WidgetData.parseCurrentTask("""{"v":1,"tasks":[]}"""))
+    }
+
+    @Test
+    fun currentTaskUnknownVersionParsesToNull() {
+        val json =
+            """{"v":2,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":false}}"""
+        assertNull(WidgetData.parseCurrentTask(json))
+    }
+
+    @Test
+    fun currentTaskUnparseableBlobDegradesInsteadOfThrowing() {
+        assertNull(WidgetData.parseCurrentTask("not json"))
+    }
+
     @Test
     fun parsesStalenessStamp() {
         val meta = WidgetData.parseMeta(blob)
