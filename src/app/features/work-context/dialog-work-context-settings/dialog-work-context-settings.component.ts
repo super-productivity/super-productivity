@@ -11,8 +11,9 @@ import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { T } from '../../../t.const';
 import { Project } from '../../project/project.model';
 import { Tag } from '../../tag/tag.model';
-import { WorkContextThemeCfg } from '../work-context.model';
+import { WorkContextThemeCfg, WorkContextType } from '../work-context.model';
 import { DEFAULT_TAG_COLOR } from '../work-context.const';
+import { getDefaultWorkContextTheme } from '../work-context-default-theme.util';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
 import { buildWorkContextSettingsFormCfg } from './work-context-settings-form-cfg.const';
@@ -69,7 +70,12 @@ export class DialogWorkContextSettingsComponent {
 
   constructor() {
     const entity = this._data.entity;
-    const theme = { ...entity.theme };
+    // #9156: `{ ...undefined }` is `{}`, which validation accepts and never heals
+    const defaultTheme = getDefaultWorkContextTheme(
+      this._data.isProject ? WorkContextType.PROJECT : WorkContextType.TAG,
+      entity.id,
+    );
+    const theme = { ...defaultTheme, ...entity.theme };
     let tagColor: string | null | undefined;
     // For tags: align the displayed Tag Color and Primary fields with
     // the tag's actually rendered color. If one is missing or still at
@@ -93,7 +99,7 @@ export class DialogWorkContextSettingsComponent {
     // original store state instead of pushing the prefilled values.
     this._originalEntityData = {
       ...entity,
-      theme: { ...entity.theme },
+      theme: { ...defaultTheme, ...entity.theme },
     } as Project | Tag;
     // If the user opens settings on a tag whose stored theme.primary
     // matches the auto-default (or has just been prefilled to tag.color),
@@ -101,8 +107,8 @@ export class DialogWorkContextSettingsComponent {
     // theme.primary in sync.
     this._userTouchedThemePrimary = this._data.isProject
       ? false
-      : entity.theme?.primary !== DEFAULT_TAG_COLOR &&
-        entity.theme?.primary !== (entity as Tag).color;
+      : this._originalEntityData.theme.primary !== DEFAULT_TAG_COLOR &&
+        this._originalEntityData.theme.primary !== (entity as Tag).color;
     this.fields = adjustToLiveFormlyForm(
       buildWorkContextSettingsFormCfg(this._data.isProject),
     );
