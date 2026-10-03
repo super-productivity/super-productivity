@@ -436,17 +436,14 @@ body.isDarkTheme {
   --surface-2: var(--dark3);
   --surface-3: var(--dark12);
   --surface-4: var(--dark24);
-
   --ink-strong: rgb(255, 255, 255);
   --ink: rgb(230, 230, 230);
   --ink-muted: rgba(235, 235, 235, 0.65);
   --ink-on-channel: 255, 255, 255;
-
   --separator: rgba(255, 255, 255, 0.1);
   --divider: rgba(255, 255, 255, 0.12);
   --scrim: rgba(0, 0, 0, 0.6);
   --bg-overlay: rgba(0, 0, 0, 0.8);
-
   --brand: var(--palette-primary-400);
   --focus-ring: var(--brand);
   --system-surface: var(--bg, #131314);
@@ -523,7 +520,6 @@ body.isDarkTheme {
   --separator-color: var(--separator);
   --divider-color: var(--divider);
   --c-backdrop: var(--scrim);
-
   --notes-container-bg: inherit;
 
   // Task surfaces (Cat A)
