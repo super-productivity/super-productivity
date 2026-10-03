@@ -561,8 +561,8 @@ items to **check**, not to blind-fix — a blind fix risks re-creating #8508.
    injects `--safe-area-inset-*`. If the web also pads via `var(--safe-area-*)`,
    that double-counts. The common API 36 case is WebView >= 140 = passthrough (no
    static parent padding, so no double-count), making this the stale-WebView
-   corner. This is what `--bottom-nav-safe-area` in `src/styles/_css-variables.scss`
-   halves the inset for. Verify on an API 35/36 device with an old WebView; if it
+   corner. `--bottom-nav-safe-area` in `src/styles/_css-variables.scss` reserves
+   the full inset and carries this caveat. Verify on an API 35/36 device with an old WebView; if it
    is real, gate the web padding off on that band rather than removing it globally.
 2. **`env(safe-area-inset-bottom)` vs `var(--safe-area-bottom)` consumers diverge
    on API >= 35.** Some SCSS reads raw `env()`, other SCSS reads
