@@ -81,6 +81,59 @@ export interface PrivacyConfig {
  */
 export const isConsentRequired = (config: ServerConfig): boolean => !!config.privacy;
 
+/**
+ * Which peers may set X-Forwarded-* so req.ip resolves to the real client IP
+ * instead of the proxy's. Two proxy-addr ranges, one per place the reverse
+ * proxy can sit: 'loopback' (127.0.0.1/8, ::1/128) for host networking or a
+ * same-pod sidecar, and 'uniquelocal' (10/8, 172.16/12, 192.168/16, fc00::/7)
+ * for the docker bridge or an ingress controller's pod network. Headers from
+ * any other peer are ignored, so a client that reaches the origin directly
+ * cannot spoof its IP.
+ *
+ * Must stay a value that validates the connecting address: fastify 5.12.1
+ * disabled the hop-count form (`trustProxy: 1`) because it ignores the peer
+ * address entirely, leaving the headers spoofable (GHSA-3m5p-2c4r-xxw2).
+ *
+ * req.ip is the @fastify/rate-limit key, so too narrow a value silently
+ * collapses every client into one bucket instead of failing loudly. Neither
+ * range covers 100.64.0.0/10 (CGNAT/Tailscale) or 169.254.0.0/16 — a
+ * deployment needing those sets TRUST_PROXY instead of this being widened for
+ * everyone.
+ */
+export const SERVER_TRUST_PROXY = ['loopback', 'uniquelocal'];
+
+const TRUST_PROXY_KEYWORDS = ['loopback', 'linklocal', 'uniquelocal'];
+const IPV4_WITH_OPTIONAL_PREFIX = /^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?$/;
+const IPV6_WITH_OPTIONAL_PREFIX = /^[0-9a-f]*:[0-9a-f:]*(\/\d{1,3})?$/i;
+
+/**
+ * Parse a TRUST_PROXY value into the list fastify's trustProxy option takes.
+ * Throws on anything that does not look like a keyword, an IP or a CIDR range,
+ * so the spoofable hop-count and `true` forms never reach fastify; proxy-addr
+ * rejects malformed addresses when the server starts.
+ */
+export const parseTrustProxy = (value: string): string[] => {
+  const entries = value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+  for (const entry of entries) {
+    const isValid =
+      TRUST_PROXY_KEYWORDS.includes(entry) ||
+      IPV4_WITH_OPTIONAL_PREFIX.test(entry) ||
+      IPV6_WITH_OPTIONAL_PREFIX.test(entry);
+    if (!isValid) {
+      throw new Error(
+        `Invalid TRUST_PROXY entry "${entry}". Use proxy-addr keywords (loopback, linklocal, uniquelocal), ` +
+          'IP addresses or CIDR ranges; hop counts and "true" leave X-Forwarded-For spoofable.',
+      );
+    }
+  }
+
+  return entries;
+};
+
 export interface ServerConfig {
   port: number;
   host: string;
@@ -94,6 +147,8 @@ export interface ServerConfig {
     enabled: boolean;
     allowedOrigins?: CorsOrigin[];
   };
+  /** Peers whose X-Forwarded-* headers are trusted; see SERVER_TRUST_PROXY. */
+  trustProxy: string[];
   smtp?: {
     host: string;
     port: number;
@@ -150,6 +205,7 @@ const DEFAULT_CONFIG: ServerConfig = {
     enabled: true,
     allowedOrigins: DEFAULT_CORS_ORIGINS,
   },
+  trustProxy: SERVER_TRUST_PROXY,
 };
 
 /**
@@ -264,6 +320,14 @@ export const loadConfigFromEnv = (
     // If origins are provided, implicitly enable CORS if not explicitly disabled
     if (process.env.CORS_ENABLED === undefined) {
       config.cors.enabled = true;
+    }
+  }
+
+  // Trusted reverse-proxy peers (comma-separated keywords, IPs or CIDR ranges)
+  if (process.env.TRUST_PROXY) {
+    const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
+    if (trustProxy.length > 0) {
+      config.trustProxy = trustProxy;
     }
   }
 
