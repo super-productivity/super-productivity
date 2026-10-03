@@ -1,5 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { CaldavCommonInterfacesService } from './caldav-common-interfaces.service';
 import { CaldavClientService } from './caldav-client.service';
 import { CaldavSyncAdapterService } from './caldav-sync-adapter.service';
@@ -62,6 +64,7 @@ describe('CaldavCommonInterfacesService', () => {
   let service: CaldavCommonInterfacesService;
   let caldavClientSpy: jasmine.SpyObj<CaldavClientService>;
   let issueProviderServiceSpy: jasmine.SpyObj<IssueProviderService>;
+  let store: MockStore;
 
   beforeEach(() => {
     caldavClientSpy = jasmine.createSpyObj('CaldavClientService', [
@@ -81,9 +84,11 @@ describe('CaldavCommonInterfacesService', () => {
         { provide: CaldavClientService, useValue: caldavClientSpy },
         CaldavSyncAdapterService,
         { provide: IssueProviderService, useValue: issueProviderServiceSpy },
+        provideMockStore(),
       ],
     });
     service = TestBed.inject(CaldavCommonInterfacesService);
+    store = TestBed.inject(MockStore);
   });
 
   describe('pollInterval', () => {
@@ -418,6 +423,202 @@ describe('CaldavCommonInterfacesService', () => {
 
       expect(result.length).toBe(1);
       expect(result[0].taskChanges.isDone).toBeTrue();
+    });
+  });
+
+  describe('date pull semantics (#10099)', () => {
+    // Title/done match the server so only dates can differ.
+    const dated = (o: Partial<Task> = {}): Task =>
+      makeSpTask({
+        title: BASE_ISSUE.summary,
+        isDone: false,
+        issueLastUpdated: 42,
+        ...o,
+      });
+    const cfgWith = (
+      twoWaySync: IssueProviderCaldav['twoWaySync'],
+    ): IssueProviderCaldav => ({
+      ...BASE_CFG,
+      twoWaySync,
+    });
+
+    beforeEach(() => issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(BASE_CFG)));
+
+    it('default: unchanged ETag keeps a local planned date and deadline (no heal)', async () => {
+      caldavClientSpy.getById$.and.returnValue(of(BASE_ISSUE));
+      const r = await service.getFreshDataForIssueTask(
+        dated({ dueDay: '2026-10-01', deadlineDay: '2026-10-05' }),
+      );
+      expect(r).toBeNull();
+    });
+
+    it('default: changed ETag with no DTSTART clears the planned date (as today)', async () => {
+      caldavClientSpy.getById$.and.returnValue(of({ ...BASE_ISSUE, etag_hash: 43 }));
+      const r = await service.getFreshDataForIssueTask(dated({ dueDay: '2026-10-01' }));
+      expect(r?.taskChanges.dueDay).toBeNull();
+    });
+
+    it('default: changed ETag with no DUE keeps a deadline the server never had', async () => {
+      caldavClientSpy.getById$.and.returnValue(of({ ...BASE_ISSUE, etag_hash: 43 }));
+      const r = await service.getFreshDataForIssueTask(
+        dated({ deadlineDay: '2026-10-05', issueLastSyncedValues: { due: null } }),
+      );
+      expect('deadlineDay' in (r?.taskChanges ?? {})).toBeFalse();
+      expect('deadlineWithTime' in (r?.taskChanges ?? {})).toBeFalse();
+    });
+
+    it('missing due baseline (older client) keeps the local deadline', async () => {
+      caldavClientSpy.getById$.and.returnValue(of({ ...BASE_ISSUE, etag_hash: 43 }));
+      const r = await service.getFreshDataForIssueTask(
+        dated({ deadlineDay: '2026-10-05', issueLastSyncedValues: {} }),
+      );
+      expect('deadlineDay' in (r?.taskChanges ?? {})).toBeFalse();
+    });
+
+    it('changed ETag where the server removed a DUE it had clears the deadline', async () => {
+      caldavClientSpy.getById$.and.returnValue(of({ ...BASE_ISSUE, etag_hash: 43 }));
+      const r = await service.getFreshDataForIssueTask(
+        dated({
+          deadlineDay: '2026-10-05',
+          issueLastSyncedValues: { due: '2026-10-05' },
+        }),
+      );
+      expect(r?.taskChanges.deadlineDay).toBeNull();
+      expect(r?.taskChanges.deadlineWithTime).toBeNull();
+    });
+
+    it('changed ETag pulls a timed DUE exactly like getAddTaskData', async () => {
+      caldavClientSpy.getById$.and.returnValue(
+        of({ ...BASE_ISSUE, etag_hash: 43, due: TIMED_TIMESTAMP, isDueAllDay: false }),
+      );
+      const r = await service.getFreshDataForIssueTask(
+        dated({ deadlineDay: '2026-10-05' }),
+      );
+      expect(r?.taskChanges.deadlineWithTime).toBe(TIMED_TIMESTAMP);
+      expect(r?.taskChanges.deadlineDay).toBeNull();
+    });
+
+    it('both: an unrelated ETag change does not overwrite a local planned date', async () => {
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of(cfgWith({ plannedDate: 'both' })),
+      );
+      caldavClientSpy.getById$.and.returnValue(
+        of({ ...BASE_ISSUE, etag_hash: 43, start: ALL_DAY_TIMESTAMP, isAllDay: true }),
+      );
+      const r = await service.getFreshDataForIssueTask(
+        dated({
+          dueDay: '2026-10-01',
+          issueLastSyncedValues: { dtstart: ALL_DAY_DATE_STR },
+        }),
+      );
+      expect('dueDay' in (r?.taskChanges ?? {})).toBeFalse();
+    });
+
+    it('off: dates are not pulled', async () => {
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of(cfgWith({ plannedDate: 'off' })),
+      );
+      caldavClientSpy.getById$.and.returnValue(
+        of({ ...BASE_ISSUE, etag_hash: 43, start: ALL_DAY_TIMESTAMP, isAllDay: true }),
+      );
+      const r = await service.getFreshDataForIssueTask(dated({ dueDay: '2026-10-01' }));
+      expect('dueDay' in (r?.taskChanges ?? {})).toBeFalse();
+    });
+
+    describe('baseline backfill', () => {
+      beforeEach(() => spyOn(store, 'dispatch'));
+
+      it('backfills missing date baselines quietly when push is enabled and the ETag is unchanged', async () => {
+        issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+          of(cfgWith({ deadline: 'both' })),
+        );
+        caldavClientSpy.getByIds$.and.returnValue(
+          of([{ ...BASE_ISSUE, due: ALL_DAY_TIMESTAMP, isDueAllDay: true }]),
+        );
+        const task = dated({
+          deadlineDay: ALL_DAY_DATE_STR,
+          issueLastSyncedValues: { completed: false, summary: BASE_ISSUE.summary },
+        });
+
+        const updates = await service.getFreshDataForIssueTasks([task]);
+
+        expect(updates).toEqual([]);
+        expect(store.dispatch).toHaveBeenCalledOnceWith(
+          TaskSharedActions.updateTasks({
+            tasks: [
+              {
+                id: task.id,
+                changes: {
+                  issueLastSyncedValues: {
+                    completed: false,
+                    summary: BASE_ISSUE.summary,
+                    due: ALL_DAY_DATE_STR,
+                  },
+                },
+              },
+            ],
+          }),
+        );
+      });
+
+      it('backfills a missing dtstart baseline when planned date push is enabled and the ETag is unchanged', async () => {
+        issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+          of(cfgWith({ plannedDate: 'both' })),
+        );
+        caldavClientSpy.getByIds$.and.returnValue(
+          of([{ ...BASE_ISSUE, start: ALL_DAY_TIMESTAMP, isAllDay: true }]),
+        );
+        const task = dated({
+          dueDay: ALL_DAY_DATE_STR,
+          issueLastSyncedValues: { completed: false, summary: BASE_ISSUE.summary },
+        });
+
+        const updates = await service.getFreshDataForIssueTasks([task]);
+
+        expect(updates).toEqual([]);
+        expect(store.dispatch).toHaveBeenCalledOnceWith(
+          TaskSharedActions.updateTasks({
+            tasks: [
+              {
+                id: task.id,
+                changes: {
+                  issueLastSyncedValues: {
+                    completed: false,
+                    summary: BASE_ISSUE.summary,
+                    dtstart: ALL_DAY_DATE_STR,
+                  },
+                },
+              },
+            ],
+          }),
+        );
+      });
+
+      it('does nothing by default (no push enabled)', async () => {
+        caldavClientSpy.getByIds$.and.returnValue(of([BASE_ISSUE]));
+        await service.getFreshDataForIssueTasks([dated({ issueLastSyncedValues: {} })]);
+        expect(store.dispatch).not.toHaveBeenCalled();
+      });
+
+      it('does nothing when the baseline already has the key', async () => {
+        issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+          of(cfgWith({ deadline: 'both' })),
+        );
+        caldavClientSpy.getByIds$.and.returnValue(of([BASE_ISSUE]));
+        await service.getFreshDataForIssueTasks([
+          dated({ issueLastSyncedValues: { due: null } }),
+        ]);
+        expect(store.dispatch).not.toHaveBeenCalled();
+      });
+
+      it('does nothing when the ETag changed (the normal pull refreshes baselines)', async () => {
+        issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+          of(cfgWith({ deadline: 'both' })),
+        );
+        caldavClientSpy.getByIds$.and.returnValue(of([{ ...BASE_ISSUE, etag_hash: 43 }]));
+        await service.getFreshDataForIssueTasks([dated({ issueLastSyncedValues: {} })]);
+        expect(store.dispatch).not.toHaveBeenCalled();
+      });
     });
   });
 

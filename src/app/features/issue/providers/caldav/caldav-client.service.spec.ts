@@ -4,6 +4,8 @@ import { CaldavClientService } from './caldav-client.service';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { CaldavCfg } from './caldav.model';
 import { CaldavIssue } from './caldav-issue.model';
+import { CaldavSyncAdapterService } from './caldav-sync-adapter.service';
+import type { CaldavFieldUpdates } from './caldav-sync-adapter.service';
 
 // ─── _getParentRelatedTo ──────────────────────────────────────────────────────
 
@@ -171,6 +173,242 @@ describe('CaldavClientService.updateFields$ – completion push', () => {
     expect(davTask.update).toHaveBeenCalled();
     expect(davTask.data).toContain('STATUS:NEEDS-ACTION');
     expect(davTask.data).not.toContain('STATUS:COMPLETED');
+  });
+
+  const davTaskWith = (
+    lines: string[],
+  ): {
+    data: string;
+    url: string;
+    etag: string;
+    update: jasmine.Spy;
+  } => ({
+    data: [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Test//EN',
+      'BEGIN:VTODO',
+      'UID:todo-date-1',
+      'SUMMARY:Dated',
+      ...lines,
+      'END:VTODO',
+      'END:VCALENDAR',
+    ].join('\r\n'),
+    url: 'https://cal.example.com/todo-date-1.ics',
+    etag: '"etag-1"',
+    update: jasmine.createSpy('update').and.resolveTo(undefined),
+  });
+
+  const stubTask = (davTask: ReturnType<typeof davTaskWith>): void => {
+    spyOn(svc as any, '_getCalendar').and.resolveTo({ readOnly: false });
+    spyOn(CaldavClientService as any, '_findTaskByUid').and.resolveTo([davTask]);
+  };
+
+  // Controller ruling (final fix wave, #10099): the original version of this test
+  // pushed an all-day DTSTART with a timed DUE and asserted both were written
+  // unchanged. That pair is exactly the DATE/DATE-TIME type mismatch RFC 5545
+  // forbids (see the "invalid DUE/DTSTART pairs" describe below), so it encoded
+  // an invalid state. Replaced with two same-type valid-pair pushes.
+  it('writes an all-day DTSTART and a later all-day DUE', async () => {
+    const davTask = davTaskWith([]);
+    stubTask(davTask);
+    await firstValueFrom(
+      svc.updateFields$(MOCK_CFG, 'todo-date-1', {
+        dtstart: '2026-09-25',
+        due: '2026-09-30',
+      }),
+    );
+    expect(davTask.update).toHaveBeenCalled();
+    expect(davTask.data).toContain('DTSTART;VALUE=DATE:20260925');
+    expect(davTask.data).toContain('DUE;VALUE=DATE:20260930');
+    expect(davTask.data).toContain('SEQUENCE:1');
+  });
+
+  it('writes a timed DTSTART and a later timed DUE', async () => {
+    const davTask = davTaskWith([]);
+    stubTask(davTask);
+    await firstValueFrom(
+      svc.updateFields$(MOCK_CFG, 'todo-date-1', {
+        dtstart: Date.UTC(2026, 8, 25, 12, 0, 0),
+        due: Date.UTC(2026, 8, 30, 12, 0, 0),
+      }),
+    );
+    expect(davTask.update).toHaveBeenCalled();
+    expect(davTask.data).toContain('DTSTART:20260925T120000Z');
+    expect(davTask.data).toContain('DUE:20260930T120000Z');
+    expect(davTask.data).toContain('SEQUENCE:1');
+  });
+
+  it('removes DUE on null', async () => {
+    const davTask = davTaskWith(['DUE;VALUE=DATE:20260930']);
+    stubTask(davTask);
+    await firstValueFrom(svc.updateFields$(MOCK_CFG, 'todo-date-1', { due: null }));
+    expect(davTask.update).toHaveBeenCalled();
+    expect(davTask.data).not.toContain('DUE');
+  });
+
+  it('does not call update when the date is unchanged (e.g. reminder snooze)', async () => {
+    const davTask = davTaskWith(['DUE;VALUE=DATE:20260930']);
+    stubTask(davTask);
+    await firstValueFrom(
+      svc.updateFields$(MOCK_CFG, 'todo-date-1', { due: '2026-09-30' }),
+    );
+    expect(davTask.update).not.toHaveBeenCalled();
+  });
+
+  it('skips dates on a recurring VTODO: writes other fields, then rejects with the expected-skip marker', async () => {
+    const davTask = davTaskWith(['DTSTART;VALUE=DATE:20260925', 'RRULE:FREQ=WEEKLY']);
+    stubTask(davTask);
+    await expectAsync(
+      firstValueFrom(
+        svc.updateFields$(MOCK_CFG, 'todo-date-1', {
+          summary: 'Renamed',
+          dtstart: '2026-10-01',
+        }),
+      ),
+    ).toBeRejectedWith(jasmine.objectContaining({ isExpectedSyncSkip: true }));
+    expect(davTask.update).toHaveBeenCalled();
+    expect(davTask.data).toContain('SUMMARY:Renamed');
+    expect(davTask.data).toContain('DTSTART;VALUE=DATE:20260925');
+  });
+
+  // ─── invalid DUE/DTSTART pairs (#10099 final fix wave, review Important #1) ──
+
+  it('skips a timed DTSTART push that would mismatch an all-day DUE: writes other fields, then rejects with the expected-skip marker', async () => {
+    const davTask = davTaskWith(['DUE;VALUE=DATE:20260930']);
+    stubTask(davTask);
+    await expectAsync(
+      firstValueFrom(
+        svc.updateFields$(MOCK_CFG, 'todo-date-1', {
+          summary: 'Renamed',
+          dtstart: Date.UTC(2026, 8, 25, 12, 0, 0),
+        }),
+      ),
+    ).toBeRejectedWith(jasmine.objectContaining({ isExpectedSyncSkip: true }));
+    expect(davTask.update).toHaveBeenCalled();
+    expect(davTask.data).toContain('SUMMARY:Renamed');
+    expect(davTask.data).not.toContain('DTSTART');
+    expect(davTask.data).toContain('DUE;VALUE=DATE:20260930');
+  });
+
+  it('skips a DUE push earlier than the existing DTSTART (same type): writes no date, rejects with the expected-skip marker', async () => {
+    const davTask = davTaskWith(['DTSTART;VALUE=DATE:20260925']);
+    stubTask(davTask);
+    await expectAsync(
+      firstValueFrom(
+        svc.updateFields$(MOCK_CFG, 'todo-date-1', {
+          due: '2026-09-20',
+        }),
+      ),
+    ).toBeRejectedWith(jasmine.objectContaining({ isExpectedSyncSkip: true }));
+    expect(davTask.update).not.toHaveBeenCalled();
+    expect(davTask.data).toContain('DTSTART;VALUE=DATE:20260925');
+    expect(davTask.data).not.toContain('DUE');
+  });
+
+  it('writes a valid all-day DTSTART/DUE pair normally', async () => {
+    const davTask = davTaskWith([]);
+    stubTask(davTask);
+    await firstValueFrom(
+      svc.updateFields$(MOCK_CFG, 'todo-date-1', {
+        dtstart: '2026-09-25',
+        due: '2026-09-30',
+      }),
+    );
+    expect(davTask.update).toHaveBeenCalled();
+    expect(davTask.data).toContain('DTSTART;VALUE=DATE:20260925');
+    expect(davTask.data).toContain('DUE;VALUE=DATE:20260930');
+  });
+
+  // ─── read-back round trip through the pull mapping (#10099 final fix wave, review Important #2) ──
+
+  describe('date round-trip through the pull mapping', () => {
+    let syncAdapter: CaldavSyncAdapterService;
+
+    beforeEach(() => {
+      syncAdapter = TestBed.inject(CaldavSyncAdapterService);
+    });
+
+    const BERLIN_VTIMEZONE = [
+      'BEGIN:VTIMEZONE',
+      'TZID:Europe/Berlin',
+      'BEGIN:STANDARD',
+      'DTSTART:19701025T030000',
+      'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU',
+      'TZOFFSETFROM:+0200',
+      'TZOFFSETTO:+0100',
+      'END:STANDARD',
+      'BEGIN:DAYLIGHT',
+      'DTSTART:19700329T020000',
+      'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU',
+      'TZOFFSETFROM:+0100',
+      'TZOFFSETTO:+0200',
+      'END:DAYLIGHT',
+      'END:VTIMEZONE',
+    ];
+
+    const davTaskWithVtimezone = (lines: string[]): ReturnType<typeof davTaskWith> => ({
+      data: [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Test//EN',
+        ...BERLIN_VTIMEZONE,
+        'BEGIN:VTODO',
+        'UID:todo-date-1',
+        'SUMMARY:Dated',
+        ...lines,
+        'END:VTODO',
+        'END:VCALENDAR',
+      ].join('\r\n'),
+      url: 'https://cal.example.com/todo-date-1.ics',
+      etag: '"etag-1"',
+      update: jasmine.createSpy('update').and.resolveTo(undefined),
+    });
+
+    const pushAndReadBack = async (
+      davTask: ReturnType<typeof davTaskWith>,
+      updates: CaldavFieldUpdates,
+    ): Promise<Record<string, unknown>> => {
+      stubTask(davTask);
+      await firstValueFrom(svc.updateFields$(MOCK_CFG, 'todo-date-1', updates));
+      const mapped = await (CaldavClientService as any)._mapTask(davTask);
+      return syncAdapter.extractSyncValues(mapped as unknown as Record<string, unknown>);
+    };
+
+    it('round-trips an all-day DTSTART', async () => {
+      const values = await pushAndReadBack(davTaskWith([]), { dtstart: '2026-09-25' });
+      expect(values['dtstart']).toBe('2026-09-25');
+    });
+
+    it('round-trips a timed DUE (UTC)', async () => {
+      const due = Date.UTC(2026, 8, 30, 12, 0, 0);
+      const values = await pushAndReadBack(davTaskWith([]), { due });
+      expect(values['due']).toBe(due);
+    });
+
+    it('round-trips a timed DTSTART with TZID=Europe/Berlin when the VTIMEZONE is present', async () => {
+      const davTask = davTaskWithVtimezone([
+        'DTSTART;TZID=Europe/Berlin:20260110T090000',
+      ]);
+      const dtstart = Date.UTC(2026, 8, 25, 12, 0, 0);
+      const values = await pushAndReadBack(davTask, { dtstart });
+      expect(values['dtstart']).toBe(dtstart);
+    });
+
+    it('round-trips DUE switching from all-day to timed', async () => {
+      const due = Date.UTC(2026, 8, 30, 12, 0, 0);
+      const values = await pushAndReadBack(davTaskWith(['DUE;VALUE=DATE:20260930']), {
+        due,
+      });
+      expect(values['due']).toBe(due);
+    });
+
+    it('round-trips DUE switching from timed to all-day', async () => {
+      const values = await pushAndReadBack(davTaskWith(['DUE:20260930T120000Z']), {
+        due: '2026-09-30',
+      });
+      expect(values['due']).toBe('2026-09-30');
+    });
   });
 });
 
