@@ -1,4 +1,5 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, Injector } from '@angular/core';
+import { toObservable } from '@angular/core/rxjs-interop';
 import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
 import { merge } from 'rxjs';
@@ -14,6 +15,7 @@ import {
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { androidInterface } from '../android-interface';
 import { WidgetDataService } from '../widget-data.service';
+import { TrackingPresenceService } from '../../tracking-presence/tracking-presence.service';
 import { TaskService } from '../../tasks/task.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { DroidLog } from '../../../core/log';
@@ -21,7 +23,10 @@ import { T } from '../../../t.const';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
 import { selectAndroidWidgetData } from './android-widget.selectors';
-import { selectTaskEntities } from '../../tasks/store/task.selectors';
+import {
+  selectCurrentTaskId,
+  selectTaskEntities,
+} from '../../tasks/store/task.selectors';
 import { Dictionary } from '@ngrx/entity';
 import { Task } from '../../tasks/task.model';
 
@@ -54,10 +59,25 @@ export const getTaskDoneChangesToApply = (
     .map(([id, isDone]) => ({ id, isDone: isDone as boolean }));
 };
 
+/**
+ * CAS guard for a queued widget stop-tracking tap: only apply it if the app is
+ * still tracking the SAME task the tap intended to stop. A stale queued stop
+ * (task switched, or stopped and restarted, since the tap) must not touch
+ * whatever is tracked now — same reasoning as TrackingPresenceCmd's sessionId
+ * guard for a remote stop. Exported for direct testing — the effect itself is
+ * gated by IS_ANDROID_WEB_VIEW.
+ */
+export const shouldApplyWidgetTrackingStop = (
+  queuedTaskId: string | null,
+  currentTaskId: string | null,
+): boolean => !!queuedTaskId && queuedTaskId === currentTaskId;
+
 @Injectable()
 export class AndroidWidgetEffects {
   private _store = inject(Store);
+  private _injector = inject(Injector);
   private _widgetDataService = inject(WidgetDataService);
+  private _trackingPresence = inject(TrackingPresenceService);
   private _taskService = inject(TaskService);
   private _snackService = inject(SnackService);
   private _hydrationState = inject(HydrationStateService);
@@ -77,6 +97,23 @@ export class AndroidWidgetEffects {
       { dispatch: false },
     );
 
+  // Remote tracking-presence (SuperSync only) lives in a service signal, not the
+  // store, so store-selector emissions never fire for it — this is its own
+  // trigger for the widget's currentTask fallback.
+  pushOnRemoteSessionChange$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        toObservable(this._trackingPresence.remoteSessionView, {
+          injector: this._injector,
+        }).pipe(
+          filter(() => !this._hydrationState.isApplyingRemoteOps()),
+          debounceTime(500),
+          tap(() => this._widgetDataService.pushCurrent()),
+        ),
+      { dispatch: false },
+    );
+
   // The guard above drops ALL emissions while remote ops are applied and nothing
   // re-emits afterwards, so without this the widget would miss synced changes
   // until the next local edit. Push once whenever the sync window closes.
@@ -87,6 +124,25 @@ export class AndroidWidgetEffects {
         this._hydrationState.isInSyncWindow$.pipe(
           pairwise(),
           filter(([wasInWindow, isInWindow]) => wasInWindow && !isInWindow),
+          tap(() => this._widgetDataService.pushCurrent()),
+        ),
+      { dispatch: false },
+    );
+
+  // currentTask is no longer part of selectAndroidWidgetData (it needs
+  // TrackingPresenceService signals) — this is the trigger for the LOCAL side:
+  // task switch, tracking start/stop, and focus-cycle changes all flow through
+  // TrackingPresenceService's own local-change subscription, so its signal is a
+  // superset of what selectCurrentTaskId alone would catch.
+  pushOnLocalTrackingChange$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        toObservable(this._trackingPresence.localTrackingInfo, {
+          injector: this._injector,
+        }).pipe(
+          filter(() => !this._hydrationState.isApplyingRemoteOps()),
+          debounceTime(500),
           tap(() => this._widgetDataService.pushCurrent()),
         ),
       { dispatch: false },
@@ -124,6 +180,45 @@ export class AndroidWidgetEffects {
         ),
       { dispatch: false },
     );
+
+  // Same "single delivery path" shape as drainWidgetDoneQueue$, sharing its
+  // trigger streams — a widget stop tap fires the same drain-now broadcast.
+  drainWidgetTrackingStopQueue$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        merge(
+          androidInterface.onResume$,
+          androidInterface.onWidgetDoneDrainRequest$,
+        ).pipe(
+          concatMap(() =>
+            this._dataInitState.isAllDataLoadedInitially$.pipe(
+              first(),
+              switchMap(() => this._store.select(selectCurrentTaskId).pipe(first())),
+            ),
+          ),
+          tap((currentTaskId) => this._drainTrackingStopQueue(currentTaskId)),
+        ),
+      { dispatch: false },
+    );
+
+  /**
+   * Applying the stop reuses handlePauseAction$ (android-foreground-tracking.
+   * effects.ts) verbatim via the same onPauseTracking$ subject the notification
+   * pause action feeds — that effect already does the correct elapsed-time
+   * sync + flush-before-pause dance; duplicating it here would risk the
+   * double-count hazard its own comments warn about.
+   */
+  private _drainTrackingStopQueue(currentTaskId: string | null): void {
+    const queuedTaskId = androidInterface.getWidgetTrackingStopQueue?.() ?? null;
+    if (!queuedTaskId) {
+      return;
+    }
+    if (shouldApplyWidgetTrackingStop(queuedTaskId, currentTaskId)) {
+      DroidLog.log('Stopping tracking from widget', { id: queuedTaskId });
+      androidInterface.onPauseTracking$.next();
+    }
+  }
 
   private _drainDoneQueue(taskEntities: Dictionary<Task>): void {
     const queueJson = androidInterface.getWidgetDoneQueue?.();

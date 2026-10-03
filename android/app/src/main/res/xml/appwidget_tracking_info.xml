@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:initialLayout="@layout/widget_task_list"
-    android:previewLayout="@layout/widget_task_list"
+    android:initialLayout="@layout/widget_tracking"
+    android:previewLayout="@layout/widget_tracking"
     android:configure="com.superproductivity.superproductivity.widget.WidgetBackgroundConfigActivity"
-    android:minWidth="250dp"
-    android:minHeight="180dp"
-    android:minResizeWidth="180dp"
-    android:minResizeHeight="110dp"
+    android:minWidth="110dp"
+    android:minHeight="40dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="40dp"
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen"
     android:widgetFeatures="reconfigurable"
-    android:description="@string/widget_description" />
+    android:description="@string/widget_tracking_widget_description" />

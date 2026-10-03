@@ -1,4 +1,7 @@
-import { getTaskDoneChangesToApply } from './android-widget.effects';
+import {
+  getTaskDoneChangesToApply,
+  shouldApplyWidgetTrackingStop,
+} from './android-widget.effects';
 import { Task } from '../../tasks/task.model';
 import { Dictionary } from '@ngrx/entity';
 
@@ -62,5 +65,23 @@ describe('AndroidWidgetEffects - getTaskDoneChangesToApply', () => {
 
   it('should skip non-boolean target values', () => {
     expect(getTaskDoneChangesToApply('{"a":"true"}', entities({ id: 'a' }))).toEqual([]);
+  });
+});
+
+describe('AndroidWidgetEffects - shouldApplyWidgetTrackingStop', () => {
+  it('should apply when the queued task is still the one currently tracked', () => {
+    expect(shouldApplyWidgetTrackingStop('a', 'a')).toBe(true);
+  });
+
+  it('should not apply when tracking moved to a different task since the tap', () => {
+    expect(shouldApplyWidgetTrackingStop('a', 'b')).toBe(false);
+  });
+
+  it('should not apply when nothing is tracked anymore', () => {
+    expect(shouldApplyWidgetTrackingStop('a', null)).toBe(false);
+  });
+
+  it('should not apply an empty queue', () => {
+    expect(shouldApplyWidgetTrackingStop(null, 'a')).toBe(false);
   });
 });

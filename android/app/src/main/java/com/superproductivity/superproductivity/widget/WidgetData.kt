@@ -12,6 +12,20 @@ data class WidgetTask(
 )
 
 /**
+ * The task currently being tracked — on this device or, via SuperSync presence,
+ * a remote one. [sinceTs]/[focusCycle] are display-only, degrading to null
+ * (never a fabricated value) when unavailable — see AndroidWidgetCurrentTask.
+ */
+data class WidgetCurrentTask(
+    val id: String,
+    val title: String,
+    val deviceLabel: String,
+    val isLocal: Boolean,
+    val sinceTs: Long?,
+    val focusCycle: Int?
+)
+
+/**
  * When the snapshot stops describing "today", and which day it describes.
  *
  * Both are null for blobs written before the stamp existed (an install that upgraded
@@ -91,6 +105,33 @@ object WidgetData {
             )
         }
         return result
+    }
+
+    /**
+     * The `currentTask` field, or null when nothing is tracked (locally or, via
+     * SuperSync tracking-presence, remotely) — same degrade-to-null contract as
+     * every other field here, never a title-less stub.
+     */
+    fun parseCurrentTask(json: String): WidgetCurrentTask? {
+        return try {
+            val root = JSONObject(json)
+            if (root.optInt("v", -1) != SUPPORTED_VERSION) {
+                return null
+            }
+            val task = root.optJSONObject("currentTask") ?: return null
+            WidgetCurrentTask(
+                id = task.getString("id"),
+                title = task.getString("title"),
+                deviceLabel = task.optString("deviceLabel", ""),
+                isLocal = task.optBoolean("isLocal", false),
+                // 0L is both optLong's default and a real instant; treat it as absent
+                // (same reasoning as AndroidWidgetData.validUntil / WidgetMeta).
+                sinceTs = task.optLong("sinceTs", 0L).takeIf { it > 0L },
+                focusCycle = if (task.isNull("focusCycle")) null else task.optInt("focusCycle")
+            )
+        } catch (e: Exception) {
+            null
+        }
     }
 
     /**

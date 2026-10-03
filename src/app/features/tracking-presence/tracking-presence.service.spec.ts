@@ -191,6 +191,31 @@ describe('TrackingPresenceService', () => {
       flush();
     }));
 
+    it('exposes localTrackingInfo with the sinceTs while tracking, null while not', fakeAsync(() => {
+      service.start();
+      tick();
+      expect(service.localTrackingInfo()).toBeNull();
+
+      setLocalTaskId('task-1');
+      expect(service.localTrackingInfo()?.sinceTs).toBeTruthy();
+
+      setLocalTaskId(null);
+      expect(service.localTrackingInfo()).toBeNull();
+      service.stop();
+      flush();
+    }));
+
+    it('resets localTrackingInfo on stop()', fakeAsync(() => {
+      service.start();
+      tick();
+      setLocalTaskId('task-1');
+      expect(service.localTrackingInfo()).not.toBeNull();
+
+      service.stop();
+      flush();
+      expect(service.localTrackingInfo()).toBeNull();
+    }));
+
     it('mints a new sessionId on task switch', fakeAsync(() => {
       service.start();
       tick();
