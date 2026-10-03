@@ -180,19 +180,27 @@ used an in-memory index of capture-time state diffs, and derived incoming
 opaque ops by running the root reducer on a state copy. It needed no wire key
 and no bump. Measured on the 120 standard seeds against `d9cc190`:
 
-- **Gains:** 17 compare entries stop failing. Seeds with any signature drop
-  from 103 to 97, `field-reverted` from 40 to 24 and `field-unwritten` from
-  13 to 7. Almost all of it comes from two producers, `planTasksForToday` and
-  the habit `setCounterToday`, whose payloads already carry what they write.
-- **Regressions:** 5 entries newly fail on 4 seeds: a time loss, an
-  `older-write-won`, and project or subtask list divergence. Two of #10462's
-  tests (`time-delta-kept-beside-timeless-winner.integration.spec.ts`) also
-  fail on the final spike head. In "counts B tracked time once on every
-  device when A races a rename", devices A and C end with 0 instead of B's
-  3000, as before #10462.
-  In "counts a delivered but unmarked delta once, without a sync error",
-  device B's upload is permanently rejected (`DUPLICATE_OPERATION`). The
-  cause was not diagnosed.
+- **Gains:** 16 compare entries stop failing. Seeds with any signature drop
+  from 103 to 98, `field-reverted` from 40 to 28, time loss from 23 to 21
+  and `older-write-won` from 4 to 3. Almost all of it comes from two
+  producers, `planTasksForToday` and the habit `setCounterToday`, whose
+  payloads already carry what they write.
+- **Regressions:** 3 entries newly fail, all list divergence on seed
+  20725005 (project `taskIds` and `subTasks`). Each mechanism also exists
+  on master.
+- **Two more exceptions were needed.** Reading `planTasksForToday` first
+  broke two of #10462's tests
+  (`time-delta-kept-beside-timeless-winner.integration.spec.ts`):
+  - **The field-patch path re-sent a delta.** The crossing of a local
+    auto-plan and delta with a remote edit became eligible for a field
+    patch. `keptLocalTimeDeltas` keeps every delta, without #10462's rule
+    for a delta a remote clock covers, so a delivered delta was re-sent
+    (`DUPLICATE_OPERATION`).
+  - **The rejected delta was lost.** The same crossing read as disjoint, so
+    no conflict was built. The delta the server had rejected never reached
+    #10462's survival rule, and A and C ended with 0.
+  - **The fix:** derived ops are kept out of both paths when a time delta is
+    present. The numbers above are measured with that guard.
 - **Exit criteria:**
   - **Equal-value writes:** not detected. The synced habit op always writes a
     value its local, unsynced increase already applied, so its capture diff is
@@ -202,8 +210,9 @@ and no bump. Measured on the 120 standard seeds against `d9cc190`:
   - **Restarts:** lose the index.
   - **File providers:** the same op is opaque on its author and readable on
     its receivers, which breaks the identical-field-set contract.
-  - **Branch deletions:** none. Every opacity branch stays as the fallback, so
-    (6) fails as a simplification.
+  - **Branch deletions:** none. Every opacity branch stays as the fallback,
+    and the delta paths needed two new exceptions, so (6) fails as a
+    simplification.
 
 ### Membership versus order (option M, formerly (5); design later)
 
