@@ -3,7 +3,11 @@
   width: 0;
   height: 0;
   display: block;
-  left: 0;
+  // Anchors the growing edge to the reading start: left in LTR, right in RTL
+  // (matters once a consumer promotes this to `position: absolute`, e.g.
+  // task-detail-panel.component.scss — a plain `left: 0` there would always
+  // pin the fill to the physical left and grow the wrong way in RTL).
+  inset-inline-start: 0;
   pointer-events: none;
   max-width: 100%;
   z-index: 2;
@@ -16,8 +20,7 @@
     width: 100%;
     height: 3px;
     top: -5px;
-    left: 2px;
-    right: 2px;
+    inset-inline: 2px;
     border-radius: var(--card-border-radius);
   }
 

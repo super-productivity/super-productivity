@@ -6,7 +6,7 @@
   flex-direction: row;
   min-width: 20px;
   padding: 0 var(--s);
-  padding-left: 0;
+  padding-inline-start: 0;
   font-size: 10px;
   border-radius: var(--s2);
   cursor: pointer;
@@ -36,7 +36,7 @@
   padding: 0;
 
   // needs to be important to overwrite inside mat option
-  margin-right: 3px !important;
+  margin-inline-end: 3px !important;
 }
 
 $ico-size: 13px;
@@ -60,7 +60,7 @@ $ico-size: 13px;
   vertical-align: middle;
   width: $ico-size;
   height: $ico-size;
-  margin-right: 3px !important;
+  margin-inline-end: 3px !important;
 }
 
 $circle-size: 9px;

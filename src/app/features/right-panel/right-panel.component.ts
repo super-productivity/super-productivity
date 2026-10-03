@@ -112,7 +112,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
   readonly sideWidth = input<number>(40);
   readonly wasClosed = output<void>();
 
-  readonly isRTL = this._languageService.isLangRTL;
+  readonly isLocaleRtl = computed(() => this._languageService.isLangRTL);
 
   // Convert observables to signals to match right-panel-content logic
   private readonly _selectedTask = toSignal(this._taskService.selectedTask$, {
@@ -492,7 +492,8 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
     }
     this._lastDragTime = now;
 
-    const deltaX = this._startX() - event.clientX;
+    const dirSign = document.dir === 'rtl' ? -1 : 1;
+    const deltaX = (this._startX() - event.clientX) * dirSign;
     const potentialWidth = this._startWidth() + deltaX;
     const isCollapsing = deltaX < 0;
 

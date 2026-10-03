@@ -91,7 +91,11 @@
           stroke="currentColor"
           stroke-width="2"
         >
-          <path [attr.d]="isFullMode() ? 'M13 4l-6 6 6 6' : 'M7 4l6 6-6 6'" />
+          @if (isLocaleRtl()) {
+            <path [attr.d]="isFullMode() ? 'M13 4l-6 6 6 6' : 'M7 4l6 6-6 6'" />
+          } @else {
+            <path [attr.d]="isFullMode() ? 'M7 4l6 6-6 6' : 'M13 4l-6 6 6 6'" />
+          }
         </svg>
       </button>
     }

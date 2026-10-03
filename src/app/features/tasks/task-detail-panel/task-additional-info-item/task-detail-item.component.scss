@@ -72,7 +72,7 @@
   font-size: 14px;
 
   &-title mat-icon:first-of-type {
-    margin-right: var(--s);
+    margin-inline-end: var(--s);
   }
 }
 
@@ -115,10 +115,10 @@
     }
 
     &-description {
-      text-align: right;
+      text-align: end;
 
       > * {
-        margin-left: auto;
+        margin-inline-start: auto;
         display: flex;
         align-items: center;
       }
@@ -207,22 +207,22 @@
   flex: 1;
 
   ::ng-deep mat-icon:first-of-type {
-    margin-right: var(--s);
+    margin-inline-end: var(--s);
   }
 
   .full-size & {
     min-width: 40px;
     min-height: 48px;
     flex-grow: 0;
-    margin-right: 0;
+    margin-inline-end: 0;
   }
 }
 
 .input-item__value {
-  text-align: right;
+  text-align: end;
   display: flex;
   align-items: center;
-  margin-right: var(--s3);
+  margin-inline-end: var(--s3);
   color: var(--task-detail-value-color);
 
   &,
@@ -232,8 +232,8 @@
 
   > * {
     flex: 1;
-    margin-left: auto;
-    text-align: right;
+    margin-inline-start: auto;
+    text-align: end;
     display: inline-block;
   }
 
@@ -250,11 +250,16 @@
 }
 
 .input-item__edit-btn {
-  margin-left: calc(-1 * var(--s3));
-  margin-right: var(--s);
+  margin-inline-start: calc(-1 * var(--s3));
+  margin-inline-end: var(--s);
   display: none !important;
 
   .input-item:hover & {
     display: block !important;
   }
+}
+
+// Fix for RTL locales to support mat-icons
+:host::ng-deep mat-icon {
+  direction: inherit;
 }

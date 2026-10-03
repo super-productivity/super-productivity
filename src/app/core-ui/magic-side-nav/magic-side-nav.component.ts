@@ -41,6 +41,7 @@ import { SwipeDirective } from '../../ui/swipe-gesture/swipe.directive';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../t.const';
+import { Directionality } from '@angular/cdk/bidi';
 
 // 56px = 24px icon + 16px (var(--s2)) padding on each side, so the left-aligned
 // nav icons sit centered in the collapsed rail.
@@ -85,6 +86,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   private _dragDropRegistry = inject(DragDropRegistry);
   private _externalDragService = inject(ScheduleExternalDragService);
   private _pointerUpSubscription: Subscription | null = null;
+  private readonly _directionality = inject(Directionality);
 
   // Use service's computed signal directly
   readonly config = this._sideNavConfigService.navConfig;
@@ -99,6 +101,8 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   readonly T = T;
   readonly isMobile = this._layoutService.isXs;
   private readonly _initialState = this._getInitialState();
+
+  readonly isLocaleRtl = computed(() => this._directionality.value === 'rtl');
 
   activeWorkContextId = input<string | null>(null);
 
@@ -418,10 +422,8 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   private _handleDrag(event: MouseEvent): void {
     if (!this.isResizing()) return;
 
-    const deltaX =
-      // this.config().position === 'right'
-      //   ? this.startX() - event.clientX
-      event.clientX - this.startX();
+    const dirSign = document.dir === 'rtl' ? -1 : 1;
+    const deltaX = (event.clientX - this.startX()) * dirSign;
 
     const potentialWidth = this.startWidth() + deltaX;
     const { collapseThreshold, expandThreshold, minWidth, maxWidth } = this.config();

@@ -53,7 +53,7 @@
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    margin-right: 12px;
+    margin-inline-end: 12px;
     flex-shrink: 0;
   }
 
@@ -63,7 +63,7 @@
 
     .author-name {
       font-weight: 500;
-      margin-right: var(--s);
+      margin-inline-end: var(--s);
     }
 
     .when {

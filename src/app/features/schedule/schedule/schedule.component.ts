@@ -46,6 +46,7 @@ import { DateTimeFormatService } from '../../../core/date-time-format/date-time-
 import { getWeekNumber } from '../../../util/get-week-number';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { anchorContextNow } from '../anchor-context-now';
+import { Directionality } from '@angular/cdk/bidi';
 
 @Component({
   selector: 'schedule',
@@ -75,6 +76,7 @@ export class ScheduleComponent {
   taskService = inject(TaskService);
   layoutService = inject(LayoutService);
   scheduleService = inject(ScheduleService);
+  directionality = inject(Directionality);
   private _store = inject(Store);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _globalConfigService = inject(GlobalConfigService);
@@ -316,6 +318,8 @@ export class ScheduleComponent {
     const hoursToday = hours + minutes / 60;
     return Math.round(hoursToday * FH);
   });
+
+  readonly isLocaleRtl = computed(() => this.directionality.value === 'rtl');
 
   goToPreviousPeriod(): void {
     // Never navigate into the past — the displayed range must include today or later
