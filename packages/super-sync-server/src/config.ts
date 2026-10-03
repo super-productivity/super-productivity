@@ -205,9 +205,15 @@ export const loadConfigFromEnv = (
     config.dataDir = path.resolve(config.dataDir);
   }
 
-  // Public URL (for email links)
-  if (process.env.PUBLIC_URL) {
-    const trimmed = process.env.PUBLIC_URL.trim();
+  // Public URL (for email links). Read as unset-vs-empty rather than by
+  // truthiness: an operator whose deploy platform derives PUBLIC_URL from a
+  // domain assigned in a UI gets an EMPTY string when the domain was never
+  // assigned, which is the single most common misconfiguration. It must not be
+  // confused with "no opinion" (the localhost fallback, fine in dev).
+  const rawPublicUrl = process.env.PUBLIC_URL;
+  const publicUrlSet = rawPublicUrl !== undefined && rawPublicUrl.trim() !== '';
+  if (publicUrlSet) {
+    const trimmed = rawPublicUrl.trim();
     if (!/^https?:\/\//i.test(trimmed)) {
       throw new Error('PUBLIC_URL must start with http:// or https://');
     }
@@ -218,6 +224,18 @@ export const loadConfigFromEnv = (
 
   // Enforce HTTPS for PUBLIC_URL in production
   if (process.env.NODE_ENV === 'production' && !config.publicUrl.startsWith('https://')) {
+    if (!publicUrlSet) {
+      // Say what is actually wrong. "must use HTTPS" reads as a TLS problem and
+      // sends the operator hunting certificates when the real cause is a missing
+      // domain in their deploy platform's UI.
+      throw new Error(
+        'PUBLIC_URL is required in production and must be the public https:// URL users ' +
+          'reach this server at, e.g. https://sync.example.com. It is used for links in ' +
+          'verification, magic-link and password-recovery emails. If your platform derives ' +
+          'this value from a domain, assign the domain to THIS service first — an unassigned ' +
+          'domain resolves to an empty string rather than a default.',
+      );
+    }
     throw new Error('PUBLIC_URL must use HTTPS in production');
   }
 

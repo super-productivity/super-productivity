@@ -22,6 +22,7 @@
 - [[2.20-Import-from-Todoist]]
 - [[2.21-Manage-Plugins]]
 - [[2.13-Run-with-Docker]]
+- [[2.24-Deploy-on-Coolify]]
 
 ### Contributing to Super-Productivity
 
