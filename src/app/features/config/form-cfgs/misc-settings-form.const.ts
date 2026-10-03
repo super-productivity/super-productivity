@@ -1,4 +1,3 @@
-import { FormlyFieldConfig } from '@ngx-formly/core';
 import {
   ConfigFormSection,
   LimitedFormlyFieldConfig,
@@ -43,31 +42,14 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
     ...((IS_ELECTRON
       ? [
           {
-            key: 'isLocalRestApiEnabled',
-            type: 'checkbox',
-            templateOptions: {
-              label: T.GCF.MISC.IS_LOCAL_REST_API_ENABLED,
-              description: T.GCF.MISC.IS_LOCAL_REST_API_ENABLED_HINT,
-            },
+            // Keyless: the switch and the token are owned by the Electron main
+            // process and live on this device only, never in the synced misc
+            // config — a synced switch started the API on every desktop.
+            type: 'local-rest-api-settings',
           },
           {
-            type: 'tpl',
-            expressions: {
-              hide: (fCfg: FormlyFieldConfig) => !fCfg.model.isLocalRestApiEnabled,
-            },
-            templateOptions: {
-              tag: 'h3',
-              text: T.GCF.MISC.LOCAL_REST_API_TOKEN,
-              class: 'sub-section-heading',
-            },
-          },
-          {
-            // Keyless: the token is owned by the Electron main process and read
-            // over IPC, never stored in the synced misc config.
-            type: 'local-rest-api-token',
-            expressions: {
-              hide: (fCfg: FormlyFieldConfig) => !fCfg.model.isLocalRestApiEnabled,
-            },
+            // Keyless for the same reason: device-local, owned by main.
+            type: 'assistant-access-settings',
           },
         ]
       : []) as LimitedFormlyFieldConfig<MiscConfig>[]),

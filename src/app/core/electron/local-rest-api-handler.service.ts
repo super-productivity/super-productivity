@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import typia from 'typia';
@@ -15,6 +16,9 @@ import { TagService } from '../../features/tag/tag.service';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
+import { DataInitStateService } from '../data-init/data-init-state.service';
+import { parseAssistantCaptureInput } from './assistant-capture-input';
+import { ASSISTANT_CAPTURE_PATH } from '../../../../electron/shared-with-frontend/assistant-access.model';
 import { isTodayWithOffset } from '../../util/is-today.util';
 import { isValidDBDateStr } from '../../util/get-db-date-str';
 import { IssueLog } from '../log';
@@ -402,6 +406,13 @@ export class LocalRestApiHandlerService {
   private readonly _dateService = inject(DateService);
   private readonly _featureBridge = inject(LOCAL_REST_API_FEATURE_BRIDGE);
   private readonly _store = inject(Store);
+  // The main process only knows the renderer has booted, which happens before
+  // the data is loaded — answering then would serve an empty task list as if it
+  // were the user's data, and let a write land on top of half-hydrated state.
+  private readonly _isDataLoaded = toSignal(
+    inject(DataInitStateService).isAllDataLoadedInitially$,
+    { initialValue: false },
+  );
   private _isInitialized = false;
 
   private _dispatchDeadlineChange(taskId: string, change: DeadlineChange): void {
@@ -465,6 +476,23 @@ export class LocalRestApiHandlerService {
     const { method, path, requestId, body, query } = payload;
     const segments = path.split('/').filter(Boolean);
 
+    if (this._isDataLoaded() !== true) {
+      return createErrorResponse(
+        requestId,
+        503,
+        'APP_NOT_READY',
+        'App data is still loading',
+      );
+    }
+
+    // Only the main process can mark a request as coming from assistant (MCP)
+    // access; over plain REST this route does not exist.
+    if (path === ASSISTANT_CAPTURE_PATH) {
+      return payload.source === 'mcp' && method === 'POST'
+        ? this._handleAssistantCapture(requestId, body)
+        : createErrorResponse(requestId, 404, 'NOT_FOUND', 'Route not found');
+    }
+
     if (method === 'GET' && path === '/status') {
       return this._handleGetStatus(requestId);
     }
@@ -506,6 +534,21 @@ export class LocalRestApiHandlerService {
     }
 
     return createErrorResponse(requestId, 404, 'NOT_FOUND', 'Route not found');
+  }
+
+  private async _handleAssistantCapture(
+    requestId: string,
+    body: unknown,
+  ): Promise<LocalRestApiResponsePayload> {
+    const input = parseAssistantCaptureInput(body);
+    if (!input) {
+      return createErrorResponse(requestId, 400, 'INVALID_INPUT', 'Invalid capture');
+    }
+    return createSuccessResponse(
+      requestId,
+      200,
+      await this._featureBridge.captureAssistantTask(input),
+    );
   }
 
   private async _handleGetStatus(
@@ -626,7 +669,14 @@ export class LocalRestApiHandlerService {
     } else if (source === 'all') {
       tasks = await this._taskService.getAllTasksEverywhere();
     } else {
-      tasks = await firstValueFrom(this._taskService.allTasks$);
+      // Archiving a project leaves its tasks in the store; the app hides them
+      // everywhere, so "active" does too.
+      const [allTasks, archivedProjects] = await Promise.all([
+        firstValueFrom(this._taskService.allTasks$),
+        firstValueFrom(this._projectService.archived$),
+      ]);
+      const archivedIds = new Set(archivedProjects.map((p) => p.id));
+      tasks = allTasks.filter((t) => !t.projectId || !archivedIds.has(t.projectId));
     }
 
     let filtered = tasks;

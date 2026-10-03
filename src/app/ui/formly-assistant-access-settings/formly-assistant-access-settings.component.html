@@ -1,0 +1,117 @@
+<div class="assistant-access-settings">
+  <mat-checkbox
+    [checked]="isEnabled()"
+    [disabled]="isBusy() || state() === null"
+    (change)="toggle($event.checked)"
+    >{{ T.GCF.MISC.IS_ASSISTANT_ACCESS_ENABLED | translate }}</mat-checkbox
+  >
+  <p class="hint">{{ T.GCF.MISC.IS_ASSISTANT_ACCESS_ENABLED_HINT | translate }}</p>
+
+  @if (isEnabled()) {
+    <p
+      class="status"
+      [class.is-error]="!!state()?.error"
+      role="status"
+    >
+      @switch (state()?.error) {
+        @case ('PORT_IN_USE') {
+          {{ T.GCF.MISC.LOCAL_REST_API_STATUS_PORT_IN_USE | translate: { port } }}
+        }
+        @case ('PERMISSION_DENIED') {
+          {{ T.GCF.MISC.LOCAL_REST_API_STATUS_PERMISSION_DENIED | translate }}
+        }
+        @case ('UNKNOWN') {
+          {{ T.GCF.MISC.LOCAL_REST_API_STATUS_ERROR | translate }}
+        }
+        @default {
+          @if (state()?.isListening) {
+            {{ T.GCF.MISC.LOCAL_REST_API_STATUS_LISTENING | translate: { url } }}
+          }
+        }
+      }
+    </p>
+
+    <h3 class="sub-section-heading">
+      {{ T.GCF.MISC.ASSISTANT_ACCESS_PERMISSIONS | translate }}
+    </h3>
+    <mat-checkbox
+      class="scope"
+      [checked]="hasScope('tasks:read')"
+      [disabled]="isBusy()"
+      (change)="setScope('tasks:read', $event.checked)"
+      >{{ T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_READ | translate }}</mat-checkbox
+    >
+    <mat-checkbox
+      class="scope"
+      [checked]="hasScope('tasks:read_notes')"
+      [disabled]="isBusy() || !hasScope('tasks:read')"
+      (change)="setScope('tasks:read_notes', $event.checked)"
+      >{{ T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_READ_NOTES | translate }}</mat-checkbox
+    >
+    <mat-checkbox
+      class="scope"
+      [checked]="hasScope('tasks:capture')"
+      [disabled]="isBusy()"
+      (change)="setScope('tasks:capture', $event.checked)"
+      >{{ T.GCF.MISC.ASSISTANT_ACCESS_SCOPE_CAPTURE | translate }}</mat-checkbox
+    >
+
+    <h3 class="sub-section-heading">
+      {{ T.GCF.MISC.ASSISTANT_ACCESS_KEY | translate }}
+    </h3>
+    @if (newKey()) {
+      <input
+        class="key-value"
+        type="text"
+        readonly
+        [value]="newKey()"
+        (focus)="selectText($event)"
+        [attr.aria-label]="T.GCF.MISC.ASSISTANT_ACCESS_KEY | translate"
+      />
+      <p
+        class="hint"
+        role="status"
+      >
+        {{ T.GCF.MISC.ASSISTANT_ACCESS_KEY_SHOWN_ONCE | translate }}
+      </p>
+    } @else if (state()?.hasCredential) {
+      <p class="hint">{{ T.GCF.MISC.ASSISTANT_ACCESS_KEY_EXISTS | translate }}</p>
+    }
+    <button
+      mat-stroked-button
+      color="primary"
+      type="button"
+      [disabled]="isBusy()"
+      (click)="generateKey()"
+    >
+      {{
+        (state()?.hasCredential
+          ? T.GCF.MISC.ASSISTANT_ACCESS_KEY_REPLACE
+          : T.GCF.MISC.ASSISTANT_ACCESS_KEY_GENERATE
+        ) | translate
+      }}
+    </button>
+
+    <h3 class="sub-section-heading">
+      {{ T.GCF.MISC.ASSISTANT_ACCESS_SETUP | translate }}
+    </h3>
+    <p class="hint">{{ T.GCF.MISC.ASSISTANT_ACCESS_SETUP_CLAUDE_CODE | translate }}</p>
+    <textarea
+      class="snippet"
+      readonly
+      rows="3"
+      [value]="claudeCodeSnippet()"
+      (focus)="selectText($event)"
+      [attr.aria-label]="T.GCF.MISC.ASSISTANT_ACCESS_SETUP_CLAUDE_CODE | translate"
+    ></textarea>
+    <p class="hint">{{ T.GCF.MISC.ASSISTANT_ACCESS_SETUP_JSON | translate }}</p>
+    <textarea
+      class="snippet"
+      readonly
+      rows="10"
+      [value]="jsonSnippet()"
+      (focus)="selectText($event)"
+      [attr.aria-label]="T.GCF.MISC.ASSISTANT_ACCESS_SETUP_JSON | translate"
+    ></textarea>
+  }
+</div>

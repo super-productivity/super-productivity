@@ -5,6 +5,7 @@ artifactName: ${name}-${arch}.${ext}
 files:
   - electron/**/*
   - '!electron/**/*.ts'
+  - '!electron/**/*.test.cjs'
   - '!electron/**/*.js.map'
   - .tmp/angular-dist/**/*
   - 'embedded.provisionprofile'
@@ -170,6 +171,11 @@ snap:
     # Fix for issue #6031: Add filesystem access for local file sync
     # https://github.com/super-productivity/super-productivity/issues/6031
     - removable-media # Allows sync to external drives/USB storage
+    # Lets the opt-in local REST API / assistant endpoint listen on 127.0.0.1.
+    # Not in electron-builder's `default` plugs; today listening may only work
+    # through browser-support's seccomp rules, which core24 no longer includes.
+    # Auto-connects, so users see no prompt.
+    - network-bind
     # Override electron-builder's hardcoded gnome-3-28-1804 content snap (core20 era)
     # with gnome-42-2204 (core22 era) for up-to-date Mesa drivers and GSettings schemas.
     # The plug name must match the template key to replace it rather than duplicate it.

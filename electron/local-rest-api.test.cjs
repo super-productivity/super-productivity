@@ -135,6 +135,8 @@ const installMocks = (ctx) => {
       return {
         app: {
           getPath: () => ctx.userDataDir,
+          getVersion: () => '0.0.0-test',
+          whenReady: () => ctx.whenReady || Promise.resolve(),
         },
         ipcMain: {
           on: (eventName, handler) => {
@@ -192,13 +194,28 @@ const uninstallMocks = () => {
 };
 
 /** Loads a fresh copy of the module bound to `ctx`, with its own module state. */
+// Modules that capture a mocked import (`electron.app`, `fs`) at require()
+// time. They have to be loaded cold with each copy too, or every copy would
+// share the first copy's userData dir and filesystem hooks.
+const coldDependencyPaths = [
+  'simple-store.ts',
+  'secure-file.ts',
+  'mcp/assistant-access.ts',
+  'mcp/mcp-http.ts',
+  'mcp/mcp-tools.ts',
+  'mcp/mcp-protocol.ts',
+].map((file) => path.resolve(__dirname, file));
+
 const loadModule = (ctx) => {
   const resolved = require.resolve(localRestApiModulePath);
+  const resolvedDeps = coldDependencyPaths.map((dep) => require.resolve(dep));
   installMocks(ctx);
   delete require.cache[resolved];
+  resolvedDeps.forEach((dep) => delete require.cache[dep]);
   const loaded = require(localRestApiModulePath);
   // Dropping it again keeps the next load genuinely cold.
   delete require.cache[resolved];
+  resolvedDeps.forEach((dep) => delete require.cache[dep]);
   uninstallMocks();
   return loaded;
 };
@@ -208,12 +225,10 @@ const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-lra-test-'));
 const tokenFilePath = path.join(userDataDir, 'local-rest-api-token');
 
 const sharedCtx = createContext({ port: SHARED_PORT, userDataDir });
-const { initLocalRestApi, updateLocalRestApiConfig } = loadModule(sharedCtx);
+const { initLocalRestApi, applyLocalRestApiEnabled } = loadModule(sharedCtx);
 
-const enableApi = () =>
-  updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: true } });
-const disableApi = () =>
-  updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: false } });
+const enableApi = () => applyLocalRestApiEnabled(true);
+const disableApi = () => applyLocalRestApiEnabled(false);
 const getToken = () => sharedCtx.handleHandlers.get('LOCAL_REST_API_GET_TOKEN')();
 const regenerateToken = () =>
   sharedCtx.handleHandlers.get('LOCAL_REST_API_REGENERATE_TOKEN')();
@@ -531,7 +546,7 @@ test('a corrupted token file is replaced instead of becoming the credential', ()
     const cold = loadModule(
       createContext({ port: takeIsolatedPort(), userDataDir: coldProfileDir }),
     );
-    cold.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: true } });
+    cold.applyLocalRestApiEnabled(true);
     assert.match(fs.readFileSync(coldTokenFilePath, 'utf8').trim(), /^[A-Za-z0-9]{32}$/);
   } finally {
     fs.rmSync(coldProfileDir, { recursive: true, force: true });
@@ -578,7 +593,7 @@ test('a cold start repairs the mode of a readable token file without rotating it
     const cold = loadModule(
       createContext({ port: takeIsolatedPort(), userDataDir: coldProfileDir }),
     );
-    cold.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: true } });
+    cold.applyLocalRestApiEnabled(true);
 
     // Still the user's token — scripts keep working — but no longer readable by
     // every account on the machine.
@@ -606,7 +621,7 @@ test('a token whose mode cannot actually be restricted is not served', () => {
     const ctx = createContext({ port: takeIsolatedPort(), userDataDir: coldProfileDir });
     ctx.ignoreChmod = true;
     const cold = loadModule(ctx);
-    cold.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: true } });
+    cold.applyLocalRestApiEnabled(true);
 
     // The repair silently did nothing, so the readable token has to be dropped
     // rather than kept as the live credential.
@@ -637,7 +652,7 @@ test('enabling fails closed when the token file cannot be made private', async (
 
   try {
     isolated.initLocalRestApi();
-    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: true } });
+    isolated.applyLocalRestApiEnabled(true);
 
     await assert.rejects(
       makeRequest({ method: 'GET', path: '/health' }, undefined, port),
@@ -669,7 +684,7 @@ test('enabling fails closed when the token file cannot be made private', async (
       )})`,
     );
   } finally {
-    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: false } });
+    isolated.applyLocalRestApiEnabled(false);
     fs.rmSync(profileDir, { recursive: true, force: true });
   }
 });
@@ -705,7 +720,7 @@ test('an entry at the old predictable temp path cannot redirect or block the wri
 
   try {
     isolated.initLocalRestApi();
-    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: true } });
+    isolated.applyLocalRestApiEnabled(true);
 
     assert.equal(
       fs.readFileSync(outsidePath, 'utf8'),
@@ -752,7 +767,7 @@ test('an entry at the old predictable temp path cannot redirect or block the wri
     );
   } finally {
     await settleListen();
-    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: false } });
+    isolated.applyLocalRestApiEnabled(false);
     fs.rmSync(profileDir, { recursive: true, force: true });
     fs.rmSync(outsideDir, { recursive: true, force: true });
   }
@@ -780,7 +795,7 @@ test('the temp file is opened exclusively, so a name that is guessed anyway fail
 
   try {
     isolated.initLocalRestApi();
-    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: true } });
+    isolated.applyLocalRestApiEnabled(true);
 
     assert.equal(
       fs.readFileSync(outsidePath, 'utf8'),
@@ -815,7 +830,7 @@ test('the temp file is opened exclusively, so a name that is guessed anyway fail
     );
   } finally {
     await settleListen();
-    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: false } });
+    isolated.applyLocalRestApiEnabled(false);
     fs.rmSync(profileDir, { recursive: true, force: true });
     fs.rmSync(outsideDir, { recursive: true, force: true });
   }
@@ -833,7 +848,7 @@ test('persisting a token fsyncs the file and the directory entry', () => {
 
   try {
     ctx.fsyncedPaths.length = 0;
-    cold.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: true } });
+    cold.applyLocalRestApiEnabled(true);
 
     assert.ok(
       ctx.fsyncedPaths.some((p) => p && p.endsWith('.tmp')),
@@ -866,7 +881,7 @@ test('a directory that cannot be fsynced does not fail the write', async () => {
   try {
     fs.chmodSync(profileDir, 0o300); // write + search, no read
     isolated.initLocalRestApi();
-    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: true } });
+    isolated.applyLocalRestApiEnabled(true);
 
     // Not merely "the file is there" — the rename already happened by the time
     // the fsync runs, so the file exists either way. What a rethrown fsync
@@ -877,7 +892,7 @@ test('a directory that cannot be fsynced does not fail the write', async () => {
     fs.chmodSync(profileDir, 0o700);
     assert.match(fs.readFileSync(tokenPath, 'utf8').trim(), /^[A-Za-z0-9]{32}$/);
   } finally {
-    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: false } });
+    isolated.applyLocalRestApiEnabled(false);
     fs.chmodSync(profileDir, 0o700);
     fs.rmSync(profileDir, { recursive: true, force: true });
   }
@@ -896,7 +911,7 @@ test('a first enable that could not store a token recovers once storage works', 
 
   try {
     isolated.initLocalRestApi();
-    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: true } });
+    isolated.applyLocalRestApiEnabled(true);
 
     // Failing closed is correct: no credential, no server.
     await assert.rejects(
@@ -931,7 +946,7 @@ test('a first enable that could not store a token recovers once storage works', 
     assert.equal(authed.status, 200);
     assert.equal(authed.body.data, 'mock_renderer_data');
   } finally {
-    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: false } });
+    isolated.applyLocalRestApiEnabled(false);
     fs.rmSync(brokenProfileDir, { recursive: true, force: true });
   }
 });
@@ -948,7 +963,7 @@ test('recovery also works when Regenerate is the call that first succeeds', asyn
 
   try {
     isolated.initLocalRestApi();
-    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: true } });
+    isolated.applyLocalRestApiEnabled(true);
     // Settings opens while storage is still broken: the read fails as well.
     assert.throws(() => ctx.handleHandlers.get('LOCAL_REST_API_GET_TOKEN')());
 
@@ -959,7 +974,7 @@ test('recovery also works when Regenerate is the call that first succeeds', asyn
     const health = await makeRequest({ method: 'GET', path: '/health' }, undefined, port);
     assert.equal(health.status, 200, 'settings showed enabled but nothing was listening');
   } finally {
-    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: false } });
+    isolated.applyLocalRestApiEnabled(false);
     fs.rmSync(brokenProfileDir, { recursive: true, force: true });
   }
 });
@@ -973,7 +988,7 @@ test('recovering a token does not start a server the user disabled', async () =>
 
   try {
     isolated.initLocalRestApi();
-    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: false } });
+    isolated.applyLocalRestApiEnabled(false);
 
     const token = ctx.handleHandlers.get('LOCAL_REST_API_GET_TOKEN')();
     assert.match(token, /^[A-Za-z0-9]{32}$/);
@@ -984,7 +999,7 @@ test('recovering a token does not start a server the user disabled', async () =>
       'reading the token started the API while the setting was off',
     );
   } finally {
-    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: false } });
+    isolated.applyLocalRestApiEnabled(false);
     fs.rmSync(profileDir, { recursive: true, force: true });
   }
 });
@@ -1030,6 +1045,149 @@ test('SP_FORCE_LOCAL_REST_API can use an explicit dev token', async () => {
     restore('SP_FORCE_LOCAL_REST_API', originalForce);
     restore('SP_FORCE_LOCAL_REST_API_TOKEN', originalForceToken);
     disableApi();
+  }
+});
+
+const waitFor = async (predicate, label) => {
+  for (let i = 0; i < 100; i++) {
+    if (predicate()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.fail(`timed out waiting for ${label}`);
+};
+
+const readSimpleStore = (dir) =>
+  JSON.parse(fs.readFileSync(path.join(dir, 'simpleSettings'), 'utf8'));
+
+// The switch is device-local now: a fresh profile starts off, whatever any
+// synced config says, and nothing is written until the user chooses.
+test('a fresh profile starts disabled and does not listen', async () => {
+  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-lra-default-'));
+  const port = takeIsolatedPort();
+  const ctx = createContext({ port, userDataDir: profileDir });
+  const isolated = loadModule(ctx);
+
+  try {
+    isolated.initLocalRestApi();
+    await settleListen();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.deepEqual(isolated.getLocalRestApiState(), {
+      isEnabled: false,
+      isListening: false,
+    });
+    await assert.rejects(
+      makeRequest({ method: 'GET', path: '/health' }, undefined, port),
+      /ECONNREFUSED/,
+    );
+    assert.equal(fs.existsSync(path.join(profileDir, 'local-rest-api-token')), false);
+  } finally {
+    fs.rmSync(profileDir, { recursive: true, force: true });
+  }
+});
+
+test('the enable IPC persists the choice and a restart restores it', async () => {
+  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-lra-persist-'));
+  const port = takeIsolatedPort();
+  const ctx = createContext({ port, userDataDir: profileDir });
+  const first = loadModule(ctx);
+
+  try {
+    first.initLocalRestApi();
+    const setEnabled = ctx.handleHandlers.get('LOCAL_REST_API_SET_ENABLED');
+    const state = await setEnabled({}, true);
+    assert.deepEqual(state, { isEnabled: true, isListening: true });
+    assert.equal(readSimpleStore(profileDir).localRestApiEnabled, true);
+    const health = await makeRequest({ method: 'GET', path: '/health' }, undefined, port);
+    assert.equal(health.status, 200);
+
+    // Turning it off is persisted before it is reported.
+    assert.deepEqual(await setEnabled({}, false), {
+      isEnabled: false,
+      isListening: false,
+    });
+    assert.equal(readSimpleStore(profileDir).localRestApiEnabled, false);
+    await settleListen();
+
+    await setEnabled({}, true);
+    first.applyLocalRestApiEnabled(false);
+    await settleListen();
+
+    // A second copy stands in for the next launch: it reads the file itself.
+    const restartCtx = createContext({
+      port: takeIsolatedPort(),
+      userDataDir: profileDir,
+    });
+    const second = loadModule(restartCtx);
+    second.initLocalRestApi();
+    await waitFor(() => second.getLocalRestApiState().isListening, 'restored listener');
+    second.applyLocalRestApiEnabled(false);
+    await settleListen();
+  } finally {
+    first.applyLocalRestApiEnabled(false);
+    fs.rmSync(profileDir, { recursive: true, force: true });
+  }
+});
+
+// initLocalRestApi() runs before start-app.ts moves userData for Snap and
+// --user-data-dir, so the persisted switch must only be read once the app is
+// ready — otherwise every Snap launch reads the wrong profile.
+test('the persisted switch is read from the final userData dir', async () => {
+  const earlyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-lra-early-'));
+  const finalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-lra-final-'));
+  fs.writeFileSync(
+    path.join(finalDir, 'simpleSettings'),
+    JSON.stringify({ localRestApiEnabled: true }),
+  );
+  let markReady;
+  const ctx = createContext({ port: takeIsolatedPort(), userDataDir: earlyDir });
+  ctx.whenReady = new Promise((resolve) => (markReady = resolve));
+  const isolated = loadModule(ctx);
+
+  try {
+    isolated.initLocalRestApi();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(isolated.getLocalRestApiState().isEnabled, false);
+
+    ctx.userDataDir = finalDir; // what start-app.ts does via app.setPath()
+    markReady();
+    await waitFor(() => isolated.getLocalRestApiState().isListening, 'listener');
+  } finally {
+    isolated.applyLocalRestApiEnabled(false);
+    await settleListen();
+    fs.rmSync(earlyDir, { recursive: true, force: true });
+    fs.rmSync(finalDir, { recursive: true, force: true });
+  }
+});
+
+test('the enable IPC rejects anything but a boolean', async () => {
+  const setEnabled = sharedCtx.handleHandlers.get('LOCAL_REST_API_SET_ENABLED');
+  await assert.rejects(setEnabled({}, 'true'), /Invalid enabled value/);
+  await assert.rejects(setEnabled({}, undefined), /Invalid enabled value/);
+});
+
+// A switched-on API that nothing serves used to be visible only in the log.
+test('a port that is already taken is reported in the state', async () => {
+  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-lra-inuse-'));
+  const port = takeIsolatedPort();
+  const blocker = http.createServer();
+  await new Promise((resolve) => blocker.listen(port, '127.0.0.1', resolve));
+  const ctx = createContext({ port, userDataDir: profileDir });
+  const isolated = loadModule(ctx);
+
+  try {
+    isolated.initLocalRestApi();
+    const state = await ctx.handleHandlers.get('LOCAL_REST_API_SET_ENABLED')({}, true);
+    assert.deepEqual(state, {
+      isEnabled: true,
+      isListening: false,
+      error: 'PORT_IN_USE',
+    });
+  } finally {
+    isolated.applyLocalRestApiEnabled(false);
+    await new Promise((resolve) => blocker.close(resolve));
+    fs.rmSync(profileDir, { recursive: true, force: true });
   }
 });
 
