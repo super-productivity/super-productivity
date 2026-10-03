@@ -1,4 +1,4 @@
-import { playSound } from './play-sound';
+import { playSound, playSoundFromBuffer } from './play-sound';
 import { closeAudioContext } from './audio-context';
 import { Log } from '../core/log';
 
@@ -174,5 +174,98 @@ describe('playSound', () => {
 
     expect(mockAudioContext.resume).toHaveBeenCalled();
     expect(mockBufferSource.start).toHaveBeenCalledWith(0);
+  });
+});
+
+describe('playSoundFromBuffer', () => {
+  let mockAudioContext: any;
+  let mockGainNode: any;
+  let mockBufferSource: any;
+  let mockAudioBuffer: AudioBuffer;
+  let originalAudioContext: typeof AudioContext;
+
+  beforeEach(() => {
+    originalAudioContext = (window as any).AudioContext;
+
+    mockGainNode = {
+      connect: jasmine.createSpy('connect'),
+      disconnect: jasmine.createSpy('disconnect'),
+      gain: { value: 1 },
+    };
+    mockBufferSource = {
+      connect: jasmine.createSpy('connect'),
+      disconnect: jasmine.createSpy('disconnect'),
+      start: jasmine.createSpy('start'),
+      buffer: null,
+      onended: null as (() => void) | null,
+    };
+    mockAudioBuffer = {} as AudioBuffer;
+    mockAudioContext = {
+      state: 'running',
+      resume: jasmine.createSpy('resume').and.returnValue(Promise.resolve()),
+      close: jasmine.createSpy('close'),
+      createBufferSource: jasmine
+        .createSpy('createBufferSource')
+        .and.returnValue(mockBufferSource),
+      createGain: jasmine.createSpy('createGain').and.returnValue(mockGainNode),
+      destination: {} as AudioDestinationNode,
+      decodeAudioData: jasmine
+        .createSpy('decodeAudioData')
+        .and.returnValue(Promise.resolve(mockAudioBuffer)),
+    };
+    (window as any).AudioContext = jasmine
+      .createSpy('AudioContext')
+      .and.returnValue(mockAudioContext);
+
+    closeAudioContext();
+  });
+
+  afterEach(() => {
+    (window as any).AudioContext = originalAudioContext;
+    closeAudioContext();
+  });
+
+  it('should decode the ArrayBuffer and play it', async () => {
+    const raw = new ArrayBuffer(32);
+    await playSoundFromBuffer('custom:test', raw, 80);
+
+    expect(mockAudioContext.decodeAudioData).toHaveBeenCalled();
+    expect(mockBufferSource.start).toHaveBeenCalledWith(0);
+  });
+
+  it('should apply the given volume via gain node', async () => {
+    const raw = new ArrayBuffer(32);
+    await playSoundFromBuffer('custom:test', raw, 60);
+
+    expect(mockAudioContext.createGain).toHaveBeenCalled();
+    expect(mockGainNode.gain.value).toBe(0.6);
+  });
+
+  it('should default volume to 100 and connect directly to destination', async () => {
+    const raw = new ArrayBuffer(32);
+    await playSoundFromBuffer('custom:test', raw);
+
+    expect(mockAudioContext.createGain).not.toHaveBeenCalled();
+    expect(mockBufferSource.connect).toHaveBeenCalledWith(mockAudioContext.destination);
+  });
+
+  it('should cache the decoded buffer and not re-decode on second call', async () => {
+    const raw = new ArrayBuffer(32);
+    await playSoundFromBuffer('custom:cached', raw, 80);
+    await playSoundFromBuffer('custom:cached', raw, 80);
+
+    expect(mockAudioContext.decodeAudioData).toHaveBeenCalledTimes(1);
+    expect(mockBufferSource.start).toHaveBeenCalledTimes(2);
+  });
+
+  it('should catch decode errors and not throw', async () => {
+    mockAudioContext.decodeAudioData.and.returnValue(
+      Promise.reject(new Error('decode fail')),
+    );
+    const consoleErrorSpy = spyOn(console, 'error');
+    const raw = new ArrayBuffer(32);
+
+    await expectAsync(playSoundFromBuffer('custom:bad', raw, 80)).toBeResolved();
+    expect(consoleErrorSpy).toHaveBeenCalled();
   });
 });

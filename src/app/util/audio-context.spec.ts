@@ -1,6 +1,7 @@
 import {
   getAudioContext,
   getAudioBuffer,
+  getAudioBufferFromRaw,
   clearAudioBufferCache,
   closeAudioContext,
   unlockAudioContext,
@@ -281,6 +282,61 @@ describe('audio-context', () => {
 
       expect(mockBufferSource.disconnect).toHaveBeenCalled();
       expect(mockGainNode.disconnect).toHaveBeenCalled();
+    });
+  });
+
+  describe('getAudioBufferFromRaw', () => {
+    let mockContext: any;
+    let mockAudioBuffer: AudioBuffer;
+
+    beforeEach(() => {
+      mockAudioBuffer = {} as AudioBuffer;
+      mockContext = {
+        state: 'running',
+        resume: jasmine.createSpy('resume').and.returnValue(Promise.resolve()),
+        close: jasmine.createSpy('close'),
+        decodeAudioData: jasmine
+          .createSpy('decodeAudioData')
+          .and.returnValue(Promise.resolve(mockAudioBuffer)),
+      };
+      (window as any).AudioContext = jasmine
+        .createSpy('AudioContext')
+        .and.returnValue(mockContext);
+    });
+
+    it('should decode an ArrayBuffer and return an AudioBuffer', async () => {
+      const raw = new ArrayBuffer(16);
+      const result = await getAudioBufferFromRaw('my-key', raw);
+
+      expect(mockContext.decodeAudioData).toHaveBeenCalled();
+      expect(result).toBe(mockAudioBuffer);
+    });
+
+    it('should cache the result under the given key', async () => {
+      const raw = new ArrayBuffer(16);
+      await getAudioBufferFromRaw('cache-key', raw);
+      const second = await getAudioBufferFromRaw('cache-key', raw);
+
+      expect(mockContext.decodeAudioData).toHaveBeenCalledTimes(1);
+      expect(second).toBe(mockAudioBuffer);
+    });
+
+    it('should decode separately for different cache keys', async () => {
+      await getAudioBufferFromRaw('key-a', new ArrayBuffer(8));
+      await getAudioBufferFromRaw('key-b', new ArrayBuffer(8));
+
+      expect(mockContext.decodeAudioData).toHaveBeenCalledTimes(2);
+    });
+
+    it('should pass a copy of the buffer so the original is not detached', async () => {
+      const raw = new ArrayBuffer(16);
+      await getAudioBufferFromRaw('copy-key', raw);
+
+      // decodeAudioData should have received a copy, not the original reference
+      const decoded = mockContext.decodeAudioData.calls.mostRecent()
+        .args[0] as ArrayBuffer;
+      expect(decoded).not.toBe(raw);
+      expect(decoded.byteLength).toBe(16);
     });
   });
 
