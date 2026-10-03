@@ -77,7 +77,7 @@
     <button
       mat-icon-button
       (click)="goToPreviousPeriod()"
-      [disabled]="isViewingToday()"
+      [disabled]="_isPreviousPeriodDisabled()"
       [attr.aria-label]="
         (isMonthView()
           ? T.F.SCHEDULE.PREVIOUS_MONTH
@@ -102,7 +102,7 @@
       mat-icon-button
       class="today-btn"
       (click)="goToToday()"
-      [disabled]="isViewingToday()"
+      [disabled]="_isTodayButtonDisabled()"
       [attr.aria-label]="T.G.TODAY_TAG_TITLE | translate"
       [matTooltip]="T.G.TODAY_TAG_TITLE | translate"
     >
