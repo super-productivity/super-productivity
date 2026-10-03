@@ -14,7 +14,7 @@ import {
   RegisteredPluginIssueProvider,
 } from './plugin-issue-provider.model';
 import { IssueProviderPluginType } from '../../features/issue/issue.model';
-import { Task } from '../../features/tasks/task.model';
+import { IssueTask, Task } from '../../features/tasks/task.model';
 import { TaskService } from '../../features/tasks/task.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -415,6 +415,37 @@ describe('PluginIssueProviderAdapterService', () => {
       expect(result.tagIds).toEqual(['tag-bug']);
       expect(result.issueLastSyncedValues).toEqual({ labels: ['bug'] });
       expect(result.issueLastUpdated).toBe(2000);
+    });
+
+    describe('doneStates', () => {
+      const addTaskDataFor = (
+        state: string,
+        defOverrides: Partial<IssueProviderPluginDefinition> = {},
+      ): IssueTask => {
+        registrySpy.getProvider.and.returnValue(createMockProvider(defOverrides));
+        return service.getAddTaskDataForCfg(
+          { id: 'ISS-1', title: 'Issue', state } as PluginSearchResult,
+          mockPluginCfg,
+        );
+      };
+
+      it('should mark the task done when the state matches doneStates case-insensitively', () => {
+        expect(addTaskDataFor('Shipped', { doneStates: ['shipped'] }).isDone).toBe(true);
+      });
+
+      it('should not fall back to the default done words when doneStates is set', () => {
+        expect(addTaskDataFor('Resolved', { doneStates: ['Closed'] }).isDone).toBe(false);
+      });
+
+      it('should treat no state as done when doneStates is empty', () => {
+        expect(addTaskDataFor('closed', { doneStates: [] }).isDone).toBe(false);
+      });
+
+      it('should use the default done words when doneStates is not set', () => {
+        expect(addTaskDataFor('Resolved').isDone).toBe(true);
+        expect(addTaskDataFor('closed').isDone).toBe(true);
+        expect(addTaskDataFor('Shipped').isDone).toBe(false);
+      });
     });
   });
 
