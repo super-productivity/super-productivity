@@ -52,8 +52,15 @@ export const parseImageDimensionsFromTitle = (
 export const preprocessMarkdown = (markdown: string): string => {
   // Match: ![alt](url =WIDTHxHEIGHT) or ![alt](url =WIDTHx) or ![alt](url =xHEIGHT)
   // Capture groups: 1=alt, 2=url, 3=width, 4=height
+  //
+  // The `[^\S\n]*` after the opening paren keeps this in step with the live
+  // editor's SIZED_IMAGE_RE (live-markdown-ranges.ts), which tolerates spaces
+  // there. Without it `![a]( u =10x20)` is sized while editing and unsized in
+  // the read-only render of the very same note. Horizontal whitespace only:
+  // allowing a newline here would widen the other direction of that same
+  // divergence, since the live editor matches against a single line.
   return markdown.replace(
-    /!\[([^\]]*)\]\(([^\s)]+)\s+=(\d*)x(\d*)\)/g,
+    /!\[([^\]]*)\]\([^\S\n]*([^\s)]+)\s+=(\d*)x(\d*)\)/g,
     (match, alt, url, width, height) => {
       // Create title attribute with width|height format
       const dimensions = `${width || ''}|${height || ''}`;
