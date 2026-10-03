@@ -669,6 +669,104 @@ describe('Planner Selectors - selectPlannerDays', () => {
 
     expect(result[0].timeEstimate).toBe(0);
   });
+
+  describe('calendar events spanning or near day boundaries', () => {
+    const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+    const dayDates = ['2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02'];
+
+    const getDaysWithEvent = (
+      calEv: ScheduleFromCalendarEvent,
+      startOfNextDayDiffMs: number,
+    ): string[] => {
+      const selector = fromSelectors.selectPlannerDays(
+        dayDates,
+        [],
+        [],
+        [{ items: [calEv] }],
+        [],
+        today,
+      );
+      const result = selector.projector(
+        createTasksMapFromTasksArray([]),
+        emptyPlannerState,
+        defaultScheduleConfig,
+        startOfNextDayDiffMs,
+      );
+      return result
+        .filter(
+          (day) =>
+            day.allDayEvents.some((ev) => ev.id === calEv.id) ||
+            day.scheduledIItems.some((item) => item.id === calEv.id),
+        )
+        .map((day) => day.dayDate);
+    };
+
+    it('should keep an all-day event on its date when a start-of-next-day offset is set', () => {
+      const days = getDaysWithEvent(
+        {
+          id: 'birthday',
+          calProviderId: 'provider-1',
+          issueProviderKey: 'ICAL',
+          title: 'Birthday',
+          start: getLocalTime(2026, 9, 30, 0),
+          duration: DAY_DURATION_MS,
+          isAllDay: true,
+        },
+        FOUR_HOURS_MS,
+      );
+
+      expect(days).toEqual(['2026-09-30']);
+    });
+
+    it('should list a multi-day all-day event on every day it covers', () => {
+      const days = getDaysWithEvent(
+        {
+          id: 'two-day-workshop',
+          calProviderId: 'provider-1',
+          issueProviderKey: 'ICAL',
+          title: 'Workshop',
+          start: getLocalTime(2026, 9, 30, 0),
+          duration: getLocalTime(2026, 10, 2, 0) - getLocalTime(2026, 9, 30, 0),
+          isAllDay: true,
+        },
+        0,
+      );
+
+      expect(days).toEqual(['2026-09-30', '2026-10-01']);
+    });
+
+    it('should list a timed event longer than a day on every day it covers', () => {
+      const days = getDaysWithEvent(
+        {
+          id: 'timed-two-day-workshop',
+          calProviderId: 'provider-1',
+          issueProviderKey: 'ICAL',
+          title: 'Workshop',
+          start: getLocalTime(2026, 9, 30, 10),
+          duration: getLocalTime(2026, 10, 1, 17) - getLocalTime(2026, 9, 30, 10),
+        },
+        0,
+      );
+
+      expect(days).toEqual(['2026-09-30', '2026-10-01']);
+    });
+
+    it('should still apply the start-of-next-day offset to a timed event', () => {
+      const days = getDaysWithEvent(
+        {
+          id: 'late-night-call',
+          calProviderId: 'provider-1',
+          issueProviderKey: 'ICAL',
+          title: 'Late night call',
+          start: getLocalTime(2026, 10, 1, 2),
+          duration: 30 * 60 * 1000,
+        },
+        FOUR_HOURS_MS,
+      );
+
+      expect(days).toEqual(['2026-09-30']);
+    });
+  });
 });
 
 describe('Planner Selectors - selectAllTasksDueToday', () => {

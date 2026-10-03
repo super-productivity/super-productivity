@@ -24,6 +24,7 @@ import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { devError } from '../../../util/dev-error';
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { oneDayInMilliseconds } from '../../../util/month-time-conversion';
 import { ScheduleCalendarMapEntry } from '../../schedule/schedule.model';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { calculateAvailableHours } from '../util/calculate-available-hours';
@@ -106,6 +107,7 @@ export const selectPlannerDays = (
   // Use Set for O(1) lookup instead of O(n) .includes() in filter
   const allPlannedIdSet = new Set(allPlannedTasks.map((t) => t.id));
   const unplannedTaskIdsToday = todayListTaskIds.filter((id) => !allPlannedIdSet.has(id));
+  const lastDayDate = dayDates.reduce((last, d) => (d > last ? d : last), '');
 
   return createSelector(
     selectMapOfAllTasksInActiveProjects,
@@ -127,6 +129,7 @@ export const selectPlannerDays = (
       const calendarEventsByDay = groupCalendarEventsByDay(
         calendarEvents,
         startOfNextDayDiffMs,
+        lastDayDate,
       );
 
       return dayDates.map((dayDate) =>
@@ -376,20 +379,70 @@ interface IcalEventsForDayResult {
 const groupCalendarEventsByDay = (
   calendarEvents: ScheduleCalendarMapEntry[],
   startOfNextDayDiffMs: number,
+  lastDayDate: string,
 ): Map<string, ScheduleFromCalendarEvent[]> => {
   const byDay = new Map<string, ScheduleFromCalendarEvent[]>();
   calendarEvents.forEach((icalMapEntry) => {
     icalMapEntry.items.forEach((calEv) => {
-      const dayKey = getDbDateStr(new Date(calEv.start - startOfNextDayDiffMs));
-      const eventsForDay = byDay.get(dayKey);
-      if (eventsForDay) {
-        eventsForDay.push(calEv);
-      } else {
-        byDay.set(dayKey, [calEv]);
-      }
+      getCalendarEventDayKeys(calEv, startOfNextDayDiffMs, lastDayDate).forEach(
+        (dayKey) => {
+          const eventsForDay = byDay.get(dayKey);
+          if (eventsForDay) {
+            eventsForDay.push(calEv);
+          } else {
+            byDay.set(dayKey, [calEv]);
+          }
+        },
+      );
     });
   });
   return byDay;
+};
+
+/**
+ * Days a calendar event is listed on.
+ *
+ * - Timed events belong to the logical day of their start.
+ * - All-day events are listed on every day they cover, not only the first one.
+ * - Date-valued all-day events (`isAllDay`) belong to calendar dates, so the
+ *   start-of-next-day offset does not apply to them (like `deadlineDay` vs
+ *   `deadlineWithTime`); applying it moved them to the previous day.
+ *
+ * Days after `lastDayDate` are not needed by the caller and are skipped.
+ */
+const getCalendarEventDayKeys = (
+  calEv: ScheduleFromCalendarEvent,
+  startOfNextDayDiffMs: number,
+  lastDayDate: string,
+): string[] => {
+  if (!isAllDayCalendarEvent(calEv)) {
+    return [getDbDateStr(new Date(calEv.start - startOfNextDayDiffMs))];
+  }
+
+  const offsetMs = calEv.isAllDay ? 0 : startOfNextDayDiffMs;
+  const firstDay = new Date(calEv.start - offsetMs);
+  const day = new Date(firstDay.getFullYear(), firstDay.getMonth(), firstDay.getDate());
+  let lastEventDayKey: string;
+  if (calEv.isAllDay) {
+    // A date-valued event covers whole days; rounding absorbs days that DST
+    // makes 23h or 25h long.
+    const dayCount = Math.max(1, Math.round(calEv.duration / oneDayInMilliseconds));
+    lastEventDayKey = getDbDateStr(
+      new Date(day.getFullYear(), day.getMonth(), day.getDate() + dayCount - 1),
+    );
+  } else {
+    // The end is exclusive: an event ending exactly at the start of a day does
+    // not cover that day.
+    lastEventDayKey = getDbDateStr(new Date(calEv.start + calEv.duration - 1 - offsetMs));
+  }
+  const lastKey = lastEventDayKey < lastDayDate ? lastEventDayKey : lastDayDate;
+
+  const dayKeys = [getDbDateStr(day)];
+  while (dayKeys[dayKeys.length - 1] < lastKey) {
+    day.setDate(day.getDate() + 1);
+    dayKeys.push(getDbDateStr(day));
+  }
+  return dayKeys;
 };
 
 const getIcalEventsForDay = (
