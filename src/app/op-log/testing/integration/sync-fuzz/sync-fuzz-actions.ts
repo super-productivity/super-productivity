@@ -33,6 +33,7 @@ import { WorkContextType } from '../../../../features/work-context/work-context.
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { BackupService } from '../../../backup/backup.service';
 import { OperationLogSyncService } from '../../../sync/operation-log-sync.service';
+import { OperationLogStoreService } from '../../../persistence/operation-log-store.service';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { moveItemInArray } from '../../../../util/move-item-in-array';
 import { SyncFuzzHarness } from './sync-fuzz-harness';
@@ -102,6 +103,10 @@ export interface FuzzWrite {
   entity: string;
   field: string;
   value: unknown;
+  /** Original op time for an early write in a multi-op intent. */
+  time?: number;
+  /** A creation default that a whole-entity snapshot may carry, not a user edit. */
+  isBaseline?: boolean;
 }
 
 const INBOX = 'INBOX_PROJECT';
@@ -191,6 +196,12 @@ export const executeIntent = async (
   const run = async (...actions: Action[]): Promise<void> => {
     for (const action of actions) await harness.dispatch(action);
   };
+  // Read immediately after the writing dispatch, before any later action.
+  const lastOpTime = async (): Promise<number> => {
+    const store = TestBed.inject(OperationLogStoreService);
+    const [last] = await store.getOpsAfterSeq((await store.getLastSeq()) - 1);
+    return last.op.timestamp;
+  };
   const day = fuzzDay();
 
   switch (intent[0]) {
@@ -207,7 +218,15 @@ export const executeIntent = async (
           isAddToBottom: false,
         }),
       );
-      return [];
+      return [
+        { entity: `task:${id}`, field: 'title', value: id },
+        {
+          entity: `task:${id}`,
+          field: 'dueDay',
+          value: ctx === 'T' ? day : undefined,
+          isBaseline: ctx !== 'T',
+        },
+      ];
     }
     case 'renameTask': {
       const [, id, title] = intent;
@@ -236,6 +255,7 @@ export const executeIntent = async (
       const [, id, duration] = intent;
       const t = task(id);
       if (!t) return undefined;
+      const writes: FuzzWrite[] = [];
       // Starting and tracking a task, as the app does it:
       // - setCurrentTask reopens a done task: TaskInternalEffects
       //   .reopenStartedDoneTask$ emits this updateTask as its own op, before
@@ -254,6 +274,12 @@ export const executeIntent = async (
         await run(
           TaskSharedActions.updateTask({ task: { id, changes: { isDone: false } } }),
         );
+        writes.push({
+          entity: `task:${id}`,
+          field: 'isDone',
+          value: false,
+          time: await lastOpTime(),
+        });
       }
       await run(
         TimeTrackingActions.addTimeSpent({
@@ -262,17 +288,23 @@ export const executeIntent = async (
           duration,
           isFromTrackingReminder: false,
         }),
-        ...(!t.dueDay && typeof t.dueWithTime !== 'number'
-          ? [
-              TaskSharedActions.planTasksForToday({
-                taskIds: [id],
-                today: day,
-                startOfNextDayDiffMs: 0,
-              }),
-            ]
-          : []),
-        syncTimeSpent({ taskId: id, date: day, duration }),
       );
+      if (!t.dueDay && typeof t.dueWithTime !== 'number') {
+        await run(
+          TaskSharedActions.planTasksForToday({
+            taskIds: [id],
+            today: day,
+            startOfNextDayDiffMs: 0,
+          }),
+        );
+        writes.push({
+          entity: `task:${id}`,
+          field: 'dueDay',
+          value: day,
+          time: await lastOpTime(),
+        });
+      }
+      await run(syncTimeSpent({ taskId: id, date: day, duration }));
       const tracked = viewOf(await harness.state()).timeTracking;
       const contexts: ['PROJECT' | 'TAG', string][] = [
         ['PROJECT', t.projectId],
@@ -286,7 +318,7 @@ export const executeIntent = async (
           await run(syncTimeTracking({ contextType, contextId, date: day, data }));
         }
       }
-      return t.isDone ? [{ entity: `task:${id}`, field: 'isDone', value: false }] : [];
+      return writes;
     }
     case 'deleteTask': {
       const [, id] = intent;
@@ -304,7 +336,11 @@ export const executeIntent = async (
       const tasks = [{ ...t, subTasks: [] }];
       await TestBed.inject(ArchiveService).moveTasksToArchiveAndFlushArchiveIfDue(tasks);
       await run(TaskSharedActions.moveToArchive({ tasks }));
-      return [];
+      // ArchiveService deliberately clears scheduling on the archived snapshot.
+      return [
+        { entity: `task:${id}`, field: 'dueDay', value: undefined },
+        { entity: `task:${id}`, field: 'dueWithTime', value: undefined },
+      ];
     }
     case 'restoreTask': {
       const [, id] = intent;
@@ -331,7 +367,10 @@ export const executeIntent = async (
           },
         }),
       );
-      return [];
+      return [
+        { entity: `note:${id}`, field: 'content', value: id },
+        { entity: `note:${id}`, field: 'isPinnedToToday', value: ctx === 'T' },
+      ];
     }
     case 'editNote': {
       const [, id, field, value] = intent;
@@ -380,7 +419,10 @@ export const executeIntent = async (
           },
         }),
       );
-      return [];
+      return [
+        { entity: `habit:${id}`, field: 'title', value: id },
+        { entity: `habit:${id}`, field: 'isEnabled', value: true },
+      ];
     }
     case 'editHabit': {
       const [, id, field, value] = intent;

@@ -84,7 +84,63 @@ const signatures = (
 };
 
 describe('sync fuzz preservation oracles', () => {
+  describe('provable existence', () => {
+    it('reports a missing newer isolated edit, including a note with a delete', () => {
+      const del = entry('A', { A: 1 }, ['deleteNote', 'n1']);
+      const edit = entry('B', { B: 1 }, ['editNote', 'n1', 'content', 'newer']);
+      expect(signatures({}, [del, edit])).toEqual(['lost-entity:note']);
+      expect(signatures({ notes: { n1: { content: 'newer' } } }, [del, edit])).toEqual(
+        [],
+      );
+      // A later delete, or one that saw the edit, legitimately removes it.
+      expect(signatures({}, [{ ...del, time: edit.time + 1 }, edit])).toEqual([]);
+      const after = entry('A', { A: 2, B: 1 }, ['deleteNote', 'n1']);
+      expect(signatures({}, [del, edit, after])).toEqual([]);
+    });
+
+    it('does not infer a winner across several conflict rounds or three devices', () => {
+      const del = entry('A', { A: 1 }, ['deleteNote', 'n1']);
+      const edit = entry('B', { B: 1 }, ['editNote', 'n1', 'content', 'newer']);
+      const third = entry('C', { C: 1 }, ['editNote', 'n1', 'isLock', true]);
+      expect(signatures({}, [del, edit, third])).toEqual([]);
+      const earlier = entry('B', { B: 1 }, ['editNote', 'n1', 'isLock', true]);
+      const later = entry('B', { B: 2 }, ['editNote', 'n1', 'content', 'later']);
+      expect(signatures({}, [earlier, del, later])).toEqual([]);
+    });
+
+    for (const intent of [
+      ['addTask', 't1', 'P'],
+      ['restoreTask', 't1'],
+    ] as Intent[]) {
+      it(`requires a causally later ${intent[0]} without calling it resurrection`, () => {
+        const del = entry('A', { A: 1 }, ['deleteTask', 't1']);
+        const recreate = entry('B', { A: 1, B: 1 }, intent);
+        expect(signatures({}, [del, recreate])).toEqual(['lost-entity:task']);
+        expect(signatures({ tasks: { t1: { id: 't1' } } }, [del, recreate])).toEqual([]);
+        const deleteAgain = entry('B', { A: 1, B: 2 }, ['deleteTask', 't1']);
+        expect(signatures({}, [del, recreate, deleteAgain])).toEqual([]);
+      });
+    }
+
+    it('requires a kept edit even when its creation is outside the retained ledger', () => {
+      const edit = entry('B', { A: 5, B: 1 }, ['editNote', 'n1', 'content', 'after']);
+      expect(signatures({}, [edit])).toEqual(['lost-entity:note']);
+    });
+  });
+
   describe('latest write per field', () => {
+    it('uses an implicit write’s original time, not its intent’s last op', () => {
+      const track = entry('A', { A: 4 }, ['track', 't1', 0]);
+      track.writes = [{ entity: 'task:t1', field: 'isDone', value: false, time: 10 }];
+      track.time = 30;
+      const done = entry('B', { B: 1 }, ['doneTask', 't1', true]);
+      done.time = 20;
+      expect(signatures({ tasks: { t1: { isDone: true } } }, [track, done])).toEqual([]);
+      expect(signatures({ tasks: { t1: { isDone: false } } }, [track, done])).toEqual([
+        'older-write-won:task.isDone',
+      ]);
+    });
+
     // A writes notes, C writes newer notes; both concurrent (#10422's shape).
     const a = entry('A', { A: 1 }, ['editTaskNotes', 't1', 'A notes']);
     const c = entry('C', { C: 1 }, ['editTaskNotes', 't1', 'C notes']);
@@ -335,7 +391,7 @@ describe('sync fuzz preservation oracles', () => {
       );
       expect(
         signatures(converged('imported'), [rename], replacement('imported')),
-      ).toEqual(['field-reverted:task.title']);
+      ).toEqual(['older-write-won:task.title']);
     });
   });
 });
