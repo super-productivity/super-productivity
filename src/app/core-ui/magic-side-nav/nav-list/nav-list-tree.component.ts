@@ -146,6 +146,10 @@ export class NavListTreeComponent implements OnDestroy {
     this.visibilityMenuTrigger()?.closeMenu();
   }
 
+  sortProjects(): void {
+    this._navConfigService.sortProjectTree();
+  }
+
   goToArchivedProjects(): void {
     this.visibilityMenuTrigger()?.closeMenu();
     this._router.navigateByUrl('/archived-projects');

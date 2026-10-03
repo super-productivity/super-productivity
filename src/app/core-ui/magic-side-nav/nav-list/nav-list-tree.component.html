@@ -158,6 +158,14 @@
 
 <!-- Project Visibility Menu -->
 <mat-menu #visibilityMenu="matMenu">
+  <button
+    mat-menu-item
+    (click)="sortProjects()"
+  >
+    <mat-icon>sort_by_alpha</mat-icon>
+    {{ T.F.PROJECT_FOLDER.SORT | translate }}
+  </button>
+  <mat-divider></mat-divider>
   @for (project of allUnarchivedProjects(); track project.id) {
     @let projectIcon = project.icon || DEFAULT_PROJECT_ICON;
     @let isProjectIconEmoji = isSingleEmoji(projectIcon);

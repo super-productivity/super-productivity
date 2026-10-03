@@ -15,6 +15,8 @@ import { selectAllProjects } from '../project/store/project.selectors';
 import { selectAllTags } from '../tag/store/tag.reducer';
 import { Project } from '../project/project.model';
 import { Tag } from '../tag/tag.model';
+import { INBOX_PROJECT } from '../project/project.const';
+import { TODAY_TAG } from '../tag/tag.const';
 
 describe('MenuTreeService', () => {
   let service: MenuTreeService;
@@ -395,6 +397,71 @@ describe('MenuTreeService', () => {
       expect(lastTree().map((n) => n.id)).toEqual(['folder-1']);
       const folder = lastTree()[0] as MenuTreeFolderNode;
       expect(folder.children.map((c) => c.id)).toEqual(['t-1']);
+    });
+  });
+
+  describe('sortProjectTreeByName / sortTagTreeByName', () => {
+    let dispatchSpy: jasmine.Spy;
+    beforeEach(() => {
+      dispatchSpy = spyOn(store, 'dispatch');
+    });
+
+    const lastAction = (): { type: string; tree: MenuTreeTreeNode[] } =>
+      dispatchSpy.calls.mostRecent().args[0] as {
+        type: string;
+        tree: MenuTreeTreeNode[];
+      };
+
+    it('persists projects A–Z via updateProjectTree, leaving the inbox out', () => {
+      store.overrideSelector(selectAllProjects, [
+        { id: INBOX_PROJECT.id, title: 'Inbox' },
+        { id: 'p-b', title: 'Beta' },
+        { id: 'p-a', title: 'Alpha' },
+      ] as Project[]);
+      store.overrideSelector(selectMenuTreeProjectTree, [
+        { k: MenuTreeKind.PROJECT, id: 'p-b' },
+      ]);
+      store.refreshState();
+
+      expect(service.sortProjectTreeByName()).toBeTrue();
+
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+      expect(lastAction().type).toBe('[MenuTree] Update Project Tree');
+      expect(lastAction().tree.map((node) => node.id)).toEqual(['p-a', 'p-b']);
+    });
+
+    it('persists tags A–Z via updateTagTree, leaving the Today tag out', () => {
+      store.overrideSelector(selectAllTags, [
+        { id: TODAY_TAG.id, title: 'Today' },
+        { id: 't-z', title: 'zzz' },
+        { id: 't-a', title: 'aaa' },
+      ] as Tag[]);
+      store.overrideSelector(selectMenuTreeTagTree, [
+        { k: MenuTreeKind.TAG, id: 't-z' },
+        { k: MenuTreeKind.TAG, id: 't-a' },
+      ]);
+      store.refreshState();
+
+      expect(service.sortTagTreeByName()).toBeTrue();
+
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+      expect(lastAction().type).toBe('[MenuTree] Update Tag Tree');
+      expect(lastAction().tree.map((node) => node.id)).toEqual(['t-a', 't-z']);
+    });
+
+    it('dispatches nothing when the tree is already sorted', () => {
+      store.overrideSelector(selectAllTags, [
+        { id: 't-a', title: 'aaa' },
+        { id: 't-z', title: 'zzz' },
+      ] as Tag[]);
+      store.overrideSelector(selectMenuTreeTagTree, [
+        { k: MenuTreeKind.TAG, id: 't-a' },
+        { k: MenuTreeKind.TAG, id: 't-z' },
+      ]);
+      store.refreshState();
+
+      expect(service.sortTagTreeByName()).toBeFalse();
+      expect(dispatchSpy).not.toHaveBeenCalled();
     });
   });
 });

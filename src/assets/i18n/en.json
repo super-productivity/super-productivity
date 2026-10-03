@@ -1096,6 +1096,10 @@
         "NO_PARENT": "No folder (root level)",
         "PLACEHOLDER": "Select folder"
       },
+      "S": {
+        "SORTED": "Projects sorted A–Z"
+      },
+      "SORT": "Sort projects A–Z",
       "TOOLTIP_CREATE": "Create project folder",
       "TOOLTIP_VISIBILITY": "Show/hide projects",
       "ADD_SUBFOLDER": "Add subfolder",
@@ -1769,7 +1773,11 @@
         "NO_PARENT": "No folder (root level)",
         "PLACEHOLDER": "Select folder"
       },
+      "S": {
+        "SORTED": "Tags sorted A–Z"
+      },
       "TOOLTIP_CREATE": "Create tag folder",
+      "TOOLTIP_SORT": "Sort tags A–Z",
       "ADD_SUBFOLDER": "Add subfolder",
       "ADD_TAG": "Add tag"
     },

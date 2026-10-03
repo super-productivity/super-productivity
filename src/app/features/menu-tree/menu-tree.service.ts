@@ -5,6 +5,7 @@ import { map } from 'rxjs/operators';
 import { Project } from '../project/project.model';
 import { Tag } from '../tag/tag.model';
 import { TODAY_TAG } from '../tag/tag.const';
+import { INBOX_PROJECT } from '../project/project.const';
 import {
   MenuTreeFolderNode,
   MenuTreeKind,
@@ -28,6 +29,7 @@ import {
   deleteFolder,
   updateFolder,
 } from './store/menu-tree.actions';
+import { sortMenuTreeByName } from './sort-menu-tree-by-name';
 
 @Injectable({ providedIn: 'root' })
 export class MenuTreeService {
@@ -189,6 +191,39 @@ export class MenuTreeService {
   persistTagViewTree(viewNodes: MenuTreeViewNode[]): void {
     const stored = this._viewToStoredTree(viewNodes, MenuTreeKind.TAG);
     this.setTagTree(stored);
+  }
+
+  /**
+   * One-time A–Z sort of the sidebar tree, persisted through the existing
+   * `updateProjectTree`/`updateTagTree` op like a drag-reorder, so one click is
+   * one op. Returns false and dispatches nothing when the order already matches.
+   */
+  sortProjectTreeByName(): boolean {
+    const current = this.projectTree();
+    const sorted = sortMenuTreeByName(
+      current,
+      MenuTreeKind.PROJECT,
+      this._allProjects().filter((project) => project.id !== INBOX_PROJECT.id),
+    );
+    if (JSON.stringify(sorted) === JSON.stringify(current)) {
+      return false;
+    }
+    this.setProjectTree(sorted);
+    return true;
+  }
+
+  sortTagTreeByName(): boolean {
+    const current = this.tagTree();
+    const sorted = sortMenuTreeByName(
+      current,
+      MenuTreeKind.TAG,
+      this._allTags().filter((tag) => tag.id !== TODAY_TAG.id),
+    );
+    if (JSON.stringify(sorted) === JSON.stringify(current)) {
+      return false;
+    }
+    this.setTagTree(sorted);
+    return true;
   }
 
   createProjectFolder(name: string, parentFolderId?: string | null): void {

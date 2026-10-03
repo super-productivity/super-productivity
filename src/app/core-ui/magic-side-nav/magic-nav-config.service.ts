@@ -224,6 +224,14 @@ export class MagicNavConfigService {
             tooltip: T.MH.CREATE_TAG,
             action: () => this._createNewTag(),
           },
+          // Last on purpose: below ~230px sidebar width the third button
+          // overflows, and it should be this one, not the create buttons.
+          {
+            id: 'sort-tags',
+            icon: 'sort_by_alpha',
+            tooltip: T.F.TAG_FOLDER.TOOLTIP_SORT,
+            action: () => this._sortTagTree(),
+          },
         ],
       },
 
@@ -560,6 +568,30 @@ export class MagicNavConfigService {
         }
         this._menuTreeService.createTagFolder(trimmed);
       });
+  }
+
+  // Lives in the project visibility menu: a fourth header button clips the
+  // Projects header at the default sidebar width.
+  sortProjectTree(): void {
+    const previousTree = this._menuTreeService.projectTree();
+    if (this._menuTreeService.sortProjectTreeByName()) {
+      this._snackService.open({
+        msg: T.F.PROJECT_FOLDER.S.SORTED,
+        actionStr: T.G.UNDO,
+        actionFn: () => this._menuTreeService.setProjectTree(previousTree),
+      });
+    }
+  }
+
+  private _sortTagTree(): void {
+    const previousTree = this._menuTreeService.tagTree();
+    if (this._menuTreeService.sortTagTreeByName()) {
+      this._snackService.open({
+        msg: T.F.TAG_FOLDER.S.SORTED,
+        actionStr: T.G.UNDO,
+        actionFn: () => this._menuTreeService.setTagTree(previousTree),
+      });
+    }
   }
 
   private _createNewTag(): void {
