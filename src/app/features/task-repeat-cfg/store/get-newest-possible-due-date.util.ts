@@ -11,10 +11,11 @@ import {
   hasNthWeekdayAnchor,
 } from './get-nth-weekday-of-month.util';
 import { Log } from '../../../core/log';
+import { capDateAtRepeatUntilDay } from './repeat-until-day.util';
 
 export const getNewestPossibleDueDate = (
   taskRepeatCfg: TaskRepeatCfg,
-  today: Date,
+  todayIn: Date,
 ): Date | null => {
   // FOR DEBUG
   // return new Date();
@@ -26,6 +27,9 @@ export const getNewestPossibleDueDate = (
     return null;
   }
 
+  // Past the end date, look back from the end date instead: an occurrence on
+  // or before it that was never created is still due, anything later is not.
+  const today = capDateAtRepeatUntilDay(taskRepeatCfg, todayIn);
   const checkDate = new Date(today);
   // Get the effective last task creation day with fallback logic
   const startDateStr = getEffectiveRepeatStartDate(taskRepeatCfg);

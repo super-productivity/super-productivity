@@ -3070,6 +3070,96 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         jasmine.objectContaining({ lastTaskCreationDay: expectedDayStr }),
       );
     });
+
+    // #10091: an end date that already passed leaves no occurrence on or after
+    // today. The live instance stays where it is and lastTaskCreationDay is not
+    // re-anchored to today (which would land past the end date).
+    it('leaves the live instance and anchor alone when the end date has passed (#10091)', () => {
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+      const yesterdayStr = getDbDateStr(new Date(today.getTime() - DAY_MS));
+      const FIVE_DAYS_MS = 5 * DAY_MS;
+      const fiveDaysAgoStr = getDbDateStr(new Date(today.getTime() - FIVE_DAYS_MS));
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: todayStr,
+        created: today.getTime(),
+      };
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: fiveDaysAgoStr,
+        lastTaskCreationDay: todayStr,
+        repeatUntilDay: yesterdayStr,
+      };
+
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: { repeatUntilDay: yesterdayStr },
+          },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      const emitted: Action[] = [];
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) =>
+        emitted.push(result),
+      );
+
+      expect(emitted).toEqual([]);
+      expect(taskRepeatCfgService.updateTaskRepeatCfg).not.toHaveBeenCalled();
+    });
+
+    it("keeps today's instance when the end date is today (#10091)", () => {
+      const today = new Date();
+      const todayStr = getDbDateStr(today);
+
+      const liveTask: Task = {
+        ...mockTask,
+        isDone: false,
+        dueDay: todayStr,
+        created: today.getTime(),
+      };
+      const updatedCfg: TaskRepeatCfgCopy = {
+        ...mockRepeatCfg,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: todayStr,
+        lastTaskCreationDay: todayStr,
+        repeatUntilDay: todayStr,
+      };
+
+      actions$ = of(
+        updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: 'repeat-cfg-id',
+            changes: { repeatUntilDay: todayStr },
+          },
+        }),
+      );
+      taskRepeatCfgService.getTaskRepeatCfgById$.and.returnValue(of(updatedCfg));
+      taskService.getTasksByRepeatCfgId$.and.returnValue(of([liveTask]));
+
+      const emitted: Action[] = [];
+      effects.rescheduleTaskOnRepeatCfgUpdate$.subscribe((result) =>
+        emitted.push(result),
+      );
+
+      expect(emitted).toEqual([
+        PlannerActions.planTaskForDay({ task: liveTask as any, day: todayStr }),
+      ]);
+      expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
+        'repeat-cfg-id',
+        jasmine.objectContaining({ lastTaskCreationDay: todayStr }),
+      );
+    });
   });
 });
 

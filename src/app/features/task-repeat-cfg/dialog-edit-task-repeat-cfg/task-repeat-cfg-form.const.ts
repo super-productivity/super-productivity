@@ -2,6 +2,7 @@ import { FormlyFieldConfig } from '@ngx-formly/core';
 import { T } from '../../../t.const';
 import { RepeatQuickSetting, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 const updateParent = (
   field: FormlyFieldConfig,
@@ -207,6 +208,24 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
 ];
 
 export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
+  // Optional inclusive end day (#10091). The picker emits Date | null; persist
+  // a YYYY-MM-DD string and `undefined` when cleared, so the clear syncs via
+  // `clearedFields` instead of storing a null.
+  {
+    key: 'repeatUntilDay',
+    type: 'date',
+    templateOptions: {
+      label: T.F.TASK_REPEAT.F.REPEAT_UNTIL_DAY,
+    },
+    parsers: [
+      (value: Date | string | null | undefined) =>
+        value instanceof Date ? getDbDateStr(value) : value || undefined,
+    ],
+    expressionProperties: {
+      ['templateOptions.min']: (model: Partial<TaskRepeatCfg>) =>
+        model.startDate || undefined,
+    },
+  },
   {
     key: 'defaultEstimate',
     type: 'duration',

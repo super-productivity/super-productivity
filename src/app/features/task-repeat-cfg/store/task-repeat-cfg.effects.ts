@@ -70,6 +70,7 @@ const SCHEDULE_AFFECTING_BY_FIELD: Record<keyof TaskRepeatCfgCopy, boolean> = {
   quickSetting: false,
   repeatCycle: true,
   startDate: true,
+  repeatUntilDay: true,
   repeatEvery: true,
   monday: true,
   tuesday: true,
@@ -368,6 +369,15 @@ export class TaskRepeatCfgEffects {
                       this._addTasksForTomorrowService.addAllDueToday();
                     }
                   }
+                  return EMPTY;
+                }
+
+                // The end date leaves no occurrence on or after today (#10091).
+                // Leave the live instance where it is — it was a real
+                // occurrence the user may still want to finish — and do not
+                // re-anchor lastTaskCreationDay, which the today-fallback below
+                // would otherwise push past the end date.
+                if (!firstOccurrence && fullCfg.repeatUntilDay) {
                   return EMPTY;
                 }
 

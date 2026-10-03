@@ -691,6 +691,16 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       });
       expect(normalized.monthlyWeekOfMonth).toBeUndefined();
     });
+
+    it('converts a cleared repeatUntilDay (null) to undefined (#10091)', async () => {
+      const fixture = await setupTestBed({ task: mockTask });
+      const normalized = (fixture.componentInstance as any)._normalizeMonthlyAnchor({
+        quickSetting: 'DAILY',
+        repeatUntilDay: null,
+      });
+      expect('repeatUntilDay' in normalized).toBe(true);
+      expect(normalized.repeatUntilDay).toBeUndefined();
+    });
   });
 
   describe('startDate min floor (#7768 Bug 4 refined)', () => {
