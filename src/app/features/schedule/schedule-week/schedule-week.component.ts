@@ -90,6 +90,7 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   workStartEnd = input<{ workStartRow: number; workEndRow: number } | null>(null);
   currentTimeRow = input<number | null>(null);
   todayDateStr = input<string | undefined>(undefined);
+  deadlineTasksByDay = input<Record<string, any[]> | null>(null);
   isCtrlPressed = signal<boolean>(false);
   isTaskDragActive = input<boolean>(false);
   scheduleRowHeightPx = signal<number>(readStoredScheduleRowHeight());
@@ -204,6 +205,33 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
         },
       ),
     ),
+  );
+
+  deadlineStats = computed(() => {
+    const deadlinesByDay = this.deadlineTasksByDay() || {};
+    return (this.daysToShow() || []).map((day) => {
+      const deadlineTasks = deadlinesByDay[day] || [];
+      return {
+        count: deadlineTasks.length,
+        tasks: deadlineTasks,
+      };
+    });
+  });
+
+  deadlineTooltips = computed(() =>
+    this.deadlineStats().map((stats) => {
+      if (stats.count === 0) return '';
+      const titles = stats.tasks.map((t: any) => t.title).join(', ');
+      return this._translateService.instant(
+        stats.count === 1
+          ? T.F.SCHEDULE.DEADLINE_TASKS_TOOLTIP_ONE
+          : T.F.SCHEDULE.DEADLINE_TASKS_TOOLTIP,
+        {
+          count: stats.count,
+          titles,
+        },
+      );
+    }),
   );
 
   // Split projections (RepeatProjectionSplit, SplitTaskContinued, …) share the

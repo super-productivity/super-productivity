@@ -710,3 +710,67 @@ const createTaskScheduleEvent = (id: string, plannedForDay: string): ScheduleEve
   } as ScheduleEvent['data'],
   plannedForDay,
 });
+
+describe('ScheduleMonthComponent deadline tasks', () => {
+  let component: ScheduleMonthComponent;
+  let fixture: ComponentFixture<ScheduleMonthComponent>;
+  let mockScheduleService: jasmine.SpyObj<ScheduleService>;
+  let mockDateTimeFormatService: jasmine.SpyObj<DateTimeFormatService>;
+
+  beforeEach(async () => {
+    mockScheduleService = jasmine.createSpyObj('ScheduleService', [
+      'getDayClass',
+      'getEventsForDay',
+      'getEventDayStr',
+    ]);
+    mockScheduleService.getDayClass.and.returnValue('');
+    mockScheduleService.getEventsForDay.and.returnValue([]);
+    mockScheduleService.getEventDayStr.and.returnValue(null);
+
+    mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', ['-'], {
+      currentLocale: () => 'sv',
+      isoTextLocale: () => 'de',
+    });
+
+    await TestBed.configureTestingModule({
+      imports: [ScheduleMonthComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: ScheduleService, useValue: mockScheduleService },
+        { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(ScheduleMonthComponent);
+    component = fixture.componentInstance;
+  });
+
+  it('should get deadline tasks for a specific day', () => {
+    const deadlineTasks = [
+      { id: 'task-1', title: 'Deadline 1' },
+      { id: 'task-2', title: 'Deadline 2' },
+    ];
+    fixture.componentRef.setInput('deadlineTasksByDay', {
+      '2026-01-15': deadlineTasks,
+    });
+
+    const result = component.getDeadlineTasksForDay('2026-01-15');
+    expect(result).toEqual(deadlineTasks);
+    expect(result.length).toBe(2);
+  });
+
+  it('should return empty array for day with no deadline tasks', () => {
+    fixture.componentRef.setInput('deadlineTasksByDay', {
+      '2026-01-15': [{ id: 'task-1', title: 'Deadline 1' }],
+    });
+
+    const result = component.getDeadlineTasksForDay('2026-01-16');
+    expect(result).toEqual([]);
+  });
+
+  it('should return empty array when deadlineTasksByDay is null', () => {
+    fixture.componentRef.setInput('deadlineTasksByDay', null);
+
+    const result = component.getDeadlineTasksForDay('2026-01-15');
+    expect(result).toEqual([]);
+  });
+});

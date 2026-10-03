@@ -30,6 +30,11 @@
               ></schedule-event>
             </div>
           }
+          @for (task of getDeadlineTasksForDay(day); track task.id) {
+            <div class="month-deadline-task">
+              <planner-deadline-task [task]="task"></planner-deadline-task>
+            </div>
+          }
           @if (dayEvents.length > 1) {
             @let hiddenEventCount = dayEvents.length - 1;
             <span class="month-more-events">

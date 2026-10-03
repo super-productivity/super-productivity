@@ -31,6 +31,22 @@
             }
           </span>
         }
+        @if (deadlineStats()[$index].count > 0) {
+          <span
+            class="deadline-badge"
+            tabindex="0"
+            [matTooltipPosition]="'below'"
+            [matTooltip]="deadlineTooltips()[$index]"
+            [attr.aria-label]="deadlineTooltips()[$index]"
+          >
+            <mat-icon class="deadline-icon">flag</mat-icon>
+            @if (deadlineStats()[$index].count > 1) {
+              <span class="deadline-count">
+                {{ deadlineStats()[$index].count }}
+              </span>
+            }
+          </span>
+        }
       </div>
     }
   </div>

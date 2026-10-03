@@ -1455,4 +1455,62 @@ describe('ScheduleComponent', () => {
       expect(Math.abs(scaledWrapper.scrollTop - plainTop)).toBeLessThan(2);
     });
   });
+
+  describe('deadlineTasksByDay computed', () => {
+    it('groups tasks with deadlines by their deadline day', fakeAsync(() => {
+      const mockTasksMap = new Map([
+        ['task-1', { id: 'task-1', title: 'Deadline task 1', deadlineDay: '2026-01-20', isDone: false }],
+        ['task-2', { id: 'task-2', title: 'Deadline task 2', deadlineDay: '2026-01-21', isDone: false }],
+        ['task-3', { id: 'task-3', title: 'Task without deadline', isDone: false }],
+      ]);
+
+      const store = TestBed.inject(MockStore);
+      store.setState({
+        issueProvider: { ids: [], entities: {} },
+        root: {
+          appState: {
+            startOfNextDayDiffMs: 0,
+          },
+        },
+        tasks: {
+          allTasksInActiveProjects: mockTasksMap,
+        },
+      });
+
+      fixture.detectChanges();
+      tick();
+
+      const deadlines = component.deadlineTasksByDay();
+      expect(deadlines['2026-01-20']?.length || 0).toBe(1);
+      expect(deadlines['2026-01-21']?.length || 0).toBe(1);
+      expect(deadlines['2026-01-20']?.[0]?.title).toBe('Deadline task 1');
+    }));
+
+    it('skips done tasks when grouping deadlines', fakeAsync(() => {
+      const mockTasksMap = new Map([
+        ['task-1', { id: 'task-1', title: 'Pending deadline', deadlineDay: '2026-01-20', isDone: false }],
+        ['task-2', { id: 'task-2', title: 'Completed deadline', deadlineDay: '2026-01-20', isDone: true }],
+      ]);
+
+      const store = TestBed.inject(MockStore);
+      store.setState({
+        issueProvider: { ids: [], entities: {} },
+        root: {
+          appState: {
+            startOfNextDayDiffMs: 0,
+          },
+        },
+        tasks: {
+          allTasksInActiveProjects: mockTasksMap,
+        },
+      });
+
+      fixture.detectChanges();
+      tick();
+
+      const deadlines = component.deadlineTasksByDay();
+      expect(deadlines['2026-01-20']?.length || 0).toBe(1);
+      expect(deadlines['2026-01-20']?.[0]?.id).toBe('task-1');
+    }));
+  });
 });

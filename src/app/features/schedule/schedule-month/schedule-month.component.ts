@@ -13,6 +13,7 @@ import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-f
 import { parseDbDateStr } from 'src/app/util/parse-db-date-str';
 import { TranslatePipe, TranslateService, TranslateStore } from '@ngx-translate/core';
 import { getPluralKey } from '../../../util/get-plural-key';
+import { PlannerDeadlineTaskComponent } from '../../planner/planner-deadline-task/planner-deadline-task.component';
 
 // `grid-template-rows` repeats `var(--nr-of-weeks)`, which otherwise resolves to
 // the static 6 declared on `schedule`. At 5 weeks that leaves a sixth, empty row
@@ -25,7 +26,7 @@ const HOST_BINDINGS = {
 
 @Component({
   selector: 'schedule-month',
-  imports: [ScheduleEventComponent, TranslatePipe],
+  imports: [ScheduleEventComponent, PlannerDeadlineTaskComponent, TranslatePipe],
   templateUrl: './schedule-month.component.html',
   styleUrl: './schedule-month.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -42,6 +43,7 @@ export class ScheduleMonthComponent {
   readonly daysToShow = input<string[]>([]);
   readonly weeksToShow = input<number>(6);
   readonly firstDayOfWeek = input<number>(1);
+  readonly deadlineTasksByDay = input<Record<string, any[]> | null>(null);
 
   // Generate weekday headers based on firstDayOfWeek setting
   readonly weekdayHeaders = computed(() => {
@@ -108,6 +110,11 @@ export class ScheduleMonthComponent {
 
   getEventsForDay(day: string): ScheduleEvent[] {
     return this._scheduleService.getEventsForDay(day, this.events() || []);
+  }
+
+  getDeadlineTasksForDay(day: string): any[] {
+    const deadlinesByDay = this.deadlineTasksByDay() || {};
+    return deadlinesByDay[day] || [];
   }
 
   getMoreEventsKey(count: number): string {
