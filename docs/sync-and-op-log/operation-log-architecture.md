@@ -817,15 +817,24 @@ IDs deduplicate ops still in the local log, while vector clocks carry causality.
    committed revision (#10239). The next cycle downloads/applies that baseline
    before retrying; rejection does not acknowledge local ops, write the file, or
    advance the cursor. Warm-cache uploads retain the conditional PUT check.
-   A v2 ops upload only extends a file this client applied, with or without
-   retained ops: a snapshot-only file (for example another device's
-   `SYNC_IMPORT` seed) that appears after this client's download is loaded
-   first instead of being replaced. Full-state snapshot uploads still write
-   unconditionally (except REPAIR), so a device answering an empty download
+   V2 and v3 ops uploads only extend a file this client applied, with or without
+   retained ops: an unapplied migration probe or a cold read without a matching
+   committed revision defers before dedup acknowledgements or compaction
+   (#10395). An applied cycle cache also permits healing a corrupt primary from
+   its backup. A snapshot-only file (for example another device's `SYNC_IMPORT`
+   seed) appearing after this client's download must be loaded first. Full-state
+   snapshot uploads still write unconditionally (except REPAIR), so a device answering an empty download
    with its own `SYNC_IMPORT` can still replace a seed that landed after its
-   check. The split format does not follow this yet: it appends to a staged,
-   unapplied read (e.g. a server-migration probe) and skips the cold-read check
-   without a committed revision (#10395).
+   check. Format migration can publish the equivalent v3 representation first;
+   a subsequent download/apply permits pending operations to append safely.
+   Browser coverage in `webdav-stale-monolith.spec.ts` exercises encrypted/plain
+   v3 and compaction at the real buffer cap, including fresh-client restart.
+   `webdav-upgrade-baseline.spec.ts` removes only `lastSeenClocks` from persisted
+   adapter metadata: v2/v3 must retain baseline content when a replacement plus
+   tail masks the counter reset, while an already hydrated base and a pending
+   backup restore retain their normal behavior (#10469/#10478). Dropbox/OneDrive
+   have no browser harness; their unchanged-revision upgrade prechecks run
+   through the adapter's provider transport seam in its focused specs.
    Legacy ops without `sv` use the file's
    `syncVersion` as a conservative upper bound. After local compaction prunes
    such an op's applied ID, a later file write advances this upper bound past

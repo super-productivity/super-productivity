@@ -2293,10 +2293,6 @@ export class FileBasedSyncAdapterService {
     } else {
       try {
         const r = await this._downloadOpsFile(provider, cfg, encryptKey);
-        const lastSeenRev = this._lastSeenRevs.get(providerKey);
-        if (lastSeenRev && r.rev !== lastSeenRev) {
-          throw new UploadRevToMatchMismatchAPIError('Remote data changed; retry sync.');
-        }
         opsFile = r.data;
         opsRev = r.rev;
       } catch (e) {
@@ -2316,6 +2312,17 @@ export class FileBasedSyncAdapterService {
           throw e;
         }
       }
+    }
+
+    // As in v2, a migration probe only stages data. Require an applied cache
+    // (including .bak recovery) or a matching committed rev before acknowledging
+    // any ops or compacting the remote baseline from the local snapshot.
+    if (
+      opsFile &&
+      (this._pendingExpectedSyncVersions.has(providerKey) ||
+        (!cached && (!opsRev || opsRev !== this._lastSeenRevs.get(providerKey))))
+    ) {
+      throw new UploadRevToMatchMismatchAPIError('Unapplied remote data; retry sync.');
     }
 
     if (opsFile && opsRev && this._isPendingSplitMigration(opsFile)) {
@@ -2375,16 +2382,8 @@ export class FileBasedSyncAdapterService {
 
     const combinedOps = [...existingOps, ...compactOps];
 
-    // Compaction is required when the folder has no snapshot yet (fresh/first
-    // sync) OR appending would push the ops buffer past MAX_RECENT_OPS.
-    //
-    // Review follow-up: the trigger is MAX_RECENT_OPS (the buffer cap), NOT
-    // SPLIT_COMPACTION_THRESHOLD (the post-compaction retained size). Triggering on
-    // the retained size would recompact on every op-bearing sync once the folder
-    // crosses it (rebuild sync-state.json + re-upload the snapshot every time —
-    // worse than the single-file path). Triggering at the cap and trimming back to
-    // the threshold leaves ~SPLIT_COMPACTION_THRESHOLD cheap op-only syncs between
-    // compactions.
+    // Compact only a fresh folder or a buffer exceeding MAX_RECENT_OPS. Trim
+    // back to SPLIT_COMPACTION_THRESHOLD so ordinary appends stay op-only.
     let snapshotRef = opsFile?.snapshotRef;
     const needsCompaction =
       !snapshotRef || combinedOps.length > FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS;

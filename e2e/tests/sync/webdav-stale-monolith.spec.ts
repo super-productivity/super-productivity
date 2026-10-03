@@ -48,16 +48,18 @@ test.describe('@webdav stale monolith #10256', () => {
     expect(webdavServerUp).toBe(true);
   });
 
-  for (const { isUseSplitSyncFiles, firstSync } of [
-    { isUseSplitSyncFiles: false, firstSync: false },
-    { isUseSplitSyncFiles: true, firstSync: false },
-    { isUseSplitSyncFiles: false, firstSync: true },
-    { isUseSplitSyncFiles: true, firstSync: true },
+  for (const { isUseSplitSyncFiles, firstSync, nearCap, encrypted } of [
+    { isUseSplitSyncFiles: false, firstSync: false, nearCap: false, encrypted: false },
+    { isUseSplitSyncFiles: true, firstSync: false, nearCap: false, encrypted: false },
+    { isUseSplitSyncFiles: false, firstSync: true, nearCap: false, encrypted: false },
+    { isUseSplitSyncFiles: true, firstSync: true, nearCap: false, encrypted: false },
+    { isUseSplitSyncFiles: true, firstSync: true, nearCap: true, encrypted: false },
+    { isUseSplitSyncFiles: true, firstSync: true, nearCap: false, encrypted: true },
   ]) {
     const scenario = firstSync
       ? 'migration probe preserves local and remote data'
       : 'fresh client retains both writers after upload cache expiry';
-    test(`${scenario} (split=${isUseSplitSyncFiles})`, async ({
+    test(`${scenario} (split=${isUseSplitSyncFiles}, nearCap=${nearCap}, encrypted=${encrypted})`, async ({
       browser,
       baseURL,
       request,
@@ -68,6 +70,9 @@ test.describe('@webdav stale monolith #10256', () => {
         ...WEBDAV_CONFIG_TEMPLATE,
         syncFolderPath: `/${folder}`,
         isUseSplitSyncFiles,
+        ...(encrypted
+          ? { encryptAtSetup: true, encryptionPassword: 'test-password' }
+          : {}),
       };
       const contexts: BrowserContext[] = [];
       const client = async (
@@ -117,7 +122,7 @@ test.describe('@webdav stale monolith #10256', () => {
       const aTask = 'Writer A task';
       const bTask = 'Writer B pending task';
       const titles = firstSync ? [aTask, bTask] : ['Shared baseline', aTask, bTask];
-      const requiresFirstSyncDecision = firstSync && !isUseSplitSyncFiles;
+      const requiresFirstSyncDecision = firstSync;
       const remoteTitles = requiresFirstSyncDecision ? [aTask] : titles;
       try {
         const a = await client();
@@ -187,6 +192,54 @@ test.describe('@webdav stale monolith #10256', () => {
         } else {
           await syncOnce(a);
         }
+        if (nearCap) {
+          // Capture a real task update, then seed a full remote buffer with that
+          // wire shape. Avoid 2,000 browser actions while B holds a timed lock.
+          await a.page.evaluate(() => {
+            const id = document.querySelector('task')!.getAttribute('data-task-id')!;
+            (
+              window as unknown as {
+                __e2eTestHelpers: { store: { dispatch: (action: unknown) => void } };
+              }
+            ).__e2eTestHelpers.store.dispatch({
+              type: '[Task Shared] updateTask',
+              task: { id, changes: { notes: 'Retained remote edit' } },
+              meta: {
+                isPersistent: true,
+                entityType: 'TASK',
+                entityId: id,
+                opType: 'UPD',
+              },
+            });
+          });
+          await expect.poll(async () => (await pendingIds(a.page)).length).toBe(1);
+          await syncOnce(a);
+          const headers = {
+            Authorization: `Basic ${Buffer.from('admin:admin').toString('base64')}`,
+          };
+          const response = await request.get(remoteUrl, { headers });
+          const text = await response.text();
+          const prefixEnd = text.indexOf('__') + 2;
+          const file = JSON.parse(text.slice(prefixEnd));
+          const template = file.recentOps.at(-1);
+          expect(template.o).toBe('UPD');
+          for (let i = file.recentOps.length; i < 2000; i++) {
+            file.vectorClock[template.c]++;
+            file.recentOps.push({
+              ...template,
+              id: `buffer-${i}`,
+              v: { ...file.vectorClock },
+            });
+          }
+          expect(
+            (
+              await request.put(remoteUrl, {
+                headers,
+                data: text.slice(0, prefixEnd) + JSON.stringify(file),
+              })
+            ).ok(),
+          ).toBe(true);
+        }
         await expect(b.page.locator('task', { hasText: aTask })).toHaveCount(0);
         let initialUploadWrites = 0;
         b.page.on('request', (req) => {
@@ -212,6 +265,14 @@ test.describe('@webdav stale monolith #10256', () => {
         b.sync.completeTriggeredSyncCycle();
 
         const remaining = await pendingIds(b.page);
+        if (firstSync) {
+          expect
+            .soft(remaining, 'unapplied migration probe must not acknowledge local ops')
+            .toEqual(pending);
+          expect
+            .soft(initialUploadWrites, 'unapplied migration probe must not write')
+            .toBe(0);
+        }
         if (remaining.length > 0) {
           // A writer with an unapplied baseline leaves the original work pending
           // for the next normal download/upload cycle.
@@ -232,9 +293,9 @@ test.describe('@webdav stale monolith #10256', () => {
             await syncOnce(b);
           }
         }
-        expect(await pendingIds(b.page)).toEqual(
-          requiresFirstSyncDecision ? pending : [],
-        );
+        expect
+          .soft(await pendingIds(b.page))
+          .toEqual(requiresFirstSyncDecision ? pending : []);
         const remote = await request.get(remoteUrl, {
           headers: {
             Authorization: `Basic ${Buffer.from('admin:admin').toString('base64')}`,
@@ -242,10 +303,23 @@ test.describe('@webdav stale monolith #10256', () => {
         });
         expect(remote.ok()).toBe(true);
         const encoded = await remote.text();
-        const data = JSON.parse(encoded.slice(encoded.indexOf('__') + 2)) as {
-          version: number;
-        };
-        expect(data.version).toBe(isUseSplitSyncFiles ? 3 : 2);
+        const data = encrypted
+          ? { encrypted: true }
+          : JSON.parse(encoded.slice(encoded.indexOf('__') + 2));
+        if (!encrypted) expect(data.version).toBe(isUseSplitSyncFiles ? 3 : 2);
+        if (nearCap) {
+          const snapshot = await request.get(
+            new URL(data.snapshotRef.file, remoteUrl).href,
+            {
+              headers: {
+                Authorization: `Basic ${Buffer.from('admin:admin').toString('base64')}`,
+              },
+            },
+          );
+          expect
+            .soft(await snapshot.text(), 'compaction must preserve the remote task')
+            .toContain(aTask);
+        }
         await testInfo.attach('remote-after-writer-b.json', {
           body: JSON.stringify(data, null, 2),
           contentType: 'application/json',
@@ -263,9 +337,7 @@ test.describe('@webdav stale monolith #10256', () => {
         for (const title of remoteTitles) {
           await expect(c.page.locator('task', { hasText: title })).toBeVisible();
         }
-        // A changed cold-read revision defers both formats; a fresh split migration
-        // can still append to its initial baseline without publishing a snapshot.
-        expect(remaining).toEqual(isUseSplitSyncFiles && firstSync ? [] : pending);
+        expect(remaining).toEqual(pending);
 
         for (const writer of [a, b]) {
           if (!requiresFirstSyncDecision) await syncOnce(writer);
