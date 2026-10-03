@@ -105,6 +105,7 @@ import { TaskFocusService } from './task-focus.service';
 import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
 import { TimeBlockDeleteSidecarService } from '../calendar-integration/time-block/time-block-delete-sidecar.service';
 import { getDeadlineAutoPlanFields } from './util/get-deadline-auto-plan-fields';
+import { isTaskOnToday } from './util/is-task-on-today';
 import { TaskTimeSyncService } from './task-time-sync.service';
 
 @Injectable({
@@ -465,11 +466,26 @@ export class TaskService {
    */
   scheduleForTodayById(taskId: string): void {
     const task = this._taskEntities()[taskId];
+    const today = this._dateService.todayStr();
+    const startOfNextDayDiffMs = this._dateService.getStartOfNextDayDiffMs();
+
+    // The same two guards TaskComponent.scheduleForToday() applies, so Shift+T
+    // does not depend on whether a <task> or a <planner-task> renders the row.
+    // (#9577)
+    // Already on Today: planTasksForToday clears remindAt unconditionally, so
+    // re-planning a task due at a time today silently drops its reminder and
+    // writes both dueDay and dueWithTime.
+    // Done: completion never synthesizes a dueDay, and dating a done task adds
+    // it to the daily summary's done count for today.
+    if (task && (task.isDone || isTaskOnToday(task, today, startOfNextDayDiffMs))) {
+      return;
+    }
+
     this._store.dispatch(
       TaskSharedActions.planTasksForToday({
         taskIds: [taskId],
-        today: this._dateService.todayStr(),
-        startOfNextDayDiffMs: this._dateService.getStartOfNextDayDiffMs(),
+        today,
+        startOfNextDayDiffMs,
         parentTaskMap: task ? { [taskId]: task.parentId } : undefined,
       }),
     );
