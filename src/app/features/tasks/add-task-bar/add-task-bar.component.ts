@@ -284,7 +284,7 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
     startWith([]),
   );
 
-  mentionCfg$ = inject(MentionConfigService).mentionConfig$;
+  mentionCfg$ = inject(MentionConfigService).addTaskBarMentionConfig$;
 
   // View children
   inputEl = viewChild<ElementRef<HTMLTextAreaElement>>('inputEl');
