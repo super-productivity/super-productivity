@@ -227,7 +227,10 @@
       }
     ],
     "signatures": [],
-    "rejections": ["CONFLICT_CONCURRENT [Task Shared] updateTask"]
+    "rejections": [
+      "CONFLICT_CONCURRENT [Task Shared] updateTask",
+      "CONFLICT_CONCURRENT [TimeTracking] Sync time spent"
+    ]
   },
   {
     "class": "lww-update-skips-today-order",
@@ -312,7 +315,7 @@
       }
     ],
     "signatures": [],
-    "rejections": []
+    "rejections": ["CONFLICT_CONCURRENT [TimeTracking] Sync time spent"]
   },
   {
     "class": "commuting-edit-beside-local-win",
@@ -1435,7 +1438,7 @@
       }
     ],
     "signatures": [],
-    "rejections": []
+    "rejections": ["CONFLICT_CONCURRENT [TimeTracking] Sync time spent"]
   },
   {
     "class": "remote-win-patch-timestamp",

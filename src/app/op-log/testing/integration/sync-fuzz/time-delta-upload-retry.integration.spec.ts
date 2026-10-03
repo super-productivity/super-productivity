@@ -10,9 +10,25 @@ import {
 } from '../../../core/operation.types';
 import { executeIntent, Intent, SETUP_INTENTS, viewOf } from './sync-fuzz-actions';
 import { FuzzDevice, SyncFuzzHarness } from './sync-fuzz-harness';
+import { runFuzz } from './sync-fuzz-runner';
 
 describe('time delta upload retries', () => {
   afterEach(() => SyncFuzzHarness.dispose());
+
+  it('preserves time when a recovered delta follows its own acknowledged patch', async () => {
+    // Minimized from original tasks:20725005, whose 9000 ms became 5000.
+    // Tracking the done task reopens it through the real production actions.
+    const result = await runFuzz({
+      steps: [
+        { d: 'A', a: ['doneTask', 't2', true], s: 1, r: 1 },
+        { d: 'B', a: ['track', 't2', 2000], s: 1 },
+        { d: 'C', a: ['renameTask', 't2', 'C16'], s: 1 },
+        { d: 'B', a: ['track', 't2', 4000] },
+        { d: 'A', a: ['track', 't2', 3000] },
+      ],
+    });
+    expect(result.failures).toEqual([]);
+  }, 60000);
 
   for (const boundary of [
     'application',

@@ -313,7 +313,8 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
    [#10393](https://github.com/super-productivity/super-productivity/issues/10393#issuecomment-5948107121)):
    a delta also commutes with ops that provably write no time field
    (`writesNoTaskTime` in `conflict-disjoint-merge.util.ts`): readable
-   single-task edits without a time key, and the opaque actions admitted in
+   single-task edits without a time key, timeless patch rows checked only
+   by their field keys, and the opaque actions admitted in
    `TIMELESS_OPAQUE_TASK_ACTIONS`, today only the `planTasksForToday` that
    tracking an unscheduled task emits (its reducer spec proves it writes no
    time). So a remote delta beside a pending auto-plan applies without a
@@ -322,7 +323,10 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
    the winner (`timeDeltasSurvivingRemoteWins`). The same crossing with
    no pending side (#9073), where a device's own auto-plan and delta were
    already synced when the other device's accepted delta arrives, commutes
-   too: there a local win emitted a snapshot whose merged clock claimed the
+   too, including retained histories mixing those patch rows, readable
+   timeless edits and deltas. One side must contain only deltas: a delta
+   beside overlapping non-time writes on both sides does not admit them.
+   There a local win emitted a snapshot whose merged clock claimed the
    remote delta without its time, so every device lost it (the 2000/5000
    history in the harness spec below; E2E in
    `supersync-time-delta-auto-plan-crossing.spec.ts`). A delta a remote op's

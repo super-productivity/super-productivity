@@ -8,6 +8,7 @@ import {
   parseSuperSyncRequestBody,
   recordTaskTimeDelta,
   renameTask,
+  getTaskElement,
   routeSuperSyncOps,
   unrouteSuperSyncOps,
   waitForTask,
@@ -15,6 +16,8 @@ import {
 } from '../../utils/supersync-helpers';
 import { waitForAppReady } from '../../utils/waits';
 import { readDeltas } from '../../utils/time-delta-retry-helpers';
+import { cssSelectors } from '../../constants/selectors';
+import { TaskPage } from '../../pages/task.page';
 
 const blockBackgroundSync = (): void => {
   const flags = globalThis as typeof globalThis & Record<string, boolean>;
@@ -23,7 +26,82 @@ const blockBackgroundSync = (): void => {
   flags['__SP_E2E_BLOCK_IMMEDIATE_UPLOAD'] = true;
 };
 
+const reopenTask = async (client: SimulatedE2EClient, title: string): Promise<void> => {
+  await getTaskElement(client, title).first().locator(cssSelectors.TASK_DONE_BTN).click();
+  await expect
+    .poll(() =>
+      getTaskElement(client, title).evaluateAll(
+        (tasks) =>
+          tasks.length > 0 && tasks.every((task) => !task.classList.contains('isDone')),
+      ),
+    )
+    .toBe(true);
+};
+
 test.describe('@supersync time delta upload identity', () => {
+  test('an acknowledged successor patch keeps a later concurrent delta additive', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.setTimeout(300000);
+    const clients: SimulatedE2EClient[] = [];
+    const title = `SuccessorDelta-${testRunId}`;
+    const date = '2026-10-03';
+    try {
+      const config = getSuperSyncConfig(await createTestUser(testRunId));
+      for (const name of ['A', 'B', 'C']) {
+        const client = await createSimulatedClient(browser, baseURL!, name, testRunId);
+        clients.push(client);
+        await client.sync.setupSuperSync(config);
+        if (name === 'A') {
+          await client.workView.addTask(title);
+        }
+        await client.sync.syncAndWait();
+        await waitForTask(client.page, title);
+        await client.page.evaluate(blockBackgroundSync);
+        await client.page.addInitScript(blockBackgroundSync);
+      }
+      const [a, b, c] = clients;
+      await new TaskPage(a.page).markTaskAsDone(getTaskElement(a, title).first());
+      await a.sync.syncAndWait();
+      await a.page.reload();
+      await waitForAppReady(a.page);
+      await recordTaskTimeDelta(b, title, date, 2000);
+      await b.sync.syncAndWait();
+      await renameTask(c, title, `${title}-C`);
+      await c.sync.syncAndWait();
+      await reopenTask(b, title);
+      await recordTaskTimeDelta(b, title, date, 4000);
+      await reopenTask(a, title);
+      await recordTaskTimeDelta(a, title, date, 3000);
+      await expect
+        .poll(
+          async () => (await readDeltas(a)).filter(({ syncedAt }) => !syncedAt).length,
+        )
+        .toBe(1);
+      const original = (await readDeltas(a)).find(({ syncedAt }) => !syncedAt)!.op;
+      await a.sync.syncAndWait();
+      const delivered = (await readDeltas(a)).find(({ op }) => op.id === original.id)!;
+      expect(delivered.syncedAt).toBeDefined();
+      expect(delivered.op.v).not.toEqual(original.v);
+      expect(delivered.op.p).toEqual(original.p);
+      await expectExactTaskTime(a, title, 5000);
+
+      // B's reopen and delta are concurrent with A's accepted patch and delta.
+      // On A, no pending operation remains when B's accepted delta arrives.
+      for (const client of [b, a, c, b, a, c]) await client.sync.syncAndWait();
+      for (const client of clients) {
+        await expectExactTaskTime(client, title, 9000);
+        await client.page.reload();
+        await waitForAppReady(client.page);
+        await expectExactTaskTime(client, title, 9000);
+      }
+    } finally {
+      for (const client of clients) await closeClient(client);
+    }
+  });
+
   for (const accepted of [true, false]) {
     test(`a ${accepted ? 'stored' : 'rejected'} delta retries after its response is lost`, async ({
       browser,

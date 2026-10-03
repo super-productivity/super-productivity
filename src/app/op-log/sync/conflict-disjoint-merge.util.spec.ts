@@ -419,6 +419,48 @@ describe('conflict-disjoint-merge.util', () => {
       );
     });
 
+    it('commutes a delta with mixed retained timeless patches and deltas in both directions', () => {
+      const timeless = row({ id: 'task-1', title: 'B' });
+      const rename = op({ payload: { task: { id: 'task-1', changes: { notes: 'A' } } } });
+      const mixed = [timeless, rename, deferredSyncTimeSpentOp()];
+      expect(commutes([syncTimeSpentOp()], mixed)).toBeTrue();
+      expect(commutes(mixed, [syncTimeSpentOp()])).toBeTrue();
+    });
+
+    it('does not commute non-time writes on both sides just because one also tracks time', () => {
+      const local = [syncTimeSpentOp(), row({ id: 'task-1', title: 'A' })];
+      const remote = [row({ id: 'task-1', title: 'B' })];
+      expect(commutes(local, remote)).toBeFalse();
+      expect(commutes(remote, local)).toBeFalse();
+      const rename = op({ payload: { task: { id: 'task-1', changes: { title: 'B' } } } });
+      expect(commutes(local, [rename])).toBeFalse();
+      expect(commutes([rename], local)).toBeFalse();
+    });
+
+    it('reads only keys of a timeless patch when it commutes with a remote delta', () => {
+      const fields = {
+        id: 'task-1',
+        get title(): string {
+          throw new Error('row value read');
+        },
+      };
+      expect(
+        commutes([row(fields), deferredSyncTimeSpentOp()], [syncTimeSpentOp()]),
+      ).toBeTrue();
+    });
+
+    for (const unsafe of [
+      { actionPayload: { timeSpent: 0 } },
+      { actionPayload: { title: 'B' }, clearedFields: ['timeSpentOnDay'] },
+      { actionPayload: { title: 'B' }, lwwUpdateMode: 'replace' },
+    ]) {
+      it(`refuses mixed source history with ${JSON.stringify(unsafe)} in both directions`, () => {
+        const mixed = [row({}, unsafe), deferredSyncTimeSpentOp()];
+        expect(commutes(mixed, [syncTimeSpentOp()])).toBeFalse();
+        expect(commutes([syncTimeSpentOp()], mixed)).toBeFalse();
+      });
+    }
+
     // `setOne` rewrites every field, so a replace row writes time whatever
     // keys it carries.
     it('is false for any replace row', () => {
