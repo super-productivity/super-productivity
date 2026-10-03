@@ -1,5 +1,5 @@
 import { app, ipcMain } from 'electron';
-import { log, warn } from 'electron-log/main';
+import { debug, log, warn } from 'electron-log/main';
 import { createServer, IncomingMessage, Server, ServerResponse } from 'http';
 import { randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 import {
@@ -315,6 +315,9 @@ const writeJson = (
   body: LocalRestApiResponsePayload['body'],
   extraHeaders: Record<string, string> = {},
 ): void => {
+  if ('error' in body) {
+    responseErrorCodes.set(res, body.error.code);
+  }
   const responseJson = JSON.stringify(body);
   res.writeHead(status, {
     ...JSON_HEADERS,
@@ -323,6 +326,43 @@ const writeJson = (
     ...extraHeaders,
   });
   res.end(responseJson);
+};
+
+// The envelope's error code for each response, so the request log says why a
+// request failed and not just its status.
+const responseErrorCodes = new WeakMap<ServerResponse, string>();
+
+// The route a request hit, with the task id replaced, so the log records what a
+// client called without recording which tasks it touched. Mirrors the renderer's
+// dispatch, which reads the second segment under /tasks as the task id.
+const toRoutePattern = (pathname: string): string => {
+  const segments = pathname.split('/').filter(Boolean);
+  if (segments[0] === 'tasks' && segments.length >= 2) {
+    return ['', 'tasks', ':id', ...segments.slice(2)].join('/');
+  }
+  return pathname;
+};
+
+// One line per request, including those rejected before reaching the renderer:
+//   [local-rest-api] POST /tasks/:id/archive 200 3ms
+//   [local-rest-api] GET /tasks/:id 404 TASK_NOT_FOUND 2ms
+// Never the Authorization header, the query string or the body.
+const logRequest = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  startedAt: number,
+): void => {
+  try {
+    const { pathname } = new URL(req.url ?? '/', `http://${LOCAL_REST_API_HOST}`);
+    const outcome = res.writableFinished ? String(res.statusCode) : 'aborted';
+    const code = responseErrorCodes.get(res);
+    debug(
+      `[local-rest-api] ${req.method ?? 'GET'} ${toRoutePattern(pathname)} ${outcome}` +
+        `${code ? ` ${code}` : ''} ${Date.now() - startedAt}ms`,
+    );
+  } catch (error) {
+    warn('[local-rest-api] Could not log request', error);
+  }
 };
 
 // RFC 7235 requires a challenge on every 401. It also tells the scripts written
@@ -485,6 +525,10 @@ const handleHttpRequest = async (
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> => {
+  const startedAt = Date.now();
+  // 'close' rather than 'finish', so a client that hangs up is logged too.
+  res.once('close', () => logRequest(req, res, startedAt));
+
   // Reject everything while disabled. server.close() stops accepting new
   // sockets, but an in-flight keep-alive connection could still be served
   // during the close window; this makes the off switch immediate.
