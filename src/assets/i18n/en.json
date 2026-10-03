@@ -3007,6 +3007,7 @@
     "SYNC_STATE": {
       "ERROR": "Sync problem — click to retry",
       "IN_SYNC": "In sync — click to sync now",
+      "IN_SYNC_CONFIRMED": "In sync, server checked just now — click to sync now",
       "OFFLINE": "You're offline — sync resumes when you reconnect",
       "SYNCING": "Syncing…"
     },

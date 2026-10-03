@@ -38,8 +38,12 @@ export class SyncPage extends BasePage {
     this.syncFolderInput = page.locator('.e2e-syncFolderPath input');
     this.saveBtn = page.locator('mat-dialog-actions button[mat-flat-button]');
     this.syncSpinner = page.locator('.sync-btn mat-icon.spin');
-    this.syncCheckIcon = page.locator('.sync-btn mat-icon.sync-state-ico');
-    this.syncConfirmedIcon = this.syncCheckIcon.filter({ hasText: 'done_all' });
+    // The button carries the upload state as a data attribute: 'local' once
+    // every local change is uploaded, 'remote' once the server was checked too.
+    this.syncCheckIcon = page.locator('button.sync-btn[data-sync-confirmation]');
+    this.syncConfirmedIcon = page.locator(
+      'button.sync-btn[data-sync-confirmation="remote"]',
+    );
     this.syncErrorIcon = page
       .locator('.sync-btn mat-icon')
       .filter({ hasText: 'sync_problem' });
@@ -440,7 +444,7 @@ export class SyncPage extends BasePage {
 
     // Wait for sync spinner to disappear
     await this.syncSpinner.waitFor({ state: 'hidden', timeout: 20000 });
-    // Require the remote-confirmed double check, not the local-only check icon.
+    // Require the remote-confirmed state, not the local-only one.
     await this.syncConfirmedIcon.waitFor({ state: 'visible' });
     this.completeTriggeredSyncCycle();
   }
@@ -648,8 +652,8 @@ export class SyncPage extends BasePage {
    * This ensures the provider config has been loaded from IndexedDB.
    */
   async waitForSyncReady(): Promise<void> {
-    // Wait for sync button to show the check icon (indicates provider is ready)
-    // The sync button shows a plain sync icon when not ready, and check/done_all when ready
+    // Wait for the sync button to report an upload state (provider is ready).
+    // It reports none while sync is not ready.
     await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
   }
 

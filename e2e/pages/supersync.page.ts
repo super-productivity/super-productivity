@@ -161,7 +161,7 @@ export class SuperSyncPage extends BasePage {
   readonly syncSpinner: Locator;
   readonly syncCheckIcon: Locator;
   readonly syncErrorIcon: Locator;
-  private readonly _syncRemoteCheckIcon: Locator;
+  readonly syncConfirmedIcon: Locator;
   /** Fresh client confirmation dialog - appears when a new client first syncs */
   readonly freshClientDialog: Locator;
   readonly freshClientConfirmBtn: Locator;
@@ -214,9 +214,11 @@ export class SuperSyncPage extends BasePage {
     this.encryptionPasswordInput = page.locator('.e2e-encryptKey input[type="password"]');
     this.saveBtn = page.locator('mat-dialog-actions button[mat-flat-button]');
     this.syncSpinner = page.locator('.sync-btn mat-icon.spin');
-    this.syncCheckIcon = page.locator('.sync-btn mat-icon.sync-state-ico');
-    this._syncRemoteCheckIcon = page.locator(
-      '.sync-btn mat-icon.sync-state-ico:has-text("done_all")',
+    // The button carries the upload state as a data attribute: 'local' once
+    // every local change is uploaded, 'remote' once the server was checked too.
+    this.syncCheckIcon = page.locator('button.sync-btn[data-sync-confirmation]');
+    this.syncConfirmedIcon = page.locator(
+      'button.sync-btn[data-sync-confirmation="remote"]',
     );
     // Error state shows sync_problem icon (no special class, just the icon name)
     this.syncErrorIcon = page.locator('.sync-btn mat-icon:has-text("sync_problem")');
@@ -2052,7 +2054,7 @@ export class SuperSyncPage extends BasePage {
   private async _getSyncCompletionSnapshot(): Promise<SyncCompletionSnapshot> {
     const [checkVisible, spinnerVisible, errorVisible, unsyncedCount] = await Promise.all(
       [
-        this._syncRemoteCheckIcon.isVisible().catch(() => false),
+        this.syncConfirmedIcon.isVisible().catch(() => false),
         this.syncSpinner.isVisible().catch(() => false),
         this.syncErrorIcon.isVisible().catch(() => false),
         this._getUnsyncedOperationCount(),
@@ -2513,7 +2515,7 @@ export class SuperSyncPage extends BasePage {
     const isSpinnerVisible = await this.syncSpinner.isVisible().catch(() => false);
     if (isSpinnerVisible) return 'syncing';
 
-    const isCheckVisible = await this._syncRemoteCheckIcon.isVisible().catch(() => false);
+    const isCheckVisible = await this.syncConfirmedIcon.isVisible().catch(() => false);
     if (isCheckVisible) return 'success';
 
     return 'unknown';

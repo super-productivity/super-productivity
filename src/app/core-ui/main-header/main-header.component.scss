@@ -400,14 +400,14 @@ button {
 // rather than to `:host`, because the page title's own buttons are deliberately
 // not on this grid.
 .action-nav-right {
-  ::ng-deep button:not(.sync-btn) .mat-icon:not(.sync-state-ico) {
+  ::ng-deep button:not(.sync-btn) .mat-icon {
     font-size: 20px;
     width: 20px;
     height: 20px;
     line-height: 20px;
   }
 
-  ::ng-deep button.sync-btn .mat-icon:not(.sync-state-ico) {
+  ::ng-deep button.sync-btn .mat-icon {
     font-size: 24px;
     width: 24px;
     height: 24px;
@@ -508,7 +508,6 @@ button {
 }
 
 .sync-btn {
-  position: relative;
   color: var(--text-color-muted);
 
   &:is(:hover, :focus-visible) {
@@ -521,50 +520,5 @@ button {
   &.is-error,
   &.is-offline {
     color: var(--button-warn-label);
-  }
-}
-
-.sync-state-ico {
-  // Positioning - center within sync button
-  position: absolute !important;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-
-  // Icon sizing
-  font-size: 15px;
-  width: 15px;
-  height: 15px;
-  line-height: 15px;
-
-  // Deliberately NO fill behind the badge, however much "solid circle so the
-  // badge reads" wants one. This sits dead centre on the 24px `sync` glyph, so
-  // at 15px plus 3px padding an opaque disc covers 21px of it and knocks the
-  // glyph out down to four corner nubs. That is not a hypothetical: the fill
-  // was written against the phantom `--c-bg`, which made the declaration
-  // invalid, so it never painted once until #9304 mapped it to the real `--bg`
-  // and the icon visibly lost its ring.
-  //
-  // No token can stand in for it either, because the header is
-  // `background: transparent` and what shows through varies: `--sidenav-bg`
-  // once the action row teleports to the vertical strip, nothing at all on
-  // liquid-glass (`--bg` is `transparent` there), and the user's own wallpaper
-  // wherever `.bg-image` is set — where any opaque disc is just a blob.
-  // The check reads fine inside the ring unaided.
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  // Inert without a fill, but they still size and round the forced-colors ring.
-  border-radius: 50%;
-  padding: 3px;
-
-  // Ensure it sits above sync icon
-  z-index: 1;
-
-  // Windows High Contrast Mode flattens every glyph to one system colour, so
-  // the badge needs an edge of its own to stay separable from the sync ring.
-  @media (forced-colors: active) {
-    outline: 2px solid CanvasText;
-    outline-offset: -2px;
   }
 }
