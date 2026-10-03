@@ -54,10 +54,28 @@
     }
   }
 
+  // Fixed 32px chip, matching the additional-btn used inside nav-list-tree —
+  // otherwise :host's align-items:stretch stretches this to the full (square)
+  // row height. The rounded shape itself now comes from the shared
+  // src/styles/components/multi-btn-wrapper.scss layer (this button is a
+  // direct child of the .g-multi-btn-wrapper host), not from local overrides.
+  // Without a gap, this button's rounded corners sit flush against
+  // .nav-link's, and two same-color rounded boxes touching at zero gap
+  // pinch into a visible notch.
   .additional-btn {
     flex-shrink: 0;
-    width: 40px !important;
-    min-width: 40px !important;
+    align-self: center;
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    padding: var(--s-half) !important;
+    margin-left: var(--s-half);
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
   }
 
   &.isHidden {

@@ -76,17 +76,35 @@
   color: var(--sidenav-text-secondary);
   background: transparent;
   border: none;
-  border-radius: 0 !important; // Override Material Design rounded corners
+  // Match .nav-link's rounded hover shape instead of Material's default
+  // circle, so the row and its buttons read as one consistent hover language.
+  // This button sits inside an extra .additional-btns wrapper div, so it's
+  // not a direct child of .g-multi-btn-wrapper — the shared
+  // src/styles/components/multi-btn-wrapper.scss layer's radius fix doesn't
+  // reach it, so it still needs its own override here.
+  border-radius: var(--radius-sm) !important;
   cursor: pointer;
 
   // Override Material Design button styles
   &.mat-mdc-icon-button {
     --mdc-icon-button-state-layer-size: 32px;
     --mdc-icon-button-icon-size: 18px;
-    border-radius: 0 !important;
+    border-radius: var(--radius-sm) !important;
     width: 32px !important;
     height: 32px !important;
     padding: var(--s-half) !important;
+  }
+
+  // .mat-mdc-button-persistent-ripple (the hover/focus state layer) defaults
+  // to a circle regardless of the button's own border-radius — match it to
+  // the button above. .mat-ripple-element (the press ripple) doesn't need
+  // this: it's already clipped to the button's shape by its container's
+  // border-radius:inherit + overflow:hidden, and forcing a radius on it would
+  // turn Material's expanding circle into an expanding rounded square.
+  ::ng-deep {
+    .mat-mdc-button-persistent-ripple {
+      border-radius: var(--radius-sm) !important;
+    }
   }
 
   &:focus,
