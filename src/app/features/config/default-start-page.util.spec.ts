@@ -12,6 +12,7 @@ const features = (over: Partial<AppFeaturesConfig> = {}): AppFeaturesConfig =>
     isPlannerEnabled: true,
     isSchedulerEnabled: true,
     isBoardsEnabled: true,
+    isAllTasksEnabled: true,
     ...over,
   }) as AppFeaturesConfig;
 
@@ -78,6 +79,19 @@ describe('getStartPageUrlPath', () => {
         getStartPageUrlPath(
           DefaultStartPage.Boards,
           features({ isBoardsEnabled: false }),
+          undefined,
+        ),
+      ).toBe(TODAY_URL);
+    });
+
+    it('resolves All Tasks when enabled, Today when disabled', () => {
+      expect(getStartPageUrlPath(DefaultStartPage.AllTasks, features(), undefined)).toBe(
+        '/all-tasks',
+      );
+      expect(
+        getStartPageUrlPath(
+          DefaultStartPage.AllTasks,
+          features({ isAllTasksEnabled: false }),
           undefined,
         ),
       ).toBe(TODAY_URL);
