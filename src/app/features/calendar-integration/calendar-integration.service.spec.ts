@@ -1049,10 +1049,12 @@ END:VCALENDAR`;
         result.forEach((ev) => expect((ev as any).color).toBe('#4caf50'));
       }));
 
-      it('should not add a color property when the provider has no color configured', fakeAsync(() => {
+      it('should stamp a deterministic fallback color when the provider has no color configured', fakeAsync(() => {
         const result = requestAndFlush(createMockProvider({ color: undefined }));
         expect(result.length).toBeGreaterThan(0);
-        result.forEach((ev) => expect((ev as any).color).toBeFalsy());
+        result.forEach((ev) =>
+          expect((ev as any).color).toMatch(/^hsl\(\d{1,3}, 60%, 55%\)$/),
+        );
       }));
 
       it('should stamp both color and isReferenceCalendar when both are set', fakeAsync(() => {
