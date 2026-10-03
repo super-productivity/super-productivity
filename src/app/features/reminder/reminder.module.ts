@@ -43,6 +43,7 @@ import { Log } from '../../core/log';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { androidInterface } from '../android/android-interface';
 import { DateService } from '../../core/date/date.service';
+import { TranslateService } from '@ngx-translate/core';
 
 const SNOOZE_10M_MS = 10 * 60 * 1000;
 const SNOOZE_1H_MS = 60 * 60 * 1000;
@@ -70,6 +71,7 @@ export class ReminderModule {
   private readonly _capacitorReminderService = inject(CapacitorReminderService);
   private readonly _syncWrapperService = inject(SyncWrapperService);
   private readonly _dateService = inject(DateService);
+  private readonly _translateService = inject(TranslateService);
 
   constructor() {
     // Initialize reminder service (runs migration in background)
@@ -149,6 +151,17 @@ export class ReminderModule {
 
         if (IS_ELECTRON && this._globalConfigService.cfg()?.reminder?.isFocusWindow) {
           this._uiHelperService.focusApp();
+        }
+
+        if (
+          IS_ELECTRON &&
+          this._globalConfigService.cfg()?.reminder?.isFullScreenReminder
+        ) {
+          window.ea.showFullScreenBlocker({
+            msg: reminders.map((r) => r.title).join('\n'),
+            isDismissable: true,
+            dismissLabel: this._translateService.instant(T.G.DISMISS),
+          });
         }
 
         this._showNotification(reminders);

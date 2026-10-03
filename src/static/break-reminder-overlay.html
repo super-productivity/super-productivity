@@ -27,6 +27,18 @@
         margin: auto;
       }
 
+      .is-dismissable #msg {
+        white-space: pre-line;
+      }
+
+      #dismiss {
+        display: block;
+        margin: 24px auto 0;
+        padding: 12px 32px;
+        font: inherit;
+        cursor: pointer;
+      }
+
       html,
       body {
         background: transparent;
@@ -88,9 +100,24 @@
     window.setTimeout(() => {
       document.getElementById('bg').style.opacity = '1';
     });
-    window.setTimeout(() => {
-      document.getElementById('bg').style.opacity = '0';
-    }, time - 700);
+    if (hashObj.dismiss) {
+      // task reminder: stays until the user dismisses it (click / Esc / Enter)
+      const btn = document.createElement('button');
+      btn.id = 'dismiss';
+      btn.textContent = decodeURIComponent(hashObj.dismiss);
+      document.body.classList.add('is-dismissable');
+      document.getElementById('container').append(btn);
+      document.getElementById('bg').style.cursor = 'pointer';
+      document.addEventListener('click', () => window.close());
+      document.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape' || ev.key === 'Enter') window.close();
+      });
+      btn.focus();
+    } else {
+      window.setTimeout(() => {
+        document.getElementById('bg').style.opacity = '0';
+      }, time - 700);
+    }
 
     if (imgUrl) {
       const img = document.createElement('img');

@@ -246,7 +246,13 @@ export interface ElectronAPI {
 
   registerGlobalShortcuts(keyboardConfig: KeyboardConfig): void;
 
-  showFullScreenBlocker(args: { msg?: string; takeABreakCfg: TakeABreakConfig }): void;
+  showFullScreenBlocker(args: {
+    msg?: string;
+    takeABreakCfg?: TakeABreakConfig;
+    // stays open until the user dismisses it (click / Esc / Enter)
+    isDismissable?: boolean;
+    dismissLabel?: string;
+  }): void;
 
   backupAppData(args: {
     data: AppDataCompleteLegacy | AppDataComplete;
