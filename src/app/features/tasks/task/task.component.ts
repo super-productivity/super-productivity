@@ -124,6 +124,8 @@ import {
 } from '../add-subtask-input/add-subtask-input.component';
 import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 import { getSubTaskTimeLeftForDisplay } from '../util/get-sub-task-time-left-for-display';
+import { getScheduledDateColor } from '../util/get-scheduled-date-color';
+import { TagService } from '../../tag/tag.service';
 
 const isInteractiveTarget = (target: EventTarget | null): boolean =>
   target instanceof Element &&
@@ -148,6 +150,7 @@ const isInteractiveTarget = (target: EventTarget | null): boolean =>
     '[class.hasNoSubTasks]': 'task().subTaskIds.length === 0',
     '[class.isDragReady]': 'isDragReady()',
     '[class.isOverdue]': 'isOverdue()',
+    '[style.--scheduled-date-today]': 'tagService.scheduledTodayColor()',
     '(contextmenu)': 'onHostContextMenu($event)',
     '(mousedown)': 'onHostMouseDown($event)',
     '(click)': 'onHostClick($event)',
@@ -203,6 +206,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _multiSelect = inject(TaskMultiSelectService);
   private readonly _taskMoveToProjectService = inject(TaskMoveToProjectService);
 
+  readonly tagService = inject(TagService);
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
   readonly globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
@@ -287,6 +291,19 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     return (
       (t.dueWithTime && this._dateService.isToday(t.dueWithTime)) ||
       (t.dueDay && t.dueDay === todayStr)
+    );
+  });
+  scheduledDateColor = computed(() => {
+    const task = this.task();
+    if (task.isDone || this.isCurrent() || (!task.dueDay && !task.dueWithTime)) {
+      return '';
+    }
+    return getScheduledDateColor(
+      task,
+      this.globalTrackingIntervalService.todayDateStr(),
+      this._dateService.getStartOfNextDayDiffMs(),
+      // Only timed tasks depend on the clock, with no per-row subscription.
+      task.dueWithTime ? this.globalTrackingIntervalService.clockTimestamp() : 0,
     );
   });
   hasTimeConflict = computed(() => {

@@ -150,6 +150,7 @@
                   : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
               "
               class="ico-btn schedule-btn"
+              [attr.data-scheduled-date-color]="scheduledDateColor()"
               mat-icon-button
             >
               <mat-icon>alarm</mat-icon>
@@ -172,6 +173,7 @@
                   : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
               "
               class="ico-btn schedule-btn"
+              [attr.data-scheduled-date-color]="scheduledDateColor()"
               mat-icon-button
             >
               @if (isScheduledToday()) {
@@ -198,6 +200,7 @@
                   : (T.F.TASK.CMP.EDIT_SCHEDULED | translate)
               "
               class="ico-btn schedule-btn"
+              [attr.data-scheduled-date-color]="scheduledDateColor()"
               mat-icon-button
             >
               @if (isScheduledToday()) {

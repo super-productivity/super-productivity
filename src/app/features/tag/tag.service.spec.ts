@@ -3,7 +3,7 @@ import { TagService } from './tag.service';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { Store } from '@ngrx/store';
 import { Tag, TagState } from './tag.model';
-import { DEFAULT_TAG } from './tag.const';
+import { DEFAULT_TAG, TODAY_TAG } from './tag.const';
 import { deleteTag, deleteTags, updateTag } from './store/tag.actions';
 import {
   selectAllTags,
@@ -71,6 +71,31 @@ describe('TagService', () => {
 
   afterEach(() => {
     store.resetSelectors();
+  });
+
+  describe('scheduledTodayColor', () => {
+    it('retains theme defaults until Today is customized and reacts to color changes', () => {
+      const selector = store.overrideSelector(selectAllTags, [TODAY_TAG]);
+      store.refreshState();
+      expect(service.scheduledTodayColor()).toBeNull();
+      selector.setResult([{ ...TODAY_TAG, color: '#008080' }]);
+      store.refreshState();
+      expect(service.scheduledTodayColor()).toBe('#008080');
+      selector.setResult([
+        { ...TODAY_TAG, theme: { ...TODAY_TAG.theme, primary: '#a020f0' } },
+      ]);
+      store.refreshState();
+      expect(service.scheduledTodayColor()).toBe('#a020f0');
+      selector.setResult([TODAY_TAG]);
+      store.refreshState();
+      expect(service.scheduledTodayColor()).toBeNull();
+    });
+
+    it('does not use an unrelated tag color', () => {
+      store.overrideSelector(selectAllTags, [createTag({ color: '#008080' })]);
+      store.refreshState();
+      expect(service.scheduledTodayColor()).toBeNull();
+    });
   });
 
   describe('tags$', () => {
