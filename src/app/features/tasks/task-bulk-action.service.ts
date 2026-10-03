@@ -41,7 +41,7 @@ import {
   resolveTagIntent,
   splitParentOnly,
 } from './task-bulk-action.util';
-import { TASK_PRIORITY_LABEL_KEY } from './task-priority.const';
+import { TASK_PRIORITY_LABEL_KEY, getTaskPriority } from './task-priority.const';
 import { isTouchActive } from '../../util/input-intent';
 import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
 import { msToString } from '../../ui/duration/ms-to-string.pipe';
@@ -571,7 +571,7 @@ export class TaskBulkActionService {
   /** Sets one priority on every selected task, or clears it with `null`. */
   async setPriority(priority: TaskPriority | null): Promise<void> {
     const tasks = this._resolveInVisualOrder().filter(
-      (t) => (t.priority ?? null) !== priority,
+      (t) => getTaskPriority(t.priority) !== priority,
     );
     if (!tasks.length) {
       this._snackNothingToDo();

@@ -1,5 +1,9 @@
 import { TaskPriorityIndicatorComponent } from '../../task-priority-indicator/task-priority-indicator.component';
-import { TASK_PRIORITY_LABEL_KEY, TASK_PRIORITY_LEVELS } from '../../task-priority.const';
+import {
+  TASK_PRIORITY_LABEL_KEY,
+  TASK_PRIORITY_LEVELS,
+  getTaskPriority,
+} from '../../task-priority.const';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -172,6 +176,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   readonly contextMenu = viewChild('contextMenu', { read: MatMenu });
 
   task!: TaskWithSubTasks | Task;
+  priority: TaskPriority | null = null;
 
   isCurrent: boolean = false;
   isBacklog: boolean = false;
@@ -219,6 +224,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   //  Accessor inputs cannot be migrated as they are too complex.
   @Input('task') set taskSet(v: TaskWithSubTasks | Task) {
     this.task = v;
+    this.priority = getTaskPriority(v.priority);
     this._pluginTaskContextMenuTarget.set(v.parentId ? 'SUBTASK' : 'TASK');
     this.isCurrent = this._taskService.currentTaskId() === v.id;
     this._task$.next(v);
@@ -555,7 +561,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   setPriority(priority: TaskPriority | null): void {
-    if (priority === (this.task.priority ?? null)) {
+    if (priority === this.priority) {
       return;
     }
     this._taskService.update(this.task.id, { priority });

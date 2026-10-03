@@ -450,12 +450,12 @@
     mat-menu-item
     menuTouchFix
     role="menuitemradio"
-    [attr.aria-checked]="!task.priority"
+    [attr.aria-checked]="!priority"
     (click)="setPriority(null)"
   >
     <mat-icon>clear</mat-icon>
     <span>{{ T.F.TASK.CMP.PRIORITY_NONE | translate }}</span>
-    @if (!task.priority) {
+    @if (!priority) {
       <div><mat-icon>check</mat-icon></div>
     }
   </button>
@@ -464,7 +464,7 @@
       mat-menu-item
       menuTouchFix
       role="menuitemradio"
-      [attr.aria-checked]="task.priority === level"
+      [attr.aria-checked]="priority === level"
       (click)="setPriority(level)"
     >
       <task-priority-indicator
@@ -473,7 +473,7 @@
         aria-hidden="true"
       ></task-priority-indicator>
       <span>{{ PRIORITY_LABEL_KEY[level] | translate }}</span>
-      @if (task.priority === level) {
+      @if (priority === level) {
         <div><mat-icon>check</mat-icon></div>
       }
     </button>

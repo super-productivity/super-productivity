@@ -7,10 +7,11 @@ import {
 } from '@angular/core';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
-import { TaskPriority } from '../task.model';
+import { Task } from '../task.model';
 import {
   DEFAULT_TASK_PRIORITY_ICON_PRESET,
   TASK_PRIORITY_ICONS,
+  getTaskPriority,
   TASK_PRIORITY_LABEL_KEY,
 } from '../task-priority.const';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -44,14 +45,14 @@ import { TaskPriorityIconPreset } from '../../config/global-config.model';
   /* eslint-disable @typescript-eslint/naming-convention */
   host: {
     // The colour anchor, on this component's own host.
-    '[attr.data-priority]': 'priority()',
+    '[attr.data-priority]': 'level()',
   },
   /* eslint-enable @typescript-eslint/naming-convention */
 })
 export class TaskPriorityIndicatorComponent {
   private readonly _globalConfigService = inject(GlobalConfigService);
 
-  readonly priority = input.required<TaskPriority>();
+  readonly priority = input.required<NonNullable<Task['priority']>>();
   /** Overrides the configured preset, e.g. to preview each preset in settings. */
   readonly iconPreset = input<TaskPriorityIconPreset>();
 
@@ -64,7 +65,13 @@ export class TaskPriorityIndicatorComponent {
             ?.priorityIconPreset) as TaskPriorityIconPreset
       ] ?? TASK_PRIORITY_ICONS[DEFAULT_TASK_PRIORITY_ICON_PRESET],
   );
-  // Empty for a value outside 1–3 (e.g. a stale test-build string): renders nothing.
-  readonly icon = computed(() => this._icons()[this.priority()]);
-  readonly labelKey = computed(() => TASK_PRIORITY_LABEL_KEY[this.priority()]);
+  readonly level = computed(() => getTaskPriority(this.priority()));
+  readonly icon = computed(() => {
+    const level = this.level();
+    return level ? this._icons()[level] : undefined;
+  });
+  readonly labelKey = computed(() => {
+    const level = this.level();
+    return level ? TASK_PRIORITY_LABEL_KEY[level] : undefined;
+  });
 }

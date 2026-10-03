@@ -566,7 +566,7 @@ describe('TaskBulkActionService', () => {
 
   describe('setPriority', () => {
     it('updates only the tasks whose priority differs', async () => {
-      select([t('a'), t('same', { priority: 3 }), t('low', { priority: 1 })]);
+      select([t('a'), t('same', { priority: 'high' }), t('low', { priority: 1 })]);
 
       await service.setPriority(3);
 
@@ -585,7 +585,7 @@ describe('TaskBulkActionService', () => {
     });
 
     it('does nothing when every task already has that priority', async () => {
-      select([t('a', { priority: 2 }), t('b', { priority: 2 })]);
+      select([t('a', { priority: 2 }), t('b', { priority: 'medium' })]);
 
       await service.setPriority(2);
 
