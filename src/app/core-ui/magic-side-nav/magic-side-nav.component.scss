@@ -187,6 +187,10 @@
     scrollbar-width: none;
     scrollbar-gutter: stable both-edges;
 
+    .nav-scroll-section {
+      scrollbar-width: none;
+    }
+
     .mode-toggle {
       right: auto;
       left: 50%;
@@ -294,6 +298,21 @@
   :host-context(.isMac.isElectron) & {
     padding-top: calc(var(--pt) + var(--mac-title-bar-padding, 0px));
   }
+}
+
+// The mobile drawer keeps scrolling as a whole, and so does the desktop nav
+// on windows too short for this min-height
+.nav-sidenav:not(.mobile) .nav-scroll-section {
+  flex: 1 1 0;
+  min-height: 120px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.nav-scroll-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
 .nav-item {
