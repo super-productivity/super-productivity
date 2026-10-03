@@ -177,6 +177,7 @@ export class OneDrive implements FileSyncProvider<
     const cfg = await this._cfgOrError();
     try {
       const driveItemPath = this._getDriveItemPath(targetPath, cfg);
+      const metadataBefore = await this._requestJson<{ eTag?: string }>(driveItemPath);
       const response = await this._request({
         method: 'GET',
         path: `${driveItemPath}/content`,
@@ -190,9 +191,17 @@ export class OneDrive implements FileSyncProvider<
         };
       }
 
-      const metadata = await this._requestJson<{ eTag?: string }>(driveItemPath);
+      // Without a content ETag, only use metadata that stayed unchanged across
+      // the read. A newer revision could otherwise authorize uploading stale data.
+      if (!metadataBefore.eTag) {
+        throw new NoRevAPIError('OneDrive download missing eTag');
+      }
+      const metadataAfter = await this._requestJson<{ eTag?: string }>(driveItemPath);
+      if (metadataBefore.eTag !== metadataAfter.eTag) {
+        throw new UploadRevToMatchMismatchAPIError('OneDrive changed during download');
+      }
       return {
-        rev: metadata.eTag || '',
+        rev: metadataBefore.eTag,
         dataStr,
       };
     } catch (e) {
