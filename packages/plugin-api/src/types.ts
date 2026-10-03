@@ -359,6 +359,32 @@ export interface Project {
   icon?: string | null;
 }
 
+/**
+ * A node of the sidebar's project tree, as returned by `getProjectTree()`.
+ * Folders nest; a project sits in exactly one folder or at the root.
+ */
+export type ProjectTreeNode = ProjectTreeFolderNode | ProjectTreeProjectNode;
+
+export interface ProjectTreeFolderNode {
+  type: 'folder';
+  id: string;
+  name: string;
+  isExpanded: boolean;
+  children: ProjectTreeNode[];
+}
+
+export interface ProjectTreeProjectNode {
+  type: 'project';
+  /** The project's id, as in `getAllProjects()`. */
+  id: string;
+}
+
+export interface ProjectFolderMove {
+  projectId: string;
+  /** Target folder id from `getProjectTree()`; `null` moves the project to the root. */
+  folderId: string | null;
+}
+
 export interface Tag {
   id: string;
   title: string;
@@ -700,6 +726,21 @@ export interface PluginAPI {
    * context, the app falls back to Today.
    */
   deleteProject(projectId: string): Promise<void>;
+
+  /**
+   * The sidebar's project folders with the projects placed in them, in sidebar
+   * order. Covers the projects `getAllProjects()` returns, except the Inbox.
+   */
+  getProjectTree(): Promise<ProjectTreeNode[]>;
+
+  /**
+   * Moves projects into folders (or to the root with `folderId: null`) in a
+   * single write, so a batch cannot drop a concurrent reorder from another
+   * device. A moved project is appended to its target folder; one already in
+   * that folder keeps its position. Unknown project or folder ids reject the
+   * whole batch.
+   */
+  moveProjectsToFolders(moves: ProjectFolderMove[]): Promise<void>;
 
   // tags
   getAllTags(): Promise<Tag[]>;

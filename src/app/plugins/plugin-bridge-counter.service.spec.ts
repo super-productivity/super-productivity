@@ -31,6 +31,7 @@ import { DataInitService } from '../core/data-init/data-init.service';
 import { GlobalConfigService } from '../features/config/global-config.service';
 import { signal } from '@angular/core';
 import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
+import { PluginProjectTreeService } from './plugin-project-tree.service';
 
 /* eslint-disable @typescript-eslint/naming-convention */
 describe('PluginBridgeService.setCounter()', () => {
@@ -66,6 +67,7 @@ describe('PluginBridgeService.setCounter()', () => {
       providers: [
         PluginBridgeService,
         { provide: Store, useValue: storeSpy },
+        { provide: PluginProjectTreeService, useValue: {} },
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: ProjectService, useValue: projectServiceSpy },
         { provide: TagService, useValue: tagServiceSpy },
