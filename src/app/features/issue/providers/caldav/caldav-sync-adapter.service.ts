@@ -72,6 +72,7 @@ const CALDAV_DATE_FIELD_MAPPINGS: FieldMapping[] = [
     toIssueValue: toTimedIssueValue,
     toTaskValue: toTimedTaskValue,
     pushTogetherWith: CALDAV_DATE_TASK_FIELD_LIST,
+    baselineFromUnchangedIssue: true,
     skipPush: skipAutomaticPlannedDate,
   },
   {
@@ -81,6 +82,7 @@ const CALDAV_DATE_FIELD_MAPPINGS: FieldMapping[] = [
     toIssueValue: toDayIssueValue,
     toTaskValue: toDayTaskValue,
     pushTogetherWith: CALDAV_DATE_TASK_FIELD_LIST,
+    baselineFromUnchangedIssue: true,
     skipPush: skipAutomaticPlannedDate,
   },
   {
@@ -90,6 +92,7 @@ const CALDAV_DATE_FIELD_MAPPINGS: FieldMapping[] = [
     toIssueValue: toTimedIssueValue,
     toTaskValue: toTimedTaskValue,
     pushTogetherWith: CALDAV_DATE_TASK_FIELD_LIST,
+    baselineFromUnchangedIssue: true,
   },
   {
     taskField: 'deadlineDay',
@@ -98,6 +101,7 @@ const CALDAV_DATE_FIELD_MAPPINGS: FieldMapping[] = [
     toIssueValue: toDayIssueValue,
     toTaskValue: toDayTaskValue,
     pushTogetherWith: CALDAV_DATE_TASK_FIELD_LIST,
+    baselineFromUnchangedIssue: true,
   },
 ];
 

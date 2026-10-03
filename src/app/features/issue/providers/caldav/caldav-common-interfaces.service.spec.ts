@@ -1,7 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { CaldavCommonInterfacesService } from './caldav-common-interfaces.service';
 import { CaldavClientService } from './caldav-client.service';
 import { CaldavSyncAdapterService } from './caldav-sync-adapter.service';
@@ -525,100 +524,32 @@ describe('CaldavCommonInterfacesService', () => {
       expect('dueDay' in (r?.taskChanges ?? {})).toBeFalse();
     });
 
-    describe('baseline backfill', () => {
-      beforeEach(() => spyOn(store, 'dispatch'));
-
-      it('backfills missing date baselines quietly when push is enabled and the ETag is unchanged', async () => {
-        issueProviderServiceSpy.getCfgOnce$.and.returnValue(
-          of(cfgWith({ deadline: 'both' })),
-        );
-        caldavClientSpy.getByIds$.and.returnValue(
-          of([{ ...BASE_ISSUE, due: ALL_DAY_TIMESTAMP, isDueAllDay: true }]),
-        );
-        const task = dated({
-          deadlineDay: ALL_DAY_DATE_STR,
-          issueLastSyncedValues: { completed: false, summary: BASE_ISSUE.summary },
-        });
-
-        const updates = await service.getFreshDataForIssueTasks([task]);
-
-        expect(updates).toEqual([]);
-        expect(store.dispatch).toHaveBeenCalledOnceWith(
-          TaskSharedActions.updateTasks({
-            tasks: [
-              {
-                id: task.id,
-                changes: {
-                  issueLastSyncedValues: {
-                    completed: false,
-                    summary: BASE_ISSUE.summary,
-                    due: ALL_DAY_DATE_STR,
-                  },
-                },
-              },
-            ],
-          }),
-        );
+    it('polling never dispatches anything for tasks without date baselines (push builds them in memory)', async () => {
+      spyOn(store, 'dispatch');
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of(cfgWith({ plannedDate: 'both', deadline: 'both' })),
+      );
+      caldavClientSpy.getByIds$.and.returnValue(
+        of([
+          {
+            ...BASE_ISSUE,
+            start: ALL_DAY_TIMESTAMP,
+            isAllDay: true,
+            due: ALL_DAY_TIMESTAMP,
+            isDueAllDay: true,
+          },
+        ]),
+      );
+      const task = dated({
+        dueDay: ALL_DAY_DATE_STR,
+        deadlineDay: ALL_DAY_DATE_STR,
+        issueLastSyncedValues: { completed: false, summary: BASE_ISSUE.summary },
       });
 
-      it('backfills a missing dtstart baseline when planned date push is enabled and the ETag is unchanged', async () => {
-        issueProviderServiceSpy.getCfgOnce$.and.returnValue(
-          of(cfgWith({ plannedDate: 'both' })),
-        );
-        caldavClientSpy.getByIds$.and.returnValue(
-          of([{ ...BASE_ISSUE, start: ALL_DAY_TIMESTAMP, isAllDay: true }]),
-        );
-        const task = dated({
-          dueDay: ALL_DAY_DATE_STR,
-          issueLastSyncedValues: { completed: false, summary: BASE_ISSUE.summary },
-        });
+      const updates = await service.getFreshDataForIssueTasks([task]);
 
-        const updates = await service.getFreshDataForIssueTasks([task]);
-
-        expect(updates).toEqual([]);
-        expect(store.dispatch).toHaveBeenCalledOnceWith(
-          TaskSharedActions.updateTasks({
-            tasks: [
-              {
-                id: task.id,
-                changes: {
-                  issueLastSyncedValues: {
-                    completed: false,
-                    summary: BASE_ISSUE.summary,
-                    dtstart: ALL_DAY_DATE_STR,
-                  },
-                },
-              },
-            ],
-          }),
-        );
-      });
-
-      it('does nothing by default (no push enabled)', async () => {
-        caldavClientSpy.getByIds$.and.returnValue(of([BASE_ISSUE]));
-        await service.getFreshDataForIssueTasks([dated({ issueLastSyncedValues: {} })]);
-        expect(store.dispatch).not.toHaveBeenCalled();
-      });
-
-      it('does nothing when the baseline already has the key', async () => {
-        issueProviderServiceSpy.getCfgOnce$.and.returnValue(
-          of(cfgWith({ deadline: 'both' })),
-        );
-        caldavClientSpy.getByIds$.and.returnValue(of([BASE_ISSUE]));
-        await service.getFreshDataForIssueTasks([
-          dated({ issueLastSyncedValues: { due: null } }),
-        ]);
-        expect(store.dispatch).not.toHaveBeenCalled();
-      });
-
-      it('does nothing when the ETag changed (the normal pull refreshes baselines)', async () => {
-        issueProviderServiceSpy.getCfgOnce$.and.returnValue(
-          of(cfgWith({ deadline: 'both' })),
-        );
-        caldavClientSpy.getByIds$.and.returnValue(of([{ ...BASE_ISSUE, etag_hash: 43 }]));
-        await service.getFreshDataForIssueTasks([dated({ issueLastSyncedValues: {} })]);
-        expect(store.dispatch).not.toHaveBeenCalled();
-      });
+      expect(updates).toEqual([]);
+      expect(store.dispatch).not.toHaveBeenCalled();
     });
   });
 

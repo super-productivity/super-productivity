@@ -1,5 +1,4 @@
 import { Injectable, inject } from '@angular/core';
-import { Store } from '@ngrx/store';
 import { firstValueFrom, Observable } from 'rxjs';
 import { first, map, tap } from 'rxjs/operators';
 import { IssueTask, Task } from 'src/app/features/tasks/task.model';
@@ -18,7 +17,6 @@ import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { isCaldavEnabled } from './is-caldav-enabled.util';
 import { CALDAV_POLL_INTERVAL } from './caldav.const';
 import { issueValuesEqual } from '../../two-way-sync/compute-push-decisions';
-import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 
 @Injectable({
   providedIn: 'root',
@@ -26,7 +24,6 @@ import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actio
 export class CaldavCommonInterfacesService extends BaseIssueProviderService<CaldavCfg> {
   private readonly _caldavClientService = inject(CaldavClientService);
   private readonly _caldavSyncAdapter = inject(CaldavSyncAdapterService);
-  private readonly _store = inject(Store);
 
   // Short-lived cache so that getNewIssuesToAddToBacklog and all getSubTasks
   // calls within the same poll cycle share a single REPORT request instead of
@@ -171,7 +168,6 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
       taskChanges: Partial<Task>;
       issue: CaldavIssue;
     }[] = [];
-    const baselineBackfills: { id: string; changes: Partial<Task> }[] = [];
 
     for (const task of tasks) {
       const issue = task.issueId ? issueMap.get(task.issueId) : undefined;
@@ -188,20 +184,7 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
           },
           issue,
         });
-      } else {
-        const backfill = this._getDateBaselineBackfill(task, issue, cfg);
-        if (backfill) {
-          baselineBackfills.push({
-            id: task.id,
-            changes: { issueLastSyncedValues: backfill },
-          });
-        }
       }
-    }
-
-    if (baselineBackfills.length) {
-      // One bulk op, no snack, not a two-way-sync push trigger.
-      this._store.dispatch(TaskSharedActions.updateTasks({ tasks: baselineBackfills }));
     }
 
     return updates;
@@ -328,39 +311,6 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
     }
 
     return wasUpdated || hasPullOnlyMismatch ? (taskChanges as Partial<Task>) : null;
-  }
-
-  /**
-   * Tasks linked before date push existed have no dtstart/due baseline, so
-   * their first date push would be skipped as "no-baseline". When push is
-   * enabled for a date and the ETag is unchanged since the last pull, the
-   * server's current value is the one last pulled, so it is a safe baseline.
-   */
-  private _getDateBaselineBackfill(
-    task: Task,
-    issue: CaldavIssue,
-    cfg: CaldavCfg,
-  ): Record<string, unknown> | null {
-    if (issue.etag_hash !== task.issueLastUpdated) {
-      return null;
-    }
-    const syncConfig = this._caldavSyncAdapter.getSyncConfig(cfg);
-    const lastSynced = task.issueLastSyncedValues ?? {};
-    const fresh = this._caldavSyncAdapter.extractSyncValues(
-      issue as unknown as Record<string, unknown>,
-    );
-    const missing: Record<string, unknown> = {};
-    for (const [taskField, issueField] of [
-      ['dueDay', 'dtstart'],
-      ['deadlineDay', 'due'],
-    ] as const) {
-      const direction = syncConfig[taskField];
-      const canPush = direction === 'pushOnly' || direction === 'both';
-      if (canPush && !(issueField in lastSynced)) {
-        missing[issueField] = fresh[issueField];
-      }
-    }
-    return Object.keys(missing).length ? { ...lastSynced, ...missing } : null;
   }
 
   protected _apiGetById$(

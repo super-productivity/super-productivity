@@ -631,7 +631,23 @@ export class IssueTwoWaySyncEffects {
 
         const freshIssue = await adapter.fetchIssue(issueId, cfg);
         const freshValues = adapter.extractSyncValues(freshIssue);
-        const lastSyncedValues = task.issueLastSyncedValues ?? {};
+        const storedSyncValues = task.issueLastSyncedValues ?? {};
+        // A field with no baseline yet (e.g. mapped after the task was linked)
+        // can use the fetched value when the issue is unchanged since the last
+        // pull: that value is the one SP last saw. In memory only, so polling
+        // never writes a separate op for it.
+        const isIssueUnchangedSincePull =
+          !!adapter.getIssueLastUpdated &&
+          typeof task.issueLastUpdated === 'number' &&
+          adapter.getIssueLastUpdated(freshIssue) === task.issueLastUpdated;
+        const lastSyncedValues: Record<string, unknown> = { ...storedSyncValues };
+        if (isIssueUnchangedSincePull) {
+          for (const m of fieldMappings) {
+            if (m.baselineFromUnchangedIssue && !(m.issueField in lastSyncedValues)) {
+              lastSyncedValues[m.issueField] = freshValues[m.issueField];
+            }
+          }
+        }
 
         // Re-fetch task to get post-meta-reducer values (e.g. short syntax parsed title)
         const currentTask = await firstValueFrom(this._taskService.getByIdOnce$(task.id));

@@ -44,4 +44,11 @@ export interface FieldMapping {
    * an explicit edit (e.g. CalDAV: Planner moves, repeat-config planning).
    */
   skipPush?: (ctx: FieldPushContext) => boolean;
+  /**
+   * When the task has no baseline for this field and the provider's
+   * last-updated marker equals `task.issueLastUpdated` (the issue is unchanged
+   * since the last pull), use the fetched value as the baseline. For fields
+   * added to a provider after tasks were linked (e.g. CalDAV dates).
+   */
+  baselineFromUnchangedIssue?: boolean;
 }

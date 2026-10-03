@@ -137,6 +137,19 @@ describe('CaldavSyncAdapterService dates', () => {
     ).toBeTrue();
   });
 
+  it('lets only the four date mappings take a missing baseline from an unchanged issue', () => {
+    const flagged = adapter
+      .getFieldMappings()
+      .filter((m) => m.baselineFromUnchangedIssue)
+      .map((m) => m.taskField)
+      .sort();
+    expect(flagged).toEqual(['deadlineDay', 'deadlineWithTime', 'dueDay', 'dueWithTime']);
+    for (const field of ['isDone', 'title', 'notes']) {
+      const m = adapter.getFieldMappings().find((fm) => fm.taskField === field)!;
+      expect(m.baselineFromUnchangedIssue).toBeUndefined();
+    }
+  });
+
   describe('planned-date skipPush', () => {
     const mappingFor = (field: string): FieldMapping =>
       adapter.getFieldMappings().find((m) => m.taskField === field)!;

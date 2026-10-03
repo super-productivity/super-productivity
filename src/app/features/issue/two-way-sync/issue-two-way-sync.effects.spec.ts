@@ -940,6 +940,109 @@ describe('IssueTwoWaySyncEffects', () => {
       }));
     });
 
+    describe('baselineFromUnchangedIssue', () => {
+      const flaggedDueDay: FieldMapping = {
+        ...dueDayFieldMapping,
+        baselineFromUnchangedIssue: true,
+      };
+
+      const setUpBaseline = ({
+        mapping = flaggedDueDay,
+        issueLastUpdatedOnServer = 42,
+        hasGetIssueLastUpdated = true,
+        taskOverrides = {} as Partial<Task>,
+      } = {}): { adapter: IssueSyncAdapter<unknown>; task: Task } => {
+        const adapter = createMockAdapter({
+          getFieldMappings: jasmine
+            .createSpy('getFieldMappings')
+            .and.returnValue([mapping]),
+          getSyncConfig: jasmine.createSpy('getSyncConfig').and.returnValue({}),
+          fetchIssue: jasmine
+            .createSpy('fetchIssue')
+            .and.resolveTo({ dtstart: '2026-03-19' }),
+          extractSyncValues: jasmine
+            .createSpy('extractSyncValues')
+            .and.returnValue({ dtstart: '2026-03-19' }),
+          ...(!hasGetIssueLastUpdated
+            ? {}
+            : {
+                getIssueLastUpdated: jasmine
+                  .createSpy('getIssueLastUpdated')
+                  .and.returnValue(issueLastUpdatedOnServer),
+              }),
+        });
+        adapterRegistry.register('TEST_PROVIDER', adapter);
+
+        const task = createMockTask({
+          id: 'task-1',
+          issueType: 'TEST_PROVIDER' as any,
+          issueId: 'issue-1',
+          issueProviderId: 'provider-1',
+          issueLastSyncedValues: {},
+          issueLastUpdated: 42,
+          dueDay: '2026-03-22',
+          ...taskOverrides,
+        });
+
+        taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+        issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+          of(createMockIssueProvider()),
+        );
+
+        effects.pushFieldsOnTaskUpdate$.subscribe();
+        actions$.next(PlannerActions.planTaskForDay({ task, day: '2026-03-22' }));
+        tick();
+        return { adapter, task };
+      };
+
+      const expectNoBaselineWrite = (): void => {
+        const withSyncValues = taskServiceSpy.update.calls
+          .allArgs()
+          .filter((args) => 'issueLastSyncedValues' in (args[1] as Partial<Task>));
+        expect(withSyncValues).toEqual([]);
+      };
+
+      afterEach(() => adapterRegistry.unregister('TEST_PROVIDER'));
+
+      it('uses the fetched value as baseline when the issue is unchanged since the last pull', fakeAsync(() => {
+        const { adapter } = setUpBaseline();
+        expect(adapter.pushChanges).toHaveBeenCalledWith(
+          'issue-1',
+          { dtstart: '2026-03-22' },
+          jasmine.anything(),
+        );
+        const updateChanges = taskServiceSpy.update.calls.mostRecent()
+          .args[1] as Partial<Task>;
+        expect(updateChanges.issueLastSyncedValues).toEqual({ dtstart: '2026-03-22' });
+      }));
+
+      it('does not push when the issue changed on the server since the last pull', fakeAsync(() => {
+        const { adapter } = setUpBaseline({ issueLastUpdatedOnServer: 43 });
+        expect(adapter.pushChanges).not.toHaveBeenCalled();
+        expectNoBaselineWrite();
+      }));
+
+      it('does not build a baseline for mappings without the flag', fakeAsync(() => {
+        const { adapter } = setUpBaseline({ mapping: dueDayFieldMapping });
+        expect(adapter.pushChanges).not.toHaveBeenCalled();
+        expectNoBaselineWrite();
+      }));
+
+      it('does not build a baseline when the adapter has no getIssueLastUpdated', fakeAsync(() => {
+        const { adapter } = setUpBaseline({ hasGetIssueLastUpdated: false });
+        expect(adapter.pushChanges).not.toHaveBeenCalled();
+        expectNoBaselineWrite();
+      }));
+
+      it('never overrides a stored baseline (provider-changed still skips)', fakeAsync(() => {
+        const { adapter } = setUpBaseline({
+          taskOverrides: { issueLastSyncedValues: { dtstart: '2026-03-10' } },
+        });
+        expect(adapter.pushChanges).not.toHaveBeenCalled();
+        expectNoBaselineWrite();
+      }));
+    });
+
     it('should show snack on push error and continue', fakeAsync(() => {
       const adapter = createMockAdapter({
         getFieldMappings: jasmine
