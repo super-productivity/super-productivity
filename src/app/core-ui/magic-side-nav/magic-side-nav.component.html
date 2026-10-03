@@ -215,6 +215,16 @@
   </nav>
 }
 
+<!-- Window drag strip: covers the empty area above the nav content. On macOS the
+     traffic lights are drawn over it, but the nav itself is a `no-drag` region,
+     so without this the window could not be moved by its top-left corner. -->
+@if (!isMobile()) {
+  <div
+    class="title-bar-drag-strip"
+    aria-hidden="true"
+  ></div>
+}
+
 <!-- Resize Handle (moved outside scrolling container) -->
 @if (config().resizable && !isMobile()) {
   <div

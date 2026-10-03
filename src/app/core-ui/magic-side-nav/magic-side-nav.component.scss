@@ -319,7 +319,13 @@
 // Resize handle (now positioned relative to host component)
 .resize-handle {
   position: absolute;
-  top: 0;
+  // The host box reaches up to the window top, but themes that clear the macOS
+  // traffic lights push the panel itself down from it (liquid-glass publishes
+  // that offset as `--title-bar-drag-height`, see above). Start the handle
+  // where the panel starts, so the affordance never runs past the panel's top
+  // edge into the title-bar band. Themes that keep the panel flush fall back to
+  // zero and cover the panel exactly.
+  top: var(--title-bar-drag-height, 0px);
   bottom: 0;
   width: 4px;
   cursor: col-resize;
@@ -341,5 +347,39 @@
 
   &:active {
     background-color: var(--sidenav-active-text);
+  }
+}
+
+.title-bar-drag-strip {
+  display: none;
+}
+
+// macOS desktop only: the window has no native title bar (`hiddenInset`), so the
+// traffic lights are drawn over the empty band above the nav content. The header
+// is a window drag region, the nav is `no-drag` — which turned that band into a
+// dead zone where grabbing the window did nothing.
+//
+// Themes that push the nav down from the window top (liquid-glass does, to clear
+// the traffic lights) publish that pushed-in height as `--title-bar-drag-height`,
+// so the strip covers exactly the empty band and never overlaps the `no-drag`
+// panel. Themes that keep the nav flush with the window top fall back to zero
+// height: the empty space there sits inside the scroll container, which has to
+// stay `no-drag` for scrolling (#6435).
+:host-context(.isMac.isElectron) .title-bar-drag-strip {
+  display: block;
+  position: absolute;
+  // Relative to the host's padding box, so `top: 0` is the window top even with
+  // the theme's padding-top applied.
+  top: 0;
+  right: 0;
+  left: 0;
+  height: var(--title-bar-drag-height, 0px);
+  -webkit-app-region: drag;
+  cursor: grab;
+  // Above the nav and the resize handle.
+  z-index: 1004;
+
+  &:active {
+    cursor: grabbing;
   }
 }
