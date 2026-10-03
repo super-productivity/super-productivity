@@ -462,9 +462,10 @@ export class PluginBridgeService implements OnDestroy {
     }
 
     const issueProviderCfg = manifest?.issueProvider;
+    const isBundled = this._isPluginBundled(pluginId);
     const customKey = issueProviderCfg?.issueProviderKey;
-    if (customKey && (ISSUE_PROVIDER_TYPES as readonly string[]).includes(customKey)) {
-      throw new Error(`Plugin cannot register under built-in key "${customKey}"`);
+    if (customKey && (!isBundled || ISSUE_PROVIDER_TYPES.some((k) => k === customKey))) {
+      throw new Error(`Plugin cannot register under reserved key "${customKey}"`);
     }
     const name = manifest?.name ?? pluginId;
     const humanReadableName = issueProviderCfg?.humanReadableName ?? name;
@@ -489,8 +490,7 @@ export class PluginBridgeService implements OnDestroy {
       issueProviderKey: customKey,
       useAgendaView: issueProviderCfg?.useAgendaView,
       defaultAutoAddToBacklog: issueProviderCfg?.defaultAutoAddToBacklog,
-      allowPrivateNetwork:
-        issueProviderCfg?.allowPrivateNetwork && this._isPluginBundled(pluginId),
+      allowPrivateNetwork: issueProviderCfg?.allowPrivateNetwork && isBundled,
     });
 
     const registeredKey = this._pluginIssueProviderRegistry.getRegisteredKey(pluginId);
