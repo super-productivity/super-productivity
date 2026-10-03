@@ -745,10 +745,12 @@ export class CaldavClientService {
     }
 
     const hasDateUpdate = updates.dtstart !== undefined || updates.due !== undefined;
-    // Changing DTSTART on a recurring VTODO would move the whole series, and a
-    // resource with several VTODOs holds overrides we don't model.
+    // Changing DTSTART on a recurring VTODO (RRULE or RDATE) would move the
+    // whole series, and a resource with several VTODOs holds overrides we
+    // don't model. EXDATE alone defines no recurrence.
     const isRecurring =
       todo.hasProperty('rrule') ||
+      todo.hasProperty('rdate') ||
       todo.hasProperty('recurrence-id') ||
       comp.getAllSubcomponents('vtodo').length > 1;
     const isSkippedRecurringDate = hasDateUpdate && isRecurring;

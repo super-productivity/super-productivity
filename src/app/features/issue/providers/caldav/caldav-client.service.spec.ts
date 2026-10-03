@@ -272,6 +272,60 @@ describe('CaldavClientService.updateFields$ – completion push', () => {
     expect(davTask.data).toContain('DTSTART;VALUE=DATE:20260925');
   });
 
+  it('skips a date edit on an RDATE-only VTODO: writes other fields, then rejects with the expected-skip marker', async () => {
+    const davTask = davTaskWith([
+      'DTSTART;VALUE=DATE:20261001',
+      'RDATE;VALUE=DATE:20261008,20261015',
+    ]);
+    stubTask(davTask);
+    await expectAsync(
+      firstValueFrom(
+        svc.updateFields$(MOCK_CFG, 'todo-date-1', {
+          summary: 'Renamed',
+          dtstart: '2026-10-05',
+        }),
+      ),
+    ).toBeRejectedWith(jasmine.objectContaining({ isExpectedSyncSkip: true }));
+    expect(davTask.update).toHaveBeenCalled();
+    expect(davTask.data).toContain('SUMMARY:Renamed');
+    expect(davTask.data).toContain('DTSTART;VALUE=DATE:20261001');
+    expect(davTask.data).toContain('RDATE;VALUE=DATE:20261008,20261015');
+  });
+
+  it('skips a date clear on an RDATE-only VTODO: keeps DTSTART and DUE, writes other fields', async () => {
+    const davTask = davTaskWith([
+      'DTSTART;VALUE=DATE:20261001',
+      'DUE;VALUE=DATE:20261002',
+      'RDATE;VALUE=DATE:20261008,20261015',
+    ]);
+    stubTask(davTask);
+    await expectAsync(
+      firstValueFrom(
+        svc.updateFields$(MOCK_CFG, 'todo-date-1', {
+          summary: 'Renamed',
+          dtstart: null,
+          due: null,
+        }),
+      ),
+    ).toBeRejectedWith(jasmine.objectContaining({ isExpectedSyncSkip: true }));
+    expect(davTask.update).toHaveBeenCalled();
+    expect(davTask.data).toContain('SUMMARY:Renamed');
+    expect(davTask.data).toContain('DTSTART;VALUE=DATE:20261001');
+    expect(davTask.data).toContain('DUE;VALUE=DATE:20261002');
+  });
+
+  it('still writes dates on a VTODO with EXDATE but no RRULE or RDATE (not recurring)', async () => {
+    const davTask = davTaskWith([
+      'DTSTART;VALUE=DATE:20261001',
+      'EXDATE;VALUE=DATE:20261008',
+    ]);
+    stubTask(davTask);
+    await firstValueFrom(
+      svc.updateFields$(MOCK_CFG, 'todo-date-1', { dtstart: '2026-10-05' }),
+    );
+    expect(davTask.data).toContain('DTSTART;VALUE=DATE:20261005');
+  });
+
   // ─── invalid DUE/DTSTART pairs (#10099 final fix wave, review Important #1) ──
 
   it('skips a timed DTSTART push that would mismatch an all-day DUE: writes other fields, then rejects with the expected-skip marker', async () => {
