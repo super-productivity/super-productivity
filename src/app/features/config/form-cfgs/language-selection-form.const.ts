@@ -98,5 +98,17 @@ export const LANGUAGE_SELECTION_FORM_FORM: ConfigFormSection<LocalizationConfig>
         ],
       },
     },
+    {
+      key: 'weekNumberSystem',
+      type: 'select',
+      templateOptions: {
+        label: T.GCF.MISC.WEEK_NUMBER_SYSTEM,
+        options: [
+          { label: T.GCF.MISC.WEEK_NUMBER_SYSTEM_AUTO, value: null },
+          { label: T.GCF.MISC.WEEK_NUMBER_SYSTEM_ISO, value: 'iso' },
+          { label: T.GCF.MISC.WEEK_NUMBER_SYSTEM_US, value: 'us' },
+        ],
+      },
+    },
   ],
 };

@@ -12,6 +12,7 @@ import {
   input,
   output,
   viewChild,
+  ViewContainerRef,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatCalendar, MatCalendarView } from '@angular/material/datepicker';
@@ -43,6 +44,8 @@ import { fadeAnimation } from '../animations/fade.ani';
 import { getClockStringFromHours } from '../../util/get-clock-string-from-hours';
 import { IS_ELECTRON_TOKEN } from '../../app.constants';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
+import { getWeekNumber } from '../../util/get-week-number';
+import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../core/locale.constants';
 
 const DEFAULT_TIME = '09:00';
 
@@ -88,6 +91,7 @@ export class DateTimePickerComponent implements AfterViewInit {
   private _dateService = inject(DateService);
   private _globalConfigService = inject(GlobalConfigService);
   private readonly _cdr = inject(ChangeDetectorRef);
+  private readonly _viewContainerRef = inject(ViewContainerRef);
   private _el = inject(ElementRef);
   private readonly _isElectron = inject(IS_ELECTRON_TOKEN);
   private readonly _isAndroidWebView = inject(IS_ANDROID_WEB_VIEW_TOKEN);
@@ -122,6 +126,9 @@ export class DateTimePickerComponent implements AfterViewInit {
   readonly isConfigReady = computed(
     () => this._globalConfigService.localization() !== undefined,
   );
+
+  // Week numbers for the calendar rows
+  weekNumbers: number[] = [];
 
   private _lastView: MatCalendarView | null = null;
   private _viewChangeEffect = effect((onCleanup) => {
@@ -289,6 +296,46 @@ export class DateTimePickerComponent implements AfterViewInit {
     this.quickAccessClick.emit(val);
   }
 
+  // Calculate and render week numbers for the calendar
+  private renderWeekNumbers(): void {
+    const calendarEl = this._el.nativeElement.querySelector(
+      '.mat-calendar',
+    ) as HTMLElement;
+    if (!calendarEl) return;
+
+    const firstDayOfWeek = this.getFirstDayOfWeek();
+
+    // Get all week rows (each week is a row in the calendar body)
+    const weekRows = calendarEl.querySelectorAll('.mat-calendar-body tr');
+    if (weekRows.length === 0) return;
+
+    // Calculate week numbers for each row
+    const newWeekNumbers: number[] = [];
+    weekRows.forEach((row) => {
+      // Find the first date cell in this row (use first cell, not excluding disabled)
+      const firstDateCell = row.querySelector('.mat-calendar-body-cell');
+      if (firstDateCell) {
+        const dateStr = (firstDateCell as HTMLElement).getAttribute('aria-label');
+        if (dateStr) {
+          // Parse the date from the aria-label (format: "Month day, year", e.g., "September 1, 2024")
+          const date = new Date(dateStr);
+          if (!isNaN(date.getTime())) {
+            newWeekNumbers.push(getWeekNumber(date, firstDayOfWeek));
+          }
+        }
+      }
+    });
+
+    this.weekNumbers = newWeekNumbers;
+    this._cdr.markForCheck();
+  }
+
+  // Get the first day of week from config or default
+  private getFirstDayOfWeek(): number {
+    const cfg = this._globalConfigService.localization()?.firstDayOfWeek;
+    return cfg !== null && cfg !== undefined ? cfg : DEFAULT_FIRST_DAY_OF_WEEK;
+  }
+
   private _lastMouseCoords: { x: number; y: number } | null = null;
 
   ngAfterViewInit(): void {
@@ -299,6 +346,24 @@ export class DateTimePickerComponent implements AfterViewInit {
       ) as HTMLElement;
       if (activeCell) {
         activeCell.focus();
+      }
+      // Render week numbers after the calendar is rendered
+      setTimeout(() => this.renderWeekNumbers(), 100);
+
+      // Set up a MutationObserver to detect when the calendar view changes
+      const calendarEl = this._el.nativeElement.querySelector('.mat-calendar');
+      if (calendarEl) {
+        const observer = new MutationObserver(() => {
+          this.renderWeekNumbers();
+        });
+        observer.observe(calendarEl, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['class'],
+        });
+        // Store the observer to disconnect later if needed
+        (this as any)._weekNumberObserver = observer;
       }
     }, 50);
   }

@@ -215,7 +215,10 @@ export type LocalizationConfig = Readonly<{
   lng?: LanguageCode | null;
   firstDayOfWeek?: number | null;
   dateTimeLocale?: DateTimeLocale | null;
+  weekNumberSystem?: 'none' | 'iso' | 'us' | null;
 }>;
+
+export type WeekNumberSystem = 'none' | 'iso' | 'us';
 
 export type SoundConfig = Readonly<{
   isIncreaseDoneSoundPitch: boolean;

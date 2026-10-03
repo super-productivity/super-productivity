@@ -10,6 +10,7 @@
   role="row"
   aria-hidden="true"
 >
+  <div class="week-number-label">Week</div>
   @for (label of dayLabels(); track $index) {
     <div>{{ label }}</div>
   }
@@ -30,6 +31,9 @@
         class="week"
         role="row"
       >
+        <div class="week-number-cell">
+          {{ weekNumbers()[$index] }}
+        </div>
         @for (day of week; track day.dateStr) {
           <button
             role="gridcell"

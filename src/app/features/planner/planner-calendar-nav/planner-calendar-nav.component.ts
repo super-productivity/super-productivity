@@ -20,6 +20,7 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { getWeekRange } from '../../../util/get-week-range';
 import { getWeekdaysMin } from '../../../util/get-weekdays-min';
+import { getWeekNumber } from '../../../util/get-week-number';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import {
@@ -118,6 +119,13 @@ export class PlannerCalendarNavComponent {
       weeks.push(week);
     }
     return weeks;
+  });
+  weekNumbers = computed<number[]>(() => {
+    const firstDayOfWeek = this._firstDayOfWeek();
+    return this.weeks().map((week) => {
+      const firstDay = parseDbDateStr(week[0].dateStr);
+      return getWeekNumber(firstDay, firstDayOfWeek);
+    });
   });
 
   activeWeekIndex = computed(() => {
