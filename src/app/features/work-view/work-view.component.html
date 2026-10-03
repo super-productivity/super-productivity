@@ -186,6 +186,10 @@
                         : undefined
                     "
                   ></task-list>
+                  <add-task-inline
+                    [label]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TASK"
+                    [isListAction]="true"
+                  ></add-task-inline>
                 </div>
                 @for (section of sections(); track section.id) {
                   <div
@@ -239,6 +243,11 @@
                         [listId]="'PARENT'"
                         [listModelId]="section.id"
                       ></task-list>
+                      <add-task-inline
+                        [label]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TASK"
+                        [isListAction]="true"
+                        (afterTaskAdd)="onTaskAddedToSection(section, $event)"
+                      ></add-task-inline>
                     </collapsible>
                   </div>
                 }
@@ -250,6 +259,10 @@
                 listId="PARENT"
                 listModelId="UNDONE"
               ></task-list>
+              <add-task-inline
+                [label]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_ADD_TASK"
+                [isListAction]="true"
+              ></add-task-inline>
             }
           }
 

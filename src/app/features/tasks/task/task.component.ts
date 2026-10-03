@@ -313,6 +313,14 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     return (t.timeEstimate && (t.timeSpent / t.timeEstimate) * 100) || 0;
   });
 
+  readonly subtaskProgress = computed(() => {
+    const subtasks = this.task().subTasks ?? [];
+    return {
+      total: subtasks.length,
+      done: subtasks.reduce((count, task) => count + Number(task.isDone), 0),
+    };
+  });
+
   // Derived from the pair rather than rounded on its own — see the helper's doc. #9190
   subTaskTimeLeft = computed<number>(() =>
     getSubTaskTimeLeftForDisplay(this.task().subTasks),

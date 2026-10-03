@@ -26,6 +26,8 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExit: boolean;
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
+  /** Desktop only; absent in older persisted settings, defaults to off. */
+  isShowDueTaskBadge?: boolean;
   isLocalRestApiEnabled?: boolean;
   // Desktop-only daily check for a newer GitHub release (#5463). Optional
   // because it was added later; a missing key means ON (see UpdateCheckService).

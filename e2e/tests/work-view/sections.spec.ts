@@ -194,6 +194,76 @@ test.describe('Sections', () => {
       .waitFor({ state: 'attached', timeout: 5000 });
   };
 
+  test('offers Add task beneath the Inbox list without named sections', async ({
+    page,
+    workViewPage,
+  }, testInfo) => {
+    await page.goto('/#/project/INBOX_PROJECT/tasks');
+    await workViewPage.waitForTaskList();
+    const inbox = page.locator('work-view-page');
+    const add = inbox.locator('add-task-inline').getByRole('button', {
+      name: 'Add task',
+      exact: true,
+    });
+    await expect(add).toBeVisible();
+    await add.click();
+    const input = inbox.locator('add-task-inline textarea.main-input');
+    await input.fill('Inbox inline task');
+    await input.press('Enter');
+    await input.fill('Another Inbox task');
+    await input.press('Enter');
+    await input.press('Escape');
+    await expect(
+      inbox.locator('task task-title').filter({ hasText: 'Inbox inline task' }),
+    ).toBeVisible();
+    await expect(
+      inbox.locator('task task-title').filter({ hasText: 'Another Inbox task' }),
+    ).toBeVisible();
+    await expect(add).toBeVisible();
+    await page.reload();
+    await workViewPage.waitForTaskList();
+    await expect(add).toBeVisible();
+    await expect(
+      inbox.locator('task task-title').filter({ hasText: 'Inbox inline task' }),
+    ).toBeVisible();
+    await expect(
+      inbox.locator('task task-title').filter({ hasText: 'Another Inbox task' }),
+    ).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('inbox-add-task.png') });
+  });
+
+  test('creates tasks directly beneath their section and preserves placement on reload', async ({
+    page,
+    workViewPage,
+    projectPage,
+  }) => {
+    await setupTestProject(workViewPage, projectPage);
+    await openProjectContextMenu(page);
+    await clickAddSection(page);
+    await submitPromptDialog(page, 'Inline Section');
+    const section = sectionByTitle(page, 'Inline Section');
+    await section.locator('add-task-inline button').click();
+    const input = section.locator('add-task-bar textarea.main-input');
+    await input.fill('Task created in section');
+    await input.press('Enter');
+    await expect(section.locator('task task-title')).toContainText([
+      'Task created in section',
+    ]);
+    await input.fill('Second task in section');
+    await input.press('Enter');
+    await input.press('Escape');
+    await expect(section.locator('task task-title')).toContainText([
+      'Task created in section',
+      'Second task in section',
+    ]);
+    await page.reload();
+    await workViewPage.waitForTaskList();
+    await expect(section.locator('task task-title')).toContainText([
+      'Task created in section',
+      'Second task in section',
+    ]);
+  });
+
   test('creates a section via the project context menu', async ({
     page,
     workViewPage,

@@ -15,6 +15,14 @@ import { FocusModeService } from '../../focus-mode/focus-mode.service';
 import { TaskService } from '../task.service';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { DEFAULT_TASK, Task } from '../task.model';
+import { SchedulingSnapshot, selectTaskSchedulingSnapshot } from './task.selectors';
+import {
+  selectTodayStr,
+  selectStartOfNextDayDiffMs,
+} from '../../../root-store/app-state/app-state.selectors';
+import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
+import { MiscConfig } from '../../config/global-config.model';
 
 /**
  * The OS progress bar (taskbar/dock) must only ever have one writer: a timed
@@ -28,6 +36,9 @@ describe('TaskElectronEffects', () => {
   let actions$: Subject<any>;
   let store: MockStore;
   let setProgressBarSpy: jasmine.Spy;
+  let misc$: BehaviorSubject<Partial<MiscConfig>>;
+  let inSyncWindow$: BehaviorSubject<boolean>;
+  let initialSyncGateOpen$: BehaviorSubject<boolean>;
 
   const task: Task = {
     ...DEFAULT_TASK,
@@ -37,6 +48,9 @@ describe('TaskElectronEffects', () => {
     timeSpent: 30 * 60000,
     timeEstimate: 60 * 60000,
   };
+
+  const schedulingTask = (changes: Partial<Task> = {}): SchedulingSnapshot =>
+    selectTaskSchedulingSnapshot.projector([{ ...task, ...changes }])[0];
 
   const addTimeSpent = (): ReturnType<typeof TimeTrackingActions.addTimeSpent> =>
     TimeTrackingActions.addTimeSpent({
@@ -49,12 +63,16 @@ describe('TaskElectronEffects', () => {
   beforeEach(() => {
     actions$ = new Subject<any>();
     setProgressBarSpy = jasmine.createSpy('setProgressBar');
+    misc$ = new BehaviorSubject<Partial<MiscConfig>>({ isShowDueTaskBadge: true });
+    inSyncWindow$ = new BehaviorSubject(false);
+    initialSyncGateOpen$ = new BehaviorSubject(true);
     (window as any).ea = {
       on: () => {},
       onSwitchTask: () => {},
       updateCurrentTask: () => {},
       updateTodayTasks: () => {},
       setProgressBar: setProgressBarSpy,
+      setDueTaskBadge: () => {},
     };
 
     TestBed.configureTestingModule({
@@ -66,12 +84,32 @@ describe('TaskElectronEffects', () => {
             { selector: selectCurrentTask, value: task },
             { selector: selectTaskEntities, value: { T1: task } },
             { selector: selectTodayTaskIds, value: [] },
+            {
+              selector: selectTaskSchedulingSnapshot,
+              value: [schedulingTask({ dueDay: '2026-10-03' })],
+            },
+            { selector: selectTodayStr, value: '2026-10-03' },
+            { selector: selectStartOfNextDayDiffMs, value: 0 },
             { selector: selectIsOverlayShown, value: false },
             { selector: selectIsOsProgressBarOwnedBySession, value: false },
           ],
         }),
         { provide: LOCAL_ACTIONS, useValue: actions$ },
-        { provide: GlobalConfigService, useValue: {} },
+        { provide: GlobalConfigService, useValue: { misc$ } },
+        {
+          provide: HydrationStateService,
+          useValue: {
+            isInSyncWindow$: inSyncWindow$,
+            isInSyncWindow: () => inSyncWindow$.value,
+          },
+        },
+        {
+          provide: SyncTriggerService,
+          useValue: {
+            initialSyncGateOpen$,
+            isInitialSyncDoneSync: () => initialSyncGateOpen$.value,
+          },
+        },
         { provide: TaskService, useValue: { setCurrentId: () => {} } },
         {
           provide: FocusModeService,
@@ -90,6 +128,44 @@ describe('TaskElectronEffects', () => {
   afterEach(() => {
     store.resetSelectors();
     delete (window as any).ea;
+  });
+
+  describe('syncDueTaskBadge$', () => {
+    it('updates on completion and clears the badge when disabled', () => {
+      const counts: number[] = [];
+      const sub = effects.syncDueTaskBadge$.subscribe((count) => counts.push(count));
+      expect(counts).toEqual([1]);
+      store.overrideSelector(selectTaskSchedulingSnapshot, [
+        schedulingTask({ dueDay: '2026-10-03', isDone: true }),
+      ]);
+      store.refreshState();
+      expect(counts).toEqual([1, 0]);
+      store.overrideSelector(selectTaskSchedulingSnapshot, [
+        schedulingTask({ dueDay: '2026-10-02' }),
+      ]);
+      store.refreshState();
+      misc$.next({ isShowDueTaskBadge: false });
+      expect(counts).toEqual([1, 0, 1, 0]);
+      sub.unsubscribe();
+    });
+
+    it('publishes the latest count after a sync window without another task change', () => {
+      inSyncWindow$.next(true);
+      initialSyncGateOpen$.next(false);
+      const counts: number[] = [];
+      const sub = effects.syncDueTaskBadge$.subscribe((count) => counts.push(count));
+      expect(counts).toEqual([]);
+      store.overrideSelector(selectTaskSchedulingSnapshot, [
+        schedulingTask({ dueDay: '2026-10-03' }),
+        schedulingTask({ id: 'T2', dueDay: '2026-10-02' }),
+      ]);
+      store.refreshState();
+      initialSyncGateOpen$.next(true);
+      expect(counts).toEqual([]);
+      inSyncWindow$.next(false);
+      expect(counts).toEqual([2]);
+      sub.unsubscribe();
+    });
   });
 
   describe('setTaskBarProgress$', () => {

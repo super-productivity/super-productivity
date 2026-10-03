@@ -1,5 +1,17 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
+import { combineLatest } from 'rxjs';
+import { distinctUntilChanged, map } from 'rxjs/operators';
+import { selectTaskSchedulingSnapshot } from './task.selectors';
+import {
+  selectTodayStr,
+  selectStartOfNextDayDiffMs,
+} from '../../../root-store/app-state/app-state.selectors';
+import { countDueTasks } from '../util/count-due-tasks';
+import { IS_ELECTRON } from '../../../app.constants';
+import { skipDuringSyncWindow } from '../../../util/skip-during-sync-window.operator';
+import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { setCurrentTask, unsetCurrentTask } from './task.actions';
 import { select, Store } from '@ngrx/store';
 import {
@@ -43,6 +55,8 @@ export class TaskElectronEffects {
   private _configService = inject(GlobalConfigService);
   private _focusModeService = inject(FocusModeService);
   private _taskService = inject(TaskService);
+  private _hydrationState = inject(HydrationStateService);
+  private _syncTrigger = inject(SyncTriggerService);
 
   // -----------------------------------------------------------------------------------
   // NOTE: IS_ELECTRON checks not necessary, since we check before importing this module
@@ -100,6 +114,32 @@ export class TaskElectronEffects {
               timeSpent: t!.timeSpent,
             }));
           window.ea.updateTodayTasks(tasks);
+        }),
+      ),
+    { dispatch: false },
+  );
+
+  syncDueTaskBadge$ = createEffect(
+    () =>
+      combineLatest([
+        this._store$.select(selectTaskSchedulingSnapshot),
+        this._store$.select(selectTodayStr),
+        this._store$.select(selectStartOfNextDayDiffMs),
+        this._configService.misc$,
+        // Re-evaluate the latest count when the window opens, even if the
+        // last task emission was suppressed during hydration/remote apply.
+        this._hydrationState.isInSyncWindow$,
+        this._syncTrigger.initialSyncGateOpen$,
+      ]).pipe(
+        skipDuringSyncWindow(),
+        map(([tasks, today, dayOffset, misc]) =>
+          misc.isShowDueTaskBadge && today
+            ? countDueTasks(tasks, today, dayOffset ?? 0)
+            : 0,
+        ),
+        distinctUntilChanged(),
+        tap((count) => {
+          if (IS_ELECTRON) window.ea.setDueTaskBadge(count);
         }),
       ),
     { dispatch: false },

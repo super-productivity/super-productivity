@@ -3,6 +3,33 @@
 @use './task-base';
 @use './task-controls';
 
+.subtask-summary {
+  position: relative;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+}
+
+.subtask-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-quarter);
+  margin-left: var(--s);
+  color: var(--text-color-muted);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+
+  &.is-complete {
+    color: var(--color-success);
+  }
+
+  mat-icon {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+  }
+}
+
 :host.isDragReady:not(.cdk-drag-placeholder) {
   background: var(--bg-lighter);
   box-shadow: var(--whiteframe-shadow-8dp);
