@@ -48,10 +48,16 @@ unclassified unless a causal recreation proves existence. The oracle is not a
 second conflict resolver and does not promise global per-field LWW. The existing
 latest-field model retains its documented pairwise/whole-entity approximations
 in `Ledger.crossing` and `checkLatestWrite`; concurrent NOTE fields and opaque habit counts
-still have whole-entity semantics. With no concurrent intent on a note and no retained note reorder, its latest
-field write is checked even when the old value is a supplied baseline. Note
-reorders are not indexed by entity in the ledger, so their presence conservatively
-excludes this new latest-note check.
+still have whole-entity semantics. A NOTE crossing accepts either side's snapshot
+only when its last visible field write accounts for the value: a creation/import
+baseline both sides overwrote cannot excuse complete content loss. A delete's
+side cannot supply a surviving snapshot. With no concurrent intent on a note,
+its latest field write is checked even when the old value is a supplied baseline.
+Note reorders are not indexed by entity in the ledger, so only a reorder
+concurrent with the latest edit conservatively excludes this check; a completed
+historical reorder does not excuse losing a later isolated edit. The reorder
+intent stores context and move indices, not affected note IDs, so even an
+unrelated concurrent reorder remains a bounded gap in this check.
 
 Recording creation values can change a lost-edit signature from
 `field-reverted`/`field-unwritten` to `older-write-won`, or explain an older
@@ -60,7 +66,8 @@ failure. The three `remote-win-keeps-local-edit` pins retain their divergence
 signatures even though the winner's baseline field is now accounted for.
 
 The oracle specs include deliberately corrupted **real harness outcomes**:
-missing winning notes in both upload orders, corrupted supplied creation
+missing winning notes and lost note content in both upload orders, content
+loss after completed project/Today reorders, corrupted supplied creation
 values, lost implicit scheduling, lost retained post-import creations/edits,
 and a missing causal recreation. Unit controls cover legitimate delete absence,
 archive precedence, original-time comparison and ambiguous delete crossings.

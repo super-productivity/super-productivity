@@ -283,6 +283,35 @@ describe('sync fuzz preservation oracles', () => {
         signatures({ habits: { h1: { id: 'h1', title: 'A' } } }, [titleA, titleC]),
       ).toEqual(['older-write-won:habit.title']);
     });
+
+    it('allows a note snapshot baseline only when that side has not overwritten it', () => {
+      const creation = entry('A', { A: 1 }, ['addNote', 'n1', 'P']);
+      creation.writes = [{ entity: 'note:n1', field: 'content', value: 'n1' }];
+      const content = entry('B', { A: 1, B: 1 }, ['editNote', 'n1', 'content', 'B']);
+      const lock = entry('C', { A: 1, C: 1 }, ['editNote', 'n1', 'isLock', true]);
+      const baseline = { notes: { n1: { content: 'n1', isLock: true } } };
+      expect(signatures(baseline, [creation, content, lock])).toEqual([]);
+      const overwritten = entry('C', { A: 1, C: 1 }, ['editNote', 'n1', 'content', 'C']);
+      expect(
+        signatures({ notes: { n1: { content: 'n1' } } }, [
+          creation,
+          content,
+          overwritten,
+        ]),
+      ).toEqual(['older-write-won:note.content']);
+    });
+
+    it('checks a causally later note edit after a reorder, but leaves concurrent reorders unclassified', () => {
+      const reorder = entry('A', { A: 1 }, ['reorderNotes', 'P', 0, 1]);
+      const old = entry('A', { A: 2 }, ['editNote', 'n1', 'content', 'old']);
+      const later = entry('B', { A: 2, B: 1 }, ['editNote', 'n1', 'content', 'new']);
+      const converged = { notes: { n1: { content: 'old' } } };
+      expect(signatures(converged, [reorder, old, later])).toEqual([
+        'older-write-won:note.content',
+      ]);
+      const concurrent = entry('C', { C: 1 }, ['reorderNotes', 'P', 0, 1]);
+      expect(signatures(converged, [old, later, concurrent])).toEqual([]);
+    });
   });
 
   describe('archived tasks', () => {

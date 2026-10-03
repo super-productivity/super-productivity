@@ -222,13 +222,13 @@ const isLaterWrite = (
 /** What the executed intents imply, for the preservation oracles. */
 export class Ledger {
   readonly deleted = new Set<string>();
-  readonly hasNoteReorder: boolean;
+  readonly noteReorders: readonly LedgerEntry[];
   /** Per entity, the intents that targeted it, in execution order. */
   readonly byEntity = new Map<string, LedgerEntry[]>();
   readonly writes = new Map<string, LedgerWrite[]>();
 
   constructor(entries: readonly LedgerEntry[]) {
-    this.hasNoteReorder = entries.some((e) => e.intent[0] === 'reorderNotes');
+    this.noteReorders = entries.filter((e) => e.intent[0] === 'reorderNotes');
     for (const entry of entries) this._note(entry);
     // Explicit creation after a delete starts a new lifetime with new defaults.
     // A restore carries an archived snapshot, so it does not excuse old content.
@@ -1232,8 +1232,11 @@ export const checkPreservation = (
  * leaves" in lww-field-level-resolution.md). An older value one of them
  * carried reports as `older-write-won` too; no seed shows one yet.
  *
- * Out of scope, by design: concurrent NOTE fields, which stay on whole-entity LWW
- * (decision 4 of docs/sync-and-op-log/lww-field-level-resolution.md), and
+ * Concurrent NOTE fields stay on whole-entity LWW (decision 4 of
+ * docs/sync-and-op-log/lww-field-level-resolution.md): either side's snapshot
+ * may explain a value, but not a baseline both sides overwrote. Concurrent
+ * note reorders remain unclassified because the ledger does not index their
+ * affected entities. Out of scope, by design:
  * habit counts (`countOnDay`), which are opaque (decision 6). A value no
  * intent wrote is `field-unwritten`'s, not this check's. Pending local LWW
  * rows (re-sends, whole-entity) are not in the ledger, which models intents.
@@ -1255,19 +1258,34 @@ const checkLatestWrite = (
   });
   const latest = writes.reduce((a, b) => (isLaterWrite(key(b), key(a)) ? b : a));
   if (Object.is(actual, latest.value)) return;
-  // Whole-entity NOTE conflicts promise no per-field winner. With no crossing,
-  // however, a supplied creation/import baseline must not excuse a lost edit.
-  if (
-    type === 'note' &&
-    (ledger.hasNoteReorder ||
-      (ledger.byEntity.get(entity) ?? []).some((e) => isConcurrent(e, latest.entry)))
-  )
+  const valueWasHeld = (side: readonly LedgerEntry[]): boolean => {
+    const winner = latestOf(side);
+    if (winner.intent[0].startsWith('delete')) return false;
+    const visible = writes.filter(
+      (w) => side.includes(w.entry) || isCausalPastOf(w.entry, winner),
+    );
+    // A snapshot carries its last visible field write, not every value from
+    // its causal past. In particular, an overwritten baseline cannot return.
+    if (visible.length) {
+      const held = visible.reduce((a, b) => (isLaterWrite(key(b), key(a)) ? b : a));
+      return Object.is(held.value, actual);
+    }
+    return !!(
+      baseline &&
+      Object.is(baseline.value, actual) &&
+      isCausalPastOf(baseline, winner)
+    );
+  };
+  if (type === 'note' && ledger.noteReorders.some((e) => isConcurrent(e, latest.entry)))
     return;
   const accounted = (ledger.byEntity.get(entity) ?? []).some((other) => {
     if (other.device === latest.entry.device || !isConcurrent(other, latest.entry)) {
       return false;
     }
     const { aSide, bSide, whole } = ledger.crossing(entity, latest.entry, other);
+    // NOTE promises a whole-entity snapshot, not per-field merge. Keep that
+    // boundary while checking that some concurrent side could carry the value.
+    if (type === 'note') return valueWasHeld(aSide) || valueWasHeld(bSide);
     if (!whole || !isLaterWrite(latestOf(bSide), latestOf(aSide))) return false;
     // A whole-entity snapshot carries what its device held: its side's writes
     // and their causal past.

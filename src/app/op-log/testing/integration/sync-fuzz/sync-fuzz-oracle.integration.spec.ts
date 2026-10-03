@@ -173,6 +173,52 @@ describe('sync fuzz oracle real-path negative controls', () => {
     expect(failures.map((f) => f.signature)).toContain('older-write-won:note.content');
   }, 60_000);
 
+  for (const first of ['A', 'B']) {
+    for (const conflict of ['content', 'delete'] as const) {
+      it(`rejects lost note content in a ${conflict} crossing (${first} uploads first)`, async () => {
+        const steps: FuzzStep[] = [
+          {
+            d: 'A',
+            a:
+              conflict === 'delete'
+                ? ['deleteNote', 'n1']
+                : ['editNote', 'n1', 'content', 'A content'],
+          },
+          { d: 'B', a: ['editNote', 'n1', 'content', 'B content'] },
+          { d: first, s: 1 },
+          { d: first === 'A' ? 'B' : 'A', s: 1 },
+        ];
+        expect((await runFuzz({ steps })).failures).toEqual([]);
+        corruptOutcome((state) => {
+          (state.note as Entities).entities['n1']['content'] = 'n1';
+        });
+        const { failures } = await runFuzz({ steps });
+        expect(failures.map((f) => f.signature)).toContain(
+          'older-write-won:note.content',
+        );
+      }, 60_000);
+    }
+  }
+
+  for (const context of ['P', 'T'] as const) {
+    it(`checks an isolated note edit after a completed ${context} reorder`, async () => {
+      const steps: FuzzStep[] = [];
+      if (context === 'T') steps.push({ d: 'A', a: ['addNote', 'n4', 'T'], s: 1 });
+      steps.push(
+        { d: 'A', a: ['reorderNotes', context, 0, 1], s: 1 },
+        { d: 'A', a: ['editNote', 'n1', 'content', 'after reorder'], s: 1 },
+      );
+      const kept = await runFuzz({ steps });
+      expect(kept.steps.some((step) => step.a?.[0] === 'reorderNotes')).toBeTrue();
+      expect(kept.failures).toEqual([]);
+      corruptOutcome((state) => {
+        (state.note as Entities).entities['n1']['content'] = 'n1';
+      });
+      const { failures } = await runFuzz({ steps });
+      expect(failures.map((f) => f.signature)).toContain('older-write-won:note.content');
+    }, 60_000);
+  }
+
   it('records archive scheduling clears, including against imported content', async () => {
     const steps: FuzzStep[] = [
       { d: 'A', a: ['doneTask', 't1', true] },
