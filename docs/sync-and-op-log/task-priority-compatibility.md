@@ -8,6 +8,10 @@ for icons, labels, menu selection, sorting and filtering. Explicit priority
 changes still write numbers (or `null` to clear); selecting the same semantic
 level emits no operation.
 
+Saved device-local priority filters also accept historical `high`/`medium`/`low`
+presets. On reload they adopt the equivalent current `3`/`2`/`1` menu value, so
+both task encodings remain visible and the selected menu entry is marked.
+
 No migration, new field, schema bump, new action or plugin API change is needed.
 The task-row template is unchanged: the existing indicator caches normalization
 with a computed signal, and the menu caches it when its task input changes.
@@ -52,8 +56,11 @@ It generates a real backup, imports all six representations plus `null`, checks
 both encrypted sync directions, unrelated edits, the icon/menu, semantic no-op
 operation count, archive/restore on both clients, null clearing, restart and
 backup export. Duplication (including subtasks), sorting/filtering and all icon
-presets are covered by focused Angular specs. Real validator cases also cover
-both young and old archives.
+presets are covered by focused Angular specs. Three additional browser cases
+reload saved historical filters after receiving both task encodings through
+SuperSync, checking matching tasks and the selected menu entry at every level.
+Real validator cases invoke `appDataValidators.archiveYoung/archiveOld` directly;
+invalid-priority negative controls prove both archive checks can fail.
 
 Run with the provider runner:
 
@@ -70,12 +77,15 @@ E2E_BASE_URL=http://localhost:4246 E2E_REQUIRE_SUPERSYNC=true npm run e2e:file -
 ```
 
 Baseline: failed with all three string priorities changed to `undefined`.
-Repaired: one browser test passed, no skips. Focused Angular suites: 207 passed,
-no skips (priority indicator, duplication, bulk actions, context menu,
-customizer, auto-fix validation and frozen-state compatibility). After expanding
-the archive assertions, the 51 validator specs were rerun and passed. Local logs and
-the baseline trace are retained in `.tmp/priority-compatibility/` for the task
-handoff; these generated artifacts are not source files.
+The original mixed-encoding browser regression passed. During the follow-up
+review, all three saved-filter browser cases failed before the preset repair
+with zero matching tasks instead of two; the matching Angular reload cases also
+failed. After repair, all three saved-filter browser cases passed, no skips.
+The repaired focused Angular suites passed 202 tests (priority indicator,
+duplication, bulk actions, context menu, customizer, auto-fix validation and
+frozen-state compatibility). The archive validator file independently passed
+53 tests, including its two negative controls. These counts describe separate
+runs, not a full repository suite.
 
 ## Review
 
@@ -86,10 +96,19 @@ Fresh-context review-and-improve pass:
   now switches every non-null priority to the equivalent other encoding and
   asserts the exact received values. It also verifies unrelated notes arrive.
   The strengthened browser test passed (one test, no skips).
-- No production defects found. The reviewer independently reran the 207 focused
-  Angular specs successfully. No findings remain unfixed.
+- **Fixed:** historical saved priority presets were retained as strings, while
+  the filter compared their numeric coercion to task priorities. Reload hid all
+  tasks. Restoring each historical preset now adopts its current numeric menu
+  value using the existing priority semantics; both task encodings are preserved.
+- **Fixed:** the original archive assertions used `validateAllData`, which omits
+  both archives. The tests now call each real archive validator directly and
+  verify an invalid priority is rejected. No archive production defect was found.
+- **Not fixed:** CI's App Features Sync-button test remained unchecked after
+  re-enabling it. The exact test passed three local runs with retries disabled,
+  and the entire App Features file passed eight tests with CI's three workers.
+  The failure remains unexplained; no unsupported workaround was added.
 
-The final checks also include `checkFile` on all 16 modified TypeScript files,
-app TypeScript and Angular template compilation, E2E TypeScript compilation
+Follow-up checks include `checkFile` on all four TypeScript files changed during
+review, app TypeScript and E2E TypeScript compilation
 (`-p e2e/tsconfig.json --noEmit --baseUrl .`, resolving the existing `src/` alias),
 and documentation link validation.

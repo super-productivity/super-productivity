@@ -79,6 +79,69 @@ const exportBackup = async (page: Page): Promise<Backup> => {
   return JSON.parse(readFileSync((await (await download).path())!, 'utf8'));
 };
 
+for (const [legacy, numeric] of [
+  ['high', 3],
+  ['medium', 2],
+  ['low', 1],
+] as const) {
+  test(`@supersync restores saved ${legacy} priority filters after reload`, async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    const a = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+    const b = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+    try {
+      for (const [title, priority] of [
+        ['Legacy priority', legacy],
+        ['Numeric priority', numeric],
+        ['Other priority', null],
+      ] as const) {
+        await a.workView.addTask(title);
+        const task = (await tasks(a.page)).find((t) => t.title.endsWith(title))!;
+        await update(a.page, task.id, { priority });
+      }
+      const config = getSuperSyncConfig(await createTestUser(testRunId));
+      await a.sync.setupSuperSync(config);
+      await b.sync.setupSuperSync(config);
+      await waitForTask(b.page, 'Other priority');
+      await b.page.evaluate((preset) => {
+        localStorage.setItem(
+          'SUP_TASK_VIEW_CUSTOMIZER_BY_CONTEXT',
+          JSON.stringify({
+            ['TAG:TODAY']: { filter: { type: 'priority', preset, label: 'Priority' } },
+          }),
+        );
+      }, legacy);
+      await b.page.reload();
+      await waitForAppReady(b.page);
+      await expect(b.page.locator('task')).toHaveCount(2);
+      await expect(
+        b.page.locator('task-title', { hasText: 'Legacy priority' }),
+      ).toBeVisible();
+      await expect(
+        b.page.locator('task-title', { hasText: 'Numeric priority' }),
+      ).toBeVisible();
+      await expect(
+        b.page.locator('task-title', { hasText: 'Other priority' }),
+      ).not.toBeAttached();
+      await b.page
+        .getByRole('button', { name: 'Toggle filter/group/sort panel', exact: true })
+        .click();
+      await b.page.getByRole('menuitem', { name: /Filter By/ }).click();
+      await b.page.getByRole('menuitem', { name: 'Priority', exact: true }).click();
+      const selected = b.page.getByRole('menuitem', {
+        name: new RegExp(legacy, 'i'),
+      });
+      await expect(selected).toHaveClass(/active/);
+      await expect(selected.locator('mat-icon')).toHaveText('check');
+    } finally {
+      await closeClient(a);
+      await closeClient(b);
+    }
+  });
+}
+
 test('@supersync preserves mixed priority encodings through import, both sync directions and restart', async ({
   browser,
   baseURL,

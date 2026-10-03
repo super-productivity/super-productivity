@@ -1484,6 +1484,39 @@ describe('TaskViewCustomizerService', () => {
       expect(newService.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
     });
 
+    for (const [legacy, numeric] of [
+      ['high', 3],
+      ['medium', 2],
+      ['low', 1],
+    ] as const) {
+      it(`restores the saved ${legacy} priority preset for both task encodings`, () => {
+        localStorage.setItem(
+          LS.TASK_VIEW_CUSTOMIZER_BY_CONTEXT,
+          JSON.stringify({
+            ['TAG:TODAY']: {
+              filter: { type: FILTER_OPTION_TYPE.priority, preset: legacy },
+            },
+          }),
+        );
+        const newService = buildService(
+          of({ activeId: 'TODAY', activeType: WorkContextType.TAG }),
+        );
+        const filter = newService.selectedFilter();
+        expect(filter.preset).toBe(String(numeric));
+        expect(filter.label).toBe(T.F.TASK_VIEW.CUSTOMIZER.FILTER_PRIORITY);
+        const candidates: TaskWithSubTasks[] = [
+          { ...mockTasks[0], id: 'legacy', priority: legacy },
+          { ...mockTasks[1], id: 'numeric', priority: numeric },
+          { ...mockTasks[2], id: 'none', priority: null },
+        ];
+        expect(
+          newService['applyFilter'](candidates, filter.type, filter.preset!).map(
+            (t) => t.id,
+          ),
+        ).toEqual(['legacy', 'numeric']);
+      });
+    }
+
     it('should persist per-context state when options change', (done) => {
       service.setFilter(savedFilter);
 

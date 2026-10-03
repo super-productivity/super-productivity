@@ -195,9 +195,16 @@ export class TaskViewCustomizerService {
     const currentFilter = OPTIONS.filter.list.find(
       (option) => option.type === stored.type,
     );
-    return currentFilter
-      ? { ...currentFilter, preset: stored.preset ?? null }
-      : DEFAULT_OPTIONS.filter;
+    let preset = stored.preset ?? null;
+    // Historical local presets used the same string encoding as task priorities.
+    // Adopt the current menu value without rewriting the tasks themselves.
+    if (
+      stored.type === FILTER_OPTION_TYPE.priority &&
+      (preset === 'high' || preset === 'medium' || preset === 'low')
+    ) {
+      preset = String(getTaskPriority(preset));
+    }
+    return currentFilter ? { ...currentFilter, preset } : DEFAULT_OPTIONS.filter;
   }
 
   customizeUndoneTasks(

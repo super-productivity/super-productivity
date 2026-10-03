@@ -1,6 +1,6 @@
 import { autoFixTypiaErrors } from './auto-fix-typia-errors';
 import { createAppDataCompleteMock } from '../../util/app-data-mock';
-import { validateAllData } from './validation-fn';
+import { appDataValidators, validateAllData } from './validation-fn';
 import type { AppDataComplete } from '../model/model-config';
 import type { IValidation } from 'typia';
 import { initialTaskState } from '../../features/tasks/store/task.reducer';
@@ -932,11 +932,28 @@ describe('autoFixTypiaErrors — mixed task priority encodings', () => {
       const d = withTaskPriority(priority);
       const before = validateAllData(d);
       expect(before.success).toBe(true);
+      expect(appDataValidators.archiveYoung(d.archiveYoung).success).toBe(true);
+      expect(appDataValidators.archiveOld(d.archiveOld).success).toBe(true);
       const result = autoFixTypiaErrors(d, before.success ? [] : before.errors);
       expect(result.task.entities.t1!.priority).toBe(priority);
       expect(result.archiveYoung.task.entities.young!.priority).toBe(priority);
       expect(result.archiveOld.task.entities.old!.priority).toBe(priority);
       expect(validateAllData(result).success).toBe(true);
+      expect(appDataValidators.archiveYoung(result.archiveYoung).success).toBe(true);
+      expect(appDataValidators.archiveOld(result.archiveOld).success).toBe(true);
+    });
+  }
+
+  for (const archive of ['archiveYoung', 'archiveOld'] as const) {
+    it(`rejects an invalid priority in ${archive}`, () => {
+      const d = withTaskPriority('invalid');
+      const result = appDataValidators[archive](d[archive]);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.errors.some((error) => error.path.endsWith('.priority'))).toBe(
+          true,
+        );
+      }
     });
   }
 
