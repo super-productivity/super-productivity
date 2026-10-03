@@ -198,6 +198,8 @@ describe('LocalRestApiHandlerService', () => {
         list$: of([]),
       },
     );
+    (projectServiceMock as any).add.and.returnValue('new-project-id');
+    (projectServiceMock as any).getByIdOnce$ = (_id: string) => of(undefined);
     Object.defineProperty(projectServiceMock, 'list', {
       value: (() => activeProjects) as ProjectService['list'],
     });
@@ -2529,6 +2531,30 @@ describe('LocalRestApiHandlerService', () => {
       service.init();
     });
 
+    const createMockProject = (
+      id: string,
+      overrides: Record<string, unknown> = {},
+    ): Project =>
+      ({
+        id,
+        title: `Project ${id}`,
+        icon: 'list_alt',
+        isArchived: false,
+        isHiddenFromMenu: false,
+        isEnableBacklog: false,
+        taskIds: [],
+        backlogTaskIds: [],
+        noteIds: [],
+        advancedCfg: {},
+        theme: {},
+        ...overrides,
+      }) as unknown as Project;
+
+    const setProjectStore = (projects: (Project | undefined)[]): void => {
+      (projectServiceMock as any).getByIdOnce$ = (id: string) =>
+        of(projects.find((p) => p?.id === id));
+    };
+
     describe('GET /projects', () => {
       it('should return all projects', async () => {
         const projects = [
@@ -2554,6 +2580,332 @@ describe('LocalRestApiHandlerService', () => {
         );
 
         expect(response.body.ok).toBe(true);
+      });
+    });
+
+    describe('GET /projects/:id', () => {
+      it('should return a project by id', async () => {
+        const project = createMockProject('p1', { title: 'Work' });
+        setProjectStore([project]);
+
+        const response = await sendRequestAndWait(createRequest('GET', '/projects/p1'));
+
+        expect(response.body.ok).toBe(true);
+        expect(response.status).toBe(200);
+        expect((response.body as any).data).toEqual(project);
+      });
+
+      it('should return 404 for a non-existent project', async () => {
+        setProjectStore([]);
+
+        const response = await sendRequestAndWait(
+          createRequest('GET', '/projects/missing'),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(404);
+        expect((response.body as any).error.code).toBe('PROJECT_NOT_FOUND');
+      });
+    });
+
+    describe('POST /projects', () => {
+      it('should create a project and strip unknown fields', async () => {
+        const createdProject = createMockProject('new-project-id', {
+          title: 'Symphony',
+          icon: 'hub',
+        });
+        setProjectStore([createdProject]);
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects', {
+            body: {
+              title: '  Symphony  ',
+              icon: 'hub',
+              unknownField: 'ignored',
+            },
+          }),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(response.status).toBe(201);
+        expect(projectServiceMock.add).toHaveBeenCalledWith({
+          title: 'Symphony',
+          icon: 'hub',
+        });
+        expect((response.body as any).data).toEqual(createdProject);
+      });
+
+      it('should not let an injected id through', async () => {
+        setProjectStore([createMockProject('new-project-id', { title: 'X' })]);
+
+        await sendRequestAndWait(
+          createRequest('POST', '/projects', { body: { title: 'X', id: 'injected-id' } }),
+        );
+
+        expect(projectServiceMock.add).toHaveBeenCalledWith({ title: 'X' });
+      });
+
+      it('should reject taskIds with 400 UNSUPPORTED_FIELD and not create', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects', {
+            body: { title: 'X', taskIds: ['unsafe'] },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+        expect(projectServiceMock.add).not.toHaveBeenCalled();
+      });
+
+      it('should reject backlogTaskIds and noteIds with 400', async () => {
+        for (const field of ['backlogTaskIds', 'noteIds']) {
+          const response = await sendRequestAndWait(
+            createRequest('POST', '/projects', { body: { title: 'X', [field]: [] } }),
+          );
+          expect(response.status).toBe(400);
+          expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+        }
+        expect(projectServiceMock.add).not.toHaveBeenCalled();
+      });
+
+      it('should return 400 for a missing title', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects', { body: { icon: 'hub' } }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect(projectServiceMock.add).not.toHaveBeenCalled();
+      });
+
+      it('should return 400 for an empty title', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects', { body: { title: '   ' } }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect(projectServiceMock.add).not.toHaveBeenCalled();
+      });
+
+      it('should return 400 for a non-string title', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects', { body: { title: 123 } }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+      });
+
+      it('should return 400 for a non-boolean isEnableBacklog', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects', {
+            body: { title: 'X', isEnableBacklog: 'yes' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect((response.body as any).error.details).toBeDefined();
+        expect(projectServiceMock.add).not.toHaveBeenCalled();
+      });
+
+      it('should reject isArchived (use /archive instead)', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects', {
+            body: { title: 'X', isArchived: 'true' },
+          }),
+        );
+
+        // isArchived is not in the allowlist: the string value is stripped
+        // silently (like unknown fields), the project is still created.
+        expect(response.body.ok).toBe(true);
+        expect(projectServiceMock.add).toHaveBeenCalledWith({ title: 'X' });
+      });
+
+      it('should return 400 for a non-object body', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects', { body: 'just a string' }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+      });
+    });
+
+    describe('PATCH /projects/:id', () => {
+      it('should update an existing project', async () => {
+        const existing = createMockProject('p1', { title: 'Old' });
+        setProjectStore([existing]);
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/projects/p1', {
+            body: { title: '  New  ', icon: 'hub', unknownField: 'ignored' },
+          }),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(response.status).toBe(200);
+        expect(projectServiceMock.update).toHaveBeenCalledWith('p1', {
+          title: 'New',
+          icon: 'hub',
+        });
+      });
+
+      it('should return 404 for a non-existent project', async () => {
+        setProjectStore([]);
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/projects/missing', { body: { title: 'New' } }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(404);
+        expect((response.body as any).error.code).toBe('PROJECT_NOT_FOUND');
+        expect(projectServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should reject taskIds with 400 UNSUPPORTED_FIELD', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/projects/p1', { body: { taskIds: ['unsafe'] } }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+        expect(projectServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should return 400 for an empty title', async () => {
+        setProjectStore([createMockProject('p1')]);
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/projects/p1', { body: { title: '  ' } }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect(projectServiceMock.update).not.toHaveBeenCalled();
+      });
+
+      it('should return 400 for a wrong-typed isHiddenFromMenu', async () => {
+        setProjectStore([createMockProject('p1')]);
+
+        const response = await sendRequestAndWait(
+          createRequest('PATCH', '/projects/p1', { body: { isHiddenFromMenu: 1 } }),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('INVALID_INPUT');
+        expect(projectServiceMock.update).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('DELETE /projects/:id', () => {
+      it('should delete an existing project', async () => {
+        const project = createMockProject('p1');
+        setProjectStore([project]);
+
+        const response = await sendRequestAndWait(
+          createRequest('DELETE', '/projects/p1'),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(response.status).toBe(200);
+        expect((response.body as any).data).toEqual({ id: 'p1', deleted: true });
+        expect(projectServiceMock.remove).toHaveBeenCalledWith(project);
+      });
+
+      it('should return 404 for a non-existent project', async () => {
+        setProjectStore([]);
+
+        const response = await sendRequestAndWait(
+          createRequest('DELETE', '/projects/missing'),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(404);
+        expect((response.body as any).error.code).toBe('PROJECT_NOT_FOUND');
+        expect(projectServiceMock.remove).not.toHaveBeenCalled();
+      });
+
+      it('should reject deleting the Inbox', async () => {
+        const response = await sendRequestAndWait(
+          createRequest('DELETE', '/projects/INBOX_PROJECT'),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(400);
+        expect((response.body as any).error.code).toBe('UNSUPPORTED_FIELD');
+        expect(projectServiceMock.remove).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('POST /projects/:id/archive and /unarchive', () => {
+      it('should archive an active project via the dedicated action', async () => {
+        setProjectStore([createMockProject('p1', { isArchived: false })]);
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects/p1/archive'),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(response.status).toBe(200);
+        expect((response.body as any).data).toEqual({ id: 'p1', archived: true });
+      });
+
+      it('should unarchive an archived project', async () => {
+        setProjectStore([createMockProject('p1', { isArchived: true })]);
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects/p1/unarchive'),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(response.status).toBe(200);
+        expect((response.body as any).data).toEqual({ id: 'p1', archived: false });
+      });
+
+      it('should be idempotent when already in the requested state', async () => {
+        setProjectStore([createMockProject('p1', { isArchived: true })]);
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects/p1/archive'),
+        );
+
+        expect(response.body.ok).toBe(true);
+        expect(response.status).toBe(200);
+        expect((response.body as any).data).toEqual({ id: 'p1', archived: true });
+      });
+
+      it('should return 404 for a non-existent project', async () => {
+        setProjectStore([]);
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects/missing/archive'),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(404);
+        expect((response.body as any).error.code).toBe('PROJECT_NOT_FOUND');
+      });
+
+      it('should return 404 for unknown project sub-routes', async () => {
+        setProjectStore([createMockProject('p1')]);
+
+        const response = await sendRequestAndWait(
+          createRequest('POST', '/projects/p1/unknown'),
+        );
+
+        expect(response.body.ok).toBe(false);
+        expect(response.status).toBe(404);
+        expect((response.body as any).error.code).toBe('NOT_FOUND');
       });
     });
   });

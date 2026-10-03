@@ -11,6 +11,8 @@ import { TaskArchiveService } from '../../features/archive/task-archive.service'
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { ProjectService } from '../../features/project/project.service';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
+import { Project } from '../../features/project/project.model';
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TagService } from '../../features/tag/tag.service';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
 import { TODAY_TAG } from '../../features/tag/tag.const';
@@ -19,6 +21,12 @@ import { isTodayWithOffset } from '../../util/is-today.util';
 import { isValidDBDateStr } from '../../util/get-db-date-str';
 import { IssueLog } from '../log';
 import { LOCAL_REST_API_FEATURE_BRIDGE } from './local-rest-api-feature-bridge';
+import {
+  handleCreateProject,
+  handleProjectRoutes,
+} from './local-rest-api-project-routes';
+import type { LocalRestApiProjectDeps } from './local-rest-api-project-routes';
+import { createErrorResponse, createSuccessResponse } from './local-rest-api-response';
 
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports -- grandfathered layer-boundary debt
@@ -335,38 +343,6 @@ const getQueryParamAsBoolean = (
   return value.toLowerCase() === 'true';
 };
 
-const createErrorResponse = (
-  requestId: string,
-  status: number,
-  code: string,
-  message: string,
-  details?: unknown,
-): LocalRestApiResponsePayload => ({
-  requestId,
-  status,
-  body: {
-    ok: false,
-    error: {
-      code,
-      message,
-      details,
-    },
-  },
-});
-
-const createSuccessResponse = (
-  requestId: string,
-  status: number,
-  data: unknown,
-): LocalRestApiResponsePayload => ({
-  requestId,
-  status,
-  body: {
-    ok: true,
-    data,
-  },
-});
-
 type TaskSource = 'active' | 'archived' | 'all';
 
 /**
@@ -403,6 +379,16 @@ export class LocalRestApiHandlerService {
   private readonly _featureBridge = inject(LOCAL_REST_API_FEATURE_BRIDGE);
   private readonly _store = inject(Store);
   private _isInitialized = false;
+
+  /**
+   * Dependencies for the delegated project REST routes
+   * (local-rest-api-project-routes.ts). Kept as a method rather than
+   * constructor-injected fields so the delegated helpers stay pure functions
+   * of their arguments and the spec can swap the mocks per test.
+   */
+  private _projectDeps(): LocalRestApiProjectDeps {
+    return { projectService: this._projectService, store: this._store };
+  }
 
   private _dispatchDeadlineChange(taskId: string, change: DeadlineChange): void {
     if (change.type === 'clearReminder') {
@@ -499,6 +485,14 @@ export class LocalRestApiHandlerService {
 
     if (method === 'GET' && path === '/projects') {
       return this._handleListProjects(requestId, query);
+    }
+
+    if (method === 'POST' && path === '/projects') {
+      return handleCreateProject(this._projectDeps(), payload);
+    }
+
+    if (segments[0] === 'projects' && segments[1]) {
+      return handleProjectRoutes(this._projectDeps(), payload, segments);
     }
 
     if (method === 'GET' && path === '/tags') {
@@ -1100,8 +1094,15 @@ export class LocalRestApiHandlerService {
     }
   }
 
-  // The id equality checks reject prototype-property names ('constructor',
-  // 'toString', …) that entity-map lookups resolve to truthy non-tasks.
+  // The id equality check rejects prototype-property names ('constructor',
+  // 'toString', …) that entity-map lookups resolve to truthy non-projects.
+  // Archived projects stay readable by id (GET/PATCH), they are just excluded
+  // from the list endpoint and from being a task-move destination.
+  private async _getProjectById(projectId: string): Promise<Project | undefined> {
+    const project = await firstValueFrom(this._projectService.getByIdOnce$(projectId));
+    return project?.id === projectId ? project : undefined;
+  }
+
   private async _getTaskById(taskId: string): Promise<Task | undefined> {
     const task = await firstValueFrom(this._taskService.getByIdOnce$(taskId));
     return task?.id === taskId ? task : undefined;
