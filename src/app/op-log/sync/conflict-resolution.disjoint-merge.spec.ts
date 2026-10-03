@@ -1620,7 +1620,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       );
     });
 
-    it('keeps a local time delta pending and rebases it, even when no field is re-sent', async () => {
+    it('keeps a local time delta pending unchanged, even when no field is re-sent', async () => {
       mockStore.select.and.returnValue(of({ id: 'task-1', title: 'A title' }));
       const rename = title({ id: 'l-rename', clientId: 'A', vectorClock: { A: 1 } }, 'A');
       const delta = op({
@@ -1645,15 +1645,13 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       await service.autoResolveConflictsLWW([conflictOf([rename, delta], [remote])]);
 
       // The rename lost and the delta's arguments are no fields: nothing is
-      // re-sent, and the delta stays pending, rebased past the remote side.
+      // re-sent, and the delta stays pending with its original identity.
       expect(mergedOpArgs()).toBeUndefined();
       expect(appliedOpIds()).toEqual(['r']);
       const rejected = mockOpLogStore.markRejected.calls.allArgs().flat(2);
       expect(rejected).toContain('l-rename');
       expect(rejected).not.toContain('l-delta');
-      expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledWith(['l-delta'], {
-        B: 1,
-      });
+      expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
     });
 
     it('re-sends a pending edit beside a newer remote patch row that does not write its field (#10260, #10422)', async () => {

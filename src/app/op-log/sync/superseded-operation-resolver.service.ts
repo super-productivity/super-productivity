@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import {
   ActionType,
+  isFullStateOpType,
   isLwwUpdatePayload,
   Operation,
   OperationLogEntry,
@@ -240,17 +241,24 @@ export class SupersededOperationResolverService {
   /**
    * The causal proof for a rejection: the one retained row whose clock is the
    * `existingClock` the server compared against, when it is an applied, synced
-   * remote op concurrent with the rejected one.
+   * remote op concurrent with the rejected one. Delta-only recovery also
+   * admits a timeless successor patch, including this client's own patch.
    */
   private _findAppliedConflictRow(
     item: SupersededOperation,
     context: SectionCausalReplayContext,
+    allowTimelessSuccessor = false,
   ): OperationLogEntry | undefined {
     const existingClock = item.existingClock;
     if (
       !existingClock ||
-      compareVectorClocks(item.op.vectorClock, existingClock) !==
-        VectorClockComparison.CONCURRENT
+      (compareVectorClocks(item.op.vectorClock, existingClock) !==
+        VectorClockComparison.CONCURRENT &&
+        !(
+          allowTimelessSuccessor &&
+          compareVectorClocks(item.op.vectorClock, existingClock) ===
+            VectorClockComparison.LESS_THAN
+        ))
     ) {
       return undefined;
     }
@@ -271,10 +279,28 @@ export class SupersededOperationResolverService {
     }
     const matchingRetainedEntries = Array.from(matchingRetainedEntriesById.values());
     const row = matchingRetainedEntries[0];
+    // A later patch may have been accepted while this delta was rejected.
+    // Its merged clock can cover the delta without carrying any of its time.
+    // Read only patch keys through the existing commuting predicate (D5a).
+    const isTimelessSuccessor =
+      allowTimelessSuccessor &&
+      row &&
+      isLwwUpdatePayload(row.op.payload) &&
+      isCommutingTimeDeltaCrossing({
+        localOps: [item.op],
+        remoteOps: [row.op],
+        payloadKey: 'task',
+        entityId: item.op.entityId!,
+      });
     return matchingRetainedEntries.length === 1 &&
-      row.source === 'remote' &&
       row.syncedAt !== undefined &&
-      row.applicationStatus === 'applied' &&
+      ((row.source === 'remote' && row.applicationStatus === 'applied') ||
+        (isTimelessSuccessor &&
+          row.source === 'local' &&
+          row.op.clientId === item.op.clientId)) &&
+      (compareVectorClocks(item.op.vectorClock, row.op.vectorClock) ===
+        VectorClockComparison.CONCURRENT ||
+        isTimelessSuccessor) &&
       row.rejectedAt === undefined &&
       row.reducerRejectedAt === undefined
       ? row
@@ -289,8 +315,12 @@ export class SupersededOperationResolverService {
    * (`rebasePendingLocalOps`): a `syncTimeSpent` delta stays additive instead
    * of becoming an LWW snapshot that overwrites other devices' concurrent time,
    * and it still replays exactly once. The proof is the applied row whose clock
-   * the server compared against, so no full re-download is needed.
+   * the server compared against, so no full re-download is needed. A timeless
+   * successor patch is also admissible when every intervening task op commutes.
    *
+   * SuperSync checks duplicate IDs before conflicts: a conflict rejection
+   * proves this ID was absent at that decision. An ambiguous/lost response
+   * proves nothing and must retry the original identity, also on file providers.
    * Only ops this upload got rejected move, and no other tab uploads meanwhile
    * (UPLOAD lock). Any other pending op may be one another tab uploaded and has
    * not marked synced yet; moving it would turn its re-upload into an
@@ -359,7 +389,13 @@ export class SupersededOperationResolverService {
         const taskEntries = pendingEntries.filter(({ op }) =>
           getOpEntityIds(op).includes(taskId),
         );
+        if (taskEntries.length === 0) {
+          continue;
+        }
         const pendingOps = taskEntries.map(({ op }) => op);
+        const onlyDeltas = pendingOps.every(
+          (op) => op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        );
         // The server may already hold later ops of the task from this client:
         // against a crossing delta it accepts this client's own delta and each
         // op dominating it. Receivers apply the moved ops after those, so they
@@ -385,12 +421,30 @@ export class SupersededOperationResolverService {
           // Ops of other entity types write these task fields too, where no
           // check here sees them (deleting a tag rewrites every task's tagIds).
           // A moved op touching one could land on the wrong side of such a write.
-          !touchesCrossEntityTaskFields(
-            [...pendingOps, ...acceptedLaterOps],
-            payloadKey,
-            taskId,
-          ) &&
+          (onlyDeltas ||
+            !touchesCrossEntityTaskFields(
+              [...pendingOps, ...acceptedLaterOps],
+              payloadKey,
+              taskId,
+            )) &&
+          // A delta moved past its successor must commute with the entire
+          // intervening task history, not just the last patch. A replace or
+          // absolute time write could already include its contribution.
+          (!onlyDeltas ||
+            tail.every(
+              ({ seq, op }) =>
+                seq <= taskEntries[0].seq ||
+                (!isFullStateOpType(op.opType) &&
+                  (!getOpEntityIds(op).includes(taskId) ||
+                    isCommutingTimeDeltaCrossing({
+                      localOps: pendingOps,
+                      remoteOps: [op],
+                      payloadKey,
+                      entityId: taskId,
+                    }))),
+            )) &&
           (acceptedLaterOps.length === 0 ||
+            onlyDeltas ||
             isDisjointMergeEligible({
               localOps: pendingOps,
               remoteOps: acceptedLaterOps,
@@ -398,12 +452,13 @@ export class SupersededOperationResolverService {
               entityId: taskId,
             })) &&
           items.every((item) => {
-            const row = this._findAppliedConflictRow(item, context);
+            const row = this._findAppliedConflictRow(item, context, onlyDeltas);
             if (!row) return false;
             const crossing = pendingOps.filter(
               (op) =>
+                onlyDeltas ||
                 compareVectorClocks(op.vectorClock, row.op.vectorClock) ===
-                VectorClockComparison.CONCURRENT,
+                  VectorClockComparison.CONCURRENT,
             );
             clockToDominate = mergeVectorClocks(clockToDominate, row.op.vectorClock);
             return (

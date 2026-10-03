@@ -62,7 +62,9 @@ same field, each at that write's own timestamp (see
 * both sides changed at least one real (non-noise) field, or the remote
   side holds such a row;
 * time stays out of the patch: a local `syncTimeSpent` delta is kept pending
-  and rebased past the remote side instead; a remote delta, `removeTimeSpent`,
+  with its original ID, clock and payload; only a confirmed SuperSync
+  conflict rejection permits a commuting rebase. Lost responses retry unchanged;
+  a remote delta, `removeTimeSpent`,
   or a delta beside an absolute time write (or beside a remote row that may
   write time) refuses the patch;
 * an overlapping patch that would clear a reminder field (`reminderId`,

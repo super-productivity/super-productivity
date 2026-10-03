@@ -83,6 +83,8 @@ describe('SupersededOperationResolverService', () => {
       'appendWithVectorClockOverwrite',
       'getOpsAfterSeq',
       'getUnsynced',
+      'rebasePendingLocalOps',
+      'invalidateUnsyncedCache',
     ]);
     mockVectorClockService = jasmine.createSpyObj('VectorClockService', [
       'getCurrentVectorClock',
@@ -188,6 +190,142 @@ describe('SupersededOperationResolverService', () => {
     });
 
     service = TestBed.inject(SupersededOperationResolverService);
+  });
+
+  describe('rejected deltas beside accepted successor patches', () => {
+    it('skips a task already resolved during download while another remains pending', async () => {
+      const resolved = createMockOperation('resolved', 'TASK', 'task-1', {
+        [TEST_CLIENT_ID]: 1,
+      });
+      const pending: Operation = {
+        ...createMockOperation('pending', 'TASK', 'task-2', { [TEST_CLIENT_ID]: 2 }),
+        clientId: TEST_CLIENT_ID,
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        payload: { taskId: 'task-2', date: '2026-10-03', duration: 3000 },
+      };
+      const successor: Operation = {
+        ...createMockOperation('patch', 'TASK', 'task-2', {
+          [TEST_CLIENT_ID]: 3,
+          remote: 1,
+        }),
+        clientId: TEST_CLIENT_ID,
+        payload: {
+          lwwUpdateMode: 'patch',
+          actionPayload: { title: 'B' },
+          entityChanges: [],
+        },
+      };
+      mockOpLogStore.getUnsynced.and.resolveTo([
+        { seq: 2, op: pending, source: 'local', appliedAt: 2 },
+      ]);
+      mockOpLogStore.getOpsAfterSeq.and.resolveTo([
+        { seq: 3, op: successor, source: 'local', appliedAt: 3, syncedAt: 3 },
+      ]);
+      mockOpLogStore.rebasePendingLocalOps.and.resolveTo([pending]);
+
+      const recovered = await service.rebaseCommutingTimeDeltaRejections([
+        { opId: resolved.id, op: resolved, existingClock: { remote: 1 } },
+        { opId: pending.id, op: pending, existingClock: successor.vectorClock },
+      ]);
+
+      expect([...recovered]).toEqual([pending.id]);
+      expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledOnceWith(
+        [pending.id],
+        successor.vectorClock,
+      );
+    });
+
+    for (const shape of [
+      'own patch',
+      'remote patch',
+      'replace',
+      'time write',
+      'time clear',
+      'unacknowledged',
+      'unapplied',
+      'intervening time write',
+      'missing row',
+      'unrejected delta',
+    ] as const) {
+      it(`checks the recovery proof for ${shape}`, async () => {
+        const delta: Operation = {
+          ...createMockOperation('delta', 'TASK', 'task-1', { [TEST_CLIENT_ID]: 1 }),
+          clientId: TEST_CLIENT_ID,
+          actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          payload: { taskId: 'task-1', date: '2026-10-03', duration: 3000 },
+        };
+        const row: Operation = {
+          ...createMockOperation('patch', 'TASK', 'task-1', {
+            [TEST_CLIENT_ID]: 2,
+            remote: 1,
+          }),
+          clientId:
+            shape === 'remote patch' || shape === 'unapplied' ? 'remote' : TEST_CLIENT_ID,
+          payload: {
+            lwwUpdateMode: shape === 'replace' ? 'replace' : 'patch',
+            actionPayload: shape === 'time write' ? { timeSpent: 3000 } : { title: 'B' },
+            entityChanges: [],
+            ...(shape === 'time clear' ? { clearedFields: ['timeSpentOnDay'] } : {}),
+          },
+        };
+        const pending: OperationLogEntry = {
+          seq: 1,
+          op: delta,
+          source: 'local',
+          appliedAt: 1,
+        };
+        const entry: OperationLogEntry = {
+          seq: 3,
+          op: row,
+          source: row.clientId === TEST_CLIENT_ID ? 'local' : 'remote',
+          appliedAt: 3,
+          syncedAt: shape === 'unacknowledged' ? undefined : 3,
+          applicationStatus: shape === 'unapplied' ? 'pending' : 'applied',
+        };
+        const tail = shape === 'missing row' ? [] : [entry];
+        if (shape === 'intervening time write') {
+          tail.unshift({
+            ...entry,
+            seq: 2,
+            op: {
+              ...row,
+              id: 'absolute',
+              vectorClock: { remote: 1 },
+              payload: {
+                lwwUpdateMode: 'patch',
+                actionPayload: { timeSpent: 3000 },
+                entityChanges: [],
+              },
+            },
+          });
+        }
+        mockOpLogStore.getUnsynced.and.resolveTo([
+          pending,
+          ...(shape === 'unrejected delta'
+            ? [{ ...pending, seq: 2, op: { ...delta, id: 'uncertain' } }]
+            : []),
+        ]);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo(tail);
+        mockOpLogStore.rebasePendingLocalOps.and.resolveTo([delta]);
+        const recovered = await service.rebaseCommutingTimeDeltaRejections([
+          { opId: delta.id, op: delta, existingClock: row.vectorClock },
+        ]);
+        const allowed = shape === 'own patch' || shape === 'remote patch';
+        expect([...recovered]).toEqual(allowed ? [delta.id] : []);
+        if (allowed) {
+          expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledWith(
+            [delta.id],
+            row.vectorClock,
+          );
+          expect(mockLockService.request.calls.allArgs().map(([name]) => name)).toEqual([
+            'sp_op_log_upload',
+            'sp_op_log',
+          ]);
+        } else {
+          expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
+        }
+      });
+    }
   });
 
   describe('resolveSupersededLocalOps', () => {
