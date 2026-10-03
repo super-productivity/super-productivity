@@ -50,7 +50,7 @@
     "dotenv": "^17.2.3",
     "fastify": "^5.12.1",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^9.1.1",
+    "nodemailer": "^10.0.12",
     "uuidv7": "^1.1.0",
     "zod": "^4.4.3"
   },
@@ -67,6 +67,6 @@
     "supertest": "^7.1.4",
     "ts-node": "^10.9.1",
     "typescript": "^5.0.0",
-    "vitest": "^4.1.6"
+    "vitest": "^5.0.2"
   }
 }
