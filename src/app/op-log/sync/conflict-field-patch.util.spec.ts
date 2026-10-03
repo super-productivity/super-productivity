@@ -4,7 +4,6 @@ import {
   isFieldPatchEligible,
   keptLocalTimeDeltas,
   localWinningFieldGroups,
-  rebaseKeptTimeDeltas,
   supersededPatchFields,
   survivingLocalFields,
   timeDeltasSurvivingRemoteWins,
@@ -324,7 +323,7 @@ describe('conflict-field-patch.util', () => {
     });
   });
 
-  describe('keptLocalTimeDeltas / rebaseKeptTimeDeltas', () => {
+  describe('keptLocalTimeDeltas', () => {
     const conflict: EntityConflict = {
       entityType: 'TASK' as EntityType,
       entityId: 'task-1',
@@ -336,39 +335,9 @@ describe('conflict-field-patch.util', () => {
       suggestedResolution: 'manual',
     };
 
-    it('keeps only the local deltas and dominates every remote op', () => {
+    it('keeps only the local deltas', () => {
       const kept = keptLocalTimeDeltas([conflict]);
       expect([...kept.opIds]).toEqual(['d']);
-      expect(kept.clockToDominate).toEqual({ B: 2, C: 1 });
-    });
-
-    it('rebases the pending deltas with the patches after them', async () => {
-      const store = {
-        getOpById: jasmine
-          .createSpy('getOpById')
-          .and.resolveTo({ source: 'local' } as { source: string }),
-        rebasePendingLocalOps: jasmine.createSpy('rebase').and.resolveTo([]),
-      };
-      await rebaseKeptTimeDeltas(store, keptLocalTimeDeltas([conflict]), ['patch']);
-      expect(store.rebasePendingLocalOps).toHaveBeenCalledWith(['d', 'patch'], {
-        B: 2,
-        C: 1,
-      });
-    });
-
-    it('leaves an already-uploaded delta and the patches alone', async () => {
-      const store = {
-        getOpById: jasmine.createSpy('getOpById').and.resolveTo({
-          source: 'local',
-          syncedAt: 1,
-        } as {
-          source: string;
-          syncedAt?: number;
-        }),
-        rebasePendingLocalOps: jasmine.createSpy('rebase').and.resolveTo([]),
-      };
-      await rebaseKeptTimeDeltas(store, keptLocalTimeDeltas([conflict]), ['patch']);
-      expect(store.rebasePendingLocalOps).not.toHaveBeenCalled();
     });
   });
 
@@ -399,12 +368,11 @@ describe('conflict-field-patch.util', () => {
     const survivors = (winner: 'local' | 'remote', c: EntityConflict): EntityConflict[] =>
       timeDeltasSurvivingRemoteWins([{ conflict: c, winner }], 'task');
 
-    it('keeps the local delta beside a winner that writes no time, rebased past it', () => {
+    it('keeps the local delta beside a winner that writes no time', () => {
       const [kept] = survivors('remote', conflict(tick, [remotePlan]));
       expect(kept.localOps.map((o) => o.id)).toEqual(['d']);
       const clocks = keptLocalTimeDeltas([kept]);
       expect([...clocks.opIds]).toEqual(['d']);
-      expect(clocks.clockToDominate).toEqual({ B: 1 });
     });
 
     it('leaves a local win to its snapshot', () => {

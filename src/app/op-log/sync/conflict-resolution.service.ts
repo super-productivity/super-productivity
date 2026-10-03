@@ -119,7 +119,6 @@ import {
   aggregateEntityConflict,
   fieldPatchGroups,
   keptLocalTimeDeltas,
-  rebaseKeptTimeDeltas,
   timeDeltasSurvivingRemoteWins,
   buildSurvivingFieldPatches,
 } from './conflict-field-patch.util';
@@ -1030,7 +1029,7 @@ export class ConflictResolutionService {
       ...additionalLocalIntentOps,
     ]);
     const { remoteWinnerAffectedEntityKeys } = lwwPartitions;
-    // A patched conflict's local time deltas stay pending (rebased in STEP 3b),
+    // A patched conflict's local time deltas stay pending with immutable identity,
     // and so do those beside a remote winner that writes no time (#10378).
     const keptDeltas = keptLocalTimeDeltas([
       ...mergedResolutions.map((m) => m.conflict),
@@ -1461,7 +1460,6 @@ export class ConflictResolutionService {
     // ─────────────────────────────────────────────────────────────────────────
     const resendOps = mergedResolutions.flatMap((merged) => merged.mergedOps);
     const resendIds = new Set(resendOps.map((op) => op.id));
-    let writtenResendIds: string[] = [];
     const hasLocalResolutionOps =
       newLocalWinOps.length > 0 ||
       localMultiReconciliationOps.length > 0 ||
@@ -1548,7 +1546,6 @@ export class ConflictResolutionService {
           });
         }
       }
-      writtenResendIds = writtenResends.map((entry) => entry.op.id);
       // Apply/upload the WRITTEN re-sends: they carry the rebased clocks.
       for (const { op } of writtenResends) {
         checkpointExemptOpIds.add(op.id);
@@ -1628,9 +1625,6 @@ export class ConflictResolutionService {
           localOpsToRejectSet.add(op.id);
         }
       }
-    }
-    if (keptDeltas.opIds.size > 0) {
-      await rebaseKeptTimeDeltas(this.opLogStore, keptDeltas, writtenResendIds);
     }
 
     await rebaseKeptReorders(this.opLogStore, keptReorders, new Set(remoteOpsToReject));

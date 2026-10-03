@@ -143,10 +143,10 @@ hydration must replay identically.
 - **A patch:**
   - omits the time fields;
   - applies the remote deltas;
-  - keeps the local delta out of the rejected set and rebases it in place past
-    the resolution clock (`rebasePendingLocalOps`, as
-    `SupersededOperationResolverService` already does). Its id, seq and
-    payload stay, so it uploads once and replays once.
+  - keeps the local delta out of the rejected set with its original ID, clock
+    and payload. Only a confirmed SuperSync conflict rejection permits an
+    in-place clock rebase (`rebaseCommutingTimeDeltaRejections`); a lost
+    response retries unchanged. File providers deduplicate the original ID.
 - **Not a new op.** Restart replay is status-blind
   ([`operation-log-hydrator.service.ts`](../../src/app/op-log/persistence/operation-log-hydrator.service.ts)),
   so a rejected original plus a re-sent copy would add the time twice.
@@ -318,7 +318,7 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
    tracking an unscheduled task emits (its reducer spec proves it writes no
    time). So a remote delta beside a pending auto-plan applies without a
    conflict, and a local win's snapshot folds it in; on a remote win whose
-   ops all write no time, the local deltas stay pending and are rebased past
+   ops all write no time, the local deltas stay pending unchanged beside
    the winner (`timeDeltasSurvivingRemoteWins`). The same crossing with
    no pending side (#9073), where a device's own auto-plan and delta were
    already synced when the other device's accepted delta arrives, commutes
@@ -327,8 +327,7 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
    history in the harness spec below; E2E in
    `supersync-time-delta-auto-plan-crossing.spec.ts`). A delta a remote op's
    clock covers loses: that device had seen it, so it was delivered and
-   counts once (keeping it re-sends it with a rebased clock, which the server
-   rejects as `INVALID_OP_ID` with a sync error). D10 refined (#10393) asks to
+   counts once. D10 refined (#10393) asks to
    keep a delta whose coverage is only inherited knowledge; the harness spec
    `time-delta-kept-beside-timeless-winner.integration.spec.ts` builds such a
    clock through the real paths, and a concurrent op of the same crossing
@@ -385,8 +384,15 @@ holds the rules; `ConflictResolutionService._tryCreateFieldPatch` builds the op.
   their order on this device is not fixed, so that crossing can still diverge
   (residual, as before #10438).
 - **Time:** a local `syncTimeSpent` delta is neither in the patch nor
-  rejected. It stays pending and is rebased in place past the remote sides,
-  together with the patch after it (`rebaseKeptTimeDeltas`). A remote delta,
+  rejected. It stays pending with its original ID, clock and payload, even
+  when its upload response was lost. SuperSync checks duplicates before
+  conflicts, so only a received conflict rejection proves the delta was not
+  stored and permits `rebaseCommutingTimeDeltaRejections` to move its clock.
+  That path accepts an applied, acknowledged timeless patch (including the
+  same client's successor), only when all intervening task operations commute.
+  It reads patch keys, never values (D5a); absolute time writes and replace
+  rows retain their existing fallback. File providers retry unchanged and
+  deduplicate by operation ID. A remote delta,
   `removeTimeSpent`, or a delta beside an absolute time write keeps the
   whole-entity path.
 - **Clock:** the patch also dominates the batch's commuting single-entity ops
@@ -508,7 +514,7 @@ rows of the same single entity, resolves per field:
    of the same field (timestamp, then clientId) is re-sent as a `'patch'`
    row, at the timestamp of the op that wrote it (`localWinningFieldGroups`,
    one row per such op, oldest first). The original local ops are rejected; a
-   local time delta stays pending and is rebased (unchanged).
+   local time delta stays pending unchanged until a confirmed server rejection.
 3. A remote readable op writes the fields of its change; a remote `'patch'`
    row writes its keys (`actionPayload`, `clearedFields`); a `'replace'` row
    writes every field.
