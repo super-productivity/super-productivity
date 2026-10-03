@@ -2,8 +2,8 @@
 
 **Status:** decisions D1–D10 recorded 2026-10-02 (tracker
 [#10393](https://github.com/super-productivity/super-productivity/issues/10393),
-queue item 5); see [Decisions](#decisions). The protocol target itself is
-deferred until the option (6) spike reports.
+queue item 5); see [Decisions](#decisions). The option (6) spike reported on
+2026-10-03 and (6) was rejected (D11, [spike result](#spike-result-2026-10-03)).
 
 **Why now.** The stopping point (decided 2026-10-01) says a protocol change is
 indicated when a fix needs (A) a new wire key, (B) accepted newly failing
@@ -78,20 +78,59 @@ not membership derivation.
 ## How resolution reaches the fleet
 
 On SuperSync, the server detects conflicts from vector clocks, entity ids and
-action type (concurrent time deltas pass; `conflict.ts`); it never resolves on
-payload contents, and with E2EE it cannot. The server accepts the first of two
-concurrent ops, so only the device holding the other one resolves: on download,
-against its pending op, or after a rejected upload. It uploads resolution rows
-(`'patch'` or `'replace'`); every other device applies them in server order.
+action type; it never resolves on payload contents, and with E2EE it cannot.
+It compares an upload only with the latest stored op of each declared entity
+(`resolveConflictForExistingOp`, `conflict.ts`) and accepts it only if its
+clock dominates that op (or equals it from the same client, a retry). It
+also accepts a concurrent op without a check in three cases: both ops are
+time deltas, the op is a full-state op, or the two ops declare no common
+entity. The last case covers undeclared cross-entity list
+writes (`docs/plans/2026-09-26-sync-architecture-review.md`). Resolution rows
+(`'patch'` or `'replace'`) go through the same check; they pass because the
+resolver merges both sides' clocks.
+
+**Correction (option (6) spike, 2026-10-03).** An earlier version of this
+section said "one device resolves, everyone applies its rows", and concluded
+that a single resolver gives convergence. That claim is wrong:
+
+- **Every device holding a losing op resolves.** Each one resolves its own
+  crossing: on download against its pending op, after a rejected upload, or in
+  a no-pending crossing (#9073). With three devices editing one task offline,
+  the second and third uploader each resolve the same entity. A third device
+  that downloaded only the first op before the second device's row landed
+  resolves a different pair. Its row is then rejected as concurrent, and it
+  resolves again (`RejectedOpsHandlerService`,
+  `SupersededOperationResolverService`).
+- **The server still keeps one chain per declared entity.** Every row it
+  accepts dominates the one before, and every device applies that chain in
+  server order. So the replicas end up equal on declared entities, but their
+  content is whatever the resolver of each accepted row produced. An old
+  resolver's row is accepted and propagates.
+- **Where ops stay concurrent, the server does not serialize them.** It lets
+  through concurrent time deltas, full-state ops and undeclared cross-entity
+  writes. Full-state ops replace state (`SyncImportFilterService`).
+  Undeclared writes are never detected as a crossing. A receiver without a
+  pending op checks a concurrent op against its retained history (#9073,
+  `_buildNoPendingConcurrentConflict`): commuting pairs, such as concurrent
+  time deltas, apply as they are, and the rest are resolved on that device.
+  So two resolver versions can apply different results there. This needs a
+  test with several resolving clients, not an argument from a single
+  resolver.
+
 Two consequences:
 
-- **Resolve-time changes** (what the resolving device emits) converge in a
-  mixed fleet on SuperSync: one device resolves, everyone applies its rows. An
-  old client that resolves still loses data the old way. On file providers
-  there is no referee, so both devices can resolve the same crossing; an old
-  and a new resolver can then emit different rows, which the convergence
-  contract (`conflict-journal-and-review.md`) forbids. Unverified, since the
-  harness cannot run released clients (`lww-field-level-resolution.md`).
+- **Resolve-time changes** (what the resolving device emits) converge on
+  declared entities in a mixed fleet on SuperSync: the server serializes rows
+  per entity. They do not preserve content in a mixed fleet: an old client
+  that resolves still loses data the old way, and its row is the one everyone
+  applies. Where a concurrent op reaches receivers unserialized (above), each
+  receiver resolves it locally, so convergence needs every resolver to reach
+  the same result. On file
+  providers there is no referee, so every device that downloads a crossing
+  resolves it. An old and a new resolver can then emit different rows, which
+  the convergence contract (`conflict-journal-and-review.md`) forbids. This is
+  unverified, since the harness cannot run released clients
+  (`lww-field-level-resolution.md`).
 - **Apply-time changes** (how a device applies an incoming op, e.g. "skip a
   field whose stored timestamp is newer") diverge in a mixed fleet: old
   clients apply the whole op, new clients skip. They need every device on the
@@ -127,11 +166,44 @@ which fields an opaque op writes, which is (1)'s extractor.
 | **Idea**           | When resolving, learn which fields an op writes by applying its reducer to a copy of the root state and diffing the entity, instead of a hand-written per-action extractor; keep a local, never-synced per-field index of the latest write; resolve per field and emit today's `'patch'` rows. Time deltas extend the existing rebase (`keptLocalTimeDeltas`/`rebaseKeptTimeDeltas`, `conflict-field-patch.util.ts`) instead of losing to LWW. Since #10422 the rebase covers both directions for readable sides; decision 7 as replaced on 2026-10-01 keeps a pending delta through a remote win only when the winner writes no time; D10 settles winners that write time and #10378 |
 | **Fixes**          | The field-level residue of opaque TASK, PROJECT, TAG and habit producers (#10421, #10438's shape). Not NOTE while decision 4 holds (`note.content` 10 and `note.isLock` 6 seeds stay). The rebase extension targets #10378 and #10380's task half, which (2) does not fix                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **Wire / schema**  | None: rows are the existing `'patch'` shape; the index is local (the `DB_VERSION` channel, ADR #8). No bump                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **Mixed fleet**    | Converges on SuperSync, where one device resolves. On file providers it is worse than (1): the index is per device, so two resolvers of the same crossing can emit different rows. Old resolvers keep emitting `'replace'` rows with absolute `timeSpentOnDay`; a rebased delta after one can count time twice, so the rebase must not sit beside a `'replace'` row                                                                                                                                                                                                                                                                                                                   |
+| **Mixed fleet**    | Converges on declared entities on SuperSync, where the server keeps one chain of accepted rows per entity, though every device holding a losing op resolves (see the correction above); a concurrent op the server lets through is resolved again by every receiver that finds a non-commuting crossing (#9073). On file providers it is worse than (1): the index is per device, so two resolvers of the same crossing can emit different rows. Old resolvers keep emitting `'replace'` rows with absolute `timeSpentOnDay`; a rebased delta after one can count time twice, so the rebase must not sit beside a `'replace'` row                                                     |
 | **Floor**          | Not needed, except for NOTE (decision 4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Decisions**      | Reverses 6 generically, not per action. Its index records no fields from incoming resolution rows (D9), so decisions 5 and 5a stay                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **Effort**         | Unknown until a spike. Reducers are not pure in the needed sense: they read device-local `todayStr`, fall back to `getDbDateStr()`, and stamp `Date.now()` into `modified`/`doneOn` (`task-shared-crud.reducer.ts`, `task.reducer.util.ts`, `task-shared-scheduling.reducer.ts`, `planner-shared.reducer.ts`). Meta-reducers such as `planTasksForToday` need the root state. A diff misses writes of an equal value, so the field set depends on the base state. On SuperSync the server lets a crossing pass only when both ops are `syncTimeSpent` (`conflict.ts`), so a delta against `planTasksForToday` is still rejected and must be rebased by the client                     |
 | **Lets us delete** | Per-action opacity rules (`isOpaqueChangeOp`), most accepted compare entries                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+
+#### Spike result (2026-10-03)
+
+The spike ([#10482](https://github.com/super-productivity/super-productivity/pull/10482),
+closed unmerged) built (6) behind the resolver's existing opacity check. It
+used an in-memory index of capture-time state diffs, and derived incoming
+opaque ops by running the root reducer on a state copy. It needed no wire key
+and no bump. Measured on the 120 standard seeds against `d9cc190`:
+
+- **Gains:** 17 compare entries stop failing. Seeds with any signature drop
+  from 103 to 97, `field-reverted` from 40 to 24 and `field-unwritten` from
+  13 to 7. Almost all of it comes from two producers, `planTasksForToday` and
+  the habit `setCounterToday`, whose payloads already carry what they write.
+- **Regressions:** 5 entries newly fail on 4 seeds: a time loss, an
+  `older-write-won`, and project or subtask list divergence. Two of #10462's
+  tests (`time-delta-kept-beside-timeless-winner.integration.spec.ts`) also
+  fail on the final spike head. In "counts B tracked time once on every
+  device when A races a rename", devices A and C end with 0 instead of B's
+  3000, as before #10462.
+  In "counts a delivered but unmarked delta once, without a sync error",
+  device B's upload is permanently rejected (`DUPLICATE_OPERATION`). The
+  cause was not diagnosed.
+- **Exit criteria:**
+  - **Equal-value writes:** not detected. The synced habit op always writes a
+    value its local, unsynced increase already applied, so its capture diff is
+    empty, while the receiver's diff depends on its own count.
+  - **Cross-entity writes:** seen, but unusable. They are undeclared, they are
+    order lists, and they depend on the device's day.
+  - **Restarts:** lose the index.
+  - **File providers:** the same op is opaque on its author and readable on
+    its receivers, which breaks the identical-field-set contract.
+  - **Branch deletions:** none. Every opacity branch stays as the fallback, so
+    (6) fails as a simplification.
 
 ### Membership versus order (option M, formerly (5); design later)
 
@@ -220,6 +292,14 @@ Two follow-up questions, answered the same day in the design-note session
 D10 extends decision 7 as replaced on 2026-10-01, which kept a delta only
 when the winner writes no time.
 
+After the spike reported (2026-10-03), @johannesjo answered "Do as
+recommended" and then chose the option labelled "Reject; record residue
+(Recommended)". The row below records that recommendation:
+
+| #   | Question                          | Decided                                                                                                                                                                                                                                                                                       |
+| --- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D11 | Adopt option (6) after the spike? | No. Decision 6 stays. The losses the spike fixed (task edits crossing an auto-plan, habit counts) stay recorded residue under rule 15: a fix needs a user report. Reading `planTasksForToday`'s and `setCounterToday`'s own payloads would need D3 reopened and its own original-seed compare |
+
 ## Missing evidence
 
 - Version spread per app version on SuperSync (#10397), to size the mixed-fleet
@@ -227,6 +307,5 @@ when the winner writes no time.
   downloads only.
 - Whether v19.1.0 shows #10438 (diverges or only reverts the field).
 - A per-seed split of `field-reverted`/`field-unwritten` by producer.
-- The (6) spike: field sets for meta-reducers, map fields and equal-value
-  writes, the rebase next to `'replace'` rows, and two file-provider
-  resolvers of one crossing.
+- Two file-provider resolvers of one opaque-op crossing: no harness drives
+  them (the (6) spike argued this from code only).
