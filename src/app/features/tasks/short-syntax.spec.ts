@@ -3150,3 +3150,270 @@ describe('shortSyntax recurrence', () => {
     expect(due.getHours()).toBe(6);
   });
 });
+
+describe('shortSyntax nth weekday (@2monday)', () => {
+  // Wed Jan 17 2024, 10:00 local time
+  const NOW = new Date(2024, 0, 17, 10, 0, 0, 0);
+
+  const parse = async (
+    title: string,
+    now: Date = NOW,
+    mode: 'combine' | 'replace' = 'combine',
+  ): ReturnType<typeof shortSyntax> =>
+    shortSyntax({ ...TASK, title }, CONFIG, [], [], now, mode);
+
+  const dueOf = (r: Awaited<ReturnType<typeof shortSyntax>>): Date =>
+    new Date(r?.taskChanges.dueWithTime as number);
+
+  // The nth occurrence of a weekday counting from today, n=1 being the next one
+  const nthWeekdayFrom = (from: Date, weekday: number, nth: number): Date => {
+    const diff = (weekday - from.getDay() + 7) % 7;
+    const extraWeeks = (nth - 1) * 7;
+    return new Date(
+      from.getFullYear(),
+      from.getMonth(),
+      from.getDate() + diff + extraWeeks,
+      12,
+      0,
+    );
+  };
+
+  const expectNthWeekday = (
+    r: Awaited<ReturnType<typeof shortSyntax>>,
+    weekday: number,
+    nth: number,
+    now: Date = NOW,
+  ): void => {
+    const expected = nthWeekdayFrom(now, weekday, nth);
+    expect(formatDateToISO(dueOf(r))).toBe(formatDateToISO(expected));
+    expect(dueOf(r).getDay()).toBe(weekday);
+  };
+
+  it('should parse "@2monday" as the Monday after next', async () => {
+    const r = await parse('Water plants @2monday');
+    expect(r?.taskChanges.title).toBe('Water plants');
+    expectNthWeekday(r, 1, 2); // Mon Jan 22 + 7 = Mon Jan 29
+    expect(dueOf(r).getDate()).toBe(29);
+    expect(r?.taskChanges.hasPlannedTime).toBe(false);
+    expect(r?.repeat ?? null).toBeNull();
+  });
+
+  it('should parse "@4tuesday" as the fourth Tuesday', async () => {
+    const r = await parse('Review @4tuesday');
+    expect(r?.taskChanges.title).toBe('Review');
+    expectNthWeekday(r, 2, 4); // Tue Jan 23 + 3 weeks = Tue Feb 13
+    expect(dueOf(r).getDate()).toBe(13);
+    expect(dueOf(r).getMonth()).toBe(1);
+  });
+
+  it('should treat "@1monday" exactly like "@monday"', async () => {
+    const nth = await parse('Standup @1monday');
+    const plain = await parse('Standup @monday');
+    expect(nth?.taskChanges.title).toBe('Standup');
+    expect(nth?.taskChanges.dueWithTime).toBe(plain?.taskChanges.dueWithTime);
+    expect(nth?.taskChanges.hasPlannedTime).toBe(false);
+  });
+
+  it('should support weekday abbreviations, plurals and casing', async () => {
+    for (const title of ['Task @2mon', 'Task @2mondays', 'Task @2MON', 'Task @2Mon']) {
+      const r = await parse(title);
+      expect(r?.taskChanges.title).withContext(title).toBe('Task');
+      expectNthWeekday(r, 1, 2);
+    }
+    for (const title of ['Task @4TUE', 'Task @4tues', 'Task @4tuesdays']) {
+      const r = await parse(title);
+      expect(r?.taskChanges.title).withContext(title).toBe('Task');
+      expectNthWeekday(r, 2, 4);
+    }
+  });
+
+  it('should accept whitespace between the number and the weekday', async () => {
+    const r = await parse('Task @2 monday');
+    expect(r?.taskChanges.title).toBe('Task');
+    expectNthWeekday(r, 1, 2);
+  });
+
+  it('should support the full range of n (1..5)', async () => {
+    for (const nth of [1, 2, 3, 4, 5]) {
+      const r = await parse(`Task @${nth}monday`);
+      expect(r?.taskChanges.title).withContext(`n=${nth}`).toBe('Task');
+      expectNthWeekday(r, 1, nth);
+    }
+  });
+
+  it('should anchor the date no matter what time of day it is typed', async () => {
+    // 23:00 is past the 12:00 anchor; the result must still be the plain nth
+    // weekday at noon, not rolled forward a week the way a passed *time* is.
+    const late = new Date(2024, 0, 17, 23, 0, 0, 0);
+    const r = await parse('Task @2monday', late);
+    expectNthWeekday(r, 1, 2, late);
+  });
+
+  it('should parse a trailing time ("@2monday 3pm")', async () => {
+    const r = await parse('Team call @2monday 3pm');
+    expect(r?.taskChanges.title).toBe('Team call');
+    expectNthWeekday(r, 1, 2);
+    expect(dueOf(r).getHours()).toBe(15);
+    expect(dueOf(r).getMinutes()).toBe(0);
+    expect(r?.taskChanges.hasPlannedTime).toBeUndefined();
+  });
+
+  it('should DST-safely carry the typed time', async () => {
+    const gap = findSpringForwardSunday(2026);
+    if (!gap) {
+      // Timezone without a spring-forward transition (UTC, Tokyo).
+      return;
+    }
+    // The typed time is on a normal day, but the resolved day is the transition
+    // Sunday: the timestamp cannot hold the wall-clock time, so it travels as
+    // dueTimeStr, exactly like "@every friday 3pm".
+    const nth = (gap.sunday.getDate() - 1 + 6) / 7;
+    if (!Number.isInteger(nth) || nth < 1 || nth > 5) {
+      return;
+    }
+    const wednesday = new Date(gap.sunday);
+    wednesday.setDate(wednesday.getDate() - 4);
+    wednesday.setHours(10, 0);
+    const r = await parse(`Backup @${nth}sunday ${gap.missingHour}:30am`, wednesday);
+    expect(dueOf(r).getDay()).toBe(0);
+    expect(r?.taskChanges.dueTimeStr).toBe(`0${gap.missingHour}:30`);
+  });
+
+  it('should not leave the weekday in the title (regression for #10285)', async () => {
+    for (const title of ['Task @2monday', 'Task @9monday', 'Task @0monday']) {
+      const r = await parse(title);
+      expect(r?.taskChanges.title).withContext(title).toBe('Task');
+    }
+  });
+
+  it('should not silently turn an out-of-range n into a time', async () => {
+    // "@9monday" is not a valid nth weekday. Before this feature the numeric
+    // fallback scheduled 09:00 and left "monday" behind. The weekday must be
+    // consumed and no time invented.
+    for (const title of ['Task @9monday', 'Task @0monday']) {
+      const r = await parse(title);
+      expect(r?.taskChanges.title).withContext(title).toBe('Task');
+      expect(r?.taskChanges.dueWithTime).withContext(title).toBeUndefined();
+      expect(r?.taskChanges.hasPlannedTime).withContext(title).toBeUndefined();
+    }
+  });
+
+  it('should not mis-parse "@2m" as an nth weekday', async () => {
+    // "@2m" stays a 2-minute estimate; the bare "@" is a 2-minute due time
+    const r = await parse('Task @2m');
+    expect(r?.taskChanges.title).toBe('Task');
+    const due = dueOf(r);
+    expect(due.getHours()).toBe(10);
+    expect(due.getMinutes()).toBe(2);
+  });
+
+  it('should not mis-parse "@2" as an nth weekday', async () => {
+    const r = await parse('Task @2');
+    expect(r?.taskChanges.title).toBe('Task');
+    expect(r?.taskChanges.dueWithTime).toBeDefined();
+  });
+
+  it('should not shadow the "@every 2 fridays" recurrence', async () => {
+    const r = await shortSyntax(
+      { ...TASK, title: 'Water plants @every 2 fridays' },
+      CONFIG,
+      [],
+      [],
+      NOW,
+      'combine',
+      true,
+    );
+    expect(r?.repeat).toEqual({
+      type: 'INTERVAL',
+      repeatCycle: 'WEEKLY',
+      repeatEvery: 2,
+    } as never);
+    expect(r?.taskChanges.title).toBe('Water plants');
+  });
+
+  it('should highlight the whole token and support the clear path (replace mode)', async () => {
+    const title = 'Water plants @2monday';
+    const r = await parse(title);
+    expect(r?.parsedRanges).toEqual(expectedRanges(title, [['due', '@2monday']]));
+
+    const cleared = await parse(title, NOW, 'replace');
+    expect(cleared?.taskChanges.title).toBe('Water plants');
+  });
+
+  it('should work in a title edit (isParseRepeat false, the default)', async () => {
+    // Nothing in the nth-weekday parser may depend on isParseRepeat
+    const r = await parse('Standup @2friday');
+    expect(r?.taskChanges.title).toBe('Standup');
+    expectNthWeekday(r, 5, 2);
+  });
+
+  it('should coexist with a following time estimate', async () => {
+    const r = await parse('Call @2monday 25m');
+    expect(r?.taskChanges.title).toBe('Call');
+    expectNthWeekday(r, 1, 2);
+    expect(r?.taskChanges.timeEstimate).toBe(25 * 60 * 1000);
+  });
+
+  it('should strip trailing punctuation with the token', async () => {
+    const r = await parse('Dinner @2mondays.');
+    expect(r?.taskChanges.title).toBe('Dinner.');
+    expectNthWeekday(r, 1, 2);
+  });
+
+  it('should not absorb a chrono match further into the remainder', async () => {
+    // "tomorrow" belongs to the title; only the token itself is the due date
+    const r = await parse('Standup @2monday and friday');
+    expect(r?.taskChanges.title).toBe('Standup and friday');
+    expectNthWeekday(r, 1, 2);
+  });
+
+  it('should still parse "@every monday" as a recurrence', async () => {
+    const r = await shortSyntax(
+      { ...TASK, title: 'Standup @every monday' },
+      CONFIG,
+      [],
+      [],
+      NOW,
+      'combine',
+      true,
+    );
+    expect(r?.repeat?.type).toBe('PRESET');
+    expect(r?.taskChanges.title).toBe('Standup');
+  });
+
+  it('should not consume a word the weekday only prefixes ("@2monx")', async () => {
+    const r = await parse('Task @2monx');
+    // Not an nth weekday; the numeric fallback still handles it as before
+    expect(r?.taskChanges.title).toBe('Task monx');
+  });
+
+  it('should also support the deadline form ("!2monday")', async () => {
+    const r = await shortSyntax(
+      { ...TASK, title: 'Taxes !2monday' },
+      DEADLINE_CONFIG,
+      [],
+      [],
+      NOW,
+    );
+    expect(r?.taskChanges.title).toBe('Taxes');
+    const deadline = new Date(r?.taskChanges.deadlineWithTime as number);
+    expect(deadline.getDay()).toBe(1);
+    expect(deadline.getDate()).toBe(29);
+    expect(r?.taskChanges.hasDeadlineTime).toBe(false);
+  });
+
+  it('should support a trailing time on the deadline form ("!2monday 3pm")', async () => {
+    const r = await shortSyntax(
+      { ...TASK, title: 'Taxes !2monday 3pm' },
+      DEADLINE_CONFIG,
+      [],
+      [],
+      NOW,
+    );
+    expect(r?.taskChanges.title).toBe('Taxes');
+    const deadline = new Date(r?.taskChanges.deadlineWithTime as number);
+    expect(deadline.getDate()).toBe(29);
+    expect(deadline.getHours()).toBe(15);
+    expect(r?.taskChanges.hasDeadlineTime).toBe(true);
+  });
+});
