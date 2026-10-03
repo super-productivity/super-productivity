@@ -95,12 +95,13 @@ export interface TaskCopy
   // Additional app-specific fields
 
   /**
-   * Optional priority: 1 = Low, 2 = Medium, 3 = High. `undefined` and `null` both
+   * Optional priority: 1/low = Low, 2/medium = Medium, 3/high = High. `undefined` and `null` both
    * mean "no priority" and are treated the same by sorting and filtering.
-   * Persisted as an optional field (no schema bump); older clients carry it as
-   * an unknown field.
+   * Preserve historical string encodings on reads; explicit changes write numbers.
+   * Clients predating priorities ignore the field. Older priority-aware builds
+   * accept only one encoding and must upgrade before syncing mixed data.
    */
-  priority?: TaskPriority | null;
+  priority?: TaskPriority | 'high' | 'medium' | 'low' | null;
 
   /**
    * Scheduled time as Unix timestamp (ms). For tasks scheduled with a specific time.

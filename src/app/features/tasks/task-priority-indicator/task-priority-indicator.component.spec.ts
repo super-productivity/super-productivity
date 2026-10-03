@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { TaskPriorityIndicatorComponent } from './task-priority-indicator.component';
 import { TASK_PRIORITY_ICONS, TASK_PRIORITY_LABEL_KEY } from '../task-priority.const';
-import { TaskPriority } from '../task.model';
+import { Task, TaskPriority } from '../task.model';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { TaskPriorityIconPreset, TasksConfig } from '../../config/global-config.model';
 
@@ -11,7 +11,7 @@ describe('TaskPriorityIndicatorComponent', () => {
   let cfg: WritableSignal<{ tasks?: Partial<TasksConfig> } | undefined>;
 
   const create = (
-    priority: TaskPriority,
+    priority: NonNullable<Task['priority']>,
     iconPreset?: TaskPriorityIconPreset,
   ): ComponentFixture<TaskPriorityIndicatorComponent> => {
     const fixture = TestBed.createComponent(TaskPriorityIndicatorComponent);
@@ -98,12 +98,29 @@ describe('TaskPriorityIndicatorComponent', () => {
     expect(icon(fixture)!.getAttribute('fontIcon')).toBe(TASK_PRIORITY_ICONS.numbers[3]);
   });
 
-  // A string priority written by an old test build is only repaired on sync, so a
-  // local-only user can still render one. It must not throw, and shows nothing.
+  for (const [legacy, level] of [
+    ['low', 1],
+    ['medium', 2],
+    ['high', 3],
+  ] as const) {
+    for (const preset of ['chevrons', 'numbers'] as const) {
+      it(`renders ${legacy} like ${level} with ${preset}`, () => {
+        const fixture = create(legacy, preset);
+        expect(fixture.nativeElement.getAttribute('data-priority')).toBe(`${level}`);
+        expect(icon(fixture)!.getAttribute('fontIcon')).toBe(
+          TASK_PRIORITY_ICONS[preset][level],
+        );
+        expect(icon(fixture)!.getAttribute('aria-label')).toBe(
+          TASK_PRIORITY_LABEL_KEY[level],
+        );
+      });
+    }
+  }
+
   it('renders nothing for an unexpected value', () => {
     let fixture: ComponentFixture<TaskPriorityIndicatorComponent> | undefined;
 
-    expect(() => (fixture = create('high' as unknown as TaskPriority))).not.toThrow();
+    expect(() => (fixture = create(4 as TaskPriority))).not.toThrow();
     expect(icon(fixture!)).toBeNull();
     expect(fixture!.nativeElement.getBoundingClientRect().width).toBe(0);
   });

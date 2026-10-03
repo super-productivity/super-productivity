@@ -335,7 +335,7 @@ describe('TaskContextMenuInnerComponent', () => {
     };
 
     it('lists None, Low, Medium, High and checks only the current level', fakeAsync(() => {
-      component.taskSet = { ...DEFAULT_TASK, id: 'task-1', priority: 2 } as Task;
+      component.taskSet = { ...DEFAULT_TASK, id: 'task-1', priority: 'medium' } as Task;
       fixture.detectChanges();
 
       const items = openPriorityMenu();
@@ -356,11 +356,14 @@ describe('TaskContextMenuInnerComponent', () => {
       // Opening focuses the current level, so Enter keeps it.
       expect(document.activeElement).toBe(items[2]);
       expect(items[1].querySelector('task-priority-indicator')).not.toBeNull();
+      items[2].click();
+      flush();
+      expect(taskService.update).not.toHaveBeenCalled();
       closeMenus();
     }));
 
     it('sets the numeric level, and clears with null', fakeAsync(() => {
-      component.taskSet = { ...DEFAULT_TASK, id: 'task-1', priority: 2 } as Task;
+      component.taskSet = { ...DEFAULT_TASK, id: 'task-1', priority: 'medium' } as Task;
       fixture.detectChanges();
 
       openPriorityMenu()[3].click();

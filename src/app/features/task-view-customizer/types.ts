@@ -70,7 +70,7 @@ export enum FILTER_TIME {
   MIN_120 = '7200000',
 }
 
-/** Values are `TaskPriority` levels as strings; the filter compares `+value` to `task.priority`. */
+/** Values are `TaskPriority` levels as strings; the filter compares `+value` to the semantic task priority. */
 export enum FILTER_PRIORITY {
   high = '3',
   medium = '2',

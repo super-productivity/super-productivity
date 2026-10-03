@@ -118,11 +118,11 @@ describe('TaskDuplicateService', () => {
       .map(([arg]) => arg.additional);
     expect(additionals[0]).toEqual(jasmine.objectContaining({ priority: 3 }));
     expect(additionals[1]).not.toEqual(jasmine.objectContaining({ priority: 3 }));
-    expect(additionals[1]?.priority).toBeUndefined();
+    expect(additionals[1]?.priority).toBeNull();
   });
 
-  it('does not copy a stale string priority from an old test build', () => {
-    const staleSubTask = { ...subTask, priority: 'high' } as unknown as Task;
+  it('preserves legacy string priorities on parents and subtasks', () => {
+    const legacySubTask: Task = { ...subTask, priority: 'high' };
     taskService.add.and.returnValue('new-parent-task');
     taskService.createNewTaskWithDefaults.and.returnValue({
       ...DEFAULT_TASK,
@@ -133,14 +133,14 @@ describe('TaskDuplicateService', () => {
     service.duplicate({
       ...parentTask,
       priority: 'high',
-      subTasks: [staleSubTask],
-    } as unknown as TaskWithSubTasks);
+      subTasks: [legacySubTask],
+    } as TaskWithSubTasks);
 
-    expect('priority' in taskService.add.calls.mostRecent().args[2]!).toBe(false);
+    expect(taskService.add.calls.mostRecent().args[2]!.priority).toBe('high');
     expect(
-      'priority' in
-        taskService.createNewTaskWithDefaults.calls.mostRecent().args[0].additional!,
-    ).toBe(false);
+      taskService.createNewTaskWithDefaults.calls.mostRecent().args[0].additional!
+        .priority,
+    ).toBe('high');
   });
 
   it('does not duplicate a subtask', () => {

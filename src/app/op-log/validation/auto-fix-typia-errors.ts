@@ -108,26 +108,6 @@ export const autoFixTypiaErrors = (
         const parsedValue = parseFloat(value);
         setValueByPath(data, keys, parsedValue);
         logAutoFixApplied(path, keys, 'string-to-number', value, parsedValue);
-      } else if (
-        keys[0] === 'task' &&
-        keys[1] === 'entities' &&
-        keys.length === 4 &&
-        keys[3] === 'priority' &&
-        typeof value === 'string'
-      ) {
-        // Test builds stored priority as 'high' | 'medium' | 'low' before it
-        // became 1 | 2 | 3. No other branch heals that, so every sync would end
-        // in "validation failed". Drop it to "no priority" rather than mapping it.
-        // Strings only: an unknown *number* would come from a newer client, and
-        // silently erasing it here would sync the loss back to that client.
-        setValueByPath(data, keys, undefined);
-        logAutoFixApplied(
-          path,
-          keys,
-          'task-priority-invalid-to-undefined',
-          value,
-          undefined,
-        );
       } else if (keys[0] === 'globalConfig') {
         const defaultValue = getValueByPath(DEFAULT_GLOBAL_CONFIG, keys.slice(1));
         setValueByPath(data, keys, defaultValue);

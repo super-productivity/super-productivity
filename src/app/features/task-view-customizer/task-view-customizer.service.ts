@@ -1,3 +1,4 @@
+import { getTaskPriority } from '../tasks/task-priority.const';
 import { computed, effect, Injectable, inject, signal } from '@angular/core';
 import { Observable, animationFrameScheduler, combineLatest, of } from 'rxjs';
 import { map, observeOn, switchMap, take } from 'rxjs/operators';
@@ -301,10 +302,10 @@ export class TaskViewCustomizerService {
         });
       case FILTER_OPTION_TYPE.priority:
         if (value === FILTER_COMMON.NOT_SPECIFIED) {
-          return tasks.filter((t) => !t.priority);
+          return tasks.filter((t) => !getTaskPriority(t.priority));
         }
 
-        return tasks.filter((t) => t.priority === +value);
+        return tasks.filter((t) => getTaskPriority(t.priority) === +value);
       default:
         return tasks;
     }
@@ -371,14 +372,10 @@ export class TaskViewCustomizerService {
       }
 
       case SORT_OPTION_TYPE.priority: {
-        const getPriorityRank = (priority: TaskWithSubTasks['priority']): number => {
-          if (priority === 3) return 0;
-          if (priority === 2) return 1;
-          if (priority === 1) return 2;
-          return 3;
-        };
         return tasksCopy.sort(
-          (a, b) => (getPriorityRank(a.priority) - getPriorityRank(b.priority)) * factor,
+          (a, b) =>
+            ((getTaskPriority(b.priority) ?? 0) - (getTaskPriority(a.priority) ?? 0)) *
+            factor,
         );
       }
 
