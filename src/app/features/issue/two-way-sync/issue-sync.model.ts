@@ -1,9 +1,17 @@
+import { Action } from '@ngrx/store';
 import { Task } from '../../tasks/task.model';
 
 export type SyncDirection = 'off' | 'pullOnly' | 'pushOnly' | 'both';
 
 /** Per-field config keyed by task field name */
 export type FieldSyncConfig = Partial<Record<keyof Task, SyncDirection>>;
+
+export interface FieldPushContext {
+  /** The NgRx action that triggered the push. */
+  action: Action;
+  /** The task after the reducer ran. */
+  task: Task;
+}
 
 export interface FieldMappingContext {
   issueId: string;
@@ -30,4 +38,10 @@ export interface FieldMapping {
    * Partners that merely differ (e.g. changed automatically) are not sent.
    */
   pushTogetherWith?: (keyof Task)[];
+  /**
+   * Leaves this field out of a push when it returns true, also as a held-back
+   * `pushTogetherWith` partner. For triggers that can change the field without
+   * an explicit edit (e.g. CalDAV: Planner moves, repeat-config planning).
+   */
+  skipPush?: (ctx: FieldPushContext) => boolean;
 }

@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { Store } from '@ngrx/store';
+import { Action, Store } from '@ngrx/store';
 import { createEffect, ofType } from '@ngrx/effects';
 import { EMPTY, Observable, first, firstValueFrom, from } from 'rxjs';
 import { catchError, concatMap, filter, map } from 'rxjs/operators';
@@ -11,7 +11,7 @@ import { IssueProviderService } from '../issue-provider.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { IssueSyncAdapterRegistryService } from './issue-sync-adapter-registry.service';
 import { computePushDecisions, issueValuesEqual } from './compute-push-decisions';
-import { FieldMapping, FieldSyncConfig } from './issue-sync.model';
+import { FieldMapping, FieldPushContext, FieldSyncConfig } from './issue-sync.model';
 import { IssueSyncAdapter } from './issue-sync-adapter.interface';
 import { IssueProvider, IssueProviderKey } from '../issue.model';
 import { IssueLog } from '../../../core/log';
@@ -176,7 +176,7 @@ export class IssueTwoWaySyncEffects {
           PlannerActions.planTaskForDay,
           PlannerActions.transferTask,
         ),
-        map((action) => ACTION_EXTRACTORS[action.type](action)),
+        map((action) => ({ ...ACTION_EXTRACTORS[action.type](action), action })),
         filter(({ taskId, changes }) => {
           if (this._syncOriginatedTaskIds.delete(taskId)) {
             return false;
@@ -187,11 +187,12 @@ export class IssueTwoWaySyncEffects {
           }
           return Object.keys(changes).some((key) => SYNCABLE_TASK_FIELDS.has(key));
         }),
-        concatMap(({ taskId, changes }) =>
+        concatMap(({ taskId, changes, action }) =>
           this._taskService.getByIdOnce$(taskId).pipe(
             map((fullTask) => ({
               fullTask,
               changes,
+              action,
             })),
           ),
         ),
@@ -206,8 +207,8 @@ export class IssueTwoWaySyncEffects {
           }
           return !!this._getAdapter(fullTask.issueType);
         }),
-        concatMap(({ fullTask, changes }) =>
-          this._pushChanges$(fullTask, changes).pipe(
+        concatMap(({ fullTask, changes, action }) =>
+          this._pushChanges$(fullTask, changes, action).pipe(
             catchError((err) => {
               // Expected provider limitation (e.g. a single recurring occurrence,
               // #7492) — the local task edit stands; don't alarm the user.
@@ -235,9 +236,12 @@ export class IssueTwoWaySyncEffects {
         // Titles arrive via sidecar (set by TagService before dispatch), not
         // on the action payload — keeps user-visible tag titles out of the
         // exportable op-log.
-        map(() => this._deletedTagTitlesSidecar.consume()),
-        filter((deletedTagTitles) => deletedTagTitles.length > 0),
-        concatMap((deletedTagTitles) =>
+        map((action) => ({
+          action,
+          deletedTagTitles: this._deletedTagTitlesSidecar.consume(),
+        })),
+        filter(({ deletedTagTitles }) => deletedTagTitles.length > 0),
+        concatMap(({ action, deletedTagTitles }) =>
           this._store.select(selectAllTasks).pipe(
             first(),
             map((tasks) =>
@@ -246,9 +250,10 @@ export class IssueTwoWaySyncEffects {
               ),
             ),
             concatMap((tasks) => from(tasks)),
+            map((task) => ({ task, action })),
           ),
         ),
-        filter((task) => {
+        filter(({ task }) => {
           if (this._syncOriginatedTaskIds.delete(task.id)) {
             return false;
           }
@@ -257,8 +262,8 @@ export class IssueTwoWaySyncEffects {
           }
           return !!this._getAdapter(task.issueType);
         }),
-        concatMap((task) =>
-          this._pushChanges$(task, { tagIds: task.tagIds }).pipe(
+        concatMap(({ task, action }) =>
+          this._pushChanges$(task, { tagIds: task.tagIds }, action).pipe(
             catchError((err) => {
               if (isExpectedSyncSkipError(err)) {
                 return EMPTY;
@@ -546,7 +551,11 @@ export class IssueTwoWaySyncEffects {
       );
   }
 
-  private _pushChanges$(task: Task, changes: Partial<Task>): Observable<unknown> {
+  private _pushChanges$(
+    task: Task,
+    changes: Partial<Task>,
+    action: Action,
+  ): Observable<unknown> {
     if (!task.issueType || !task.issueProviderId || !task.issueId) {
       return EMPTY;
     }
@@ -568,14 +577,28 @@ export class IssueTwoWaySyncEffects {
           return dir === 'pushOnly' || dir === 'both';
         };
 
+        // A mapping can opt out of pushes from specific triggers. `task` was
+        // fetched after the triggering action ran.
+        const pushCtx: FieldPushContext = { action, task };
+        const isSkipped = (m: FieldMapping): boolean => !!m.skipPush?.(pushCtx);
+        const pushableChanges: Partial<Task> = { ...changes };
+        for (const m of fieldMappings) {
+          if (m.taskField in pushableChanges && isSkipped(m)) {
+            delete pushableChanges[m.taskField];
+            // The field now holds a value that must not reach the provider, so
+            // an earlier held-back value of it must not be re-sent later either.
+            this._forgetHeldBack(task.id, [m.taskField]);
+          }
+        }
+
         // Fields to push: the changed ones plus held-back pushTogetherWith partners.
         // Partners are only linked when the changed mapping itself can push, and
         // only if an earlier push of that partner was held back: an automatic
         // change of a partner (e.g. Add to Today) must not reach the provider.
         const heldBack = this._heldBackFields.get(task.id);
-        const fieldsToPush = new Set<string>(Object.keys(changes));
+        const fieldsToPush = new Set<string>(Object.keys(pushableChanges));
         for (const m of fieldMappings) {
-          if (m.taskField in changes && canPush(m)) {
+          if (m.taskField in pushableChanges && canPush(m)) {
             for (const partner of m.pushTogetherWith ?? []) {
               if (!heldBack?.has(partner)) {
                 continue;
@@ -585,7 +608,10 @@ export class IssueTwoWaySyncEffects {
               const partnerMappings = fieldMappings.filter(
                 (pm) => pm.taskField === partner,
               );
-              if (partnerMappings.some((pm) => canPush(pm))) {
+              if (
+                partnerMappings.some((pm) => canPush(pm)) &&
+                !partnerMappings.some((pm) => isSkipped(pm))
+              ) {
                 fieldsToPush.add(partner);
               }
             }
@@ -611,7 +637,7 @@ export class IssueTwoWaySyncEffects {
         const currentTask = await firstValueFrom(this._taskService.getByIdOnce$(task.id));
         const taskFieldChanges: Record<string, unknown> = {};
         for (const mapping of fieldMappings) {
-          const isChanged = mapping.taskField in changes;
+          const isChanged = mapping.taskField in pushableChanges;
           if (!isChanged && (!fieldsToPush.has(mapping.taskField) || !currentTask)) {
             // Partners are only read from a live task.
             continue;
@@ -622,7 +648,7 @@ export class IssueTwoWaySyncEffects {
           // when the task is gone.
           taskFieldChanges[mapping.taskField] = currentTask
             ? currentTask[mapping.taskField as keyof Task]
-            : changes[mapping.taskField];
+            : pushableChanges[mapping.taskField];
         }
 
         const parsed = parseInt(issueId, 10);

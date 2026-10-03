@@ -7,6 +7,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { PlannerDayComponent } from './planner-day.component';
 import { PlannerDay } from '../planner.model';
 import { TaskService } from '../../tasks/task.service';
+import { TaskCopy } from '../../tasks/task.model';
 import { DateService } from '../../../core/date/date.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
@@ -16,13 +17,14 @@ describe('PlannerDayComponent', () => {
   const createComponent = (
     currentLocale: string,
     isoTextLocale: string | null,
+    taskService: unknown = {},
   ): PlannerDayComponent => {
     TestBed.configureTestingModule({
       imports: [PlannerDayComponent],
       providers: [
         provideMockStore(),
         { provide: MatDialog, useValue: jasmine.createSpyObj('MatDialog', ['open']) },
-        { provide: TaskService, useValue: {} },
+        { provide: TaskService, useValue: taskService },
         { provide: DateService, useValue: {} },
         { provide: LayoutService, useValue: { isXs: signal(false) } },
         {
@@ -107,6 +109,24 @@ describe('PlannerDayComponent', () => {
     const component = createComponent('de-DE', null);
 
     expect(getDayLabel(component)).toBe('Mo.');
+  });
+
+  it('marks a timed task dropped on another day as a Planner move', () => {
+    const taskService = jasmine.createSpyObj<TaskService>('TaskService', [
+      'scheduleTask',
+    ]);
+    const component = createComponent('en', null, taskService);
+    const dueWithTime = new Date(2026, 9, 6, 14, 30).getTime();
+    const task = { id: 't1', dueWithTime } as TaskCopy;
+
+    component.editTaskReminderOrReScheduleIfPossible(task, '2026-10-08');
+
+    expect(taskService.scheduleTask).toHaveBeenCalledTimes(1);
+    const args = taskService.scheduleTask.calls.mostRecent().args;
+    expect(args[0]).toBe(task);
+    expect(new Date(args[1]).getHours()).toBe(14);
+    expect(args[3]).toBeFalse();
+    expect(args[4]).toBeTrue();
   });
 
   it('labels planned and available time and displays an explicit zero', () => {

@@ -1,8 +1,14 @@
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { IssueSyncAdapter } from '../../two-way-sync/issue-sync-adapter.interface';
-import { FieldMapping, FieldSyncConfig } from '../../two-way-sync/issue-sync.model';
+import {
+  FieldMapping,
+  FieldPushContext,
+  FieldSyncConfig,
+} from '../../two-way-sync/issue-sync.model';
 import { Task } from '../../../tasks/task.model';
+import { PlannerActions } from '../../../planner/store/planner.actions';
+import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { CaldavCfg } from './caldav.model';
 import { CaldavClientService } from './caldav-client.service';
 import {
@@ -37,6 +43,21 @@ const CALDAV_DATE_TASK_FIELD_LIST: (keyof Task)[] = [
   'deadlineWithTime',
 ];
 
+const isTimedPlannerMove = (action: FieldPushContext['action']): boolean =>
+  action.type === TaskSharedActions.scheduleTaskWithTime.type &&
+  (action as ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>).isPlannerMove ===
+    true;
+
+/**
+ * Planned dates also change without an explicit edit, through Planner drags
+ * and repeat-config scheduling, so CalDAV pushes neither (#10099). This also
+ * skips explicit planned-date edits on a task with a repeat config.
+ */
+const skipAutomaticPlannedDate = ({ action, task }: FieldPushContext): boolean =>
+  action.type === PlannerActions.transferTask.type ||
+  isTimedPlannerMove(action) ||
+  !!task.repeatCfgId;
+
 /**
  * Each date pair shares one issue field, so computePushDecisions makes exactly
  * one decision per VTODO property. Timed values are `number`, all-day values
@@ -51,6 +72,7 @@ const CALDAV_DATE_FIELD_MAPPINGS: FieldMapping[] = [
     toIssueValue: toTimedIssueValue,
     toTaskValue: toTimedTaskValue,
     pushTogetherWith: CALDAV_DATE_TASK_FIELD_LIST,
+    skipPush: skipAutomaticPlannedDate,
   },
   {
     taskField: 'dueDay',
@@ -59,6 +81,7 @@ const CALDAV_DATE_FIELD_MAPPINGS: FieldMapping[] = [
     toIssueValue: toDayIssueValue,
     toTaskValue: toDayTaskValue,
     pushTogetherWith: CALDAV_DATE_TASK_FIELD_LIST,
+    skipPush: skipAutomaticPlannedDate,
   },
   {
     taskField: 'deadlineWithTime',
@@ -86,7 +109,7 @@ export const CALDAV_DEADLINE_TASK_FIELDS: ReadonlySet<string> = new Set([
   'deadlineWithTime',
 ]);
 
-const CALDAV_FIELD_MAPPINGS: FieldMapping[] = [
+export const CALDAV_FIELD_MAPPINGS: FieldMapping[] = [
   {
     taskField: 'isDone',
     issueField: 'completed',

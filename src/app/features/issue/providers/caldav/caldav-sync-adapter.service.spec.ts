@@ -4,6 +4,11 @@ import { CaldavClientService } from './caldav-client.service';
 import { CaldavCfg } from './caldav.model';
 import { DEFAULT_CALDAV_CFG } from './caldav.const';
 import { computePushDecisions } from '../../two-way-sync/compute-push-decisions';
+import { Action } from '@ngrx/store';
+import { FieldMapping, FieldPushContext } from '../../two-way-sync/issue-sync.model';
+import { Task } from '../../../tasks/task.model';
+import { PlannerActions } from '../../../planner/store/planner.actions';
+import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 
 const NOON_UTC = Date.UTC(2026, 8, 25, 12, 0, 0);
 
@@ -130,5 +135,72 @@ describe('CaldavSyncAdapterService dates', () => {
         .filter((m) => !['dtstart', 'due'].includes(m.issueField))
         .every((m) => m.pushTogetherWith === undefined),
     ).toBeTrue();
+  });
+
+  describe('planned-date skipPush', () => {
+    const mappingFor = (field: string): FieldMapping =>
+      adapter.getFieldMappings().find((m) => m.taskField === field)!;
+    const task = (extra: Partial<Task> = {}): Task => ({ id: 't1', ...extra }) as Task;
+    const ctx = (action: Action, t: Task = task()): FieldPushContext => ({
+      action,
+      task: t,
+    });
+
+    for (const field of ['dueDay', 'dueWithTime']) {
+      it(`${field}: skips Planner drags (transferTask)`, () => {
+        expect(
+          mappingFor(field).skipPush!(ctx({ type: PlannerActions.transferTask.type })),
+        ).toBeTrue();
+      });
+      it(`${field}: skips a timed Planner drag (scheduleTaskWithTime with isPlannerMove)`, () => {
+        expect(
+          mappingFor(field).skipPush!(
+            ctx({
+              type: TaskSharedActions.scheduleTaskWithTime.type,
+              isPlannerMove: true,
+            } as Action),
+          ),
+        ).toBeTrue();
+      });
+      it(`${field}: ignores the Planner flag on any other action type`, () => {
+        for (const type of [
+          TaskSharedActions.reScheduleTaskWithTime.type,
+          PlannerActions.planTaskForDay.type,
+          TaskSharedActions.updateTask.type,
+        ]) {
+          expect(
+            mappingFor(field).skipPush!(ctx({ type, isPlannerMove: true } as Action)),
+          ).toBeFalse();
+        }
+      });
+      it(`${field}: skips any trigger on a task with a repeat config`, () => {
+        expect(
+          mappingFor(field).skipPush!(
+            ctx(
+              { type: PlannerActions.planTaskForDay.type },
+              task({ repeatCfgId: 'rc-1' }),
+            ),
+          ),
+        ).toBeTrue();
+      });
+      it(`${field}: pushes explicit edits on a non-repeating task`, () => {
+        for (const type of [
+          PlannerActions.planTaskForDay.type,
+          TaskSharedActions.scheduleTaskWithTime.type,
+          TaskSharedActions.reScheduleTaskWithTime.type,
+          TaskSharedActions.unscheduleTask.type,
+          TaskSharedActions.updateTask.type,
+          TaskSharedActions.applyShortSyntax.type,
+        ]) {
+          expect(mappingFor(field).skipPush!(ctx({ type }))).toBeFalse();
+        }
+      });
+    }
+
+    for (const field of ['deadlineDay', 'deadlineWithTime']) {
+      it(`${field}: never skipped, even on a repeating task`, () => {
+        expect(mappingFor(field).skipPush).toBeUndefined();
+      });
+    }
   });
 });
