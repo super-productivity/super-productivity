@@ -79,6 +79,7 @@ const ALLOWED_IFRAME_API_METHODS = new Set([
   'decrementCounter',
   'deleteCounter',
   'getAllCounters',
+  'getAllSimpleCounters',
 ]);
 
 const isTransparentCssValue = (value: string): boolean => {
@@ -484,6 +485,7 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           decrementCounter: (id, decrementBy) => callApi('decrementCounter', [id, decrementBy]),
           deleteCounter: (id) => callApi('deleteCounter', [id]),
           getAllCounters: () => callApi('getAllCounters'),
+          getAllSimpleCounters: () => callApi('getAllSimpleCounters'),
 
           // i18n
           translate: (key, params) => callApi('translate', [key, params]),
