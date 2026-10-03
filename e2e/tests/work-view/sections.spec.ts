@@ -102,6 +102,42 @@ test.describe('Sections', () => {
     });
   });
 
+  for (const context of ['project', 'Inbox'] as const) {
+    test(`creates the first section inline after ${context} root tasks`, async ({
+      page,
+      workViewPage,
+      projectPage,
+      testPrefix,
+    }) => {
+      if (context === 'project') {
+        await setupTestProject(workViewPage, projectPage, `${testPrefix} Root Sections`);
+      } else {
+        await page.goto('/#/project/INBOX_PROJECT/tasks');
+        await workViewPage.waitForTaskList();
+      }
+      await workViewPage.addTask('Root task');
+      const controls = page.locator('.add-section-inline');
+      const titles = page.locator('.section-container .collapsible-title');
+      await expect(titles).toHaveCount(0);
+      await expect(controls).toHaveCount(1);
+      await controls.last().hover();
+      await expect(controls.last()).toHaveCSS('opacity', '1');
+      await controls.last().click();
+      await submitPromptDialog(page, 'First');
+      await expect(titles).toHaveText(['First (0)']);
+      await expect(page.locator('.no-section task')).toHaveCount(1);
+
+      // The trailing affordance must also work with exactly one named section.
+      await expect(controls).toHaveCount(2);
+      await controls.last().hover();
+      await expect(controls.last()).toHaveCSS('opacity', '1');
+      await controls.last().click();
+      await submitPromptDialog(page, 'Second');
+      await expect(titles).toHaveText(['First (0)', 'Second (0)']);
+      await expect(page.locator('.no-section task')).toHaveCount(1);
+    });
+  }
+
   test('inserts sections before, between and after existing sections', async ({
     page,
     workViewPage,
