@@ -48,7 +48,7 @@
     "@sp/sync-core": "*",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.3",
-    "fastify": "^5.12.1",
+    "fastify": "^5.12.5",
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^9.1.1",
     "uuidv7": "^1.1.0",
