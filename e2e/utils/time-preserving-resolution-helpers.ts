@@ -224,11 +224,11 @@ export const runThreeTrackerScenario = async (
     }
     // Original acceptance order: A3000, B1000, B sync, C5000, C sync.
     if (firstSync === 'B') await b.sync();
-    else if (isChild) await a.sync();
+    else if (firstSync === 'A') await a.sync();
     await changeTask(c, title, 'plan');
     await recordTaskTimeDelta(c, title, 5000);
     await expectExactTaskTime(c, title, 5000);
-    if (firstSync === 'B' || isChild) await c.sync();
+    if (firstSync !== 'simultaneous') await c.sync();
     if (firstSync === 'simultaneous') {
       await Promise.all(
         clients.map((client) => client.sync({ allowConcurrentUploadRetry: true })),
