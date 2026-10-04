@@ -234,9 +234,10 @@ disk — `DELETE` returns space to PostgreSQL for reuse, not to the OS; only
 `VACUUM FULL` or `pg_repack` does that, both needing a maintenance window. Dumps
 shrink immediately either way, since `pg_dump` writes live rows only.
 
-The daily sweep fires ~10s after the app starts and then every 24h, so the
-**restart time picks the hour it runs**. Restart at a quiet hour — and not during
-the backup window — if the sweep is heavy.
+The daily sweep fires ~10s after the app starts and then every 24h, so by default the
+**restart time picks the hour it runs**. If the sweep is heavy, set
+`OLD_OPS_CLEANUP_HOUR_UTC` (0-23) to run it at a quiet hour instead — and not during
+the backup window.
 
 ## Output Files
 
