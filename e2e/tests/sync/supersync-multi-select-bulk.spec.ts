@@ -79,7 +79,9 @@ test.describe('@supersync SuperSync Multi-Select Bulk Actions', () => {
       await clientB.workView.waitForTaskList();
       for (const name of names) await waitForTask(clientB.page, name);
       const move = async (destination: string): Promise<void> => {
-        await clientA!.page.keyboard.press('Escape');
+        const bar = clientA!.page.locator(BAR);
+        if (await bar.isVisible())
+          await bar.getByRole('button', { name: 'Clear selection' }).click();
         await expect(clientA!.page.locator(BAR)).toBeHidden();
         await selectTasks(clientA!, names);
         await clientA!.page.locator(BAR).getByRole('button', { name: 'Actions' }).click();

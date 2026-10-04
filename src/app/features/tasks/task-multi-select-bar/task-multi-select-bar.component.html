@@ -332,6 +332,7 @@
   <ng-template matMenuContent>
     <button
       (click)="bulk.moveToSection(null)"
+      menuTouchFix
       mat-menu-item
     >
       <mat-icon>list</mat-icon>{{ T.F.TASK.MULTI_SELECT.NO_SECTION | translate }}
@@ -339,6 +340,7 @@
     @for (section of bulk.moveToSectionList(); track section.id) {
       <button
         (click)="bulk.moveToSection(section.id)"
+        menuTouchFix
         mat-menu-item
       >
         <mat-icon>segment</mat-icon>{{ section.title }}

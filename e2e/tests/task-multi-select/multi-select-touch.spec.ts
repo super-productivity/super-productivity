@@ -33,6 +33,7 @@ test.describe('Task multi-select (touch)', () => {
     await dialog.locator('input[type="text"]').fill('Touch destination');
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(dialog).toBeHidden();
+    await page.mouse.move(5, 5); // Park the setup mouse away from the touch menus.
     await page.evaluate(() =>
       window.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch' })),
     );
