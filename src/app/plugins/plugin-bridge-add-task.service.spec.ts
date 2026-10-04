@@ -28,6 +28,7 @@ import { Task, TaskCopy } from '../features/tasks/task.model';
 import { PluginCreateTaskData } from '@super-productivity/plugin-api';
 import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
 import EN_TRANSLATIONS from '../../assets/i18n/en.json';
+import { PluginProjectTreeService } from './plugin-project-tree.service';
 
 // Covers the plugin API's subtask-creation branch, which hand-rolls task
 // construction rather than going through TaskService.addSubTaskTo(). The
@@ -74,6 +75,7 @@ describe('PluginBridgeService.addTask() — subtask creation', () => {
       providers: [
         PluginBridgeService,
         { provide: Store, useValue: storeSpy },
+        { provide: PluginProjectTreeService, useValue: {} },
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: ProjectService, useValue: projectServiceSpy },
         { provide: TagService, useValue: tagServiceSpy },

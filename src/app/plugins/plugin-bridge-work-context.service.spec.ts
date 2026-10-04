@@ -29,6 +29,7 @@ import {
 } from '../features/work-context/work-context.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
 import { PluginManifest, PluginHooks } from './plugin-api.model';
+import { PluginProjectTreeService } from './plugin-project-tree.service';
 
 // Covers the work-context plugin extension points introduced in commit
 // e3ce1fcdd9: registerWorkContextHeaderButton (validation, filtering, cleanup)
@@ -97,6 +98,7 @@ describe('PluginBridgeService.workContext — header buttons + embed slot', () =
           provide: Store,
           useValue: jasmine.createSpyObj('Store', ['select', 'dispatch']),
         },
+        { provide: PluginProjectTreeService, useValue: {} },
         {
           provide: TaskService,
           useValue: jasmine.createSpyObj(

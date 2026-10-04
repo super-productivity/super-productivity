@@ -26,6 +26,8 @@ import {
   PluginWorkContextHeaderBtnCfg,
   ActiveWorkContext,
   Project,
+  ProjectFolderMove,
+  ProjectTreeNode,
   SnackCfg,
   Tag,
   Task,
@@ -277,6 +279,18 @@ export class PluginAPI implements PluginAPIInterface {
   async deleteProject(projectId: string): Promise<void> {
     PluginLog.log(`Plugin ${this.#pluginId} requested to delete project ${projectId}`);
     return this.#boundMethods.deleteProject(projectId);
+  }
+
+  async getProjectTree(): Promise<ProjectTreeNode[]> {
+    PluginLog.log(`Plugin ${this.#pluginId} requested the project tree`);
+    return this.#pluginBridge.getProjectTree();
+  }
+
+  async moveProjectsToFolders(moves: ProjectFolderMove[]): Promise<void> {
+    PluginLog.log(`Plugin ${this.#pluginId} requested to move projects to folders`, {
+      count: moves.length,
+    });
+    return this.#pluginBridge.moveProjectsToFolders(moves);
   }
 
   async getAllTags(): Promise<Tag[]> {

@@ -517,6 +517,26 @@ export class MenuTreeService {
     );
   }
 
+  /**
+   * Applies all moves to one tree and persists it as a single op: each
+   * `updateProjectTree` carries the whole tree, so moving projects one call at
+   * a time could overwrite a concurrent reorder from another device.
+   */
+  moveProjectsToFolders(
+    moves: ReadonlyArray<{ projectId: string; folderId: string | null }>,
+  ): void {
+    if (!moves.length) {
+      return;
+    }
+    this.setProjectTree(
+      moves.reduce(
+        (tree, { projectId, folderId }) =>
+          this._placeItemInFolder(tree, projectId, MenuTreeKind.PROJECT, folderId),
+        this.projectTree(),
+      ),
+    );
+  }
+
   addTagToFolder(tagId: string, folderId: string | null): void {
     this.setTagTree(
       this._placeItemInFolder(this.tagTree(), tagId, MenuTreeKind.TAG, folderId),

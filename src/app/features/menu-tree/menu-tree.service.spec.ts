@@ -396,5 +396,31 @@ describe('MenuTreeService', () => {
       const folder = lastTree()[0] as MenuTreeFolderNode;
       expect(folder.children.map((c) => c.id)).toEqual(['t-1']);
     });
+
+    it('applies a batch of project moves as a single updateProjectTree', () => {
+      store.overrideSelector(selectMenuTreeProjectTree, [
+        folderNode('folder-1', [{ id: 'p-1', k: MenuTreeKind.PROJECT }]),
+        folderNode('folder-2'),
+        { id: 'p-2', k: MenuTreeKind.PROJECT },
+      ]);
+      store.refreshState();
+
+      service.moveProjectsToFolders([
+        { projectId: 'p-1', folderId: 'folder-2' },
+        { projectId: 'p-2', folderId: 'folder-2' },
+      ]);
+
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+      const [folder1, folder2, ...rest] = lastTree() as MenuTreeFolderNode[];
+      expect(folder1.children).toEqual([]);
+      expect(folder2.children.map((c) => c.id)).toEqual(['p-1', 'p-2']);
+      expect(rest).toEqual([]);
+    });
+
+    it('does not dispatch for an empty batch', () => {
+      service.moveProjectsToFolders([]);
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
   });
 });

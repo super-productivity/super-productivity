@@ -40,6 +40,8 @@ import {
   PluginRequestOptions,
   PluginSimpleCounterFull,
   PluginTaskRepeatCfg,
+  ProjectFolderMove,
+  ProjectTreeNode,
   SnackCfg,
 } from '@super-productivity/plugin-api';
 import { snackCfgToSnackParams } from './plugin-api-mapper';
@@ -92,6 +94,7 @@ import { ISSUE_PROVIDER_TYPES } from '../features/issue/issue.const';
 import { PluginService } from './plugin.service';
 import { PluginI18nService } from './plugin-i18n.service';
 import { PluginTaskContextMenuRegistryService } from './plugin-task-context-menu-registry.service';
+import { PluginProjectTreeService } from './plugin-project-tree.service';
 import { formatDateForPlugin } from './plugin-i18n-date.util';
 
 /**
@@ -170,6 +173,7 @@ export class PluginBridgeService implements OnDestroy {
   private _dataInitService = inject(DataInitService);
   private _globalConfigService = inject(GlobalConfigService);
   private _taskContextMenuRegistry = inject(PluginTaskContextMenuRegistryService);
+  private _pluginProjectTree = inject(PluginProjectTreeService);
   readonly #nodeExecutionGrantTokens = new Map<string, string>();
   readonly #nodeExecutionApi = this._consumeNodeExecutionApi();
 
@@ -1123,6 +1127,14 @@ export class PluginBridgeService implements OnDestroy {
     await this._projectService.remove(project);
 
     PluginLog.log('PluginBridge: Project deleted successfully', { projectId });
+  }
+
+  async getProjectTree(): Promise<ProjectTreeNode[]> {
+    return this._pluginProjectTree.getProjectTree();
+  }
+
+  async moveProjectsToFolders(moves: ProjectFolderMove[]): Promise<void> {
+    return this._pluginProjectTree.moveProjectsToFolders(moves);
   }
 
   /**

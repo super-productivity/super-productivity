@@ -307,6 +307,8 @@ Iframe plugins automatically receive:
 - `addProject(project)` - Create new project
 - `updateProject(projectId, updates)` - Update project
 - `deleteProject(projectId)` - Delete a project **and the tasks it contains** (backlog and subtasks included), the same cascade the UI's "Delete project" applies. Deleting the Inbox is rejected, and if the deleted project is the active one the app falls back to the Today context.
+- `getProjectTree()` - Get the sidebar's project folders and the projects in them, in sidebar order. Folders are `{ type: 'folder', id, name, isExpanded, children }` and nest; projects are `{ type: 'project', id }`. The Inbox is not part of the tree.
+- `moveProjectsToFolders(moves)` - Move projects into folders in one write, e.g. `[{ projectId, folderId }]`; `folderId: null` moves a project to the root. Pass every move in one call: each call rewrites the whole tree, so separate calls can drop a reorder made concurrently on another device. An unknown project or folder id rejects the whole batch. Creating, renaming and deleting folders is not exposed to plugins.
 
 #### Tags
 
