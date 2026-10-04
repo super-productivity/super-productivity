@@ -2877,6 +2877,9 @@
       "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Włącz formatowanie Markdown w notatkach zadań",
       "IS_TRAY_SHOW_CURRENT": "Pokaż bieżące zadanie w zasobniku / menu statusu (tylko macOS/Windows)",
       "NOTES_TEMPLATE": "Domyślny szablon notatek zadania",
+      "PRIORITY_ICON_PRESET": "Ikony priorytetu",
+      "PRIORITY_ICON_PRESET_CHEVRONS": "Strzałki",
+      "PRIORITY_ICON_PRESET_NUMBERS": "Liczby",
       "TITLE": "Zadania"
     },
     "TIME_TRACKING": {
@@ -3040,31 +3043,12 @@
     "TASK_MARKED_DONE": "Zadanie oznaczone jako wykonane"
   },
   "ONBOARDING": {
-    "TITLE": "Jak chcesz używać Super Productivity?",
-    "SUBTITLE": "Wybierz konfigurację pasującą do Twojego stylu pracy. Zawsze możesz to zmienić później w Ustawieniach.",
-    "PRIVACY_HINT": "Twoje dane pozostają bezpiecznie na Twoim urządzeniu. Nic nie jest wysyłane na serwer.",
-    "SYNC_CTA": "Używasz już Super Productivity na innym urządzeniu?",
-    "SYNC_CTA_LINK": "Skonfiguruj synchronizację",
-    "PRESETS": {
-      "SIMPLE_TODO": {
-        "TITLE": "Prosta lista zadań",
-        "DESCRIPTION": "Przejrzysty menedżer zadań z projektami, tagami i notatkami. Bez dodatków."
-      },
-      "TIME_TRACKER": {
-        "TITLE": "Śledzenie czasu",
-        "DESCRIPTION": "Śledź, ile czasu zajmują zadania. Idealne do rozliczania godzin lub zrozumienia, na co przeznaczasz czas."
-      },
-      "PRODUCTIVITY_PRO": {
-        "TITLE": "Pakiet produktywności",
-        "DESCRIPTION": "Planuj dzień, buduj nawyki, skupiaj się i śledź czas. Wszystko w jednym miejscu."
-      }
-    },
     "HINTS": {
       "CREATE_TASK": "Kliknij +, aby dodać pierwsze zadanie",
       "CREATE_TASK_TOUCH": "Dotknij +, aby dodać pierwsze zadanie",
-      "EXPLORE": "Klikaj i odkrywaj! Pomoc znajdziesz w panelu bocznym.",
-      "EXPLORE_TOUCH": "Odkrywaj swobodnie! Pomoc znajdziesz w menu.",
-      "TASK_TAP_TOUCH": "Dotknij zadania, aby otworzyć jego szczegóły.",
+      "DONE_TITLE": "Wszystko gotowe",
+      "EXPLORE_INBOX": "W Twojej skrzynce odbiorczej czekają dodatkowe, opcjonalne wskazówki. Możesz je wypróbować lub usunąć, kiedy tylko zechcesz.",
+      "GOT_IT": "Rozumiem",
       "TASK_SWIPE_LEFT_TOUCH": "Przesuń zadanie w lewo, aby zobaczyć więcej akcji",
       "TASK_SWIPE_RIGHT_TOUCH": "Przesuń zadanie w prawo, aby oznaczyć je jako ukończone",
       "OR_PRESS": "lub naciśnij",
