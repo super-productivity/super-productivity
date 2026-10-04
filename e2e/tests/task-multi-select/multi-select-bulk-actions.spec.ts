@@ -110,6 +110,8 @@ test.describe('Task multi-select bulk actions', () => {
     await expect(page.locator(BAR)).toBeHidden();
     await ctrlSelect(taskPage, [titles[0], titles[1]]);
     await expect(page.locator(BAR)).toContainText('2 selected');
+    // Park the setup mouse so it cannot close a keyboard-opened submenu.
+    await page.mouse.move(5, 5);
     // Q on a selected row exposes the same menu to keyboard users.
     await taskPage.getTaskByText(titles[0]).focus();
     await page.keyboard.press('q');
