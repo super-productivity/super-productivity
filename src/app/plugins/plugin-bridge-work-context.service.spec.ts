@@ -9,6 +9,7 @@ import { PluginBridgeService } from './plugin-bridge.service';
 import { TaskService } from '../features/tasks/task.service';
 import { ProjectService } from '../features/project/project.service';
 import { TagService } from '../features/tag/tag.service';
+import { TaskRepeatCfgService } from '../features/task-repeat-cfg/task-repeat-cfg.service';
 import { WorkContextService } from '../features/work-context/work-context.service';
 import { SnackService } from '../core/snack/snack.service';
 import { NotifyService } from '../core/notify/notify.service';
@@ -107,6 +108,7 @@ describe('PluginBridgeService.workContext — header buttons + embed slot', () =
         },
         { provide: ProjectService, useValue: { list$: of([]) } },
         { provide: TagService, useValue: { tags$: of([]) } },
+        { provide: TaskRepeatCfgService, useValue: {} },
         { provide: WorkContextService, useValue: workContextServiceSpy },
         {
           provide: SnackService,
