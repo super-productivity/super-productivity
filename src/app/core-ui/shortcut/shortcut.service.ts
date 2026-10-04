@@ -69,6 +69,7 @@ export class ShortcutService {
   private _pluginBridgeService = inject(PluginBridgeService);
   private _taskShortcutService = inject(TaskShortcutService);
   private _overlayContainer = inject(OverlayContainer);
+  private _isNoteTaskHandoffPending = false;
 
   isCtrlPressed$: Observable<boolean> = fromEvent(document, 'keydown').pipe(
     switchMap((ev: Event) => {
@@ -115,43 +116,52 @@ export class ShortcutService {
   }
 
   private async _showAddTaskBarFromDesktopCommand(): Promise<void> {
+    if (this._isNoteTaskHandoffPending) {
+      return;
+    }
+
     const addNoteDialogRef = this._getAddNoteDialogRef();
     if (!addNoteDialogRef) {
       this._layoutService.showAddTaskBar();
       return;
     }
 
-    const addNoteDialog = addNoteDialogRef.componentInstance;
-    const noteContent = addNoteDialog.data?.content?.trim() || '';
+    this._isNoteTaskHandoffPending = true;
+    try {
+      const addNoteDialog = addNoteDialogRef.componentInstance;
+      const noteContent = addNoteDialog.data?.content?.trim() || '';
 
-    if (noteContent.length > 0) {
-      const shouldSave = await firstValueFrom(
-        this._matDialog
-          .open(DialogConfirmComponent, {
-            data: {
-              message: T.F.NOTE.D_FULLSCREEN.CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK,
-              okTxt: T.G.SAVE,
-              cancelTxt: T.G.DISCARD,
-            },
-          })
-          .afterClosed(),
-      );
+      if (noteContent.length > 0) {
+        const shouldSave = await firstValueFrom(
+          this._matDialog
+            .open(DialogConfirmComponent, {
+              data: {
+                message: T.F.NOTE.D_FULLSCREEN.CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK,
+                okTxt: T.G.SAVE,
+                cancelTxt: T.G.DISCARD,
+              },
+            })
+            .afterClosed(),
+        );
 
-      if (typeof shouldSave !== 'boolean') {
-        return;
-      }
+        if (typeof shouldSave !== 'boolean') {
+          return;
+        }
 
-      if (shouldSave) {
-        addNoteDialog.close();
+        if (shouldSave) {
+          addNoteDialog.close();
+        } else {
+          addNoteDialog.closeAfterConfirmedDiscard();
+        }
       } else {
         addNoteDialog.closeAfterConfirmedDiscard();
       }
-    } else {
-      addNoteDialog.closeAfterConfirmedDiscard();
-    }
 
-    await firstValueFrom(addNoteDialogRef.afterClosed());
-    this._layoutService.showAddTaskBar();
+      await firstValueFrom(addNoteDialogRef.afterClosed());
+      this._layoutService.showAddTaskBar();
+    } finally {
+      this._isNoteTaskHandoffPending = false;
+    }
   }
 
   private _getAddNoteDialogRef(): MatDialogRef<DialogAddNoteComponent> | null {
