@@ -19,6 +19,8 @@ import { SharePayload } from '../../core/share/share.model';
 import { map } from 'rxjs/operators';
 import { calculateSustainabilityScore } from './metric-scoring.util';
 import { TODAY_TAG } from '../tag/tag.const';
+import { LocaleDatePipe } from '../../ui/pipes/locale-date.pipe';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 
 const FULL_PRODUCTIVITY_BREAKDOWN_CHART_RANGE = Number.MAX_SAFE_INTEGER;
 
@@ -35,6 +37,7 @@ const FULL_PRODUCTIVITY_BREAKDOWN_CHART_RANGE = Number.MAX_SAFE_INTEGER;
     TranslatePipe,
     ActivityHeatmapComponent,
     ShareButtonComponent,
+    LocaleDatePipe,
   ],
 })
 export class MetricComponent {
@@ -42,6 +45,8 @@ export class MetricComponent {
   metricService = inject(MetricService);
   projectMetricsService = inject(ProjectMetricsService);
   allTasksMetricsService = inject(AllTasksMetricsService);
+  // Passed to the pure `localeDate` pipe so dates re-render on a locale change.
+  readonly locale = inject(DateTimeFormatService).currentLocale;
 
   T: typeof T = T;
 

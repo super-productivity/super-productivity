@@ -10,12 +10,15 @@
         </h1>
         <share-button
           [payload]="sharePayload()"
-          [tooltip]="'Share your productivity stats'"
+          [tooltip]="T.F.METRIC.CMP.SHARE_STATS | translate"
         />
       </div>
       <!--  <h2>Basic Metrics</h2>-->
       <p>
-        <i>{{ sm.start }} – {{ sm.end }}</i>
+        <i
+          >{{ sm.start | localeDate: 'shortDate' : undefined : locale() }} –
+          {{ sm.end | localeDate: 'shortDate' : undefined : locale() }}</i
+        >
       </p>
       <div class="material-table">
         <table>

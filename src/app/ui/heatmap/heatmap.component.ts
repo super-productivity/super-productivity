@@ -14,6 +14,8 @@ import { TranslatePipe, TranslateService, TranslateStore } from '@ngx-translate/
 import { T } from '../../t.const';
 import { getPluralKey } from '../../util/get-plural-key';
 import { msToString } from '../duration/ms-to-string.pipe';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
+import { safeFormatDate } from '../../util/safe-format-date';
 
 export interface DayData {
   date: Date;
@@ -44,6 +46,7 @@ export class HeatmapComponent {
   private readonly _dateAdapter = inject(DateAdapter);
   private readonly _translateService = inject(TranslateService);
   private readonly _translateStore = inject(TranslateStore);
+  private readonly _dateTimeFormatService = inject(DateTimeFormatService);
 
   readonly T = T;
 
@@ -91,11 +94,12 @@ export class HeatmapComponent {
    */
   private readonly _dayTitles = computed(() => {
     this._langChange();
+    const locale = this._dateTimeFormatService.currentLocale();
     const titles = new Map<string, string>();
     for (const week of this.data()?.weeks ?? []) {
       for (const day of week.days) {
         if (day) {
-          titles.set(day.dateStr, this._buildDayTitle(day));
+          titles.set(day.dateStr, this._buildDayTitle(day, locale));
         }
       }
     }
@@ -116,7 +120,7 @@ export class HeatmapComponent {
     return this._dayTitles().get(day.dateStr) ?? '';
   }
 
-  private _buildDayTitle(day: DayData): string {
+  private _buildDayTitle(day: DayData, locale: string): string {
     const key = getPluralKey(
       this._translateService,
       this._translateStore,
@@ -124,7 +128,7 @@ export class HeatmapComponent {
       'HEATMAP.DAY_TOOLTIP',
     );
     return this._translateService.instant(key, {
-      date: day.dateStr,
+      date: safeFormatDate(day.date, 'shortDate', locale),
       taskCount: day.taskCount,
       timeSpent: msToString(day.timeSpent),
     });

@@ -11,6 +11,7 @@ import { SimpleMetrics } from './metric.model';
 import { signal } from '@angular/core';
 import { T } from '../../t.const';
 import { INBOX_PROJECT } from '../project/project.const';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 
 describe('MetricComponent', () => {
   let component: MetricComponent;
@@ -101,6 +102,10 @@ describe('MetricComponent', () => {
         { provide: ProjectMetricsService, useValue: projectMetricsServiceSpy },
         { provide: AllTasksMetricsService, useValue: allTasksMetricsServiceSpy },
         { provide: WorkContextService, useValue: workContextServiceSpy },
+        {
+          provide: DateTimeFormatService,
+          useValue: { currentLocale: signal('en-US') },
+        },
       ],
     }).overrideComponent(MetricComponent, {
       set: {

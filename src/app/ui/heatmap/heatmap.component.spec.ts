@@ -1,4 +1,6 @@
-import { Component } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeDe from '@angular/common/locales/de';
+import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DateAdapter } from '@angular/material/core';
 import { By } from '@angular/platform-browser';
@@ -6,6 +8,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
 
 import { HeatmapComponent, HeatmapData } from './heatmap.component';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 
 @Component({
   standalone: true,
@@ -57,6 +60,12 @@ const TRANSLATIONS = {
 describe('HeatmapComponent', () => {
   let fixture: ComponentFixture<TestHostComponent>;
   let firstDayOfWeek: number;
+  const localeSig = signal<string>('en-US');
+
+  beforeAll(() => {
+    // formatDate needs locale data registered for non-default locales.
+    registerLocaleData(localeDe, 'de-DE');
+  });
 
   beforeEach(async () => {
     document.body.classList.add('isDarkTheme');
@@ -64,6 +73,7 @@ describe('HeatmapComponent', () => {
     document.body.style.setProperty('--ink-on-channel', '255, 255, 255');
     document.body.style.setProperty('--c-primary', 'rgb(90, 150, 255)');
     firstDayOfWeek = 0;
+    localeSig.set('en-US');
 
     await TestBed.configureTestingModule({
       imports: [TestHostComponent, TranslateModule.forRoot()],
@@ -75,6 +85,10 @@ describe('HeatmapComponent', () => {
             getDayOfWeekNames: () => LOCALIZED_DAY_NAMES,
             localeChanges: new Subject<void>(),
           },
+        },
+        {
+          provide: DateTimeFormatService,
+          useValue: { currentLocale: localeSig },
         },
       ],
     }).compileComponents();
@@ -156,9 +170,24 @@ describe('HeatmapComponent', () => {
       fixture.nativeElement.querySelectorAll('.day') as NodeListOf<HTMLElement>,
     );
 
-    expect(days[0].title).toBe('2026-01-01: 0 Aufgaben, -');
-    expect(days[1].title).toBe('2026-01-02: 1 Aufgabe, 1m');
+    expect(days[0].title).toBe('1/1/26: 0 Aufgaben, -');
+    expect(days[1].title).toBe('1/2/26: 1 Aufgabe, 1m');
     // Days outside the range render without a tooltip.
     expect(days[2].title).toBe('');
+  });
+
+  it('formats tooltip dates with the date locale, independent of the UI language', () => {
+    const days = Array.from(
+      fixture.nativeElement.querySelectorAll('.day') as NodeListOf<HTMLElement>,
+    );
+
+    expect(days[0].title).toBe('1/1/26: 0 Aufgaben, -');
+    expect(days[1].title).toBe('1/2/26: 1 Aufgabe, 1m');
+
+    localeSig.set('de-DE');
+    fixture.detectChanges();
+
+    expect(days[0].title).toBe('01.01.26: 0 Aufgaben, -');
+    expect(days[1].title).toBe('02.01.26: 1 Aufgabe, 1m');
   });
 });
