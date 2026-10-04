@@ -1,6 +1,8 @@
 import { inject, Injectable } from '@angular/core';
+import { Store } from '@ngrx/store';
 import { Project } from '../../project/project.model';
 import { Tag } from '../../tag/tag.model';
+import { selectAllSections } from '../../section/store/section.selectors';
 import { AddTaskBarStateService } from './add-task-bar-state.service';
 import { AddTaskBarRepeat } from './add-task-bar.const';
 import {
@@ -19,6 +21,7 @@ import { millisecondsDiffToRemindOption } from '../util/remind-option-to-millise
 interface PreviousParseResult {
   cleanText: string | null;
   projectId: string | null;
+  sectionId: string | null;
   tagIds: string[];
   newTagTitles: string[];
   timeSpentOnDay: TimeSpentOnDay | null;
@@ -57,6 +60,10 @@ const isSameRepeat = (
 @Injectable()
 export class AddTaskBarParserService {
   private readonly _stateService = inject(AddTaskBarStateService);
+  private readonly _store = inject(Store);
+  // Signal read instead of a per-parse subscribe/unsubscribe: this runs on
+  // every keystroke (round-5 review note on PR #9014).
+  private readonly _allSections = this._store.selectSignal(selectAllSections);
   private _previousParseResult: PreviousParseResult | null = null;
   private _parseRunId = 0;
   // Exactly which characters of which input the parser last consumed, so a
@@ -108,7 +115,12 @@ export class AddTaskBarParserService {
       return;
     }
 
-    // Get current tags from state to preserve pre-selected tags
+    const allSections = this._allSections();
+    // Context for a standalone "/Section" token (no "+Project" typed) — read
+    // BEFORE the parse so it reflects the selection the text was typed against
+    // (the parsed section is re-validated against the final project below).
+    const sectionContextProjectId =
+      this._stateService.state().projectId || defaultProject?.id;
     const parseResult = await shortSyntax(
       { title: text, tagIds: this._stateService.state().tagIdsFromTxt },
       config,
@@ -117,6 +129,8 @@ export class AddTaskBarParserService {
       undefined,
       'replace',
       true,
+      allSections,
+      sectionContextProjectId,
     );
 
     if (parseRunId !== this._parseRunId) {
@@ -168,6 +182,7 @@ export class AddTaskBarParserService {
         projectId: this._stateService.isAutoDetected()
           ? defaultProject?.id || null
           : null,
+        sectionId: null,
         tagIds: currentState.tagIdsFromTxt, // Preserve pre-selected tags
         newTagTitles: [],
         timeSpentOnDay: null,
@@ -262,6 +277,7 @@ export class AddTaskBarParserService {
       currentResult = {
         cleanText: parseResult.taskChanges.title || text,
         projectId: parseResult.projectId || null,
+        sectionId: parseResult.sectionId || null,
         tagIds: tagIds,
         newTagTitles: newTagTitles,
         timeSpentOnDay: parseResult.taskChanges.timeSpentOnDay || null,
@@ -300,6 +316,28 @@ export class AddTaskBarParserService {
           this._stateService.updateProjectId(defaultProject.id);
         }
       }
+    }
+
+    // After the project (updateProjectId resets the section to null). A
+    // parsed section must belong to the project the task will actually land
+    // in: the standalone-"/Section" context handed to the parser can be one
+    // edit stale (deleting "+Work" still resolves "/Design" against Work), so
+    // validate against the CURRENT project — the block above has already
+    // updated it (round-3 review finding on PR #9014).
+    const finalProjectId = this._stateService.state().projectId;
+    currentResult.sectionId =
+      currentResult.sectionId &&
+      allSections.some(
+        (s) => s.id === currentResult.sectionId && s.contextId === finalProjectId,
+      )
+        ? currentResult.sectionId
+        : null;
+    if (
+      !this._previousParseResult ||
+      this._previousParseResult.sectionId !== currentResult.sectionId ||
+      this._stateService.state().sectionId !== currentResult.sectionId
+    ) {
+      this._stateService.updateSectionId(currentResult.sectionId);
     }
 
     if (

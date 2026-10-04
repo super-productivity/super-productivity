@@ -5,6 +5,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AddTaskBarComponent } from './add-task-bar.component';
 import { TaskService } from '../task.service';
+import { SectionService } from '../../section/section.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
@@ -63,6 +64,7 @@ describe('AddTaskBarComponent', () => {
   let mockTagService: jasmine.SpyObj<TagService>;
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
   let mockStore: jasmine.SpyObj<Store>;
+  let mockAllSections: unknown[];
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockAddTaskBarIssueSearchService: jasmine.SpyObj<AddTaskBarIssueSearchService>;
@@ -222,9 +224,19 @@ describe('AddTaskBarComponent', () => {
       shortSyntax$: of({}),
       localization: () => ({ timeLocale: DEFAULT_LOCALE }),
     });
-    mockStore = jasmine.createSpyObj('Store', ['select', 'dispatch', 'pipe']);
+    mockStore = jasmine.createSpyObj('Store', [
+      'select',
+      'selectSignal',
+      'dispatch',
+      'pipe',
+    ]);
     mockStore.pipe.and.returnValue(of([]));
     mockStore.select.and.returnValue(of([]));
+    // The component reads selectAllSections through a signal; tests swap the
+    // backing value (see setupSectionAdd) rather than re-stubbing the spy,
+    // since the signal field is created once at construction.
+    mockAllSections = [];
+    mockStore.selectSignal.and.returnValue(((): unknown[] => mockAllSections) as any);
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
     mockAddTaskBarIssueSearchService = jasmine.createSpyObj(
@@ -490,6 +502,75 @@ describe('AddTaskBarComponent', () => {
         }),
       );
       expect(mockTaskService.moveToCurrentWorkContext).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('addTask → section placement (PR #9014)', () => {
+    const designSection = {
+      id: 'sec-1',
+      contextId: 'project-1',
+      contextType: 'PROJECT',
+      title: 'Design',
+      taskIds: [],
+    };
+    let addToSectionSpy: jasmine.Spy;
+
+    const setupSectionAdd = (sections: unknown[]): void => {
+      mockAllSections = sections;
+      mockTaskService.add.and.returnValue('task-1');
+      addToSectionSpy = spyOn(TestBed.inject(SectionService), 'addTaskToSection');
+      component.stateService.updateInputTxt('New task');
+      component.stateService.updateCleanText('New task');
+      // updateProjectId clears the section, so set the project first
+      component.stateService.updateProjectId('project-1');
+      component.stateService.updateSectionId('sec-1');
+    };
+
+    it('should file the new task into the parsed section of its project', async () => {
+      setupSectionAdd([designSection]);
+
+      await component.addTask();
+
+      expect(addToSectionSpy).toHaveBeenCalledWith('sec-1', 'task-1', null, null);
+    });
+
+    it('should respect add-to-bottom inside the section', async () => {
+      setupSectionAdd([{ ...designSection, taskIds: ['t-a', 't-b'] }]);
+      component.isAddToBottom.set(true);
+
+      await component.addTask();
+
+      expect(addToSectionSpy).toHaveBeenCalledWith('sec-1', 'task-1', 't-b', null);
+    });
+
+    it('should NOT file the task when the section belongs to another project (write-site guard)', async () => {
+      // Round-3 review finding on PR #9014: a stale sectionId must never put
+      // a task id into another project's section.taskIds.
+      setupSectionAdd([{ ...designSection, contextId: 'project-2' }]);
+
+      await component.addTask();
+
+      expect(mockTaskService.add).toHaveBeenCalled();
+      expect(addToSectionSpy).not.toHaveBeenCalled();
+    });
+
+    it('should NOT file the task when the section no longer exists', async () => {
+      setupSectionAdd([]);
+
+      await component.addTask();
+
+      expect(mockTaskService.add).toHaveBeenCalled();
+      expect(addToSectionSpy).not.toHaveBeenCalled();
+    });
+
+    it('should skip section placement for backlog adds', async () => {
+      setupSectionAdd([designSection]);
+      component.isAddToBacklog.set(true);
+
+      await component.addTask();
+
+      expect(mockTaskService.add).toHaveBeenCalled();
+      expect(addToSectionSpy).not.toHaveBeenCalled();
     });
   });
 
