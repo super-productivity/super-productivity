@@ -359,6 +359,24 @@ describe('loadConfigFromEnv - TRUST_PROXY parsing', () => {
     expect(config.trustProxy).toEqual(['10.0.0.5', 'fd00::/8', '::1']);
   });
 
+  it('should accept IPv4-mapped IPv6 addresses and ranges', async () => {
+    process.env.TRUST_PROXY = '::ffff:100.64.0.1,::ffff:100.64.0.0/106';
+
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.trustProxy).toEqual(['::ffff:100.64.0.1', '::ffff:100.64.0.0/106']);
+  });
+
+  it('should accept an IPv4 range written as a netmask', async () => {
+    process.env.TRUST_PROXY = '10.0.0.0/255.0.0.0';
+
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.trustProxy).toEqual(['10.0.0.0/255.0.0.0']);
+  });
+
   it('should ignore empty entries', async () => {
     process.env.TRUST_PROXY = ',loopback,,';
 

@@ -1,3 +1,4 @@
+import { isIP } from 'net';
 import * as path from 'path';
 import { Logger } from './logger';
 
@@ -103,14 +104,13 @@ export const isConsentRequired = (config: ServerConfig): boolean => !!config.pri
 export const SERVER_TRUST_PROXY = ['loopback', 'uniquelocal'];
 
 const TRUST_PROXY_KEYWORDS = ['loopback', 'linklocal', 'uniquelocal'];
-const IPV4_WITH_OPTIONAL_PREFIX = /^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?$/;
-const IPV6_WITH_OPTIONAL_PREFIX = /^[0-9a-f]*:[0-9a-f:]*(\/\d{1,3})?$/i;
 
 /**
  * Parse a TRUST_PROXY value into the list fastify's trustProxy option takes.
- * Throws on anything that does not look like a keyword, an IP or a CIDR range,
- * so the spoofable hop-count and `true` forms never reach fastify; proxy-addr
- * rejects malformed addresses when the server starts.
+ * Throws unless each entry is a keyword or an IP address with an optional
+ * range, so the spoofable hop-count and `true` forms never reach fastify; the
+ * range itself is left to proxy-addr, which rejects an invalid one when the
+ * server starts.
  */
 export const parseTrustProxy = (value: string): string[] => {
   const entries = value
@@ -119,10 +119,9 @@ export const parseTrustProxy = (value: string): string[] => {
     .filter((entry) => entry.length > 0);
 
   for (const entry of entries) {
-    const isValid =
-      TRUST_PROXY_KEYWORDS.includes(entry) ||
-      IPV4_WITH_OPTIONAL_PREFIX.test(entry) ||
-      IPV6_WITH_OPTIONAL_PREFIX.test(entry);
+    const rangeStart = entry.lastIndexOf('/');
+    const address = rangeStart === -1 ? entry : entry.slice(0, rangeStart);
+    const isValid = TRUST_PROXY_KEYWORDS.includes(entry) || isIP(address) !== 0;
     if (!isValid) {
       throw new Error(
         `Invalid TRUST_PROXY entry "${entry}". Use proxy-addr keywords (loopback, linklocal, uniquelocal), ` +
