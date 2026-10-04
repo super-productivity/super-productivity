@@ -17,67 +17,19 @@ const blockBackgroundSync = (): void => {
   flags['__SP_E2E_BLOCK_IMMEDIATE_UPLOAD'] = true;
 };
 
-/** Calls the instantiated development app service; never writes an op or snapshot. */
+/** Call real persistence services through the hook available in optimized E2E builds. */
 const persist = (page: Page, compact = false): Promise<void> =>
   page.evaluate(async (shouldCompact) => {
-    interface Injector {
-      records?: Map<{ name?: string }, unknown>;
-      get: (token: unknown) => unknown;
-      injector?: Injector;
-      parentInjector?: Injector;
-      parent?: Injector;
-      _lView?: unknown[];
-    }
-    const ng = (window as unknown as { ng: { getInjector: (el: Element) => Injector } })
-      .ng;
-    const node = ng.getInjector(document.querySelector('app-root')!);
-    const queue: Injector[] = [
-      node,
-      ...(node._lView ?? []).filter(
-        (value): value is Injector =>
-          !!value &&
-          typeof value === 'object' &&
-          ('records' in value || 'parentInjector' in value),
-      ),
-    ];
-    const seen = new Set<Injector>();
-    const services = new Map<string, unknown>();
-    while (queue.length) {
-      const injector = queue.shift()!;
-      if (seen.has(injector)) continue;
-      seen.add(injector);
-      for (const token of injector.records?.keys() ?? []) {
-        if (
-          token.name?.startsWith('OperationWriteFlushService') ||
-          token.name?.startsWith('OperationLogCompactionService')
-        ) {
-          services.set(token.name.replace(/\d+$/, ''), injector.get(token));
-        }
-      }
-      for (const parent of [
-        injector.injector,
-        injector.parentInjector,
-        injector.parent,
-      ]) {
-        if (parent) queue.push(parent);
-      }
-    }
-    const flush = services.get('OperationWriteFlushService') as
-      | {
+    const helpers = (
+      window as unknown as {
+        __e2eTestHelpers: {
           flushPendingWrites: () => Promise<void>;
-        }
-      | undefined;
-    if (!flush) throw new Error('Real operation write flush service unavailable');
-    await flush.flushPendingWrites();
-    if (shouldCompact) {
-      const compaction = services.get('OperationLogCompactionService') as
-        | {
-            compact: () => Promise<void>;
-          }
-        | undefined;
-      if (!compaction) throw new Error('Real operation compaction service unavailable');
-      await compaction.compact();
-    }
+          compact: () => Promise<boolean>;
+        };
+      }
+    ).__e2eTestHelpers;
+    await helpers.flushPendingWrites();
+    if (shouldCompact) await helpers.compact();
   }, compact);
 
 interface TaskView {

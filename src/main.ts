@@ -382,7 +382,7 @@ bootstrapApplication(AppComponent, {
 }).then((appRef) => {
   appInjector = appRef.injector;
 
-  // Expose store + HydrationStateService for e2e tests in dev/stage builds.
+  // Expose store and persistence helpers for E2E tests in non-production builds.
   // Used by the screenshot pipeline to flip locale / customTheme inside a
   // single session (see e2e/store-screenshots/helpers.ts) and by #6230
   // recurring-task tests. Stripped from production via the env guard.
@@ -392,6 +392,13 @@ bootstrapApplication(AppComponent, {
       (window as unknown as { __e2eTestHelpers?: unknown }).__e2eTestHelpers = {
         store: storeRef,
         hydrationState: appRef.injector.get(m.HydrationStateService),
+        flushPendingWrites: () =>
+          appRef.injector.get(OperationWriteFlushService).flushPendingWrites(),
+        compact: async () => {
+          const { OperationLogCompactionService } =
+            await import('./app/op-log/persistence/operation-log-compaction.service');
+          return appRef.injector.get(OperationLogCompactionService).compact();
+        },
       };
     });
   }
