@@ -1622,7 +1622,7 @@
         "DECRYPTION_FAILED": "Nie udało się odszyfrować zsynchronizowanych danych. Sprawdź hasło szyfrowania.",
         "DEFERRED_ACTION_FAILED": "Niektóre zmiany dokonane podczas synchronizacji nie mogły zostać zapisane. Przeładuj, aby odzyskać.",
         "DEFERRED_ACTION_PERMANENT_FAILED": "Nie udało się zapisać zmiany i synchronizacja została wstrzymana. Przeładuj aplikację, aby przywrócić ostatni zapisany stan.",
-        "DEFERRED_ACTIONS_STUCK": "Synchronizacja prawdopodobnie jest zajęta. Twoje ostatnie zmiany oczekują na zapis. W przypadku ponownego załadowania aplikacji, synchronizacja będzie przywrócona, ale zapisane zmiany zostaną odrzucone.",
+        "DEFERRED_ACTIONS_STUCK": "Synchronizacja prawdopodobnie jest zajęta. Twoje ostatnie zmiany oczekują na zapis. W przypadku ponownego załadowania aplikacji, synchronizacja będzie przywrócona, ale niezapisane zmiany zostaną odrzucone.",
         "DISABLE_ENCRYPTION_FAILED": "Nie udało się wyłączyć szyfrowania: {{message}}",
         "ENABLE_ENCRYPTION_FAILED": "Nie udało się włączyć szyfrowania: {{message}}",
         "ENCRYPTION_PASSWORD_REQUIRED": "Otrzymano zaszyfrowane dane, ale nie skonfigurowano hasła szyfrowania. Ustaw hasło szyfrowania w ustawieniach synchronizacji.",
@@ -2901,7 +2901,7 @@
   },
   "GLOBAL_RELATIVE_TIME": {
     "FUTURE": {
-      "A_DAY": "dzisiaj",
+      "A_DAY": "za 1 dzień",
       "A_MINUTE": "za minutę",
       "A_MONTH": "za miesiąc",
       "A_YEAR": "za rok",
