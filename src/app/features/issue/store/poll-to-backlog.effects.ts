@@ -34,6 +34,11 @@ export class PollToBacklogEffects {
   private readonly _snackService = inject(SnackService);
   private readonly _store = inject(Store);
   private readonly _pluginRegistry = inject(PluginIssueProviderRegistryService);
+
+  /**
+   * Created here because the operator calls inject() -- the timers themselves are
+   * built lazily inside switchMap(), outside of any injection context.
+   */
   private readonly _skipDuringSyncWindow = skipDuringSyncWindow<number>();
 
   pollToBacklogActions$: Observable<unknown> = this._actions$.pipe(
@@ -132,6 +137,11 @@ export class PollToBacklogEffects {
     return (
       stopOnContextSwitch ? timer$.pipe(takeUntil(this.pollToBacklogActions$)) : timer$
     ).pipe(
+      // The chain is only gated once at start, but every tick imports issues and can
+      // dispatch restoreTask for archived recurring tasks. Inside the sync window the
+      // reducer commits such a change while capture only buffers the action, so a
+      // failed drain would leave local state ahead of the op log (and the archive read
+      // may be stale mid-replay). Dropping the tick is safe: the next one retries.
       this._skipDuringSyncWindow,
       tap(() => IssueLog.log('POLL ' + provider.issueProviderKey)),
       switchMap(() =>
