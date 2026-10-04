@@ -8,6 +8,7 @@ import {
 import {
   blockBackgroundSync,
   runReminderClearScenario,
+  runThreeTrackerScenario,
   runIncomingNotesScenario,
   type JoinResolutionClient,
 } from '../../utils/time-preserving-resolution-helpers';
@@ -35,6 +36,31 @@ const createJoin = async (
 
 test.describe('@supersync time-preserving conflict resolution', () => {
   for (const firstSync of ['A', 'B'] as const) {
+    test(`${firstSync}-first three trackers preserve all 9000 ms`, async ({
+      browser,
+      baseURL,
+      testRunId,
+    }) => {
+      test.setTimeout(300000);
+      await runThreeTrackerScenario(
+        await createJoin(browser, baseURL!, testRunId),
+        `ThreeTrackers-${testRunId}`,
+        firstSync,
+      );
+    });
+    test(`${firstSync}-first three trackers preserve child and parent totals`, async ({
+      browser,
+      baseURL,
+      testRunId,
+    }) => {
+      test.setTimeout(300000);
+      await runThreeTrackerScenario(
+        await createJoin(browser, baseURL!, testRunId),
+        `ThreeChildTrackers-${testRunId}`,
+        firstSync,
+        true,
+      );
+    });
     test(`${firstSync}-first a winning plan clears scheduled time and reminder everywhere`, async ({
       browser,
       baseURL,
@@ -45,6 +71,18 @@ test.describe('@supersync time-preserving conflict resolution', () => {
       await runReminderClearScenario(join, `TimePreserving-${testRunId}`, firstSync);
     });
   }
+  test('simultaneous resolvers preserve all three tracker contributions', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.setTimeout(300000);
+    await runThreeTrackerScenario(
+      await createJoin(browser, baseURL!, testRunId),
+      `SimultaneousTrackers-${testRunId}`,
+      'simultaneous',
+    );
+  });
   test('conflict resolution preserves concurrent downloaded notes', async ({
     browser,
     baseURL,

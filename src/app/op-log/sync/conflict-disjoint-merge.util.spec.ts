@@ -1,9 +1,9 @@
+import { isTaskSnapshotUnchangedByContent } from './time-preserving-task-snapshot.util';
 import {
   hasOpaqueChanges,
   isAdditiveTimeOp,
   isCommutingTimeDeltaCrossing,
   isDisjointMergeEligible,
-  isTaskSnapshotUnchangedByContent,
   mergeChangedFields,
   touchesCrossEntityTaskFields,
   writesNoTaskTime,

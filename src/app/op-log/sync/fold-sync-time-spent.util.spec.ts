@@ -1,3 +1,5 @@
+import { preserveTaskSnapshotTime } from './time-preserving-task-snapshot.util';
+import { DEFAULT_TASK } from '../../features/tasks/task.model';
 import {
   buildTimeAwareResolutionBatches,
   foldSyncTimeSpentDeltas,
@@ -21,6 +23,68 @@ const deltaOp = (actionPayload: Record<string, unknown>): Operation => ({
   vectorClock: { B: 1 },
   timestamp: 1000,
   schemaVersion: 1,
+});
+
+describe('incoming fields beside a source non-time snapshot', () => {
+  for (const notes of ['downloaded notes', undefined]) {
+    it(`preserves the incoming notes ${notes === undefined ? 'clear' : 'write'} at the original batch position`, async () => {
+      const snapshot: Operation = preserveTaskSnapshotTime(
+        {
+          ...deltaOp({}),
+          id: 'source',
+          payload: {
+            entityChanges: [],
+            lwwUpdateMode: 'replace',
+            actionPayload: {
+              ...DEFAULT_TASK,
+              id: 'task-1',
+              projectId: '',
+              title: 'winner',
+              notes: undefined,
+            },
+          },
+        },
+        {
+          entityType: 'TASK',
+          entityId: 'task-1',
+          localOps: [deltaOp({})],
+          remoteOps: [deltaOp({})],
+          suggestedResolution: 'manual',
+        },
+      );
+      const incoming: Operation = {
+        ...deltaOp({}),
+        id: 'notes',
+        actionType: ActionType.TASK_SHARED_UPDATE,
+        payload: { task: { id: 'task-1', changes: { notes } } },
+      };
+      const { batches } = await buildTimeAwareResolutionBatches({
+        unappliedRemoteLosers: [],
+        compensatedRemoteOps: [],
+        newLocalWinOps: [snapshot],
+        remoteWinsOps: [],
+        localMultiReconciliationOps: [],
+        nonConflictingOps: [incoming],
+        getTask: async () => undefined,
+      });
+      const [written] = batches.flatMap((batch) => batch.ops);
+      expect(written.vectorClock).toEqual(snapshot.vectorClock);
+      expect(written.id).toBe(snapshot.id);
+      const sourcePayload = snapshot.payload as {
+        actionPayload: Record<string, unknown>;
+        clearedFields: string[];
+      };
+      expect(written.payload).toEqual({
+        ...sourcePayload,
+        actionPayload: { ...sourcePayload.actionPayload, notes },
+        clearedFields: [
+          ...sourcePayload.clearedFields.filter((field) => field !== 'notes'),
+          ...(notes === undefined ? ['notes'] : []),
+        ],
+      });
+      expect(batches).toEqual([{ source: 'local', ops: [written] }]);
+    });
+  }
 });
 
 describe('foldSyncTimeSpentDeltas', () => {

@@ -1,3 +1,8 @@
+import {
+  taskSnapshotGroupCommutes,
+  supersededTaskSnapshotIds,
+  isTaskResolutionSnapshot,
+} from './time-preserving-task-snapshot.util';
 import { inject, Injectable } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import {
@@ -56,7 +61,6 @@ import { UnsupportedMultiEntityConflictError } from '../core/errors/sync-errors'
 import {
   isCommutingTimeDeltaCrossing,
   isDisjointMergeEligible,
-  isTaskSnapshotUnchangedByContent,
   touchesCrossEntityTaskFields,
 } from './conflict-disjoint-merge.util';
 import { getPayloadKey } from '../core/entity-registry';
@@ -328,7 +332,6 @@ export class SupersededOperationResolverService {
    * INVALID_OP_ID.
    *
    * @param assertFence re-asserts the sync cycle's epoch before the write (#9074)
-   * @returns ids of the rebased ops; they stay pending and need an upload
    */
   async rebaseCommutingTimeDeltaRejections(
     rejectedOps: SupersededOperation[],
@@ -387,9 +390,13 @@ export class SupersededOperationResolverService {
       const payloadKey = getPayloadKey('TASK') ?? 'task';
       for (const [taskId, items] of rejectedByTask) {
         // Seq order; every pending op of the task moves so their clocks keep it.
-        const taskEntries = pendingEntries.filter(({ op }) =>
+        const allTaskEntries = pendingEntries.filter(({ op }) =>
           getOpEntityIds(op).includes(taskId),
         );
+        const retired = supersededTaskSnapshotIds(allTaskEntries, items, clientId, (id) =>
+          this._findAppliedConflictRow(items.find((item) => item.opId === id)!, context),
+        );
+        const taskEntries = allTaskEntries.filter(({ op }) => !retired.has(op.id));
         if (taskEntries.length === 0) {
           continue;
         }
@@ -397,49 +404,29 @@ export class SupersededOperationResolverService {
         const onlyDeltas = pendingOps.every(
           (op) => op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
         );
-        const isSnapshot = (op: Operation): boolean =>
-          isLwwUpdatePayload(op.payload) && op.payload.lwwUpdateMode === 'replace';
         const snapshotGroup =
-          pendingOps.some(isSnapshot) &&
+          pendingOps.some(isTaskResolutionSnapshot) &&
           pendingOps.some(
             (op) => op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
           ) &&
           pendingOps.every(
             (op) =>
-              isSnapshot(op) ||
+              isTaskResolutionSnapshot(op) ||
               op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
           );
         // A replacement repairs membership outside its task. Compaction must
         // not hide an intervening write; the cache also detects a missing suffix.
-        const cache = snapshotGroup ? await this.opLogStore.loadStateCache() : null;
+        const cache =
+          snapshotGroup || retired.size > 0
+            ? await this.opLogStore.loadStateCache()
+            : null;
         const completeHistory =
           (tail.at(-1)?.seq ?? pendingEntries[0].seq) >= (cache?.lastAppliedOpSeq ?? 0) &&
           tail.every(({ seq }, index) => seq === pendingEntries[0].seq + index + 1);
-        const pendingIds = new Set(pendingOps.map((op) => op.id));
-        // Snapshots are read before their batch is persisted. An earlier
-        // durable row is safe to skip only when its clock is strictly covered.
         const snapshotGroupCommutes =
           snapshotGroup &&
           completeHistory &&
-          taskEntries.every((entry) =>
-            tail.every(
-              ({ seq, op }) =>
-                pendingIds.has(op.id) ||
-                (seq <= entry.seq &&
-                  compareVectorClocks(entry.op.vectorClock, op.vectorClock) ===
-                    VectorClockComparison.GREATER_THAN) ||
-                (isSnapshot(entry.op)
-                  ? isTaskSnapshotUnchangedByContent(entry.op, op)
-                  : !isFullStateOpType(op.opType) &&
-                    (!getOpEntityIds(op).includes(taskId) ||
-                      isCommutingTimeDeltaCrossing({
-                        localOps: [entry.op],
-                        remoteOps: [op],
-                        payloadKey,
-                        entityId: taskId,
-                      }))),
-            ),
-          );
+          taskSnapshotGroupCommutes(taskEntries, tail, taskId);
         // The server may already hold later ops of the task from this client:
         // against a crossing delta it accepts this client's own delta and each
         // op dominating it. Receivers apply the moved ops after those, so they
@@ -456,6 +443,7 @@ export class SupersededOperationResolverService {
           .map(({ op }) => op);
         let clockToDominate: VectorClock = {};
         const isProven =
+          (retired.size === 0 || (completeHistory && onlyDeltas)) &&
           pendingOps.every(
             (op) =>
               rejectedOpIds.has(op.id) &&
@@ -497,30 +485,34 @@ export class SupersededOperationResolverService {
               payloadKey,
               entityId: taskId,
             })) &&
-          items.every((item) => {
-            const row = this._findAppliedConflictRow(item, context, onlyDeltas);
-            if (!row) return false;
-            const crossing = pendingOps.filter(
-              (op) =>
-                onlyDeltas ||
-                compareVectorClocks(op.vectorClock, row.op.vectorClock) ===
-                  VectorClockComparison.CONCURRENT,
-            );
-            clockToDominate = mergeVectorClocks(clockToDominate, row.op.vectorClock);
-            return (
-              crossing.some((op) => op.id === item.opId) &&
-              (snapshotGroupCommutes ||
-                isCommutingTimeDeltaCrossing({
-                  localOps: crossing,
-                  remoteOps: [row.op],
-                  payloadKey,
-                  entityId: taskId,
-                }))
-            );
-          });
+          items
+            .filter((item) => !retired.has(item.opId))
+            .every((item) => {
+              const row = this._findAppliedConflictRow(item, context, onlyDeltas);
+              if (!row) return false;
+              const crossing = pendingOps.filter(
+                (op) =>
+                  onlyDeltas ||
+                  compareVectorClocks(op.vectorClock, row.op.vectorClock) ===
+                    VectorClockComparison.CONCURRENT,
+              );
+              clockToDominate = mergeVectorClocks(clockToDominate, row.op.vectorClock);
+              return (
+                crossing.some((op) => op.id === item.opId) &&
+                (snapshotGroupCommutes ||
+                  isCommutingTimeDeltaCrossing({
+                    localOps: crossing,
+                    remoteOps: [row.op],
+                    payloadKey,
+                    entityId: taskId,
+                  }))
+              );
+            });
         if (!isProven) {
           continue;
         }
+        assertFence?.('time-delta rejection rebase');
+        if (retired.size > 0) await this.opLogStore.markRejected([...retired]);
         assertFence?.('time-delta rejection rebase');
         const rebased = await this.opLogStore.rebasePendingLocalOps(
           pendingOps.map((op) => op.id),

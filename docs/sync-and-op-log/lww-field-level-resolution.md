@@ -302,7 +302,8 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
 5. **Resolution ops as input:** no; the no-re-merge contract stays. Narrowed
    by decisions 5a and 5a extended below: a conflict may read a row's keys,
    never its values.
-6. **Opaque ops:** stay on whole-entity LWW.
+6. **Opaque ops:** stay on whole-entity LWW, with the narrow time-preserving
+   exception below.
 7. **Time on a remote win:** ~~local-win direction only, for now.~~ Replaced
    on 2026-10-01 ([#10393](https://github.com/super-productivity/super-productivity/issues/10393#issuecomment-5936659621)):
    a pending time delta survives a remote win whose winner writes no time
@@ -343,6 +344,35 @@ Decided by @johannesjo on 2026-09-30 ([#10393](https://github.com/super-producti
    downloads the other side while its own tick is pending lacks it and still
    resolves by whole-entity LWW, so the released E2E only covers a released
    tracker that uploads first.
+
+**Decision 6, narrow time-preserving exception (2026-10-04, task 3).**
+On the foundation of #10499, an existing TASK conflict containing only original
+`syncTimeSpent` deltas and operations proven to write no task time may keep its
+original deltas separate from its non-time winner. This includes the existing
+`planTasksForToday` proof and single-task non-time patch rows inspected by keys
+and `clearedFields` only. Overlapping scheduling writes still conflict normally.
+
+A qualifying local winner uses the same current-state snapshot, per-operation
+winner, timestamp, vector clock and batch position as before, but emits a patch
+without `timeSpent` or `timeSpentOnDay`. Missing optional fields are explicit
+clears. Eligibility covers every conflict and other incoming operation for that
+task in the batch; an absolute time edit, deletion/recreation, multi-entity write,
+or unproven opaque operation keeps the existing path. Original deltas travel
+separately on either winner side; no second additive operation is synthesized.
+
+After an explicit server rejection, a newer applied full non-time winner may
+supersede this device's rejected non-time snapshot. Only after proving the
+existing LWW winner, coverage of its write/clear keys, and complete commuting
+history may retry handling retire that obsolete snapshot and rebase the
+original delta. Unknown upload outcomes retain the original operation unchanged.
+An intervening absolute time write or task reassignment does not satisfy this
+proof. Retiring the snapshot does not remove it from durable replay.
+
+This does not permit extracting per-action payloads, reading incoming resolution
+values, merging resolution rows, or building a derived field index (decisions
+3, 5 and 11). Existing time-bearing replacements and active older resolvers
+remain capable of erasing time. Readers before v18.22.0 ignore patch clears;
+accepting that additional clear limitation for this exception remains pending.
 
 **Decision 5a (2026-10-01, #10421).** Asked whether rule 1 below stays within
 decision 5, @johannesjo answered: "Ponder in sub agent and act according to

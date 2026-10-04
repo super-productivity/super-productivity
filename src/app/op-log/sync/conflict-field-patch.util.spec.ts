@@ -6,7 +6,7 @@ import {
   localWinningFieldGroups,
   supersededPatchFields,
   survivingLocalFields,
-  timeDeltasSurvivingRemoteWins,
+  timeDeltasSurvivingLww,
 } from './conflict-field-patch.util';
 import {
   ActionType,
@@ -341,7 +341,7 @@ describe('conflict-field-patch.util', () => {
     });
   });
 
-  describe('timeDeltasSurvivingRemoteWins (#10378)', () => {
+  describe('timeDeltasSurvivingLww (#10378)', () => {
     const plan = (over: Partial<Operation> = {}): Operation =>
       op({
         actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
@@ -366,7 +366,7 @@ describe('conflict-field-patch.util', () => {
     ];
     const remotePlan = plan({ id: 'remote-plan', clientId: 'B', vectorClock: { B: 1 } });
     const survivors = (winner: 'local' | 'remote', c: EntityConflict): EntityConflict[] =>
-      timeDeltasSurvivingRemoteWins([{ conflict: c, winner }], 'task');
+      timeDeltasSurvivingLww([{ conflict: c, winner }], 'task');
 
     it('keeps the local delta beside a winner that writes no time', () => {
       const [kept] = survivors('remote', conflict(tick, [remotePlan]));
@@ -375,8 +375,10 @@ describe('conflict-field-patch.util', () => {
       expect([...clocks.opIds]).toEqual(['d']);
     });
 
-    it('leaves a local win to its snapshot', () => {
-      expect(survivors('local', conflict(tick, [remotePlan]))).toEqual([]);
+    it('keeps the original delta beside a local non-time snapshot', () => {
+      expect(survivors('local', conflict(tick, [remotePlan]))[0].localOps).toEqual([
+        tick[1],
+      ]);
     });
 
     // A covering remote op saw the delta: it was delivered and counts once.

@@ -9,7 +9,7 @@ import {
 export interface ResolutionClient {
   page: Page;
   workView: WorkViewPage;
-  sync: () => Promise<void>;
+  sync: (options?: { allowConcurrentUploadRetry?: boolean }) => Promise<void>;
   close: () => Promise<void>;
 }
 export type JoinResolutionClient = (name: string) => Promise<ResolutionClient>;
@@ -23,7 +23,7 @@ export const blockBackgroundSync = (): void => {
 const changeTask = async (
   client: ResolutionClient,
   taskTitle: string,
-  changeKind: 'plan' | 'schedule' | 'rename' | 'future' | 'notes',
+  changeKind: 'unschedule' | 'plan' | 'schedule' | 'rename' | 'future' | 'notes',
 ): Promise<void> => {
   await client.page.evaluate(
     ({ title, kind }) => {
@@ -53,6 +53,8 @@ const changeTask = async (
         entityId: task.id,
         opType: 'UPD',
       };
+      if (kind === 'unschedule')
+        store.dispatch({ type: '[Task Shared] unscheduleTask', id: task.id, meta });
       if (kind === 'rename')
         store.dispatch({
           type: '[Task Shared] updateTask',
@@ -151,6 +153,106 @@ const recordTaskTimeDelta = async (
     return state.appState.todayStr;
   });
   await recordDelta(client, name, date, duration);
+};
+
+/** Use the normal conversion action so time ticks exercise parent aggregation. */
+const makeTrackerSubtask = async (
+  client: ResolutionClient,
+  title: string,
+): Promise<void> => {
+  await client.workView.addTask('TrackerParent');
+  await changeTask(client, 'TrackerParent', 'unschedule');
+  await client.page.evaluate((childTitle) => {
+    type Task = { id: string; title: string };
+    let state!: { tasks: { entities: Record<string, Task> } };
+    const store = (
+      window as unknown as {
+        __e2eTestHelpers: {
+          store: {
+            subscribe: (fn: (s: typeof state) => void) => { unsubscribe: () => void };
+            dispatch: (action: unknown) => void;
+          };
+        };
+      }
+    ).__e2eTestHelpers.store;
+    store.subscribe((value) => (state = value)).unsubscribe();
+    const tasks = Object.values(state.tasks.entities);
+    const child = tasks.find((task) => task.title.includes(childTitle))!;
+    const parent = tasks.find((task) => task.title.includes('TrackerParent'))!;
+    store.dispatch({
+      type: '[Task Shared] convertToSubTask',
+      taskId: child.id,
+      targetParentId: parent.id,
+      afterTaskId: null,
+      meta: { isPersistent: true, entityType: 'TASK', entityId: child.id, opType: 'UPD' },
+    });
+  }, title);
+};
+
+/** Reuse the saved tracker trace, pinning B's first sync before C records time. */
+export const runThreeTrackerScenario = async (
+  join: JoinResolutionClient,
+  title: string,
+  firstSync: 'A' | 'B' | 'simultaneous',
+  isChild = false,
+): Promise<void> => {
+  const clients: ResolutionClient[] = [];
+  try {
+    for (const name of ['A', 'B', 'C']) {
+      const client = await join(name);
+      clients.push(client);
+      if (name === 'A') {
+        await client.workView.addTask(title);
+        await changeTask(client, title, 'unschedule');
+        if (isChild) await makeTrackerSubtask(client, title);
+      }
+      await client.sync();
+      expect(await scheduling(client, title)).toEqual({
+        dueDay: undefined,
+        dueWithTime: undefined,
+        remindAt: undefined,
+      });
+    }
+    const [a, b, c] = clients;
+    for (const [client, time] of [
+      [a, 3000],
+      [b, 1000],
+    ] as const) {
+      await changeTask(client, title, 'plan');
+      await recordTaskTimeDelta(client, title, time);
+      await expectExactTaskTime(client, title, time);
+    }
+    // Original acceptance order: A3000, B1000, B sync, C5000, C sync.
+    if (firstSync === 'B') await b.sync();
+    else if (isChild) await a.sync();
+    await changeTask(c, title, 'plan');
+    await recordTaskTimeDelta(c, title, 5000);
+    await expectExactTaskTime(c, title, 5000);
+    if (firstSync === 'B' || isChild) await c.sync();
+    if (firstSync === 'simultaneous') {
+      await Promise.all(
+        clients.map((client) => client.sync({ allowConcurrentUploadRetry: true })),
+      );
+    }
+    const order = [a, b, c];
+    for (const client of [...order, ...order, ...order]) await client.sync();
+    for (const client of clients) {
+      await expectExactTaskTime(client, title, 9000);
+      if (isChild) await expectExactTaskTime(client, 'TrackerParent', 9000);
+      await client.page.reload();
+      await waitForAppReady(client.page);
+      await client.sync();
+      await expectExactTaskTime(client, title, 9000);
+      if (isChild) await expectExactTaskTime(client, 'TrackerParent', 9000);
+    }
+    const fresh = await join('D');
+    clients.push(fresh);
+    await fresh.sync();
+    await expectExactTaskTime(fresh, title, 9000);
+    if (isChild) await expectExactTaskTime(fresh, 'TrackerParent', 9000);
+  } finally {
+    for (const client of clients) await client.close();
+  }
 };
 
 export const runReminderClearScenario = async (

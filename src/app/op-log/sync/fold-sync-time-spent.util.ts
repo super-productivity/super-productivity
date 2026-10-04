@@ -1,4 +1,6 @@
+import { isTimePreservingTaskSnapshot } from './time-preserving-task-snapshot.util';
 import { extractActionPayload } from '@sp/sync-core';
+import { clearedFieldsProps } from '../../util/cleared-update-fields';
 import {
   compareVectorClocks,
   mergeVectorClocks,
@@ -219,6 +221,10 @@ export const buildTimeAwareResolutionBatches = async ({
   resendOps?: Operation[];
   getTask: (taskId: string) => Promise<unknown>;
 }): Promise<{ batches: MixedSourceOperationBatch[]; precedingOps: Operation[] }> => {
+  // Provenance is local to this batch: only newly built source winners qualify.
+  const sourceSnapshotIds = new Set(
+    newLocalWinOps.filter(isTimePreservingTaskSnapshot).map((op) => op.id),
+  );
   const foldedIds = new Set<string>();
   // A remote winner of the snapshot's task applies after it (`localWinKeys`
   // below), so its plain fields are this device's post-batch values as well
@@ -234,7 +240,7 @@ export const buildTimeAwareResolutionBatches = async ({
       op.entityType !== 'TASK' ||
       !op.entityId ||
       !isLwwUpdatePayload(op.payload) ||
-      op.payload.lwwUpdateMode !== 'replace'
+      (op.payload.lwwUpdateMode !== 'replace' && !sourceSnapshotIds.has(op.id))
     ) {
       return op;
     }
@@ -268,7 +274,24 @@ export const buildTimeAwareResolutionBatches = async ({
     }
     if (!hasOverlay) return op;
     const actionPayload = { ...op.payload.actionPayload, ...overlay };
-    return { ...op, payload: { ...op.payload, actionPayload } };
+    const clearedFields = sourceSnapshotIds.has(op.id)
+      ? (op.payload.clearedFields ?? []).filter((field) => !(field in overlay))
+      : undefined;
+    return {
+      ...op,
+      payload: {
+        ...op.payload,
+        actionPayload,
+        ...(clearedFields
+          ? {
+              clearedFields: [
+                ...clearedFields,
+                ...(clearedFieldsProps(overlay).clearedFields ?? []),
+              ],
+            }
+          : {}),
+      },
+    };
   };
   const foldSnapshots = (ops: Operation[], timeOps: Operation[]): Promise<Operation[]> =>
     Promise.all(

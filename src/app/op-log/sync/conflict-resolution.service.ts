@@ -119,7 +119,7 @@ import {
   aggregateEntityConflict,
   fieldPatchGroups,
   keptLocalTimeDeltas,
-  timeDeltasSurvivingRemoteWins,
+  timeDeltasSurvivingLww,
   buildSurvivingFieldPatches,
 } from './conflict-field-patch.util';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
@@ -134,6 +134,7 @@ import {
   selectTaskReplacementCompensations,
   type MultiEntityRemoteOpWinners,
 } from './lww-compensation-selection.util';
+import { preserveTaskSnapshotTimes } from './time-preserving-task-snapshot.util';
 import { selectPlannerState } from '../../features/planner/store/planner.selectors';
 
 /**
@@ -1028,7 +1029,7 @@ export class ConflictResolutionService {
     // and so do those beside a remote winner that writes no time (#10378).
     const keptDeltas = keptLocalTimeDeltas([
       ...mergedResolutions.map((m) => m.conflict),
-      ...timeDeltasSurvivingRemoteWins(resolutions, this._resolvePayloadKey('TASK')),
+      ...timeDeltasSurvivingLww(resolutions, 'task', nonConflictingOps),
     ]);
     const localOpsToReject = [...new Set(lwwPartitions.localOpsToReject)].filter(
       (opId) => !keptDeltas.opIds.has(opId),
@@ -1987,10 +1988,7 @@ export class ConflictResolutionService {
   }
 
   /**
-   * Resolves conflicts using LWW timestamp comparison.
-   *
-   * @param conflicts - The conflicts to resolve
-   * @returns Array of resolutions with winner and optional new update op
+   * Plans each conflict by LWW, retaining ordinary field merges and local winners.
    */
   private async _resolveConflictsWithLWW(
     conflicts: EntityConflict[],
@@ -2118,7 +2116,7 @@ export class ConflictResolutionService {
     }
 
     return {
-      lwwResolutions: resolutions,
+      lwwResolutions: preserveTaskSnapshotTimes(resolutions, nonConflictingOps),
       mergedResolutions,
       localMultiReconciliationOps,
     };
@@ -2632,17 +2630,9 @@ export class ConflictResolutionService {
   }
 
   /**
-   * Creates a replacement operation to sync local state when local wins LWW.
-   *
-   * The new operation has:
-   * - Fresh UUIDv7 ID
-   * - The original semantic restore payload for the exact restore-vs-delete case,
-   *   otherwise the current entity state from NgRx store
-   * - Merged vector clock (local + remote) + increment
-   * - Preserved maximum timestamp from local ops (for correct LWW semantics)
-   *
-   * @param conflict - The conflict where local won
-   * @returns New UPDATE operation, or undefined if entity not found
+   * Re-emits a local LWW winner with a fresh ID, merged clock and original
+   * winning timestamp. Qualifying TASK snapshots leave additive time alone.
+   * The exact restore-vs-delete case retains its semantic action instead.
    */
   private async _createLocalWinUpdateOp(
     conflict: EntityConflict,

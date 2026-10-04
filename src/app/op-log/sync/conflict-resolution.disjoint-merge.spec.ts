@@ -41,6 +41,11 @@ import { TODAY_TAG } from '../../features/tag/tag.const';
 import { appStateFeatureKey } from '../../root-store/app-state/app-state.reducer';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { UnsupportedMultiEntityConflictError } from '../core/errors/sync-errors';
+import { validateOperationPayload } from '../validation/validate-operation-payload';
+import {
+  isTimelessTaskPatch,
+  isTimePreservingTaskSnapshot,
+} from './time-preserving-task-snapshot.util';
 
 /**
  * Minimal RootState for exercising the PRODUCTION `lwwUpdateMetaReducer` on a
@@ -385,8 +390,8 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
   // A syncTimeSpent op is an additive delta. Its wire entityChanges carry the
   // delta's arguments ({ taskId, date, duration }, direct write) or nothing
   // (deferred write); a synthesized merge would write those keys onto the task
-  // and reject the delta. The pair must fall to whole-entity LWW, and whichever
-  // side wins must leave the task's time history intact.
+  // and reject the delta. A local non-time winner must leave the other client's
+  // time history and additive contribution intact without copying delta arguments.
   describe('(a-time) pending edit vs remote syncTimeSpent (#10147)', () => {
     const DAY = '2024-01-15';
     const HISTORY = {
@@ -445,7 +450,9 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
         payload: { task: { id: 'task-1', changes: { isDone: true } } },
       });
 
-    const expectNoSynthesizedMerge = async (): Promise<void> => {
+    const expectNoSynthesizedMerge = async (
+      expectedMode: 'patch' | 'replace' = 'replace',
+    ): Promise<void> => {
       const localOps = mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
         .allArgs()
         .flatMap(([batches]) => batches)
@@ -456,24 +463,27 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
         expect(Object.keys(payload)).not.toContain('taskId');
         expect(Object.keys(payload)).not.toContain('date');
         expect(Object.keys(payload)).not.toContain('duration');
-        expect((emitted.payload as { lwwUpdateMode?: string }).lwwUpdateMode).not.toBe(
-          'patch',
+        expect((emitted.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe(
+          expectedMode,
         );
+        if (expectedMode === 'patch') {
+          expect(Object.keys(payload)).not.toContain('timeSpent');
+          expect(Object.keys(payload)).not.toContain('timeSpentOnDay');
+        }
       }
     };
 
     for (const form of ['direct', 'deferred'] as const) {
-      it(`never synthesizes a merged patch from a ${form}-form delta and keeps the time history on the local-win path`, async () => {
+      it(`keeps a ${form}-form delta and the time history beside a local non-time winner`, async () => {
         mockStore.select.and.returnValue(of(currentTask));
 
         await service.autoResolveConflictsLWW([
           conflictOf([pendingDoneEdit()], [capturedSyncTimeSpent(form)]),
         ]);
-        await expectNoSynthesizedMerge();
+        await expectNoSynthesizedMerge('patch');
 
-        // Local (ts 2000) wins: the local-win op is a full snapshot. Applied
-        // through the production reducer on the other client, it carries the
-        // whole timeSpentOnDay map — not a single-day delta.
+        // Local (ts 2000) wins the non-time fields. Applying its patch through
+        // the production reducer preserves the other client's time and delta.
         const localWin = mergedOpArgs();
         expect(localWin).toBeDefined();
         const mockBase = jasmine.createSpy('base').and.callFake((st: unknown) => st);
@@ -497,8 +507,11 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
           >
         )[TASK_FEATURE_NAME].entities['task-1'];
         expect(task['isDone']).toBe(true);
-        expect(task['timeSpentOnDay']).toEqual(HISTORY);
-        expect(task['timeSpent']).toBe(HISTORY_TOTAL);
+        expect(task['timeSpentOnDay']).toEqual({
+          ...HISTORY,
+          [DAY]: HISTORY[DAY] + 60000,
+        });
+        expect(task['timeSpent']).toBe(HISTORY_TOTAL + 60000);
       });
     }
 
@@ -1742,7 +1755,44 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       }
     });
 
-    it('refuses the patch beside a remote time delta', async () => {
+    it('handles non-array clearedFields accepted by existing payload validation and replay', async () => {
+      mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Local title' }));
+      const remote = op({
+        id: 'remote-row',
+        clientId: 'B',
+        vectorClock: { B: 1 },
+        timestamp: 1000,
+        actionType: '[TASK] LWW Update' as ActionType,
+        payload: {
+          actionPayload: { id: 'task-1', title: 'Remote title' },
+          entityChanges: [],
+          lwwUpdateMode: 'patch',
+          clearedFields: {},
+        },
+      });
+      expect(validateOperationPayload(remote).success).toBeTrue();
+      expect(convertOpToAction(remote).type).toBe('[TASK] LWW Update');
+      expect(isTimelessTaskPatch(remote, 'task-1')).toBeTrue();
+      expect(isTimePreservingTaskSnapshot(remote)).toBeFalse();
+
+      await service.autoResolveConflictsLWW([
+        conflictOf(
+          [
+            op({
+              actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+              timestamp: 2000,
+              payload: { taskIds: ['task-1'], today: '2026-10-04' },
+            }),
+          ],
+          [remote],
+        ),
+      ]);
+      expect((mergedOpArgs()!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe(
+        'patch',
+      );
+    });
+
+    it('emits the local non-time snapshot beside a remote time delta', async () => {
       mockStore.select.and.returnValue(of({ id: 'task-1', title: 'A title' }));
       const local = title({ id: 'l', clientId: 'A', vectorClock: { A: 1 } }, 'A');
       const remoteRename = title(
@@ -1766,8 +1816,13 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       ]);
 
       expect((mergedOpArgs()!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe(
-        'replace',
+        'patch',
       );
+      const payload = extractActionPayload(mergedOpArgs()!.payload);
+      expect(payload['title']).toBe('A title');
+      expect(Object.keys(payload)).not.toContain('timeSpent');
+      expect(Object.keys(payload)).not.toContain('timeSpentOnDay');
+      expect(Object.keys(payload)).not.toContain('duration');
       expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
     });
   });

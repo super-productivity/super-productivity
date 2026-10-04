@@ -31,6 +31,11 @@ import {
   writesNoTaskTime,
 } from './conflict-disjoint-merge.util';
 
+import {
+  timePreservingTaskIds,
+  isTimelessTaskPatch,
+} from './time-preserving-task-snapshot.util';
+
 /**
  * Fields whose clear a v18.15.0–v18.21.x receiver would drop from a patch
  * (it ignores `clearedFields`), leaving a reminder that fires (#10393,
@@ -320,7 +325,7 @@ export const keptLocalTimeDeltas = (
 };
 
 /**
- * Remote-win conflicts whose local time deltas survive the win, each narrowed
+ * Conflicts whose local time deltas survive LWW, each narrowed
  * to those deltas for `keptLocalTimeDeltas` (decision 7, D10, #10378). Every
  * op of a TASK conflict is a `syncTimeSpent` delta or writes no time field
  * (`writesNoTaskTime`), so the winner leaves the deltas' time as it is: they
@@ -331,18 +336,26 @@ export const keptLocalTimeDeltas = (
  * (D10 refined, case 3); no trace has
  * shown that losing time, since a concurrent op of the same crossing keeps
  * the delta (time-delta-kept-beside-timeless-winner.integration.spec.ts).
- * Rows and other time writers keep whole-entity LWW.
+ * Eligible local snapshots omit time and keep their deltas too. Timeless patch
+ * rows qualify by keys; replacements and other time writers retain whole-entity LWW.
  */
-export const timeDeltasSurvivingRemoteWins = (
+export const timeDeltasSurvivingLww = (
   resolutions: { conflict: EntityConflict; winner: 'local' | 'remote' }[],
   payloadKey: string,
-): EntityConflict[] =>
-  resolutions.flatMap(({ conflict, winner }) => {
+  nonConflictingOps: Operation[] = [],
+): EntityConflict[] => {
+  const eligible = timePreservingTaskIds(
+    resolutions.map((resolution) => resolution.conflict),
+    nonConflictingOps,
+  );
+  return resolutions.flatMap(({ conflict, winner }) => {
     const { entityId, localOps, remoteOps } = conflict;
     const isTimeless = (op: Operation): boolean =>
-      isSyncTimeSpentOp(op) || writesNoTaskTime(op, payloadKey, entityId);
+      isSyncTimeSpentOp(op) ||
+      writesNoTaskTime(op, payloadKey, entityId) ||
+      (eligible.has(entityId) && isTimelessTaskPatch(op, entityId));
     if (
-      winner !== 'remote' ||
+      (winner !== 'remote' && !eligible.has(entityId)) ||
       conflict.entityType !== 'TASK' ||
       remoteOps.length === 0 ||
       ![...localOps, ...remoteOps].every(isTimeless)
@@ -352,14 +365,16 @@ export const timeDeltasSurvivingRemoteWins = (
     const deltas = localOps.filter(
       (op) =>
         isSyncTimeSpentOp(op) &&
-        remoteOps.every(
-          (remote) =>
-            compareVectorClocks(op.vectorClock, remote.vectorClock) ===
-            VectorClockComparison.CONCURRENT,
-        ),
+        (winner === 'local' ||
+          remoteOps.every(
+            (remote) =>
+              compareVectorClocks(op.vectorClock, remote.vectorClock) ===
+              VectorClockComparison.CONCURRENT,
+          )),
     );
     return deltas.length > 0 ? [{ ...conflict, localOps: deltas }] : [];
   });
+};
 
 /**
  * `SupersededOperationResolverService`: the fields a server-rejected group of

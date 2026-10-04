@@ -9,6 +9,8 @@ import {
 import { toEntityKey } from '../util/entity-key.util';
 import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 
+import { isTimePreservingTaskSnapshot } from './time-preserving-task-snapshot.util';
+
 type Resolution = LwwResolvedConflict<Operation, EntityConflict>;
 
 export interface MultiEntityRemoteOpWinners {
@@ -89,7 +91,8 @@ export const selectTaskReplacementCompensations = (
       localWinOp.opType !== OpType.Update ||
       getOpEntityIds(localWinOp).length !== 1 ||
       !isLwwUpdatePayload(localWinOp.payload) ||
-      localWinOp.payload.lwwUpdateMode !== 'replace' ||
+      (localWinOp.payload.lwwUpdateMode !== 'replace' &&
+        !isTimePreservingTaskSnapshot(localWinOp)) ||
       localWinOp.payload.recreatesEntityAfterDelete === true ||
       conflict.localOps.some(
         (op) =>
@@ -105,7 +108,8 @@ export const selectTaskReplacementCompensations = (
         remoteOp.opType !== OpType.Update ||
         getOpEntityIds(remoteOp).length !== 1 ||
         !isLwwUpdatePayload(remoteOp.payload) ||
-        remoteOp.payload.lwwUpdateMode !== 'replace' ||
+        (remoteOp.payload.lwwUpdateMode !== 'replace' &&
+          !isTimePreservingTaskSnapshot(remoteOp)) ||
         remoteOp.payload.recreatesEntityAfterDelete === true
       )
         continue;
