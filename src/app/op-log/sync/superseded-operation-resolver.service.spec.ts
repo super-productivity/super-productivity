@@ -82,6 +82,7 @@ describe('SupersededOperationResolverService', () => {
       'appendMixedSourceBatchSkipDuplicates',
       'appendWithVectorClockOverwrite',
       'getOpsAfterSeq',
+      'loadStateCache',
       'getUnsynced',
       'rebasePendingLocalOps',
       'invalidateUnsyncedCache',
@@ -113,6 +114,7 @@ describe('SupersededOperationResolverService', () => {
     // Default mocks
     mockVectorClockService.getCurrentVectorClock.and.returnValue(Promise.resolve({}));
     mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+    mockOpLogStore.loadStateCache.and.resolveTo(null);
     mockOpLogStore.getUnsynced.and.resolveTo([]);
     mockOpLogStore.markRejected.and.returnValue(Promise.resolve());
     mockStateSnapshotService.getStateSnapshotForOperationLog.and.returnValue(
@@ -190,6 +192,153 @@ describe('SupersededOperationResolverService', () => {
     });
 
     service = TestBed.inject(SupersededOperationResolverService);
+  });
+
+  describe('rejected delta and unchanged own replacement', () => {
+    for (const variant of [
+      'equal',
+      'equal before snapshot',
+      'different title',
+      'different title before snapshot',
+      'different notes before snapshot',
+      'causally covered notes before snapshot',
+      'equal clock notes before snapshot',
+      'foreign plan',
+      'history gap',
+      'missing suffix',
+      'unrejected snapshot',
+      'remote replace',
+    ] as const) {
+      it(`checks the complete retry proof: ${variant}`, async () => {
+        const delta: Operation = {
+          ...createMockOperation('delta', 'TASK', 'task-1', { [TEST_CLIENT_ID]: 1 }),
+          clientId: TEST_CLIENT_ID,
+          actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          payload: { taskId: 'task-1', date: '2026-10-03', duration: 3000 },
+        };
+        const snapshot: Operation = {
+          ...delta,
+          id: 'snapshot',
+          vectorClock: { [TEST_CLIENT_ID]: 2 },
+          actionType: '[TASK] LWW Update' as ActionType,
+          payload: {
+            lwwUpdateMode: 'replace',
+            actionPayload: {
+              id: 'task-1',
+              title: 'retained',
+              notes: 'retained notes',
+              timeSpent: 3000,
+            },
+            entityChanges: [],
+          },
+        };
+        const remote: Operation = {
+          ...createMockOperation('remote', 'TASK', 'task-1', { remote: 1 }),
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          payload: {
+            task: {
+              id: 'task-1',
+              changes: {
+                title: variant.startsWith('different title') ? 'different' : 'retained',
+              },
+            },
+          },
+        };
+        if (variant === 'remote replace') remote.payload = snapshot.payload;
+        const pending: OperationLogEntry[] = [delta, snapshot].map((op, index) => ({
+          seq: index + 1,
+          op,
+          source: 'local',
+          appliedAt: index + 1,
+        }));
+        const remoteEntry: OperationLogEntry = {
+          seq: variant === 'history gap' ? 4 : 3,
+          op: remote,
+          source: 'remote',
+          appliedAt: 3,
+          syncedAt: 3,
+          applicationStatus: 'applied',
+        };
+        if (
+          variant === 'equal before snapshot' ||
+          variant === 'different title before snapshot'
+        ) {
+          pending[1].seq = 3;
+          remoteEntry.seq = 2;
+        }
+        const tail = [pending[1], remoteEntry].sort((a, b) => a.seq - b.seq);
+        if (variant.endsWith('notes before snapshot')) {
+          pending[1].seq = 3;
+          remoteEntry.seq = 4;
+          if (variant === 'causally covered notes before snapshot') {
+            snapshot.vectorClock = { ...snapshot.vectorClock, notesAuthor: 1 };
+          }
+          tail.unshift({
+            ...remoteEntry,
+            seq: 2,
+            op: {
+              ...remote,
+              id: 'earlier-notes',
+              vectorClock:
+                variant === 'equal clock notes before snapshot'
+                  ? snapshot.vectorClock
+                  : { notesAuthor: 1 },
+              payload: { task: { id: 'task-1', changes: { notes: 'different notes' } } },
+            },
+          });
+        }
+        if (variant === 'foreign plan')
+          tail.push({
+            ...remoteEntry,
+            seq: 4,
+            op: {
+              ...remote,
+              id: 'plan',
+              entityId: 'task-2',
+              actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+              payload: {
+                taskIds: ['task-2'],
+                today: '2026-10-03',
+                parentTaskMap: {},
+                startOfNextDayDiffMs: 0,
+              },
+            },
+          });
+        if (variant === 'missing suffix') {
+          mockOpLogStore.loadStateCache.and.resolveTo({
+            lastAppliedOpSeq: 4,
+          } as NonNullable<
+            Awaited<ReturnType<OperationLogStoreService['loadStateCache']>>
+          >);
+        }
+        mockOpLogStore.getUnsynced.and.resolveTo(pending);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo(tail);
+        mockOpLogStore.rebasePendingLocalOps.and.resolveTo([delta, snapshot]);
+        const before = JSON.stringify([delta, snapshot]);
+        const rejected = variant === 'unrejected snapshot' ? [delta] : [delta, snapshot];
+        const result = await service.rebaseCommutingTimeDeltaRejections(
+          rejected.map((op) => ({
+            opId: op.id,
+            op,
+            existingClock: remote.vectorClock,
+          })),
+        );
+        const shouldRebase =
+          variant === 'equal' ||
+          variant === 'equal before snapshot' ||
+          variant === 'causally covered notes before snapshot';
+        expect([...result]).toEqual(shouldRebase ? [delta.id, snapshot.id] : []);
+        expect(JSON.stringify([delta, snapshot])).toBe(before);
+        if (shouldRebase) {
+          expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledOnceWith(
+            [delta.id, snapshot.id],
+            remote.vectorClock,
+          );
+        } else {
+          expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
+        }
+      });
+    }
   });
 
   describe('rejected deltas beside accepted successor patches', () => {

@@ -56,6 +56,7 @@ import { UnsupportedMultiEntityConflictError } from '../core/errors/sync-errors'
 import {
   isCommutingTimeDeltaCrossing,
   isDisjointMergeEligible,
+  isTaskSnapshotUnchangedByContent,
   touchesCrossEntityTaskFields,
 } from './conflict-disjoint-merge.util';
 import { getPayloadKey } from '../core/entity-registry';
@@ -396,6 +397,49 @@ export class SupersededOperationResolverService {
         const onlyDeltas = pendingOps.every(
           (op) => op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
         );
+        const isSnapshot = (op: Operation): boolean =>
+          isLwwUpdatePayload(op.payload) && op.payload.lwwUpdateMode === 'replace';
+        const snapshotGroup =
+          pendingOps.some(isSnapshot) &&
+          pendingOps.some(
+            (op) => op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          ) &&
+          pendingOps.every(
+            (op) =>
+              isSnapshot(op) ||
+              op.actionType === ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          );
+        // A replacement repairs membership outside its task. Compaction must
+        // not hide an intervening write; the cache also detects a missing suffix.
+        const cache = snapshotGroup ? await this.opLogStore.loadStateCache() : null;
+        const completeHistory =
+          (tail.at(-1)?.seq ?? pendingEntries[0].seq) >= (cache?.lastAppliedOpSeq ?? 0) &&
+          tail.every(({ seq }, index) => seq === pendingEntries[0].seq + index + 1);
+        const pendingIds = new Set(pendingOps.map((op) => op.id));
+        // Snapshots are read before their batch is persisted. An earlier
+        // durable row is safe to skip only when its clock is strictly covered.
+        const snapshotGroupCommutes =
+          snapshotGroup &&
+          completeHistory &&
+          taskEntries.every((entry) =>
+            tail.every(
+              ({ seq, op }) =>
+                pendingIds.has(op.id) ||
+                (seq <= entry.seq &&
+                  compareVectorClocks(entry.op.vectorClock, op.vectorClock) ===
+                    VectorClockComparison.GREATER_THAN) ||
+                (isSnapshot(entry.op)
+                  ? isTaskSnapshotUnchangedByContent(entry.op, op)
+                  : !isFullStateOpType(op.opType) &&
+                    (!getOpEntityIds(op).includes(taskId) ||
+                      isCommutingTimeDeltaCrossing({
+                        localOps: [entry.op],
+                        remoteOps: [op],
+                        payloadKey,
+                        entityId: taskId,
+                      }))),
+            ),
+          );
         // The server may already hold later ops of the task from this client:
         // against a crossing delta it accepts this client's own delta and each
         // op dominating it. Receivers apply the moved ops after those, so they
@@ -422,6 +466,7 @@ export class SupersededOperationResolverService {
           // check here sees them (deleting a tag rewrites every task's tagIds).
           // A moved op touching one could land on the wrong side of such a write.
           (onlyDeltas ||
+            snapshotGroupCommutes ||
             !touchesCrossEntityTaskFields(
               [...pendingOps, ...acceptedLaterOps],
               payloadKey,
@@ -445,6 +490,7 @@ export class SupersededOperationResolverService {
             )) &&
           (acceptedLaterOps.length === 0 ||
             onlyDeltas ||
+            snapshotGroupCommutes ||
             isDisjointMergeEligible({
               localOps: pendingOps,
               remoteOps: acceptedLaterOps,
@@ -463,12 +509,13 @@ export class SupersededOperationResolverService {
             clockToDominate = mergeVectorClocks(clockToDominate, row.op.vectorClock);
             return (
               crossing.some((op) => op.id === item.opId) &&
-              isCommutingTimeDeltaCrossing({
-                localOps: crossing,
-                remoteOps: [row.op],
-                payloadKey,
-                entityId: taskId,
-              })
+              (snapshotGroupCommutes ||
+                isCommutingTimeDeltaCrossing({
+                  localOps: crossing,
+                  remoteOps: [row.op],
+                  payloadKey,
+                  entityId: taskId,
+                }))
             );
           });
         if (!isProven) {

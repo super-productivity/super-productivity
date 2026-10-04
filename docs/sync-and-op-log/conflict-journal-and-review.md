@@ -112,6 +112,14 @@ such a row reads only **which** fields it writes (its keys, or every field for
 a `'replace'` row), never its values: the row applies as itself, and the local
 fields newer than it, or that it does not write, are re-sent after it. Rows
 never merge with each other (a pending local row keeps whole-entity LWW).
+Rejection recovery has a separate, narrow no-op proof: after the server explicitly
+rejects every moved operation, it may compare this client's own unchanged
+replacement against intervening original content edits. This preserves the
+replacement body and its order beside the original time deltas; it does not read
+incoming resolution values or use row values to synthesize a field patch. The
+retained history must be complete through the snapshot frontier. Earlier stored
+rows still need the proof unless the pending operation's clock covers them;
+append order alone does not establish observation.
 The re-sends are written last in the same transaction as the remote winners,
 after every incoming op of the download, so a crash cannot leave the remote
 values persisted without them.

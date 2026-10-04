@@ -3,6 +3,7 @@ import {
   isAdditiveTimeOp,
   isCommutingTimeDeltaCrossing,
   isDisjointMergeEligible,
+  isTaskSnapshotUnchangedByContent,
   mergeChangedFields,
   touchesCrossEntityTaskFields,
   writesNoTaskTime,
@@ -687,5 +688,89 @@ describe('conflict-disjoint-merge.util', () => {
       expect(mergeChangedFields([junkOp], 'task', 'task-1')).toEqual({});
       expect(hasOpaqueChanges([junkOp], 'task', 'task-1')).toBe(true);
     });
+  });
+});
+
+describe('isTaskSnapshotUnchangedByContent', () => {
+  const snapshot = op({
+    payload: {
+      lwwUpdateMode: 'replace',
+      entityChanges: [],
+      actionPayload: {
+        id: 'task-1',
+        title: 'retained',
+        notes: 'kept',
+        created: 1000,
+        priority: 1,
+        dueDay: DAY,
+        timeSpent: 3000,
+      },
+    },
+  });
+  const update = (changes: Record<string, unknown>, entityId = 'task-1'): Operation =>
+    op({
+      entityId,
+      actionType: ActionType.TASK_SHARED_UPDATE,
+      payload: { task: { id: entityId, changes } },
+    });
+
+  it('proves equal plain content is a no-op without changing the replacement', () => {
+    const before = JSON.stringify(snapshot);
+    expect(
+      isTaskSnapshotUnchangedByContent(
+        snapshot,
+        update({ title: 'retained', notes: 'kept', priority: 1 }),
+      ),
+    ).toBeTrue();
+    expect(JSON.stringify(snapshot)).toBe(before);
+  });
+
+  it('refuses actual content differences, clears, scheduling and completion', () => {
+    for (const changes of [
+      { title: 'different' },
+      { notes: undefined },
+      { dueDay: DAY },
+      { isDone: false },
+      { timeSpent: 3000 },
+    ]) {
+      expect(isTaskSnapshotUnchangedByContent(snapshot, update(changes))).toBeFalse();
+    }
+  });
+
+  it('refuses creation identity changes and metadata beyond display arrival time', () => {
+    // created identifies a repeat occurrence; an unchanged replacement must
+    // never be moved after an edit that changes that persisted value.
+    for (const changes of [{ created: 2000 }, { lastModified: 2000 }]) {
+      expect(isTaskSnapshotUnchangedByContent(snapshot, update(changes))).toBeFalse();
+    }
+    expect(
+      isTaskSnapshotUnchangedByContent(snapshot, update({ modified: 2000 })),
+    ).toBeTrue();
+  });
+
+  it('allows content on another task, but never its scheduling mutations', () => {
+    expect(
+      isTaskSnapshotUnchangedByContent(snapshot, update({ title: 'other' }, 'task-2')),
+    ).toBeTrue();
+    expect(
+      isTaskSnapshotUnchangedByContent(snapshot, update({ dueDay: DAY }, 'task-2')),
+    ).toBeFalse();
+  });
+
+  it('never reads incoming resolution values, even equal ones', () => {
+    for (const mode of ['patch', 'replace']) {
+      expect(
+        isTaskSnapshotUnchangedByContent(
+          snapshot,
+          op({
+            payload: {
+              lwwUpdateMode: mode,
+              entityChanges: [],
+              actionPayload: { title: 'retained' },
+            },
+          }),
+        ),
+      ).toBeFalse();
+    }
   });
 });

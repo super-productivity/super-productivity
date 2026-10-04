@@ -1,0 +1,420 @@
+[
+  {
+    "name": "20725007",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t3", "A0"],
+        "c": 1
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t2", "A1"],
+        "s": 1,
+        "r": 1
+      },
+      {
+        "d": "A",
+        "a": ["renameTask", "t2", "A2"],
+        "r": 1
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A3"]
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A4"]
+      },
+      {
+        "d": "B",
+        "a": ["track", "t1", 2000],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t2", "C6"],
+        "s": 1,
+        "r": 1
+      },
+      {
+        "d": "B",
+        "a": ["track", "t1", 2000],
+        "c": 1
+      },
+      {
+        "d": "B",
+        "a": ["track", "t2", 4000]
+      },
+      {
+        "d": "B",
+        "a": ["track", "t1", 4000],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["track", "t2", 3000],
+        "s": 1,
+        "c": 1
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A11"]
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t3", "C12"]
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t1", "C13"]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t3", 3000]
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t2", "C15"]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t1", 5000]
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t3", "C17"],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["track", "t1", 2000],
+        "s": 1,
+        "r": 1
+      },
+      {
+        "d": "B",
+        "a": ["renameTask", "t1", "B19"]
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t1", "C20"],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["track", "t3", 3000]
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t2", "C22"]
+      },
+      {
+        "d": "B",
+        "a": ["track", "t3", 1000],
+        "r": 1
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t1", "C24"],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["track", "t1", 3000],
+        "c": 1
+      },
+      {
+        "d": "B",
+        "a": ["editTaskNotes", "t1", "B26"],
+        "s": 1,
+        "r": 1
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t2", "A27"]
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t1", "C28"]
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t2", "A29"],
+        "s": 1
+      }
+    ]
+  },
+  {
+    "name": "20725023-done-False",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["track", "t1", 2000],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["doneTask", "t1", true],
+        "r": 1
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A2"]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t3", 2000],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["editTaskNotes", "t1", "B4"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t3", 1000]
+      },
+      {
+        "d": "B",
+        "a": ["renameTask", "t3", "B6"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t3", 1000]
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t1", "C8"],
+        "c": 1
+      },
+      {
+        "d": "A",
+        "a": ["track", "t2", 5000]
+      },
+      {
+        "d": "A",
+        "a": ["doneTask", "t2", true]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 5000],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["track", "t2", 5000]
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t1", "C13"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t3", 4000]
+      },
+      {
+        "d": "A",
+        "a": ["doneTask", "t3", true],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t1", "C16"]
+      },
+      {
+        "d": "B",
+        "a": ["doneTask", "t1", false]
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t3", "C18"]
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t2", "C19"],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A20"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 3000]
+      },
+      {
+        "d": "B",
+        "a": ["track", "t1", 4000],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A23"],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["track", "t1", 3000],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t2", "C25"],
+        "r": 1
+      },
+      {
+        "d": "B",
+        "a": ["track", "t2", 2000]
+      },
+      {
+        "d": "A",
+        "a": ["doneTask", "t3", false]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t3", 4000]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t3", 5000]
+      }
+    ]
+  },
+  {
+    "name": "20725023-done-True",
+    "steps": [
+      {
+        "d": "A",
+        "a": ["track", "t1", 2000],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["doneTask", "t1", true],
+        "r": 1
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A2"]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t3", 2000],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["editTaskNotes", "t1", "B4"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t3", 1000]
+      },
+      {
+        "d": "B",
+        "a": ["renameTask", "t3", "B6"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t3", 1000]
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t1", "C8"],
+        "c": 1
+      },
+      {
+        "d": "A",
+        "a": ["track", "t2", 5000]
+      },
+      {
+        "d": "A",
+        "a": ["doneTask", "t2", true]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 5000],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["track", "t2", 5000]
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t1", "C13"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t3", 4000]
+      },
+      {
+        "d": "A",
+        "a": ["doneTask", "t3", true],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["editTaskNotes", "t1", "C16"]
+      },
+      {
+        "d": "B",
+        "a": ["doneTask", "t1", false]
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t3", "C18"]
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t2", "C19"],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A20"]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t1", 3000]
+      },
+      {
+        "d": "B",
+        "a": ["track", "t1", 4000],
+        "s": 1
+      },
+      {
+        "d": "A",
+        "a": ["editTaskNotes", "t1", "A23"],
+        "s": 1
+      },
+      {
+        "d": "B",
+        "a": ["track", "t1", 3000],
+        "s": 1
+      },
+      {
+        "d": "C",
+        "a": ["renameTask", "t2", "C25"],
+        "r": 1
+      },
+      {
+        "d": "B",
+        "a": ["track", "t2", 2000]
+      },
+      {
+        "d": "A",
+        "a": ["doneTask", "t3", true]
+      },
+      {
+        "d": "C",
+        "a": ["track", "t3", 4000]
+      },
+      {
+        "d": "A",
+        "a": ["track", "t3", 5000]
+      }
+    ]
+  }
+]

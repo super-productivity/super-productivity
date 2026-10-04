@@ -1142,7 +1142,7 @@ export const getTaskTitleFromState = async (
   }, titleSubstring);
 
 export const getTaskTimeSpentFromState = async (
-  client: SimulatedE2EClient,
+  client: Pick<SimulatedE2EClient, 'page'>,
   taskName: string,
 ): Promise<number | null> =>
   client.page.evaluate(async (name) => {
@@ -1265,7 +1265,7 @@ export const waitForTaskTimeSpent = async (
  * @param expectedTimeSpent - The expected timeSpent in milliseconds
  */
 export const expectExactTaskTime = async (
-  client: SimulatedE2EClient,
+  client: Pick<SimulatedE2EClient, 'page'>,
   taskName: string,
   expectedTimeSpent: number,
 ): Promise<void> => {
@@ -1287,7 +1287,7 @@ export const expectExactTaskTime = async (
  * @param duration - The time delta in milliseconds
  */
 export const recordTaskTimeDelta = async (
-  client: SimulatedE2EClient,
+  client: Pick<SimulatedE2EClient, 'page'>,
   taskName: string,
   date: string,
   duration: number,

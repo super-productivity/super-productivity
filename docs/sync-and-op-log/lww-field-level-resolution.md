@@ -394,11 +394,22 @@ holds the rules; `ConflictResolutionService._tryCreateFieldPatch` builds the op.
   stored and permits `rebaseCommutingTimeDeltaRejections` to move its clock.
   That path accepts an applied, acknowledged timeless patch (including the
   same client's successor), only when all intervening task operations commute.
-  It reads patch keys, never values (D5a); absolute time writes and replace
-  rows retain their existing fallback. File providers retry unchanged and
-  deduplicate by operation ID. A remote delta,
-  `removeTimeSpent`, or a delta beside an absolute time write keeps the
-  whole-entity path.
+  It reads incoming patch keys, never their values (D5a). A rejected group of
+  this client's deltas and replacement rows can also retry in its original
+  order when every crossed content edit leaves each replacement unchanged.
+  This narrow proof compares the author's own pending replacement values; it
+  neither merges resolution rows nor emits new fields. Retained history must
+  be complete through the state-cache frontier, so compaction cannot hide a
+  scheduling or relationship change. An earlier stored row is skipped only
+  when the pending operation's clock proves it was already observed; append
+  order alone is insufficient. Every moved
+  row must be explicitly rejected; an accepted or ambiguously uploaded
+  companion prevents the move. Incoming replacements, absolute time writes
+  and unproven crossings retain their fallback. File providers retry unchanged
+  and deduplicate by operation ID. Ordinary field patches still refuse a
+  remote delta, `removeTimeSpent`, or a delta beside an absolute time write.
+  See the [regression tracker](./time-delta-retry-regressions.md) for the exact
+  frozen traces and rejected alternatives.
 - **Clock:** the patch also dominates the batch's commuting single-entity ops
   on its entity (e.g. a third client's delta), or the server rejects it as
   concurrent. It carries none of their fields.
