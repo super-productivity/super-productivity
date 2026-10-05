@@ -106,8 +106,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           # Buildx would otherwise attach a provenance attestation, turning every push
           # into an OCI index with an untagged child version. Nobody consumes the
-          # attestation (deploys verify the VCS_REF revision label instead), and a flat
-          # one-version-per-build graph is what makes the prune step below safe.
+          # attestation (deploys verify the VCS_REF revision label instead), leaving 
+          # the manifest-aware cleanup action to safely prune multi-arch manifests.
           provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
