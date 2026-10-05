@@ -33,7 +33,7 @@ export interface FieldMapping {
   mutuallyExclusive?: (keyof Task)[];
   /**
    * Task fields to re-send together with this one when an earlier push of them
-   * was held back by the adapter (expected-skip), read from the current task.
+   * was held back by the adapter (expected-skip) and they are unchanged since.
    * For provider fields that are only valid as a pair (e.g. CalDAV DTSTART/DUE).
    * Partners that merely differ (e.g. changed automatically) are not sent.
    */

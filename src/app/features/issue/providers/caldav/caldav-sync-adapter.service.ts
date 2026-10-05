@@ -35,7 +35,7 @@ const toTimedTaskValue = (v: unknown): number | null =>
   typeof v === 'number' ? v : null;
 const toDayTaskValue = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 
-/** DTSTART and DUE are only valid as a pair, so a held-back date is re-sent with its partner. */
+/** DTSTART and DUE are only valid as a pair, so an unchanged held-back date is re-sent with its partner. */
 const CALDAV_DATE_TASK_FIELD_LIST: (keyof Task)[] = [
   'dueDay',
   'dueWithTime',

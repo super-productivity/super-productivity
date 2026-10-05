@@ -149,10 +149,10 @@ export class IssueTwoWaySyncEffects {
 
   /**
    * Linked (`pushTogetherWith`) task fields whose last push an adapter held
-   * back, per task id. In memory only: after a restart a held-back field is
-   * re-sent only when it is edited again.
+   * back, with the value that push tried to send, per task id. In memory only:
+   * after a restart a held-back field is re-sent only when it is edited again.
    */
-  private _heldBackFields = new Map<string, Set<string>>();
+  private _heldBackFields = new Map<string, Map<string, unknown>>();
 
   constructor() {
     const caldavAdapter = inject(CaldavSyncAdapterService);
@@ -585,22 +585,52 @@ export class IssueTwoWaySyncEffects {
         for (const m of fieldMappings) {
           if (m.taskField in pushableChanges && isSkipped(m)) {
             delete pushableChanges[m.taskField];
-            // The field now holds a value that must not reach the provider, so
-            // an earlier held-back value of it must not be re-sent later either.
-            this._forgetHeldBack(task.id, [m.taskField]);
+            // The issue field now holds a value that must not reach the provider,
+            // so no earlier held-back value of it may be re-sent later either. This
+            // covers every task field mapped to it: a Planner move to an untimed
+            // day names only dueDay but also clears a held-back dueWithTime.
+            this._forgetHeldBack(
+              task.id,
+              fieldMappings
+                .filter((sibling) => sibling.issueField === m.issueField)
+                .map((sibling) => sibling.taskField as string),
+            );
           }
         }
 
         // Fields to push: the changed ones plus held-back pushTogetherWith partners.
         // Partners are only linked when the changed mapping itself can push, and
-        // only if an earlier push of that partner was held back: an automatic
-        // change of a partner (e.g. Add to Today) must not reach the provider.
+        // only if an earlier push of that partner was held back and the partner
+        // still has the value held back then: an automatic change of a partner
+        // (e.g. Add to Today, a drag onto another task in the Schedule view
+        // (moveBeforeTask)) must not reach the provider.
         const heldBack = this._heldBackFields.get(task.id);
+        // A held-back field is retried only while every held-back field feeding
+        // the same issue field (e.g. dueDay and dueWithTime for DTSTART) is
+        // unchanged; otherwise the whole group is forgotten.
+        const retryHeldBack = (field: string, source: Task): boolean => {
+          if (!heldBack?.has(field)) {
+            return false;
+          }
+          const issueFields = new Set(
+            fieldMappings.filter((m) => m.taskField === field).map((m) => m.issueField),
+          );
+          const group = fieldMappings
+            .filter((m) => issueFields.has(m.issueField) && heldBack.has(m.taskField))
+            .map((m) => m.taskField as string);
+          if (
+            group.every((f) => issueValuesEqual(source[f as keyof Task], heldBack.get(f)))
+          ) {
+            return true;
+          }
+          this._forgetHeldBack(task.id, group);
+          return false;
+        };
         const fieldsToPush = new Set<string>(Object.keys(pushableChanges));
         for (const m of fieldMappings) {
           if (m.taskField in pushableChanges && canPush(m)) {
             for (const partner of m.pushTogetherWith ?? []) {
-              if (!heldBack?.has(partner)) {
+              if (!retryHeldBack(partner, task)) {
                 continue;
               }
               // The partner itself must still be push-enabled: a direction
@@ -662,6 +692,14 @@ export class IssueTwoWaySyncEffects {
           // would resurrect a value the reducer deliberately cleared (e.g. the
           // stale time on day-only short syntax). Fall back to the action only
           // when the task is gone.
+          // A held-back partner may have changed during the fetch: same rule as above.
+          if (
+            !isChanged &&
+            currentTask &&
+            !retryHeldBack(mapping.taskField, currentTask)
+          ) {
+            continue;
+          }
           taskFieldChanges[mapping.taskField] = currentTask
             ? currentTask[mapping.taskField as keyof Task]
             : pushableChanges[mapping.taskField];
@@ -707,7 +745,7 @@ export class IssueTwoWaySyncEffects {
             await adapter.pushChanges(issueId, toPush, cfg);
           } catch (err) {
             if (isExpectedSyncSkipError(err) && linkedFields.length) {
-              this._rememberHeldBack(task.id, linkedFields);
+              this._rememberHeldBack(task.id, linkedFields, taskFieldChanges);
             }
             throw err;
           }
@@ -779,11 +817,15 @@ export class IssueTwoWaySyncEffects {
     );
   }
 
-  private _rememberHeldBack(taskId: string, fields: string[]): void {
-    const set = this._heldBackFields.get(taskId) ?? new Set<string>();
-    fields.forEach((f) => set.add(f));
+  private _rememberHeldBack(
+    taskId: string,
+    fields: string[],
+    values: Record<string, unknown>,
+  ): void {
+    const held = this._heldBackFields.get(taskId) ?? new Map<string, unknown>();
+    fields.forEach((f) => held.set(f, values[f]));
     this._heldBackFields.delete(taskId);
-    this._heldBackFields.set(taskId, set);
+    this._heldBackFields.set(taskId, held);
     if (this._heldBackFields.size > IssueTwoWaySyncEffects._MAX_SYNC_ORIGINATED_IDS) {
       const oldest = this._heldBackFields.keys().next().value;
       if (oldest !== undefined) {
@@ -793,12 +835,12 @@ export class IssueTwoWaySyncEffects {
   }
 
   private _forgetHeldBack(taskId: string, fields: string[]): void {
-    const set = this._heldBackFields.get(taskId);
-    if (!set) {
+    const held = this._heldBackFields.get(taskId);
+    if (!held) {
       return;
     }
-    fields.forEach((f) => set.delete(f));
-    if (!set.size) {
+    fields.forEach((f) => held.delete(f));
+    if (!held.size) {
       this._heldBackFields.delete(taskId);
     }
   }
