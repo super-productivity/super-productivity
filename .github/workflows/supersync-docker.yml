@@ -126,8 +126,7 @@ jobs:
         if: github.event_name == 'push'
         uses: dataaxiom/ghcr-cleanup-action@v1.2.2
         with:
-          packages: super-productivity/supersync
-          package-type: container
+          packages: supersync
           keep-n-tagged: 15
           delete-ghost-images: true
           delete-partial-images: true
