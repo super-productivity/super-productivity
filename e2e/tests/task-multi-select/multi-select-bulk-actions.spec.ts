@@ -67,6 +67,80 @@ const ctrlSelect = async (taskPage: TaskPage, titles: string[]): Promise<void> =
 };
 
 test.describe('Task multi-select bulk actions', () => {
+  test('moves selected tasks between sections and back to root, preserving order after reload', async ({
+    page,
+    workViewPage,
+    taskPage,
+    projectPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await projectPage.createProject(testPrefix);
+    await projectPage.navigateToProjectByName(testPrefix);
+    const titles = await addTasks(workViewPage, testPrefix, ['A', 'B', 'C']);
+    for (const title of ['Left', 'Right']) {
+      await page.locator('.project-settings-btn').click();
+      await waitForMenuSettled(page);
+      await page.getByRole('menuitem', { name: 'Add Section' }).click();
+      const dialog = page.locator('mat-dialog-container');
+      await dialog.locator('input[type="text"]').fill(title);
+      await dialog.getByRole('button', { name: 'Save' }).click();
+      await expect(dialog).toBeHidden();
+    }
+    const left = page
+      .locator('.section-container')
+      .filter({ has: page.locator('.collapsible-title', { hasText: 'Left' }) });
+    const right = page
+      .locator('.section-container')
+      .filter({ has: page.locator('.collapsible-title', { hasText: 'Right' }) });
+    const move = async (destination: string): Promise<void> => {
+      await openActions(page);
+      await openSubmenu(page, 'Move to section');
+      await page.getByRole('menuitem', { name: destination, exact: true }).click();
+    };
+    // Reverse selection order: the destination follows DOM order, not click order.
+    await ctrlSelect(taskPage, [titles[1], titles[0]]);
+    const ordered = await page
+      .locator('task.isMultiSelected .task-title')
+      .allTextContents();
+    await move('Left');
+    await expect(left.locator('task')).toHaveCount(2);
+    await expect(left.locator('task .task-title')).toHaveText(ordered);
+    await page.keyboard.press('Escape');
+    await expect(page.locator(BAR)).toBeHidden();
+    await ctrlSelect(taskPage, [titles[0], titles[1]]);
+    await expect(page.locator(BAR)).toContainText('2 selected');
+    // Park the setup mouse so it cannot close a keyboard-opened submenu.
+    await page.mouse.move(5, 5);
+    // Q on a selected row exposes the same menu to keyboard users.
+    await taskPage.getTaskByText(titles[0]).focus();
+    await page.keyboard.press('q');
+    await waitForMenuSettled(page);
+    const sectionTrigger = menuItem(page, 'Move to section');
+    await sectionTrigger.focus();
+    await sectionTrigger.press('Enter');
+    await waitForMenuSettled(page);
+    const destination = page.getByRole('menuitem', { name: 'Right', exact: true });
+    await destination.focus();
+    await destination.press('Enter');
+    await expect(left.locator('task')).toHaveCount(0);
+    await expect(right.locator('task .task-title')).toHaveText(ordered);
+    await page.keyboard.press('Escape');
+    await expect(page.locator(BAR)).toBeHidden();
+    await ctrlSelect(taskPage, [titles[0], titles[1]]);
+    await expect(page.locator(BAR)).toContainText('2 selected');
+    await move('No section (project root)');
+    await expect(right.locator('task')).toHaveCount(0);
+    await expect(page.locator('.no-section task')).toHaveCount(3);
+    await page.keyboard.press('Escape');
+    await page.reload();
+    await workViewPage.waitForTaskList();
+    await expect(page.locator('.no-section task')).toHaveCount(3);
+    await expect(page.locator('.no-section task .task-title')).toHaveText([
+      titles[2],
+      ...ordered,
+    ]);
+  });
   test('marks the selection done and not done again from the menu', async ({
     page,
     workViewPage,
@@ -451,7 +525,10 @@ test.describe('Task multi-select bulk actions', () => {
       'Alone B',
       'Alone C',
     ]);
+    await page.keyboard.press('Escape');
+    await expect(page.locator(BAR)).toBeHidden();
     await ctrlSelect(taskPage, [titles[0], titles[1]]);
+    await expect(page.locator(BAR)).toContainText('2 selected');
     const bar = page.locator(BAR);
     await expect(bar).toContainText('2 selected');
 

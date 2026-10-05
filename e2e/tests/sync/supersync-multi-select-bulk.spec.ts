@@ -37,6 +37,89 @@ const selectTasks = async (
 };
 
 test.describe('@supersync SuperSync Multi-Select Bulk Actions', () => {
+  test('Bulk section moves and project-root moves propagate to another client', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.setTimeout(180000);
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+    try {
+      const user = await createTestUser(testRunId);
+      const config = getSuperSyncConfig(user);
+      clientA = await createSimulatedClient(
+        browser,
+        baseURL || 'http://localhost:4242',
+        'A',
+        testRunId,
+      );
+      await clientA.sync.setupSuperSync(config);
+      await clientA.page.goto('/#/project/INBOX_PROJECT/tasks');
+      await clientA.workView.waitForTaskList();
+      const names = ['SectionA', 'SectionB'].map((name) => name + '-' + testRunId);
+      for (const name of names) await clientA.workView.addTask(name);
+      await clientA.page.locator('.project-settings-btn').click();
+      await waitForMenuSettled(clientA.page);
+      await clientA.page.getByRole('menuitem', { name: 'Add Section' }).click();
+      const dialog = clientA.page.locator('mat-dialog-container');
+      await dialog.locator('input[type="text"]').fill('Bulk destination');
+      await dialog.getByRole('button', { name: 'Save' }).click();
+      await expect(dialog).toBeHidden();
+      await clientA.sync.syncAndWait();
+      clientB = await createSimulatedClient(
+        browser,
+        baseURL || 'http://localhost:4242',
+        'B',
+        testRunId,
+      );
+      await clientB.sync.setupSuperSync(config);
+      await clientB.sync.syncAndWait();
+      await clientB.page.goto('/#/project/INBOX_PROJECT/tasks');
+      await clientB.workView.waitForTaskList();
+      for (const name of names) await waitForTask(clientB.page, name);
+      const move = async (destination: string): Promise<void> => {
+        const bar = clientA!.page.locator(BAR);
+        if (await bar.isVisible())
+          await bar.getByRole('button', { name: 'Clear selection' }).click();
+        await expect(clientA!.page.locator(BAR)).toBeHidden();
+        await selectTasks(clientA!, names);
+        await clientA!.page.locator(BAR).getByRole('button', { name: 'Actions' }).click();
+        await waitForMenuSettled(clientA!.page);
+        await clientA!.page.getByRole('menuitem', { name: 'Move to section' }).click();
+        await waitForMenuSettled(clientA!.page);
+        await clientA!.page
+          .getByRole('menuitem', { name: destination, exact: true })
+          .click();
+      };
+      await move('Bulk destination');
+      await expect(clientA.page.locator('.section-container task')).toHaveCount(2);
+      const order = await clientA.page
+        .locator('.section-container task .task-title')
+        .allTextContents();
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
+      await expect(
+        clientB.page.locator('.section-container task .task-title'),
+      ).toHaveText(order);
+      await move('No section (project root)');
+      await expect(clientA.page.locator('.no-section task')).toHaveCount(2);
+      await clientA.sync.syncAndWait();
+      await clientB.sync.syncAndWait();
+      await expect(clientB.page.locator('.section-container task')).toHaveCount(0);
+      await expect(clientB.page.locator('.no-section task .task-title')).toHaveText(
+        order,
+      );
+      await clientB.page.reload();
+      await clientB.workView.waitForTaskList();
+      await expect(clientB.page.locator('.no-section task .task-title')).toHaveText(
+        order,
+      );
+    } finally {
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
+    }
+  });
   /**
    * Scenario: bulk done and bulk delete replicate to a second client
    *

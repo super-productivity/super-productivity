@@ -1,3 +1,8 @@
+import { SectionService } from '../section/section.service';
+import { Section } from '../section/section.model';
+import { selectAllSections } from '../section/store/section.selectors';
+import { selectProjectFeatureState } from '../project/store/project.selectors';
+import { WorkContextType } from '../work-context/work-context.model';
 import { TestBed } from '@angular/core/testing';
 import { computed, Signal, signal } from '@angular/core';
 import { Store } from '@ngrx/store';
@@ -21,6 +26,17 @@ import { PlannerActions } from '../planner/store/planner.actions';
 
 describe('TaskBulkActionService', () => {
   let service: TaskBulkActionService;
+  let sections: ReturnType<typeof signal<Section[]>>;
+  let context: { activeId: string; activeType: WorkContextType };
+  let sectionService: jasmine.SpyObj<SectionService>;
+  const section = (id: string, taskIds: string[] = [], contextId = 'p1'): Section => ({
+    id,
+    title: id,
+    contextId,
+    contextType: WorkContextType.PROJECT,
+    taskIds,
+    isExpanded: true,
+  });
   let taskService: jasmine.SpyObj<TaskService>;
   let currentTaskId: ReturnType<typeof signal<string | null>>;
   let store: { dispatch: jasmine.Spy; selectSignal: jasmine.Spy; select: jasmine.Spy };
@@ -69,6 +85,12 @@ describe('TaskBulkActionService', () => {
     store.dispatch.calls.allArgs().map(([action]) => (action as { type: string }).type);
 
   beforeEach(() => {
+    sections = signal<Section[]>([]);
+    context = { activeId: 'p1', activeType: WorkContextType.PROJECT };
+    sectionService = jasmine.createSpyObj<SectionService>('SectionService', [
+      'addTaskToSection',
+      'removeTaskFromSection',
+    ]);
     entities = signal<Record<string, Task>>({});
     selectedIds = signal<ReadonlySet<string>>(new Set());
     dialogResult = true;
@@ -89,7 +111,21 @@ describe('TaskBulkActionService', () => {
 
     store = {
       dispatch: jasmine.createSpy('dispatch'),
-      selectSignal: jasmine.createSpy('selectSignal').and.returnValue(entities),
+      selectSignal: jasmine
+        .createSpy('selectSignal')
+        .and.callFake((selector: unknown) => {
+          if (selector === selectAllSections) return sections;
+          if (selector === selectProjectFeatureState)
+            return computed(() => ({
+              entities: {
+                p1: {
+                  id: 'p1',
+                  taskIds: Object.keys(entities()).filter((id) => id !== 'backlog'),
+                },
+              },
+            }));
+          return entities;
+        }),
       select: jasmine
         .createSpy('select')
         .and.callFake((_sel: unknown, props: { id: string }) =>
@@ -132,6 +168,7 @@ describe('TaskBulkActionService', () => {
     TestBed.configureTestingModule({
       providers: [
         TaskBulkActionService,
+        { provide: SectionService, useValue: sectionService },
         { provide: Store, useValue: store },
         { provide: TaskService, useValue: taskService },
         { provide: TaskMultiSelectService, useValue: multiSelect },
@@ -164,6 +201,7 @@ describe('TaskBulkActionService', () => {
           provide: WorkContextService,
           useValue: {
             flatDoneTodayNr$: of(0),
+            activeWorkContextTypeAndId$: defer(() => of(context)),
             activeWorkContext$: defer(() => of({ isEnableBacklog })),
           },
         },
@@ -180,6 +218,92 @@ describe('TaskBulkActionService', () => {
       ],
     });
     service = TestBed.inject(TaskBulkActionService);
+  });
+
+  describe('moveToSection', () => {
+    it('appends roots and tasks from multiple sections in visual order with explicit sources', async () => {
+      select([t('c'), t('a'), t('b')]);
+      multiSelect.selectedIdsInDomOrder.and.returnValue(['a', 'b', 'c']);
+      sections.set([
+        section('left', ['a']),
+        section('right', ['c']),
+        section('target', ['existing']),
+      ]);
+      await service.moveToSection('target');
+      expect(sectionService.addTaskToSection.calls.allArgs()).toEqual([
+        ['target', 'a', 'existing', 'left'],
+        ['target', 'b', 'a', null],
+        ['target', 'c', 'b', 'right'],
+      ]);
+      expect(snackService.open).toHaveBeenCalledTimes(1);
+      expect(multiSelect.isBulkFeedbackSuppressed()).toBeFalse();
+    });
+
+    it('moves sectioned tasks back to the root and leaves existing root tasks in place', async () => {
+      select([t('a'), t('root'), t('b')]);
+      sections.set([section('left', ['a']), section('right', ['b'])]);
+      await service.moveToSection(null);
+      expect(sectionService.removeTaskFromSection.calls.allArgs()).toEqual([
+        ['left', 'a', 'p1', WorkContextType.PROJECT, 'root'],
+        ['right', 'b', 'p1', WorkContextType.PROJECT, 'a'],
+      ]);
+    });
+
+    it('keeps tasks already in the target in place', async () => {
+      select([t('already'), t('new')]);
+      sections.set([section('target', ['already'])]);
+      await service.moveToSection('target');
+      expect(sectionService.addTaskToSection.calls.allArgs()).toEqual([
+        ['target', 'new', 'already', null],
+      ]);
+    });
+
+    it('moves a selected parent once and skips lone subtasks and backlog tasks', async () => {
+      select([
+        t('parent'),
+        t('child', { parentId: 'parent' }),
+        t('lone', { parentId: 'other' }),
+        t('backlog'),
+      ]);
+      sections.set([section('target')]);
+      await service.moveToSection('target');
+      expect(sectionService.addTaskToSection.calls.allArgs()).toEqual([
+        ['target', 'parent', null, null],
+      ]);
+      expect(snackService.open.calls.mostRecent().args[0].msg).toContain('PARTIAL');
+    });
+
+    it('rejects a deleted or foreign destination', async () => {
+      select([t('a')]);
+      sections.set([section('target'), section('foreign', [], 'p2')]);
+      await service.moveToSection('deleted');
+      await service.moveToSection('foreign');
+      expect(sectionService.addTaskToSection).not.toHaveBeenCalled();
+    });
+
+    it('rejects a selection spanning projects', async () => {
+      select([t('a'), t('b', { projectId: 'p2' })]);
+      sections.set([section('target')]);
+      expect(service.moveToSectionList()).toEqual([]);
+      await service.moveToSection('target');
+      expect(sectionService.addTaskToSection).not.toHaveBeenCalled();
+    });
+
+    it('does not move stale selected IDs or only subtasks', async () => {
+      select([t('child', { parentId: 'parent' })]);
+      sections.set([section('target')]);
+      selectedIds.set(new Set(['child', 'deleted']));
+      await service.moveToSection('target');
+      expect(sectionService.addTaskToSection).not.toHaveBeenCalled();
+    });
+
+    it('finishes touch selection after a successful move', async () => {
+      select([t('a')]);
+      sections.set([section('target')]);
+      multiSelect.isTouchSelectionMode.set(true);
+      await service.moveToSection('target');
+      expect(multiSelect.clear).toHaveBeenCalled();
+    });
   });
 
   describe('markDone', () => {

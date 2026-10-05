@@ -52,6 +52,8 @@ describe('TaskMultiSelectBarComponent', () => {
           provide: TaskBulkActionService,
           useValue: {
             selectedTasks,
+            moveToSectionList: signal([]),
+            moveToSection: jasmine.createSpy('moveToSection'),
             hasUndone: signal(false),
             hasParentTasks: signal(false),
             hasScheduled: signal(false),
@@ -190,6 +192,41 @@ describe('TaskMultiSelectBarComponent', () => {
       T.F.TASK.CMP.PRIORITY_MEDIUM,
       T.F.TASK.CMP.PRIORITY_HIGH,
     ]);
+    fixture.componentInstance.onMenuClosed();
+    multiSelect.toggle('a');
+    fixture.detectChanges();
+    tick(500);
+  }));
+
+  it('offers project root and section destinations through the bulk submenu', fakeAsync(() => {
+    const bulk = TestBed.inject(TaskBulkActionService);
+    (bulk.moveToSectionList as ReturnType<typeof signal>).set([
+      { id: 's1', title: 'Destination' },
+    ]);
+    multiSelect.toggle('a');
+    fixture.detectChanges();
+    fixture.componentInstance.actionsTrigger()!.openMenu();
+    fixture.detectChanges();
+    tick();
+    const trigger = Array.from(
+      document.querySelectorAll<HTMLElement>('.cdk-overlay-container [mat-menu-item]'),
+    ).find((el) => el.textContent?.includes(T.F.TASK.MULTI_SELECT.MOVE_TO_SECTION));
+    trigger!.click();
+    fixture.detectChanges();
+    tick();
+    const items = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '.cdk-overlay-container .mat-mdc-menu-panel',
+      ),
+    )
+      .at(-1)!
+      .querySelectorAll<HTMLElement>('[mat-menu-item]');
+    expect(items[0].textContent).toContain(T.F.TASK.MULTI_SELECT.NO_SECTION);
+    expect(items[1].textContent).toContain('Destination');
+    items[1].click();
+    fixture.detectChanges();
+    tick();
+    expect(bulk.moveToSection).toHaveBeenCalledWith('s1');
     fixture.componentInstance.onMenuClosed();
     multiSelect.toggle('a');
     fixture.detectChanges();

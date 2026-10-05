@@ -1994,6 +1994,8 @@
         "TITLE": "Add for Day"
       },
       "MULTI_SELECT": {
+        "MOVE_TO_SECTION": "Move to section",
+        "NO_SECTION": "No section (project root)",
         "ACTIONS": "Actions",
         "CLEAR": "Clear selection",
         "D_CONFIRM_DELETE": {
@@ -2033,6 +2035,11 @@
             "ONE": "Moved {{count}} task to \"{{projectTitle}}\"",
             "OTHER": "Moved {{count}} tasks to \"{{projectTitle}}\"",
             "PARTIAL": "Moved {{count}} of {{total}} tasks to \"{{projectTitle}}\" (subtasks follow their parent)"
+          },
+          "MOVED_TO_SECTION": {
+            "ONE": "Moved {{count}} task to \"{{sectionTitle}}\"",
+            "OTHER": "Moved {{count}} tasks to \"{{sectionTitle}}\"",
+            "PARTIAL": "Moved {{count}} of {{total}} tasks to \"{{sectionTitle}}\" (subtasks follow their parent)"
           },
           "MOVED_TO_REGULAR": {
             "ONE": "Moved {{count}} task to the regular list",

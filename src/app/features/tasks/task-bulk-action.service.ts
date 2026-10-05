@@ -1,4 +1,9 @@
 import { computed, inject, Injectable } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { SectionService } from '../section/section.service';
+import { selectAllSections } from '../section/store/section.selectors';
+import { selectProjectFeatureState } from '../project/store/project.selectors';
+import { WorkContextType } from '../work-context/work-context.model';
 import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
@@ -80,6 +85,38 @@ export class TaskBulkActionService {
   private readonly _translateService = inject(TranslateService);
   private readonly _translateStore = inject(TranslateStore);
   private readonly _datePipe = inject(LocaleDatePipe);
+
+  private readonly _sectionService = inject(SectionService);
+  private readonly _sections = this._store.selectSignal(selectAllSections);
+  private readonly _projects = this._store.selectSignal(selectProjectFeatureState);
+  private readonly _sectionContext = toSignal(
+    this._workContextService.activeWorkContextTypeAndId$,
+  );
+
+  /** Only regular project tasks can move between project sections. */
+  readonly moveToSectionList = computed(() => {
+    const context = this._sectionContext();
+    const tasks = this.selectedTasks();
+    if (
+      context?.activeType !== WorkContextType.PROJECT ||
+      !tasks.length ||
+      tasks.some((task) => task.projectId !== context.activeId)
+    ) {
+      return [];
+    }
+    const project = this._projects().entities[context.activeId];
+    if (
+      !project ||
+      !tasks.some((task) => !task.parentId && project.taskIds.includes(task.id))
+    ) {
+      return [];
+    }
+    return this._sections().filter(
+      (section) =>
+        section.contextType === WorkContextType.PROJECT &&
+        section.contextId === context.activeId,
+    );
+  });
 
   private readonly _taskEntities = this._store.selectSignal(selectTaskEntities);
 
@@ -284,6 +321,75 @@ export class TaskBulkActionService {
         'forward',
       );
     }
+    this._finish(focusTargetId);
+  }
+
+  /** One menu action, using the established per-task section conflict units. */
+  async moveToSection(sectionId: string | null): Promise<void> {
+    const context = this._sectionContext();
+    const sections = this.moveToSectionList();
+    const target = sections.find((section) => section.id === sectionId);
+    if (!context || !sections.length || (sectionId !== null && !target)) {
+      this._snackNothingToDo();
+      return;
+    }
+    const project = this._projects().entities[context.activeId];
+    if (!project) return;
+    const { eligible, skippedSubtasks } = splitParentOnly(
+      dedupeSubtasksOfSelectedParents(this._resolveInVisualOrder()),
+    );
+    const tasks = eligible.filter((task) => project.taskIds.includes(task.id));
+    const sourceByTask = new Map(
+      sections.flatMap((section) =>
+        section.taskIds.map((id) => [id, section.id] as const),
+      ),
+    );
+    const moving = tasks.filter(
+      (task) => (sourceByTask.get(task.id) ?? null) !== sectionId,
+    );
+    if (!moving.length) {
+      this._snackNothingToDo();
+      return;
+    }
+    const movingIds = new Set(moving.map((task) => task.id));
+    const destinationIds = target
+      ? target.taskIds
+      : project.taskIds.filter((id) => !sourceByTask.has(id));
+    let afterTaskId = destinationIds.filter((id) => !movingIds.has(id)).at(-1) ?? null;
+    const focusTargetId = this._getFocusTargetAfterRemoval();
+    await this._runSuppressed(() => {
+      for (const task of moving) {
+        const sourceSectionId = sourceByTask.get(task.id) ?? null;
+        if (sectionId) {
+          this._sectionService.addTaskToSection(
+            sectionId,
+            task.id,
+            afterTaskId,
+            sourceSectionId,
+          );
+        } else if (sourceSectionId) {
+          this._sectionService.removeTaskFromSection(
+            sourceSectionId,
+            task.id,
+            context.activeId,
+            WorkContextType.PROJECT,
+            afterTaskId,
+          );
+        }
+        afterTaskId = task.id;
+      }
+    });
+    this._snackMoved(
+      'MOVED_TO_SECTION',
+      moving.length,
+      skippedSubtasks.length,
+      {
+        sectionTitle:
+          target?.title ??
+          this._translateService.instant(T.F.TASK.MULTI_SELECT.NO_SECTION),
+      },
+      'segment',
+    );
     this._finish(focusTargetId);
   }
 
@@ -705,7 +811,11 @@ export class TaskBulkActionService {
 
   /** A move that skipped lone subtasks says so (they follow their parent). */
   private _snackMoved(
-    key: 'MOVED_TO_PROJECT' | 'MOVED_TO_BACKLOG' | 'MOVED_TO_REGULAR',
+    key:
+      | 'MOVED_TO_PROJECT'
+      | 'MOVED_TO_BACKLOG'
+      | 'MOVED_TO_REGULAR'
+      | 'MOVED_TO_SECTION',
     count: number,
     skipped: number,
     params: Record<string, string | number> = {},

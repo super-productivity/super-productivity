@@ -15,6 +15,59 @@ test.describe('Task multi-select (touch)', () => {
   // The viewport stays desktop-sized so the shared add-task flow works.
   test.use({ viewport: { width: 1024, height: 900 }, hasTouch: true, isMobile: true });
 
+  test('moves touch-selected Inbox tasks to a section and exits selection mode', async ({
+    page,
+    workViewPage,
+    taskPage,
+    testPrefix,
+  }) => {
+    await page.goto('/#/project/INBOX_PROJECT/tasks');
+    await workViewPage.waitForTaskList();
+    const names = [testPrefix + '-One', testPrefix + '-Two'];
+    for (const name of names) await workViewPage.addTask(name);
+    await page.locator('.project-settings-btn').click();
+    await waitForMenuSettled(page);
+    await page.getByRole('menuitem', { name: 'Add Section' }).click();
+    const dialog = page.locator('mat-dialog-container');
+    await dialog.locator('input[type="text"]').fill('Touch destination');
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).toBeHidden();
+    await page.mouse.move(5, 5); // Park the setup mouse away from the touch menus.
+    await page.evaluate(() =>
+      window.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch' })),
+    );
+    const a = taskPage.getTaskByText(names[0]);
+    await a.focus();
+    await page.keyboard.press('q');
+    await waitForMenuSettled(page);
+    await page.getByRole('menuitem', { name: 'Select several tasks' }).tap();
+    await taskPage.getTaskByText(names[1]).tap();
+    await expect(page.locator(BAR)).toContainText('2 selected');
+    await page.locator(BAR).getByRole('button', { name: 'Actions' }).tap();
+    await waitForMenuSettled(page);
+    // The shared touch submenu guard guards submenu taps during the first 350ms.
+    // Send a real finger press/release with a deliberate hold through Chromium.
+    const trigger = page.getByRole('menuitem', { name: 'Move to section' });
+    const box = await trigger.boundingBox();
+    expect(box).not.toBeNull();
+    const halfWidth = box!.width / 2;
+    const halfHeight = box!.height / 2;
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: box!.x + halfWidth, y: box!.y + halfHeight }],
+    });
+    await page.waitForTimeout(400); // Intentional hold for the existing touch guard.
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await cdp.detach();
+    await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(2);
+    await waitForMenuSettled(page);
+    await page.getByRole('menuitem', { name: 'Touch destination', exact: true }).tap();
+    await expect(page.locator('.section-container task')).toHaveCount(2);
+    await expect(page.locator(BAR)).toBeHidden();
+    await expect(page.locator('.mat-mdc-menu-panel')).toHaveCount(0);
+  });
+
   test('the context menu enters selection mode, taps toggle, ✕ leaves', async ({
     page,
     workViewPage,

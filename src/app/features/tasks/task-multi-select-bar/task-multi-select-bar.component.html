@@ -186,6 +186,20 @@
     <span class="key-i">{{ kb().taskEditTags }}</span>
   </button>
 
+  @if (bulk.moveToSectionList().length) {
+    <button
+      #sectionTrigger="matMenuTrigger"
+      [menuTouchFix]="sectionTrigger"
+      [matMenuTriggerFor]="sectionMenu"
+      mat-menu-item
+    >
+      <span class="menuItemLeft"
+        ><mat-icon>segment</mat-icon
+        >{{ T.F.TASK.MULTI_SELECT.MOVE_TO_SECTION | translate }}</span
+      >
+    </button>
+  }
+
   @if (bulk.hasParentTasks() && moveToProjectList().length) {
     <button
       #projectTrigger="matMenuTrigger"
@@ -309,6 +323,27 @@
           ></select-option-row>
         </button>
       }
+    }
+  </ng-template>
+</mat-menu>
+
+<mat-menu #sectionMenu="matMenu">
+  <ng-template matMenuContent>
+    <button
+      (click)="bulk.moveToSection(null)"
+      menuTouchFix
+      mat-menu-item
+    >
+      <mat-icon>list</mat-icon>{{ T.F.TASK.MULTI_SELECT.NO_SECTION | translate }}
+    </button>
+    @for (section of bulk.moveToSectionList(); track section.id) {
+      <button
+        (click)="bulk.moveToSection(section.id)"
+        menuTouchFix
+        mat-menu-item
+      >
+        <mat-icon>segment</mat-icon>{{ section.title }}
+      </button>
     }
   </ng-template>
 </mat-menu>
