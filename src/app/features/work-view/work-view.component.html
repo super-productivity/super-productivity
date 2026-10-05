@@ -171,6 +171,7 @@
               @let bySection = undoneTasksBySection();
               <div
                 class="sections-wrapper"
+                [class.has-inline-insertion]="isProjectContext()"
                 cdkDropList
                 [cdkDropListEnterPredicate]="acceptSectionDragOnly"
                 (cdkDropListDropped)="dropSection($event)"
@@ -188,6 +189,15 @@
                   ></task-list>
                 </div>
                 @for (section of sections(); track section.id) {
+                  @if (isProjectContext()) {
+                    <button
+                      type="button"
+                      class="add-section-inline focus-ring"
+                      (click)="addSection(section.id)"
+                    >
+                      <span>{{ T.MH.ADD_SECTION | translate }}</span>
+                    </button>
+                  }
                   <div
                     class="section-container"
                     cdkDrag
@@ -242,6 +252,15 @@
                     </collapsible>
                   </div>
                 }
+                @if (isProjectContext()) {
+                  <button
+                    type="button"
+                    class="add-section-inline focus-ring"
+                    (click)="addSection()"
+                  >
+                    <span>{{ T.MH.ADD_SECTION | translate }}</span>
+                  </button>
+                }
               </div>
             } @else {
               <task-list
@@ -250,6 +269,15 @@
                 listId="PARENT"
                 listModelId="UNDONE"
               ></task-list>
+              @if (isProjectContext() && !customizerService.isCustomized()) {
+                <button
+                  type="button"
+                  class="add-section-inline focus-ring"
+                  (click)="addSection()"
+                >
+                  <span>{{ T.MH.ADD_SECTION | translate }}</span>
+                </button>
+              }
             }
           }
 

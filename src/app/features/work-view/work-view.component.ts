@@ -49,6 +49,7 @@ import {
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { SectionService } from '../section/section.service';
 import { Section } from '../section/section.model';
+import { WorkContextType } from '../work-context/work-context.model';
 import {
   CdkDrag,
   CdkDragDrop,
@@ -565,6 +566,27 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       .subscribe((isConfirm: boolean) => {
         if (isConfirm) {
           this.sectionService.deleteSection(id);
+        }
+      });
+  }
+
+  addSection(beforeSectionId?: string): void {
+    const contextId = this.workContextService.activeWorkContextId;
+    if (!contextId || !this.isProjectContext()) return;
+    this._matDialog
+      .open(DialogPromptComponent, {
+        data: { placeholder: T.WW.ADD_SECTION_TITLE },
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((title: string | undefined) => {
+        if (title?.trim()) {
+          this.sectionService.addSection(
+            title,
+            contextId,
+            WorkContextType.PROJECT,
+            beforeSectionId,
+          );
         }
       });
   }

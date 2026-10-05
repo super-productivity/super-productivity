@@ -7,7 +7,8 @@ import { WorkContextType } from '../../work-context/work-context.model';
 
 export const addSection = createAction(
   '[Section] Add Section',
-  (payload: { section: Section }) => ({
+  // Optional insertion anchor; omitted by existing append-only callers.
+  (payload: { section: Section; beforeSectionId?: string }) => ({
     ...payload,
     meta: {
       isPersistent: true,

@@ -321,3 +321,54 @@ finish-day-btn,
     }
   }
 }
+
+// Reserve the hit area so revealing an insertion point never moves tasks.
+.add-section-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  min-height: var(--s4);
+  padding: var(--s-half) 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition-duration-xs) var(--ani-standard-timing);
+
+  &::before,
+  &::after {
+    content: '';
+    flex: 1;
+    border-top: 1px solid currentColor;
+  }
+
+  &:hover,
+  &:focus {
+    opacity: 1;
+  }
+}
+
+.sections-wrapper.has-inline-insertion {
+  .no-section,
+  .section-container {
+    margin-bottom: 0;
+  }
+}
+
+// Existing menus and section spacing remain intact on touch-only devices.
+@media (hover: none) and (pointer: coarse) {
+  .add-section-inline {
+    display: none;
+  }
+
+  .sections-wrapper.has-inline-insertion {
+    .no-section,
+    .section-container {
+      margin-bottom: var(--s3);
+    }
+  }
+}
