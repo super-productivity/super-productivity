@@ -26,6 +26,17 @@ export const FOCUS_MODE_FORM_CFG: ConfigFormSection<FocusModeConfig> = {
       },
     },
     {
+      key: 'focusModeSoundVolume',
+      type: 'slider',
+      hideExpression: "!model.focusModeSound || model.focusModeSound === 'off'",
+      templateOptions: {
+        type: 'number',
+        min: 0,
+        max: 100,
+        label: T.GCF.FOCUS_MODE.L_FOCUS_MODE_SOUND_VOLUME,
+      },
+    },
+    {
       type: 'collapsible',
       props: { label: T.G.ADVANCED_CFG },
       fieldGroup: [

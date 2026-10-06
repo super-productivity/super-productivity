@@ -87,3 +87,22 @@ export const FOCUS_MODE_DEFAULTS = {
   LONG_BREAK_DURATION: 15 * 60 * 1000, // 15 minutes
   CYCLES_BEFORE_LONG_BREAK: 4,
 } as const;
+
+/**
+ * Default ambient focus sound volume, in percent of the main sound volume.
+ * Matches the fixed 40% ratio used before `focusModeSoundVolume` existed.
+ */
+export const DEFAULT_FOCUS_MODE_SOUND_VOLUME = 40;
+
+/**
+ * Effective volume (0-100) for the focus-mode tick / white noise. The main
+ * sound volume stays the master control: 0 there mutes focus sounds too.
+ */
+export const getFocusModeSoundVolume = (
+  mainVolume: number | undefined | null,
+  focusModeSoundVolume: number | undefined | null,
+): number => {
+  const main = mainVolume || 0;
+  const relative = focusModeSoundVolume ?? DEFAULT_FOCUS_MODE_SOUND_VOLUME;
+  return Math.round((main * Math.min(Math.max(relative, 0), 100)) / 100);
+};
