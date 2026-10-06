@@ -115,7 +115,9 @@ describe('#10441 bulk dispatch yield evidence', () => {
       const capture = TestBed.inject(OperationCaptureService);
       const dispatch = (action: Action): void => {
         const p = action as PersistentAction;
-        if (p.meta?.isPersistent) expected.push(`${p.type}|${p.meta.entityId}`);
+        if (p.meta?.isPersistent && !p.meta.isRemote) {
+          expected.push(`${p.type}|${p.meta.entityId ?? p.meta.entityIds?.[0]}`);
+        }
         store.dispatch(action);
       };
       await loop(dispatch);
@@ -168,12 +170,42 @@ describe('#10441 bulk dispatch yield evidence', () => {
     expect(o.clockStrictlyIncreasing).withContext(`${label}: clock`).toBeTrue();
     expect(o.afterRestart).withContext(`${label}: restart`).toEqual(o.beforeRestart);
     expect(o.peer).withContext(`${label}: peer`).toEqual(o.beforeRestart);
-    // eslint-disable-next-line no-console
-    console.log(
-      `#10441 ${label}: ops=${o.logged.length} pendingAfterLoop=${o.pendingAfterLoop} ` +
-        `pendingAfterYield=${o.pendingAfterYield} server=${o.serverOpCount}`,
+    // Every loop op is captured (counted) synchronously at dispatch; the
+    // yield lets at most a few writes finish, it does not drain them.
+    expect(o.pendingAfterLoop).withContext(`${label}: pending after loop`).toBe(
+      o.logged.length - 1,
     );
+    expect(o.pendingAfterYield)
+      .withContext(`${label}: pending after yield`)
+      .toBeGreaterThan(0);
   };
+
+  // Negative control: the same checks must catch a state change that has no
+  // op behind it. One loop action is marked remote, so the reducer applies it
+  // but OperationLogEffects writes no op (the effect skips isRemote).
+  it('control: a state change without an op fails restart and peer checks', async () => {
+    const o = await run(
+      3,
+      false,
+      async (h) => {
+        for (let i = 0; i < 3; i++) {
+          await h.dispatch(
+            upsertPluginUserData({ pluginUserData: { id: `pl${i}`, data: `d${i}` } }),
+          );
+        }
+      },
+      async (dispatch) => {
+        dispatch(deletePluginUserData({ pluginId: 'pl0' }));
+        const lost = deletePluginUserData({ pluginId: 'pl1' });
+        dispatch({ ...lost, meta: { ...lost.meta, isRemote: true } } as Action);
+        dispatch(deletePluginUserData({ pluginId: 'pl2' }));
+      },
+      async () => undefined,
+    );
+    expect(o.logged).toEqual(o.expected);
+    expect(o.afterRestart).not.toEqual(o.beforeRestart);
+    expect(o.peer).not.toEqual(o.beforeRestart);
+  }, 60000);
 
   for (const n of [50, 200, 500]) {
     for (const withYield of [true, false]) {
