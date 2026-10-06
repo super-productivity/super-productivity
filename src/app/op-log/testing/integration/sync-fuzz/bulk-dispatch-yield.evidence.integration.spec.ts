@@ -274,7 +274,8 @@ describe('#10441 bulk dispatch yield evidence', () => {
           },
         );
         assertSound(o, `project ${tag}`);
-        expect(o.logged.length).toBe(n + n / 2 + 1);
+        const reopened = n / 2;
+        expect(o.logged.length).toBe(n + reopened + 1);
       }, 300000);
 
       // PluginUserPersistenceService.clearAllPluginUserData: per-entry deletes.
