@@ -224,6 +224,7 @@
     width: 32px;
     padding-right: 8px;
     margin-top: 36px; // Adjust for header
+    flex: 1; // Match the height of calendar wrapper
 
     .week-number-header {
       font-size: 11px;
@@ -238,10 +239,14 @@
       color: var(--text-color-muted);
       text-align: center;
       line-height: 1;
-      height: 54.8px;
+      flex: 1; // Share space equally with calendar rows
       display: flex;
       align-items: center;
       justify-content: center;
+
+      &.blank-week {
+        visibility: hidden; // Hide blank rows but preserve spacing
+      }
     }
   }
 
