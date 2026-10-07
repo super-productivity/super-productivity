@@ -233,7 +233,7 @@
     "@angular/platform-server": "^21.2.22",
     "@angular/router": "^21.2.22",
     "@angular/service-worker": "^21.2.22",
-    "@capacitor/android": "^8.4.1",
+    "@capacitor/android": "^8.4.3",
     "@capacitor/app": "^8.1.0",
     "@capacitor/cli": "^8.4.1",
     "@capacitor/core": "^8.4.1",
