@@ -50,6 +50,7 @@ import { IS_ELECTRON_TOKEN } from '../../app.constants';
 import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../util/is-android-web-view';
 import { getWeekNumber } from '../../util/get-week-number';
 import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../core/locale.constants';
+import { DateAdapter } from '@angular/material/core';
 
 const DEFAULT_TIME = '09:00';
 
@@ -98,6 +99,7 @@ const QUICK_ACCESS_ITEMS = [
 export class DateTimePickerComponent implements AfterViewInit {
   private _dateService = inject(DateService);
   private _globalConfigService = inject(GlobalConfigService);
+  private readonly _dateAdapter = inject(DateAdapter);
   private readonly _cdr = inject(ChangeDetectorRef);
   private readonly _viewContainerRef = inject(ViewContainerRef);
   private _el = inject(ElementRef);
@@ -319,28 +321,64 @@ export class DateTimePickerComponent implements AfterViewInit {
     ) as HTMLElement;
     if (!calendarEl) return;
 
+    const localization = this._globalConfigService.localization();
     const firstDayOfWeek = this.getFirstDayOfWeek();
+    const weekNumberSystem = localization?.weekNumberSystem;
+
+    // Check if week numbers should be shown
+    // null / undefined = "System default" = hide week numbers
+    // 'iso' or 'us' = show week numbers with the specified system
+    const shouldShowWeekNumbers = weekNumberSystem === 'iso' || weekNumberSystem === 'us';
+
+    if (!shouldShowWeekNumbers) {
+      this.weekNumbers = [];
+      this._cdr.markForCheck();
+      return;
+    }
 
     // Get all week rows (each week is a row in the calendar body)
     const weekRows = calendarEl.querySelectorAll('.mat-calendar-body tr');
     if (weekRows.length === 0) return;
 
-    // Calculate week numbers for each row
+    // Calculate week numbers for each row using DateAdapter arithmetic
+    // to avoid locale-dependent parsing issues
     const newWeekNumbers: number[] = [];
+    const cal = this.calendar();
+    if (!cal) return;
+
+    // Use the calendar's activeDate as the month reference
+    const activeDate = cal.activeDate;
+    const year = this._dateAdapter.getYear(activeDate);
+    const month = this._dateAdapter.getMonth(activeDate);
+
     weekRows.forEach((row) => {
-      // Find the first date cell in this row (use first cell, not excluding disabled)
+      // Find the first date cell in this row
       const firstDateCell = row.querySelector('.mat-calendar-body-cell');
       if (firstDateCell) {
-        const dateStr = (firstDateCell as HTMLElement).getAttribute('aria-label');
-        if (dateStr) {
-          // Parse the date from the aria-label (format: "Month day, year", e.g., "September 1, 2024")
-          const date = new Date(dateStr);
-          if (!isNaN(date.getTime())) {
-            newWeekNumbers.push(getWeekNumber(date, firstDayOfWeek));
+        // Get the day number from the cell's text content
+        const dayText = firstDateCell.textContent?.trim();
+        if (dayText) {
+          const day = parseInt(dayText, 10);
+          if (!isNaN(day)) {
+            // Use DateAdapter to create the date with proper locale handling
+            const date = this._dateAdapter.createDate(year, month, day);
+            // Verify the date is valid (cell might be from previous/next month)
+            if (date && !isNaN(date.getTime())) {
+              // Calculate week number for the first cell in the row
+              // This ensures week numbers are based on the actual week, not
+              // just dates from the current month
+              newWeekNumbers.push(getWeekNumber(date, firstDayOfWeek, weekNumberSystem));
+            }
           }
         }
       }
     });
+
+    // Pad with empty values to ensure 6 rows for consistent alignment
+    // (some months only have 5 weeks, calendar shows empty rows)
+    while (newWeekNumbers.length < 6) {
+      newWeekNumbers.push(-1); // -1 indicates a blank row
+    }
 
     this.weekNumbers = newWeekNumbers;
     this._cdr.markForCheck();
