@@ -169,6 +169,51 @@ describe('parseCorsOrigin', () => {
   });
 });
 
+describe('loadConfigFromEnv - PUBLIC_URL', () => {
+  beforeEach(() => {
+    resetEnv();
+    process.env.NODE_ENV = 'production';
+  });
+
+  afterEach(() => {
+    resetEnv();
+  });
+
+  it('explains a missing PUBLIC_URL instead of blaming TLS', async () => {
+    // The deploy-platform case: the domain was never assigned to this service,
+    // so the variable arrives EMPTY. That must not read as "no opinion" and fall
+    // through to the localhost default, which then fails the https check with a
+    // message about certificates — sending the operator after the wrong problem.
+    const { loadConfigFromEnv } = await importConfig();
+
+    for (const unset of [undefined, '', '   ']) {
+      if (unset === undefined) {
+        delete process.env.PUBLIC_URL;
+      } else {
+        process.env.PUBLIC_URL = unset;
+      }
+      expect(() => loadConfigFromEnv()).toThrow(/PUBLIC_URL is required in production/);
+      // The actionable half: name the platform misconfiguration, not the scheme.
+      expect(() => loadConfigFromEnv()).toThrow(/assign the domain to THIS service/);
+      expect(() => loadConfigFromEnv()).not.toThrow(/must use HTTPS/);
+    }
+  });
+
+  it('still reports a scheme problem when PUBLIC_URL is genuinely set to http', async () => {
+    const { loadConfigFromEnv } = await importConfig();
+    process.env.PUBLIC_URL = 'http://sync.example.com';
+
+    expect(() => loadConfigFromEnv()).toThrow('PUBLIC_URL must use HTTPS in production');
+  });
+
+  it('accepts an https PUBLIC_URL and strips trailing slashes', async () => {
+    const { loadConfigFromEnv } = await importConfig();
+    process.env.PUBLIC_URL = 'https://sync.example.com/';
+
+    expect(loadConfigFromEnv().publicUrl).toBe('https://sync.example.com');
+  });
+});
+
 describe('loadConfigFromEnv - CORS_ORIGINS parsing', () => {
   beforeEach(() => {
     resetEnv();

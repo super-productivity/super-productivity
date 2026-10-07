@@ -59,6 +59,27 @@ nano .env
 ./scripts/deploy.sh
 ```
 
+### Coolify
+
+For [Coolify](https://coolify.io), use **`./docker-compose.coolify.yml`** instead of
+`./docker-compose.yml`. It runs this server _and_ the Super Productivity web app in
+one resource — the app is the `app` service — and it is shaped for a platform that
+parses the compose file, injects an `.env`, terminates TLS with its own proxy, and
+names its own containers. Concretely: no Caddy, no `container_name`, no `ports:`,
+database and JWT secrets sourced from Coolify's generated `SERVICE_*` variables, and
+`PUBLIC_URL` / passkey settings derived from the domain you assign to the service.
+
+The differences are not cosmetic. This file exists separately because
+`./docker-compose.yml` is load-bearing for self-hosted deploys — `scripts/deploy.sh`
+reads the Caddy image and service list out of it, `scripts/backup.sh` and
+`scripts/docker-monitor.sh` default to its `container_name` values, and
+`tests/migration-sql.spec.ts` asserts on those literals.
+
+See [`docs/wiki/2.24-Deploy-on-Coolify.md`](../../docs/wiki/2.24-Deploy-on-Coolify.md)
+for the setup steps.
+
+#### Local builds
+
 `./scripts/deploy.sh --build` builds the image locally instead of pulling it.
 That compiles the whole monorepo **on the deploy host**, beside the running
 stack: expect several minutes and a peak above 1.5 GB of RAM on top of the

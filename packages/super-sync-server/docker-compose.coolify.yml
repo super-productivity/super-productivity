@@ -1,0 +1,271 @@
+# Coolify deployment: Super Productivity web app + SuperSync, one resource.
+#
+# What this is: a deployment-target variant of ./docker-compose.yml. It runs the
+# same three things an operator needs on Coolify — the browser app, the sync
+# backend, and its database — but shaped for a platform that terminates TLS with
+# its own proxy and injects the environment.
+#
+# Why a separate file rather than flags on the production compose: ./docker-compose.yml
+# is load-bearing for self-hosted deploys. scripts/deploy.sh greps `image:.*caddy:`
+# out of it and runs `caddy validate`, scripts/health-alert.sh appends `caddy` to the
+# service list, scripts/backup.sh and scripts/docker-monitor.sh default to the
+# container_name values, and tests/migration-sql.spec.ts asserts on those literals.
+# Every difference below would break one of those.
+#
+# --- Coolify setup -----------------------------------------------------------
+# 1. New resource -> Docker Compose, point it at this repository and this file.
+# 2. Tick all three services: supersync, postgres, app.
+# 3. Assign an FQDN to `supersync` (e.g. sync.example.com). PUBLIC_URL,
+#    WEBAUTHN_ORIGIN and WEBAUTHN_RP_ID are derived from it — do not set them by
+#    hand, or passkeys will bind to the wrong host.
+# 4. Assign a second FQDN to `app` (e.g. sp.example.com).
+# 5. Set CORS_ORIGINS to the app's origin (below). Coolify cannot infer it.
+# 6. Deploy. JWT_SECRET, POSTGRES_PASSWORD and DATABASE_URL are generated and
+#    stored for you — see "Generated values are write-once".
+#
+# --- Generated values are write-once ----------------------------------------
+# Coolify creates SERVICE_* variables with random values and keeps them across
+# redeploys, so they are stable in normal use. They are still write-once in
+# practice: POSTGRES_PASSWORD is baked into the postgres data volume at first
+# init, and JWT_SECRET signs every session token. Changing either afterwards
+# yields `password authentication failed` / `28P01` from a healthy database, or
+# invalidates every issued token. Back both up out of band after the first
+# deploy; to rotate the password, delete the postgres volume and redeploy.
+#
+# --- What Coolify does that plain Compose does not ---------------------------
+# - Injects the .env, so every ${VAR} below resolves without a local .env file.
+# - Terminates TLS and routes by the FQDNs you assign. There is deliberately no
+#   `ports:` anywhere here: a published port binds the host, cannot be reached by
+#   Coolify's proxy (which talks over its own Docker network), and collides with
+#   anything else on the machine.
+# - Names and labels containers itself. Hence no `container_name:`.
+# - Injects its own network. Hence no `networks:` block — declaring one with a
+#   pinned `name:` would collide across resources on a single host.
+# - No Caddy here: Coolify's proxy replaces it. That also means the security
+#   headers in ../Caddyfile (X-Frame-Options, Referrer-Policy, -Server) and its
+#   query-string redaction are NOT applied. Configure them on the proxy if you
+#   front this with anything that logs URIs; see docs/wiki/2.24-Deploy-on-Coolify.md.
+
+services:
+  # --- Sync backend ----------------------------------------------------------
+  supersync:
+    # Only `latest` and `master-<sha>` are published, both built from master —
+    # there are no release tags, so pinning a version here would rot. Override
+    # SUPERSYNC_IMAGE with a master-<sha> for a fixed revision.
+    image: ${SUPERSYNC_IMAGE:-ghcr.io/super-productivity/supersync:latest}
+    restart: unless-stopped
+    # Container port only — `expose` publishes nothing to the host. Without any
+    # `ports:` entry, this is what tells Coolify's proxy where to route.
+    expose:
+      - '1900'
+    environment:
+      - NODE_ENV=production
+      - PORT=1900
+      - HOST=0.0.0.0
+      # Prisma sizes its default pool from host CPUs, not the container limit.
+      # Overriding DATABASE_URL replaces those bounds, so they must be carried
+      # across or the pool grows unbounded and takes the memory cap with it.
+      # REQUIRE_DATABASE_POOL_LIMITS=true makes the server refuse to boot if
+      # they are missing. (#9191)
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-supersync}:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/${POSTGRES_DB:-supersync}?connection_limit=60&pool_timeout=10
+      - REQUIRE_DATABASE_POOL_LIMITS=true
+      # Coolify never runs scripts/deploy.sh, so migrations must run in the
+      # container's own CMD or the schema is never applied. The container waits
+      # for postgres via depends_on, and migrate-deploy.sh retries, so a cold
+      # first deploy is fine.
+      - RUN_MIGRATIONS_ON_STARTUP=${RUN_MIGRATIONS_ON_STARTUP:-true}
+      # MIGRATE_RECOVERY_RUNTIME is deliberately absent, where docker-compose.yml
+      # sets it to `compose`. That value picks a recovery path which shells out
+      # to `docker compose run` on the HOST — no Docker CLI or socket exists
+      # inside a Coolify container, so a failed migration would have no recovery
+      # at all. migrate-deploy.sh treats unset and empty identically and uses the
+      # in-container path. Do not "restore" this line to match.
+      # 64-char generated secret: JWT tokens are signed with this and there is
+      # no rotation, so it must be strong and must never change.
+      - JWT_SECRET=${SERVICE_PASSWORD_64_SUPERSYNC}
+      # Links in verification / magic-link / recovery emails. From the FQDN you
+      # assign to this service, scheme included. Absent until a domain is set in
+      # the UI, and in production a non-https value is a hard boot failure
+      # (config.ts enforces https when NODE_ENV=production).
+      - PUBLIC_URL=${SERVICE_URL_SUPERSYNC_1900}
+      - CORS_ORIGINS=${CORS_ORIGINS:?set this to the app's origin, e.g. https://sp.example.com}
+      # Passkeys bind to the RP ID. Changing it later invalidates every
+      # credential already registered, so derive it rather than hardcoding.
+      - WEBAUTHN_RP_ID=${SERVICE_FQDN_SUPERSYNC}
+      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-}
+      - WEBAUTHN_ORIGIN=${SERVICE_URL_SUPERSYNC_1900}
+      # Identify yourself as the data controller to publish /privacy.html. All
+      # five are required together and a partial set is a hard error, so they
+      # stay optional here — set none and the legal pages are simply not served.
+      - PRIVACY_CONTACT_NAME=${PRIVACY_CONTACT_NAME:-}
+      - PRIVACY_ADDRESS_STREET=${PRIVACY_ADDRESS_STREET:-}
+      - PRIVACY_ADDRESS_CITY=${PRIVACY_ADDRESS_CITY:-}
+      - PRIVACY_ADDRESS_COUNTRY=${PRIVACY_ADDRESS_COUNTRY:-}
+      - PRIVACY_CONTACT_EMAIL=${PRIVACY_CONTACT_EMAIL:-}
+      - PRIVACY_HOSTING_PROVIDER=${PRIVACY_HOSTING_PROVIDER:-}
+      - PRIVACY_SUPERVISORY_AUTHORITY=${PRIVACY_SUPERVISORY_AUTHORITY:-}
+      - PRIVACY_DATA_REGION=${PRIVACY_DATA_REGION:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - ALLOWED_EMAILS=${ALLOWED_EMAILS:-}
+      - SUPERSYNC_DEFAULT_STORAGE_QUOTA_BYTES=${SUPERSYNC_DEFAULT_STORAGE_QUOTA_BYTES:-}
+      - OLD_OPS_CLEANUP_DELETE_BATCH_SIZE=${OLD_OPS_CLEANUP_DELETE_BATCH_SIZE:-5000}
+      - OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN=${OLD_OPS_CLEANUP_MAX_DELETED_PER_RUN:-25000}
+    volumes:
+      - supersync-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # wget is present (apk add wget in the Dockerfile), so this works. Do not
+      # "fix" it to curl — the image has no curl and the probe would always fail.
+      # 127.0.0.1 rather than localhost: busybox resolves localhost to ::1 first.
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://127.0.0.1:1900/health',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    # PID 1 is `node`, which reaps only children it spawned itself. The
+    # health-alert probe execs a forking command in here every few minutes, and
+    # BusyBox `timeout` forks a watchdog that outlives the probe; the watchdog is
+    # reparented to node and never reaped — one permanent zombie per run, 1058 of
+    # them on the hosted server after 3.7 days. docker-init reaps them and still
+    # forwards SIGTERM. Same reason as postgres below. (#9695)
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # 200+ WebSocket clients each consume an fd; the Alpine default soft limit
+    # of 1024 is tight under reconnect bursts.
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    # Keep in step with NODE_OPTIONS=--max-old-space-size=576 in the Dockerfile:
+    # that is ~75% of this cap, so V8 GCs before the cgroup OOM-killer fires.
+    mem_limit: 768m
+    cpus: '1.0'
+
+  # --- Database --------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    expose:
+      - '5432'
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-supersync}
+      # Generated by Coolify and stored. No symbols, so it cannot corrupt the
+      # DATABASE_URL above.
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=${POSTGRES_DB:-supersync}
+    # shared_buffers needs shm_size above the 64m default. 120 x 4MB work_mem is
+    # a 480MB worst-case sort budget plus 384MB shared_buffers, inside the cap.
+    # The cap stays above that anonymous budget deliberately: under cgroup v2 the
+    # page cache is charged here too, so mem_limit — not host RAM — is what bounds
+    # how much of the operations heap stays cached. Raise it only together with
+    # effective_cache_size (roughly limit - shared_buffers), and only if the host
+    # has RAM to back it; a cap at or above the whole host loses cgroup containment
+    # and lets the host OOM killer pick the victim, possibly sshd. See env.example.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=384MB
+      - -c
+      - effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-1GB}
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - max_connections=120
+      - -c
+      - random_page_cost=1.1
+      - -c
+      # 5 min — kill leaked Prisma idle-in-tx, but well above the
+      # migrate-deploy.sh 30-min STEP_TIMEOUT for CONCURRENTLY index builds.
+      - idle_in_transaction_session_timeout=300000
+      - -c
+      - wal_compression=on
+      - -c
+      - huge_pages=off
+    shm_size: 256m
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # Gate on the app database existing AND accepting queries, not just on
+      # pg_isready: during first-run initdb the server briefly bounces while
+      # POSTGRES_DB is created, and supersync's prisma migrate then race-fails
+      # with P1001.
+      test:
+        - CMD-SHELL
+        - >
+          pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" &&
+          psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "SELECT 1" > /dev/null 2>&1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # postgres is PID 1 and adopts every orphan in the container. The healthcheck
+    # is CMD-SHELL, so ash forks pg_isready and execs psql in place; when a probe
+    # exceeds `timeout` and dockerd SIGKILLs it, a still-running pg_isready is
+    # orphaned, reparented to the postmaster, and exits 2 ("no response") once its
+    # own 3s connect timeout expires. The postmaster's CleanupBackend() treats any
+    # reaped status other than 0/1 as a backend crash BEFORE checking whether the
+    # PID is one of its backends, which is a full in-place crash-restart dropping
+    # every client — the signature of all 50 crash-restarts on the hosted server.
+    # docker-init adopts the orphan instead. (#9695)
+    init: true
+    # The image's STOPSIGNAL is SIGINT (fast shutdown). Past docker's default 10s
+    # PID 1 is SIGKILLed and the next start runs crash recovery.
+    stop_grace_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${POSTGRES_MEM_LIMIT:-1536m}
+    cpus: '1.0'
+
+  # --- Browser app -----------------------------------------------------------
+  # nginx serving the prebuilt Angular bundle. Data lives in each browser's own
+  # storage, so this container holds nothing and needs no volume or secret.
+  # Coolify's proxy terminates TLS for it.
+  app:
+    image: ${SP_APP_IMAGE:-johannesjo/super-productivity:latest}
+    restart: unless-stopped
+    expose:
+      - '80'
+    healthcheck:
+      # curl, not wget: this image is nginx:1 (Debian) with jq and curl installed
+      # by the Dockerfile, and Debian ships neither busybox wget nor a wget that
+      # behaves. The app is an SPA, so / is index.html and is always 200 once
+      # nginx is up.
+      test:
+        [
+          'CMD',
+          'curl',
+          '--fail',
+          '--silent',
+          '--output',
+          '/dev/null',
+          'http://127.0.0.1:80/',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    mem_limit: 256m
+
+volumes:
+  supersync-data:
+  postgres-data:
