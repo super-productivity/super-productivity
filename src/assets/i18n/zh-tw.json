@@ -208,7 +208,7 @@
         "POLL_INTERVAL_MINUTES": "輪詢間隔（分鐘）"
       },
       "FORM_SECTION": {
-        "HELP": "<p>在此您可以設定 Super Productivity 在每日規劃檢視的工作建立面板中列出特定專案的未完成 CalDAV 待辦事項。它們將作為建議列出，並提供待辦事項的連結以及更多相關資訊。</p> <p>此外，您可以自動新增並同步所有未完成的待辦事項到您的工作待辦事項。</p><p>要在網頁應用程式中讓 Nextcloud 運作，您可能需要透過 Nextcloud 應用程式 <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a> 將 \"https://app.super-productivity.com\" 加入白名單。</p>"
+        "HELP": "<p>在此您可以設定 Super Productivity 在每日規劃檢視的工作建立面板中列出特定專案的未完成 CalDAV 待辦事項。它們將作為建議列出，並提供待辦事項的連結以及更多相關資訊。</p> <p>此外，您可以自動新增並同步所有未完成的待辦事項到您的工作待辦事項。</p><p>要在網頁應用程式中讓 Nextcloud 運作，您可能需要透過 Nextcloud 應用程式 <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a> 將 \"https://app.super-productivity.com\" 加入白名單。</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "描述",
@@ -1554,7 +1554,7 @@
         "WEB_DAV": {
           "CONDITIONAL_HEADER_WARNING_MSG": "您的 WebDAV 伺服器不支援條件式標頭（If-Unmodified-Since）。這表示 Super Productivity 無法在上傳期間偵測來自其他裝置的並行變更。<br><br>同步仍然可以運作，但如果您同時在多個裝置上進行變更，則存在資料衝突的小風險。",
           "CONDITIONAL_HEADER_WARNING_TITLE": "降低的同步安全性",
-          "CORS_INFO": "<strong>在瀏覽器中使用：</strong>允許 Super Productivity 向您的 WebDAV 伺服器發送 CORS 請求。這可能會帶來安全隱患！對於 Nextcloud，請參考 <a href='https://github.com/nextcloud/server/issues/3131'>此 GitHub 討論串</a>以取得更多資訊。在行動裝置上使此功能運作的一種方法是透過 Nextcloud 應用程式 <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a> 將 \"https://app.super-productivity.com\" 加入白名單。風險自負！</p>",
+          "CORS_INFO": "<strong>在瀏覽器中使用：</strong>允許 Super Productivity 向您的 WebDAV 伺服器發送 CORS 請求。這可能會帶來安全隱患！對於 Nextcloud，請參考 <a href='https://github.com/nextcloud/server/issues/3131'>此 GitHub 討論串</a>以取得更多資訊。在行動裝置上使此功能運作的一種方法是透過 Nextcloud 應用程式 <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a> 將 \"https://app.super-productivity.com\" 加入白名單。風險自負！</p>",
           "D_SYNC_FOLDER_PATH": "相對於 WebDAV 伺服器根目錄的路徑，用於儲存同步檔案（例如 '/super-productivity' 或 '/'）。這不是伺服器的內部目錄路徑。",
           "INFO": "<strong>警告：</strong>WebDAV 的實作方式差異很大。Super Productivity 已知可與 Nextcloud 良好配合，<strong>但可能無法與您的提供者一起使用</strong>。在正式使用前請徹底測試。",
           "L_BASE_URL": "基本網址",

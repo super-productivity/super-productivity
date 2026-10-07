@@ -445,6 +445,28 @@ test('no shipped locale value has broken or unexpected placeholders', () => {
   assert.deepEqual(offenders, []);
 });
 
+test('no shipped locale value contains an escaped slash or a bare <a> tag', () => {
+  // A literal "\/" renders as text and breaks URLs; a bare <a> was meant to
+  // close a link (#10515).
+  const i18nDirectory = join(__dirname, '..', 'src', 'assets', 'i18n');
+  const offenders = readdirSync(i18nDirectory)
+    .filter((file) => file.endsWith('.json'))
+    .sort()
+    .flatMap((file) => {
+      const locale = JSON.parse(readFileSync(join(i18nDirectory, file), 'utf8'));
+      return collectLeafKeys(locale)
+        .filter((key) => {
+          const value = getValueAtPath(locale, key);
+          return (
+            typeof value === 'string' && (value.includes('\\/') || value.includes('<a>'))
+          );
+        })
+        .map((key) => `${file}: ${key}`);
+    });
+
+  assert.deepEqual(offenders, []);
+});
+
 test('inspectTranslationDirectory compares every locale with deterministic order and totals', () => {
   const directory = mkdtempSync(join(tmpdir(), 'test-lng-files-'));
 

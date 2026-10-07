@@ -208,7 +208,7 @@
         "POLL_INTERVAL_MINUTES": "Interval polling (menit)"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar tugas CalDav yang belum selesai untuk proyek tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan terdaftar sebagai saran dan akan memberikan tautan ke todo serta informasi lebih lanjut tentangnya.</p> <p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua tugas yang belum selesai ke backlog tugas Anda</p><p>Agar berfungsi untuk nextcloud di aplikasi web, Anda mungkin perlu memasukkannya ke daftar putih (whitelist) \"https://app.super-productivity.com\" melalui aplikasi Nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
+        "HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar tugas CalDav yang belum selesai untuk proyek tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan terdaftar sebagai saran dan akan memberikan tautan ke todo serta informasi lebih lanjut tentangnya.</p> <p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua tugas yang belum selesai ke backlog tugas Anda</p><p>Agar berfungsi untuk nextcloud di aplikasi web, Anda mungkin perlu memasukkannya ke daftar putih (whitelist) \"https://app.super-productivity.com\" melalui aplikasi Nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Deskripsi",
@@ -1458,7 +1458,7 @@
         },
         "TITLE": "Sinkronisasi",
         "WEB_DAV": {
-          "CORS_INFO": "<strong>Membuatnya berfungsi di browser:</strong> Agar ini berfungsi di browser, Anda perlu memasukkan Super Productivity untuk permintaan CORS ke whitelist untuk instans Nextcloud Anda. Ini dapat memiliki implikasi keamanan negatif! Silahkan <a href='https://github.com/nextcloud/server/issues/3131'>lihat utas ini untuk informasi lebih lanjut</a>. Salah satu pendekatan untuk membuat ini berfungsi di seluler adalah memasukkannya ke whitelist \"https://app.super-productivity.com\" lewat nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Gunakan dengan risiko Anda sendiri!</p>",
+          "CORS_INFO": "<strong>Membuatnya berfungsi di browser:</strong> Agar ini berfungsi di browser, Anda perlu memasukkan Super Productivity untuk permintaan CORS ke whitelist untuk instans Nextcloud Anda. Ini dapat memiliki implikasi keamanan negatif! Silahkan <a href='https://github.com/nextcloud/server/issues/3131'>lihat utas ini untuk informasi lebih lanjut</a>. Salah satu pendekatan untuk membuat ini berfungsi di seluler adalah memasukkannya ke whitelist \"https://app.super-productivity.com\" lewat nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>. Gunakan dengan risiko Anda sendiri!</p>",
           "D_SYNC_FOLDER_PATH": "Jalur relatif terhadap root server WebDAV tempat file sinkronisasi akan disimpan (misalnya, ' /super-productivity' atau '/'). Ini BUKAN jalur direktori internal server Anda.",
           "INFO": "Implementasi WebDAV sangat bervariasi sayangnya. Super Productivity dikenal bekerja dengan baik dengan Nextcloud, <strong>tetapi mungkin tidak bekerja dengan penyedia Anda</strong>.",
           "L_BASE_URL": "URL Dasar",
@@ -1545,7 +1545,7 @@
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Data Jarak Jauh saat ini sedang ditulis",
         "ERROR_PERMISSION": "Akses file ditolak. Harap periksa izin sistem file Anda.",
         "ERROR_PERMISSION_FLATPAK": "Akses file ditolak. Berikan izin sistem file melalui Flatseal atau gunakan jalur di dalam ~/ .var/app/",
-        "ERROR_PERMISSION_SNAP": "Akses file ditolak. Jalankan 'snap connect super-productivity:home' atau gunakan jalur di dalam ~\\/snap\\/super-productivity\\/common\\/",
+        "ERROR_PERMISSION_SNAP": "Akses file ditolak. Jalankan 'snap connect super-productivity:home' atau gunakan jalur di dalam ~/snap/super-productivity/common/",
         "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "Server sinkronisasi membalas dengan halaman web alih-alih data sinkronisasimu (misalnya halaman masuk, proksi, atau galat). Data jarak jauhmu kemungkinan besar utuh — periksa URL server, kredensial, dan jaringan, lalu coba lagi. Jika masalah berlanjut, kamu bisa menimpa data jarak jauh lewat Pengaturan Sinkronisasi → Paksa Timpa.",
         "INCOMPLETE_CFG": "Otentikasi untuk sinkronisasi gagal. Silakan periksa Konfigurasi Anda!",
         "REMOTE_NOT_ENCRYPTED": "Data yang disinkronkan tidak terenkripsi, padahal enkripsi aktif di perangkat ini, sehingga ditolak. Jika kamu mematikan enkripsi di perangkat lain, matikan juga di sini pada pengaturan Sinkronisasi untuk melanjutkan.",
@@ -2838,7 +2838,7 @@
       "IS_OVERLAY_INDICATOR_ENABLED": "Aktifkan jendela indikator overlay (desktop linux/gnome)",
       "IS_SHOW_TIP_LONGER": "Tampilkan tip produktivitas saat aplikasi mulai sedikit lebih lama",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Tampilkan hitung mundur saat ini di tray / menu status (desktop mac saja)",
-      "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Gunakan bilah judul khusus (hanya Windows\\/Linux)",
+      "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Gunakan bilah judul khusus (hanya Windows/Linux)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Memerlukan restart untuk berlaku",
       "LOCAL_REST_API_TOKEN": "Token Akses",
       "LOCAL_REST_API_TOKEN_ERROR": "Token akses tidak dapat disimpan, sehingga API tidak berjalan. Periksa apakah Super Productivity dapat menulis ke folder datanya, lalu gunakan Buat Ulang untuk mencoba lagi.",
