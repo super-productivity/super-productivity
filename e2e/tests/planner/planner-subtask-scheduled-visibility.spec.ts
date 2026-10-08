@@ -1,49 +1,5 @@
-import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
-import { calendarNextMonthBtn } from '../../utils/element-helpers';
-
-/**
- * Schedule a task for an exact day (day-only, no time) via the keyboard
- * shortcut ('S' opens the schedule dialog) and calendar.
- *
- * The keyboard path is used deliberately: it is independent of whether the task
- * is already scheduled (a scheduled task's detail item shows a "Reschedule"
- * control instead of "Schedule Task") and of task height (hovering a parent
- * with sub-tasks lands on a sub-task row).
- */
-const scheduleTaskForDay = async (
-  page: Page,
-  task: Locator,
-  targetDate: Date,
-): Promise<void> => {
-  await task.scrollIntoViewIfNeeded();
-  await task.focus();
-  await expect(task).toBeFocused();
-
-  await page.keyboard.press('s');
-
-  const scheduleDialog = page.locator('dialog-schedule-task');
-  await expect(scheduleDialog).toBeVisible({ timeout: 10000 });
-  // No time set -> this creates a date-only dueDay, not a timed dueWithTime.
-  await expect(scheduleDialog.locator('input[type="time"]')).toHaveValue('');
-
-  const today = new Date();
-  if (
-    targetDate.getMonth() !== today.getMonth() ||
-    targetDate.getFullYear() !== today.getFullYear()
-  ) {
-    await calendarNextMonthBtn(scheduleDialog).click();
-  }
-
-  const targetDay = scheduleDialog
-    .locator('.mat-calendar-body-cell:not(.mat-calendar-body-disabled)')
-    .filter({ hasText: new RegExp(`^\\s*${targetDate.getDate()}\\s*$`) })
-    .first();
-  await expect(targetDay).toBeVisible();
-  await targetDay.click();
-  await scheduleDialog.locator('[data-test-id="schedule-submit-btn"]').click();
-  await scheduleDialog.waitFor({ state: 'hidden', timeout: 10000 });
-};
+import { scheduleTaskForDay } from '../../utils/schedule-task-helper';
 
 const getDateWithDayOffset = (dayOffset: number): Date => {
   const date = new Date();

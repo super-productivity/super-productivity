@@ -137,7 +137,7 @@ describe('OperationLogStoreService', () => {
     });
   });
 
-  describe('init backend selection (Phase B3)', () => {
+  describe('init connection adoption', () => {
     // Build a fresh service whose adapter comes from the given factory.
     const freshServiceWith = (adapter: OpLogDbAdapter): OperationLogStoreService => {
       TestBed.resetTestingModule();
@@ -151,30 +151,9 @@ describe('OperationLogStoreService', () => {
       return TestBed.inject(OperationLogStoreService);
     };
 
-    it('init()s a self-managing adapter (no adoptConnection) and opens NO IndexedDB', async () => {
-      // SQLite-style backend: self-manages its handle, creates its schema via
-      // init(), and never adopts a connection.
-      const initSpy = jasmine.createSpy('init').and.resolveTo(undefined);
-      const adapter = { init: initSpy } as unknown as OpLogDbAdapter;
-      const svc = freshServiceWith(adapter);
-      const openSpy = spyOn(
-        svc as unknown as { _openDbOnce: () => Promise<unknown> },
-        '_openDbOnce',
-      );
-
-      await svc.init();
-
-      expect(initSpy).toHaveBeenCalledTimes(1);
-      expect(openSpy).not.toHaveBeenCalled();
-      // No WebView IndexedDB connection is opened or cached on this path.
-      expect((svc as unknown as { _db: unknown })._db).toBeUndefined();
-    });
-
-    it('opens + adopts a connection for an adopt-connection (IndexedDB) adapter', async () => {
-      const initSpy = jasmine.createSpy('init').and.resolveTo(undefined);
+    it('opens + adopts a connection for the adapter', async () => {
       const adoptSpy = jasmine.createSpy('adoptConnection');
       const adapter = {
-        init: initSpy,
         adoptConnection: adoptSpy,
       } as unknown as OpLogDbAdapter;
       const svc = freshServiceWith(adapter);
@@ -186,10 +165,8 @@ describe('OperationLogStoreService', () => {
 
       await svc.init();
 
+      // The adapter's schema comes from the IDB upgrade on the adopted connection.
       expect(adoptSpy).toHaveBeenCalledWith(fakeDb);
-      // The IndexedDB backend does NOT use the adapter's own init() (its schema
-      // comes from the IDB upgrade on the adopted connection).
-      expect(initSpy).not.toHaveBeenCalled();
       expect((svc as unknown as { _db: unknown })._db).toBe(fakeDb);
     });
 
@@ -198,7 +175,6 @@ describe('OperationLogStoreService', () => {
     // retry budget only delays the explanation behind a white screen.
     it('fails fast without retrying when the downgrade barrier rejects the open', async () => {
       const adapter = {
-        init: jasmine.createSpy('init').and.resolveTo(undefined),
         adoptConnection: jasmine.createSpy('adoptConnection'),
       } as unknown as OpLogDbAdapter;
       const svc = freshServiceWith(adapter);
@@ -503,48 +479,6 @@ describe('OperationLogStoreService', () => {
 
     it('should return false for non-existing operations', async () => {
       expect(await service.hasOp('nonExistentId')).toBe(false);
-    });
-  });
-
-  describe('filterNewOps', () => {
-    it('should return all ops when none exist in store', async () => {
-      const op1 = createTestOperation({ entityId: 'task1' });
-      const op2 = createTestOperation({ entityId: 'task2' });
-
-      const result = await service.filterNewOps([op1, op2]);
-
-      expect(result.length).toBe(2);
-      expect(result).toContain(op1);
-      expect(result).toContain(op2);
-    });
-
-    it('should filter out ops that already exist', async () => {
-      const existingOp = createTestOperation({ entityId: 'existing' });
-      const newOp = createTestOperation({ entityId: 'new' });
-
-      await service.append(existingOp);
-
-      const result = await service.filterNewOps([existingOp, newOp]);
-
-      expect(result.length).toBe(1);
-      expect(result[0].id).toBe(newOp.id);
-    });
-
-    it('should return empty array when all ops exist', async () => {
-      const op1 = createTestOperation({ entityId: 'task1' });
-      const op2 = createTestOperation({ entityId: 'task2' });
-
-      await service.append(op1);
-      await service.append(op2);
-
-      const result = await service.filterNewOps([op1, op2]);
-
-      expect(result.length).toBe(0);
-    });
-
-    it('should return empty array for empty input', async () => {
-      const result = await service.filterNewOps([]);
-      expect(result.length).toBe(0);
     });
   });
 
@@ -1105,57 +1039,27 @@ describe('OperationLogStoreService', () => {
   });
 
   describe('compaction counter', () => {
+    // The counter has no production writer any more, so seed the persisted field
+    // directly to exercise the readers/reset that are still live. With no state
+    // cache yet this creates a counter-only entry (state: null).
+    const seedCompactionCounter = async (count: number): Promise<void> => {
+      const adapter = (service as unknown as { _adapter: OpLogDbAdapter })._adapter;
+      const existing = await adapter.get<object>(STORE_NAMES.STATE_CACHE, SINGLETON_KEY);
+      await adapter.put(STORE_NAMES.STATE_CACHE, {
+        ...(existing ?? {
+          id: SINGLETON_KEY,
+          state: null,
+          lastAppliedOpSeq: 0,
+          vectorClock: {},
+          compactedAt: 0,
+        }),
+        compactionCounter: count,
+      });
+    };
+
     it('should start at 0 when no state cache exists', async () => {
       const count = await service.getCompactionCounter();
       expect(count).toBe(0);
-    });
-
-    it('should increment counter', async () => {
-      await service.saveStateCache({
-        schemaVersion: CURRENT_SCHEMA_VERSION,
-        state: {},
-        lastAppliedOpSeq: 0,
-        vectorClock: {},
-        compactedAt: Date.now(),
-      });
-
-      const count1 = await service.incrementCompactionCounter();
-      expect(count1).toBe(1);
-
-      const count2 = await service.incrementCompactionCounter();
-      expect(count2).toBe(2);
-
-      const count3 = await service.getCompactionCounter();
-      expect(count3).toBe(2);
-    });
-
-    it('should persist counter when no state cache exists (regression test)', async () => {
-      // This tests the fix for the bug where incrementCompactionCounter()
-      // returned 1 without persisting when no cache existed.
-      // Without the fix, each call would return 1 (counter never progressed).
-
-      // No state cache exists yet - verify counter starts at 0
-      expect(await service.getCompactionCounter()).toBe(0);
-
-      // First increment should return 1 AND persist it
-      const count1 = await service.incrementCompactionCounter();
-      expect(count1).toBe(1);
-
-      // Verify it was actually persisted
-      const persistedCount1 = await service.getCompactionCounter();
-      expect(persistedCount1).toBe(1);
-
-      // Second increment should return 2 (not 1 again!)
-      const count2 = await service.incrementCompactionCounter();
-      expect(count2).toBe(2);
-
-      // Verify it was persisted
-      const persistedCount2 = await service.getCompactionCounter();
-      expect(persistedCount2).toBe(2);
-
-      // Third increment to be sure
-      const count3 = await service.incrementCompactionCounter();
-      expect(count3).toBe(3);
     });
 
     it('should reset counter', async () => {
@@ -1167,8 +1071,8 @@ describe('OperationLogStoreService', () => {
         compactedAt: Date.now(),
       });
 
-      await service.incrementCompactionCounter();
-      await service.incrementCompactionCounter();
+      await seedCompactionCounter(2);
+      expect(await service.getCompactionCounter()).toBe(2);
       await service.resetCompactionCounter();
 
       const count = await service.getCompactionCounter();
@@ -1176,19 +1080,19 @@ describe('OperationLogStoreService', () => {
     });
 
     // =========================================================================
-    // Regression test: incrementCompactionCounter counter-only cache handling
+    // Regression test: counter-only cache handling
     // =========================================================================
-    // When incrementCompactionCounter creates a cache entry just to track the
-    // counter, loadStateCache should return null since there's no valid snapshot.
+    // When a cache entry exists just to track the counter (state: null),
+    // loadStateCache should return null since there's no valid snapshot.
     // This prevents unnecessary recovery paths on startup.
 
-    it('should not expose invalid snapshot when incrementCompactionCounter creates counter-only cache', async () => {
+    it('should not expose invalid snapshot when a counter-only cache entry exists', async () => {
       // No state cache exists yet
       const beforeCache = await service.loadStateCache();
       expect(beforeCache).toBeNull();
 
-      // Increment the compaction counter (simulating operation writes before first compaction)
-      await service.incrementCompactionCounter();
+      // Persist a counter-only cache entry (counter progress before first compaction)
+      await seedCompactionCounter(1);
 
       // Now check what loadStateCache returns
       const afterCache = await service.loadStateCache();
@@ -1199,10 +1103,8 @@ describe('OperationLogStoreService', () => {
     });
 
     it('should still track compaction counter even when loadStateCache returns null', async () => {
-      // Increment counter without a real snapshot existing
-      await service.incrementCompactionCounter();
-      await service.incrementCompactionCounter();
-      await service.incrementCompactionCounter();
+      // Persist a counter without a real snapshot existing
+      await seedCompactionCounter(3);
 
       // loadStateCache returns null (no valid snapshot)
       const cache = await service.loadStateCache();
@@ -1443,14 +1345,20 @@ describe('OperationLogStoreService', () => {
     // =========================================================================
     // Issue #6213: When appendBatch throws ConstraintError, the appliedOpIds cache
     // becomes stale (it doesn't know about ops from a previous failed sync).
-    // The cache must be invalidated so filterNewOps returns correct results.
+    // The cache must be invalidated so filtering against it returns correct results.
+
+    // Filters ops against the applied-op-ID cache, like the sync download path.
+    const filterUnapplied = async (ops: Operation[]): Promise<Operation[]> => {
+      const appliedIds = await service.getAppliedOpIds();
+      return ops.filter((op) => !appliedIds.has(op.id));
+    };
 
     it('should invalidate appliedOpIds cache on ConstraintError to fix sync retry (issue #6213)', async () => {
       // Setup: Insert some ops initially
       const existingOps = [createTestOperation(), createTestOperation()];
       await service.appendBatch(existingOps, 'remote');
 
-      // Prime the appliedOpIds cache by calling filterNewOps
+      // Prime the appliedOpIds cache by calling getAppliedOpIds
       const appliedIds1 = await service.getAppliedOpIds();
       expect(appliedIds1.size).toBe(2);
 
@@ -1463,9 +1371,9 @@ describe('OperationLogStoreService', () => {
         /Duplicate operation detected/,
       );
 
-      // After the error, filterNewOps should still work correctly
+      // After the error, filtering against the applied IDs should still work correctly
       // The cache should have been invalidated, so it will rebuild from IndexedDB
-      const newOps = await service.filterNewOps(mixedOps);
+      const newOps = await filterUnapplied(mixedOps);
 
       // Only the new op should be returned (the duplicate should be filtered out)
       expect(newOps.length).toBe(1);
@@ -1488,7 +1396,7 @@ describe('OperationLogStoreService', () => {
       ).toBeRejectedWithError(/Duplicate operation detected/);
 
       // Retry: filter first, then append only new ops - should succeed
-      const trulyNewOps = await service.filterNewOps(firstAttemptOps);
+      const trulyNewOps = await filterUnapplied(firstAttemptOps);
       expect(trulyNewOps.length).toBe(1);
 
       const seqs = await service.appendBatch(trulyNewOps, 'remote');
@@ -1806,6 +1714,90 @@ describe('OperationLogStoreService', () => {
       expect((await service.loadStateCache())?.state).not.toEqual({
         sentinel: 'should-not-apply',
       });
+    });
+  });
+
+  describe('rebasePendingLocalOps', () => {
+    it('should move pending local ops past a clock in place and in seq order', async () => {
+      const first = createTestOperation({
+        id: 'rebase-1',
+        vectorClock: { testClient: 5 },
+      });
+      const second = createTestOperation({
+        id: 'rebase-2',
+        vectorClock: { testClient: 6 },
+      });
+      await service.appendWithVectorClockOverwrite(first, 'local');
+      await service.appendWithVectorClockOverwrite(second, 'local');
+      const before = await service.getOpsAfterSeq(0);
+      // Warm the unsynced cache: it must not keep serving the stale clocks.
+      expect((await service.getUnsynced()).length).toBe(2);
+
+      const rebased = await service.rebasePendingLocalOps([second.id, first.id], {
+        remote: 3,
+        testClient: 2,
+      });
+
+      const after = await service.getOpsAfterSeq(0);
+      expect(after.map(({ seq, op }) => [seq, op.id])).toEqual(
+        before.map(({ seq, op }) => [seq, op.id]),
+      );
+      expect(after.map(({ op }) => op.payload)).toEqual([first.payload, second.payload]);
+      expect(after.map(({ op }) => op.vectorClock)).toEqual([
+        { testClient: 7, remote: 3 },
+        { testClient: 8, remote: 3 },
+      ]);
+      expect(rebased.map(({ id }) => id)).toEqual([first.id, second.id]);
+      expect((await service.getUnsynced()).map(({ op }) => op.vectorClock)).toEqual(
+        after.map(({ op }) => op.vectorClock),
+      );
+      expect(await service.getVectorClock()).toEqual({ testClient: 8, remote: 3 });
+    });
+
+    it('should rebase nothing when an op is no longer pending', async () => {
+      const pending = createTestOperation({
+        id: 'rebase-pending',
+        vectorClock: { testClient: 1 },
+      });
+      const op = createTestOperation({
+        id: 'rebase-synced',
+        vectorClock: { testClient: 2 },
+      });
+      await service.appendWithVectorClockOverwrite(pending, 'local');
+      await service.appendWithVectorClockOverwrite(op, 'local');
+      await service.markSynced([(await service.getOpsAfterSeq(0))[1].seq]);
+
+      // All or nothing: the op that is still pending keeps its clock as well.
+      expect(
+        await service.rebasePendingLocalOps([pending.id, op.id], { remote: 1 }),
+      ).toEqual([]);
+      expect(
+        (await service.getOpsAfterSeq(0)).map((entry) => entry.op.vectorClock),
+      ).toEqual([pending.vectorClock, op.vectorClock]);
+      expect(await service.getVectorClock()).toEqual({ testClient: 2 });
+    });
+
+    it('should keep the counter of a rebased op the state cache covers', async () => {
+      const covered = createTestOperation({
+        id: 'covered',
+        vectorClock: { testClient: 5 },
+      });
+      const tail = createTestOperation({ id: 'tail', vectorClock: { testClient: 6 } });
+      await service.appendWithVectorClockOverwrite(covered, 'local');
+      await service.saveStateCache({
+        state: {},
+        lastAppliedOpSeq: await service.getLastSeq(),
+        vectorClock: { testClient: 5 },
+        compactedAt: 1,
+        schemaVersion: 1,
+      });
+      await service.appendWithVectorClockOverwrite(tail, 'local');
+
+      await service.rebasePendingLocalOps([covered.id, tail.id], { remote: 3 });
+
+      // Boot restores this clock and merges the tail (the tail op carries 8),
+      // so no later op can reuse the covered op's new counter.
+      expect((await service.loadStateCache())?.vectorClock).toEqual({ testClient: 7 });
     });
   });
 

@@ -19,6 +19,7 @@ const MAX_REPORTED_ENTITY_COUNT = 9999;
 // Identity is covered by sync-errors.identity.spec.ts.
 export {
   AuthFailSPError,
+  ClientUpdateRequiredSPError,
   EmptyRemoteBodySPError,
   FileHashCreationAPIError,
   HttpNotOkAPIError,

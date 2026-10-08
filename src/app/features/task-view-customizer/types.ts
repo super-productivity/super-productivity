@@ -70,11 +70,11 @@ export enum FILTER_TIME {
   MIN_120 = '7200000',
 }
 
-/** Values must equal the `TaskPriority` strings — they are matched against `task.priority`. */
+/** Values are `TaskPriority` levels as strings; the filter compares `+value` to the semantic task priority. */
 export enum FILTER_PRIORITY {
-  high = 'high',
-  medium = 'medium',
-  low = 'low',
+  high = '3',
+  medium = '2',
+  low = '1',
 }
 
 export enum FILTER_COMMON {
@@ -296,9 +296,10 @@ const priorityPresets: BaseOption<FILTER_COMMON | FILTER_PRIORITY>[] = [
     type: FILTER_COMMON.NOT_SPECIFIED,
     label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_NOT_SPECIFIED,
   },
-  { type: FILTER_PRIORITY.high, label: T.F.TASK.CMP.PRIORITY_HIGH },
-  { type: FILTER_PRIORITY.medium, label: T.F.TASK.CMP.PRIORITY_MEDIUM },
+  // Lowest first, like the priority menus.
   { type: FILTER_PRIORITY.low, label: T.F.TASK.CMP.PRIORITY_LOW },
+  { type: FILTER_PRIORITY.medium, label: T.F.TASK.CMP.PRIORITY_MEDIUM },
+  { type: FILTER_PRIORITY.high, label: T.F.TASK.CMP.PRIORITY_HIGH },
 ];
 
 export const OPTIONS = {

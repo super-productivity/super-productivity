@@ -55,10 +55,10 @@ interface ArchiveDBSchema {
 export class ArchiveStoreService {
   private _db?: IDBPDatabase<ArchiveDBSchema>;
   private _initPromise?: Promise<void>;
-  // Phase A migration seam: archive reads/writes route through this adapter,
-  // which operates on this service's own SUP_OPS connection (adopted in
-  // _init, released on close/versionchange and on the iOS connection-closing
-  // retry path). Phase B: backend comes from DI.
+  // Archive reads/writes route through this adapter, which operates on this
+  // service's own SUP_OPS connection (adopted in _init, released on
+  // close/versionchange and on the iOS connection-closing retry path). It comes
+  // from DI and is always IndexedDB (the SQLite backend is parked).
   private readonly _adapter: OpLogDbAdapter = inject(OP_LOG_DB_ADAPTER_FACTORY)();
 
   private async _ensureInit(): Promise<void> {
@@ -82,14 +82,6 @@ export class ArchiveStoreService {
    * all stores.
    */
   private async _init(): Promise<void> {
-    // Self-managing backends (e.g. SQLite) own their handle and create their own
-    // schema via the adapter — no WebView IndexedDB connection needed. Mirrors
-    // OperationLogStoreService.init(); only the adopt-connection (IndexedDB)
-    // backend opens/owns a connection here.
-    if (!this._adapter.adoptConnection) {
-      await this._adapter.init();
-      return;
-    }
     const db = await this._openDbWithRetry();
     db.addEventListener('close', () => {
       Log.warn(
@@ -97,7 +89,7 @@ export class ArchiveStoreService {
       );
       this._db = undefined;
       this._initPromise = undefined;
-      this._adapter.adoptConnection?.(undefined);
+      this._adapter.adoptConnection(undefined);
     });
     // A newer tab is upgrading SUP_OPS (a future schema bump). Close now so this
     // connection does not block the upgrade; the next access reopens
@@ -106,10 +98,10 @@ export class ArchiveStoreService {
       db.close();
       this._db = undefined;
       this._initPromise = undefined;
-      this._adapter.adoptConnection?.(undefined);
+      this._adapter.adoptConnection(undefined);
     });
     this._db = db;
-    this._adapter.adoptConnection?.(db);
+    this._adapter.adoptConnection(db);
   }
 
   /**
@@ -188,7 +180,7 @@ export class ArchiveStoreService {
         Log.warn('[ArchiveStore] Connection closing error detected, re-opening...', e);
         this._db = undefined;
         this._initPromise = undefined;
-        this._adapter.adoptConnection?.(undefined);
+        this._adapter.adoptConnection(undefined);
         return await fn();
       }
       throw e;

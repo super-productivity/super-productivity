@@ -47,6 +47,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     defaultProjectId: INBOX_PROJECT.id,
     isMarkdownFormattingInNotesEnabled: true,
     notesTemplate: defaultTaskNotesTemplate,
+    priorityIconPreset: 'chevrons',
   },
   misc: {
     isConfirmBeforeExit: false,
@@ -240,7 +241,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     // TODO maybe enable later if it works well
     isCompressionEnabled: false,
     isEncryptionEnabled: false,
-    // Leave isUseSplitSyncFiles absent: discover the remote format; create v3 if empty.
+    // Absent: join the remote format; empty folders get EMPTY_FOLDER_SYNC_FORMAT.
     encryptKey: null,
     syncProvider: null,
     syncInterval: minute,

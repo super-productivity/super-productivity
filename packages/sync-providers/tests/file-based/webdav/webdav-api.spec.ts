@@ -133,7 +133,7 @@ interface FakeDavFile {
  * to the HTTP header only, never to the DAV property.
  *
  * `ignoreIfMatch` reproduces servers that serve strong ETags but PUT
- * unconditionally — e.g. hacdias/webdav v5, our own E2E server (#9030).
+ * unconditionally — e.g. hacdias/webdav v5, our self-hosting compose (#9030).
  */
 const makeFakeDavServer = (
   file: FakeDavFile,
@@ -192,32 +192,6 @@ const headerValue = (req: DavRequest, name: string): string | undefined =>
   )?.[1];
 
 describe('WebdavApi', () => {
-  describe('listFiles', () => {
-    it('returns file paths from PROPFIND multistatus, filtering folder itself', async () => {
-      const adapter = makeAdapter();
-      adapter.request.mockResolvedValue(okResponse(sampleListing, 207));
-
-      const result = await makeApi(adapter).listFiles('sp/');
-      expect(result).toEqual(['/dav/sp/op-1.json']);
-    });
-
-    it('returns empty array on 404', async () => {
-      const adapter = makeAdapter();
-      adapter.request.mockResolvedValue(okResponse('', 404));
-      const result = await makeApi(adapter).listFiles('missing/');
-      expect(result).toEqual([]);
-    });
-
-    it('also returns empty array on HttpNotOkAPIError with 404 in catch', async () => {
-      const adapter = makeAdapter();
-      adapter.request.mockRejectedValue(
-        new HttpNotOkAPIError(new Response('', { status: 404 })),
-      );
-      const result = await makeApi(adapter).listFiles('missing/');
-      expect(result).toEqual([]);
-    });
-  });
-
   describe('download', () => {
     it('returns dataStr and md5 rev', async () => {
       const adapter = makeAdapter();
@@ -988,46 +962,28 @@ describe('WebdavApi', () => {
     });
   });
 
-  describe('_buildFullPath (via list)', () => {
+  describe('_buildFullPath (via download)', () => {
     it('throws MissingCredentialsSPError when baseUrl is missing', async () => {
       const adapter = makeAdapter();
       const api = makeApi(adapter, NOOP_SYNC_LOGGER, {
         ...cfg,
         baseUrl: '',
       } as WebdavPrivateCfg);
-      await expect(api.listFiles('/')).rejects.toBeInstanceOf(MissingCredentialsSPError);
+      await expect(api.download({ path: '/' })).rejects.toBeInstanceOf(
+        MissingCredentialsSPError,
+      );
     });
 
     it('throws InvalidDataSPError for paths with .. (no path echo in message)', async () => {
       const adapter = makeAdapter();
       const api = makeApi(adapter);
       try {
-        await api.listFiles('../escape');
+        await api.download({ path: '../escape' });
         expect.fail('expected throw');
       } catch (e) {
         expect(e).toBeInstanceOf(InvalidDataSPError);
         expect((e as Error).message).not.toContain('../escape');
       }
-    });
-  });
-
-  describe('privacy: A3 sweep — never log raw errors', () => {
-    it('listFiles error meta does not embed raw Error', async () => {
-      const calls: Array<{ msg: string; meta?: unknown }> = [];
-      const logger: SyncLogger = {
-        ...NOOP_SYNC_LOGGER,
-        critical: (msg, meta) => calls.push({ msg, meta }),
-      };
-      const adapter = makeAdapter();
-      adapter.request.mockRejectedValue(new Error('inner-leak-token-xyz'));
-      const api = makeApi(adapter, logger);
-      await expect(api.listFiles('sp/')).rejects.toThrow();
-
-      // critical was called; meta must be structured, not raw error
-      expect(calls.length).toBeGreaterThan(0);
-      const meta = calls[0].meta as { errorName?: string };
-      expect(meta?.errorName).toBe('Error');
-      expect(JSON.stringify(calls)).not.toContain('inner-leak-token-xyz');
     });
   });
 });

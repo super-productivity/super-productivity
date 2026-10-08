@@ -21,7 +21,6 @@ const noopFileAdapter: FileAdapter = {
   readFile: async () => '',
   writeFile: async () => undefined,
   deleteFile: async () => undefined,
-  listFiles: async () => [],
 };
 
 const makeProvider = (

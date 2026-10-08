@@ -131,6 +131,8 @@ export interface UploadResult {
    * deferred until the caller has resolved and applied piggybacked operations.
    */
   pendingAcknowledgementSeqs?: number[];
+  /** Verified server originals to restore atomically with deferred acknowledgement. */
+  pendingAcknowledgementOriginals?: ReadonlyMap<string, Operation>;
   /**
    * Number of local-win update ops created during LWW conflict resolution.
    * These ops need to be uploaded to propagate local state to other clients.

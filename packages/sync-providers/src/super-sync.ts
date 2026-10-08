@@ -8,6 +8,10 @@ export {
   type SuperSyncReplaceTokenResult,
   type SuperSyncWebSocketAccess,
 } from './super-sync/super-sync.model';
-export { SuperSyncProvider, type SuperSyncDeps } from './super-sync/super-sync';
+export {
+  SUPER_SYNC_CLIENT_UPDATE_REQUIRED_CODE,
+  SuperSyncProvider,
+  type SuperSyncDeps,
+} from './super-sync/super-sync';
 export type { SuperSyncResponseValidators } from './super-sync/response-validators';
 export type { SuperSyncStorage } from './super-sync/storage';

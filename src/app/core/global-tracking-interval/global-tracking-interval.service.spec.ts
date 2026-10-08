@@ -64,6 +64,25 @@ describe('GlobalTrackingIntervalService', () => {
     });
   });
 
+  it('refreshes the shared display clock on ticks and wake-up', fakeAsync(() => {
+    const service = TestBed.inject(GlobalTrackingIntervalService);
+    const initial = service.clockTimestamp();
+    tick(TRACKING_INTERVAL);
+    expect(service.clockTimestamp()).toBe(initial + TRACKING_INTERVAL);
+    tick(100);
+    service.triggerWakeUpTick();
+    expect(service.clockTimestamp()).toBe(initial + TRACKING_INTERVAL + 100);
+  }));
+
+  it('refreshes the display clock when the app receives focus', fakeAsync(() => {
+    const service = TestBed.inject(GlobalTrackingIntervalService);
+    const initial = service.clockTimestamp();
+    tick(100);
+    window.dispatchEvent(new Event('focus'));
+    tick(100);
+    expect(service.clockTimestamp()).toBe(initial + 200);
+  }));
+
   it('should emit elapsed wall-clock time on tick$', fakeAsync(() => {
     const service = TestBed.inject(GlobalTrackingIntervalService);
     const durations: number[] = [];

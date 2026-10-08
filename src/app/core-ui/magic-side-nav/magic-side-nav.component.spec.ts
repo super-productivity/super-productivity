@@ -1,3 +1,4 @@
+import { TaskMultiDragService } from '../../features/tasks/task-multi-drag.service';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -62,6 +63,17 @@ describe('MagicSideNavComponent', () => {
     await TestBed.configureTestingModule({
       imports: [MagicSideNavComponent, NoopAnimationsModule, TranslateModule.forRoot()],
       providers: [
+        {
+          provide: TaskMultiDragService,
+          useValue: {
+            ids: () => [],
+            selectedIds: () => new Set(),
+            selectionSize: () => 0,
+            start: () => {},
+            clear: () => {},
+            canDrop: () => false,
+          },
+        },
         {
           provide: MagicNavConfigService,
           useValue: navConfigServiceMock,

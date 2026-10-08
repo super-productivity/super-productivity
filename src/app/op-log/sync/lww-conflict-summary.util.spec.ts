@@ -1,4 +1,7 @@
-import { findLwwContentConflicts } from './lww-conflict-summary.util';
+import {
+  findLwwContentConflicts,
+  findPatchContentConflicts,
+} from './lww-conflict-summary.util';
 import { OpType, type LwwResolvedConflict } from '@sp/sync-core';
 import type { ActionType, EntityConflict, Operation } from '../core/operation.types';
 
@@ -319,5 +322,53 @@ describe('findLwwContentConflicts', () => {
     expect(result).toEqual([
       { entityId: 'task-1', discardedFields: ['title'], discardedTitle: 'rename B' },
     ]);
+  });
+});
+
+describe('findPatchContentConflicts', () => {
+  const patch = (
+    winner: 'local' | 'remote',
+    localOps: Operation[],
+    remoteOps: Operation[],
+  ): LwwResolvedConflict<Operation, EntityConflict> => ({
+    winner,
+    conflict: {
+      entityType: 'TASK',
+      entityId: 'task-1',
+      localOps,
+      remoteOps,
+      suggestedResolution: 'manual',
+    },
+  });
+
+  it('reports a content field only where the winner wrote it too', () => {
+    const result = findPatchContentConflicts(
+      [
+        patch(
+          'remote',
+          [wrappedUpdate({ title: 'Mine', notes: 'my notes' })],
+          [wrappedUpdate({ title: 'Theirs' })],
+        ),
+      ],
+      payloadKeyFor,
+    );
+    expect(result).toEqual([
+      { entityId: 'task-1', discardedFields: ['title'], discardedTitle: 'Mine' },
+    ]);
+  });
+
+  it('reports nothing when the patch kept every content edit', () => {
+    expect(
+      findPatchContentConflicts(
+        [
+          patch(
+            'local',
+            [wrappedUpdate({ title: 'Mine' })],
+            [wrappedUpdate({ notes: 'their notes' })],
+          ),
+        ],
+        payloadKeyFor,
+      ),
+    ).toEqual([]);
   });
 });

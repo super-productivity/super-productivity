@@ -330,6 +330,47 @@ describe('handlePluginMessage()', () => {
     );
   });
 
+  it('routes getAllSimpleCounters iframe API calls through plugin-bound methods', async () => {
+    const sourceWindow = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>(
+      'sourceWindow',
+      ['postMessage'],
+    );
+    const simpleCounters = [{ id: 'sc1', title: 'Water', countOnDay: {} }];
+    const getAllSimpleCounters = jasmine
+      .createSpy('getAllSimpleCounters')
+      .and.resolveTo(simpleCounters);
+    const pluginBridge = {
+      createBoundMethods: () => ({
+        getAllSimpleCounters,
+      }),
+    } as unknown as PluginBridgeService;
+
+    await handlePluginMessage(
+      {
+        data: {
+          type: PluginIframeMessageType.API_CALL,
+          bridgeToken: 'test-bridge-token',
+          bridgeGeneration: 4,
+          method: 'getAllSimpleCounters',
+          callId: 16,
+          args: [],
+        },
+        source: sourceWindow,
+      } as unknown as MessageEvent,
+      createConfig(pluginBridge),
+    );
+
+    expect(getAllSimpleCounters).toHaveBeenCalledTimes(1);
+    expect(sourceWindow.postMessage).toHaveBeenCalledWith(
+      {
+        type: PluginIframeMessageType.API_RESPONSE,
+        callId: 16,
+        result: simpleCounters,
+      },
+      '*',
+    );
+  });
+
   it('routes request iframe API calls through plugin-bound methods', async () => {
     const sourceWindow = jasmine.createSpyObj<{ postMessage: jasmine.Spy }>(
       'sourceWindow',

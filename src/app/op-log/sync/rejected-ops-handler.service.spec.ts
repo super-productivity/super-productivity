@@ -54,9 +54,12 @@ describe('RejectedOpsHandlerService', () => {
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
     supersededOperationResolverSpy = jasmine.createSpyObj(
       'SupersededOperationResolverService',
-      ['resolveSupersededLocalOps'],
+      ['resolveSupersededLocalOps', 'rebaseCommutingTimeDeltaRejections'],
     );
     supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(0);
+    supersededOperationResolverSpy.rebaseCommutingTimeDeltaRejections.and.resolveTo(
+      new Set<string>(),
+    );
     repairOperationServiceSpy = jasmine.createSpyObj('RepairOperationService', [
       'rebaseStaleRepair',
     ]);
@@ -861,6 +864,46 @@ describe('RejectedOpsHandlerService', () => {
         expect(downloadCallback).toHaveBeenCalledWith({
           forceFromSeq0: true,
           isReDeliveryRetry: true,
+        });
+      });
+
+      it('should skip the forced download when every rejection is rebased in place (#10214)', async () => {
+        const op = createOp({ id: 'op-1' });
+        opLogStoreSpy.getOpById.and.resolveTo(mockEntry(op));
+        downloadCallback.and.resolveTo({ kind: 'completed', newOpsCount: 0 });
+        supersededOperationResolverSpy.rebaseCommutingTimeDeltaRejections.and.resolveTo(
+          new Set(['op-1']),
+        );
+        const assertFence = jasmine.createSpy('assertFence');
+
+        const result = await service.handleRejectedOps(
+          [
+            {
+              opId: 'op-1',
+              error: 'concurrent',
+              errorCode: 'CONFLICT_CONCURRENT',
+              existingClock: { remote: 2 },
+            },
+          ],
+          downloadCallback,
+          assertFence,
+        );
+
+        // The resolver re-asserts the cycle's sync epoch before its write.
+        expect(
+          supersededOperationResolverSpy.rebaseCommutingTimeDeltaRejections,
+        ).toHaveBeenCalledWith([jasmine.objectContaining({ opId: 'op-1' })], assertFence);
+        expect(downloadCallback).toHaveBeenCalledTimes(1);
+        expect(downloadCallback).not.toHaveBeenCalledWith(
+          jasmine.objectContaining({ forceFromSeq0: true }),
+        );
+        expect(
+          supersededOperationResolverSpy.resolveSupersededLocalOps,
+        ).not.toHaveBeenCalled();
+        expect(result).toEqual({
+          kind: 'completed',
+          mergedOpsCreated: 1,
+          permanentRejectionCount: 0,
         });
       });
 

@@ -1,5 +1,6 @@
 import { test, expect } from '../../fixtures/supersync.fixture';
 import {
+  archiveDoneTasks,
   createTestUser,
   getSuperSyncConfig,
   createSimulatedClient,
@@ -44,25 +45,6 @@ const markTaskDone = async (
   await task.press('d');
 
   await expect(task).toHaveClass(/isDone/, { timeout: 10000 });
-};
-
-/**
- * Helper to archive done tasks via Daily Summary
- */
-const archiveDoneTasks = async (page: SimulatedE2EClient['page']): Promise<void> => {
-  const finishDayBtn = page.locator('.e2e-finish-day');
-  await finishDayBtn.waitFor({ state: 'visible', timeout: 10000 });
-  await finishDayBtn.click();
-
-  await page.waitForURL(/daily-summary/);
-
-  const saveAndGoHomeBtn = page.locator(
-    'daily-summary button[mat-flat-button]:has(mat-icon:has-text("wb_sunny"))',
-  );
-  await saveAndGoHomeBtn.waitFor({ state: 'visible', timeout: 10000 });
-  await saveAndGoHomeBtn.click();
-
-  await page.waitForURL(/(active\/tasks|tag\/TODAY\/tasks)/);
 };
 
 /**
@@ -155,7 +137,7 @@ test.describe('@supersync Server Migration Archive Sync', () => {
       console.log('[Migration Archive] Marked task as done');
 
       // Archive the task via Daily Summary
-      await archiveDoneTasks(clientA.page);
+      await archiveDoneTasks(clientA);
       console.log('[Migration Archive] Archived task');
 
       // Verify task is no longer in work view (archived)

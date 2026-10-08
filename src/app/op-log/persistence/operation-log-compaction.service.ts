@@ -220,6 +220,9 @@ export class OperationLogCompactionService {
         return false;
       }
 
+      // Another tab may have raised this client's counter in place, which
+      // this tab's cached clock misses: read the durable clock in step 2.
+      this.opLogStore.clearVectorClockCache();
       // 1. Get current state from NgRx store
       const currentState = this.stateSnapshot.getStateSnapshotForOperationLog();
       this.checkCompactionTimeout(startTime, `${label}state snapshot`);

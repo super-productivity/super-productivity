@@ -24,14 +24,5 @@
       [attr.stroke-dasharray]="circumference"
       [attr.stroke-dashoffset]="dashOffset()"
     ></circle>
-  } @else if (isPulsing()) {
-    <circle
-      class="progress-circle__pulse"
-      [attr.cx]="center"
-      [attr.cy]="center"
-      [attr.r]="radius"
-      fill="none"
-      [attr.stroke-width]="strokeWidth"
-    ></circle>
   }
 </svg>

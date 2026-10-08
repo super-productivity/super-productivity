@@ -12,6 +12,7 @@ import { SyncProviderManager } from '../sync-providers/provider-manager.service'
 import { VectorClockService } from './vector-clock.service';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { ConflictResolutionService } from './conflict-resolution.service';
+import { SupersededOperationResolverService } from './superseded-operation-resolver.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { SyncSessionValidationService } from './sync-session-validation.service';
 import { LockService } from './lock.service';
@@ -404,56 +405,130 @@ describe('RemoteOpsProcessingService', () => {
       ]);
     });
 
-    it('should log conflict identities without logging operation payloads', async () => {
-      const localOp = {
-        id: 'local-op',
-        entityType: 'TASK',
-        entityId: 'task-1',
-        payload: { title: 'private local title' },
-      } as Operation;
-      const remoteOp = {
-        id: 'remote-op',
-        entityType: 'TASK',
-        entityId: 'task-1',
-        payload: { title: 'private remote title' },
-        schemaVersion: 1,
-      } as Operation;
-      spyOn(service, 'detectConflicts').and.resolveTo({
-        nonConflicting: [],
-        conflicts: [
-          {
-            entityType: 'TASK',
-            entityId: 'task-1',
-            localOps: [localOp],
-            remoteOps: [remoteOp],
-            suggestedResolution: 'manual',
-          },
-        ],
-      });
-      conflictResolutionServiceSpy.autoResolveConflictsLWW.and.resolveTo({
-        localWinOpsCreated: 0,
-      });
-      vectorClockServiceSpy.getEntityFrontier.and.resolveTo(new Map());
-      const warnSpy = spyOn(OpLog, 'warn');
+    for (const rebaseKeptTimeDeltas of [false, true]) {
+      it(`should log only conflict identities and forward the rebase policy (${rebaseKeptTimeDeltas})`, async () => {
+        const localOp = {
+          id: 'local-op',
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'private local title' },
+        } as Operation;
+        const remoteOp = {
+          id: 'remote-op',
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: { title: 'private remote title' },
+          schemaVersion: 1,
+        } as Operation;
+        spyOn(service, 'detectConflicts').and.resolveTo({
+          nonConflicting: [],
+          conflicts: [
+            {
+              entityType: 'TASK',
+              entityId: 'task-1',
+              localOps: [localOp],
+              remoteOps: [remoteOp],
+              suggestedResolution: 'manual',
+            },
+          ],
+        });
+        conflictResolutionServiceSpy.autoResolveConflictsLWW.and.resolveTo({
+          localWinOpsCreated: 0,
+        });
+        vectorClockServiceSpy.getEntityFrontier.and.resolveTo(new Map());
+        const warnSpy = spyOn(OpLog, 'warn');
 
-      await service.processRemoteOps([remoteOp]);
+        await service.processRemoteOps([remoteOp], {
+          rebaseKeptTimeDeltas,
+          fenceEpoch: 37,
+        });
+        const resolutionOptions =
+          conflictResolutionServiceSpy.autoResolveConflictsLWW.calls.mostRecent().args[2];
+        expect(resolutionOptions?.rebaseKeptTimeDeltas).toBe(
+          rebaseKeptTimeDeltas ? true : undefined,
+        );
+        if (rebaseKeptTimeDeltas) {
+          const assertFence = spyOn(
+            TestBed.inject(SyncProviderManager),
+            'assertSyncEpochUnchanged',
+          ).and.throwError('epoch changed');
+          expect(() => resolutionOptions?.assertFence?.('kept time deltas')).toThrowError(
+            'epoch changed',
+          );
+          expect(assertFence).toHaveBeenCalledWith(37, 'kept time deltas');
+        } else {
+          expect(resolutionOptions?.assertFence).toBeUndefined();
+        }
 
-      const summary = warnSpy.calls
-        .allArgs()
-        .find(([message]) => String(message).includes('Detected 1 conflicts'))?.[1];
-      expect(summary).toEqual({
-        conflicts: [
-          {
-            entityType: 'TASK',
-            entityId: 'task-1',
-            localOpIds: ['local-op'],
-            remoteOpIds: ['remote-op'],
-            suggestedResolution: 'manual',
-          },
-        ],
+        const summary = warnSpy.calls
+          .allArgs()
+          .find(([message]) => String(message).includes('Detected 1 conflicts'))?.[1];
+        expect(summary).toEqual({
+          conflicts: [
+            {
+              entityType: 'TASK',
+              entityId: 'task-1',
+              localOpIds: ['local-op'],
+              remoteOpIds: ['remote-op'],
+              suggestedResolution: 'manual',
+            },
+          ],
+        });
+        expect(JSON.stringify(summary)).not.toContain('private');
       });
-      expect(JSON.stringify(summary)).not.toContain('private');
-    });
+    }
+
+    // #10377: a pending reorder that crossed an applied remote op is reissued
+    // before it can upload stale, on every provider.
+    for (const withConflict of [false, true]) {
+      it(`reissues crossed pending reorders after the ${withConflict ? 'LWW' : 'plain'} apply`, async () => {
+        const remoteOp = {
+          id: 'remote-order',
+          entityType: 'NOTE',
+          entityId: 'note-1',
+          payload: {},
+          schemaVersion: 1,
+        } as Operation;
+        spyOn(service, 'detectConflicts').and.resolveTo({
+          nonConflicting: [remoteOp],
+          conflicts: withConflict
+            ? [
+                {
+                  entityType: 'TASK',
+                  entityId: 'task-1',
+                  localOps: [{ id: 'local-op' } as Operation],
+                  remoteOps: [{ id: 'other-remote' } as Operation],
+                  suggestedResolution: 'manual',
+                },
+              ]
+            : [],
+        });
+        const callOrder: string[] = [];
+        conflictResolutionServiceSpy.autoResolveConflictsLWW.and.callFake(async () => {
+          callOrder.push('apply');
+          return { localWinOpsCreated: 1 };
+        });
+        spyOn(service, 'applyNonConflictingOps').and.callFake(async () => {
+          callOrder.push('apply');
+          return [];
+        });
+        spyOn(service, 'validateAfterSync').and.resolveTo(true);
+        const reissue = spyOn(
+          TestBed.inject(SupersededOperationResolverService),
+          'reissueCrossedPendingReorders',
+        ).and.callFake(async () => {
+          callOrder.push('reissue');
+          return { created: 2, deferredOpIds: [] };
+        });
+        vectorClockServiceSpy.getEntityFrontier.and.resolveTo(new Map());
+
+        const result = await service.processRemoteOps([remoteOp]);
+
+        expect(reissue).toHaveBeenCalledOnceWith();
+        expect(callOrder).toEqual(['apply', 'reissue']);
+        expect(result.localWinOpsCreated).toBe(withConflict ? 3 : 2);
+      });
+    }
 
     // Disjoint-field merging must remain enabled (#9095).
     it('should keep disjoint merge enabled on the production resolve path', async () => {

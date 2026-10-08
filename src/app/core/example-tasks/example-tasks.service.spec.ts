@@ -21,6 +21,7 @@ describe('ExampleTasksService', () => {
 
   beforeEach(() => {
     localStorage.removeItem(LS.EXAMPLE_TASKS_CREATED);
+    localStorage.removeItem(LS.EXAMPLE_TASK_IDS);
 
     syncReady$ = new Subject();
     taskService = jasmine.createSpyObj('TaskService', ['createNewTaskWithDefaults']);
@@ -65,6 +66,7 @@ describe('ExampleTasksService', () => {
 
   afterEach(() => {
     localStorage.removeItem(LS.EXAMPLE_TASKS_CREATED);
+    localStorage.removeItem(LS.EXAMPLE_TASK_IDS);
     store.resetSelectors();
   });
 
@@ -101,6 +103,13 @@ describe('ExampleTasksService', () => {
       expect(action.isExampleTask).toBe(true);
     }
     expect(localStorage.getItem(LS.EXAMPLE_TASKS_CREATED)).toBe('true');
+    // Onboarding points at the Inbox only while these exact tasks exist.
+    expect(JSON.parse(localStorage.getItem(LS.EXAMPLE_TASK_IDS) ?? '[]')).toEqual([
+      'mock-id-0',
+      'mock-id-1',
+      'mock-id-2',
+      'mock-id-3',
+    ]);
   });
 
   it('should NOT create example tasks when tasks already exist, but mark onboarding done', () => {

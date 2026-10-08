@@ -14,7 +14,7 @@ import {
   RegisteredPluginIssueProvider,
 } from './plugin-issue-provider.model';
 import { IssueProviderPluginType } from '../../features/issue/issue.model';
-import { Task } from '../../features/tasks/task.model';
+import { IssueTask, Task } from '../../features/tasks/task.model';
 import { TaskService } from '../../features/tasks/task.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -415,6 +415,83 @@ describe('PluginIssueProviderAdapterService', () => {
       expect(result.tagIds).toEqual(['tag-bug']);
       expect(result.issueLastSyncedValues).toEqual({ labels: ['bug'] });
       expect(result.issueLastUpdated).toBe(2000);
+    });
+
+    describe('doneStates', () => {
+      const addTaskDataFor = (
+        state: string,
+        defOverrides: Partial<IssueProviderPluginDefinition> = {},
+      ): IssueTask => {
+        registrySpy.getProvider.and.returnValue(createMockProvider(defOverrides));
+        return service.getAddTaskDataForCfg(
+          { id: 'ISS-1', title: 'Issue', state } as PluginSearchResult,
+          mockPluginCfg,
+        );
+      };
+
+      it('should mark the task done when the state matches doneStates case-insensitively', () => {
+        expect(addTaskDataFor('Shipped', { doneStates: ['shipped'] }).isDone).toBe(true);
+      });
+
+      it('should not fall back to the default done words when doneStates is set', () => {
+        expect(addTaskDataFor('Resolved', { doneStates: ['Closed'] }).isDone).toBe(false);
+      });
+
+      it('should treat no state as done when doneStates is empty', () => {
+        expect(addTaskDataFor('closed', { doneStates: [] }).isDone).toBe(false);
+      });
+
+      it('should use the default done words when doneStates is not set', () => {
+        expect(addTaskDataFor('Resolved').isDone).toBe(true);
+        expect(addTaskDataFor('closed').isDone).toBe(true);
+        expect(addTaskDataFor('Shipped').isDone).toBe(false);
+      });
+
+      const refreshAfterImport = async (
+        state: string,
+        defOverrides: Partial<IssueProviderPluginDefinition>,
+      ): Promise<{ imported: IssueTask; afterRefresh: Partial<Task> }> => {
+        const imported = addTaskDataFor(state, defOverrides);
+        registrySpy.getProvider.and.returnValue(
+          createMockProvider({
+            ...defOverrides,
+            getById: jasmine.createSpy('getById').and.resolveTo({
+              id: 'ISS-1',
+              title: 'Issue (edited)',
+              state,
+              lastUpdated: 2000,
+            } as PluginIssue),
+          }),
+        );
+        const result = await service.getFreshDataForIssueTask({
+          ...imported,
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+        } as unknown as Task);
+        return { imported, afterRefresh: { ...imported, ...result!.taskChanges } };
+      };
+
+      it('should keep a task imported as done when the issue is refreshed', async () => {
+        const { imported, afterRefresh } = await refreshAfterImport('Shipped', {
+          doneStates: ['shipped'],
+        });
+
+        expect(imported.isDone).toBe(true);
+        expect(afterRefresh.title).toBe('Issue (edited)');
+        expect(afterRefresh.isDone).toBe(true);
+      });
+
+      it('should keep a task imported as open when the issue is refreshed and doneStates is empty', async () => {
+        const { imported, afterRefresh } = await refreshAfterImport('Closed', {
+          doneStates: [],
+        });
+
+        expect(imported.isDone).toBe(false);
+        expect(afterRefresh.title).toBe('Issue (edited)');
+        expect(afterRefresh.isDone).toBe(false);
+      });
     });
   });
 

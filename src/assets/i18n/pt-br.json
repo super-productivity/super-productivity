@@ -103,6 +103,14 @@
     }
   },
   "F": {
+    "IOS_SHARE": {
+      "SAVE": "Salvar",
+      "DESTINATION": "Entrada",
+      "NEXT_OPEN": "Será adicionado na próxima vez que você abrir o Super Productivity",
+      "SAVE_ERROR": "Não foi possível salvar. Tente novamente.",
+      "IMPORT_ERROR": "Não foi possível importar o conteúdo compartilhado. Ele foi mantido neste dispositivo; abra o app novamente para tentar de novo.",
+      "INVALID": "Compartilhe um link ou texto (até 100.000 caracteres)."
+    },
     "ATTACHMENT": {
       "DIALOG_EDIT": {
         "ADD_ATTACHMENT": "Adicionar Anexo",
@@ -207,7 +215,7 @@
         "POLL_INTERVAL_MINUTES": "Intervalo de verificação (minutos)"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Aqui você pode configurar o Super Productivity para listar tarefas CalDAV não concluídas de um projeto específico no painel de criação de tarefas na visualização de agendamento diário. Elas serão listadas como sugestões e fornecerão um link para a tarefa, bem como mais informações sobre ela.</p><p>Além disso, você pode adicionar e sincronizar automaticamente todas as tarefas não concluídas ao seu backlog de tarefas.</p><p>Para fazer funcionar com o Nextcloud no webapp, você pode precisar permitir \"https://app.super-productivity.com\" no app do Nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
+        "HELP": "<p>Aqui você pode configurar o Super Productivity para listar tarefas CalDAV não concluídas de um projeto específico no painel de criação de tarefas na visualização de agendamento diário. Elas serão listadas como sugestões e fornecerão um link para a tarefa, bem como mais informações sobre ela.</p><p>Além disso, você pode adicionar e sincronizar automaticamente todas as tarefas não concluídas ao seu backlog de tarefas.</p><p>Para fazer funcionar com o Nextcloud no webapp, você pode precisar permitir \"https://app.super-productivity.com\" no app do Nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Descrição",
@@ -725,8 +733,14 @@
         "DAYS_WORKED": "Dias trabalhados",
         "FOCUS_SESSION_TRENDS": "Sessões de foco ao longo do tempo",
         "GLOBAL_METRICS": "Métricas Globais",
+        "HEATMAP_SHARE_FAILED": "Falha ao compartilhar o mapa de calor",
+        "HEATMAP_SHARE_TAGLINE": "{{title}} – Com o app Super Productivity",
+        "HEATMAP_SHARED_TO_DEVICE": "Mapa de calor salvo no armazenamento do dispositivo",
+        "HEATMAP_SHARED_TO_PATH": "Mapa de calor salvo em {{path}}",
         "NO_ADDITIONAL_DATA_YET": "Nenhum dado adicional coletado ainda. Use o formulário no painel de \"Avaliação\" do resumo diário para fazer isso.",
         "PRODUCTIVITY_BREAKDOWN_OVER_TIME": "Produtividade e Sustentabilidade ao longo do tempo",
+        "SHARE_HEATMAP": "Compartilhar mapa de calor",
+        "SHARE_STATS": "Compartilhe suas estatísticas de produtividade",
         "SIMPLE_CLICK_COUNTERS_OVER_TIME": "Contadores de Cliques ao longo do tempo",
         "SIMPLE_COUNTERS": "Contadores Simples e Monitoramento de Hábitos",
         "SIMPLE_STOPWATCH_COUNTERS_OVER_TIME": "Contadores de Cronômetro ao longo do tempo",
@@ -830,6 +844,7 @@
       },
       "D_FULLSCREEN": {
         "CONFIRM_DISCARD_MSG": "Você tem alterações não salvas. Descartá-las?",
+        "CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK": "Salvar a nota atual antes de criar uma nova tarefa?",
         "TOOLBAR": {
           "BOLD": "Negrito",
           "BULLET_LIST": "Lista com marcadores",
@@ -978,6 +993,9 @@
       "D_DELETE": {
         "MSG": "Tem certeza de que deseja excluir o projeto \"{{title}}\"?"
       },
+      "D_RENAME": {
+        "PLACEHOLDER": "Digite o nome do projeto"
+      },
       "FORM_BASIC": {
         "L_ENABLE_BACKLOG": "Ativar Backlog do Projeto",
         "L_IS_HIDDEN_FROM_MENU": "Ocultar projeto do menu",
@@ -1011,6 +1029,7 @@
         "ARCHIVED": "Projeto arquivado",
         "CREATED": "Projeto <strong>{{title}}</strong> criado. Você pode selecioná-lo no menu no canto superior esquerdo.",
         "DELETED": "Projeto excluído",
+        "DISCARDED": "Alterações descartadas",
         "UNARCHIVED": "Projeto desarquivado",
         "UPDATED": "Configurações do projeto atualizadas",
         "REOPENED": "Projeto reaberto",
@@ -1289,6 +1308,7 @@
         "CHANGE_PW_AND_DECRYPT": "Tentar Descriptografar Novamente",
         "P1": "Seus dados remotos estão criptografados e a descriptografia falhou.",
         "P2_FORGOT_PW": "Se você <strong>esqueceu sua senha</strong>, insira a senha correta e clique em \"Tentar Descriptografar Novamente\".",
+        "P3_START_OVER": "Se você não conseguir recuperar a senha, deixe o servidor de sincronização como está — seus dados lá continuam intactos. Para apagá-los e recomeçar a partir deste dispositivo, feche esta janela e use <strong>Forçar Sobrescrita</strong> em Configurações → Sincronização e Backup → Sincronização.",
         "P3_PW_CHANGED": "Se você <strong>alterou sua senha em outro dispositivo</strong>, insira sua nova senha e clique em \"Sobrescrever Remoto\". Isso enviará seus dados locais para o servidor.",
         "PASSWORD": "Senha",
         "TITLE": "Falha na Descriptografia"
@@ -1601,6 +1621,7 @@
         "AUTH_TOKEN_REJECTED": "O token de sincronização foi rejeitado pelo servidor: {{reason}}. Por favor, obtenha um novo token.",
         "BTN_CONFIGURE": "Configurar",
         "BTN_FORCE_OVERWRITE": "Forçar Sobrescrita",
+        "BTN_RESOLVE_CONFLICT": "Resolver…",
         "CHANGE_PASSWORD_FAILED": "Falha ao alterar a senha: {{message}}",
         "CLOCK_DRIFT_WARNING": "O relógio do seu dispositivo parece estar atrasado/adiantado em {{minutes}} minutos. Isso pode causar problemas de sincronização.",
         "COMPACTION_FAILED": "Limpeza do banco de dados falhou. O app pode ficar lento.",
@@ -1674,6 +1695,7 @@
         "AUTH_SERVICE_UNAVAILABLE": "O serviço de autenticação está temporariamente indisponível (HTTP {{status}}). Tente novamente.",
         "AUTH_SERVICE_UNAVAILABLE_WITH_REFERENCE": "O serviço de autenticação está temporariamente indisponível (HTTP {{status}}). Tente novamente. Referência: {{reference}}.",
         "DEFERRED_ACTION_PERMANENT_FAILED": "Uma alteração não pôde ser salva e a sincronização foi pausada. Recarregue para restaurar o último estado salvo.",
+        "DEFERRED_ACTIONS_STUCK": "A sincronização parece travada. Suas alterações recentes estão aguardando e ainda não foram salvas. Recarregar o app recupera a sincronização, mas descarta essas alterações.",
         "FORCE_UPLOAD_FAILED": "Falha ao sobrescrever os dados do servidor. Suas alterações locais continuam disponíveis.",
         "HYDRATION_FALLBACK_RECOVERY": "Falha ao carregar os dados salvos — exibindo o que foi possível restaurar do registro local. Itens ausentes podem ser recuperados com uma sincronização completa ou importação de backup.",
         "INCOMPLETE_REMOTE_OPERATIONS": "Não foi possível terminar de aplicar as alterações baixadas. A sincronização foi pausada para proteger seus dados. Reinicie o app para tentar novamente. Se isso continuar acontecendo, restaure um backup.",
@@ -1777,6 +1799,9 @@
       "D_DELETE": {
         "CONFIRM_MSG": "Você realmente deseja excluir a etiqueta \"{{tagName}}\"? Ela será removida de todas as tarefas. Esta ação não pode ser desfeita!"
       },
+      "D_RENAME": {
+        "PLACEHOLDER": "Digite o nome da etiqueta"
+      },
       "D_EDIT": {
         "ADD": "Adicionar etiquetas para \"{{title}}\"",
         "EDIT": "Editar etiquetas para \"{{title}}\"",
@@ -1871,6 +1896,7 @@
         "SUB_TASKS_EMPTY": "Subtarefas",
         "TIME": "Duração",
         "TITLE_PLACEHOLDER": "Insira um título",
+        "OPEN_IN_FULLSCREEN": "Abrir em tela cheia",
         "ADD_CHECKLIST_ITEM": "Adicionar item ao checklist",
         "CHECKLIST_ACTIONS": "Ações do checklist",
         "CHECK_ALL": "Marcar todos",
@@ -1905,6 +1931,11 @@
         "MOVE_TO_OTHER_PROJECT": "Mover para o projeto",
         "MOVE_TO_REGULAR": "Mover para lista regular",
         "MOVE_TO_TOP": "Mover para o topo",
+        "PRIORITY": "Prioridade",
+        "PRIORITY_HIGH": "Alta",
+        "PRIORITY_LOW": "Baixa",
+        "PRIORITY_MEDIUM": "Média",
+        "PRIORITY_NONE": "Nenhuma",
         "OPEN_ATTACH": "Anexar arquivo ou link",
         "OPEN_ISSUE": "Abrir no navegador",
         "OPEN_TIME": "Registro de trabalho",
@@ -2077,6 +2108,14 @@
             "PARTIAL": "{{count}} de {{total}} tarefas movidas para a lista normal (as subtarefas acompanham a tarefa principal)"
           },
           "NOTHING_TO_DO": "Não há nada a alterar nas tarefas selecionadas",
+          "PRIORITY_CLEARED": {
+            "ONE": "Prioridade removida de {{count}} tarefa",
+            "OTHER": "Prioridade removida de {{count}} tarefas"
+          },
+          "PRIORITY_SET": {
+            "ONE": "Prioridade de {{count}} tarefa definida como {{priority}}",
+            "OTHER": "Prioridade de {{count}} tarefas definida como {{priority}}"
+          },
           "SCHEDULED": {
             "ONE": "{{count}} tarefa agendada para {{date}}",
             "OTHER": "{{count}} tarefas agendadas para {{date}}"
@@ -2270,6 +2309,7 @@
         "FILTER_DEFAULT": "Sem Filtro",
         "FILTER_ESTIMATED_TIME": "Tempo Estimado",
         "FILTER_NOT_SPECIFIED": "Não especificado",
+        "FILTER_PRIORITY": "Prioridade",
         "FILTER_PROJECT": "Projeto",
         "FILTER_SCHEDULED_DATE": "Data Agendada",
         "FILTER_TAG": "Etiqueta",
@@ -2294,6 +2334,7 @@
         "SORT_DEADLINE": "Prazo",
         "SORT_DEFAULT": "Padrão",
         "SORT_NAME": "Nome",
+        "SORT_PRIORITY": "Prioridade",
         "SORT_SCHEDULED_DATE": "Data Agendada",
         "TIME_1HOUR": "> 1 Hora",
         "TIME_2HOUR": "> 2 Horas",
@@ -2450,10 +2491,13 @@
       }
     },
     "ANDROID": {
+      "TIME_RECOVERY_FAILED": "Não foi possível recuperar o tempo registrado pelo temporizador. Verifique o tempo da tarefa antes de continuar.",
       "FOREGROUND_SERVICE_START_FAILED_FOCUS": "O Android bloqueou a notificação persistente do modo de foco. O temporizador continua funcionando no app, mas os alertas em segundo plano podem ficar indisponíveis. Verifique a permissão de notificações e as restrições de bateria/segundo plano.",
       "FOREGROUND_SERVICE_START_FAILED_TRACKING": "O Android bloqueou a notificação persistente do registro de trabalho. O tempo continua sendo registrado no app, mas a recuperação em segundo plano pode ficar indisponível. Verifique a permissão de notificações e as restrições de bateria/segundo plano.",
       "OPEN_NOTIFICATION_SETTINGS": "Abrir configurações",
-      "WIDGET_TASKS_UPDATED": "{{count}} tarefa(s) atualizada(s) pelo widget"
+      "WIDGET_TASKS_UPDATED": "{{count}} tarefa(s) atualizada(s) pelo widget",
+      "CAPTURES_IMPORTED": "{{count}} tarefa(s) adicionada(s) pela adição rápida",
+      "CAPTURE_IMPORT_ERROR": "Algumas tarefas da adição rápida ainda não puderam ser adicionadas. Elas foram mantidas e serão tentadas novamente."
     }
   },
   "FILE_IMEX": {
@@ -2475,6 +2519,7 @@
     "PRIVACY_EXPORT_DESCRIPTION": "Exportar dados anonimizados (para enviar para contact@super-productivity.com para depuração)",
     "S_BACKUP_DOWNLOADED": "Backup baixado na pasta de documentos do Android",
     "S_ERR_IMPORT_FAILED": "Falha ao importar dados",
+    "S_ERR_IMPORT_UNREPAIRABLE": "Falha na importação: este backup contém dados que não podem ser reparados. Tente um backup mais antigo, exporte seus logs e relate o problema.",
     "S_ERR_INVALID_DATA": "Falha na importação: JSON inválido",
     "S_ERR_INVALID_URL": "Falha na importação: URL inválida",
     "S_ERR_NETWORK": "Falha na importação: Erro de rede ao buscar dados da URL",
@@ -2523,6 +2568,7 @@
     "PASSWORD_STRENGTH_WEAK": "Fraca",
     "PROCESSING": "Processando",
     "REMOVE": "Remover",
+    "RENAME": "Renomear",
     "SAVE": "Salvar",
     "SHARE": "Compartilhar",
     "SUBMIT": "Enviar",
@@ -2803,6 +2849,7 @@
       "VI": "Tiếng Việt"
     },
     "MISC": {
+      "APPEARANCE": "Aparência",
       "DARK_MODE": "Modo Escuro",
       "DARK_MODE_ARIA_LABEL": "Seleção do modo escuro",
       "DARK_MODE_DARK": "Escuro",
@@ -2878,6 +2925,8 @@
       "LUNCH_BREAK_START_END_DESCRIPTION": "ex: 13:00",
       "MONTH": "Mês",
       "TITLE": "Agenda",
+      "WORK_END_DESCRIPTION": "ex: 17:00",
+      "WORK_START_DESCRIPTION": "ex: 9:00",
       "WORK_START_END_DESCRIPTION": "ex: 17:00"
     },
     "SHORT_SYNTAX": {
@@ -2923,6 +2972,9 @@
       "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Ativar formatação Markdown nas notas da tarefa",
       "IS_TRAY_SHOW_CURRENT": "Mostrar tarefa atual na bandeja / menu de status (apenas macOS/Windows)",
       "NOTES_TEMPLATE": "Modelo de descrição de tarefa",
+      "PRIORITY_ICON_PRESET": "Ícones de prioridade",
+      "PRIORITY_ICON_PRESET_CHEVRONS": "Setas",
+      "PRIORITY_ICON_PRESET_NUMBERS": "Números",
       "TITLE": "Tarefas"
     },
     "TIME_TRACKING": {
@@ -2976,6 +3028,7 @@
     }
   },
   "GLOBAL_SNACK": {
+    "ACTION_REJECTED": "Essa alteração encontrou um erro interno e não foi aplicada. Nada foi perdido; se continuar acontecendo, recarregue o app.",
     "COPY_TO_CLIPPBOARD": "Copiado para a área de transferência",
     "DUPLICATE_PROJECT_ERROR": "Não foi possível duplicar o projeto",
     "DUPLICATE_PROJECT_SUCCESS": "Projeto duplicado com sucesso",
@@ -3005,6 +3058,14 @@
     "UNKNOWN": "Carregando dados remotos",
     "WEB_DAV_DOWNLOAD": "WebDAV: Baixando dados...",
     "WEB_DAV_UPLOAD": "WebDAV: Enviando dados..."
+  },
+  "HEATMAP": {
+    "DAY_TOOLTIP": {
+      "ONE": "{{date}}: {{taskCount}} tarefa, {{timeSpent}}",
+      "OTHER": "{{date}}: {{taskCount}} tarefas, {{timeSpent}}"
+    },
+    "LEGEND_LESS": "Menos",
+    "LEGEND_MORE": "Mais"
   },
   "MH": {
     "HISTORY": "Histórico",
@@ -3121,6 +3182,9 @@
     "HINTS": {
       "CREATE_TASK": "Clique em + para adicionar sua primeira tarefa",
       "CREATE_TASK_TOUCH": "Toque em + para adicionar sua primeira tarefa",
+      "DONE_TITLE": "Tudo pronto",
+      "EXPLORE_INBOX": "Algumas dicas opcionais estão esperando na sua Entrada. Experimente ou exclua quando quiser.",
+      "GOT_IT": "Entendi",
       "EXPLORE": "Sinta-se à vontade para clicar e explorar! Você pode encontrar ajuda na barra lateral.",
       "EXPLORE_TOUCH": "Sinta-se à vontade para explorar. Você pode encontrar ajuda na barra lateral.",
       "TASK_TAP_TOUCH": "Toque em uma tarefa para abrir os detalhes.",
@@ -3224,6 +3288,12 @@
     "MENU_ENTRY_ICON_STRING": "O ícone da entrada do menu deve ser uma string",
     "MENU_ENTRY_LABEL_REQUIRED": "O rótulo da entrada do menu é obrigatório",
     "MENU_ENTRY_ONCLICK_REQUIRED": "O manipulador onClick da entrada do menu é obrigatório",
+    "TASK_CONTEXT_MENU_ACTIONS": "Ações de plugins",
+    "TASK_CONTEXT_MENU_ENTRY_ID_INVALID": "O ID da entrada do menu de contexto da tarefa deve corresponder a [a-z0-9][a-z0-9_-]{0,63}",
+    "TASK_CONTEXT_MENU_ENTRY_LABEL_INVALID": "O rótulo da entrada do menu de contexto da tarefa deve ter de 1 a {{maxLength}} caracteres",
+    "TASK_CONTEXT_MENU_ENTRY_ICON_INVALID": "O ícone da entrada do menu de contexto da tarefa deve ser o nome de um ícone do Material",
+    "TASK_CONTEXT_MENU_ENTRY_ONCLICK_REQUIRED": "O manipulador onClick da entrada do menu de contexto da tarefa é obrigatório",
+    "TASK_CONTEXT_MENU_ENTRY_TARGET_INVALID": "O showFor da entrada do menu de contexto da tarefa deve conter TASK ou SUBTASK",
     "MIN_VERSION": "Versão Mín.:",
     "NO_ADDITIONAL_INFO": "Nenhuma informação adicional disponível",
     "NO_CONTENT_PROVIDED": "Nenhum conteúdo fornecido",
@@ -3268,6 +3338,7 @@
     "NODE_EXECUTION_PERMISSION_DENIED": "A permissão para executar Node.js não foi concedida",
     "NODE_EXECUTION_BUILT_IN_ONLY": "No momento, a execução do Node.js está disponível apenas para plugins integrados para desktop.",
     "PLUGIN_ID_RESERVED": "O ID de plugin \"{{pluginId}}\" está reservado para um plugin integrado",
+    "PLUGIN_INSTALLED": "Plugin \"{{name}}\" instalado",
     "SETUP_ISSUE_PROVIDER": "Configurar no Painel de Provedores de Issues",
     "NODE_EXECUTION_BRIDGE_UNAVAILABLE": "Não foi possível se conectar à ponte de execução do Node.js. Tente desativar e reativar o plugin.",
     "PLUGIN_LOAD_FAILED": "Falha ao carregar o plugin \"{{pluginName}}\": {{error}}"
@@ -3420,7 +3491,8 @@
       "TITLE": "Conectar ao Plainspace",
       "TOKEN_HELP": "Crie um token de API no Plainspace e cole-o abaixo.",
       "TOKEN_LABEL": "Token de API",
-      "TOKEN_PLACEHOLDER": "pat_…"
+      "TOKEN_PLACEHOLDER": "pat_…",
+      "UNREACHABLE": "Não foi possível acessar o Plainspace. Verifique sua conexão com a internet e o host, depois tente novamente."
     },
     "FORM": {
       "HOST": "Host do Plainspace",

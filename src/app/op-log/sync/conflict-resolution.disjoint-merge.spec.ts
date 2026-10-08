@@ -11,24 +11,27 @@ import { SnackService } from '../../core/snack/snack.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { OperationLogEffects } from '../capture/operation-log.effects';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
-import { buildEntityRegistry, ENTITY_REGISTRY } from '../core/entity-registry';
+import {
+  buildEntityRegistry,
+  ENTITY_REGISTRY,
+  getPayloadKey,
+} from '../core/entity-registry';
 import {
   ActionType,
   EntityConflict,
+  EntityType,
   extractActionPayload,
   OpType,
   Operation,
 } from '../core/operation.types';
+import { ENTITY_TYPES } from '@sp/shared-schema';
 import {
   compareVectorClocks,
   incrementVectorClock,
   mergeVectorClocks,
   VectorClockComparison,
 } from '../../core/util/vector-clock';
-import {
-  synthesizeMergedChanges,
-  isDisjointMergeEligible,
-} from './conflict-disjoint-merge.util';
+import { isDisjointMergeEligible } from './conflict-disjoint-merge.util';
 import { lwwUpdateMetaReducer } from '../../root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer';
 import { TASK_FEATURE_NAME } from '../../features/tasks/store/task.reducer';
 import { PROJECT_FEATURE_NAME } from '../../features/project/store/project.reducer';
@@ -38,6 +41,11 @@ import { TODAY_TAG } from '../../features/tag/tag.const';
 import { appStateFeatureKey } from '../../root-store/app-state/app-state.reducer';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { UnsupportedMultiEntityConflictError } from '../core/errors/sync-errors';
+import { validateOperationPayload } from '../validation/validate-operation-payload';
+import {
+  isTimelessTaskPatch,
+  isTimePreservingTaskSnapshot,
+} from './time-preserving-task-snapshot.util';
 
 /**
  * Minimal RootState for exercising the PRODUCTION `lwwUpdateMetaReducer` on a
@@ -91,6 +99,8 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
   let mockOperationApplier: jasmine.SpyObj<OperationApplierService>;
 
   const CLIENT_ID = 'client-local';
+  /** Durable seqs grow across appends, as in the real store. */
+  let lastSeq = 0;
 
   const op = (over: Partial<Operation> = {}): Operation => ({
     id: `op-${Math.random().toString(36).slice(2)}`,
@@ -126,6 +136,12 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       .flatMap((batch) => [...batch.ops])
       .find((o) => o.entityId === entityId && o.opType === OpType.Update);
 
+  /** The ids of every op the resolution applied, in apply order. */
+  const appliedOpIds = (): string[] =>
+    mockOperationApplier.applyOperations.calls
+      .allArgs()
+      .flatMap(([ops]) => ops.map((o) => o.id));
+
   beforeEach(() => {
     mockStore = jasmine.createSpyObj('Store', ['select']);
     mockStore.select.and.returnValue(of(undefined));
@@ -146,14 +162,16 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       'getOpById',
       'mergeRemoteOpClocks',
       'markReducersCommittedAndMergeClocks',
+      'rebasePendingLocalOps',
     ]);
     mockOpLogStore.getOpById.and.resolveTo(undefined);
+    mockOpLogStore.rebasePendingLocalOps.and.resolveTo([]);
     mockOpLogStore.mergeRemoteOpClocks.and.resolveTo(undefined);
     mockOpLogStore.markReducersCommittedAndMergeClocks.and.resolveTo(undefined);
     mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(async (batches) => ({
       written: batches.flatMap((batch) =>
-        batch.ops.map((batchOp, index) => ({
-          seq: index + 1,
+        batch.ops.map((batchOp) => ({
+          seq: ++lastSeq,
           op: batchOp,
           source: batch.source,
         })),
@@ -166,7 +184,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     mockOpLogStore.appendWithVectorClockOverwrite.and.resolveTo(1);
     mockOpLogStore.appendBatchSkipDuplicates.and.callFake((ops: Operation[]) =>
       Promise.resolve({
-        seqs: ops.map((_, i) => i + 1),
+        seqs: ops.map(() => ++lastSeq),
         writtenOps: ops,
         skippedCount: 0,
       }),
@@ -225,12 +243,21 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
           ops.forEach((o) => pendingAppendedIds.add(o.id));
         }
         return Promise.resolve({
-          seqs: ops.map((_, i) => i + 1),
+          seqs: ops.map(() => ++lastSeq),
           writtenOps: ops,
           skippedCount: 0,
         });
       },
     );
+    mockOpLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(async (batches) => ({
+      written: batches.flatMap((batch) =>
+        batch.ops.map((batchOp) => {
+          if (batch.options?.pendingApply) pendingAppendedIds.add(batchOp.id);
+          return { seq: ++lastSeq, op: batchOp, source: batch.source };
+        }),
+      ),
+      skippedCount: 0,
+    }));
     mockOpLogStore.markReducersCommittedAndMergeClocks.and.callFake(
       async (_seqs, ops) => {
         for (const o of ops) {
@@ -302,15 +329,17 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     expect(mockOpLogStore.appendWithVectorClockOverwrite).not.toHaveBeenCalled();
     const batches =
       mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.mostRecent().args[0];
-    const remoteBatch = batches.find((b) => b.source === 'remote');
-    const localBatch = batches.find((b) => b.source === 'local');
-    expect(remoteBatch!.ops.map((o) => o.id)).toEqual(['remote-mb']);
-    expect(localBatch!.ops.length).toBe(1);
-    expect(localBatch!.ops[0].opType).toBe(OpType.Update);
+    // One transaction: the remote side, then the patch (#10422 crash window).
+    expect(batches.map((b) => b.source)).toEqual(['remote', 'local']);
+    expect(batches[0].ops.map((o) => o.id)).toEqual(['remote-mb']);
+    expect(batches[1].ops.length).toBe(1);
+    expect(batches[1].ops[0].opType).toBe(OpType.Update);
+    // The remote side applies as itself, before the patch.
+    expect(appliedOpIds()).toEqual(['remote-mb', batches[1].ops[0].id]);
   });
 
   // ── (a) title vs notes → merge both ────────────────────────────────────────
-  it('(a) merges concurrent title-vs-notes edits into one op keeping BOTH', async () => {
+  it('(a) keeps BOTH concurrent title-vs-notes edits: the remote op applies, the local field is re-sent', async () => {
     mockStore.select.and.returnValue(
       of({ id: 'task-1', title: 'Local title', notes: 'base notes' }),
     );
@@ -332,18 +361,21 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
 
     await service.autoResolveConflictsLWW([conflictOf([localOp], [remoteOp])]);
 
-    // A single synthesized merged op carries BOTH changes.
+    // The patch re-sends only the local field, at the local op's own time;
+    // the remote op applies as itself before it (#10422).
     const merged = mergedOpArgs();
     expect(merged).toBeDefined();
     const payload = extractActionPayload(merged!.payload);
     expect(payload['title']).toBe('Local title');
-    expect(payload['notes']).toBe('Remote notes');
+    expect('notes' in payload).toBeFalse();
+    expect(merged!.timestamp).toBe(2000);
     expect((merged!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe('patch');
+    expect(appliedOpIds()).toEqual(['remote-1', merged!.id]);
 
-    // BOTH original ops are superseded (rejected).
+    // The local op is superseded (rejected); the remote one is not.
     const rejected = mockOpLogStore.markRejected.calls.allArgs().flat(2);
     expect(rejected).toContain('local-1');
-    expect(rejected).toContain('remote-1');
+    expect(rejected).not.toContain('remote-1');
 
     // Merged clock dominates both original ops.
     expect(compareVectorClocks(merged!.vectorClock, { A: 1 })).toBe(
@@ -358,8 +390,8 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
   // A syncTimeSpent op is an additive delta. Its wire entityChanges carry the
   // delta's arguments ({ taskId, date, duration }, direct write) or nothing
   // (deferred write); a synthesized merge would write those keys onto the task
-  // and reject the delta. The pair must fall to whole-entity LWW, and whichever
-  // side wins must leave the task's time history intact.
+  // and reject the delta. A local non-time winner must leave the other client's
+  // time history and additive contribution intact without copying delta arguments.
   describe('(a-time) pending edit vs remote syncTimeSpent (#10147)', () => {
     const DAY = '2024-01-15';
     const HISTORY = {
@@ -418,7 +450,9 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
         payload: { task: { id: 'task-1', changes: { isDone: true } } },
       });
 
-    const expectNoSynthesizedMerge = async (): Promise<void> => {
+    const expectNoSynthesizedMerge = async (
+      expectedMode: 'patch' | 'replace' = 'replace',
+    ): Promise<void> => {
       const localOps = mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
         .allArgs()
         .flatMap(([batches]) => batches)
@@ -429,24 +463,27 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
         expect(Object.keys(payload)).not.toContain('taskId');
         expect(Object.keys(payload)).not.toContain('date');
         expect(Object.keys(payload)).not.toContain('duration');
-        expect((emitted.payload as { lwwUpdateMode?: string }).lwwUpdateMode).not.toBe(
-          'patch',
+        expect((emitted.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe(
+          expectedMode,
         );
+        if (expectedMode === 'patch') {
+          expect(Object.keys(payload)).not.toContain('timeSpent');
+          expect(Object.keys(payload)).not.toContain('timeSpentOnDay');
+        }
       }
     };
 
     for (const form of ['direct', 'deferred'] as const) {
-      it(`never synthesizes a merged patch from a ${form}-form delta and keeps the time history on the local-win path`, async () => {
+      it(`keeps a ${form}-form delta and the time history beside a local non-time winner`, async () => {
         mockStore.select.and.returnValue(of(currentTask));
 
         await service.autoResolveConflictsLWW([
           conflictOf([pendingDoneEdit()], [capturedSyncTimeSpent(form)]),
         ]);
-        await expectNoSynthesizedMerge();
+        await expectNoSynthesizedMerge('patch');
 
-        // Local (ts 2000) wins: the local-win op is a full snapshot. Applied
-        // through the production reducer on the other client, it carries the
-        // whole timeSpentOnDay map — not a single-day delta.
+        // Local (ts 2000) wins the non-time fields. Applying its patch through
+        // the production reducer preserves the other client's time and delta.
         const localWin = mergedOpArgs();
         expect(localWin).toBeDefined();
         const mockBase = jasmine.createSpy('base').and.callFake((st: unknown) => st);
@@ -470,8 +507,11 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
           >
         )[TASK_FEATURE_NAME].entities['task-1'];
         expect(task['isDone']).toBe(true);
-        expect(task['timeSpentOnDay']).toEqual(HISTORY);
-        expect(task['timeSpent']).toBe(HISTORY_TOTAL);
+        expect(task['timeSpentOnDay']).toEqual({
+          ...HISTORY,
+          [DAY]: HISTORY[DAY] + 60000,
+        });
+        expect(task['timeSpent']).toBe(HISTORY_TOTAL + 60000);
       });
     }
 
@@ -531,13 +571,14 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     const merged = mergedOpArgs();
     expect(merged).toBeDefined();
     const payload = extractActionPayload(merged!.payload);
-    expect(payload['title']).toBe('Renamed by A');
+    expect('title' in payload).toBeFalse();
     expect(payload['isDone']).toBe(true);
     expect((merged!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe('patch');
+    expect(appliedOpIds()).toEqual(['remote-rename', merged!.id]);
 
     const rejected = mockOpLogStore.markRejected.calls.allArgs().flat(2);
     expect(rejected).toContain('local-done');
-    expect(rejected).toContain('remote-rename');
+    expect(rejected).not.toContain('remote-rename');
   });
 
   // ── (a0b) #9776 follow-up: a cleared field must survive the disjoint merge ──
@@ -547,27 +588,20 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
   // author merged — divergent strategies for the same conflict — and even the
   // author's merged op lost the clear on upload (no `clearedFields` on the
   // synthesized payload).
-  it('(a0b) merges a wire-shape field clear with a disjoint edit and re-lists the clear', async () => {
+  it('(a0b) re-sends a local field clear beside a disjoint remote edit and re-lists the clear', async () => {
     mockStore.select.and.returnValue(
-      of({ id: 'task-1', title: 'Local title', _hideSubTasksMode: undefined }),
+      of({ id: 'task-1', title: 'Remote title', _hideSubTasksMode: undefined }),
     );
 
-    const localOp = op({
-      id: 'local-title',
-      clientId: 'A',
-      vectorClock: { A: 1 },
-      timestamp: 2000,
-      payload: { task: { id: 'task-1', changes: { title: 'Local title' } } },
-    });
-    // Remote clear exactly as it comes off the wire: `changes` lost the
+    // A local clear as it reads after a restart: `changes` lost the
     // undefined-valued key to JSON serialization; `clearedFields` survives.
-    const remoteOp: Operation = JSON.parse(
+    const localOp: Operation = JSON.parse(
       JSON.stringify(
         op({
-          id: 'remote-clear',
-          clientId: 'B',
-          vectorClock: { B: 1 },
-          timestamp: 1000,
+          id: 'local-clear',
+          clientId: 'A',
+          vectorClock: { A: 1 },
+          timestamp: 2000,
           payload: {
             actionPayload: {
               task: { id: 'task-1', changes: { _hideSubTasksMode: undefined } },
@@ -578,13 +612,20 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
         }),
       ),
     );
+    const remoteOp = op({
+      id: 'remote-title',
+      clientId: 'B',
+      vectorClock: { B: 1 },
+      timestamp: 1000,
+      payload: { task: { id: 'task-1', changes: { title: 'Remote title' } } },
+    });
 
     await service.autoResolveConflictsLWW([conflictOf([localOp], [remoteOp])]);
 
     const merged = mergedOpArgs();
     expect(merged).toBeDefined();
     const payload = extractActionPayload(merged!.payload);
-    expect(payload['title']).toBe('Local title');
+    expect('title' in payload).toBeFalse();
     // The clear is present in the delta AND re-listed out-of-band so it
     // survives the merged op's own JSON upload.
     expect(Object.keys(payload)).toContain('_hideSubTasksMode');
@@ -595,8 +636,8 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     expect((merged!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe('patch');
 
     const rejected = mockOpLogStore.markRejected.calls.allArgs().flat(2);
-    expect(rejected).toContain('local-title');
-    expect(rejected).toContain('remote-clear');
+    expect(rejected).toContain('local-clear');
+    expect(rejected).not.toContain('remote-title');
   });
 
   // ── (a0c) clearedFields is scoped to disjoint merges ──
@@ -1242,13 +1283,13 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     expect(merged).toBeDefined();
     const payload = extractActionPayload(merged!.payload);
     expect(payload['title']).toBe('Local title');
-    expect(payload['notes']).toBe('Remote notes');
+    expect('notes' in payload).toBe(false);
     // The un-conflicted field must NOT ride along in the synthesized op.
     expect('timeSpentOnDay' in payload).toBe(false);
   });
 
-  // ── (a4) disjoint-merge fix: refuse merge when the entity has >1 conflict this batch
-  it('(a4) refuses disjoint-merge for an entity with multiple conflicts (falls back to LWW)', async () => {
+  // ── (a4) one patch per entity: its conflicts are resolved together
+  it('(a4) resolves an entity with multiple conflicts together, as ONE re-send', async () => {
     mockStore.select.and.returnValue(
       of({ id: 'task-1', title: 'base', notes: 'base', timeEstimate: 5 }),
     );
@@ -1275,16 +1316,28 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     });
 
     // detectConflicts emits one conflict per remote op → two conflicts, same
-    // entity. Merging each independently would let the clock-dominating sibling
-    // silently drop the other's field.
+    // entity. Patching each independently would let the clock-dominating
+    // sibling silently drop the other's field.
     await service.autoResolveConflictsLWW([
       conflictOf([localEst], [remoteTitle]),
       conflictOf([localEst], [remoteNotes]),
     ]);
-    expect(mergedOpArgs()).toBeUndefined();
-    expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(
-      jasmine.arrayContaining(['local-est']),
+    const localOps = mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
+      .allArgs()
+      .flatMap(([batches]) => batches)
+      .filter((batch) => batch.source === 'local')
+      .flatMap((batch) => [...batch.ops]);
+    expect(localOps.length).toBe(1);
+    expect(extractActionPayload(localOps[0].payload)).toEqual({
+      timeEstimate: 9,
+      id: 'task-1',
+    });
+    expect(compareVectorClocks(localOps[0].vectorClock, { A: 1, B: 2 })).toBe(
+      VectorClockComparison.GREATER_THAN,
     );
+    expect(appliedOpIds()).toEqual(['remote-title', 'remote-notes', localOps[0].id]);
+    const rejected = mockOpLogStore.markRejected.calls.allArgs().flat(2);
+    expect(rejected).toEqual(['local-est']);
   });
 
   it('(a5) refuses disjoint-merge for a multi-entity remote operation (#8956)', async () => {
@@ -1389,7 +1442,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
   });
 
   // ── (b) title vs title → LWW unchanged ─────────────────────────────────────
-  it('(b) leaves same-field (title-vs-title) conflicts to LWW', async () => {
+  it("(b) re-sends a same-field (title-vs-title) local win at the local op's time", async () => {
     mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Local title' }));
 
     const localOp = op({
@@ -1408,13 +1461,434 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     });
 
     await service.autoResolveConflictsLWW([conflictOf([localOp], [remoteOp])]);
-    const replacement = mergedOpArgs();
-    expect(replacement).toBeDefined();
-    expect(extractActionPayload(replacement!.payload)['title']).toBe('Local title');
-    expect((replacement!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe(
-      'replace',
-    );
-    expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['remote-1']);
+    const patch = mergedOpArgs();
+    expect(patch).toBeDefined();
+    expect(extractActionPayload(patch!.payload)).toEqual({
+      title: 'Local title',
+      id: 'task-1',
+    });
+    expect((patch!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe('patch');
+    expect(patch!.timestamp).toBe(2000);
+    expect(appliedOpIds()).toEqual(['remote-1', patch!.id]);
+    expect(mockOpLogStore.markRejected.calls.allArgs().flat(2)).toEqual(['local-1']);
+  });
+
+  // ── field patch (#10379, #10260): overlapping fields ────────────────────────
+  describe('field patch of overlapping conflicts', () => {
+    const titleAndDone = (over: Partial<Operation>): Operation =>
+      op({
+        payload: {
+          task: { id: 'task-1', changes: { title: 'A title', isDone: true } },
+        },
+        ...over,
+      });
+    const title = (over: Partial<Operation>, value: string): Operation =>
+      op({ payload: { task: { id: 'task-1', changes: { title: value } } }, ...over });
+
+    it("keeps the losing side's other fields when the remote side wins (#10260)", async () => {
+      mockStore.select.and.returnValue(
+        of({ id: 'task-1', title: 'A title', isDone: true }),
+      );
+      const local = titleAndDone({ id: 'l', clientId: 'A', vectorClock: { A: 1 } });
+      const remote = title(
+        { id: 'r', clientId: 'B', vectorClock: { B: 1 }, timestamp: 2000 },
+        'B title',
+      );
+
+      await service.autoResolveConflictsLWW([conflictOf([local], [remote])]);
+
+      // Only the losing side's own field is re-sent, at its own time (#10422).
+      const patch = mergedOpArgs()!;
+      expect(extractActionPayload(patch.payload)).toEqual({
+        isDone: true,
+        id: 'task-1',
+      });
+      expect(patch.timestamp).toBe(1000);
+      expect(appliedOpIds()).toEqual(['r', patch.id]);
+    });
+
+    it("keeps the other side's fields when the local side wins (#10379)", async () => {
+      mockStore.select.and.returnValue(of({ id: 'task-1', title: 'B title' }));
+      const local = title(
+        { id: 'l', clientId: 'B', vectorClock: { B: 1 }, timestamp: 2000 },
+        'B title',
+      );
+      const remote = titleAndDone({ id: 'r', clientId: 'A', vectorClock: { A: 1 } });
+
+      await service.autoResolveConflictsLWW([conflictOf([local], [remote])]);
+
+      // The other side's done toggle applies as itself, not inside the patch.
+      const patch = mergedOpArgs()!;
+      expect(extractActionPayload(patch.payload)).toEqual({
+        title: 'B title',
+        id: 'task-1',
+      });
+      expect(patch.timestamp).toBe(2000);
+      expect(appliedOpIds()).toEqual(['r', patch.id]);
+    });
+
+    it('re-sends each winning local op as its own row at its own time, oldest first, each dominating the one before (#10422)', async () => {
+      mockStore.select.and.returnValue(
+        of({ id: 'task-1', title: 'A title', notes: 'A notes', isDone: true }),
+      );
+      const notes = op({
+        id: 'l-notes',
+        clientId: 'A',
+        vectorClock: { A: 1 },
+        timestamp: 1000,
+        payload: { task: { id: 'task-1', changes: { notes: 'A notes' } } },
+      });
+      const rename = title(
+        { id: 'l-title', clientId: 'A', vectorClock: { A: 2 }, timestamp: 3000 },
+        'A title',
+      );
+      const remote = op({
+        id: 'r',
+        clientId: 'B',
+        vectorClock: { B: 1 },
+        timestamp: 2000,
+        payload: { task: { id: 'task-1', changes: { isDone: true } } },
+      });
+
+      await service.autoResolveConflictsLWW([conflictOf([notes, rename], [remote])]);
+
+      const resends = mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls
+        .allArgs()
+        .flatMap(([batches]) => batches)
+        .filter((batch) => batch.source === 'local')
+        .flatMap((batch) => [...batch.ops]);
+      expect(resends.map((o) => extractActionPayload(o.payload))).toEqual([
+        { notes: 'A notes', id: 'task-1' },
+        { title: 'A title', id: 'task-1' },
+      ]);
+      expect(resends.map((o) => o.timestamp)).toEqual([1000, 3000]);
+      expect(compareVectorClocks(resends[1].vectorClock, resends[0].vectorClock)).toBe(
+        VectorClockComparison.GREATER_THAN,
+      );
+      for (const original of [notes, rename, remote]) {
+        expect(compareVectorClocks(resends[0].vectorClock, original.vectorClock)).toBe(
+          VectorClockComparison.GREATER_THAN,
+        );
+      }
+      expect(appliedOpIds()).toEqual(['r', resends[0].id, resends[1].id]);
+      const rejected = mockOpLogStore.markRejected.calls.allArgs().flat(2);
+      expect(rejected).toEqual(jasmine.arrayWithExactContents(['l-notes', 'l-title']));
+    });
+
+    it('assigns each field to the same side on both devices for a timestamp tie', async () => {
+      mockStore.select.and.returnValue(of({ id: 'task-1', title: 'x' }));
+      const onA = titleAndDone({
+        id: 'a',
+        clientId: 'clientA',
+        vectorClock: { clientA: 1 },
+        timestamp: 1000,
+      });
+      const onB = title(
+        { id: 'b', clientId: 'clientB', vectorClock: { clientB: 1 }, timestamp: 1000 },
+        'B title',
+      );
+
+      await service.autoResolveConflictsLWW([conflictOf([onA], [onB])]);
+      const patchOnA = mergedOpArgs()!;
+      mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.reset();
+      await service.autoResolveConflictsLWW([conflictOf([onB], [onA])]);
+      const patchOnB = mergedOpArgs()!;
+
+      // 'clientB' > 'clientA' gives B the shared title on both devices: A
+      // re-sends only its done toggle, B only its title.
+      expect(extractActionPayload(patchOnA.payload)).toEqual({
+        isDone: true,
+        id: 'task-1',
+      });
+      expect(extractActionPayload(patchOnB.payload)).toEqual({
+        title: 'B title',
+        id: 'task-1',
+      });
+    });
+
+    it('keeps the whole-entity path when an overlapping patch would clear a reminder', async () => {
+      mockStore.select.and.returnValue(of({ id: 'task-1', title: 'A title' }));
+      const local = op({
+        id: 'l',
+        clientId: 'A',
+        vectorClock: { A: 1 },
+        timestamp: 2000,
+        payload: {
+          task: {
+            id: 'task-1',
+            changes: { title: 'A title', dueWithTime: undefined },
+          },
+          clearedFields: ['dueWithTime'],
+        },
+      });
+      const remote = title(
+        { id: 'r', clientId: 'B', vectorClock: { B: 1 }, timestamp: 1000 },
+        'B title',
+      );
+
+      await service.autoResolveConflictsLWW([conflictOf([local], [remote])]);
+
+      expect((mergedOpArgs()!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe(
+        'replace',
+      );
+    });
+
+    it('keeps a local time delta pending unchanged, even when no field is re-sent', async () => {
+      mockStore.select.and.returnValue(of({ id: 'task-1', title: 'A title' }));
+      const rename = title({ id: 'l-rename', clientId: 'A', vectorClock: { A: 1 } }, 'A');
+      const delta = op({
+        id: 'l-delta',
+        clientId: 'A',
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        vectorClock: { A: 2 },
+        timestamp: 1100,
+        payload: {
+          actionPayload: { taskId: 'task-1', date: '2026-01-01', duration: 3000 },
+          entityChanges: [],
+        },
+      });
+      const remote = title(
+        { id: 'r', clientId: 'B', vectorClock: { B: 1 }, timestamp: 2000 },
+        'B title',
+      );
+      mockOpLogStore.getOpById.and.callFake(async (id: string) =>
+        id === 'l-delta' ? ({ source: 'local', op: delta, seq: 2 } as never) : undefined,
+      );
+
+      await service.autoResolveConflictsLWW([conflictOf([rename, delta], [remote])]);
+
+      // The rename lost and the delta's arguments are no fields: nothing is
+      // re-sent, and the delta stays pending with its original identity.
+      expect(mergedOpArgs()).toBeUndefined();
+      expect(appliedOpIds()).toEqual(['r']);
+      const rejected = mockOpLogStore.markRejected.calls.allArgs().flat(2);
+      expect(rejected).toContain('l-rename');
+      expect(rejected).not.toContain('l-delta');
+      expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
+    });
+
+    for (const { rebaseKeptTimeDeltas, disableDisjointMerge } of [
+      { rebaseKeptTimeDeltas: false, disableDisjointMerge: false },
+      { rebaseKeptTimeDeltas: true, disableDisjointMerge: false },
+      { rebaseKeptTimeDeltas: true, disableDisjointMerge: true },
+    ]) {
+      it(`rebases fresh resolution clocks with recovery=${rebaseKeptTimeDeltas}, snapshot=${disableDisjointMerge}`, async () => {
+        mockStore.select.and.returnValue(of({ id: 'task-1', title: 'A title' }));
+        const rename = title(
+          { id: 'l-rename', clientId: 'A', vectorClock: { A: 1 }, timestamp: 3000 },
+          'A title',
+        );
+        const delta = op({
+          id: 'l-delta',
+          clientId: 'A',
+          vectorClock: { A: 2 },
+          actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          payload: {
+            actionPayload: { taskId: 'task-1', date: '2026-01-01', duration: 3000 },
+          },
+        });
+        const remote = title(
+          { id: 'r', clientId: 'B', vectorClock: { B: 1 }, timestamp: 2000 },
+          'B title',
+        );
+        mockOpLogStore.getOpById.and.callFake(async (id) =>
+          id === delta.id ? ({ source: 'local', op: delta, seq: 2 } as never) : undefined,
+        );
+        let rebasedSuccessor: Operation | undefined;
+        mockOpLogStore.rebasePendingLocalOps.and.callFake(async (ids, clock) => {
+          const successor = mergedOpArgs()!;
+          expect(ids).toEqual([delta.id, successor.id]);
+          expect(clock).toEqual({ B: 1 });
+          rebasedSuccessor = { ...successor, vectorClock: { A: 4, B: 1 } };
+          return [{ ...delta, vectorClock: { A: 3, B: 1 } }, rebasedSuccessor];
+        });
+        const assertFence = jasmine.createSpy('assertFence');
+        await service.autoResolveConflictsLWW(
+          [conflictOf([rename, delta], [remote])],
+          [],
+          {
+            rebaseKeptTimeDeltas,
+            disableDisjointMerge,
+            assertFence,
+          },
+        );
+        if (rebaseKeptTimeDeltas && !disableDisjointMerge) {
+          expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledTimes(1);
+          expect(assertFence).toHaveBeenCalledOnceWith('kept time delta rebase');
+          const applied = mockOperationApplier.applyOperations.calls.mostRecent().args[0];
+          expect(applied.find((row) => row.id === rebasedSuccessor!.id)).toBe(
+            rebasedSuccessor,
+          );
+          expect(compareVectorClocks(rebasedSuccessor!.vectorClock, { A: 3, B: 1 })).toBe(
+            VectorClockComparison.GREATER_THAN,
+          );
+        } else {
+          expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
+          expect(assertFence).not.toHaveBeenCalled();
+          const rejected = mockOpLogStore.markRejected.calls.allArgs().flat(2);
+          expect(rejected).not.toContain(delta.id);
+        }
+      });
+    }
+
+    it('re-sends a pending edit beside a newer remote patch row that does not write its field (#10260, #10422)', async () => {
+      mockStore.select.and.returnValue(
+        of({ id: 'task-1', title: 'B title', isDone: true, doneOn: 900 }),
+      );
+      const local = op({
+        id: 'l-done',
+        clientId: 'A',
+        vectorClock: { A: 2 },
+        timestamp: 900,
+        payload: { task: { id: 'task-1', changes: { isDone: true, doneOn: 900 } } },
+      });
+      const row = op({
+        id: 'r-row',
+        clientId: 'B',
+        actionType: '[TASK] LWW Update' as ActionType,
+        vectorClock: { A: 1, B: 3 },
+        timestamp: 2000,
+        payload: {
+          actionPayload: { id: 'task-1', title: 'B title' },
+          entityChanges: [],
+          lwwUpdateMode: 'patch',
+        },
+      });
+
+      await service.autoResolveConflictsLWW([conflictOf([local], [row])]);
+
+      // Only the row's keys are read: it writes no done toggle. It applies as
+      // itself, and the toggle is re-sent after it.
+      const reemitted = mergedOpArgs()!;
+      expect(appliedOpIds()).toEqual(['r-row', reemitted.id]);
+      expect(extractActionPayload(reemitted.payload)).toEqual({
+        isDone: true,
+        doneOn: 900,
+        id: 'task-1',
+      });
+      expect(compareVectorClocks(reemitted.vectorClock, row.vectorClock)).toBe(
+        VectorClockComparison.GREATER_THAN,
+      );
+      expect(reemitted.timestamp).toBe(900);
+    });
+
+    // Decision 5a extended (#10393, #10448) reads a remote row's keys only for
+    // TASK, PROJECT, TAG and SIMPLE_COUNTER; NOTE stays out (decision 4).
+    it('reads a remote patch row per field only for TASK, PROJECT, TAG and SIMPLE_COUNTER (decision 5a)', async () => {
+      const admitted = ['TASK', 'PROJECT', 'TAG', 'SIMPLE_COUNTER'];
+      const notEntities = ['MIGRATION', 'RECOVERY', 'ALL'];
+      const payloadKeyFor = (type: EntityType): string =>
+        getPayloadKey(type) ?? type.toLowerCase();
+      mockStore.select.and.returnValue(of({ id: 'e-1', title: 'B title', isDone: true }));
+
+      for (const type of ENTITY_TYPES.filter((t) => !notEntities.includes(t))) {
+        mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.reset();
+        const local = op({
+          id: `l-${type}`,
+          clientId: 'A',
+          entityType: type,
+          entityId: 'e-1',
+          vectorClock: { A: 2 },
+          timestamp: 900,
+          payload: { [payloadKeyFor(type)]: { id: 'e-1', changes: { isDone: true } } },
+        });
+        const row = op({
+          id: `r-${type}`,
+          clientId: 'B',
+          actionType: `[${type}] LWW Update` as ActionType,
+          entityType: type,
+          entityId: 'e-1',
+          vectorClock: { A: 1, B: 3 },
+          timestamp: 2000,
+          payload: {
+            actionPayload: { id: 'e-1', title: 'B title' },
+            entityChanges: [],
+            lwwUpdateMode: 'patch',
+          },
+        });
+
+        await service.autoResolveConflictsLWW([
+          { ...conflictOf([local], [row], 'e-1'), entityType: type },
+        ]);
+
+        const reemitted = mergedOpArgs('e-1');
+        const isPatch =
+          (reemitted?.payload as { lwwUpdateMode?: string } | undefined)
+            ?.lwwUpdateMode === 'patch';
+        expect(isPatch).withContext(type).toBe(admitted.includes(type));
+      }
+    });
+
+    it('handles non-array clearedFields accepted by existing payload validation and replay', async () => {
+      mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Local title' }));
+      const remote = op({
+        id: 'remote-row',
+        clientId: 'B',
+        vectorClock: { B: 1 },
+        timestamp: 1000,
+        actionType: '[TASK] LWW Update' as ActionType,
+        payload: {
+          actionPayload: { id: 'task-1', title: 'Remote title' },
+          entityChanges: [],
+          lwwUpdateMode: 'patch',
+          clearedFields: {},
+        },
+      });
+      expect(validateOperationPayload(remote).success).toBeTrue();
+      expect(convertOpToAction(remote).type).toBe('[TASK] LWW Update');
+      expect(isTimelessTaskPatch(remote, 'task-1')).toBeTrue();
+      expect(isTimePreservingTaskSnapshot(remote)).toBeFalse();
+
+      await service.autoResolveConflictsLWW([
+        conflictOf(
+          [
+            op({
+              actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+              timestamp: 2000,
+              payload: { taskIds: ['task-1'], today: '2026-10-04' },
+            }),
+          ],
+          [remote],
+        ),
+      ]);
+      expect((mergedOpArgs()!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe(
+        'patch',
+      );
+    });
+
+    it('emits the local non-time snapshot beside a remote time delta', async () => {
+      mockStore.select.and.returnValue(of({ id: 'task-1', title: 'A title' }));
+      const local = title({ id: 'l', clientId: 'A', vectorClock: { A: 1 } }, 'A');
+      const remoteRename = title(
+        { id: 'r', clientId: 'B', vectorClock: { B: 1 }, timestamp: 900 },
+        'B',
+      );
+      const remoteDelta = op({
+        id: 'r-delta',
+        clientId: 'B',
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        vectorClock: { B: 2 },
+        timestamp: 950,
+        payload: {
+          actionPayload: { taskId: 'task-1', date: '2026-01-01', duration: 3000 },
+          entityChanges: [],
+        },
+      });
+
+      await service.autoResolveConflictsLWW([
+        conflictOf([local], [remoteRename, remoteDelta]),
+      ]);
+
+      expect((mergedOpArgs()!.payload as { lwwUpdateMode?: string }).lwwUpdateMode).toBe(
+        'patch',
+      );
+      const payload = extractActionPayload(mergedOpArgs()!.payload);
+      expect(payload['title']).toBe('A title');
+      expect(Object.keys(payload)).not.toContain('timeSpent');
+      expect(Object.keys(payload)).not.toContain('timeSpentOnDay');
+      expect(Object.keys(payload)).not.toContain('duration');
+      expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
+    });
   });
 
   // ── (c) disjoint real fields + both bumped a noise field → still merges ─────
@@ -1448,10 +1922,11 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     expect(merged).toBeDefined();
     const payload = extractActionPayload(merged!.payload);
     expect(payload['title']).toBe('Local title');
-    expect(payload['notes']).toBe('Remote notes');
-    // The noise field resolves to the greater-(timestamp) side, NOT simply the
-    // local current-state value.
-    expect(payload['modified']).toBe(2222);
+    expect('notes' in payload).toBe(false);
+    // The noise field is the newer remote side's: the local one is not
+    // re-sent, so the remote op's value stands.
+    expect('modified' in payload).toBe(false);
+    expect(appliedOpIds()).toEqual(['remote-1', merged!.id]);
   });
 
   // ── (d) edit vs delete → delete wins, NO merge ─────────────────────────────
@@ -1493,7 +1968,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
     // does NOT reject it: an archive that carries its own disjoint non-noise
     // field alongside a concurrent disjoint edit is field-level merge-eligible.
     // The ONLY thing preventing a partial-resurrection merge is the
-    // `_isArchivePlan` guard in `_tryCreateDisjointMergeOp`. This asserts
+    // `_isWholeEntityWinPlan` guard in `_tryCreateFieldPatch`. This asserts
     // eligibility is TRUE yet no merged op is synthesized — so a regression that
     // dropped the guard would fail here (and nowhere else).
     const localEdit = op({
@@ -1531,60 +2006,6 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
 
   // ── (e) two-client convergence ─────────────────────────────────────────────
   describe('(e) two-client convergence', () => {
-    // side1 authored by client A; side2 authored by client B.
-    const side1Changes = { title: 'A-title', modified: 1500 };
-    const side2Changes = { notes: 'B-notes', modified: 1600 };
-    const side1Meta = { timestamp: 1500, clientId: 'A' };
-    const side2Meta = { timestamp: 1600, clientId: 'B' };
-
-    it('both clients synthesize the byte-identical merged DELTA (either ordering)', () => {
-      // Client A: local = side1, remote = side2.
-      const mergedA = synthesizeMergedChanges(
-        side1Changes,
-        side2Changes,
-        side1Meta,
-        side2Meta,
-      );
-      // Client B: local = side2, remote = side1 (mirror).
-      const mergedB = synthesizeMergedChanges(
-        side2Changes,
-        side1Changes,
-        side2Meta,
-        side1Meta,
-      );
-
-      expect(mergedA).toEqual(mergedB);
-      // Explicit expected delta: both real fields kept; noise → newer (side2).
-      // No `id` and NO untouched fields — the delta carries ONLY changed fields.
-      expect(mergedA).toEqual({
-        title: 'A-title',
-        notes: 'B-notes',
-        modified: 1600,
-      });
-    });
-
-    it("the merged DELTA is independent of each client's divergent current state (disjoint-merge divergence fix)", () => {
-      // The two clients' current entities differ on an UN-conflicted field
-      // (timeSpentOnDay) — e.g. one already applied a third device's edit the
-      // other has not. A full-entity snapshot would drag that field along and
-      // diverge forever; the delta is derived only from the two sides' ops, so
-      // it is identical regardless. Neither delta may contain timeSpentOnDay.
-      const mergedA = synthesizeMergedChanges(
-        side1Changes,
-        side2Changes,
-        side1Meta,
-        side2Meta,
-      );
-      const mergedB = synthesizeMergedChanges(
-        side2Changes,
-        side1Changes,
-        side2Meta,
-        side1Meta,
-      );
-      expect(mergedA).toEqual(mergedB);
-      expect('timeSpentOnDay' in mergedA).toBe(false);
-    });
-
     it('both merged clocks dominate BOTH original ops', () => {
       const clockSide1 = { clientA: 2 };
       const clockSide2 = { clientB: 2 };
@@ -1602,9 +2023,8 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
           VectorClockComparison.GREATER_THAN,
         );
       }
-      // The two independently-synthesized merged ops are concurrent by clock,
-      // but carry identical payloads (previous test) → resolve by ordinary LWW,
-      // never re-merging, so entity state converges.
+      // The two independently built re-sends are concurrent by clock; each
+      // carries only its own side's fields (see the round-trip test below).
       expect(compareVectorClocks(clockA, clockB)).toBe(VectorClockComparison.CONCURRENT);
     });
   });
@@ -1645,8 +2065,8 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       opLogStore.markReducersCommittedAndMergeClocks.and.resolveTo(undefined);
       opLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(async (batches) => ({
         written: batches.flatMap((batch) =>
-          batch.ops.map((batchOp, index) => ({
-            seq: index + 1,
+          batch.ops.map((batchOp) => ({
+            seq: ++lastSeq,
             op: batchOp,
             source: batch.source,
           })),
@@ -1660,7 +2080,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       opLogStore.appendWithVectorClockOverwrite.and.resolveTo(1);
       opLogStore.appendBatchSkipDuplicates.and.callFake((ops: Operation[]) =>
         Promise.resolve({
-          seqs: ops.map((_, i) => i + 1),
+          seqs: ops.map(() => ++lastSeq),
           writtenOps: ops,
           skippedCount: 0,
         }),
@@ -1713,7 +2133,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       return { title: p['title'], notes: p['notes'] };
     };
 
-    it('both clients synthesize the identical merged entity, and the two merged ops do not re-merge (converge)', async () => {
+    it('each client re-sends only its own field, and both reach the identical entity (converge)', async () => {
       const titleOp = op({
         id: 'op-A',
         clientId: 'clientA',
@@ -1740,71 +2160,37 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
         conflictOf([notesOp], [titleOp]),
       );
 
-      expect(a1.synthesized).toBeDefined();
-      expect(b1.synthesized).toBeDefined();
-      expect(entityOf(a1.synthesized!)).toEqual({ title: 'A-title', notes: 'B-notes' });
-      expect(entityOf(a1.synthesized!)).toEqual(entityOf(b1.synthesized!));
+      expect(entityOf(a1.synthesized!)).toEqual({ title: 'A-title', notes: undefined });
+      expect(entityOf(b1.synthesized!)).toEqual({ title: undefined, notes: 'B-notes' });
 
-      const mA = a1.synthesized!;
-      const mB = b1.synthesized!;
-      expect(
-        isDisjointMergeEligible({
-          localOps: [mA],
-          remoteOps: [mB],
-          payloadKey: 'task',
-          entityId: 'task-1',
-        }),
-      ).toBe(false);
-      expect(
-        isDisjointMergeEligible({
-          localOps: [mB],
-          remoteOps: [mA],
-          payloadKey: 'task',
-          entityId: 'task-1',
-        }),
-      ).toBe(false);
+      // Each device applied the other's op as itself, then its own re-send;
+      // a third device applies both originals and both re-sends.
+      const apply = (
+        state: Record<string, unknown>,
+        ...ops: Operation[]
+      ): Record<string, unknown> =>
+        ops.reduce((acc, o) => {
+          const p = extractActionPayload(o.payload);
+          const changes =
+            (p['task'] as { changes?: Record<string, unknown> } | undefined)?.changes ??
+            p;
+          return { ...acc, ...changes, id: 'task-1' };
+        }, state);
+      const base = { id: 'task-1', title: 'base', notes: 'base' };
+      const onA = apply(base, titleOp, notesOp, a1.synthesized!);
+      const onB = apply(base, notesOp, titleOp, b1.synthesized!);
+      const onC = apply(base, titleOp, notesOp, a1.synthesized!, b1.synthesized!);
+      expect(onA).toEqual({ id: 'task-1', title: 'A-title', notes: 'B-notes' });
+      expect(onB).toEqual(onA);
+      expect(onC).toEqual(onA);
     });
   });
 
   // A FOCUSED COMPOSITION TEST, not a transport e2e: it drives
   // ConflictResolutionService with hand-built EntityConflicts and composes the
-  // ops it emits with a local LWW `applyOp` helper. It does NOT exercise real
-  // conflict detection, the OperationApplierService, or any sync transport —
-  // cross-client propagation is MODELLED (justified by the dominating-clock
-  // assertions below), not executed. Client B contributes only an input op, not
-  // a tracked client. Its value: it goes red if `_createLocalWinUpdateOp` ever
-  // emits a partial delta instead of a full snapshot — a NECESSARY (not
-  // sufficient) condition for the local-win side to reconstruct every field.
-  // The first test pins that op shape and checks the fields both sides share.
-  // The second test goes further: it drives the real production seam
-  // (convertOpToAction + lwwUpdateMetaReducer) and shows that a receiver-only
-  // field the loser absorbed IS cleared, because the local-win op carries
-  // `lwwUpdateMode: 'replace'` and the reducer applies it via setOne — so the
-  // clients CONVERGE at the task entity, but ONLY for receivers that honour
-  // replace-mode (see the scope note on the describe below). Neither test makes
-  // a whole-normalized-state or all-orderings convergence claim.
-  describe('composition (3-client): a later overlapping edit beats the merged op', () => {
-    // Adjudicates the "partial merged delta is not closed under later LWW
-    // composition" concern: after a merged op loses whole-op LWW to a newer
-    // overlapping edit from a third client, the clients are TRANSIENTLY apart
-    // (the remote-win side keeps the merged delta's other field; the local-win
-    // side never applied it) — reconciling the SHARED fields depends on the
-    // local-win side emitting a FULL-SNAPSHOT op. The first test pins that op
-    // property (full snapshot + dominating clock) and checks the shared fields
-    // line up; it does NOT assert whole-state cross-client convergence. The
-    // second test drives the production seam and pins the CONVERGENT outcome:
-    // because the local-win op carries `lwwUpdateMode: 'replace'`, the reducer
-    // applies it via setOne, CLEARING a receiver-only field the loser absorbed,
-    // so A converges onto C for this upload ordering.
-    //
-    // SCOPE — this convergence is receiver-version-dependent. The disjoint merge
-    // that sets up the scenario is enabled in production (unfrozen by #9095), and
-    // its merged op is an ordinary 'patch' that any client applies via updateOne.
-    // But the replace-mode local-win op is newer: a receiver predating replace-mode
-    // treats it as a plain LWW Update, applies C's snapshot via updateOne, keeps
-    // the absorbed field, and the receiver-only-field divergence persists. So in a
-    // mixed fleet this pins replace-aware behaviour only, not universal convergence;
-    // the residual older-client divergence is tracked separately as a runtime fix.
+  // ops it emits with a field-level `applyOp` model. Cross-client propagation
+  // is modelled in server order, justified by the dominating-clock assertions.
+  describe('composition (3-client): a later overlapping edit beats a re-send', () => {
     const resolveCapturing = async (
       clientId: string,
       currentState: Record<string, unknown>,
@@ -1842,7 +2228,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       opLogStore.appendWithVectorClockOverwrite.and.resolveTo(1);
       opLogStore.appendBatchSkipDuplicates.and.callFake((ops: Operation[]) =>
         Promise.resolve({
-          seqs: ops.map((_, i) => i + 1),
+          seqs: ops.map(() => ++lastSeq),
           writtenOps: ops,
           skippedCount: 0,
         }),
@@ -1851,8 +2237,8 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       // mixed-source batch, mirroring the outer suite's setup.
       opLogStore.appendMixedSourceBatchSkipDuplicates.and.callFake(async (batches) => ({
         written: batches.flatMap((batch) =>
-          batch.ops.map((batchOp, index) => ({
-            seq: index + 1,
+          batch.ops.map((batchOp) => ({
+            seq: ++lastSeq,
             op: batchOp,
             source: batch.source,
           })),
@@ -1939,8 +2325,9 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       notes: s['notes'],
     });
 
-    it('the full-snapshot local-win op reconciles fields present on both sides (no receiver-only field in play)', async () => {
-      // Round 1: A (title) and B (notes) conflict -> disjoint merge on A.
+    it("a third client's newer title beats a re-send per field and keeps the other side's notes (#10422)", async () => {
+      // Round 1: A (title, 2000) loses nothing to B (notes, 3000): A applies
+      // B's op and re-sends only its title, at its own time.
       const opA = op({
         id: 'op-A',
         clientId: 'clientA',
@@ -1955,21 +2342,19 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
         timestamp: 3000,
         payload: { task: { id: 'task-1', changes: { notes: 'B-notes' } } },
       });
-
       const r1 = await resolveCapturing(
         'clientA',
         { id: 'task-1', title: 'A-title', notes: 'base' },
         conflictOf([opA], [opB]),
       );
-      const mergedOp = r1.appended[0];
-      expect(mergedOp).toBeDefined();
+      const [reSendA] = r1.appended;
+      expect(r1.appended.length).toBe(1);
+      expect(reSendA.timestamp).toBe(2000);
+      expect(r1.applied.map((o) => o.id)).toEqual(['op-B', reSendA.id]);
 
-      // A's state after applying the merged delta.
-      let stateA = applyOp({ id: 'task-1', title: 'A-title', notes: 'base' }, mergedOp);
-      expect(pick(stateA)).toEqual({ title: 'A-title', notes: 'B-notes' });
-
-      // Concurrent third client C: overlapping title edit, NEWER timestamp,
-      // clock concurrent with everything (C never saw opA/opB/merged).
+      // Round 2 on C: a newer overlapping title (4000) against B's op and A's
+      // re-send, which C reads only by its keys (title). C wins the title, so
+      // it applies both remote ops as themselves and re-sends its title.
       const opC = op({
         id: 'op-C',
         clientId: 'clientC',
@@ -1977,228 +2362,32 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
         timestamp: 4000,
         payload: { task: { id: 'task-1', changes: { title: 'C-title' } } },
       });
-      let stateC: Record<string, unknown> = {
-        id: 'task-1',
-        title: 'C-title',
-        notes: 'base',
-        // A field touched by NEITHER opC nor the merged delta. A partial
-        // (changed-fields-only) local-win op would drop it, so it makes the
-        // "full snapshot" assertion below test more than the two edited fields.
-        tagIds: ['keep-me'],
-      };
-
-      // Round 2 on A: local merged op vs remote opC. Fields overlap on title
-      // and the merged op is flat/opaque -> no re-merge -> whole-op LWW ->
-      // opC (newer) wins -> A applies opC AS-IS (partial).
-      const r2a = await resolveCapturing(
-        'clientA',
-        stateA,
-        conflictOf([mergedOp], [opC]),
-      );
-      expect(r2a.appended.length).toBe(0); // remote win: no new op from A
-      for (const o of r2a.applied) {
-        stateA = applyOp(stateA, o);
-      }
-
-      // TRANSIENT LIMB (documented, not asserted as final): A now holds
-      // { title: C, notes: B-notes } while C holds { title: C, notes: base }.
-      expect(pick(stateA)).toEqual({ title: 'C-title', notes: 'B-notes' });
-
-      // Round 2 on C: local opC vs remote merged op -> LOCAL win -> C must
-      // emit a reconciling local-win op carrying its FULL entity snapshot.
-      const r2c = await resolveCapturing(
+      const r2 = await resolveCapturing(
         'clientC',
-        stateC,
-        conflictOf([opC], [mergedOp]),
+        { id: 'task-1', title: 'C-title', notes: 'base' },
+        conflictOf([opC], [opB, reSendA]),
       );
-      for (const o of r2c.applied) {
-        stateC = applyOp(stateC, o);
-      }
-      const localWinOp = r2c.appended[0];
-      expect(localWinOp).toBeDefined();
-      // Full snapshot, not a partial changed-fields-only delta: applied to a
-      // BARE base the op alone must reconstruct C's COMPLETE entity — every
-      // field, including notes (=base, untouched by opC) AND tagIds (touched by
-      // neither opC nor the merged delta). This is the closure property; a
-      // partial op would drop these and never reconcile A's B-notes with C.
-      expect(applyOp({ id: 'task-1' }, localWinOp)).toEqual({
-        id: 'task-1',
+      const [reSendC] = r2.appended;
+      expect(r2.appended.length).toBe(1);
+      expect(extractActionPayload(reSendC.payload)).toEqual({
         title: 'C-title',
-        notes: 'base',
-        tagIds: ['keep-me'],
+        id: 'task-1',
       });
-
-      // The local-win op's clock DOMINATES both inputs (opC and the merged op),
-      // so in production it reaches A as a plain non-conflicting remote op that
-      // applies directly — which is what the modelled propagation below assumes.
-      expect(compareVectorClocks(localWinOp.vectorClock, opC.vectorClock)).toBe(
-        VectorClockComparison.GREATER_THAN,
-      );
-      expect(compareVectorClocks(localWinOp.vectorClock, mergedOp.vectorClock)).toBe(
+      expect(reSendC.timestamp).toBe(4000);
+      expect(r2.applied.map((o) => o.id)).toEqual(['op-B', reSendA.id, reSendC.id]);
+      expect(compareVectorClocks(reSendC.vectorClock, reSendA.vectorClock)).toBe(
         VectorClockComparison.GREATER_THAN,
       );
 
-      // Modelled propagation (justified by the dominating clock above): the
-      // local-win op reaches A as a plain remote op and applies directly.
-      stateA = applyOp(stateA, localWinOp);
-
-      // SHARED-FIELD RECONCILIATION (deliberately NOT whole-state convergence):
-      // the fields both sides carry line up — A's `notes` (absorbed from the
-      // merged delta) is overwritten by C's snapshot value, and `title` already
-      // agreed. We do NOT assert byte-identical whole-state equality: the real
-      // lwwUpdateMetaReducer also stamps `modified` and repairs relationships
-      // (project.taskIds, tag/TODAY membership) that this field-level `applyOp`
-      // model omits. Whole-state, cross-client convergence is not established at
-      // this layer — in particular the inverse upload ordering (opC accepted
-      // first, the merged op rejected, so C never downloads it and emits no
-      // reconciling op) can leave the clients apart even on shared fields. That
-      // is a real-transport property for a dedicated multi-client harness, not
-      // this service-level composition test.
-      expect(pick(stateA)).toEqual(pick(stateC));
-      expect(pick(stateA)).toEqual({ title: 'C-title', notes: 'base' });
-    });
-
-    // Pins the receiver-only CLEARING behavior. B edits an OPTIONAL field
-    // (`dueDay`) that C never has: A absorbs it via the merged delta, then C's
-    // later full local-win snapshot omits it. Because that snapshot rides an
-    // `lwwUpdateMode: 'replace'` op, the production meta-reducer applies it via
-    // setOne (a full entity swap), so A's absorbed `dueDay` — and B's `notes` —
-    // are CLEARED and the clients CONVERGE. This is the behavior the
-    // replace/setOne work established; the earlier shallow-`updateOne` path (and a
-    // hand-built action that keeps `lwwUpdateMode` out of `meta`) would instead
-    // strand the absorbed field on A. This guards against regressing to that
-    // non-clearing path. Ops travel the real wire shape (JSON round-trip) and are
-    // applied through the production `convertOpToAction` + meta-reducer seam.
-    it('clears a receiver-only field the loser absorbed via the replace-mode local-win op — A converges onto C for this ordering (production reducer + JSON round-trip)', async () => {
-      // Round 1: A (title) vs B (notes + an OPTIONAL dueDay that C never has).
-      const opA = op({
-        id: 'op-A',
-        clientId: 'clientA',
-        vectorClock: { clientA: 1 },
-        timestamp: 2000,
-        payload: { task: { id: 'task-1', changes: { title: 'A-title' } } },
-      });
-      const opB = op({
-        id: 'op-B',
-        clientId: 'clientB',
-        vectorClock: { clientB: 1 },
-        timestamp: 3000,
-        payload: {
-          task: { id: 'task-1', changes: { notes: 'B-notes', dueDay: '2026-07-15' } },
-        },
-      });
-
-      const r1 = await resolveCapturing(
-        'clientA',
-        { id: 'task-1', title: 'A-title', notes: 'base' },
-        conflictOf([opA], [opB]),
-      );
-      const mergedOp = r1.appended[0];
-      expect(mergedOp).toBeDefined();
-
-      // A absorbs the merged delta, INCLUDING the receiver-only dueDay.
-      let stateA = applyOp({ id: 'task-1', title: 'A-title', notes: 'base' }, mergedOp);
-      expect(stateA['dueDay']).toBe('2026-07-15');
-
-      // Third client C: overlapping newer title edit; its entity never had dueDay.
-      const opC = op({
-        id: 'op-C',
-        clientId: 'clientC',
-        vectorClock: { clientC: 1 },
-        timestamp: 4000,
-        payload: { task: { id: 'task-1', changes: { title: 'C-title' } } },
-      });
-      let stateC: Record<string, unknown> = {
-        id: 'task-1',
-        title: 'C-title',
-        notes: 'base',
-      };
-      expect('dueDay' in stateC).toBe(false);
-
-      // Round 2 on A: merged op vs newer opC -> opC wins -> A applies it (partial).
-      const r2a = await resolveCapturing(
-        'clientA',
-        stateA,
-        conflictOf([mergedOp], [opC]),
-      );
-      for (const o of r2a.applied) {
-        stateA = applyOp(stateA, o);
-      }
-
-      // Round 2 on C: local opC vs remote merged op -> LOCAL win -> full snapshot.
-      const r2c = await resolveCapturing(
-        'clientC',
-        stateC,
-        conflictOf([opC], [mergedOp]),
-      );
-      for (const o of r2c.applied) {
-        stateC = applyOp(stateC, o);
-      }
-      const localWinOp = r2c.appended[0];
-      expect(localWinOp).toBeDefined();
-
-      // JSON round-trip — SuperSync serializes ops with JSON.stringify, so C's flat
-      // snapshot (which never had dueDay) reaches A with dueDay simply ABSENT from
-      // the snapshot; the wire cannot encode "clear this field" explicitly.
-      const wirePayload = JSON.parse(JSON.stringify(localWinOp.payload)) as Record<
-        string,
-        unknown
-      >;
-      expect('dueDay' in (wirePayload['actionPayload'] as Record<string, unknown>)).toBe(
-        false,
-      );
-
-      // Apply the round-tripped local-win op to A through the PRODUCTION seam.
-      // convertOpToAction routes the op's `lwwUpdateMode: 'replace'` into
-      // action.meta, so lwwUpdateMetaReducer applies it via setOne — a full
-      // snapshot swap. (A hand-built action spreading lwwUpdateMode at the top
-      // level instead of meta silently takes the updateOne shallow-merge branch
-      // and hides this.) A's task carries the modelled post-round-2 state (title
-      // reconciled to C, notes still B's, dueDay absorbed) plus the structural
-      // fields the reducer's relationship-repair reads.
-      const mockBase = jasmine.createSpy('base').and.callFake((s: unknown) => s);
-      const prodReducer = lwwUpdateMetaReducer(mockBase);
-      const aRootState = buildRootStateWithTask({
-        ...stateA,
-        dueWithTime: null,
-        projectId: null,
-        tagIds: [],
-        parentId: null,
-        subTaskIds: [],
-        modified: 1000,
-      });
-      const action = convertOpToAction({
-        ...localWinOp,
-        payload: wirePayload,
-      } as Operation) as unknown as Action;
-      prodReducer(aRootState, action);
-      const aTask = (
-        mockBase.calls.mostRecent().args[0] as Record<
-          string,
-          { entities: Record<string, Record<string, unknown>> }
-        >
-      )[TASK_FEATURE_NAME].entities['task-1'];
-
-      // ACTUAL CURRENT BEHAVIOR: A's task entity converges onto C's snapshot. C's
-      // later local-win op is `lwwUpdateMode: 'replace'`, so the production reducer
-      // applies it via setOne — replacing A's whole task with C's snapshot (a
-      // COMPLETE current-state snapshot in production; createLWWUpdateOp warns that
-      // a partial one would lose data). Every field that snapshot omits is CLEARED.
-      // This is the replace/setOne behavior; a shallow updateOne (the
-      // pre-#8990 path, or a mis-built action that keeps lwwUpdateMode out of meta)
-      // would instead strand dueDay on A and leave the clients divergent.
-      //
-      // The DISCRIMINATING proof is `notes` and `dueDay` below: `notes` only flips
-      // from the absorbed 'B-notes' to 'base', and `dueDay` only disappears, if the
-      // reducer actually engaged setOne (updateOne would keep dueDay). `title` was
-      // already 'C-title' on A before this step (absorbed in round 2a), so it
-      // corroborates but does not by itself prove the op was applied. Convergence
-      // here is at the task-entity level for THIS upload ordering (see the round-2
-      // scoping note above); it is not a whole-normalized-state / all-orderings claim.
-      expect(aTask['title']).toBe('C-title'); // already C's pre-reducer; unchanged by the replace
-      expect(aTask['notes']).toBe('base'); // 'B-notes' → 'base': setOne took C's snapshot
-      expect(aTask['dueDay']).toBeUndefined(); // absorbed field CLEARED by setOne (updateOne would keep it)
-      expect('dueDay' in stateC).toBe(false); // C never had it — A now matches C
+      // Every device ends on the latest write of each field.
+      const base = { id: 'task-1', title: 'base', notes: 'base' };
+      const onA = [opA, opB, reSendA, reSendC].reduce(applyOp, base);
+      const onB = [opB, reSendA, reSendC].reduce(applyOp, base);
+      const onC = [opC, opB, reSendA, reSendC].reduce(applyOp, base);
+      const expected = { title: 'C-title', notes: 'B-notes' };
+      expect(pick(onA)).toEqual(expected);
+      expect(pick(onB)).toEqual(expected);
+      expect(pick(onC)).toEqual(expected);
     });
   });
 });

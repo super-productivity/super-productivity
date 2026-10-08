@@ -227,16 +227,10 @@ export class TaskPage extends BasePage {
    * Check if task has a specific tag
    */
   async taskHasTag(task: Locator, tagName: string): Promise<boolean> {
-    const tags = this.getTaskTags(task);
-    const tagCount = await tags.count();
-
-    for (let i = 0; i < tagCount; i++) {
-      const tagText = await tags.nth(i).textContent();
-      if (tagText?.includes(tagName)) {
-        return true;
-      }
-    }
-    return false;
+    // One snapshot of all tags: count() + nth(i).textContent() would wait out its
+    // whole timeout on a tag that a re-render removed in between.
+    const tagTexts = await this.getTaskTags(task).allTextContents();
+    return tagTexts.some((tagText) => tagText.includes(tagName));
   }
 
   /**

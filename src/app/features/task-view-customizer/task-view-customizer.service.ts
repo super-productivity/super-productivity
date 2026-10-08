@@ -1,3 +1,4 @@
+import { getTaskPriority } from '../tasks/task-priority.const';
 import { computed, effect, Injectable, inject, signal } from '@angular/core';
 import { Observable, animationFrameScheduler, combineLatest, of } from 'rxjs';
 import { map, observeOn, switchMap, take } from 'rxjs/operators';
@@ -194,9 +195,16 @@ export class TaskViewCustomizerService {
     const currentFilter = OPTIONS.filter.list.find(
       (option) => option.type === stored.type,
     );
-    return currentFilter
-      ? { ...currentFilter, preset: stored.preset ?? null }
-      : DEFAULT_OPTIONS.filter;
+    let preset = stored.preset ?? null;
+    // Historical local presets used the same string encoding as task priorities.
+    // Adopt the current menu value without rewriting the tasks themselves.
+    if (
+      stored.type === FILTER_OPTION_TYPE.priority &&
+      (preset === 'high' || preset === 'medium' || preset === 'low')
+    ) {
+      preset = String(getTaskPriority(preset));
+    }
+    return currentFilter ? { ...currentFilter, preset } : DEFAULT_OPTIONS.filter;
   }
 
   customizeUndoneTasks(
@@ -301,10 +309,10 @@ export class TaskViewCustomizerService {
         });
       case FILTER_OPTION_TYPE.priority:
         if (value === FILTER_COMMON.NOT_SPECIFIED) {
-          return tasks.filter((t) => !t.priority);
+          return tasks.filter((t) => !getTaskPriority(t.priority));
         }
 
-        return tasks.filter((t) => t.priority === value);
+        return tasks.filter((t) => getTaskPriority(t.priority) === +value);
       default:
         return tasks;
     }
@@ -371,14 +379,10 @@ export class TaskViewCustomizerService {
       }
 
       case SORT_OPTION_TYPE.priority: {
-        const getPriorityRank = (priority: TaskWithSubTasks['priority']): number => {
-          if (priority === 'high') return 0;
-          if (priority === 'medium') return 1;
-          if (priority === 'low') return 2;
-          return 3;
-        };
         return tasksCopy.sort(
-          (a, b) => (getPriorityRank(a.priority) - getPriorityRank(b.priority)) * factor,
+          (a, b) =>
+            ((getTaskPriority(b.priority) ?? 0) - (getTaskPriority(a.priority) ?? 0)) *
+            factor,
         );
       }
 

@@ -1283,6 +1283,105 @@ describe('bulkHydrationMetaReducer', () => {
         'recreate',
       ]);
     });
+
+    // A fresh device or a restart gets the delete, the recreate and a later
+    // snapshot in one batch; a device that got them in separate syncs applied
+    // the snapshot.
+    describe('a later update of a task recreated after a same-batch delete (#10381)', () => {
+      const DELETE = ActionType.TASK_SHARED_DELETE_MULTIPLE;
+      const patchRecreateOp = createMockOperation({
+        id: 'patch-recreate',
+        actionType: TASK_LWW_TYPE,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: TASK_ID,
+        payload: {
+          actionPayload: { id: TASK_ID, title: 'patch-recreate' },
+          entityChanges: [],
+          lwwUpdateMode: 'patch',
+          recreatesEntityAfterDelete: true,
+        },
+      });
+
+      it('applies a task LWW Update after the recreate, not before it', () => {
+        expect(
+          applied([
+            deleteOp,
+            taskLwwOp('before'),
+            taskLwwOp('recreate', true),
+            taskLwwOp('after'),
+          ]),
+        ).toEqual([DELETE, 'recreate', 'after']);
+      });
+
+      it('keeps the task in a TAG LWW Update after the recreate only', () => {
+        applied([
+          deleteOp,
+          tagLwwOp('before'),
+          taskLwwOp('recreate', true),
+          tagLwwOp('after'),
+        ]);
+
+        expect(tagTaskIds('before')).toEqual([TASK_ID_2]);
+        expect(tagTaskIds('after')).toEqual([TASK_ID, TASK_ID_2]);
+      });
+
+      it('skips again after a later delete', () => {
+        expect(
+          applied([
+            deleteOp,
+            taskLwwOp('recreate', true),
+            { ...deleteOp, id: 'delete-2' },
+            taskLwwOp('after'),
+          ]),
+        ).toEqual([DELETE, 'recreate', DELETE]);
+      });
+
+      it('does not count a patch recreate, which cannot bring the task back', () => {
+        expect(applied([deleteOp, patchRecreateOp, taskLwwOp('after')])).toEqual([
+          DELETE,
+          'patch-recreate',
+        ]);
+      });
+
+      it('does not move the restore point for a recreate of a task already back', () => {
+        expect(
+          applied([
+            archiveOp('archive'),
+            restoreOp,
+            taskLwwOp('mid'),
+            taskLwwOp('recreate', true),
+            taskLwwOp('after'),
+          ]),
+        ).toEqual([
+          'archive',
+          ActionType.TASK_SHARED_RESTORE,
+          'mid',
+          'recreate',
+          'after',
+        ]);
+        reducerCalls = [];
+        expect(
+          applied([
+            deleteOp,
+            taskLwwOp('r1', true),
+            taskLwwOp('mid'),
+            taskLwwOp('r2', true),
+            taskLwwOp('after'),
+          ]),
+        ).toEqual([DELETE, 'r1', 'mid', 'r2', 'after']);
+      });
+
+      it('does not count a recreate that a same-batch archive blocks', () => {
+        expect(
+          applied([
+            archiveOp('archive'),
+            taskLwwOp('recreate', true),
+            taskLwwOp('after'),
+          ]),
+        ).toEqual(['archive']);
+      });
+    });
   });
 
   // =========================================================================

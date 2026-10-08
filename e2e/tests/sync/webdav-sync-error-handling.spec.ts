@@ -63,19 +63,14 @@ test.describe('@webdav WebDAV Sync Error Handling', () => {
     const startTime = Date.now();
     let errorFound = false;
     while (Date.now() - startTime < 15000 && !errorFound) {
-      // Check for error snackbar
-      const snackBars = pageA.locator('.mat-mdc-snack-bar-container');
-      const count = await snackBars.count();
-      for (let i = 0; i < count; ++i) {
-        const text = await snackBars.nth(i).innerText();
-        if (
-          text.toLowerCase().includes('error') ||
-          text.toLowerCase().includes('fail') ||
-          text.toLowerCase().includes('network')
-        ) {
-          errorFound = true;
-          break;
-        }
+      // Check for error snackbar. One snapshot of all bars: they auto-dismiss, so
+      // count() + nth(i).innerText() could wait out its whole timeout on a bar that
+      // had just closed and throw from inside this polling loop.
+      const snackBarTexts = await pageA
+        .locator('.mat-mdc-snack-bar-container')
+        .allInnerTexts();
+      if (snackBarTexts.some((text) => /error|fail|network/i.test(text))) {
+        errorFound = true;
       }
 
       // Check for error icon on sync button
@@ -159,25 +154,13 @@ test.describe('@webdav WebDAV Sync Error Handling', () => {
     const startTime = Date.now();
     let authErrorFound = false;
     while (Date.now() - startTime < 15000 && !authErrorFound) {
-      // Check for error snackbar
-      const snackBars = pageA.locator('.mat-mdc-snack-bar-container');
-      const count = await snackBars.count();
-      for (let i = 0; i < count; ++i) {
-        const text = await snackBars
-          .nth(i)
-          .innerText()
-          .catch(() => '');
-        const textLower = text.toLowerCase();
-        if (
-          textLower.includes('401') ||
-          textLower.includes('auth') ||
-          textLower.includes('unauthorized') ||
-          textLower.includes('error') ||
-          textLower.includes('fail')
-        ) {
-          authErrorFound = true;
-          break;
-        }
+      // Check for error snackbar. One snapshot of all bars: they auto-dismiss, so
+      // count() + nth(i).innerText() could burn the action timeout on a closed bar.
+      const snackBarTexts = await pageA
+        .locator('.mat-mdc-snack-bar-container')
+        .allInnerTexts();
+      if (snackBarTexts.some((text) => /401|auth|unauthorized|error|fail/i.test(text))) {
+        authErrorFound = true;
       }
 
       if (!authErrorFound) {

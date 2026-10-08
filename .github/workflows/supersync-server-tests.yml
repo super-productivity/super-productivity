@@ -12,6 +12,8 @@ on:
       - 'packages/super-sync-server/**'
       - 'packages/shared-schema/**' # @sp/shared-schema is a direct dep
       - 'packages/sync-core/**' # transitive dep via @sp/shared-schema
+      # The sync fuzz harness's SuperSync port, checked by tests/sync-fuzz-server-parity.pglite.spec.ts
+      - 'src/app/op-log/testing/integration/sync-fuzz/**'
       - '.github/workflows/supersync-server-tests.yml'
   workflow_dispatch:
 

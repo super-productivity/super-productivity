@@ -10,6 +10,7 @@ import {
 } from 'vitest';
 import {
   AuthFailSPError,
+  ClientUpdateRequiredSPError,
   MissingCredentialsSPError,
   NetworkUnavailableSPError,
 } from '../../src/errors';
@@ -1264,6 +1265,105 @@ describe('SuperSyncProvider', () => {
         expect(e).toBeInstanceOf(AuthFailSPError);
         expect((e as AuthFailSPError).message).toContain('403');
       }
+    });
+  });
+
+  describe('client update required (minimum app version)', () => {
+    const updateRequiredBody = JSON.stringify({
+      error: 'client_update_required',
+      errorCode: 'CLIENT_UPDATE_REQUIRED',
+    });
+
+    it('throws ClientUpdateRequiredSPError on a download refusal, without retrying', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(
+        errorResponse(426, 'Upgrade Required', updateRequiredBody),
+      );
+
+      await expect(provider.downloadOps(0)).rejects.toBeInstanceOf(
+        ClientUpdateRequiredSPError,
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('never treats the refusal as an auth failure, even with a 403 status', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(errorResponse(403, 'Forbidden', updateRequiredBody));
+
+      const error = await provider.downloadOps(0).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ClientUpdateRequiredSPError);
+      expect(error).not.toBeInstanceOf(AuthFailSPError);
+    });
+
+    it('keeps a fixed message that no retry or network classifier matches', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider();
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValue(
+        errorResponse(
+          503,
+          'Service Unavailable',
+          JSON.stringify({
+            error: 'secret task title',
+            errorCode: 'CLIENT_UPDATE_REQUIRED',
+          }),
+        ),
+      );
+
+      const error = (await provider
+        .uploadOps([createMockOperation()], 'client-1')
+        .catch((e: unknown) => e)) as Error;
+
+      expect(error).toBeInstanceOf(ClientUpdateRequiredSPError);
+      expect(error.message).not.toContain('secret task title');
+      expect(isRetryableUploadError(error)).toBe(false);
+    });
+
+    it('throws ClientUpdateRequiredSPError on the native path', async () => {
+      const ctx = buildProvider({ isNativePlatform: true });
+      ctx.cfgStore.load.mockResolvedValue(testConfig);
+      ctx.nativeHttpExecutor.mockResolvedValue({
+        status: 426,
+        headers: {},
+        data: { error: 'client_update_required', errorCode: 'CLIENT_UPDATE_REQUIRED' },
+      });
+
+      await expect(
+        ctx.provider.uploadOps([createMockOperation()], 'client-1'),
+      ).rejects.toBeInstanceOf(ClientUpdateRequiredSPError);
+    });
+
+    it('sends the app version on uploads and resets, not only on downloads', async () => {
+      const { provider, cfgStore, fetchMock } = buildProvider({ appVersion: '19.2.0' });
+      cfgStore.load.mockResolvedValue(testConfig);
+      fetchMock.mockResolvedValueOnce(okResponse({ results: [], latestSeq: 0 }));
+      fetchMock.mockResolvedValueOnce(okResponse({ success: true }));
+
+      await provider.uploadOps([createMockOperation()], 'client-1');
+      await provider.deleteAllData();
+
+      const urls = fetchMock.mock.calls.map(([url]) => url as string);
+      expect(urls).toEqual([
+        'https://sync.example.com/api/sync/ops?appVersion=19.2.0',
+        'https://sync.example.com/api/sync/data?appVersion=19.2.0',
+      ]);
+    });
+
+    it('sends the app version on the native path', async () => {
+      const ctx = buildProvider({ isNativePlatform: true, appVersion: '19.2.0' });
+      ctx.cfgStore.load.mockResolvedValue(testConfig);
+      ctx.nativeHttpExecutor.mockResolvedValue({
+        status: 200,
+        headers: {},
+        data: { results: [], latestSeq: 0 },
+      });
+
+      await ctx.provider.uploadOps([createMockOperation()], 'client-1');
+
+      const [request] = ctx.nativeHttpExecutor.mock.calls[0] as [NativeHttpRequestConfig];
+      expect(request.url).toBe('https://sync.example.com/api/sync/ops?appVersion=19.2.0');
     });
   });
 

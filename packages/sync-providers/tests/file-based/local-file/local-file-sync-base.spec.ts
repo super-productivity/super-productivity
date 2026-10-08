@@ -85,10 +85,6 @@ class MockFileAdapter implements FileAdapter {
     this._files.delete(path);
   }
 
-  async listFiles(dirPath: string): Promise<string[]> {
-    return [...this._files.keys()].filter((path) => path.startsWith(dirPath));
-  }
-
   setFile(path: string, content: string): void {
     this._files.set(path, content);
   }
@@ -215,20 +211,6 @@ describe('LocalFileSyncBase', () => {
     const provider = new TestableLocalFileSync(new MockFileAdapter());
 
     await expect(provider.removeFile('nonexistent.json')).resolves.toBeUndefined();
-  });
-
-  it('lists files through the injected file adapter', async () => {
-    const fileAdapter = new MockFileAdapter();
-    const provider = new TestableLocalFileSync(fileAdapter);
-    fileAdapter.setFile('/test/sync/file1.json', 'content1');
-    fileAdapter.setFile('/test/sync/file2.json', 'content2');
-    fileAdapter.setFile('/test/sync/subdir/file3.json', 'content3');
-
-    const files = await provider.listFiles('/');
-
-    expect(files).toContain('/test/sync/file1.json');
-    expect(files).toContain('/test/sync/file2.json');
-    expect(files).toContain('/test/sync/subdir/file3.json');
   });
 
   it('accepts dependency shape used by shims', () => {

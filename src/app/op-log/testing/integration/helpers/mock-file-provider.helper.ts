@@ -212,17 +212,6 @@ export class MockFileProvider implements FileSyncProvider<SyncProviderId> {
     this._files.delete(targetPath);
   }
 
-  async listFiles(targetPath: string): Promise<string[]> {
-    // Simple implementation - list all files that start with targetPath
-    const files: string[] = [];
-    for (const path of this._files.keys()) {
-      if (path.startsWith(targetPath)) {
-        files.push(path);
-      }
-    }
-    return files;
-  }
-
   async isReady(): Promise<boolean> {
     this._recordCall('isReady', []);
     return this._isReady;

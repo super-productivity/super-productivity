@@ -23,6 +23,7 @@ import {
 import { WorkContextService } from '../../work-context/work-context.service';
 import { ProjectService } from '../../project/project.service';
 import { signal } from '@angular/core';
+import type { WritableSignal } from '@angular/core';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DateService } from '../../../core/date/date.service';
@@ -30,18 +31,35 @@ import { DateAdapter } from '@angular/material/core';
 import { DEFAULT_PANEL_CFG } from '../boards.const';
 import { BoardsActions } from '../store/boards.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { TagService } from '../../tag/tag.service';
 
 const PLANNER_TASK_PROVIDERS = [
   {
     provide: GlobalConfigService,
     useValue: {
       cfg: () => null,
+      localization: () => ({}),
       appFeatures: () => ({ isTimeTrackingEnabled: false }),
     },
   },
   {
     provide: DateService,
-    useValue: { todayStr: () => '2026-09-12' },
+    useValue: {
+      todayStr: () => '2026-09-12',
+      getStartOfNextDayDiffMs: () => 0,
+    },
+  },
+  {
+    provide: GlobalTrackingIntervalService,
+    useFactory: () => ({
+      todayDateStr: signal('2026-09-12'),
+      clockTimestamp: signal(new Date(2026, 8, 12, 12).getTime()),
+    }),
+  },
+  {
+    provide: TagService,
+    useFactory: () => ({ scheduledTodayColor: signal<string | null>(null) }),
   },
   {
     provide: DateAdapter,
@@ -81,6 +99,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
       tagIds: [],
       created: Date.now(),
       subTaskIds: [],
+      dueDay: '2026-09-12',
     } as TaskCopy,
     {
       id: mockNonBacklogTaskId,
@@ -144,7 +163,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
     })
       .overrideComponent(PlannerTaskComponent, {
         set: {
-          template: '<div>Mock Task</div>',
+          template: '<ng-content></ng-content><div>Mock Task</div>',
           inputs: ['task'],
         },
       })
@@ -160,6 +179,54 @@ describe('BoardPanelComponent - Backlog Feature', () => {
 
     fixture.componentRef.setInput('panelCfg', mockPanelCfg as BoardPanelCfg);
     fixture.detectChanges();
+  });
+
+  it('colors Board Today controls and follows Today customization/reset', () => {
+    const task = component.tasks()[0];
+    expect(component.scheduledDateColor(task)).toBe('today');
+
+    const button = fixture.nativeElement.querySelector(
+      '.schedule-btn',
+    ) as HTMLElement | null;
+    expect(button).not.toBeNull();
+    expect(button!.getAttribute('data-scheduled-date-color')).toBe('today');
+    const icon = button!.querySelector('mat-icon') as HTMLElement;
+    const badge = button!.querySelector('.time-badge') as HTMLElement;
+    const defaultIconColor = getComputedStyle(icon).color;
+    expect(getComputedStyle(badge).color).toBe(defaultIconColor);
+
+    const tagService = TestBed.inject(TagService) as unknown as {
+      scheduledTodayColor: WritableSignal<string | null>;
+    };
+    tagService.scheduledTodayColor.set('#008080');
+    fixture.detectChanges();
+    expect(getComputedStyle(icon).color).toBe('rgb(0, 128, 128)');
+    expect(getComputedStyle(badge).color).toBe('rgb(0, 128, 128)');
+
+    tagService.scheduledTodayColor.set(null);
+    fixture.detectChanges();
+    expect(getComputedStyle(icon).color).toBe(defaultIconColor);
+    expect(getComputedStyle(badge).color).toBe(defaultIconColor);
+  });
+
+  it('refreshes timed Board colors at expiry and suppresses them while tracking', () => {
+    const interval = TestBed.inject(GlobalTrackingIntervalService) as unknown as {
+      clockTimestamp: WritableSignal<number>;
+    };
+    const currentTaskId = TestBed.inject(TaskService).currentTaskId as WritableSignal<
+      string | null
+    >;
+    const dueWithTime = new Date(2026, 8, 12, 12, 1).getTime();
+    const task = { ...component.tasks()[0], dueDay: undefined, dueWithTime };
+    expect(component.scheduledDateColor(task)).toBe('today');
+    interval.clockTimestamp.set(dueWithTime);
+    expect(component.scheduledDateColor(task)).toBe('overdue');
+    currentTaskId.set(task.id);
+    expect(component.scheduledDateColor(task)).toBe('');
+    currentTaskId.set(null);
+    expect(component.scheduledDateColor(task)).toBe('overdue');
+    expect(component.scheduledDateColor({ ...task, isDone: true })).toBe('');
+    expect(component.scheduledDateColor({ ...task, dueWithTime: undefined })).toBe('');
   });
 
   it('should only include backlog tasks when backlogState is OnlyBacklog', () => {

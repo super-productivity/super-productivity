@@ -572,19 +572,26 @@ export const projectReducer = createReducer<ProjectState>(
       : state,
   ),
 
-  on(updateNoteOrder, (state, { ids, activeContextType, activeContextId }) =>
-    activeContextType === WorkContextType.PROJECT
+  on(updateNoteOrder, (state, { ids, activeContextType, activeContextId }) => {
+    const project = state.entities[activeContextId as string];
+    return activeContextType === WorkContextType.PROJECT && project
       ? projectAdapter.updateOne(
           {
-            id: activeContextId as string,
+            id: project.id,
+            // A reorder changes positions, not membership (as for Today): a
+            // remote order must neither bring back a note this device deleted
+            // or moved away, nor drop one it added meanwhile (#10377).
             changes: {
-              noteIds: ids,
+              noteIds: [
+                ...project.noteIds.filter((id) => !ids.includes(id)),
+                ...ids.filter((id) => project.noteIds.includes(id)),
+              ],
             },
           },
           state,
         )
-      : state,
-  ),
+      : state;
+  }),
 
   // Task Actions
   // ------------

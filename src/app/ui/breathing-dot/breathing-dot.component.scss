@@ -13,7 +13,11 @@
   max-height: 100%;
   background-color: var(--c-primary);
   border-radius: 50%;
-  animation: breathe 8s ease-in-out infinite;
+  // Rest on the last keyframe once the breaths are done.
+  opacity: 0.4;
+  // A few breaths, then stillness: an infinite animation redraws every frame
+  // for the whole session, keeping the GPU awake on battery.
+  animation: breathe 8s ease-in-out 3;
   box-shadow: 0 0 40px var(--c-primary);
 
   &.is-paused {

@@ -1,12 +1,23 @@
+import { isTimePreservingTaskSnapshot } from './time-preserving-task-snapshot.util';
 import { extractActionPayload } from '@sp/sync-core';
-import { mergeVectorClocks } from '../../core/util/vector-clock';
-import { ActionType, isLwwUpdatePayload, Operation } from '../core/operation.types';
+import { clearedFieldsProps } from '../../util/cleared-update-fields';
+import {
+  compareVectorClocks,
+  mergeVectorClocks,
+  VectorClockComparison,
+} from '../../core/util/vector-clock';
+import {
+  ActionType,
+  isLwwUpdatePayload,
+  Operation,
+  OpType,
+} from '../core/operation.types';
 import { Task, TimeSpentOnDay } from '../../features/tasks/task.model';
 import { calcTotalTimeSpent } from '../../features/tasks/util/calc-total-time-spent';
 import { initialTaskState, taskReducer } from '../../features/tasks/store/task.reducer';
 import { taskAdapter } from '../../features/tasks/store/task.adapter';
 import { updateTimeSpentForTask } from '../../features/tasks/store/task.reducer.util';
-import { mergeChangedFields } from './conflict-disjoint-merge.util';
+import { mergeChangedFields, NOISE_FIELDS } from './conflict-disjoint-merge.util';
 import { convertOpToAction } from '../apply/operation-converter.util';
 import { getOpEntityIds } from '../util/get-op-entity-ids.util';
 import type { MixedSourceOperationBatch } from '../persistence/operation-log-store.service';
@@ -70,12 +81,126 @@ export const foldSyncTimeSpentDeltas = (
 };
 
 /**
+ * Task fields `updateTask` assigns as they are. Every other field has derived
+ * or cross-entity writes (`isDone` sets `doneOn`, `timeEstimate` the parent's
+ * total, `projectId`/`tagIds`/`dueDay` the lists), which a field overlay
+ * cannot reproduce, and a time delta's arguments are not task fields (#10147).
+ */
+const PLAIN_TASK_FIELDS: ReadonlySet<string> = new Set(['title', 'notes']);
+
+/**
+ * The fields a nonconflicting single-task update writes on `taskId`, when all
+ * of them are plain (noise fields aside), else undefined: opaque, multi-entity,
+ * another task, an LWW row (whose flat payload reads as no fields), or a field
+ * with derived writes. A clear keeps its key with the value `undefined`.
+ */
+const plainTaskFields = (
+  op: Operation,
+  taskId: string,
+): Record<string, unknown> | undefined => {
+  if (
+    op.entityType !== 'TASK' ||
+    op.opType !== OpType.Update ||
+    isLwwUpdatePayload(op.payload)
+  ) {
+    return undefined;
+  }
+  const ids = getOpEntityIds(op);
+  if (ids.length !== 1 || ids[0] !== taskId) {
+    return undefined;
+  }
+  const changes = mergeChangedFields([op], 'task', taskId);
+  const fields = Object.keys(changes).filter((field) => !NOISE_FIELDS.has(field));
+  return fields.length > 0 && fields.every((field) => PLAIN_TASK_FIELDS.has(field))
+    ? Object.fromEntries(fields.map((field) => [field, changes[field]]))
+    : undefined;
+};
+
+/** True when `op` declares `taskId` or names it anywhere in its payload. */
+const touchesTask = (op: Operation, taskId: string): boolean =>
+  getOpEntityIds(op).includes(taskId) ||
+  JSON.stringify(op.payload).includes(JSON.stringify(taskId));
+
+/** The `type:id` keys of the entities an op declares. */
+const entityKeys = (op: Operation): Set<string> =>
+  new Set(getOpEntityIds(op).map((id) => `${op.entityType}:${id}`));
+
+/**
+ * #10423: the incoming prefix to persist ahead of the resolution's local rows,
+ * in server order. Splitting a download into conflicts and nonconflicting ops
+ * loses that order, but on one entity it is causal: a remote winner belongs
+ * right after the last nonconflicting op it dominates, which reached the
+ * server first, and before any op that dominates it. Such winners join the
+ * prefix (`moved`); the others keep their place. The prefix covers at least
+ * the first `minLength` nonconflicting ops.
+ */
+export const orderIncomingPrefix = (
+  nonConflictingOps: Operation[],
+  remoteWinsOps: Operation[],
+  minLength = 0,
+): { ordered: Operation[]; precedingOps: Operation[]; moved: Set<Operation> } => {
+  const keysOf = new Map(
+    [...nonConflictingOps, ...remoteWinsOps].map((op) => [op, entityKeys(op)]),
+  );
+  // True when `later` causally dominates `earlier` on an entity they share.
+  const dominates = (later: Operation, earlier: Operation): boolean =>
+    [...keysOf.get(later)!].some((key) => keysOf.get(earlier)!.has(key)) &&
+    compareVectorClocks(earlier.vectorClock, later.vectorClock) ===
+      VectorClockComparison.LESS_THAN;
+  const placed = remoteWinsOps.map((winner) => ({
+    winner,
+    pos: nonConflictingOps.reduce(
+      (last, op, index) => (dominates(winner, op) ? index + 1 : last),
+      0,
+    ),
+  }));
+  const length = Math.max(minLength, ...placed.map(({ pos }) => pos));
+  const precedingOps = nonConflictingOps.slice(0, length);
+  const inPrefix = placed.filter(
+    ({ winner, pos }) => pos > 0 || precedingOps.some((op) => dominates(op, winner)),
+  );
+  const ordered: Operation[] = [];
+  for (let index = 0; index <= length; index++) {
+    inPrefix.forEach(({ winner, pos }) => pos === index && ordered.push(winner));
+    if (index < length) ordered.push(nonConflictingOps[index]);
+  }
+  return { ordered, precedingOps, moved: new Set(inPrefix.map(({ winner }) => winner)) };
+};
+
+/**
+ * Without a local resolution row, the remote winners and the incoming prefix
+ * they dominate, in server order (`orderIncomingPrefix`); the other winners
+ * keep their place first.
+ */
+export const remoteWinsInServerOrder = (
+  nonConflictingOps: Operation[],
+  remoteWinsOps: Operation[],
+): Operation[] => {
+  const { ordered, moved } = orderIncomingPrefix(nonConflictingOps, remoteWinsOps);
+  return [...remoteWinsOps.filter((op) => !moved.has(op)), ...ordered];
+};
+
+/**
  * A local winner can share an entity with incoming nonconflicting time edits
  * (including edits to its children). Project those edits in their received
  * order and persist the incoming prefix BEFORE the snapshot. Hoisting only a
  * delta can put it ahead of an absolute edit and silently erase tracked time.
  * Keep both decisions together. Live apply still uses the written remote rows
  * and only the local snapshots needed for compensation.
+ *
+ * An incoming nonconflicting task update of plain fields, e.g. a notes edit
+ * that commutes with a pending time delta (#10385), is handled differently: a
+ * replace snapshot read before it is applied would erase it on every other
+ * device, so its fields are overlaid onto the snapshot's content. Unlike a
+ * delta it is absolute, so it needs neither the clock merge nor the hoist: it
+ * stays after the snapshot and re-applies the same value there on replay.
+ * A remote winner of the same task's other conflict (e.g. a rename newer than
+ * the local one, beside an older opaque op the local side beat) is overlaid
+ * the same way: it also applies after the snapshot (#10438).
+ *
+ * Field-patch re-sends (#10422) go last, after every incoming op, in the same
+ * transaction: a crash between the remote winners and the re-sends would
+ * otherwise hydrate the winners without the local fields that beat them.
  */
 export const buildTimeAwareResolutionBatches = async ({
   unappliedRemoteLosers,
@@ -84,6 +209,7 @@ export const buildTimeAwareResolutionBatches = async ({
   remoteWinsOps,
   localMultiReconciliationOps,
   nonConflictingOps,
+  resendOps = [],
   getTask,
 }: {
   unappliedRemoteLosers: Operation[];
@@ -92,9 +218,81 @@ export const buildTimeAwareResolutionBatches = async ({
   remoteWinsOps: Operation[];
   localMultiReconciliationOps: Operation[];
   nonConflictingOps: Operation[];
+  resendOps?: Operation[];
   getTask: (taskId: string) => Promise<unknown>;
 }): Promise<{ batches: MixedSourceOperationBatch[]; precedingOps: Operation[] }> => {
+  // Provenance is local to this batch: only newly built source winners qualify.
+  const sourceSnapshotIds = new Set(
+    newLocalWinOps.filter(isTimePreservingTaskSnapshot).map((op) => op.id),
+  );
   const foldedIds = new Set<string>();
+  // A remote winner of the snapshot's task applies after it (`localWinKeys`
+  // below), so its plain fields are this device's post-batch values as well
+  // (#10438). A winning delta is folded before the snapshot instead. Only a
+  // TASK winner that declares the task follows the snapshot; one that merely
+  // names it (a tag's task list, a subtask's parent) writes none of its plain
+  // fields and is ignored, as on master.
+  const remoteWinnerFieldOps = remoteWinsOps.filter(
+    (op) => op.entityType === 'TASK' && !isSyncTimeSpentOp(op),
+  );
+  const foldFieldOps = (op: Operation, fieldOps: Operation[]): Operation => {
+    if (
+      op.entityType !== 'TASK' ||
+      !op.entityId ||
+      !isLwwUpdatePayload(op.payload) ||
+      (op.payload.lwwUpdateMode !== 'replace' && !sourceSnapshotIds.has(op.id))
+    ) {
+      return op;
+    }
+    // The overlay changes only the snapshot's content, never its clock, and
+    // the edits stay after it in the log. Merging their clocks would also
+    // claim every earlier op of their author, including undeclared writes to
+    // this task (a subtask's estimate, a tag delete), so the server would
+    // accept a snapshot master's clock gets rejected and rebuilt from
+    // post-batch state (review of #10398). With master's clock, the server
+    // accepts it only where master's does, and there it now carries the
+    // edits. An op that touches the task (declares or names it) but is not a
+    // plain edit leaves the snapshot as on master, since the overlay would no
+    // longer be the post-batch value; the time projection's folds are carried.
+    const taskId = op.entityId;
+    const edits = fieldOps.filter(
+      (incoming) => touchesTask(incoming, taskId) && !foldedIds.has(incoming.id),
+    );
+    const winners = remoteWinnerFieldOps.filter((winner) =>
+      getOpEntityIds(winner).includes(taskId),
+    );
+    // Their relative order on this device is not fixed (a re-send moves the
+    // edits after the winners), so the overlay could not tell which is last.
+    if (edits.length > 0 && winners.length > 0) return op;
+    const overlay: Record<string, unknown> = {};
+    let hasOverlay = false;
+    for (const incoming of [...edits, ...winners]) {
+      const changes = plainTaskFields(incoming, taskId);
+      if (!changes) return op;
+      Object.assign(overlay, changes);
+      hasOverlay = true;
+    }
+    if (!hasOverlay) return op;
+    const actionPayload = { ...op.payload.actionPayload, ...overlay };
+    const clearedFields = sourceSnapshotIds.has(op.id)
+      ? (op.payload.clearedFields ?? []).filter((field) => !(field in overlay))
+      : undefined;
+    return {
+      ...op,
+      payload: {
+        ...op.payload,
+        actionPayload,
+        ...(clearedFields
+          ? {
+              clearedFields: [
+                ...clearedFields,
+                ...(clearedFieldsProps(overlay).clearedFields ?? []),
+              ],
+            }
+          : {}),
+      },
+    };
+  };
   const foldSnapshots = (ops: Operation[], timeOps: Operation[]): Promise<Operation[]> =>
     Promise.all(
       ops.map(async (op) => {
@@ -160,10 +358,11 @@ export const buildTimeAwareResolutionBatches = async ({
   // (e.g. local rename beat a remote rename); the snapshot must carry it too.
   // Reconciliations already fold their winning deltas.
   const winningTimeOps = remoteWinsOps.filter(isSyncTimeSpentOp);
-  const [localWins, reconciliations] = await Promise.all([
+  const [timeFoldedLocalWins, reconciliations] = await Promise.all([
     foldSnapshots(newLocalWinOps, [...nonConflictingOps, ...winningTimeOps]),
     foldSnapshots(localMultiReconciliationOps, nonConflictingOps),
   ]);
+  const localWins = timeFoldedLocalWins.map((op) => foldFieldOps(op, nonConflictingOps));
   // Keep the incoming prefix intact: hoisting a delta alone can move it ahead
   // of an absolute time edit (losing the delta) or the task's CREATE.
   const isFolded = (op: Operation): boolean => foldedIds.has(op.id);
@@ -171,21 +370,45 @@ export const buildTimeAwareResolutionBatches = async ({
     (last, op, index) => (isFolded(op) ? index : last),
     -1,
   );
-  const precedingOps = nonConflictingOps.slice(0, lastFoldedIndex + 1);
+  // A winner beside a local win of its entity stays after it: it must
+  // override the snapshot, here and on replay.
+  const localWinKeys = new Set(
+    newLocalWinOps.flatMap((op) =>
+      getOpEntityIds(op).map((id) => `${op.entityType}:${id}`),
+    ),
+  );
+  const { ordered, precedingOps, moved } = orderIncomingPrefix(
+    nonConflictingOps,
+    remoteWinsOps.filter(
+      (op) =>
+        !isFolded(op) &&
+        !getOpEntityIds(op).some((id) => localWinKeys.has(`${op.entityType}:${id}`)),
+    ),
+    lastFoldedIndex + 1,
+  );
   const batches: MixedSourceOperationBatch[] = [
     { ops: unappliedRemoteLosers, source: 'remote' },
     {
-      ops: [...compensatedRemoteOps, ...precedingOps, ...winningTimeOps.filter(isFolded)],
+      ops: [...compensatedRemoteOps, ...ordered, ...winningTimeOps.filter(isFolded)],
       source: 'remote',
       options: { pendingApply: true },
     },
     { ops: localWins, source: 'local' },
     {
-      ops: remoteWinsOps.filter((op) => !isFolded(op)),
+      ops: remoteWinsOps.filter((op) => !isFolded(op) && !moved.has(op)),
       source: 'remote',
       options: { pendingApply: true },
     },
     { ops: reconciliations, source: 'local' },
   ];
-  return { precedingOps, batches: batches.filter((batch) => batch.ops.length > 0) };
+  // Re-sends must follow the whole incoming batch, so it all joins the prefix.
+  const rest = resendOps.length > 0 ? nonConflictingOps.slice(precedingOps.length) : [];
+  batches.push(
+    { ops: rest, source: 'remote', options: { pendingApply: true } },
+    { ops: resendOps, source: 'local' },
+  );
+  return {
+    precedingOps: [...precedingOps, ...rest],
+    batches: batches.filter((batch) => batch.ops.length > 0),
+  };
 };

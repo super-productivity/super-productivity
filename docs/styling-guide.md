@@ -252,19 +252,19 @@ Quickest adoption — add the `.focus-ring` utility class from `util.scss`, whic
 
 ## Z-Index Layers
 
-| Variable                 | Value | Purpose                  |
-| ------------------------ | ----- | ------------------------ |
-| `--z-check-done`         | 11    | Task done checkbox       |
-| `--z-main-header`        | 12    | Main header              |
-| `--z-task-title-focus`   | 32    | Focused task title       |
-| `--z-multi-select-bar`   | 45    | Multi-select action bar  |
-| `--z-mobile-bottom-nav`  | 50    | Mobile bottom navigation |
-| `--z-side-nav`           | 60    | Side navigation          |
-| `--z-backdrop`           | 222   | Backdrop overlay         |
-| `--z-add-task-bar`       | 999   | Add task bar             |
-| `--z-search-bar`         | 999   | Search bar               |
-| `--z-onboarding-presets` | 999   | Onboarding preset screen |
-| `--z-tour`               | 1001  | Tour overlay             |
+| Variable                | Value | Purpose                  |
+| ----------------------- | ----- | ------------------------ |
+| `--z-check-done`        | 11    | Task done checkbox       |
+| `--z-main-header`       | 12    | Main header              |
+| `--z-task-title-focus`  | 32    | Focused task title       |
+| `--z-multi-select-bar`  | 45    | Multi-select action bar  |
+| `--z-mobile-bottom-nav` | 50    | Mobile bottom navigation |
+| `--z-side-nav`          | 60    | Side navigation          |
+| `--z-backdrop`          | 222   | Backdrop overlay         |
+| `--z-add-task-bar`      | 999   | Add task bar             |
+| `--z-search-bar`        | 999   | Search bar               |
+| `--z-tour`              | 1001  | Tour overlay             |
+| `--z-onboarding-hint`   | 1100  | First-run hints          |
 
 ## Layout Variables
 

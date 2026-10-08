@@ -11,6 +11,7 @@ import {
   SERVER_HELMET_CONFIG,
   SERVER_TRUST_PROXY,
 } from '../src/server';
+import { parseTrustProxy } from '../src/config';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 
@@ -285,6 +286,23 @@ describe('Server Security Configuration', () => {
 
     it('should not use the hop-count form disabled by GHSA-3m5p-2c4r-xxw2', () => {
       expect(typeof SERVER_TRUST_PROXY).not.toBe('number');
+    });
+
+    // The default deliberately leaves CGNAT (100.64.0.0/10) out, so a Tailscale
+    // sidecar's headers are ignored unless the operator opts in via TRUST_PROXY.
+    it('should ignore X-Forwarded-For from a CGNAT peer by default', async () => {
+      expect(await getIpForPeer('100.64.0.1')).toBe('100.64.0.1');
+    });
+
+    it('should resolve the forwarded client IP for a CGNAT peer once TRUST_PROXY names its range', async () => {
+      await app.close();
+      app = Fastify({
+        trustProxy: parseTrustProxy('loopback,uniquelocal,100.64.0.0/10'),
+      });
+      app.get('/test', async (req) => ({ ip: req.ip }));
+      await app.ready();
+
+      expect(await getIpForPeer('100.64.0.1')).toBe('203.0.113.9');
     });
   });
 });

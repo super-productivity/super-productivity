@@ -47,6 +47,8 @@ import {
 } from '@angular/material/core';
 import { MatDatepickerIntl } from '@angular/material/datepicker';
 import { FormlyConfigModule } from './app/ui/formly-config.module';
+import { provideFormlyConfig } from '@ngx-formly/core';
+import { PRIORITY_ICON_PRESET_SELECT_FORMLY_CONFIG } from './app/features/config/priority-icon-preset-select/priority-icon-preset-select.component';
 import { markedOptionsFactory } from './app/ui/marked-options-factory';
 import { MaterialCssVarsModule } from 'angular-material-css-vars';
 import { DEFAULT_TODAY_TAG_COLOR } from './app/features/work-context/work-context.const';
@@ -88,6 +90,8 @@ import { OperationWriteFlushService } from './app/op-log/sync/operation-write-fl
 import { TaskService } from './app/features/tasks/task.service';
 import { LocalRestApiFeatureBridgeService } from './app/features/tasks/local-rest-api-feature-bridge.service';
 import { LOCAL_REST_API_FEATURE_BRIDGE } from './app/core/electron/local-rest-api-feature-bridge';
+import { LOCAL_REST_API_FEATURE_ROUTES } from './app/core/electron/local-rest-api-feature-routes';
+import { LocalRestApiTaskRepeatCfgRoutesService } from './app/features/task-repeat-cfg/local-rest-api-task-repeat-cfg-routes.service';
 import { PluginOAuthRedirectHandler } from './app/plugins/oauth/plugin-oauth-redirect.handler';
 import { OAuthCallbackHandlerService } from './app/imex/sync/oauth-callback-handler.service';
 import { GlobalConfigService } from './app/features/config/global-config.service';
@@ -140,6 +144,9 @@ bootstrapApplication(AppComponent, {
     // timeout, so a failed or stalled chunk load degrades to the default locale
     // instead of failing bootstrap or holding up first render indefinitely.
     provideAppInitializer(() => registerNavigatorLocale()),
+    // Feature-owned formly type, registered here rather than in ui/'s
+    // FormlyConfigModule so ui/ does not import from features/.
+    provideFormlyConfig(PRIORITY_ICON_PRESET_SELECT_FORMLY_CONFIG),
     // Provide configuration for TranslateHttpLoader
     {
       provide: TRANSLATE_HTTP_LOADER_CONFIG,
@@ -226,6 +233,11 @@ bootstrapApplication(AppComponent, {
     {
       provide: LOCAL_REST_API_FEATURE_BRIDGE,
       useClass: LocalRestApiFeatureBridgeService,
+    },
+    {
+      provide: LOCAL_REST_API_FEATURE_ROUTES,
+      useClass: LocalRestApiTaskRepeatCfgRoutesService,
+      multi: true,
     },
     {
       provide: MAT_DATE_FORMATS,
@@ -377,7 +389,7 @@ bootstrapApplication(AppComponent, {
 }).then((appRef) => {
   appInjector = appRef.injector;
 
-  // Expose store + HydrationStateService for e2e tests in dev/stage builds.
+  // Expose store and persistence helpers for E2E tests in non-production builds.
   // Used by the screenshot pipeline to flip locale / customTheme inside a
   // single session (see e2e/store-screenshots/helpers.ts) and by #6230
   // recurring-task tests. Stripped from production via the env guard.
@@ -387,6 +399,13 @@ bootstrapApplication(AppComponent, {
       (window as unknown as { __e2eTestHelpers?: unknown }).__e2eTestHelpers = {
         store: storeRef,
         hydrationState: appRef.injector.get(m.HydrationStateService),
+        flushPendingWrites: () =>
+          appRef.injector.get(OperationWriteFlushService).flushPendingWrites(),
+        compact: async () => {
+          const { OperationLogCompactionService } =
+            await import('./app/op-log/persistence/operation-log-compaction.service');
+          return appRef.injector.get(OperationLogCompactionService).compact();
+        },
       };
     });
   }

@@ -171,6 +171,7 @@
               @let bySection = undoneTasksBySection();
               <div
                 class="sections-wrapper"
+                data-section-selection-scope
                 cdkDropList
                 [cdkDropListEnterPredicate]="acceptSectionDragOnly"
                 (cdkDropListDropped)="dropSection($event)"

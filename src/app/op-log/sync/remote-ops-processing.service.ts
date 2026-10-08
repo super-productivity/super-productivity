@@ -40,6 +40,7 @@ import { SyncProviderManager } from '../sync-providers/provider-manager.service'
 import { BackupService } from '../backup/backup.service';
 import { RecoveryPointBannerService } from '../../imex/local-backup/recovery-point-banner.service';
 import { countAllTasks } from '../../imex/local-backup/backup-ring.util';
+import { SupersededOperationResolverService } from './superseded-operation-resolver.service';
 
 /** The state that ends up applied when a batch carries several full-state ops. */
 const lastFullStateOp = (ops: Operation[]): Operation | undefined =>
@@ -67,6 +68,7 @@ export class RemoteOpsProcessingService {
   private opLogStore = inject(OperationLogStoreService);
   private operationApplier = inject(OperationApplierService);
   private conflictResolutionService = inject(ConflictResolutionService);
+  private supersededOperationResolver = inject(SupersededOperationResolverService);
   private validateStateService = inject(ValidateStateService);
   private sessionValidation = inject(SyncSessionValidationService);
   private vectorClockService = inject(VectorClockService);
@@ -136,6 +138,8 @@ export class RemoteOpsProcessingService {
        * apply old-epoch ops onto the fresh state.
        */
       fenceEpoch?: number;
+      /** SuperSync can recover receipts if a kept delta was already uploaded. */
+      rebaseKeptTimeDeltas?: boolean;
     },
   ): Promise<{
     localWinOpsCreated: number;
@@ -504,19 +508,32 @@ export class RemoteOpsProcessingService {
           nonConflicting,
           {
             callerHoldsOperationLogLock: true,
+            ...(options?.rebaseKeptTimeDeltas
+              ? {
+                  rebaseKeptTimeDeltas: true,
+                  assertFence: (context: string) =>
+                    this.providerManager.assertSyncEpochUnchanged(
+                      options.fenceEpoch,
+                      context,
+                    ),
+                }
+              : {}),
           },
         );
         localWinOpsCreated = lwwResult.localWinOpsCreated;
-        return;
-      }
-
-      // ─────────────────────────────────────────────────────────────────────────
-      // STEP 6: No Conflicts - Apply directly and validate
-      // ─────────────────────────────────────────────────────────────────────────
-      if (nonConflicting.length > 0) {
+      } else if (nonConflicting.length > 0) {
+        // ───────────────────────────────────────────────────────────────────────
+        // STEP 6: No Conflicts - Apply directly and validate
+        // ───────────────────────────────────────────────────────────────────────
         await this.applyNonConflictingOps(nonConflicting, true);
         await this.validateAfterSync(true); // Inside sp_op_log lock
       }
+
+      // #10377: a pending reorder that crossed a competing order or a delete
+      // applied above is reissued now, before it can upload stale.
+      localWinOpsCreated += (
+        await this.supersededOperationResolver.reissueCrossedPendingReorders()
+      ).created;
     });
     return {
       localWinOpsCreated,

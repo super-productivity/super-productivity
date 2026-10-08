@@ -54,6 +54,7 @@
           (click)="scheduleTask(task, $event)"
           [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"
           class="ico-btn schedule-btn"
+          [attr.data-scheduled-date-color]="scheduledDateColor(task)"
           color=""
           mat-icon-button
         >
@@ -70,6 +71,7 @@
           (click)="scheduleTask(task, $event)"
           [title]="T.F.TASK.CMP.SCHEDULE | translate"
           class="ico-btn schedule-btn"
+          [attr.data-scheduled-date-color]="scheduledDateColor(task)"
           color=""
           mat-icon-button
         >

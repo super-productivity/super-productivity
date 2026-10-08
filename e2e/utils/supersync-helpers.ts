@@ -40,10 +40,15 @@ export const SUPERSYNC_BASE_URL =
   process.env.SUPERSYNC_E2E_URL || 'http://localhost:1901';
 
 /**
- * Matches both `/api/sync/ops` uploads and `/api/sync/ops?...` downloads.
+ * Matches `/api/sync/ops` uploads and downloads. Every SuperSync request
+ * carries query parameters (downloads their cursor, all requests
+ * `appVersion`), so a glob without the trailing `*` matches nothing.
  * Do not add a trailing slash: the production endpoint has none.
  */
 const SUPERSYNC_OPS_ROUTE = '**/api/sync/ops*';
+
+/** Matches `/api/sync/snapshot` uploads, query parameters included. */
+export const SUPERSYNC_SNAPSHOT_ROUTE = '**/api/sync/snapshot*';
 
 export const routeSuperSyncOps = async (
   page: Page,
@@ -371,6 +376,12 @@ export const createSimulatedClient = async (
   testPrefix: string,
   options: {
     allowExampleTasks?: boolean;
+    /**
+     * Start with the calm new-install app features (`NEW_INSTALL_APP_FEATURES`)
+     * instead of the all-features-on set the E2E suite otherwise uses. The tour
+     * stays hidden: the app never shows it to a Playwright user agent.
+     */
+    isNewInstallAppFeatures?: boolean;
     /** Released bundles register service workers; block them when switching builds. */
     serviceWorkers?: 'allow' | 'block';
     /**
@@ -380,7 +391,11 @@ export const createSimulatedClient = async (
     seedBeforeBoot?: (page: Page) => Promise<void>;
   } = {},
 ): Promise<SimulatedE2EClient> => {
-  const { allowExampleTasks = false, seedBeforeBoot } = options;
+  const {
+    allowExampleTasks = false,
+    isNewInstallAppFeatures = false,
+    seedBeforeBoot,
+  } = options;
   // Use provided baseURL or fall back to localhost:4242 (Playwright fixture may be undefined)
   const effectiveBaseURL = baseURL || 'http://localhost:4242';
 
@@ -410,14 +425,21 @@ export const createSimulatedClient = async (
   // This runs before any page JavaScript, so Angular sees the flags immediately.
   // Tests of the example-task sync gate opt back in via { allowExampleTasks: true }
   // so first-run onboarding tasks are actually created.
-  await page.addInitScript((allowExamples) => {
-    localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
-    localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
-    localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
-    if (!allowExamples) {
-      localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
-    }
-  }, allowExampleTasks);
+  await page.addInitScript(
+    ({ allowExamples, isNewInstall }) => {
+      localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
+      localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
+      // getInitialAppFeatures() starts E2E clients with every feature on only
+      // while this flag is set.
+      if (!isNewInstall) {
+        localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
+      }
+      if (!allowExamples) {
+        localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+      }
+    },
+    { allowExamples: allowExampleTasks, isNewInstall: isNewInstallAppFeatures },
+  );
 
   page.on('console', (msg) => {
     if (msg.type() === 'error') {
@@ -972,18 +994,22 @@ export const getTaskCount = async (client: SimulatedE2EClient): Promise<number> 
  * Get all task titles as an array.
  * Useful for comparing task order between clients.
  *
+ * Reads every row in one in-page evaluation. `count()` followed by a per-row
+ * `nth(i).innerText()` is not a snapshot: each read re-resolves the locator and
+ * auto-waits, so a re-render in between (a sync applying ops, a view swap) leaves
+ * `nth(i)` pointing past the new end of the list and the read waits out its whole
+ * timeout on a row that no longer exists.
+ *
+ * The result is still whatever the DOM showed at that instant, so callers that
+ * assert on the list after a sync should poll it (`expect.poll`) rather than
+ * trust one read.
+ *
  * @param client - The simulated E2E client
  * @returns Array of task titles in order
  */
 export const getTaskTitles = async (client: SimulatedE2EClient): Promise<string[]> => {
-  const tasks = client.page.locator('task .task-title');
-  const count = await tasks.count();
-  const titles: string[] = [];
-  for (let i = 0; i < count; i++) {
-    const text = await tasks.nth(i).innerText();
-    titles.push(text.trim());
-  }
-  return titles;
+  const titles = await client.page.locator('task .task-title').allInnerTexts();
+  return titles.map((title) => title.trim());
 };
 
 /**
@@ -1116,7 +1142,7 @@ export const getTaskTitleFromState = async (
   }, titleSubstring);
 
 export const getTaskTimeSpentFromState = async (
-  client: SimulatedE2EClient,
+  client: Pick<SimulatedE2EClient, 'page'>,
   taskName: string,
 ): Promise<number | null> =>
   client.page.evaluate(async (name) => {
@@ -1239,7 +1265,7 @@ export const waitForTaskTimeSpent = async (
  * @param expectedTimeSpent - The expected timeSpent in milliseconds
  */
 export const expectExactTaskTime = async (
-  client: SimulatedE2EClient,
+  client: Pick<SimulatedE2EClient, 'page'>,
   taskName: string,
   expectedTimeSpent: number,
 ): Promise<void> => {
@@ -1261,7 +1287,7 @@ export const expectExactTaskTime = async (
  * @param duration - The time delta in milliseconds
  */
 export const recordTaskTimeDelta = async (
-  client: SimulatedE2EClient,
+  client: Pick<SimulatedE2EClient, 'page'>,
   taskName: string,
   date: string,
   duration: number,

@@ -377,7 +377,7 @@ test('hasBlockingDefects is false for a clean report with an empty baseline', ()
 // direction of the change shows in the diff; it should only ever go down. The
 // baseline records translations that already dropped a placeholder when the
 // check was introduced (#10006) and may only shrink.
-const BASELINE_PLACEHOLDER_COUNT = 123;
+const BASELINE_PLACEHOLDER_COUNT = 120;
 
 test('no shipped locale drops an English placeholder outside the baseline, and the baseline only shrinks', () => {
   const baseline = readBaselineFile(join(__dirname, 'test-lng-files.baseline.json'));
@@ -441,6 +441,28 @@ test('no shipped locale value has broken or unexpected placeholders', () => {
         `${file.file}: unexpected=${file.unexpectedPlaceholderKeys.join(', ')}; ` +
         `malformed=${file.malformedKeys.join(', ')}`,
     );
+
+  assert.deepEqual(offenders, []);
+});
+
+test('no shipped locale value contains an escaped slash or a bare <a> tag', () => {
+  // A literal "\/" renders as text and breaks URLs; a bare <a> was meant to
+  // close a link (#10515).
+  const i18nDirectory = join(__dirname, '..', 'src', 'assets', 'i18n');
+  const offenders = readdirSync(i18nDirectory)
+    .filter((file) => file.endsWith('.json'))
+    .sort()
+    .flatMap((file) => {
+      const locale = JSON.parse(readFileSync(join(i18nDirectory, file), 'utf8'));
+      return collectLeafKeys(locale)
+        .filter((key) => {
+          const value = getValueAtPath(locale, key);
+          return (
+            typeof value === 'string' && (value.includes('\\/') || value.includes('<a>'))
+          );
+        })
+        .map((key) => `${file}: ${key}`);
+    });
 
   assert.deepEqual(offenders, []);
 });

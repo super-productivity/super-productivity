@@ -1,3 +1,4 @@
+import { TaskMultiDragService } from '../../features/tasks/task-multi-drag.service';
 /* eslint-disable @typescript-eslint/naming-convention */
 import {
   AfterViewInit,
@@ -48,6 +49,12 @@ const COLLAPSED_WIDTH = 56;
 const MOBILE_NAV_WIDTH = 300;
 const FOCUS_DELAY_MS = 10;
 const INITIAL_ENTER_ANIMATION_DURATION_MS = 425;
+// `--transition-duration-l` (375ms) plus a 50ms buffer — the duration the panel
+// animates its width over (`--sidenav-transition-duration` in the stylesheet).
+// The timeout is a fixed timer rather than a `transitionend` listener, so the
+// buffer is what keeps it from firing before the width has settled and clipping
+// the last of the collapse; the two numbers have to move together.
+const SIDENAV_WIDTH_ANIMATION_DURATION_MS = 425;
 
 @Component({
   selector: 'magic-side-nav',
@@ -83,6 +90,7 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   private readonly _dataInitStateService = inject(DataInitStateService);
   private readonly _router = inject(Router);
   private _dragDropRegistry = inject(DragDropRegistry);
+  private _multiDrag = inject(TaskMultiDragService);
   private _externalDragService = inject(ScheduleExternalDragService);
   private _pointerUpSubscription: Subscription | null = null;
 
@@ -482,11 +490,12 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
       this._animateTimeoutId = null;
     }
     this.animateWidth.set(true);
-    // Slightly longer than --transition-duration-m (225ms) to ensure cleanup
+    // Slightly longer than --sidenav-transition-duration to ensure cleanup runs
+    // after the width has settled instead of cutting it short
     this._animateTimeoutId = window.setTimeout(() => {
       this.animateWidth.set(false);
       this._animateTimeoutId = null;
-    }, 300);
+    }, SIDENAV_WIDTH_ANIMATION_DURATION_MS);
   }
 
   private _handleArrowNavigation(event: KeyboardEvent): void {
@@ -656,6 +665,27 @@ export class MagicSideNavComponent implements OnDestroy, AfterViewInit {
   }
 
   private _handlePointerUp(event: MouseEvent | TouchEvent): void {
+    const ids = [...this._multiDrag.ids()];
+    if (ids.length > 1) {
+      if (this._multiDrag.isCancelled()) return;
+      const position = getPointerPosition(event);
+      const projectId = position
+        ? document
+            .elementFromPoint(position.x, position.y)
+            ?.closest('nav-item[data-project-id]')
+            ?.getAttribute('data-project-id')
+        : null;
+      if (projectId) {
+        this._externalDragService.setCancelNextDrop(true);
+        this._externalDragService
+          .activeDragRef()
+          ?.ended.pipe(take(1))
+          .subscribe(() => {
+            void this._multiDrag.moveToProject(projectId, ids);
+          });
+      }
+      return;
+    }
     const draggedTask = this._externalDragService.activeTask();
 
     // exclude recurring tasks

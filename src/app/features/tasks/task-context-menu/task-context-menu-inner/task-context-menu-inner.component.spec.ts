@@ -67,6 +67,7 @@ describe('TaskContextMenuInnerComponent', () => {
       'remove',
       'getTasksWithSubTasksByRepeatCfgId$',
       'getArchiveTasksForRepeatCfgId',
+      'update',
     ]);
     taskService.currentTaskId.and.returnValue('some-id');
     taskDuplicateService = jasmine.createSpyObj<TaskDuplicateService>(
@@ -310,6 +311,72 @@ describe('TaskContextMenuInnerComponent', () => {
     });
   });
 
+  describe('priority submenu', () => {
+    const menuItems = (selector: string): HTMLElement[] =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>(`.cdk-overlay-container ${selector}`),
+      );
+    const openPriorityMenu = (): HTMLElement[] => {
+      component.contextMenuTrigger()?.openMenu();
+      fixture.detectChanges();
+      tick();
+      const trigger = menuItems('[mat-menu-item]').find((el) =>
+        el.textContent?.trim().endsWith(T.F.TASK.CMP.PRIORITY),
+      );
+      expect(trigger).toBeDefined();
+      trigger!.click();
+      fixture.detectChanges();
+      tick();
+      return menuItems('[role="menuitemradio"]');
+    };
+    const closeMenus = (): void => {
+      component.contextMenuTrigger()?.closeMenu();
+      flush();
+    };
+
+    it('lists None, Low, Medium, High and checks only the current level', fakeAsync(() => {
+      component.taskSet = { ...DEFAULT_TASK, id: 'task-1', priority: 'medium' } as Task;
+      fixture.detectChanges();
+
+      const items = openPriorityMenu();
+
+      expect(items.map((el) => el.textContent)).toEqual([
+        jasmine.stringContaining(T.F.TASK.CMP.PRIORITY_NONE),
+        jasmine.stringContaining(T.F.TASK.CMP.PRIORITY_LOW),
+        jasmine.stringContaining(T.F.TASK.CMP.PRIORITY_MEDIUM),
+        jasmine.stringContaining(T.F.TASK.CMP.PRIORITY_HIGH),
+      ]);
+      expect(items.map((el) => el.getAttribute('aria-checked'))).toEqual([
+        'false',
+        'false',
+        'true',
+        'false',
+      ]);
+      expect(items[2].textContent).toContain('check');
+      // Opening focuses the current level, so Enter keeps it.
+      expect(document.activeElement).toBe(items[2]);
+      expect(items[1].querySelector('task-priority-indicator')).not.toBeNull();
+      items[2].click();
+      flush();
+      expect(taskService.update).not.toHaveBeenCalled();
+      closeMenus();
+    }));
+
+    it('sets the numeric level, and clears with null', fakeAsync(() => {
+      component.taskSet = { ...DEFAULT_TASK, id: 'task-1', priority: 'medium' } as Task;
+      fixture.detectChanges();
+
+      openPriorityMenu()[3].click();
+      flush();
+      expect(taskService.update).toHaveBeenCalledWith('task-1', { priority: 3 });
+
+      openPriorityMenu()[0].click();
+      flush();
+      expect(taskService.update).toHaveBeenCalledWith('task-1', { priority: null });
+      closeMenus();
+    }));
+  });
+
   describe('duplicate()', () => {
     it('delegates a task without subtasks directly to TaskDuplicateService', async () => {
       const mockTask: Task = {
@@ -512,6 +579,38 @@ describe('TaskContextMenuInnerComponent', () => {
       component.focusFirstSubmenuItem(menu);
 
       expect(menu.focusFirstItem).toHaveBeenCalledWith('program');
+    });
+  });
+
+  describe('focusCheckedSubmenuItem()', () => {
+    const fakeItem = (
+      ariaChecked: string | null,
+    ): { focus: jasmine.Spy; _getHostElement: () => HTMLElement } => {
+      const el = document.createElement('button');
+      if (ariaChecked !== null) {
+        el.setAttribute('aria-checked', ariaChecked);
+      }
+      return { focus: jasmine.createSpy('focus'), _getHostElement: () => el };
+    };
+
+    it('focuses the checked item', () => {
+      const items = [fakeItem('false'), fakeItem('true'), fakeItem('false')];
+      const menu = { _allItems: items, focusFirstItem: jasmine.createSpy() };
+
+      component.focusCheckedSubmenuItem(menu as unknown as MatMenu);
+
+      expect(items[1].focus).toHaveBeenCalledWith('program');
+      expect(menu.focusFirstItem).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the first item when nothing is checked', () => {
+      const items = [fakeItem(null), fakeItem('false')];
+      const menu = { _allItems: items, focusFirstItem: jasmine.createSpy() };
+
+      component.focusCheckedSubmenuItem(menu as unknown as MatMenu);
+
+      expect(menu.focusFirstItem).toHaveBeenCalledWith('program');
+      expect(items[0].focus).not.toHaveBeenCalled();
     });
   });
 

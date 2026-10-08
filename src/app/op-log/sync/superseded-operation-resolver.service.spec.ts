@@ -1,3 +1,5 @@
+import { DEFAULT_TASK } from '../../features/tasks/task.model';
+import { preserveTaskSnapshotTime } from './time-preserving-task-snapshot.util';
 import { TestBed } from '@angular/core/testing';
 import { SupersededOperationResolverService } from './superseded-operation-resolver.service';
 import {
@@ -82,7 +84,10 @@ describe('SupersededOperationResolverService', () => {
       'appendMixedSourceBatchSkipDuplicates',
       'appendWithVectorClockOverwrite',
       'getOpsAfterSeq',
+      'loadStateCache',
       'getUnsynced',
+      'rebasePendingLocalOps',
+      'invalidateUnsyncedCache',
     ]);
     mockVectorClockService = jasmine.createSpyObj('VectorClockService', [
       'getCurrentVectorClock',
@@ -111,6 +116,7 @@ describe('SupersededOperationResolverService', () => {
     // Default mocks
     mockVectorClockService.getCurrentVectorClock.and.returnValue(Promise.resolve({}));
     mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+    mockOpLogStore.loadStateCache.and.resolveTo(null);
     mockOpLogStore.getUnsynced.and.resolveTo([]);
     mockOpLogStore.markRejected.and.returnValue(Promise.resolve());
     mockStateSnapshotService.getStateSnapshotForOperationLog.and.returnValue(
@@ -188,6 +194,449 @@ describe('SupersededOperationResolverService', () => {
     });
 
     service = TestBed.inject(SupersededOperationResolverService);
+  });
+
+  describe('rejected delta and unchanged own replacement', () => {
+    for (const variant of [
+      'equal',
+      'equal before snapshot',
+      'different title',
+      'different title before snapshot',
+      'different notes before snapshot',
+      'causally covered notes before snapshot',
+      'equal clock notes before snapshot',
+      'foreign plan',
+      'history gap',
+      'missing suffix',
+      'unrejected snapshot',
+      'remote replace',
+    ] as const) {
+      it(`checks the complete retry proof: ${variant}`, async () => {
+        const delta: Operation = {
+          ...createMockOperation('delta', 'TASK', 'task-1', { [TEST_CLIENT_ID]: 1 }),
+          clientId: TEST_CLIENT_ID,
+          actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          payload: { taskId: 'task-1', date: '2026-10-03', duration: 3000 },
+        };
+        const snapshot: Operation = {
+          ...delta,
+          id: 'snapshot',
+          vectorClock: { [TEST_CLIENT_ID]: 2 },
+          actionType: '[TASK] LWW Update' as ActionType,
+          payload: {
+            lwwUpdateMode: 'replace',
+            actionPayload: {
+              id: 'task-1',
+              title: 'retained',
+              notes: 'retained notes',
+              timeSpent: 3000,
+            },
+            entityChanges: [],
+          },
+        };
+        const remote: Operation = {
+          ...createMockOperation('remote', 'TASK', 'task-1', { remote: 1 }),
+          actionType: ActionType.TASK_SHARED_UPDATE,
+          payload: {
+            task: {
+              id: 'task-1',
+              changes: {
+                title: variant.startsWith('different title') ? 'different' : 'retained',
+              },
+            },
+          },
+        };
+        if (variant === 'remote replace') remote.payload = snapshot.payload;
+        const pending: OperationLogEntry[] = [delta, snapshot].map((op, index) => ({
+          seq: index + 1,
+          op,
+          source: 'local',
+          appliedAt: index + 1,
+        }));
+        const remoteEntry: OperationLogEntry = {
+          seq: variant === 'history gap' ? 4 : 3,
+          op: remote,
+          source: 'remote',
+          appliedAt: 3,
+          syncedAt: 3,
+          applicationStatus: 'applied',
+        };
+        if (
+          variant === 'equal before snapshot' ||
+          variant === 'different title before snapshot'
+        ) {
+          pending[1].seq = 3;
+          remoteEntry.seq = 2;
+        }
+        const tail = [pending[1], remoteEntry].sort((a, b) => a.seq - b.seq);
+        if (variant.endsWith('notes before snapshot')) {
+          pending[1].seq = 3;
+          remoteEntry.seq = 4;
+          if (variant === 'causally covered notes before snapshot') {
+            snapshot.vectorClock = { ...snapshot.vectorClock, notesAuthor: 1 };
+          }
+          tail.unshift({
+            ...remoteEntry,
+            seq: 2,
+            op: {
+              ...remote,
+              id: 'earlier-notes',
+              vectorClock:
+                variant === 'equal clock notes before snapshot'
+                  ? snapshot.vectorClock
+                  : { notesAuthor: 1 },
+              payload: { task: { id: 'task-1', changes: { notes: 'different notes' } } },
+            },
+          });
+        }
+        if (variant === 'foreign plan')
+          tail.push({
+            ...remoteEntry,
+            seq: 4,
+            op: {
+              ...remote,
+              id: 'plan',
+              entityId: 'task-2',
+              actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+              payload: {
+                taskIds: ['task-2'],
+                today: '2026-10-03',
+                parentTaskMap: {},
+                startOfNextDayDiffMs: 0,
+              },
+            },
+          });
+        if (variant === 'missing suffix') {
+          mockOpLogStore.loadStateCache.and.resolveTo({
+            lastAppliedOpSeq: 4,
+          } as NonNullable<
+            Awaited<ReturnType<OperationLogStoreService['loadStateCache']>>
+          >);
+        }
+        mockOpLogStore.getUnsynced.and.resolveTo(pending);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo(tail);
+        mockOpLogStore.rebasePendingLocalOps.and.resolveTo([delta, snapshot]);
+        const before = JSON.stringify([delta, snapshot]);
+        const rejected = variant === 'unrejected snapshot' ? [delta] : [delta, snapshot];
+        const result = await service.rebaseCommutingTimeDeltaRejections(
+          rejected.map((op) => ({
+            opId: op.id,
+            op,
+            existingClock: remote.vectorClock,
+          })),
+        );
+        const shouldRebase =
+          variant === 'equal' ||
+          variant === 'equal before snapshot' ||
+          variant === 'causally covered notes before snapshot';
+        expect([...result]).toEqual(shouldRebase ? [delta.id, snapshot.id] : []);
+        expect(JSON.stringify([delta, snapshot])).toBe(before);
+        if (shouldRebase) {
+          expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledOnceWith(
+            [delta.id, snapshot.id],
+            remote.vectorClock,
+          );
+        } else {
+          expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
+        }
+      });
+    }
+  });
+
+  describe('rejected source snapshot superseded by an applied source snapshot', () => {
+    for (const variant of [
+      'newer remote',
+      'tie remote wins',
+      'tie local wins',
+      'stale rejection',
+      'unrejected snapshot',
+      'history gap',
+      'missing suffix',
+      'parent move',
+      'partial remote',
+      'remote replacement',
+      'epoch changes after retirement',
+    ] as const) {
+      it(`preserves the original delta identity with ${variant}`, async () => {
+        const delta: Operation = {
+          ...createMockOperation(
+            'original-delta',
+            'TASK',
+            'task-1',
+            { [TEST_CLIENT_ID]: 1 },
+            10,
+          ),
+          clientId: TEST_CLIENT_ID,
+          actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          payload: { taskId: 'task-1', date: '2026-10-04', duration: 1000 },
+        };
+        const snapshot = preserveTaskSnapshotTime(
+          {
+            ...delta,
+            id: 'own-snapshot',
+            timestamp: 20,
+            vectorClock: { [TEST_CLIENT_ID]: 2 },
+            actionType: '[TASK] LWW Update' as ActionType,
+            payload: {
+              entityChanges: [],
+              lwwUpdateMode: 'replace',
+              actionPayload: {
+                ...DEFAULT_TASK,
+                id: 'task-1',
+                projectId: '',
+                parentId: 'parent',
+              },
+            },
+          },
+          {
+            entityType: 'TASK',
+            entityId: 'task-1',
+            localOps: [delta],
+            remoteOps: [delta],
+            suggestedResolution: 'manual',
+          },
+        );
+        const rejectedSnapshot = { ...snapshot };
+        const remote: Operation = {
+          ...snapshot,
+          id: 'remote-snapshot',
+          clientId: 'z-remote',
+          vectorClock: { remote: 1 },
+          timestamp: 30,
+        };
+        if (variant.startsWith('tie')) {
+          remote.timestamp = snapshot.timestamp;
+          remote.clientId = variant === 'tie remote wins' ? 'z-remote' : 'a-remote';
+        }
+        if (variant === 'stale rejection')
+          snapshot.vectorClock = { [TEST_CLIENT_ID]: 3, remote: 1 };
+        if (variant === 'partial remote')
+          remote.payload = {
+            entityChanges: [],
+            lwwUpdateMode: 'patch',
+            actionPayload: { title: 'new' },
+          };
+        if (variant === 'remote replacement')
+          remote.payload = {
+            entityChanges: [],
+            lwwUpdateMode: 'replace',
+            actionPayload: { ...DEFAULT_TASK, id: 'task-1' },
+          };
+        const pending: OperationLogEntry[] = [delta, snapshot].map((op, index) => ({
+          op,
+          seq: index + 1,
+          source: 'local',
+          appliedAt: index + 1,
+        }));
+        const remoteEntry: OperationLogEntry = {
+          op: remote,
+          seq: variant === 'history gap' ? 4 : 3,
+          source: 'remote',
+          appliedAt: 3,
+          syncedAt: 3,
+          applicationStatus: 'applied',
+        };
+        const tail = [pending[1], remoteEntry];
+        if (variant === 'parent move')
+          tail.push({
+            ...remoteEntry,
+            seq: 4,
+            op: {
+              ...remote,
+              id: 'parent-move',
+              actionType: ActionType.TASK_SHARED_CONVERT_TO_SUB,
+              payload: {
+                taskId: 'task-1',
+                targetParentId: 'other-parent',
+                afterTaskId: null,
+              },
+            },
+          });
+        if (variant === 'missing suffix')
+          mockOpLogStore.loadStateCache.and.resolveTo({
+            lastAppliedOpSeq: 4,
+          } as NonNullable<
+            Awaited<ReturnType<OperationLogStoreService['loadStateCache']>>
+          >);
+        mockOpLogStore.getUnsynced.and.resolveTo(pending);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo(tail);
+        mockOpLogStore.rebasePendingLocalOps.and.resolveTo([delta]);
+        const rejected =
+          variant === 'unrejected snapshot' ? [delta] : [delta, rejectedSnapshot];
+        const before = JSON.stringify(pending);
+        const assertFence = (): void => {
+          if (
+            variant === 'epoch changes after retirement' &&
+            mockOpLogStore.markRejected.calls.count()
+          )
+            throw new Error('epoch changed');
+        };
+        const result = service.rebaseCommutingTimeDeltaRejections(
+          rejected.map((op) => ({
+            opId: op.id,
+            op,
+            existingClock: remote.vectorClock,
+          })),
+          assertFence,
+        );
+        const shouldRebase = variant === 'newer remote' || variant === 'tie remote wins';
+        if (variant === 'epoch changes after retirement') {
+          await expectAsync(result).toBeRejectedWithError('epoch changed');
+          expect(mockOpLogStore.markRejected).toHaveBeenCalledOnceWith([snapshot.id]);
+        } else {
+          expect([...(await result)]).toEqual(shouldRebase ? [delta.id] : []);
+          if (shouldRebase)
+            expect(mockOpLogStore.markRejected).toHaveBeenCalledOnceWith([snapshot.id]);
+          else expect(mockOpLogStore.markRejected).not.toHaveBeenCalled();
+        }
+        if (shouldRebase)
+          expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledOnceWith(
+            [delta.id],
+            remote.vectorClock,
+          );
+        else expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
+        expect(JSON.stringify(pending)).toBe(before);
+        expect(
+          mockOpLogStore.appendMixedSourceBatchSkipDuplicates,
+        ).not.toHaveBeenCalled();
+      });
+    }
+  });
+
+  describe('rejected deltas beside accepted successor patches', () => {
+    it('skips a task already resolved during download while another remains pending', async () => {
+      const resolved = createMockOperation('resolved', 'TASK', 'task-1', {
+        [TEST_CLIENT_ID]: 1,
+      });
+      const pending: Operation = {
+        ...createMockOperation('pending', 'TASK', 'task-2', { [TEST_CLIENT_ID]: 2 }),
+        clientId: TEST_CLIENT_ID,
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        payload: { taskId: 'task-2', date: '2026-10-03', duration: 3000 },
+      };
+      const successor: Operation = {
+        ...createMockOperation('patch', 'TASK', 'task-2', {
+          [TEST_CLIENT_ID]: 3,
+          remote: 1,
+        }),
+        clientId: TEST_CLIENT_ID,
+        payload: {
+          lwwUpdateMode: 'patch',
+          actionPayload: { title: 'B' },
+          entityChanges: [],
+        },
+      };
+      mockOpLogStore.getUnsynced.and.resolveTo([
+        { seq: 2, op: pending, source: 'local', appliedAt: 2 },
+      ]);
+      mockOpLogStore.getOpsAfterSeq.and.resolveTo([
+        { seq: 3, op: successor, source: 'local', appliedAt: 3, syncedAt: 3 },
+      ]);
+      mockOpLogStore.rebasePendingLocalOps.and.resolveTo([pending]);
+
+      const recovered = await service.rebaseCommutingTimeDeltaRejections([
+        { opId: resolved.id, op: resolved, existingClock: { remote: 1 } },
+        { opId: pending.id, op: pending, existingClock: successor.vectorClock },
+      ]);
+
+      expect([...recovered]).toEqual([pending.id]);
+      expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledOnceWith(
+        [pending.id],
+        successor.vectorClock,
+      );
+    });
+
+    for (const shape of [
+      'own patch',
+      'remote patch',
+      'replace',
+      'time write',
+      'time clear',
+      'unacknowledged',
+      'unapplied',
+      'intervening time write',
+      'missing row',
+      'unrejected delta',
+    ] as const) {
+      it(`checks the recovery proof for ${shape}`, async () => {
+        const delta: Operation = {
+          ...createMockOperation('delta', 'TASK', 'task-1', { [TEST_CLIENT_ID]: 1 }),
+          clientId: TEST_CLIENT_ID,
+          actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+          payload: { taskId: 'task-1', date: '2026-10-03', duration: 3000 },
+        };
+        const row: Operation = {
+          ...createMockOperation('patch', 'TASK', 'task-1', {
+            [TEST_CLIENT_ID]: 2,
+            remote: 1,
+          }),
+          clientId:
+            shape === 'remote patch' || shape === 'unapplied' ? 'remote' : TEST_CLIENT_ID,
+          payload: {
+            lwwUpdateMode: shape === 'replace' ? 'replace' : 'patch',
+            actionPayload: shape === 'time write' ? { timeSpent: 3000 } : { title: 'B' },
+            entityChanges: [],
+            ...(shape === 'time clear' ? { clearedFields: ['timeSpentOnDay'] } : {}),
+          },
+        };
+        const pending: OperationLogEntry = {
+          seq: 1,
+          op: delta,
+          source: 'local',
+          appliedAt: 1,
+        };
+        const entry: OperationLogEntry = {
+          seq: 3,
+          op: row,
+          source: row.clientId === TEST_CLIENT_ID ? 'local' : 'remote',
+          appliedAt: 3,
+          syncedAt: shape === 'unacknowledged' ? undefined : 3,
+          applicationStatus: shape === 'unapplied' ? 'pending' : 'applied',
+        };
+        const tail = shape === 'missing row' ? [] : [entry];
+        if (shape === 'intervening time write') {
+          tail.unshift({
+            ...entry,
+            seq: 2,
+            op: {
+              ...row,
+              id: 'absolute',
+              vectorClock: { remote: 1 },
+              payload: {
+                lwwUpdateMode: 'patch',
+                actionPayload: { timeSpent: 3000 },
+                entityChanges: [],
+              },
+            },
+          });
+        }
+        mockOpLogStore.getUnsynced.and.resolveTo([
+          pending,
+          ...(shape === 'unrejected delta'
+            ? [{ ...pending, seq: 2, op: { ...delta, id: 'uncertain' } }]
+            : []),
+        ]);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo(tail);
+        mockOpLogStore.rebasePendingLocalOps.and.resolveTo([delta]);
+        const recovered = await service.rebaseCommutingTimeDeltaRejections([
+          { opId: delta.id, op: delta, existingClock: row.vectorClock },
+        ]);
+        const allowed = shape === 'own patch' || shape === 'remote patch';
+        expect([...recovered]).toEqual(allowed ? [delta.id] : []);
+        if (allowed) {
+          expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledWith(
+            [delta.id],
+            row.vectorClock,
+          );
+          expect(mockLockService.request.calls.allArgs().map(([name]) => name)).toEqual([
+            'sp_op_log_upload',
+            'sp_op_log',
+          ]);
+        } else {
+          expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
+        }
+      });
+    }
   });
 
   describe('resolveSupersededLocalOps', () => {
@@ -356,6 +805,125 @@ describe('SupersededOperationResolverService', () => {
       expect(appendedOp.payload).toEqual(entityState);
       expect(appendedOp.clientId).toBe(TEST_CLIENT_ID);
       expect(appendedOp.timestamp).toBe(1000); // Preserved from original
+    });
+
+    it('re-uploads only the fields a readable edit wrote, as a patch (#10379)', async () => {
+      const supersededOp = createMockOperation(
+        'op-1',
+        'TASK',
+        'task-1',
+        { clientA: 5 },
+        1000,
+      );
+      supersededOp.actionType = ActionType.TASK_SHARED_UPDATE;
+      supersededOp.payload = {
+        actionPayload: {
+          task: { id: 'task-1', changes: { title: 'Renamed', notes: undefined } },
+          clearedFields: ['notes'],
+        },
+        entityChanges: [],
+      };
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo({ clientA: 3 });
+      // Another device's done toggle is in state; a replace would re-send it.
+      mockConflictResolutionService.getCurrentEntityState.and.resolveTo({
+        id: 'task-1',
+        title: 'Renamed',
+        isDone: true,
+      });
+
+      await service.resolveSupersededLocalOps([{ opId: 'op-1', op: supersededOp }]);
+
+      expect(mockConflictResolutionService.createLWWUpdateOp).toHaveBeenCalledWith(
+        'TASK',
+        'task-1',
+        { title: 'Renamed', notes: undefined },
+        TEST_CLIENT_ID,
+        jasmine.any(Object),
+        1000,
+        'patch',
+        undefined,
+        true,
+      );
+      expectAtomicRejection(['op-1']);
+    });
+
+    // Released receivers (v18.15.0-v19.1.0) replace a habit with a 'replace'
+    // snapshot that cannot carry its `type`; repair then resets it.
+    it('re-uploads a superseded habit snapshot as a patch', async () => {
+      const habit = { id: 'cnt-1', title: 'Habit', type: 'StopWatch', countOnDay: {} };
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo({});
+      mockConflictResolutionService.getCurrentEntityState.and.resolveTo(habit);
+      mockConflictResolutionService.createLWWUpdateOp.and.callFake(
+        (entityType, entityId, entityState, clientId, vectorClock, timestamp, mode) => ({
+          ...createMockOperation('replacement', entityType, entityId, vectorClock),
+          actionType: `[${entityType}] LWW Update` as ActionType,
+          payload: {
+            actionPayload: entityState as Record<string, unknown>,
+            entityChanges: [],
+            lwwUpdateMode: mode ?? 'replace',
+          },
+          clientId,
+          timestamp,
+        }),
+      );
+
+      await service.resolveSupersededLocalOps([
+        {
+          opId: 'op-1',
+          op: createMockOperation('op-1', 'SIMPLE_COUNTER', 'cnt-1', { clientA: 1 }),
+        },
+      ]);
+
+      const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
+        .args[0] as Operation;
+      expect(appendedOp.payload).toEqual(
+        jasmine.objectContaining({ actionPayload: habit, lwwUpdateMode: 'patch' }),
+      );
+    });
+
+    // Receivers ignore a marked patch for an absent habit, so a recreation is
+    // marked first and then stays a replace.
+    it('re-uploads a superseded habit recreation as a marked replace', async () => {
+      const habit = { id: 'cnt-1', title: 'Habit', type: 'StopWatch', countOnDay: {} };
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo({});
+      mockConflictResolutionService.getCurrentEntityState.and.resolveTo(habit);
+      mockConflictResolutionService.createLWWUpdateOp.and.callFake(
+        (entityType, entityId, entityState, clientId, vectorClock, timestamp, mode) => ({
+          ...createMockOperation('replacement', entityType, entityId, vectorClock),
+          actionType: `[${entityType}] LWW Update` as ActionType,
+          payload: {
+            actionPayload: entityState as Record<string, unknown>,
+            entityChanges: [],
+            lwwUpdateMode: mode ?? 'replace',
+          },
+          clientId,
+          timestamp,
+        }),
+      );
+      const supersededRecreation: Operation = {
+        ...createMockOperation('op-1', 'SIMPLE_COUNTER', 'cnt-1', { clientA: 1 }),
+        actionType: '[SIMPLE_COUNTER] LWW Update' as ActionType,
+        payload: {
+          actionPayload: habit,
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+          recreatesEntityAfterDelete: true,
+        },
+      };
+
+      await service.resolveSupersededLocalOps([
+        { opId: 'op-1', op: supersededRecreation },
+      ]);
+
+      const appendedOp = mockOpLogStore.appendWithVectorClockOverwrite.calls.first()
+        .args[0] as Operation;
+      expect(appendedOp.payload).toEqual(
+        jasmine.objectContaining({
+          actionPayload: habit,
+          lwwUpdateMode: 'replace',
+          recreatesEntityAfterDelete: true,
+        }),
+      );
     });
 
     it('preserves recreate guards and appends their relationship follow-ups (#8997)', async () => {

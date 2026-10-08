@@ -1,11 +1,11 @@
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
   effect,
   inject,
   input,
-  OnDestroy,
   output,
   signal,
   viewChild,
@@ -39,8 +39,6 @@ import { expandCollapseAni } from '../../../ui/tree-dnd/tree.animations';
 import { Router } from '@angular/router';
 import { Log } from '../../../core/log';
 
-const EXPAND_ANIMATION_RESET_DELAY_MS = 250;
-
 export const getProjectVisibilityIconColor = (project: Project): string | null =>
   isSingleEmoji(project.icon || DEFAULT_PROJECT_ICON)
     ? null
@@ -65,12 +63,15 @@ export const getProjectVisibilityIconColor = (project: Project): string | null =
   styleUrls: ['./nav-list-tree.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [expandCollapseAni],
+  // On the host so it also covers the folders inside the tree.
+  host: {
+    ['[@.disabled]']: '!isAnimationEnabled()',
+  },
 })
-export class NavListTreeComponent implements OnDestroy {
+export class NavListTreeComponent {
   private readonly _navConfigService = inject(MagicNavConfigService);
   private readonly _menuTreeService = inject(MenuTreeService);
   private readonly _router = inject(Router);
-  private _expandAnimationTimeoutId: number | null = null;
 
   item = input.required<NavTreeItem>();
   showLabels = input<boolean>(true);
@@ -95,25 +96,20 @@ export class NavListTreeComponent implements OnDestroy {
 
   readonly treeNodes = signal<TreeNode<MenuTreeViewNode>[]>([]);
   readonly treeKind = computed<MenuTreeKind>(() => this.item().treeKind);
-  readonly shouldAnimateExpandCollapse = signal(false);
+  // Off for the first render, so the lists and folders that are already open
+  // appear without animating in on app start.
+  readonly isAnimationEnabled = signal(false);
 
   constructor() {
     effect(() => {
       const nodes = this.item().tree;
       this.treeNodes.set(nodes.map((node) => this._toTreeNode(node)));
     });
+    afterNextRender(() => this.isAnimationEnabled.set(true));
   }
 
   onHeaderClick(): void {
-    this._enableExpandAnimationTemporarily();
     this.itemClick.emit(this.item());
-  }
-
-  ngOnDestroy(): void {
-    if (this._expandAnimationTimeoutId != null) {
-      window.clearTimeout(this._expandAnimationTimeoutId);
-      this._expandAnimationTimeoutId = null;
-    }
   }
 
   onChildClick(node: TreeNode<MenuTreeViewNode>): void {
@@ -161,18 +157,6 @@ export class NavListTreeComponent implements OnDestroy {
     event.preventDefault();
     event.stopPropagation();
     this._openFolderContextMenu(event, node);
-  }
-
-  private _enableExpandAnimationTemporarily(): void {
-    if (this._expandAnimationTimeoutId != null) {
-      window.clearTimeout(this._expandAnimationTimeoutId);
-    }
-
-    this.shouldAnimateExpandCollapse.set(true);
-    this._expandAnimationTimeoutId = window.setTimeout(() => {
-      this.shouldAnimateExpandCollapse.set(false);
-      this._expandAnimationTimeoutId = null;
-    }, EXPAND_ANIMATION_RESET_DELAY_MS);
   }
 
   private _openFolderContextMenu(

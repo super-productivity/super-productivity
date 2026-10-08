@@ -22,8 +22,12 @@ test('calendar connection failure shows the HTTP status without exposing its URL
   await dialog.locator('input[id*="icalUrl"]').fill(calendarUrl);
   await dialog.getByRole('button', { name: 'Test connection' }).click();
 
-  const snack = page.locator('mat-snack-bar-container');
-  await expect(snack).toContainText('Connection failed:');
+  // A startup snack (e.g. the storage persistence warning) can still be
+  // leaving the screen, so match the connection snack itself.
+  const snack = page.locator('mat-snack-bar-container', {
+    hasText: 'Connection failed:',
+  });
+  await expect(snack).toBeVisible();
   await expect(snack).toContainText('401');
   await expect(snack).not.toContainText('private-secret-9900');
   await expect(snack).not.toContainText(calendarUrl);

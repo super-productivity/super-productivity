@@ -6,18 +6,12 @@ import {
   selectTagById,
   selectTagsByIds,
 } from './store/tag.reducer';
-import {
-  addTag,
-  deleteTag,
-  deleteTags,
-  updateTag,
-  updateTagOrder,
-} from './store/tag.actions';
+import { addTag, deleteTag, deleteTags, updateTag } from './store/tag.actions';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Tag, TagState } from './tag.model';
 import { nanoid } from 'nanoid';
-import { DEFAULT_TAG } from './tag.const';
+import { DEFAULT_TAG, TODAY_TAG } from './tag.const';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { sortByTitle } from '../../util/sort-by-title';
 import { getRandomWorkContextColor } from '../../ui/work-context-color';
@@ -34,6 +28,15 @@ export class TagService {
 
   tags$: Observable<Tag[]> = this._store$.pipe(select(selectAllTags));
   tags = toSignal(this.tags$, { initialValue: [] });
+  // Share one lookup across task rows. Uncustomized Today keeps theme-safe green.
+  scheduledTodayColor = computed(() => {
+    const today = this.tags().find((tag) => tag.id === TODAY_TAG.id);
+    if (today?.color) return today.color;
+    const primary = today?.theme?.primary;
+    return primary && primary.toLowerCase() !== TODAY_TAG.theme.primary?.toLowerCase()
+      ? primary
+      : null;
+  });
   tagsInTreeOrder = computed(() =>
     this._menuTreeService.buildTagListInTreeOrder(this.tags()),
   );
@@ -81,10 +84,6 @@ export class TagService {
 
   updateColor(id: string, color: string): void {
     this._store$.dispatch(updateTag({ tag: { id, changes: { color } } }));
-  }
-
-  updateOrder(ids: string[]): void {
-    this._store$.dispatch(updateTagOrder({ ids }));
   }
 
   deleteTags(ids: string[]): void {

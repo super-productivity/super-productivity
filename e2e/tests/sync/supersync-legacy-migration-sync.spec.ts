@@ -562,8 +562,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       // The regression pin: the setup sync must prompt instead of silently
       // reporting IN_SYNC with B's migrated tasks stranded.
       await expect(syncPageB.conflictDialog).toBeVisible({ timeout: 30000 });
-      await syncPageB.resolveConflictDialog('local');
-      await syncPageB.syncAndWait({ useLocal: true });
+      await syncPageB.syncAndWait({ conflictDialog: 'local' });
       console.log('[Test] Client B: kept local data via SYNC_IMPORT');
 
       await sidenavB.locator('nav-item', { hasText: 'Client B Project' }).click();
@@ -677,8 +676,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
 
       // The regression pin: an archive-only store prompts like one with active tasks.
       await expect(syncPageB.conflictDialog).toBeVisible({ timeout: 30000 });
-      await syncPageB.resolveConflictDialog('local');
-      await syncPageB.syncAndWait({ useLocal: true });
+      await syncPageB.syncAndWait({ conflictDialog: 'local' });
       const opsBAfter = await getLocalOpLogSummary(clientB.page);
       expect(opsBAfter.some(isFullStateOp)).toBe(true);
       expect(opsBAfter.find((op) => op.entityType === 'MIGRATION')?.isSynced).toBe(true);

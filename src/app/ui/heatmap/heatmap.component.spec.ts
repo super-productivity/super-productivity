@@ -1,8 +1,14 @@
-import { Component } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeDe from '@angular/common/locales/de';
+import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DateAdapter } from '@angular/material/core';
+import { By } from '@angular/platform-browser';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Subject } from 'rxjs';
 
 import { HeatmapComponent, HeatmapData } from './heatmap.component';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 
 @Component({
   standalone: true,
@@ -36,19 +42,60 @@ class TestHostComponent {
   };
 }
 
+// Stand-ins for the locale-aware names `CustomDateAdapter` returns, distinct from
+// the English defaults so a hardcoded fallback would fail the assertions.
+const LOCALIZED_DAY_NAMES = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+
+const TRANSLATIONS = {
+  HEATMAP: {
+    DAY_TOOLTIP: {
+      ONE: '{{date}}: {{taskCount}} Aufgabe, {{timeSpent}}',
+      OTHER: '{{date}}: {{taskCount}} Aufgaben, {{timeSpent}}',
+    },
+    LEGEND_LESS: 'Weniger',
+    LEGEND_MORE: 'Mehr',
+  },
+};
+
 describe('HeatmapComponent', () => {
   let fixture: ComponentFixture<TestHostComponent>;
+  let firstDayOfWeek: number;
+  const localeSig = signal<string>('en-US');
+
+  beforeAll(() => {
+    // formatDate needs locale data registered for non-default locales.
+    registerLocaleData(localeDe, 'de-DE');
+  });
 
   beforeEach(async () => {
     document.body.classList.add('isDarkTheme');
     document.body.style.setProperty('--c-light-05', 'rgba(255, 255, 255, 0.05)');
     document.body.style.setProperty('--ink-on-channel', '255, 255, 255');
     document.body.style.setProperty('--c-primary', 'rgb(90, 150, 255)');
+    firstDayOfWeek = 0;
+    localeSig.set('en-US');
 
     await TestBed.configureTestingModule({
-      imports: [TestHostComponent],
-      providers: [{ provide: DateAdapter, useValue: { getFirstDayOfWeek: () => 0 } }],
+      imports: [TestHostComponent, TranslateModule.forRoot()],
+      providers: [
+        {
+          provide: DateAdapter,
+          useValue: {
+            getFirstDayOfWeek: () => firstDayOfWeek,
+            getDayOfWeekNames: () => LOCALIZED_DAY_NAMES,
+            localeChanges: new Subject<void>(),
+          },
+        },
+        {
+          provide: DateTimeFormatService,
+          useValue: { currentLocale: localeSig },
+        },
+      ],
     }).compileComponents();
+
+    const translateService = TestBed.inject(TranslateService);
+    translateService.setTranslation('de', TRANSLATIONS);
+    translateService.use('de');
 
     fixture = TestBed.createComponent(TestHostComponent);
     fixture.detectChanges();
@@ -87,5 +134,60 @@ describe('HeatmapComponent', () => {
     expect(getComputedStyle(inactiveLegendItem).boxShadow).not.toContain(
       'rgba(255, 255, 255',
     );
+  });
+
+  it('takes weekday abbreviations from the locale-aware date adapter', () => {
+    const renderedLabels = Array.from(
+      fixture.nativeElement.querySelectorAll('.day-label') as NodeListOf<HTMLElement>,
+    ).map((el) => el.textContent?.trim());
+
+    expect(renderedLabels).toEqual(LOCALIZED_DAY_NAMES);
+  });
+
+  it('rotates the localized weekday abbreviations by the first day of week', () => {
+    firstDayOfWeek = 1;
+    fixture = TestBed.createComponent(TestHostComponent);
+    fixture.detectChanges();
+
+    expect(
+      fixture.debugElement
+        .query(By.directive(HeatmapComponent))
+        .componentInstance.dayLabels(),
+    ).toEqual(['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']);
+  });
+
+  it('translates the legend labels', () => {
+    const legendText = (
+      fixture.nativeElement.querySelector('.heatmap-legend') as HTMLElement
+    ).textContent;
+
+    expect(legendText).toContain('Weniger');
+    expect(legendText).toContain('Mehr');
+  });
+
+  it('translates day tooltips and picks the plural form by task count', () => {
+    const days = Array.from(
+      fixture.nativeElement.querySelectorAll('.day') as NodeListOf<HTMLElement>,
+    );
+
+    expect(days[0].title).toBe('1/1/26: 0 Aufgaben, -');
+    expect(days[1].title).toBe('1/2/26: 1 Aufgabe, 1m');
+    // Days outside the range render without a tooltip.
+    expect(days[2].title).toBe('');
+  });
+
+  it('formats tooltip dates with the date locale, independent of the UI language', () => {
+    const days = Array.from(
+      fixture.nativeElement.querySelectorAll('.day') as NodeListOf<HTMLElement>,
+    );
+
+    expect(days[0].title).toBe('1/1/26: 0 Aufgaben, -');
+    expect(days[1].title).toBe('1/2/26: 1 Aufgabe, 1m');
+
+    localeSig.set('de-DE');
+    fixture.detectChanges();
+
+    expect(days[0].title).toBe('01.01.26: 0 Aufgaben, -');
+    expect(days[1].title).toBe('02.01.26: 1 Aufgabe, 1m');
   });
 });

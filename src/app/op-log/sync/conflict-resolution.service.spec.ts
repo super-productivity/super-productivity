@@ -12,6 +12,7 @@ import { OperationLogStoreService } from '../persistence/operation-log-store.ser
 import { SnackService } from '../../core/snack/snack.service';
 import { BannerService } from '../../core/banner/banner.service';
 import { BannerId } from '../../core/banner/banner.model';
+import { T } from '../../t.const';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { of } from 'rxjs';
 import {
@@ -77,6 +78,30 @@ describe('ConflictResolutionService', () => {
     vectorClock: { [clientId]: 1 },
     timestamp: Date.now(),
     schemaVersion: 1,
+  });
+
+  // #10420: a pending habit order listing h1 and h2, and single-habit ops.
+  const listedHabitOp = (
+    id: string,
+    clientId: string,
+    actionType: ActionType,
+    actionPayload: Record<string, unknown>,
+    timestamp = Date.now(),
+  ): Operation => ({
+    ...createMockOp(id, clientId),
+    actionType,
+    entityType: 'SIMPLE_COUNTER',
+    entityId: 'h1',
+    payload: { actionPayload, entityChanges: [] },
+    timestamp,
+  });
+  const habitOrderOp = (): Operation => ({
+    ...listedHabitOp('order', 'clientA', ActionType.COUNTER_UPDATE_ORDER, {
+      ids: ['h2', 'h1'],
+    }),
+    opType: OpType.Move,
+    entityId: 'h2',
+    entityIds: ['h2', 'h1'],
   });
 
   const getMixedLocalOps = (): readonly Operation[] =>
@@ -655,13 +680,17 @@ describe('ConflictResolutionService', () => {
         return openBannerSpy;
       };
 
-      it('preserves the content-loss warning without a review action', async () => {
+      it('preserves the content-loss warning with only a confirming OK button', async () => {
         const openBannerSpy = await openContentBanner();
 
         const banner = openBannerSpy.calls.mostRecent().args[0];
         expect(banner.id).toBe(BannerId.SyncConflictContentResolved);
-        // Message + built-in dismiss = exactly the released v18.14.0 banner.
-        expect(banner.action).toBeUndefined();
+        // #10481: the shared G.DISMISS label reads as "reject" in some locales,
+        // so the banner shows a single "OK" that only closes it.
+        expect(banner.isHideDismissBtn).toBe(true);
+        expect(banner.action?.label).toBe(T.G.OK);
+        expect(banner.action2).toBeUndefined();
+        expect(banner.isKeepVisibleAfterAction).toBeFalsy();
       });
     });
 
@@ -864,6 +893,51 @@ describe('ConflictResolutionService', () => {
       );
       // Local ops should be rejected
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-1']);
+    });
+
+    it('keeps a commuting pending habit order pending past a remote winner (#10420)', async () => {
+      const now = Date.now();
+      const order = habitOrderOp();
+      const count = listedHabitOp(
+        'count',
+        'clientA',
+        'test' as ActionType,
+        {},
+        now - 1000,
+      );
+      const remote = {
+        ...listedHabitOp('remote', 'clientB', 'test' as ActionType, {}, now),
+        vectorClock: { clientB: 4 },
+      };
+      const conflicts: EntityConflict[] = [
+        {
+          entityType: 'SIMPLE_COUNTER',
+          entityId: 'h1',
+          localOps: [count],
+          remoteOps: [remote],
+          suggestedResolution: 'manual',
+        },
+      ];
+      mockOpLogStore.getUnsyncedByEntity.and.resolveTo(
+        new Map([
+          ['SIMPLE_COUNTER:h1', [order, count]],
+          ['SIMPLE_COUNTER:h2', [order]],
+        ]),
+      );
+      const getUnsynced = jasmine.createSpy('getUnsynced').and.resolveTo([
+        { seq: 1, source: 'local', op: order },
+        { seq: 2, source: 'local', op: count },
+      ]);
+      const rebase = jasmine.createSpy('rebasePendingLocalOps').and.resolveTo([]);
+      Object.assign(mockOpLogStore, { getUnsynced, rebasePendingLocalOps: rebase });
+
+      await service.autoResolveConflictsLWW(conflicts);
+
+      expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['count']);
+      expect(mockOpLogStore.markRejected).not.toHaveBeenCalledWith(
+        jasmine.arrayContaining(['order']),
+      );
+      expect(rebase).toHaveBeenCalledOnceWith(['order', 'count'], { clientB: 4 });
     });
 
     it('should not duplicate already rejected local ops while adding superseded pending ops', async () => {
@@ -1142,6 +1216,55 @@ describe('ConflictResolutionService', () => {
             .recreatesEntityAfterDelete,
         ).toBeTrue();
       });
+
+      // Released receivers (v18.15.0-v19.1.0) replace a habit with a 'replace'
+      // snapshot that cannot carry its `type`; repair then resets it.
+      for (const remoteOpType of [OpType.Update, OpType.Delete]) {
+        it(`sends a local-win habit snapshot as ${remoteOpType === OpType.Update ? 'a patch' : 'a replace recreation'} over a remote ${remoteOpType}`, async () => {
+          const now = Date.now();
+          mockStore.select.and.returnValue(
+            of({
+              id: 'cnt-1',
+              title: 'Local title',
+              isEnabled: true,
+              icon: null,
+              type: 'StopWatch',
+              countOnDay: {},
+              isOn: false,
+            }),
+          );
+          const habitOp = (
+            id: string,
+            clientId: string,
+            at: number,
+            t: OpType,
+          ): Operation => ({
+            ...createOpWithTimestamp(id, clientId, at, t, 'cnt-1'),
+            entityType: 'SIMPLE_COUNTER' as const,
+          });
+
+          await service.autoResolveConflictsLWW([
+            {
+              entityType: 'SIMPLE_COUNTER',
+              entityId: 'cnt-1',
+              localOps: [habitOp('local-upd', 'client-a', now, OpType.Update)],
+              remoteOps: [habitOp('remote-op', 'client-b', now - 1000, remoteOpType)],
+              suggestedResolution: 'manual',
+            },
+          ]);
+
+          const payload = getFirstMixedLocalOp().payload;
+          if (!isLwwUpdatePayload(payload)) throw new Error('expected an LWW payload');
+          expect(payload.actionPayload['type']).toBe('StopWatch');
+          if (remoteOpType === OpType.Update) {
+            expect(payload.lwwUpdateMode).toBe('patch');
+            expect(payload.clearedFields).toContain('streakMinValue');
+          } else {
+            expect(payload.lwwUpdateMode).toBe('replace');
+            expect(payload.recreatesEntityAfterDelete).toBeTrue();
+          }
+        });
+      }
 
       it('should recreate a locally-winning UPDATE over a concurrent remote DELETE on a client-ID tie (#9024)', async () => {
         const now = Date.now();
@@ -5344,7 +5467,7 @@ describe('ConflictResolutionService', () => {
                   mergedResolutions: [
                     {
                       conflict,
-                      mergedOp,
+                      mergedOps: [mergedOp],
                     },
                   ],
                 },
@@ -5378,14 +5501,19 @@ describe('ConflictResolutionService', () => {
         const result = await service.autoResolveConflictsLWW([conflict]);
 
         expect(result).toEqual({ localWinOpsCreated: 0 });
-        const mergeRemoteBatch =
-          mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.argsFor(0)[0][0];
-        expect(mergeRemoteBatch).toEqual(
-          jasmine.objectContaining({
-            source: 'remote',
-            options: { pendingApply: true },
-          }),
-        );
+        // The remote side and the re-sent local fields share one transaction;
+        // the fallback re-resolves the remote side alone.
+        expect(
+          mockOpLogStore.appendMixedSourceBatchSkipDuplicates.calls.argsFor(0)[0],
+        ).toEqual([
+          { ops: [remoteOp], source: 'remote', options: { pendingApply: true } },
+          { ops: [mergedOp], source: 'local' },
+        ]);
+        expect(mockOpLogStore.appendBatchSkipDuplicates.calls.argsFor(0)).toEqual([
+          [remoteOp],
+          'remote',
+          { pendingApply: true },
+        ]);
         expect(mockOpLogStore.markReducersCommittedAndMergeClocks).toHaveBeenCalledWith(
           [],
           [],
@@ -5424,7 +5552,7 @@ describe('ConflictResolutionService', () => {
                 }
               : {
                   lwwResolutions: [],
-                  mergedResolutions: [{ conflict, mergedOp }],
+                  mergedResolutions: [{ conflict, mergedOps: [mergedOp] }],
                 },
         );
         mockOpLogStore.appendBatchSkipDuplicates.and.resolveTo({
@@ -7227,6 +7355,55 @@ describe('ConflictResolutionService', () => {
     });
   });
 
+  describe('checkOpForConflicts — a pending order beside a conflict (#10420)', () => {
+    const ctxFor = (
+      pending: Operation[],
+    ): Parameters<ConflictResolutionService['checkOpForConflicts']>[1] => ({
+      localPendingOpsByEntity: new Map([['SIMPLE_COUNTER:h1', pending]]),
+      appliedFrontierByEntity: new Map(),
+      retainedOpsByEntity: new Map(),
+      snapshotVectorClock: undefined,
+      snapshotEntityKeys: new Set(),
+      hasNoSnapshotClock: true,
+    });
+    const rename = (id: string, clientId: string): Operation =>
+      listedHabitOp(id, clientId, ActionType.COUNTER_UPDATE, {
+        simpleCounter: { id: 'h1', changes: { title: clientId } },
+      });
+
+    it('resolves the edit conflict without the commuting order', async () => {
+      const order = habitOrderOp();
+      const local = rename('local', 'clientA');
+      const result = await service.checkOpForConflicts(
+        rename('remote', 'clientB'),
+        ctxFor([order, local]),
+      );
+      expect(result.conflicts.length).toBe(1);
+      expect(result.conflicts[0].localOps).toEqual([local]);
+    });
+
+    it('lets a habit LWW row cross a pending habit order', async () => {
+      const row = {
+        ...listedHabitOp('row', 'clientB', '[SIMPLE_COUNTER] LWW Update' as ActionType, {
+          id: 'h1',
+          title: 'row',
+        }),
+      };
+      const result = await service.checkOpForConflicts(row, ctxFor([habitOrderOp()]));
+      expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+    });
+
+    it('keeps the order in a conflict it does not commute with', async () => {
+      const order = habitOrderOp();
+      const remoteDelete: Operation = {
+        ...listedHabitOp('delete', 'clientB', ActionType.COUNTER_DELETE, { id: 'h1' }),
+        opType: OpType.Delete,
+      };
+      const result = await service.checkOpForConflicts(remoteDelete, ctxFor([order]));
+      expect(result.conflicts[0].localOps).toEqual([order]);
+    });
+  });
+
   describe('checkOpForConflicts — no-pending CONCURRENT crossing (#9073)', () => {
     const KEY = 'TASK:task-1';
 
@@ -7326,11 +7503,13 @@ describe('ConflictResolutionService', () => {
     it('resolves the mirrored conflicts to the SAME winner on both sides (convergence)', async () => {
       const onA = await detect(opY, [opX]);
       const onB = await detect(opX, [opY]);
+      // Both sides are retained, already-synced rows.
+      mockOpLogStore.getOpById.and.resolveTo({ source: 'local', syncedAt: 1 } as never);
 
       // A: remote (Y, ts 2000) wins → Y is applied via the pipeline, no local-win op.
       mockStore.select.and.returnValue(of({ id: 'task-1', title: 'from A' }));
       const resolutionA = await service.autoResolveConflictsLWW(onA.conflicts);
-      // B: local (Y) wins → ONE dominating LWW op carries B's state everywhere.
+      // B: local (Y) wins → ONE dominating field patch carries both sides' fields.
       mockStore.select.and.returnValue(of({ id: 'task-1', title: 'from B' }));
       const resolutionB = await service.autoResolveConflictsLWW(onB.conflicts);
 
@@ -7508,6 +7687,61 @@ describe('ConflictResolutionService', () => {
       ]);
 
       expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+    });
+
+    // #10378: tracking an unscheduled task emits an opaque `planTasksForToday`
+    // beside its delta. Once both are synced, a concurrent delta from another
+    // device must still commute; a local LWW win would emit a snapshot whose
+    // clock claims the remote delta without its time.
+    describe('beside a synced auto-plan (#10378)', () => {
+      const deltaOp = (id: string, clientId: string, clock: VectorClock): Operation => ({
+        ...updateOp({ id, clientId, vectorClock: clock, timestamp: 1000, changes: {} }),
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        payload: {
+          actionPayload: { taskId: 'task-1', date: '2024-01-15', duration: 2000 },
+          entityChanges: [],
+        },
+      });
+      const planOp = (id: string, clientId: string, clock: VectorClock): Operation => ({
+        ...updateOp({ id, clientId, vectorClock: clock, timestamp: 3000, changes: {} }),
+        actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+        payload: {
+          actionPayload: { taskIds: ['task-1'], today: '2024-01-15' },
+          entityChanges: [],
+        },
+      });
+
+      it('applies a remote delta as-is against a retained [auto-plan, delta] side', async () => {
+        const result = await detect(deltaOp('op-time-r', 'clientB', { clientB: 1 }), [
+          planOp('op-plan-l', 'clientA', { clientA: 1 }),
+          deltaOp('op-time-l', 'clientA', { clientA: 2 }),
+        ]);
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it('applies a remote auto-plan as-is against a retained delta', async () => {
+        const result = await detect(planOp('op-plan-r', 'clientB', { clientB: 1 }), [
+          deltaOp('op-time-l', 'clientA', { clientA: 1 }),
+        ]);
+
+        expect(result).toEqual({ isSupersededOrDuplicate: false, conflicts: [] });
+      });
+
+      it('still routes a remote delta into a conflict against a retained absolute time write', async () => {
+        const result = await detect(deltaOp('op-time-r', 'clientB', { clientB: 1 }), [
+          planOp('op-plan-l', 'clientA', { clientA: 1 }),
+          updateOp({
+            id: 'op-time-edit',
+            clientId: 'clientA',
+            vectorClock: { clientA: 2 },
+            timestamp: 3500,
+            changes: { timeSpentOnDay: { ['2024-01-15']: 5000 } },
+          }),
+        ]);
+
+        expect(result.conflicts.length).toBe(1);
+      });
     });
 
     // Real captured shapes of a syncTimeSpent op (#10146): a non-adapter
@@ -7758,6 +7992,8 @@ describe('ConflictResolutionService', () => {
 
       const onA = await detect(tieY, [tieX]);
       const onB = await detect(tieX, [tieY]);
+      // Both sides are retained, already-synced rows.
+      mockOpLogStore.getOpById.and.resolveTo({ source: 'local', syncedAt: 1 } as never);
 
       // 'clientB' > 'clientA' → Y wins on BOTH sides: remote-wins on A
       // (no local-win op), local-wins on B (one heal op).

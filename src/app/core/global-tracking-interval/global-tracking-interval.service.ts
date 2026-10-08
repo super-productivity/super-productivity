@@ -91,6 +91,16 @@ export class GlobalTrackingIntervalService {
    */
   minuteTick$: Observable<unknown> = this._createMinuteTickObservable();
 
+  // Reuse the shared second tick; refresh immediately after focus/resume as well.
+  clockTimestamp = toSignal(
+    merge(
+      this.globalInterval$,
+      this._createAppActiveObservable(),
+      this._wakeUpTick$,
+    ).pipe(map(() => Date.now())),
+    { initialValue: Date.now() },
+  );
+
   // Shared signal to avoid creating 200+ subscriptions in task components
   todayDateStr = toSignal(this.todayDateStr$, {
     initialValue: this._dateService.todayStr(),

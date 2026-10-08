@@ -4,6 +4,8 @@ import { SyncConfigService } from '../../imex/sync/sync-config.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { GlobalConfigService } from '../../features/config/global-config.service';
+import { NEW_INSTALL_APP_FEATURES } from '../../features/config/new-install-app-features.const';
+import { AppFeaturesConfig } from '../../features/config/global-config.model';
 import { ActivatedRoute } from '@angular/router';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { of } from 'rxjs';
@@ -70,6 +72,7 @@ describe('ConfigPageComponent', () => {
           useValue: jasmine.createSpyObj('GlobalConfigService', ['updateSection'], {
             cfg$: of({}),
             sync$: of({}),
+            appFeatures: signal(NEW_INSTALL_APP_FEATURES),
           }),
         },
         { provide: ActivatedRoute, useValue: { queryParams: of({}) } },
@@ -94,6 +97,32 @@ describe('ConfigPageComponent', () => {
 
   beforeEach(async () => {
     await setup();
+  });
+
+  describe('saving App Features', () => {
+    it('writes only the switches that changed', () => {
+      const configService = TestBed.inject(
+        GlobalConfigService,
+      ) as jasmine.SpyObj<GlobalConfigService>;
+      component.saveGlobalCfg({
+        sectionKey: 'appFeatures',
+        config: { ...NEW_INSTALL_APP_FEATURES, isBoardsEnabled: true },
+      });
+      expect(configService.updateSection).toHaveBeenCalledOnceWith('appFeatures', {
+        isBoardsEnabled: true,
+      } as Partial<AppFeaturesConfig>);
+    });
+
+    it('writes nothing when nothing changed', () => {
+      const configService = TestBed.inject(
+        GlobalConfigService,
+      ) as jasmine.SpyObj<GlobalConfigService>;
+      component.saveGlobalCfg({
+        sectionKey: 'appFeatures',
+        config: { ...NEW_INSTALL_APP_FEATURES },
+      });
+      expect(configService.updateSection).not.toHaveBeenCalled();
+    });
   });
 
   it('should expose an empty syncStatus by default', () => {

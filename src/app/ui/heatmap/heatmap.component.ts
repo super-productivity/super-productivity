@@ -8,8 +8,14 @@ import {
   input,
   viewChild,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { DateAdapter } from '@angular/material/core';
+import { TranslatePipe, TranslateService, TranslateStore } from '@ngx-translate/core';
+import { T } from '../../t.const';
+import { getPluralKey } from '../../util/get-plural-key';
 import { msToString } from '../duration/ms-to-string.pipe';
+import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
+import { safeFormatDate } from '../../util/safe-format-date';
 
 export interface DayData {
   date: Date;
@@ -34,10 +40,15 @@ export interface HeatmapData {
   styleUrls: ['./heatmap.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
-  imports: [],
+  imports: [TranslatePipe],
 })
 export class HeatmapComponent {
   private readonly _dateAdapter = inject(DateAdapter);
+  private readonly _translateService = inject(TranslateService);
+  private readonly _translateStore = inject(TranslateStore);
+  private readonly _dateTimeFormatService = inject(DateTimeFormatService);
+
+  readonly T = T;
 
   readonly data = input.required<HeatmapData | null>();
   readonly label = input<string>('');
@@ -60,10 +71,39 @@ export class HeatmapComponent {
     });
   }
 
+  /** Emits whenever the date locale changes so locale-derived labels re-compute. */
+  private readonly _localeChange = toSignal(this._dateAdapter.localeChanges, {
+    initialValue: null,
+  });
+
+  /** Emits whenever the UI language changes so translated labels re-compute. */
+  private readonly _langChange = toSignal(this._translateService.onLangChange, {
+    initialValue: null,
+  });
+
   readonly dayLabels = computed(() => {
-    const allDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    this._localeChange();
+    const allDays = this._dateAdapter.getDayOfWeekNames('short');
     const firstDay = this._dateAdapter.getFirstDayOfWeek();
     return [...allDays.slice(firstDay), ...allDays.slice(0, firstDay)];
+  });
+
+  /**
+   * Day tooltips keyed by `dateStr`. Pre-computed rather than resolved per cell so
+   * a full year of days costs one translation pass instead of ~365 per render.
+   */
+  private readonly _dayTitles = computed(() => {
+    this._langChange();
+    const locale = this._dateTimeFormatService.currentLocale();
+    const titles = new Map<string, string>();
+    for (const week of this.data()?.weeks ?? []) {
+      for (const day of week.days) {
+        if (day) {
+          titles.set(day.dateStr, this._buildDayTitle(day, locale));
+        }
+      }
+    }
+    return titles;
   });
 
   getDayClass(day: DayData | null): string {
@@ -77,6 +117,20 @@ export class HeatmapComponent {
     if (!day) {
       return '';
     }
-    return `${day.dateStr}: ${day.taskCount} tasks, ${msToString(day.timeSpent)}`;
+    return this._dayTitles().get(day.dateStr) ?? '';
+  }
+
+  private _buildDayTitle(day: DayData, locale: string): string {
+    const key = getPluralKey(
+      this._translateService,
+      this._translateStore,
+      day.taskCount,
+      'HEATMAP.DAY_TOOLTIP',
+    );
+    return this._translateService.instant(key, {
+      date: safeFormatDate(day.date, 'shortDate', locale),
+      taskCount: day.taskCount,
+      timeSpent: msToString(day.timeSpent),
+    });
   }
 }

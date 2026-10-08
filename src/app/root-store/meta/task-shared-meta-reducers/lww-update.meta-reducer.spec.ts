@@ -9,6 +9,8 @@ import { Task } from '../../../features/tasks/task.model';
 import { Project } from '../../../features/project/project.model';
 import { Tag } from '../../../features/tag/tag.model';
 import { Section } from '../../../features/section/section.model';
+import { NOTE_FEATURE_NAME } from '../../../features/note/store/note.reducer';
+import { Note } from '../../../features/note/note.model';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { INBOX_PROJECT } from '../../../features/project/project.const';
@@ -24,6 +26,7 @@ import {
   SimpleCounterType,
 } from '../../../features/simple-counter/simple-counter.model';
 import { convertOpToAction } from '../../../op-log/apply/operation-converter.util';
+import { asPatchSnapshotIfTypeShadowed } from '../../../op-log/sync/lww-snapshot-patch-mode.util';
 import { ActionType, Operation, OpType } from '../../../op-log/core/operation.types';
 import { PLUGIN_USER_DATA_FEATURE_NAME } from '../../../plugins/store/plugin-user-data.reducer';
 import { BOARDS_FEATURE_NAME } from '../../../features/boards/store/boards.reducer';
@@ -1125,6 +1128,161 @@ describe('lwwUpdateMetaReducer', () => {
       expect(counter.type).toBe(SimpleCounterType.StopWatch);
       expect(appDataValidators.simpleCounter(counterState as never).success).toBe(true);
     });
+
+    // The winner's snapshot carries its own type; keeping the receiver's type
+    // instead made two devices silently diverge when their types differed.
+    describe('winner type', () => {
+      const receiverCounter = {
+        id: 'cnt_h',
+        title: 'Habit',
+        isEnabled: true,
+        icon: null,
+        type: SimpleCounterType.StopWatch,
+        countOnDay: {},
+        isOn: false,
+        isTrackStreaks: true,
+        streakMinValue: 5,
+      };
+      const counterOp = (payload: Record<string, unknown>): Operation => ({
+        id: 'op-counter-winner',
+        actionType: '[SIMPLE_COUNTER] LWW Update' as ActionType,
+        opType: OpType.Update,
+        entityType: 'SIMPLE_COUNTER',
+        entityId: 'cnt_h',
+        payload: { entityChanges: [], ...payload } as Operation['payload'],
+        clientId: 'clientA',
+        vectorClock: { clientA: 3 },
+        timestamp: 1700000000000,
+        schemaVersion: 1,
+      });
+      // The wire (JSON) drops undefined-valued keys.
+      const overTheWire = (op: Operation): Operation => JSON.parse(JSON.stringify(op));
+      const applyToReceiver = (
+        op: Operation,
+        entities: Record<string, unknown> = { cnt_h: receiverCounter },
+      ): { entities: Record<string, unknown> } | undefined => {
+        reducer(makeStateWithCounters(entities), convertOpToAction(overTheWire(op)));
+        const updated = mockReducer.calls.mostRecent().args[0] as Record<
+          string,
+          { entities: Record<string, unknown> } | undefined
+        >;
+        return updated[SIMPLE_COUNTER_FEATURE_NAME];
+      };
+      const winner = {
+        ...receiverCounter,
+        title: 'Winning title',
+        type: SimpleCounterType.ClickCounter,
+        isTrackStreaks: false,
+        streakMinValue: undefined,
+      };
+
+      it('replaces the receiver type with the one a replace snapshot carries', () => {
+        const counterState = applyToReceiver(
+          counterOp({ actionPayload: winner, lwwUpdateMode: 'replace' }),
+        );
+        const counter = counterState?.entities['cnt_h'] as SimpleCounter;
+        expect(counter.type).toBe(SimpleCounterType.ClickCounter);
+        expect(counter.title).toBe('Winning title');
+        expect(counter.streakMinValue).toBeUndefined();
+        expect(appDataValidators.simpleCounter(counterState as never).success).toBe(true);
+      });
+
+      it('applies the type and listed clears of a patch-mode snapshot', () => {
+        const counterState = applyToReceiver(
+          counterOp({
+            actionPayload: winner,
+            lwwUpdateMode: 'patch',
+            clearedFields: ['streakMinValue'],
+          }),
+        );
+        const counter = counterState?.entities['cnt_h'] as SimpleCounter;
+        expect(counter.type).toBe(SimpleCounterType.ClickCounter);
+        expect(counter.isTrackStreaks).toBe(false);
+        expect(counter.streakMinValue).toBeUndefined();
+        expect(appDataValidators.simpleCounter(counterState as never).success).toBe(true);
+      });
+
+      // Senders turn a whole-habit replace into a patch plus clears. A current
+      // receiver must end with the same habit either way, nested objects
+      // included: updateOne replaces them, it does not merge them.
+      it('ends with the same habit from the sent patch as from the replace', () => {
+        const [dayA, dayB] = ['2026-09-01', '2026-09-02'];
+        const receiver = {
+          ...receiverCounter,
+          isHideButton: true,
+          countOnDay: { [dayA]: 3, [dayB]: 1 },
+          countdownDuration: 60000,
+        };
+        const replaceOp = counterOp({
+          actionPayload: { ...winner, countOnDay: { [dayB]: 5 } },
+          lwwUpdateMode: 'replace',
+        });
+        const habitAfter = (op: Operation): Record<string, unknown> => {
+          const habit = {
+            ...(applyToReceiver(op, { cnt_h: receiver })?.entities['cnt_h'] as Record<
+              string,
+              unknown
+            >),
+          };
+          delete habit['modified'];
+          return JSON.parse(JSON.stringify(habit));
+        };
+
+        const patchOp = asPatchSnapshotIfTypeShadowed(replaceOp);
+        expect(patchOp.payload).toEqual(
+          jasmine.objectContaining({ lwwUpdateMode: 'patch' }),
+        );
+        const fromPatch = habitAfter(patchOp);
+
+        expect(fromPatch).toEqual(habitAfter(replaceOp));
+        expect(fromPatch['type']).toBe(SimpleCounterType.ClickCounter);
+        expect(fromPatch['countOnDay']).toEqual({ [dayB]: 5 });
+        expect(fromPatch['countdownDuration']).toBeUndefined();
+      });
+
+      it('keeps the receiver type when the op carries none', () => {
+        const counterState = applyToReceiver(
+          counterOp({
+            actionPayload: { id: 'cnt_h', title: 'Merged title' },
+            lwwUpdateMode: 'patch',
+          }),
+        );
+        const counter = counterState?.entities['cnt_h'] as SimpleCounter;
+        expect(counter.type).toBe(SimpleCounterType.StopWatch);
+        expect(counter.title).toBe('Merged title');
+      });
+
+      // A plain setOne would drop the type a snapshot does not carry, and
+      // typia repair would then reset the habit.
+      it('keeps the receiver type when a replace snapshot carries none', () => {
+        const untypedSnapshot: Record<string, unknown> = {
+          ...receiverCounter,
+          title: 'Merged title',
+        };
+        delete untypedSnapshot['type'];
+        const counterState = applyToReceiver(
+          counterOp({ actionPayload: untypedSnapshot, lwwUpdateMode: 'replace' }),
+        );
+        const counter = counterState?.entities['cnt_h'] as SimpleCounter;
+        expect(counter.type).toBe(SimpleCounterType.StopWatch);
+        expect(counter.title).toBe('Merged title');
+        expect(appDataValidators.simpleCounter(counterState as never).success).toBe(true);
+      });
+
+      it('recreates a locally deleted counter with the winner type', () => {
+        const counterState = applyToReceiver(
+          counterOp({
+            actionPayload: { ...winner, type: SimpleCounterType.StopWatch },
+            lwwUpdateMode: 'replace',
+            recreatesEntityAfterDelete: true,
+          }),
+          {},
+        );
+        const counter = counterState?.entities['cnt_h'] as SimpleCounter;
+        expect(counter.type).toBe(SimpleCounterType.StopWatch);
+        expect(appDataValidators.simpleCounter(counterState as never).success).toBe(true);
+      });
+    });
   });
 
   describe('[PROJECT] LWW Update', () => {
@@ -1469,6 +1627,131 @@ describe('lwwUpdateMetaReducer', () => {
       expect(recreated.id).toBe('recreated-section');
       expect(recreated.title).toBe('Recreated Section');
       expect(recreated.contextId).toBe(PROJECT_ID);
+    });
+  });
+
+  describe('[NOTE] LWW Update recreate (#10380)', () => {
+    const NOTE_ID = 'note1';
+    const OTHER_NOTE_ID = 'note0';
+    const createNote = (overrides: Partial<Note> = {}): Note => ({
+      id: NOTE_ID,
+      content: 'Note content',
+      projectId: PROJECT_ID,
+      isPinnedToToday: false,
+      created: 100,
+      modified: 100,
+      ...overrides,
+    });
+    const createStateWithNotes = (
+      notes: Note[],
+      noteIds: string[],
+      todayOrder: string[],
+    ): Partial<RootState> => {
+      const base = createMockState();
+      return {
+        ...base,
+        [PROJECT_FEATURE_NAME]: {
+          ...base[PROJECT_FEATURE_NAME]!,
+          entities: {
+            ...base[PROJECT_FEATURE_NAME]!.entities,
+            [PROJECT_ID]: createMockProject({ noteIds }),
+          },
+        },
+        [NOTE_FEATURE_NAME]: {
+          ids: notes.map((n) => n.id),
+          entities: Object.fromEntries(notes.map((n) => [n.id, n])),
+          todayOrder,
+        },
+      } as Partial<RootState>;
+    };
+    const lwwNote = (note: Note): Action =>
+      ({
+        type: '[NOTE] LWW Update',
+        ...note,
+        meta: {
+          isPersistent: true,
+          entityType: 'NOTE',
+          entityId: note.id,
+          isRemote: true,
+          lwwUpdateMode: 'replace',
+          recreatesEntityAfterDelete: true,
+        },
+      }) as unknown as Action;
+    const run = (state: Partial<RootState>, action: Action): Partial<RootState> => {
+      reducer(state, action);
+      return mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+    };
+
+    it('restores a deleted pinned note intact, in its project and in Today', () => {
+      const other = createNote({ id: OTHER_NOTE_ID, isPinnedToToday: true });
+      const note = createNote({ isPinnedToToday: true, isLock: true });
+      const result = run(
+        createStateWithNotes([other], [OTHER_NOTE_ID], [OTHER_NOTE_ID]),
+        lwwNote(note),
+      );
+
+      expect(result[NOTE_FEATURE_NAME]!.entities[NOTE_ID]).toEqual({
+        ...note,
+        modified: jasmine.any(Number),
+      });
+      expect(result[PROJECT_FEATURE_NAME]!.entities[PROJECT_ID]!.noteIds).toEqual([
+        OTHER_NOTE_ID,
+        NOTE_ID,
+      ]);
+      expect(result[NOTE_FEATURE_NAME]!.todayOrder).toEqual([OTHER_NOTE_ID, NOTE_ID]);
+      expect(appDataValidators.note(result[NOTE_FEATURE_NAME]!).success).toBe(true);
+    });
+
+    it('restores an unpinned note to its project only', () => {
+      const result = run(createStateWithNotes([], [], []), lwwNote(createNote()));
+
+      expect(result[PROJECT_FEATURE_NAME]!.entities[PROJECT_ID]!.noteIds).toEqual([
+        NOTE_ID,
+      ]);
+      expect(result[NOTE_FEATURE_NAME]!.todayOrder).toEqual([]);
+    });
+
+    it('restores a pinned note without a project to Today only', () => {
+      const result = run(
+        createStateWithNotes([], [], []),
+        lwwNote(createNote({ projectId: null, isPinnedToToday: true })),
+      );
+
+      expect(result[PROJECT_FEATURE_NAME]!.entities[PROJECT_ID]!.noteIds).toEqual([]);
+      expect(result[NOTE_FEATURE_NAME]!.todayOrder).toEqual([NOTE_ID]);
+    });
+
+    it('does not add a note to a project this client does not have', () => {
+      const result = run(
+        createStateWithNotes([], [], []),
+        lwwNote(createNote({ projectId: 'missing-project' })),
+      );
+
+      expect(result[PROJECT_FEATURE_NAME]!.entities['missing-project']).toBeUndefined();
+      expect(result[NOTE_FEATURE_NAME]!.entities[NOTE_ID]).toBeDefined();
+    });
+
+    it('does not duplicate list entries that are already present', () => {
+      const result = run(
+        createStateWithNotes([], [NOTE_ID], [NOTE_ID]),
+        lwwNote(createNote({ isPinnedToToday: true })),
+      );
+
+      expect(result[PROJECT_FEATURE_NAME]!.entities[PROJECT_ID]!.noteIds).toEqual([
+        NOTE_ID,
+      ]);
+      expect(result[NOTE_FEATURE_NAME]!.todayOrder).toEqual([NOTE_ID]);
+    });
+
+    it('leaves the lists alone when the note still exists', () => {
+      const result = run(
+        createStateWithNotes([createNote()], [], []),
+        lwwNote(createNote({ isPinnedToToday: true, content: 'Edited' })),
+      );
+
+      expect(result[NOTE_FEATURE_NAME]!.entities[NOTE_ID]!.content).toBe('Edited');
+      expect(result[PROJECT_FEATURE_NAME]!.entities[PROJECT_ID]!.noteIds).toEqual([]);
+      expect(result[NOTE_FEATURE_NAME]!.todayOrder).toEqual([]);
     });
   });
 

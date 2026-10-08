@@ -30,15 +30,23 @@ const fileExists = async (provider: Provider, path: string): Promise<boolean> =>
   }
 };
 
-/** Discover only existing protocol files. A local installation says nothing about remote data. */
+/**
+ * Format created in an empty folder when no format choice is saved. v2 (as in
+ * v19.1) until the v3 default's snapshot, interrupted-write and legacy-overwrite
+ * follow-ups land; changing it to 'v3' re-enables that default.
+ */
+export const EMPTY_FOLDER_SYNC_FORMAT: 'v2' | 'v3' = 'v2';
+
+/**
+ * Discover only existing v2/v3 protocol files. A local installation says nothing
+ * about remote data. A v16 `__meta_` folder counts as empty here: the readers
+ * still report it on normal syncs, and a confirmed force overwrite replaces it.
+ */
 export const discoverFileSyncFormat = async (
   provider: Provider,
 ): Promise<'v2' | 'v3' | 'empty'> => {
   if (await fileExists(provider, FILE_BASED_SYNC_CONSTANTS.OPS_FILE)) return 'v3';
   if (await fileExists(provider, FILE_BASED_SYNC_CONSTANTS.SYNC_FILE)) return 'v2';
-  if (await fileExists(provider, FILE_BASED_SYNC_CONSTANTS.LEGACY_META_FILE)) {
-    throw new LegacySyncFormatDetectedError();
-  }
   return 'empty';
 };
 

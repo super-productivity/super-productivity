@@ -18,6 +18,7 @@ import {
   EncryptNoPasswordError,
   FileSyncTargetChangedError,
   InvalidDataSPError,
+  JsonParseError,
   PlaintextWhenEncryptionExpectedError,
   RemoteFileNotFoundAPIError,
   SplitSyncFormatDetectedError,
@@ -243,25 +244,30 @@ describe('FileBasedSyncAdapterService', () => {
       });
     });
 
-    it('creates v3 from an absent setting and reuses discovery for later polls', async () => {
+    it('creates v2 from an absent setting and reuses discovery for later polls', async () => {
       expect(DEFAULT_GLOBAL_CONFIG.sync.isUseSplitSyncFiles).toBeUndefined();
       await adapter.downloadOps(0);
       await adapter.uploadOps([createMockSyncOp()], 'client1');
-      expect(files.has(C.OPS_FILE)).toBeTrue();
-      expect(files.get(C.OPS_FILE)).toContain('"version":3');
-      expect(files.get(C.SYNC_FILE)).toContain('"format":"split"');
-      const marker = mockProvider.uploadFile.calls
+      expect(parseWithPrefix(files.get(C.SYNC_FILE)!).version).toBe(2);
+      expect(files.has(C.OPS_FILE)).toBeFalse();
+      const created = mockProvider.uploadFile.calls
         .allArgs()
         .find(([path]) => path === C.SYNC_FILE)!;
-      expect(marker.slice(2)).toEqual([null, false]);
+      // Conditional create: a concurrent creator wins instead of being overwritten.
+      expect(created.slice(2)).toEqual([null, false]);
       await adapter.downloadOps(0);
       mockProvider.getFileRev.calls.reset();
       await adapter.downloadOps(0);
-      expect(mockProvider.getFileRev).not.toHaveBeenCalled();
+      // Only the v2 reader's split-marker probe remains once discovery is cached.
+      expect(mockProvider.getFileRev.calls.allArgs().map(([path]) => path)).toEqual([
+        C.OPS_FILE,
+      ]);
     });
 
     it('honors explicit v2 after auto-detecting a split folder', async () => {
+      splitSyncEnabled = true;
       await adapter.uploadOps([createMockSyncOp()], 'client1');
+      splitSyncEnabled = undefined;
       await adapter.downloadOps(0);
       // A pending migration can contain both a legacy primary and an ops file.
       files.set(C.SYNC_FILE, addPrefix(createMockSyncData()));
@@ -285,12 +291,15 @@ describe('FileBasedSyncAdapterService', () => {
     });
 
     it('rediscovers after a target switch', async () => {
-      files.set(C.SYNC_FILE, addPrefix(createMockSyncData()));
+      splitSyncEnabled = true;
+      await adapter.uploadOps([createMockSyncOp()], 'client1');
+      splitSyncEnabled = undefined;
       await adapter.downloadOps(0);
       service.invalidateAllTargets();
       files.clear();
       await adapter.uploadOps([createMockSyncOp()], 'client1');
-      expect(files.has(C.OPS_FILE)).toBeTrue();
+      expect(parseWithPrefix(files.get(C.SYNC_FILE)!).version).toBe(2);
+      expect(files.has(C.OPS_FILE)).toBeFalse();
     });
 
     it('does not cache discovery from a target switched during the probe', async () => {
@@ -319,6 +328,9 @@ describe('FileBasedSyncAdapterService', () => {
         }
         throw new RemoteFileNotFoundAPIError(path);
       });
+      // The late read is not an applied revision, so the upload stops before the
+      // write-time target guard. The sync cycle retries both silently; force
+      // upload and "Keep local" special-case only FileSyncTargetChangedError.
       await expectAsync(
         adapter.uploadOps([createMockSyncOp()], 'client1'),
       ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
@@ -330,17 +342,38 @@ describe('FileBasedSyncAdapterService', () => {
         return { dataStr, rev: path + '-rev' };
       });
       await adapter.uploadOps([createMockSyncOp()], 'client1');
-      expect(files.has(C.OPS_FILE)).toBeTrue();
-      expect(files.get(C.SYNC_FILE)).toContain('"format":"split"');
+      expect(parseWithPrefix(files.get(C.SYNC_FILE)!).version).toBe(2);
+      expect(files.has(C.OPS_FILE)).toBeFalse();
     });
 
-    it('does not migrate v2 that appears after empty-folder discovery', async () => {
-      const legacy = addPrefix(createMockSyncData());
+    it('does not overwrite v2 that appears after empty-folder discovery', async () => {
+      const remoteOp = { id: 'remote-op', c: 'remote', a: 'HA', o: 'ADD', e: 'TASK' };
+      const legacy = addPrefix(
+        createMockSyncData({
+          recentOps: [{ ...remoteOp, d: 't1', v: { remote: 1 }, t: 1, s: 1 } as never],
+        }),
+      );
       mockProvider.downloadFile.and.callFake(async (path: string) => {
         // A legacy writer commits after the metadata probes saw an empty folder.
         files.set(C.SYNC_FILE, legacy);
         if (path === C.SYNC_FILE) return { dataStr: legacy, rev: 'legacy-rev' };
         throw new RemoteFileNotFoundAPIError(path);
+      });
+      await expectAsync(
+        adapter.uploadOps([createMockSyncOp()], 'client1'),
+      ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+      expect(files.get(C.SYNC_FILE)).toBe(legacy);
+      expect(files.has(C.OPS_FILE)).toBeFalse();
+    });
+
+    it('does not migrate v2 that replaces a discovered v3 folder', async () => {
+      const legacy = addPrefix(createMockSyncData());
+      mockProvider.getFileRev.and.callFake(async (path: string) => {
+        if (path !== C.OPS_FILE) throw new RemoteFileNotFoundAPIError(path);
+        // The v3 commit point vanishes and a v2 writer commits after discovery.
+        files.set(C.SYNC_FILE, legacy);
+        return { rev: 'discovered-v3' };
       });
       await expectAsync(
         adapter.uploadOps([createMockSyncOp()], 'client1'),
@@ -359,7 +392,7 @@ describe('FileBasedSyncAdapterService', () => {
       });
     }
 
-    it('blocks unreadable legacy metadata rather than creating v3', async () => {
+    it('blocks unreadable legacy metadata on a normal sync', async () => {
       mockProvider.getFileRev.and.callFake(async (path: string) => {
         if (path === C.LEGACY_META_FILE) throw new InvalidDataSPError('invalid prefix');
         throw new RemoteFileNotFoundAPIError(path);
@@ -370,7 +403,121 @@ describe('FileBasedSyncAdapterService', () => {
       expect(mockProvider.uploadFile).not.toHaveBeenCalled();
     });
 
-    for (const path of [C.OPS_FILE, C.SYNC_FILE, C.LEGACY_META_FILE]) {
+    it('reports a legacy folder on normal syncs but lets force overwrite write v2', async () => {
+      files.set(C.LEGACY_META_FILE, '{"lastUpdate":1}');
+      await expectAsync(adapter.downloadOps(0)).toBeRejectedWithError(
+        LegacySyncFormatDetectedError,
+      );
+      await expectAsync(
+        adapter.uploadOps([createMockSyncOp()], 'client1'),
+      ).toBeRejectedWithError(LegacySyncFormatDetectedError);
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+
+      const result = await adapter.uploadSnapshot!(
+        { tasks: [] },
+        'client1',
+        'recovery',
+        { client1: 1 },
+        1,
+        false,
+        'import-op',
+      );
+      expect(result.accepted).toBeTrue();
+      expect(parseWithPrefix(files.get(C.SYNC_FILE)!).version).toBe(2);
+      expect(files.has(C.OPS_FILE)).toBeFalse();
+      expect((await adapter.downloadOps(0)).snapshotState).toBeDefined();
+    });
+
+    it('seeds an empty folder as v2 through the snapshot path', async () => {
+      // A synced device moving to an empty folder uploads a SERVER_MIGRATION
+      // SYNC_IMPORT here, not through uploadOps.
+      const result = await adapter.uploadSnapshot!(
+        { tasks: [] },
+        'client1',
+        'initial',
+        { client1: 1 },
+        1,
+        false,
+        'import-op',
+        false,
+        'SYNC_IMPORT',
+        'SERVER_MIGRATION',
+      );
+      expect(result.accepted).toBeTrue();
+      expect(parseWithPrefix(files.get(C.SYNC_FILE)!).version).toBe(2);
+      expect([...files.keys()].sort()).toEqual([C.BACKUP_FILE, C.SYNC_FILE].sort());
+    });
+
+    // Surgical sync claims sync-data.json with a create-only tombstone before it
+    // publishes the split files of a new folder.
+    describe('when Surgical sync creates a folder', () => {
+      beforeEach(() => {
+        splitSyncEnabled = true;
+      });
+
+      it('neutralizes the backup before the create-only claim', async () => {
+        await adapter.uploadOps([createMockSyncOp()], 'client1');
+
+        const writes = mockProvider.uploadFile.calls
+          .allArgs()
+          .map(([path, , revToMatch, isForce]) => [path, revToMatch, isForce]);
+        expect(writes.slice(0, 2)).toEqual([
+          [C.BACKUP_FILE, null, true],
+          [C.SYNC_FILE, null, false],
+        ]);
+        expect(parseWithPrefix(files.get(C.SYNC_FILE)!)).toEqual(
+          jasmine.objectContaining({ version: 3, format: 'split' }),
+        );
+        const ops = parseWithPrefix(
+          files.get(C.OPS_FILE)!,
+        ) as unknown as FileBasedOpsFile;
+        expect(ops.version).toBe(3);
+      });
+
+      it('neutralizes a v2 backup that outlived its primary before claiming the folder', async () => {
+        // An interrupted Android write (delete, create, write) or a deleted primary
+        // can leave only the backup of a v2 folder.
+        files.set(C.BACKUP_FILE, addPrefix(createMockSyncData({ clientId: 'v2Client' })));
+        await adapter.uploadOps([createMockSyncOp()], 'client1');
+
+        // A reader with Surgical sync saved off recovers an unreadable primary from
+        // the backup and heals it: a live v2 backup would resurrect v2 over the
+        // tombstone, a neutralized one is refused.
+        splitSyncEnabled = false;
+        files.set(
+          C.SYNC_FILE,
+          getSyncFilePrefix({ isCompress: false, isEncrypt: false, modelVersion: 3 }) +
+            '{"version":3',
+        );
+        await expectAsync(adapter.downloadOps(0)).toBeRejectedWithError(JsonParseError);
+      });
+
+      it('publishes no split files when a v2 client creates sync-data.json first', async () => {
+        const v2 = addPrefix(createMockSyncData({ clientId: 'v2Client' }));
+        mockProvider.uploadFile.and.callFake(async (path: string, data: string) => {
+          if (path === C.SYNC_FILE) {
+            // The v2 client commits after this client found no sync-data.json.
+            files.set(path, v2);
+            throw new UploadRevToMatchMismatchAPIError(path);
+          }
+          files.set(path, data);
+          return { rev: path + '-rev' };
+        });
+
+        await expectAsync(
+          adapter.uploadOps([createMockSyncOp()], 'client1'),
+        ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+
+        expect(files.get(C.SYNC_FILE)).toBe(v2);
+        expect(files.has(C.OPS_FILE) || files.has(C.STATE_FILE)).toBeFalse();
+        // Only the backup was neutralized, and v2 recovery refuses a version-3 backup.
+        expect(parseWithPrefix(files.get(C.BACKUP_FILE)!)).toEqual(
+          jasmine.objectContaining({ version: 3, format: 'split' }),
+        );
+      });
+    });
+
+    for (const path of [C.OPS_FILE, C.SYNC_FILE]) {
       it(`propagates a discovery error at ${path} without writing`, async () => {
         const failure = new AuthFailSPError('Authentication failed (HTTP 401)');
         mockProvider.getFileRev.and.callFake(async (file: string) => {
@@ -721,7 +868,8 @@ describe('FileBasedSyncAdapterService', () => {
       mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-2' }));
 
       // First, download to populate cache
-      await adapter.downloadOps(0);
+      const downloaded = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(downloaded.latestSeq);
 
       // Reset download spy call count
       mockProvider.downloadFile.calls.reset();
@@ -742,7 +890,8 @@ describe('FileBasedSyncAdapterService', () => {
       mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-124' }));
 
       // Download to populate cache
-      await adapter.downloadOps(0);
+      const downloaded = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(downloaded.latestSeq);
       mockProvider.downloadFile.calls.reset();
 
       // Upload should pass revToMatch parameter
@@ -771,7 +920,8 @@ describe('FileBasedSyncAdapterService', () => {
         Promise.reject(new UploadRevToMatchMismatchAPIError('Rev mismatch')),
       );
 
-      await adapter.downloadOps(0);
+      const downloaded = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(downloaded.latestSeq);
 
       const op = createMockSyncOp();
       // Genuine mismatch: adapter throws so next sync cycle can fix the snapshot
@@ -818,7 +968,8 @@ describe('FileBasedSyncAdapterService', () => {
       );
 
       // Download to populate cache with rev-1
-      await adapter.downloadOps(0);
+      const downloaded = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(downloaded.latestSeq);
 
       const op = createMockSyncOp();
       const result = await adapter.uploadOps([op], 'client1');
@@ -838,7 +989,8 @@ describe('FileBasedSyncAdapterService', () => {
       mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-2' }));
 
       // Download to populate cache
-      await adapter.downloadOps(0);
+      const downloaded = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(downloaded.latestSeq);
 
       // Upload (should clear cache)
       const op = createMockSyncOp();
@@ -3112,7 +3264,8 @@ describe('FileBasedSyncAdapterService', () => {
         return Promise.resolve({ rev: 'rev-2' });
       });
 
-      await adapter.downloadOps(0);
+      const downloaded = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(downloaded.latestSeq);
 
       const result = await adapter.uploadOps([createMockSyncOp()], 'client1');
       expect(result.results[0].accepted).toBe(true);
@@ -3368,7 +3521,8 @@ describe('FileBasedSyncAdapterService', () => {
         },
       );
 
-      await adapter.downloadOps(0);
+      const downloaded = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(downloaded.latestSeq);
 
       await expectAsync(
         adapter.uploadOps([createMockSyncOp()], 'client1'),
@@ -3413,7 +3567,8 @@ describe('FileBasedSyncAdapterService', () => {
       );
 
       // Client B downloads (caches rev-1).
-      await adapter.downloadOps(0);
+      const downloaded = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(downloaded.latestSeq);
 
       // Client A concurrently commits op-A → remote advances to rev-2.
       remote = {
@@ -3454,6 +3609,9 @@ describe('FileBasedSyncAdapterService', () => {
       );
       const dl = await adapter.downloadOps(1);
       expect(dl.gapDetected).toBe(true);
+      // As in production, the gap triggers a seq-0 download that is applied.
+      const full = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(full.latestSeq);
 
       // The next upload must build on the REMOTE version (→ 3), proving the stale
       // in-memory counter (5) was reconciled rather than trusted.
@@ -3700,7 +3858,8 @@ describe('FileBasedSyncAdapterService', () => {
       mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-up' }));
 
       // Poll 1: download (seeds cache + rev) then upload (clears cache, records upload rev).
-      await adapter.downloadOps(0);
+      const downloaded = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(downloaded.latestSeq);
       await adapter.uploadOps([createMockSyncOp()], 'client1');
 
       // Persisted state carries the upload rev.
@@ -3946,8 +4105,90 @@ describe('FileBasedSyncAdapterService', () => {
       });
     });
 
+    for (const encrypted of [false, true]) {
+      it(`requires an applied split baseline before even dedup acknowledgements (encrypted=${encrypted})`, async () => {
+        const encode = (data: unknown): Promise<string> =>
+          encrypted ? encryptSplitFile(data) : Promise.resolve(addPrefix(data, 3));
+        const opsFile = makeOpsFile({
+          recentOps: [makeCompactOp({ id: 'op-123', sv: 1 })],
+        });
+        const encodedOps = await encode(opsFile);
+        const encodedState = await encode(makeStateFile());
+        let rev = 'committed-rev';
+        mockProvider.downloadFile.and.callFake(async (path: string) => {
+          if (path === C.OPS_FILE) return { dataStr: encodedOps, rev };
+          if (path === C.STATE_FILE) return { dataStr: encodedState, rev: 'state' };
+          throw new RemoteFileNotFoundAPIError(path);
+        });
+        const subject = encrypted
+          ? service.createAdapter(mockProvider, encryptedCfg, 'test-password')
+          : adapter;
+        const assertRefused = async (): Promise<void> => {
+          await expectAsync(
+            subject.uploadOps([createMockSyncOp()], 'client1'),
+          ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+          expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+        };
+        await assertRefused(); // cold read with no committed revision
+        const downloaded = await subject.downloadOps(0); // migration probe
+        await assertRefused(); // warm but unapplied cache
+        expect(await subject.getLastServerSeq()).toBe(0);
+        await subject.setLastServerSeq(downloaded.latestSeq);
+        expect(
+          (await subject.uploadOps([createMockSyncOp()], 'client1')).results[0].accepted,
+        ).toBe(true);
+        service['_splitOpsCache'].clear();
+        expect(
+          (await subject.uploadOps([createMockSyncOp()], 'client1')).results[0].accepted,
+        ).toBe(true);
+        rev = 'changed-rev';
+        await assertRefused();
+        expect(await subject.getLastServerSeq()).toBe(downloaded.latestSeq);
+      });
+    }
+
+    // Dropbox and OneDrive have no browser harness. Exercise the real adapter's
+    // unchanged-revision optimization through their FileSyncProvider transport seam.
+    for (const providerId of [SyncProviderId.Dropbox, SyncProviderId.OneDrive]) {
+      for (const split of [false, true]) {
+        it(`reads once after a clockless upgrade before trusting ${providerId}'s unchanged v${split ? 3 : 2} revision`, async () => {
+          splitSyncEnabled = split;
+          mockProvider.id = providerId;
+          const subject = service.createAdapter(mockProvider, mockCfg, undefined);
+          const path = split ? C.OPS_FILE : C.SYNC_FILE;
+          const data = split
+            ? makeOpsFile({ syncVersion: 3 })
+            : createMockSyncData({ syncVersion: 3 });
+          routeDownloads({
+            [path]: addPrefix(data, split ? 3 : 2),
+            ...(split ? { [C.STATE_FILE]: addPrefix(makeStateFile(), 3) } : {}),
+          });
+          const downloaded = await subject.downloadOps(0);
+          await subject.setLastServerSeq(downloaded.latestSeq);
+          service['_lastSeenVectorClocks'].clear();
+          service['_splitOpsCache'].clear();
+          service['_syncCycleCache'].clear();
+          mockProvider.getFileRev.and.callFake(async (file: string) => {
+            if (file === path) return { rev: `${path}-rev` };
+            throw new RemoteFileNotFoundAPIError(file);
+          });
+          mockProvider.downloadFile.calls.reset();
+          const first = await subject.downloadOps(downloaded.latestSeq);
+          expect(mockProvider.downloadFile).toHaveBeenCalledWith(path);
+          await subject.setLastServerSeq(first.latestSeq);
+          service['_splitOpsCache'].clear();
+          service['_syncCycleCache'].clear();
+          mockProvider.downloadFile.calls.reset();
+          await subject.downloadOps(first.latestSeq);
+          expect(mockProvider.downloadFile).not.toHaveBeenCalled();
+        });
+      }
+    }
+
     // (a) op-only sync uploads/downloads ONLY sync-ops.json and never snapshots.
     it('(a) op-only upload touches ONLY sync-ops.json and never calls getStateSnapshot()', async () => {
+      // This upload follows an earlier applied download whose revision survived restart.
+      service['_lastSeenRevs'].set(SyncProviderId.WebDAV, `${C.OPS_FILE}-rev`);
       const opsFile = makeOpsFile({ syncVersion: 3, recentOps: [] });
       routeDownloads({ [C.OPS_FILE]: addPrefix(opsFile, 3) });
 
@@ -3967,6 +4208,8 @@ describe('FileBasedSyncAdapterService', () => {
     });
 
     it('(a) acknowledges an already-committed op retry without appending it again', async () => {
+      // This upload follows an earlier applied download whose revision survived restart.
+      service['_lastSeenRevs'].set(SyncProviderId.WebDAV, `${C.OPS_FILE}-rev`);
       const opsFile = makeOpsFile({
         syncVersion: 3,
         recentOps: [makeCompactOp({ id: 'op-123', sv: 3 })],
@@ -3995,11 +4238,21 @@ describe('FileBasedSyncAdapterService', () => {
         if (path === C.OPS_BACKUP_FILE) {
           return { dataStr: addPrefix(recovered, 3), rev: 'ops-bak-rev' };
         }
+        if (path === C.STATE_FILE) {
+          return { dataStr: addPrefix(makeStateFile(), 3), rev: 'state-rev-1' };
+        }
         throw new SyncDataCorruptedError('corrupt', C.OPS_FILE);
       });
 
-      // Seeds the sync-cycle cache with the CORRUPT primary's rev.
-      await adapter.downloadOps(0);
+      // A backup read must also be applied before it can heal the primary.
+      const downloaded = await adapter.downloadOps(0);
+      expect(downloaded.snapshotState).toEqual({ tasks: [] });
+      expect(downloaded.gapDetected).toBeFalsy();
+      await expectAsync(
+        adapter.uploadOps([createMockSyncOp()], 'client1'),
+      ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+      expect(mockProvider.uploadFile).not.toHaveBeenCalled();
+      await adapter.setLastServerSeq(downloaded.latestSeq);
       await adapter.uploadOps([createMockSyncOp()], 'client1');
 
       expect(uploadedPaths()).toContain(C.OPS_FILE);
@@ -4269,6 +4522,8 @@ describe('FileBasedSyncAdapterService', () => {
     // (b) compaction triggers when the buffer exceeds MAX_RECENT_OPS, writing
     // state THEN ops.
     it('(b) compaction past MAX_RECENT_OPS writes sync-state.json BEFORE sync-ops.json', async () => {
+      // This upload follows an earlier applied download whose revision survived restart.
+      service['_lastSeenRevs'].set(SyncProviderId.WebDAV, `${C.OPS_FILE}-rev`);
       const many = Array.from({ length: C.MAX_RECENT_OPS }, () => ({ sv: 1 }) as never);
       const opsFile = makeOpsFile({ syncVersion: 5, recentOps: many });
       routeDownloads({
@@ -4290,6 +4545,8 @@ describe('FileBasedSyncAdapterService', () => {
     });
 
     it('(b) encrypted compaction rejects a plaintext state file without writing', async () => {
+      // This upload follows an earlier applied download whose revision survived restart.
+      service['_lastSeenRevs'].set(SyncProviderId.WebDAV, `${C.OPS_FILE}-rev`);
       const many = Array.from({ length: C.MAX_RECENT_OPS }, () => ({ sv: 1 }) as never);
       const opsFile = makeOpsFile({ syncVersion: 5, recentOps: many });
       routeDownloads({
@@ -4314,6 +4571,7 @@ describe('FileBasedSyncAdapterService', () => {
     // rebuild). The old code triggered compaction at SPLIT_COMPACTION_THRESHOLD, so
     // it recompacted on EVERY op-bearing sync once the folder crossed 1000.
     it('(b2) does NOT recompact on every op-bearing sync between the threshold and the cap', async () => {
+      service['_lastSeenRevs'].set(SyncProviderId.WebDAV, 'ops-5');
       // Buffer sits between the trim target (1000) and the trigger (2000).
       const between = C.SPLIT_COMPACTION_THRESHOLD + 200;
       let remoteOps = {
@@ -4424,6 +4682,8 @@ describe('FileBasedSyncAdapterService', () => {
     });
 
     it('(c) aborts compaction before overwriting a v4 fixed state file', async () => {
+      // This upload follows an earlier applied download whose revision survived restart.
+      service['_lastSeenRevs'].set(SyncProviderId.WebDAV, `${C.OPS_FILE}-rev`);
       const recentOps = Array.from({ length: C.MAX_RECENT_OPS }, (_, i) =>
         makeCompactOp({ id: `op-${i}`, sv: i + 1 }),
       );
@@ -4625,7 +4885,9 @@ describe('FileBasedSyncAdapterService', () => {
         // ops/state files not present yet
       });
 
-      await adapter.uploadOps([createMockSyncOp()], 'client1');
+      await expectAsync(
+        adapter.uploadOps([createMockSyncOp()], 'client1'),
+      ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
 
       const paths = uploadedPaths();
       for (const [path, encoded] of mockProvider.uploadFile.calls.allArgs()) {
@@ -4679,6 +4941,18 @@ describe('FileBasedSyncAdapterService', () => {
         version: number;
       };
       expect(bak.version).toBe(C.SPLIT_FILE_VERSION);
+      routeDownloads(
+        Object.fromEntries(
+          mockProvider.uploadFile.calls
+            .allArgs()
+            .map(([path, encoded]) => [path, encoded]),
+        ),
+      );
+      const migrated = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(migrated.latestSeq);
+      expect(
+        (await adapter.uploadOps([createMockSyncOp()], 'client1')).results[0].accepted,
+      ).toBe(true);
     });
 
     it('(e2) resumes a pending migration marker after restart before appending ops', async () => {
@@ -4711,6 +4985,8 @@ describe('FileBasedSyncAdapterService', () => {
         ),
       });
 
+      const resumed = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(resumed.latestSeq);
       await adapter.uploadOps([createMockSyncOp()], 'client1');
 
       const paths = uploadedPaths();
@@ -4890,6 +5166,11 @@ describe('FileBasedSyncAdapterService', () => {
         },
       );
 
+      await expectAsync(
+        adapter.uploadOps([createMockSyncOp()], 'client1'),
+      ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+      const migrated = await adapter.downloadOps(0);
+      await adapter.setLastServerSeq(migrated.latestSeq);
       await adapter.uploadOps([createMockSyncOp()], 'client1');
 
       const finalState = stateData as FileBasedStateFile;
@@ -5010,6 +5291,8 @@ describe('FileBasedSyncAdapterService', () => {
     });
 
     it('(i) op upload backs up the current sync-ops.json to .bak BEFORE overwriting it', async () => {
+      // This upload follows an earlier applied download whose revision survived restart.
+      service['_lastSeenRevs'].set(SyncProviderId.WebDAV, `${C.OPS_FILE}-rev`);
       // sync-ops.json is the hot file (rewritten on every op-bearing sync) — it
       // gets the same SPAP-8 backup-before-overwrite as the single-file format.
       const existing = makeOpsFile({
@@ -5052,6 +5335,7 @@ describe('FileBasedSyncAdapterService', () => {
       const result = await adapter.downloadOps(1, 'client2');
 
       expect(result.ops.some((o) => o.op.id === 'op-from-bak')).toBe(true);
+      await adapter.setLastServerSeq(result.latestSeq);
       expect(mockSnackService.open).toHaveBeenCalled();
 
       // The next upload heals the corrupt primary via a conditional PUT matching

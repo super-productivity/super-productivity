@@ -43,11 +43,17 @@ supersync:
   cors:
     # -- Comma-separated list of allowed CORS origins
     origins: "https://app.super-productivity.com"
+  # -- Peers whose X-Forwarded-* headers are trusted (proxy-addr keywords, IPs or
+  # CIDR ranges). Empty keeps the server default of "loopback,uniquelocal".
+  trustProxy: ""
   cleanup:
     # -- Max old operation ids selected/deleted for one user in a cleanup pass.
     oldOpsDeleteBatchSize: 5000
     # -- Max old operations deleted across all users in one cleanup pass.
     oldOpsMaxDeletedPerRun: 25000
+    # -- UTC hour (0-23) to run the daily cleanup job at.
+    # Empty runs it 10s after start, then every 24h.
+    hourUtc: ""
   webauthn:
     # -- WebAuthn relying party display name, shown in your users' OS passkey prompt.
     # Defaults to the relying-party ID when empty — do not ship someone else's brand here.

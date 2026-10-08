@@ -1,7 +1,6 @@
 import { test, expect } from '../../fixtures/test.fixture';
 import { type Page } from '@playwright/test';
 
-const DB_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ONE_HOUR = 60 * 60 * 1000;
 const THIRTY_MINUTES = 30 * 60 * 1000;
 
@@ -104,14 +103,34 @@ const addTaskWithoutWaitingForTodayList = async (
   await page.locator('.e2e-add-task-submit').click();
 };
 
+/**
+ * Waits until the short syntax token is gone from the task's title and returns
+ * the task's state.
+ *
+ * "The task exists" and "it has a due day" both hold before the syntax is
+ * applied. The add bar submits whatever it had parsed at click time. When that
+ * parse has not landed yet (the first "@date" of a page load waits for the lazy
+ * chrono-node chunk) the task is created with the raw title and the bar's
+ * default due day, which is today in the Today context and so already looks
+ * like a date. ShortSyntaxEffects then re-parses the created task and
+ * dispatches applyShortSyntax, which rewrites title, due day and estimate in one
+ * reducer pass. A single read after either earlier condition can therefore see
+ * "<title> @tomorrow" with today's date. The title only becomes exactly
+ * `taskTitle` once that pass is applied, so wait for it before reading the
+ * other fields.
+ */
 const expectTaskTitleWithoutShortSyntax = async (
   page: Page,
   taskTitle: string,
   token: string,
 ): Promise<TaskStateSnapshot> => {
   await expect
-    .poll(async () => (await getTaskStateByTitle(page, taskTitle))?.title ?? null)
-    .not.toBeNull();
+    .poll(
+      async () =>
+        (await getTaskStateByTitle(page, taskTitle))?.title ??
+        `<no task containing "${taskTitle}">`,
+    )
+    .toBe(taskTitle);
 
   const taskState = await getTaskStateByTitle(page, taskTitle);
   expect(taskState).not.toBeNull();
@@ -241,9 +260,6 @@ test.describe('Scheduled Task Operations', () => {
     const dueDayBeforeAdd = await getDbDateStr(page, 1);
     await addTaskWithoutWaitingForTodayList(page, `${taskTitle} @tomorrow`);
 
-    await expect
-      .poll(async () => (await getTaskStateByTitle(page, taskTitle))?.dueDay ?? '')
-      .toMatch(DB_DATE_RE);
     const taskState = await expectTaskTitleWithoutShortSyntax(
       page,
       taskTitle,

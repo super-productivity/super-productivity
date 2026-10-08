@@ -62,8 +62,7 @@ Provider-switch scenarios need both servers and both required flags; follow the
 ## Navigation traps and maintenance
 
 - Current persistence lives in [op-log/persistence](../src/app/op-log/persistence/).
-  [pfapi](../src/app/pfapi/) is legacy compiled code; the live
-  [legacy database reader](../src/app/core/persistence/legacy-pf-db.service.ts)
+  The [legacy database reader](../src/app/core/persistence/legacy-pf-db.service.ts)
   is a separate migration component.
 - Issue-provider synchronization and application-state synchronization have
   different entry points; use their separate rows above.

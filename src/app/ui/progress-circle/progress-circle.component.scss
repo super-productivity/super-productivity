@@ -25,21 +25,3 @@
   stroke: currentColor;
   transition: stroke-dashoffset var(--transition-duration-m) ease;
 }
-
-.progress-circle__pulse {
-  stroke: currentColor;
-  animation: progress-circle-pulse 2s ease-in-out infinite;
-}
-
-@keyframes progress-circle-pulse {
-  0%,
-  100% {
-    opacity: 0.5;
-    stroke-width: 2;
-  }
-
-  50% {
-    opacity: 1;
-    stroke-width: 2;
-  }
-}

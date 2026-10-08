@@ -1,10 +1,12 @@
+import { isTaskSnapshotUnchangedByContent } from './time-preserving-task-snapshot.util';
 import {
   hasOpaqueChanges,
   isAdditiveTimeOp,
+  isCommutingTimeDeltaCrossing,
   isDisjointMergeEligible,
   mergeChangedFields,
-  MergeSideMeta,
-  noiseTiebreakSide,
+  touchesCrossEntityTaskFields,
+  writesNoTaskTime,
 } from './conflict-disjoint-merge.util';
 import { ActionType, EntityType, OpType, Operation } from '../core/operation.types';
 
@@ -389,72 +391,244 @@ describe('conflict-disjoint-merge.util', () => {
     });
   });
 
-  describe('noiseTiebreakSide', () => {
-    it('picks the greater-timestamp side (local newer)', () => {
-      expect(
-        noiseTiebreakSide(
-          { timestamp: 2000, clientId: 'A' },
-          { timestamp: 1000, clientId: 'Z' },
-        ),
-      ).toBe('local');
+  // #10421, #10408: a resolution row is opaque, but a time-only side commutes
+  // with one that writes no time. Only the row's keys are read.
+  describe('isCommutingTimeDeltaCrossing (resolution rows)', () => {
+    const row = (
+      actionPayload: Record<string, unknown>,
+      extra: Record<string, unknown> = {},
+    ): Operation =>
+      op({
+        id: 'row',
+        actionType: '[TASK] LWW Update' as ActionType,
+        clientId: 'B',
+        payload: { actionPayload, entityChanges: [], lwwUpdateMode: 'patch', ...extra },
+      });
+    const commutes = (localOps: Operation[], remoteOps: Operation[]): boolean =>
+      isCommutingTimeDeltaCrossing({
+        localOps,
+        remoteOps,
+        payloadKey: 'task',
+        entityId: 'task-1',
+      });
+
+    it('is true for time deltas beside a row that writes no time', () => {
+      const notesRow = row({ id: 'task-1', notes: 'B' });
+      expect(commutes([syncTimeSpentOp()], [notesRow])).toBe(true);
+      expect(commutes([syncTimeSpentOp(), deferredSyncTimeSpentOp()], [notesRow])).toBe(
+        true,
+      );
     });
 
-    it('picks the greater-timestamp side (remote newer)', () => {
-      expect(
-        noiseTiebreakSide(
-          { timestamp: 1000, clientId: 'Z' },
-          { timestamp: 2000, clientId: 'A' },
-        ),
-      ).toBe('remote');
+    it('commutes a delta with mixed retained timeless patches and deltas in both directions', () => {
+      const timeless = row({ id: 'task-1', title: 'B' });
+      const rename = op({ payload: { task: { id: 'task-1', changes: { notes: 'A' } } } });
+      const mixed = [timeless, rename, deferredSyncTimeSpentOp()];
+      expect(commutes([syncTimeSpentOp()], mixed)).toBeTrue();
+      expect(commutes(mixed, [syncTimeSpentOp()])).toBeTrue();
     });
 
-    // The equal-timestamp branch: falls back to the greater clientId. This is the
-    // cross-client determinism guarantee — without it two clients could pick
-    // different noise values and diverge.
-    it('breaks an equal-timestamp tie by the greater clientId (local wins)', () => {
-      expect(
-        noiseTiebreakSide(
-          { timestamp: 1000, clientId: 'B' },
-          { timestamp: 1000, clientId: 'A' },
-        ),
-      ).toBe('local');
+    it('does not commute non-time writes on both sides just because one also tracks time', () => {
+      const local = [syncTimeSpentOp(), row({ id: 'task-1', title: 'A' })];
+      const remote = [row({ id: 'task-1', title: 'B' })];
+      expect(commutes(local, remote)).toBeFalse();
+      expect(commutes(remote, local)).toBeFalse();
+      const rename = op({ payload: { task: { id: 'task-1', changes: { title: 'B' } } } });
+      expect(commutes(local, [rename])).toBeFalse();
+      expect(commutes([rename], local)).toBeFalse();
     });
 
-    it('breaks an equal-timestamp tie by the greater clientId (remote wins)', () => {
+    it('reads only keys of a timeless patch when it commutes with a remote delta', () => {
+      const fields = {
+        id: 'task-1',
+        get title(): string {
+          throw new Error('row value read');
+        },
+      };
       expect(
-        noiseTiebreakSide(
-          { timestamp: 1000, clientId: 'A' },
-          { timestamp: 1000, clientId: 'B' },
-        ),
-      ).toBe('remote');
+        commutes([row(fields), deferredSyncTimeSpentOp()], [syncTimeSpentOp()]),
+      ).toBeTrue();
     });
 
-    it('is fully symmetric on equal timestamps: both clients pick the SAME physical side', () => {
-      // X and Y differ only by clientId. Whichever side X is passed as, the result
-      // must always point at the SAME side (the greater clientId, Y here).
-      const x: MergeSideMeta = { timestamp: 1000, clientId: 'A' };
-      const y: MergeSideMeta = { timestamp: 1000, clientId: 'B' };
-      // Client 1 sees X local / Y remote → picks remote (= Y).
-      expect(noiseTiebreakSide(x, y)).toBe('remote');
-      // Client 2 sees Y local / X remote → picks local (= Y).
-      expect(noiseTiebreakSide(y, x)).toBe('local');
+    for (const unsafe of [
+      { actionPayload: { timeSpent: 0 } },
+      { actionPayload: { title: 'B' }, clearedFields: ['timeSpentOnDay'] },
+      { actionPayload: { title: 'B' }, lwwUpdateMode: 'replace' },
+    ]) {
+      it(`refuses mixed source history with ${JSON.stringify(unsafe)} in both directions`, () => {
+        const mixed = [row({}, unsafe), deferredSyncTimeSpentOp()];
+        expect(commutes(mixed, [syncTimeSpentOp()])).toBeFalse();
+        expect(commutes([syncTimeSpentOp()], mixed)).toBeFalse();
+      });
+    }
+
+    // `setOne` rewrites every field, so a replace row writes time whatever
+    // keys it carries.
+    it('is false for any replace row', () => {
+      expect(
+        commutes(
+          [syncTimeSpentOp()],
+          [row({ id: 'task-1', title: 'T' }, { lwwUpdateMode: 'replace' })],
+        ),
+      ).toBe(false);
     });
 
-    it('defaults to local when both identity components are equal', () => {
+    it('is false for a row that writes or clears a time field', () => {
+      expect(commutes([syncTimeSpentOp()], [row({ id: 'task-1', timeSpent: 0 })])).toBe(
+        false,
+      );
       expect(
-        noiseTiebreakSide(
-          { timestamp: 1000, clientId: 'A' },
-          { timestamp: 1000, clientId: 'A' },
+        commutes([syncTimeSpentOp()], [row({ id: 'task-1', timeSpentOnDay: {} })]),
+      ).toBe(false);
+      expect(
+        commutes(
+          [syncTimeSpentOp()],
+          [row({ id: 'task-1', notes: 'B' }, { clearedFields: ['timeSpentOnDay'] })],
         ),
-      ).toBe('local');
+      ).toBe(false);
+    });
+
+    it('is false unless the local side is only time deltas', () => {
+      const notesRow = row({ id: 'task-1', notes: 'B' });
+      const rename = op({ payload: { task: { id: 'task-1', changes: { title: 'A' } } } });
+      expect(commutes([syncTimeSpentOp(), rename], [notesRow])).toBe(false);
+      expect(commutes([removeTimeSpentOp()], [notesRow])).toBe(false);
+    });
+
+    it('is false for a row of several entities or of another task', () => {
+      expect(
+        commutes(
+          [syncTimeSpentOp()],
+          [{ ...row({ id: 'task-1', notes: 'B' }), entityIds: ['task-1', 'task-2'] }],
+        ),
+      ).toBe(false);
+      expect(
+        commutes(
+          [syncTimeSpentOp()],
+          [{ ...row({ id: 'task-2', notes: 'B' }), entityId: 'task-2' }],
+        ),
+      ).toBe(false);
     });
   });
 
-  // ── cleared fields (#9776): `changes: { field: undefined }` + out-of-band
-  // `clearedFields`. The author's op keeps the undefined key (structured clone);
-  // the same op after a JSON wire round-trip loses it. Both shapes must extract
-  // the IDENTICAL field set, or the author merges while the receiver falls back
-  // to whole-entity LWW — silent divergence on the same conflict. ──────────────
+  describe('isCommutingTimeDeltaCrossing (timeless ops, #10378)', () => {
+    /** Production-shaped auto-plan op that tracking an unscheduled task emits. */
+    const planOp = (over: Partial<Operation> = {}): Operation =>
+      op({
+        actionType: ActionType.TASK_SHARED_PLAN_FOR_TODAY,
+        entityId: undefined,
+        entityIds: ['task-1'],
+        payload: {
+          actionPayload: { taskIds: ['task-1'], today: DAY, startOfNextDayDiffMs: 0 },
+          entityChanges: [],
+        },
+        ...over,
+      });
+    const commutes = (localOps: Operation[], remoteOps: Operation[]): boolean =>
+      isCommutingTimeDeltaCrossing({
+        localOps,
+        remoteOps,
+        payloadKey: 'task',
+        entityId: 'task-1',
+      });
+
+    it('is true for time deltas beside a tick of the other device, in both directions', () => {
+      const tick = [planOp({ id: 'plan' }), syncTimeSpentOp({ id: 'delta' })];
+      expect(commutes(tick, [syncTimeSpentOp({ id: 'remote' })])).toBe(true);
+      expect(commutes([syncTimeSpentOp({ id: 'local' })], tick)).toBe(true);
+      expect(commutes([deferredSyncTimeSpentOp()], [planOp()])).toBe(true);
+    });
+
+    it('is true beside a readable edit that writes no time field', () => {
+      const rename = op({ payload: { task: { id: 'task-1', changes: { title: 'A' } } } });
+      expect(commutes([syncTimeSpentOp()], [planOp({ id: 'plan' }), rename])).toBe(true);
+    });
+
+    // Both sides hold a non-delta op, so the plans still meet in a conflict.
+    it('is false when neither side is only time deltas', () => {
+      const tick = [planOp({ id: 'plan' }), syncTimeSpentOp({ id: 'delta' })];
+      expect(commutes(tick, [planOp({ id: 'remote-plan' })])).toBe(false);
+    });
+
+    it('is false beside an op that writes or may write time', () => {
+      const timeEdit = op({
+        payload: { task: { id: 'task-1', changes: { timeSpentOnDay: { [DAY]: 1 } } } },
+      });
+      const rounding = op({
+        actionType: '[Task] RoundTimeSpentForDay' as ActionType,
+        entityId: undefined,
+        entityIds: ['task-1'],
+        payload: { actionPayload: { day: DAY, taskIds: ['task-1'] }, entityChanges: [] },
+      });
+      expect(commutes([syncTimeSpentOp()], [planOp({ id: 'plan' }), timeEdit])).toBe(
+        false,
+      );
+      expect(commutes([syncTimeSpentOp()], [rounding])).toBe(false);
+      expect(commutes([syncTimeSpentOp()], [convertToSubTaskOp()])).toBe(false);
+      expect(commutes([syncTimeSpentOp()], [removeTimeSpentOp()])).toBe(false);
+      expect(commutes([syncTimeSpentOp()], [op({ opType: OpType.Delete })])).toBe(false);
+    });
+
+    it('is false for a plan of several tasks or of another task', () => {
+      const bulk = planOp({
+        entityIds: ['task-1', 'task-2'],
+        payload: {
+          actionPayload: { taskIds: ['task-1', 'task-2'], today: DAY },
+          entityChanges: [],
+        },
+      });
+      expect(commutes([syncTimeSpentOp()], [bulk])).toBe(false);
+      expect(writesNoTaskTime(planOp({ entityIds: ['task-2'] }), 'task', 'task-1')).toBe(
+        false,
+      );
+    });
+
+    // A replace row rewrites every field; rows keep their own rule above.
+    it('never reads an LWW row as timeless', () => {
+      const replaceRow = op({
+        actionType: '[TASK] LWW Update' as ActionType,
+        payload: {
+          actionPayload: { id: 'task-1', title: 'T' },
+          entityChanges: [],
+          lwwUpdateMode: 'replace',
+        },
+      });
+      expect(writesNoTaskTime(replaceRow, 'task', 'task-1')).toBe(false);
+      expect(commutes([syncTimeSpentOp()], [planOp({ id: 'plan' }), replaceRow])).toBe(
+        false,
+      );
+    });
+  });
+
+  describe('touchesCrossEntityTaskFields', () => {
+    const edit = (task: Record<string, unknown>): Operation =>
+      op({ payload: { task: { id: 'task-1', ...task } } });
+    const touches = (ops: Operation[]): boolean =>
+      touchesCrossEntityTaskFields(ops, 'task', 'task-1');
+
+    it('is false for time deltas and edits of fields only task ops write', () => {
+      expect(touches([syncTimeSpentOp(), deferredSyncTimeSpentOp()])).toBe(false);
+      expect(touches([syncTimeSpentOp(), edit({ title: 'T', notes: 'N' })])).toBe(false);
+    });
+
+    it('is true for a field that ops of other entity types also write', () => {
+      for (const field of ['tagIds', 'projectId', 'parentId', 'dueDay', 'dueWithTime']) {
+        expect(touches([syncTimeSpentOp(), edit({ [field]: 'x' })]))
+          .withContext(field)
+          .toBe(true);
+      }
+    });
+
+    it('is true when an op cannot be read as task fields', () => {
+      expect(touches([convertToSubTaskOp()])).toBe(true);
+      const plannerMove = op({
+        entityType: 'PLANNER' as EntityType,
+        payload: { actionPayload: {}, entityChanges: [] },
+      });
+      expect(touches([syncTimeSpentOp(), plannerMove])).toBe(true);
+    });
+  });
+
   describe('cleared fields', () => {
     /** Author-side shape: undefined key survives IndexedDB structured clone. */
     const authorClearOp = (): Operation =>
@@ -514,5 +688,89 @@ describe('conflict-disjoint-merge.util', () => {
       expect(mergeChangedFields([junkOp], 'task', 'task-1')).toEqual({});
       expect(hasOpaqueChanges([junkOp], 'task', 'task-1')).toBe(true);
     });
+  });
+});
+
+describe('isTaskSnapshotUnchangedByContent', () => {
+  const snapshot = op({
+    payload: {
+      lwwUpdateMode: 'replace',
+      entityChanges: [],
+      actionPayload: {
+        id: 'task-1',
+        title: 'retained',
+        notes: 'kept',
+        created: 1000,
+        priority: 1,
+        dueDay: DAY,
+        timeSpent: 3000,
+      },
+    },
+  });
+  const update = (changes: Record<string, unknown>, entityId = 'task-1'): Operation =>
+    op({
+      entityId,
+      actionType: ActionType.TASK_SHARED_UPDATE,
+      payload: { task: { id: entityId, changes } },
+    });
+
+  it('proves equal plain content is a no-op without changing the replacement', () => {
+    const before = JSON.stringify(snapshot);
+    expect(
+      isTaskSnapshotUnchangedByContent(
+        snapshot,
+        update({ title: 'retained', notes: 'kept', priority: 1 }),
+      ),
+    ).toBeTrue();
+    expect(JSON.stringify(snapshot)).toBe(before);
+  });
+
+  it('refuses actual content differences, clears, scheduling and completion', () => {
+    for (const changes of [
+      { title: 'different' },
+      { notes: undefined },
+      { dueDay: DAY },
+      { isDone: false },
+      { timeSpent: 3000 },
+    ]) {
+      expect(isTaskSnapshotUnchangedByContent(snapshot, update(changes))).toBeFalse();
+    }
+  });
+
+  it('refuses creation identity changes and metadata beyond display arrival time', () => {
+    // created identifies a repeat occurrence; an unchanged replacement must
+    // never be moved after an edit that changes that persisted value.
+    for (const changes of [{ created: 2000 }, { lastModified: 2000 }]) {
+      expect(isTaskSnapshotUnchangedByContent(snapshot, update(changes))).toBeFalse();
+    }
+    expect(
+      isTaskSnapshotUnchangedByContent(snapshot, update({ modified: 2000 })),
+    ).toBeTrue();
+  });
+
+  it('allows content on another task, but never its scheduling mutations', () => {
+    expect(
+      isTaskSnapshotUnchangedByContent(snapshot, update({ title: 'other' }, 'task-2')),
+    ).toBeTrue();
+    expect(
+      isTaskSnapshotUnchangedByContent(snapshot, update({ dueDay: DAY }, 'task-2')),
+    ).toBeFalse();
+  });
+
+  it('never reads incoming resolution values, even equal ones', () => {
+    for (const mode of ['patch', 'replace']) {
+      expect(
+        isTaskSnapshotUnchangedByContent(
+          snapshot,
+          op({
+            payload: {
+              lwwUpdateMode: mode,
+              entityChanges: [],
+              actionPayload: { title: 'retained' },
+            },
+          }),
+        ),
+      ).toBeFalse();
+    }
   });
 });

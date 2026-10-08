@@ -91,3 +91,43 @@
     box-shadow: none !important;
   }
 }
+
+// Keep the rows in the layout so CDK's cached drop positions stay accurate.
+.multi-drag-source {
+  opacity: 0;
+}
+
+// A group has one insertion slot, without showing the picked row as its ghost.
+.is-multi-dragging > .cdk-drag-placeholder {
+  ::ng-deep * {
+    visibility: hidden;
+  }
+}
+
+.multi-task-drag-preview {
+  width: min(480px, 80vw);
+  padding: var(--s2) var(--s3);
+  background: var(--bg-lighter);
+  color: var(--text-color);
+  border: 1px solid var(--divider-color);
+  border-radius: var(--task-border-radius);
+}
+
+.multi-task-drag-preview-tasks {
+  max-height: min(360px, 50vh);
+  overflow: hidden;
+}
+
+.multi-task-drag-preview-row {
+  padding: var(--s) 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multi-task-drag-preview-count {
+  padding-bottom: var(--s);
+  border-bottom: 1px solid var(--divider-color);
+  color: var(--c-accent);
+  font-size: var(--font-size-sm);
+}

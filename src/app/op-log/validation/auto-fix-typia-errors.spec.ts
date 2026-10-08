@@ -1,6 +1,6 @@
 import { autoFixTypiaErrors } from './auto-fix-typia-errors';
 import { createAppDataCompleteMock } from '../../util/app-data-mock';
-import { validateAllData } from './validation-fn';
+import { appDataValidators, validateAllData } from './validation-fn';
 import type { AppDataComplete } from '../model/model-config';
 import type { IValidation } from 'typia';
 import { initialTaskState } from '../../features/tasks/store/task.reducer';
@@ -897,5 +897,73 @@ describe('autoFixTypiaErrors — invalid worklogExportSettings (#8279)', () => {
     const cols = (settingsOf(repaired, 'project') as { cols: string[] }).cols;
     expect(cols).toEqual(['DATE', 'START', 'END', 'TIME_CLOCK', 'TITLES_INCLUDING_SUB']);
     expect(cols).not.toBe(DEFAULT_PROJECT.advancedCfg.worklogExportSettings.cols);
+  });
+});
+
+// Both encodings have been persisted by master builds. Exercise the real validator.
+describe('autoFixTypiaErrors — mixed task priority encodings', () => {
+  beforeEach(() => {
+    spyOn(OP_LOG_SYNC_LOGGER, 'err').and.stub();
+    spyOn(OP_LOG_SYNC_LOGGER, 'warn').and.stub();
+  });
+
+  const withTaskPriority = (priority: unknown): AppDataComplete => {
+    const d = createAppDataCompleteMock();
+    const task = { ...DEFAULT_TASK, id: 't1', projectId: INBOX_PROJECT.id, priority };
+    return {
+      ...d,
+      task: { ...initialTaskState, ids: ['t1'], entities: { t1: task } },
+      archiveYoung: {
+        ...d.archiveYoung,
+        task: {
+          ids: ['young'],
+          entities: { young: { ...task, id: 'young', isDone: true } },
+        },
+      },
+      archiveOld: {
+        ...d.archiveOld,
+        task: { ids: ['old'], entities: { old: { ...task, id: 'old', isDone: true } } },
+      },
+    } as unknown as AppDataComplete;
+  };
+
+  for (const priority of ['high', 'medium', 'low', 1, 2, 3, null, undefined] as const) {
+    it(`preserves ${priority} through validation and repair`, () => {
+      const d = withTaskPriority(priority);
+      const before = validateAllData(d);
+      expect(before.success).toBe(true);
+      expect(appDataValidators.archiveYoung(d.archiveYoung).success).toBe(true);
+      expect(appDataValidators.archiveOld(d.archiveOld).success).toBe(true);
+      const result = autoFixTypiaErrors(d, before.success ? [] : before.errors);
+      expect(result.task.entities.t1!.priority).toBe(priority);
+      expect(result.archiveYoung.task.entities.young!.priority).toBe(priority);
+      expect(result.archiveOld.task.entities.old!.priority).toBe(priority);
+      expect(validateAllData(result).success).toBe(true);
+      expect(appDataValidators.archiveYoung(result.archiveYoung).success).toBe(true);
+      expect(appDataValidators.archiveOld(result.archiveOld).success).toBe(true);
+    });
+  }
+
+  for (const archive of ['archiveYoung', 'archiveOld'] as const) {
+    it(`rejects an invalid priority in ${archive}`, () => {
+      const d = withTaskPriority('invalid');
+      const result = appDataValidators[archive](d[archive]);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.errors.some((error) => error.path.endsWith('.priority'))).toBe(
+          true,
+        );
+      }
+    });
+  }
+
+  it('keeps an unknown numeric priority, which only a newer client could write', () => {
+    const d = withTaskPriority(4);
+    const before = validateAllData(d);
+    expect(before.success).toBe(false);
+
+    const result = autoFixTypiaErrors(d, (before as IValidation.IFailure).errors);
+
+    expect(result.task.entities.t1!.priority as unknown).toBe(4);
   });
 });

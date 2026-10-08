@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
 import { OperationLogCompactionService } from '../../persistence/operation-log-compaction.service';
+import { OpLogDbAdapter } from '../../persistence/op-log-db-adapter';
+import { SINGLETON_KEY, STORE_NAMES } from '../../persistence/db-keys.const';
 import { VectorClockService } from '../../sync/vector-clock.service';
 import { OpType, VectorClock } from '../../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from '../../persistence/schema-migration.service';
@@ -35,6 +37,24 @@ describe('Compaction Integration', () => {
   let compactionService: OperationLogCompactionService;
   let vectorClockService: VectorClockService;
   let mockStateSnapshot: jasmine.SpyObj<StateSnapshotService>;
+
+  // The persisted compaction counter has no production writer any more, so seed
+  // it directly (keeping any existing snapshot). Compaction's counter reset stays
+  // observable this way, which the tests below use to tell which path compact() took.
+  const seedCompactionCounter = async (count: number): Promise<void> => {
+    const adapter = (storeService as unknown as { _adapter: OpLogDbAdapter })._adapter;
+    const existing = await adapter.get<object>(STORE_NAMES.STATE_CACHE, SINGLETON_KEY);
+    await adapter.put(STORE_NAMES.STATE_CACHE, {
+      ...(existing ?? {
+        id: SINGLETON_KEY,
+        state: null,
+        lastAppliedOpSeq: 0,
+        vectorClock: {},
+        compactedAt: 0,
+      }),
+      compactionCounter: count,
+    });
+  };
 
   beforeEach(async () => {
     // Create mock for StateSnapshotService
@@ -514,9 +534,8 @@ describe('Compaction Integration', () => {
 
   describe('Compaction counter', () => {
     it('should reset compaction counter after save', async () => {
-      // Increment counter
-      await storeService.incrementCompactionCounter();
-      await storeService.incrementCompactionCounter();
+      // Seed counter
+      await seedCompactionCounter(2);
 
       let counter = await storeService.getCompactionCounter();
       expect(counter).toBe(2);
@@ -526,26 +545,6 @@ describe('Compaction Integration', () => {
 
       counter = await storeService.getCompactionCounter();
       expect(counter).toBe(0);
-    });
-
-    it('should track operations for compaction threshold', async () => {
-      const client = new TestClient('client-test');
-
-      // Start at 0
-      let counter = await storeService.getCompactionCounter();
-      expect(counter).toBe(0);
-
-      // Add operations and increment counter
-      for (let i = 0; i < 5; i++) {
-        await storeService.append(
-          createTaskOperation(client, `task-${i}`, OpType.Create, { title: `Task ${i}` }),
-          'local',
-        );
-        await storeService.incrementCompactionCounter();
-      }
-
-      counter = await storeService.getCompactionCounter();
-      expect(counter).toBe(5);
     });
   });
 
@@ -637,7 +636,7 @@ describe('Compaction Integration', () => {
         compactedAt: Date.now(),
         schemaVersion: CURRENT_SCHEMA_VERSION,
       });
-      await storeService.incrementCompactionCounter();
+      await seedCompactionCounter(1);
 
       // Live NgRx state is the transient empty/initial state.
       mockStateSnapshot.getStateSnapshot.and.returnValue({
@@ -664,8 +663,7 @@ describe('Compaction Integration', () => {
         createTaskOperation(client, 'task-1', OpType.Create, { title: 'Task 1' }),
         'local',
       );
-      await storeService.incrementCompactionCounter();
-      await storeService.incrementCompactionCounter();
+      await seedCompactionCounter(2);
 
       const liveState = {
         task: {

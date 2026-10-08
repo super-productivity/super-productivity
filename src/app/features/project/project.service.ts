@@ -28,7 +28,6 @@ import {
   toggleHideFromMenu,
   unarchiveProject,
   updateProject,
-  updateProjectOrder,
 } from './store/project.actions';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { DEFAULT_PROJECT, INBOX_PROJECT } from './project.const';
@@ -442,10 +441,6 @@ export class ProjectService {
 
   moveTaskToBacklog(taskId: string, projectId: string): void {
     this._store$.dispatch(moveProjectTaskToBacklogListAuto({ taskId, projectId }));
-  }
-
-  updateOrder(ids: string[]): void {
-    this._store$.dispatch(updateProjectOrder({ ids }));
   }
 
   async duplicateProject(templateProjectId: string): Promise<string> {

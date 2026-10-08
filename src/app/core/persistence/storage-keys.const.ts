@@ -72,6 +72,8 @@ export enum LS {
   // NOTE: key is different, but we keep it to avoid showing it again
   IS_SKIP_TOUR = 'SUP_IS_SHOW_TOUR',
 
+  // Historic name (the old preset screen): now set once the first real task is
+  // added, so a reload after that does not start onboarding over.
   ONBOARDING_PRESET_DONE = 'SUP_ONBOARDING_PRESET_DONE',
   ONBOARDING_HINTS_DONE = 'SUP_ONBOARDING_HINTS_DONE',
 
@@ -93,6 +95,8 @@ export enum LS {
   SELECTED_BOARD = 'SELECTED_BOARD',
   DONE_TASKS_HIDDEN = 'DONE_TASKS_HIDDEN',
   EXAMPLE_TASKS_CREATED = 'SUP_EXAMPLE_TASKS_CREATED',
+  // IDs of the seeded example tasks, so onboarding points at them only while they exist
+  EXAMPLE_TASK_IDS = 'SUP_EXAMPLE_TASK_IDS',
   LATER_TODAY_TASKS_HIDDEN = 'LATER_TODAY_TASKS_HIDDEN',
   OVERDUE_TASKS_HIDDEN = 'OVERDUE_TASKS_HIDDEN',
   REPEAT_CFGS_HIDDEN = 'REPEAT_CFGS_HIDDEN',

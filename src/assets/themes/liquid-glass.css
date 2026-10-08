@@ -496,21 +496,6 @@ body::before {
   display: none !important;
 }
 
-/* ---------------------------------------------------------
- * User-selected wallpaper (.bg-image)
- *
- * `.bg-overlay` is a flat white/black scrim layered above
- * `.bg-image` and below the app. It adds a milky wash that fights
- * the translucent glass surfaces, so Liquid Glass neutralizes it.
- *
- * Wallpaper blur is controlled by the user background image blur
- * setting, not by this theme.
- * --------------------------------------------------------- */
-
-body.hasBgImage .bg-overlay {
-  display: none !important;
-}
-
 /* Schedule weekday / week-column headers — bind to a solid surface
  * so the axis label band reads as a firm divider, not as glass.
  * Scope `.week-header` to schedule-week: worklog uses the same class

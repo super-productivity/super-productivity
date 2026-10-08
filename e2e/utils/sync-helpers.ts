@@ -135,13 +135,21 @@ export const createWebDavFolder = async (
  *
  * @param browser - Playwright Browser instance
  * @param baseURL - Base URL for the app
+ * @param acceptedConfirms - Exact extra confirmations the test deliberately triggers
  * @returns Object with context and page
  */
 export const setupSyncClient = async (
   browser: Browser,
   baseURL: string | undefined,
+  acceptedConfirms: readonly RegExp[] = [],
 ): Promise<{ context: BrowserContext; page: Page }> => {
-  const context = await browser.newContext({ baseURL });
+  // A context created here does not inherit the config's user agent; the app
+  // needs PLAYWRIGHT in it to start with every app feature on (as in the
+  // regular suite) instead of the new-install set.
+  const context = await browser.newContext({
+    baseURL,
+    userAgent: 'PLAYWRIGHT WEBDAV-SYNC-CLIENT',
+  });
   const page = await context.newPage();
   const pageErrors = attachPageErrorCollector(page, 'WebDAV sync client');
   installDevErrorDialogHandler(page, 'WebDAV sync client');
@@ -170,7 +178,9 @@ export const setupSyncClient = async (
     }
 
     if (dialog.type() === 'confirm') {
-      const isExpectedDialog = FRESH_CLIENT_CONFIRM.test(normalizeDialogMessage(message));
+      const isExpectedDialog = [FRESH_CLIENT_CONFIRM, ...acceptedConfirms].some(
+        (pattern) => pattern.test(normalizeDialogMessage(message)),
+      );
 
       if (!isExpectedDialog) {
         console.error(`[E2E] Unexpected confirm dialog: "${message}"`);

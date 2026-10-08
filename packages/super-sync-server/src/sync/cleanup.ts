@@ -117,25 +117,55 @@ const runDailyCleanup = async (): Promise<void> => {
   }
 };
 
+// Own parser: parsePositiveIntegerEnv rejects 0, a valid hour.
+const getCleanupHourUtc = (): number | null => {
+  const rawValue = process.env.OLD_OPS_CLEANUP_HOUR_UTC;
+  if (rawValue === undefined || rawValue === '') return null;
+
+  const hour = Number(rawValue);
+  if (!/^\d{1,2}$/.test(rawValue) || hour > 23) {
+    Logger.warn(
+      `Invalid OLD_OPS_CLEANUP_HOUR_UTC="${rawValue}" (expected 0-23). ` +
+        `Falling back to running ${INITIAL_CLEANUP_DELAY_MS / 1000}s after start.`,
+    );
+    return null;
+  }
+  return hour;
+};
+
+const msUntilNextUtcHour = (hourUtc: number, now: number): number => {
+  const next = new Date(now);
+  next.setUTCHours(hourUtc, 0, 0, 0);
+  if (next.getTime() <= now) next.setUTCDate(next.getUTCDate() + 1);
+  return next.getTime() - now;
+};
+
 export const startCleanupJobs = (): void => {
   Logger.info('Starting daily cleanup job...');
 
+  const hourUtc = getCleanupHourUtc();
   // Brief warmup before the first pass; the per-batch/per-run throttles in
   // deleteOldSyncedOpsForAllUsers keep the work bounded so this delay only
   // needs to cover startup tasks, not the cleanup itself.
+  const firstRunDelayMs =
+    hourUtc === null ? INITIAL_CLEANUP_DELAY_MS : msUntilNextUtcHour(hourUtc, Date.now());
   initialCleanupTimer = setTimeout(() => {
     initialCleanupTimer = null;
     void runDailyCleanup();
-  }, INITIAL_CLEANUP_DELAY_MS);
+
+    // Schedule recurring daily cleanup from the first run, so it keeps that time of day
+    cleanupTimer = setInterval(() => {
+      void runDailyCleanup();
+    }, MS_PER_DAY);
+    cleanupTimer.unref();
+  }, firstRunDelayMs);
   initialCleanupTimer.unref();
 
-  // Schedule recurring daily cleanup
-  cleanupTimer = setInterval(() => {
-    void runDailyCleanup();
-  }, MS_PER_DAY);
-  cleanupTimer.unref();
-
-  Logger.info('Daily cleanup job scheduled');
+  Logger.info(
+    hourUtc === null
+      ? 'Daily cleanup job scheduled'
+      : `Daily cleanup job scheduled for ${hourUtc}:00 UTC`,
+  );
 };
 
 export const stopCleanupJobs = (): void => {

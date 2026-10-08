@@ -1,3 +1,9 @@
+import { TaskPriorityIndicatorComponent } from '../../task-priority-indicator/task-priority-indicator.component';
+import {
+  TASK_PRIORITY_LABEL_KEY,
+  TASK_PRIORITY_LEVELS,
+  getTaskPriority,
+} from '../../task-priority.const';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -104,6 +110,7 @@ import { PluginTaskContextMenuTarget } from '@super-productivity/plugin-api';
     IssueIconPipe,
     MenuTouchFixDirective,
     SelectOptionRowComponent,
+    TaskPriorityIndicatorComponent,
   ],
   templateUrl: './task-context-menu-inner.component.html',
   styleUrl: './task-context-menu-inner.component.scss',
@@ -139,6 +146,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   protected readonly isTouchActive = isTouchActive;
   protected readonly T = T;
+  protected readonly PRIORITY_LEVELS = TASK_PRIORITY_LEVELS;
+  protected readonly PRIORITY_LABEL_KEY = TASK_PRIORITY_LABEL_KEY;
   readonly ESTIMATE_OPTIONS = ESTIMATE_OPTIONS;
   readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
 
@@ -167,6 +176,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   readonly contextMenu = viewChild('contextMenu', { read: MatMenu });
 
   task!: TaskWithSubTasks | Task;
+  priority: TaskPriority | null = null;
 
   isCurrent: boolean = false;
   isBacklog: boolean = false;
@@ -214,6 +224,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   //  Accessor inputs cannot be migrated as they are too complex.
   @Input('task') set taskSet(v: TaskWithSubTasks | Task) {
     this.task = v;
+    this.priority = getTaskPriority(v.priority);
     this._pluginTaskContextMenuTarget.set(v.parentId ? 'SUBTASK' : 'TASK');
     this.isCurrent = this._taskService.currentTaskId() === v.id;
     this._task$.next(v);
@@ -411,6 +422,22 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     menu.focusFirstItem('program');
   }
 
+  /**
+   * For radio-style submenus: focus the checked item so opening the menu and
+   * pressing Enter keeps the current choice. Falls back to the first item.
+   * `MatMenuItem.focus()` also moves the menu's key manager to that item.
+   */
+  focusCheckedSubmenuItem(menu: MatMenu): void {
+    const checked = menu._allItems.find(
+      (item) => item._getHostElement().getAttribute('aria-checked') === 'true',
+    );
+    if (checked) {
+      checked.focus('program');
+    } else {
+      menu.focusFirstItem('program');
+    }
+  }
+
   /** Touch entry point into multi-selection (there is no modifier key). */
   enterSelectionMode(): void {
     // The detail panel is single-task UI (a bottom sheet on touch); close it.
@@ -534,7 +561,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   }
 
   setPriority(priority: TaskPriority | null): void {
-    if (priority === (this.task.priority ?? null)) {
+    if (priority === this.priority) {
       return;
     }
     this._taskService.update(this.task.id, { priority });

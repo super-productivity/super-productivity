@@ -305,7 +305,7 @@
     [matMenuTriggerFor]="priorityMenu"
     mat-menu-item
     [menuTouchFix]="priorityMenuTrigger"
-    (menuOpened)="focusFirstSubmenuItem(priorityMenu)"
+    (menuOpened)="focusCheckedSubmenuItem(priorityMenu)"
   >
     <span class="menuItemLeft">
       <mat-icon>priority_high</mat-icon>
@@ -449,43 +449,35 @@
   <button
     mat-menu-item
     menuTouchFix
-    (click)="setPriority('high')"
-  >
-    @if (task.priority === 'high') {
-      <mat-icon>check</mat-icon>
-    }
-    {{ T.F.TASK.CMP.PRIORITY_HIGH | translate }}
-  </button>
-  <button
-    mat-menu-item
-    menuTouchFix
-    (click)="setPriority('medium')"
-  >
-    @if (task.priority === 'medium') {
-      <mat-icon>check</mat-icon>
-    }
-    {{ T.F.TASK.CMP.PRIORITY_MEDIUM | translate }}
-  </button>
-  <button
-    mat-menu-item
-    menuTouchFix
-    (click)="setPriority('low')"
-  >
-    @if (task.priority === 'low') {
-      <mat-icon>check</mat-icon>
-    }
-    {{ T.F.TASK.CMP.PRIORITY_LOW | translate }}
-  </button>
-  <button
-    mat-menu-item
-    menuTouchFix
+    role="menuitemradio"
+    [attr.aria-checked]="!priority"
     (click)="setPriority(null)"
   >
-    @if (!task.priority) {
-      <mat-icon>check</mat-icon>
+    <mat-icon>clear</mat-icon>
+    <span>{{ T.F.TASK.CMP.PRIORITY_NONE | translate }}</span>
+    @if (!priority) {
+      <div><mat-icon>check</mat-icon></div>
     }
-    {{ T.F.TASK.CMP.PRIORITY_NONE | translate }}
   </button>
+  @for (level of PRIORITY_LEVELS; track level) {
+    <button
+      mat-menu-item
+      menuTouchFix
+      role="menuitemradio"
+      [attr.aria-checked]="priority === level"
+      (click)="setPriority(level)"
+    >
+      <task-priority-indicator
+        matMenuItemIcon
+        [priority]="level"
+        aria-hidden="true"
+      ></task-priority-indicator>
+      <span>{{ PRIORITY_LABEL_KEY[level] | translate }}</span>
+      @if (priority === level) {
+        <div><mat-icon>check</mat-icon></div>
+      }
+    </button>
+  }
 </mat-menu>
 
 <mat-menu #projectMenu="matMenu">

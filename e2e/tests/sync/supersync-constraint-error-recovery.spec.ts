@@ -18,12 +18,12 @@ import {
  * 1. appendBatch() partially succeeds (some ops written to IndexedDB)
  * 2. ConstraintError is thrown (duplicate op ID)
  * 3. appliedOpIds cache was NOT invalidated
- * 4. Next sync: filterNewOps() returns the same ops (cache says they're new)
+ * 4. Next sync: the applied-op-ID filter returns the same ops (cache says they're new)
  * 5. appendBatch() fails again with ConstraintError
  * 6. Infinite loop
  *
  * The fix: Invalidate appliedOpIds cache when ConstraintError occurs, so
- * filterNewOps() re-reads from IndexedDB on next sync.
+ * the filter re-reads from IndexedDB on next sync.
  *
  * Prerequisites:
  * - super-sync-server running on localhost:1901 with TEST_MODE=true

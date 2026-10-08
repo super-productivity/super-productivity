@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { getAppSemver } from '../../util/get-app-version-str';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { SuperSyncWebSocketService } from './super-sync-websocket.service';
 
@@ -79,7 +80,18 @@ describe('SuperSyncWebSocketService', () => {
 
     expect(MockWebSocket.instances).toHaveSize(1);
     expect(MockWebSocket.instances[0].url).toBe(
-      'wss://sync.example.com/api/sync/ws?token=token%20with%20%2B%2F%3F&clientId=client_1',
+      'wss://sync.example.com/api/sync/ws?token=token%20with%20%2B%2F%3F&clientId=client_1' +
+        `&appVersion=${getAppSemver()}`,
+    );
+  });
+
+  it('should send the app version on the handshake', async () => {
+    await service.connect('https://sync.example.com', 'token');
+
+    const appVersion = getAppSemver();
+    expect(appVersion).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(new URL(MockWebSocket.instances[0].url).searchParams.get('appVersion')).toBe(
+      appVersion as string,
     );
   });
 

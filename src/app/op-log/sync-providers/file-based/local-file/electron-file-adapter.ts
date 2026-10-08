@@ -48,14 +48,4 @@ export class ElectronFileAdapter implements FileAdapter {
       throw result;
     }
   }
-
-  async listFiles(relativePath: string): Promise<string[]> {
-    const result = await this.ea.fileSyncListFiles({
-      relativePath,
-    });
-    if (result instanceof Error) {
-      throw result;
-    }
-    return result;
-  }
 }

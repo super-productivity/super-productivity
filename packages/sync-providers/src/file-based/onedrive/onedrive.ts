@@ -18,11 +18,7 @@ import {
 } from '../../errors';
 import { assertUploadedSizeMatches } from '../verify-upload-size';
 import { generateCodeVerifier, generateCodeChallenge } from '../../pkce';
-import type {
-  OneDrivePrivateCfg,
-  OneDriveListResponse,
-  OneDriveTokenResponse,
-} from './onedrive.model';
+import type { OneDrivePrivateCfg, OneDriveTokenResponse } from './onedrive.model';
 
 export const PROVIDER_ID_ONEDRIVE = 'OneDrive' as const;
 
@@ -54,15 +50,10 @@ const ONEDRIVE_DEFAULTS = {
   syncFolderPath: 'Super Productivity',
 } as const;
 
-// Hard cap on listFiles pagination iterations. ~200 items per page × 500 pages
-// = 100k op-log files, well past any realistic limit. A buggy or cyclic
-// continuation that ignored this cap would grow `names[]` unbounded.
-const ONEDRIVE_MAX_LIST_PAGES = 500;
-
 // Allowlist of Microsoft Graph sovereign hosts. `_request` accepts absolute
-// URLs (for @odata.nextLink pass-through), but the request carries the user's
-// Bearer token — sending it to an attacker-controlled host would leak the
-// token. A tampered or spoofed nextLink with any other host throws instead.
+// URLs (for @odata.nextLink pass-through; no caller passes one since listFiles
+// was removed), but the request carries the user's Bearer token — sending it to
+// an attacker-controlled host would leak the token. Any other host throws.
 const ONEDRIVE_GRAPH_HOSTS: ReadonlySet<string> = new Set([
   'graph.microsoft.com',
   'graph.microsoft.us',
@@ -186,6 +177,7 @@ export class OneDrive implements FileSyncProvider<
     const cfg = await this._cfgOrError();
     try {
       const driveItemPath = this._getDriveItemPath(targetPath, cfg);
+      const metadataBefore = await this._requestJson<{ eTag?: string }>(driveItemPath);
       const response = await this._request({
         method: 'GET',
         path: `${driveItemPath}/content`,
@@ -199,9 +191,17 @@ export class OneDrive implements FileSyncProvider<
         };
       }
 
-      const metadata = await this._requestJson<{ eTag?: string }>(driveItemPath);
+      // Without a content ETag, only use metadata that stayed unchanged across
+      // the read. A newer revision could otherwise authorize uploading stale data.
+      if (!metadataBefore.eTag) {
+        throw new NoRevAPIError('OneDrive download missing eTag');
+      }
+      const metadataAfter = await this._requestJson<{ eTag?: string }>(driveItemPath);
+      if (metadataBefore.eTag !== metadataAfter.eTag) {
+        throw new UploadRevToMatchMismatchAPIError('OneDrive changed during download');
+      }
       return {
-        rev: metadata.eTag || '',
+        rev: metadataBefore.eTag,
         dataStr,
       };
     } catch (e) {
@@ -261,45 +261,6 @@ export class OneDrive implements FileSyncProvider<
       });
     } catch (e) {
       this._mapAndThrow(e);
-    }
-  }
-
-  async listFiles(dirPath: string): Promise<string[]> {
-    const cfg = await this._cfgOrError();
-    const names: string[] = [];
-    // Graph /children paginates by ~200 items; follow @odata.nextLink
-    // to collect the full listing. Missing entries would cause replay drift
-    // when the op-log folder grows beyond a single page.
-    let nextUrl: string | undefined = `${this._getDriveItemPath(dirPath, cfg)}/children`;
-    let pages = 0;
-    try {
-      while (nextUrl) {
-        if (++pages > ONEDRIVE_MAX_LIST_PAGES) {
-          throw new Error(
-            `OneDrive listFiles exceeded ${ONEDRIVE_MAX_LIST_PAGES} pages — refusing to continue`,
-          );
-        }
-        const result: OneDriveListResponse =
-          await this._requestJson<OneDriveListResponse>(nextUrl);
-        for (const item of result.value || []) {
-          if (item.file && item.name) {
-            names.push(item.name);
-          }
-        }
-        // Per Microsoft, @odata.nextLink is opaque — pass it through as-is.
-        // _request accepts absolute URLs to support sovereign clouds and
-        // future Graph path drift without silent truncation.
-        nextUrl = result['@odata.nextLink'];
-      }
-      return names;
-    } catch (e) {
-      if (e instanceof RemoteFileNotFoundAPIError) {
-        return [];
-      }
-      if (e instanceof HttpNotOkAPIError && e.response.status === 404) {
-        return [];
-      }
-      throw e;
     }
   }
 

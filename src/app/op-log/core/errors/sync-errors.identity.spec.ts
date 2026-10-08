@@ -1,5 +1,6 @@
 import {
   AuthFailSPError as PackageAuthFailSPError,
+  ClientUpdateRequiredSPError as PackageClientUpdateRequiredSPError,
   EmptyRemoteBodySPError as PackageEmptyRemoteBodySPError,
   FileHashCreationAPIError as PackageFileHashCreationAPIError,
   HttpNotOkAPIError as PackageHttpNotOkAPIError,
@@ -18,6 +19,7 @@ import {
 import { WebCryptoNotAvailableError as PackageWebCryptoNotAvailableError } from '@sp/sync-core';
 import {
   AuthFailSPError,
+  ClientUpdateRequiredSPError,
   EmptyRemoteBodySPError,
   FileHashCreationAPIError,
   HttpNotOkAPIError,
@@ -45,6 +47,11 @@ import {
 describe('sync-errors identity (single class definition across import paths)', () => {
   const PAIRS: ReadonlyArray<readonly [string, unknown, unknown]> = [
     ['AuthFailSPError', AuthFailSPError, PackageAuthFailSPError],
+    [
+      'ClientUpdateRequiredSPError',
+      ClientUpdateRequiredSPError,
+      PackageClientUpdateRequiredSPError,
+    ],
     ['InvalidDataSPError', InvalidDataSPError, PackageInvalidDataSPError],
     ['EmptyRemoteBodySPError', EmptyRemoteBodySPError, PackageEmptyRemoteBodySPError],
     [

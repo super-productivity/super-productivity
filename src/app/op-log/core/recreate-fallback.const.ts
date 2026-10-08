@@ -36,11 +36,12 @@ import { EMPTY_SIMPLE_COUNTER } from '../../features/simple-counter/simple-count
  * IMPORTANT: adding a new type here gives you the generic recreate backfill,
  * but the on-disk DEFENSE-IN-DEPTH heal stays absent until you ALSO add a
  * matching branch in `auto-fix-typia-errors.ts` (or generalize that file).
- * Membership here ALSO opts the type into SPAP-14 disjoint-field auto-merge:
- * `ConflictResolutionService._tryCreateDisjointMergeOp` refuses fallback-less
- * types because its partial merged op must survive this recreate path. That is
- * safe by construction (recreate-safe ⇒ merge-recreate-safe), but know that an
- * entry here enables merging for the type too.
+ * Membership here ALSO opts the type into field-patch resolutions:
+ * `ConflictResolutionService._tryCreateFieldPatch` and
+ * `supersededPatchFields` refuse fallback-less types because their partial
+ * patch must survive this recreate path. That is safe by construction
+ * (recreate-safe ⇒ patch-recreate-safe), but know that an entry here enables
+ * patches for the type too.
  *
  * TASK is the type the original report hit; PROJECT and TAG are defense in
  * depth because they share the same recreate code path. SIMPLE_COUNTER was
@@ -53,9 +54,13 @@ import { EMPTY_SIMPLE_COUNTER } from '../../features/simple-counter/simple-count
  * (`isEnabled: false`) on the deleting device only — the holder keeps its real
  * type via `updateOne` merge, so the fleet diverges on `type`. Acceptable vs.
  * the previous dead-end; a full fix needs a tombstone (snapshot) delete op.
- * NOTE, TASK_REPEAT_CFG, METRIC, ISSUE_PROVIDER still fall through to the
+ * TASK_REPEAT_CFG, METRIC, ISSUE_PROVIDER still fall through to the
  * legacy behavior — add an entry here when there is evidence the
- * partial-payload path fires for them.
+ * partial-payload path fires for them. NOTE has that evidence (#10380) but
+ * stays out on purpose: an entry would admit it to field patches, which waits
+ * until v19.1.0 leaves the fleet (#10393, decision 4). Its recreate gets the
+ * whole note from `deleteNote`'s optional `note` instead; a delete op without
+ * it (a released client, or one stored before) still recreates a partial note.
  *
  * The TASK entry layers `INBOX_PROJECT.id` on top of `DEFAULT_TASK` because
  * `DEFAULT_TASK` Omits `projectId` (it varies per task), but `TaskCopy`

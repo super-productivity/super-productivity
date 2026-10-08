@@ -12,9 +12,11 @@ import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { Store } from '@ngrx/store';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { TaskShortcutService } from '../../features/tasks/task-shortcut.service';
+import { DialogAddNoteComponent } from '../../features/note/dialog-add-note/dialog-add-note.component';
+import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { signal } from '@angular/core';
-import { of } from 'rxjs';
+import { Observable, of, Subject } from 'rxjs';
 
 const PLUGIN_SHORTCUT_CFG_KEY = 'plugin_automations:r1';
 
@@ -25,6 +27,7 @@ describe('ShortcutService', () => {
   let mockConfigService: any;
   let mockMatDialog: any;
   let mockPluginBridgeService: any;
+  let mockLayoutService: any;
 
   beforeEach(() => {
     mockMatDialog = {
@@ -47,6 +50,10 @@ describe('ShortcutService', () => {
       shortcuts: signal<any[]>([]),
       executeShortcut: jasmine.createSpy('executeShortcut'),
     };
+    mockLayoutService = {
+      isNavOpen: signal(false),
+      showAddTaskBar: jasmine.createSpy('showAddTaskBar'),
+    };
     mockConfigService = {
       cfg: signal({
         keyboard: {
@@ -66,7 +73,7 @@ describe('ShortcutService', () => {
         { provide: TaskShortcutService, useValue: mockTaskShortcutService },
         { provide: Router, useValue: mockRouter },
         { provide: GlobalConfigService, useValue: mockConfigService },
-        { provide: LayoutService, useValue: { isNavOpen: signal(false) } },
+        { provide: LayoutService, useValue: mockLayoutService },
         { provide: MatDialog, useValue: mockMatDialog },
         { provide: TaskService, useValue: { currentTaskId: signal(null) } },
         { provide: WorkContextService, useValue: { activeWorkContext$: signal({}) } },
@@ -244,6 +251,153 @@ describe('ShortcutService', () => {
       ]);
 
       expect(mockMatDialog.open).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('desktop add-task command while adding a note', () => {
+    const showAddTaskBarFromDesktopCommand = (): Promise<void> =>
+      (
+        service as unknown as {
+          _showAddTaskBarFromDesktopCommand: () => Promise<void>;
+        }
+      )._showAddTaskBarFromDesktopCommand();
+
+    const setOpenNote = (
+      content: string,
+      afterClosed$: Observable<unknown> = of(undefined),
+    ): {
+      close: jasmine.Spy;
+      closeAfterConfirmedDiscard: jasmine.Spy;
+    } => {
+      const noteComponent = Object.create(
+        DialogAddNoteComponent.prototype,
+      ) as DialogAddNoteComponent;
+      noteComponent.data = { content };
+      const close = spyOn(noteComponent, 'close');
+      const closeAfterConfirmedDiscard = spyOn(
+        noteComponent,
+        'closeAfterConfirmedDiscard',
+      );
+      mockMatDialog.openDialogs = [
+        {
+          componentInstance: noteComponent,
+          afterClosed: () => afterClosed$,
+        },
+      ];
+      return { close, closeAfterConfirmedDiscard };
+    };
+
+    it('should discard an empty note before showing the add-task bar', async () => {
+      const note = setOpenNote('  ');
+
+      await showAddTaskBarFromDesktopCommand();
+
+      expect(note.closeAfterConfirmedDiscard).toHaveBeenCalled();
+      expect(mockLayoutService.showAddTaskBar).toHaveBeenCalled();
+    });
+
+    it('should save a non-empty note before showing the add-task bar', async () => {
+      const note = setOpenNote('Note content');
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => of(true),
+      });
+
+      await showAddTaskBarFromDesktopCommand();
+
+      expect(mockMatDialog.open).toHaveBeenCalledWith(DialogConfirmComponent, {
+        data: {
+          message: 'F.NOTE.D_FULLSCREEN.CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK',
+          okTxt: 'G.SAVE',
+          cancelTxt: 'G.DISCARD',
+        },
+      });
+      expect(note.close).toHaveBeenCalledWith();
+      expect(note.closeAfterConfirmedDiscard).not.toHaveBeenCalled();
+      expect(mockLayoutService.showAddTaskBar).toHaveBeenCalled();
+    });
+
+    it('should ignore repeated commands until the note has closed and allow later commands', async () => {
+      const confirmationClosed$ = new Subject<boolean | undefined>();
+      const noteClosed$ = new Subject<void>();
+      const note = setOpenNote('Note content', noteClosed$);
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => confirmationClosed$,
+      });
+
+      const handoff = showAddTaskBarFromDesktopCommand();
+      const repeatedHandoff = showAddTaskBarFromDesktopCommand();
+
+      expect(mockMatDialog.open).toHaveBeenCalledTimes(1);
+      expect(note.close).not.toHaveBeenCalled();
+      expect(mockLayoutService.showAddTaskBar).not.toHaveBeenCalled();
+
+      confirmationClosed$.next(true);
+      await Promise.resolve();
+      mockMatDialog.openDialogs = [];
+      await showAddTaskBarFromDesktopCommand();
+
+      expect(note.close).toHaveBeenCalledTimes(1);
+      expect(mockLayoutService.showAddTaskBar).not.toHaveBeenCalled();
+
+      noteClosed$.next();
+      await Promise.all([handoff, repeatedHandoff]);
+
+      expect(mockMatDialog.open).toHaveBeenCalledTimes(1);
+      expect(note.close).toHaveBeenCalledTimes(1);
+      expect(mockLayoutService.showAddTaskBar).toHaveBeenCalledTimes(1);
+
+      await showAddTaskBarFromDesktopCommand();
+
+      expect(mockLayoutService.showAddTaskBar).toHaveBeenCalledTimes(2);
+    });
+
+    it('should allow another handoff after cancellation', async () => {
+      const confirmationClosed$ = new Subject<boolean | undefined>();
+      const note = setOpenNote('Note content');
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => confirmationClosed$,
+      });
+
+      const cancelledHandoff = showAddTaskBarFromDesktopCommand();
+      const repeatedHandoff = showAddTaskBarFromDesktopCommand();
+      confirmationClosed$.next(undefined);
+      await Promise.all([cancelledHandoff, repeatedHandoff]);
+
+      expect(mockMatDialog.open).toHaveBeenCalledTimes(1);
+      expect(note.close).not.toHaveBeenCalled();
+      expect(mockLayoutService.showAddTaskBar).not.toHaveBeenCalled();
+
+      const nextHandoff = showAddTaskBarFromDesktopCommand();
+      confirmationClosed$.next(true);
+      await nextHandoff;
+
+      expect(mockMatDialog.open).toHaveBeenCalledTimes(2);
+      expect(note.close).toHaveBeenCalledTimes(1);
+      expect(mockLayoutService.showAddTaskBar).toHaveBeenCalledTimes(1);
+    });
+
+    it('should discard a non-empty note when discard is selected', async () => {
+      const note = setOpenNote('Note content');
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => of(false),
+      });
+
+      await showAddTaskBarFromDesktopCommand();
+
+      expect(note.closeAfterConfirmedDiscard).toHaveBeenCalled();
+      expect(mockLayoutService.showAddTaskBar).toHaveBeenCalled();
+    });
+
+    it('should keep the note open when confirmation is cancelled', async () => {
+      const note = setOpenNote('Note content');
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => of(undefined),
+      });
+
+      await showAddTaskBarFromDesktopCommand();
+
+      expect(note.close).not.toHaveBeenCalled();
+      expect(mockLayoutService.showAddTaskBar).not.toHaveBeenCalled();
     });
   });
 });

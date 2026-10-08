@@ -16,9 +16,9 @@ const SELECTION_SCOPE_SELECTOR =
  *   on route and work-context change (TaskMultiSelectBarComponent).
  * - Only ever holds ids of tasks currently rendered as a participating row; rows
  *   prune themselves on destroy.
- * - Ranges and keyboard extension are scoped to the anchor's list, i.e. the
- *   direct `<task>` children of its `.task-list-inner`, so expanded subtasks
- *   of other parents are never swept in.
+ * - Shift-click ranges span parent rows in regular project sections; other
+ *   ranges and keyboard navigation stay within the anchor's list. Nested
+ *   subtasks of other parents are never swept in.
  */
 @Injectable({
   providedIn: 'root',
@@ -164,13 +164,19 @@ export class TaskMultiSelectService {
 
   /**
    * Shift+click: select everything between the anchor and `targetId` in the
-   * anchor's list, replacing the selection. When there is no anchor (nothing
+   * anchor's list or project sections, replacing the selection. When there is
+   * no anchor (nothing
    * selected yet, or the anchor was deselected), the focused row becomes the
    * anchor, as for Shift+Arrow, because a plain click only focuses a row
-   * (#10143). If no row is focused, or the target sits in a different list,
+   * (#10143). If no row is focused, or the target sits outside the range scope,
    * the target becomes the new anchor.
    */
-  selectRange(targetId: string, isAdditive = false, targetRow?: HTMLElement): void {
+  selectRange(
+    targetId: string,
+    isAdditive = false,
+    targetRow?: HTMLElement,
+    includeSections = true,
+  ): void {
     if (!this.anchorId() || !this._selectedIds().size) {
       const focused = this._focusedRow();
       if (focused) {
@@ -179,7 +185,7 @@ export class TaskMultiSelectService {
     }
     const anchorId = this.anchorId();
     const range = anchorId
-      ? this._rangeInAnchorList(anchorId, targetId, targetRow)
+      ? this._rangeInAnchorList(anchorId, targetId, targetRow, includeSections)
       : null;
     if (!range) {
       // No range to build (no anchor, or the target is in another list), so the
@@ -218,7 +224,7 @@ export class TaskMultiSelectService {
     if (!nextEl || !nextId) {
       return null;
     }
-    this.selectRange(nextId, false, nextEl);
+    this.selectRange(nextId, false, nextEl, false);
     nextEl.focus();
     return nextEl;
   }
@@ -411,7 +417,8 @@ export class TaskMultiSelectService {
   private _rangeInAnchorList(
     anchorId: string,
     targetId: string,
-    targetRow?: HTMLElement,
+    targetRow: HTMLElement | undefined,
+    includeSections: boolean,
   ): string[] | null {
     const anchorRow = this._anchor()?.row;
     const anchorEl =
@@ -425,7 +432,19 @@ export class TaskMultiSelectService {
     if (!anchorEl) {
       return null;
     }
-    const rows = this._listRowsFor(anchorEl);
+    // Regular project sections share a Shift-click range. Keep subtask,
+    // board, Planner, done and backlog ranges in their existing scopes.
+    const sectionScope = anchorEl.closest('[data-section-selection-scope]');
+    const rows =
+      includeSections &&
+      sectionScope &&
+      anchorEl.parentElement?.dataset.listId === 'PARENT'
+        ? Array.from(
+            sectionScope.querySelectorAll<HTMLElement>(
+              '.task-list-inner[data-list-id="PARENT"] > task',
+            ),
+          ).filter((row) => !this._destroyedHosts.has(row))
+        : this._listRowsFor(anchorEl);
     // Identical task IDs can be rendered in different board panels. The clicked
     // copy determines the range, not the first matching task elsewhere on screen.
     const target = this._focusedRow();

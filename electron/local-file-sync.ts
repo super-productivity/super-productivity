@@ -295,31 +295,6 @@ export const initLocalFileSyncAdapter = (): void => {
     },
   );
 
-  ipcMain.handle(
-    IPC.FILE_SYNC_LIST_FILES,
-    async (
-      ev,
-      {
-        relativePath,
-      }: {
-        relativePath?: string;
-      },
-    ): Promise<string[] | Error> => {
-      try {
-        const dirPath = (await _resolveRelative(relativePath)).absolutePath;
-        return readdirSync(dirPath);
-      } catch (e) {
-        error('Local file sync list files failed', getSafeErrorMeta(e));
-        if ((e as NodeJS.ErrnoException).code === 'EACCES') {
-          log(
-            'ERR: Permission denied. If running as a snap, ensure the "home" or "removable-media" interface is connected.',
-          );
-        }
-        return createSafeIpcError(IPC.FILE_SYNC_LIST_FILES, e);
-      }
-    },
-  );
-
   ipcMain.handle(IPC.PICK_DIRECTORY, async (): Promise<string | Error | undefined> => {
     try {
       const win = getWin();

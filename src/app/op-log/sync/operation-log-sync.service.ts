@@ -75,13 +75,16 @@ import { Operation, OperationLogEntry } from '../core/operation.types';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { extractEntityKeysFromState } from '../persistence/extract-entity-keys';
 import { firstValueFrom } from 'rxjs';
-import { selectSyncConfig } from '../../features/config/store/global-config.reducer';
+import {
+  selectAppFeaturesConfig,
+  selectSyncConfig,
+} from '../../features/config/store/global-config.reducer';
+import { buildRemoteRebuildBaselineState } from './remote-rebuild-baseline.util';
 import {
   applyLocalOnlySyncSettingsToAppData,
   LocalOnlySyncSettings,
   stripLocalOnlySyncSettingsFromAppData,
 } from '../../features/config/local-only-sync-settings.util';
-import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { processDeferredActions } from './process-deferred-actions-flush.util';
 import { HydrationStateService } from '../apply/hydration-state.service';
@@ -409,6 +412,7 @@ export class OperationLogSyncService {
         startupOpIdsToDiscard,
         {
           repairBaseServerSeq: result.lastServerSeqToPersist,
+          rebaseKeptTimeDeltas: syncProvider.providerMode === 'superSyncOps',
           conflictRecheck: {
             isNeverSynced: isNeverSyncedAtSyncStart,
             preCapturedPendingOps: result.selectedPendingOps ?? [],
@@ -498,19 +502,18 @@ export class OperationLogSyncService {
 
     const pendingAcknowledgementSeqs = result.pendingAcknowledgementSeqs ?? [];
     if (pendingAcknowledgementSeqs.length > 0) {
-      // #9074: the deferred ack is a local persist — a stale cycle must not
-      // mark ops synced after a destructive config change (they'd never
-      // re-upload to the new epoch's target).
+      // #9074: never acknowledge ops against a changed sync target.
       this.providerManager.assertSyncEpochUnchanged(
         options?.fenceEpoch,
         'deferred acknowledgement',
       );
-      await this.opLogStore.markSynced(pendingAcknowledgementSeqs);
+      await this.opLogStore.markSynced(
+        pendingAcknowledgementSeqs,
+        result.pendingAcknowledgementOriginals,
+      );
     }
 
-    // STEP 2: Handle server-rejected operations
-    // handleRejectedOps may create merged ops for concurrent modifications.
-    // These need to be uploaded, so we add them to localWinOpsCreated.
+    // STEP 2: resolve rejections and count merged ops needing upload.
     // Pass a download callback so the handler can trigger downloads for concurrent mods.
     //
     // NOTE: This must NOT run after a SYNC_IMPORT conflict dialog resolution (USE_LOCAL,
@@ -530,14 +533,14 @@ export class OperationLogSyncService {
     try {
       // #9074: the rejection handler appends merged/local-win ops and flips
       // rejection markers — old-epoch writes that would resurrect data around
-      // a clean-slate replacement.
-      this.providerManager.assertSyncEpochUnchanged(
-        options?.fenceEpoch,
-        'rejected-ops handling',
-      );
+      // a clean-slate replacement. It re-asserts before its in-place rebase.
+      const assertFence = (context: string): void =>
+        this.providerManager.assertSyncEpochUnchanged(options?.fenceEpoch, context);
+      assertFence('rejected-ops handling');
       rejectionResult = await this.rejectedOpsHandlerService.handleRejectedOps(
         result.rejectedOps,
         downloadCallback,
+        assertFence,
       );
       if (rejectionResult.kind === 'cancelled') {
         return { kind: 'cancelled' };
@@ -1218,6 +1221,7 @@ export class OperationLogSyncService {
       startupOpIdsToDiscard,
       {
         repairBaseServerSeq: result.latestServerSeq,
+        rebaseKeptTimeDeltas: syncProvider.providerMode === 'superSyncOps',
         ignoredLocalFullStateOpIds: options?.ignoredLocalFullStateOpIds,
         conflictRecheck: { isNeverSynced: options?.isNeverSynced },
         fenceEpoch: options?.fenceEpoch,
@@ -1356,6 +1360,7 @@ export class OperationLogSyncService {
     startupOpIds: string[],
     options?: {
       repairBaseServerSeq?: number;
+      rebaseKeptTimeDeltas?: boolean;
       ignoredLocalFullStateOpIds?: readonly string[];
       conflictRecheck?: {
         isNeverSynced?: boolean;
@@ -1420,18 +1425,15 @@ export class OperationLogSyncService {
                   }
                 : {}),
               ...(beforeFullStateApply ? { beforeFullStateApply } : {}),
+              ...(options?.rebaseKeptTimeDeltas ? { rebaseKeptTimeDeltas: true } : {}),
               ...(options?.fenceEpoch !== undefined
                 ? { fenceEpoch: options.fenceEpoch }
                 : {}),
             },
           );
           if (options?.deferredRepairOpId && !preApplyRepairDeferred) {
-            // The skipped snapshot carried the fix for corruption this client
-            // most likely shares (it applied the same ops). Heal it here:
-            // processRemoteOps only validates when it applied something, and a
-            // batch holding just the repair applies nothing. Inside
-            // runWithBaseServerSeq so any repair this produces is causal — a
-            // legacy one would make receivers drop concurrent ops.
+            // Heal even when the deferred repair was the only op. Keep its causal
+            // server context so receivers preserve their concurrent work.
             deferredRepairHealFailed =
               !(await this.remoteOpsProcessingService.validateAfterSync());
           }
@@ -1917,30 +1919,10 @@ export class OperationLogSyncService {
     }
     const defaultData = getDefaultMainModelData();
     const baselineSource = snapshotState ?? defaultData;
-    const baselineGlobalConfig =
-      baselineSource['globalConfig'] && typeof baselineSource['globalConfig'] === 'object'
-        ? (baselineSource['globalConfig'] as Record<string, unknown>)
-        : {};
-    const baselineSyncConfig =
-      baselineGlobalConfig['sync'] && typeof baselineGlobalConfig['sync'] === 'object'
-        ? (baselineGlobalConfig['sync'] as Record<string, unknown>)
-        : {};
-    // getDefaultMainModelData intentionally excludes globalConfig. Add a
-    // default config shell before applying the canonical device-local fields
-    // so an interrupted rebuild can hydrate enough configuration to sync again.
-    const baselineState = applyLocalOnlySyncSettingsToAppData(
-      {
-        ...baselineSource,
-        globalConfig: {
-          ...DEFAULT_GLOBAL_CONFIG,
-          ...baselineGlobalConfig,
-          sync: {
-            ...DEFAULT_GLOBAL_CONFIG.sync,
-            ...baselineSyncConfig,
-          },
-        },
-      },
+    const baselineState = buildRemoteRebuildBaselineState(
+      baselineSource,
       localOnlySyncSettings,
+      await firstValueFrom(this.store.select(selectAppFeaturesConfig)),
     );
     const archiveYoung =
       (snapshotState?.[
@@ -2025,7 +2007,9 @@ export class OperationLogSyncService {
             vectorClock: rebuiltClock,
             schemaVersion: CURRENT_SCHEMA_VERSION,
             snapshotEntityKeys: extractEntityKeysFromState(
-              baselineState as Parameters<typeof extractEntityKeysFromState>[0],
+              baselineState as unknown as Parameters<
+                typeof extractEntityKeysFromState
+              >[0],
             ),
             archiveYoung,
             archiveOld,

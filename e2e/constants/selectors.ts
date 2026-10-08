@@ -77,15 +77,8 @@ export const cssSelectors = {
   // SETTINGS PAGE SELECTORS
   // ============================================================================
   PAGE_SETTINGS: '.page-settings',
-  PLUGIN_SECTION: '.plugin-section',
-  PLUGIN_MANAGEMENT: 'plugin-management',
   COLLAPSIBLE: 'collapsible',
   COLLAPSIBLE_HEADER: '.collapsible-header',
-
-  // Plugin selectors
-  PLUGIN_CARD: 'plugin-management mat-card',
-  PLUGIN_TOGGLE: 'mat-slide-toggle button[role="switch"]',
-  PLUGIN_FILE_INPUT: 'input[type="file"][accept=".zip"]',
 
   // ============================================================================
   // PROJECT SELECTORS

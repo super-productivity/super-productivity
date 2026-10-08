@@ -242,28 +242,6 @@
 <mat-menu #priorityMenu="matMenu">
   <ng-template matMenuContent>
     <button
-      (click)="bulk.setPriority('high')"
-      menuTouchFix
-      mat-menu-item
-    >
-      {{ T.F.TASK.CMP.PRIORITY_HIGH | translate }}
-    </button>
-    <button
-      (click)="bulk.setPriority('medium')"
-      menuTouchFix
-      mat-menu-item
-    >
-      {{ T.F.TASK.CMP.PRIORITY_MEDIUM | translate }}
-    </button>
-    <button
-      (click)="bulk.setPriority('low')"
-      menuTouchFix
-      mat-menu-item
-    >
-      {{ T.F.TASK.CMP.PRIORITY_LOW | translate }}
-    </button>
-    <mat-divider></mat-divider>
-    <button
       (click)="bulk.setPriority(null)"
       menuTouchFix
       mat-menu-item
@@ -271,6 +249,21 @@
       <mat-icon>clear</mat-icon>
       {{ T.F.TASK.CMP.PRIORITY_NONE | translate }}
     </button>
+    <mat-divider></mat-divider>
+    @for (level of PRIORITY_LEVELS; track level) {
+      <button
+        (click)="bulk.setPriority(level)"
+        menuTouchFix
+        mat-menu-item
+      >
+        <task-priority-indicator
+          matMenuItemIcon
+          [priority]="level"
+          aria-hidden="true"
+        ></task-priority-indicator>
+        {{ PRIORITY_LABEL_KEY[level] | translate }}
+      </button>
+    }
   </ng-template>
 </mat-menu>
 

@@ -187,7 +187,8 @@ export const bulkOperationsMetaReducer = <T>(
                     index,
                   ));
               // Skip LWW Updates whose entityId itself is archived/deleted in this batch
-              // (covers TASK; for TAG/PROJECT entityId is the tag/project id, not a task).
+              // (covers TASK; for TAG/PROJECT entityId is the tag/project id, not a task),
+              // unless a restore or recreate earlier in the batch brought it back.
               if (
                 isLww &&
                 !recreatesEntityAfterDelete &&

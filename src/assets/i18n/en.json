@@ -106,7 +106,7 @@
     },
     "GO_FURTHER": {
       "TITLE": "Go further",
-      "NOTES": "There is much more to discover!\n\n**App Features** (in Settings) — Enable integrations, habits, and other features. Go to **Settings → App Features** to see what's available.\n\n**Boards** — Visualize your tasks in customizable Kanban-style boards. Enable them in **App Features**, then find them in the **sidebar menu**.\n\n**Schedule** — Plan your day by scheduling tasks at specific times. Drag tasks onto the **Schedule** view in the sidebar to organize your timeline.\n\n**Integrations** — Once enabled in App Features, import tasks from Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV, and many more. You can also integrate your calendar. Configure them in the **Issue Provider Panel**.\n\n**Habits** — Track recurring habits and routines. Find them in the **sidebar menu** once enabled.\n\n**Plugins** — Add features like the Procrastination Buster, Automations, or Voice Reminders. Go to **Settings → Plugins**.\n\n**Customize** — Themes, dark mode, keyboard shortcuts, language, and productivity helpers are all in **Settings**."
+      "NOTES": "There is much more to discover!\n\n**App Features** (in Settings) — Enable integrations, habits, and other features. Go to **Settings → App Features** to see what's available.\n\n**Boards** — Visualize your tasks in customizable Kanban-style boards. Enable them in **App Features**, then find them in the **sidebar menu**.\n\n**Schedule** — Plan your day by scheduling tasks at specific times. Enable it in **App Features**, then drag tasks onto the **Schedule** view in the sidebar to organize your timeline.\n\n**Integrations** — Once enabled in App Features, import tasks from Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV, and many more. You can also integrate your calendar. Configure them in the **Issue Provider Panel**.\n\n**Habits** — Track recurring habits and routines. Find them in the **sidebar menu** once enabled.\n\n**Focus mode & Finish Day** — Work in distraction-free focus sessions and wrap up your day with a short review. Enable them in **App Features**.\n\n**Plugins** — Add features like the Procrastination Buster, Automations, or Voice Reminders. Go to **Settings → Plugins**.\n\n**Customize** — Themes, dark mode, keyboard shortcuts, language, and productivity helpers are all in **Settings**."
     }
   },
   "F": {
@@ -746,8 +746,14 @@
         "DAYS_WORKED": "Days worked",
         "FOCUS_SESSION_TRENDS": "Focus sessions over time",
         "GLOBAL_METRICS": "Global Metrics",
+        "HEATMAP_SHARE_FAILED": "Failed to share heatmap",
+        "HEATMAP_SHARE_TAGLINE": "{{title}} – With the Super Productivity App",
+        "HEATMAP_SHARED_TO_DEVICE": "Heatmap saved to device storage",
+        "HEATMAP_SHARED_TO_PATH": "Heatmap saved to {{path}}",
         "NO_ADDITIONAL_DATA_YET": "No additional data collected yet. Use the form on the daily summary \"Evaluation\" panel to do so.",
         "PRODUCTIVITY_BREAKDOWN_OVER_TIME": "Productivity & Sustainability over time",
+        "SHARE_HEATMAP": "Share heatmap",
+        "SHARE_STATS": "Share your productivity stats",
         "SIMPLE_CLICK_COUNTERS_OVER_TIME": "Click Counters over time",
         "SIMPLE_COUNTERS": "Simple Counters & Habit Tracking",
         "SIMPLE_STOPWATCH_COUNTERS_OVER_TIME": "Stopwatch Counters over time",
@@ -851,6 +857,7 @@
       },
       "D_FULLSCREEN": {
         "CONFIRM_DISCARD_MSG": "You have unsaved changes. Discard them?",
+        "CONFIRM_SAVE_BEFORE_OPENING_NEW_TASK": "Save the current note before opening a new task?",
         "TOOLBAR": {
           "BOLD": "Bold",
           "BULLET_LIST": "Bulleted list",
@@ -1492,7 +1499,7 @@
         "L_MANUAL_SYNC_ONLY": "Only sync manually (disable automatic sync)",
         "L_SYNC_INTERVAL": "Sync interval",
         "L_SYNC_PROVIDER": "Sync provider",
-        "L_USE_SPLIT_SYNC_FILES": "Surgical sync – Upgrade an existing v2 folder to the faster split ops/snapshot format. New empty folders use this format automatically. Older app versions may need this enabled on every device.",
+        "L_USE_SPLIT_SYNC_FILES": "Surgical sync – Faster syncing using a split ops/snapshot file layout. Turning it on upgrades this sync folder permanently. Other devices may need to turn it on too; versions before 18.14 cannot sync an upgraded folder.",
         "LOCAL_FILE": {
           "INFO_TEXT": "<strong>Warning:</strong> Do <strong>not</strong> use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices — they <strong>will</strong> cause data corruption and conflicts. For multi-device sync, use SuperSync, Nextcloud, or Dropbox instead.",
           "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Needs file access permission",
@@ -2148,6 +2155,12 @@
         "ADVANCED_CFG": "Advanced configuration",
         "EDIT": "Edit Recurring Task Config",
         "HEATMAP_LABEL": "Activity",
+        "INHERITED_SUBTASKS": "New instances get these subtasks:",
+        "NEXT_OCCURRENCE": "Next new instance: {{date}}",
+        "NEXT_OCCURRENCE_AFTER_COMPLETION": "A new instance is created as soon as the current one is done",
+        "NEXT_OCCURRENCE_FROM_COMPLETION": "Next new instance: {{date}}, later if the current one is completed late",
+        "NEXT_OCCURRENCE_UNSAVED": "The date of the next new instance updates after saving",
+        "NEXT_OCCURRENCE_WAIT_FOR_COMPLETION": "Next new instance: {{date}}, if the current one is done by then",
         "TAG_LABEL": "Tags",
         "TIME_SPENT_THIS_MONTH": "This month",
         "TIME_SPENT_THIS_WEEK": "This week",
@@ -2877,6 +2890,9 @@
       "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Enable Markdown formatting in task notes",
       "IS_TRAY_SHOW_CURRENT": "Show current task in the tray / status menu (macOS/Windows only)",
       "NOTES_TEMPLATE": "Task description template",
+      "PRIORITY_ICON_PRESET": "Priority icons",
+      "PRIORITY_ICON_PRESET_CHEVRONS": "Chevrons",
+      "PRIORITY_ICON_PRESET_NUMBERS": "Numbers",
       "TITLE": "Tasks"
     },
     "TIME_TRACKING": {
@@ -2946,6 +2962,14 @@
   "GPB": {
     "JIRA_LOAD_ISSUE": "Jira: Load issue data...",
     "UNKNOWN": "Loading remote data"
+  },
+  "HEATMAP": {
+    "DAY_TOOLTIP": {
+      "ONE": "{{date}}: {{taskCount}} task, {{timeSpent}}",
+      "OTHER": "{{date}}: {{taskCount}} tasks, {{timeSpent}}"
+    },
+    "LEGEND_LESS": "Less",
+    "LEGEND_MORE": "More"
   },
   "MH": {
     "ADD_NEW_TASK": "Add new Task",
@@ -3040,35 +3064,16 @@
     "TASK_MARKED_DONE": "Task marked as done"
   },
   "ONBOARDING": {
-    "TITLE": "How do you want to use Super Productivity?",
-    "SUBTITLE": "Pick a setup that matches your workflow. You can always change this later in Settings.",
-    "PRIVACY_HINT": "Your data stays securely on your device unless you choose to set up sync.",
-    "SYNC_CTA": "Already using Super Productivity on another device?",
-    "SYNC_CTA_LINK": "Set up sync",
-    "PRESETS": {
-      "SIMPLE_TODO": {
-        "TITLE": "Simple Todo List",
-        "DESCRIPTION": "A clean task manager with projects, tags, and notes. No extras."
-      },
-      "TIME_TRACKER": {
-        "TITLE": "Time Tracker",
-        "DESCRIPTION": "Track how long tasks take. Great for billing hours or understanding where your time goes."
-      },
-      "PRODUCTIVITY_PRO": {
-        "TITLE": "Productivity Suite",
-        "DESCRIPTION": "Plan your day, build habits, focus deeply, and track your time. All in one place."
-      }
-    },
     "HINTS": {
       "CREATE_TASK": "Click + to add your first task",
       "CREATE_TASK_TOUCH": "Tap + to add your first task",
-      "EXPLORE": "Feel free to click around and explore! You can find help in the sidebar.",
-      "EXPLORE_TOUCH": "Feel free to explore. You can find help in the sidebar.",
-      "TASK_TAP_TOUCH": "Tap a task to open its details.",
+      "DONE_TITLE": "You're all set",
+      "EXPLORE_INBOX": "Some optional tips are waiting in your Inbox. Try them or delete them, whenever you like.",
+      "GOT_IT": "Got it",
       "TASK_SWIPE_LEFT_TOUCH": "Swipe task left for more actions",
       "TASK_SWIPE_RIGHT_TOUCH": "Swipe task right to mark it as done",
       "OR_PRESS": "or press",
-      "SKIP_ARIA": "Dismiss hint"
+      "SKIP_ARIA": "Close tip"
     }
   },
   "PDS": {

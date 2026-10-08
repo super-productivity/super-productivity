@@ -148,4 +148,25 @@ describe('FocusButtonComponent', () => {
       expect(component.circleVisible()).toBe(true);
     });
   });
+
+  describe('circleProgress', () => {
+    it('shows a full static ring during a Flowtime session', () => {
+      mockFocusMode.mode.set(FocusModeMode.Flowtime);
+      mockFocusMode.isSessionRunning.set(true);
+      expect(component.circleProgress()).toBe(100);
+    });
+
+    it('shows break progress during a Flowtime break', () => {
+      mockFocusMode.mode.set(FocusModeMode.Flowtime);
+      mockFocusMode.isBreakActive.set(true);
+      mockFocusMode.progress.set(30);
+      expect(component.circleProgress()).toBe(30);
+    });
+
+    it('shows session progress in Pomodoro', () => {
+      mockFocusMode.isSessionRunning.set(true);
+      mockFocusMode.progress.set(40);
+      expect(component.circleProgress()).toBe(40);
+    });
+  });
 });

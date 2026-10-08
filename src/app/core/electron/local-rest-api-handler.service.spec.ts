@@ -12,6 +12,10 @@ import {
   LOCAL_REST_API_FEATURE_BRIDGE,
   LocalRestApiFeatureBridge,
 } from './local-rest-api-feature-bridge';
+import {
+  LOCAL_REST_API_FEATURE_ROUTES,
+  LocalRestApiFeatureRoutes,
+} from './local-rest-api-feature-routes';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DateService } from '../date/date.service';
 import { Task, TaskWithSubTasks, TaskArchive } from '../../features/tasks/task.model';
@@ -41,6 +45,7 @@ describe('LocalRestApiHandlerService', () => {
   let tagServiceMock: jasmine.SpyObj<TagService>;
   let dateServiceMock: jasmine.SpyObj<DateService>;
   let featureBridgeMock: jasmine.SpyObj<LocalRestApiFeatureBridge>;
+  let featureRoutes: LocalRestApiFeatureRoutes[];
   let store: MockStore;
   let dispatchSpy: jasmine.Spy;
   let activeProjects: Project[];
@@ -224,6 +229,8 @@ describe('LocalRestApiHandlerService', () => {
     );
     featureBridgeMock.issueLink.and.returnValue(Promise.resolve(''));
 
+    featureRoutes = [];
+
     TestBed.configureTestingModule({
       providers: [
         LocalRestApiHandlerService,
@@ -233,6 +240,7 @@ describe('LocalRestApiHandlerService', () => {
         { provide: TagService, useValue: tagServiceMock },
         { provide: DateService, useValue: dateServiceMock },
         { provide: LOCAL_REST_API_FEATURE_BRIDGE, useValue: featureBridgeMock },
+        { provide: LOCAL_REST_API_FEATURE_ROUTES, useValue: featureRoutes },
         provideMockStore({ initialState: { focusMode: initialFocusModeState } }),
       ],
     });
@@ -2589,6 +2597,61 @@ describe('LocalRestApiHandlerService', () => {
 
         expect(response.body.ok).toBe(true);
       });
+    });
+  });
+
+  describe('feature routes', () => {
+    const createFeatureRoutes = (
+      response?: LocalRestApiResponsePayload,
+    ): jasmine.SpyObj<LocalRestApiFeatureRoutes> => {
+      const routes = jasmine.createSpyObj<LocalRestApiFeatureRoutes>('FeatureRoutes', [
+        'handle',
+      ]);
+      routes.handle.and.resolveTo(response);
+      return routes;
+    };
+
+    beforeEach(() => {
+      service.init();
+    });
+
+    it('should answer with the first feature route that handles the request', async () => {
+      const featureResponse: LocalRestApiResponsePayload = {
+        requestId: 'test-request-id',
+        status: 200,
+        body: { ok: true, data: { handled: true } },
+      };
+      const notMine = createFeatureRoutes(undefined);
+      const mine = createFeatureRoutes(featureResponse);
+      const after = createFeatureRoutes(featureResponse);
+      featureRoutes.push(notMine, mine, after);
+      const request = createRequest('GET', '/feature-things');
+
+      const response = await sendRequestAndWait(request);
+
+      expect(response).toEqual(featureResponse);
+      expect(notMine.handle).toHaveBeenCalledWith(request);
+      expect(mine.handle).toHaveBeenCalledWith(request);
+      expect(after.handle).not.toHaveBeenCalled();
+    });
+
+    it('should return 404 when no feature route handles the request', async () => {
+      featureRoutes.push(createFeatureRoutes(undefined));
+
+      const response = await sendRequestAndWait(createRequest('GET', '/feature-things'));
+
+      expect(response.status).toBe(404);
+      expect((response.body as any).error.code).toBe('NOT_FOUND');
+    });
+
+    it('should not ask feature routes about core routes', async () => {
+      const routes = createFeatureRoutes(undefined);
+      featureRoutes.push(routes);
+
+      const response = await sendRequestAndWait(createRequest('GET', '/tags'));
+
+      expect(response.status).toBe(200);
+      expect(routes.handle).not.toHaveBeenCalled();
     });
   });
 

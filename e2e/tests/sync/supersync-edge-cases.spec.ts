@@ -550,7 +550,7 @@ test.describe('@supersync SuperSync Edge Cases', () => {
       await clientA.sync.syncAndWait();
 
       // 5. Client B syncs (update conflicts with deletion)
-      // The conflict resolution may show a dialog or auto-resolve
+      // Resolves automatically; a whole-dataset dialog would fail syncAndWait()
       await clientB.sync.syncAndWait();
 
       // 6. Final sync to converge
@@ -783,7 +783,8 @@ test.describe('@supersync SuperSync Edge Cases', () => {
       await clientA.sync.syncAndWait();
 
       // 5. Client B syncs (will get conflict/rejection for Task1 edit)
-      // The conflict may be auto-resolved or show dialog - either way, B's op is rejected
+      // The conflict resolves automatically and B's op is rejected. A whole-dataset
+      // dialog would fail syncAndWait().
       await clientB.sync.syncAndWait();
 
       // 6. Client B creates a NEW, UNRELATED Task2

@@ -64,8 +64,9 @@ export class OperationLogEffects implements DeferredLocalActionsPort {
   private writeCount = 0;
   /**
    * PERF: In-memory compaction counter to avoid IndexedDB transaction on every operation.
-   * The persistent counter in state_cache is only used for cross-tab/restart recovery.
-   * Initialized lazily from persisted value on first operation.
+   * Initialized lazily from the persisted state_cache counter on first operation. Nothing
+   * increments that counter any more, so this starts at 0 in practice and does not
+   * survive a restart (compactIfBloated() covers cross-restart growth).
    */
   private inMemoryCompactionCounter: number | null = null;
 

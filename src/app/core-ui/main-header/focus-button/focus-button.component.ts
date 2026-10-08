@@ -82,12 +82,10 @@ export class FocusButtonComponent {
       const progress = this.progress();
       return typeof progress === 'number' ? Math.min(100, Math.max(0, progress)) : 0;
     }
-    return null;
+    // Flowtime has no end to show progress towards. A static full ring marks
+    // the session; a looping animation would redraw every frame for hours.
+    return 100;
   });
-
-  readonly circleShouldPulse = computed(
-    () => this.circleVisible() && this.mode() === FocusModeMode.Flowtime,
-  );
 
   readonly buttonColor = computed(() => (this.circleVisible() ? 'accent' : undefined));
 

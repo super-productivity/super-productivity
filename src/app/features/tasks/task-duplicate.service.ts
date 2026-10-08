@@ -3,6 +3,7 @@ import { Store } from '@ngrx/store';
 import { TaskService } from './task.service';
 import { TaskWithSubTasks } from './task.model';
 import { addSubTask } from './store/task.actions';
+import { PlannerActions } from '../planner/store/planner.actions';
 
 @Injectable({
   providedIn: 'root',
@@ -21,6 +22,7 @@ export class TaskDuplicateService {
       projectId: task.projectId || undefined,
       tagIds: task.tagIds || [],
       ...(task.notes && { notes: task.notes }),
+      ...(task.priority !== undefined && { priority: task.priority }),
     };
     const timeData = {
       ...(task.dueDay && { dueDay: task.dueDay }),
@@ -40,8 +42,11 @@ export class TaskDuplicateService {
         additional: {
           isDone: subTask.isDone,
           projectId: subTask.projectId,
+          ...(subTask.dueDay && { dueDay: subTask.dueDay }),
+          ...(subTask.dueWithTime && { dueWithTime: subTask.dueWithTime }),
           timeEstimate: subTask.timeEstimate,
           notes: subTask.notes,
+          ...(subTask.priority !== undefined && { priority: subTask.priority }),
         },
       });
       this._store.dispatch(
@@ -50,6 +55,14 @@ export class TaskDuplicateService {
           parentId: taskId,
         }),
       );
+      if (subTask.dueDay) {
+        this._store.dispatch(
+          PlannerActions.planTaskForDay({
+            task: subTaskObj,
+            day: subTask.dueDay,
+          }),
+        );
+      }
     }
 
     return taskId;

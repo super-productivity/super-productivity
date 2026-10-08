@@ -253,27 +253,6 @@ export class Dropbox implements FileSyncProvider<
     }
   }
 
-  async listFiles(dirPath: string): Promise<string[]> {
-    this._deps.logger.normal(`${Dropbox.L}.listFiles()`, { dirPath });
-    try {
-      // DropboxApi.listFiles now returns full paths, so no need to prepend _getPath
-      return await this._withTokenRefresh(() =>
-        this._api.listFiles(this._getPath(dirPath), dirPath),
-      );
-    } catch (e) {
-      if (this._isPathNotFoundError(e)) {
-        // If the directory doesn't exist, return empty array
-        return [];
-      }
-
-      if (this._isUnauthorizedError(e)) {
-        throw new AuthFailSPError('Dropbox 401 listFiles', dirPath);
-      }
-
-      throw e;
-    }
-  }
-
   /**
    * Gets authentication helper for OAuth flow
    * @returns Promise with auth helper object

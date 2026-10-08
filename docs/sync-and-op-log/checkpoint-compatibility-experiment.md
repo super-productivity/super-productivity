@@ -44,6 +44,9 @@ Download `app-play-release.apk` from each release and extract **only**
 | [v18.14.0](https://github.com/super-productivity/super-productivity/releases/tag/v18.14.0) | `1dab9bb1124200f0b2c3dc51e464a4bba38f951cb4325091e1cc4fcfb5b6126e` |
 | [v19.0.1](https://github.com/super-productivity/super-productivity/releases/tag/v19.0.1)   | `9ba64b5cb0b043f442187250ac0e2e91a44f79ebdcc8dd3dc2b10588a7037530` |
 
+[`fetch-released-client-assets.sh`](../../scripts/fetch-released-client-assets.sh)
+does this and rejects any other digest:
+`scripts/fetch-released-client-assets.sh <dir> v18.14.0 v19.0.1`.
 Each configured directory must contain `index.html` directly:
 
 ```sh
@@ -55,7 +58,8 @@ npx playwright test --config e2e/playwright.compatibility.config.ts
 
 The tests create synthetic users and tasks. Destroy the disposable database after
 the run. Never point the experiment at production. The normal E2E suite skips
-these tests when the asset-directory variables are absent.
+these tests when the asset-directory variables are absent; the scheduled E2E
+workflow's released-client job sets them against its disposable CI server.
 
 ## What remains unproven
 

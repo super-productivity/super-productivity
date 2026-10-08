@@ -56,8 +56,6 @@ const ea: ElectronAPI = {
       dataStr: string | undefined;
     }>,
   fileSyncRemove: (args) => _invoke('FILE_SYNC_REMOVE', args) as Promise<void>,
-  fileSyncListFiles: (args) =>
-    _invoke('FILE_SYNC_LIST_FILES', args) as Promise<string[] | Error>,
   checkDirExists: (args) => _invoke('CHECK_DIR_EXISTS', args) as Promise<true | Error>,
 
   pickDirectory: () => _invoke('PICK_DIRECTORY') as Promise<string | Error | undefined>,

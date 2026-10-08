@@ -257,6 +257,51 @@ describe('bulk-archive-filter.util', () => {
     });
   });
 
+  describe('recreate-after-delete in the same batch (#10381)', () => {
+    const deleteOp = createOperation({
+      id: 'delete',
+      opType: OpType.Delete,
+      actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+      entityId: TASK_ID,
+      entityIds: [TASK_ID],
+    });
+    const recreateOp = (lwwUpdateMode: 'replace' | 'patch'): Operation =>
+      createOperation({
+        id: `recreate-${lwwUpdateMode}`,
+        actionType: toLwwUpdateActionType('TASK'),
+        entityId: TASK_ID,
+        payload: {
+          actionPayload: { id: TASK_ID },
+          entityChanges: [],
+          lwwUpdateMode,
+          recreatesEntityAfterDelete: true,
+        },
+      });
+    const state = { [TASK_FEATURE_NAME]: { entities: { [TASK_ID]: { id: TASK_ID } } } };
+
+    it('records a whole-task recreate like a restore', () => {
+      const { all, restoredAt } = collectTaskRemovalEntityIdsFromBatch(
+        [deleteOp, recreateOp('replace')],
+        state,
+      );
+
+      expect(restoredAt).toEqual(new Map([[TASK_ID, 1]]));
+      expect(isRemovedAtIndex(all, restoredAt, TASK_ID, 1)).toBe(true);
+      expect(isRemovedAtIndex(all, restoredAt, TASK_ID, 2)).toBe(false);
+    });
+
+    it('ignores a patch recreate and a recreate with no earlier delete', () => {
+      expect(
+        collectTaskRemovalEntityIdsFromBatch([deleteOp, recreateOp('patch')], state)
+          .restoredAt,
+      ).toEqual(new Map());
+      expect(
+        collectTaskRemovalEntityIdsFromBatch([recreateOp('replace'), deleteOp], state)
+          .restoredAt,
+      ).toEqual(new Map());
+    });
+  });
+
   describe('isRemovedAtIndex (position-aware pre-scan)', () => {
     it('returns false for an id present in neither the removal set nor the restore map', () => {
       expect(isRemovedAtIndex(new Set(['other']), new Map(), 'task-x', 5)).toBe(false);

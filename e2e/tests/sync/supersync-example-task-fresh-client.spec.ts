@@ -68,6 +68,25 @@ test.describe('@supersync Fresh-client example tasks vs incoming import (#7976)'
         allowExampleTasks: true,
       });
 
+      // Example tasks live in the INBOX project. Open it now and stay on it: seeing them
+      // here proves the "none survives" check below is not vacuous, and it keeps the list
+      // read after the import off a route swap. While a route animates (~225ms) the
+      // leaving view stays mounted next to the entering one, so right after navigating, a
+      // task listed in both TODAY and INBOX (the seeder's task is) shows up twice, and
+      // waitForTask is satisfied by either view.
+      await freshClient.page.goto('/#/project/INBOX_PROJECT/tasks', {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      // Same read and exact titles as the check after the import (waitForTask matches
+      // substrings), so that check cannot pass vacuously if a title drifts from
+      // EXAMPLE_TASK_TITLES.
+      await expect
+        .poll(() => getTaskTitles(freshClient!), {
+          message: 'INBOX should list all four example tasks before sync is configured',
+        })
+        .toEqual(expect.arrayContaining(EXAMPLE_TASK_TITLES));
+
       // Configure sync but do NOT let setup auto-resolve the conflict dialog
       // (waitForInitialSync:true would click "Use Server Data" and hide the bug).
       await freshClient.sync.setupSuperSync({
@@ -91,19 +110,35 @@ test.describe('@supersync Fresh-client example tasks vs incoming import (#7976)'
       expect(syncResult).toBe('complete');
 
       // The import replaced local state: the real remote task is present and NONE of the
-      // onboarding example tasks survive. Example tasks live in the INBOX project.
-      // (If the seeder's task lands elsewhere on your setup, adjust this navigation.)
-      await freshClient.page.goto('/#/project/INBOX_PROJECT/tasks', {
-        waitUntil: 'domcontentloaded',
-        timeout: 30000,
-      });
-      await freshClient.page.waitForLoadState('networkidle');
+      // onboarding example tasks survive.
       await waitForTask(freshClient.page, realTask);
 
-      const titles = await getTaskTitles(freshClient);
-      for (const exampleTitle of EXAMPLE_TASK_TITLES) {
-        expect(titles).not.toContain(exampleTitle);
-      }
+      // `complete` above only means the check icon showed once, not that the import has
+      // been applied: for a few hundred ms after it the real task is listed next to all
+      // four example tasks. So read the SETTLED list: poll the whole verdict, one atomic
+      // snapshot per attempt (a count() followed by per-row reads waits out its timeout on
+      // a row that a re-render removed in between).
+      await expect
+        .poll(
+          async () => {
+            const titles = await getTaskTitles(freshClient!);
+            return {
+              hasRealTask: titles.some((title) => title.includes(realTask)),
+              survivingExampleTasks: titles.filter((title) =>
+                EXAMPLE_TASK_TITLES.includes(title),
+              ),
+            };
+          },
+          {
+            message: 'INBOX should list the imported task and none of the example tasks',
+          },
+        )
+        .toEqual({ hasRealTask: true, survivingExampleTasks: [] });
+
+      // Still no conflict dialog once everything has settled (the race above only saw the
+      // first check icon).
+      await expect(freshClient.sync.syncImportConflictDialog).toBeHidden();
+      await expect(freshClient.sync.conflictDialog).toBeHidden();
     } finally {
       if (freshClient) {
         await closeClient(freshClient);

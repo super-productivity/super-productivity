@@ -12,6 +12,7 @@ import { lazyInject } from '../../util/lazy-inject';
 import { SyncLog } from '../../core/log';
 import { AuthFailSPError, MissingCredentialsSPError } from '../sync-exports';
 import {
+  ClientUpdateRequiredSPError,
   ForceUploadFailedError,
   ForceUploadPendingOpsError,
   IncompleteRemoteOperationsError,
@@ -336,6 +337,13 @@ export class WsTriggeredDownloadService implements OnDestroy {
         }
         if (err instanceof AuthFailSPError || err instanceof MissingCredentialsSPError) {
           SyncLog.warn('WsTriggeredDownloadService: Auth failure during download', err);
+          this.stop();
+          return false;
+        }
+        if (err instanceof ClientUpdateRequiredSPError) {
+          // The server refuses this app version until it is updated, so a retry
+          // cannot succeed. The regular sync shows the update notice.
+          SyncLog.warn('WsTriggeredDownloadService: Server requires an app update');
           this.stop();
           return false;
         }

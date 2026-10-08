@@ -19,7 +19,9 @@ import {
 /**
  * #10264: real app reducers, capture, encrypted transport and conflict recovery.
  * Dispatch the same persistent actions as the UI. Never select a side in the
- * whole-dataset dialog: syncAndWait() would silently hide this regression.
+ * whole-dataset dialog: it replaces one device's entire dataset and would hide
+ * this regression. The strict `sync` helper below fails on it, and so does
+ * syncAndWait() unless it is given `conflictDialog`.
  */
 const PROJECT_ID = 'INBOX_PROJECT';
 type Family = 'project notes' | 'Today notes' | 'habits' | 'boards' | 'sections';
@@ -82,6 +84,16 @@ const readRows = (page: Page): Promise<CompactOperationLogEntry[]> =>
       db.close();
     }
   });
+
+const fullStateOpCounts = (clients: SimulatedE2EClient[]): Promise<number[]> =>
+  Promise.all(
+    clients.map(
+      async (client) =>
+        (await readRows(client.page)).filter((row) =>
+          ['REPAIR', 'SYNC_IMPORT', 'BACKUP_IMPORT'].includes(row.op.o),
+        ).length,
+    ),
+  );
 
 const editContent = async (
   page: Page,
@@ -200,6 +212,56 @@ const sync = async (client: SimulatedE2EClient): Promise<void> => {
   expect(observed).toBe('in-sync');
 };
 
+const habitOrder = (page: Page): Promise<string[]> =>
+  page.locator('.habit-row .habit-name').allTextContents();
+
+/** Exercise the CDK drop handler, including its enabled-only footprint. */
+const dragHabit = async (page: Page): Promise<void> => {
+  const before = await habitOrder(page);
+  const from = await page.locator('.habit-row').last().boundingBox();
+  const to = await page.locator('.habit-row').first().boundingBox();
+  if (!from || !to) throw new Error('Habit drag targets missing');
+  const halfHeight = from.height / 2;
+  const centerY = from.y + halfHeight;
+  await page.mouse.move(from.x + 30, centerY);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 30, centerY - 10, { steps: 3 });
+  await expect(page.locator('.cdk-drag-preview')).toBeVisible();
+  await page.mouse.move(to.x + 30, to.y + 5, { steps: 25 });
+  await page.mouse.up();
+  await expect(page.locator('.cdk-drag-preview')).toBeHidden();
+  await expect.poll(() => habitOrder(page)).not.toEqual(before);
+};
+
+const editHabitDate = async (
+  page: Page,
+  id: string,
+  daysAgo: number,
+  stopwatch = false,
+): Promise<void> => {
+  await page
+    .locator('.habit-row')
+    .filter({ has: page.getByText(id, { exact: true }) })
+    .locator('.day-cell')
+    .nth(6 - daysAgo)
+    .click();
+  if (stopwatch) {
+    const dialog = page.locator('dialog-simple-counter-edit');
+    await dialog.locator('input[name="count"]').fill('17m');
+    await dialog.getByRole('button', { name: /Save/ }).click();
+    await expect(dialog).toBeHidden();
+  }
+};
+
+const habitDates = (page: Page): Promise<string[]> =>
+  page.evaluate(() =>
+    [0, 2, 5].map((daysAgo) => {
+      const date = new Date();
+      date.setDate(date.getDate() - daysAgo);
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    }),
+  );
+
 const fixture = (
   family: Family,
   ids: string[],
@@ -302,6 +364,157 @@ const fixture = (
 };
 
 test.describe('@supersync reorder crossing content (#10264)', () => {
+  for (const daysAgo of [0, 2]) {
+    for (const remoteReorder of [false, true]) {
+      test(`dated habit grid: ${daysAgo ? 'past date' : 'today'}, ${remoteReorder ? 'remote' : 'local'} reorder`, async ({
+        browser,
+        baseURL,
+        testRunId,
+      }) => {
+        test.setTimeout(240000);
+        const ids = ['a', 'disabled', 'b', 'untouched'].map((id) => id + '-' + testRunId);
+        const clients: SimulatedE2EClient[] = [];
+        try {
+          const config = getSuperSyncConfig(await createTestUser(testRunId));
+          const a = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
+          clients.push(a);
+          await a.sync.setupSuperSync(config);
+          const dates = await habitDates(a.page);
+          const date = dates[daysAgo ? 1 : 0];
+          const seeds = fixture('habits', ids).seeds;
+          for (const [i, seed] of seeds.entries()) {
+            Object.assign(seed.simpleCounter as Record<string, unknown>, {
+              isEnabled: i !== 1,
+              icon: 'favorite',
+              isTrackStreaks: true,
+              streakMinValue: 5,
+              streakMode: 'weekly-frequency',
+              streakWeeklyFrequency: 3,
+              countOnDay: { [dates[0]]: 2, [dates[1]]: 4, [dates[2]]: 8 },
+            });
+          }
+          for (const seed of seeds) await dispatch(a.page, seed);
+          await sync(a);
+          const b = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
+          clients.push(b);
+          await b.sync.setupSuperSync(config);
+          await sync(b);
+          const before = await snapshot(a.page, 'habits', ids);
+          expect(await snapshot(b.page, 'habits', ids)).toEqual(before);
+          const fullStatesBefore = await fullStateOpCounts(clients);
+          for (const client of clients) {
+            await client.page.goto('/#/habits');
+            await expect(client.page.locator('.habit-row')).toHaveCount(3);
+          }
+          const reorderClient = remoteReorder ? b : a;
+          const countClient = remoteReorder ? a : b;
+          if (remoteReorder) await editHabitDate(countClient.page, ids[0], daysAgo);
+          await dragHabit(reorderClient.page);
+          if (!remoteReorder) await editHabitDate(countClient.page, ids[0], daysAgo);
+          const newVal = daysAgo ? 5 : 3;
+          await expect
+            .poll(async () =>
+              (await readRows(countClient.page)).some(
+                (row) => row.op.a === 'SFD' && row.op.d === ids[0],
+              ),
+            )
+            .toBe(true);
+          const count = (await readRows(countClient.page)).find(
+            (row) => row.op.a === 'SFD',
+          )!;
+          expect(count.op.p).toMatchObject({
+            actionPayload: { id: ids[0], date, newVal },
+          });
+          expect(count.syncedAt).toBeUndefined();
+          await expect
+            .poll(async () =>
+              (await readRows(reorderClient.page)).some((row) => row.op.a === 'SM'),
+            )
+            .toBe(true);
+          const order = (await readRows(reorderClient.page)).find(
+            (row) => row.op.a === 'SM',
+          )!;
+          expect(order.op.ds).toEqual(await habitOrder(reorderClient.page));
+          expect(order.op.ds!.length).toBe(3);
+          expect(order.op.ds).not.toContain(ids[1]);
+          expect(order.op.p).toMatchObject({ actionPayload: { ids: order.op.ds } });
+          expect(order.syncedAt).toBeUndefined();
+          expect(count.op.v[order.op.c] ?? 0).toBeLessThan(order.op.v[order.op.c]);
+          expect(order.op.v[count.op.c] ?? 0).toBeLessThan(count.op.v[count.op.c]);
+          const edited = await snapshot(countClient.page, 'habits', ids);
+          const reordered = await snapshot(reorderClient.page, 'habits', ids);
+          expect(edited.entities[ids[0]].countOnDay).toEqual({
+            ...(before.entities[ids[0]].countOnDay as Record<string, number>),
+            [date]: newVal,
+          });
+
+          // B uploads first; A must resolve its pending crossing without choosing a dataset.
+          await sync(b);
+          await sync(a);
+          await sync(b);
+          await sync(a);
+          const final = await snapshot(a.page, 'habits', ids);
+          expect(final.entities).toEqual(edited.entities);
+          expect(final.order).toEqual(reordered.order);
+          expect(final.order.indexOf(ids[1])).toBe(before.order.indexOf(ids[1]));
+          expect([...final.order].sort()).toEqual([...ids].sort());
+          const original = remoteReorder ? count : order;
+          const resolvedRows = await readRows(a.page);
+          expect(
+            resolvedRows.find((row) => row.op.id === original.op.id)!.rejectedAt,
+          ).toBeDefined();
+          const replacement = resolvedRows.find(
+            (row) =>
+              row.source === 'local' &&
+              row.op.a === original.op.a &&
+              row.op.id !== original.op.id &&
+              !!row.syncedAt &&
+              !row.rejectedAt,
+          )!;
+          expect(replacement).toBeDefined();
+          if (remoteReorder)
+            expect(replacement.op.p).toMatchObject({
+              actionPayload: { id: ids[0], date, newVal },
+            });
+          else expect([...replacement.op.ds!].sort()).toEqual([...order.op.ds!].sort());
+          await test.info().attach('dated-habit-recovery-history', {
+            body: JSON.stringify({ count, order, replacement }),
+            contentType: 'application/json',
+          });
+          for (const client of clients) {
+            expect(await snapshot(client.page, 'habits', ids)).toEqual(final);
+            const rows = await readRows(client.page);
+            expect(
+              rows.filter(
+                (row) => row.source === 'local' && !row.syncedAt && !row.rejectedAt,
+              ),
+            ).toEqual([]);
+            await client.page.reload();
+            await waitForAppReady(client.page, {
+              routeRegex: /#\/habits/,
+              selector: '.habit-grid',
+            });
+            expect(await snapshot(client.page, 'habits', ids)).toEqual(final);
+            await sync(client);
+          }
+          expect(await fullStateOpCounts(clients)).toEqual(fullStatesBefore);
+          const fresh = await createSimulatedClient(
+            browser,
+            baseURL!,
+            'Fresh',
+            testRunId,
+          );
+          clients.push(fresh);
+          await fresh.sync.setupSuperSync(config);
+          await sync(fresh);
+          expect(await snapshot(fresh.page, 'habits', ids)).toEqual(final);
+        } finally {
+          for (const client of clients) await closeClient(client);
+        }
+      });
+    }
+  }
+
   test('habits: recovery leaves a concurrent disabled habit edit independent', async ({
     browser,
     baseURL,
@@ -476,17 +689,22 @@ test.describe('@supersync reorder crossing content (#10264)', () => {
       );
     }
 
-    for (const pendingContent of family === 'habits' ? [false, true] : [false]) {
+    for (const pending of family === 'habits'
+      ? ['reorder', 'content', 'dated reorder', 'dated content']
+      : ['reorder']) {
+      const pendingContent = pending.endsWith('content');
+      const datedHabit = pending.startsWith('dated');
       test(
         family +
-          (pendingContent
-            ? ': reissues the content after interrupted sync and compaction'
-            : ': keeps the reorder pending after interrupted sync and compaction'),
+          (pendingContent ? ': reissues the ' : ': keeps the ') +
+          pending +
+          (pendingContent ? '' : ' pending') +
+          ' after interrupted sync and compaction',
         async ({ browser, baseURL, testRunId }) => {
           test.setTimeout(240000);
           const ids = ['a', 'b', 'untouched'].map((id) => id + '-' + testRunId);
           const data = fixture(family, ids);
-          if (pendingContent) {
+          if (pendingContent || datedHabit) {
             // The receiver's default-field repair must not mask loss of this type.
             (data.seeds[0].simpleCounter as Record<string, unknown>).type = 'StopWatch';
           }
@@ -496,6 +714,21 @@ test.describe('@supersync reorder crossing content (#10264)', () => {
             const a = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
             clients.push(a);
             await a.sync.setupSuperSync(config);
+            // setupSuperSync's background-sync blocks do not survive A's reloads;
+            // a startup sync would take the rejection instead of the sync click.
+            await a.page.addInitScript(() => {
+              const flags = window as unknown as Record<string, unknown>;
+              flags.__SP_E2E_BLOCK_AUTO_SYNC = true;
+              flags.__SP_E2E_BLOCK_IMMEDIATE_UPLOAD = true;
+              flags.__SP_E2E_BLOCK_WS_DOWNLOAD = true;
+            });
+            if (datedHabit) {
+              const dates = await habitDates(a.page);
+              (data.seeds[0].simpleCounter as Record<string, unknown>).countOnDay = {
+                [dates[0]]: 120000,
+                [dates[1]]: 60000,
+              };
+            }
             // Ordinary task activity later triggers real log compaction while offline.
             await a.workView.addTask('Compaction activity-' + testRunId);
             for (const seed of [...data.seeds].reverse()) await dispatch(a.page, seed);
@@ -508,7 +741,8 @@ test.describe('@supersync reorder crossing content (#10264)', () => {
             await b.sync.setupSuperSync(config);
             await sync(b);
             const before = await snapshot(a.page, family, ids);
-            const reversed = [...before.order].reverse();
+            const fullStatesBefore = datedHabit ? await fullStateOpCounts(clients) : [];
+            let reversed = [...before.order].reverse();
             data.reorder.ids = reversed;
             data.reorder.meta.entityIds = reversed;
             let offline = false;
@@ -518,7 +752,33 @@ test.describe('@supersync reorder crossing content (#10264)', () => {
                 await route.abort();
               else await route.continue();
             });
-            if (pendingContent) {
+            if (datedHabit) {
+              for (const client of [a, b]) {
+                await client.page.goto('/#/habits');
+                await expect(client.page.locator('.habit-row')).toHaveCount(3);
+              }
+              await editHabitDate(pendingContent ? a.page : b.page, ids[0], 2, true);
+              await dragHabit(pendingContent ? b.page : a.page);
+              reversed = (await snapshot(pendingContent ? b.page : a.page, family, ids))
+                .order;
+              await expect
+                .poll(async () =>
+                  (await readRows(pendingContent ? a.page : b.page)).some(
+                    (row) => row.op.a === 'SFD' && row.op.d === ids[0],
+                  ),
+                )
+                .toBe(true);
+              const count = (await readRows(pendingContent ? a.page : b.page)).find(
+                (row) => row.op.a === 'SFD',
+              )!;
+              expect(count.op.p).toMatchObject({
+                actionPayload: {
+                  id: ids[0],
+                  date: (await habitDates(a.page))[1],
+                  newVal: 1020000,
+                },
+              });
+            } else if (pendingContent) {
               await editContent(a.page, family, data.edit);
               await dispatch(b.page, data.reorder);
             } else {
@@ -599,7 +859,10 @@ test.describe('@supersync reorder crossing content (#10264)', () => {
               .toBe(false);
             // A real compaction checkpoint must retain the optimistic state on restart.
             await a.page.reload();
-            await waitForAppReady(a.page);
+            await waitForAppReady(
+              a.page,
+              datedHabit ? { routeRegex: /#\/habits/, selector: '.habit-grid' } : {},
+            );
             expect(await snapshot(a.page, family, ids)).toEqual(interrupted);
             offline = false;
             allowUpload = true;
@@ -623,7 +886,7 @@ test.describe('@supersync reorder crossing content (#10264)', () => {
               await expect(a.sync.syncSpinner).toBeHidden();
             };
             if (pendingContent) {
-              // An absolute counter-today set is reissued with its current value:
+              // An absolute count is reissued with its original day and current value:
               // sync must neither stop nor fall back to type-stripping entity LWW.
               await expectOriginalRejected();
               await expect(a.sync.conflictDialog).toBeHidden();
@@ -638,9 +901,24 @@ test.describe('@supersync reorder crossing content (#10264)', () => {
                 (row) => row.op.id === original.op.id,
               )!;
               expect(replaced.rejectedAt).toBeDefined();
+              const replacements = (await readRows(a.page)).filter(
+                (row) =>
+                  row.source === 'local' &&
+                  row.op.a === original.op.a &&
+                  row.op.id !== original.op.id &&
+                  !!row.syncedAt &&
+                  !row.rejectedAt,
+              );
+              expect(replacements).toHaveLength(1);
+              expect(replacements[0].op.p).toEqual(original.op.p);
               await a.page.reload();
-              await waitForAppReady(a.page);
+              await waitForAppReady(
+                a.page,
+                datedHabit ? { routeRegex: /#\/habits/, selector: '.habit-grid' } : {},
+              );
               expect(await snapshot(a.page, family, ids)).toEqual(converged);
+              if (datedHabit)
+                expect(await fullStateOpCounts(clients)).toEqual(fullStatesBefore);
               return;
             }
             for (let attempt = 0; attempt < 4; attempt++) {
@@ -661,13 +939,18 @@ test.describe('@supersync reorder crossing content (#10264)', () => {
             expect(peer.entities).toEqual(interrupted.entities);
             expect(peer.order).toEqual(before.order);
             await a.page.reload();
-            await waitForAppReady(a.page);
+            await waitForAppReady(
+              a.page,
+              datedHabit ? { routeRegex: /#\/habits/, selector: '.habit-grid' } : {},
+            );
             expect(await snapshot(a.page, family, ids)).toEqual(interrupted);
             const retained = (await readRows(a.page)).find(
               (row) => row.op.id === original.op.id,
             )!;
             expect(retained.rejectedAt).toBeUndefined();
             expect(retained.syncedAt).toBeUndefined();
+            if (datedHabit)
+              expect(await fullStateOpCounts(clients)).toEqual(fullStatesBefore);
           } finally {
             for (const client of clients) await closeClient(client);
           }
@@ -688,6 +971,163 @@ test.describe('@supersync released reorder compatibility (#10264)', () => {
     assets = await serveReleasedClientAssets({ old: oldAssets!, new: oldAssets! });
   });
   test.afterAll(async () => assets?.close());
+
+  for (const oldReorders of [false, true]) {
+    test(`released dated habits: current resolves ${oldReorders ? 'count' : 'reorder'}, old consumes and reloads`, async ({
+      browser,
+      baseURL,
+      testRunId,
+    }) => {
+      test.setTimeout(240000);
+      const ids = ['a', 'disabled', 'b', 'untouched'].map((id) => id + '-' + testRunId);
+      const clients: SimulatedE2EClient[] = [];
+      try {
+        const config = getSuperSyncConfig(await createTestUser(testRunId));
+        const current = await createSimulatedClient(
+          browser,
+          baseURL!,
+          'Current',
+          testRunId,
+        );
+        clients.push(current);
+        await current.sync.setupSuperSync(config);
+        const dates = await habitDates(current.page);
+        const seeds = fixture('habits', ids).seeds;
+        for (const [i, seed] of seeds.entries()) {
+          Object.assign(seed.simpleCounter as Record<string, unknown>, {
+            isEnabled: i !== 1,
+            countOnDay: { [dates[0]]: 2, [dates[1]]: 4, [dates[2]]: 8 },
+          });
+          await dispatch(current.page, seed);
+        }
+        await sync(current);
+        const released = await createSimulatedClient(
+          browser,
+          RELEASED_APP_URL,
+          'Released',
+          testRunId,
+          { serviceWorkers: 'block' },
+        );
+        clients.push(released);
+        await released.sync.setupSuperSync(config);
+        await sync(released);
+        const versions: (string | null)[] = [];
+        released.page.on('request', (request) => {
+          if (request.method() === 'GET' && request.url().includes('/api/sync/ops?')) {
+            versions.push(new URL(request.url()).searchParams.get('appVersion'));
+          }
+        });
+        await released.page.goto(RELEASED_APP_URL + '/#/habits');
+        await expect(released.page.locator('.habit-row')).toHaveCount(3);
+        // Both histories prove this unmodified release emits the historical action.
+        await editHabitDate(released.page, ids[2], 5);
+        await expect
+          .poll(async () =>
+            (await readRows(released.page)).some((row) => row.op.a === 'SFD'),
+          )
+          .toBe(true);
+        expect(
+          (await readRows(released.page)).find((row) => row.op.a === 'SFD')!.op.p,
+        ).toMatchObject({ actionPayload: { id: ids[2], date: dates[2], newVal: 9 } });
+        await sync(released);
+        await sync(current);
+        const before = await snapshot(current.page, 'habits', ids);
+        const fullStatesBefore = await fullStateOpCounts(clients);
+        await current.page.goto('/#/habits');
+        await expect(current.page.locator('.habit-row')).toHaveCount(3);
+        const oldRowIds = new Set(
+          (await readRows(released.page)).map((row) => row.op.id),
+        );
+        if (oldReorders) {
+          await editHabitDate(current.page, ids[0], 2);
+          await dragHabit(released.page);
+        } else {
+          await dragHabit(current.page);
+          await editHabitDate(released.page, ids[0], 2);
+        }
+        const oldAction = oldReorders ? 'SM' : 'SFD';
+        const reordered = await habitOrder(oldReorders ? released.page : current.page);
+        await expect
+          .poll(async () =>
+            (await readRows(released.page)).some(
+              (row) =>
+                !oldRowIds.has(row.op.id) && row.op.a === oldAction && !row.syncedAt,
+            ),
+          )
+          .toBe(true);
+        // The current client resolves both distinct histories; the old one uploads first.
+        await sync(released);
+        await sync(current);
+        await sync(released);
+        await sync(current);
+        const final = await snapshot(current.page, 'habits', ids);
+        expect(final.entities).toEqual({
+          ...before.entities,
+          [ids[0]]: {
+            ...before.entities[ids[0]],
+            countOnDay: { [dates[0]]: 2, [dates[1]]: 5, [dates[2]]: 8 },
+          },
+        });
+        expect([...final.order].sort()).toEqual([...ids].sort());
+        expect(final.order.filter((id) => id !== ids[1])).toEqual(reordered);
+        expect(final.order.indexOf(ids[1])).toBe(before.order.indexOf(ids[1]));
+        const localRows = (await readRows(current.page)).filter(
+          (row) => row.source === 'local' && row.op.a === (oldReorders ? 'SFD' : 'SM'),
+        );
+        expect(localRows.some((row) => !!row.rejectedAt)).toBe(true);
+        const accepted = localRows.find((row) => !!row.syncedAt && !row.rejectedAt)!;
+        expect(accepted).toBeDefined();
+        if (oldReorders)
+          expect(accepted.op.p).toMatchObject({
+            actionPayload: { id: ids[0], date: dates[1], newVal: 5 },
+          });
+        for (const reload of [false, true]) {
+          if (reload) {
+            await released.page.reload();
+            await waitForAppReady(released.page, {
+              routeRegex: /#\/habits/,
+              selector: '.habit-grid',
+            });
+            await sync(released);
+          }
+          await expect
+            .poll(() => habitOrder(released.page))
+            .toEqual(final.order.filter((id) => id !== ids[1]));
+          for (const id of ids.filter((value) => value !== ids[1])) {
+            const row = released.page
+              .locator('.habit-row')
+              .filter({ has: released.page.getByText(id, { exact: true }) });
+            for (const [i, daysAgo] of [0, 2, 5].entries()) {
+              await expect(
+                row
+                  .locator('.day-cell')
+                  .nth(6 - daysAgo)
+                  .locator('.value-text'),
+              ).toHaveText(
+                String(
+                  (final.entities[id].countOnDay as Record<string, number>)[dates[i]],
+                ),
+              );
+            }
+          }
+          await released.page.locator('.disabled-section-header').click();
+          await expect(
+            released.page.locator('.disabled-item').filter({ hasText: ids[1] }),
+          ).toBeVisible();
+        }
+        expect(versions).toContain('19.1.0');
+        expect(await fullStateOpCounts(clients)).toEqual(fullStatesBefore);
+        for (const client of clients)
+          expect(
+            (await readRows(client.page)).filter(
+              (row) => row.source === 'local' && !row.syncedAt && !row.rejectedAt,
+            ),
+          ).toEqual([]);
+      } finally {
+        for (const client of clients) await closeClient(client);
+      }
+    });
+  }
 
   for (const oldReorders of [false, true]) {
     test(

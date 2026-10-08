@@ -1,10 +1,7 @@
 <div class="focus-btn-wrapper">
   <div class="focus-btn-anchor">
     @if (circleVisible()) {
-      <progress-circle
-        [progress]="circleProgress()"
-        [isPulsing]="circleShouldPulse()"
-      ></progress-circle>
+      <progress-circle [progress]="circleProgress()"></progress-circle>
     }
 
     <button

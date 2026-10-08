@@ -669,7 +669,7 @@ test.describe('@supersync Network Failure Recovery', () => {
 
       // Intercept and return storage quota exceeded BEFORE creating task
       // so the immediate upload service gets the error
-      await clientA.page.route('**/api/sync/ops', async (route) => {
+      await routeSuperSyncOps(clientA.page, async (route) => {
         if (route.request().method() === 'POST') {
           console.log('[Test] Simulating storage quota exceeded');
           await route.fulfill({
@@ -723,7 +723,7 @@ test.describe('@supersync Network Failure Recovery', () => {
       console.log('[StorageQuota] ✓ Server quota exceeded handling test PASSED');
     } finally {
       if (clientA) {
-        await clientA.page.unroute('**/api/sync/ops').catch(() => {});
+        await unrouteSuperSyncOps(clientA.page).catch(() => {});
       }
       if (clientA) await closeClient(clientA);
     }

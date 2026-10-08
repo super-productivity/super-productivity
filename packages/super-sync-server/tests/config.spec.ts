@@ -321,3 +321,89 @@ describe('DEFAULT_CORS_ORIGINS', () => {
     ).toBe(false);
   });
 });
+
+describe('loadConfigFromEnv - TRUST_PROXY parsing', () => {
+  beforeEach(() => {
+    resetEnv();
+  });
+
+  afterEach(() => {
+    resetEnv();
+  });
+
+  it('should default to loopback and uniquelocal when TRUST_PROXY is unset', async () => {
+    delete process.env.TRUST_PROXY;
+
+    const { loadConfigFromEnv, SERVER_TRUST_PROXY } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.trustProxy).toEqual(['loopback', 'uniquelocal']);
+    expect(config.trustProxy).toEqual(SERVER_TRUST_PROXY);
+  });
+
+  it('should parse a comma-separated list of keywords and address ranges', async () => {
+    process.env.TRUST_PROXY = 'loopback, uniquelocal ,100.64.0.0/10';
+
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.trustProxy).toEqual(['loopback', 'uniquelocal', '100.64.0.0/10']);
+  });
+
+  it('should accept plain IPv4 and IPv6 addresses and ranges', async () => {
+    process.env.TRUST_PROXY = '10.0.0.5,fd00::/8,::1';
+
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.trustProxy).toEqual(['10.0.0.5', 'fd00::/8', '::1']);
+  });
+
+  it('should accept IPv4-mapped IPv6 addresses and ranges', async () => {
+    process.env.TRUST_PROXY = '::ffff:100.64.0.1,::ffff:100.64.0.0/106';
+
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.trustProxy).toEqual(['::ffff:100.64.0.1', '::ffff:100.64.0.0/106']);
+  });
+
+  it('should accept an IPv4 range written as a netmask', async () => {
+    process.env.TRUST_PROXY = '10.0.0.0/255.0.0.0';
+
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.trustProxy).toEqual(['10.0.0.0/255.0.0.0']);
+  });
+
+  it('should ignore empty entries', async () => {
+    process.env.TRUST_PROXY = ',loopback,,';
+
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.trustProxy).toEqual(['loopback']);
+  });
+
+  it('should keep the default when TRUST_PROXY is empty', async () => {
+    process.env.TRUST_PROXY = '';
+
+    const { loadConfigFromEnv, SERVER_TRUST_PROXY } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.trustProxy).toEqual(SERVER_TRUST_PROXY);
+  });
+
+  // The hop-count form, the trust-everything form and a stray word all leave
+  // X-Forwarded-For spoofable or unset, so none of them may reach fastify.
+  it.each(['1', 'true', 'loopback,tailscale'])(
+    'should reject TRUST_PROXY=%s',
+    async (value) => {
+      process.env.TRUST_PROXY = value;
+
+      const { loadConfigFromEnv } = await importConfig();
+      expect(() => loadConfigFromEnv()).toThrow(/Invalid TRUST_PROXY/);
+    },
+  );
+});

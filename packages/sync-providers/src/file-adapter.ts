@@ -3,5 +3,4 @@ export interface FileAdapter {
   writeFile(filePath: string, dataStr: string): Promise<void>;
   deleteFile(filePath: string): Promise<void>;
   checkDirExists?(dirPath: string): Promise<boolean>;
-  listFiles?(dirPath: string): Promise<string[]>;
 }

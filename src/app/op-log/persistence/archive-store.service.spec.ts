@@ -81,9 +81,9 @@ describe('ArchiveStoreService', () => {
   });
 
   // #9187: ArchiveStoreService keeps its own copy of the open-with-retry loop,
-  // and it is a live path (both consumers only skip it for a self-managing
-  // adapter). Driving a REAL downgrade beats spying a seam here — this service
-  // inlines `openDB`, and the actual browser rejection is the better oracle.
+  // and it is a live path. Driving a REAL downgrade beats spying a seam here —
+  // this service inlines `openDB`, and the actual browser rejection is the
+  // better oracle.
   describe('downgrade barrier', () => {
     it('fails fast with a classified error when the DB is newer than this build', async () => {
       // Drop the connection opened by the beforeEach so it cannot block the

@@ -53,6 +53,7 @@ describe('OperationLogCompactionService', () => {
 
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
+      'clearVectorClockCache',
       'getLastSeq',
       'saveStateCache',
       'resetCompactionCounter',
@@ -220,6 +221,15 @@ describe('OperationLogCompactionService', () => {
       await service.compact();
 
       expect(mockVectorClockService.getCurrentVectorClock).toHaveBeenCalled();
+    });
+
+    it('should read the durable vector clock, not a stale per-tab cache', async () => {
+      await service.compact();
+
+      // Another tab can raise this client's counter in place (#10214).
+      expect(mockOpLogStore.clearVectorClockCache).toHaveBeenCalledBefore(
+        mockVectorClockService.getCurrentVectorClock,
+      );
     });
 
     it('should get last sequence number', async () => {

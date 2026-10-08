@@ -61,6 +61,27 @@ type SyncCompletionSnapshot = {
 
 type NativeSyncConfirmIntent = 'fresh' | 'use-local' | 'use-remote' | 'repair';
 
+/** Which side to keep in the whole-dataset conflict dialog (`dialog-sync-conflict`). */
+export type ConflictDialogChoice = 'local' | 'remote';
+
+/**
+ * How the sync helpers answer the dialogs they own. `useLocal` steers the
+ * SYNC_IMPORT conflict dialog and the native confirms that go with it.
+ * `conflictDialog` is the explicit opt-in for the whole-dataset dialog: left
+ * unset, that dialog fails the helper instead of silently picking a side.
+ */
+type SyncDialogChoices = {
+  useLocal: boolean;
+  conflictDialog?: ConflictDialogChoice;
+};
+
+/**
+ * The app's diagnostic for the fail-closed multi-entity conflict stop
+ * (`UnsupportedMultiEntityConflictError`). Its message is allowlisted metadata
+ * only (side, action type, entity count), so it is safe to quote in a failure.
+ */
+const MULTI_ENTITY_UNSUPPORTED_LOG = /SYNC_MULTI_ENTITY_UNSUPPORTED[^\n]*/;
+
 /**
  * The complete set of native `window.confirm()` prompts production may raise
  * during a sync the suite drives. Anything outside this list is treated as an
@@ -145,10 +166,17 @@ export class SuperSyncPage extends BasePage {
   readonly freshClientDialog: Locator;
   readonly freshClientConfirmBtn: Locator;
   /**
-   * Local-data conflict dialog (`dialog-sync-conflict`) — appears when a client
-   * that never synced holds meaningful local data and the server already has
-   * ordinary ops (LocalDataConflictError, #9863). "Keep local" force-uploads a
-   * SYNC_IMPORT, "Keep remote" replaces local state with the server's.
+   * Whole-dataset conflict dialog (`dialog-sync-conflict`). Two stops raise it:
+   * a client that never synced holds meaningful local data and the server
+   * already has ordinary ops (LocalDataConflictError, #9863), or the
+   * multi-entity conflict preflight refuses to auto-resolve
+   * (UnsupportedMultiEntityConflictError, SYNC_MULTI_ENTITY_UNSUPPORTED).
+   * "Keep local" force-uploads a SYNC_IMPORT, "Keep remote" replaces local
+   * state with the server's: either way ALL data on one side is lost.
+   *
+   * syncAndWait() and the other completion helpers therefore FAIL when it
+   * appears. A test that intentionally exercises it asserts on it and answers
+   * with resolveConflictDialog(), or opts in via syncAndWait({ conflictDialog }).
    */
   readonly conflictDialog: Locator;
   readonly conflictUseLocalBtn: Locator;
@@ -163,9 +191,19 @@ export class SuperSyncPage extends BasePage {
    */
   private _encryptionPassword: string = 'e2e-default-encryption-pw';
   private _unexpectedNativeDialog: string | undefined;
+  /** Last SYNC_MULTI_ENTITY_UNSUPPORTED console line seen on this page. */
+  private _lastMultiEntityStopLog: string | undefined;
 
   constructor(page: Page) {
     super(page);
+    // Keep the app's own diagnostic for the multi-entity stop, so an unexpected
+    // whole-dataset dialog can name its cause instead of only its type.
+    page.on('console', (message) => {
+      const stop = MULTI_ENTITY_UNSUPPORTED_LOG.exec(message.text());
+      if (stop) {
+        this._lastMultiEntityStopLog = stop[0];
+      }
+    });
     this.syncBtn = page.locator('button.sync-btn');
     this.providerSelect = page.locator('formly-field-mat-select mat-select');
     this.baseUrlInput = page.locator('.e2e-baseUrl input');
@@ -190,7 +228,7 @@ export class SuperSyncPage extends BasePage {
     this.freshClientConfirmBtn = this.freshClientDialog.locator(
       'button[mat-flat-button]',
     );
-    // Local-data conflict dialog elements
+    // Whole-dataset conflict dialog elements (see conflictDialog)
     this.conflictDialog = page.locator('dialog-sync-conflict');
     this.conflictUseLocalBtn = this.conflictDialog.locator('button', {
       hasText: /Keep local/i,
@@ -911,7 +949,9 @@ export class SuperSyncPage extends BasePage {
           console.log(
             '[SuperSyncPage] Sync check icon not visible after 60s — re-triggering sync once',
           );
-          await this._handleSyncDialogs(config.syncImportChoice === 'local');
+          await this._handleSyncDialogs({
+            useLocal: config.syncImportChoice === 'local',
+          });
           await this.clickSyncBtn();
           await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
         }
@@ -1662,7 +1702,8 @@ export class SuperSyncPage extends BasePage {
 
   /**
    * Trigger a manual sync via the sync button and wait for it to complete.
-   * Does not handle dialogs - use syncAndWait() for normal operation.
+   * Waits with syncAndWait()'s default dialog handling, so the whole-dataset
+   * conflict dialog fails it too; it cannot opt in to answering that dialog.
    *
    * @internal Use syncAndWait() instead for most cases
    */
@@ -1678,6 +1719,7 @@ export class SuperSyncPage extends BasePage {
   /**
    * Wait for an ongoing sync operation to complete.
    * Useful when sync is triggered automatically (e.g., after data changes).
+   * Fails if the whole-dataset conflict dialog appears, like triggerSync().
    *
    * @param options.timeout - Maximum time to wait (default: 15000ms)
    * @param options.skipSpinnerCheck - If true, only waits for check icon (useful when sync might already be in progress)
@@ -1810,10 +1852,17 @@ export class SuperSyncPage extends BasePage {
   }
 
   /**
-   * Answer the local-data conflict dialog, including the conditional overwrite
-   * warning either choice may raise (see confirmSyncConflictOverwriteIfShown).
+   * Answer the whole-dataset conflict dialog, including the conditional
+   * overwrite warning either choice may raise (see
+   * confirmSyncConflictOverwriteIfShown). For tests that assert on the dialog
+   * themselves; syncAndWait() never answers it unless given `conflictDialog`.
+   *
+   * Returns once the dialog is closed, not once the forced upload/download it
+   * starts has finished. After a multi-entity stop the sync status stays ERROR
+   * until then, so wait for `syncErrorIcon` to clear before syncing again. The
+   * double checkmark only returns after the next normal cycle.
    */
-  async resolveConflictDialog(choice: 'local' | 'remote'): Promise<void> {
+  async resolveConflictDialog(choice: ConflictDialogChoice): Promise<void> {
     await expect(this.conflictDialog).toBeVisible({ timeout: 5000 });
     if (choice === 'local') {
       await this.conflictUseLocalBtn.click();
@@ -1824,11 +1873,59 @@ export class SuperSyncPage extends BasePage {
   }
 
   /**
+   * The failure for a whole-dataset conflict dialog nobody opted into. Picking a
+   * side would replace ALL data on the other side and hide the fail-closed stop
+   * (SYNC_MULTI_ENTITY_UNSUPPORTED) this suite exists to catch, so it is an error.
+   */
+  private _unexpectedConflictDialogError(): Error {
+    const cause = this._lastMultiEntityStopLog
+      ? `Last console diagnostic: ${this._lastMultiEntityStopLog}.`
+      : 'No SYNC_MULTI_ENTITY_UNSUPPORTED console text was captured, so this is ' +
+        'more likely the first-sync LocalDataConflictError.';
+    return new Error(
+      'Unexpected whole-dataset conflict dialog (`dialog-sync-conflict`, "Keep local" / ' +
+        '"Keep remote") during SuperSync. Sync hit its fail-closed conflict stop ' +
+        '(SYNC_MULTI_ENTITY_UNSUPPORTED or LocalDataConflictError) and choosing a side ' +
+        `would replace ALL data on the other side, so the helper does not pick one. ${cause} ` +
+        "If the test intentionally exercises this dialog, pass syncAndWait({ conflictDialog: 'local' | 'remote' }) " +
+        'or answer it with resolveConflictDialog().',
+    );
+  }
+
+  /**
+   * Runs after an opted-in answer. Two things stand between the closed dialog and
+   * the state the completion loop waits for:
+   * - The multi-entity stop sets the sync status to ERROR BEFORE it opens the
+   *   dialog, and the forced upload/download the answer starts only clears it once
+   *   it has finished. The dialog is already closed by then and no spinner shows,
+   *   so without this wait the loop reads the leftover error icon as a failed sync.
+   *   The first-sync stop sets no error, so it passes straight through.
+   * - That forced sync ends in IN_SYNC but never marks the remote as checked, so
+   *   the double checkmark the loop waits for stays away until one more normal
+   *   cycle has run, and nothing else starts one in time.
+   */
+  private async _finishConflictResolution(): Promise<void> {
+    try {
+      await this.syncErrorIcon.waitFor({ state: 'hidden', timeout: 60000 });
+    } catch (error) {
+      throw new Error(
+        'Sync still reports an error 60s after the whole-dataset conflict dialog was answered',
+        { cause: error },
+      );
+    }
+    await this._triggerSuperSyncCycle(30000);
+  }
+
+  /**
    * Handle any sync-blocking dialogs (Angular Material or native).
-   * Returns true if a dialog was handled, false otherwise.
+   * Returns true if a dialog was handled, false otherwise. Throws if the
+   * whole-dataset conflict dialog is up and `conflictDialog` was not given.
    * @private
    */
-  private async _handleSyncDialogs(useLocal: boolean): Promise<boolean> {
+  private async _handleSyncDialogs({
+    useLocal,
+    conflictDialog,
+  }: SyncDialogChoices): Promise<boolean> {
     // 1. Fresh client confirmation dialog (Angular Material)
     if (await this.freshClientDialog.isVisible().catch(() => false)) {
       console.log('[syncAndWait] Fresh client dialog detected, confirming...');
@@ -1837,12 +1934,17 @@ export class SuperSyncPage extends BasePage {
       return true;
     }
 
-    // 2. Local-data conflict dialog
+    // 2. Whole-dataset conflict dialog: never resolved silently. Only a caller
+    //    that opted in with `conflictDialog` gets an answer; everyone else fails.
     if (await this.conflictDialog.isVisible().catch(() => false)) {
+      if (!conflictDialog) {
+        throw this._unexpectedConflictDialogError();
+      }
       console.log(
-        `[syncAndWait] Conflict dialog detected, using ${useLocal ? 'local' : 'remote'} data...`,
+        `[syncAndWait] Whole-dataset conflict dialog detected, keeping ${conflictDialog} data (opted in)...`,
       );
-      await this.resolveConflictDialog(useLocal ? 'local' : 'remote');
+      await this.resolveConflictDialog(conflictDialog);
+      await this._finishConflictResolution();
       return true;
     }
 
@@ -2048,17 +2150,17 @@ export class SuperSyncPage extends BasePage {
     }
   }
 
-  private async _waitForSyncCompletion(options: {
-    timeout: number;
-    useLocal: boolean;
-  }): Promise<void> {
+  private async _waitForSyncCompletion({
+    timeout,
+    ...dialogChoices
+  }: { timeout: number } & SyncDialogChoices): Promise<void> {
     const startTime = Date.now();
     let lastSnapshot: SyncCompletionSnapshot | undefined;
 
-    while (Date.now() - startTime < options.timeout) {
+    while (Date.now() - startTime < timeout) {
       this._throwIfUnexpectedNativeDialog();
 
-      const handledDialog = await this._handleSyncDialogs(options.useLocal);
+      const handledDialog = await this._handleSyncDialogs(dialogChoices);
       if (handledDialog) {
         await this.page.waitForTimeout(500);
         continue;
@@ -2068,7 +2170,7 @@ export class SuperSyncPage extends BasePage {
 
       if (lastSnapshot.errorVisible) {
         await this.page.waitForTimeout(500);
-        const handledErrorDialog = await this._handleSyncDialogs(options.useLocal);
+        const handledErrorDialog = await this._handleSyncDialogs(dialogChoices);
         if (handledErrorDialog) {
           continue;
         }
@@ -2083,7 +2185,7 @@ export class SuperSyncPage extends BasePage {
     }
 
     throw new Error(
-      `syncAndWait timed out waiting for completion indicator after ${options.timeout}ms. Last state: ${JSON.stringify(lastSnapshot)}`,
+      `syncAndWait timed out waiting for completion indicator after ${timeout}ms. Last state: ${JSON.stringify(lastSnapshot)}`,
     );
   }
 
@@ -2094,20 +2196,38 @@ export class SuperSyncPage extends BasePage {
    * Automatically handles:
    * - Native window.confirm dialogs (fresh client sync confirmation)
    * - Fresh client confirmation dialogs (Angular Material)
-   * - Conflict resolution (uses "Use All Remote" by default)
    * - Sync import conflicts (uses remote by default)
+   * - Encryption password, enable-encryption and decryption-failed dialogs
+   *
+   * Deliberately NOT handled by default: the whole-dataset conflict dialog
+   * (`dialog-sync-conflict`, "Keep local" / "Keep remote"). It is the fail-closed
+   * stop (SYNC_MULTI_ENTITY_UNSUPPORTED, or a first-sync LocalDataConflictError),
+   * and choosing a side replaces ALL data on the other side, so the helper throws
+   * instead of hiding it. A test that intentionally exercises the dialog passes
+   * `conflictDialog`, or asserts on it and calls resolveConflictDialog() itself.
    *
    * Dialogs are checked continuously during the sync wait, not just once at the start.
    * This prevents sync hangs when dialogs appear mid-sync.
    *
-   * @param options.useLocal - For conflicts, use local data instead of remote (default: false)
+   * @param options.useLocal - For sync import conflicts (and the native confirms that go
+   *   with them), keep this device's data instead of the server's (default: false).
+   *   Does not answer the whole-dataset dialog: see `conflictDialog`.
+   * @param options.conflictDialog - Explicit opt-in to answer the whole-dataset conflict
+   *   dialog by keeping 'local' or 'remote' data. Omit it and that dialog fails the sync.
+   *   After answering it waits for the forced upload/download to finish and runs one more
+   *   normal cycle, as a test would by hand, so the sync ends confirmed.
    * @param options.timeout - Maximum time to wait for sync (default: 30000ms)
    */
   async syncAndWait(
-    options: { useLocal?: boolean; timeout?: number } = {},
+    options: {
+      useLocal?: boolean;
+      conflictDialog?: ConflictDialogChoice;
+      timeout?: number;
+    } = {},
   ): Promise<void> {
     // Increased default timeout from 15s to 30s for multi-client scenarios under load
-    const { useLocal = false, timeout = 30000 } = options;
+    const { useLocal = false, conflictDialog, timeout = 30000 } = options;
+    const dialogChoices: SyncDialogChoices = { useLocal, conflictDialog };
 
     this._throwIfUnexpectedNativeDialog();
 
@@ -2126,7 +2246,7 @@ export class SuperSyncPage extends BasePage {
 
     try {
       // Handle any pre-existing dialog (e.g., from auto-sync) before clicking sync
-      await this._handleSyncDialogs(useLocal);
+      await this._handleSyncDialogs(dialogChoices);
 
       // A visible check icon can be up to a minute old. Arm a SuperSync ops
       // response waiter before clicking; only after a successful response finishes
@@ -2140,7 +2260,7 @@ export class SuperSyncPage extends BasePage {
       this._throwIfUnexpectedNativeDialog();
       await this._waitForSyncCompletion({
         timeout: remainingTimeout(syncStartedAt, timeout),
-        useLocal,
+        ...dialogChoices,
       });
 
       // Post-sync dialog check: _promptSuperSyncEncryptionIfNeeded() runs AFTER
@@ -2148,7 +2268,7 @@ export class SuperSyncPage extends BasePage {
       // enter_password dialogs asynchronously (lazy import causes delay).
       // Give these dialogs time to appear and handle them.
       await this.page.waitForTimeout(1500);
-      const postSyncDialog = await this._handleSyncDialogs(useLocal);
+      const postSyncDialog = await this._handleSyncDialogs(dialogChoices);
       if (postSyncDialog) {
         console.log(
           '[syncAndWait] Post-sync encryption dialog handled, waiting for re-sync...',
@@ -2162,11 +2282,11 @@ export class SuperSyncPage extends BasePage {
         if (reSpinner) {
           await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
         }
-        await this._waitForSyncCompletion({ timeout: 10000, useLocal });
+        await this._waitForSyncCompletion({ timeout: 10000, ...dialogChoices });
 
         // Check for another dialog after re-sync (e.g., enter_password after enable_encryption)
         await this.page.waitForTimeout(1500);
-        const secondDialog = await this._handleSyncDialogs(useLocal);
+        const secondDialog = await this._handleSyncDialogs(dialogChoices);
         if (secondDialog) {
           console.log(
             '[syncAndWait] Second post-sync dialog handled, waiting for re-sync...',
@@ -2178,7 +2298,7 @@ export class SuperSyncPage extends BasePage {
           if (reSpinner2) {
             await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
           }
-          await this._waitForSyncCompletion({ timeout: 10000, useLocal });
+          await this._waitForSyncCompletion({ timeout: 10000, ...dialogChoices });
         }
       }
 
@@ -2204,9 +2324,9 @@ export class SuperSyncPage extends BasePage {
           `[syncAndWait] ${pending} trailing op(s) remained after sync settled — ` +
             `flushing (attempt ${flush + 1}/3).`,
         );
-        await this._handleSyncDialogs(useLocal);
+        await this._handleSyncDialogs(dialogChoices);
         await this._triggerSuperSyncCycle(10000);
-        await this._waitForSyncCompletion({ timeout: 10000, useLocal });
+        await this._waitForSyncCompletion({ timeout: 10000, ...dialogChoices });
       }
 
       const remainingPending = await this._getUnsyncedOperationCount();

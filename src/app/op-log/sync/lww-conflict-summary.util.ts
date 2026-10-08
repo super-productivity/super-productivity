@@ -99,3 +99,42 @@ export const findLwwContentConflicts = (
     ...(discardedTitle !== undefined ? { discardedTitle } : {}),
   }));
 };
+
+/**
+ * `findLwwContentConflicts` for field patches: a patch keeps every field only
+ * one side wrote, so the loser's content edit is discarded only where the
+ * winner wrote the same field (e.g. both renamed the task).
+ */
+export const findPatchContentConflicts = (
+  patches: LwwResolvedConflict<Operation, EntityConflict>[],
+  payloadKeyFor: (entityType: string) => string,
+): LwwContentConflict[] =>
+  findLwwContentConflicts(patches, payloadKeyFor).flatMap((found) => {
+    const patch = patches.find(
+      ({ conflict }) =>
+        conflict.entityType === 'TASK' && conflict.entityId === found.entityId,
+    );
+    if (!patch) return [];
+    const { winner, conflict } = patch;
+    const winnerOps = winner === 'remote' ? conflict.remoteOps : conflict.localOps;
+    const written = new Set(
+      winnerOps
+        .filter((op) => op.opType === OpType.Update)
+        .flatMap((op) =>
+          Object.keys(
+            extractUpdateChanges(op.payload, payloadKeyFor(conflict.entityType)),
+          ),
+        ),
+    );
+    const discardedFields = found.discardedFields.filter((field) => written.has(field));
+    if (discardedFields.length === 0) return [];
+    return [
+      {
+        entityId: found.entityId,
+        discardedFields,
+        ...(written.has('title') && found.discardedTitle !== undefined
+          ? { discardedTitle: found.discardedTitle }
+          : {}),
+      },
+    ];
+  });

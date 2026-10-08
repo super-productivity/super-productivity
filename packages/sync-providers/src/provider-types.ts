@@ -76,7 +76,6 @@ export interface FileSyncProvider<
     isForceOverwrite?: boolean,
   ): Promise<FileRevResponse>;
   removeFile(targetPath: string): Promise<void>;
-  listFiles?(targetPath: string): Promise<string[]>;
 }
 
 export const isFileSyncProvider = <

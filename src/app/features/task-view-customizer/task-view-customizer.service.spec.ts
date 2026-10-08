@@ -266,8 +266,8 @@ describe('TaskViewCustomizerService', () => {
 
   it('should filter by priority', () => {
     const tasks: TaskWithSubTasks[] = [
-      { ...mockTasks[0], id: 'high', priority: 'high' },
-      { ...mockTasks[1], id: 'medium', priority: 'medium' },
+      { ...mockTasks[0], id: 'high', priority: 3 },
+      { ...mockTasks[1], id: 'medium', priority: 2 },
       { ...mockTasks[2], id: 'high-2', priority: 'high' },
       { ...mockTasks[3], id: 'none' },
     ];
@@ -316,8 +316,8 @@ describe('TaskViewCustomizerService', () => {
     const tasks: TaskWithSubTasks[] = [
       { ...mockTasks[0], id: 'none' },
       { ...mockTasks[1], id: 'low', priority: 'low' },
-      { ...mockTasks[2], id: 'medium-first', priority: 'medium' },
-      { ...mockTasks[3], id: 'high', priority: 'high' },
+      { ...mockTasks[2], id: 'medium-first', priority: 2 },
+      { ...mockTasks[3], id: 'high', priority: 3 },
       { ...mockTasks[0], id: 'medium-second', priority: 'medium' },
     ];
 
@@ -1483,6 +1483,39 @@ describe('TaskViewCustomizerService', () => {
       expect(newService.selectedGroup()).toEqual(DEFAULT_OPTIONS.group);
       expect(newService.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
     });
+
+    for (const [legacy, numeric] of [
+      ['high', 3],
+      ['medium', 2],
+      ['low', 1],
+    ] as const) {
+      it(`restores the saved ${legacy} priority preset for both task encodings`, () => {
+        localStorage.setItem(
+          LS.TASK_VIEW_CUSTOMIZER_BY_CONTEXT,
+          JSON.stringify({
+            ['TAG:TODAY']: {
+              filter: { type: FILTER_OPTION_TYPE.priority, preset: legacy },
+            },
+          }),
+        );
+        const newService = buildService(
+          of({ activeId: 'TODAY', activeType: WorkContextType.TAG }),
+        );
+        const filter = newService.selectedFilter();
+        expect(filter.preset).toBe(String(numeric));
+        expect(filter.label).toBe(T.F.TASK_VIEW.CUSTOMIZER.FILTER_PRIORITY);
+        const candidates: TaskWithSubTasks[] = [
+          { ...mockTasks[0], id: 'legacy', priority: legacy },
+          { ...mockTasks[1], id: 'numeric', priority: numeric },
+          { ...mockTasks[2], id: 'none', priority: null },
+        ];
+        expect(
+          newService['applyFilter'](candidates, filter.type, filter.preset!).map(
+            (t) => t.id,
+          ),
+        ).toEqual(['legacy', 'numeric']);
+      });
+    }
 
     it('should persist per-context state when options change', (done) => {
       service.setFilter(savedFilter);

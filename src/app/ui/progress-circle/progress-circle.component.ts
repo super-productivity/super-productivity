@@ -1,10 +1,4 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  booleanAttribute,
-  computed,
-  input,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
 const STROKE_WIDTH = 2;
 const VIEWBOX_SIZE = 44;
@@ -40,9 +34,6 @@ export class ProgressCircleComponent {
   readonly progress = input<number | null, number | null | undefined>(null, {
     transform: clampProgress,
   });
-  readonly isPulsing = input<boolean, unknown>(false, {
-    transform: booleanAttribute,
-  });
   readonly color = input<string | null, string | null | undefined>(null, {
     transform: (value) => value ?? null,
   });
@@ -54,7 +45,7 @@ export class ProgressCircleComponent {
   readonly circumference = 2 * Math.PI * this.radius;
   readonly viewBox = `0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`;
 
-  readonly showProgress = computed(() => this.progress() !== null && !this.isPulsing());
+  readonly showProgress = computed(() => this.progress() !== null);
 
   readonly progressRatio = computed(() => {
     const value = this.progress();

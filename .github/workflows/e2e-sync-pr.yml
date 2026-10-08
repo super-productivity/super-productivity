@@ -39,6 +39,7 @@ jobs:
     outputs:
       supersync: ${{ steps.detect.outputs.supersync }}
       webdav: ${{ steps.detect.outputs.webdav }}
+      fuzz: ${{ steps.detect.outputs.fuzz }}
     steps:
       - name: Check out Git repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
@@ -59,6 +60,7 @@ jobs:
             echo "No PR base (manual run) — running both suites."
             echo "supersync=true" >> "$GITHUB_OUTPUT"
             echo "webdav=true" >> "$GITHUB_OUTPUT"
+            echo "fuzz=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -82,19 +84,25 @@ jobs:
           COMMON="src/app/imex/sync/|src/app/op-log/|src/app/pfapi/|src/app/root-store/|src/app/features/[^/]+/store/|${PERSISTENT_ACTION_PATHS}|${SYNC_UTILITY_PATHS}|packages/sync-providers/|packages/sync-core/|packages/shared-schema/|docker-compose\.yaml$|e2e/tests/sync/|e2e/helpers/|e2e/pages/|e2e/fixtures/|e2e/constants/|e2e/utils/|e2e/playwright\.config\.ts$|e2e/global-setup\.ts$|\.github/workflows/e2e-sync-pr\.yml$"
           # SuperSync also depends on the server package and its compose override.
           SUPERSYNC_PATTERN="^(${COMMON}|packages/super-sync-server/|docker-compose\.supersync\.yaml\$)"
-          WEBDAV_PATTERN="^(${COMMON})"
+          # WebDAV also depends on its E2E server image and precondition probe.
+          WEBDAV_PATTERN="^(${COMMON}|e2e/webdav-server/|scripts/wait-for-webdav\.sh\$)"
+          # The sync fuzz harness runs client sync code only, not the E2E helpers.
+          FUZZ_PATTERN="^(src/app/imex/sync/|src/app/op-log/|src/app/pfapi/|src/app/root-store/|src/app/features/[^/]+/store/|${PERSISTENT_ACTION_PATHS}|${SYNC_UTILITY_PATHS}|packages/sync-providers/|packages/sync-core/|packages/shared-schema/|tools/sync-fuzz-compare\.js\$|\.github/workflows/e2e-sync-pr\.yml\$)"
 
           supersync=false
           webdav=false
+          fuzz=false
           # here-string (not echo|grep) so a first-line match can't SIGPIPE the
           # upstream under `set -o pipefail`; if-condition so a no-match (grep
           # exit 1) does not trip `set -e`.
           if grep -Eq "${SUPERSYNC_PATTERN}" <<< "${CHANGED_FILES}"; then supersync=true; fi
           if grep -Eq "${WEBDAV_PATTERN}" <<< "${CHANGED_FILES}"; then webdav=true; fi
+          if grep -Eq "${FUZZ_PATTERN}" <<< "${CHANGED_FILES}"; then fuzz=true; fi
 
-          echo "→ supersync=${supersync} webdav=${webdav}"
+          echo "→ supersync=${supersync} webdav=${webdav} fuzz=${fuzz}"
           echo "supersync=${supersync}" >> "$GITHUB_OUTPUT"
           echo "webdav=${webdav}" >> "$GITHUB_OUTPUT"
+          echo "fuzz=${fuzz}" >> "$GITHUB_OUTPUT"
 
   # Job 1: build the frontend once, shared by both suites.
   build:
@@ -166,17 +174,19 @@ jobs:
         run: cp .env.example .env
 
       - name: Start Sync Docker Services
-        # Retry to survive transient Docker Hub pull timeouts / rate limits;
-        # timeout_minutes also bounds the otherwise-unbounded health-wait loop.
+        # Retry to survive transient Docker Hub pull / Alpine mirror failures.
+        # set -eu fails an attempt as soon as the build fails; without it the
+        # health wait spun until timeout_minutes, burning the job's time budget.
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
         with:
-          timeout_minutes: 12
+          timeout_minutes: 6
           max_attempts: 3
-          retry_wait_seconds: 20
+          retry_wait_seconds: 60
           command: |
-            docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync webdav
+            set -eu
+            docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync webdav-e2e
             echo "⏳ Waiting for SuperSync server..."
-            until curl -s http://localhost:1901/health > /dev/null 2>&1; do sleep 1; done
+            timeout 180 sh -c 'until curl -s http://localhost:1901/health > /dev/null 2>&1; do sleep 1; done'
             echo "✓ SuperSync server ready!"
             chmod +x ./scripts/wait-for-webdav.sh
             ./scripts/wait-for-webdav.sh
@@ -195,7 +205,7 @@ jobs:
           # failure out of the log tail the GitHub API and `gh run view --log-failed`
           # return, leaving the actual failure unreadable.
           echo "=== SuperSync Logs (last 400 lines per container) ==="
-          docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml logs --tail=400 supersync webdav
+          docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml logs --tail=400 supersync webdav-e2e
 
       - name: Stop Docker Services
         if: always()
@@ -245,7 +255,7 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 20
           command: |
-            docker compose up -d webdav
+            docker compose up -d --build webdav-e2e
             chmod +x ./scripts/wait-for-webdav.sh
             ./scripts/wait-for-webdav.sh
 
@@ -258,7 +268,7 @@ jobs:
         if: ${{ failure() }}
         run: |
           echo "=== WebDAV Logs (last 400 lines) ==="
-          docker compose logs --tail=400 webdav
+          docker compose logs --tail=400 webdav-e2e
 
       - name: Stop Docker Services
         if: always()
@@ -271,6 +281,32 @@ jobs:
           name: e2e-sync-pr-webdav-results-${{ github.run_id }}
           path: .tmp/e2e-test-results/**/*.*
           retention-days: 30
+
+  # Sync fuzz seeds that newly fail against the base. The pinned traces in
+  # `npm test` only report signatures no pin explains, so a known failure
+  # turning more frequent passes them; this comparison caught two such
+  # regressions by hand in #10398. Informational: not part of any gate.
+  sync-fuzz-compare:
+    name: Sync Fuzz Compare
+    needs: detect
+    if: needs.detect.outputs.fuzz == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup E2E Environment
+        uses: ./.github/actions/setup-e2e
+
+      # On a PR, HEAD is the merge commit and HEAD^1 the live base tip.
+      - name: Compare fuzz signatures with the base
+        env:
+          BASE_REF: ${{ github.event_name == 'pull_request' && 'HEAD^1' || 'origin/master' }}
+        run: npm run sync-fuzz:compare -- "${BASE_REF}"
 
   # Job 4: SuperSync required status check. Always runs, so it always reports.
   # Mark this job's name ("SuperSync E2E Gate") required in branch protection.

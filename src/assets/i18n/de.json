@@ -1419,7 +1419,7 @@
       "D_PERMISSION": {
         "DISABLE_SYNC": "Synchronisierung deaktivieren",
         "PERM_FILE": "Berechtigung erteilen",
-        "TEXT": "<p>Deine Dateiberechtigung für die lokale Synchronisierung wurde widerrufen.<\\/p>",
+        "TEXT": "<p>Deine Dateiberechtigung für die lokale Synchronisierung wurde widerrufen.</p>",
         "TITLE": "Sync: Lokale Dateiberechtigung verweigert"
       },
       "D_RESTORE": {
@@ -1643,8 +1643,8 @@
         },
         "TITLE": "Sync",
         "WEB_DAV": {
-          "CORS_INFO": "<p><strong>Experimental!!</strong> <strong>Damit dies für Mobil oder den Browser funktioniert, musst du Super Productivity für CORS-Anfragen bei deiner Nextcloud-Instanz auf die Whitelist setzen</strong>, dies kann negative Auswirkungen auf die Sicherheit haben! Weitere Informationen findest du <a href='https://github.com/nextcloud/server/issues/3131'>in diesem Thread</a>. Ein Ansatz, um dies auch mobil zu ermöglichen, ist das Whitelisting \"https://app.super-productivity.com\" über die Nextcloud-App <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Benutzung auf eigene Gefahr!",
-          "D_SYNC_FOLDER_PATH": "Pfad relativ zum WebDAV-Server-Stamm, in dem die Synchronisationsdateien gespeichert werden (z.B. '\\/super-productivity' oder '\\/'). Dies ist NICHT der interne Verzeichnispfad deines Servers.",
+          "CORS_INFO": "<p><strong>Experimental!!</strong> <strong>Damit dies für Mobil oder den Browser funktioniert, musst du Super Productivity für CORS-Anfragen bei deiner Nextcloud-Instanz auf die Whitelist setzen</strong>, dies kann negative Auswirkungen auf die Sicherheit haben! Weitere Informationen findest du <a href='https://github.com/nextcloud/server/issues/3131'>in diesem Thread</a>. Ein Ansatz, um dies auch mobil zu ermöglichen, ist das Whitelisting \"https://app.super-productivity.com\" über die Nextcloud-App <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>. Benutzung auf eigene Gefahr!",
+          "D_SYNC_FOLDER_PATH": "Pfad relativ zum WebDAV-Server-Stamm, in dem die Synchronisationsdateien gespeichert werden (z.B. '/super-productivity' oder '/'). Dies ist NICHT der interne Verzeichnispfad deines Servers.",
           "INFO": "Leider unterscheiden sich WebDAV-Implementierungen stark voneinander. Super Productivity funktioniert bekanntermaßen gut mit Nextcloud, <strong>aber möglicherweise nicht mit deinem Anbieter</strong>.",
           "L_BASE_URL": "Basis-URL",
           "L_PASSWORD": "Passwort",
@@ -1684,8 +1684,8 @@
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Remote-Daten werden derzeit geschrieben",
         "ERROR_PAYLOAD_TOO_LARGE": "Synchronisierungsfehler: deine Daten sind zu groß zum Hochladen.\n\nDies passiert, wenn du viele archivierte Aufgaben hast. Deine Daten wurden NICHT synchronisiert!\n\nBitte kontaktiere den Support für Hilfe.",
         "ERROR_PERMISSION": "Dateizugriff verweigert. Bitte überprüfe deine Dateisystemberechtigungen.",
-        "ERROR_PERMISSION_FLATPAK": "Dateizugriff verweigert. Gewähre Dateisystemberechtigungen über Flatseal oder verwende einen Pfad innerhalb von ~\\/var\\/app\\/",
-        "ERROR_PERMISSION_SNAP": "Dateizugriff verweigert. Führe 'snap connect super-productivity:home' aus oder verwende einen Pfad innerhalb von ~\\/snap\\/super-productivity\\/common\\/",
+        "ERROR_PERMISSION_FLATPAK": "Dateizugriff verweigert. Gewähre Dateisystemberechtigungen über Flatseal oder verwende einen Pfad innerhalb von ~/var/app/",
+        "ERROR_PERMISSION_SNAP": "Dateizugriff verweigert. Führe 'snap connect super-productivity:home' aus oder verwende einen Pfad innerhalb von ~/snap/super-productivity/common/",
         "ERROR_REMOTE_FILE_CORRUPTED": "Remote-Synchronisationsdaten sind nicht lesbar (möglicherweise abgeschnitten oder beschädigt). Deine lokalen Daten sind sicher. Du kannst die Remote-Daten mit deinen lokalen Daten überschreiben.",
         "ERROR_REMOTE_FILE_EMPTY": "Remote-Synchronisationsdatei ist leer. Das kann nach einer unterbrochenen Synchronisation passieren. Remote-Daten mit deinen lokalen Daten überschreiben?",
         "ERROR_REMOTE_FILE_LOCKED": "Remote-Synchronisationsdatei ist vom Server gesperrt. Das kann sich beim nächsten Synchronisationsversuch lösen.",
@@ -2131,7 +2131,7 @@
         "REMINDER_ADDED": "Geplante Aufgabe \"{{title}}\"",
         "REMINDER_DELETED": "Erinnerung für Aufgabe gelöscht",
         "REMINDER_UPDATED": "Erinnerung für Aufgabe \"{{title}}\" aktualisiert",
-        "TASK_ALREADY_EXISTS": "Aufgabe <strong>{{title}}<\\/strong> existiert bereits",
+        "TASK_ALREADY_EXISTS": "Aufgabe <strong>{{title}}</strong> existiert bereits",
         "TASK_CREATED": "Erstellte Aufgabe \"{{taskTitle}}\""
       },
       "SELECT_OR_CREATE": "Aufgabe auswählen oder erstellen",

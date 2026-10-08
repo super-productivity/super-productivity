@@ -2,7 +2,7 @@
   <div class="wrapper">
     @if (sc.type === SimpleCounterType.StopWatch) {
       @if (sc.isOn) {
-        <progress-circle [isPulsing]="true"></progress-circle>
+        <progress-circle [progress]="100"></progress-circle>
       }
       <button
         (click)="toggleStopwatch()"

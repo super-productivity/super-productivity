@@ -8,7 +8,10 @@ import {
 } from '../core/operation.types';
 import { getLwwEntityType } from '../core/lww-update-action-types';
 import { getEntityConfig, isLwwPayloadIdCanonical } from '../core/entity-registry';
-import { PersistentAction } from '../core/persistent-action.interface';
+import {
+  ENVELOPE_SHADOWED_KEYS,
+  PersistentAction,
+} from '../core/persistent-action.interface';
 import { SyncLog } from '../../core/log';
 import { isValidDBDateStr } from '../../util/get-db-date-str';
 import { applyClearedFields } from '../../util/cleared-update-fields';
@@ -27,6 +30,16 @@ const isValidDbDate = (value: unknown): value is string =>
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
+
+/** The LWW entity's own fields that the action envelope overwrites, if any. */
+const pickEnvelopeShadowedFields = (
+  entity: Record<string, unknown>,
+): Record<string, unknown> | undefined => {
+  const keys = ENVELOPE_SHADOWED_KEYS.filter((key) => entity[key] !== undefined);
+  return keys.length > 0
+    ? Object.fromEntries(keys.map((key) => [key, entity[key]]))
+    : undefined;
+};
 
 /**
  * Legacy operations did not capture the originating logical day or timezone.
@@ -380,6 +393,13 @@ export const convertOpToAction = (
       lwwPayload.clearedFields as string[],
     ) as Record<string, unknown>;
   }
+  // The envelope below overwrites the entity's own `type`/`meta` fields
+  // (SimpleCounter.type). Carry the sender's values so lwwUpdateMetaReducer
+  // applies them instead of keeping the receiver's own.
+  const lwwShadowedFields =
+    !isFullStateOp && lwwEntityType !== undefined && isRecord(actionPayload)
+      ? pickEnvelopeShadowedFields(actionPayload)
+      : undefined;
   return {
     ...actionPayload,
     type: replayActionType,
@@ -405,6 +425,7 @@ export const convertOpToAction = (
       ...(lwwPayload?.projectMoveFootprint !== undefined
         ? { projectMoveFootprint: lwwPayload.projectMoveFootprint }
         : {}),
+      ...(lwwShadowedFields ? { lwwShadowedFields } : {}),
     },
   };
 };

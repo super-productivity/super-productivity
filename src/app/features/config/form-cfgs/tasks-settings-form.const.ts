@@ -52,6 +52,15 @@ export const TASKS_SETTINGS_FORM_CFG: ConfigFormSection<TasksConfig> = {
       },
     },
     {
+      key: 'priorityIconPreset',
+      // Shows each preset's icons next to its name; see main.ts for registration.
+      type: 'priority-icon-preset-select',
+      defaultValue: 'chevrons',
+      templateOptions: {
+        label: T.GCF.TASKS.PRIORITY_ICON_PRESET,
+      },
+    },
+    {
       key: 'notesTemplate',
       type: 'textarea',
       templateOptions: {

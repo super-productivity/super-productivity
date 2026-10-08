@@ -7,6 +7,7 @@ import type { SyncLogger } from '@sp/sync-core';
 import type { SyncCredentialStorePort } from '../credential-store-port';
 import {
   AuthFailSPError,
+  ClientUpdateRequiredSPError,
   MissingCredentialsSPError,
   NetworkUnavailableSPError,
 } from '../errors';
@@ -48,6 +49,12 @@ const SUPERSYNC_WEB_MAX_RETRIES = 2;
 
 /** Max chars of server `error` field threaded into thrown `Error.message`. */
 const SERVER_ERROR_REASON_MAX_CHARS = 80;
+
+/**
+ * Mirrors `SUPER_SYNC_ERROR_CODES.CLIENT_UPDATE_REQUIRED` in `@sp/shared-schema`,
+ * which this package may not import; an app-side spec pins the two together.
+ */
+export const SUPER_SYNC_CLIENT_UPDATE_REQUIRED_CODE = 'CLIENT_UPDATE_REQUIRED';
 
 /**
  * Internal tag for non-2xx HTTP errors thrown by this provider, so
@@ -103,8 +110,10 @@ export interface SuperSyncDeps {
   webRequestRetryDelay?: (ms: number) => Promise<void>;
   /**
    * Bare semver of the running app (`18.22.0`, no channel suffix), sent as the
-   * `appVersion` download query parameter so the server can tell which
-   * accounts still have clients that treat REPAIR as a reset (#9962). A query
+   * `appVersion` query parameter on every request: downloads let the server
+   * tell which accounts still have clients that treat REPAIR as a reset
+   * (#9962), and a future minimum-version floor must also see it on uploads
+   * and resets (docs/sync-and-op-log/client-version-floor.md). A query
    * parameter, not a header: older servers strip it as an unknown key, and a
    * browser client needs no new CORS allowance. Omitted → not sent.
    */
@@ -301,9 +310,6 @@ export class SuperSyncProvider
     }
     if (limit !== undefined) {
       params.set('limit', String(limit));
-    }
-    if (this._deps.appVersion) {
-      params.set('appVersion', this._deps.appVersion);
     }
 
     const response = await this._fetchApi<unknown>(
@@ -620,6 +626,21 @@ export class SuperSyncProvider
   }
 
   /**
+   * Request URL with the app version appended as a query parameter (see
+   * `SuperSyncDeps.appVersion`). `path` stays version-free because it is
+   * also what the request logs record.
+   */
+  private _buildUrl(cfg: SuperSyncPrivateCfg, path: string): string {
+    const url = `${this._resolveBaseUrl(cfg)}${path}`;
+    const { appVersion } = this._deps;
+    if (!appVersion) {
+      return url;
+    }
+    const separator = path.includes('?') ? '&' : '?';
+    return `${url}${separator}appVersion=${encodeURIComponent(appVersion)}`;
+  }
+
+  /**
    * Generates a storage key unique to this server URL + access token
    * so different users on the same server get separate `lastServerSeq`
    * tracking. The cached value is invalidated in `setPrivateCfg`
@@ -652,11 +673,21 @@ export class SuperSyncProvider
   }
 
   /**
-   * Throws `AuthFailSPError` for 401/403. Body is NOT retained on the
-   * error (would land in `AdditionalLogErrorBase.additionalLog` and
-   * leak user content from a malformed response).
+   * Throws `ClientUpdateRequiredSPError` for the minimum-version refusal
+   * (matched by `errorCode`, whatever the status), then `AuthFailSPError`
+   * for 401/403. The refusal is checked first so it can never count as an
+   * auth failure, which signs the user out after three strikes. Body is NOT
+   * retained on either error (would land in
+   * `AdditionalLogErrorBase.additionalLog` and leak user content from a
+   * malformed response).
    */
   private _checkHttpStatus(status: number, body?: string): void {
+    if (
+      this._extractServerErrorDetails(body, status).errorCode ===
+      SUPER_SYNC_CLIENT_UPDATE_REQUIRED_CODE
+    ) {
+      throw new ClientUpdateRequiredSPError();
+    }
     if (status === 401 || status === 403) {
       const { reason } = this._extractServerErrorDetails(body, status);
       throw new AuthFailSPError(reason || `Authentication failed (HTTP ${status})`);
@@ -794,15 +825,16 @@ export class SuperSyncProvider
     if (networkError) {
       throw new NetworkUnavailableSPError();
     }
-    // Our own thrown errors (`AuthFailSPError`, `MissingCredentialsSPError`,
-    // `SuperSyncHttpStatusError` from the non-2xx branch) carry only
-    // scrubbed content and propagate unchanged. Foreign errors from the
-    // native HTTP executor (e.g. iOS TLS-cert errors like "Hostname
-    // mismatch for example.com") can embed the resolved hostname in
+    // Our own thrown errors (`AuthFailSPError`, `ClientUpdateRequiredSPError`,
+    // `MissingCredentialsSPError`, `SuperSyncHttpStatusError` from the non-2xx
+    // branch) carry only scrubbed content and propagate unchanged. Foreign
+    // errors from the native HTTP executor (e.g. iOS TLS-cert errors like
+    // "Hostname mismatch for example.com") can embed the resolved hostname in
     // `.message`. Replace those with a name-only surface; the logger
     // above also records only error name/code metadata.
     if (
       error instanceof AuthFailSPError ||
+      error instanceof ClientUpdateRequiredSPError ||
       error instanceof MissingCredentialsSPError ||
       error instanceof SuperSyncHttpStatusError
     ) {
@@ -817,6 +849,7 @@ export class SuperSyncProvider
   private _isRetryableWebRequestError(error: unknown): boolean {
     if (
       error instanceof AuthFailSPError ||
+      error instanceof ClientUpdateRequiredSPError ||
       error instanceof MissingCredentialsSPError ||
       error instanceof SuperSyncHttpStatusError
     ) {
@@ -839,8 +872,7 @@ export class SuperSyncProvider
     path: string,
     options: RequestInit & { noRetry?: boolean; body?: string },
   ): Promise<T> {
-    const baseUrl = this._resolveBaseUrl(cfg);
-    const url = `${baseUrl}${path}`;
+    const url = this._buildUrl(cfg, path);
     const sanitizedToken = this._sanitizeToken(cfg.accessToken);
 
     if (this.isNativePlatform) {
@@ -873,8 +905,7 @@ export class SuperSyncProvider
     path: string,
     compressedBody: Uint8Array,
   ): Promise<T> {
-    const baseUrl = this._resolveBaseUrl(cfg);
-    const url = `${baseUrl}${path}`;
+    const url = this._buildUrl(cfg, path);
     const sanitizedToken = this._sanitizeToken(cfg.accessToken);
 
     const headers = new Headers();
@@ -1056,8 +1087,7 @@ export class SuperSyncProvider
     retryOpts?: { noRetry?: boolean },
   ): Promise<T> {
     const startTime = Date.now();
-    const baseUrl = this._resolveBaseUrl(cfg);
-    const url = `${baseUrl}${path}`;
+    const url = this._buildUrl(cfg, path);
     const sanitizedToken = this._sanitizeToken(cfg.accessToken);
 
     const headers: Record<string, string> = {

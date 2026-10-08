@@ -49,7 +49,6 @@
     [class.is-multi-selecting]="isMultiSelecting()"
     [class.has-vertical-action-bar]="isVerticalActionBar()"
     [class.app-entrance]="isAppEntrance()"
-    [class.is-onboarding]="isShowOnboardingPresets()"
     [dir]="isRTL ? 'rtl' : 'ltr'"
   >
     <magic-side-nav
@@ -91,13 +90,6 @@
   </div>
 }
 <!-- -->
-
-@if (isShowOnboardingPresets()) {
-  <onboarding-preset-selection
-    (presetSelected)="onPresetSelected()"
-    (dismissed)="onOnboardingDismissed()"
-  ></onboarding-preset-selection>
-}
 
 @if (onboardingHintService.currentStep()) {
   <onboarding-hint></onboarding-hint>

@@ -330,6 +330,69 @@ describe('TaskMultiSelectService', () => {
     });
   });
 
+  describe('section ranges', () => {
+    beforeEach(() => {
+      const scope = document.createElement('div');
+      scope.setAttribute('data-section-selection-scope', '');
+      const main = root.querySelector('.task-list-inner[data-list-id="PARENT"]')!;
+      root.prepend(scope);
+      scope.append(main);
+      const section = document.createElement('div');
+      section.innerHTML =
+        '<div class="task-list-inner" data-list-id="PARENT"><task data-task-id="f" tabindex="0"></task><task data-task-id="g" tabindex="0"></task></div>';
+      scope.append(section);
+    });
+
+    it('ranges from root to a section without including subtasks or done tasks', () => {
+      service.toggle('c');
+      service.selectRange('g');
+      expect(selected()).toEqual(['c', 'd', 'f', 'g']);
+    });
+
+    it('ranges upward across sections and shrinks back to its anchor', () => {
+      service.toggle('g');
+      service.selectRange('b');
+      expect(selected()).toEqual(['b', 'c', 'd', 'f', 'g']);
+      service.selectRange('f');
+      expect(selected()).toEqual(['f', 'g']);
+      expect(service.anchorId()).toBe('g');
+    });
+
+    it('keeps an existing selection with additive cross-section ranges', () => {
+      service.toggle('a');
+      service.toggle('d');
+      service.selectRange('g', true);
+      expect(selected()).toEqual(['a', 'd', 'f', 'g']);
+    });
+
+    it('excludes destroyed parent rows still animating out of a section', () => {
+      const removed = root.querySelector<HTMLElement>('[data-task-id="f"]')!;
+      service.removeWhenUnrendered('f', removed);
+      service.toggle('d');
+      service.selectRange('g');
+      expect(selected()).toEqual(['d', 'g']);
+    });
+
+    it('starts a local keyboard range when focus is in another section', () => {
+      service.toggle('a');
+      focusRow('f');
+      expect(extend('down')?.dataset.taskId).toBe('g');
+      expect(selected()).toEqual(['g']);
+      expect(service.anchorId()).toBe('g');
+    });
+
+    it('keeps subtask ranges and keyboard navigation within their own lists', () => {
+      service.toggle('b1');
+      service.selectRange('g');
+      expect(selected()).toEqual(['g']);
+      service.clear();
+      focusRow('d');
+      expect(extend('down')).toBeNull();
+      service.selectAllInListOfFocused();
+      expect(selected()).toEqual(['a', 'b', 'c', 'd']);
+    });
+  });
+
   describe('extendFromFocused', () => {
     it('starts from the focused row and extends downwards', () => {
       focusRow('b');

@@ -73,6 +73,11 @@ import { reorderBoardTasks } from '../reorder-board-tasks';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { checkKeyCombo } from '../../../util/check-key-combo';
 import { ADD_TASK_INLINE_BTN_SELECTOR } from '../../planner/add-task-inline/add-task-inline.const';
+import { getScheduledDateColor } from '../../tasks/util/get-scheduled-date-color';
+import type { ScheduledDateColor } from '../../tasks/util/get-scheduled-date-color';
+import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { DateService } from '../../../core/date/date.service';
+import { TagService } from '../../tag/tag.service';
 
 export interface BoardPanelNavigation {
   direction: -1 | 1 | 'up' | 'down';
@@ -106,6 +111,8 @@ export interface BoardPanelNavigation {
     // Angular host bindings use template attribute syntax.
     // eslint-disable-next-line @typescript-eslint/naming-convention
     '[attr.data-board-selection-scope]': 'panelCfg().id',
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '[style.--scheduled-date-today]': 'tagService.scheduledTodayColor()',
   },
 })
 export class BoardPanelComponent implements TaskCardList {
@@ -120,6 +127,9 @@ export class BoardPanelComponent implements TaskCardList {
   taskService = inject(TaskService);
   _matDialog = inject(MatDialog);
   readonly multiSelect = inject(TaskMultiSelectService);
+  readonly tagService = inject(TagService);
+  private readonly _trackingInterval = inject(GlobalTrackingIntervalService);
+  private readonly _dateService = inject(DateService);
   private _element = inject<ElementRef<HTMLElement>>(ElementRef);
   private _injector = inject(Injector);
   private _destroyRef = inject(DestroyRef);
@@ -532,6 +542,22 @@ export class BoardPanelComponent implements TaskCardList {
 
     this._checkToScheduledTask(panelCfg, taskId);
     this._checkBacklogState(panelCfg, taskId);
+  }
+
+  scheduledDateColor(task: TaskCopy): ScheduledDateColor {
+    if (
+      task.isDone ||
+      this.taskService.currentTaskId() === task.id ||
+      (!task.dueDay && !task.dueWithTime)
+    ) {
+      return '';
+    }
+    return getScheduledDateColor(
+      task,
+      this._trackingInterval.todayDateStr(),
+      this._dateService.getStartOfNextDayDiffMs(),
+      task.dueWithTime ? this._trackingInterval.clockTimestamp() : 0,
+    );
   }
 
   scheduleTask(task: TaskCopy, ev?: MouseEvent): void {

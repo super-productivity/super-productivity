@@ -1756,4 +1756,176 @@ describe('ConflictResolutionService persistence (integration, real store)', () =
     );
     expect(localClientResult[TASK_FEATURE_NAME].ids).toEqual([]);
   });
+
+  describe('field-patch re-sends (#10422)', () => {
+    const createTask = (id: string, overrides: Partial<Task> = {}): Task =>
+      ({
+        ...DEFAULT_TASK,
+        id,
+        title: id,
+        projectId: 'project1',
+        subTaskIds: [],
+        ...overrides,
+      }) as Task;
+    const taskUpdate = (
+      id: string,
+      taskId: string,
+      clientId: string,
+      timestamp: number,
+      changes: Partial<Task>,
+      vectorClock: Record<string, number>,
+    ): Operation => ({
+      id,
+      actionType: ActionType.TASK_SHARED_UPDATE,
+      opType: OpType.Update,
+      entityType: 'TASK',
+      entityId: taskId,
+      payload: {
+        actionPayload: { task: { id: taskId, changes } },
+        entityChanges: [],
+      },
+      clientId,
+      vectorClock,
+      timestamp,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    });
+    const base = createTask('t1', { title: 'Base title', notes: 'Base notes' });
+    const other = createTask('t2');
+    const initialTaskState = createTaskReplayState([base, other], ['t1', 't2']);
+    // The local title is newer than the remote notes edit, so it is re-sent
+    // after the remote side; the other task's edit is nonconflicting.
+    const localTitle = taskUpdate(
+      'local-title',
+      't1',
+      LOCAL_CLIENT_ID,
+      2_000,
+      { title: 'Local title' },
+      { [LOCAL_CLIENT_ID]: 1 },
+    );
+    const remoteNotes = taskUpdate(
+      'remote-notes',
+      't1',
+      REMOTE_CLIENT_ID,
+      1_000,
+      { notes: 'Remote notes' },
+      { [REMOTE_CLIENT_ID]: 1 },
+    );
+    const remoteOther = taskUpdate(
+      'remote-other',
+      't2',
+      REMOTE_CLIENT_ID,
+      1_500,
+      { title: 'Remote other' },
+      { [REMOTE_CLIENT_ID]: 2 },
+    );
+    const conflict: EntityConflict = {
+      entityType: 'TASK',
+      entityId: 't1',
+      localOps: [localTitle],
+      remoteOps: [remoteNotes],
+      suggestedResolution: 'manual',
+    };
+    const fieldShape = (state: RootState): unknown =>
+      Object.fromEntries(
+        Object.entries(state[TASK_FEATURE_NAME].entities).map(([id, task]) => [
+          id,
+          { title: task?.title, notes: task?.notes },
+        ]),
+      );
+
+    beforeEach(async () => {
+      store.select.and.callFake((_selector: unknown, props?: { id?: string }) =>
+        of(props?.id === 't1' ? { ...base, title: 'Local title' } : undefined),
+      );
+      await opLogStore.append(localTitle, 'local');
+    });
+
+    it('writes nothing when the re-send fails to persist, so no remote winner hydrates without it', async () => {
+      const adapter = (opLogStore as unknown as { _adapter: OpLogDbAdapter })._adapter;
+      const originalTransaction = adapter.transaction.bind(adapter);
+      spyOn(adapter, 'transaction').and.callFake(async (stores, mode, callback) =>
+        originalTransaction(stores, mode, async (tx) => {
+          const failingTx = new Proxy(tx, {
+            get: (target, property): unknown => {
+              if (property === 'add') {
+                return async (storeName: string, value: unknown) => {
+                  // Only the re-send carries the local title from here on.
+                  if (
+                    storeName === STORE_NAMES.OPS &&
+                    JSON.stringify(value).includes('Local title')
+                  ) {
+                    throw new Error('injected re-send persistence failure');
+                  }
+                  return target.add(storeName, value);
+                };
+              }
+              const value = Reflect.get(target, property);
+              return typeof value === 'function' ? value.bind(target) : value;
+            },
+          });
+          return callback(failingTx);
+        }),
+      );
+
+      await expectAsync(
+        service.autoResolveConflictsLWW([conflict], [remoteOther]),
+      ).toBeRejectedWithError('injected re-send persistence failure');
+
+      expect((await opLogStore.getOpsAfterSeq(0)).map(({ op }) => op.id)).toEqual([
+        localTitle.id,
+      ]);
+      expect((await opLogStore.getOpById(localTitle.id))?.rejectedAt).toBeUndefined();
+      expect(operationApplier.applyOperations).not.toHaveBeenCalled();
+    });
+
+    it('hydrates a crash before the reducer checkpoint to the live state, on every client', async () => {
+      operationApplier.applyOperations.and.callFake(async (operations) => {
+        liveResolutionOps = operations;
+        throw new Error('simulated crash before reducer checkpoint');
+      });
+
+      await expectAsync(
+        service.autoResolveConflictsLWW([conflict], [remoteOther]),
+      ).toBeRejectedWithError('simulated crash before reducer checkpoint');
+
+      const storedEntries = await opLogStore.getOpsAfterSeq(0);
+      const [resend] = storedEntries
+        .filter(({ op, source }) => source === 'local' && op.id !== localTitle.id)
+        .map(({ op }) => op);
+      // The re-send follows the whole incoming batch in seq order.
+      expect(storedEntries.map(({ op }) => op.id)).toEqual([
+        localTitle.id,
+        remoteNotes.id,
+        remoteOther.id,
+        resend.id,
+      ]);
+      expect(liveResolutionOps.map(({ id }) => id)).toEqual([
+        remoteNotes.id,
+        remoteOther.id,
+        resend.id,
+      ]);
+
+      const liveState = applyTaskOperations(
+        applyTaskOperations(initialTaskState, [localTitle], LOCAL_CLIENT_ID),
+        liveResolutionOps,
+        LOCAL_CLIENT_ID,
+      );
+      const restartedState = applyTaskOperations(
+        initialTaskState,
+        storedEntries.map(({ op }) => op),
+        LOCAL_CLIENT_ID,
+      );
+      const remoteState = applyTaskOperations(
+        initialTaskState,
+        [remoteNotes, remoteOther, resend],
+        REMOTE_CLIENT_ID,
+      );
+      expect(fieldShape(restartedState)).toEqual(fieldShape(liveState));
+      expect(fieldShape(remoteState)).toEqual(fieldShape(liveState));
+      expect(fieldShape(liveState)).toEqual({
+        t1: { title: 'Local title', notes: 'Remote notes' },
+        t2: { title: 'Remote other', notes: other.notes },
+      });
+    });
+  });
 });

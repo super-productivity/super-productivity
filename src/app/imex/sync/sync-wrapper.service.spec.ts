@@ -43,6 +43,7 @@ import {
   InvalidFilePrefixError,
   JsonParseError,
   SyncDataCorruptedError,
+  ClientUpdateRequiredSPError,
   UploadRevToMatchMismatchAPIError,
   WebDavNativeRequestError,
   EncryptNoPasswordError,
@@ -2291,6 +2292,25 @@ describe('SyncWrapperService', () => {
       // No force-upload button — overwriting a newer remote would destroy data
       const callArgs = mockSnackService.open.calls.mostRecent().args[0];
       expect(callArgs['actionFn']).toBeUndefined();
+    });
+
+    it('asks to update the app when the server requires a newer version, without signing out', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new ClientUpdateRequiredSPError()),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
+      expect(mockProviderManager.clearAuthCredentials).not.toHaveBeenCalled();
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          msg: T.F.SYNC.S.VERSION_TOO_OLD,
+          actionStr: T.PS.UPDATE_APP,
+          type: 'ERROR',
+        }),
+      );
     });
 
     describe('LocalDataConflictError handling', () => {

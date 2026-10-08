@@ -24,14 +24,18 @@ continue to resolve.
 
 ## Disjoint-field auto-merge
 
-When two clients concurrently edit the SAME entity but DIFFERENT (non-noise)
-fields, whole-entity LWW would discard one side's real edit. Instead, both are
-kept by synthesizing a single merged UPDATE op. Eligibility
-(`isDisjointMergeEligible` + the archive-plan guard in
-`conflict-resolution.service.ts`):
+When two clients concurrently edit the SAME entity, whole-entity LWW would
+discard one side's real edits. Instead, the conflict resolves per field: the
+remote ops apply as themselves, and the resolver re-sends, as field patches,
+only its own fields whose latest write is newer than every remote write of the
+same field, each at that write's own timestamp (see
+[lww-field-level-resolution.md](./lww-field-level-resolution.md), #10379,
+#10422). Eligibility (`isFieldPatchEligible` in `conflict-field-patch.util.ts`
 
-- neither side has a DELETE op, and the plan is not an archive plan;
-- neither side contains a multi-entity op. Resolution rejects the original ops,
+- the archive-plan guard in `conflict-resolution.service.ts`):
+
+* neither side has a DELETE op, and the plan is not an archive plan;
+* neither side contains a multi-entity op. Resolution rejects the original ops,
   so merging only the conflicted entity would silently drop the bulk op's
   sibling-entity updates. Unsafe partial compensation fails closed before any
   op-log mutation, leaving the local operation pending and surfacing a sync
@@ -50,18 +54,28 @@ kept by synthesizing a single merged UPDATE op. Eligibility
   A sibling missing from current state is not recreated (a later delete owns it).
   Arbitrary bulk actions are not split from `entityChanges`: relationship/list
   mutations may carry atomic invariants that plain payload shape cannot prove;
-- neither side has opaque ops (their changes could not be carried into the
-  synthesized delta — merging would silently drop them and the two clients
-  would synthesize DIFFERENT results);
-- both sides changed at least one real (non-noise) field;
-- the two sides' non-noise changed-field sets are disjoint;
-- the entity has only ONE conflict in this batch. `detectConflicts` emits one
-  conflict per remote op with no per-entity aggregation, so an entity with ≥2
-  concurrent remote ops would synthesize multiple merged ops whose clocks
-  dominate one another — a dominated sibling can be superseded and its field
-  silently dropped. Such entities fall back to whole-entity LWW (honest refusal;
-  per-entity aggregation into one op is a possible future improvement);
-- the entity type has a `RECREATE_FALLBACK` (`TASK` / `PROJECT` / `TAG` /
+* neither side has opaque ops (their changes could not be carried into the
+  re-sent fields — merging would silently drop them and the two clients
+  would resolve DIFFERENTLY). Since #10422 a remote LWW row of the same entity
+  is admitted: it applies as itself, and only which fields it writes is read;
+  the local side must be readable `{ id, changes }` edits;
+* both sides changed at least one real (non-noise) field, or the remote
+  side holds such a row;
+* time stays out of the patch: a local `syncTimeSpent` delta is kept pending
+  with its original ID, clock and payload; only a confirmed SuperSync
+  conflict rejection permits a commuting rebase. Lost responses retry unchanged;
+  a remote delta, `removeTimeSpent`,
+  or a delta beside an absolute time write (or beside a remote row that may
+  write time) refuses the patch;
+* an overlapping patch that would clear a reminder field (`reminderId`,
+  `remindAt`, `dueWithTime`, `deadlineRemindAt`) refuses: v18.15.0–v18.21.x
+  receivers ignore `clearedFields`;
+* all conflicts of one entity in the batch resolve together as ONE
+  resolution (one re-send per winning local op, each dominating the one
+  before). `detectConflicts` emits one conflict per remote op, and per-conflict patches
+  would dominate one another, so a superseded sibling would drop its fields
+  (`aggregateEntityConflict`);
+* the entity type has a `RECREATE_FALLBACK` (`TASK` / `PROJECT` / `TAG` /
   `SIMPLE_COUNTER`). The merged op is a partial delta, so if it wins over a
   concurrent DELETE on a client that already applied that delete (a passive
   observer, which does NOT pass through the full-entity reconstruction in
@@ -73,26 +87,42 @@ kept by synthesizing a single merged UPDATE op. Eligibility
   `DEFAULT_*` backfill diverging from holders in that rare race — the same
   bounded limitation documented in `recreate-fallback.const.ts`.
 
-**Convergence contract:** both clients must synthesize the byte-identical
-merged **changes delta** regardless of which one performs the merge. The delta
-is the union of both sides' non-noise fields (disjoint, so nothing is clobbered)
-plus the noise fields either side changed, resolved via a deterministic
-`(timestamp, clientId)` tiebreak. Crucially the delta is derived ONLY from the
-two sides' ops — **not** from either client's current entity snapshot. A
+**Convergence contract:** both clients must assign every field to the same
+side regardless of which one resolves. A field both sides wrote goes to the
+side whose latest write of it is newer by the planner's rule (timestamp, then
+the clientId of that op), which is symmetric between the two devices; each
+resolver re-sends only the fields assigned to it. The re-sent values come ONLY
+from the resolver's own ops, **not** from its current entity snapshot. A
 full-entity snapshot would drag along fields NEITHER side touched; if such an
 untouched field momentarily differs between the two clients (an ordinary
 staggered-sync race — e.g. one client already applied a third device's edit the
-other has not), the two snapshots would differ, tie under LWW at the identical
-`max(timestamp)`, and diverge PERMANENTLY. See `synthesizeMergedChanges`.
+other has not), the two snapshots would differ, tie under LWW, and diverge
+PERMANENTLY. See `localWinningFieldGroups`.
 
-**Atomicity / no-re-merge contract:** the merged resolution is exactly ONE new
-UPDATE op carrying a **flat PARTIAL delta** (only the changed fields), layered
-on top of both sides' history like a normal edit — there is no history rewind.
+**Timestamps:** a re-send carries a field only at the timestamp of the op that
+wrote it, never at the other side's newer time (#10422). Otherwise the re-sent
+older field beats a third device's newer edit of it.
+
+**Atomicity / no-re-merge contract:** each re-send is a new UPDATE op carrying
+a **flat PARTIAL delta** (only the re-sent fields), layered on top of both
+sides' history like a normal edit — there is no history rewind.
 `lwwUpdateMetaReducer` applies it via `updateOne` (a shallow merge), so fields
-outside the delta keep their own values on each client. Because the payload is
-flat (not `{ changes }`-shaped), `extractUpdateChanges` yields `{}` for it, so
-a merged op can never itself become disjoint-merge eligible: merges do not
-cascade or re-merge on later syncs.
+outside the delta keep their own values on each client. A later conflict with
+such a row reads only **which** fields it writes (its keys, or every field for
+a `'replace'` row), never its values: the row applies as itself, and the local
+fields newer than it, or that it does not write, are re-sent after it. Rows
+never merge with each other (a pending local row keeps whole-entity LWW).
+Rejection recovery has a separate, narrow no-op proof: after the server explicitly
+rejects every moved operation, it may compare this client's own unchanged
+replacement against intervening original content edits. This preserves the
+replacement body and its order beside the original time deltas; it does not read
+incoming resolution values or use row values to synthesize a field patch. The
+retained history must be complete through the snapshot frontier. Earlier stored
+rows still need the proof unless the pending operation's clock covers them;
+append order alone does not establish observation.
+The re-sends are written last in the same transaction as the remote winners,
+after every incoming op of the download, so a crash cannot leave the remote
+values persisted without them.
 
 ### Composition residual (pre-existing class)
 

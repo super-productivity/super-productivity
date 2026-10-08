@@ -50,10 +50,4 @@ export class SafFileAdapter implements FileAdapter {
     // SAF works with a selected folder, so we just check if we have permission
     return await SafService.checkPermission(uri);
   }
-
-  // TODO: implement for operation log sync
-  async listFiles?(dirPath: string): Promise<string[]> {
-    SyncLog.warn('SafFileAdapter: listFiles is not yet implemented for Android SAF.');
-    throw new Error('SafFileAdapter: listFiles is not yet implemented.');
-  }
 }

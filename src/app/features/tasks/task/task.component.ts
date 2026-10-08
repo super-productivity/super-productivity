@@ -124,6 +124,8 @@ import {
 } from '../add-subtask-input/add-subtask-input.component';
 import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 import { getSubTaskTimeLeftForDisplay } from '../util/get-sub-task-time-left-for-display';
+import { getScheduledDateColor } from '../util/get-scheduled-date-color';
+import { TagService } from '../../tag/tag.service';
 
 const isInteractiveTarget = (target: EventTarget | null): boolean =>
   target instanceof Element &&
@@ -148,6 +150,7 @@ const isInteractiveTarget = (target: EventTarget | null): boolean =>
     '[class.hasNoSubTasks]': 'task().subTaskIds.length === 0',
     '[class.isDragReady]': 'isDragReady()',
     '[class.isOverdue]': 'isOverdue()',
+    '[style.--scheduled-date-today]': 'tagService.scheduledTodayColor()',
     '(contextmenu)': 'onHostContextMenu($event)',
     '(mousedown)': 'onHostMouseDown($event)',
     '(click)': 'onHostClick($event)',
@@ -203,6 +206,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _multiSelect = inject(TaskMultiSelectService);
   private readonly _taskMoveToProjectService = inject(TaskMoveToProjectService);
 
+  readonly tagService = inject(TagService);
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
   readonly globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
@@ -287,6 +291,19 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     return (
       (t.dueWithTime && this._dateService.isToday(t.dueWithTime)) ||
       (t.dueDay && t.dueDay === todayStr)
+    );
+  });
+  scheduledDateColor = computed(() => {
+    const task = this.task();
+    if (task.isDone || this.isCurrent() || (!task.dueDay && !task.dueWithTime)) {
+      return '';
+    }
+    return getScheduledDateColor(
+      task,
+      this.globalTrackingIntervalService.todayDateStr(),
+      this._dateService.getStartOfNextDayDiffMs(),
+      // Only timed tasks depend on the clock, with no per-row subscription.
+      task.dueWithTime ? this.globalTrackingIntervalService.clockTimestamp() : 0,
     );
   });
   hasTimeConflict = computed(() => {
@@ -501,7 +518,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     if (
       !isMultiSelectModifierEvent(ev) &&
       this._multiSelect.isActive() &&
-      !this._multiSelect.isTouchSelectionMode()
+      !this._multiSelect.isTouchSelectionMode() &&
+      !(
+        this._multiSelect.has(this.task().id) &&
+        !this.task().parentId &&
+        this._multiSelect.count() > 1
+      )
     ) {
       this._multiSelect.clear();
     }
@@ -519,6 +541,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       return;
     }
     const isModifierClick = isMultiSelectModifierEvent(ev);
+    // Defer clearing a selected parent until click so CDK can start a group drag.
+    if (!isModifierClick && !this._multiSelect.isTouchSelectionMode())
+      this._multiSelect.clear();
     const isTouchTap = !isModifierClick && this._multiSelect.isTouchSelectionMode();
     if (
       (!isModifierClick && !isTouchTap) ||
@@ -1129,6 +1154,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   toggleTaskDone(): void {
+    if (!this._multiSelect.isTouchSelectionMode()) this._multiSelect.clear();
     window.clearTimeout(this._doneAnimationTimeout);
     this.focusNext(true, true);
     this._doneAnimationTimeout = this._taskService.toggleDoneWithAnimation(
@@ -1250,6 +1276,15 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
         id: this.task().id,
       }),
     );
+  }
+
+  clearSelectionOnTitleClick(event: MouseEvent): void {
+    if (
+      !isInteractiveTarget(event.target) &&
+      !isMultiSelectModifierEvent(event) &&
+      !this._multiSelect.isTouchSelectionMode()
+    )
+      this._multiSelect.clear();
   }
 
   titleBarClick(event: MouseEvent): void {

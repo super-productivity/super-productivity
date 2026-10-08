@@ -8,7 +8,11 @@ const openKanban = async (page: Page): Promise<void> => {
     .getByRole('tab')
     .filter({ hasText: /kanban/i })
     .click();
-  await page.getByRole('button', { name: 'Create Tag', exact: true }).click();
+  const kanbanPanel = page.getByRole('tabpanel', { name: 'Kanban', exact: true });
+  await expect(kanbanPanel).toBeVisible();
+  // The button can pass Playwright's stability check while the tab is still sliding.
+  await expect(kanbanPanel).not.toHaveClass(/mat-tab-body-animating/);
+  await kanbanPanel.getByRole('button', { name: 'Create Tag', exact: true }).click();
   await expect(page.locator('[data-board-selection-scope="TODO"]')).toBeVisible();
 };
 
