@@ -208,3 +208,13 @@ describe('Nextcloud Deck Plugin - updateIssue null description', () => {
     expect(http.put.mock.calls[0][1].description).toBe('');
   });
 });
+
+describe('Nextcloud Deck Plugin - notes mapping', () => {
+  // like the built-in provider: an empty description never clears local notes
+  it('pulls no notes for an empty description', () => {
+    const notes = definition.fieldMappings!.find((m) => m.taskField === 'notes')!;
+    expect(notes.toTaskValue('', { issueId: '1' })).toBeUndefined();
+    expect(notes.toTaskValue(null, { issueId: '1' })).toBeUndefined();
+    expect(notes.toTaskValue('Desc', { issueId: '1' })).toBe('Desc');
+  });
+});

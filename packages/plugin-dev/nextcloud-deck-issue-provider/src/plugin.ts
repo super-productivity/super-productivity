@@ -373,7 +373,9 @@ PluginAPI.registerIssueProvider({
       issueField: 'body',
       defaultDirection: 'pullOnly',
       toIssueValue: (taskValue: unknown): string => (taskValue as string) ?? '',
-      toTaskValue: (issueValue: unknown): string => (issueValue as string) ?? '',
+      // like the built-in provider: an empty description leaves local notes alone
+      toTaskValue: (issueValue: unknown): string | undefined =>
+        (issueValue as string) || undefined,
     },
   ] satisfies PluginFieldMapping[],
 
