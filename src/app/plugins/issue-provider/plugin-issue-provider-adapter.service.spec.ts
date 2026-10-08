@@ -857,6 +857,59 @@ describe('PluginIssueProviderAdapterService', () => {
         expect(result!.taskChanges['title' as keyof Task]).toBeUndefined();
       });
 
+      // the poll after a push from a baseline-less task: the pushed field must
+      // not flip back, and every other mapped field gets pulled and seeded
+      it('should seed the full baseline after a push without reverting it', async () => {
+        const freshIssue = {
+          id: 'ISS-1',
+          title: 'T',
+          state: 'done',
+          body: 'Remote',
+          lastUpdated: 2000,
+        } as unknown as PluginIssue;
+        const provider = createMockProvider({
+          getById: jasmine.createSpy('getById').and.resolveTo(freshIssue),
+          fieldMappings: [
+            {
+              taskField: 'isDone',
+              issueField: 'state',
+              defaultDirection: 'both',
+              toIssueValue: (v: unknown) => (v ? 'done' : 'open'),
+              toTaskValue: (v: unknown) => v === 'done',
+            },
+            {
+              taskField: 'notes',
+              issueField: 'body',
+              defaultDirection: 'pullOnly',
+              toIssueValue: (v: unknown) => v,
+              toTaskValue: (v: unknown) => v,
+            },
+          ] as PluginFieldMapping[],
+          extractSyncValues: jasmine
+            .createSpy('extractSyncValues')
+            .and.returnValue({ state: 'done', body: 'Remote' }),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-1',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          isDone: true,
+          notes: 'Local',
+          issueLastSyncedValues: { state: 'done' },
+        } as unknown as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result!.taskChanges.isDone).toBeUndefined();
+        expect(result!.taskChanges.notes).toBe('Remote');
+        expect(result!.taskChanges.issueLastSyncedValues).toEqual({
+          state: 'done',
+          body: 'Remote',
+        });
+      });
+
       it('should not overwrite isDone when the status direction is off', async () => {
         const freshIssue = {
           id: 'ISS-1',

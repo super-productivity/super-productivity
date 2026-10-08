@@ -232,6 +232,7 @@ describe('PluginTimeTrackingEffects', () => {
     });
     const data = await markDone();
 
+    expect(matDialog.open).toHaveBeenCalled();
     expect(getById).toHaveBeenCalledWith('42', jasmine.anything(), jasmine.anything());
     expect(data.task.id).toBe('t1');
   });
