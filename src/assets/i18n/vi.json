@@ -548,7 +548,8 @@
         "OAUTH_FAILED_WITH_DETAIL": "Xác thực thất bại: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Sự cố từ xa đã bị xóa. Xóa công việc liên kết \"{{taskTitle}}\"?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Sự cố từ xa đã bị xóa nhưng công việc \"{{taskTitle}}\" có thời gian đã theo dõi. Xóa dù sao?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Đẩy đồng bộ hai chiều thất bại: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Đẩy đồng bộ hai chiều thất bại: {{errorMsg}}",
+        "POST_TIME_SUCCESS": "{{providerName}}: Đã tạo mục cho {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Tự động tạo sự cố cho công việc mới",

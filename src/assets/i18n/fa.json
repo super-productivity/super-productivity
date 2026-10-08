@@ -539,7 +539,8 @@
         "PLUGIN_NOT_INSTALLED": "افزونه نصب نشده است",
         "REMOTE_ISSUE_DELETED": "مسئله از راه دور حذف شده است. وظیفه پیوندخورده «{{taskTitle}}» حذف شود؟",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "مسئله از راه دور حذف شده، اما برای وظیفه «{{taskTitle}}» زمان ثبت شده است. با این حال حذف شود؟",
-        "TWO_WAY_SYNC_PUSH_FAILED": "ارسال همگام‌سازی دوطرفه ناموفق بود"
+        "TWO_WAY_SYNC_PUSH_FAILED": "ارسال همگام‌سازی دوطرفه ناموفق بود",
+        "POST_TIME_SUCCESS": "{{providerName}}: ورودی زمان برای {{issueTitle}} با موفقیت ایجاد شد"
       },
       "DIALOG": {
         "ADVANCED_CONFIG": "پیکربندی پیشرفته",
@@ -582,7 +583,8 @@
         "POST_TIME": "ارسال زمان",
         "STARTED": "شروع شده",
         "TIME_SPENT": "زمان صرف شده",
-        "TITLE": "ثبت زمان در {{providerName}}"
+        "TITLE": "ثبت زمان در {{providerName}}",
+        "SUBMIT_TIME_FOR": "ارسال زمان به {{providerName}} برای"
       }
     },
     "ISSUE_PANEL": {

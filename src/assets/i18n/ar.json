@@ -515,7 +515,8 @@
         "OAUTH_DISCONNECTED": "تم فصل حساب OAuth.",
         "OAUTH_FAILED": "فشلت المصادقة.",
         "REMOTE_ISSUE_DELETED": "تم حذف المشكلة البعيدة. هل تريد حذف المهمة المرتبطة \"{{taskTitle}}\"؟",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "تم حذف المشكلة البعيدة لكن المهمة \"{{taskTitle}}\" تحتوي على وقت متتبع. هل تريد الحذف على أي حال؟"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "تم حذف المشكلة البعيدة لكن المهمة \"{{taskTitle}}\" تحتوي على وقت متتبع. هل تريد الحذف على أي حال؟",
+        "POST_TIME_SUCCESS": "{{providerName}}: تم إنشاء إدخال الوقت بنجاح لـ {{issueTitle}}"
       },
       "DIALOG": {
         "ADVANCED_CONFIG": "إعدادات متقدمة",
@@ -568,7 +569,8 @@
         "POST_TIME": "نشر الوقت",
         "STARTED": "بدأ في",
         "TIME_SPENT": "الوقت المستغرق",
-        "TITLE": "تتبع الوقت في {{providerName}}"
+        "TITLE": "تتبع الوقت في {{providerName}}",
+        "SUBMIT_TIME_FOR": "إرسال الوقت إلى {{providerName}} لـ"
       }
     },
     "ISSUE_PANEL": {
