@@ -124,7 +124,7 @@ jobs:
       # workflow publishes it with GITHUB_TOKEN).
       - name: Prune old package versions
         if: github.event_name == 'push'
-        uses: dataaxiom/ghcr-cleanup-action@52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
         with:
           packages: supersync
           keep-n-tagged: 15
