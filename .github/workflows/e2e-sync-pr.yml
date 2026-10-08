@@ -84,7 +84,8 @@ jobs:
           COMMON="src/app/imex/sync/|src/app/op-log/|src/app/pfapi/|src/app/root-store/|src/app/features/[^/]+/store/|${PERSISTENT_ACTION_PATHS}|${SYNC_UTILITY_PATHS}|packages/sync-providers/|packages/sync-core/|packages/shared-schema/|docker-compose\.yaml$|e2e/tests/sync/|e2e/helpers/|e2e/pages/|e2e/fixtures/|e2e/constants/|e2e/utils/|e2e/playwright\.config\.ts$|e2e/global-setup\.ts$|\.github/workflows/e2e-sync-pr\.yml$"
           # SuperSync also depends on the server package and its compose override.
           SUPERSYNC_PATTERN="^(${COMMON}|packages/super-sync-server/|docker-compose\.supersync\.yaml\$)"
-          WEBDAV_PATTERN="^(${COMMON})"
+          # WebDAV also depends on its E2E server image and precondition probe.
+          WEBDAV_PATTERN="^(${COMMON}|e2e/webdav-server/|scripts/wait-for-webdav\.sh\$)"
           # The sync fuzz harness runs client sync code only, not the E2E helpers.
           FUZZ_PATTERN="^(src/app/imex/sync/|src/app/op-log/|src/app/pfapi/|src/app/root-store/|src/app/features/[^/]+/store/|${PERSISTENT_ACTION_PATHS}|${SYNC_UTILITY_PATHS}|packages/sync-core/|packages/shared-schema/|tools/sync-fuzz-compare\.js\$|\.github/workflows/e2e-sync-pr\.yml\$)"
 
@@ -183,7 +184,7 @@ jobs:
           retry_wait_seconds: 60
           command: |
             set -eu
-            docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync webdav
+            docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync webdav-e2e
             echo "⏳ Waiting for SuperSync server..."
             timeout 180 sh -c 'until curl -s http://localhost:1901/health > /dev/null 2>&1; do sleep 1; done'
             echo "✓ SuperSync server ready!"
@@ -204,7 +205,7 @@ jobs:
           # failure out of the log tail the GitHub API and `gh run view --log-failed`
           # return, leaving the actual failure unreadable.
           echo "=== SuperSync Logs (last 400 lines per container) ==="
-          docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml logs --tail=400 supersync webdav
+          docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml logs --tail=400 supersync webdav-e2e
 
       - name: Stop Docker Services
         if: always()
@@ -254,7 +255,7 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 20
           command: |
-            docker compose up -d webdav
+            docker compose up -d --build webdav-e2e
             chmod +x ./scripts/wait-for-webdav.sh
             ./scripts/wait-for-webdav.sh
 
@@ -267,7 +268,7 @@ jobs:
         if: ${{ failure() }}
         run: |
           echo "=== WebDAV Logs (last 400 lines) ==="
-          docker compose logs --tail=400 webdav
+          docker compose logs --tail=400 webdav-e2e
 
       - name: Stop Docker Services
         if: always()

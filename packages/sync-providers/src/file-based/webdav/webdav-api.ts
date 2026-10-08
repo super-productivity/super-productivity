@@ -338,7 +338,7 @@ export class WebdavApi {
 
   /**
    * #9030: some servers serve strong ETags but PUT unconditionally, ignoring
-   * `If-Match` (e.g. hacdias/webdav v5, our E2E server), which would silently
+   * `If-Match` (e.g. hacdias/webdav v5, our self-hosting compose), which would silently
    * clobber a concurrent write. This best-effort pre-check narrows that to the
    * PROPFIND→PUT window; on compliant servers `If-Match` still closes it.
    */

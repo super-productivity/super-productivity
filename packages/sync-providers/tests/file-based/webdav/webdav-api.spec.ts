@@ -133,7 +133,7 @@ interface FakeDavFile {
  * to the HTTP header only, never to the DAV property.
  *
  * `ignoreIfMatch` reproduces servers that serve strong ETags but PUT
- * unconditionally — e.g. hacdias/webdav v5, our own E2E server (#9030).
+ * unconditionally — e.g. hacdias/webdav v5, our self-hosting compose (#9030).
  */
 const makeFakeDavServer = (
   file: FakeDavFile,
