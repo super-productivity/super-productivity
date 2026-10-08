@@ -9,9 +9,13 @@ on:
   workflow_dispatch:
     inputs: {}
 
+permissions:
+  contents: read
+
 jobs:
   windows-store-artifact:
     runs-on: windows-latest
+    timeout-minutes: 45
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}

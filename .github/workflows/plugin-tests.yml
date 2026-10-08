@@ -14,10 +14,16 @@ on:
 permissions:
   contents: read
 
+# Superseded PR pushes cancel the old run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   detect-changes:
     name: Detect plugin changes
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       plugins: ${{ steps.detect.outputs.plugins }}
       has-changes: ${{ steps.detect.outputs.has-changes }}
@@ -79,6 +85,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -87,29 +94,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
-        with:
-          node-version: 22
-      # work around for npm installs from git+https://github.com/johannesjo/J2M.git
-      - name: Reconfigure git to use HTTP authentication
-        run: >
-          git config --global url."https://github.com/".insteadOf
-          ssh://git@github.com/
-      - name: Get npm cache directory
-        id: npm-cache-dir
-        run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
-        with:
-          path: ${{ steps.npm-cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node22-
-      # Mirror ci.yml: use `npm i` here, not `npm ci`. The root lockfile uses
-      # an `overrides.app-builder-lib.minimatch` pin that npm 10 (bundled with
-      # Node 22) considers out-of-sync, while npm 11 accepts it. `npm i`
-      # tolerates the drift without altering the lockfile on disk.
-      - name: Install root dependencies
-        run: npm i
+      - name: Setup Node Dependencies
+        uses: ./.github/actions/setup-deps
       # Plugins consume @super-productivity/plugin-api and vite-plugin via file:
       # references that resolve to dist/. Build those before running plugin tests.
       - name: Build shared packages
