@@ -354,22 +354,6 @@ const FRAMEWORK_CLASSES: ReadonlySet<string> = new Set([
   'ZoneAwareEffectScheduler',
 ]);
 
-/**
- * The source class name, which the tables above and recorded dialog names
- * use. The esbuild bundle
- * renames classes whose names collide (`LockService2`, NgRx's `_State`), but
- * some real names end in a digit (`_DomRendererFactory2`), so a listed name
- * wins before the bundler's suffix is stripped.
- */
-const sourceClassName = (name: string): string => {
-  const unprefixed = name.replace(/^_/, '');
-  const isListed =
-    FRAMEWORK_CLASSES.has(unprefixed) ||
-    !!SHARED_CLASSES[unprefixed] ||
-    !!SHARED_FIELDS[unprefixed];
-  return isListed ? unprefixed : unprefixed.replace(/\d+$/, '');
-};
-
 /** True for a value no device owns: a function, or a stream that retains nothing. */
 const isStateless = (value: unknown): boolean =>
   (typeof value === 'function' && !isSignal(value)) ||
@@ -440,7 +424,7 @@ class FuzzClock {
 /** A dialog stub: records every dialog and closes it with `onOpen`'s answer. */
 const recordingDialog = (onOpen: (name: string) => unknown): Partial<MatDialog> => ({
   open: ((component: { name?: string }) => {
-    const answer = onOpen(component?.name ? sourceClassName(component.name) : 'dialog');
+    const answer = onOpen(component?.name ?? 'dialog');
     return { afterClosed: () => of(answer), close: () => undefined };
   }) as unknown as MatDialog['open'],
   openDialogs: [],
@@ -812,10 +796,8 @@ export class SyncFuzzHarness {
     const unlisted: string[] = [];
     for (const instance of values) {
       if (!instance || typeof instance !== 'object' || Array.isArray(instance)) continue;
-      const rawName = instance.constructor?.name;
-      if (!rawName) continue;
-      const name = sourceClassName(rawName);
-      if (name === 'Object' || FRAMEWORK_CLASSES.has(name)) continue;
+      const name = instance.constructor?.name;
+      if (!name || name === 'Object' || FRAMEWORK_CLASSES.has(name)) continue;
       if (SHARED_CLASSES[name]) continue;
       const device = this._deviceFieldNames.get(instance);
       const shared = SHARED_FIELDS[name];

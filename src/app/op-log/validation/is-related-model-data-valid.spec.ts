@@ -2,9 +2,10 @@ import { AppDataComplete } from '../model/model-config';
 import { OpLog } from '../../core/log';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { OP_LOG_SYNC_LOGGER } from '../core/sync-logger.adapter';
-import { isRelatedModelDataValid } from './is-related-model-data-valid';
 
 describe('isRelatedModelDataValid', () => {
+  let isRelatedModelDataValid: any;
+
   beforeEach(() => {
     // Suppress OpLog output during tests by spying on the methods
     spyOn(OpLog, 'log');
@@ -14,14 +15,28 @@ describe('isRelatedModelDataValid', () => {
     spyOn(OpLog, 'err');
     spyOn(OpLog, 'critical');
     spyOn(OP_LOG_SYNC_LOGGER, 'log');
-    // devError asks via confirm() whether to throw; decline so the validity
-    // errors under test return false instead of throwing. confirm is already
-    // a global spy (src/test.ts), so change its answer and restore it after.
-    (window.confirm as jasmine.Spy).and.returnValue(false);
-  });
+    /* eslint-disable @typescript-eslint/no-require-imports */
+    // Reset modules to allow re-importing with mocks
+    // @ts-ignore
+    delete require.cache[require.resolve('../../util/dev-error')];
+    // @ts-ignore
+    delete require.cache[require.resolve('./is-related-model-data-valid')];
 
-  afterEach(() => {
-    (window.confirm as jasmine.Spy).and.returnValue(true);
+    // Mock the devError module
+    // @ts-ignore
+    require('../../util/dev-error');
+    // @ts-ignore
+    require.cache[require.resolve('../../util/dev-error')] = {
+      exports: {
+        devError: jasmine.createSpy('devError'),
+      },
+    };
+
+    // Import the function under test
+    // @ts-ignore
+    isRelatedModelDataValid =
+      require('./is-related-model-data-valid').isRelatedModelDataValid;
+    /* eslint-enable @typescript-eslint/no-require-imports */
   });
 
   it('should handle null data gracefully', () => {

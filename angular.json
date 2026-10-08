@@ -239,7 +239,6 @@
             "tsConfig": "src/tsconfig.spec.json",
             "preserveSymlinks": true,
             "karmaConfig": "src/karma.conf.js",
-            "builderMode": "application",
             "styles": ["src/styles.scss"],
             "scripts": [],
             "assets": ["src/favicon.ico", "src/assets", "src/manifest.json"]
