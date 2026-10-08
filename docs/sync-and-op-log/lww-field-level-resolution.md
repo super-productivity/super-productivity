@@ -185,9 +185,10 @@ Checked with `git show v18.15.0:` and `git show v19.1.0:`.
 **The hazards of sending a `'patch'` where a `'replace'` went before:**
 
 1. **Clears.** v18.15.0 ignores `clearedFields`, and v19.1.0 applies it. The
-   v18.22.0 boundary is from
-   [contributor-sync-model.md](./contributor-sync-model.md) ("Clearing a
-   field", #9776), not checked against a tag.
+   LWW payload apply (`clearedFields` in `operation-converter.util.ts`) first
+   shipped in v18.21.2 (`633a27b`, checked with
+   `git tag --contains`); [contributor-sync-model.md](./contributor-sync-model.md)
+   ("Clearing a field", #9776) rounds this to v18.22.0.
    - An older receiver keeps a stale value, e.g. a cleared `dueWithTime` or
      `reminderId`, where `setOne` cleared it.
    - This is the same documented residual as `asPatchSnapshotIfTypeShadowed`.
@@ -375,8 +376,11 @@ proof. Retiring the snapshot does not remove it from durable replay.
 This does not permit extracting per-action payloads, reading incoming resolution
 values, merging resolution rows, or building a derived field index (decisions
 3, 5 and 11). Existing time-bearing replacements and active older resolvers
-remain capable of erasing time. Readers before v18.22.0 ignore patch clears;
-accepting that additional clear limitation for this exception remains pending.
+remain capable of erasing time. Readers before v18.21.2 ignore patch clears
+and may keep a stale optional value; decision 3 covers this as the same
+residual with the same end date, the enforced version floor (#10397). A
+`'replace'` here instead would lose tracked time (#10393 open question 6,
+decided 2026-10-06).
 
 **Decision 5a (2026-10-01, #10421).** Asked whether rule 1 below stays within
 decision 5, @johannesjo answered: "Ponder in sub agent and act according to
