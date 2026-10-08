@@ -133,6 +133,7 @@ test.describe('Android Focus timer recovery after WebView recreation', () => {
     isNativeCompleteFirst?: boolean;
     isTrackingDuringBreak?: boolean;
     isCountdown?: boolean;
+    isManualBreakStart?: boolean;
   };
   const resumeCases: ResumeCase[] = [
     { name: 'at the end', backgroundMs: 20 * 60_000, expectedMs: 25 * 60_000 },
@@ -157,6 +158,13 @@ test.describe('Android Focus timer recovery after WebView recreation', () => {
       expectedMs: 25 * 60_000,
       isCountdown: true,
     },
+    // Manual break start keeps the session in overtime, so it records all of it.
+    {
+      name: 'past the end with manual break start',
+      backgroundMs: 50 * 60_000,
+      expectedMs: 55 * 60_000,
+      isManualBreakStart: true,
+    },
   ];
   for (const resumeCase of resumeCases) {
     test(`records background Pomodoro time on resume ${resumeCase.name}`, async ({
@@ -164,11 +172,13 @@ test.describe('Android Focus timer recovery after WebView recreation', () => {
       workViewPage,
     }) => {
       await workViewPage.waitForTaskList();
-      if (resumeCase.isTrackingDuringBreak) {
+      if (resumeCase.isTrackingDuringBreak || resumeCase.isManualBreakStart) {
         await dispatch(page, {
           type: '[Global Config] Update Global Config Section',
           sectionKey: 'focusMode',
-          sectionCfg: { isPauseTrackingDuringBreak: false },
+          sectionCfg: resumeCase.isManualBreakStart
+            ? { isManualBreakStart: true }
+            : { isPauseTrackingDuringBreak: false },
           isSkipSnack: true,
         });
       }
@@ -198,7 +208,13 @@ test.describe('Android Focus timer recovery after WebView recreation', () => {
 
       await expect
         .poll(async () => (await readState(page)).focusMode.timer.purpose)
-        .toBe(resumeCase.isCountdown ? null : 'break');
+        .toBe(
+          resumeCase.isCountdown
+            ? null
+            : resumeCase.isManualBreakStart
+              ? 'work'
+              : 'break',
+        );
       await expectTaskTime(page, taskId, resumeCase.expectedMs);
       await pauseAndFlush(page);
       await page.reload();
