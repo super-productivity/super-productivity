@@ -158,6 +158,13 @@ test.describe('Android Focus timer recovery after WebView recreation', () => {
       expectedMs: 25 * 60_000,
       isCountdown: true,
     },
+    {
+      name: 'past the end of a Countdown while tracking continues during breaks',
+      backgroundMs: 50 * 60_000,
+      expectedMs: 55 * 60_000,
+      isCountdown: true,
+      isTrackingDuringBreak: true,
+    },
     // Manual break start keeps the session in overtime, so it records all of it.
     {
       name: 'past the end with manual break start',
