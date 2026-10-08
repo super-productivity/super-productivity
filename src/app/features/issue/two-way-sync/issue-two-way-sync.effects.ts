@@ -549,10 +549,11 @@ export class IssueTwoWaySyncEffects {
 
         const freshIssue = await adapter.fetchIssue(issueId, cfg);
         const freshValues = adapter.extractSyncValues(freshIssue);
-        const lastSyncedValues = task.issueLastSyncedValues ?? {};
-
         // Re-fetch task to get post-meta-reducer values (e.g. short syntax parsed title)
         const currentTask = await firstValueFrom(this._taskService.getByIdOnce$(task.id));
+        // the snapshot predates pushes queued before it; their baseline is newer
+        const syncState = currentTask ?? task;
+        const lastSyncedValues = syncState.issueLastSyncedValues ?? {};
         const taskFieldChanges: Record<string, unknown> = {};
         for (const mapping of fieldMappings) {
           if (mapping.taskField in changes) {
@@ -577,8 +578,8 @@ export class IssueTwoWaySyncEffects {
           // issue is unchanged since the task last saw it, its current values
           // are what the task last pulled, so the user's change can win; a
           // single missing field still means "first sync" and is skipped.
-          task.issueLastSyncedValues ??
-            (adapter.getIssueLastUpdated?.(freshIssue) === task.issueLastUpdated
+          syncState.issueLastSyncedValues ??
+            (adapter.getIssueLastUpdated?.(freshIssue) === syncState.issueLastUpdated
               ? freshValues
               : {}),
           ctx,

@@ -1,4 +1,4 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { of, Subject } from 'rxjs';
@@ -330,6 +330,69 @@ describe('IssueTwoWaySyncEffects', () => {
       expect(taskServiceSpy.update).toHaveBeenCalledWith('task-1', {
         issueLastSyncedValues: { status: 'COMPLETED' },
       });
+    }));
+
+    // the second toggle is queued before the first push lands; it must compare
+    // against the baseline that push wrote, not the stale snapshot
+    it('should push a quick reopen after a pending done push', fakeAsync(() => {
+      let remote = { status: 'NEEDS-ACTION', lastUpdated: 1000 };
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping]),
+        fetchIssue: jasmine.createSpy('fetchIssue').and.callFake(async () => remote),
+        pushChanges: jasmine
+          .createSpy('pushChanges')
+          .and.callFake(async (_id: string, changes: Record<string, unknown>) => {
+            await new Promise((r) => setTimeout(r, 100));
+            remote = { status: changes['status'] as string, lastUpdated: 2000 };
+          }),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.callFake((issue: Record<string, unknown>) => ({
+            status: issue['status'],
+          })),
+        getIssueLastUpdated: (issue: Record<string, unknown>) =>
+          issue['lastUpdated'] as number,
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+      let task = createMockTask({
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastUpdated: 1000,
+        issueLastSyncedValues: { status: 'NEEDS-ACTION' },
+        isDone: false,
+      });
+      taskServiceSpy.getByIdOnce$.and.callFake(() => of(task));
+      taskServiceSpy.update.and.callFake((_id: string, changes: Partial<Task>) => {
+        task = { ...task, ...changes };
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      task = { ...task, isDone: true };
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      // the done push is now in flight
+      flushMicrotasks();
+      task = { ...task, isDone: false };
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: false } },
+        }),
+      );
+      tick(500);
+
+      expect(
+        (adapter.pushChanges as jasmine.Spy).calls.allArgs().map((a) => a[1]),
+      ).toEqual([{ status: 'COMPLETED' }, { status: 'NEEDS-ACTION' }]);
+      expect(remote.status).toBe('NEEDS-ACTION');
+
+      adapterRegistry.unregister('TEST_PROVIDER');
     }));
 
     it('should still skip a field missing from an existing baseline', fakeAsync(() => {
