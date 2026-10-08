@@ -2,7 +2,7 @@
  * Completion-race test for GitHub issue #7856 (companion to focus-mode.bug-7856.spec).
  * https://github.com/super-productivity/super-productivity/issues/7856
  *
- * The resume-tick fix (AndroidFocusModeEffects.resyncFocusTimerOnResume$) dispatches a
+ * The resume-tick fix (handleAndroidResume in android-foreground-tracking.effects) dispatches a
  * `tick()` on app resume. When a Pomodoro/Countdown session ran PAST its duration while
  * the app was backgrounded, the native foreground service ALSO completes: it decrements
  * `remainingMs` to 0 on its main-looper handler and fires ACTION_TIMER_COMPLETE
