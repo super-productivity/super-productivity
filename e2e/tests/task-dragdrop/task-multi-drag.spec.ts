@@ -313,7 +313,7 @@ test.describe('Multi-task drag', () => {
     await select(page, ['Large 470']);
     await page
       .locator('task')
-      .filter({ has: page.locator('task-title', { hasText: 'Large 498', exact: true }) })
+      .filter({ has: page.locator('task-title').getByText('Large 498', { exact: true }) })
       .locator('.task-title')
       .click({ modifiers: ['Shift'] });
     await expect(page.locator('task-multi-select-bar .bar')).toContainText('29 selected');
@@ -322,7 +322,7 @@ test.describe('Multi-task drag', () => {
       page
         .locator('task')
         .filter({
-          has: page.locator('task-title', { hasText: 'Large 498', exact: true }),
+          has: page.locator('task-title').getByText('Large 498', { exact: true }),
         })
         .locator('done-toggle'),
     );
@@ -340,14 +340,14 @@ test.describe('Multi-task drag', () => {
     await select(page, ['Large 496', 'Large 497']);
     await page
       .locator('task')
-      .filter({ has: page.locator('task-title', { hasText: 'Large 496', exact: true }) })
+      .filter({ has: page.locator('task-title').getByText('Large 496', { exact: true }) })
       .locator('done-toggle')
       .click();
     await expect(page.locator('task-multi-select-bar .bar')).toHaveCount(0);
     // Restore the task, then dragging an unselected row must remain a single drag.
-    const row496 = page
-      .locator('task')
-      .filter({ has: page.locator('task-title', { hasText: 'Large 496', exact: true }) });
+    const row496 = page.locator('task').filter({
+      has: page.locator('task-title').getByText('Large 496', { exact: true }),
+    });
     // The open-list row keeps animating out while the done row renders (#10594):
     // wait for the done row, then for the open row to leave.
     await expect(row496.locator('done-toggle[aria-checked="true"]')).toHaveCount(1);
@@ -359,7 +359,7 @@ test.describe('Multi-task drag', () => {
       page
         .locator('task')
         .filter({
-          has: page.locator('task-title', { hasText: 'Large 498', exact: true }),
+          has: page.locator('task-title').getByText('Large 498', { exact: true }),
         })
         .locator('done-toggle'),
     );
