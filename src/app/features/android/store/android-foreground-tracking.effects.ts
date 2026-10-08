@@ -355,6 +355,9 @@ export class AndroidForegroundTrackingEffects {
    * effect — both paths would emit a syncTimeSpent op for the SAME gap, and
    * remote devices would double-count it on op-log replay (ops apply
    * state-relative there, unlike the snapshot-based local reducer).
+   * The focus-mode resume tick follows the credit for the same reason in
+   * reverse: it may complete a Pomodoro and unset the task (see
+   * handleAndroidResume).
    */
   syncOnResume$ =
     IS_ANDROID_WEB_VIEW &&

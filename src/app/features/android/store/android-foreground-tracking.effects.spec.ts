@@ -1,11 +1,11 @@
-import { Store } from '@ngrx/store';
-import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
 import { TestBed, fakeAsync } from '@angular/core/testing';
+import { Store } from '@ngrx/store';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { BehaviorSubject } from 'rxjs';
 import { TaskService } from '../../tasks/task.service';
 import { DateService } from '../../../core/date/date.service';
 import { Task } from '../../tasks/task.model';
+import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
 import {
   creditBackgroundTickGap,
   handleAndroidResume,
