@@ -228,7 +228,9 @@ PluginAPI.registerIssueProvider({
     const searchPromise = http
       .get<{
         results?: RedmineSearchItem[];
-      }>(`${getHost(cfg)}${projectScope(cfg)}/search.json`, { params: { limit: LIMIT, q: query, issues: '1', open_issues: '1' } })
+      }>(`${getHost(cfg)}${projectScope(cfg)}/search.json`, {
+        params: { limit: LIMIT, q: query, issues: '1', open_issues: '1' },
+      })
       .then((res) => (res?.results || []).map(mapSearchItem));
 
     const results = mergeById(...(await Promise.all([byIdPromise, searchPromise])));

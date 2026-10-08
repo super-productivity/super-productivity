@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import type {
   IssueProviderPluginDefinition,
   PluginHttp,
@@ -67,6 +67,14 @@ const createHttp = (): PluginHttp & {
     get: ReturnType<typeof vi.fn>;
     put: ReturnType<typeof vi.fn>;
   };
+
+// The plugin caches board reads for a few seconds; jump past that per test
+let now = new Date('2024-01-01T00:00:00Z').getTime();
+beforeEach(() => {
+  now += 60000;
+  vi.useFakeTimers({ toFake: ['Date'], now });
+});
+afterEach(() => vi.useRealTimers());
 
 const ids = (items: { id: string }[]): string[] => items.map((i) => i.id);
 
@@ -174,5 +182,47 @@ describe('Nextcloud Deck Plugin - updateIssue', () => {
     expect(http.put.mock.calls[0][1]).toEqual(
       expect.objectContaining({ description: 'New', done: '2024-01-01' }),
     );
+  });
+});
+
+describe('Nextcloud Deck Plugin - board read cache', () => {
+  it('shares one board download between consecutive getById calls', async () => {
+    const http = createHttp();
+    await definition.getById('11', baseCfg, http);
+    await definition.getById('21', baseCfg, http);
+    expect(http.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('refetches once the cache expired', async () => {
+    const http = createHttp();
+    await definition.getById('11', baseCfg, http);
+    vi.setSystemTime(now + 6000);
+    await definition.getById('11', baseCfg, http);
+    expect(http.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('updateIssue reads fresh data instead of the cache', async () => {
+    const http = createHttp();
+    await definition.getById('11', baseCfg, http);
+    await definition.updateIssue!('11', { state: 'done' }, baseCfg, http);
+    expect(http.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not cache failed requests', async () => {
+    const http = createHttp();
+    http.get.mockRejectedValueOnce(new Error('offline'));
+    await expect(definition.getById('11', baseCfg, http)).rejects.toThrow('offline');
+    await expect(definition.getById('11', baseCfg, http)).resolves.toBeDefined();
+  });
+});
+
+describe('Nextcloud Deck Plugin - updateIssue null description', () => {
+  it('sends an empty string for a card without description', async () => {
+    const http = createHttp();
+    http.get.mockResolvedValueOnce([
+      { id: 1, title: 'S', cards: [card(5, { description: null })] },
+    ]);
+    await definition.updateIssue!('5', { state: 'done' }, baseCfg, http);
+    expect(http.put.mock.calls[0][1].description).toBe('');
   });
 });

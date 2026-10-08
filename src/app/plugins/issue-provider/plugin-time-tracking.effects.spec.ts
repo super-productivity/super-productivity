@@ -157,6 +157,16 @@ describe('PluginTimeTrackingEffects', () => {
     expect(await firstValueFrom(data.timeLoggedUpdate$!)).toBe(1000);
   });
 
+  it('falls back to no activities when loading them fails', async () => {
+    timeTracking.getActivities.and.rejectWith(new Error('boom'));
+    setProviders({
+      ip1: { id: 'ip1', issueProviderKey: 'REDMINE', pluginId: 'p', pluginConfig },
+    });
+    const data = await markDone();
+
+    expect(await firstValueFrom(data.activities$!)).toEqual([]);
+  });
+
   it('logs the submitted time through the plugin', async () => {
     setProviders({
       ip1: { id: 'ip1', issueProviderKey: 'REDMINE', pluginId: 'p', pluginConfig },

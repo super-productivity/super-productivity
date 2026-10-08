@@ -151,12 +151,17 @@ export class PluginTimeTrackingEffects {
       this._showError(ctx, e);
       return;
     }
-    const { DialogTrackTimeComponent } =
-      await import('../../features/issue/shared/dialog-track-time/dialog-track-time.component');
-    this._matDialog.open(DialogTrackTimeComponent, {
-      restoreFocus: true,
-      data: this._buildDialogData(task, ctx, { issueLabel, issueUrl }),
-    });
+    try {
+      const { DialogTrackTimeComponent } =
+        await import('../../features/issue/shared/dialog-track-time/dialog-track-time.component');
+      this._matDialog.open(DialogTrackTimeComponent, {
+        restoreFocus: true,
+        data: this._buildDialogData(task, ctx, { issueLabel, issueUrl }),
+      });
+    } catch (e) {
+      // e.g. lazy chunk failed to load while offline; `void` caller would drop it
+      this._showError(ctx, e);
+    }
   }
 
   private _buildDialogData(
@@ -179,7 +184,10 @@ export class PluginTimeTrackingEffects {
           )
         : undefined,
       activities$: timeTracking.getActivities
-        ? from(timeTracking.getActivities(pluginConfig, http))
+        ? from(timeTracking.getActivities(pluginConfig, http)).pipe(
+            // the template's async pipe would throw on a rejected request
+            catchError(() => of([])),
+          )
         : undefined,
       defaultTime: pluginConfig['timeTrackingDialogDefaultTime'] as
         | JiraWorklogExportDefaultTime

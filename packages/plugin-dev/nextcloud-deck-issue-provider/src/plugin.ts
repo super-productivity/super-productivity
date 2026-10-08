@@ -97,8 +97,41 @@ const toBase64 = (str: string): string => {
   return btoa(binary);
 };
 
-const fetchStacks = (cfg: DeckConfig, http: PluginHttp): Promise<DeckStack[]> =>
-  http.get<DeckStack[]>(`${getApiUrl(cfg)}/boards/${getBoardId(cfg)}/stacks`);
+// The host refreshes tasks one by one (one getById each) and Deck has no
+// single-card endpoint, so every refresh would re-download the whole board.
+// A short-lived cache lets one refresh round share a single download.
+const CACHE_TTL_MS = 5000;
+const readCache = new Map<string, { at: number; value: Promise<unknown> }>();
+
+const cachedGet = <T>(
+  cfg: DeckConfig,
+  url: string,
+  http: PluginHttp,
+  isFresh: boolean,
+): Promise<T> => {
+  const key = `${cfg.username}@${url}`;
+  const hit = readCache.get(key);
+  if (!isFresh && hit && Date.now() - hit.at < CACHE_TTL_MS) {
+    return hit.value as Promise<T>;
+  }
+  const value = http.get<T>(url);
+  readCache.set(key, { at: Date.now(), value });
+  // never keep a failed request around
+  value.catch(() => readCache.delete(key));
+  return value;
+};
+
+const fetchStacks = (
+  cfg: DeckConfig,
+  http: PluginHttp,
+  isFresh = false,
+): Promise<DeckStack[]> =>
+  cachedGet<DeckStack[]>(
+    cfg,
+    `${getApiUrl(cfg)}/boards/${getBoardId(cfg)}/stacks`,
+    http,
+    isFresh,
+  );
 
 const formatTitle = (
   card: DeckCard,
@@ -123,7 +156,12 @@ const fetchBoardTitle = async (cfg: DeckConfig, http: PluginHttp): Promise<strin
   if (!cfg.titleTemplate?.includes('{BOARD}')) {
     return '';
   }
-  const board = await http.get<DeckBoard>(`${getApiUrl(cfg)}/boards/${getBoardId(cfg)}`);
+  const board = await cachedGet<DeckBoard>(
+    cfg,
+    `${getApiUrl(cfg)}/boards/${getBoardId(cfg)}`,
+    http,
+    false,
+  );
   return board?.title || '';
 };
 
@@ -186,8 +224,9 @@ const findCard = async (
   cardId: string,
   cfg: DeckConfig,
   http: PluginHttp,
+  isFresh = false,
 ): Promise<{ card: DeckCard; stack: DeckStack }> => {
-  const stacks = await fetchStacks(cfg, http);
+  const stacks = await fetchStacks(cfg, http, isFresh);
   for (const stack of stacks) {
     const card = (stack.cards || []).find((c) => String(c.id) === cardId);
     if (card) {
@@ -210,7 +249,7 @@ const loadStackOptions = async (
   if (!cfg.selectedBoardId) {
     return [];
   }
-  const stacks = await fetchStacks(cfg, http);
+  const stacks = await fetchStacks(cfg, http, true);
   return stacks.map((s) => ({ label: s.title, value: String(s.id) }));
 };
 
@@ -368,7 +407,8 @@ PluginAPI.registerIssueProvider({
   ): Promise<void> {
     const cfg = asCfg(config);
     const boardId = getBoardId(cfg);
-    const { card, stack } = await findCard(id, cfg, http);
+    // read-modify-write must not run on cached data
+    const { card, stack } = await findCard(id, cfg, http, true);
     const isMarkedDone = changes['state'] === STATE_DONE;
     const doneStackId = cfg.doneStackId ? String(cfg.doneStackId) : '';
     let stackId = String(stack.id);
@@ -385,7 +425,7 @@ PluginAPI.registerIssueProvider({
       type: 'plain',
       owner: cfg.username,
       title: card.title,
-      description: 'body' in changes ? changes['body'] : card.description,
+      description: 'body' in changes ? changes['body'] : (card.description ?? ''),
       duedate: card.duedate,
       done:
         'state' in changes ? (isMarkedDone ? new Date().toISOString() : null) : card.done,
