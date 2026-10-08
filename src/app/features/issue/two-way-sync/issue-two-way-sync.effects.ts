@@ -573,10 +573,14 @@ export class IssueTwoWaySyncEffects {
           syncConfig,
           freshValues,
           // A task with no baseline at all was linked before two-way sync (e.g.
-          // a migrated built-in provider, whose effects always pushed). Comparing
-          // against the current issue lets the user's change win once; a single
-          // missing field still means "first sync" and is skipped.
-          task.issueLastSyncedValues ?? freshValues,
+          // a migrated built-in provider, whose effects always pushed). If the
+          // issue is unchanged since the task last saw it, its current values
+          // are what the task last pulled, so the user's change can win; a
+          // single missing field still means "first sync" and is skipped.
+          task.issueLastSyncedValues ??
+            (adapter.getIssueLastUpdated?.(freshIssue) === task.issueLastUpdated
+              ? freshValues
+              : {}),
           ctx,
         );
 
@@ -622,10 +626,13 @@ export class IssueTwoWaySyncEffects {
             lastSyncedValues[m.issueField],
           );
         });
-        // Without any baseline the remote may hold edits we never compared;
-        // a stale marker lets the next poll seed the full baseline and pull them.
+        // A field the issue reports but the baseline lacks was never compared;
+        // a stale marker lets the next poll seed the full baseline and pull it.
+        const hasUnseededField = fieldMappings.some(
+          (m) => m.issueField in freshValues && !(m.issueField in lastSyncedValues),
+        );
         const keepIssueLastUpdatedStale =
-          hasProviderOwnedSkip || hasUnpulledRemoteChange || !task.issueLastSyncedValues;
+          hasProviderOwnedSkip || hasUnpulledRemoteChange || hasUnseededField;
 
         // Only advance baselines for fields we actually wrote. Fresh provider
         // values for skipped or unrelated fields still need the polling path to

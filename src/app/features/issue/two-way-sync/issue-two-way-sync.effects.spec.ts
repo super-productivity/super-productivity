@@ -220,6 +220,63 @@ describe('IssueTwoWaySyncEffects', () => {
 
     // tasks linked before two-way sync existed (e.g. migrated Nextcloud Deck)
     // never got a baseline; the user's change must still reach the issue
+    const baselessPushSetup = (
+      remoteLastUpdated: number,
+      taskOverrides: Partial<Task> = {},
+      remoteStatus = 'NEEDS-ACTION',
+    ): IssueSyncAdapter<unknown> => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping, titleFieldMapping]),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ status: remoteStatus, summary: 'Remote' }),
+        getIssueLastUpdated: () => remoteLastUpdated,
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+      const task = createMockTask({
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastUpdated: 1000,
+        isDone: true,
+        ...taskOverrides,
+      });
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      tick();
+      adapterRegistry.unregister('TEST_PROVIDER');
+      return adapter;
+    };
+
+    // an old task may miss remote edits that were never polled; those win
+    it('should not push for a baseline-less task whose issue changed since', fakeAsync(() => {
+      const adapter = baselessPushSetup(2000);
+
+      expect(adapter.pushChanges).not.toHaveBeenCalled();
+    }));
+
+    // after a push the baseline only holds the pushed field; until a poll
+    // seeds the rest, later pushes must keep the marker stale too
+    it('should keep issueLastUpdated stale while the baseline is partial', fakeAsync(() => {
+      baselessPushSetup(
+        1000,
+        { isDone: false, issueLastSyncedValues: { status: 'COMPLETED' } },
+        'COMPLETED',
+      );
+
+      expect(taskServiceSpy.update).toHaveBeenCalledWith('task-1', {
+        issueLastSyncedValues: { status: 'NEEDS-ACTION' },
+      });
+    }));
+
     it('should push for a task that has no baseline at all', fakeAsync(() => {
       const adapter = createMockAdapter({
         getFieldMappings: jasmine
@@ -228,12 +285,14 @@ describe('IssueTwoWaySyncEffects', () => {
         extractSyncValues: jasmine
           .createSpy('extractSyncValues')
           .and.returnValue({ status: 'NEEDS-ACTION' }),
+        getIssueLastUpdated: () => 1000,
       });
       adapterRegistry.register('TEST_PROVIDER', adapter);
       const task = createMockTask({
         issueType: 'TEST_PROVIDER' as any,
         issueId: 'issue-1',
         issueProviderId: 'provider-1',
+        issueLastUpdated: 1000,
         isDone: true,
       });
       taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
