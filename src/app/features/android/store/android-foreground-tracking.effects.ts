@@ -147,9 +147,10 @@ export const creditBackgroundTickGap = (
 /**
  * How much background time a resume may credit before its focus tick
  * auto-completes the running work session, or null when the tick cannot
- * complete one (Flowtime, overtime, paused/idle timer, break). Mirrors the cap
- * in AndroidFocusModeEffects._completionDuration, so a resume and a native
- * completion credit the same time to the task.
+ * complete one (Flowtime, overtime, paused/idle timer, break). The conditions
+ * mirror the tick reducer's work auto-completion in focus-mode.reducer.ts; the
+ * cap mirrors AndroidFocusModeEffects._completionDuration, so a resume and a
+ * native completion credit the same time to the task.
  */
 export const getFocusAutoCompleteCapMs = (
   timer: TimerState,
@@ -188,7 +189,9 @@ export const handleAndroidResume = async (
     // The tick may complete a Pomodoro and unset the current task. Credit that
     // task only up to the session end; the remainder then goes to whatever the
     // completion leaves tracked (nothing while tracking pauses during breaks).
-    deps.globalTracking.triggerWakeUpTick(focusAutoCompleteCapMs);
+    deps.globalTracking.triggerWakeUpTick(
+      Math.min(focusAutoCompleteCapMs, ANDROID_BACKGROUND_TICK_CAP_MS),
+    );
     deps.taskService.flushAccumulatedTimeSpent();
     tickFocus();
     creditBackgroundTickGap(deps.globalTracking, deps.taskService);
@@ -399,6 +402,8 @@ export class AndroidForegroundTrackingEffects {
             this._store.select(selectTimer),
             this._store.select(selectIsOvertimeEnabled),
           ),
+          // Also gates the focus tick: before data load the focus timer is still
+          // idle (tick is a no-op) and the 1s interval catches up afterwards.
           filter(([, , isTaskDataLoaded]) => isTaskDataLoaded),
           tap(([, currentTask, , timer, isOvertimeEnabled]) =>
             handleAndroidResume(
