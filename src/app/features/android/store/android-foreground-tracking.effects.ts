@@ -21,7 +21,11 @@ import {
 import { DroidLog } from '../../../core/log';
 import { Task } from '../../tasks/task.model';
 import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
-import { selectTimer } from '../../focus-mode/store/focus-mode.selectors';
+import {
+  selectIsOvertimeEnabled,
+  selectTimer,
+} from '../../focus-mode/store/focus-mode.selectors';
+import { TimerState } from '../../focus-mode/focus-mode.model';
 import { combineLatest, firstValueFrom, Subject } from 'rxjs';
 import { ANDROID_BACKGROUND_TICK_CAP_MS } from '../../../app.constants';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
@@ -140,6 +144,21 @@ export const creditBackgroundTickGap = (
   taskService.flushAccumulatedTimeSpent();
 };
 
+/**
+ * How much background time a resume may credit before its focus tick
+ * auto-completes the running work session, or null when the tick cannot
+ * complete one (Flowtime, overtime, paused/idle timer, break). Mirrors the cap
+ * in AndroidFocusModeEffects._completionDuration, so a resume and a native
+ * completion credit the same time to the task.
+ */
+export const getFocusAutoCompleteCapMs = (
+  timer: TimerState,
+  isOvertimeEnabled: boolean,
+): number | null =>
+  timer.isRunning && timer.purpose === 'work' && timer.duration > 0 && !isOvertimeEnabled
+    ? Math.max(0, timer.duration - timer.elapsed)
+    : null;
+
 export type AndroidResumeDeps = {
   store: Store;
   globalTracking: GlobalTrackingIntervalService;
@@ -159,11 +178,21 @@ export type AndroidResumeDeps = {
 export const handleAndroidResume = async (
   deps: AndroidResumeDeps,
   currentTask: Task | null,
+  focusAutoCompleteCapMs: number | null = null,
 ): Promise<void> => {
-  creditBackgroundTickGap(deps.globalTracking, deps.taskService);
-  // A resume tick can complete a Pomodoro and unset the current task. Record
-  // the background gap first, while that task is still being tracked.
-  deps.store.dispatch(focusModeActions.tick());
+  const tickFocus = (): void => deps.store.dispatch(focusModeActions.tick());
+  if (focusAutoCompleteCapMs === null) {
+    creditBackgroundTickGap(deps.globalTracking, deps.taskService);
+    tickFocus();
+  } else {
+    // The tick may complete a Pomodoro and unset the current task. Credit that
+    // task only up to the session end; the remainder then goes to whatever the
+    // completion leaves tracked (nothing while tracking pauses during breaks).
+    deps.globalTracking.triggerWakeUpTick(focusAutoCompleteCapMs);
+    deps.taskService.flushAccumulatedTimeSpent();
+    tickFocus();
+    creditBackgroundTickGap(deps.globalTracking, deps.taskService);
+  }
   if (currentTask) {
     await deps.syncElapsedTimeForTask(currentTask.id);
   } else {
@@ -355,8 +384,8 @@ export class AndroidForegroundTrackingEffects {
    * effect — both paths would emit a syncTimeSpent op for the SAME gap, and
    * remote devices would double-count it on op-log replay (ops apply
    * state-relative there, unlike the snapshot-based local reducer).
-   * The focus-mode resume tick follows the credit for the same reason in
-   * reverse: it may complete a Pomodoro and unset the task (see
+   * The focus-mode resume tick may complete a Pomodoro and unset the task, so
+   * the task is credited only up to the session end before it (see
    * handleAndroidResume).
    */
   syncOnResume$ =
@@ -367,9 +396,11 @@ export class AndroidForegroundTrackingEffects {
           withLatestFrom(
             this._store.select(selectCurrentTask),
             this._store.select(selectIsTaskDataLoaded),
+            this._store.select(selectTimer),
+            this._store.select(selectIsOvertimeEnabled),
           ),
           filter(([, , isTaskDataLoaded]) => isTaskDataLoaded),
-          tap(([, currentTask]) =>
+          tap(([, currentTask, , timer, isOvertimeEnabled]) =>
             handleAndroidResume(
               {
                 store: this._store,
@@ -381,6 +412,7 @@ export class AndroidForegroundTrackingEffects {
                   this._recoveryRequest$.next({ data, source: 'resume' }),
               },
               currentTask,
+              getFocusAutoCompleteCapMs(timer, isOvertimeEnabled),
             ),
           ),
         ),

@@ -8,6 +8,7 @@ import { Task } from '../../tasks/task.model';
 import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
 import {
   creditBackgroundTickGap,
+  getFocusAutoCompleteCapMs,
   handleAndroidResume,
   isTimeSpentJumpForNotification,
   parseNativeTrackingData,
@@ -15,6 +16,7 @@ import {
 } from './android-foreground-tracking.effects';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { ANDROID_BACKGROUND_TICK_CAP_MS } from '../../../app.constants';
+import { TimerState } from '../../focus-mode/focus-mode.model';
 
 // We need to test the effect logic by reimplementing it in tests since
 // the actual effects are conditionally created based on IS_ANDROID_WEB_VIEW
@@ -1902,6 +1904,44 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
     expect(store.dispatch).toHaveBeenCalledOnceWith(focusModeActions.tick());
   });
 
+  it('should credit the task only up to the session end before a completing focus tick', async () => {
+    const CAP_MS = 4 * 60 * 1000;
+    const order: string[] = [];
+    taskService.flushAccumulatedTimeSpent.and.callFake(() => order.push('flush'));
+    (store.dispatch as jasmine.Spy).and.callFake(() => {
+      order.push('tick');
+    });
+    globalTracking.triggerWakeUpTick.and.callFake((maxMs?: number) => {
+      order.push('credit:' + maxMs);
+      return { duration: maxMs ?? 0, date: '2026-06-11', timestamp: 0 };
+    });
+
+    await handleAndroidResume(
+      {
+        store,
+        globalTracking,
+        taskService,
+        syncElapsedTimeForTask: (taskId) => {
+          order.push('reconcile:' + taskId);
+          return Promise.resolve(true);
+        },
+        getNativeTrackingData: () => null,
+        requestRecovery: () => order.push('recovery'),
+      },
+      { id: 'task-1' } as Task,
+      CAP_MS,
+    );
+
+    expect(order).toEqual([
+      'credit:' + CAP_MS,
+      'flush',
+      'tick',
+      'credit:' + ANDROID_BACKGROUND_TICK_CAP_MS,
+      'flush',
+      'reconcile:task-1',
+    ]);
+  });
+
   it('should produce exactly ONE syncTimeSpent op for the gap (reconcile sees post-credit state)', async () => {
     // Models the real wiring: the wake tick credits the gap into the task's
     // timeSpent synchronously (tick$ subscriber + reducer), the flush emits
@@ -1962,5 +2002,34 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
     expect(globalTracking.triggerWakeUpTick).toHaveBeenCalledTimes(1);
     expect(reconcileSpy).not.toHaveBeenCalled();
     expect(recovered).toEqual([nativeData]);
+  });
+});
+
+describe('getFocusAutoCompleteCapMs', () => {
+  const MIN = 60_000;
+  const timer = (over: Partial<TimerState> = {}): TimerState =>
+    ({
+      isRunning: true,
+      purpose: 'work',
+      duration: 25 * MIN,
+      elapsed: 5 * MIN,
+      startedAt: 0,
+      ...over,
+    }) as TimerState;
+
+  it('returns the remaining time of a running fixed-duration work session', () => {
+    expect(getFocusAutoCompleteCapMs(timer(), false)).toBe(20 * MIN);
+  });
+
+  it('never returns a negative cap', () => {
+    expect(getFocusAutoCompleteCapMs(timer({ elapsed: 30 * MIN }), false)).toBe(0);
+  });
+
+  it('returns null when the tick cannot complete a work session', () => {
+    expect(getFocusAutoCompleteCapMs(timer(), true)).toBeNull();
+    expect(getFocusAutoCompleteCapMs(timer({ duration: 0 }), false)).toBeNull();
+    expect(getFocusAutoCompleteCapMs(timer({ isRunning: false }), false)).toBeNull();
+    expect(getFocusAutoCompleteCapMs(timer({ purpose: 'break' }), false)).toBeNull();
+    expect(getFocusAutoCompleteCapMs(timer({ purpose: null }), false)).toBeNull();
   });
 });
