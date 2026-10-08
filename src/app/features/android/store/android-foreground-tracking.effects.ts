@@ -25,7 +25,7 @@ import {
   selectIsOvertimeEnabled,
   selectTimer,
 } from '../../focus-mode/store/focus-mode.selectors';
-import { TimerState } from '../../focus-mode/focus-mode.model';
+import { getTimerRemainingMs, TimerState } from '../../focus-mode/focus-mode.model';
 import { combineLatest, firstValueFrom, Subject } from 'rxjs';
 import { ANDROID_BACKGROUND_TICK_CAP_MS } from '../../../app.constants';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
@@ -156,7 +156,7 @@ export const getFocusAutoCompleteCapMs = (
   isOvertimeEnabled: boolean,
 ): number | null =>
   timer.isRunning && timer.purpose === 'work' && timer.duration > 0 && !isOvertimeEnabled
-    ? Math.max(0, timer.duration - timer.elapsed)
+    ? getTimerRemainingMs(timer)
     : null;
 
 export type AndroidResumeDeps = {

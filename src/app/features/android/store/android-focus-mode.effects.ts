@@ -27,7 +27,11 @@ import {
   selectTaskEntities,
 } from '../../tasks/store/task.selectors';
 import { combineLatest, firstValueFrom } from 'rxjs';
-import { FocusModeMode, TimerState } from '../../focus-mode/focus-mode.model';
+import {
+  FocusModeMode,
+  getTimerRemainingMs,
+  TimerState,
+} from '../../focus-mode/focus-mode.model';
 import { DroidLog } from '../../../core/log';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -465,10 +469,7 @@ export class AndroidFocusModeEffects {
         ),
         tap(([, timer]) => {
           if (timer.purpose === 'work' && timer.isRunning) {
-            const cap =
-              timer.duration > 0
-                ? Math.max(0, timer.duration - timer.elapsed)
-                : undefined;
+            const cap = timer.duration > 0 ? getTimerRemainingMs(timer) : undefined;
             this._globalTrackingInterval.triggerWakeUpTick(cap);
           }
         }),
@@ -656,8 +657,9 @@ export class AndroidFocusModeEffects {
 
   private _completionDuration(timer: TimerState): number {
     if (timer.duration > 0) {
-      const cap = Math.max(0, timer.duration - timer.elapsed);
-      const tick = this._globalTrackingInterval.triggerWakeUpTick(cap);
+      const tick = this._globalTrackingInterval.triggerWakeUpTick(
+        getTimerRemainingMs(timer),
+      );
       return Math.min(timer.duration, timer.elapsed + tick.duration);
     }
     const tick = this._globalTrackingInterval.triggerWakeUpTick();
