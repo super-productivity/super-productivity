@@ -36,6 +36,7 @@ type TimerWindow = Window & {
   SUPAndroid: {
     onPause$: { next: () => void };
     onResume$: { next: () => void };
+    onFocusModeTimerComplete$: { next: (isBreak: boolean) => void };
     onFocusSkip$: { next: () => void };
     getFocusModeElapsed: () => string;
   };
@@ -123,13 +124,38 @@ const expectTaskTime = async (
 
 test.describe('Android Focus timer recovery after WebView recreation', () => {
   // Returning exactly at the end, or long after it, credits the task only up
-  // to the Pomodoro end; the overrun belongs to the break, where tracking pauses.
-  for (const backgroundMs of [20 * 60_000, 50 * 60_000]) {
-    test(`records background time up to the Pomodoro end on resume after ${backgroundMs / 60_000} min`, async ({
+  // to the Pomodoro end; the overrun belongs to the break, where tracking pauses
+  // by default. The native completion may reach the WebView before the resume.
+  const pomodoroResumeCases = [
+    { name: 'at the end', backgroundMs: 20 * 60_000, expectedMs: 25 * 60_000 },
+    { name: 'past the end', backgroundMs: 50 * 60_000, expectedMs: 25 * 60_000 },
+    {
+      name: 'past the end after the native completion',
+      backgroundMs: 50 * 60_000,
+      expectedMs: 25 * 60_000,
+      isNativeCompleteFirst: true,
+    },
+    {
+      name: 'past the end while tracking continues during breaks',
+      backgroundMs: 50 * 60_000,
+      expectedMs: 55 * 60_000,
+      isTrackingDuringBreak: true,
+    },
+  ];
+  for (const c of pomodoroResumeCases) {
+    test(`records background Pomodoro time on resume ${c.name}`, async ({
       page,
       workViewPage,
     }) => {
       await workViewPage.waitForTaskList();
+      if (c.isTrackingDuringBreak) {
+        await dispatch(page, {
+          type: '[Global Config] Update Global Config Section',
+          sectionKey: 'focusMode',
+          sectionCfg: { isPauseTrackingDuringBreak: false },
+          isSkipSnack: true,
+        });
+      }
       await workViewPage.addTask('Background Pomodoro');
       const taskId = await startFlowtime(page);
       await dispatch(page, { type: '[FocusMode] Set Mode', mode: 'Pomodoro' });
@@ -141,17 +167,24 @@ test.describe('Android Focus timer recovery after WebView recreation', () => {
       await page.clock.fastForward(5 * 60_000);
       await expectTaskTime(page, taskId, 5 * 60_000);
       await pauseAndFlush(page);
-      await page.clock.fastForward(backgroundMs);
+      await page.clock.fastForward(c.backgroundMs);
+      if (c.isNativeCompleteFirst) {
+        await page.evaluate(() =>
+          (window as unknown as TimerWindow).SUPAndroid.onFocusModeTimerComplete$.next(
+            false,
+          ),
+        );
+      }
       await resume(page);
 
       await expect
         .poll(async () => (await readState(page)).focusMode.timer.purpose)
         .toBe('break');
-      await expectTaskTime(page, taskId, 25 * 60_000);
+      await expectTaskTime(page, taskId, c.expectedMs);
       await pauseAndFlush(page);
       await page.reload();
       await workViewPage.waitForTaskList();
-      await expectTaskTime(page, taskId, 25 * 60_000);
+      await expectTaskTime(page, taskId, c.expectedMs);
     });
   }
 
