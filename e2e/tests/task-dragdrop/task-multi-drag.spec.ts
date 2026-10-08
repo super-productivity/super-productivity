@@ -345,10 +345,12 @@ test.describe('Multi-task drag', () => {
       .click();
     await expect(page.locator('task-multi-select-bar .bar')).toHaveCount(0);
     // Restore the task, then dragging an unselected row must remain a single drag.
+    // The undone row can linger hidden in the DOM after its leave animation,
+    // so target the completed row's toggle.
     await page
       .locator('task')
       .filter({ has: page.locator('task-title', { hasText: 'Large 496', exact: true }) })
-      .locator('done-toggle')
+      .locator('done-toggle[aria-checked="true"]')
       .click();
     await select(page, ['Large 496', 'Large 497']);
     await startDrag(
