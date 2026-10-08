@@ -86,7 +86,7 @@ jobs:
           SUPERSYNC_PATTERN="^(${COMMON}|packages/super-sync-server/|docker-compose\.supersync\.yaml\$)"
           WEBDAV_PATTERN="^(${COMMON})"
           # The sync fuzz harness runs client sync code only, not the E2E helpers.
-          FUZZ_PATTERN="^(src/app/imex/sync/|src/app/op-log/|src/app/pfapi/|src/app/root-store/|src/app/features/[^/]+/store/|${PERSISTENT_ACTION_PATHS}|${SYNC_UTILITY_PATHS}|packages/sync-core/|packages/shared-schema/|tools/sync-fuzz-compare\.js\$|\.github/workflows/e2e-sync-pr\.yml\$)"
+          FUZZ_PATTERN="^(src/app/imex/sync/|src/app/op-log/|src/app/pfapi/|src/app/root-store/|src/app/features/[^/]+/store/|${PERSISTENT_ACTION_PATHS}|${SYNC_UTILITY_PATHS}|packages/sync-providers/|packages/sync-core/|packages/shared-schema/|tools/sync-fuzz-compare\.js\$|\.github/workflows/e2e-sync-pr\.yml\$)"
 
           supersync=false
           webdav=false
