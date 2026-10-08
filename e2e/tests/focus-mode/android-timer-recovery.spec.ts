@@ -122,6 +122,35 @@ const expectTaskTime = async (
 };
 
 test.describe('Android Focus timer recovery after WebView recreation', () => {
+  test('records background time before completing a Pomodoro on resume', async ({
+    page,
+    workViewPage,
+  }) => {
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('Background Pomodoro');
+    const taskId = await startFlowtime(page);
+    await dispatch(page, { type: '[FocusMode] Set Mode', mode: 'Pomodoro' });
+    await dispatch(page, {
+      type: '[FocusMode] Start Session',
+      duration: 25 * 60_000,
+      taskId,
+    });
+    await page.clock.fastForward(5 * 60_000);
+    await expectTaskTime(page, taskId, 5 * 60_000);
+    await pauseAndFlush(page);
+    await page.clock.fastForward(20 * 60_000);
+    await resume(page);
+
+    await expect
+      .poll(async () => (await readState(page)).focusMode.timer.purpose)
+      .toBe('break');
+    await expectTaskTime(page, taskId, 25 * 60_000);
+    await pauseAndFlush(page);
+    await page.reload();
+    await workViewPage.waitForTaskList();
+    await expectTaskTime(page, taskId, 25 * 60_000);
+  });
+
   test('ordinary background/resume and closing the overlay preserve recorded time', async ({
     page,
     workViewPage,

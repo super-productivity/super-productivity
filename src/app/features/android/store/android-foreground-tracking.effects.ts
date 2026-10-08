@@ -20,6 +20,7 @@ import {
 } from '../../tasks/store/task.selectors';
 import { DroidLog } from '../../../core/log';
 import { Task } from '../../tasks/task.model';
+import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
 import { selectTimer } from '../../focus-mode/store/focus-mode.selectors';
 import { combineLatest, firstValueFrom, Subject } from 'rxjs';
 import { ANDROID_BACKGROUND_TICK_CAP_MS } from '../../../app.constants';
@@ -140,6 +141,7 @@ export const creditBackgroundTickGap = (
 };
 
 export type AndroidResumeDeps = {
+  store: Store;
   globalTracking: GlobalTrackingIntervalService;
   taskService: TaskService;
   syncElapsedTimeForTask: (taskId: string) => Promise<boolean>;
@@ -159,6 +161,9 @@ export const handleAndroidResume = async (
   currentTask: Task | null,
 ): Promise<void> => {
   creditBackgroundTickGap(deps.globalTracking, deps.taskService);
+  // A resume tick can complete a Pomodoro and unset the current task. Record
+  // the background gap first, while that task is still being tracked.
+  deps.store.dispatch(focusModeActions.tick());
   if (currentTask) {
     await deps.syncElapsedTimeForTask(currentTask.id);
   } else {
@@ -364,6 +369,7 @@ export class AndroidForegroundTrackingEffects {
           tap(([, currentTask]) =>
             handleAndroidResume(
               {
+                store: this._store,
                 globalTracking: this._globalTrackingIntervalService,
                 taskService: this._taskService,
                 syncElapsedTimeForTask: (taskId) => this._syncElapsedTimeForTask(taskId),

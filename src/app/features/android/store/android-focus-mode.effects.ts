@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
-import { Action, createSelector, Store } from '@ngrx/store';
+import { createSelector, Store } from '@ngrx/store';
 import {
   exhaustMap,
   filter,
@@ -26,7 +26,7 @@ import {
   selectCurrentTaskId,
   selectTaskEntities,
 } from '../../tasks/store/task.selectors';
-import { combineLatest, firstValueFrom, Observable } from 'rxjs';
+import { combineLatest, firstValueFrom } from 'rxjs';
 import { FocusModeMode, TimerState } from '../../focus-mode/focus-mode.model';
 import { DroidLog } from '../../../core/log';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
@@ -44,15 +44,6 @@ import { waitForSyncWindow } from '../../../util/wait-for-sync-window.operator';
 import { bulkApplyOperations } from '../../../op-log/apply/bulk-hydration.action';
 
 type FocusNotificationTask = Pick<Task, 'id' | 'title'> | null | undefined;
-
-/**
- * On app resume, fire a single `tick()` so the wall-clock-based focus reducer
- * snaps the in-app countdown back to the truth after the WebView interval was
- * frozen in the background (#7856). The `tick` reducer is a no-op when the timer
- * is idle or paused, so no extra guard is needed here.
- */
-export const createFocusResumeTick$ = (onResume$: Observable<void>): Observable<Action> =>
-  onResume$.pipe(map(() => focusModeActions.tick()));
 
 /**
  * Whether the focus-mode notification needs a fresh push to the native service.
@@ -496,23 +487,6 @@ export class AndroidFocusModeEffects {
       ),
     );
 
-  // When the app returns to the foreground, the WebView's interval(1000) may have
-  // been frozen while backgrounded, leaving the in-app focus countdown stale and
-  // adrift from the still-accurate native notification (#7856). Fire one tick so
-  // the wall-clock reducer snaps the countdown back to the truth — mirroring how
-  // time tracking re-syncs from native on resume (syncOnResume$).
-  resyncFocusTimerOnResume$ =
-    IS_ANDROID_WEB_VIEW &&
-    createEffect(() =>
-      createFocusResumeTick$(
-        androidInterface.onResume$.pipe(
-          tap(() =>
-            DroidLog.log('AndroidFocusModeEffects: App resumed, re-syncing focus timer'),
-          ),
-        ),
-      ),
-    );
-
   // Re-adopt a focus session that kept running in the native foreground
   // service after the app was swiped from recents and reopened (#7855). The
   // WebView is recreated with an idle store, so without this the session (and
@@ -534,8 +508,8 @@ export class AndroidFocusModeEffects {
   // the timer means only a genuine resume/cold-start can trigger recovery.
   //
   // We recover only while the store is idle, so a live in-app session is never
-  // clobbered. (The sibling resyncFocusTimerOnResume$ also fires on resume, but
-  // its tick() is a no-op while the store is idle, so the two don't conflict.)
+  // clobbered. The tracking resume handler also dispatches tick(), which is a
+  // no-op while the store is idle, so the two do not conflict.
   // After restore, syncFocusModeToNotification$ re-issues startFocusModeService
   // with the same remaining time the native service already holds — an
   // intentional, idempotent round-trip (no countdown reset).

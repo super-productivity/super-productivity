@@ -1,3 +1,5 @@
+import { Store } from '@ngrx/store';
+import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
 import { TestBed, fakeAsync } from '@angular/core/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { BehaviorSubject } from 'rxjs';
@@ -1850,10 +1852,12 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
   const PRE_GAP_TIME_SPENT = 60000;
   const NATIVE_ELAPSED = PRE_GAP_TIME_SPENT + GAP_MS;
 
+  let store: jasmine.SpyObj<Store>;
   let globalTracking: jasmine.SpyObj<GlobalTrackingIntervalService>;
   let taskService: jasmine.SpyObj<TaskService>;
 
   beforeEach(() => {
+    store = jasmine.createSpyObj<Store>('Store', ['dispatch']);
     globalTracking = jasmine.createSpyObj<GlobalTrackingIntervalService>(
       'GlobalTrackingIntervalService',
       ['triggerWakeUpTick', 'resetTrackingStart'],
@@ -1868,8 +1872,9 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
     ]);
   });
 
-  it('should credit the gap BEFORE the native reconcile samples the task', async () => {
+  it('should credit and flush the gap before focus completion and native reconciliation', async () => {
     const order: string[] = [];
+    taskService.flushAccumulatedTimeSpent.and.callFake(() => order.push('flush'));
     globalTracking.triggerWakeUpTick.and.callFake(() => {
       order.push('credit');
       return { duration: GAP_MS, date: '2026-06-11', timestamp: 0 };
@@ -1877,6 +1882,7 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
 
     await handleAndroidResume(
       {
+        store,
         globalTracking,
         taskService,
         syncElapsedTimeForTask: (taskId) => {
@@ -1889,7 +1895,9 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
       { id: 'task-1' } as Task,
     );
 
-    expect(order).toEqual(['credit', 'reconcile:task-1']);
+    expect(order).toEqual(['credit', 'flush', 'reconcile:task-1']);
+    expect(store.dispatch).toHaveBeenCalledOnceWith(focusModeActions.tick());
+    expect(taskService.flushAccumulatedTimeSpent).toHaveBeenCalledBefore(store.dispatch);
   });
 
   it('should produce exactly ONE syncTimeSpent op for the gap (reconcile sees post-credit state)', async () => {
@@ -1912,6 +1920,7 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
 
     await handleAndroidResume(
       {
+        store,
         globalTracking,
         taskService,
         // mirrors _syncElapsedTimeForTask's delta logic against live state
@@ -1938,6 +1947,7 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
 
     await handleAndroidResume(
       {
+        store,
         globalTracking,
         taskService,
         syncElapsedTimeForTask: reconcileSpy,
