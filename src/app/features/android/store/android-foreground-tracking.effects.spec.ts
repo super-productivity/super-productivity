@@ -1875,6 +1875,9 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
   it('should credit and flush the gap before focus completion and native reconciliation', async () => {
     const order: string[] = [];
     taskService.flushAccumulatedTimeSpent.and.callFake(() => order.push('flush'));
+    (store.dispatch as jasmine.Spy).and.callFake(() => {
+      order.push('tick');
+    });
     globalTracking.triggerWakeUpTick.and.callFake(() => {
       order.push('credit');
       return { duration: GAP_MS, date: '2026-06-11', timestamp: 0 };
@@ -1895,9 +1898,8 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
       { id: 'task-1' } as Task,
     );
 
-    expect(order).toEqual(['credit', 'flush', 'reconcile:task-1']);
+    expect(order).toEqual(['credit', 'flush', 'tick', 'reconcile:task-1']);
     expect(store.dispatch).toHaveBeenCalledOnceWith(focusModeActions.tick());
-    expect(taskService.flushAccumulatedTimeSpent).toHaveBeenCalledBefore(store.dispatch);
   });
 
   it('should produce exactly ONE syncTimeSpent op for the gap (reconcile sees post-credit state)', async () => {
