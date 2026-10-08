@@ -378,6 +378,11 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       const baseTaskData: MutableTaskChanges = this._buildBaseIssueTask(issue);
       delete baseTaskData.dueDay;
       delete baseTaskData.dueWithTime;
+      // no state means the issue says nothing about done-ness (e.g. Redmine);
+      // the base `false` would reopen a task the user completed
+      if (issue.state == null) {
+        delete baseTaskData.isDone;
+      }
       for (const mapping of resolved.provider.definition.fieldMappings ?? []) {
         delete baseTaskData[mapping.taskField];
       }

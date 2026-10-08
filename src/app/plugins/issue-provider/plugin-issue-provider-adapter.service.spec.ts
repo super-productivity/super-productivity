@@ -463,6 +463,28 @@ describe('PluginIssueProviderAdapterService', () => {
       expect(result!.taskChanges.title).toBe('Updated Issue');
     });
 
+    // an issue without `state` (e.g. Redmine) says nothing about done-ness,
+    // so a refresh must not reopen a task the user completed
+    it('should not touch isDone when the issue has no state', async () => {
+      const provider = createMockProvider({
+        getById: jasmine
+          .createSpy('getById')
+          .and.resolveTo({ id: 'ISS-5', title: 'T', lastUpdated: 2000 }),
+      });
+      registrySpy.getProvider.and.returnValue(provider);
+      const task = {
+        id: 'task-1',
+        issueId: 'ISS-5',
+        issueProviderId: PROVIDER_ID,
+        issueLastUpdated: 1000,
+        isDone: true,
+      } as Task;
+
+      const result = await service.getFreshDataForIssueTask(task);
+
+      expect(result!.taskChanges.isDone).toBeUndefined();
+    });
+
     it('should return null when issue is not updated', async () => {
       const freshIssue: PluginIssue = {
         id: 'ISS-5',
@@ -1558,6 +1580,37 @@ describe('PluginIssueProviderAdapterService', () => {
       expect(getById).not.toHaveBeenCalled();
       expect(result.map((r) => r.task.id)).toEqual(['task-1', 'task-2', 'task-3']);
       expect(result[1].taskChanges.title).toBe('Two');
+    });
+
+    it('should batch per provider and fall back to getById without getByIds', async () => {
+      const issue = { id: 'ISS-1', title: 'One', lastUpdated: 5000 } as PluginIssue;
+      const getByIds = jasmine.createSpy('getByIds').and.resolveTo([issue]);
+      const getById = jasmine.createSpy('getById').and.resolveTo(issue);
+      const batched = createMockProvider({ getByIds });
+      const single = createMockProvider({ getById });
+      registrySpy.getProvider.and.callFake((key: string) =>
+        key === 'plugin:single' ? single : batched,
+      );
+      const otherCfg = {
+        ...mockPluginCfg,
+        id: 'other',
+        issueProviderKey: 'plugin:single',
+      };
+      // the per-task fallback reads the config once more
+      storeSpy.select.and.returnValues(of(mockPluginCfg), of(otherCfg), of(otherCfg));
+
+      const result = await service.getFreshDataForIssueTasks([
+        { id: 'task-1', issueId: 'ISS-1', issueProviderId: PROVIDER_ID } as Task,
+        { id: 'task-2', issueId: 'ISS-1', issueProviderId: 'other' } as Task,
+      ]);
+
+      expect(getByIds).toHaveBeenCalledOnceWith(
+        ['ISS-1'],
+        jasmine.anything(),
+        jasmine.anything(),
+      );
+      expect(getById).toHaveBeenCalledTimes(1);
+      expect(result.map((r) => r.task.id)).toEqual(['task-1', 'task-2']);
     });
 
     it('should return nothing when getByIds fails', async () => {
