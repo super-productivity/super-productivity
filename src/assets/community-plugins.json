@@ -182,5 +182,13 @@
     "author": "BigWebstas",
     "authorUrl": "https://github.com/BigWebstas",
     "stars": 0
+  },
+  {
+    "name": "Vikunja Integration",
+    "shortDescription": "Bidirectional sync between Super Productivity and Vikunja, including tasks, project mirrors, subtasks, labels, completion state, descriptions, and due dates.",
+    "url": "https://github.com/abhilesh/sp-vikunja",
+    "author": "abhilesh",
+    "authorUrl": "https://github.com/abhilesh",
+    "stars": 0
   }
 ]
