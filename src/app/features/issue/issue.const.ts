@@ -41,12 +41,10 @@ export const GITHUB_TYPE: MigratedIssueProviderKey = 'GITHUB';
 export const JIRA_TYPE: BuiltInIssueProviderKey = 'JIRA';
 export const CALDAV_TYPE: BuiltInIssueProviderKey = 'CALDAV';
 export const OPEN_PROJECT_TYPE: BuiltInIssueProviderKey = 'OPEN_PROJECT';
-export const REDMINE_TYPE: MigratedIssueProviderKey = 'REDMINE';
 export const ICAL_TYPE: BuiltInIssueProviderKey = 'ICAL';
 export const TRELLO_TYPE: MigratedIssueProviderKey = 'TRELLO';
 export const CLICKUP_TYPE: MigratedIssueProviderKey = 'CLICKUP';
 export const AZURE_DEVOPS_TYPE: MigratedIssueProviderKey = 'AZURE_DEVOPS';
-export const NEXTCLOUD_DECK_TYPE: MigratedIssueProviderKey = 'NEXTCLOUD_DECK';
 export const PLAINSPACE_TYPE: BuiltInIssueProviderKey = 'PLAINSPACE';
 
 export const ISSUE_PROVIDER_TYPES: BuiltInIssueProviderKey[] = [
