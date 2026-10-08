@@ -465,25 +465,27 @@ describe('PluginIssueProviderAdapterService', () => {
 
     // an issue without `state` (e.g. Redmine) says nothing about done-ness,
     // so a refresh must not reopen a task the user completed
-    it('should not touch isDone when the issue has no state', async () => {
-      const provider = createMockProvider({
-        getById: jasmine
-          .createSpy('getById')
-          .and.resolveTo({ id: 'ISS-5', title: 'T', lastUpdated: 2000 }),
+    for (const state of [undefined, '']) {
+      it(`should not touch isDone when the issue state is ${JSON.stringify(state)}`, async () => {
+        const provider = createMockProvider({
+          getById: jasmine
+            .createSpy('getById')
+            .and.resolveTo({ id: 'ISS-5', title: 'T', state, lastUpdated: 2000 }),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          isDone: true,
+        } as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result!.taskChanges.isDone).toBeUndefined();
       });
-      registrySpy.getProvider.and.returnValue(provider);
-      const task = {
-        id: 'task-1',
-        issueId: 'ISS-5',
-        issueProviderId: PROVIDER_ID,
-        issueLastUpdated: 1000,
-        isDone: true,
-      } as Task;
-
-      const result = await service.getFreshDataForIssueTask(task);
-
-      expect(result!.taskChanges.isDone).toBeUndefined();
-    });
+    }
 
     it('should return null when issue is not updated', async () => {
       const freshIssue: PluginIssue = {
