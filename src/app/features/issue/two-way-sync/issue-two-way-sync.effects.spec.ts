@@ -395,6 +395,72 @@ describe('IssueTwoWaySyncEffects', () => {
       adapterRegistry.unregister('TEST_PROVIDER');
     }));
 
+    // a push of another field queued behind the done push must keep the
+    // baseline that push wrote, not write the stale status back
+    it('should keep both fields in the baseline after queued pushes', fakeAsync(() => {
+      let remote: Record<string, unknown> = {
+        status: 'NEEDS-ACTION',
+        summary: 'Old',
+        lastUpdated: 1000,
+      };
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping, titleFieldMapping]),
+        fetchIssue: jasmine.createSpy('fetchIssue').and.callFake(async () => remote),
+        pushChanges: jasmine
+          .createSpy('pushChanges')
+          .and.callFake(async (_id: string, changes: Record<string, unknown>) => {
+            await new Promise((r) => setTimeout(r, 100));
+            remote = { ...remote, ...changes, lastUpdated: 2000 };
+          }),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.callFake((issue: Record<string, unknown>) => ({
+            status: issue['status'],
+            summary: issue['summary'],
+          })),
+        getIssueLastUpdated: (issue: Record<string, unknown>) =>
+          issue['lastUpdated'] as number,
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+      let task = createMockTask({
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastUpdated: 1000,
+        issueLastSyncedValues: { status: 'NEEDS-ACTION', summary: 'Old' },
+        isDone: false,
+        title: 'Old',
+      });
+      taskServiceSpy.getByIdOnce$.and.callFake(() => of(task));
+      taskServiceSpy.update.and.callFake((_id: string, changes: Partial<Task>) => {
+        task = { ...task, ...changes };
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      task = { ...task, isDone: true };
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      // the done push is now in flight
+      flushMicrotasks();
+      task = { ...task, title: 'New' };
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { title: 'New' } },
+        }),
+      );
+      tick(500);
+
+      expect(task.issueLastSyncedValues).toEqual({ status: 'COMPLETED', summary: 'New' });
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
     it('should still skip a field missing from an existing baseline', fakeAsync(() => {
       const adapter = createMockAdapter({
         getFieldMappings: jasmine
