@@ -7,11 +7,15 @@ import { TaskService } from '../../tasks/task.service';
 import { IssueProviderService } from '../issue-provider.service';
 import { IssueSyncAdapterRegistryService } from './issue-sync-adapter-registry.service';
 import { IssueSyncAdapterResolverService } from './issue-sync-adapter-resolver.service';
-import { CaldavSyncAdapterService } from '../providers/caldav/caldav-sync-adapter.service';
+import {
+  CALDAV_FIELD_MAPPINGS,
+  CaldavSyncAdapterService,
+} from '../providers/caldav/caldav-sync-adapter.service';
 import { PlainspaceSyncAdapterService } from '../providers/plainspace/plainspace-sync-adapter.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../../planner/store/planner.actions';
+import { ADD_TASK_PANEL_ID } from '../../planner/planner.model';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { Task, TaskWithSubTasks } from '../../tasks/task.model';
 import { selectEnabledIssueProviders } from '../store/issue-provider.selectors';
@@ -114,6 +118,22 @@ describe('IssueTwoWaySyncEffects', () => {
     issueField: 'summary',
     defaultDirection: 'both',
     toIssueValue: (val: unknown) => val,
+    toTaskValue: (val: unknown) => val,
+  };
+
+  const deadlineWithTimeFieldMapping: FieldMapping = {
+    taskField: 'deadlineWithTime',
+    issueField: 'due',
+    defaultDirection: 'both',
+    toIssueValue: (val: unknown) => (val == null ? null : val),
+    toTaskValue: (val: unknown) => val,
+  };
+
+  const deadlineDayFieldMapping: FieldMapping = {
+    taskField: 'deadlineDay',
+    issueField: 'due',
+    defaultDirection: 'both',
+    toIssueValue: (val: unknown) => (val == null ? null : val),
     toTaskValue: (val: unknown) => val,
   };
 
@@ -818,6 +838,211 @@ describe('IssueTwoWaySyncEffects', () => {
       adapterRegistry.unregister('TEST_PROVIDER');
     }));
 
+    describe('skipPush', () => {
+      const setUpSkipPush = (
+        mapping: FieldMapping,
+        taskOverrides: Partial<Task> = {},
+      ): { adapter: IssueSyncAdapter<unknown>; task: Task } => {
+        const adapter = createMockAdapter({
+          getFieldMappings: jasmine
+            .createSpy('getFieldMappings')
+            .and.returnValue([mapping]),
+          getSyncConfig: jasmine.createSpy('getSyncConfig').and.returnValue({}),
+          fetchIssue: jasmine
+            .createSpy('fetchIssue')
+            .and.resolveTo({ dtstart: '2026-03-19' }),
+          extractSyncValues: jasmine
+            .createSpy('extractSyncValues')
+            .and.returnValue({ dtstart: '2026-03-19' }),
+        });
+        adapterRegistry.register('TEST_PROVIDER', adapter);
+
+        const task = createMockTask({
+          id: 'task-1',
+          issueType: 'TEST_PROVIDER' as any,
+          issueId: 'issue-1',
+          issueProviderId: 'provider-1',
+          issueLastSyncedValues: { dtstart: '2026-03-19' },
+          dueDay: '2026-03-22',
+          ...taskOverrides,
+        });
+
+        taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+        issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+          of(createMockIssueProvider()),
+        );
+
+        effects.pushFieldsOnTaskUpdate$.subscribe();
+        return { adapter, task };
+      };
+
+      const skipTransferTask: FieldMapping = {
+        ...dueDayFieldMapping,
+        skipPush: ({ action }) => action.type === PlannerActions.transferTask.type,
+      };
+      const skipRepeating: FieldMapping = {
+        ...dueDayFieldMapping,
+        skipPush: ({ task }) => !!task.repeatCfgId,
+      };
+
+      afterEach(() => adapterRegistry.unregister('TEST_PROVIDER'));
+
+      it('does not push a field whose mapping skipPush returns true for the triggering action', fakeAsync(() => {
+        const { adapter, task } = setUpSkipPush(skipTransferTask);
+        actions$.next(
+          PlannerActions.transferTask({
+            task,
+            prevDay: '2026-03-19',
+            newDay: '2026-03-22',
+            targetIndex: 0,
+            today: '2026-03-20',
+          }),
+        );
+        tick();
+        expect(adapter.fetchIssue).not.toHaveBeenCalled();
+        expect(adapter.pushChanges).not.toHaveBeenCalled();
+      }));
+
+      it('still pushes that field for other actions', fakeAsync(() => {
+        const { adapter, task } = setUpSkipPush(skipTransferTask);
+        actions$.next(PlannerActions.planTaskForDay({ task, day: '2026-03-22' }));
+        tick();
+        expect(adapter.pushChanges).toHaveBeenCalledWith(
+          'issue-1',
+          jasmine.objectContaining({ [dueDayFieldMapping.issueField]: '2026-03-22' }),
+          jasmine.anything(),
+        );
+      }));
+
+      it('gives skipPush the task the effect fetched', fakeAsync(() => {
+        const { adapter, task } = setUpSkipPush(skipRepeating, { repeatCfgId: 'rc-1' });
+        // The action carries a task without repeatCfgId: only the fetched one has it.
+        actions$.next(
+          PlannerActions.planTaskForDay({
+            task: { ...task, repeatCfgId: undefined },
+            day: '2026-03-22',
+          }),
+        );
+        tick();
+        expect(adapter.fetchIssue).not.toHaveBeenCalled();
+        expect(adapter.pushChanges).not.toHaveBeenCalled();
+      }));
+
+      it('pushes when the fetched task does not match skipPush', fakeAsync(() => {
+        const { adapter, task } = setUpSkipPush(skipRepeating);
+        actions$.next(PlannerActions.planTaskForDay({ task, day: '2026-03-22' }));
+        tick();
+        expect(adapter.pushChanges).toHaveBeenCalledWith(
+          'issue-1',
+          jasmine.objectContaining({ [dueDayFieldMapping.issueField]: '2026-03-22' }),
+          jasmine.anything(),
+        );
+      }));
+    });
+
+    describe('baselineFromUnchangedIssue', () => {
+      const flaggedDueDay: FieldMapping = {
+        ...dueDayFieldMapping,
+        baselineFromUnchangedIssue: true,
+      };
+
+      const setUpBaseline = ({
+        mapping = flaggedDueDay,
+        issueLastUpdatedOnServer = 42,
+        hasGetIssueLastUpdated = true,
+        taskOverrides = {} as Partial<Task>,
+      } = {}): { adapter: IssueSyncAdapter<unknown>; task: Task } => {
+        const adapter = createMockAdapter({
+          getFieldMappings: jasmine
+            .createSpy('getFieldMappings')
+            .and.returnValue([mapping]),
+          getSyncConfig: jasmine.createSpy('getSyncConfig').and.returnValue({}),
+          fetchIssue: jasmine
+            .createSpy('fetchIssue')
+            .and.resolveTo({ dtstart: '2026-03-19' }),
+          extractSyncValues: jasmine
+            .createSpy('extractSyncValues')
+            .and.returnValue({ dtstart: '2026-03-19' }),
+          ...(!hasGetIssueLastUpdated
+            ? {}
+            : {
+                getIssueLastUpdated: jasmine
+                  .createSpy('getIssueLastUpdated')
+                  .and.returnValue(issueLastUpdatedOnServer),
+              }),
+        });
+        adapterRegistry.register('TEST_PROVIDER', adapter);
+
+        const task = createMockTask({
+          id: 'task-1',
+          issueType: 'TEST_PROVIDER' as any,
+          issueId: 'issue-1',
+          issueProviderId: 'provider-1',
+          issueLastSyncedValues: {},
+          issueLastUpdated: 42,
+          dueDay: '2026-03-22',
+          ...taskOverrides,
+        });
+
+        taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+        issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+          of(createMockIssueProvider()),
+        );
+
+        effects.pushFieldsOnTaskUpdate$.subscribe();
+        actions$.next(PlannerActions.planTaskForDay({ task, day: '2026-03-22' }));
+        tick();
+        return { adapter, task };
+      };
+
+      const expectNoBaselineWrite = (): void => {
+        const withSyncValues = taskServiceSpy.update.calls
+          .allArgs()
+          .filter((args) => 'issueLastSyncedValues' in (args[1] as Partial<Task>));
+        expect(withSyncValues).toEqual([]);
+      };
+
+      afterEach(() => adapterRegistry.unregister('TEST_PROVIDER'));
+
+      it('uses the fetched value as baseline when the issue is unchanged since the last pull', fakeAsync(() => {
+        const { adapter } = setUpBaseline();
+        expect(adapter.pushChanges).toHaveBeenCalledWith(
+          'issue-1',
+          { dtstart: '2026-03-22' },
+          jasmine.anything(),
+        );
+        const updateChanges = taskServiceSpy.update.calls.mostRecent()
+          .args[1] as Partial<Task>;
+        expect(updateChanges.issueLastSyncedValues).toEqual({ dtstart: '2026-03-22' });
+      }));
+
+      it('does not push when the issue changed on the server since the last pull', fakeAsync(() => {
+        const { adapter } = setUpBaseline({ issueLastUpdatedOnServer: 43 });
+        expect(adapter.pushChanges).not.toHaveBeenCalled();
+        expectNoBaselineWrite();
+      }));
+
+      it('does not build a baseline for mappings without the flag', fakeAsync(() => {
+        const { adapter } = setUpBaseline({ mapping: dueDayFieldMapping });
+        expect(adapter.pushChanges).not.toHaveBeenCalled();
+        expectNoBaselineWrite();
+      }));
+
+      it('does not build a baseline when the adapter has no getIssueLastUpdated', fakeAsync(() => {
+        const { adapter } = setUpBaseline({ hasGetIssueLastUpdated: false });
+        expect(adapter.pushChanges).not.toHaveBeenCalled();
+        expectNoBaselineWrite();
+      }));
+
+      it('never overrides a stored baseline (provider-changed still skips)', fakeAsync(() => {
+        const { adapter } = setUpBaseline({
+          taskOverrides: { issueLastSyncedValues: { dtstart: '2026-03-10' } },
+        });
+        expect(adapter.pushChanges).not.toHaveBeenCalled();
+        expectNoBaselineWrite();
+      }));
+    });
+
     it('should show snack on push error and continue', fakeAsync(() => {
       const adapter = createMockAdapter({
         getFieldMappings: jasmine
@@ -897,6 +1122,999 @@ describe('IssueTwoWaySyncEffects', () => {
 
       expect(snackServiceSpy.open).not.toHaveBeenCalled();
 
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('pushes the post-reducer date pair, not a value the reducer cleared', fakeAsync(() => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([dueWithTimeFieldMapping, dueDayFieldMapping]),
+        fetchIssue: jasmine.createSpy('fetchIssue').and.resolveTo({ dtstart: null }),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ dtstart: null }),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      // Reducer outcome of day-only short syntax: dueDay set, dueWithTime cleared.
+      const task = createMockTask({
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastSyncedValues: { dtstart: null },
+        dueDay: '2026-10-05',
+        dueWithTime: undefined,
+      });
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      // The action still carries the parser's stale time.
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: {
+            id: 'task-1',
+            changes: { dueWithTime: 1790000000000, dueDay: '2026-10-05' },
+          },
+        }),
+      );
+      tick();
+
+      expect(adapter.pushChanges).toHaveBeenCalledWith(
+        'issue-1',
+        { dtstart: '2026-10-05' },
+        jasmine.anything(),
+      );
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    const setUpDeadlineAdapter = (baselineDue: unknown): IssueSyncAdapter<unknown> => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([deadlineWithTimeFieldMapping, deadlineDayFieldMapping]),
+        fetchIssue: jasmine.createSpy('fetchIssue').and.resolveTo({ due: baselineDue }),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ due: baselineDue }),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+      return adapter;
+    };
+
+    const linkedTask = (o: Partial<Task>): Task =>
+      createMockTask({
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        ...o,
+      });
+
+    it('pushes a deadline set via setDeadline', fakeAsync(() => {
+      const adapter = setUpDeadlineAdapter(null);
+      taskServiceSpy.getByIdOnce$.and.returnValue(
+        of(
+          linkedTask({ deadlineDay: '2026-10-05', issueLastSyncedValues: { due: null } }),
+        ),
+      );
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(
+        TaskSharedActions.setDeadline({ taskId: 'task-1', deadlineDay: '2026-10-05' }),
+      );
+      tick();
+      expect(adapter.pushChanges).toHaveBeenCalledWith(
+        'issue-1',
+        { due: '2026-10-05' },
+        jasmine.anything(),
+      );
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    describe('pushTogetherWith (held-back retry)', () => {
+      const ALL_DATES: (keyof Task)[] = [
+        'dueDay',
+        'dueWithTime',
+        'deadlineDay',
+        'deadlineWithTime',
+      ];
+      const linked = (m: FieldMapping): FieldMapping => ({
+        ...m,
+        pushTogetherWith: ALL_DATES,
+      });
+      const BASE = { dtstart: '2026-09-25', due: '2026-09-30' };
+      let adapter: IssueSyncAdapter<unknown>;
+      let currentTask: Task;
+
+      beforeEach(() => {
+        adapter = createMockAdapter({
+          getFieldMappings: jasmine
+            .createSpy('getFieldMappings')
+            .and.returnValue([
+              linked(dueWithTimeFieldMapping),
+              linked(dueDayFieldMapping),
+              linked(deadlineWithTimeFieldMapping),
+              linked(deadlineDayFieldMapping),
+            ]),
+          fetchIssue: jasmine.createSpy('fetchIssue').and.resolveTo(BASE),
+          extractSyncValues: jasmine.createSpy('extractSyncValues').and.returnValue(BASE),
+        });
+        adapterRegistry.register('TEST_PROVIDER', adapter);
+        issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+          of(createMockIssueProvider()),
+        );
+        currentTask = createMockTask({
+          issueType: 'TEST_PROVIDER' as any,
+          issueId: 'issue-1',
+          issueProviderId: 'provider-1',
+          issueLastSyncedValues: BASE,
+          dueDay: '2026-10-03',
+          deadlineDay: '2026-09-30',
+        });
+        taskServiceSpy.getByIdOnce$.and.callFake(() => of(currentTask));
+        // The real TaskService.update() dispatches TaskSharedActions.updateTask,
+        // which the effect's own filter immediately consumes as sync-originated
+        // (via _syncOriginatedTaskIds). Simulate that round trip so a bare spy
+        // doesn't leave the flag dangling and swallow the next real dispatch.
+        taskServiceSpy.update.and.callFake((id: string, changes: Partial<Task>) => {
+          actions$.next(TaskSharedActions.updateTask({ task: { id, changes } }));
+        });
+        effects.pushFieldsOnTaskUpdate$.subscribe();
+      });
+
+      afterEach(() => adapterRegistry.unregister('TEST_PROVIDER'));
+
+      it('re-sends a held-back planned date with the next deadline edit, then forgets it', fakeAsync(() => {
+        // 1) Planned date moved past the deadline: the adapter holds it back.
+        (adapter.pushChanges as jasmine.Spy).and.returnValue(
+          Promise.reject(
+            Object.assign(new Error('held back'), { isExpectedSyncSkip: true }),
+          ),
+        );
+        actions$.next(
+          PlannerActions.planTaskForDay({ task: currentTask, day: '2026-10-03' }),
+        );
+        tick();
+        expect(adapter.pushChanges).toHaveBeenCalledWith(
+          'issue-1',
+          { dtstart: '2026-10-03' },
+          jasmine.anything(),
+        );
+
+        // 2) Deadline moved: both are sent.
+        (adapter.pushChanges as jasmine.Spy).calls.reset();
+        (adapter.pushChanges as jasmine.Spy).and.resolveTo();
+        currentTask = { ...currentTask, deadlineDay: '2026-10-08' };
+        actions$.next(
+          TaskSharedActions.setDeadline({ taskId: 'task-1', deadlineDay: '2026-10-08' }),
+        );
+        tick();
+        expect(adapter.pushChanges).toHaveBeenCalledWith(
+          'issue-1',
+          { due: '2026-10-08', dtstart: '2026-10-03' },
+          jasmine.anything(),
+        );
+
+        // 3) Next deadline edit: the planned date is no longer attached.
+        (adapter.pushChanges as jasmine.Spy).calls.reset();
+        currentTask = {
+          ...currentTask,
+          deadlineDay: '2026-10-09',
+          issueLastSyncedValues: { dtstart: '2026-10-03', due: '2026-10-08' },
+        };
+        (adapter.fetchIssue as jasmine.Spy).and.resolveTo({
+          dtstart: '2026-10-03',
+          due: '2026-10-08',
+        });
+        (adapter.extractSyncValues as jasmine.Spy).and.returnValue({
+          dtstart: '2026-10-03',
+          due: '2026-10-08',
+        });
+        actions$.next(
+          TaskSharedActions.setDeadline({ taskId: 'task-1', deadlineDay: '2026-10-09' }),
+        );
+        tick();
+        expect(adapter.pushChanges).toHaveBeenCalledWith(
+          'issue-1',
+          { due: '2026-10-09' },
+          jasmine.anything(),
+        );
+      }));
+
+      it('does not re-send a held-back partner whose mapping skips this push', fakeAsync(() => {
+        const skipRepeating = (m: FieldMapping): FieldMapping => ({
+          ...linked(m),
+          skipPush: ({ task }) => !!task.repeatCfgId,
+        });
+        (adapter.getFieldMappings as jasmine.Spy).and.returnValue([
+          skipRepeating(dueWithTimeFieldMapping),
+          skipRepeating(dueDayFieldMapping),
+          linked(deadlineWithTimeFieldMapping),
+          linked(deadlineDayFieldMapping),
+        ]);
+
+        // 1) Planned date moved on a non-repeating task: the adapter holds it back.
+        (adapter.pushChanges as jasmine.Spy).and.returnValue(
+          Promise.reject(
+            Object.assign(new Error('held back'), { isExpectedSyncSkip: true }),
+          ),
+        );
+        actions$.next(
+          PlannerActions.planTaskForDay({ task: currentTask, day: '2026-10-03' }),
+        );
+        tick();
+        expect(adapter.pushChanges).toHaveBeenCalledWith(
+          'issue-1',
+          { dtstart: '2026-10-03' },
+          jasmine.anything(),
+        );
+
+        // 2) The task now has a repeat config; a deadline edit must not carry
+        // the held-back planned date along.
+        (adapter.pushChanges as jasmine.Spy).calls.reset();
+        (adapter.pushChanges as jasmine.Spy).and.resolveTo();
+        currentTask = { ...currentTask, repeatCfgId: 'rc-1', deadlineDay: '2026-10-08' };
+        actions$.next(
+          TaskSharedActions.setDeadline({ taskId: 'task-1', deadlineDay: '2026-10-08' }),
+        );
+        tick();
+        expect(adapter.pushChanges).toHaveBeenCalledTimes(1);
+        const pushed = (adapter.pushChanges as jasmine.Spy).calls.mostRecent()
+          .args[1] as Record<string, unknown>;
+        expect(pushed).toEqual({ due: '2026-10-08' });
+        expect('dtstart' in pushed).toBeFalse();
+      }));
+
+      it('does not attach an automatically changed planned date to a deadline push', fakeAsync(() => {
+        // dueDay differs from the server (e.g. Add to Today or deadline auto-plan), nothing held back.
+        currentTask = { ...currentTask, deadlineDay: '2026-10-08' };
+        actions$.next(
+          TaskSharedActions.setDeadline({ taskId: 'task-1', deadlineDay: '2026-10-08' }),
+        );
+        tick();
+        expect(adapter.pushChanges).toHaveBeenCalledWith(
+          'issue-1',
+          { due: '2026-10-08' },
+          jasmine.anything(),
+        );
+      }));
+
+      it('keeps a held-back partner held back when it is only skipped (provider-changed) this round', fakeAsync(() => {
+        // a) Planned date moved: the adapter holds it back.
+        (adapter.pushChanges as jasmine.Spy).and.returnValue(
+          Promise.reject(
+            Object.assign(new Error('held back'), { isExpectedSyncSkip: true }),
+          ),
+        );
+        actions$.next(
+          PlannerActions.planTaskForDay({ task: currentTask, day: '2026-10-03' }),
+        );
+        tick();
+        expect(adapter.pushChanges).toHaveBeenCalledWith(
+          'issue-1',
+          { dtstart: '2026-10-03' },
+          jasmine.anything(),
+        );
+
+        // b) Deadline moved while the server's dtstart drifted from the baseline:
+        // dueDay is skipped as provider-changed, only the deadline is pushed.
+        (adapter.pushChanges as jasmine.Spy).calls.reset();
+        (adapter.pushChanges as jasmine.Spy).and.resolveTo();
+        (adapter.fetchIssue as jasmine.Spy).and.resolveTo({
+          dtstart: '2026-10-05',
+          due: '2026-09-30',
+        });
+        (adapter.extractSyncValues as jasmine.Spy).and.returnValue({
+          dtstart: '2026-10-05',
+          due: '2026-09-30',
+        });
+        currentTask = { ...currentTask, deadlineDay: '2026-10-08' };
+        actions$.next(
+          TaskSharedActions.setDeadline({ taskId: 'task-1', deadlineDay: '2026-10-08' }),
+        );
+        tick();
+        expect(adapter.pushChanges).toHaveBeenCalledWith(
+          'issue-1',
+          { due: '2026-10-08' },
+          jasmine.anything(),
+        );
+
+        // c) The server's dtstart matches the baseline again (no more drift) and
+        // the deadline changes once more: dueDay is still held back from (a) and
+        // must be re-sent, proving (b)'s skip did not forget it.
+        (adapter.pushChanges as jasmine.Spy).calls.reset();
+        currentTask = {
+          ...currentTask,
+          deadlineDay: '2026-10-09',
+          issueLastSyncedValues: { dtstart: '2026-09-25', due: '2026-10-08' },
+        };
+        (adapter.fetchIssue as jasmine.Spy).and.resolveTo({
+          dtstart: '2026-09-25',
+          due: '2026-10-08',
+        });
+        (adapter.extractSyncValues as jasmine.Spy).and.returnValue({
+          dtstart: '2026-09-25',
+          due: '2026-10-08',
+        });
+        actions$.next(
+          TaskSharedActions.setDeadline({ taskId: 'task-1', deadlineDay: '2026-10-09' }),
+        );
+        tick();
+        expect(adapter.pushChanges).toHaveBeenCalledWith(
+          'issue-1',
+          { due: '2026-10-09', dtstart: '2026-10-03' },
+          jasmine.anything(),
+        );
+      }));
+    });
+
+    describe('CalDAV planned-date triggers', () => {
+      const BASE = { dtstart: '2026-10-01', due: '2026-10-20' };
+      const TIMED = new Date(2026, 9, 6, 14, 30).getTime();
+      let adapter: IssueSyncAdapter<unknown>;
+      let currentTask: Task;
+
+      const setTask = (o: Partial<Task>): Task => {
+        currentTask = createMockTask({
+          issueType: 'TEST_PROVIDER' as any,
+          issueId: 'issue-1',
+          issueProviderId: 'provider-1',
+          issueLastSyncedValues: BASE,
+          dueDay: '2026-10-01',
+          deadlineDay: '2026-10-20',
+          ...o,
+        });
+        return currentTask;
+      };
+
+      beforeEach(() => {
+        adapter = createMockAdapter({
+          getFieldMappings: jasmine
+            .createSpy('getFieldMappings')
+            .and.returnValue(CALDAV_FIELD_MAPPINGS),
+          getSyncConfig: jasmine.createSpy('getSyncConfig').and.returnValue({
+            dueDay: 'both',
+            dueWithTime: 'both',
+            deadlineDay: 'both',
+            deadlineWithTime: 'both',
+          }),
+          fetchIssue: jasmine.createSpy('fetchIssue').and.resolveTo(BASE),
+          extractSyncValues: jasmine.createSpy('extractSyncValues').and.returnValue(BASE),
+        });
+        adapterRegistry.register('TEST_PROVIDER', adapter);
+        issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+          of(createMockIssueProvider()),
+        );
+        setTask({});
+        taskServiceSpy.getByIdOnce$.and.callFake(() => of(currentTask));
+        // Simulate the real update() round trip (see the held-back block above).
+        taskServiceSpy.update.and.callFake((id: string, changes: Partial<Task>) => {
+          actions$.next(TaskSharedActions.updateTask({ task: { id, changes } }));
+        });
+        effects.pushFieldsOnTaskUpdate$.subscribe();
+      });
+
+      afterEach(() => adapterRegistry.unregister('TEST_PROVIDER'));
+
+      it('does not push an untimed Planner drag (transferTask)', fakeAsync(() => {
+        const task = setTask({ dueDay: '2026-10-08' });
+        actions$.next(
+          PlannerActions.transferTask({
+            task,
+            prevDay: '2026-10-01',
+            newDay: '2026-10-08',
+            targetIndex: 0,
+            today: '2026-10-04',
+          }),
+        );
+        tick();
+        expect(adapter.pushChanges).not.toHaveBeenCalled();
+      }));
+
+      it('does not push a timed Planner drag (scheduleTaskWithTime with isPlannerMove)', fakeAsync(() => {
+        const task = setTask({ dueDay: undefined, dueWithTime: TIMED });
+        actions$.next(
+          TaskSharedActions.scheduleTaskWithTime({
+            task,
+            dueWithTime: TIMED,
+            isMoveToBacklog: false,
+            isPlannerMove: true,
+          }),
+        );
+        tick();
+        expect(adapter.pushChanges).not.toHaveBeenCalled();
+      }));
+
+      it('does not push repeat-config planning, but still pushes the deadline of that task', fakeAsync(() => {
+        // The repeat-config chain: updateTask({ dueDay }) then planTaskForDay.
+        const task = setTask({ dueDay: '2026-10-08', repeatCfgId: 'rc-1' });
+        actions$.next(
+          TaskSharedActions.updateTask({
+            task: { id: 'task-1', changes: { dueDay: '2026-10-08' } },
+          }),
+        );
+        tick();
+        actions$.next(PlannerActions.planTaskForDay({ task, day: '2026-10-08' }));
+        tick();
+        expect(adapter.pushChanges).not.toHaveBeenCalled();
+
+        setTask({ dueDay: '2026-10-08', repeatCfgId: 'rc-1', deadlineDay: '2026-10-22' });
+        actions$.next(
+          TaskSharedActions.setDeadline({ taskId: 'task-1', deadlineDay: '2026-10-22' }),
+        );
+        tick();
+        expect(adapter.pushChanges).toHaveBeenCalledOnceWith(
+          'issue-1',
+          { due: '2026-10-22' },
+          jasmine.anything(),
+        );
+      }));
+
+      it('pushes planTaskForDay on a non-repeating task', fakeAsync(() => {
+        const task = setTask({ dueDay: '2026-10-08' });
+        actions$.next(PlannerActions.planTaskForDay({ task, day: '2026-10-08' }));
+        tick();
+        expect(adapter.pushChanges).toHaveBeenCalledWith(
+          'issue-1',
+          { dtstart: '2026-10-08' },
+          jasmine.anything(),
+        );
+      }));
+
+      it('pushes scheduleTaskWithTime without the Planner flag', fakeAsync(() => {
+        const task = setTask({ dueDay: undefined, dueWithTime: TIMED });
+        actions$.next(
+          TaskSharedActions.scheduleTaskWithTime({
+            task,
+            dueWithTime: TIMED,
+            isMoveToBacklog: false,
+          }),
+        );
+        tick();
+        expect(adapter.pushChanges).toHaveBeenCalledWith(
+          'issue-1',
+          { dtstart: TIMED },
+          jasmine.anything(),
+        );
+      }));
+
+      it('pushes unscheduleTask on a non-repeating task', fakeAsync(() => {
+        setTask({ dueDay: undefined, dueWithTime: undefined });
+        actions$.next(TaskSharedActions.unscheduleTask({ id: 'task-1' }));
+        tick();
+        expect(adapter.pushChanges).toHaveBeenCalledWith(
+          'issue-1',
+          { dtstart: null },
+          jasmine.anything(),
+        );
+      }));
+
+      it('does not push or fetch a Planner drag to the add-task panel (dueDay cleared)', fakeAsync(() => {
+        const task = setTask({ dueDay: undefined });
+        actions$.next(
+          PlannerActions.transferTask({
+            task,
+            prevDay: '2026-10-01',
+            newDay: ADD_TASK_PANEL_ID,
+            targetIndex: 0,
+            today: '2026-10-04',
+          }),
+        );
+        tick();
+        expect(adapter.fetchIssue).not.toHaveBeenCalled();
+        expect(adapter.pushChanges).not.toHaveBeenCalled();
+      }));
+
+      describe('a skipped planned-date change forgets its held-back state', () => {
+        const holdBackPlannedDate = (): void => {
+          (adapter.pushChanges as jasmine.Spy).and.returnValue(
+            Promise.reject(
+              Object.assign(new Error('held back'), { isExpectedSyncSkip: true }),
+            ),
+          );
+          const task = setTask({ dueDay: '2026-10-25' });
+          actions$.next(PlannerActions.planTaskForDay({ task, day: '2026-10-25' }));
+          tick();
+          expect(adapter.pushChanges).toHaveBeenCalledOnceWith(
+            'issue-1',
+            { dtstart: '2026-10-25' },
+            jasmine.anything(),
+          );
+          (adapter.pushChanges as jasmine.Spy).calls.reset();
+          (adapter.pushChanges as jasmine.Spy).and.resolveTo();
+        };
+
+        const expectDeadlineOnlyPush = (o: Partial<Task>): void => {
+          setTask({ ...o, deadlineDay: '2026-10-30' });
+          actions$.next(
+            TaskSharedActions.setDeadline({
+              taskId: 'task-1',
+              deadlineDay: '2026-10-30',
+            }),
+          );
+          tick();
+          expect(adapter.pushChanges).toHaveBeenCalledOnceWith(
+            'issue-1',
+            { due: '2026-10-30' },
+            jasmine.anything(),
+          );
+        };
+
+        it('after a Planner drag', fakeAsync(() => {
+          holdBackPlannedDate();
+          const task = setTask({ dueDay: '2026-10-26' });
+          actions$.next(
+            PlannerActions.transferTask({
+              task,
+              prevDay: '2026-10-25',
+              newDay: '2026-10-26',
+              targetIndex: 0,
+              today: '2026-10-04',
+            }),
+          );
+          tick();
+          expect(adapter.pushChanges).not.toHaveBeenCalled();
+
+          expectDeadlineOnlyPush({ dueDay: '2026-10-26' });
+        }));
+
+        it('after planning while the task had a repeat config', fakeAsync(() => {
+          holdBackPlannedDate();
+          const task = setTask({ dueDay: '2026-10-26', repeatCfgId: 'rc-1' });
+          actions$.next(PlannerActions.planTaskForDay({ task, day: '2026-10-26' }));
+          tick();
+          expect(adapter.pushChanges).not.toHaveBeenCalled();
+
+          // The repeat config is removed again before the deadline edit.
+          expectDeadlineOnlyPush({ dueDay: '2026-10-26', repeatCfgId: undefined });
+        }));
+
+        // The skipped change names only one field of the dtstart pair, while the
+        // held-back state is on the other one, which the move has just cleared.
+        const DEADLINE = new Date(2026, 9, 20, 18, 0).getTime();
+        const NEW_DEADLINE = new Date(2026, 9, 30, 18, 0).getTime();
+        const timedBase = { dtstart: TIMED, due: DEADLINE };
+        const useTimedBaselines = (): void => {
+          (adapter.fetchIssue as jasmine.Spy).and.resolveTo(timedBase);
+          (adapter.extractSyncValues as jasmine.Spy).and.returnValue(timedBase);
+        };
+        const rejectAsHeldBack = (): void => {
+          (adapter.pushChanges as jasmine.Spy).and.returnValue(
+            Promise.reject(
+              Object.assign(new Error('held back'), { isExpectedSyncSkip: true }),
+            ),
+          );
+        };
+        const expectTimedDeadlineOnlyPush = (o: Partial<Task>): void => {
+          (adapter.pushChanges as jasmine.Spy).calls.reset();
+          (adapter.pushChanges as jasmine.Spy).and.resolveTo();
+          setTask({ ...o, deadlineDay: undefined, deadlineWithTime: NEW_DEADLINE });
+          actions$.next(
+            TaskSharedActions.setDeadline({
+              taskId: 'task-1',
+              deadlineWithTime: NEW_DEADLINE,
+            }),
+          );
+          tick();
+          // Only DUE: no dtstart key, so DTSTART is preserved on the server.
+          expect(adapter.pushChanges).toHaveBeenCalledOnceWith(
+            'issue-1',
+            { due: NEW_DEADLINE },
+            jasmine.anything(),
+          );
+        };
+
+        it('of the sibling field after an untimed Planner drag', fakeAsync(() => {
+          useTimedBaselines();
+          const timedTask = (o: Partial<Task>): Task =>
+            setTask({
+              dueDay: undefined,
+              deadlineDay: undefined,
+              deadlineWithTime: DEADLINE,
+              issueLastSyncedValues: timedBase,
+              ...o,
+            });
+
+          // Explicitly scheduled beyond DUE: held back as dueWithTime.
+          rejectAsHeldBack();
+          const late = new Date(2026, 9, 25, 9, 0).getTime();
+          let task = timedTask({ dueWithTime: late });
+          actions$.next(
+            TaskSharedActions.scheduleTaskWithTime({
+              task,
+              dueWithTime: late,
+              isMoveToBacklog: false,
+            }),
+          );
+          tick();
+          expect(adapter.pushChanges).toHaveBeenCalledOnceWith(
+            'issue-1',
+            { dtstart: late },
+            jasmine.anything(),
+          );
+          (adapter.pushChanges as jasmine.Spy).calls.reset();
+
+          // Untimed Planner drag: clears dueWithTime, but names only dueDay.
+          task = timedTask({ dueDay: '2026-10-26', dueWithTime: undefined });
+          actions$.next(
+            PlannerActions.transferTask({
+              task,
+              prevDay: '2026-10-25',
+              newDay: '2026-10-26',
+              targetIndex: 0,
+              today: '2026-10-04',
+            }),
+          );
+          tick();
+          expect(adapter.pushChanges).not.toHaveBeenCalled();
+
+          expectTimedDeadlineOnlyPush({
+            dueDay: '2026-10-26',
+            dueWithTime: undefined,
+            issueLastSyncedValues: timedBase,
+          });
+        }));
+
+        it('of the sibling field after a timed Planner drag', fakeAsync(() => {
+          useTimedBaselines();
+          // Planned beyond DUE as an all-day date: held back as dueDay.
+          rejectAsHeldBack();
+          let task = setTask({
+            dueDay: '2026-10-25',
+            deadlineDay: undefined,
+            deadlineWithTime: DEADLINE,
+            issueLastSyncedValues: timedBase,
+          });
+          actions$.next(PlannerActions.planTaskForDay({ task, day: '2026-10-25' }));
+          tick();
+          expect(adapter.pushChanges).toHaveBeenCalledOnceWith(
+            'issue-1',
+            { dtstart: '2026-10-25' },
+            jasmine.anything(),
+          );
+          (adapter.pushChanges as jasmine.Spy).calls.reset();
+
+          // Timed Planner drag: clears dueDay, but names only dueWithTime.
+          const moved = new Date(2026, 9, 26, 9, 0).getTime();
+          task = setTask({
+            dueDay: undefined,
+            dueWithTime: moved,
+            deadlineDay: undefined,
+            deadlineWithTime: DEADLINE,
+            issueLastSyncedValues: timedBase,
+          });
+          actions$.next(
+            TaskSharedActions.scheduleTaskWithTime({
+              task,
+              dueWithTime: moved,
+              isMoveToBacklog: false,
+              isPlannerMove: true,
+            }),
+          );
+          tick();
+          expect(adapter.pushChanges).not.toHaveBeenCalled();
+
+          expectTimedDeadlineOnlyPush({
+            dueDay: undefined,
+            dueWithTime: moved,
+            issueLastSyncedValues: timedBase,
+          });
+        }));
+      });
+
+      describe('a held-back date is retried only while unchanged', () => {
+        const rejectAsHeldBack = (): void => {
+          (adapter.pushChanges as jasmine.Spy).and.returnValue(
+            Promise.reject(
+              Object.assign(new Error('held back'), { isExpectedSyncSkip: true }),
+            ),
+          );
+        };
+        const resetPush = (): void => {
+          (adapter.pushChanges as jasmine.Spy).calls.reset();
+          (adapter.pushChanges as jasmine.Spy).and.resolveTo();
+        };
+        const holdBackDueDay = (): void => {
+          rejectAsHeldBack();
+          const task = setTask({ dueDay: '2026-10-25' });
+          actions$.next(PlannerActions.planTaskForDay({ task, day: '2026-10-25' }));
+          tick();
+          expect(adapter.pushChanges).toHaveBeenCalledOnceWith(
+            'issue-1',
+            { dtstart: '2026-10-25' },
+            jasmine.anything(),
+          );
+          resetPush();
+        };
+        const setDeadlineDay = (o: Partial<Task>): void => {
+          setTask({ ...o, deadlineDay: '2026-10-30' });
+          actions$.next(
+            TaskSharedActions.setDeadline({
+              taskId: 'task-1',
+              deadlineDay: '2026-10-30',
+            }),
+          );
+          tick();
+        };
+
+        it('re-sends an unchanged held-back planned date with the deadline', fakeAsync(() => {
+          holdBackDueDay();
+          setDeadlineDay({ dueDay: '2026-10-25' });
+          expect(adapter.pushChanges).toHaveBeenCalledOnceWith(
+            'issue-1',
+            { due: '2026-10-30', dtstart: '2026-10-25' },
+            jasmine.anything(),
+          );
+        }));
+
+        it('drops a held-back dueDay that changes while the server is fetched', fakeAsync(() => {
+          holdBackDueDay();
+          // Unchanged when the deadline action runs, changed by the time the task
+          // is re-read after the server fetch.
+          const unchanged = setTask({ dueDay: '2026-10-25', deadlineDay: '2026-10-30' });
+          const changed = { ...unchanged, dueDay: '2026-10-04' };
+          let reads = 0;
+          taskServiceSpy.getByIdOnce$.and.callFake(() =>
+            of(reads++ === 0 ? unchanged : changed),
+          );
+          actions$.next(
+            TaskSharedActions.setDeadline({
+              taskId: 'task-1',
+              deadlineDay: '2026-10-30',
+            }),
+          );
+          tick();
+          expect(adapter.pushChanges).toHaveBeenCalledOnceWith(
+            'issue-1',
+            { due: '2026-10-30' },
+            jasmine.anything(),
+          );
+        }));
+
+        it('drops a held-back dueDay changed by an unwatched action (e.g. planTasksForToday)', fakeAsync(() => {
+          holdBackDueDay();
+          // Planning for today changes dueDay but is not a push trigger.
+          setTask({ dueDay: '2026-10-04' });
+          actions$.next(
+            TaskSharedActions.planTasksForToday({
+              taskIds: ['task-1'],
+              today: '2026-10-04',
+            }),
+          );
+          tick();
+          expect(adapter.pushChanges).not.toHaveBeenCalled();
+
+          setDeadlineDay({ dueDay: '2026-10-04' });
+          expect(adapter.pushChanges).toHaveBeenCalledOnceWith(
+            'issue-1',
+            { due: '2026-10-30' },
+            jasmine.anything(),
+          );
+        }));
+
+        it('drops both held-back planned-date fields when only one of them changed', fakeAsync(() => {
+          // One edit names both fields of the DTSTART pair: both are held back.
+          rejectAsHeldBack();
+          setTask({ dueDay: '2026-10-25', dueWithTime: undefined });
+          actions$.next(
+            TaskSharedActions.updateTask({
+              task: {
+                id: 'task-1',
+                changes: { dueDay: '2026-10-25', dueWithTime: undefined },
+              },
+            }),
+          );
+          tick();
+          expect(adapter.pushChanges).toHaveBeenCalledOnceWith(
+            'issue-1',
+            { dtstart: '2026-10-25' },
+            jasmine.anything(),
+          );
+          resetPush();
+
+          // Planning for today changes dueDay only; dueWithTime still matches its
+          // held-back value but must not be retried alone (it would clear DTSTART).
+          setTask({ dueDay: '2026-10-04' });
+          actions$.next(
+            TaskSharedActions.planTasksForToday({
+              taskIds: ['task-1'],
+              today: '2026-10-04',
+            }),
+          );
+          tick();
+
+          setDeadlineDay({ dueDay: '2026-10-04' });
+          expect(adapter.pushChanges).toHaveBeenCalledOnceWith(
+            'issue-1',
+            { due: '2026-10-30' },
+            jasmine.anything(),
+          );
+        }));
+
+        it('drops a held-back dueWithTime cleared by a drag onto another task in the Schedule view (moveBeforeTask)', fakeAsync(() => {
+          const DEADLINE = new Date(2026, 9, 20, 18, 0).getTime();
+          const NEW_DEADLINE = new Date(2026, 9, 30, 18, 0).getTime();
+          const timedBase = { dtstart: TIMED, due: DEADLINE };
+          (adapter.fetchIssue as jasmine.Spy).and.resolveTo(timedBase);
+          (adapter.extractSyncValues as jasmine.Spy).and.returnValue(timedBase);
+          const timedTask = (o: Partial<Task>): Task =>
+            setTask({
+              dueDay: undefined,
+              deadlineDay: undefined,
+              deadlineWithTime: DEADLINE,
+              issueLastSyncedValues: timedBase,
+              ...o,
+            });
+
+          // Explicitly scheduled beyond DUE: held back as dueWithTime.
+          rejectAsHeldBack();
+          const late = new Date(2026, 9, 25, 9, 0).getTime();
+          const task = timedTask({ dueWithTime: late });
+          actions$.next(
+            TaskSharedActions.scheduleTaskWithTime({
+              task,
+              dueWithTime: late,
+              isMoveToBacklog: false,
+            }),
+          );
+          tick();
+          expect(adapter.pushChanges).toHaveBeenCalledOnceWith(
+            'issue-1',
+            { dtstart: late },
+            jasmine.anything(),
+          );
+          resetPush();
+
+          // moveBeforeTask sets dueDay to the target's day and clears dueWithTime,
+          // and is not a push trigger.
+          timedTask({ dueDay: '2026-10-26', dueWithTime: undefined });
+          actions$.next(
+            PlannerActions.moveBeforeTask({ fromTask: task, toTaskId: 'task-2' }),
+          );
+          tick();
+          expect(adapter.pushChanges).not.toHaveBeenCalled();
+
+          timedTask({
+            dueDay: '2026-10-26',
+            dueWithTime: undefined,
+            deadlineWithTime: NEW_DEADLINE,
+          });
+          actions$.next(
+            TaskSharedActions.setDeadline({
+              taskId: 'task-1',
+              deadlineWithTime: NEW_DEADLINE,
+            }),
+          );
+          tick();
+          // Only DUE: the cleared dueWithTime must not push `dtstart: null`.
+          expect(adapter.pushChanges).toHaveBeenCalledOnceWith(
+            'issue-1',
+            { due: NEW_DEADLINE },
+            jasmine.anything(),
+          );
+        }));
+      });
+    });
+
+    it('does not push partners when the changed date field cannot itself push', fakeAsync(() => {
+      const ALL_DATES: (keyof Task)[] = [
+        'dueDay',
+        'dueWithTime',
+        'deadlineDay',
+        'deadlineWithTime',
+      ];
+      const linked = (m: FieldMapping): FieldMapping => ({
+        ...m,
+        pushTogetherWith: ALL_DATES,
+      });
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([
+            linked(dueWithTimeFieldMapping),
+            linked(dueDayFieldMapping),
+            linked(deadlineWithTimeFieldMapping),
+            linked(deadlineDayFieldMapping),
+          ]),
+        getSyncConfig: jasmine.createSpy('getSyncConfig').and.returnValue({
+          dueDay: 'pullOnly',
+          dueWithTime: 'pullOnly',
+          deadlineDay: 'both',
+          deadlineWithTime: 'both',
+        }),
+        fetchIssue: jasmine
+          .createSpy('fetchIssue')
+          .and.resolveTo({ dtstart: '2026-10-03', due: '2026-09-30' }),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ dtstart: '2026-10-03', due: '2026-09-30' }),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+      const task = createMockTask({
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastSyncedValues: { dtstart: '2026-10-03', due: '2026-09-30' },
+        dueDay: '2026-10-03',
+        deadlineDay: '2026-09-30',
+      });
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(PlannerActions.planTaskForDay({ task, day: '2026-10-03' }));
+      tick();
+
+      // dueDay is pull-only, so this edit must not drag in deadlineDay's push.
+      expect(adapter.fetchIssue).not.toHaveBeenCalled();
+      expect(adapter.pushChanges).not.toHaveBeenCalled();
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('pushes a timed deadline replacing an all-day one (reducer cleared deadlineDay)', fakeAsync(() => {
+      const adapter = setUpDeadlineAdapter('2026-10-05');
+      taskServiceSpy.getByIdOnce$.and.returnValue(
+        of(
+          linkedTask({
+            deadlineWithTime: 1790000000000,
+            deadlineDay: undefined,
+            issueLastSyncedValues: { due: '2026-10-05' },
+          }),
+        ),
+      );
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(
+        TaskSharedActions.setDeadline({
+          taskId: 'task-1',
+          deadlineWithTime: 1790000000000,
+        }),
+      );
+      tick();
+      expect(adapter.pushChanges).toHaveBeenCalledWith(
+        'issue-1',
+        { due: 1790000000000 },
+        jasmine.anything(),
+      );
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('pushes a clear for removeDeadline', fakeAsync(() => {
+      const adapter = setUpDeadlineAdapter('2026-10-05');
+      taskServiceSpy.getByIdOnce$.and.returnValue(
+        of(linkedTask({ issueLastSyncedValues: { due: '2026-10-05' } })),
+      );
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(TaskSharedActions.removeDeadline({ taskId: 'task-1' }));
+      tick();
+      expect(adapter.pushChanges).toHaveBeenCalledWith(
+        'issue-1',
+        { due: null },
+        jasmine.anything(),
+      );
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('does not overwrite a newer server deadline on snooze (provider-changed)', fakeAsync(() => {
+      const adapter = setUpDeadlineAdapter('2026-10-09'); // changed on the server
+      taskServiceSpy.getByIdOnce$.and.returnValue(
+        of(
+          linkedTask({
+            deadlineDay: '2026-10-05',
+            issueLastSyncedValues: { due: '2026-10-05' },
+          }),
+        ),
+      );
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(
+        TaskSharedActions.setDeadline({
+          taskId: 'task-1',
+          deadlineDay: '2026-10-05',
+          deadlineRemindAt: Date.now() + 600000,
+        }),
+      );
+      tick();
+      expect(adapter.pushChanges).not.toHaveBeenCalled();
       adapterRegistry.unregister('TEST_PROVIDER');
     }));
   });

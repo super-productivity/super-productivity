@@ -13,6 +13,8 @@ export const DEFAULT_CALDAV_CFG: CaldavCfg = {
     isDone: 'pullOnly',
     title: 'pullOnly',
     notes: 'off',
+    plannedDate: 'pullOnly',
+    deadline: 'pullOnly',
   },
 };
 

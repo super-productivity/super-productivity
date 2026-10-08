@@ -1150,14 +1150,14 @@ export class TaskService {
     due: number,
     remindCfg: TaskReminderOptionId,
     isMoveToBacklog: boolean = false,
+    isPlannerMove: boolean = false,
   ): void {
+    const remindAt = remindOptionToMilliseconds(due, remindCfg);
+    const props = { task, dueWithTime: due, remindAt, isMoveToBacklog };
     this._store.dispatch(
-      TaskSharedActions.scheduleTaskWithTime({
-        task,
-        dueWithTime: due,
-        remindAt: remindOptionToMilliseconds(due, remindCfg),
-        isMoveToBacklog,
-      }),
+      TaskSharedActions.scheduleTaskWithTime(
+        isPlannerMove ? { ...props, isPlannerMove } : props,
+      ),
     );
   }
 

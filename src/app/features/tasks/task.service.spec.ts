@@ -747,6 +747,40 @@ describe('TaskService', () => {
         }),
       );
     });
+
+    it('marks a Planner move with isPlannerMove', () => {
+      const task = createMockTask('task-1');
+      const due = Date.now() + 3600000;
+
+      service.scheduleTask(task, due, TaskReminderOptionId.AtStart, false, true);
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: TaskSharedActions.scheduleTaskWithTime.type,
+          isPlannerMove: true,
+        }),
+      );
+    });
+
+    it('leaves isPlannerMove out of the action by default', () => {
+      const task = createMockTask('task-1');
+      const due = Date.now() + 3600000;
+
+      service.scheduleTask(task, due, TaskReminderOptionId.AtStart);
+      service.scheduleTask(task, due, TaskReminderOptionId.AtStart, false, false);
+
+      const actions = (store.dispatch as jasmine.Spy).calls
+        .all()
+        .map((c) => c.args[0] as object)
+        .filter(
+          (a) =>
+            (a as { type: string }).type === TaskSharedActions.scheduleTaskWithTime.type,
+        );
+      expect(actions.length).toBe(2);
+      for (const a of actions) {
+        expect('isPlannerMove' in a).toBeFalse();
+      }
+    });
   });
 
   describe('reScheduleTask', () => {

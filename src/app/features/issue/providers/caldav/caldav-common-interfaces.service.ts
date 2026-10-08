@@ -6,7 +6,11 @@ import { BaseIssueProviderService } from '../../base/base-issue-provider.service
 import { IssueData, SearchResultItem } from '../../issue.model';
 import { CaldavIssue, CaldavIssueReduced } from './caldav-issue.model';
 import { CaldavClientService } from './caldav-client.service';
-import { CaldavSyncAdapterService } from './caldav-sync-adapter.service';
+import {
+  CALDAV_DATE_TASK_FIELDS,
+  CALDAV_DEADLINE_TASK_FIELDS,
+  CaldavSyncAdapterService,
+} from './caldav-sync-adapter.service';
 import { CaldavCfg } from './caldav.model';
 import { truncate } from '../../../../util/truncate';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
@@ -246,7 +250,11 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
     const taskChanges: Record<PropertyKey, unknown> = wasUpdated
       ? { ...this.getAddTaskData(issue) }
       : {};
-    const issueValues = issue as unknown as Record<string, unknown>;
+    // Mapped issue fields (incl. the derived dtstart/due) come from the adapter,
+    // the same values that baselines are built from.
+    const issueValues = this._caldavSyncAdapter.extractSyncValues(
+      issue as unknown as Record<string, unknown>,
+    );
     const lastSyncedValues = task.issueLastSyncedValues ?? {};
     const syncConfig = this._caldavSyncAdapter.getSyncConfig(cfg);
     const context = { issueId: issue.id };
@@ -265,6 +273,14 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
         issueValues[mapping.issueField],
         context,
       );
+      const isDateField = CALDAV_DATE_TASK_FIELDS.has(mapping.taskField);
+      // A deadline absent on the server is only a removal if the server had one
+      // at the last sync; otherwise the deadline exists only in SP and is kept.
+      const isDeadlineOnlyInSp =
+        CALDAV_DEADLINE_TASK_FIELDS.has(mapping.taskField) &&
+        issueValues[mapping.issueField] === null &&
+        (lastSyncedValues[mapping.issueField] === undefined ||
+          lastSyncedValues[mapping.issueField] === null);
       // A VTODO-wide ETag can change for an unrelated field. In "both" mode,
       // preserve pending local edits unless this specific remote field changed.
       const shouldPullAfterEtagChange =
@@ -275,7 +291,7 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
           lastSyncedValues[mapping.issueField],
         );
       if (wasUpdated) {
-        if (shouldPullAfterEtagChange) {
+        if (shouldPullAfterEtagChange && !isDeadlineOnlyInSp) {
           taskChanges[mapping.taskField] = remoteTaskValue;
         } else {
           delete taskChanges[mapping.taskField];
@@ -283,6 +299,9 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
       } else if (
         // Older refreshes could advance the ETag without applying mapped values.
         // Heal provider-owned fields, but preserve possible unpushed edits in "both".
+        // Dates were always applied on ETag change, so they never need healing, and
+        // healing would revert dates set in SP (#10099).
+        !isDateField &&
         direction === 'pullOnly' &&
         remoteTaskValue !== task[mapping.taskField]
       ) {

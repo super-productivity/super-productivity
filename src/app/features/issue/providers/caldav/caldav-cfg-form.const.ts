@@ -42,6 +42,24 @@ const TWO_WAY_SYNC_FORM_FIELDS: LimitedFormlyFieldConfig<IssueProviderCaldav>[] 
           options: SYNC_DIRECTION_OPTIONS,
         },
       },
+      {
+        key: 'twoWaySync.plannedDate',
+        type: 'select',
+        defaultValue: 'pullOnly',
+        props: {
+          label: T.F.CALDAV.FORM.TWO_WAY_SYNC_PLANNED_DATE,
+          options: SYNC_DIRECTION_OPTIONS,
+        },
+      },
+      {
+        key: 'twoWaySync.deadline',
+        type: 'select',
+        defaultValue: 'pullOnly',
+        props: {
+          label: T.F.CALDAV.FORM.TWO_WAY_SYNC_DEADLINE,
+          options: SYNC_DIRECTION_OPTIONS,
+        },
+      },
     ],
   },
 ];

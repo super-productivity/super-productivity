@@ -1,5 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { CaldavCfg } from './caldav.model';
+import type { CaldavFieldUpdates } from './caldav-sync-adapter.service';
+import {
+  applyIcalDate,
+  isValidDatePair,
+  readIcalDateValue,
+} from './caldav-ical-date.util';
 // @ts-ignore
 import DavClient, { namespaces as NS } from '@nextcloud/cdav-library';
 // @ts-ignore
@@ -57,6 +63,19 @@ interface CalDavTaskData {
   etag: string;
   update?: () => Promise<void>;
 }
+
+const createDateSkipError = (reason: string): Error =>
+  Object.assign(
+    new Error(reason),
+    // Two-way sync treats this as an expected limitation: no snack, and no
+    // baseline advance, so the next poll reconciles.
+    { isExpectedSyncSkip: true },
+  );
+
+const isExpectedSyncSkip = (err: unknown): boolean =>
+  typeof err === 'object' &&
+  err !== null &&
+  (err as { isExpectedSyncSkip?: boolean }).isExpectedSyncSkip === true;
 
 @Injectable({
   providedIn: 'root',
@@ -404,10 +423,14 @@ export class CaldavClientService {
   updateFields$(
     caldavCfg: CaldavCfg,
     issueId: string,
-    fields: { completed?: boolean; summary?: string; note?: string },
+    fields: CaldavFieldUpdates,
   ): Observable<void> {
     return from(this._updateTask(caldavCfg, issueId, fields)).pipe(
-      catchError((err) => throwError({ [HANDLED_ERROR_PROP_STR]: 'Caldav: ' + err })),
+      catchError((err) =>
+        isExpectedSyncSkip(err)
+          ? throwError(() => err)
+          : throwError({ [HANDLED_ERROR_PROP_STR]: 'Caldav: ' + err }),
+      ),
     );
   }
 
@@ -647,7 +670,7 @@ export class CaldavClientService {
   private async _updateTask(
     cfg: CaldavCfg,
     uid: string,
-    updates: { completed?: boolean; summary?: string; note?: string },
+    updates: CaldavFieldUpdates,
   ): Promise<void> {
     const cal = await this._getCalendar(cfg);
 
@@ -721,23 +744,72 @@ export class CaldavClientService {
       }
     }
 
-    if (!changeObserved) {
-      return;
+    const hasDateUpdate = updates.dtstart !== undefined || updates.due !== undefined;
+    // Changing DTSTART on a recurring VTODO (RRULE or RDATE) would move the
+    // whole series, and a resource with several VTODOs holds overrides we
+    // don't model. EXDATE alone defines no recurrence.
+    const isRecurring =
+      todo.hasProperty('rrule') ||
+      todo.hasProperty('rdate') ||
+      todo.hasProperty('recurrence-id') ||
+      comp.getAllSubcomponents('vtodo').length > 1;
+    const isSkippedRecurringDate = hasDateUpdate && isRecurring;
+
+    // RFC 5545 forbids DUE and DTSTART with different value types, or DUE
+    // earlier than DTSTART; strict servers (sabre/dav: Nextcloud, Baikal)
+    // reject such PUTs. Compute the pair the push would leave behind and skip
+    // the date write entirely rather than send an invalid VTODO.
+    const resultStart =
+      updates.dtstart !== undefined
+        ? updates.dtstart
+        : readIcalDateValue(todo.getFirstProperty('dtstart'));
+    const resultDue =
+      updates.due !== undefined
+        ? updates.due
+        : readIcalDateValue(todo.getFirstProperty('due'));
+    const isSkippedInvalidDatePair =
+      hasDateUpdate && !isRecurring && !isValidDatePair(resultStart, resultDue);
+
+    if (hasDateUpdate && !isRecurring && !isSkippedInvalidDatePair) {
+      if (
+        updates.dtstart !== undefined &&
+        applyIcalDate(ICAL, comp, todo, 'dtstart', updates.dtstart)
+      ) {
+        changeObserved = true;
+      }
+      if (
+        updates.due !== undefined &&
+        applyIcalDate(ICAL, comp, todo, 'due', updates.due)
+      ) {
+        changeObserved = true;
+      }
     }
-    todo.updatePropertyWithValue('last-modified', now);
-    todo.updatePropertyWithValue('dtstamp', now);
 
-    // https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.7.4
-    // Some calendar clients do not see updates (completion) submitted by SuperProductivity as the 'sequence' number is unchanged.
-    // As 'sequence' starts at 0 and completing probably counts as a major change, then it should be at least 1 in the end,
-    // if no other changes have been written.
-    const sequence = todo.getFirstPropertyValue('sequence');
-    const sequenceInt = sequence ? parseInt(sequence as string, 10) + 1 : 1;
-    todo.updatePropertyWithValue('sequence', sequenceInt);
+    if (changeObserved) {
+      todo.updatePropertyWithValue('last-modified', now);
+      todo.updatePropertyWithValue('dtstamp', now);
 
-    task.data = ICAL.stringify(jCal);
-    if (task.update) {
-      await task.update().catch((err) => this._handleNetErr(err));
+      // https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.7.4
+      // Some calendar clients do not see updates (completion) submitted by SuperProductivity as the 'sequence' number is unchanged.
+      // As 'sequence' starts at 0 and completing probably counts as a major change, then it should be at least 1 in the end,
+      // if no other changes have been written.
+      const sequence = todo.getFirstPropertyValue('sequence');
+      const sequenceInt = sequence ? parseInt(sequence as string, 10) + 1 : 1;
+      todo.updatePropertyWithValue('sequence', sequenceInt);
+
+      task.data = ICAL.stringify(jCal);
+      if (task.update) {
+        await task.update().catch((err) => this._handleNetErr(err));
+      }
+    }
+
+    if (isSkippedRecurringDate) {
+      throw createDateSkipError('CalDAV: dates are not pushed for recurring VTODOs');
+    }
+    if (isSkippedInvalidDatePair) {
+      throw createDateSkipError(
+        'CalDAV: date pair would be invalid (DUE/DTSTART type mismatch or DUE before DTSTART)',
+      );
     }
   }
 }

@@ -275,6 +275,8 @@ export const TaskSharedActions = createActionGroup({
       remindAt?: number;
       isMoveToBacklog: boolean;
       isSkipAutoRemoveFromToday?: boolean;
+      /** Set by Planner drags so issue sync can tell them from explicit scheduling. */
+      isPlannerMove?: boolean;
     }) => ({
       ...taskProps,
       meta: {
