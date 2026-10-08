@@ -537,7 +537,8 @@
         "OAUTH_DISCONNECTED": "Akun OAuth terputus.",
         "OAUTH_FAILED": "Autentikasi gagal.",
         "REMOTE_ISSUE_DELETED": "Issue jarak jauh telah dihapus. Hapus tugas tertaut \"{{taskTitle}}\"?",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "Issue jarak jauh telah dihapus, tetapi tugas \"{{taskTitle}}\" memiliki waktu terlacak. Tetap hapus?"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "Issue jarak jauh telah dihapus, tetapi tugas \"{{taskTitle}}\" memiliki waktu terlacak. Tetap hapus?",
+        "POST_TIME_SUCCESS": "{{providerName}}: Berhasil membuat entri waktu untuk {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Buat isu otomatis untuk tugas baru",
@@ -566,6 +567,15 @@
         "POLLING_MODE_DESCRIPTION": "Kapan polling dilakukan: hanya saat proyek atau tag terkait terbuka, atau selalu di latar belakang",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "Saat konteks terbuka",
         "POLLING_MODE_ALWAYS": "Selalu (di latar belakang)"
+      },
+      "DIALOG_TRACK_TIME": {
+        "TIME_SPENT": "Waktu yang dihabiskan",
+        "ACTIVITY": "Aktivitas",
+        "INVALID_DATE": "Nilai yang dimasukkan bukan tanggal!",
+        "POST_TIME": "Kirim Waktu",
+        "STARTED": "Dimulai",
+        "SUBMIT_TIME_FOR": "Kirim waktu ke {{providerName}} untuk",
+        "TITLE": "{{providerName}}: Kirim Catatan Kerja"
       }
     },
     "ISSUE_PANEL": {
@@ -789,33 +799,6 @@
         "REMINDER_NEEDS_TEXT": "Tulis refleksi sebelum meminta pengingat",
         "REMINDER_TASK_TITLE": "Kunjungi kembali catatan refleksi",
         "TITLE": "Catatan Refleksi"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "ISSUE_CONTENT": {
-        "LABELS": "Label",
-        "ASSIGNED_USERS": "Pengguna yang Ditugaskan",
-        "DECK_DESCRIPTION": "Deskripsi Deck",
-        "STACK": "Tumpukan"
-      },
-      "FORM": {
-        "BASE_URL": "URL Dasar Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Hanya impor kartu yang ditugaskan ke saya",
-        "IS_TRANSITION_ISSUES_ENABLED": "Sinkronkan status penyelesaian dan judul kembali ke Nextcloud Deck",
-        "PASSWORD": "Kata sandi aplikasi Nextcloud Anda",
-        "POLL_INTERVAL_MINUTES": "Interval polling (menit)",
-        "TITLE_TEMPLATE": "Template judul tugas",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variabel: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Contoh: [{BOARD}: {COLUMN}] {CARD_TITLE}. Kosongkan untuk judul kartu saja.",
-        "USERNAME": "Nama pengguna Nextcloud Anda"
-      },
-      "FORM_SECTION": {
-        "HELP": "Konfigurasikan integrasi Nextcloud Deck Anda untuk mengimpor kartu sebagai tugas. Gunakan kata sandi aplikasi untuk autentikasi."
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Papan tidak ditemukan",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Kartu \"{{issueId}}\" tampaknya telah dihapus di server.",
-        "ERR_CREDENTIALS_MISSING": "Masukkan URL Nextcloud, nama pengguna, dan kata sandi terlebih dahulu.",
-        "ERR_LOAD_BOARDS": "Gagal memuat papan Deck. Periksa kredensial Anda."
       }
     },
     "NOTE": {
@@ -1076,44 +1059,6 @@
       "NO_DATA": "Tidak ada data untuk tahun ini",
       "PAGE_TITLE": "Riwayat Cepat",
       "WEEK_TITLE": "Minggu {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "TIME_SPENT": "Waktu yang dihabiskan",
-        "ACTIVITY": "Aktivitas",
-        "INVALID_DATE": "Nilai yang dimasukkan bukan tanggal!",
-        "POST_TIME": "Kirim Waktu",
-        "STARTED": "Dimulai",
-        "SUBMIT_TIME_FOR": "Kirim waktu ke Redmine untuk",
-        "TITLE": "Redmine: Kirim Catatan Kerja"
-      },
-      "FORM": {
-        "API_KEY": "Akses kunci API",
-        "HOST": "Host (contoh.: https://redmine.org)",
-        "PROJECT_ID": "Pengidentifikasi Proyek",
-        "PROJECT_ID_DESCRIPTION": "Dapat ditemukan sebagai bagian dari URL, saat melihat proyek di Browser.",
-        "SCOPE": "Cakupan",
-        "SCOPE_ALL": "Semua",
-        "SCOPE_ASSIGNED": "Ditugaskan kepada saya",
-        "SCOPE_CREATED": "Dibuat oleh saya",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Tampilkan dialog pelacakan waktu untuk melaporkan ke Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Memerlukan modul pelacakan waktu diaktifkan untuk proyek Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Tampilkan dialog pelacakan waktu saat subtugas diselesaikan"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk mencantumkan open Redmine issues (baik versi online atau yang dihosting sendiri) untuk proyek tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan dicantumkan sebagai saran dan akan memberikan tautan ke issues tersebut serta informasi lebih lanjut tentangnya.</p><p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua masalah yang terbuka ke backlog tugas Anda.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Penulis",
-        "DESCRIPTION": "Deskripsi",
-        "MARK_AS_CHECKED": "Tandai pembaruan sebagai dicentang",
-        "PRIORITY": "Prioritas",
-        "STATUS": "Status"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Berhasil membuat entri waktu untuk {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Tutup",

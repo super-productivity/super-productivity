@@ -537,7 +537,8 @@
         "OAUTH_DISCONNECTED": "OAuth-account losgekoppeld.",
         "OAUTH_FAILED": "Authenticatie mislukt.",
         "REMOTE_ISSUE_DELETED": "Externe issue is verwijderd. Gekoppelde taak \"{{taskTitle}}\" verwijderen?",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "Externe issue is verwijderd, maar taak \"{{taskTitle}}\" heeft geregistreerde tijd. Toch verwijderen?"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "Externe issue is verwijderd, maar taak \"{{taskTitle}}\" heeft geregistreerde tijd. Toch verwijderen?",
+        "POST_TIME_SUCCESS": "{{providerName}}: Tijdregistratie succesvol aangemaakt voor {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "OFF": "Uit",
@@ -566,6 +567,15 @@
         "POLLING_MODE_DESCRIPTION": "Wanneer pollen: alleen terwijl het relevante project of de tag open is, of altijd op de achtergrond",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "Wanneer context open is",
         "POLLING_MODE_ALWAYS": "Altijd (op achtergrond)"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Activiteit",
+        "STARTED": "Gestart",
+        "TIME_SPENT": "Tijd besteed",
+        "INVALID_DATE": "De ingevoerde waarde is geen datum!",
+        "POST_TIME": "Tijd versturen",
+        "SUBMIT_TIME_FOR": "Tijd naar {{providerName}} versturen voor",
+        "TITLE": "{{providerName}}: Werklog indienen"
       }
     },
     "ISSUE_PANEL": {
@@ -789,33 +799,6 @@
         "REMINDER_NEEDS_TEXT": "Schrijf een reflectie voordat je om een herinnering vraagt",
         "REMINDER_TASK_TITLE": "Bekijk reflectienotitie opnieuw",
         "TITLE": "Reflectienotitie"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "ISSUE_CONTENT": {
-        "LABELS": "Labels",
-        "ASSIGNED_USERS": "Toegewezen gebruikers",
-        "DECK_DESCRIPTION": "Deck-beschrijving",
-        "STACK": "Stapel"
-      },
-      "FORM": {
-        "BASE_URL": "Nextcloud Basis-URL",
-        "FILTER_BY_ASSIGNEE": "Alleen aan mij toegewezen kaarten importeren",
-        "IS_TRANSITION_ISSUES_ENABLED": "Voltooiingsstatus en titel terugsynchroniseren naar Nextcloud Deck",
-        "PASSWORD": "Je Nextcloud app-wachtwoord",
-        "POLL_INTERVAL_MINUTES": "Polling-interval (minuten)",
-        "TITLE_TEMPLATE": "Taaktitelsjabloon",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variabelen: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Voorbeeld: [{BOARD}: {COLUMN}] {CARD_TITLE}. Laat leeg voor alleen de kaarttitel.",
-        "USERNAME": "Je Nextcloud gebruikersnaam"
-      },
-      "FORM_SECTION": {
-        "HELP": "Configureer je Nextcloud Deck-integratie om kaarten als taken te importeren. Gebruik een app-wachtwoord voor authenticatie."
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Bord niet gevonden",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Kaart \"{{issueId}}\" lijkt te zijn verwijderd op de server.",
-        "ERR_CREDENTIALS_MISSING": "Voer eerst de Nextcloud-URL, gebruikersnaam en wachtwoord in.",
-        "ERR_LOAD_BOARDS": "Kan Deck-borden niet laden. Controleer je inloggegevens."
       }
     },
     "NOTE": {
@@ -1076,44 +1059,6 @@
       "NO_DATA": "Geen gegevens voor het huidige jaar",
       "PAGE_TITLE": "Snelle geschiedenis",
       "WEEK_TITLE": "Week {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Activiteit",
-        "STARTED": "Gestart",
-        "TIME_SPENT": "Tijd besteed",
-        "INVALID_DATE": "De ingevoerde waarde is geen datum!",
-        "POST_TIME": "Tijd versturen",
-        "SUBMIT_TIME_FOR": "Tijd naar Redmine versturen voor",
-        "TITLE": "Redmine: Werklog indienen"
-      },
-      "FORM": {
-        "API_KEY": "API-toegangssleutel",
-        "HOST": "Host (e.g.: https://redmine.org)",
-        "PROJECT_ID": "Project identificatie",
-        "PROJECT_ID_DESCRIPTION": "Kan gevonden worden in deel van de URL, wanneer je het project open hebt in de Browser",
-        "SCOPE": "Omvang",
-        "SCOPE_ALL": "Allemaal",
-        "SCOPE_ASSIGNED": "Aan mij toegewezen",
-        "SCOPE_CREATED": "Aangemaakt door mij",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Tijdregistratiedialoog tonen om te rapporteren aan Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Vereist dat de tijdregistratiemodule is ingeschakeld voor het Redmine-project",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Tijdregistratiedialoog tonen wanneer subtaken zijn voltooid"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Hier kunt u SuperProductivity configureren om open Redmine (hetzij de online versie of een zelf gehoste instantie) problemen voor een specifiek project te tonen in het taakcreatiepaneel in de dagelijkse planningsweergave. Ze worden weergegeven als suggesties en geven een link naar het probleem en meer informatie erover.</p><p>Daarnaast kun je automatisch alle openstaande kwesties importeren.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Auteur",
-        "DESCRIPTION": "Omschrijving",
-        "MARK_AS_CHECKED": "Markeer wijzigingen als gecontroleerd",
-        "PRIORITY": "Prioriteit",
-        "STATUS": "Status"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Tijdregistratie succesvol aangemaakt voor {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "AFWIJZEN",

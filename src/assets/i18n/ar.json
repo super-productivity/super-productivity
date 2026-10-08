@@ -561,6 +561,14 @@
         "POLLING_MODE_DESCRIPTION": "متى يتم الاستطلاع: فقط أثناء فتح المشروع أو الوسم ذي الصلة، أو دائماً في الخلفية",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "عند فتح السياق",
         "POLLING_MODE_ALWAYS": "دائماً (في الخلفية)"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "النشاط",
+        "INVALID_DATE": "تاريخ غير صالح",
+        "POST_TIME": "نشر الوقت",
+        "STARTED": "بدأ في",
+        "TIME_SPENT": "الوقت المستغرق",
+        "TITLE": "تتبع الوقت في {{providerName}}"
       }
     },
     "ISSUE_PANEL": {
@@ -1044,44 +1052,6 @@
       "NO_DATA": "لا توجد بيانات للسنة الحالية",
       "PAGE_TITLE": "التاريخ السريع",
       "WEEK_TITLE": "الأسبوع {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "FORM": {
-        "API_KEY": "مفتاح الوصول إلى واجهة برمجة التطبيقات",
-        "HOST": "المضيف \n(على سبيل المثال: https://redmine.org)",
-        "PROJECT_ID": "معرّف المشروع",
-        "PROJECT_ID_DESCRIPTION": "يمكن العثور عليها كجزء من عنوان الرابط عند عرض المشروع في المتصفح.",
-        "SCOPE": "النطاق",
-        "SCOPE_ALL": "الكل",
-        "SCOPE_ASSIGNED": "تم تعيينه لي",
-        "SCOPE_CREATED": "تم إنشاؤه بواسطتي",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "إظهار حوار تتبع الوقت",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "إظهار حوار تتبع الوقت عند إيقاف المؤقت",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "إظهار حوار تتبع الوقت لكل مهمة فرعية"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>\nهنا يمكنك تهيئة ”الإنتاجية الفائقة“ لإدراج مشكلات ”ريدمين“ المفتوحة (سواءً كانت نسخته الإلكترونية أو مثيل مستضاف ذاتيًا) لمشروع معين في لوحة إنشاء المهام في عرض التخطيط اليومي. سيتم سردها كاقتراحات وستوفر رابطًا للمشكلة بالإضافة إلى مزيد من المعلومات حولها\n</p><p>\nإضافةً على ذلك، يمكنك إستيراد المشاكل المفتوحة تلقائياً\n</p>",
-        "TITLE": "ملف الريدماين"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "الكاتب",
-        "DESCRIPTION": "الوصف",
-        "MARK_AS_CHECKED": "وضع علامة تم التحقق من التحديثات",
-        "PRIORITY": "الأولوية",
-        "STATUS": "الحالة"
-      },
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "النشاط",
-        "INVALID_DATE": "تاريخ غير صالح",
-        "POST_TIME": "نشر الوقت",
-        "STARTED": "بدأ في",
-        "SUBMIT_TIME_FOR": "تقديم الوقت لـ",
-        "TIME_SPENT": "الوقت المستغرق",
-        "TITLE": "تتبع الوقت في Redmine"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "تم نشر الوقت بنجاح"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "أقال",
@@ -2440,33 +2410,6 @@
       "PASTE_SUCCESS": "تم لصق الصورة بنجاح",
       "SIZE_EXCEEDED": "حجم الصورة ({{actualSize}}) يتجاوز الحد الأقصى المسموح ({{maxSize}})",
       "STORAGE_QUOTA_EXCEEDED": "تم تجاوز حصة التخزين. يرجى تحرير مساحة أو تقليل أحجام الصور."
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "رابط القاعدة",
-        "FILTER_BY_ASSIGNEE": "تصفية حسب المكلّف",
-        "IS_TRANSITION_ISSUES_ENABLED": "تفعيل نقل المشكلات",
-        "PASSWORD": "كلمة المرور",
-        "POLL_INTERVAL_MINUTES": "فترة الاستطلاع (بالدقائق)",
-        "TITLE_TEMPLATE": "قالب العنوان",
-        "TITLE_TEMPLATE_DESCRIPTION": "قالب العنوان للمهام الجديدة المنشأة من بطاقات Deck",
-        "USERNAME": "اسم المستخدم"
-      },
-      "FORM_SECTION": {
-        "HELP": "مساعدة"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "المستخدمون المعينون",
-        "DECK_DESCRIPTION": "وصف Deck",
-        "LABELS": "التسميات",
-        "STACK": "المكدس"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "لم يتم العثور على اللوحة",
-        "CARD_NOT_FOUND": "لم يتم العثور على البطاقة",
-        "ERR_CREDENTIALS_MISSING": "بيانات الاعتماد مفقودة",
-        "ERR_LOAD_BOARDS": "خطأ في تحميل اللوحات"
-      }
     },
     "ANDROID": {
       "FOREGROUND_SERVICE_START_FAILED_FOCUS": "حظر Android الإشعار الدائم لوضع التركيز. يستمر المؤقّت داخل التطبيق، لكن قد لا تتوفر التنبيهات في الخلفية. تحقّق من إذن الإشعارات وقيود البطارية والعمل في الخلفية.",

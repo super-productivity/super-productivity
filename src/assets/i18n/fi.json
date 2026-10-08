@@ -520,7 +520,8 @@
         "OAUTH_FAILED": "Todennus epäonnistui.",
         "OAUTH_FAILED_WITH_DETAIL": "Todennus epäonnistui: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Etäongelma poistettiin. Poistetaanko linkitetty tehtävä \"{{taskTitle}}\"?",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "Etäongelma poistettiin, mutta tehtävään \"{{taskTitle}}\" on seurattu aikaa. Poistetaanko se silti?"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "Etäongelma poistettiin, mutta tehtävään \"{{taskTitle}}\" on seurattu aikaa. Poistetaanko se silti?",
+        "POST_TIME_SUCCESS": "{{providerName}}: Aikakirjaus luotiin onnistuneesti kohteelle {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "OFF": "Pois päältä",
@@ -566,6 +567,15 @@
         "POLLING_MODE_DESCRIPTION": "Milloin päivitykset tarkistetaan: vain asiaankuuluvan projektin tai tunnisteen ollessa avoinna vai aina taustalla",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "Kun asiayhteys on avoinna",
         "POLLING_MODE_ALWAYS": "Aina (taustalla)"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Toiminta",
+        "STARTED": "Aloitettu",
+        "INVALID_DATE": "Syötetty arvo ei ole päivämäärä!",
+        "POST_TIME": "Lähetä aika",
+        "SUBMIT_TIME_FOR": "Lähetä aika {{providerName}}en kohteelle",
+        "TIME_SPENT": "Käytetty aika",
+        "TITLE": "{{providerName}}: Lähetä työloki"
       }
     },
     "ISSUE_PANEL": {
@@ -1049,44 +1059,6 @@
       "NO_DATA": "Ei tietoa tältä vuodelta",
       "PAGE_TITLE": "Pikahistoria",
       "WEEK_TITLE": "Viikko {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Toiminta",
-        "STARTED": "Aloitettu",
-        "INVALID_DATE": "Syötetty arvo ei ole päivämäärä!",
-        "POST_TIME": "Lähetä aika",
-        "SUBMIT_TIME_FOR": "Lähetä aika Redmineen kohteelle",
-        "TIME_SPENT": "Käytetty aika",
-        "TITLE": "Redmine: Lähetä työloki"
-      },
-      "FORM": {
-        "API_KEY": "API-käyttöavain",
-        "HOST": "Isäntä (esim.: https://redmine.org)",
-        "PROJECT_ID": "Projektin tunniste",
-        "PROJECT_ID_DESCRIPTION": "Löytyy osana URL-osoitetta, kun katsot projektia selaimessa.",
-        "SCOPE": "Laajuus",
-        "SCOPE_ALL": "Kaikki",
-        "SCOPE_ASSIGNED": "Minulle osoitetut",
-        "SCOPE_CREATED": "Minun luomat",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Näytä ajanseurantaikkuna Redmineen raportointia varten",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Vaatii ajanseurantamoduulin olevan käytössä Redmine-projektissa",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Näytä ajanseurantaikkuna, kun alitehtävät valmistuvat"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Tässä voit määrittää SuperProductivityn listamaan avoimet Redmine-ongelmat (joko verkkoversio tai itse isännöity instanssi) tietystä projektista tehtävänluontipaneelissa päivittäisessä suunnittelinäkymässä. Ne listataan ehdotuksina ja tarjoavat linkin ongelmaan sekä lisätietoja siitä.</p><p>Lisäksi voit automaattisesti tuoda kaikki avoimet ongelmat.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Tekijä",
-        "DESCRIPTION": "Kuvaus",
-        "MARK_AS_CHECKED": "Merkitse päivitykset tarkastetuiksi",
-        "PRIORITY": "Prioriteetti",
-        "STATUS": "Tila"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Aikakirjaus luotiin onnistuneesti kohteelle {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Hylkää",
@@ -2442,33 +2414,6 @@
       "PASTE_SUCCESS": "Kuva liitetty onnistuneesti",
       "SIZE_EXCEEDED": "Kuvan koko ({{actualSize}}) ylittää sallitun enimmäiskoon ({{maxSize}})",
       "STORAGE_QUOTA_EXCEEDED": "Tallennustila täynnä. Vapauta tilaa tai pienennä kuvien kokoa."
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Nextcloud-perusosoite",
-        "FILTER_BY_ASSIGNEE": "Tuo vain minulle osoitetut kortit",
-        "IS_TRANSITION_ISSUES_ENABLED": "Synkronoi valmistumistila ja otsikko takaisin Nextcloud Deckiin",
-        "PASSWORD": "Nextcloud-sovellussalasanasi",
-        "POLL_INTERVAL_MINUTES": "Kyselyväli (minuuttia)",
-        "TITLE_TEMPLATE": "Tehtävän otsikkomalli",
-        "TITLE_TEMPLATE_DESCRIPTION": "Muuttujat: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Esimerkki: [{BOARD}: {COLUMN}] {CARD_TITLE}. Jätä tyhjäksi käyttääksesi vain kortin otsikkoa.",
-        "USERNAME": "Nextcloud-käyttäjänimesi"
-      },
-      "FORM_SECTION": {
-        "HELP": "Määritä Nextcloud Deck -integraatiosi tuodaksesi kortteja tehtävinä. Käytä sovellussalasanaa todennukseen."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Osoitetut käyttäjät",
-        "DECK_DESCRIPTION": "Deck-kuvaus",
-        "LABELS": "Tunnisteet",
-        "STACK": "Pino"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Taulua ei löytynyt",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Kortti \"{{issueId}}\" näyttää olevan poistettu palvelimelta.",
-        "ERR_CREDENTIALS_MISSING": "Syötä ensin Nextcloud-osoite, käyttäjänimi ja salasana.",
-        "ERR_LOAD_BOARDS": "Deck-taulujen lataus epäonnistui. Tarkista tunnistetietosi."
-      }
     },
     "ANDROID": {
       "FOREGROUND_SERVICE_START_FAILED_FOCUS": "Android esti keskittymistilan pysyvän ilmoituksen. Ajastin jatkaa toimintaansa sovelluksessa, mutta taustahälytykset eivät ehkä ole käytettävissä. Tarkista ilmoituslupa sekä akun ja taustatoiminnan rajoitukset.",

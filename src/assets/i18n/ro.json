@@ -544,7 +544,8 @@
         "OAUTH_FAILED_WITH_DETAIL": "Autentificarea a eșuat: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Problema la distanță a fost ștearsă. Ștergi sarcina legată \"{{taskTitle}}\"?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Problema la distanță a fost ștearsă dar sarcina \"{{taskTitle}}\" are timp urmărit. Ștergi oricum?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Trimiterea sincronizării bidirecționale a eșuat: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Trimiterea sincronizării bidirecționale a eșuat: {{errorMsg}}",
+        "POST_TIME_SUCCESS": "{{providerName}}: A fost creat cu succes intervalul de timp pentru {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Creează automat probleme pentru sarcini noi",
@@ -580,6 +581,15 @@
         "RELOAD_OPTIONS": "Reîncarcă opțiunile",
         "SETUP_TITLE": "Editează configurația {{title}}",
         "TEST_CONNECTION": "Testează conexiunea"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Activitate",
+        "INVALID_DATE": "Valoarea introdusă nu este o dată!",
+        "POST_TIME": "Trimite timp",
+        "STARTED": "Început",
+        "SUBMIT_TIME_FOR": "Trimite timp către {{providerName}} pentru",
+        "TIME_SPENT": "Timp petrecut",
+        "TITLE": "{{providerName}}: Trimite worklog"
       }
     },
     "ISSUE_PANEL": {
@@ -803,33 +813,6 @@
         "REMINDER_NEEDS_TEXT": "Scrie o reflecție înainte de a cere un memento",
         "REMINDER_TASK_TITLE": "Revizuiește notița de reflecție",
         "TITLE": "Notă de reflecție"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "URL de bază Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Importă doar cardurile atribuite mie",
-        "IS_TRANSITION_ISSUES_ENABLED": "Sincronizează starea de finalizare și titlul înapoi în Nextcloud Deck",
-        "PASSWORD": "Parola ta de aplicație Nextcloud",
-        "POLL_INTERVAL_MINUTES": "Interval de interogare (minute)",
-        "TITLE_TEMPLATE": "Șablon titlu sarcină",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variabile: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Exemplu: [{BOARD}: {COLUMN}] {CARD_TITLE}. Lasă gol pentru doar titlul cardului.",
-        "USERNAME": "Numele tău de utilizator Nextcloud"
-      },
-      "FORM_SECTION": {
-        "HELP": "Configurează integrarea Nextcloud Deck pentru a importa carduri ca sarcini. Utilizează o parolă de aplicație pentru autentificare."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Utilizatori atribuiți",
-        "DECK_DESCRIPTION": "Descriere Deck",
-        "LABELS": "Etichete",
-        "STACK": "Stivă"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Tablou negăsit",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Cardul \"{{issueId}}\" pare să fi fost șters de pe server.",
-        "ERR_CREDENTIALS_MISSING": "Introduceți mai întâi URL-ul Nextcloud, numele de utilizator și parola.",
-        "ERR_LOAD_BOARDS": "Încărcarea tablourilor Deck a eșuat. Verifică credențialele."
       }
     },
     "NOTE": {
@@ -1085,44 +1068,6 @@
       "TOOLTIP_VISIBILITY": "Afișează/ascunde proiectele",
       "ADD_SUBFOLDER": "Adaugă subfolder",
       "ADD_PROJECT": "Adaugă proiect"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Activitate",
-        "INVALID_DATE": "Valoarea introdusă nu este o dată!",
-        "POST_TIME": "Trimite timp",
-        "STARTED": "Început",
-        "SUBMIT_TIME_FOR": "Trimite timp către Redmine pentru",
-        "TIME_SPENT": "Timp petrecut",
-        "TITLE": "Redmine: Trimite worklog"
-      },
-      "FORM": {
-        "API_KEY": "Cheie de acces API",
-        "HOST": "Host (ex: https://redmine.org)",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Afișează dialogul de urmărire a timpului pentru raportare către Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Necesită modul de urmărire a timpului activat pentru proiectul Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Afișează dialogul de urmărire a timpului când subtasks sunt finalizate",
-        "PROJECT_ID": "Identificator proiect",
-        "PROJECT_ID_DESCRIPTION": "Poate fi găsit ca parte a URL-ului atunci când vizualizezi proiectul în browser web.",
-        "SCOPE": "Interval",
-        "SCOPE_ALL": "Toate",
-        "SCOPE_ASSIGNED": "Atribuite mie",
-        "SCOPE_CREATED": "Create de mine"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Aici poți configura Super Productivity să listeze probleme Redmine deschise (fie versiunea online, fie o instanță self-hosted) pentru un proiect specific în panoul de creare a sarcinilor din vizualizarea de planificare zilnică. Vor fi listate ca sugestii și vor oferi un link către problemă, precum și informații suplimentare despre aceasta.</p><p>În plus, poți importa automat toate problemele deschise.</p>",
-        "TITLE": "Secțiune"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Autor",
-        "DESCRIPTION": "Descriere",
-        "MARK_AS_CHECKED": "Marchează actualizările ca verificate",
-        "PRIORITY": "Prioritate",
-        "STATUS": "Stare"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: A fost creat cu succes intervalul de timp pentru {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Închide",

@@ -543,7 +543,8 @@
         "OAUTH_DISCONNECTED": "Compte OAuth déconnecté.",
         "OAUTH_FAILED": "Échec de l'authentification.",
         "REMOTE_ISSUE_DELETED": "Le ticket distant a été supprimé. Supprimer la tâche liée \"{{taskTitle}}\" ?",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "Le ticket distant a été supprimé, mais la tâche \"{{taskTitle}}\" contient du temps suivi. Supprimer quand même ?"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "Le ticket distant a été supprimé, mais la tâche \"{{taskTitle}}\" contient du temps suivi. Supprimer quand même ?",
+        "POST_TIME_SUCCESS": "{{providerName}} : Entrée de temps créée avec succès pour {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_TAGS": "Créer automatiquement des balises pour les étiquettes synchronisées",
@@ -572,6 +573,15 @@
         "POLLING_MODE_DESCRIPTION": "Quand interroger : seulement lorsque le projet ou l'étiquette concerné est ouvert, ou toujours en arrière-plan",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "Quand le contexte est ouvert",
         "POLLING_MODE_ALWAYS": "Toujours (en arrière-plan)"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Activité",
+        "STARTED": "Commencé",
+        "TIME_SPENT": "Temps passé",
+        "INVALID_DATE": "La valeur saisie n'est pas une date !",
+        "POST_TIME": "Enregistrer le temps",
+        "SUBMIT_TIME_FOR": "Soumettre le temps à {{providerName}} pour",
+        "TITLE": "{{providerName}} : Soumettre le journal de travail"
       }
     },
     "ISSUE_PANEL": {
@@ -795,33 +805,6 @@
         "REMINDER_NEEDS_TEXT": "Écrivez une réflexion avant de demander un rappel",
         "REMINDER_TASK_TITLE": "Revoir la note de réflexion",
         "TITLE": "Note de réflexion"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "ISSUE_CONTENT": {
-        "LABELS": "Étiquettes",
-        "ASSIGNED_USERS": "Utilisateurs assignés",
-        "DECK_DESCRIPTION": "Description Deck",
-        "STACK": "Pile"
-      },
-      "FORM": {
-        "BASE_URL": "URL de base Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Importer uniquement les cartes qui me sont assignées",
-        "IS_TRANSITION_ISSUES_ENABLED": "Synchroniser le statut d'achèvement et le titre vers Nextcloud Deck",
-        "PASSWORD": "Mot de passe d'application Nextcloud",
-        "POLL_INTERVAL_MINUTES": "Intervalle de sondage (minutes)",
-        "TITLE_TEMPLATE": "Modèle de titre de tâche",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variables : {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Exemple : [{BOARD}: {COLUMN}] {CARD_TITLE}. Laissez vide pour utiliser uniquement le titre de la carte.",
-        "USERNAME": "Nom d'utilisateur Nextcloud"
-      },
-      "FORM_SECTION": {
-        "HELP": "Configurez votre intégration Nextcloud Deck pour importer des cartes en tant que tâches. Utilisez un mot de passe d'application pour l'authentification."
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck : Tableau introuvable",
-        "CARD_NOT_FOUND": "Nextcloud Deck : La carte \"{{issueId}}\" semble avoir été supprimée du serveur.",
-        "ERR_CREDENTIALS_MISSING": "Veuillez d'abord saisir l'URL Nextcloud, le nom d'utilisateur et le mot de passe.",
-        "ERR_LOAD_BOARDS": "Échec du chargement des tableaux Deck. Vérifiez vos identifiants."
       }
     },
     "NOTE": {
@@ -1082,44 +1065,6 @@
       "NO_DATA": "Pas de données pour l'année en cours",
       "PAGE_TITLE": "Historique rapide",
       "WEEK_TITLE": "Semaine {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Activité",
-        "STARTED": "Commencé",
-        "TIME_SPENT": "Temps passé",
-        "INVALID_DATE": "La valeur saisie n'est pas une date !",
-        "POST_TIME": "Enregistrer le temps",
-        "SUBMIT_TIME_FOR": "Soumettre le temps à Redmine pour",
-        "TITLE": "Redmine : Soumettre le journal de travail"
-      },
-      "FORM": {
-        "API_KEY": "clé d'accès à l'API",
-        "HOST": "Hôte (ex : https://redmine.org)",
-        "PROJECT_ID": "Identifiant du projet",
-        "PROJECT_ID_DESCRIPTION": "Peut être trouvé dans une partie de l'URL, lors de la visualisation du projet dans le navigateur.",
-        "SCOPE": "Portée",
-        "SCOPE_ALL": "Tout",
-        "SCOPE_ASSIGNED": "Assigné à moi-même",
-        "SCOPE_CREATED": "Créé par moi",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Afficher la boîte de dialogue de suivi du temps pour Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Nécessite que le module de suivi du temps soit activé pour le projet Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Afficher la boîte de dialogue de suivi du temps à la fin des sous-tâches"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Ici, vous pouvez configurer SuperProductivity pour répertorier les tickets Redmine ouverts (soit la version en ligne, soit une instance auto-hébergée) pour un projet spécifique dans le panneau de création de tâches de la vue de planification quotidienne. Ils seront répertoriés sous forme de suggestions et fourniront un lien vers le problème ainsi que plus d'informations à ce sujet.</p><p>Vous pouvez aussi importer automatiquement tous les problèmes ouverts.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Auteur",
-        "DESCRIPTION": "Description",
-        "MARK_AS_CHECKED": "Marquer les mises à jour comme cochées",
-        "PRIORITY": "Priorité",
-        "STATUS": "Statut"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine : Entrée de temps créée avec succès pour {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Rejeter",

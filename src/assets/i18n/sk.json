@@ -537,7 +537,8 @@
         "OAUTH_FAILED": "Overenie zlyhalo.",
         "OAUTH_FAILED_WITH_DETAIL": "Overenie zlyhalo: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Vzdialený problém bol odstránený. Odstrániť prepojenú úlohu \"{{taskTitle}}\"?",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "Vzdialený problém bol odstránený, ale pri úlohe \"{{taskTitle}}\" je sledovaný čas. Napriek tomu ju odstrániť?"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "Vzdialený problém bol odstránený, ale pri úlohe \"{{taskTitle}}\" je sledovaný čas. Napriek tomu ju odstrániť?",
+        "POST_TIME_SUCCESS": "{{providerName}}: Záznam času pre {{issueTitle}} bol úspešne vytvorený"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Automaticky vytvárať úlohy pre nové úlohy",
@@ -566,6 +567,15 @@
         "POLLING_MODE_DESCRIPTION": "Kedy zisťovať zmeny: iba ak je otvorený príslušný projekt alebo značka, alebo vždy na pozadí",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "Keď je kontext otvorený",
         "POLLING_MODE_ALWAYS": "Vždy (na pozadí)"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Aktivita",
+        "TIME_SPENT": "Strávený čas",
+        "INVALID_DATE": "Zadaná hodnota nie je dátum\\!",
+        "POST_TIME": "Odoslať čas",
+        "STARTED": "Začaté",
+        "SUBMIT_TIME_FOR": "Odoslať čas do {{providerName}} pre",
+        "TITLE": "{{providerName}}: Odoslať záznam práce"
       }
     },
     "ISSUE_PANEL": {
@@ -789,33 +799,6 @@
         "REMINDER_NEEDS_TEXT": "Napíšte reflexiu predtým, než požiadate o pripomienku",
         "REMINDER_TASK_TITLE": "Znovu navštívte poznámku reflexie",
         "TITLE": "Poznámka reflexie"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "ISSUE_CONTENT": {
-        "LABELS": "Štítky",
-        "ASSIGNED_USERS": "Priradení používatelia",
-        "DECK_DESCRIPTION": "Popis karty Deck",
-        "STACK": "Zásobník"
-      },
-      "FORM": {
-        "BASE_URL": "Základná URL adresa Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Importovať len karty priradené mne",
-        "IS_TRANSITION_ISSUES_ENABLED": "Synchronizovať stav dokončenia a názov späť do Nextcloud Deck",
-        "PASSWORD": "Vaše heslo aplikácie Nextcloud",
-        "POLL_INTERVAL_MINUTES": "Interval kontroly (minúty)",
-        "TITLE_TEMPLATE": "Šablóna názvu úlohy",
-        "TITLE_TEMPLATE_DESCRIPTION": "Premenné: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Príklad: [{BOARD}: {COLUMN}] {CARD_TITLE}. Nechajte prázdne pre samotný názov karty.",
-        "USERNAME": "Vaše používateľské meno Nextcloud"
-      },
-      "FORM_SECTION": {
-        "HELP": "Nakonfigurujte integráciu Nextcloud Deck na import kariet ako úloh. Na autentifikáciu použite heslo aplikácie."
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Nástenka nebola nájdená",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Karta \"{{issueId}}\" bola zrejme odstránená zo servera.",
-        "ERR_CREDENTIALS_MISSING": "Najprv zadajte URL adresu Nextcloud, používateľské meno a heslo.",
-        "ERR_LOAD_BOARDS": "Nepodarilo sa načítať nástenky Deck. Skontrolujte prihlasovacie údaje."
       }
     },
     "NOTE": {
@@ -1076,44 +1059,6 @@
       "NO_DATA": "Žiadne údaje za aktuálny rok",
       "PAGE_TITLE": "Rýchla história",
       "WEEK_TITLE": "Týždeň {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Aktivita",
-        "TIME_SPENT": "Strávený čas",
-        "INVALID_DATE": "Zadaná hodnota nie je dátum\\!",
-        "POST_TIME": "Odoslať čas",
-        "STARTED": "Začaté",
-        "SUBMIT_TIME_FOR": "Odoslať čas do Redmine pre",
-        "TITLE": "Redmine: Odoslať záznam práce"
-      },
-      "FORM": {
-        "API_KEY": "Prístupový kľúč API",
-        "HOST": "Hostiteľ (napr.: https://redmine.org)",
-        "PROJECT_ID": "Identifikátor projektu",
-        "PROJECT_ID_DESCRIPTION": "Môže sa nájsť ako súčasť URL, keď sa projekt zobrazuje v prehliadači.",
-        "SCOPE": "Rozsah",
-        "SCOPE_ALL": "Všetky",
-        "SCOPE_ASSIGNED": "Priradené mne",
-        "SCOPE_CREATED": "Vytvorené mnou",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Zobraziť dialóg sledovania času pre hlásenie do Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Vyžaduje povolený modul sledovania času v projekte Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Zobraziť dialóg sledovania času pri dokončení podúloh"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Tu môžete nakonfigurovať program SuperProductivity tak, aby na paneli vytvárania úloh v zobrazení denného plánovania zobrazoval zoznam otvorených problémov Redmine (buď jeho online verzie, alebo samostatne hostovanej inštancie) pre konkrétny projekt. Budú uvedené ako návrhy a budú obsahovať odkaz na problém, ako aj ďalšie informácie o ňom.</p><p>Okrem toho môžete automaticky importovať všetky otvorené problémy.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Autor",
-        "DESCRIPTION": "Popis",
-        "MARK_AS_CHECKED": "Označiť aktualizácie ako skontrolované",
-        "PRIORITY": "Priorita",
-        "STATUS": "Stav"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Záznam času pre {{issueTitle}} bol úspešne vytvorený"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Zrušiť",

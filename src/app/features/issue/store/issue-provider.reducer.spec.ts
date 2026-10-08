@@ -274,6 +274,113 @@ describe('issueProviderReducer loadAllData migration', () => {
     });
   });
 
+  describe('REDMINE → redmine-issue-provider', () => {
+    const legacyRedmine = {
+      id: 'rp1',
+      issueProviderKey: 'REDMINE',
+      isEnabled: true,
+      host: 'https://redmine.example.com',
+      api_key: 'key',
+      projectId: 'proj',
+      scope: 'created-by-me',
+      isShowTimeTrackingDialog: true,
+      isShowTimeTrackingDialogForEachSubTask: true,
+      timeTrackingDialogDefaultTime: 'TimeToday',
+    };
+    const migrate = (provider: unknown): Record<string, unknown> =>
+      issueProviderReducer(issueProviderInitialState, loadWith({ rp1: provider }))
+        .entities['rp1'] as unknown as Record<string, unknown>;
+
+    it('moves connection and time tracking fields into pluginConfig', () => {
+      const migrated = migrate(legacyRedmine);
+      expect(migrated['pluginId']).toBe('redmine-issue-provider');
+      expect(migrated['pluginConfig']).toEqual({
+        projectId: 'proj',
+        host: 'https://redmine.example.com',
+        api_key: 'key',
+        scope: 'created-by-me',
+        isShowTimeTrackingDialog: true,
+        isShowTimeTrackingDialogForEachSubTask: true,
+        timeTrackingDialogDefaultTime: 'TimeToday',
+      });
+      expect(migrated['host']).toBe('https://redmine.example.com');
+    });
+
+    it('defaults missing optional fields', () => {
+      const migrated = migrate({ id: 'rp1', issueProviderKey: 'REDMINE', host: 'h' });
+      expect(migrated['pluginConfig']).toEqual({
+        projectId: '',
+        host: 'h',
+        api_key: '',
+        scope: 'assigned-to-me',
+        isShowTimeTrackingDialog: false,
+        isShowTimeTrackingDialogForEachSubTask: false,
+      });
+    });
+  });
+
+  describe('NEXTCLOUD_DECK → nextcloud-deck-issue-provider', () => {
+    const legacyDeck = {
+      id: 'np1',
+      issueProviderKey: 'NEXTCLOUD_DECK',
+      isEnabled: true,
+      nextcloudBaseUrl: 'https://cloud.example.com',
+      username: 'me',
+      password: 'pw',
+      selectedBoardId: 7,
+      selectedBoardTitle: 'Board',
+      importStackIds: [1, 2],
+      doneStackId: 3,
+      isTransitionIssuesEnabled: true,
+      filterByAssignee: false,
+      titleTemplate: '{TITLE}',
+      pollIntervalMinutes: 10,
+    };
+    const migrate = (provider: unknown): Record<string, unknown> =>
+      issueProviderReducer(issueProviderInitialState, loadWith({ np1: provider }))
+        .entities['np1'] as unknown as Record<string, unknown>;
+
+    it('moves fields into pluginConfig with string ids and done-state push', () => {
+      const migrated = migrate(legacyDeck);
+      expect(migrated['pluginId']).toBe('nextcloud-deck-issue-provider');
+      expect(migrated['pluginConfig']).toEqual({
+        selectedBoardTitle: 'Board',
+        nextcloudBaseUrl: 'https://cloud.example.com',
+        username: 'me',
+        password: 'pw',
+        selectedBoardId: '7',
+        importStackIds: ['1', '2'],
+        doneStackId: '3',
+        filterByAssignee: false,
+        titleTemplate: '{TITLE}',
+        twoWaySync: { isDone: 'both', notes: 'pullOnly' },
+      });
+      expect(migrated['selectedBoardId']).toBe(7);
+    });
+
+    it('keeps the legacy defaults for unset fields', () => {
+      const migrated = migrate({ id: 'np1', issueProviderKey: 'NEXTCLOUD_DECK' });
+      expect(migrated['pluginConfig']).toEqual(
+        jasmine.objectContaining({
+          selectedBoardId: '',
+          importStackIds: [],
+          doneStackId: '',
+          filterByAssignee: true,
+          twoWaySync: { isDone: 'pullOnly', notes: 'pullOnly' },
+        }),
+      );
+    });
+
+    it('is idempotent — already-migrated providers are left untouched', () => {
+      const already = { ...legacyDeck, pluginId: 'x', pluginConfig: {} };
+      const state = issueProviderReducer(
+        issueProviderInitialState,
+        loadWith({ np1: already }),
+      );
+      expect(state.entities['np1'] as unknown).toBe(already);
+    });
+  });
+
   it('returns state unchanged when no legacy providers need migration', () => {
     const action = loadWith({
       jp1: { id: 'jp1', issueProviderKey: 'JIRA', isEnabled: true },

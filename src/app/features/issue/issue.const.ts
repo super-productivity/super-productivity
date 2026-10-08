@@ -19,10 +19,7 @@ import {
 } from './providers/open-project/open-project.const';
 import { T } from '../../t.const';
 // Gitea is now a plugin — no built-in config needed
-import {
-  DEFAULT_REDMINE_CFG,
-  REDMINE_CONFIG_FORM_SECTION,
-} from './providers/redmine/redmine.const';
+// Redmine is now a plugin — no built-in config needed
 import {
   CALENDAR_FORM_CFG_NEW,
   DEFAULT_CALENDAR_CFG,
@@ -31,8 +28,7 @@ import {
 // Linear is now a plugin — no built-in config needed
 // ClickUp is now a plugin — no built-in config needed
 // Azure DevOps is now a plugin — no built-in config needed
-import { DEFAULT_NEXTCLOUD_DECK_CFG } from './providers/nextcloud-deck/nextcloud-deck.const';
-import { NEXTCLOUD_DECK_CONFIG_FORM_SECTION } from './providers/nextcloud-deck/nextcloud-deck.const';
+// Nextcloud Deck is now a plugin — no built-in config needed
 import {
   DEFAULT_PLAINSPACE_CFG,
   PLAINSPACE_CONFIG_FORM_SECTION,
@@ -45,12 +41,12 @@ export const GITHUB_TYPE: MigratedIssueProviderKey = 'GITHUB';
 export const JIRA_TYPE: BuiltInIssueProviderKey = 'JIRA';
 export const CALDAV_TYPE: BuiltInIssueProviderKey = 'CALDAV';
 export const OPEN_PROJECT_TYPE: BuiltInIssueProviderKey = 'OPEN_PROJECT';
-export const REDMINE_TYPE: BuiltInIssueProviderKey = 'REDMINE';
+export const REDMINE_TYPE: MigratedIssueProviderKey = 'REDMINE';
 export const ICAL_TYPE: BuiltInIssueProviderKey = 'ICAL';
 export const TRELLO_TYPE: MigratedIssueProviderKey = 'TRELLO';
 export const CLICKUP_TYPE: MigratedIssueProviderKey = 'CLICKUP';
 export const AZURE_DEVOPS_TYPE: MigratedIssueProviderKey = 'AZURE_DEVOPS';
-export const NEXTCLOUD_DECK_TYPE: BuiltInIssueProviderKey = 'NEXTCLOUD_DECK';
+export const NEXTCLOUD_DECK_TYPE: MigratedIssueProviderKey = 'NEXTCLOUD_DECK';
 export const PLAINSPACE_TYPE: BuiltInIssueProviderKey = 'PLAINSPACE';
 
 export const ISSUE_PROVIDER_TYPES: BuiltInIssueProviderKey[] = [
@@ -59,8 +55,6 @@ export const ISSUE_PROVIDER_TYPES: BuiltInIssueProviderKey[] = [
   CALDAV_TYPE,
   ICAL_TYPE,
   OPEN_PROJECT_TYPE,
-  REDMINE_TYPE,
-  NEXTCLOUD_DECK_TYPE,
   PLAINSPACE_TYPE,
 ] as const;
 
@@ -70,8 +64,6 @@ export const ISSUE_PROVIDER_ICON_MAP = {
   [CALDAV_TYPE]: 'caldav',
   [ICAL_TYPE]: 'calendar',
   [OPEN_PROJECT_TYPE]: 'open_project',
-  [REDMINE_TYPE]: 'redmine',
-  [NEXTCLOUD_DECK_TYPE]: 'nextcloud_deck',
   [PLAINSPACE_TYPE]: 'plainspace',
 } as const;
 
@@ -81,8 +73,6 @@ export const ISSUE_PROVIDER_HUMANIZED = {
   [CALDAV_TYPE]: 'CalDAV',
   [ICAL_TYPE]: 'Calendar',
   [OPEN_PROJECT_TYPE]: 'OpenProject',
-  [REDMINE_TYPE]: 'Redmine',
-  [NEXTCLOUD_DECK_TYPE]: 'Nextcloud Deck',
   [PLAINSPACE_TYPE]: 'Plainspace',
 } as const;
 
@@ -92,8 +82,6 @@ export const DEFAULT_ISSUE_PROVIDER_CFGS = {
   [CALDAV_TYPE]: DEFAULT_CALDAV_CFG,
   [ICAL_TYPE]: DEFAULT_CALENDAR_CFG,
   [OPEN_PROJECT_TYPE]: DEFAULT_OPEN_PROJECT_CFG,
-  [REDMINE_TYPE]: DEFAULT_REDMINE_CFG,
-  [NEXTCLOUD_DECK_TYPE]: DEFAULT_NEXTCLOUD_DECK_CFG,
   [PLAINSPACE_TYPE]: DEFAULT_PLAINSPACE_CFG,
 } as const;
 
@@ -103,8 +91,6 @@ export const ISSUE_PROVIDER_FORM_CFGS_MAP = {
   [CALDAV_TYPE]: CALDAV_CONFIG_FORM_SECTION,
   [ICAL_TYPE]: CALENDAR_FORM_CFG_NEW as any,
   [OPEN_PROJECT_TYPE]: OPEN_PROJECT_CONFIG_FORM_SECTION,
-  [REDMINE_TYPE]: REDMINE_CONFIG_FORM_SECTION,
-  [NEXTCLOUD_DECK_TYPE]: NEXTCLOUD_DECK_CONFIG_FORM_SECTION,
   [PLAINSPACE_TYPE]: PLAINSPACE_CONFIG_FORM_SECTION,
 } as const;
 
@@ -128,8 +114,6 @@ export const ISSUE_STR_MAP: Record<
     ISSUE_STR: T.F.OPEN_PROJECT.ISSUE_STRINGS.ISSUE_STR,
     ISSUES_STR: T.F.OPEN_PROJECT.ISSUE_STRINGS.ISSUES_STR,
   },
-  [REDMINE_TYPE]: DEFAULT_ISSUE_STRS,
-  [NEXTCLOUD_DECK_TYPE]: DEFAULT_ISSUE_STRS,
   [PLAINSPACE_TYPE]: DEFAULT_ISSUE_STRS,
 } as const;
 

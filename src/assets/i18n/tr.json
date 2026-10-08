@@ -544,7 +544,8 @@
         "OAUTH_FAILED_WITH_DETAIL": "Kimlik doğrulama başarısız: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Uzak sorun silindi. Bağlı olan \"{{taskTitle}}\" görevi silinsin mi?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Uzak sorun silindi ancak \"{{taskTitle}}\" görevinin izlenen zamanı var. Yine de silinsin mi?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Çift yönlü senkronizasyon gönderimi başarısız: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Çift yönlü senkronizasyon gönderimi başarısız: {{errorMsg}}",
+        "POST_TIME_SUCCESS": "{{providerName}}: {{issueTitle}} için süre kaydı başarıyla oluşturuldu"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Yeni görevler için otomatik sorun oluştur",
@@ -580,6 +581,15 @@
         "RELOAD_OPTIONS": "Seçenekleri Yeniden Yükle",
         "SETUP_TITLE": "{{title}} Yapılandırmasını Kur",
         "TEST_CONNECTION": "Bağlantıyı Test Et"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Etkinlik",
+        "INVALID_DATE": "Girilen değer bir tarih değil!",
+        "POST_TIME": "Süreyi Gönder",
+        "STARTED": "Başlangıç",
+        "SUBMIT_TIME_FOR": "{{providerName}}'a süre gönder:",
+        "TIME_SPENT": "Harcanan Süre",
+        "TITLE": "{{providerName}}: Çalışma Kaydı Gönder"
       }
     },
     "ISSUE_PANEL": {
@@ -803,33 +813,6 @@
         "REMINDER_NEEDS_TEXT": "Hatırlatıcı istemeden önce bir düşünce yazın",
         "REMINDER_TASK_TITLE": "Düşünce notunu yeniden ziyaret et",
         "TITLE": "Düşünce Notu"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Nextcloud Temel URL",
-        "FILTER_BY_ASSIGNEE": "Yalnızca bana atanmış kartları içe aktar",
-        "IS_TRANSITION_ISSUES_ENABLED": "Tamamlanma durumunu ve başlığı Nextcloud Deck'e geri senkronize et",
-        "PASSWORD": "Nextcloud uygulama şifreniz",
-        "POLL_INTERVAL_MINUTES": "Yoklama aralığı (dakika)",
-        "TITLE_TEMPLATE": "Görev başlık şablonu",
-        "TITLE_TEMPLATE_DESCRIPTION": "Değişkenler: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Örnek: [{BOARD}: {COLUMN}] {CARD_TITLE}. Yalnızca kart başlığı için boş bırakın.",
-        "USERNAME": "Nextcloud kullanıcı adınız"
-      },
-      "FORM_SECTION": {
-        "HELP": "Kartları görev olarak içe aktarmak için Nextcloud Deck entegrasyonunuzu yapılandırın. Kimlik doğrulama için uygulama şifresi kullanın."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Atanan Kullanıcılar",
-        "DECK_DESCRIPTION": "Deck Açıklaması",
-        "LABELS": "Etiketler",
-        "STACK": "Yığın"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Pano bulunamadı",
-        "CARD_NOT_FOUND": "Nextcloud Deck: \"{{issueId}}\" kartı sunucuda silinmiş görünüyor.",
-        "ERR_CREDENTIALS_MISSING": "Önce Nextcloud URL'sini, kullanıcı adını ve şifreyi girin.",
-        "ERR_LOAD_BOARDS": "Deck panoları yüklenemedi. Kimlik bilgilerinizi kontrol edin."
       }
     },
     "NOTE": {
@@ -1085,44 +1068,6 @@
       "TOOLTIP_VISIBILITY": "Projeleri göster/gizle",
       "ADD_SUBFOLDER": "Alt klasör ekle",
       "ADD_PROJECT": "Proje ekle"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Etkinlik",
-        "INVALID_DATE": "Girilen değer bir tarih değil!",
-        "POST_TIME": "Süreyi Gönder",
-        "STARTED": "Başlangıç",
-        "SUBMIT_TIME_FOR": "Redmine'a süre gönder:",
-        "TIME_SPENT": "Harcanan Süre",
-        "TITLE": "Redmine: Çalışma Kaydı Gönder"
-      },
-      "FORM": {
-        "API_KEY": "API erişim anahtarı",
-        "HOST": "Sağlayıcı (e.g.: https://redmine.org)",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Redmine'a raporlamak için süre takibi diyaloğunu göster",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Redmine projesinde süre takibi modülünün etkinleştirilmiş olması gerekir",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Alt görevler tamamlandığında süre takibi diyaloğunu göster",
-        "PROJECT_ID": "Proje Tanımlayıcı",
-        "PROJECT_ID_DESCRIPTION": "Projeyi Tarayıcıda görüntülerken URL'nin bir parçası olarak bulunabilir.",
-        "SCOPE": "Kapsam",
-        "SCOPE_ALL": "Hepsi",
-        "SCOPE_ASSIGNED": "Bana atanan",
-        "SCOPE_CREATED": "Benim tarafımdan oluşturuldu"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Burada, günlük planlama görünümündeki görev oluşturma panelinde belirli bir proje için açık Redmine (çevrimiçi sürümü veya şirket içinde barındırılan bir örnek) sorunlarını listelemek için SuperProductivity'yi yapılandırabilirsiniz. Öneriler olarak listelenecekler ve konuyla ilgili bir bağlantının yanı sıra konuyla ilgili daha fazla bilgi sağlayacaklar.</p><p>Ek olarak, tüm açık sorunları otomatik olarak görev biriktirme listenize ekleyebilir ve senkronize edebilirsiniz.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Yaratıcı",
-        "DESCRIPTION": "Açıklama",
-        "MARK_AS_CHECKED": "Güncellemeleri kontrol edildi olarak işaretle",
-        "PRIORITY": "Öncelik",
-        "STATUS": "Durum"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: {{issueTitle}} için süre kaydı başarıyla oluşturuldu"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Görmezden gel",

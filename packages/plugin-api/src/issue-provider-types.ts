@@ -214,6 +214,44 @@ export interface IssueProviderPluginDefinition {
       http: PluginHttp,
     ): Promise<void>;
   };
+  /** Optional time tracking (worklog) integration. When implemented, the host offers
+   *  its track-time dialog after a linked task is marked done. The dialog is controlled
+   *  by these well-known config keys, which the plugin should expose as config fields:
+   *  - `isShowTimeTrackingDialog` (checkbox) — show the dialog when a task is done
+   *  - `isShowTimeTrackingDialogForEachSubTask` (checkbox) — show it per subtask instead
+   *  - `timeTrackingDialogDefaultTime` (select: `AllTime` | `AllTimeMinusLogged` |
+   *    `TimeToday` | `TimeYesterday`) — preselected time; the dialog can update it */
+  timeTracking?: PluginTimeTracking;
+}
+
+export interface PluginTimeEntry {
+  /** Start of the logged work (ms timestamp) */
+  started: number;
+  timeSpentMs: number;
+  comment: string;
+  /** Selected activity id, when the plugin provides activities */
+  activityId?: number;
+}
+
+export interface PluginTimeTracking {
+  /** Create a time entry for the issue. Throw to keep the dialog open. */
+  logTime(
+    issueId: string,
+    entry: PluginTimeEntry,
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<void>;
+  /** Time already logged on the issue by the current user (ms) */
+  getTimeLogged?(
+    issueId: string,
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<number>;
+  /** Activities (e.g. "Development") the user can pick for a time entry */
+  getActivities?(
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<{ id: number; name: string }[]>;
 }
 
 export interface IssueProviderManifestConfig {

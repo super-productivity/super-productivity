@@ -537,7 +537,8 @@
         "OAUTH_FAILED": "Autentisering mislyktes.",
         "OAUTH_FAILED_WITH_DETAIL": "Autentisering mislyktes: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Den eksterne saken ble slettet. Vil du slette den tilknyttede oppgaven «{{taskTitle}}»?",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "Den eksterne saken ble slettet, men oppgaven «{{taskTitle}}» har registrert tid. Vil du slette den likevel?"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "Den eksterne saken ble slettet, men oppgaven «{{taskTitle}}» har registrert tid. Vil du slette den likevel?",
+        "POST_TIME_SUCCESS": "{{providerName}}: Tidsoppføring opprettet for {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "OFF": "Av",
@@ -566,6 +567,15 @@
         "POLLING_MODE_ALWAYS": "Alltid (i bakgrunnen)",
         "POLLING_MODE_DESCRIPTION": "Når det skal polles: bare mens det relevante prosjektet eller merket er åpent, eller alltid i bakgrunnen",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "Når konteksten er åpen"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Aktivitet",
+        "STARTED": "Startet",
+        "TIME_SPENT": "Brukt tid",
+        "INVALID_DATE": "Den angitte verdien er ikke en dato!",
+        "POST_TIME": "Registrer tid",
+        "SUBMIT_TIME_FOR": "Send tid til {{providerName}} for",
+        "TITLE": "{{providerName}}: Send tidslogg"
       }
     },
     "ISSUE_PANEL": {
@@ -789,33 +799,6 @@
         "REMINDER_NEEDS_TEXT": "Skriv en refleksjon før du ber om en påminnelse",
         "REMINDER_TASK_TITLE": "Gå gjennom refleksjonsnotatet igjen",
         "TITLE": "Refleksjonsnotat"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "ISSUE_CONTENT": {
-        "LABELS": "Etiketter",
-        "ASSIGNED_USERS": "Tildelte brukere",
-        "DECK_DESCRIPTION": "Deck-beskrivelse",
-        "STACK": "Stabel"
-      },
-      "FORM": {
-        "BASE_URL": "Nextcloud base-URL",
-        "FILTER_BY_ASSIGNEE": "Importer kun kort tildelt meg",
-        "IS_TRANSITION_ISSUES_ENABLED": "Synkroniser fullføringsstatus og tittel tilbake til Nextcloud Deck",
-        "PASSWORD": "Ditt Nextcloud-apppassord",
-        "POLL_INTERVAL_MINUTES": "Pollingsintervall (minutter)",
-        "TITLE_TEMPLATE": "Mal for oppgavetittel",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variabler: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Eksempel: [{BOARD}: {COLUMN}] {CARD_TITLE}. La stå tomt for kun korttittel.",
-        "USERNAME": "Ditt Nextcloud-brukernavn"
-      },
-      "FORM_SECTION": {
-        "HELP": "Konfigurer Nextcloud Deck-integrasjonen for å importere kort som oppgaver. Bruk et apppassord for autentisering."
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Tavle ikke funnet",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Kortet \"{{issueId}}\" ser ut til å være slettet fra serveren.",
-        "ERR_CREDENTIALS_MISSING": "Fyll inn Nextcloud-URL, brukernavn og passord først.",
-        "ERR_LOAD_BOARDS": "Kunne ikke laste Deck-tavler. Sjekk legitimasjonen din."
       }
     },
     "NOTE": {
@@ -1076,44 +1059,6 @@
       "NO_DATA": "Ingen data for inneværende år",
       "PAGE_TITLE": "Rask historie",
       "WEEK_TITLE": "Uke {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Aktivitet",
-        "STARTED": "Startet",
-        "TIME_SPENT": "Brukt tid",
-        "INVALID_DATE": "Den angitte verdien er ikke en dato!",
-        "POST_TIME": "Registrer tid",
-        "SUBMIT_TIME_FOR": "Send tid til Redmine for",
-        "TITLE": "Redmine: Send tidslogg"
-      },
-      "FORM": {
-        "API_KEY": "API-tilgangsnøkkel",
-        "HOST": "Vert (f.eks.: https://redmine.org)",
-        "PROJECT_ID": "Prosjektidentifikator",
-        "PROJECT_ID_DESCRIPTION": "Kan finnes som en del av URL-en når du ser på prosjektet i nettleseren.",
-        "SCOPE": "Omfang",
-        "SCOPE_ALL": "Alle",
-        "SCOPE_ASSIGNED": "Tildelt meg",
-        "SCOPE_CREATED": "Opprettet av meg",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Vis tidsregistreringsdialog for rapportering til Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Krever at tidsregistreringsmodulen er aktivert for Redmine-prosjektet",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Vis tidsregistreringsdialog når deloppgaver fullføres"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne Redmine (enten det er den nettbaserte versjonen eller en selvhostet instans) problemer for et spesifikt prosjekt i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til problemet samt mer informasjon om det.</p><p>I tillegg kan du automatisk importere alle åpne problemer.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Forfatter",
-        "DESCRIPTION": "Beskrivelse",
-        "MARK_AS_CHECKED": "Merk oppdateringer som sjekket",
-        "PRIORITY": "Prioritet",
-        "STATUS": "Status"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Tidsoppføring opprettet for {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Avvis",

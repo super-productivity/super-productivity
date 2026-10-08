@@ -573,7 +573,8 @@
         "PLUGIN_NOT_INSTALLED": "Požadovaný plugin \"{{pluginName}}\" není nainstalován.",
         "REMOTE_ISSUE_DELETED": "Vzdálený problém byl smazán. Smazat propojený úkol „{{taskTitle}}“?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Vzdálený problém byl smazán, ale u úkolu „{{taskTitle}}“ je sledovaný čas. Přesto jej smazat?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Odesílání obousměrné synchronizace selhalo: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Odesílání obousměrné synchronizace selhalo: {{errorMsg}}",
+        "POST_TIME_SUCCESS": "{{providerName}}: Záznam času pro {{issueTitle}} úspěšně vytvořen"
       },
       "DIALOG": {
         "ADVANCED_CONFIG": "Pokročilá konfigurace",
@@ -609,6 +610,15 @@
         "TAGS": "Směr synchronizace štítků / kategorií",
         "TIME_ESTIMATE": "Odhad času",
         "TITLE": "Směr synchronizace názvu"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Aktivita",
+        "INVALID_DATE": "Zadaná hodnota není datum!",
+        "POST_TIME": "Odeslat čas",
+        "STARTED": "Zahájeno",
+        "SUBMIT_TIME_FOR": "Odeslat čas do {{providerName}} pro",
+        "TIME_SPENT": "Strávený čas",
+        "TITLE": "{{providerName}}: Odeslat pracovní výkaz"
       }
     },
     "ISSUE_PANEL": {
@@ -1092,44 +1102,6 @@
       "NO_DATA": "Za aktuální rok nejsou k dispozici žádná data",
       "PAGE_TITLE": "Rychlá historie",
       "WEEK_TITLE": "Týden {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "FORM": {
-        "API_KEY": "API klíč přístupu",
-        "HOST": "Hostitel (např.: https://redmine.org)",
-        "PROJECT_ID": "Identifikátor projektu",
-        "PROJECT_ID_DESCRIPTION": "Lze nalézt jako část adresy URL při prohlížení projektu v prohlížeči.",
-        "SCOPE": "Rozsah",
-        "SCOPE_ALL": "Všechny",
-        "SCOPE_ASSIGNED": "Přiřazeno mně",
-        "SCOPE_CREATED": "Vytvořeno mnou",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Zobrazit dialog sledování času pro Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Vyžaduje povolený modul sledování času v projektu Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Zobrazit dialog sledování času při dokončení podúkolů"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby zobrazoval otevřené problémy Redmine (buď online verze, nebo samonosné instance) pro konkrétní projekt v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na problém a další informace o něm.</p><p>Kromě toho můžete automaticky importovat všechny otevřené problémy.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Autor",
-        "DESCRIPTION": "Popis",
-        "MARK_AS_CHECKED": "Označit změny jako zkontrolované",
-        "PRIORITY": "Priorita",
-        "STATUS": "Status"
-      },
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Aktivita",
-        "INVALID_DATE": "Zadaná hodnota není datum!",
-        "POST_TIME": "Odeslat čas",
-        "STARTED": "Zahájeno",
-        "SUBMIT_TIME_FOR": "Odeslat čas do Redmine pro",
-        "TIME_SPENT": "Strávený čas",
-        "TITLE": "Redmine: Odeslat pracovní výkaz"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Záznam času pro {{issueTitle}} úspěšně vytvořen"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Zavřít",
@@ -2457,33 +2429,6 @@
       "PASTE_SUCCESS": "Obrázek úspěšně vložen",
       "SIZE_EXCEEDED": "Velikost obrázku ({{actualSize}}) překračuje maximální povolenou velikost ({{maxSize}})",
       "STORAGE_QUOTA_EXCEEDED": "Kvóta úložiště překročena. Uvolněte prostor nebo zmenšete obrázky."
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Základní URL Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Importovat pouze karty přiřazené mně",
-        "IS_TRANSITION_ISSUES_ENABLED": "Synchronizovat stav dokončení a název zpět do Nextcloud Deck",
-        "PASSWORD": "Vaše heslo aplikace Nextcloud",
-        "POLL_INTERVAL_MINUTES": "Interval dotazování (minuty)",
-        "TITLE_TEMPLATE": "Šablona názvu úkolu",
-        "TITLE_TEMPLATE_DESCRIPTION": "Proměnné: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Příklad: [{BOARD}: {COLUMN}] {CARD_TITLE}. Ponechte prázdné pro pouze název karty.",
-        "USERNAME": "Vaše uživatelské jméno Nextcloud"
-      },
-      "FORM_SECTION": {
-        "HELP": "Nakonfigurujte integraci Nextcloud Deck pro import karet jako úkolů. Pro ověření použijte heslo aplikace."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Přiřazení uživatelé",
-        "DECK_DESCRIPTION": "Popis Deck",
-        "LABELS": "Štítky",
-        "STACK": "Zásobník"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Nástěnka nenalezena",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Karta \"{{issueId}}\" zřejmě byla ze serveru smazána.",
-        "ERR_CREDENTIALS_MISSING": "Nejprve zadejte URL Nextcloud, uživatelské jméno a heslo.",
-        "ERR_LOAD_BOARDS": "Načtení nástěnek Deck selhalo. Zkontrolujte přihlašovací údaje."
-      }
     }
   },
   "FILE_IMEX": {
