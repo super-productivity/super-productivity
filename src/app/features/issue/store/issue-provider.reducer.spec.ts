@@ -312,7 +312,7 @@ describe('issueProviderReducer loadAllData migration', () => {
         projectId: '',
         host: 'h',
         api_key: '',
-        scope: 'assigned-to-me',
+        scope: 'all',
         isShowTimeTrackingDialog: false,
         isShowTimeTrackingDialogForEachSubTask: false,
       });

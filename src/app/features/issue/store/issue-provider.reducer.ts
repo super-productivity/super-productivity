@@ -218,7 +218,8 @@ export const issueProviderReducer = createReducer(
             projectId: provider['projectId'] ?? '',
             host: provider['host'] ?? '',
             api_key: provider['api_key'] ?? '',
-            scope: provider['scope'] ?? 'assigned-to-me',
+            // an unset legacy scope applied no filter; don't narrow it to assigned-to-me
+            scope: provider['scope'] || 'all',
             isShowTimeTrackingDialog: provider['isShowTimeTrackingDialog'] ?? false,
             isShowTimeTrackingDialogForEachSubTask:
               provider['isShowTimeTrackingDialogForEachSubTask'] ?? false,
