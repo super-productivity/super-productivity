@@ -277,15 +277,17 @@ describe('IssueTwoWaySyncEffects', () => {
       });
     }));
 
-    it('should push for a task that has no baseline at all', fakeAsync(() => {
+    // CalDAV reports `note: undefined` for an empty description; a baseline
+    // that went through JSON (sync) lacks the key, which is not "unseeded"
+    it('should advance issueLastUpdated when an unseeded field has no value', fakeAsync(() => {
       const adapter = createMockAdapter({
         getFieldMappings: jasmine
           .createSpy('getFieldMappings')
-          .and.returnValue([isDoneFieldMapping]),
+          .and.returnValue([isDoneFieldMapping, titleFieldMapping]),
         extractSyncValues: jasmine
           .createSpy('extractSyncValues')
-          .and.returnValue({ status: 'NEEDS-ACTION' }),
-        getIssueLastUpdated: () => 1000,
+          .and.returnValue({ status: 'NEEDS-ACTION', summary: undefined }),
+        getIssueLastUpdated: () => 3000,
       });
       adapterRegistry.register('TEST_PROVIDER', adapter);
       const task = createMockTask({
@@ -293,6 +295,7 @@ describe('IssueTwoWaySyncEffects', () => {
         issueId: 'issue-1',
         issueProviderId: 'provider-1',
         issueLastUpdated: 1000,
+        issueLastSyncedValues: { status: 'NEEDS-ACTION' },
         isDone: true,
       });
       taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
@@ -306,6 +309,17 @@ describe('IssueTwoWaySyncEffects', () => {
       );
       tick();
 
+      expect(taskServiceSpy.update).toHaveBeenCalledWith('task-1', {
+        issueLastSyncedValues: { status: 'COMPLETED' },
+        issueLastUpdated: 3000,
+      });
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should push for a task that has no baseline at all', fakeAsync(() => {
+      const adapter = baselessPushSetup(1000);
+
       expect(adapter.pushChanges).toHaveBeenCalledWith(
         'issue-1',
         { status: 'COMPLETED' },
@@ -316,8 +330,6 @@ describe('IssueTwoWaySyncEffects', () => {
       expect(taskServiceSpy.update).toHaveBeenCalledWith('task-1', {
         issueLastSyncedValues: { status: 'COMPLETED' },
       });
-
-      adapterRegistry.unregister('TEST_PROVIDER');
     }));
 
     it('should still skip a field missing from an existing baseline', fakeAsync(() => {

@@ -628,8 +628,12 @@ export class IssueTwoWaySyncEffects {
         });
         // A field the issue reports but the baseline lacks was never compared;
         // a stale marker lets the next poll seed the full baseline and pull it.
+        // An undefined value (e.g. CalDAV `note`) has nothing to pull, and JSON
+        // sync drops such keys from the baseline anyway.
         const hasUnseededField = fieldMappings.some(
-          (m) => m.issueField in freshValues && !(m.issueField in lastSyncedValues),
+          (m) =>
+            freshValues[m.issueField] !== undefined &&
+            !(m.issueField in lastSyncedValues),
         );
         const keepIssueLastUpdatedStale =
           hasProviderOwnedSkip || hasUnpulledRemoteChange || hasUnseededField;
