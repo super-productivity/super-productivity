@@ -42,44 +42,28 @@ body.isDisableAnimations {
 // iOS Safe Area Handling
 // ===============================
 
-// Native mobile platforms get safe area padding
 body.isNativeMobile {
-  // Apply safe area padding to the viewport
   padding-top: var(--safe-area-top);
   padding-left: var(--safe-area-left);
   padding-right: var(--safe-area-right);
 
-  // Bottom padding only when keyboard is not visible
-  // Skip when bottom nav is present — the nav and content area handle it themselves
   &:not(.isKeyboardVisible):not(.hasMobileBottomNav) {
     padding-bottom: var(--safe-area-bottom);
   }
 }
 
-// Native Android's opaque system bars need the full inset, not the iOS half
-// default — see --bottom-nav-safe-area in _css-variables.scss (#8792).
 body.isNativeMobile:not(.isIOS) {
   --bottom-nav-safe-area: var(--safe-area-bottom);
 }
 
-// iOS-specific adjustments
 body.isIOS {
-  // Prevent overscroll bounce effect
   overscroll-behavior: none;
-
-  // Ensure the viewport extends behind safe areas
-  // This allows us to color the areas behind notch/home indicator
   min-height: 100vh;
   min-height: -webkit-fill-available;
 }
 
-// Keyboard visible adjustments
 body.isKeyboardVisible {
-  // Remove bottom safe area when keyboard is visible
   padding-bottom: 0;
-
-  // Optionally adjust for keyboard height
-  // Elements can use --keyboard-height to position above keyboard
 }
 
 // ===============================
@@ -87,29 +71,647 @@ body.isKeyboardVisible {
 // ===============================
 
 body.isIPad {
-  // iPad has more screen real estate - use wider content
   --component-max-width: 900px;
-
-  // Larger touch targets are less necessary on iPad
   --touch-target-min: 40px;
 
-  // Better use of horizontal space in landscape
   @media (min-width: 1024px) {
     --component-max-width: 1000px;
   }
 
-  // Split-view support: when iPad is in split-view mode,
-  // the viewport is narrower - detect and adjust
   @media (max-width: 500px) {
-    // In narrow split-view, use phone-like layout
     --component-max-width: 100%;
   }
 
-  // iPad in landscape with enough space for side-by-side content
   @media (min-width: 1024px) and (orientation: landscape) {
-    // Wider dialogs on iPad landscape
     .mat-mdc-dialog-container {
       max-width: 700px;
+    }
+  }
+}
+
+// =========================================================
+// CUSTOM MODIFICATIONS & OVERRIDES
+// =========================================================
+
+/* 1. RTL Support — Active ONLY when language/document direction is set to RTL */
+html[dir='rtl'],
+[dir='rtl'] {
+  direction: rtl;
+  text-align: right;
+
+  .cdk-overlay-container,
+  .mat-mdc-menu-panel,
+  .mat-mdc-dialog-container {
+    direction: rtl;
+    text-align: right;
+  }
+}
+
+/* 2. Hide moon graphic and glowing background elements in the empty state */
+.no-tasks-planned svg,
+.no-tasks-planned img,
+[class*='no-tasks'] svg,
+[class*='no-tasks'] img,
+.no-tasks-planned::before,
+.no-tasks-planned::after {
+  display: none !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+/* 3. Task time badges spacing and styling to avoid text overlap */
+.task .time-wrapper,
+.task .time-badge,
+.task [class*='time'] {
+  margin-inline-start: 8px;
+  margin-inline-end: 8px;
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 4. Responsive task list container (Fixes large vertical layout gap) */
+.work-view,
+task-list,
+.task-list-wrapper {
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+}
+
+/* iOS viewport height fix for task container */
+body.isIOS {
+  .work-view {
+    min-height: -webkit-fill-available;
+  }
+}
+
+/* Remove moon graphic, sun circle, and glowing background from empty states */
+add-more-or-finish,
+.add-more-or-finish,
+.no-tasks-planned,
+.no-tasks {
+  background: none !important;
+  box-shadow: none !important;
+
+  &::before,
+  &::after {
+    display: none !important;
+    content: none !important;
+    background: none !important;
+  }
+
+  svg,
+  img,
+  [class*='sun'],
+  [class*='moon'],
+  [class*='circle'],
+  [class*='glow'] {
+    display: none !important;
+    opacity: 0 !important;
+  }
+}
+
+/* =========================================================
+   CUSTOM MODIFICATIONS & THEME INTEGRATION
+   ========================================================= */
+
+/* ===== 1. Expanded spacing between Timer, Time badges, and Icons ===== */
+.task {
+  .time-wrapper,
+  .task-time,
+  .time-badge,
+  .task-stats,
+  [class*='time'],
+  [class*='timer'] {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 16px !important; /* Expands distance between timer, time, and badges */
+    margin-inline-start: 12px !important;
+    margin-inline-end: 12px !important;
+  }
+}
+
+/* ===== 2. Android-Only System Font Override ===== */
+/* Apply custom system font rules ONLY on Android devices */
+body.isAndroid,
+body.isNativeMobile:not(.isIOS) {
+  html,
+  body,
+  app-root,
+  .app-frame,
+  html
+    *:not(mat-icon):not(.mat-icon):not(.material-icons):not(.material-symbols-outlined),
+  body
+    *:not(mat-icon):not(.mat-icon):not(.material-icons):not(.material-symbols-outlined),
+  app-root
+    *:not(mat-icon):not(.mat-icon):not(.material-icons):not(.material-symbols-outlined),
+  .app-frame
+    *:not(mat-icon):not(.mat-icon):not(.material-icons):not(.material-symbols-outlined) {
+    font-family: system-ui, sans-serif, emoji !important;
+    font-weight: 500 !important;
+  }
+}
+
+/* Guard against any child elements accidentally inheriting a broken icon font */
+mat-icon *,
+.mat-icon *,
+.material-icons *,
+.material-symbols-outlined * {
+  font-family: inherit !important;
+  font-weight: inherit !important;
+}
+
+/* ===== 3. Automatic Text Direction & Full RTL Support ===== */
+/* Auto bidi text direction: Arabic -> RTL, English -> LTR for content elements */
+.task-title,
+.task-title *,
+.notes,
+.notes *,
+.note-content,
+.note-content *,
+input[type='text'],
+textarea,
+.mat-input-element {
+  unicode-bidi: plaintext !important;
+  text-align: start !important;
+}
+
+/* Global RTL support when the app direction is RTL */
+html[dir='rtl'],
+[dir='rtl'] {
+  direction: rtl;
+  text-align: right;
+
+  .cdk-overlay-container,
+  .mat-mdc-menu-panel,
+  .mat-mdc-dialog-container {
+    direction: rtl;
+    text-align: right;
+  }
+}
+
+/* =========================================================
+   TASK ROW SPACING OVERRIDE
+   ========================================================= */
+
+/* Force explicit spacing between time, badges, duration, and icons inside tasks */
+.task {
+  /* Increase gap between all meta elements on the right side of the task */
+  .time,
+  .time-wrapper,
+  .time-badge,
+  .time-spent,
+  .time-estimate,
+  .task-stats,
+  [class*='time'],
+  [class*='badge'] {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 18px !important; /* Space between icon and text inside badge */
+    margin-inline: 15px !important; /* Outer spacing between adjacent elements */
+  }
+
+  /* Spacing for individual badges and icons */
+  mat-icon,
+  .time-badge,
+  .subtask-count,
+  [class*='icon'] {
+    margin-inline: 6px !important;
+  }
+}
+
+/* =========================================================
+   iOS HABIT FORM & ANALYTICS OVERLAY STYLES
+   ========================================================= */
+
+.ios-habit-dialog {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  padding: 20px !important;
+
+  .ios-dialog-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding-bottom: 16px !important;
+    border-bottom: 1px solid #1c1c1e !important;
+
+    .ios-dialog-title {
+      font-size: 1.1rem !important;
+      font-weight: 600 !important;
+      color: #89b4fa !important;
+    }
+    .save-btn {
+      color: #89b4fa !important;
+      font-weight: 600 !important;
+    }
+  }
+
+  .ios-dialog-body {
+    padding-top: 16px !important;
+
+    .ios-input-card {
+      background: #1c1c1e !important;
+      border-radius: 10px !important;
+      padding: 10px 14px !important;
+      display: flex !important;
+      align-items: center !important;
+      margin-bottom: 16px !important;
+
+      .ios-title-input {
+        background: transparent !important;
+        border: none !important;
+        color: #89b4fa !important;
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+        width: 100% !important;
+        outline: none !important;
+      }
+    }
+
+    .ios-form-row {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      padding: 12px 0 !important;
+      border-bottom: 1px solid #1c1c1e !important;
+
+      .row-left {
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        color: #ffffff !important;
+
+        .row-icon {
+          color: #8e8e93 !important;
+        }
+        .color-preview {
+          width: 20px !important;
+          height: 20px !important;
+          border-radius: 50% !important;
+        }
+      }
+
+      .ios-text-input,
+      .ios-number-input,
+      .ios-select-input,
+      .ios-date-input,
+      .ios-time-input {
+        background: transparent !important;
+        border: none !important;
+        color: #8e8e93 !important;
+        text-align: right !important;
+        font-size: 0.95rem !important;
+        outline: none !important;
+
+        option {
+          background: #1c1c1e !important;
+          color: #ffffff !important;
+        }
+      }
+
+      .ios-color-picker {
+        background: transparent !important;
+        border: none !important;
+        cursor: pointer !important;
+        width: 30px !important;
+        height: 30px !important;
+      }
+    }
+
+    .memo-row {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+
+      .memo-header {
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        margin-bottom: 8px !important;
+      }
+
+      .ios-memo-textarea {
+        width: 100% !important;
+        background: #1c1c1e !important;
+        border: none !important;
+        color: #ffffff !important;
+        border-radius: 8px !important;
+        padding: 10px !important;
+        outline: none !important;
+        resize: none !important;
+      }
+    }
+
+    .ios-timestamps-section {
+      margin-top: 20px !important;
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+
+      .timestamp-info {
+        display: flex !important;
+        gap: 8px !important;
+        color: #8e8e93 !important;
+        font-size: 0.8rem !important;
+      }
+    }
+  }
+}
+
+/* iOS Analytics Dialog Overlay */
+.ios-analytics-backdrop {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: rgba(0, 0, 0, 0.85) !important;
+  backdrop-filter: blur(8px) !important;
+  z-index: 99999 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.ios-analytics-modal {
+  background: #000000 !important;
+  color: #ffffff !important;
+  width: 100% !important;
+  max-width: 480px !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  border-radius: 16px !important;
+  padding: 20px !important;
+  border: 1px solid #1c1c1e !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9) !important;
+
+  .ios-modal-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin-bottom: 20px !important;
+
+    .ios-select-dropdown {
+      background: #1c1c1e !important;
+      color: #89b4fa !important;
+      border: 1px solid #2c2c2e !important;
+      border-radius: 8px !important;
+      padding: 6px 12px !important;
+      font-size: 1.1rem !important;
+      font-weight: 600 !important;
+      outline: none !important;
+    }
+  }
+
+  .summary-card {
+    display: flex !important;
+    align-items: center !important;
+    gap: 16px !important;
+    margin-bottom: 24px !important;
+
+    .donut-svg {
+      width: 54px !important;
+      height: 54px !important;
+      .donut-bg {
+        fill: none !important;
+        stroke: #1c1c1e !important;
+        stroke-width: 3.8 !important;
+      }
+      .donut-fill {
+        fill: none !important;
+        stroke: #89b4fa !important;
+        stroke-width: 3.8 !important;
+        stroke-linecap: round !important;
+      }
+    }
+
+    .summary-info {
+      h3 {
+        margin: 0 0 4px 0 !important;
+        font-size: 1.1rem !important;
+      }
+      p {
+        margin: 0 !important;
+        color: #8e8e93 !important;
+        font-size: 0.85rem !important;
+      }
+    }
+  }
+
+  .heatmap-section {
+    margin-bottom: 24px !important;
+
+    .heatmap-legend {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      font-size: 0.7rem !important;
+      color: #8e8e93 !important;
+      margin-bottom: 8px !important;
+
+      .legend-cells {
+        display: flex !important;
+        gap: 3px !important;
+        .cell {
+          width: 10px !important;
+          height: 10px !important;
+          border-radius: 2px !important;
+        }
+        .lvl-0 {
+          background: #1c1c1e !important;
+        }
+        .lvl-1 {
+          background: #3b5998 !important;
+        }
+        .lvl-2 {
+          background: #5b84d7 !important;
+        }
+        .lvl-3 {
+          background: #89b4fa !important;
+        }
+      }
+    }
+
+    .heatmap-grid-container {
+      display: flex !important;
+      justify-content: space-between !important;
+
+      .heatmap-matrix {
+        display: flex !important;
+        gap: 3px !important;
+
+        .heatmap-col {
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 3px !important;
+
+          .heatmap-cell {
+            width: 10px !important;
+            height: 10px !important;
+            border-radius: 2px !important;
+            &.lvl-0 {
+              background: #1c1c1e !important;
+            }
+            &.lvl-1 {
+              background: #3b5998 !important;
+            }
+            &.lvl-2 {
+              background: #5b84d7 !important;
+            }
+            &.lvl-3 {
+              background: #89b4fa !important;
+            }
+          }
+        }
+      }
+
+      .weekday-axis {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 1px !important;
+        font-size: 0.65rem !important;
+        color: #8e8e93 !important;
+      }
+    }
+
+    .month-axis {
+      display: flex !important;
+      justify-content: space-between !important;
+      font-size: 0.75rem !important;
+      color: #8e8e93 !important;
+      margin-top: 6px !important;
+    }
+  }
+
+  .metrics-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 12px !important;
+    margin-bottom: 24px !important;
+
+    .metric-item {
+      text-align: center !important;
+      .m-label {
+        display: block !important;
+        font-size: 0.8rem !important;
+        color: #8e8e93 !important;
+      }
+      .m-val {
+        font-size: 1.4rem !important;
+        font-weight: bold !important;
+        color: #ffffff !important;
+      }
+    }
+  }
+
+  .analytics-card {
+    margin-bottom: 24px !important;
+    .card-header {
+      display: flex !important;
+      justify-content: space-between !important;
+      margin-bottom: 12px !important;
+      .card-title {
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+      }
+      .card-subtitle {
+        font-size: 0.85rem !important;
+        color: #8e8e93 !important;
+      }
+    }
+
+    .x-axis-labels {
+      display: flex !important;
+      justify-content: space-between !important;
+      font-size: 0.75rem !important;
+      color: #8e8e93 !important;
+      margin-top: 6px !important;
+    }
+  }
+
+  .bar-chart-area {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: flex-end !important;
+    height: 130px !important;
+
+    .bar-column {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      height: 100% !important;
+
+      .bar-count {
+        font-size: 0.75rem !important;
+        margin-bottom: 4px !important;
+      }
+      .bar-track {
+        width: 14px !important;
+        height: 100% !important;
+        background: #1c1c1e !important;
+        border-radius: 4px !important;
+        display: flex !important;
+        align-items: flex-end !important;
+
+        .bar-fill {
+          width: 100% !important;
+          background: #89b4fa !important;
+          border-radius: 4px !important;
+        }
+      }
+      .bar-label {
+        font-size: 0.75rem !important;
+        color: #8e8e93 !important;
+        margin-top: 6px !important;
+      }
+    }
+  }
+
+  .other-list-card {
+    h3 {
+      font-size: 1.1rem !important;
+      margin-bottom: 12px !important;
+    }
+    .meta-row {
+      display: flex !important;
+      align-items: center !important;
+      gap: 12px !important;
+      padding: 10px 0 !important;
+      border-bottom: 1px solid #1c1c1e !important;
+      mat-icon {
+        color: #8e8e93 !important;
+      }
+      .meta-content {
+        display: flex !important;
+        flex-direction: column !important;
+        .m-key {
+          font-size: 0.75rem !important;
+          color: #8e8e93 !important;
+        }
+        .m-value {
+          font-size: 0.95rem !important;
+          color: #ffffff !important;
+        }
+      }
+    }
+  }
+
+  .export-action-container {
+    margin-top: 24px !important;
+    display: flex !important;
+    justify-content: center !important;
+
+    .export-btn {
+      width: 100% !important;
+      padding: 12px !important;
+      font-size: 1rem !important;
     }
   }
 }

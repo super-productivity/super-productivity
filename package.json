@@ -1,5 +1,6 @@
 {
-  "name": "superProductivity",
+  "name": "super-prod",
+  "productName": "Super Prod.",
   "version": "19.1.0",
   "description": "ToDo list and Time Tracking",
   "keywords": [
@@ -110,7 +111,7 @@
     "int:clean": "ngx-translate-extract --input ./src --output ./src/assets/i18n/*.json --clean --sort --format namespaced-json --marker _",
     "int:find": "ngx-translate-extract --input ./src --output ./src/assets/i18n/*.json  --sort --format namespaced-json --marker _",
     "int:test": "node --test ./tools/test-lng-files.test.js && node ./tools/test-lng-files.js",
-    "int:unused": "node ./tools/find-unused-translations.js",
+    "int:unused": "node ./tools/find-unusedtranslations.js",
     "int:watch": "node ./tools/extract-i18n-watch.js",
     "lint": "npm run lint:ts && npm run lint:scss && npm run lint:css-vars && npm run test:lint-rules && npm run test:tools && npm run test:mac-icon",
     "sync-fuzz:compare": "node tools/sync-fuzz-compare.js",

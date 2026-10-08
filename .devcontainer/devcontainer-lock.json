@@ -1,0 +1,14 @@
+{
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {
+      "version": "1.3.8",
+      "resolved": "ghcr.io/devcontainers/features/git@sha256:fd75977de13a9979000e0e78baf949adb0ca71d2398995fa22e0a36d7e7e7fe2",
+      "integrity": "sha256:fd75977de13a9979000e0e78baf949adb0ca71d2398995fa22e0a36d7e7e7fe2"
+    },
+    "ghcr.io/kreemer/features/chrometesting:1": {
+      "version": "1.0.1",
+      "resolved": "ghcr.io/kreemer/features/chrometesting@sha256:8c36da43f778161aa80cee4f73396a62cb98f070375bb1e5c7ed7688b395a604",
+      "integrity": "sha256:8c36da43f778161aa80cee4f73396a62cb98f070375bb1e5c7ed7688b395a604"
+    }
+  }
+}

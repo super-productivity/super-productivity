@@ -1,46 +1,241 @@
-<form (ngSubmit)="save()">
-  <h1 mat-dialog-title>
-    {{ dialogData.simpleCounter.title }} – {{ T.MH.SETTINGS | translate }}
-  </h1>
-
-  <mat-dialog-content>
-    <formly-form
-      [fields]="fields"
-      [form]="form"
-      [(model)]="model"
-      [options]="formOptions"
-    >
-    </formly-form>
-  </mat-dialog-content>
-
-  <mat-dialog-actions>
-    @if (dialogData.simpleCounter.id) {
-      <button
-        mat-button
-        color="warn"
-        type="button"
-        (click)="delete()"
-      >
-        <mat-icon>delete</mat-icon>
-        {{ T.G.DELETE | translate }}
-      </button>
-    }
-    <span style="flex: 1"></span>
+<form
+  (ngSubmit)="save()"
+  class="ios-habit-dialog"
+>
+  <div class="ios-dialog-header">
     <button
-      mat-button
+      mat-icon-button
       type="button"
       (click)="close()"
     >
-      {{ T.G.CANCEL | translate }}
+      <mat-icon>chevron_left</mat-icon>
     </button>
+    <span class="ios-dialog-title">
+      {{ model.title || 'New Habit' }}
+    </span>
     <button
-      mat-flat-button
+      mat-button
       color="primary"
       type="submit"
-      [disabled]="!isDirty()"
+      class="save-btn"
     >
-      <mat-icon>save</mat-icon>
       {{ T.G.SAVE | translate }}
     </button>
-  </mat-dialog-actions>
+  </div>
+
+  <div class="ios-dialog-body">
+    <!-- Title Input -->
+    <div class="ios-input-card">
+      <input
+        type="text"
+        name="title"
+        [(ngModel)]="model.title"
+        placeholder="Habit Name"
+        class="ios-title-input"
+        required
+      />
+      @if (model.title) {
+        <button
+          mat-icon-button
+          type="button"
+          class="clear-btn"
+          (click)="model.title = ''"
+        >
+          <mat-icon>cancel</mat-icon>
+        </button>
+      }
+    </div>
+
+    <!-- Custom Color -->
+    <div class="ios-form-row">
+      <div class="row-left">
+        <mat-icon class="row-icon">palette</mat-icon>
+        <span
+          class="color-preview"
+          [style.background]="model.color || '#89b4fa'"
+        ></span>
+        <span class="row-label">Custom</span>
+      </div>
+      <input
+        type="color"
+        name="color"
+        [(ngModel)]="model.color"
+        class="ios-color-picker"
+      />
+    </div>
+
+    <!-- Group -->
+    <div class="ios-form-row">
+      <div class="row-left">
+        <mat-icon class="row-icon">fitness_center</mat-icon>
+        <span class="row-label">Group</span>
+      </div>
+      <input
+        type="text"
+        name="group"
+        [(ngModel)]="model.group"
+        placeholder="e.g. Health"
+        class="ios-text-input"
+      />
+    </div>
+
+    <!-- Type -->
+    <div class="ios-form-row">
+      <div class="row-left">
+        <mat-icon class="row-icon">radio_button_unchecked</mat-icon>
+        <span class="row-label">Type</span>
+      </div>
+      <select
+        name="habitType"
+        [(ngModel)]="model.habitType"
+        class="ios-select-input"
+      >
+        <option value="positive">Positive</option>
+        <option value="negative">Negative</option>
+      </select>
+    </div>
+
+    <!-- Daily Goal Value -->
+    <div class="ios-form-row">
+      <div class="row-left">
+        <mat-icon class="row-icon">show_chart</mat-icon>
+        <span class="row-label">Daily Goal Value</span>
+      </div>
+      <input
+        type="number"
+        name="streakMinValue"
+        [(ngModel)]="model.streakMinValue"
+        placeholder="1"
+        class="ios-number-input"
+      />
+    </div>
+
+    <!-- Daily Goal Unit -->
+    <div class="ios-form-row">
+      <div class="row-left">
+        <mat-icon class="row-icon">branding_watermark</mat-icon>
+        <span class="row-label">Daily goal unit</span>
+      </div>
+      <input
+        type="text"
+        name="dailyGoalUnit"
+        [(ngModel)]="model.dailyGoalUnit"
+        placeholder="Daily goal unit"
+        class="ios-text-input"
+      />
+    </div>
+
+    <!-- Desired Maximum Daily Goal -->
+    <div class="ios-form-row">
+      <div class="row-left">
+        <mat-icon class="row-icon">auto_awesome</mat-icon>
+        <span class="row-label">Desired maximum daily goal</span>
+      </div>
+      <input
+        type="number"
+        name="maxDailyGoal"
+        [(ngModel)]="model.maxDailyGoal"
+        placeholder="Desired maximum daily goal"
+        class="ios-number-input"
+      />
+    </div>
+
+    <!-- Repeat -->
+    <div class="ios-form-row">
+      <div class="row-left">
+        <mat-icon class="row-icon">sync</mat-icon>
+        <span class="row-label">Repeat</span>
+      </div>
+      <select
+        name="repeatMode"
+        [(ngModel)]="model.repeatMode"
+        class="ios-select-input"
+      >
+        <option value="Daily">Daily</option>
+        <option value="Weekly">Weekly</option>
+      </select>
+    </div>
+
+    <!-- Start Date -->
+    <div class="ios-form-row">
+      <div class="row-left">
+        <mat-icon class="row-icon">schedule</mat-icon>
+        <span class="row-label">Start Date</span>
+      </div>
+      <input
+        type="date"
+        name="startDate"
+        [(ngModel)]="model.startDate"
+        class="ios-date-input"
+      />
+    </div>
+
+    <!-- Target Days -->
+    <div class="ios-form-row">
+      <div class="row-left">
+        <mat-icon class="row-icon">flag</mat-icon>
+        <span class="row-label">Target Days</span>
+      </div>
+      <input
+        type="number"
+        name="targetDays"
+        [(ngModel)]="model.targetDays"
+        placeholder="365 days"
+        class="ios-number-input"
+      />
+    </div>
+
+    <!-- Reminder -->
+    <div class="ios-form-row">
+      <div class="row-left">
+        <mat-icon class="row-icon">notifications</mat-icon>
+        <span class="row-label">Reminder</span>
+      </div>
+      <input
+        type="time"
+        name="reminderTime"
+        [(ngModel)]="model.reminderTime"
+        class="ios-time-input"
+      />
+    </div>
+
+    <!-- Memo (Markdown) -->
+    <div class="ios-form-row memo-row">
+      <div class="memo-header">
+        <mat-icon class="row-icon">notes</mat-icon>
+        <span class="row-label">Memo, support Markdown</span>
+      </div>
+      <textarea
+        name="memo"
+        [(ngModel)]="model.memo"
+        placeholder="Memo, support Markdown"
+        class="ios-memo-textarea"
+        rows="3"
+      ></textarea>
+    </div>
+
+    <!-- Timestamps & Delete Button -->
+    <div class="ios-timestamps-section">
+      <div class="timestamp-info">
+        <mat-icon class="ts-icon">info</mat-icon>
+        <div class="ts-text">
+          <div>Created: {{ model.createdAt || 'Just now' }}</div>
+          <div>Modified: {{ model.updatedAt || 'Just now' }}</div>
+        </div>
+      </div>
+
+      @if (dialogData.simpleCounter.id) {
+        <button
+          mat-stroked-button
+          color="warn"
+          type="button"
+          class="ios-delete-btn"
+          (click)="delete()"
+        >
+          <mat-icon>delete</mat-icon>
+          {{ T.G.DELETE | translate }}
+        </button>
+      }
+    </div>
+  </div>
 </form>

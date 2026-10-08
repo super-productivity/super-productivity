@@ -25,6 +25,20 @@ export interface SimpleCounterCfgFields {
   // adv cfg
   // repeated countdown reminder
   countdownDuration?: number;
+
+  // iOS Habit Tracker Custom Fields
+  color?: string;
+  group?: string;
+  habitType?: 'positive' | 'negative' | string;
+  dailyGoalUnit?: string;
+  maxDailyGoal?: number;
+  repeatMode?: string;
+  startDate?: string;
+  targetDays?: number;
+  reminderTime?: string;
+  memo?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface SimpleCounterCopy extends SimpleCounterCfgFields {

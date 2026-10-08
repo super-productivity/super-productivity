@@ -1,6 +1,6 @@
 {
-  "name": "Super Productivity",
-  "short_name": "sup",
+  "name": "Super Prod.",
+  "short_name": "Super Prod.",
   "theme_color": "#6495ED",
   "background_color": "#fff",
   "start_url": "./index.html",
@@ -26,7 +26,7 @@
     },
     {
       "src": "assets/icons/icon-144x144.png",
-      "sizes": "144x144",
+      "sizes": "144144",
       "type": "image/png"
     },
     {

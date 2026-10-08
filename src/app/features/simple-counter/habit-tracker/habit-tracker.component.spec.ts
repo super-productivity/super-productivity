@@ -136,7 +136,6 @@ describe('HabitTrackerComponent', () => {
       const tracker = element.querySelector<HTMLElement>('.habit-tracker-container');
       expect(tracker).not.toBeNull();
 
-      // Isolate the container sizing rule from the intrinsic width of its children.
       Array.from(tracker!.children).forEach((child) => {
         (child as HTMLElement).style.display = 'none';
       });
@@ -165,7 +164,6 @@ describe('HabitTrackerComponent', () => {
       '2026-05-18',
     ]);
 
-    // midnight passes while the app stays open
     logicalToday = new Date('2026-05-19T00:30:00');
     todayDateStr.set(getDbDateStr(logicalToday));
 
@@ -181,7 +179,7 @@ describe('HabitTrackerComponent', () => {
   });
 
   it('should not open edit dialog on long-press if day is disabled', fakeAsync(() => {
-    const disabledDate = '2026-05-19'; // Tuesday (disabled in mockCounter)
+    const disabledDate = '2026-05-19';
     const tuesdayDow = 2;
 
     component.onPressStart(mockCounter, disabledDate, tuesdayDow);
@@ -192,7 +190,7 @@ describe('HabitTrackerComponent', () => {
   }));
 
   it('should open edit dialog on long-press if day is enabled', fakeAsync(() => {
-    const enabledDate = '2026-05-18'; // Monday (enabled in mockCounter)
+    const enabledDate = '2026-05-18';
     const mondayDow = 1;
 
     component.onPressStart(mockCounter, enabledDate, mondayDow);
@@ -228,8 +226,6 @@ describe('HabitTrackerComponent', () => {
       );
     });
 
-    // The shipped "Coffee Counter" default is a plain tally: streaks off, and the
-    // settings dialog wipes streakMinValue to undefined whenever they are off.
     it('keeps incrementing a plain tally with streaks off and no goal', () => {
       const tally = {
         ...mockCounter,
@@ -286,5 +282,39 @@ describe('HabitTrackerComponent', () => {
 
     expect(event.preventDefault).toHaveBeenCalled();
     expect(matDialog.open).not.toHaveBeenCalled();
+  });
+
+  describe('Statistics Modal', () => {
+    it('opens stats modal and initializes stats for first habit', () => {
+      expect(component.isStatsOpen()).toBe(false);
+      component.openStatsModal();
+      expect(component.isStatsOpen()).toBe(true);
+      expect(component.selectedHabitId()).toBe('c1');
+      expect(component.selectedHabitStats()).not.toBeNull();
+      expect(component.selectedHabitStats()?.habitTitle).toBe('Test Counter');
+    });
+
+    it('closes stats modal', () => {
+      component.openStatsModal();
+      expect(component.isStatsOpen()).toBe(true);
+      component.closeStatsModal();
+      expect(component.isStatsOpen()).toBe(false);
+    });
+
+    it('calculates streaks and stats correctly', () => {
+      const todayStr = getDbDateStr(logicalToday);
+      const counterWithHistory: SimpleCounter = {
+        ...mockCounter,
+        countOnDay: { [todayStr]: 1 },
+      };
+
+      fixture.componentRef.setInput('simpleCounters', [counterWithHistory]);
+      component.openStatsModal();
+
+      const stats = component.selectedHabitStats();
+      expect(stats?.currentStreak).toBe(1);
+      expect(stats?.bestStreak).toBe(1);
+      expect(stats?.totalCompletions).toBe(1);
+    });
   });
 });

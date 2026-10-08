@@ -142,6 +142,16 @@
         T.F.SIMPLE_COUNTER.HABIT_TRACKER.ADD_HABIT | translate
       }}</span>
     </button>
+
+    <button
+      mat-stroked-button
+      tabindex="2"
+      (click)="openStatsModal()"
+      class="stats-btn"
+    >
+      <mat-icon>analytics</mat-icon>
+      <span class="mdc-button__label">Statistics</span>
+    </button>
   </div>
 
   @if (disabledSimpleCounters().length > 0) {
@@ -196,6 +206,292 @@
           }
         </div>
       }
+    </div>
+  }
+
+  <!-- iOS Habit Analytics Dialog -->
+  @if (isStatsOpen()) {
+    <div
+      class="ios-analytics-backdrop"
+      (click)="closeStatsModal()"
+    >
+      <div
+        class="ios-analytics-modal"
+        (click)="$event.stopPropagation()"
+      >
+        <!-- Header Controls -->
+        <div class="ios-modal-header">
+          <button
+            mat-icon-button
+            (click)="closeStatsModal()"
+          >
+            <mat-icon>chevron_left</mat-icon>
+          </button>
+
+          <div class="habit-selector-wrapper">
+            <select
+              [value]="selectedHabitId()"
+              (change)="onHabitSelect($event)"
+              class="ios-select-dropdown"
+            >
+              @for (counter of simpleCounters(); track counter.id) {
+                <option [value]="counter.id">{{ counter.title }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="header-right-actions">
+            <button
+              mat-icon-button
+              (click)="closeStatsModal()"
+            >
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        </div>
+
+        @if (selectedHabitStats(); as stats) {
+          <div class="ios-modal-body">
+            <!-- 1. Donut Summary Ring -->
+            <div class="summary-card">
+              <div class="donut-wrapper">
+                <svg
+                  viewBox="0 0 36 36"
+                  class="donut-svg"
+                >
+                  <path
+                    class="donut-bg"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                  <path
+                    class="donut-fill"
+                    [attr.stroke-dasharray]="stats.habitScore + ', 100'"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                </svg>
+              </div>
+              <div class="summary-info">
+                <h3>Summary</h3>
+                <p>
+                  Current grade is <strong>{{ stats.habitScore }}</strong
+                  >, and it has been <strong>{{ stats.daysSinceStart }}</strong> days
+                  since the start.
+                </p>
+              </div>
+            </div>
+
+            <!-- 2. Heatmap Matrix -->
+            <div class="heatmap-section">
+              <div class="heatmap-legend">
+                <span>INCOMPLETE</span>
+                <div class="legend-cells">
+                  <span class="cell lvl-0"></span>
+                  <span class="cell lvl-1"></span>
+                  <span class="cell lvl-2"></span>
+                  <span class="cell lvl-3"></span>
+                </div>
+                <span>OVERFULFIL</span>
+              </div>
+
+              <div class="heatmap-grid-container">
+                <div class="heatmap-matrix">
+                  @for (col of stats.heatmapColumns; track $index) {
+                    <div class="heatmap-col">
+                      @for (cell of col.days; track $index) {
+                        <span
+                          class="heatmap-cell"
+                          [ngClass]="'lvl-' + cell.level"
+                          [matTooltip]="cell.dateStr + ': ' + cell.value"
+                        ></span>
+                      }
+                    </div>
+                  }
+                </div>
+                <div class="weekday-axis">
+                  <span>S</span><span>S</span><span>M</span><span>T</span><span>W</span
+                  ><span>T</span><span>F</span>
+                </div>
+              </div>
+              <div class="month-axis">
+                <span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span
+                ><span>Oct</span>
+              </div>
+            </div>
+
+            <!-- 3. Key Metrics Grid -->
+            <div class="metrics-grid">
+              <div class="metric-item">
+                <span class="m-label">Goal</span>
+                <span class="m-val">{{ stats.dailyGoal }}</span>
+              </div>
+              <div class="metric-item">
+                <span class="m-label">Days</span>
+                <span class="m-val">{{ stats.targetDays }}d</span>
+              </div>
+              <div class="metric-item">
+                <span class="m-label">Records</span>
+                <span class="m-val">{{ stats.totalCompletions }}</span>
+              </div>
+            </div>
+
+            <!-- 4. Score Line Chart -->
+            <div class="analytics-card">
+              <div class="card-header">
+                <span class="card-title">Score</span>
+                <span class="card-subtitle">Day</span>
+              </div>
+              <div class="line-chart-area">
+                <svg
+                  class="line-svg"
+                  viewBox="0 0 300 80"
+                  preserveAspectRatio="none"
+                >
+                  <polyline
+                    fill="none"
+                    stroke="#89b4fa"
+                    stroke-width="2"
+                    points="0,25 40,25 80,22 120,20 160,20 200,21 240,21 280,22"
+                  />
+                  <circle
+                    cx="0"
+                    cy="25"
+                    r="3"
+                    fill="#89b4fa"
+                  />
+                  <circle
+                    cx="40"
+                    cy="25"
+                    r="3"
+                    fill="#89b4fa"
+                  />
+                  <circle
+                    cx="80"
+                    cy="22"
+                    r="3"
+                    fill="#89b4fa"
+                  />
+                  <circle
+                    cx="120"
+                    cy="20"
+                    r="3"
+                    fill="#89b4fa"
+                  />
+                  <circle
+                    cx="160"
+                    cy="20"
+                    r="3"
+                    fill="#89b4fa"
+                  />
+                  <circle
+                    cx="200"
+                    cy="21"
+                    r="3"
+                    fill="#89b4fa"
+                  />
+                  <circle
+                    cx="240"
+                    cy="21"
+                    r="3"
+                    fill="#89b4fa"
+                  />
+                  <circle
+                    cx="280"
+                    cy="22"
+                    r="3"
+                    fill="#89b4fa"
+                  />
+                </svg>
+              </div>
+              <div class="x-axis-labels">
+                <span>01</span><span>02</span><span>03</span><span>04</span><span>05</span
+                ><span>06</span><span>07</span><span>08</span>
+              </div>
+            </div>
+
+            <!-- 5. Frequency Bar Chart -->
+            <div class="analytics-card">
+              <div class="card-header">
+                <span class="card-title">Frequency</span>
+                <span class="card-subtitle">Month</span>
+              </div>
+              <div class="bar-chart-area">
+                @for (bar of stats.monthlyFrequency; track bar.month) {
+                  <div class="bar-column">
+                    <span class="bar-count">{{ bar.value }}</span>
+                    <div class="bar-track">
+                      <div
+                        class="bar-fill"
+                        [style.height.%]="(bar.value / 31) * 100"
+                      ></div>
+                    </div>
+                    <span class="bar-label">{{ bar.month }}</span>
+                  </div>
+                }
+              </div>
+            </div>
+
+            <!-- 6. Metadata List -->
+            <div class="other-list-card">
+              <h3>Other</h3>
+              <div class="meta-row">
+                <mat-icon>fitness_center</mat-icon>
+                <div class="meta-content">
+                  <span class="m-key">Group</span>
+                  <span class="m-value">{{ stats.group }}</span>
+                </div>
+              </div>
+              <div class="meta-row">
+                <mat-icon>radio_button_unchecked</mat-icon>
+                <div class="meta-content">
+                  <span class="m-key">Type</span>
+                  <span class="m-value">{{ stats.habitType }}</span>
+                </div>
+              </div>
+              <div class="meta-row">
+                <mat-icon>sync</mat-icon>
+                <div class="meta-content">
+                  <span class="m-key">Repeat</span>
+                  <span class="m-value">{{ stats.repeatMode }}</span>
+                </div>
+              </div>
+              <div class="meta-row">
+                <mat-icon>schedule</mat-icon>
+                <div class="meta-content">
+                  <span class="m-key">Start Date</span>
+                  <span class="m-value">{{ stats.startDate }}</span>
+                </div>
+              </div>
+              <div class="meta-row">
+                <mat-icon>calendar_today</mat-icon>
+                <div class="meta-content">
+                  <span class="m-key">Created</span>
+                  <span class="m-value">{{ stats.createdAt }}</span>
+                </div>
+              </div>
+              <div class="meta-row">
+                <mat-icon>edit_calendar</mat-icon>
+                <div class="meta-content">
+                  <span class="m-key">Modified</span>
+                  <span class="m-value">{{ stats.updatedAt }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Export to Excel (.csv) Button -->
+            <div class="export-action-container">
+              <button
+                mat-raised-button
+                color="primary"
+                class="export-btn"
+                (click)="exportHabitToExcel()"
+              >
+                <mat-icon>file_download</mat-icon>
+                <span>Export to Excel (.csv)</span>
+              </button>
+            </div>
+          </div>
+        }
+      </div>
     </div>
   }
 </div>

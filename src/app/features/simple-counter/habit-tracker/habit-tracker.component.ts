@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ViewEncapsulation,
   computed,
   inject,
   input,
@@ -34,6 +35,42 @@ interface HabitDay {
   weekdayLabel?: string;
 }
 
+interface HeatmapDay {
+  dateStr: string;
+  value: number;
+  level: number;
+}
+
+interface HeatmapColumn {
+  days: HeatmapDay[];
+}
+
+interface MonthlyFrequency {
+  month: string;
+  value: number;
+}
+
+interface HabitStatsData {
+  habitTitle: string;
+  currentStreak: number;
+  bestStreak: number;
+  completionRate30: number;
+  habitScore: number;
+  totalCompletions: number;
+  daysSinceStart: number;
+  dailyGoal: number;
+  targetDays: number;
+  group: string;
+  habitType: string;
+  repeatMode: string;
+  startDate: string;
+  createdAt: string;
+  updatedAt: string;
+  heatmapColumns: HeatmapColumn[];
+  monthlyFrequency: MonthlyFrequency[];
+  historyKeys: string[];
+}
+
 @Component({
   selector: 'habit-tracker',
   standalone: true,
@@ -50,6 +87,7 @@ interface HabitDay {
   templateUrl: './habit-tracker.component.html',
   styleUrl: './habit-tracker.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  encapsulation: ViewEncapsulation.None,
 })
 export class HabitTrackerComponent {
   simpleCounters = input.required<SimpleCounter[]>();
@@ -61,11 +99,14 @@ export class HabitTrackerComponent {
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _matDialog = inject(MatDialog);
 
-  // Exposed so templates can pass the reactive locale to the now-pure
-  // `localeDate` pipe, preserving re-render on a locale change.
   readonly locale = this._dateTimeFormatService.currentLocale;
 
   showDisabled = signal(false);
+
+  // Statistics Modal Signals
+  isStatsOpen = signal(false);
+  selectedHabitId = signal<string | null>(null);
+  selectedHabitStats = signal<HabitStatsData | null>(null);
 
   T = T;
   SimpleCounterType = SimpleCounterType;
@@ -79,8 +120,6 @@ export class HabitTrackerComponent {
     const weekdayFormatter = isoTextLocale
       ? new Intl.DateTimeFormat(isoTextLocale, { weekday: 'short' })
       : null;
-    // Day-change dependency, so the window rolls over instead of freezing at first
-    // render (#9072). Also covers sleep and tab throttling, via #5464.
     this._globalTrackingIntervalService.todayDateStr();
     const today = this._dateService.getLogicalTodayDate();
     const offset = this.dayOffset();
@@ -125,8 +164,6 @@ export class HabitTrackerComponent {
     const first = days[0].date;
     const last = days[days.length - 1].date;
 
-    // Spelled-out `month: 'short'` name follows the UI language under the ISO
-    // 8601 option (the `sv` sentinel would otherwise leak Swedish). #8987 f/u.
     const locale = this._dateTimeFormatService.textLocale();
     const formatOptions: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
     const firstStr = first.toLocaleDateString(locale, formatOptions);
@@ -154,14 +191,10 @@ export class HabitTrackerComponent {
       counter.type === SimpleCounterType.ClickCounter ||
       counter.type === SimpleCounterType.RepeatedCountdownReminder
     ) {
-      // Simple completion habits toggle, so a mis-click can be undone by clicking
-      // again (#9970). Goal-based counters keep incrementing past their goal;
-      // exact corrections there go through the right-click/long-press dialog.
       const newVal =
         this.isSimpleCompletion(counter) && currentValue > 0 ? 0 : currentValue + 1;
       this._simpleCounterService.setCounterForDate(counter.id, date, newVal);
     } else {
-      // For StopWatch or others, open dialog on left click
       this.openEditDialog(counter, date);
     }
   }
@@ -188,7 +221,7 @@ export class HabitTrackerComponent {
     this._longPressTimer = window.setTimeout(() => {
       this._isLongPress = true;
       this._pendingLongPressAction = { counter, date };
-    }, 700); // 700ms for long press
+    }, 700);
   }
 
   onPressEnd(): void {
@@ -197,7 +230,6 @@ export class HabitTrackerComponent {
       this._longPressTimer = undefined;
     }
 
-    // If long press was triggered, open dialog on release
     if (this._pendingLongPressAction) {
       const { counter, date } = this._pendingLongPressAction;
       this._pendingLongPressAction = undefined;
@@ -221,7 +253,6 @@ export class HabitTrackerComponent {
     if (!counter.isTrackStreaks || counter.streakMode === 'weekly-frequency') {
       return true;
     }
-    // Default to 'specific-days' logic
     if (!counter.streakWeekDays) {
       return true;
     }
@@ -229,10 +260,6 @@ export class HabitTrackerComponent {
   }
 
   isSimpleCompletion(counter: SimpleCounter): boolean {
-    // Simple completion: a habit tracked as a streak whose goal is a single click.
-    // Streak tracking is required because the settings dialog clears streakMinValue
-    // whenever streaks are off, which would otherwise render plain tallies (the
-    // shipped "Coffee Counter" default) as a checkmark and hide their count.
     return (
       counter.type === SimpleCounterType.ClickCounter &&
       !!counter.isTrackStreaks &&
@@ -248,14 +275,11 @@ export class HabitTrackerComponent {
     const value = this.getVal(counter, day);
     if (value === 0) return '';
 
-    // For simple completion, just show checkmark (handled in template)
     if (this.isSimpleCompletion(counter)) {
       return '';
     }
 
-    // For StopWatch, show time
     if (counter.type === SimpleCounterType.StopWatch) {
-      // Convert ms to minutes for display
       const minutes = Math.round(value / 60000);
       if (minutes < 60) {
         return `${minutes}m`;
@@ -266,7 +290,6 @@ export class HabitTrackerComponent {
       }
     }
 
-    // For ClickCounter with specific values, show the count
     return value.toString();
   }
 
@@ -323,5 +346,199 @@ export class HabitTrackerComponent {
           this._simpleCounterService.deleteSimpleCounter(counter.id);
         }
       });
+  }
+
+  // Statistics Modal Actions & Logic
+  openStatsModal(): void {
+    this.isStatsOpen.set(true);
+    const counters = this.simpleCounters();
+    if (counters && counters.length > 0) {
+      this.selectedHabitId.set(counters[0].id);
+      this._updateStatsForHabit(counters[0]);
+    }
+  }
+
+  closeStatsModal(): void {
+    this.isStatsOpen.set(false);
+  }
+
+  onHabitSelect(event: Event): void {
+    const target = event.target as HTMLSelectElement;
+    const habitId = target.value;
+    this.selectedHabitId.set(habitId);
+    const counters = this.simpleCounters();
+    const habit = counters.find((c) => c.id === habitId);
+    if (habit) {
+      this._updateStatsForHabit(habit);
+    }
+  }
+
+  private _updateStatsForHabit(habit: SimpleCounter): void {
+    const historyObj = habit.countOnDay || {};
+    const minVal = habit.streakMinValue || 1;
+    const activeDates = Object.keys(historyObj)
+      .filter((dateStr) => historyObj[dateStr] >= minVal)
+      .sort();
+
+    const totalCompletions = activeDates.length;
+
+    let currentStreak = 0;
+    let bestStreak = 0;
+
+    if (activeDates.length > 0) {
+      const activeSet = new Set(activeDates);
+      const today = new Date();
+
+      const checkDate = new Date(today);
+      let dateStr = this._dateService.todayStr(checkDate);
+
+      if (!activeSet.has(dateStr)) {
+        checkDate.setDate(checkDate.getDate() - 1);
+        dateStr = this._dateService.todayStr(checkDate);
+      }
+
+      while (activeSet.has(dateStr)) {
+        currentStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+        dateStr = this._dateService.todayStr(checkDate);
+      }
+
+      let tempStreak = 0;
+      let prevDate: Date | null = null;
+
+      for (const dStr of activeDates) {
+        const curDate = new Date(dStr);
+        if (prevDate) {
+          const diffDays = Math.round(
+            (curDate.getTime() - prevDate.getTime()) / (1000 * 3600 * 24),
+          );
+          if (diffDays === 1) {
+            tempStreak++;
+          } else {
+            tempStreak = 1;
+          }
+        } else {
+          tempStreak = 1;
+        }
+        bestStreak = Math.max(bestStreak, tempStreak);
+        prevDate = curDate;
+      }
+    }
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoStr = this._dateService.todayStr(thirtyDaysAgo);
+
+    const completionsLast30 = activeDates.filter((d) => d >= thirtyDaysAgoStr).length;
+    const completionRate30 = Math.min(100, Math.round((completionsLast30 / 30) * 100));
+
+    const rateScore = completionRate30 * 0.7;
+    const streakScore = currentStreak * 3;
+    const habitScore = Math.min(100, Math.round(rateScore + streakScore));
+
+    // Calculate Days since start
+    const today = new Date();
+    const startDate = habit.startDate ? new Date(habit.startDate) : new Date(today);
+    const diffTime = Math.abs(today.getTime() - startDate.getTime());
+    const msInDay = 1000 * 60 * 60 * 24;
+    const daysSinceStart = Math.max(1, Math.ceil(diffTime / msInDay));
+
+    // Generate Heatmap Matrix Columns (18 Weeks)
+    const heatmapColumns: HeatmapColumn[] = [];
+    const endDate = new Date(today);
+    const numCols = 18;
+
+    for (let colIndex = numCols - 1; colIndex >= 0; colIndex--) {
+      const columnDays: HeatmapDay[] = [];
+      for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+        const targetDate = new Date(endDate);
+        const weekOffset = colIndex * 7;
+        const daysBack = weekOffset + 6 - dayIndex;
+        targetDate.setDate(targetDate.getDate() - daysBack);
+        const dStr = this._dateService.todayStr(targetDate);
+        const val = historyObj[dStr] || 0;
+
+        let level = 0;
+        if (val >= minVal * 2) level = 3;
+        else if (val >= minVal) level = 2;
+        else if (val > 0) level = 1;
+
+        columnDays.push({ dateStr: dStr, value: val, level });
+      }
+      heatmapColumns.push({ days: columnDays });
+    }
+
+    // Generate Monthly Frequency Chart
+    const monthlyFrequency: MonthlyFrequency[] = [];
+    for (let m = 5; m >= 0; m--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - m, 1);
+      const monthLabel = d.toLocaleString('en-US', { month: 'short' });
+      const yearMonthPrefix = this._dateService.todayStr(d).substring(0, 7);
+
+      const count = activeDates.filter((dateKey) =>
+        dateKey.startsWith(yearMonthPrefix),
+      ).length;
+      monthlyFrequency.push({ month: monthLabel, value: count });
+    }
+
+    this.selectedHabitStats.set({
+      habitTitle: habit.title,
+      currentStreak,
+      bestStreak,
+      completionRate30,
+      habitScore,
+      totalCompletions,
+      daysSinceStart,
+      dailyGoal: habit.streakMinValue || 1,
+      targetDays: habit.targetDays || 365,
+      group: habit.group || 'Health',
+      habitType: habit.habitType || 'Positive',
+      repeatMode: habit.repeatMode || 'Daily',
+      startDate: habit.startDate || '1/1/2026',
+      createdAt: habit.createdAt || 'Just now',
+      updatedAt: habit.updatedAt || 'Just now',
+      heatmapColumns,
+      monthlyFrequency,
+      historyKeys: activeDates,
+    });
+  }
+
+  exportHabitToExcel(): void {
+    const stats = this.selectedHabitStats();
+    if (!stats) return;
+
+    let csvContent = '\uFEFF';
+
+    csvContent += `Habit Statistics Report: ${stats.habitTitle}\n\n`;
+    csvContent += `Metric,Value\n`;
+    csvContent += `Habit Name,${stats.habitTitle}\n`;
+    csvContent += `Group,${stats.group}\n`;
+    csvContent += `Type,${stats.habitType}\n`;
+    csvContent += `Repeat Mode,${stats.repeatMode}\n`;
+    csvContent += `Start Date,${stats.startDate}\n`;
+    csvContent += `Days Since Start,${stats.daysSinceStart}\n`;
+    csvContent += `Current Streak,${stats.currentStreak} Days\n`;
+    csvContent += `Best Streak,${stats.bestStreak} Days\n`;
+    csvContent += `30-Day Completion Rate,${stats.completionRate30}%\n`;
+    csvContent += `Habit Score,${stats.habitScore} / 100\n`;
+    csvContent += `Total Completions,${stats.totalCompletions}\n\n`;
+
+    csvContent += `Completion History Log\n`;
+    csvContent += `Date\n`;
+    stats.historyKeys.forEach((date: string) => {
+      csvContent += `${date}\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute(
+      'download',
+      `${stats.habitTitle.replace(/\s+/g, '_')}_Statistics.csv`,
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 }

@@ -235,18 +235,19 @@ export const createWindow = async ({
     height: mainWindowState.height,
     minHeight: 240,
     minWidth: 300,
-    title: IS_DEV ? 'Super Productivity D' : 'Super Productivity',
-    titleBarStyle,
-    titleBarOverlay,
+    /* 1. Updated application title to Super Prod. */
+    title: IS_DEV ? 'Super Prod. D' : 'Super Prod.',
+    /* 2. Set titleBarStyle to default to use native OS window title bar */
+    titleBarStyle: 'default',
     enableLargerThanScreen: isScreenshotMode,
     show: false,
     webPreferences,
     icon: ICONS_FOLDER + '/icon_256x256.png',
     // Wayland compatibility: disable transparent/frameless features that can cause issues
     transparent: false,
-    // frame: true,
+    /* 3. Enable native window frame and buttons (close, minimize, maximize) */
+    frame: true,
   });
-
   // see: https://pratikpc.medium.com/bypassing-cors-with-electron-ab7eaf331605
   mainWin.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
     const { requestHeaders } = details;
@@ -832,8 +833,8 @@ const appCloseHandler = (app: App): void => {
     setIsQuitRequested(false);
 
     // Dereference the window object
-    mainWin = null;
-    mainWinModule.win = null;
+    (mainWin as any) = null;
+    (mainWinModule as any).win = null;
   });
 
   mainWin.webContents.on('render-process-gone', (event, detailed) => {

@@ -1,12 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import {
-  MAT_DIALOG_DATA,
-  MatDialog,
-  MatDialogActions,
-  MatDialogContent,
-  MatDialogRef,
-  MatDialogTitle,
-} from '@angular/material/dialog';
+import { CommonModule } from '@angular/common';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import {
   SimpleCounter,
   SimpleCounterCfgFields,
@@ -14,31 +8,25 @@ import {
   SimpleCounterType,
 } from '../simple-counter.model';
 import { T } from '../../../t.const';
-import { FormlyFieldConfig, FormlyFormOptions, FormlyModule } from '@ngx-formly/core';
-import { FormsModule, ReactiveFormsModule, UntypedFormGroup } from '@angular/forms';
-import { adjustToDialogFormlyForm } from '../../../util/adjust-to-dialog-formly-form';
-import { SIMPLE_COUNTER_FORM } from '../../config/form-cfgs/simple-counter-form.const';
-import { MatButton } from '@angular/material/button';
-import { MatIcon } from '@angular/material/icon';
-import { TranslatePipe } from '@ngx-translate/core';
-import { EMPTY_SIMPLE_COUNTER } from '../simple-counter.const';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { TranslateModule } from '@ngx-translate/core';
 import { SimpleCounterService } from '../simple-counter.service';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 
 @Component({
   selector: 'dialog-simple-counter-edit-settings',
+  standalone: true,
   templateUrl: './dialog-simple-counter-edit-settings.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    MatDialogTitle,
-    MatDialogContent,
-    MatDialogActions,
-    MatButton,
-    MatIcon,
-    TranslatePipe,
+    CommonModule,
+    MatButtonModule,
+    MatIconModule,
+    TranslateModule,
     ReactiveFormsModule,
     FormsModule,
-    FormlyModule,
   ],
 })
 export class DialogSimpleCounterEditSettingsComponent {
@@ -52,23 +40,13 @@ export class DialogSimpleCounterEditSettingsComponent {
   readonly T = T;
   readonly SimpleCounterType = SimpleCounterType;
 
-  readonly form = new UntypedFormGroup({});
-  readonly formOptions: FormlyFormOptions = {};
-  private readonly _fieldArray = SIMPLE_COUNTER_FORM.items?.[0]?.fieldArray as
-    | { fieldGroup?: FormlyFieldConfig[] }
-    | undefined;
-  readonly fields: FormlyFieldConfig[] = adjustToDialogFormlyForm([
-    ...(this._fieldArray?.fieldGroup ?? []),
-  ]);
-
   private readonly _initialModel = this._extractSettingsModel(
     this.dialogData.simpleCounter,
   );
   model: SimpleCounterCfgFields = this._cloneSettings(this._initialModel);
 
   save(): void {
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
+    if (!this.model.title || this.model.title.trim() === '') {
       return;
     }
     const normalized = this._normalizeSettings(this.model);
@@ -118,73 +96,103 @@ export class DialogSimpleCounterEditSettingsComponent {
   }
 
   private _extractSettingsModel(counter: SimpleCounterCopy): SimpleCounterCfgFields {
+    const now = new Date();
+    const defaultDateStr = now.toISOString().split('T')[0];
+    const defaultTimestamp = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+
+    const defaultWeekDays: { [key: number]: boolean } = {};
+    for (let i = 0; i < 7; i++) {
+      defaultWeekDays[i] = true;
+    }
+
     return {
       id: counter.id,
-      title: counter.title,
-      isEnabled: counter.isEnabled,
+      title: counter.title || '',
+      isEnabled: counter.isEnabled ?? true,
       isHideButton: counter.isHideButton,
       icon: counter.icon,
-      type: counter.type,
-      isTrackStreaks: counter.isTrackStreaks,
-      streakMinValue: counter.streakMinValue ?? EMPTY_SIMPLE_COUNTER.streakMinValue,
+      type: counter.type || SimpleCounterType.ClickCounter,
+      isTrackStreaks: true,
+      streakMinValue: counter.streakMinValue ?? 1,
       streakMode: counter.streakMode || 'specific-days',
       streakWeekDays: counter.streakWeekDays
         ? { ...counter.streakWeekDays }
-        : counter.isTrackStreaks
-          ? { ...EMPTY_SIMPLE_COUNTER.streakWeekDays }
-          : undefined,
+        : defaultWeekDays,
       streakWeeklyFrequency: counter.streakWeeklyFrequency ?? 3,
       countdownDuration: counter.countdownDuration,
+
+      // Custom iOS Habit Attributes
+      color: counter.color || '#89b4fa',
+      group: counter.group || 'Health',
+      habitType: counter.habitType || 'positive',
+      dailyGoalUnit: counter.dailyGoalUnit || 'times',
+      maxDailyGoal: counter.maxDailyGoal || 1,
+      repeatMode: counter.repeatMode || 'Daily',
+      startDate: counter.startDate || defaultDateStr,
+      targetDays: counter.targetDays || 365,
+      reminderTime: counter.reminderTime || '09:00',
+      memo: counter.memo || '',
+      createdAt: counter.createdAt || defaultTimestamp,
+      updatedAt: defaultTimestamp,
     };
   }
 
   private _normalizeSettings(
     settings: SimpleCounterCfgFields,
   ): Partial<SimpleCounterCopy> {
+    const now = new Date();
+    const defaultTimestamp = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+
+    const defaultWeekDays: { [key: number]: boolean } = {};
+    for (let i = 0; i < 7; i++) {
+      defaultWeekDays[i] = true;
+    }
+
     const normalized: Partial<SimpleCounterCopy> = {
       title: settings.title,
       isEnabled: settings.isEnabled,
       isHideButton: settings.isHideButton,
       icon: settings.icon,
-      type: settings.type,
-      isTrackStreaks: settings.isTrackStreaks,
-      streakMinValue: settings.streakMinValue,
+      type: settings.type || SimpleCounterType.ClickCounter,
+      isTrackStreaks: true,
+      streakMinValue: settings.streakMinValue ?? 1,
       streakMode: settings.streakMode || 'specific-days',
       streakWeekDays: settings.streakWeekDays
         ? { ...settings.streakWeekDays }
-        : settings.isTrackStreaks
-          ? { ...EMPTY_SIMPLE_COUNTER.streakWeekDays }
-          : undefined,
+        : defaultWeekDays,
       streakWeeklyFrequency: settings.streakWeeklyFrequency,
       countdownDuration: settings.countdownDuration ?? undefined,
+
+      // Custom iOS Habit Attributes
+      color: settings.color || '#89b4fa',
+      group: settings.group || 'Health',
+      habitType: settings.habitType || 'positive',
+      dailyGoalUnit: settings.dailyGoalUnit || 'times',
+      maxDailyGoal: settings.maxDailyGoal || 1,
+      repeatMode: settings.repeatMode || 'Daily',
+      startDate: settings.startDate,
+      targetDays: settings.targetDays || 365,
+      reminderTime: settings.reminderTime,
+      memo: settings.memo || '',
+      createdAt: settings.createdAt || defaultTimestamp,
+      updatedAt: defaultTimestamp,
     };
-
-    if (!normalized.isTrackStreaks) {
-      normalized.streakWeekDays = undefined;
-      normalized.streakMinValue = undefined;
-      normalized.streakMode = undefined;
-      normalized.streakWeeklyFrequency = undefined;
-    }
-
-    if (
-      normalized.type !== SimpleCounterType.RepeatedCountdownReminder &&
-      normalized.countdownDuration
-    ) {
-      normalized.countdownDuration = undefined;
-    }
 
     return normalized;
   }
 
   private _cloneSettings(settings: SimpleCounterCfgFields): SimpleCounterCfgFields {
+    const defaultWeekDays: { [key: number]: boolean } = {};
+    for (let i = 0; i < 7; i++) {
+      defaultWeekDays[i] = true;
+    }
+
     return {
       ...settings,
       streakMode: settings.streakMode || 'specific-days',
       streakWeekDays: settings.streakWeekDays
         ? { ...settings.streakWeekDays }
-        : settings.isTrackStreaks
-          ? { ...EMPTY_SIMPLE_COUNTER.streakWeekDays }
-          : undefined,
+        : defaultWeekDays,
     };
   }
 }
