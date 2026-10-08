@@ -218,6 +218,48 @@ describe('IssueTwoWaySyncEffects', () => {
       adapterRegistry.unregister('TEST_PROVIDER');
     }));
 
+    // tasks linked before two-way sync existed (e.g. migrated Nextcloud Deck)
+    // never got a baseline; the user's change must still reach the issue
+    it('should push for a task that has no baseline at all', fakeAsync(() => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping]),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ status: 'NEEDS-ACTION' }),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+      const task = createMockTask({
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        isDone: true,
+      });
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      tick();
+
+      expect(adapter.pushChanges).toHaveBeenCalledWith(
+        'issue-1',
+        { status: 'COMPLETED' },
+        jasmine.anything(),
+      );
+      expect(taskServiceSpy.update).toHaveBeenCalledWith('task-1', {
+        issueLastSyncedValues: { status: 'COMPLETED' },
+        issueLastUpdated: jasmine.any(Number),
+      });
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
     it('should not advance baseline when provider changed and nothing was pushed', fakeAsync(() => {
       const adapter = createMockAdapter({
         getFieldMappings: jasmine

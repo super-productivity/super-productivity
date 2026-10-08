@@ -572,7 +572,11 @@ export class IssueTwoWaySyncEffects {
           fieldMappings,
           syncConfig,
           freshValues,
-          lastSyncedValues,
+          // A task with no baseline at all was linked before two-way sync (e.g.
+          // a migrated built-in provider, whose effects always pushed). Comparing
+          // against the current issue lets the user's change win once; a single
+          // missing field still means "first sync" and is skipped.
+          task.issueLastSyncedValues ?? freshValues,
           ctx,
         );
 
