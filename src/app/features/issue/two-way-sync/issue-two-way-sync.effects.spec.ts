@@ -252,10 +252,44 @@ describe('IssueTwoWaySyncEffects', () => {
         { status: 'COMPLETED' },
         jasmine.anything(),
       );
+      // issueLastUpdated stays stale so the next poll refreshes the task, seeds
+      // the full baseline and pulls remote edits made before this push
       expect(taskServiceSpy.update).toHaveBeenCalledWith('task-1', {
         issueLastSyncedValues: { status: 'COMPLETED' },
-        issueLastUpdated: jasmine.any(Number),
       });
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should still skip a field missing from an existing baseline', fakeAsync(() => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping]),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ status: 'NEEDS-ACTION' }),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+      const task = createMockTask({
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        isDone: true,
+        issueLastSyncedValues: {},
+      });
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      tick();
+
+      expect(adapter.pushChanges).not.toHaveBeenCalled();
 
       adapterRegistry.unregister('TEST_PROVIDER');
     }));

@@ -622,7 +622,10 @@ export class IssueTwoWaySyncEffects {
             lastSyncedValues[m.issueField],
           );
         });
-        const keepIssueLastUpdatedStale = hasProviderOwnedSkip || hasUnpulledRemoteChange;
+        // Without any baseline the remote may hold edits we never compared;
+        // a stale marker lets the next poll seed the full baseline and pull them.
+        const keepIssueLastUpdatedStale =
+          hasProviderOwnedSkip || hasUnpulledRemoteChange || !task.issueLastSyncedValues;
 
         // Only advance baselines for fields we actually wrote. Fresh provider
         // values for skipped or unrelated fields still need the polling path to
