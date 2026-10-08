@@ -1982,6 +1982,52 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
     expect(emittedOps).toEqual([GAP_MS]);
   });
 
+  it('should split a capped gap into two disjoint syncTimeSpent ops that sum to the gap', async () => {
+    // Models the real service: each wake tick credits min(uncredited gap, maxMs)
+    // and advances the tracking start, so the remainder credit after the focus
+    // tick must not re-credit the part already flushed up to the session end.
+    const CAP_MS = 4 * 60 * 1000;
+    let timeSpent = PRE_GAP_TIME_SPENT;
+    let uncreditedMs = GAP_MS;
+    let pendingMs = 0;
+    const emittedOps: number[] = [];
+
+    globalTracking.triggerWakeUpTick.and.callFake((maxMs?: number) => {
+      const duration = Math.min(uncreditedMs, maxMs ?? uncreditedMs);
+      uncreditedMs -= duration;
+      pendingMs += duration;
+      timeSpent += duration;
+      return { duration, date: '2026-06-11', timestamp: 0 };
+    });
+    taskService.flushAccumulatedTimeSpent.and.callFake(() => {
+      if (pendingMs > 0) {
+        emittedOps.push(pendingMs);
+        pendingMs = 0;
+      }
+    });
+
+    await handleAndroidResume(
+      {
+        store,
+        globalTracking,
+        taskService,
+        syncElapsedTimeForTask: () => {
+          const duration = NATIVE_ELAPSED - timeSpent;
+          if (duration > 0) {
+            emittedOps.push(duration);
+          }
+          return Promise.resolve(true);
+        },
+        getNativeTrackingData: () => null,
+        requestRecovery: () => {},
+      },
+      { id: 'task-1' } as Task,
+      CAP_MS,
+    );
+
+    expect(emittedOps).toEqual([CAP_MS, GAP_MS - CAP_MS]);
+  });
+
   it('should route a no-current-task resume to recovery without a reconcile call', async () => {
     const nativeData = { taskId: 'task-native', elapsedMs: NATIVE_ELAPSED };
     const recovered: unknown[] = [];
