@@ -373,7 +373,8 @@ PluginAPI.registerIssueProvider({
       issueField: 'body',
       defaultDirection: 'pullOnly',
       toIssueValue: (taskValue: unknown): string => (taskValue as string) ?? '',
-      // like the built-in provider: an empty description leaves local notes alone
+      // an empty description leaves local notes alone (the built-in provider
+      // cleared them only on the polling device, so devices diverged)
       toTaskValue: (issueValue: unknown): string | undefined =>
         (issueValue as string) || undefined,
     },

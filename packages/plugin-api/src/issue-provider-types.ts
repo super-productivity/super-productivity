@@ -32,8 +32,9 @@ export interface PluginIssue {
   url?: string;
   /**
    * Without an `isDone` field mapping, 'closed', 'done', 'completed' or
-   * 'resolved' mark the task done on add. Leave it unset when done-ness is
-   * unknown; a refresh then keeps the task's done state.
+   * 'resolved' mark the task done on add and refresh; any other value marks
+   * it not done. Leave it unset when done-ness is unknown; a refresh then
+   * keeps the task's done state.
    */
   state?: string;
   lastUpdated?: number;
