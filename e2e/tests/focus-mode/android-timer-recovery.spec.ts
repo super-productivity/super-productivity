@@ -132,6 +132,7 @@ test.describe('Android Focus timer recovery after WebView recreation', () => {
     expectedMs: number;
     isNativeCompleteFirst?: boolean;
     isTrackingDuringBreak?: boolean;
+    isCountdown?: boolean;
   };
   const resumeCases: ResumeCase[] = [
     { name: 'at the end', backgroundMs: 20 * 60_000, expectedMs: 25 * 60_000 },
@@ -148,6 +149,13 @@ test.describe('Android Focus timer recovery after WebView recreation', () => {
       backgroundMs: 50 * 60_000,
       expectedMs: 55 * 60_000,
       isTrackingDuringBreak: true,
+    },
+    // Countdown has no break; its session end stops tracking instead.
+    {
+      name: 'past the end of a Countdown',
+      backgroundMs: 50 * 60_000,
+      expectedMs: 25 * 60_000,
+      isCountdown: true,
     },
   ];
   for (const resumeCase of resumeCases) {
@@ -166,7 +174,10 @@ test.describe('Android Focus timer recovery after WebView recreation', () => {
       }
       await workViewPage.addTask('Background Pomodoro');
       const taskId = await startFlowtime(page);
-      await dispatch(page, { type: '[FocusMode] Set Mode', mode: 'Pomodoro' });
+      await dispatch(page, {
+        type: '[FocusMode] Set Mode',
+        mode: resumeCase.isCountdown ? 'Countdown' : 'Pomodoro',
+      });
       await dispatch(page, {
         type: '[FocusMode] Start Session',
         duration: 25 * 60_000,
@@ -187,7 +198,7 @@ test.describe('Android Focus timer recovery after WebView recreation', () => {
 
       await expect
         .poll(async () => (await readState(page)).focusMode.timer.purpose)
-        .toBe('break');
+        .toBe(resumeCase.isCountdown ? null : 'break');
       await expectTaskTime(page, taskId, resumeCase.expectedMs);
       await pauseAndFlush(page);
       await page.reload();

@@ -189,12 +189,17 @@ export const handleAndroidResume = async (
     // The tick may complete a Pomodoro and unset the current task. Credit that
     // task only up to the session end; the remainder then goes to whatever the
     // completion leaves tracked (nothing while tracking pauses during breaks).
-    deps.globalTracking.triggerWakeUpTick(
-      Math.min(focusAutoCompleteCapMs, ANDROID_BACKGROUND_TICK_CAP_MS),
-    );
+    const capMs = Math.min(focusAutoCompleteCapMs, ANDROID_BACKGROUND_TICK_CAP_MS);
+    const credited = deps.globalTracking.triggerWakeUpTick(capMs);
     deps.taskService.flushAccumulatedTimeSpent();
     tickFocus();
-    creditBackgroundTickGap(deps.globalTracking, deps.taskService);
+    if (credited.duration < capMs) {
+      // The gap ended before the session; only the tick's own milliseconds are
+      // left, and crediting them would add a near-zero op to every resume.
+      deps.globalTracking.resetTrackingStart();
+    } else {
+      creditBackgroundTickGap(deps.globalTracking, deps.taskService);
+    }
   }
   if (currentTask) {
     await deps.syncElapsedTimeForTask(currentTask.id);

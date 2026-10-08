@@ -2028,6 +2028,52 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
     expect(emittedOps).toEqual([CAP_MS, GAP_MS - CAP_MS]);
   });
 
+  it('should emit one syncTimeSpent op when the gap ends before the session does', async () => {
+    // The focus tick's synchronous completion chain takes real milliseconds;
+    // re-crediting them after an uncapped first credit would add a near-zero op
+    // to every mid-session resume.
+    const ONE_MINUTE_MS = 60 * 1000;
+    const CAP_MS = GAP_MS + ONE_MINUTE_MS;
+    let uncreditedMs = GAP_MS;
+    let pendingMs = 0;
+    const emittedOps: number[] = [];
+
+    globalTracking.triggerWakeUpTick.and.callFake((maxMs?: number) => {
+      const duration = Math.min(uncreditedMs, maxMs ?? uncreditedMs);
+      uncreditedMs -= duration;
+      pendingMs += duration;
+      return { duration, date: '2026-06-11', timestamp: 0 };
+    });
+    globalTracking.resetTrackingStart.and.callFake(() => {
+      uncreditedMs = 0;
+    });
+    taskService.flushAccumulatedTimeSpent.and.callFake(() => {
+      if (pendingMs > 0) {
+        emittedOps.push(pendingMs);
+        pendingMs = 0;
+      }
+    });
+    (store.dispatch as jasmine.Spy).and.callFake(() => {
+      uncreditedMs += 2;
+    });
+
+    await handleAndroidResume(
+      {
+        store,
+        globalTracking,
+        taskService,
+        syncElapsedTimeForTask: () => Promise.resolve(true),
+        getNativeTrackingData: () => null,
+        requestRecovery: () => {},
+      },
+      { id: 'task-1' } as Task,
+      CAP_MS,
+    );
+
+    expect(emittedOps).toEqual([GAP_MS]);
+    expect(globalTracking.resetTrackingStart).toHaveBeenCalled();
+  });
+
   it('should route a no-current-task resume to recovery without a reconcile call', async () => {
     const nativeData = { taskId: 'task-native', elapsedMs: NATIVE_ELAPSED };
     const recovered: unknown[] = [];
