@@ -54,6 +54,7 @@ describe('PluginTimeTrackingEffects', () => {
   let matDialog: jasmine.SpyObj<MatDialog>;
   let timeTracking: jasmine.SpyObj<Required<PluginTimeTracking>>;
   let getById: jasmine.Spy;
+  let taskService: jasmine.SpyObj<TaskService>;
   const task: Task = createTask({
     id: 't1',
     issueId: '42',
@@ -116,9 +117,7 @@ describe('PluginTimeTrackingEffects', () => {
       'createHttpHelper',
     ]);
     pluginHttp.createHttpHelper.and.returnValue({} as never);
-    const taskService = jasmine.createSpyObj<TaskService>('TaskService', [
-      'getByIdOnce$',
-    ]);
+    taskService = jasmine.createSpyObj<TaskService>('TaskService', ['getByIdOnce$']);
     taskService.getByIdOnce$.and.returnValue(of(task));
 
     TestBed.configureTestingModule({
@@ -212,6 +211,29 @@ describe('PluginTimeTrackingEffects', () => {
         },
       }),
     );
+  });
+
+  it('opens the dialog for a done subtask in per-subtask mode', async () => {
+    const sub = createTask({ id: 't1', parentId: 'main' });
+    const main = createTask({
+      id: 'main',
+      subTaskIds: ['t1'],
+      issueId: '42',
+      issueProviderId: 'ip1',
+    });
+    taskService.getByIdOnce$.and.callFake((id: string) => of(id === 'main' ? main : sub));
+    setProviders({
+      ip1: {
+        id: 'ip1',
+        issueProviderKey: 'REDMINE',
+        pluginId: 'p',
+        pluginConfig: { ...pluginConfig, isShowTimeTrackingDialogForEachSubTask: true },
+      },
+    });
+    const data = await markDone();
+
+    expect(getById).toHaveBeenCalledWith('42', jasmine.anything(), jasmine.anything());
+    expect(data.task.id).toBe('t1');
   });
 
   it('does nothing for providers that are not plugins', async () => {
