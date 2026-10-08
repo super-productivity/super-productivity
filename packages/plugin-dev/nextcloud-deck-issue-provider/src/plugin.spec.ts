@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import type {
   IssueProviderPluginDefinition,
   PluginHttp,
@@ -67,14 +67,6 @@ const createHttp = (): PluginHttp & {
     get: ReturnType<typeof vi.fn>;
     put: ReturnType<typeof vi.fn>;
   };
-
-// The plugin caches board reads for a few seconds; jump past that per test
-let now = new Date('2024-01-01T00:00:00Z').getTime();
-beforeEach(() => {
-  now += 60000;
-  vi.useFakeTimers({ toFake: ['Date'], now });
-});
-afterEach(() => vi.useRealTimers());
 
 const ids = (items: { id: string }[]): string[] => items.map((i) => i.id);
 
@@ -185,34 +177,24 @@ describe('Nextcloud Deck Plugin - updateIssue', () => {
   });
 });
 
-describe('Nextcloud Deck Plugin - board read cache', () => {
-  it('shares one board download between consecutive getById calls', async () => {
+describe('Nextcloud Deck Plugin - getByIds', () => {
+  it('returns all requested cards from one board download', async () => {
     const http = createHttp();
-    await definition.getById('11', baseCfg, http);
-    await definition.getById('21', baseCfg, http);
+    const res = await definition.getByIds!(['11', '31', '999'], baseCfg, http);
+    expect(ids(res)).toEqual(['11', '31']);
+    expect(res[1].title).toBe('Card 31');
     expect(http.get).toHaveBeenCalledTimes(1);
   });
 
-  it('refetches once the cache expired', async () => {
+  it('fetches the board title once for the {BOARD} template', async () => {
     const http = createHttp();
-    await definition.getById('11', baseCfg, http);
-    vi.setSystemTime(now + 6000);
-    await definition.getById('11', baseCfg, http);
+    const res = await definition.getByIds!(
+      ['11', '21'],
+      { ...baseCfg, titleTemplate: '{BOARD}: {CARD_TITLE}' },
+      http,
+    );
+    expect(res.map((r) => r.title)).toEqual(['Board: Card 11', 'Board: Card 21']);
     expect(http.get).toHaveBeenCalledTimes(2);
-  });
-
-  it('updateIssue reads fresh data instead of the cache', async () => {
-    const http = createHttp();
-    await definition.getById('11', baseCfg, http);
-    await definition.updateIssue!('11', { state: 'done' }, baseCfg, http);
-    expect(http.get).toHaveBeenCalledTimes(2);
-  });
-
-  it('does not cache failed requests', async () => {
-    const http = createHttp();
-    http.get.mockRejectedValueOnce(new Error('offline'));
-    await expect(definition.getById('11', baseCfg, http)).rejects.toThrow('offline');
-    await expect(definition.getById('11', baseCfg, http)).resolves.toBeDefined();
   });
 });
 

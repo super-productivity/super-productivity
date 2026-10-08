@@ -1532,6 +1532,44 @@ describe('PluginIssueProviderAdapterService', () => {
       expect(result.length).toBe(1);
       expect(result[0].task.id).toBe('task-1');
     });
+
+    it('should fetch all issues with one getByIds call when provided', async () => {
+      const getById = jasmine.createSpy('getById');
+      const getByIds = jasmine.createSpy('getByIds').and.resolveTo([
+        { id: 'ISS-1', title: 'One', lastUpdated: 5000 },
+        { id: 'ISS-2', title: 'Two', lastUpdated: 5000 },
+      ] as PluginIssue[]);
+      registrySpy.getProvider.and.returnValue(createMockProvider({ getById, getByIds }));
+
+      const tasks = [
+        { id: 'task-1', issueId: 'ISS-1', issueProviderId: PROVIDER_ID } as Task,
+        { id: 'task-2', issueId: 'ISS-2', issueProviderId: PROVIDER_ID } as Task,
+        { id: 'task-3', issueId: 'ISS-1', issueProviderId: PROVIDER_ID } as Task,
+        { id: 'task-4', issueId: 'GONE', issueProviderId: PROVIDER_ID } as Task,
+      ];
+
+      const result = await service.getFreshDataForIssueTasks(tasks);
+
+      expect(getByIds).toHaveBeenCalledOnceWith(
+        ['ISS-1', 'ISS-2', 'GONE'],
+        jasmine.anything(),
+        jasmine.anything(),
+      );
+      expect(getById).not.toHaveBeenCalled();
+      expect(result.map((r) => r.task.id)).toEqual(['task-1', 'task-2', 'task-3']);
+      expect(result[1].taskChanges.title).toBe('Two');
+    });
+
+    it('should return nothing when getByIds fails', async () => {
+      const getByIds = jasmine.createSpy('getByIds').and.rejectWith(new Error('down'));
+      registrySpy.getProvider.and.returnValue(createMockProvider({ getByIds }));
+
+      const result = await service.getFreshDataForIssueTasks([
+        { id: 'task-1', issueId: 'ISS-1', issueProviderId: PROVIDER_ID } as Task,
+      ]);
+
+      expect(result).toEqual([]);
+    });
   });
 
   describe('issueLink', () => {

@@ -97,41 +97,8 @@ const toBase64 = (str: string): string => {
   return btoa(binary);
 };
 
-// The host refreshes tasks one by one (one getById each) and Deck has no
-// single-card endpoint, so every refresh would re-download the whole board.
-// A short-lived cache lets one refresh round share a single download.
-const CACHE_TTL_MS = 5000;
-const readCache = new Map<string, { at: number; value: Promise<unknown> }>();
-
-const cachedGet = <T>(
-  cfg: DeckConfig,
-  url: string,
-  http: PluginHttp,
-  isFresh: boolean,
-): Promise<T> => {
-  const key = `${cfg.username}@${url}`;
-  const hit = readCache.get(key);
-  if (!isFresh && hit && Date.now() - hit.at < CACHE_TTL_MS) {
-    return hit.value as Promise<T>;
-  }
-  const value = http.get<T>(url);
-  readCache.set(key, { at: Date.now(), value });
-  // never keep a failed request around
-  value.catch(() => readCache.delete(key));
-  return value;
-};
-
-const fetchStacks = (
-  cfg: DeckConfig,
-  http: PluginHttp,
-  isFresh = false,
-): Promise<DeckStack[]> =>
-  cachedGet<DeckStack[]>(
-    cfg,
-    `${getApiUrl(cfg)}/boards/${getBoardId(cfg)}/stacks`,
-    http,
-    isFresh,
-  );
+const fetchStacks = (cfg: DeckConfig, http: PluginHttp): Promise<DeckStack[]> =>
+  http.get<DeckStack[]>(`${getApiUrl(cfg)}/boards/${getBoardId(cfg)}/stacks`);
 
 const formatTitle = (
   card: DeckCard,
@@ -156,12 +123,7 @@ const fetchBoardTitle = async (cfg: DeckConfig, http: PluginHttp): Promise<strin
   if (!cfg.titleTemplate?.includes('{BOARD}')) {
     return '';
   }
-  const board = await cachedGet<DeckBoard>(
-    cfg,
-    `${getApiUrl(cfg)}/boards/${getBoardId(cfg)}`,
-    http,
-    false,
-  );
+  const board = await http.get<DeckBoard>(`${getApiUrl(cfg)}/boards/${getBoardId(cfg)}`);
   return board?.title || '';
 };
 
@@ -224,9 +186,8 @@ const findCard = async (
   cardId: string,
   cfg: DeckConfig,
   http: PluginHttp,
-  isFresh = false,
 ): Promise<{ card: DeckCard; stack: DeckStack }> => {
-  const stacks = await fetchStacks(cfg, http, isFresh);
+  const stacks = await fetchStacks(cfg, http);
   for (const stack of stacks) {
     const card = (stack.cards || []).find((c) => String(c.id) === cardId);
     if (card) {
@@ -249,7 +210,7 @@ const loadStackOptions = async (
   if (!cfg.selectedBoardId) {
     return [];
   }
-  const stacks = await fetchStacks(cfg, http, true);
+  const stacks = await fetchStacks(cfg, http);
   return stacks.map((s) => ({ label: s.title, value: String(s.id) }));
 };
 
@@ -343,6 +304,25 @@ PluginAPI.registerIssueProvider({
     return mapCard(card, stack, cfg, boardTitle);
   },
 
+  // Deck has no single-card endpoint, so a refresh reads the board once
+  async getByIds(
+    issueIds: string[],
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<PluginIssue[]> {
+    const cfg = asCfg(config);
+    const ids = new Set(issueIds);
+    const [stacks, boardTitle] = await Promise.all([
+      fetchStacks(cfg, http),
+      fetchBoardTitle(cfg, http),
+    ]);
+    return stacks.flatMap((stack) =>
+      (stack.cards || [])
+        .filter((card) => ids.has(String(card.id)))
+        .map((card) => mapCard(card, stack, cfg, boardTitle)),
+    );
+  },
+
   getIssueLink(issueId: string, config: Record<string, unknown>): string {
     return getCardLink(issueId, asCfg(config));
   },
@@ -407,8 +387,7 @@ PluginAPI.registerIssueProvider({
   ): Promise<void> {
     const cfg = asCfg(config);
     const boardId = getBoardId(cfg);
-    // read-modify-write must not run on cached data
-    const { card, stack } = await findCard(id, cfg, http, true);
+    const { card, stack } = await findCard(id, cfg, http);
     const isMarkedDone = changes['state'] === STATE_DONE;
     const doneStackId = cfg.doneStackId ? String(cfg.doneStackId) : '';
     let stackId = String(stack.id);

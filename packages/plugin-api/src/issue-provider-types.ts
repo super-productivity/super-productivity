@@ -164,6 +164,16 @@ export interface IssueProviderPluginDefinition {
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginIssue>;
+  /**
+   * Optional batch variant of `getById`, used when refreshing many tasks at
+   * once. Implement it when the API can return several issues in one request.
+   * Ids missing from the result are skipped (not treated as deleted).
+   */
+  getByIds?(
+    issueIds: string[],
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<PluginIssue[]>;
   getIssueLink(issueId: string, config: Record<string, unknown>): string;
   testConnection?(config: Record<string, unknown>, http: PluginHttp): Promise<boolean>;
   getNewIssuesForBacklog?(
