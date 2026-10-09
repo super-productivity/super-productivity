@@ -419,10 +419,6 @@ done-toggle {
   --scheduled-date-color: var(--c-warn);
 }
 
-.schedule-btn[data-scheduled-date-color='today'] {
-  --scheduled-date-color: var(--scheduled-date-today);
-}
-
 .schedule-btn[data-scheduled-date-color='tomorrow'] {
   --scheduled-date-color: var(--scheduled-date-tomorrow);
 }
@@ -432,7 +428,6 @@ done-toggle {
 }
 
 .schedule-btn[data-scheduled-date-color='overdue'],
-.schedule-btn[data-scheduled-date-color='today'],
 .schedule-btn[data-scheduled-date-color='tomorrow'],
 .schedule-btn[data-scheduled-date-color='upcoming'] {
   mat-icon {

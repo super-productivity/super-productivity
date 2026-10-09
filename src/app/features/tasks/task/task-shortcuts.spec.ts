@@ -32,7 +32,6 @@ import { PlannerService } from '../../planner/planner.service';
 import { AddSubtaskInputService } from '../add-subtask-input/add-subtask-input.service';
 import { TaskDuplicateService } from '../task-duplicate.service';
 import { TaskMultiSelectService } from '../task-multi-select.service';
-import { TagService } from '../../tag/tag.service';
 
 describe('TaskComponent shortcut handling', () => {
   let fixture: import('@angular/core/testing').ComponentFixture<TaskComponent>;
@@ -224,7 +223,6 @@ describe('TaskComponent shortcut handling', () => {
             clockTimestamp: signal(new Date(2026, 4, 5, 12).getTime()),
           }),
         },
-        { provide: TagService, useValue: { scheduledTodayColor: signal(null) } },
         {
           provide: LayoutService,
           useValue: jasmine.createSpyObj('LayoutService', [], {
@@ -273,7 +271,7 @@ describe('TaskComponent shortcut handling', () => {
       expect(component.scheduledDateColor()).toBe('tomorrow');
       const clock = TestBed.inject(GlobalTrackingIntervalService);
       (clock.todayDateStr as WritableSignal<string>).set('2026-05-06');
-      expect(component.scheduledDateColor()).toBe('today');
+      expect(component.scheduledDateColor()).toBe('');
       (clock.todayDateStr as WritableSignal<string>).set('2026-05-07');
       expect(component.scheduledDateColor()).toBe('overdue');
     });
@@ -285,7 +283,7 @@ describe('TaskComponent shortcut handling', () => {
         ...createTopLevelTask('Task'),
         dueWithTime: scheduled,
       });
-      expect(component.scheduledDateColor()).toBe('today');
+      expect(component.scheduledDateColor()).toBe('');
       (clock.clockTimestamp as WritableSignal<number>).set(scheduled);
       expect(component.scheduledDateColor()).toBe('overdue');
     });
@@ -300,7 +298,7 @@ describe('TaskComponent shortcut handling', () => {
         ...createTopLevelTask('Task'),
         dueWithTime: scheduled,
       });
-      expect(component.scheduledDateColor()).toBe('today');
+      expect(component.scheduledDateColor()).toBe('');
       currentId.set('top-1');
       expect(component.scheduledDateColor()).toBe('');
       (clock.clockTimestamp as WritableSignal<number>).set(scheduled + 1);

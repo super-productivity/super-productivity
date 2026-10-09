@@ -8,14 +8,14 @@ describe('getScheduledDateColor', () => {
 
   it('classifies every range boundary without altering task data', () => {
     expect(color('2026-10-02')).toBe('overdue');
-    expect(color(today)).toBe('today');
+    expect(color(today)).toBe('');
     expect(color('2026-10-04')).toBe('tomorrow');
     expect(color('2026-10-05')).toBe('upcoming');
     expect(color('2026-10-11')).toBe('upcoming');
     expect(color('2026-10-12')).toBe('');
   });
 
-  it('keeps completed, unscheduled and invalid dates at their default color', () => {
+  it('keeps today, completed, unscheduled and invalid dates at their default color', () => {
     expect(getScheduledDateColor({ dueDay: today, isDone: true }, today, 0, now)).toBe(
       '',
     );
@@ -26,7 +26,7 @@ describe('getScheduledDateColor', () => {
 
   it('turns red at the scheduled time without waiting for a day change', () => {
     const task = { isDone: false, dueWithTime: now };
-    expect(getScheduledDateColor(task, today, 0, now - 1)).toBe('today');
+    expect(getScheduledDateColor(task, today, 0, now - 1)).toBe('');
     expect(getScheduledDateColor(task, today, 0, now)).toBe('overdue');
     expect(getScheduledDateColor(task, today, 0, now + 1)).toBe('overdue');
   });
@@ -34,7 +34,7 @@ describe('getScheduledDateColor', () => {
   it('uses the configured logical day for timestamps and prefers time over dueDay', () => {
     const earlyTomorrow = new Date(2026, 9, 4, 2).getTime();
     const task = { isDone: false, dueDay: '2026-10-12', dueWithTime: earlyTomorrow };
-    expect(getScheduledDateColor(task, today, 4 * 60 * 60 * 1000, now)).toBe('today');
+    expect(getScheduledDateColor(task, today, 4 * 60 * 60 * 1000, now)).toBe('');
     expect(getScheduledDateColor(task, today, 0, now)).toBe('tomorrow');
   });
 
