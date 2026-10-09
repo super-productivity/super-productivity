@@ -21,12 +21,15 @@ export interface TrackTimeDialogData {
   timeLogged: number;
   timeLoggedUpdate$?: Observable<number>;
 
-  // Activities (Redmine/OpenProject)
+  // Activities (e.g. Redmine/OpenProject)
   activities$?: Observable<Array<{ id: number; name: string }>>;
 
   // Provider config — passed directly so the dialog doesn't need to fetch it
   defaultTime?: JiraWorklogExportDefaultTime;
   configTimeKey: 'worklogDialogDefaultTime' | 'timeTrackingDialogDefaultTime';
+  // Persists a new default time; when unset, the dialog writes `configTimeKey`
+  // as a top-level provider field (plugin providers keep it in `pluginConfig`)
+  saveDefaultTime?: (value: JiraWorklogExportDefaultTime) => void;
 
   // Submit handling
   onSubmit: (params: TrackTimeSubmitParams) => Observable<unknown>;

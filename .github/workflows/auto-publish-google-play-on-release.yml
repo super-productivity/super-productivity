@@ -10,9 +10,13 @@ on:
   workflow_dispatch:
     inputs: {}
 
+permissions:
+  contents: read
+
 jobs:
   auto-publish-google-play:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     # Run on manual dispatch, or for actual (non-pre-) releases.
     if: ${{ github.event_name == 'workflow_dispatch' || !github.event.release.prerelease }}

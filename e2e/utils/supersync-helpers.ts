@@ -948,10 +948,18 @@ export const startTimeTracking = async (
   taskName: string,
 ): Promise<void> => {
   const task = getTaskElement(client, taskName);
-  await task.hover();
   const startBtn = task.locator('.start-task-btn');
-  await startBtn.waitFor({ state: 'visible', timeout: UI_VISIBLE_TIMEOUT });
-  await startBtn.click();
+  // The button exists only while the first line is hovered; a re-render or
+  // layout shift between hover and click detaches it, and click never re-hovers.
+  // Re-hover each attempt, and skip the click once tracking runs so a retry
+  // cannot toggle it back off.
+  await expect(async () => {
+    if (!(await task.evaluate((el) => el.classList.contains('isCurrent')))) {
+      await task.hover();
+      await startBtn.click({ timeout: 2000 });
+    }
+    await expect(task).toHaveClass(/\bisCurrent\b/, { timeout: 1000 });
+  }).toPass({ timeout: UI_VISIBLE_TIMEOUT });
 };
 
 /**
