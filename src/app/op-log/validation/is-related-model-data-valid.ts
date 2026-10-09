@@ -267,7 +267,7 @@ const validateTasksToProjectsAndTags = (
       return false;
     }
 
-    // Create entry for this project
+    // Collect the project's task ids (active + backlog)
     const projectTaskSet = new Set<string>([
       ...project.taskIds,
       ...project.backlogTaskIds,
