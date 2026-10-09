@@ -268,7 +268,7 @@ describe('TaskComponent shortcut handling', () => {
         ...createTopLevelTask('Task'),
         dueDay: '2026-05-06',
       });
-      expect(component.scheduledDateColor()).toBe('tomorrow');
+      expect(component.scheduledDateColor()).toBe('');
       const clock = TestBed.inject(GlobalTrackingIntervalService);
       (clock.todayDateStr as WritableSignal<string>).set('2026-05-06');
       expect(component.scheduledDateColor()).toBe('');

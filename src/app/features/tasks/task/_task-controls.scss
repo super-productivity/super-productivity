@@ -414,29 +414,15 @@ done-toggle {
   position: relative;
 }
 
-// One semantic color drives the scheduled-date icon and its text badge.
+// Only overdue schedules are colored; all other dates keep the default color.
 .schedule-btn[data-scheduled-date-color='overdue'] {
-  --scheduled-date-color: var(--c-warn);
-}
-
-.schedule-btn[data-scheduled-date-color='tomorrow'] {
-  --scheduled-date-color: var(--scheduled-date-tomorrow);
-}
-
-.schedule-btn[data-scheduled-date-color='upcoming'] {
-  --scheduled-date-color: var(--scheduled-date-upcoming);
-}
-
-.schedule-btn[data-scheduled-date-color='overdue'],
-.schedule-btn[data-scheduled-date-color='tomorrow'],
-.schedule-btn[data-scheduled-date-color='upcoming'] {
   mat-icon {
-    // The schedule state takes precedence over Material's icon-color token.
-    color: var(--scheduled-date-color) !important;
+    // The overdue state takes precedence over Material's icon-color token.
+    color: var(--c-warn) !important;
   }
 
   .time-badge {
-    color: var(--scheduled-date-color);
+    color: var(--c-warn);
   }
 }
 

@@ -127,26 +127,12 @@ header {
 }
 
 .schedule-btn[data-scheduled-date-color='overdue'] {
-  --scheduled-date-color: var(--c-warn);
-}
-
-.schedule-btn[data-scheduled-date-color='tomorrow'] {
-  --scheduled-date-color: var(--scheduled-date-tomorrow);
-}
-
-.schedule-btn[data-scheduled-date-color='upcoming'] {
-  --scheduled-date-color: var(--scheduled-date-upcoming);
-}
-
-.schedule-btn[data-scheduled-date-color='overdue'],
-.schedule-btn[data-scheduled-date-color='tomorrow'],
-.schedule-btn[data-scheduled-date-color='upcoming'] {
   mat-icon {
-    color: var(--scheduled-date-color) !important;
+    color: var(--c-warn) !important;
   }
 
   .time-badge {
-    color: var(--scheduled-date-color);
+    color: var(--c-warn);
   }
 }
 
