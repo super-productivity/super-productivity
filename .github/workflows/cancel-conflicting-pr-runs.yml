@@ -39,7 +39,6 @@ jobs:
           # GitHub computes mergeability lazily after master moves; the first
           # query mostly returns UNKNOWN, so poll until it settles.
           for attempt in 1 2 3 4 5 6; do
-            sleep 20
             prs=$(gh pr list --state open --limit 200 --json number,headRefOid,mergeable |
               jq --argjson active "$active" 'map(select(.headRefOid as $s | $active | index($s)))')
             for row in $(jq -r '.[] | select(.mergeable == "CONFLICTING") | "\(.number):\(.headRefOid)"' <<<"$prs"); do
@@ -56,5 +55,6 @@ jobs:
             done
             unknown=$(jq '[.[] | select(.mergeable == "UNKNOWN")] | length' <<<"$prs")
             echo "Attempt $attempt: $unknown PR(s) with unknown mergeability"
-            [[ "$unknown" == 0 ]] && break
+            if [[ "$unknown" == 0 ]]; then break; fi
+            sleep 20
           done
