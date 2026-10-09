@@ -1,0 +1,26 @@
+diff --git a/node_modules/app-builder-lib/out/targets/snap/coreLegacy.js b/node_modules/app-builder-lib/out/targets/snap/coreLegacy.js
+index 98b626c..5d7156a 100644
+--- a/node_modules/app-builder-lib/out/targets/snap/coreLegacy.js
++++ b/node_modules/app-builder-lib/out/targets/snap/coreLegacy.js
+@@ -247,6 +247,12 @@ class SnapCoreLegacy extends SnapTarget_1.SnapCore {
+         builder_util_1.log.info({ releaseName }, "downloading snap template");
+         const templateDir = await (0, electronGet_1.downloadBuilderToolset)({ releaseName, filenameWithExt, checksums, githubOrgRepo: "electron-userland/electron-builder-binaries" });
+         await this.stageSnapFiles({ stageDir, appOutDir, hooksDir, extraAppArgs, isTemplate: true });
++        // super-productivity patch (#10576): the 2019 template's desktop-common.sh aborts the launch under
++        // `bash -e` when an XDG dir is a symlink to an empty dir; ship the maintained copy (is_subpath guard)
++        // instead. Drop once electron-builder overlays its templates/snap scripts on template builds.
++        const desktopCommonPath = path.join(stageDir, "desktop-common.sh");
++        await (0, promises_1.copyFile)(path.join((0, pathManager_1.getTemplatePath)("snap"), "desktop-common.sh"), desktopCommonPath);
++        await (0, promises_1.chmod)(desktopCommonPath, 0o755);
+         // Best-effort: remove chrome-sandbox from app dir before mksquashfs scans it.
+         await (0, promises_1.rm)(path.join(appOutDir, "chrome-sandbox"), { force: true });
+         // chmod -R g-s to avoid setgid bits in final image
+@@ -256,7 +262,7 @@ class SnapCoreLegacy extends SnapTarget_1.SnapCore {
+         const mksquashfsPath = await getMksquashfsPath(snapArch);
+         // Collect top-level entries from each dir as individual path args (mirrors Go ReadDirContentTo)
+         const mksquashfsArgs = [
+-            ...(await readDirPaths(templateDir)),
++            ...(await readDirPaths(templateDir, name => name !== "desktop-common.sh")),
+             ...(await readDirPaths(stageDir)),
+             ...(await readDirPaths(appOutDir, name => name !== "LICENSES.chromium.html" && name !== "LICENSE.electron.txt" && name !== "chrome-sandbox")),
+             artifactPath,
