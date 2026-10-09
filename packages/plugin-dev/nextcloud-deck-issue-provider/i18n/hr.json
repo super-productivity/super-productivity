@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "Osnovni URL za Nextcloud",
+    "USERNAME": "Tvoje Nextcloud korisničko ime",
+    "PASSWORD": "Tvoja lozinka za Nextcloud aplikaciju",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "Uvezi samo kartice dodijeljene meni",
+    "TITLE_TEMPLATE": "Predložak naslova zadataka",
+    "TITLE_TEMPLATE_DESC": "Varijable: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Primjer: [{BOARD}: {COLUMN}] {CARD_TITLE}. Ostavi prazno za samo naslov kartice."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sažetak",
+    "DESCRIPTION": "Opis u Decku",
+    "STACK": "Stupac",
+    "DUE_DATE": "Rok",
+    "ASSIGNED_USERS": "Dodijeljeni korisnici",
+    "LABELS": "Labeli"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "Podesi integraciju s Nextcloud Deckom da uvozi kartice kao zadatke. Koristi lozinku aplikacije za prijavu."
+}

@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "Bazowy URL Nextcloud",
+    "USERNAME": "Nazwa użytkownika Nextcloud",
+    "PASSWORD": "Hasło aplikacji Nextcloud",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "Importuj tylko karty przypisane do mnie",
+    "TITLE_TEMPLATE": "Szablon tytułu zadania",
+    "TITLE_TEMPLATE_DESC": "Zmienne: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Przykład: [{BOARD}: {COLUMN}] {CARD_TITLE}. Pozostaw puste, aby użyć tylko tytułu karty."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Podsumowanie",
+    "DESCRIPTION": "Opis Deck",
+    "STACK": "Stos",
+    "DUE_DATE": "Termin",
+    "ASSIGNED_USERS": "Przypisani użytkownicy",
+    "LABELS": "Etykiety"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "Skonfiguruj integrację z Nextcloud Deck, aby importować karty jako zadania. Użyj hasła aplikacji do uwierzytelnienia."
+}

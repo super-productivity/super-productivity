@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Servidor (ex: https://redmine.org)",
+    "API_KEY": "Chave de acesso à API",
+    "PROJECT_ID": "Identificador do Projeto",
+    "PROJECT_ID_DESC": "Pode ser encontrado como parte da URL ao visualizar o projeto em um navegador.",
+    "SCOPE": "Escopo",
+    "SCOPE_ALL": "Todos",
+    "SCOPE_CREATED": "Criado por mim",
+    "SCOPE_ASSIGNED": "Atribuído a mim",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Mostrar diálogo de registro de trabalho para reportar ao Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Requer que o módulo de registro de trabalho esteja ativado no projeto do Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Mostrar diálogo de registro de trabalho quando as subtarefas forem concluídas",
+    "DEFAULT_TIME": "Valor de tempo padrão para o diálogo",
+    "DEFAULT_TIME_ALL_TIME": "Preencher com todo o tempo trabalhado na tarefa",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Preencher com todo o tempo trabalhado menos o tempo já registrado",
+    "DEFAULT_TIME_TODAY": "Preencher apenas o tempo trabalhado hoje",
+    "DEFAULT_TIME_YESTERDAY": "Preencher apenas o tempo trabalhado ontem"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Resumo",
+    "STATUS": "Status",
+    "PRIORITY": "Prioridade",
+    "AUTHOR": "Autor",
+    "ASSIGNEE": "Responsável",
+    "CATEGORY": "Categoria",
+    "VERSION": "Versão",
+    "DUE_DATE": "Data de entrega",
+    "TIME_SPENT": "Tempo trabalhado",
+    "DESCRIPTION": "Descrição"
+  },
+  "FORM_HELP": "<p>Aqui você pode configurar o Super Productivity para listar issues abertas do Redmine (seja a versão online ou uma instância auto-hospedada) para um projeto específico no painel de criação de tarefas na visualização de planejador. Elas serão listadas como sugestões e fornecerão um link para a issue, bem como mais informações sobre ela.</p><p>Além disso, você pode importar automaticamente todas as issues abertas.</p>"
+}

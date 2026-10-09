@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Host (contoh.: https://redmine.org)",
+    "API_KEY": "Akses kunci API",
+    "PROJECT_ID": "Pengidentifikasi Proyek",
+    "PROJECT_ID_DESC": "Dapat ditemukan sebagai bagian dari URL, saat melihat proyek di Browser.",
+    "SCOPE": "Cakupan",
+    "SCOPE_ALL": "Semua",
+    "SCOPE_CREATED": "Dibuat oleh saya",
+    "SCOPE_ASSIGNED": "Ditugaskan kepada saya",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Tampilkan dialog pelacakan waktu untuk melaporkan ke Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Memerlukan modul pelacakan waktu diaktifkan untuk proyek Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Tampilkan dialog pelacakan waktu saat subtugas diselesaikan",
+    "DEFAULT_TIME": "Nilai waktu default untuk dialog",
+    "DEFAULT_TIME_ALL_TIME": "Isi semua waktu yang dihabiskan untuk tugas",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Isi semua waktu yang dihabiskan dikurangi waktu login",
+    "DEFAULT_TIME_TODAY": "Isi hanya waktu yang dihabiskan hari ini",
+    "DEFAULT_TIME_YESTERDAY": "Isi hanya waktu yang dihabiskan kemarin"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Ringkasan",
+    "STATUS": "Status",
+    "PRIORITY": "Prioritas",
+    "AUTHOR": "Penulis",
+    "ASSIGNEE": "Penanggung jawab",
+    "CATEGORY": "Kategori",
+    "VERSION": "Versi",
+    "DUE_DATE": "Tanggal Jatuh Tempo",
+    "TIME_SPENT": "Waktu yang dihabiskan",
+    "DESCRIPTION": "Deskripsi"
+  },
+  "FORM_HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk mencantumkan open Redmine issues (baik versi online atau yang dihosting sendiri) untuk proyek tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan dicantumkan sebagai saran dan akan memberikan tautan ke issues tersebut serta informasi lebih lanjut tentangnya.</p><p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua masalah yang terbuka ke backlog tugas Anda.</p>"
+}

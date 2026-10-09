@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "رابط القاعدة",
+    "USERNAME": "اسم المستخدم",
+    "PASSWORD": "كلمة المرور",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "تصفية حسب المكلّف",
+    "TITLE_TEMPLATE": "قالب العنوان",
+    "TITLE_TEMPLATE_DESC": "قالب العنوان للمهام الجديدة المنشأة من بطاقات Deck"
+  },
+  "DISPLAY": {
+    "SUMMARY": "ملخص",
+    "DESCRIPTION": "وصف Deck",
+    "STACK": "المكدس",
+    "DUE_DATE": "تاريخ الاستحقاق",
+    "ASSIGNED_USERS": "المستخدمون المعينون",
+    "LABELS": "التسميات"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "مساعدة"
+}
