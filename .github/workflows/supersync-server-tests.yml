@@ -38,7 +38,9 @@ jobs:
     # all while the check still reported on it.
     services:
       postgres:
-        image: postgres:16-alpine
+        # AWS's mirror of the Docker Official Image (same digest): Docker Hub's
+        # unauthenticated pull limit on shared runner IPs failed this job before tests ran.
+        image: public.ecr.aws/docker/library/postgres:16-alpine
         env:
           POSTGRES_USER: supersync
           POSTGRES_PASSWORD: superpassword
