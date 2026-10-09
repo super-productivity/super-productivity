@@ -40,8 +40,8 @@ Nextcloud or WebDAV remain valid choices for new installs.
 ### Prerequisites
 
 The supported self-hosted setup is the bundled Docker Compose stack
-(SuperSync + PostgreSQL + Caddy) used by the desktop (Electron), Android and iOS
-apps. It needs:
+(SuperSync + PostgreSQL + Caddy), with the desktop (Electron), Android or iOS
+app as clients. It needs:
 
 - **An AMD64 (x86-64) Linux host.** The published image is built for
   `linux/amd64` only.
@@ -51,32 +51,16 @@ apps. It needs:
   and renews the TLS certificate for `DOMAIN` automatically. Running without a
   public domain, or behind an existing reverse proxy, is not a tested recipe.
 - **A working SMTP account.** Every sign-up is confirmed by an emailed
-  verification link, and login and recovery links are emailed too. With
-  `NODE_ENV=production` (the Docker default) the server refuses to start without
-  `SMTP_HOST`. Never enable `TEST_MODE` to skip email: it exposes test routes
-  and is rejected in production.
+  verification link, and login and recovery links are emailed too. The server
+  starts without `SMTP_HOST`, but with `NODE_ENV=production` (the Docker
+  default) every email then fails and nobody can finish signing up. Never
+  enable `TEST_MODE` to skip email: it exposes test routes and is rejected in
+  production.
 - Docker with the Compose plugin, `curl`, `git`, and `jq` on the deploy host.
   The image revision check requires Docker Compose support for
   `docker compose config --format json`.
 
 ### Docker (Recommended)
-
-The easiest way to run the server is using the provided Docker Compose configuration.
-
-> **There are no release tags.** `ghcr.io/super-productivity/supersync` publishes
-> only `latest` and `master-<sha>`, both built from `master`, so a default deploy
-> tracks upstream `master` rather than a released version. The registry keeps
-> only the 15 most recent image versions (one per `master` build; the newest
-> also carries `latest`) and deletes older ones, so a `master-<sha>` tag is not
-> a durable pin and is no rollback target once it ages out.
->
-> **An old image tag alone is not a reproducible deployment.** `deploy.sh` first
-> runs `git pull --ff-only` on your checkout (normally `master`) and then
-> requires the image's revision label to match the latest commit that touched
-> the server's image inputs in that checkout. Setting `SUPERSYNC_IMAGE` to an
-> older `master-<sha>` therefore fails the revision check unless the checkout
-> is at the matching source too, and the deploy scripts, compose file and
-> migrations come from the checkout, not the image tag.
 
 ```bash
 # 1. Clone the repo (deploy.sh runs from this checkout) and enter this directory
@@ -93,22 +77,35 @@ nano .env
 ./scripts/deploy.sh
 ```
 
+> **No releases, no durable pins.** `ghcr.io/super-productivity/supersync`
+> publishes only `latest` and `master-<sha>`, both built from `master`, so a
+> default deploy tracks upstream `master`. The registry keeps only the 15 most
+> recent versions, so a `master-<sha>` tag is not a durable pin and no rollback
+> target. `deploy.sh` also runs `git pull --ff-only` on your checkout first and
+> requires the image's revision label to match the latest commit that touched
+> the server's image inputs there, so setting `SUPERSYNC_IMAGE` to an older
+> `master-<sha>` fails that check. The deploy scripts and compose file come from
+> the checkout; migrations run from the image.
+
 #### Required settings
 
-Set these in `.env` before the first deploy (`env.example` explains each one):
+Set these in `.env` before the first deploy (`env.example` explains each one
+and uses `sync.your-domain.com` as the placeholder domain):
 
-| Setting                           | Value                                                                                                                                    |
-| :-------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------- |
-| `DOMAIN`                          | Your sync domain without protocol, e.g. `sync.example.com`. Caddy requests the certificate for it.                                       |
-| `PUBLIC_URL`                      | `https://` + your domain. Used in emailed links; the server refuses to start in production if it is not HTTPS.                           |
-| `WEBAUTHN_RP_ID`                  | Your domain without protocol or port. Passkeys bind to it — changing it later invalidates every registered passkey.                      |
-| `WEBAUTHN_ORIGIN`                 | Normally the same as `PUBLIC_URL`.                                                                                                       |
-| `JWT_SECRET`, `POSTGRES_PASSWORD` | Generate them (`openssl rand -base64 32` / `openssl rand -base64 24`); both ship empty and the stack will not start without them.        |
-| `SMTP_*`                          | Host, port, TLS mode, user, password and sender address of your mail provider. Required in production.                                   |
-| `ALLOWED_EMAILS`                  | **Set this for a private install**, e.g. `you@example.com` or `*@example.com`. Left empty, anyone who can reach the server may register. |
+| Setting                           | What to set                                                                                                                                                                                                                                                     |
+| :-------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DOMAIN`                          | Your sync domain without protocol, e.g. `sync.example.com`. Caddy requests the certificate for it.                                                                                                                                                              |
+| `PUBLIC_URL`                      | `https://` + your domain. Used in emailed links; the server refuses to start in production if it is not HTTPS.                                                                                                                                                  |
+| `WEBAUTHN_RP_ID`                  | Your domain without protocol or port. Passkeys bind to it — changing it later invalidates every registered passkey.                                                                                                                                             |
+| `WEBAUTHN_ORIGIN`                 | Normally the same as `PUBLIC_URL`.                                                                                                                                                                                                                              |
+| `JWT_SECRET`, `POSTGRES_PASSWORD` | `openssl rand -base64 32` for `JWT_SECRET`, `openssl rand -hex 24` for `POSTGRES_PASSWORD` (it is embedded in `DATABASE_URL`, where a base64 `/` breaks parsing); both ship empty and the stack will not start without them. Keep `.env` private (`chmod 600`). |
+| `SMTP_*`                          | Host, port, TLS mode, user, password and sender address of your mail provider. Without them, sign-up emails fail.                                                                                                                                               |
+| `ALLOWED_EMAILS`                  | **Set this for a private install**, e.g. `you@example.com` or `*@example.com`. Left empty, anyone who can reach the server may register.                                                                                                                        |
 
 Leave `CORS_ORIGINS` at its default unless you also host the web app yourself
 (see [Configuration](#configuration)).
+
+#### Deploying and upgrading
 
 After a successful deploy, `deploy.sh` prints a **Monitoring status** block.
 Its warnings (for example that `health-alert.sh` is not in your crontab) are
@@ -327,7 +324,7 @@ All configuration is done via environment variables.
 | `PUBLIC_URL`                            | -                                    | **Required.** Public URL used for email links (e.g. `https://sync.example.com`). Must be `https://` in production.                                                                                                           |
 | `CORS_ORIGINS`                          | `https://app.super-productivity.com` | Allowed browser origins, comma-separated. The desktop and mobile apps need no entry. Add the exact origin (e.g. `https://sp.example.com`) only if you host the web app separately. `*` is rejected at startup in production. |
 | `TRUST_PROXY`                           | `loopback,uniquelocal`               | Peers whose `X-Forwarded-*` headers are trusted: proxy-addr keywords, IPs or CIDR ranges. Add e.g. `100.64.0.0/10` for a Tailscale proxy.                                                                                    |
-| `SMTP_HOST`                             | -                                    | SMTP server for verification, login and recovery emails. **Required in production** — the server refuses to start without it.                                                                                                |
+| `SMTP_HOST`                             | -                                    | SMTP server for verification, login and recovery emails. **Required in production** — without it the server starts, but every email fails.                                                                                   |
 | `WEBAUTHN_RP_ID`                        | `localhost`                          | **Required for passkeys.** Your domain, without protocol or port. Passkeys bind to this — changing it invalidates every registered credential.                                                                               |
 | `WEBAUTHN_ORIGIN`                       | `http://localhost:1900`              | **Required for passkeys.** Where users reach the auth UI, with protocol.                                                                                                                                                     |
 | `WEBAUTHN_RP_NAME`                      | value of `WEBAUTHN_RP_ID`            | Name shown in your users' OS passkey prompt.                                                                                                                                                                                 |
@@ -427,21 +424,21 @@ GET /api/sync/status
 
 ## Client Configuration
 
-These steps use the desktop or mobile app. Labels match the current app.
+These steps use the desktop or mobile app.
 
 **First device**
 
-1. Open **Settings** → **Sync & Backup** → **Sync** and choose **SuperSync (Beta)**
-   as the **Sync provider**.
+1. Open **Settings** → **Sync & Backup**, click **Set up sync** (or **Configure**),
+   and in the **Configure Sync** dialog choose **SuperSync (Beta)** as the
+   **Sync provider**.
 2. Open **Advanced Config** and set **Server URL** to your `PUBLIC_URL`
-   (e.g. `https://sync.example.com`). Do this **before** the next step: the
-   token button opens the Server URL set here, and without one it opens the
-   official hosted server instead of yours.
+   (e.g. `https://sync.example.com`). Do this first, or the next button opens
+   the official hosted server instead of yours.
 3. Click **Open Server & Get Token**. In the browser, sign up with your email,
    then open the verification link from the email to activate the account and
    sign in.
 4. Copy the token shown after signing in, paste it into **Access Token**, and
-   click **Save & Enable Sync**.
+   click **Save & Enable Sync** (**Save** if sync was already enabled).
 5. SuperSync requires end-to-end encryption. Follow the **SuperSync: Set
    Password** dialog to choose an encryption password. It is separate from your
    login and cannot be recovered — store it somewhere safe.
@@ -450,9 +447,10 @@ These steps use the desktop or mobile app. Labels match the current app.
 
 Repeat steps 1–4 with the same Server URL and account: either paste the same
 token or sign in again on the server page to get another one. When the app asks
-for the encryption password, enter the one you set on the first device. Do **not** use **Revoke & Replace Token** on
-the server page when adding a device — it invalidates every existing token and
-disconnects all your other devices.
+for the encryption password, enter the one you set on the first device. Do
+**not** use **Revoke & Replace Token** on the server page when adding a device —
+it invalidates every existing token and disconnects all your other devices. Use
+it when a device is lost or a token has leaked.
 
 ## Maintenance
 
@@ -585,13 +583,18 @@ limitations do not apply. Process restarts still clear in-memory coordination.
   suffix. Custom setups must provide equivalent protection. See
   [Authentication Architecture](./docs/authentication.md) for why this is a
   full-access, 365-day credential.
-- **Restrict CORS origins** in production.
+- **Keep `CORS_ORIGINS` to the exact origins you use.**
 - **Back up the database.** See
   [Backup & Disaster Recovery](./docs/backup-and-recovery.md) for the backup
   script, retention and restore procedures. The stack's data lives in the named
   Docker volumes `postgres-data` (database), `supersync-data` (app data such as
   your Terms of Service file), and `caddy-data` / `caddy-config` (TLS
-  certificates and Caddy state).
+  certificates and Caddy state); Compose prefixes them with the project name,
+  e.g. `super-sync-server_postgres-data`. Treat backups as credentials: the
+  database holds account emails, sync metadata and email/login tokens, and
+  `caddy-data` holds the TLS private key. `.env` (`JWT_SECRET`, `SMTP_PASS`,
+  `POSTGRES_PASSWORD`) is in no volume; back it up separately and keep it
+  private.
 - **Keep the encryption password separately.** Synced data is end-to-end
   encrypted with the password your users chose in the app; it is not stored on
   the server, so the task data in a server backup is unreadable without it.
