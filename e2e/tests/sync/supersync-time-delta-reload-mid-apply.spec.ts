@@ -197,4 +197,76 @@ test.describe('@supersync time delta reload mid remote apply', () => {
       });
     }
   }
+
+  // A's newer rename beats B's pending rename (a lone delta would commute), so no
+  // resolution batch is written: the remote row and the kept-delta re-clock commit
+  // separately.
+  test('a kept delta survives a reload before the remote-wins-only re-clock', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    test.setTimeout(300000);
+    const clients: SimulatedE2EClient[] = [];
+    const title = `RemoteWins-${testRunId}`;
+    try {
+      const config = getSuperSyncConfig(await createTestUser(testRunId));
+      for (const name of ['A', 'B', 'C']) {
+        const client = await createSimulatedClient(browser, baseURL!, name, testRunId);
+        clients.push(client);
+        await client.sync.setupSuperSync(config);
+        if (name === 'A') await client.workView.addTask(title);
+        await client.sync.syncAndWait();
+        await waitForTask(client.page, title);
+        await client.page.evaluate(blockBackgroundSync);
+        await client.page.addInitScript(blockBackgroundSync);
+      }
+      const [a, b, c] = clients;
+      await recordTaskTimeDelta(b, title, '2026-10-03', 3000);
+      await expect.poll(async () => (await readDeltas(b)).length).toBe(1);
+      await renameTask(b, title, `${title}-B`);
+      await renameTask(a, title, `${title}-A`);
+      await a.sync.syncAndWait();
+      await c.sync.syncAndWait();
+      // C's unsynced 1000 is concurrent with whatever B uploads after the crash.
+      await recordTaskTimeDelta(c, title, '2026-10-03', 1000);
+
+      // Uploads fail so the crash can only come from B's download resolution.
+      await routeSuperSyncOps(b.page, (route) =>
+        route.request().method() === 'POST' ? route.abort('failed') : route.continue(),
+      );
+      await b.page.reload();
+      await waitForAppReady(b.page);
+      await b.page.evaluate(armCrash, ['delta-rebase']);
+      await b.sync.clickSyncBtn();
+      await expect
+        .poll(() =>
+          b.page.evaluate(
+            () =>
+              (globalThis as typeof globalThis & Record<string, unknown>)[
+                '__E2E_CRASHED'
+              ],
+          ),
+        )
+        .toBe(true);
+      await unrouteSuperSyncOps(b.page);
+      await b.page.reload();
+      await waitForAppReady(b.page);
+
+      for (const client of [b, a, c, b, a, c]) await client.sync.syncAndWait();
+      const fresh = await createSimulatedClient(browser, baseURL!, 'Fresh', testRunId);
+      clients.push(fresh);
+      await fresh.sync.setupSuperSync(config);
+      await fresh.sync.syncAndWait();
+      for (const client of clients) {
+        await waitForTask(client.page, `${title}-A`);
+        await expectExactTaskTime(client, `${title}-A`, 4000);
+        await client.page.reload();
+        await waitForAppReady(client.page);
+        await expectExactTaskTime(client, `${title}-A`, 4000);
+      }
+    } finally {
+      for (const client of clients) await closeClient(client);
+    }
+  });
 });
