@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "Nextcloud 기본 URL",
+    "USERNAME": "Nextcloud 사용자명",
+    "PASSWORD": "Nextcloud 앱 비밀번호",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "나에게 할당된 카드만 가져오기",
+    "TITLE_TEMPLATE": "작업 제목 템플릿",
+    "TITLE_TEMPLATE_DESC": "변수: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. 예: [{BOARD}: {COLUMN}] {CARD_TITLE}. 카드 제목만 사용하려면 비워두세요."
+  },
+  "DISPLAY": {
+    "SUMMARY": "요약",
+    "DESCRIPTION": "Deck 설명",
+    "STACK": "스택",
+    "DUE_DATE": "마감일",
+    "ASSIGNED_USERS": "할당된 사용자",
+    "LABELS": "레이블"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "카드를 작업으로 가져오기 위해 Nextcloud Deck 통합을 설정하세요. 인증에는 앱 비밀번호를 사용하세요."
+}

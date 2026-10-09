@@ -1,0 +1,57 @@
+{
+  "id": "nextcloud-deck-issue-provider",
+  "name": "Nextcloud Deck",
+  "version": "1.0.0",
+  "manifestVersion": 1,
+  "minSupVersion": "13.0.0",
+  "description": "Nextcloud Deck issue provider plugin",
+  "author": "Super Productivity",
+  "type": "issueProvider",
+  "icon": "icon.svg",
+  "iFrame": false,
+  "permissions": [],
+  "hooks": [],
+  "i18n": {
+    "languages": [
+      "ar",
+      "cs",
+      "de",
+      "en",
+      "es",
+      "fa",
+      "fi",
+      "fr",
+      "hr",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nb",
+      "nl",
+      "pl",
+      "pt-br",
+      "pt",
+      "ro-md",
+      "ro",
+      "ru",
+      "sk",
+      "sv",
+      "tr",
+      "uk",
+      "vi",
+      "zh-tw",
+      "zh"
+    ]
+  },
+  "issueProvider": {
+    "pollIntervalMs": 600000,
+    "icon": "nextcloud_deck",
+    "humanReadableName": "Nextcloud Deck",
+    "issueProviderKey": "NEXTCLOUD_DECK",
+    "allowPrivateNetwork": true,
+    "issueStrings": {
+      "singular": "Card",
+      "plural": "Cards"
+    }
+  }
+}

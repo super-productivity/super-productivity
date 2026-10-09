@@ -7,10 +7,14 @@ on:
   workflow_dispatch:
     inputs: {}
 
+permissions:
+  contents: read
+
 jobs:
   push_to_registry:
     name: Push Docker image to Docker Hub
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1

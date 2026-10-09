@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "Nextcloud Base URL",
+    "USERNAME": "Your Nextcloud username",
+    "PASSWORD": "Your Nextcloud app password",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "Only import cards assigned to me",
+    "TITLE_TEMPLATE": "Task title template",
+    "TITLE_TEMPLATE_DESC": "Variables: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Example: [{BOARD}: {COLUMN}] {CARD_TITLE}. Leave empty for card title only."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Summary",
+    "DESCRIPTION": "Deck Description",
+    "STACK": "Stack",
+    "DUE_DATE": "Due Date",
+    "ASSIGNED_USERS": "Assigned Users",
+    "LABELS": "Labels"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "Configure your Nextcloud Deck integration to import cards as tasks. Use an app password for authentication."
+}
