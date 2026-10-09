@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "Nextcloud bas-URL",
+    "USERNAME": "Ditt Nextcloud-användarnamn",
+    "PASSWORD": "Ditt Nextcloud-applösenord",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "Importera endast kort tilldelade till mig",
+    "TITLE_TEMPLATE": "Mall för uppgiftstitel",
+    "TITLE_TEMPLATE_DESC": "Variabler: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Exempel: [{BOARD}: {COLUMN}] {CARD_TITLE}. Lämna tomt för enbart korttitel."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sammanfattning",
+    "DESCRIPTION": "Deck-beskrivning",
+    "STACK": "Stapel",
+    "DUE_DATE": "Två datum",
+    "ASSIGNED_USERS": "Tilldelade användare",
+    "LABELS": "Etiketter"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "Konfigurera din Nextcloud Deck-integration för att importera kort som uppgifter. Använd ett applösenord för autentisering."
+}

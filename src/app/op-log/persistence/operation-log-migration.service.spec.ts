@@ -83,6 +83,7 @@ describe('OperationLogMigrationService', () => {
       ],
     });
     service = TestBed.inject(OperationLogMigrationService);
+    service.completionDisplayMs = 0;
   });
 
   describe('checkAndMigrate', () => {

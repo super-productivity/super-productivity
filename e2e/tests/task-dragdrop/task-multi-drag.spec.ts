@@ -348,8 +348,9 @@ test.describe('Multi-task drag', () => {
     const row496 = page.locator('task').filter({
       has: page.locator('task-title').getByText('Large 496', { exact: true }),
     });
-    // The done animation keeps the old row while the done-list row renders.
-    await expect(row496.locator('done-toggle[aria-checked="true"]')).toBeVisible();
+    // The open-list row keeps animating out while the done row renders (#10594):
+    // wait for the done row, then for the open row to leave.
+    await expect(row496.locator('done-toggle[aria-checked="true"]')).toHaveCount(1);
     await expect(row496).toHaveCount(1);
     await row496.locator('done-toggle').click();
     await select(page, ['Large 496', 'Large 497']);

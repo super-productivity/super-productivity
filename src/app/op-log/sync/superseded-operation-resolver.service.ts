@@ -20,10 +20,8 @@ import {
   VectorClockComparison,
 } from '../../core/util/vector-clock';
 import { OpLog } from '../../core/log';
-import {
-  ConflictResolutionService,
-  getLatestTaskProjectMoveEntityIds,
-} from './conflict-resolution.service';
+import { ConflictResolutionService } from './conflict-resolution.service';
+import { getLatestTaskProjectMoveEntityIds } from './conflict-resolution.util';
 import { VectorClockService } from './vector-clock.service';
 import { LockService } from './lock.service';
 import { toEntityKey } from '../util/entity-key.util';

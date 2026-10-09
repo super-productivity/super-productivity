@@ -124,12 +124,13 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         // Check if the task was rescheduled to a DIFFERENT time on another device.
         // If the schedule op's remindAt matches this alarm's triggerAtMs, this IS
         // the current schedule — not stale. Only suppress if times differ.
-        // Match on isDueDate too: a task can have both a standard reminder and a
+        // Match on the kind too: a task can have both a standard reminder and a
         // deadline reminder with different times — don't let one suppress the other.
-        if (triggerAtMs > 0L) {
-            val isDueDate = reminderType == "DUE_DATE"
+        // DUE_DATE alarms are skipped: sync never carries a due-day reminder to compare.
+        if (triggerAtMs > 0L && reminderType != "DUE_DATE") {
+            val isDeadline = reminderType == "DEADLINE"
             val rescheduled = result.remindersToSchedule.any {
-                it.taskId == taskId && it.isDueDate == isDueDate && it.remindAt != triggerAtMs
+                it.taskId == taskId && it.isDeadline == isDeadline && it.remindAt != triggerAtMs
             }
             if (rescheduled) {
                 Log.d(TAG, "Task $taskId was rescheduled (trigger=$triggerAtMs), suppressing")

@@ -255,8 +255,10 @@ describe('SearchPageComponent', () => {
     ]);
     initAndFlush();
     typeAndFlush('Project');
-    expect(latestResults.length).toBe(1);
-    expect(latestResults[0].ctx.title).toBe('My Project');
+    // 'Project' now also matches the project result itself (#10223), so assert
+    // on the task item specifically.
+    const taskItem = latestResults.find((r) => r.id === 't1');
+    expect(taskItem?.ctx.title).toBe('My Project');
   }));
 
   it('should use tag context for tasks without projectId', fakeAsync(() => {
@@ -271,8 +273,10 @@ describe('SearchPageComponent', () => {
     ]);
     initAndFlush();
     typeAndFlush('Tag');
-    expect(latestResults.length).toBe(1);
-    expect(latestResults[0].ctx.title).toBe('My Tag');
+    // 'Tag' now also matches the tag result itself (#10223), so assert on the
+    // task item specifically.
+    const taskItem = latestResults.find((r) => r.id === 't1');
+    expect(taskItem?.ctx.title).toBe('My Tag');
   }));
 
   it('should reflect isDone state on the result item (#7807)', fakeAsync(() => {
@@ -553,6 +557,49 @@ describe('SearchPageComponent', () => {
     tick(150); // combineLatest debounce
     expect(latestResults[0].ctx.title).toBe('Folder 1 > Subfolder A > My Project');
   }));
+
+  // --- Projects and tags as results (#10223) ---
+
+  it('should find a project by its title and mark it isProject', fakeAsync(() => {
+    projectList$.next([createProject({ id: 'proj-x', title: 'Marketing' })]);
+    initAndFlush();
+    typeAndFlush('Marketing');
+    const projectItem = latestResults.find((r) => r.id === 'proj-x');
+    expect(projectItem).toBeDefined();
+    expect(projectItem?.isProject).toBe(true);
+    expect(projectItem?.title).toBe('Marketing');
+  }));
+
+  it('should find a tag by its title and mark it isTag', fakeAsync(() => {
+    tags$.next([createTag({ id: 'tag-x', title: 'Urgent' })]);
+    initAndFlush();
+    typeAndFlush('Urgent');
+    const tagItem = latestResults.find((r) => r.id === 'tag-x');
+    expect(tagItem).toBeDefined();
+    expect(tagItem?.isTag).toBe(true);
+    expect(tagItem?.title).toBe('Urgent');
+  }));
+
+  it('should show projects and tags even when completed/archived are not included', fakeAsync(() => {
+    projectList$.next([createProject({ id: 'proj-x', title: 'Zephyr' })]);
+    tags$.next([createTag({ id: 'tag-x', title: 'Zephyr' })]);
+    initAndFlush();
+    // includeCompleted stays false (the default)
+    typeAndFlush('Zephyr');
+    const ids = latestResults.map((r) => r.id);
+    expect(ids).toContain('proj-x');
+    expect(ids).toContain('tag-x');
+  }));
+
+  it('should navigate to the project task list on navigateToItem', () => {
+    component.navigateToItem({ id: 'proj-x', isProject: true } as SearchItem);
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/project/proj-x/tasks']);
+  });
+
+  it('should navigate to the tag task list on navigateToItem', () => {
+    component.navigateToItem({ id: 'tag-x', isTag: true } as SearchItem);
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/tag/tag-x/tasks']);
+  });
 
   it('should update folder path reactively for ARCHIVED tasks when projectFolderMap changes after init', fakeAsync(() => {
     const archiveTask = createTask({

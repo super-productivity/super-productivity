@@ -1,0 +1,23 @@
+{
+  "name": "ticktick-import",
+  "version": "1.0.0",
+  "description": "One-time import of a TickTick CSV backup into Super Productivity",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.15.33",
+    "esbuild": "^0.28.2",
+    "jest": "^30.0.4",
+    "jest-environment-jsdom": "^30.0.4",
+    "ts-jest": "^29.4.0",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@super-productivity/plugin-api": "file:../../plugin-api"
+  }
+}

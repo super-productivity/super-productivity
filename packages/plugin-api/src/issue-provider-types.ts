@@ -30,6 +30,12 @@ export interface PluginIssue {
   title: string;
   body?: string;
   url?: string;
+  /**
+   * Without an `isDone` field mapping, a state listed in `doneStates` marks
+   * the task done on add and refresh; any other value marks it not done.
+   * Leave it unset when done-ness is unknown; a refresh then keeps the
+   * task's done state.
+   */
   state?: string;
   lastUpdated?: number;
   assignee?: string;
@@ -164,6 +170,16 @@ export interface IssueProviderPluginDefinition {
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<PluginIssue>;
+  /**
+   * Optional batch variant of `getById`, used when refreshing many tasks at
+   * once. Implement it when the API can return several issues in one request.
+   * Ids missing from the result are skipped (not treated as deleted).
+   */
+  getByIds?(
+    issueIds: string[],
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<PluginIssue[]>;
   getIssueLink(issueId: string, config: Record<string, unknown>): string;
   testConnection?(config: Record<string, unknown>, http: PluginHttp): Promise<boolean>;
   getNewIssuesForBacklog?(
@@ -217,6 +233,44 @@ export interface IssueProviderPluginDefinition {
       http: PluginHttp,
     ): Promise<void>;
   };
+  /** Optional time tracking (worklog) integration. When implemented, the host offers
+   *  its track-time dialog after a linked task is marked done. The dialog is controlled
+   *  by these well-known config keys, which the plugin should expose as config fields:
+   *  - `isShowTimeTrackingDialog` (checkbox) — show the dialog when a task is done
+   *  - `isShowTimeTrackingDialogForEachSubTask` (checkbox) — show it per subtask instead
+   *  - `timeTrackingDialogDefaultTime` (select: `AllTime` | `AllTimeMinusLogged` |
+   *    `TimeToday` | `TimeYesterday`) — preselected time; the dialog can update it */
+  timeTracking?: PluginTimeTracking;
+}
+
+export interface PluginTimeEntry {
+  /** Start of the logged work (ms timestamp) */
+  started: number;
+  timeSpentMs: number;
+  comment: string;
+  /** Selected activity id, when the plugin provides activities */
+  activityId?: number;
+}
+
+export interface PluginTimeTracking {
+  /** Create a time entry for the issue. Throw to keep the dialog open. */
+  logTime(
+    issueId: string,
+    entry: PluginTimeEntry,
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<void>;
+  /** Time already logged on the issue by the current user (ms) */
+  getTimeLogged?(
+    issueId: string,
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<number>;
+  /** Activities (e.g. "Development") the user can pick for a time entry */
+  getActivities?(
+    config: Record<string, unknown>,
+    http: PluginHttp,
+  ): Promise<{ id: number; name: string }[]>;
 }
 
 export interface IssueProviderManifestConfig {

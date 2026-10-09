@@ -1,7 +1,7 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { IssueTwoWaySyncEffects } from './issue-two-way-sync.effects';
 import { TaskService } from '../../tasks/task.service';
 import { IssueProviderService } from '../issue-provider.service';
@@ -23,6 +23,10 @@ import { DeletedTaskIssueSidecarService } from './deleted-task-issue-sidecar.ser
 import { DeletedTagTitlesSidecarService } from './deleted-tag-titles-sidecar.service';
 import { deleteTag } from '../../tag/store/tag.actions';
 import { selectAllTasks } from '../../tasks/store/task.selectors';
+import {
+  REMOTE_ISSUE_DELETE_DEFER_MS,
+  TASK_DELETE_UNDO_WINDOW_MS,
+} from '../../../app.constants';
 
 describe('IssueTwoWaySyncEffects', () => {
   let effects: IssueTwoWaySyncEffects;
@@ -214,6 +218,282 @@ describe('IssueTwoWaySyncEffects', () => {
       tick();
 
       expect(adapter.pushChanges).toHaveBeenCalled();
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    // tasks linked before two-way sync existed (e.g. migrated Nextcloud Deck)
+    // never got a baseline; the user's change must still reach the issue
+    const baselessPushSetup = (
+      remoteLastUpdated: number,
+      taskOverrides: Partial<Task> = {},
+      remoteStatus = 'NEEDS-ACTION',
+    ): IssueSyncAdapter<unknown> => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping, titleFieldMapping]),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ status: remoteStatus, summary: 'Remote' }),
+        getIssueLastUpdated: () => remoteLastUpdated,
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+      const task = createMockTask({
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastUpdated: 1000,
+        isDone: true,
+        ...taskOverrides,
+      });
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      tick();
+      adapterRegistry.unregister('TEST_PROVIDER');
+      return adapter;
+    };
+
+    // an old task may miss remote edits that were never polled; those win
+    it('should not push for a baseline-less task whose issue changed since', fakeAsync(() => {
+      const adapter = baselessPushSetup(2000);
+
+      expect(adapter.pushChanges).not.toHaveBeenCalled();
+    }));
+
+    // after a push the baseline only holds the pushed field; until a poll
+    // seeds the rest, later pushes must keep the marker stale too
+    it('should keep issueLastUpdated stale while the baseline is partial', fakeAsync(() => {
+      baselessPushSetup(
+        1000,
+        { isDone: false, issueLastSyncedValues: { status: 'COMPLETED' } },
+        'COMPLETED',
+      );
+
+      expect(taskServiceSpy.update).toHaveBeenCalledWith('task-1', {
+        issueLastSyncedValues: { status: 'NEEDS-ACTION' },
+      });
+    }));
+
+    // CalDAV reports `note: undefined` for an empty description; a baseline
+    // that went through JSON (sync) lacks the key, which is not "unseeded"
+    it('should advance issueLastUpdated when an unseeded field has no value', fakeAsync(() => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping, titleFieldMapping]),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ status: 'NEEDS-ACTION', summary: undefined }),
+        getIssueLastUpdated: () => 3000,
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+      const task = createMockTask({
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastUpdated: 1000,
+        issueLastSyncedValues: { status: 'NEEDS-ACTION' },
+        isDone: true,
+      });
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      tick();
+
+      expect(taskServiceSpy.update).toHaveBeenCalledWith('task-1', {
+        issueLastSyncedValues: { status: 'COMPLETED' },
+        issueLastUpdated: 3000,
+      });
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should push for a task that has no baseline at all', fakeAsync(() => {
+      const adapter = baselessPushSetup(1000);
+
+      expect(adapter.pushChanges).toHaveBeenCalledWith(
+        'issue-1',
+        { status: 'COMPLETED' },
+        jasmine.anything(),
+      );
+      // issueLastUpdated stays stale so the next poll refreshes the task, seeds
+      // the full baseline and pulls remote edits made before this push
+      expect(taskServiceSpy.update).toHaveBeenCalledWith('task-1', {
+        issueLastSyncedValues: { status: 'COMPLETED' },
+      });
+    }));
+
+    // the second toggle is queued before the first push lands; it must compare
+    // against the baseline that push wrote, not the stale snapshot
+    it('should push a quick reopen after a pending done push', fakeAsync(() => {
+      let remote = { status: 'NEEDS-ACTION', lastUpdated: 1000 };
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping]),
+        fetchIssue: jasmine.createSpy('fetchIssue').and.callFake(async () => remote),
+        pushChanges: jasmine
+          .createSpy('pushChanges')
+          .and.callFake(async (_id: string, changes: Record<string, unknown>) => {
+            await new Promise((r) => setTimeout(r, 100));
+            remote = { status: changes['status'] as string, lastUpdated: 2000 };
+          }),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.callFake((issue: Record<string, unknown>) => ({
+            status: issue['status'],
+          })),
+        getIssueLastUpdated: (issue: Record<string, unknown>) =>
+          issue['lastUpdated'] as number,
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+      let task = createMockTask({
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastUpdated: 1000,
+        issueLastSyncedValues: { status: 'NEEDS-ACTION' },
+        isDone: false,
+      });
+      taskServiceSpy.getByIdOnce$.and.callFake(() => of(task));
+      taskServiceSpy.update.and.callFake((_id: string, changes: Partial<Task>) => {
+        task = { ...task, ...changes };
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      task = { ...task, isDone: true };
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      // the done push is now in flight
+      flushMicrotasks();
+      task = { ...task, isDone: false };
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: false } },
+        }),
+      );
+      tick(500);
+
+      expect(
+        (adapter.pushChanges as jasmine.Spy).calls.allArgs().map((a) => a[1]),
+      ).toEqual([{ status: 'COMPLETED' }, { status: 'NEEDS-ACTION' }]);
+      expect(remote.status).toBe('NEEDS-ACTION');
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    // a push of another field queued behind the done push must keep the
+    // baseline that push wrote, not write the stale status back
+    it('should keep both fields in the baseline after queued pushes', fakeAsync(() => {
+      let remote: Record<string, unknown> = {
+        status: 'NEEDS-ACTION',
+        summary: 'Old',
+        lastUpdated: 1000,
+      };
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping, titleFieldMapping]),
+        fetchIssue: jasmine.createSpy('fetchIssue').and.callFake(async () => remote),
+        pushChanges: jasmine
+          .createSpy('pushChanges')
+          .and.callFake(async (_id: string, changes: Record<string, unknown>) => {
+            await new Promise((r) => setTimeout(r, 100));
+            remote = { ...remote, ...changes, lastUpdated: 2000 };
+          }),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.callFake((issue: Record<string, unknown>) => ({
+            status: issue['status'],
+            summary: issue['summary'],
+          })),
+        getIssueLastUpdated: (issue: Record<string, unknown>) =>
+          issue['lastUpdated'] as number,
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+      let task = createMockTask({
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        issueLastUpdated: 1000,
+        issueLastSyncedValues: { status: 'NEEDS-ACTION', summary: 'Old' },
+        isDone: false,
+        title: 'Old',
+      });
+      taskServiceSpy.getByIdOnce$.and.callFake(() => of(task));
+      taskServiceSpy.update.and.callFake((_id: string, changes: Partial<Task>) => {
+        task = { ...task, ...changes };
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      task = { ...task, isDone: true };
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      // the done push is now in flight
+      flushMicrotasks();
+      task = { ...task, title: 'New' };
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { title: 'New' } },
+        }),
+      );
+      tick(500);
+
+      expect(task.issueLastSyncedValues).toEqual({ status: 'COMPLETED', summary: 'New' });
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should still skip a field missing from an existing baseline', fakeAsync(() => {
+      const adapter = createMockAdapter({
+        getFieldMappings: jasmine
+          .createSpy('getFieldMappings')
+          .and.returnValue([isDoneFieldMapping]),
+        extractSyncValues: jasmine
+          .createSpy('extractSyncValues')
+          .and.returnValue({ status: 'NEEDS-ACTION' }),
+      });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+      const task = createMockTask({
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+        isDone: true,
+        issueLastSyncedValues: {},
+      });
+      taskServiceSpy.getByIdOnce$.and.returnValue(of(task));
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(createMockIssueProvider()));
+
+      effects.pushFieldsOnTaskUpdate$.subscribe();
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: true } },
+        }),
+      );
+      tick();
+
+      expect(adapter.pushChanges).not.toHaveBeenCalled();
 
       adapterRegistry.unregister('TEST_PROVIDER');
     }));
@@ -998,7 +1278,7 @@ describe('IssueTwoWaySyncEffects', () => {
 
       actions$.next(TaskSharedActions.deleteTask({ task }));
 
-      tick();
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS);
 
       expect(deleteIssueSpy).toHaveBeenCalledWith('issue-1', cfg);
 
@@ -1076,7 +1356,7 @@ describe('IssueTwoWaySyncEffects', () => {
 
       actions$.next(TaskSharedActions.deleteTask({ task }));
 
-      tick();
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS);
 
       expect(snackServiceSpy.open).toHaveBeenCalledWith(
         jasmine.objectContaining({ type: 'ERROR' }),
@@ -1110,9 +1390,222 @@ describe('IssueTwoWaySyncEffects', () => {
 
       actions$.next(TaskSharedActions.deleteTask({ task }));
 
-      tick();
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS);
 
       expect(snackServiceSpy.open).not.toHaveBeenCalled();
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+    it('should not call deleteIssue before the undo window has elapsed', fakeAsync(() => {
+      const deleteIssueSpy = jasmine.createSpy('deleteIssue').and.resolveTo(undefined);
+      const adapter = createMockAdapter({ deleteIssue: deleteIssueSpy });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const cfg = createMockIssueProvider();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+      }) as TaskWithSubTasks;
+      (task as any).subTasks = [];
+
+      effects.deleteIssueOnTaskDelete$.subscribe();
+
+      actions$.next(TaskSharedActions.deleteTask({ task }));
+
+      tick(TASK_DELETE_UNDO_WINDOW_MS);
+      expect(deleteIssueSpy).not.toHaveBeenCalled();
+
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS - TASK_DELETE_UNDO_WINDOW_MS);
+      expect(deleteIssueSpy).toHaveBeenCalledWith('issue-1', cfg);
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should not call deleteIssue when the task is restored within the undo window (#10155)', fakeAsync(() => {
+      const deleteIssueSpy = jasmine.createSpy('deleteIssue').and.resolveTo(undefined);
+      const adapter = createMockAdapter({ deleteIssue: deleteIssueSpy });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const cfg = createMockIssueProvider();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+      }) as TaskWithSubTasks;
+      (task as any).subTasks = [];
+
+      effects.deleteIssueOnTaskDelete$.subscribe();
+
+      actions$.next(TaskSharedActions.deleteTask({ task }));
+      actions$.next(
+        TaskSharedActions.restoreDeletedTask({
+          task,
+          tagTaskIdMap: {},
+          deletedTaskEntities: {},
+        }),
+      );
+
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS * 2);
+
+      expect(deleteIssueSpy).not.toHaveBeenCalled();
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should not call deleteIssue when UNDO is clicked as the snack exits', fakeAsync(() => {
+      const deleteIssueSpy = jasmine.createSpy('deleteIssue').and.resolveTo(undefined);
+      const adapter = createMockAdapter({ deleteIssue: deleteIssueSpy });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const cfg = createMockIssueProvider();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+      }) as TaskWithSubTasks;
+      (task as any).subTasks = [];
+
+      effects.deleteIssueOnTaskDelete$.subscribe();
+
+      actions$.next(TaskSharedActions.deleteTask({ task }));
+
+      // snack debounce, enter animation fallback, exit animation
+      tick(TASK_DELETE_UNDO_WINDOW_MS + 100 + 200 + 75);
+      actions$.next(
+        TaskSharedActions.restoreDeletedTask({
+          task,
+          tagTaskIdMap: {},
+          deletedTaskEntities: {},
+        }),
+      );
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS);
+
+      expect(deleteIssueSpy).not.toHaveBeenCalled();
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should still call deleteIssue when a different task is restored', fakeAsync(() => {
+      const deleteIssueSpy = jasmine.createSpy('deleteIssue').and.resolveTo(undefined);
+      const adapter = createMockAdapter({ deleteIssue: deleteIssueSpy });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const cfg = createMockIssueProvider();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+
+      const task = createMockTask({
+        id: 'task-1',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-1',
+        issueProviderId: 'provider-1',
+      }) as TaskWithSubTasks;
+      (task as any).subTasks = [];
+
+      const otherTask = createMockTask({
+        id: 'task-2',
+        issueType: 'TEST_PROVIDER' as any,
+        issueId: 'issue-2',
+        issueProviderId: 'provider-1',
+      }) as TaskWithSubTasks;
+      (otherTask as any).subTasks = [];
+
+      effects.deleteIssueOnTaskDelete$.subscribe();
+
+      actions$.next(TaskSharedActions.deleteTask({ task }));
+      actions$.next(
+        TaskSharedActions.restoreDeletedTask({
+          task: otherTask,
+          tagTaskIdMap: {},
+          deletedTaskEntities: {},
+        }),
+      );
+
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS);
+
+      expect(deleteIssueSpy).toHaveBeenCalledWith('issue-1', cfg);
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should overlap the undo windows of concurrent deletes rather than queue them', fakeAsync(() => {
+      const deleteIssueSpy = jasmine.createSpy('deleteIssue').and.resolveTo(undefined);
+      const adapter = createMockAdapter({ deleteIssue: deleteIssueSpy });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const cfg = createMockIssueProvider();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(cfg));
+
+      const mk = (id: string, issueId: string): TaskWithSubTasks => {
+        const t = createMockTask({
+          id,
+          issueType: 'TEST_PROVIDER' as any,
+          issueId,
+          issueProviderId: 'provider-1',
+        }) as TaskWithSubTasks;
+        (t as any).subTasks = [];
+        return t;
+      };
+
+      effects.deleteIssueOnTaskDelete$.subscribe();
+
+      actions$.next(TaskSharedActions.deleteTask({ task: mk('task-1', 'issue-1') }));
+      actions$.next(TaskSharedActions.deleteTask({ task: mk('task-2', 'issue-2') }));
+
+      // One window, not two: concatMap would only have flushed the first.
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS);
+
+      expect(deleteIssueSpy).toHaveBeenCalledTimes(2);
+      expect(deleteIssueSpy).toHaveBeenCalledWith('issue-1', cfg);
+      expect(deleteIssueSpy).toHaveBeenCalledWith('issue-2', cfg);
+
+      adapterRegistry.unregister('TEST_PROVIDER');
+    }));
+
+    it('should keep other deferred deletes alive when a provider is removed inside the window', fakeAsync(() => {
+      const deleteIssueSpy = jasmine.createSpy('deleteIssue').and.resolveTo(undefined);
+      const adapter = createMockAdapter({ deleteIssue: deleteIssueSpy });
+      adapterRegistry.register('TEST_PROVIDER', adapter);
+
+      const cfg = createMockIssueProvider();
+      issueProviderServiceSpy.getCfgOnce$.and.callFake(((issueProviderId: string) =>
+        issueProviderId === 'removed-provider'
+          ? throwError(() => new Error('No issueProvider found'))
+          : of(cfg)) as any);
+
+      const mk = (id: string, issueProviderId: string): TaskWithSubTasks => {
+        const t = createMockTask({
+          id,
+          issueType: 'TEST_PROVIDER' as any,
+          issueId: `issue-${id}`,
+          issueProviderId,
+        }) as TaskWithSubTasks;
+        (t as any).subTasks = [];
+        return t;
+      };
+
+      let isErrored = false;
+      effects.deleteIssueOnTaskDelete$.subscribe({ error: () => (isErrored = true) });
+
+      actions$.next(
+        TaskSharedActions.deleteTask({ task: mk('task-1', 'removed-provider') }),
+      );
+      tick(100);
+      actions$.next(TaskSharedActions.deleteTask({ task: mk('task-2', 'provider-1') }));
+
+      tick(REMOTE_ISSUE_DELETE_DEFER_MS);
+
+      expect(isErrored).toBe(false);
+      expect(deleteIssueSpy).toHaveBeenCalledOnceWith('issue-task-2', cfg);
 
       adapterRegistry.unregister('TEST_PROVIDER');
     }));

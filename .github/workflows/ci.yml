@@ -13,12 +13,18 @@ on:
 permissions:
   contents: read
 
+# Superseded PR pushes cancel the old run; release and manual runs always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   # Verify package-lock.json only uses the official npm registry.
   # Prevents contributors using mirror registries from rewriting all resolved URLs.
   check-lockfile-registry:
     name: Check package-lock.json registry
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
@@ -42,6 +48,7 @@ jobs:
   dependency-vulnerability-review:
     name: Dependency Vulnerability Review
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'pull_request'
     steps:
       - name: 'Checkout Repository'
@@ -57,106 +64,169 @@ jobs:
       - name: 'Dependency Review'
         uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
 
+  # Lint, unit tests, E2E and PWA/Lighthouse run in parallel instead of in one
+  # serial job behind lint: the critical path is the slowest branch, not the sum.
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
-        with:
-          node-version: 22
       - name: Check out Git repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           persist-credentials: false
-      - name: Install npm Packages
-        run: npm i
+      - name: Setup Node Dependencies
+        uses: ./.github/actions/setup-deps
       - run: npm run lint
       - name: Test issue-triage helpers
         run: node --test ".github/scripts/*.test.js"
 
-  test-on-linux:
-    name: Tests
+  unit-tests:
+    name: Unit Tests
     runs-on: ubuntu-latest
-    needs: [lint, dependency-vulnerability-review]
-    if: ${{ !cancelled() && !failure() }}
+    timeout-minutes: 30
     steps:
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
-        with:
-          node-version: 22
       - name: Check out Git repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           persist-credentials: false
-      # work around for npm installs from git+https://github.com/johannesjo/J2M.git
-      - name: Reconfigure git to use HTTP authentication
-        run: >
-          git config --global url."https://github.com/".insteadOf
-          ssh://git@github.com/
-      - name: Get npm cache directory
-        id: npm-cache-dir
-        run: |
-          echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
-        id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
-        with:
-          path: ${{ steps.npm-cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node22-
-      - name: Install npm Packages
-        run: npm i
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps chromium webkit
+      # Playwright chromium is needed by the video tool tests
+      - name: Setup E2E Environment
+        uses: ./.github/actions/setup-e2e
       - name: Test video tools
         run: npm run video:kit-test -- --workers=1
       - run: npm run env # Generate env.generated.ts from environment variables
       - run: npm run int:test # Validate i18n JSON files
       - run: npm run test:electron # Node-side unit tests for electron/*.cjs
-      - run: npm run test
+      - run: npm run test:ci
+
+  e2e-build:
+    name: Build E2E Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - name: Setup Node Dependencies
+        uses: ./.github/actions/setup-deps
       - name: Build Frontend for E2E
         run: npm run buildFrontend:e2e
       - name: Verify Build Output
         run: |
           test -f .tmp/angular-dist/browser/index.html || (echo "Build output missing" && exit 1)
           test -f .tmp/angular-dist/browser/assets/bundled-plugins/api-test-plugin/manifest.json || (echo "Plugin assets missing from build" && exit 1)
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-e2e-build-${{ github.run_id }}
+          path: .tmp/angular-dist
+          retention-days: 1
+
+  e2e:
+    name: E2E ${{ matrix.shard }}/3
+    needs: e2e-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - name: Setup E2E Environment
+        uses: ./.github/actions/setup-e2e
+      - name: Download Build Artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
+        with:
+          name: ci-e2e-build-${{ github.run_id }}
+          path: .tmp/angular-dist
       - name: Test E2E
-        run: npm run e2e:ci
-        env:
-          E2E_WEBKIT_SMOKE: 'true'
-      - name: Test production PWA offline reload
-        run: npm run e2e:pwa
+        # `e2e`, not `e2e:ci`: that alias calls `npm run e2e` without `--`, so
+        # npm would swallow the --shard flag and every shard would run everything.
+        run: npm run e2e -- --project=chromium --shard=${{ matrix.shard }}/3
       - name: 'Upload E2E results on failure'
         if: ${{ failure() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2eResults
+          name: e2eResults-${{ matrix.shard }}
           path: .tmp/e2e-test-results/**/*.*
           retention-days: 14
 
-  # Lighthouse is designed to audit the performance, accessibility, SEO, and other metrics of a web application.
-  lighthouse:
-    name: Lighthouse
+  # Runs once instead of in every shard, so only this job installs WebKit.
+  e2e-webkit-smoke:
+    name: E2E WebKit Smoke
+    needs: e2e-build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - name: Setup E2E Environment
+        uses: ./.github/actions/setup-e2e
+        with:
+          browsers: webkit
+      - name: Download Build Artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
+        with:
+          name: ci-e2e-build-${{ github.run_id }}
+          path: .tmp/angular-dist
+      - name: Test mobile WebKit smoke
+        run: npm run e2e -- --project=mobile-webkit
+        env:
+          E2E_WEBKIT_SMOKE: 'true'
+      - name: 'Upload E2E results on failure'
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2eResults-webkit-smoke
+          path: .tmp/e2e-test-results/**/*.*
+          retention-days: 14
+
+  # One production web build serves both the PWA offline test and Lighthouse
+  # (`npm run e2e:pwa` would build it a second time).
+  # Lighthouse is designed to audit the performance, accessibility, SEO, and other metrics of a web application.
+  pwa-lighthouse:
+    name: PWA & Lighthouse
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - name: Check out Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
-          node-version: 22
-          cache: 'npm'
+          persist-credentials: false
 
-      - name: Install dependencies
-        run: npm i
-
-      - run: npm run env # Generate env.generated.ts
+      - name: Setup E2E Environment
+        uses: ./.github/actions/setup-e2e
 
       - name: Build production web app
+        id: prod-build
         run: npm run buildFrontend:prodWeb
 
+      - name: Test production PWA offline reload
+        run: npx playwright test --config e2e/playwright.pwa.config.ts --reporter=line
+
+      - name: 'Upload PWA results on failure'
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pwaResults
+          path: .tmp/e2e-test-results/pwa-test-results
+          retention-days: 14
+
+      # The Lighthouse steps still run when only the PWA test failed, so one
+      # failure does not hide the other.
       - name: Add swap space for Lighthouse
+        if: ${{ !cancelled() && steps.prod-build.outcome == 'success' }}
         run: |
           # Ensure Lighthouse/Chrome have enough memory on GitHub-hosted runners
           # Remove existing swapfile if present
@@ -167,10 +237,13 @@ jobs:
           sudo mkswap /swapfile
           sudo swapon /swapfile
 
+      # Must run after the PWA test, which needs the service worker
       - name: Strip service worker artifacts for Lighthouse
+        if: ${{ !cancelled() && steps.prod-build.outcome == 'success' }}
         run: node ./tools/strip-service-worker-assets.js dist/browser
 
       - name: Run Lighthouse CI
+        if: ${{ !cancelled() && steps.prod-build.outcome == 'success' }}
         uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
         with:
           # Configure Lighthouse CI
@@ -182,3 +255,30 @@ jobs:
           runs: 1
           # Configure budgets
           budgetPath: './tools/lighthouse/budget.json'
+
+  # Single stable check to mark required in branch protection, so the split
+  # and sharded jobs above can change without editing the protection rules.
+  # Skipped jobs (PR-only checks on release runs) count as passing.
+  # always(), not !cancelled(): a skipped required check would count as passing.
+  ci-gate:
+    name: CI Gate
+    if: ${{ always() }}
+    needs:
+      - check-lockfile-registry
+      - dependency-vulnerability-review
+      - lint
+      - unit-tests
+      - e2e-build
+      - e2e
+      - e2e-webkit-smoke
+      - pwa-lighthouse
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail if any CI job failed or was cancelled
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS"
+          exit 1
