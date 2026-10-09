@@ -1,9 +1,10 @@
 import { Injectable, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { createEffect, ofType } from '@ngrx/effects';
-import { EMPTY, Observable, first, firstValueFrom, from } from 'rxjs';
-import { catchError, concatMap, filter, map } from 'rxjs/operators';
+import { EMPTY, Observable, first, firstValueFrom, from, timer } from 'rxjs';
+import { catchError, concatMap, filter, map, mergeMap, takeUntil } from 'rxjs/operators';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { REMOTE_ISSUE_DELETE_DEFER_MS } from '../../../app.constants';
 import { TaskService } from '../../tasks/task.service';
 import { Task } from '../../tasks/task.model';
 import { selectAllTasks } from '../../tasks/store/task.selectors';
@@ -257,7 +258,20 @@ export class IssueTwoWaySyncEffects {
           ({ task }) => !!task.issueId && !!task.issueType && !!task.issueProviderId,
         ),
         filter(({ task }) => !!this._getAdapter(task.issueType!)),
-        concatMap(({ task }) => this._deleteRemoteIssue$(task)),
+        // restoreDeletedTask can undo the local delete; nothing can undo the
+        // remote one, so it waits out the undo window. mergeMap rather than
+        // concatMap, or N deletes would queue up N windows.
+        mergeMap(({ task }) =>
+          timer(REMOTE_ISSUE_DELETE_DEFER_MS).pipe(
+            takeUntil(
+              this._actions$.pipe(
+                ofType(TaskSharedActions.restoreDeletedTask),
+                filter(({ task: restored }) => restored.id === task.id),
+              ),
+            ),
+            concatMap(() => this._deleteRemoteIssue$(task)),
+          ),
+        ),
       ),
     { dispatch: false },
   );

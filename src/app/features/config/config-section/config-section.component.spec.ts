@@ -6,10 +6,12 @@ import {
 } from '@angular/core/testing';
 import { EMPTY } from 'rxjs';
 import { ConfigSectionComponent } from './config-section.component';
-import { ConfigSectionAction } from '../global-config.model';
+import { ConfigFormSection, ConfigSectionAction } from '../global-config.model';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TranslateService } from '@ngx-translate/core';
 import { Log } from '../../../core/log';
+import { Component } from '@angular/core';
+import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 describe('ConfigSectionComponent onAction', () => {
   let component: ConfigSectionComponent;
@@ -105,5 +107,50 @@ describe('ConfigSectionComponent onAction', () => {
     expect(() => component.onAction(action)).not.toThrow();
     expect(component.isActionPending(action)).toBe(false);
     expect(logSpy).toHaveBeenCalled();
+  });
+});
+
+@Component({
+  template: `
+    <config-section
+      [isExpanded]="true"
+      (isExpandedChange)="changes.push($event)"
+      [section]="section"
+    ></config-section>
+  `,
+  imports: [ConfigSectionComponent],
+})
+class ConfigSectionHostComponent {
+  section = { title: '', key: 'localization' } as ConfigFormSection<
+    Record<string, unknown>
+  >;
+  changes: boolean[] = [];
+}
+
+describe('ConfigSectionComponent isExpandedChange', () => {
+  let fixture: ComponentFixture<ConfigSectionHostComponent>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [ConfigSectionHostComponent, NoopAnimationsModule],
+      providers: [
+        { provide: WorkContextService, useValue: { onWorkContextChange$: EMPTY } },
+        {
+          provide: TranslateService,
+          useValue: { onLangChange: EMPTY, instant: (key: string) => key },
+        },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(ConfigSectionHostComponent);
+    fixture.detectChanges();
+  });
+
+  afterEach(() => fixture?.destroy());
+
+  it('emits when the section is collapsed by hand', () => {
+    fixture.nativeElement.querySelector('.collapsible-header').click();
+
+    expect(fixture.componentInstance.changes).toEqual([false]);
   });
 });

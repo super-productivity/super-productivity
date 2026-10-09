@@ -1,4 +1,5 @@
 <collapsible
+  (isExpandedChange)="isExpandedChange.emit($event)"
   [isExpanded]="isExpanded"
   [isIconBefore]="true"
   [title]="section?.title | translate"

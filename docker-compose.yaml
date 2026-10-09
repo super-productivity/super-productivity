@@ -143,15 +143,8 @@ services:
     ports:
       - '2345:2345'
     healthcheck:
-      test:
-        [
-          'CMD',
-          'wget',
-          '--quiet',
-          '--tries=1',
-          '--spider',
-          'http://admin:admin@localhost:2345/',
-        ]
+      # the Debian httpd image ships neither wget nor curl
+      test: ['CMD', 'bash', '-c', 'exec 3<>/dev/tcp/127.0.0.1/2345']
       interval: 10s
       timeout: 5s
       retries: 3

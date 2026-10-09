@@ -96,6 +96,7 @@
               <section class="config-section section-{{ section.key }}">
                 <config-section
                   (save)="saveGlobalCfg($event)"
+                  (isExpandedChange)="onSectionExpandedChange(section, $event)"
                   [cfg]="getGlobalCfgSection(section.key)"
                   [isExpanded]="isSectionExpanded(section)"
                   [section]="section"
@@ -123,6 +124,7 @@
               <section class="config-section section-{{ section.key }}">
                 <config-section
                   (save)="saveGlobalCfg($event)"
+                  (isExpandedChange)="onSectionExpandedChange(section, $event)"
                   [cfg]="getGlobalCfgSection(section.key)"
                   [isExpanded]="isSectionExpanded(section)"
                   [section]="section"
@@ -160,6 +162,7 @@
               <section class="config-section section-{{ section.key }}">
                 <config-section
                   (save)="saveGlobalCfg($event)"
+                  (isExpandedChange)="onSectionExpandedChange(section, $event)"
                   [cfg]="getGlobalCfgSection(section.key)"
                   [isExpanded]="isSectionExpanded(section)"
                   [section]="section"
@@ -187,6 +190,7 @@
               <section class="config-section section-{{ section.key }}">
                 <config-section
                   (save)="saveGlobalCfg($event)"
+                  (isExpandedChange)="onSectionExpandedChange(section, $event)"
                   [cfg]="getGlobalCfgSection(section.key)"
                   [isExpanded]="isSectionExpanded(section)"
                   [section]="section"
@@ -217,6 +221,7 @@
               <section class="config-section section-{{ section.key }}">
                 <config-section
                   (save)="saveGlobalCfg($event)"
+                  (isExpandedChange)="onSectionExpandedChange(section, $event)"
                   [cfg]="getGlobalCfgSection(section.key)"
                   [isExpanded]="isSectionExpanded(section)"
                   [section]="section"
@@ -301,6 +306,7 @@
               <section class="config-section imex-section section-{{ section.key }}">
                 <config-section
                   (save)="saveGlobalCfg($event)"
+                  (isExpandedChange)="onSectionExpandedChange(section, $event)"
                   [cfg]="getGlobalCfgSection(section.key)"
                   [isExpanded]="isSectionExpanded(section)"
                   [section]="section"
