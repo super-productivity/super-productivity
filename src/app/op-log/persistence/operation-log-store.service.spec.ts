@@ -1999,6 +1999,27 @@ describe('OperationLogStoreService', () => {
         expect(clocks.get('kept-delta')).toEqual({ testClient: 5 });
       });
 
+      it('should still re-clock the kept delta when the batches are empty', async () => {
+        const delta = createTestOperation({
+          id: 'lonely-delta',
+          vectorClock: { testClient: 5 },
+        });
+        await service.appendWithVectorClockOverwrite(delta, 'local');
+
+        await service.appendMixedSourceBatchSkipDuplicates([], {
+          rebaseKept: {
+            opIds: [delta.id],
+            successorOpIds: new Set(),
+            clockToDominate: { remote: 3 },
+          },
+        });
+
+        expect((await storedClocks()).get(delta.id)).toEqual({
+          testClient: 6,
+          remote: 3,
+        });
+      });
+
       it('should not re-clock anything once the kept delta was synced', async () => {
         const delta = createTestOperation({
           id: 'synced-delta',

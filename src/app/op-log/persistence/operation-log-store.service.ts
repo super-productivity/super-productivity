@@ -1181,7 +1181,8 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
   ): Promise<{ written: MixedSourceWrittenOperation[]; skippedCount: number }> {
     const nonEmptyBatches = batches.filter((batch) => batch.ops.length > 0);
     const rejectOpIds = [...new Set(options?.rejectOpIds ?? [])];
-    if (nonEmptyBatches.length === 0 && rejectOpIds.length === 0) {
+    // rebaseKept runs even for empty batches; the caller drops its fallback rebase.
+    if (!nonEmptyBatches.length && !rejectOpIds.length && !options?.rebaseKept) {
       return { written: [], skippedCount: 0 };
     }
 
