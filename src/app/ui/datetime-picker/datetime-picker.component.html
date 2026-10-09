@@ -15,11 +15,11 @@
 
 @if (isConfigReady()) {
   <div class="calendar-week-number-wrapper">
-    @if (calendarView === 'month') {
+    @if (calendarView === 'month' && showWeekNumbers()) {
       <div class="week-number-col">
         <div class="week-number-header">{{ T.G.WEEK | translate }}</div>
-        @for (weekNum of weekNumbers; track $index) {
-          <div class="week-number-cell">{{ weekNum }}</div>
+        @for (weekNum of weekNumbersWithNulls; track $index) {
+          <div class="week-number-cell">{{ weekNum ?? '' }}</div>
         }
       </div>
     }
