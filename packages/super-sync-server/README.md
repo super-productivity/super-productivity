@@ -35,9 +35,8 @@ The server uses an **append-on-write retained operation log** backed by **Postgr
 SuperSync is in **beta**. Before choosing it, compare it with the other sync
 providers in the
 [sync provider comparison](../../docs/wiki/3.08-Sync-Integration-Comparison.md);
-Nextcloud or WebDAV remain valid choices for new installs, though the generic
-WebDAV provider is experimental (the app lists it as "not recommended / no
-support").
+Nextcloud remains a valid choice for new installs; generic WebDAV also works
+but is experimental (the app lists it as "not recommended / no support").
 
 ### Prerequisites
 
