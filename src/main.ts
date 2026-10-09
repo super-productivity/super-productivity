@@ -440,13 +440,27 @@ bootstrapApplication(AppComponent, {
 
   // Lazily load and register focus-mode effects during idle time.
   // Safe to defer: focus-mode requires explicit user activation (clicking the
-  // focus button), which cannot happen before idle callback fires.
+  // focus button), which cannot happen before idle callback fires. Restoring a
+  // session killed in the background waits for data load, so it is not raced either.
   const registerLazyEffects = async (): Promise<void> => {
-    const { FocusModeEffects } =
-      await import('./app/features/focus-mode/store/focus-mode.effects');
+    const [{ FocusModeEffects }, { FocusModeSessionPersistenceEffects }] =
+      await Promise.all([
+        import('./app/features/focus-mode/store/focus-mode.effects'),
+        import('./app/features/focus-mode/store/focus-mode-session-persistence.effects'),
+      ]);
     const envInjector = appRef.injector.get(EnvironmentInjector);
     createEnvironmentInjector(
-      [importProvidersFrom(EffectsModule.forFeature([FocusModeEffects]))],
+      [
+        importProvidersFrom(
+          // Session restore relies on FocusModeEffects (completion, logging),
+          // so it registers after them. Android recovers from its native
+          // foreground service instead, which also restores the task time.
+          EffectsModule.forFeature([
+            FocusModeEffects,
+            ...(IS_ANDROID_WEB_VIEW ? [] : [FocusModeSessionPersistenceEffects]),
+          ]),
+        ),
+      ],
       envInjector,
     );
   };
