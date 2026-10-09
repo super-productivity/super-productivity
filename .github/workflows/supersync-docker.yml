@@ -19,15 +19,21 @@ on:
         required: false
         type: boolean
         default: true
+  # Published (non-pre) releases push an immutable version tag, never `latest`.
+  release:
+    types: [published]
 
-# Every run publishes the same mutable `latest` tag, so only the newest may push.
+# Every master run publishes the same mutable `latest` tag, so only the newest
+# may push. Release runs get one group per tag and are never cancelled by
+# master pushes (or by each other).
 concurrency:
-  group: supersync-docker-publish
-  cancel-in-progress: true
+  group: supersync-docker-${{ github.event_name == 'release' && github.ref || 'publish' }}
+  cancel-in-progress: ${{ github.event_name != 'release' }}
 
 jobs:
   build-and-push:
     name: Build and Push to GHCR
+    if: github.event_name != 'release' || !github.event.release.prerelease
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -69,8 +75,9 @@ jobs:
         with:
           images: ghcr.io/super-productivity/supersync
           tags: |
-            type=raw,value=latest
-            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable=${{ github.event_name != 'release' }}
+            type=sha,prefix={{branch}}-,enable=${{ github.event_name != 'release' }}
+            type=ref,event=tag
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -131,6 +138,8 @@ jobs:
         uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
         with:
           packages: supersync
+          # Release images are rollback targets; exclusion beats every other rule.
+          exclude-tags: 'v*'
           keep-n-tagged: 15
           delete-untagged: true
           delete-ghost-images: true
