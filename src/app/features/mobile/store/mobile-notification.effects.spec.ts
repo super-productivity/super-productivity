@@ -588,6 +588,24 @@ describe('MobileNotificationEffects', () => {
       );
     }));
 
+    it('schedules deadline reminders on Android too', fakeAsync(() => {
+      // Without a native alarm, Android deadline reminders only fired while the
+      // app was running — useless for the day/week lead-time options.
+      platformService.isIOS.and.returnValue(false);
+      platformService.isAndroid.and.returnValue(true);
+      subscribeDeadlineNotifications();
+
+      tick(EFFECT_DELAY_MS + 1);
+
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({
+          notificationId: generateNotificationId('d1_deadline'),
+          relatedId: 'd1',
+          reminderType: 'DEADLINE',
+        }),
+      );
+    }));
+
     it('cancels previously scheduled deadline reminders when disabled', fakeAsync(() => {
       subscribeDeadlineNotifications();
 

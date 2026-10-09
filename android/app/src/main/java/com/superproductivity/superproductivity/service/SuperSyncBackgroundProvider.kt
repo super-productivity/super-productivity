@@ -152,7 +152,7 @@ class SuperSyncBackgroundProvider(
         }
         val now = System.currentTimeMillis()
 
-        // Keyed by (taskId, isDueDate) so later ops naturally overwrite earlier ones
+        // Keyed by (taskId, isDeadline) so later ops naturally overwrite earlier ones
         val reminderMap = mutableMapOf<Pair<String, Boolean>, ReminderToSchedule>()
         // Per-task: tracks whether the LAST op affecting this task was a cancel or a schedule.
         // Ops are in server sequence order, so processing forward ensures the latest op wins.
@@ -386,14 +386,14 @@ class SuperSyncBackgroundProvider(
                 if (changes.has("remindAt") && !changes.isNull("remindAt")) {
                     val remindAt = changes.optLong("remindAt", 0L)
                     if (remindAt > now) {
-                        out[Pair(entityId, false)] = ReminderToSchedule(entityId, title, remindAt, isDueDate = false)
+                        out[Pair(entityId, false)] = ReminderToSchedule(entityId, title, remindAt, isDeadline = false)
                     }
                 }
 
                 if (changes.has("deadlineRemindAt") && !changes.isNull("deadlineRemindAt")) {
                     val deadlineRemindAt = changes.optLong("deadlineRemindAt", 0L)
                     if (deadlineRemindAt > now) {
-                        out[Pair(entityId, true)] = ReminderToSchedule(entityId, title, deadlineRemindAt, isDueDate = true)
+                        out[Pair(entityId, true)] = ReminderToSchedule(entityId, title, deadlineRemindAt, isDeadline = true)
                     }
                 }
             }
@@ -418,7 +418,7 @@ class SuperSyncBackgroundProvider(
                     val remindAt = actionPayload.optLong("remindAt", 0L)
                     if (remindAt > now) {
                         val title = taskObj.optString("title", "").ifEmpty { "Task reminder" }
-                        out[Pair(taskId, false)] = ReminderToSchedule(taskId, title, remindAt, isDueDate = false)
+                        out[Pair(taskId, false)] = ReminderToSchedule(taskId, title, remindAt, isDeadline = false)
                     }
                 }
             }
@@ -429,7 +429,7 @@ class SuperSyncBackgroundProvider(
                 if (actionPayload.has("deadlineRemindAt") && !actionPayload.isNull("deadlineRemindAt")) {
                     val deadlineRemindAt = actionPayload.optLong("deadlineRemindAt", 0L)
                     if (deadlineRemindAt > now) {
-                        out[Pair(taskId, true)] = ReminderToSchedule(taskId, "Task reminder", deadlineRemindAt, isDueDate = true)
+                        out[Pair(taskId, true)] = ReminderToSchedule(taskId, "Task reminder", deadlineRemindAt, isDeadline = true)
                     }
                 }
             }

@@ -453,7 +453,7 @@ export class MobileNotificationEffects {
     );
 
   /**
-   * Schedule explicit deadline reminders on iOS.
+   * Schedule explicit deadline reminders natively (iOS and Android).
    *
    * SYNC-SAFE: Same rationale as scheduleNotifications$ above — dispatch:false
    * (no store mutations), idempotent native scheduling, and we deliberately want
@@ -462,7 +462,6 @@ export class MobileNotificationEffects {
    */
   scheduleDeadlineNotifications$ =
     this._platformService.isNative &&
-    this._platformService.isIOS() &&
     createEffect(
       () =>
         timer(DELAY_SCHEDULE).pipe(
