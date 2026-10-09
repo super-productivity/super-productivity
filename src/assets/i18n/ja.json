@@ -515,7 +515,8 @@
         "OAUTH_DISCONNECTED": "OAuthアカウントを切断しました。",
         "OAUTH_FAILED": "認証に失敗しました。",
         "REMOTE_ISSUE_DELETED": "リモート課題は削除されました。リンクされたタスク「{{taskTitle}}」を削除しますか？",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "リモート課題は削除されましたが、タスク「{{taskTitle}}」には記録済み時間があります。それでも削除しますか？"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "リモート課題は削除されましたが、タスク「{{taskTitle}}」には記録済み時間があります。それでも削除しますか？",
+        "POST_TIME_SUCCESS": "{{providerName}}: {{issueTitle}}の時間エントリーを正常に作成しました"
       },
       "DIALOG": {
         "ADVANCED_CONFIG": "詳細設定",
@@ -561,6 +562,15 @@
         "POLLING_MODE_DESCRIPTION": "ポーリングのタイミング: 関連するプロジェクトまたはタグを開いている間のみ、または常にバックグラウンドで",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "コンテキストが開いているとき",
         "POLLING_MODE_ALWAYS": "常に（バックグラウンド）"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "活動",
+        "INVALID_DATE": "入力された値は日付ではありません！",
+        "POST_TIME": "時間を送信",
+        "STARTED": "開始日",
+        "SUBMIT_TIME_FOR": "{{providerName}}に時間を送信:",
+        "TIME_SPENT": "作業時間",
+        "TITLE": "{{providerName}}: 作業ログを送信"
       }
     },
     "ISSUE_PANEL": {
@@ -1044,44 +1054,6 @@
       "NO_DATA": "今年度のデータはありません",
       "PAGE_TITLE": "クイックヒストリー",
       "WEEK_TITLE": "週 {{nr}} （{{timeSpent}}）"
-    },
-    "REDMINE": {
-      "FORM": {
-        "API_KEY": "APIアクセスキー",
-        "HOST": "ホスト (例: https://redmine.org)",
-        "PROJECT_ID": "プロジェクト識別子",
-        "PROJECT_ID_DESCRIPTION": "ブラウザでプロジェクトを表示するときに、URL の一部として見つかります。",
-        "SCOPE": "範囲",
-        "SCOPE_ALL": "全て",
-        "SCOPE_ASSIGNED": "私に割り当てられた",
-        "SCOPE_CREATED": "私が作った",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Redmineへの報告用に時間トラッキングダイアログを表示",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Redmineプロジェクトで時間トラッキングモジュールが有効である必要があります",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "サブタスク完了時に時間トラッキングダイアログを表示"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>ここで SuperProductivity を設定し、日次計画ビューのタスク作成パネルで、特定のプロジェクトの Redmine (オンライン版またはセルフホスト インスタンス) の未解決の課題をリストすることができます。それらは提案としてリストされ、課題へのリンクとそれに関する詳細情報が提供されます。</p><p>さらに、すべての未解決課題を自動的にインポートすることもできます。</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "著者",
-        "DESCRIPTION": "説明",
-        "MARK_AS_CHECKED": "更新をチェック済みとしてマーク",
-        "PRIORITY": "優先順位",
-        "STATUS": "ステータス"
-      },
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "活動",
-        "INVALID_DATE": "入力された値は日付ではありません！",
-        "POST_TIME": "時間を送信",
-        "STARTED": "開始日",
-        "SUBMIT_TIME_FOR": "Redmineに時間を送信:",
-        "TIME_SPENT": "作業時間",
-        "TITLE": "Redmine: 作業ログを送信"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: {{issueTitle}}の時間エントリーを正常に作成しました"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "解任する",
@@ -2437,33 +2409,6 @@
       "PASTE_SUCCESS": "画像の貼り付けに成功しました",
       "SIZE_EXCEEDED": "画像サイズ ({{actualSize}}) が最大許容サイズ ({{maxSize}}) を超えています",
       "STORAGE_QUOTA_EXCEEDED": "ストレージ容量を超過しました。空き容量を確保するか、画像サイズを小さくしてください。"
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Nextcloud ベースURL",
-        "FILTER_BY_ASSIGNEE": "自分に割り当てられたカードのみインポート",
-        "IS_TRANSITION_ISSUES_ENABLED": "完了ステータスとタイトルをNextcloud Deckに同期",
-        "PASSWORD": "Nextcloudアプリパスワード",
-        "POLL_INTERVAL_MINUTES": "ポーリング間隔 (分)",
-        "TITLE_TEMPLATE": "タスクタイトルテンプレート",
-        "TITLE_TEMPLATE_DESCRIPTION": "変数: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}。例: [{BOARD}: {COLUMN}] {CARD_TITLE}。空にするとカードタイトルのみ使用。",
-        "USERNAME": "Nextcloudユーザー名"
-      },
-      "FORM_SECTION": {
-        "HELP": "Nextcloud Deck統合を設定して、カードをタスクとしてインポートします。認証にはアプリパスワードを使用してください。"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "割り当てユーザー",
-        "DECK_DESCRIPTION": "デッキの説明",
-        "LABELS": "ラベル",
-        "STACK": "スタック"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: ボードが見つかりません",
-        "CARD_NOT_FOUND": "Nextcloud Deck: カード「{{issueId}}」はサーバー上で削除されたようです。",
-        "ERR_CREDENTIALS_MISSING": "Nextcloud URL、ユーザー名、パスワードを先に入力してください。",
-        "ERR_LOAD_BOARDS": "デッキボードの読み込みに失敗しました。認証情報を確認してください。"
-      }
     },
     "ANDROID": {
       "FOREGROUND_SERVICE_START_FAILED_FOCUS": "Android により、フォーカスモードの常時通知がブロックされました。タイマーはアプリ内で継続しますが、バックグラウンドの通知を利用できない場合があります。通知の権限とバッテリー／バックグラウンドの制限を確認してください。",

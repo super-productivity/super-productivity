@@ -7,7 +7,8 @@ import org.json.JSONObject
 
 /**
  * SharedPreferences-backed queue for persisting snooze events from notification actions.
- * Stores {taskId, newRemindAt} pairs so the frontend can update NgRx state on next app open.
+ * Stores {taskId, newRemindAt, reminderType} so the frontend can update NgRx state on next
+ * app open — a deadline snooze must move the deadline reminder, not the task schedule.
  */
 object ReminderSnoozeQueue {
     private const val PREFS_NAME = "SuperProductivityReminderSnooze"
@@ -18,13 +19,14 @@ object ReminderSnoozeQueue {
     }
 
     @Synchronized
-    fun addSnoozeEvent(context: Context, taskId: String, newRemindAt: Long) {
+    fun addSnoozeEvent(context: Context, taskId: String, newRemindAt: Long, reminderType: String) {
         val prefs = getPrefs(context)
         val existing = prefs.getString(KEY_SNOOZE_EVENTS, null)
         val array = if (existing != null) JSONArray(existing) else JSONArray()
         val entry = JSONObject().apply {
             put("taskId", taskId)
             put("newRemindAt", newRemindAt)
+            put("reminderType", reminderType)
         }
         array.put(entry)
         prefs.edit().putString(KEY_SNOOZE_EVENTS, array.toString()).commit()

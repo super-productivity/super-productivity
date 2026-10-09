@@ -5,9 +5,13 @@ on:
   workflow_dispatch:
     inputs: {}
 
+permissions:
+  contents: read
+
 jobs:
   upload-to-app-super-productivity:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     if: '!github.event.release.prerelease'
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
@@ -63,7 +67,7 @@ jobs:
         run: npm run lint
 
       - name: Test Unit
-        run: npm run test
+        run: npm run test:ci
 
       - name: Build Frontend & Electron
         run: npm run buildFrontend:prodWeb

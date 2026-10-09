@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "URL base di Nextcloud",
+    "USERNAME": "Il tuo nome utente Nextcloud",
+    "PASSWORD": "La tua password app di Nextcloud",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "Importa solo le schede assegnate a me",
+    "TITLE_TEMPLATE": "Modello titolo attività",
+    "TITLE_TEMPLATE_DESC": "Variabili: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Esempio: [{BOARD}: {COLUMN}] {CARD_TITLE}. Lascia vuoto per usare solo il titolo della scheda."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Riepilogo",
+    "DESCRIPTION": "Descrizione Deck",
+    "STACK": "Pila",
+    "DUE_DATE": "Data di scadenza",
+    "ASSIGNED_USERS": "Utenti assegnati",
+    "LABELS": "Etichette"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "Configura l'integrazione Nextcloud Deck per importare le schede come attività. Usa una password app per l'autenticazione."
+}

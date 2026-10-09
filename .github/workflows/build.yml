@@ -108,7 +108,7 @@ jobs:
         run: npm run lint
 
       - name: Test Unit
-        run: npm run test
+        run: npm run test:ci
 
       - name: Build Frontend for E2E
         run: npm run buildFrontend:e2e
@@ -594,7 +594,7 @@ jobs:
         run: npm run lint
 
       - name: Test Unit
-        run: npm run test
+        run: npm run test:ci
 
       - name: Build Frontend & Electron
         run: npm run build

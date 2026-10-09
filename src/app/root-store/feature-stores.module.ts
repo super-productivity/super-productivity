@@ -73,7 +73,6 @@ import { AndroidWidgetEffects } from '../features/android/store/android-widget.e
 import { MobileNotificationEffects } from '../features/mobile/store/mobile-notification.effects';
 import { IS_IOS_NATIVE, IS_NATIVE_PLATFORM } from '../util/is-native-platform';
 import { IosBackgroundTrackingEffects } from '../features/ios/store/ios-background-tracking.effects';
-import { NextcloudDeckIssueEffects } from '../features/issue/providers/nextcloud-deck/nextcloud-deck-issue.effects';
 import { CalendarIntegrationEffects } from '../features/calendar-integration/store/calendar-integration.effects';
 import { TimeBlockSyncEffects } from '../features/calendar-integration/time-block/time-block-sync.effects';
 import { ElectronEffects } from '../core/electron/electron.effects';
@@ -82,7 +81,7 @@ import { FinishDayBeforeCloseEffects } from '../features/finish-day-before-close
 import { GitlabIssueEffects } from '../features/issue/providers/gitlab/gitlab-issue.effects';
 import { JiraIssueEffects } from '../features/issue/providers/jira/jira-issue.effects';
 import { OpenProjectEffects } from '../features/issue/providers/open-project/open-project.effects';
-import { RedmineEffects } from '../features/issue/providers/redmine/redmine.effects';
+import { PluginTimeTrackingEffects } from '../plugins/issue-provider/plugin-time-tracking.effects';
 import { ReminderCountdownEffects } from '../features/reminder/store/reminder-countdown.effects';
 import { SyncEffects } from '../imex/sync/sync.effects';
 import { boardsFeature } from '../features/boards/store/boards.reducer';
@@ -196,7 +195,6 @@ import { ReducerFailureSnackEffects } from './meta/reducer-failure-snack.effects
       ...(IS_NATIVE_PLATFORM ? [MobileNotificationEffects] : []),
     ]),
     EffectsModule.forFeature([IssueTwoWaySyncEffects]),
-    EffectsModule.forFeature([NextcloudDeckIssueEffects]),
     EffectsModule.forFeature([CalendarIntegrationEffects]),
     EffectsModule.forFeature([TimeBlockSyncEffects]),
     EffectsModule.forFeature([ElectronEffects]),
@@ -205,7 +203,7 @@ import { ReducerFailureSnackEffects } from './meta/reducer-failure-snack.effects
     EffectsModule.forFeature([GitlabIssueEffects]),
     EffectsModule.forFeature([JiraIssueEffects]),
     EffectsModule.forFeature([OpenProjectEffects]),
-    EffectsModule.forFeature([RedmineEffects]),
+    EffectsModule.forFeature([PluginTimeTrackingEffects]),
     EffectsModule.forFeature([ReminderCountdownEffects]),
     EffectsModule.forFeature([SyncEffects]),
     EffectsModule.forFeature([PluginHooksEffects, PluginOAuthLifecycleEffects]),

@@ -33,10 +33,13 @@ export default defineConfig({
   retries: 0,
   // Reduce worker count to avoid resource contention causing flakiness
   // Lower worker count improves stability by reducing parallel execution stress
+  // E2E_WORKERS lets parallel agent sessions cap their share of the machine.
   workers:
+    Number(process.env.E2E_WORKERS) ||
     (process.env.CI
       ? Math.min(3, os.cpus().length)
-      : Math.min(12, os.cpus().length - 1)) || 1,
+      : Math.min(12, os.cpus().length - 1)) ||
+    1,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: process.env.CI
     ? [

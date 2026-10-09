@@ -543,7 +543,8 @@
         "OAUTH_DISCONNECTED": "Учетная запись OAuth отключена.",
         "OAUTH_FAILED": "Ошибка аутентификации.",
         "REMOTE_ISSUE_DELETED": "Удаленная задача была удалена. Удалить связанную задачу «{{taskTitle}}»?",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "Удаленная задача была удалена, но у задачи «{{taskTitle}}» есть учтенное время. Все равно удалить?"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "Удаленная задача была удалена, но у задачи «{{taskTitle}}» есть учтенное время. Все равно удалить?",
+        "POST_TIME_SUCCESS": "{{providerName}}: Запись о времени для {{issueTitle}} успешно создана"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_TAGS": "Автоматически создавать теги для синхронизированных меток",
@@ -572,6 +573,15 @@
         "POLLING_MODE_DESCRIPTION": "Когда выполнять опрос: только пока открыт соответствующий проект или тег, либо всегда в фоне",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "Когда контекст открыт",
         "POLLING_MODE_ALWAYS": "Всегда (в фоне)"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Деятельность",
+        "STARTED": "Начало",
+        "TIME_SPENT": "Потраченное время",
+        "INVALID_DATE": "Введённое значение не является датой!",
+        "POST_TIME": "Отправить время",
+        "SUBMIT_TIME_FOR": "Отправить время в {{providerName}} для",
+        "TITLE": "{{providerName}}: Отправка записи о работе"
       }
     },
     "ISSUE_PANEL": {
@@ -795,33 +805,6 @@
         "REMINDER_NEEDS_TEXT": "Напишите размышление перед тем, как просить напоминание",
         "REMINDER_TASK_TITLE": "Пересмотреть заметку размышления",
         "TITLE": "Заметка размышления"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "ISSUE_CONTENT": {
-        "LABELS": "Метки",
-        "ASSIGNED_USERS": "Назначенные пользователи",
-        "DECK_DESCRIPTION": "Описание Deck",
-        "STACK": "Колонка"
-      },
-      "FORM": {
-        "BASE_URL": "Базовый URL Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Импортировать только карточки, назначенные мне",
-        "IS_TRANSITION_ISSUES_ENABLED": "Синхронизировать статус завершения и заголовок обратно в Nextcloud Deck",
-        "PASSWORD": "Пароль приложения Nextcloud",
-        "POLL_INTERVAL_MINUTES": "Интервал опроса (минуты)",
-        "TITLE_TEMPLATE": "Шаблон заголовка задачи",
-        "TITLE_TEMPLATE_DESCRIPTION": "Переменные: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Пример: [{BOARD}: {COLUMN}] {CARD_TITLE}. Оставьте пустым для использования только названия карточки.",
-        "USERNAME": "Имя пользователя Nextcloud"
-      },
-      "FORM_SECTION": {
-        "HELP": "Настройте интеграцию с Nextcloud Deck для импорта карточек как задач. Используйте пароль приложения для аутентификации."
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Доска не найдена",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Карточка \"{{issueId}}\" удалена на сервере.",
-        "ERR_CREDENTIALS_MISSING": "Сначала введите URL Nextcloud, имя пользователя и пароль.",
-        "ERR_LOAD_BOARDS": "Не удалось загрузить доски Deck. Проверьте учётные данные."
       }
     },
     "NOTE": {
@@ -1082,44 +1065,6 @@
       "NO_DATA": "Нет данных за текущий год",
       "PAGE_TITLE": "Быстрая история",
       "WEEK_TITLE": "Неделя {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Деятельность",
-        "STARTED": "Начало",
-        "TIME_SPENT": "Потраченное время",
-        "INVALID_DATE": "Введённое значение не является датой!",
-        "POST_TIME": "Отправить время",
-        "SUBMIT_TIME_FOR": "Отправить время в Redmine для",
-        "TITLE": "Redmine: Отправка записи о работе"
-      },
-      "FORM": {
-        "API_KEY": "ключ доступа к API",
-        "HOST": "Хост (например: https://redmine.org)",
-        "PROJECT_ID": "Идентификатор проекта",
-        "PROJECT_ID_DESCRIPTION": "Можно найти как часть URL-адреса при просмотре проекта в браузере.",
-        "SCOPE": "Скоуп",
-        "SCOPE_ALL": "Все",
-        "SCOPE_ASSIGNED": "Назначено мне",
-        "SCOPE_CREATED": "Создано мной",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Показывать диалог учёта времени для отчёта в Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Требуется включённый модуль учёта времени для проекта Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Показывать диалог учёта времени при завершении подзадач"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Здесь вы можете настроить SuperProductivity, чтобы отображать открытые проблемы Redmine (будь то онлайн-версия или автономный экземпляр) для конкретного проекта на панели создания задач в представлении ежедневного планирования. Они будут перечислены в качестве предложений и предоставят ссылку на проблему, а также дополнительную информацию о ней.</p><p>Кроме того, вы можете автоматически добавлять и синхронизировать все открытые проблемы со списком задач.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Автор",
-        "DESCRIPTION": "Описание",
-        "MARK_AS_CHECKED": "Отметить обновления как отмеченные",
-        "PRIORITY": "Приоритет",
-        "STATUS": "Статус"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Запись о времени для {{issueTitle}} успешно создана"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Закрыть",

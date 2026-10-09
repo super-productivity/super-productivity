@@ -20,6 +20,9 @@ name: 'E2E Sync (PR Gate)'
 on:
   pull_request:
     branches: [master, main]
+    # ready_for_review: drafts skip the suites (see detect), so they must run
+    # once the PR leaves draft.
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
@@ -53,8 +56,19 @@ jobs:
           # For workflow_dispatch there is no PR base — force both suites to run.
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
         run: |
           set -euo pipefail
+
+          # Drafts skip the ~180 runner-minute suites to free shared runners;
+          # drafts can't merge, and ready_for_review re-triggers this workflow.
+          if [ "${IS_DRAFT:-}" = "true" ]; then
+            echo "Draft PR — skipping sync suites until ready for review."
+            echo "supersync=false" >> "$GITHUB_OUTPUT"
+            echo "webdav=false" >> "$GITHUB_OUTPUT"
+            echo "fuzz=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           if [ -z "${BASE_SHA:-}" ]; then
             echo "No PR base (manual run) — running both suites."

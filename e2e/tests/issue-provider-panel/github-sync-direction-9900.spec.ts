@@ -1,4 +1,5 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import { waitForPluginManagementInit } from '../../helpers/plugin-test.helpers';
 
 // #9900: refreshing a plugin issue used the import mapping and then raw issue
 // fields, overwriting task fields even when their sync direction was off.
@@ -7,6 +8,16 @@ test('GitHub refresh respects disabled title sync while still pulling status', a
   workViewPage,
   taskPage,
 }) => {
+  await workViewPage.waitForTaskList();
+  // App readiness can precede plugin discovery. The provider setup panel snapshots
+  // its plugin list on creation, so wait for GitHub before opening it.
+  expect(await waitForPluginManagementInit(page)).toBe(true);
+  await expect(
+    page.locator('plugin-management mat-card-title').getByText('GitHub Issues', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.goto('/#/tag/TODAY/tasks');
   await workViewPage.waitForTaskList();
   let refreshed = false;
   let refreshRequests = 0;
@@ -32,7 +43,7 @@ test('GitHub refresh respects disabled title sync while still pulling status', a
   });
 
   await page.locator('.e2e-toggle-issue-provider-panel').click();
-  await page.locator('mat-tab-group .mat-mdc-tab:last-child').click();
+  await page.locator('issue-panel .mat-mdc-tab').last().click();
   await page.getByRole('button', { name: 'GitHub Issues', exact: true }).click();
   const dialog = page.locator('dialog-edit-issue-provider');
   await dialog.locator('input[id*="repo"]').fill('e2e/repro');
@@ -42,7 +53,7 @@ test('GitHub refresh respects disabled title sync while still pulling status', a
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(dialog).toBeHidden();
 
-  await page.locator('mat-tab-group .mat-mdc-tab').first().click();
+  await page.locator('issue-panel .mat-mdc-tab').first().click();
   await page.locator('issue-provider-tab input[name="search"]').fill('Original issue');
   await page
     .locator('issue-preview-item', { hasText: 'Original issue' })
