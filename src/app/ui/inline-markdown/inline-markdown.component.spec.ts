@@ -226,6 +226,65 @@ describe('InlineMarkdownComponent', () => {
       expect(component.changed.emit).not.toHaveBeenCalled();
     });
 
+    // #10405: CodeMirror reports blur 10ms late, so a quick click on another
+    // task re-points this component before the edit commits. The pending edit
+    // must be saved to the task it was typed into, not dropped or written onto
+    // the next task.
+    describe('task switch with an uncommitted edit (#10405)', () => {
+      let store: MockStore;
+
+      const switchToTaskB = async (): Promise<void> => {
+        fixture.componentRef.setInput('taskId', 'task-b');
+        fixture.componentRef.setInput('model', 'task B notes');
+        fixture.detectChanges();
+        await fixture.whenStable();
+      };
+
+      beforeEach(async () => {
+        store = TestBed.inject(MockStore);
+        spyOn(store, 'dispatch');
+        fixture.componentRef.setInput('taskId', 'task-a');
+        fixture.componentRef.setInput('model', 'task A notes');
+        await mountLiveEditor('task A notes');
+        spyOn(component.changed, 'emit');
+      });
+
+      it('saves the edit to the previous task', async () => {
+        const view = editorView();
+        view.dispatch({ changes: { from: view.state.doc.length, insert: ', edited' } });
+
+        await switchToTaskB();
+
+        expect(store.dispatch).toHaveBeenCalledOnceWith(
+          TaskSharedActions.updateTask({
+            task: { id: 'task-a', changes: { notes: 'task A notes, edited' } },
+          }),
+        );
+        expect(component.changed.emit).not.toHaveBeenCalled();
+        expect(editorView().state.doc.toString()).toBe('task B notes');
+      });
+
+      it('saves nothing when the note was not edited', async () => {
+        await switchToTaskB();
+
+        expect(store.dispatch).not.toHaveBeenCalled();
+        expect(component.changed.emit).not.toHaveBeenCalled();
+      });
+
+      it('saves nothing again when the edit was already committed', async () => {
+        const view = editorView();
+        view.dispatch({ changes: { from: view.state.doc.length, insert: ', edited' } });
+        component.onLiveEditorChanged(view.state.doc.toString());
+        // The parent's save comes back as the new model.
+        fixture.componentRef.setInput('model', 'task A notes, edited');
+        fixture.detectChanges();
+
+        await switchToTaskB();
+
+        expect(store.dispatch).not.toHaveBeenCalled();
+      });
+    });
+
     // The checklist toolbar is the one control editing the document from
     // outside the editor: it has to see a checklist while it is still being
     // typed, not only after the blur that commits it.

@@ -8,10 +8,12 @@ import {
   inject,
   Input,
   input,
+  OnChanges,
   OnDestroy,
   OnInit,
   output,
   signal,
+  SimpleChanges,
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -68,7 +70,7 @@ const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
     LiveMarkdownEditorComponent,
   ],
 })
-export class InlineMarkdownComponent implements OnInit, OnDestroy {
+export class InlineMarkdownComponent implements OnChanges, OnInit, OnDestroy {
   private _cd = inject(ChangeDetectorRef);
   private _globalConfigService = inject(GlobalConfigService);
   private _matDialog = inject(MatDialog);
@@ -224,6 +226,15 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     }
   }
 
+  ngOnChanges(changes: SimpleChanges): void {
+    const taskIdChange = changes['taskId'];
+    if (taskIdChange && !taskIdChange.firstChange) {
+      const modelChange = changes['model'];
+      const prevModel = modelChange ? modelChange.previousValue || '' : this._model;
+      this._commitEditToPreviousTask(taskIdChange.previousValue, prevModel);
+    }
+  }
+
   ngOnDestroy(): void {
     this._isDestroyed = true;
     if (this._hideOverFlowTimeout) {
@@ -255,6 +266,40 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
         }
       }
     }
+  }
+
+  /**
+   * A task switch re-points this component at another task before the live
+   * editor commits: CodeMirror reports blur 10ms late, so a quick click on
+   * another task lands first and the editor's doc gets replaced (#10405). The
+   * editor still holds the previous task's text here — its view refreshes only
+   * after this hook — so save it to that task directly; our `changed` listener
+   * would already write to the new one. The textarea path needs none of this:
+   * its native blur commits synchronously, before the click.
+   */
+  private _commitEditToPreviousTask(
+    prevTaskId: string | undefined,
+    prevModel: string | undefined,
+  ): void {
+    if (!prevTaskId || this._isFullscreenDialogOpen || !this.isLiveMarkdownEditor()) {
+      return;
+    }
+    const editedDoc = this.liveEditorEl()?.value;
+    if (editedDoc !== undefined && editedDoc !== (prevModel ?? '')) {
+      this._persistNotes(prevTaskId, editedDoc);
+    }
+  }
+
+  private _persistNotes(taskId: string, notes: string): void {
+    // shortcut: a shared ui/ component dispatching a task action is a
+    // layering compromise (TaskService can't be injected here — its
+    // eager effects need a full GlobalConfigService under test). Used only
+    // when our `changed` listener can't save to the right task (destroyed, or
+    // already re-pointed at another one). Clean upgrade: emit the task id with
+    // `changed` and let the owning container persist every save.
+    this._store.dispatch(
+      TaskSharedActions.updateTask({ task: { id: taskId, changes: { notes } } }),
+    );
   }
 
   checklistToggle(): void {
@@ -495,16 +540,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
         // comparing against the loaded model is the closest signal we have here.
         if (newVal.trim() !== (this._model ?? '').trim()) {
           if (taskId) {
-            // shortcut: a shared ui/ component dispatching a task action is a
-            // layering compromise (TaskService can't be injected here — its
-            // eager effects need a full GlobalConfigService under test). Clean
-            // upgrade: give the surviving focus-mode container ownership of the
-            // fullscreen dialog so the save never depends on this lifetime.
-            this._store.dispatch(
-              TaskSharedActions.updateTask({
-                task: { id: taskId, changes: { notes: newVal } },
-              }),
-            );
+            this._persistNotes(taskId, newVal);
           } else {
             // No task to persist to and our `changed` listener is gone — the
             // edit cannot be saved. Surface it rather than dropping it silently.

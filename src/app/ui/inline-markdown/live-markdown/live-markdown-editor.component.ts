@@ -94,10 +94,13 @@ export class LiveMarkdownEditorComponent {
       // keystroke.
       const current = this._view.state.doc.toString();
       if (model !== current) {
+        // Before dispatching: a blur still pending in CodeMirror's 10ms delay
+        // is reported inside this dispatch, and must not commit the incoming
+        // doc straight back as an edit (#10405).
+        this._lastEmitted = model;
         this._view.dispatch({
           changes: { from: 0, to: current.length, insert: model },
         });
-        this._lastEmitted = model;
       }
     });
 
