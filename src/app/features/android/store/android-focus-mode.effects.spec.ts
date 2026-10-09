@@ -261,6 +261,7 @@ describe('getFocusServiceCall (native service lost, #9531)', () => {
       wasFocusModeActive: true,
       isStateChanged: true,
       isResumed: false,
+      isInBackground: false,
       timer: workTimer(10 * MIN),
       isNativeServiceRunning: () => true,
       ...over,
@@ -327,6 +328,41 @@ describe('getFocusServiceCall (native service lost, #9531)', () => {
         isNativeServiceRunning: () => false,
       }),
     ).toBe('update');
+  });
+
+  it('does not restart a lost service while the app is in the background', () => {
+    // Android 12+ refuses the start there, and the failure shows a misleading
+    // "open notification settings" warning; the old update path failed silently.
+    expect(call({ isInBackground: true, isNativeServiceRunning: () => false })).toBe(
+      'update',
+    );
+  });
+
+  it('restarts a lost service on resume even before the background flag clears', () => {
+    expect(
+      call({
+        isStateChanged: false,
+        isResumed: true,
+        isInBackground: true,
+        isNativeServiceRunning: () => false,
+      }),
+    ).toBe('start');
+  });
+
+  it('restarts a lost service while the app is in the foreground', () => {
+    expect(call({ isInBackground: false, isNativeServiceRunning: () => false })).toBe(
+      'start',
+    );
+  });
+
+  it('still starts a new session while the app is in the background', () => {
+    expect(
+      call({
+        wasFocusModeActive: false,
+        isInBackground: true,
+        isNativeServiceRunning: () => false,
+      }),
+    ).toBe('start');
   });
 });
 

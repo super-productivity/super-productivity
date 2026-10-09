@@ -102,18 +102,23 @@ export const getFocusServiceCall = ({
   wasFocusModeActive,
   isStateChanged,
   isResumed,
+  isInBackground,
   timer,
   isNativeServiceRunning,
 }: {
   wasFocusModeActive: boolean;
   isStateChanged: boolean;
   isResumed: boolean;
+  isInBackground: boolean;
   timer: TimerState;
   isNativeServiceRunning: () => boolean;
 }): 'start' | 'update' | null => {
   if (!wasFocusModeActive) return 'start';
   if (!isStateChanged && !isResumed) return null;
-  if (timer.isRunning && !isNativeServiceRunning()) return 'start';
+  // Background restarts are refused and surface a misleading settings warning,
+  // so a lost service waits for the resume (or a foreground change) instead.
+  const canRestart = isResumed || !isInBackground;
+  if (timer.isRunning && canRestart && !isNativeServiceRunning()) return 'start';
   return isStateChanged ? 'update' : null;
 };
 
@@ -269,6 +274,8 @@ export class AndroidFocusModeEffects {
   // Set on resume so the next emission checks the native service even when a
   // quick return keeps the elapsed jump below the 5s update gate (#9531).
   private _isNativeServiceCheckDue = false;
+  // Latest isInBackground$ value; gates restarting a lost native service.
+  private _isInBackground = false;
 
   /**
    * Ask for notification permission when the user STARTS a focus session.
@@ -400,6 +407,7 @@ export class AndroidFocusModeEffects {
                   wasFocusModeActive,
                   isStateChanged,
                   isResumed,
+                  isInBackground: this._isInBackground,
                   timer,
                   // The native bridge reports a stopped service as 'null'.
                   isNativeServiceRunning: () =>
@@ -461,13 +469,17 @@ export class AndroidFocusModeEffects {
       { dispatch: false },
     );
 
-  markNativeServiceCheckOnResume$ =
+  // Both flags flip in one handler, so a resume always pairs "foreground" with
+  // a pending check; isResumed also lets the helper restart regardless of order.
+  // A pause drops an unconsumed check so it cannot restart from the background.
+  trackAppBackgroundState$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
       () =>
-        androidInterface.onResume$.pipe(
-          tap(() => {
-            this._isNativeServiceCheckDue = true;
+        androidInterface.isInBackground$.pipe(
+          tap((isInBackground) => {
+            this._isInBackground = isInBackground;
+            this._isNativeServiceCheckDue = !isInBackground;
           }),
         ),
       { dispatch: false },
