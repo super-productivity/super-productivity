@@ -259,9 +259,6 @@ const validateTasksToProjectsAndTags = (
   taskIds: Set<string>,
   taskRepeatCfgIds: Set<string>,
 ): boolean => {
-  // Track project-task relationships and ids for consistency validation
-  const projectTaskMap = new Map<string, Set<string>>();
-
   // Validate tasks in projects
   for (const pid of d.project.ids) {
     const project = d.project.entities[pid];
@@ -275,7 +272,6 @@ const validateTasksToProjectsAndTags = (
       ...project.taskIds,
       ...project.backlogTaskIds,
     ]);
-    projectTaskMap.set(project.id, projectTaskSet);
 
     // Validate each task in this project
     for (const tid of projectTaskSet) {

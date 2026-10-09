@@ -487,7 +487,6 @@ const setActiveContext = async (ctx: ActiveWorkContext | null): Promise<void> =>
   for (const t of titleWriteTimers.values()) clearTimeout(t);
   titleWriteTimers.clear();
   pendingTitleWrites.clear();
-  lastWrittenTitles.clear();
 
   // Drop any pending chip-reorder write-back — it targets the old context.
   cancelPendingReorder();
@@ -669,13 +668,9 @@ const insertSubtaskByParent = (taskId: string, parentTaskId: string): void => {
 /**
  * Per-task debouncers for writing edited titles back to the host. Pending
  * writes prevent ANY_TASK_UPDATE echoes from clobbering the user's typing.
- * `lastWrittenTitles` holds the value we last successfully wrote, so we
- * can distinguish our own echo from a genuine remote change in
- * refreshTaskRef.
  */
 const titleWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingTitleWrites = new Set<string>();
-const lastWrittenTitles = new Map<string, string>();
 
 const writeTitleBack = (taskId: string, newTitle: string): void => {
   const existing = titleWriteTimers.get(taskId);
@@ -687,10 +682,6 @@ const writeTitleBack = (taskId: string, newTitle: string): void => {
       titleWriteTimers.delete(taskId);
       PluginAPI.updateTask(taskId, { title: newTitle })
         .then(() => {
-          // Record what we wrote so refreshTaskRef can recognise the echo
-          // and skip it without needing the time-based pendingTitleWrites
-          // guard (which races with genuine remote edits).
-          lastWrittenTitles.set(taskId, newTitle);
           const cached = taskCache.get(taskId);
           if (cached) taskCache.set(taskId, { ...cached, title: newTitle });
         })
