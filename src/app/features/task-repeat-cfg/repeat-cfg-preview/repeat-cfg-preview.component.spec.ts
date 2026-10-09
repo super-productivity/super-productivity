@@ -39,7 +39,7 @@ describe('RepeatCfgPreviewComponent next tooltip', () => {
           useValue: { currentLocale: (): string => 'en-US' },
         },
       ],
-    });
+    }).overrideComponent(RepeatCfgPreviewComponent, { set: { template: '' } });
   });
 
   afterEach(() => {
