@@ -453,10 +453,24 @@ describe('ScheduleComponent', () => {
         mockScheduleService.getMonthWeeksToShow.and.callFake((...args) =>
           ScheduleService.prototype.getMonthWeeksToShow.apply(calendarService, args),
         );
+        mockScheduleService.getDaysToShow.and.callFake((...args) =>
+          ScheduleService.prototype.getDaysToShow.apply(calendarService, args),
+        );
         mockLayoutService.selectedTimeView.set('month');
       });
 
       afterEach(() => jasmine.clock().uninstall());
+
+      it('advances from the displayed September 30 to October 1 before the day starts in day view', () => {
+        mockLayoutService.selectedTimeView.set('day');
+        jasmine.clock().mockDate(new Date(2026, 9, 1, 1));
+        expect(component.daysToShow()).toEqual(['2026-09-30']);
+
+        component.goToNextPeriod();
+
+        expect(component['_selectedDate']()).toEqual(new Date(2026, 9, 1));
+        expect(component.daysToShow()).toEqual(['2026-10-01']);
+      });
 
       it('advances from the displayed September to October before the day starts', () => {
         jasmine.clock().mockDate(new Date(2026, 9, 1, 1));

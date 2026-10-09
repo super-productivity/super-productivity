@@ -323,10 +323,8 @@ export class ScheduleComponent {
     // Never navigate into the past — the displayed range must include today or later
     if (this.isViewingToday()) return;
 
+    const currentDate = this._selectedDate() || new Date();
     const selectedView = this._currentTimeViewMode();
-    const currentDate =
-      this._selectedDate() ||
-      (selectedView === 'month' ? this._dateService.getLogicalTodayDate() : new Date());
 
     if (selectedView === 'month') {
       const previousMonth = new Date(
@@ -353,10 +351,8 @@ export class ScheduleComponent {
   }
 
   goToNextPeriod(): void {
+    const currentDate = this._selectedDate() || this._dateService.getLogicalTodayDate();
     const selectedView = this._currentTimeViewMode();
-    const currentDate =
-      this._selectedDate() ||
-      (selectedView === 'month' ? this._dateService.getLogicalTodayDate() : new Date());
 
     if (selectedView === 'month') {
       // Jump to first day of next month
