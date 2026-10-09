@@ -22,6 +22,7 @@ export const BUNDLED_PLUGIN_PATHS = [
   'assets/bundled-plugins/caldav-calendar-provider',
   'assets/bundled-plugins/doc-mode',
   'assets/bundled-plugins/todoist-import',
+  'assets/bundled-plugins/ticktick-import',
   'assets/bundled-plugins/parallel-code',
 ] as const;
 
@@ -48,6 +49,7 @@ export const BUNDLED_PLUGIN_IDS = new Set<string>([
   'parallel-code',
   'procrastination-buster',
   'sync-md',
+  'ticktick-import',
   'todoist-import',
   'trello-issue-provider',
   'voice-reminder',

@@ -1,0 +1,72 @@
+{
+  "TITLE": {
+    "IMPORT": "Import from TickTick",
+    "PREVIEW": "Preview",
+    "IMPORTING": "Importing…",
+    "FINISHED": "Import finished",
+    "INCOMPLETE": "Import incomplete"
+  },
+  "FILE": {
+    "LABEL": "TickTick backup file (.csv)",
+    "INTRO": "Brings your open TickTick tasks, sub-tasks, checklists, tags and due dates into Super Productivity. The import only adds data — nothing in Super Productivity is changed or removed.",
+    "HELP": "Create the backup in the TickTick web app under Settings → Backup → Generate backup. The file is read on this device only; nothing is uploaded.",
+    "REQUIRED": "Please choose your TickTick backup file first.",
+    "LOADING": "Reading your TickTick backup…",
+    "NOT_TICKTICK": "This does not look like a TickTick backup — choose the .csv file from Settings → Backup.",
+    "NO_PROJECTS": "No open tasks found in this backup."
+  },
+  "ERROR": {
+    "LOAD_FAILED": "Could not read the file: {{error}}",
+    "IMPORT_FAILED": "Import failed: {{error}}",
+    "IMPORT_STOPPED": "Import stopped at “{{project}}”: {{error}}. That project was created only partially — delete “{{project}}” before re-running, then select it and the remaining projects again."
+  },
+  "BUTTON": {
+    "LOAD_PREVIEW": "Load preview",
+    "IMPORT": "Import",
+    "BACK": "Back"
+  },
+  "PREVIEW": {
+    "CHOOSE_PROJECTS": "Choose the lists to import:",
+    "PROJECT_COUNTS": "{{title}} — tasks: {{taskCount}}, sub-tasks: {{subTaskCount}}",
+    "ALREADY_EXISTS": "already exists — possibly imported before",
+    "PRIORITY_LEGEND": "Map TickTick priorities to:",
+    "PRIORITY_NONE": "Nothing",
+    "PRIORITY_TAGS": "p1–p3 tags (high, medium, low)",
+    "PRIORITY_EISENHOWER": "Eisenhower matrix — urgent / important tags",
+    "LOSS_HEADING": "What will not survive the move",
+    "SELECT_PROJECT": "Select at least one list to import."
+  },
+  "LOSS": {
+    "FOLDERS": "Folders flattened into the project list: {{count}}.",
+    "COLUMNS": "Kanban columns dropped (tasks keep their order in the project): {{count}}.",
+    "DEMOTED_SUBTASKS": "Deeply nested sub-tasks made direct sub-tasks (2 levels max): {{count}}.",
+    "RECURRING": "Recurring tasks keeping only their next date (the rule is noted in task notes): {{count}}.",
+    "REMINDERS": "Reminders not imported: {{count}}.",
+    "SUBTASK_TAGS": "Sub-task tags not imported (sub-tasks have no tags): {{count}}.",
+    "SUBTASK_PRIORITIES": "Prioritized sub-tasks not receiving priority tags: {{count}}.",
+    "TRUNCATED_FIELDS": "Unusually long values shortened to safe import limits: {{count}}.",
+    "CLOSED_TASKS": "Completed, archived and won't-do tasks in the backup skipped: {{count}}.",
+    "NOT_IN_BACKUP": "Attachments, comments, focus records and habits are not part of the TickTick backup."
+  },
+  "IMPORT": {
+    "STARTING": "Starting…",
+    "PHASE_PROJECT": "creating project",
+    "PHASE_TASKS": "creating tasks",
+    "PHASE_DETAILS": "applying dates and tags {{current}}/{{total}}",
+    "PROGRESS": "Project {{current}} of {{total}}: {{title}} — {{detail}}"
+  },
+  "SUMMARY": {
+    "PROJECT_RESULT": "{{title}}: {{landedTasks}} of {{plannedTasks}} tasks, {{landedSubTasks}} of {{plannedSubTasks}} sub-tasks",
+    "SHORTFALL": "some items did not land; please review",
+    "UNVERIFIED": "Could not verify the imported counts — the numbers above may show 0 even for tasks that landed.",
+    "CREATED_TAGS": "Created tags: {{tags}}",
+    "NOT_CARRIED_OVER": "Not carried over",
+    "SNACK_FINISHED": "TickTick import finished",
+    "UNDO": "The import is additive — to undo it, delete the created projects."
+  },
+  "PARSE": {
+    "UNTITLED_PROJECT": "Untitled list",
+    "UNTITLED_TASK": "Untitled task",
+    "REPEATS": "Repeats: {{rule}}"
+  }
+}
