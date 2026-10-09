@@ -948,4 +948,57 @@ describe('FocusModeReducer', () => {
       expect(FOCUS_MODE_FEATURE_KEY).toBe('focusMode');
     });
   });
+  describe('restoreFocusSession', () => {
+    it('re-adopts a running work session so the next tick catches up', () => {
+      const tenMinutes = 10 * 60_000;
+      const startedAt = Date.now() - tenMinutes;
+      const restored = focusModeReducer(
+        initialState,
+        a.restoreFocusSession({
+          timer: {
+            isRunning: true,
+            startedAt,
+            elapsed: 0,
+            duration: 25 * 60_000,
+            purpose: 'work',
+          },
+          mode: FocusModeMode.Pomodoro,
+          currentCycle: 3,
+          pausedTaskId: null,
+        }),
+      );
+
+      expect(restored.mode).toBe(FocusModeMode.Pomodoro);
+      expect(restored.currentCycle).toBe(3);
+      expect(restored.currentScreen).toBe(FocusScreen.Main);
+      expect(restored.mainState).toBe(FocusMainUIState.InProgress);
+      expect(restored.isOverlayShown).toBe(initialState.isOverlayShown);
+      const ticked = focusModeReducer(restored, a.tick());
+      expect(ticked.timer.elapsed).toBeGreaterThanOrEqual(tenMinutes);
+      expect(ticked.timer.isRunning).toBe(true);
+    });
+
+    it('re-adopts a paused break on the break screen', () => {
+      const restored = focusModeReducer(
+        initialState,
+        a.restoreFocusSession({
+          timer: {
+            isRunning: false,
+            startedAt: 1_000,
+            elapsed: 60_000,
+            duration: 5 * 60_000,
+            purpose: 'break',
+            isLongBreak: false,
+          },
+          mode: FocusModeMode.Pomodoro,
+          currentCycle: 1,
+          pausedTaskId: 'task-1',
+        }),
+      );
+
+      expect(restored.currentScreen).toBe(FocusScreen.Break);
+      expect(restored.pausedTaskId).toBe('task-1');
+      expect(focusModeReducer(restored, a.tick()).timer.elapsed).toBe(60_000);
+    });
+  });
 });

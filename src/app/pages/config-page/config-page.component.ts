@@ -461,6 +461,16 @@ export class ConfigPageComponent implements OnInit {
     );
   }
 
+  /**
+   * Forgets the expanded section once it is collapsed by hand, so selecting its
+   * search result again changes `[isExpanded]` and reopens it (#9643).
+   */
+  onSectionExpandedChange(section: GenericConfigFormSection, isExpanded: boolean): void {
+    if (!isExpanded && this.isSectionExpanded(section)) {
+      this.expandedSection = null;
+    }
+  }
+
   getGlobalCfgSection(
     sectionKey: GlobalConfigFormSectionKey | ProjectCfgFormKey,
   ): GlobalSectionConfig {
