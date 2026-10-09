@@ -129,15 +129,17 @@ export const parseTickTickCsv = (
   const rawTasks: RawTask[] = [];
   const columnsByProject = new Map<string, Set<string>>();
   const seenTaskIds = new Set<string>();
+  const allProjectExtIds = new Set<string>();
   let skippedClosedCount = 0;
 
   rows.slice(headerIndex + 1).forEach((cells, i) => {
     const row: Row = (name) => cells[col.get(name) ?? -1] ?? '';
+    const projectExtId = `${row('Folder Name').trim()}\u0000${row('List Name').trim()}`;
+    allProjectExtIds.add(projectExtId);
     if ((row('Status').trim() || OPEN_STATUS) !== OPEN_STATUS) {
       skippedClosedCount++;
       return;
     }
-    const projectExtId = `${row('Folder Name').trim()}\u0000${row('List Name').trim()}`;
     if (!projects.has(projectExtId)) {
       projects.set(projectExtId, toProject(row, projectExtId, strings));
     }
@@ -168,6 +170,7 @@ export const parseTickTickCsv = (
     })),
     tasks: emitTasks(rawTasks, strings),
     skippedClosedCount,
+    skippedListCount: allProjectExtIds.size - projects.size,
   };
 };
 

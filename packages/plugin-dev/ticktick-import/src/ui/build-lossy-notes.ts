@@ -49,6 +49,7 @@ export const buildLossyNotes = (
     ),
   );
   addCount('LOSS.CLOSED_TASKS', model.skippedClosedCount);
+  addCount('LOSS.CLOSED_LISTS', model.skippedListCount);
   notes.push({ key: 'LOSS.NOT_IN_BACKUP' });
   return notes;
 };

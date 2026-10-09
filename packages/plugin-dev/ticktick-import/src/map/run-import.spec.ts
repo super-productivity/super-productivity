@@ -40,6 +40,7 @@ const model = (tasks: TickTickTask[]): TickTickImportModel => ({
   projects: [project('p1', 'Work')],
   tasks,
   skippedClosedCount: 0,
+  skippedListCount: 0,
 });
 
 /** In-memory fake of the PluginAPI subset the executor uses. */
@@ -200,6 +201,7 @@ describe('runImport', () => {
         task({ extId: 'b', projectExtId: 'p2' }),
       ],
       skippedClosedCount: 0,
+      skippedListCount: 0,
     };
     const plan = planImport(m, { priorityMapping: 'none' });
     const { api } = createFakeApi({ failNthBatch: 2 });

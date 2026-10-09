@@ -91,6 +91,19 @@ describe('parseTickTickCsv', () => {
     expect(model?.skippedClosedCount).toBe(3);
   });
 
+  it('counts lists that hold only closed tasks instead of dropping them silently', () => {
+    const model = parseTickTickCsv(
+      csv(
+        { list: 'Work', id: 'a' },
+        { list: 'Done list', id: 'b', status: '1' },
+        { list: 'Done list', id: 'c', status: '2' },
+        { folder: 'Old', list: 'Work', id: 'd', status: '1' },
+      ),
+    );
+    expect(model?.projects.map((p) => p.title)).toEqual(['Work']);
+    expect(model?.skippedListCount).toBe(2);
+  });
+
   it('keeps multi-line content with commas and quotes as notes', () => {
     const content = 'line 1, with "quotes"\nline 2';
     const model = parseTickTickCsv(csv({ id: 'a', content }));

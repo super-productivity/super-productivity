@@ -12,7 +12,7 @@
     "HELP": "Create the backup in the TickTick web app under Settings → Backup → Generate backup. The file is read on this device only; nothing is uploaded.",
     "REQUIRED": "Please choose your TickTick backup file first.",
     "LOADING": "Reading your TickTick backup…",
-    "NOT_TICKTICK": "This does not look like a TickTick backup — choose the .csv file from Settings → Backup.",
+    "NOT_TICKTICK": "This does not look like a TickTick backup — choose the .csv file from Settings → Backup. If TickTick is set to a language other than English, try switching it to English and generating the backup again.",
     "NO_PROJECTS": "No open tasks found in this backup."
   },
   "ERROR": {
@@ -46,6 +46,7 @@
     "SUBTASK_PRIORITIES": "Prioritized sub-tasks not receiving priority tags: {{count}}.",
     "TRUNCATED_FIELDS": "Unusually long values shortened to safe import limits: {{count}}.",
     "CLOSED_TASKS": "Completed, archived and won't-do tasks in the backup skipped: {{count}}.",
+    "CLOSED_LISTS": "Lists without open tasks skipped: {{count}}.",
     "NOT_IN_BACKUP": "Attachments, comments, focus records and habits are not part of the TickTick backup."
   },
   "IMPORT": {

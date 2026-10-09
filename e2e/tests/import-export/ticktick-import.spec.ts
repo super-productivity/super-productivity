@@ -100,6 +100,7 @@ test.describe('TickTick import plugin', () => {
     await projectPage.navigateToProjectByName(list);
     const root = taskPage.getTaskByText('Weekly shop').first();
     await expect(root).toBeVisible();
+    expect(await taskPage.taskHasTag(root, 'errand')).toBe(true);
     // `.last()`: the parent task element contains its sub-tasks' text too
     await expect(taskPage.getTaskByText('Milk').last()).toBeVisible();
     await expect(taskPage.getTaskByText('Compare prices').last()).toBeVisible();

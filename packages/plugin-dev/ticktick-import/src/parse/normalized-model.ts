@@ -45,4 +45,6 @@ export interface TickTickImportModel {
   tasks: TickTickTask[];
   /** rows skipped because they were completed, archived or won't-do */
   skippedClosedCount: number;
+  /** lists skipped because all their tasks were closed — no empty projects */
+  skippedListCount: number;
 }

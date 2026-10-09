@@ -35,7 +35,12 @@ const project = (
 const model = (
   tasks: TickTickTask[],
   projects = [project('p1', 'Work')],
-): TickTickImportModel => ({ projects, tasks, skippedClosedCount: 0 });
+): TickTickImportModel => ({
+  projects,
+  tasks,
+  skippedClosedCount: 0,
+  skippedListCount: 0,
+});
 
 describe('planImport', () => {
   it('creates sub-tasks with temp- parent refs and carries done checklist items', () => {
