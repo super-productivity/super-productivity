@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Sağlayıcı (e.g.: https://redmine.org)",
+    "API_KEY": "API erişim anahtarı",
+    "PROJECT_ID": "Proje Tanımlayıcı",
+    "PROJECT_ID_DESC": "Projeyi Tarayıcıda görüntülerken URL'nin bir parçası olarak bulunabilir.",
+    "SCOPE": "Kapsam",
+    "SCOPE_ALL": "Hepsi",
+    "SCOPE_CREATED": "Benim tarafımdan oluşturuldu",
+    "SCOPE_ASSIGNED": "Bana atanan",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Redmine'a raporlamak için süre takibi diyaloğunu göster",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Redmine projesinde süre takibi modülünün etkinleştirilmiş olması gerekir",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Alt görevler tamamlandığında süre takibi diyaloğunu göster",
+    "DEFAULT_TIME": "İletişim kutusu için varsayılan zaman değeri",
+    "DEFAULT_TIME_ALL_TIME": "Göreve harcanan tüm zamanı doldurun",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Harcanan tüm zamanı eksi günlüğe kaydedilen zamanı doldurun",
+    "DEFAULT_TIME_TODAY": "Yalnızca bugün harcanan zamanı doldurun",
+    "DEFAULT_TIME_YESTERDAY": "Yalnızca dün harcanan zamanı doldurun"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Özet",
+    "STATUS": "Durum",
+    "PRIORITY": "Öncelik",
+    "AUTHOR": "Yazar",
+    "ASSIGNEE": "Atanan",
+    "CATEGORY": "Kategori",
+    "VERSION": "Sürüm",
+    "DUE_DATE": "Son Tarih",
+    "TIME_SPENT": "Geçen Zaman",
+    "DESCRIPTION": "Açıklama"
+  },
+  "FORM_HELP": "<p>Burada, günlük planlama görünümündeki görev oluşturma panelinde belirli bir proje için açık Redmine (çevrimiçi sürümü veya şirket içinde barındırılan bir örnek) sorunlarını listelemek için SuperProductivity'yi yapılandırabilirsiniz. Öneriler olarak listelenecekler ve konuyla ilgili bir bağlantının yanı sıra konuyla ilgili daha fazla bilgi sağlayacaklar.</p><p>Ek olarak, tüm açık sorunları otomatik olarak görev biriktirme listenize ekleyebilir ve senkronize edebilirsiniz.</p>"
+}

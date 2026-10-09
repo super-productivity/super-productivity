@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Värd (t.ex.: https://redmine.org)",
+    "API_KEY": "API-åtkomstnyckel",
+    "PROJECT_ID": "Projektidentifierare",
+    "PROJECT_ID_DESC": "Finns som en del av webbadressen när du visar projektet i webbläsaren.",
+    "SCOPE": "Omfattning",
+    "SCOPE_ALL": "Alla",
+    "SCOPE_CREATED": "Skapad av mig",
+    "SCOPE_ASSIGNED": "Tilldelad mig",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Visa tidsregistreringsdialog för rapportering till Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Kräver att tidsregistreringsmodulen är aktiverad för Redmine-projektet",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Visa tidsregistreringsdialog när deluppgifter slutförs",
+    "DEFAULT_TIME": "Standardtidsvärde för dialogrutan",
+    "DEFAULT_TIME_ALL_TIME": "Fyll i all tid som har lagts på uppgiften",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Fyll i all tid som har använts minus den tid som har loggats.",
+    "DEFAULT_TIME_TODAY": "Fyll bara i tid använd idag",
+    "DEFAULT_TIME_YESTERDAY": "Fyll bara i tiden du använde igår"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sammanfattning",
+    "STATUS": "Status",
+    "PRIORITY": "Prioritet",
+    "AUTHOR": "Författare",
+    "ASSIGNEE": "Mottagare",
+    "CATEGORY": "Kategori",
+    "VERSION": "Version",
+    "DUE_DATE": "Två datum",
+    "TIME_SPENT": "Tid som spenderats",
+    "DESCRIPTION": "Beskrivning"
+  },
+  "FORM_HELP": "<p>Här kan du konfigurera SuperProductivity så att öppna Redmine-ärenden (antingen onlineversionen eller en egenhostad instans) för ett specifikt projekt listas i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det.</p><p>Dessutom kan du automatiskt importera alla öppna ärenden.</p>"
+}

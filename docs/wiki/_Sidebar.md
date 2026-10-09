@@ -21,6 +21,7 @@
 - [[2.19-Sync-Proton-Drive-via-rclone]]
 - [[2.20-Import-from-Todoist]]
 - [[2.21-Manage-Plugins]]
+- [[2.22-Import-from-TickTick]]
 - [[2.13-Run-with-Docker]]
 
 ### Contributing to Super-Productivity
