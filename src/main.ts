@@ -453,11 +453,12 @@ bootstrapApplication(AppComponent, {
       [
         importProvidersFrom(
           // Session restore relies on FocusModeEffects (completion, logging),
-          // so it registers after them. Android recovers from its native
-          // foreground service instead, which also restores the task time.
+          // so it registers after them. iOS only: it kills backgrounded
+          // WebViews; Android recovers from its native foreground service, and
+          // on desktop a closed app means the user ended the session.
           EffectsModule.forFeature([
             FocusModeEffects,
-            ...(IS_ANDROID_WEB_VIEW ? [] : [FocusModeSessionPersistenceEffects]),
+            ...(IS_IOS_NATIVE ? [FocusModeSessionPersistenceEffects] : []),
           ]),
         ),
       ],

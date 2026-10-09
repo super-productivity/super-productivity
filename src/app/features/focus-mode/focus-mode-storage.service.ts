@@ -4,7 +4,7 @@ import { FocusModeMode, TimerState } from './focus-mode.model';
 
 /**
  * A running or paused focus session, kept so it survives the WebView being
- * killed in the background (iOS, Android process death, page reload).
+ * killed in the background on iOS.
  */
 export interface FocusSessionSnapshot {
   timer: TimerState;

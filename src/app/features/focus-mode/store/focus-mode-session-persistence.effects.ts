@@ -56,11 +56,12 @@ const isSessionOver = (timer: FocusSessionSnapshot['timer'], now: number): boole
 
 /**
  * Keeps a running/paused focus session in localStorage and re-adopts it when the
- * app starts with an idle store, so a WebView killed in the background (iOS,
- * Android process death) does not reset the Pomodoro or stop task tracking.
+ * app starts with an idle store, so an iOS WebView killed in the background
+ * does not reset the Pomodoro or stop task tracking.
  * Focus state is local-only (never op-logged), so this has no sync surface.
- * Not registered on Android: AndroidFocusModeEffects recovers from the native
- * foreground service, and a second restore path would race it.
+ * Registered on iOS only: AndroidFocusModeEffects recovers from the native
+ * foreground service (a second path would race it), and on desktop/web closing
+ * the app is a deliberate end of the session.
  */
 @Injectable()
 export class FocusModeSessionPersistenceEffects {

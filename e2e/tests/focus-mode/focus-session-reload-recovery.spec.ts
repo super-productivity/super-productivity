@@ -3,10 +3,10 @@ import { expect, test as base } from '../../fixtures/test.fixture';
 import { skipOnboardingForE2E, waitForAppReady } from '../../utils/waits';
 
 /**
- * A mobile OS may kill the backgrounded WebView (iOS, or Android when the whole
- * process dies). The app then starts fresh, and a running Pomodoro used to be
- * lost together with its task tracking. A page reload reproduces the same
- * "WebView recreated with an idle store" situation in the browser.
+ * iOS may kill the backgrounded WebView. The app then starts fresh, and a
+ * running Pomodoro used to be lost together with its task tracking. A page
+ * reload reproduces the same "WebView recreated with an idle store" situation
+ * in the browser; Capacitor's custom-platform hook makes the app treat it as iOS.
  */
 
 const MINUTE = 60 * 1000;
@@ -37,22 +37,32 @@ type HelperWindow = Window & {
 
 // The fake clock must precede Angular bootstrap so RxJS timers and Date.now()
 // share one clock across reloads.
-const test = base.extend({
-  page: async ({ isolatedContext }, use) => {
-    const page = await isolatedContext.newPage();
-    const morning = new Date();
-    morning.setHours(10, 0, 0, 0);
-    await page.clock.install({ time: morning });
-    await page.addInitScript(skipOnboardingForE2E);
-    try {
-      await page.goto('/');
-      await waitForAppReady(page);
-      await use(page);
-    } finally {
-      await page.close();
-    }
-  },
-});
+const testOn = (platform: 'ios' | 'web'): typeof base =>
+  base.extend({
+    page: async ({ isolatedContext }, use) => {
+      const page = await isolatedContext.newPage();
+      const morning = new Date();
+      morning.setHours(10, 0, 0, 0);
+      await page.clock.install({ time: morning });
+      await page.addInitScript(skipOnboardingForE2E);
+      if (platform === 'ios') {
+        await page.addInitScript(() => {
+          (
+            window as unknown as { CapacitorCustomPlatform: { name: string } }
+          ).CapacitorCustomPlatform = { name: 'ios' };
+        });
+      }
+      try {
+        await page.goto('/');
+        await waitForAppReady(page);
+        await use(page);
+      } finally {
+        await page.close();
+      }
+    },
+  });
+const test = testOn('ios');
+const webTest = testOn('web');
 
 const readState = async (page: Page): Promise<ObservedState> => {
   await page.waitForFunction(
@@ -197,3 +207,18 @@ test.describe('Focus session recovery after the WebView is recreated', () => {
     expect((await readState(page)).focusMode.timer.purpose).toBeNull();
   });
 });
+
+// On desktop/web, closing the app is a deliberate end of the session.
+webTest(
+  'outside iOS a reload does not restore the session',
+  async ({ page, workViewPage }) => {
+    await workViewPage.waitForTaskList();
+    await workViewPage.addTask('Pomodoro on the web');
+    await startPomodoro(page);
+    await page.clock.fastForward(MINUTE);
+
+    await reload(page, () => workViewPage.waitForTaskList());
+    await page.clock.fastForward(MINUTE);
+    expect((await readState(page)).focusMode.timer.purpose).toBeNull();
+  },
+);
