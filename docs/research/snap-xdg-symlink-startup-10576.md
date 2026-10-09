@@ -8,7 +8,7 @@ Research, 2026-10-09. electron-builder / app-builder-lib 26.16.1, `snap.base: co
 - electron-builder already maintains a fixed copy of the same script, `node_modules/app-builder-lib/templates/snap/desktop-common.sh`. It only ships on the no-template path. That copy adds an `is_subpath` guard that skips this branch for the reporter's setup.
 - The core24 gnome extension still does the XDG migration, but its launcher has no `-e` and has the same guard. The reporter's claim that it "no longer does this" is wrong, though core24 would still avoid the crash.
 - **Recommendation:** use patch-package on `app-builder-lib` so that template builds pack the maintained `desktop-common.sh` in place of the 2019 one. Also add a CI assertion and send the same change upstream. Confidence: 80%. See [Recommendation](#recommendation).
-- **Status:** implemented in `patches/app-builder-lib+26.16.1.patch` and the "Verify snap template was unpacked" step of `.github/workflows/build.yml`. The upstream electron-builder issue/PR has not been filed yet.
+- **Status:** implemented in `patches/app-builder-lib+26.16.1.patch` with the payload check `tools/assert-snap-xdg-guard.sh`, run in `.github/workflows/build.yml` and, before the store upload, in `.github/workflows/build-publish-to-snap-on-release.yml`. The upstream electron-builder issue/PR has not been filed yet.
 
 ## 1. Shipped template
 

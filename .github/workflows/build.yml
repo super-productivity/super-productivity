@@ -177,16 +177,10 @@ jobs:
               exit 1
             }
           done
-          # patches/app-builder-lib+*.patch swaps the template's 2019 desktop-common.sh
-          # for electron-builder's maintained copy, whose is_subpath guard keeps an XDG
-          # dir symlinked to an empty dir from aborting every launch after the first
-          # (#10576). A failed or dropped patch still builds green, so check the payload.
-          unsquashfs -cat "$SNAP_FILE" desktop-common.sh > "$RUNNER_TEMP/desktop-common.sh"
-          grep -A1 -F '[ -L "$old" ]' "$RUNNER_TEMP/desktop-common.sh" \
-            | grep -qF 'is_subpath "$old" "$SNAP_USER_DATA"' || {
-            echo "::error::desktop-common.sh lacks the is_subpath guard -- the app-builder-lib patch was not applied (#10576)"
-            exit 1
-          }
+          # #10576: the app-builder-lib patch must have swapped in the guarded launcher.
+          # On tag builds the snap is already published by now; the release workflow
+          # re-checks it before the store upload.
+          bash tools/assert-snap-xdg-guard.sh "$SNAP_FILE"
 
       - name: Normalize snap file name
         if: false == startsWith(github.ref, 'refs/tags/v')
