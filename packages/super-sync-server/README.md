@@ -39,10 +39,21 @@ Deploy hosts need Docker with the Compose plugin, `curl`, `git`, and `jq`.
 The image revision check requires Docker Compose support for
 `docker compose config --format json`.
 
-> **There are no release tags.** `ghcr.io/super-productivity/supersync` publishes
-> only `latest` and `master-<sha>`, both built from `master`, so a default deploy
-> tracks upstream `master` rather than a released version. Pin `SUPERSYNC_IMAGE`
-> to a `master-<sha>` tag if you need a fixed one.
+> **The default deploy tracks `master`.** `latest` and `master-<sha>` are built
+> from `master`. Releases also publish `vX.Y.Z`; older releases have one only if
+> it was backfilled, so check the tag exists before pinning. To run a release,
+> deploy from its tag:
+>
+> ```bash
+> git fetch --tags && git checkout vX.Y.Z
+> # in .env: SUPERSYNC_IMAGE=ghcr.io/super-productivity/supersync:vX.Y.Z
+> ./scripts/deploy.sh
+> ```
+>
+> On a tag checkout `deploy.sh` warns that `git pull` failed; that is expected and
+> leaves the checkout untouched. The image revision check passes only when the
+> image matches the checked-out tag. A `master-<sha>` pin works the same way with
+> `git checkout <sha>`.
 
 ```bash
 # 1. Clone the repo (deploy.sh runs from this checkout) and enter this directory
