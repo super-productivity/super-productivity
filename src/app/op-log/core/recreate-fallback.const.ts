@@ -37,7 +37,7 @@ import { EMPTY_SIMPLE_COUNTER } from '../../features/simple-counter/simple-count
  * but the on-disk DEFENSE-IN-DEPTH heal stays absent until you ALSO add a
  * matching branch in `auto-fix-typia-errors.ts` (or generalize that file).
  * Membership here ALSO opts the type into field-patch resolutions:
- * `ConflictResolutionService._tryCreateFieldPatch` and
+ * `ConflictLocalWinOpsService._tryCreateFieldPatch` and
  * `supersededPatchFields` refuse fallback-less types because their partial
  * patch must survive this recreate path. That is safe by construction
  * (recreate-safe ⇒ patch-recreate-safe), but know that an entry here enables

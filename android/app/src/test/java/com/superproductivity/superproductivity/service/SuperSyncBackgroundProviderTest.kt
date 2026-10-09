@@ -71,7 +71,7 @@ class SuperSyncBackgroundProviderTest {
     fun `schedules reminders from encrypted ops when a decryptor is present`() {
         val result = providerWithDecryptor().parseResponse(ENCRYPTED_DOWNLOAD_RESPONSE)
 
-        val byKey = result.remindersToSchedule.associateBy { Pair(it.taskId, it.isDueDate) }
+        val byKey = result.remindersToSchedule.associateBy { Pair(it.taskId, it.isDeadline) }
         assertEquals(3, byKey.size)
 
         // op-1 (CRT, entityChanges path): remindAt + deadlineRemindAt

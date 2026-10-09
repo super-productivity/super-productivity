@@ -1,5 +1,6 @@
 import { TaskReminderOptionId } from '../task.model';
 import {
+  millisecondsDiffToDeadlineRemindOption,
   millisecondsDiffToRemindOption,
   remindOptionToMilliseconds,
 } from './remind-option-to-milliseconds';
@@ -52,6 +53,60 @@ describe('remindOptionToMilliseconds roundtrip', () => {
     const remindAt1m = DUE_DATE - m1;
     expect(millisecondsDiffToRemindOption(DUE_DATE, remindAt1m)).toBe(
       TaskReminderOptionId.AtStart,
+    );
+  });
+});
+
+describe('millisecondsDiffToDeadlineRemindOption', () => {
+  const DEADLINE = new Date('2026-01-10T12:00:00Z').getTime();
+  const HOUR = 60 * 60 * 1000;
+  const DAY = 24 * HOUR;
+  const TWO_HOURS = 2 * HOUR;
+  const TWENTY_HOURS = 20 * HOUR;
+  const TWO_AND_HALF_DAYS = 2.5 * DAY;
+  const THREE_DAYS = 3 * DAY;
+  const SIX_DAYS = 6 * DAY;
+
+  [
+    TaskReminderOptionId.AtStart,
+    TaskReminderOptionId.m30,
+    TaskReminderOptionId.h1,
+    TaskReminderOptionId.d1,
+    TaskReminderOptionId.d3,
+    TaskReminderOptionId.w1,
+  ].forEach((optId) => {
+    it(`should roundtrip correctly for ${optId}`, () => {
+      const remindAt = remindOptionToMilliseconds(DEADLINE, optId);
+      expect(remindAt).toBeDefined();
+      expect(millisecondsDiffToDeadlineRemindOption(DEADLINE, remindAt)).toBe(optId);
+    });
+  });
+
+  it('should snap in-between diffs to the nearest long-lead bucket', () => {
+    expect(millisecondsDiffToDeadlineRemindOption(DEADLINE, DEADLINE - TWO_HOURS)).toBe(
+      TaskReminderOptionId.h1,
+    );
+    expect(
+      millisecondsDiffToDeadlineRemindOption(DEADLINE, DEADLINE - TWENTY_HOURS),
+    ).toBe(TaskReminderOptionId.d1);
+    expect(
+      millisecondsDiffToDeadlineRemindOption(DEADLINE, DEADLINE - TWO_AND_HALF_DAYS),
+    ).toBe(TaskReminderOptionId.d3);
+    expect(millisecondsDiffToDeadlineRemindOption(DEADLINE, DEADLINE - SIX_DAYS)).toBe(
+      TaskReminderOptionId.w1,
+    );
+  });
+
+  it('should return DoNotRemind without a reminder', () => {
+    expect(millisecondsDiffToDeadlineRemindOption(DEADLINE, undefined)).toBe(
+      TaskReminderOptionId.DoNotRemind,
+    );
+  });
+
+  it('should keep the due-date mapping capped at 1 hour', () => {
+    // scheduled-task dialogs only offer up to 1h; they must not get day options
+    expect(millisecondsDiffToRemindOption(DEADLINE, DEADLINE - THREE_DAYS)).toBe(
+      TaskReminderOptionId.h1,
     );
   });
 });
