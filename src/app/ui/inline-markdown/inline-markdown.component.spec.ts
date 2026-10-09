@@ -293,6 +293,31 @@ describe('InlineMarkdownComponent', () => {
         expect(component.changed.emit).not.toHaveBeenCalled();
       });
 
+      // CodeMirror stores `\r\n` as `\n`, so imported CRLF notes never match
+      // the model exactly — merely viewing one must not write it back.
+      it('saves nothing for CRLF notes that were only viewed', async () => {
+        fixture.componentRef.setInput('model', 'line 1\r\nline 2');
+        fixture.detectChanges();
+        await fixture.whenStable();
+        expect(editorView().state.doc.toString()).toBe('line 1\nline 2');
+
+        await switchToTaskB();
+
+        expect(store.dispatch).not.toHaveBeenCalled();
+      });
+
+      // Same rule as the blur path's template guard and the fullscreen
+      // fallback: a whitespace-only change is not an edit worth an op.
+      it('saves nothing for a whitespace-only change', async () => {
+        const view = editorView();
+        view.dispatch({ changes: { from: view.state.doc.length, insert: '\n\n' } });
+
+        await switchToTaskB();
+
+        expect(store.dispatch).not.toHaveBeenCalled();
+        expect(editorView().state.doc.toString()).toBe('task B notes');
+      });
+
       it('saves nothing again when the edit was already committed', async () => {
         const view = editorView();
         view.dispatch({ changes: { from: view.state.doc.length, insert: ', edited' } });

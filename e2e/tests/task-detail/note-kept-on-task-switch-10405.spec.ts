@@ -96,6 +96,7 @@ test.describe('Note edit survives a task switch (#10405)', () => {
     await replaceNote(page, EDITED_NOTE);
     await taskB.locator('task-title').click({ delay: 0 });
     await expect(page.locator(DETAIL_PANEL)).toContainText('Task B 10405');
+    await expect(notesEditor(page)).toContainText('checklist item');
     await expect(notesEditor(page)).not.toContainText(EDITED_NOTE);
 
     await expectEditKeptOnTaskA(page, taskA);
@@ -154,6 +155,7 @@ test.describe('Note edit survives a task switch (#10405)', () => {
       position: { x: Math.round(box.width * 0.6), y: Math.round(box.height - 6) },
     });
     await expect(page.locator(DETAIL_PANEL)).toContainText('Task B 10405');
+    await expect(notesEditor(page)).toContainText('checklist item');
     await expect(notesEditor(page)).not.toContainText(EDITED_NOTE);
 
     await expectEditKeptOnTaskA(page, taskA);

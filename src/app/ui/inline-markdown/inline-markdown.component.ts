@@ -289,7 +289,12 @@ export class InlineMarkdownComponent implements OnChanges, OnInit, OnDestroy {
     if (!liveEditorEl || editedDoc === undefined || editedDoc === (prevModel ?? '')) {
       return;
     }
-    this._persistNotes(prevTaskId, editedDoc);
+    // Compared like the fullscreen fallback: CodeMirror stores `\r\n` as `\n`,
+    // and a whitespace-only change is no edit — viewing must not cost an op.
+    const normalize = (text: string): string => text.replace(/\r\n?/g, '\n').trim();
+    if (normalize(editedDoc) !== normalize(prevModel ?? '')) {
+      this._persistNotes(prevTaskId, editedDoc);
+    }
     // Load the new task's note now: when both tasks show the same note (two
     // fresh tasks both show the template) the model binding does not change,
     // so nothing else would take the previous task's text out of the editor —
