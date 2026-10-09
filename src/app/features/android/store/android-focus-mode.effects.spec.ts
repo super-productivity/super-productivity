@@ -26,7 +26,7 @@ import {
   hasFocusNotificationStateChanged,
   parseNativeFocusModeData,
   shouldHandleNativeTimerComplete,
-  shouldStartFocusModeService,
+  getFocusServiceCall,
 } from './android-focus-mode.effects';
 import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
 import { TimerState } from '../../focus-mode/focus-mode.model';
@@ -251,18 +251,33 @@ describe('shouldHandleNativeTimerComplete (stale/duplicate completion guard, #88
   });
 });
 
-describe('shouldStartFocusModeService (native service lost, #9531)', () => {
+describe('getFocusServiceCall (native service lost, #9531)', () => {
   const breakTimer = (over: Partial<TimerState> = {}): TimerState =>
     workTimer(0, { purpose: 'break', duration: 5 * MIN, ...over });
+  const call = (
+    over: Partial<Parameters<typeof getFocusServiceCall>[0]> = {},
+  ): ReturnType<typeof getFocusServiceCall> =>
+    getFocusServiceCall({
+      wasFocusModeActive: true,
+      isStateChanged: true,
+      isResumed: false,
+      timer: workTimer(10 * MIN),
+      isNativeServiceRunning: () => true,
+      ...over,
+    });
 
   it('starts the service when a session begins', () => {
-    expect(shouldStartFocusModeService(false, workTimer(0), () => false)).toBe(true);
+    expect(call({ wasFocusModeActive: false, isNativeServiceRunning: () => false })).toBe(
+      'start',
+    );
   });
 
   it('updates the service while it is still running', () => {
-    expect(shouldStartFocusModeService(true, workTimer(10 * MIN), () => true)).toBe(
-      false,
-    );
+    expect(call()).toBe('update');
+  });
+
+  it('does nothing without a notification-relevant change', () => {
+    expect(call({ isStateChanged: false })).toBeNull();
   });
 
   it('restarts the next Pomodoro after the background start was refused', () => {
@@ -270,31 +285,48 @@ describe('shouldStartFocusModeService (native service lost, #9531)', () => {
     // service stops itself at each completion and Android 12+ refuses the new
     // foreground-service start, so app state stays active with no service.
     const nativeRunning = { value: true };
-    const isNativeRunning = (): boolean => nativeRunning.value;
-    expect(shouldStartFocusModeService(true, workTimer(20 * MIN), isNativeRunning)).toBe(
-      false,
-    );
+    const isNativeServiceRunning = (): boolean => nativeRunning.value;
+    expect(call({ timer: workTimer(20 * MIN), isNativeServiceRunning })).toBe('update');
     nativeRunning.value = false; // completed natively, break start refused
-    expect(shouldStartFocusModeService(false, breakTimer(), isNativeRunning)).toBe(true);
+    expect(
+      call({ wasFocusModeActive: false, timer: breakTimer(), isNativeServiceRunning }),
+    ).toBe('start');
     // Break completed natively; skipBreak auto-starts work, start refused again.
-    expect(shouldStartFocusModeService(false, workTimer(0), isNativeRunning)).toBe(true);
+    expect(
+      call({ wasFocusModeActive: false, timer: workTimer(0), isNativeServiceRunning }),
+    ).toBe('start');
 
     // The resume tick on return must start, not update, the dead service.
-    expect(shouldStartFocusModeService(true, workTimer(3 * MIN), isNativeRunning)).toBe(
-      true,
-    );
+    expect(call({ timer: workTimer(3 * MIN), isNativeServiceRunning })).toBe('start');
+  });
+
+  it('restarts on the first tick after a quick return, below the 5s update gate', () => {
+    // Tapping the completion notification right after the background auto-start
+    // returns within 5s, so no tick passes hasFocusNotificationStateChanged.
+    expect(
+      call({
+        isStateChanged: false,
+        isResumed: true,
+        timer: workTimer(2_000),
+        isNativeServiceRunning: () => false,
+      }),
+    ).toBe('start');
+  });
+
+  it('sends nothing after a resume while the service is still running', () => {
+    expect(call({ isStateChanged: false, isResumed: true })).toBeNull();
   });
 
   it('leaves a stopped session to the completion path instead of restarting', () => {
     // A resume tick that ends a session natively completed while away stops the
     // timer; restarting would only replace the completion notification.
     expect(
-      shouldStartFocusModeService(
-        true,
-        workTimer(25 * MIN, { isRunning: false }),
-        () => false,
-      ),
-    ).toBe(false);
+      call({
+        isResumed: true,
+        timer: workTimer(25 * MIN, { isRunning: false }),
+        isNativeServiceRunning: () => false,
+      }),
+    ).toBe('update');
   });
 });
 
