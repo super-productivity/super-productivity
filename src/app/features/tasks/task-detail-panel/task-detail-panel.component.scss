@@ -164,3 +164,7 @@ progress-bar {
 .local-attachments-heading {
   margin-bottom: 0;
 }
+
+.sub-tasks {
+  --task-hover-underlay: var(--task-detail-bg);
+}

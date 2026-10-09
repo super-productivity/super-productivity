@@ -45,6 +45,7 @@ import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.opera
 import { DateService } from '../../../core/date/date.service';
 import { isBlankTask } from '../util/is-blank-task';
 import { TaskMultiSelectService } from '../task-multi-select.service';
+import { TASK_DELETE_UNDO_WINDOW_MS } from '../../../app.constants';
 
 @Injectable()
 export class TaskUiEffects {
@@ -132,7 +133,7 @@ export class TaskUiEffects {
               title: truncate(task.title),
             },
             msg: T.F.TASK.S.DELETED,
-            config: { duration: 5000 },
+            config: { duration: TASK_DELETE_UNDO_WINDOW_MS },
             actionStr: T.G.UNDO,
             actionFn: () => {
               const payload = getLastDeletePayload();

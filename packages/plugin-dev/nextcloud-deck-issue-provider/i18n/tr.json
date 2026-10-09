@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "Nextcloud Temel URL",
+    "USERNAME": "Nextcloud kullanıcı adınız",
+    "PASSWORD": "Nextcloud uygulama şifreniz",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "Yalnızca bana atanmış kartları içe aktar",
+    "TITLE_TEMPLATE": "Görev başlık şablonu",
+    "TITLE_TEMPLATE_DESC": "Değişkenler: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Örnek: [{BOARD}: {COLUMN}] {CARD_TITLE}. Yalnızca kart başlığı için boş bırakın."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Özet",
+    "DESCRIPTION": "Deck Açıklaması",
+    "STACK": "Yığın",
+    "DUE_DATE": "Son Tarih",
+    "ASSIGNED_USERS": "Atanan Kullanıcılar",
+    "LABELS": "Etiketler"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "Kartları görev olarak içe aktarmak için Nextcloud Deck entegrasyonunuzu yapılandırın. Kimlik doğrulama için uygulama şifresi kullanın."
+}

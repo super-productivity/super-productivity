@@ -17,8 +17,14 @@ jobs:
     if: >
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success'
+    # Job-level so skipped runs (other workflow_run events) never cancel a
+    # real deploy; a newer build of the same PR branch supersedes this one.
+    concurrency:
+      group: pr-preview-deploy-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: true
     continue-on-error: true
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: preview-deployments
 
     steps:
