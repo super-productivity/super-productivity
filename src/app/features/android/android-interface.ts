@@ -25,6 +25,15 @@ export interface AndroidReminderSnoozeEvent {
   reminderType?: string;
 }
 
+/**
+ * Whether the native shell reports deadline snooze/tap with their type.
+ * Reads `window` lazily: online-only mode can run this bundle in an older APK.
+ */
+export const hasTypedReminderActions = (): boolean =>
+  !!(
+    window as { SUPAndroid?: { supportsTypedReminderActions?(): boolean } }
+  ).SUPAndroid?.supportsTypedReminderActions?.();
+
 /** Parses the pull-queue form of a tap (plain id or JSON object). */
 export const parseReminderTapQueue = (raw: string): AndroidReminderTap =>
   raw.startsWith('{') ? (JSON.parse(raw) as AndroidReminderTap) : raw;
@@ -36,6 +45,9 @@ export interface AndroidInterface {
   // Launches the native Play In-App Review card (play flavor). No-op on fdroid.
   // The outcome is intentionally opaque (Play policy) — nothing is returned.
   requestReview?(): void;
+
+  // Absent on APKs whose snooze/tap events don't carry the reminder type.
+  supportsTypedReminderActions?(): boolean;
 
   showToast(s: string): void;
 

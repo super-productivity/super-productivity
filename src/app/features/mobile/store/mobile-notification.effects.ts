@@ -6,6 +6,7 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { Log } from '../../../core/log';
 import { T } from '../../../t.const';
 import { generateNotificationId } from '../../android/android-notification-id.util';
+import { hasTypedReminderActions } from '../../android/android-interface';
 import { Store } from '@ngrx/store';
 import {
   selectAllTasksWithReminder,
@@ -472,6 +473,11 @@ export class MobileNotificationEffects {
             ]),
           ),
           tap(async ([tasks, reminderCfg]) => {
+            // An older APK would report a deadline snooze/tap as a task one and
+            // move the wrong reminder; it keeps the in-app deadline reminder.
+            if (this._platformService.isAndroid() && !hasTypedReminderActions()) {
+              return;
+            }
             try {
               if (reminderCfg?.disableReminders) {
                 for (const previousId of this._scheduledDeadlineIds) {

@@ -229,12 +229,14 @@ export class TaskReminderEffects {
         tap((action) => {
           const taskId = 'id' in action ? action.id : action.taskId;
           try {
-            const notificationId = generateNotificationId(taskId);
-            androidInterface.cancelNativeReminder?.(notificationId);
-            // Also cancel the deadline-specific notification if it exists
             if ('taskId' in action) {
-              const deadlineNotificationId = generateNotificationId(taskId + '_deadline');
-              androidInterface.cancelNativeReminder?.(deadlineNotificationId);
+              // Deadline actions leave the task's own reminder untouched, so cancel
+              // only the deadline slot (a deadline tap must not kill the task alarm).
+              androidInterface.cancelNativeReminder?.(
+                generateNotificationId(taskId + '_deadline'),
+              );
+            } else {
+              androidInterface.cancelNativeReminder?.(generateNotificationId(taskId));
             }
           } catch (e) {
             TaskLog.err('Failed to cancel native reminder:', e);

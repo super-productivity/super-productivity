@@ -593,9 +593,13 @@ describe('MobileNotificationEffects', () => {
       // app was running — useless for the day/week lead-time options.
       platformService.isIOS.and.returnValue(false);
       platformService.isAndroid.and.returnValue(true);
+      const win = window as { SUPAndroid?: unknown };
+      const prevAndroid = win.SUPAndroid;
+      win.SUPAndroid = { supportsTypedReminderActions: () => true };
       subscribeDeadlineNotifications();
 
       tick(EFFECT_DELAY_MS + 1);
+      win.SUPAndroid = prevAndroid;
 
       expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledOnceWith(
         jasmine.objectContaining({
@@ -604,6 +608,16 @@ describe('MobileNotificationEffects', () => {
           reminderType: 'DEADLINE',
         }),
       );
+    }));
+
+    it('skips Android deadline alarms when the APK lacks typed reminder actions', fakeAsync(() => {
+      platformService.isIOS.and.returnValue(false);
+      platformService.isAndroid.and.returnValue(true);
+      subscribeDeadlineNotifications();
+
+      tick(EFFECT_DELAY_MS + 1);
+
+      expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalled();
     }));
 
     it('cancels previously scheduled deadline reminders when disabled', fakeAsync(() => {
