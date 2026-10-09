@@ -85,6 +85,30 @@ Notes on (d), core24:
 
 Users who are currently stuck recover on the first launch of a fixed revision, because nothing bad is persisted. Until then, the reporter's workaround (put a file in the empty dir) works.
 
+## Maintenance
+
+- **electron-builder bump:** `postinstall` fails while the patch no longer applies. If the new version overlays `templates/snap/*.sh` on template builds, delete the patch but keep the payload check. Otherwise regenerate the patch for the new version.
+- **Republishing an old tag:** `build-publish-to-snap-on-release.yml` runs master's check against the downloaded snap. A `workflow_dispatch` republish of a tag built before this fix therefore fails before the store upload. This is intended: it keeps the crashing launcher off `stable`.
+- **Not fixed (upstream):** the `elif` branch still runs `mv` under `bash -e`. If `user-dirs.dirs` is stale and leaves an empty real dir inside `$SNAP_USER_DATA`, one launch fails and the next recovers. Raise it in the upstream issue rather than patching it here.
+
+## Upstream issue draft
+
+To file on electron-userland/electron-builder:
+
+> **Snap: template builds ship the 2019 `desktop-common.sh`, which aborts launches when an XDG dir is a symlink to an empty dir**
+>
+> With `snap.base: core22`, `SnapCoreLegacy.buildWithTemplate` packs `snap-template-4.0-2` (2019) as-is. Its `desktop-common.sh` runs under `#!/bin/bash -e`, and on every launch after the first it runs `mv -vn "$old"/* "$new"/` when an XDG user dir (e.g. `~/Public`) is a symlink. If the symlink target is empty, the glob doesn't expand, `mv` exits 1 and the app never starts.
+>
+> `templates/snap/desktop-common.sh` in app-builder-lib already has the fix (the `is_subpath "$old" "$SNAP_USER_DATA"` guard), but only no-template builds ship it.
+>
+> **Repro (ubuntu:22.04, coreutils 8.32):** `ln -s <empty dir> ~/Public`, set `XDG_PUBLICSHARE_DIR="$HOME/Public"`, then run the template launcher chain three times. Exit codes are 0/1/1; with the maintained script they are 0/0/0.
+>
+> **Proposed fix:** in `buildWithTemplate`, copy `getTemplatePath("snap")/*.sh` into the stage dir and exclude those names from the template dir passed to mksquashfs (otherwise mksquashfs keeps the template copy and renames the staged one to `desktop-common.sh_1`).
+>
+> **Related, still open:** the `elif` branch (an empty real dir inside `$SNAP_USER_DATA` with a stale `user-dirs.dirs`) still runs `mv` under `-e` and fails one launch.
+>
+> Downstream: super-productivity#10576.
+
 ## Verification plan
 
 1. **Unit-level, no snap needed.** Run the guarded and unguarded branch under `bash -e` in `ubuntu:22.04` with `~/Public -> <empty dir outside $SNAP_USER_DATA>`. Done above: unguarded exits 1, guarded exits 0.
