@@ -299,6 +299,71 @@ describe('ReminderModule iOS notification actions', () => {
     expect(taskServiceSpy.focusTask).toHaveBeenCalledOnceWith('task-1');
   });
 
+  type AndroidHandlers = {
+    _handleSnoozeAction: (
+      taskId: string,
+      newRemindAt: number,
+      reminderType?: string,
+    ) => Promise<void>;
+    _handleTapAction: (taskId: string, reminderType?: string) => Promise<void>;
+  };
+
+  it('moves only the deadline reminder for an Android deadline snooze', async () => {
+    await (module as unknown as AndroidHandlers)._handleSnoozeAction(
+      'task-1',
+      9_000,
+      'DEADLINE',
+    );
+
+    expect(storeSpy.dispatch).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({
+        type: TaskSharedActions.setDeadline.type,
+        taskId: 'task-1',
+        deadlineWithTime: 456,
+        deadlineRemindAt: 9_000,
+        // A snooze leaves the deadline as is, so no "Deadline set" snack.
+        isSkipSnack: true,
+      }),
+    );
+  });
+
+  it('ignores a deadline snooze when the deadline was removed meanwhile', async () => {
+    // Without a deadline, setDeadline would store an orphan deadlineRemindAt.
+    taskServiceSpy.getByIdOnce$.and.returnValue(
+      of({ id: 'task-1', title: 'Task 1', isDone: false } as Task),
+    );
+
+    await (module as unknown as AndroidHandlers)._handleSnoozeAction(
+      'task-1',
+      9_000,
+      'DEADLINE',
+    );
+
+    expect(storeSpy.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('keeps rescheduling the task reminder for an untyped Android snooze', async () => {
+    await (module as unknown as AndroidHandlers)._handleSnoozeAction('task-1', 9_000);
+
+    expect(storeSpy.dispatch).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({
+        type: TaskSharedActions.reScheduleTaskWithTime.type,
+        remindAt: 9_000,
+      }),
+    );
+  });
+
+  it('clears the deadline reminder when tapping an Android deadline notification', async () => {
+    await (module as unknown as AndroidHandlers)._handleTapAction('task-1', 'DEADLINE');
+
+    expect(storeSpy.dispatch).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({
+        type: TaskSharedActions.clearDeadlineReminder.type,
+        taskId: 'task-1',
+      }),
+    );
+  });
+
   it('does not dismiss regular reminders when tapping an iOS due-date notification', async () => {
     await handleIOSNotificationAction({
       actionId: 'tap',

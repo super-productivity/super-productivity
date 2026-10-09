@@ -25,7 +25,9 @@ x-logging-app: &app-logging
 services:
   supersync:
     # Only `latest` and `master-<sha>` are published, both built from master — there
-    # are no release tags. Pin SUPERSYNC_IMAGE to a master-<sha> for a fixed version.
+    # are no release tags. The registry keeps only the 15 most recent versions, so a
+    # master-<sha> is not a durable pin, and deploy.sh rejects an image whose revision
+    # does not match the checkout. See README "Docker (Recommended)".
     image: ${SUPERSYNC_IMAGE:-ghcr.io/super-productivity/supersync:latest}
     container_name: supersync-server
     restart: unless-stopped
