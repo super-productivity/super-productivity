@@ -31,10 +31,10 @@ export interface PluginIssue {
   body?: string;
   url?: string;
   /**
-   * Without an `isDone` field mapping, 'closed', 'done', 'completed' or
-   * 'resolved' mark the task done on add and refresh; any other value marks
-   * it not done. Leave it unset when done-ness is unknown; a refresh then
-   * keeps the task's done state.
+   * Without an `isDone` field mapping, a state listed in `doneStates` marks
+   * the task done on add and refresh; any other value marks it not done.
+   * Leave it unset when done-ness is unknown; a refresh then keeps the
+   * task's done state.
    */
   state?: string;
   lastUpdated?: number;
@@ -208,6 +208,9 @@ export interface IssueProviderPluginDefinition {
   ): Promise<void>;
   /** Issue states that indicate the issue was deleted remotely (e.g. ['cancelled'] for Google Calendar) */
   deletedStates?: string[];
+  /** Issue states that mark the task as done, matched case-insensitively (e.g. ['closed', 'done']).
+   *  Defaults to 'closed', 'done', 'completed' and 'resolved'; an empty list means no state counts as done. */
+  doneStates?: string[];
   /** Optional time-block integration. Plugins that implement this allow SP tasks
    *  to automatically create/update/delete calendar events when scheduled to a specific time. */
   timeBlock?: {

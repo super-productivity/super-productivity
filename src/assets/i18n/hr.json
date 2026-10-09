@@ -215,7 +215,7 @@
         "POLL_INTERVAL_MINUTES": "Interval provjere (minute)"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Ovdje možeš podesiti Super Productivity da prikazuje nezavršene CalDAV zadatke za određeni projekt u ploči za stvaranje zadataka u dnevnom planiranju. Prikazat će se kao prijedlozi i imat će poveznicu na zadatak kao i dodatne informacije.</p> <p>Također možeš automatski dodati i sinkronizirati sve nezavršene zadatke u svoj backlog.</p><p>Da bi radilo za Nextcloud u web aplikaciji, možda trebaš dopustiti \"https://app.super-productivity.com\" u Nextcloud aplikaciji <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
+        "HELP": "<p>Ovdje možeš podesiti Super Productivity da prikazuje nezavršene CalDAV zadatke za određeni projekt u ploči za stvaranje zadataka u dnevnom planiranju. Prikazat će se kao prijedlozi i imat će poveznicu na zadatak kao i dodatne informacije.</p> <p>Također možeš automatski dodati i sinkronizirati sve nezavršene zadatke u svoj backlog.</p><p>Da bi radilo za Nextcloud u web aplikaciji, možda trebaš dopustiti \"https://app.super-productivity.com\" u Nextcloud aplikaciji <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Opis",

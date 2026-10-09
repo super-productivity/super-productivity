@@ -149,7 +149,7 @@ operations with stale vector clocks that immediately conflict.
 
 ## The atomicity rule — one replay-atomic transition, one op
 
-**Multi-entity changes are meta-reducers, not effects. Bulk dispatch loops yield.**
+**Multi-entity changes are meta-reducers, not effects. Bulk dispatch loops need no yield.**
 
 - A transition that must replay atomically and touches more than one entity
   (e.g. deleting a tag also removing it from every task) must be **one reducer
@@ -166,19 +166,22 @@ operations with stale vector clocks that immediately conflict.
   That is a known scalability residual for this rare semantic exception, not a
   precedent for new bulk fan-out; see
   [ADR #5: Project Completion](../../ARCHITECTURE-DECISIONS.md#5-project-completion-decoupled-resolution-over-atomic-multi-entity-op).
-- `store.dispatch()` and NgRx reducers run synchronously; only the op-log
-  persistence triggered by capture is asynchronous. After a loop of 50+
-  dispatches, add one post-loop macrotask yield,
-  `await new Promise((r) => setTimeout(r, 0))`, to protect capture ordering
-  before a dependent follow-up action. It does not chunk or bound main-thread
-  reducer work, and it does not reduce the N+1 upload amplification.
-  The yield only lets queued capture work start; it does not wait until the
-  ops are written. #10441 tracks replacing it where a follow-up depends on
-  the loop's ops, evidence first. In new code, prefer one meta-reducer action
-  (no loop), or, where a loop is unavoidable and a follow-up depends on its
-  ops, await `OperationWriteFlushService.flushPendingWrites()`, which resolves
-  once every captured op's write attempt has completed (do not call it while
-  holding the operation-log lock).
+- `store.dispatch()`, NgRx reducers and op capture run synchronously; only
+  the op-log write is asynchronous, and it takes its vector clock under the
+  operation-log lock in dispatch order (`concatMap`). A loop of dispatches
+  therefore needs no post-loop `await new Promise((r) => setTimeout(r, 0))`:
+  with the yields removed, no op among 50, 200 or 500 dispatches was lost,
+  reordered or left unpersisted through the real store, IndexedDB op log,
+  restart and a SuperSync round trip (measured 2026-10 in a single tab without
+  lock timeouts, #10441). A yield never chunked reducer work, never reduced the
+  N+1 upload amplification, and never waited for writes. Existing yields are
+  harmless; remove one only in a change that already touches that loop and
+  its tests. In new
+  code, prefer one meta-reducer action (no loop), or, where a loop is
+  unavoidable and a follow-up depends on its ops, await
+  `OperationWriteFlushService.flushPendingWrites()`, which resolves once every
+  captured op's write attempt has completed (do not call it while holding the
+  operation-log lock).
 
 ⚠️ `local-rules/no-multi-entity-effect` (`warn`) flags this heuristically — it
 catches the array-literal fan-out shape (`map(() => [a(), b()])`), not every

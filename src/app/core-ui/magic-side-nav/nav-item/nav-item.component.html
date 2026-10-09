@@ -214,47 +214,91 @@
       }
     </a>
   } @else if (container() === 'action' || container() === 'group') {
-    <button
-      class="nav-link"
-      mat-menu-item
-      [class.expanded]="container() === 'group' && expanded()"
-      [attr.aria-expanded]="container() === 'group' ? expanded() : null"
-      [attr.aria-controls]="container() === 'group' ? ariaControls() : null"
-      [matMenuTriggerFor]="menuTriggerFor()"
-      [class]="tourClass()"
-      (click)="clicked.emit()"
-    >
-      @if (customPluginId(); as pluginId) {
-        <plugin-icon
-          class="nav-icon"
-          [pluginId]="pluginId"
-          [fallbackIcon]="icon() || 'extension'"
-        ></plugin-icon>
-      } @else if (svgIcon()) {
-        <mat-icon
-          class="nav-icon"
-          [class.expand-icon]="container() === 'group' && svgIcon() === 'expand_more'"
-          [class.icon--svg]="true"
-          [class.icon--early-on]="svgIcon() === 'early_on'"
-          [svgIcon]="namedSvgIcon()"
-        ></mat-icon>
-      } @else if (icon()) {
-        <mat-icon
-          class="nav-icon"
-          [class.expand-icon]="container() === 'group' && icon() === 'expand_more'"
-        >
-          {{ icon() }}
-        </mat-icon>
-      }
-      @if (label()) {
-        <span
-          class="nav-label"
-          [class.label-hidden]="!showLabels()"
-          [attr.aria-hidden]="!showLabels() ? 'true' : 'false'"
-        >
-          {{ label() | translate }}
-        </span>
-      }
-    </button>
+    @if (menuTriggerFor(); as menu) {
+      <button
+        class="nav-link"
+        mat-menu-item
+        [class.expanded]="container() === 'group' && expanded()"
+        [matMenuTriggerFor]="menu"
+        [class]="tourClass()"
+        (click)="clicked.emit()"
+      >
+        @if (customPluginId(); as pluginId) {
+          <plugin-icon
+            class="nav-icon"
+            [pluginId]="pluginId"
+            [fallbackIcon]="icon() || 'extension'"
+          ></plugin-icon>
+        } @else if (svgIcon()) {
+          <mat-icon
+            class="nav-icon"
+            [class.expand-icon]="container() === 'group' && svgIcon() === 'expand_more'"
+            [class.icon--svg]="true"
+            [class.icon--early-on]="svgIcon() === 'early_on'"
+            [svgIcon]="namedSvgIcon()"
+          ></mat-icon>
+        } @else if (icon()) {
+          <mat-icon
+            class="nav-icon"
+            [class.expand-icon]="container() === 'group' && icon() === 'expand_more'"
+          >
+            {{ icon() }}
+          </mat-icon>
+        }
+        @if (label()) {
+          <span
+            class="nav-label"
+            [class.label-hidden]="!showLabels()"
+            [attr.aria-hidden]="!showLabels() ? 'true' : 'false'"
+          >
+            {{ label() | translate }}
+          </span>
+        }
+      </button>
+    } @else {
+      <!-- No matMenuTriggerFor here: even without a menu, its host bindings
+           overwrite aria-expanded and aria-controls. -->
+      <button
+        class="nav-link"
+        mat-menu-item
+        [class.expanded]="container() === 'group' && expanded()"
+        [attr.aria-expanded]="container() === 'group' ? expanded() : null"
+        [attr.aria-controls]="container() === 'group' ? ariaControls() : null"
+        [class]="tourClass()"
+        (click)="clicked.emit()"
+      >
+        @if (customPluginId(); as pluginId) {
+          <plugin-icon
+            class="nav-icon"
+            [pluginId]="pluginId"
+            [fallbackIcon]="icon() || 'extension'"
+          ></plugin-icon>
+        } @else if (svgIcon()) {
+          <mat-icon
+            class="nav-icon"
+            [class.expand-icon]="container() === 'group' && svgIcon() === 'expand_more'"
+            [class.icon--svg]="true"
+            [class.icon--early-on]="svgIcon() === 'early_on'"
+            [svgIcon]="namedSvgIcon()"
+          ></mat-icon>
+        } @else if (icon()) {
+          <mat-icon
+            class="nav-icon"
+            [class.expand-icon]="container() === 'group' && icon() === 'expand_more'"
+          >
+            {{ icon() }}
+          </mat-icon>
+        }
+        @if (label()) {
+          <span
+            class="nav-label"
+            [class.label-hidden]="!showLabels()"
+            [attr.aria-hidden]="!showLabels() ? 'true' : 'false'"
+          >
+            {{ label() | translate }}
+          </span>
+        }
+      </button>
+    }
   }
 }

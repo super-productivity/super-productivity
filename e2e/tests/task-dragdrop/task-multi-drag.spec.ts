@@ -345,11 +345,14 @@ test.describe('Multi-task drag', () => {
       .click();
     await expect(page.locator('task-multi-select-bar .bar')).toHaveCount(0);
     // Restore the task, then dragging an unselected row must remain a single drag.
-    await page
+    const row496 = page
       .locator('task')
-      .filter({ has: page.locator('task-title', { hasText: 'Large 496', exact: true }) })
-      .locator('done-toggle')
-      .click();
+      .filter({ has: page.locator('task-title', { hasText: 'Large 496', exact: true }) });
+    // The open-list row keeps animating out while the done row renders (#10594):
+    // wait for the done row, then for the open row to leave.
+    await expect(row496.locator('done-toggle[aria-checked="true"]')).toHaveCount(1);
+    await expect(row496).toHaveCount(1);
+    await row496.locator('done-toggle').click();
     await select(page, ['Large 496', 'Large 497']);
     await startDrag(
       page,

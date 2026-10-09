@@ -208,7 +208,7 @@
         "POLL_INTERVAL_MINUTES": "Kyselyväli (minuutteina)"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Tässä voit määrittää SuperProductivityn listamaan keskeneräiset CalDav-tehtävät tietyn projektin osalta tehtävänluontipaneelissa päivittäisessä suunnittelinäkymässä. Ne listataan ehdotuksina ja tarjoavat linkin tehtävään sekä lisätietoja siitä.</p> <p>Lisäksi voit automaattisesti lisätä ja synkronoida kaikki keskeneräiset tehtävät taakkaputkeesi.</p><p>Jotta se toimisi nextcloudissa verkkosovelluksessa, sinun on ehkä sallittava \"https://app.super-productivity.com\" nextcloud-sovelluksen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a> kautta.</p>"
+        "HELP": "<p>Tässä voit määrittää SuperProductivityn listamaan keskeneräiset CalDav-tehtävät tietyn projektin osalta tehtävänluontipaneelissa päivittäisessä suunnittelinäkymässä. Ne listataan ehdotuksina ja tarjoavat linkin tehtävään sekä lisätietoja siitä.</p> <p>Lisäksi voit automaattisesti lisätä ja synkronoida kaikki keskeneräiset tehtävät taakkaputkeesi.</p><p>Jotta se toimisi nextcloudissa verkkosovelluksessa, sinun on ehkä sallittava \"https://app.super-productivity.com\" nextcloud-sovelluksen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a> kautta.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Kuvaus",
@@ -1398,8 +1398,8 @@
         },
         "TITLE": "Synkronointi",
         "WEB_DAV": {
-          "CORS_INFO": "<strong>Saadaksesi sen toimimaan selaimessa:</strong> Jotta tämä toimisi selaimessa, sinun on sallittava Super Productivity CORS-pyynnöille webdav-palvelimellasi. Tällä voi olla negatiivisia tietoturvavaikutuksia! Nextcloudille katso <a href='https://github.com/nextcloud/server/issues/3131'>tämä ketju lisätietoja varten</a>. Yksi tapa saada tämä toimimaan mobiilissa on sallia \"https://app.super-productivity.com\" nextcloud-sovelluksen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a> kautta. Käytä omalla vastuullasi!</p>",
-          "D_SYNC_FOLDER_PATH": "Polku suhteessa WebDAV-palvelimen juureen, johon synkronointitiedostot tallennetaan (esim. '\\/super-productivity' tai '\\/'). Tämä EI ole palvelimesi sisäinen hakemistopolku.",
+          "CORS_INFO": "<strong>Saadaksesi sen toimimaan selaimessa:</strong> Jotta tämä toimisi selaimessa, sinun on sallittava Super Productivity CORS-pyynnöille webdav-palvelimellasi. Tällä voi olla negatiivisia tietoturvavaikutuksia! Nextcloudille katso <a href='https://github.com/nextcloud/server/issues/3131'>tämä ketju lisätietoja varten</a>. Yksi tapa saada tämä toimimaan mobiilissa on sallia \"https://app.super-productivity.com\" nextcloud-sovelluksen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a> kautta. Käytä omalla vastuullasi!</p>",
+          "D_SYNC_FOLDER_PATH": "Polku suhteessa WebDAV-palvelimen juureen, johon synkronointitiedostot tallennetaan (esim. '/super-productivity' tai '/'). Tämä EI ole palvelimesi sisäinen hakemistopolku.",
           "INFO": "WebDAV-toteutukset valitettavasti eroavat toisistaan paljon. Super Productivity tiedetään toimivan hyvin Nextcloudin kanssa, <strong>mutta se ei välttämättä toimi tarjoajasi kanssa</strong>.",
           "L_BASE_URL": "Perus-URL",
           "L_PASSWORD": "Salasana",
@@ -1483,8 +1483,8 @@
         "ERROR_CORS": "WebDAV-synkronoinnin virhe: Verkkopyyntö epäonnistui.\n\nTämä saattaa olla CORS-ongelma. Varmista:\n• WebDAV-palvelimesi sallii Cross-Origin -pyynnöt\n• Palvelimen URL on oikea ja saatavilla\n• Sinulla on toimiva internetyhteys",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Etätietoja kirjoitetaan parhaillaan",
         "ERROR_PERMISSION": "Tiedoston käyttö estetty. Tarkista tiedostojärjestelmän käyttöoikeudet.",
-        "ERROR_PERMISSION_FLATPAK": "Tiedoston käyttö estetty. Myönnä tiedostojärjestelmän käyttöoikeus Flatsealilla tai käytä polkua, joka sijaitsee ~\\/var\\/app\\/ sisällä.",
-        "ERROR_PERMISSION_SNAP": "Tiedoston käyttö estetty. Suorita 'snap connect super-productivity:home' tai käytä polkua, joka sijaitsee ~\\/snap\\/super-productivity\\/common\\/ sisällä.",
+        "ERROR_PERMISSION_FLATPAK": "Tiedoston käyttö estetty. Myönnä tiedostojärjestelmän käyttöoikeus Flatsealilla tai käytä polkua, joka sijaitsee ~/var/app/ sisällä.",
+        "ERROR_PERMISSION_SNAP": "Tiedoston käyttö estetty. Suorita 'snap connect super-productivity:home' tai käytä polkua, joka sijaitsee ~/snap/super-productivity/common/ sisällä.",
         "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "Synkronointipalvelin vastasi verkkosivulla synkronointitietojesi sijaan (esim. kirjautumis-, välityspalvelin- tai virhesivulla). Etätietosi ovat todennäköisesti ehjät — tarkista palvelimen osoite, tunnukset ja verkkoyhteys ja yritä uudelleen. Jos ongelma jatkuu, voit ylikirjoittaa etätiedot kohdasta Synkronointiasetukset → Pakota ylikirjoitus.",
         "INCOMPLETE_CFG": "Synkronoinnin todennus epäonnistui. Tarkista asetuksesi!",
         "REMOTE_NOT_ENCRYPTED": "Synkronoidut tiedot eivät ole salattuja, mutta salaus on käytössä tällä laitteella, joten ne hylättiin. Jos poistit salauksen käytöstä toisella laitteella, poista se käytöstä myös täällä synkronointiasetuksissa jatkaaksesi.",

@@ -214,7 +214,7 @@
         "IS_ADD_SUB_TASKS": "Importar también subtareas cuando se añada una tarea"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Aquí puedes configurar SuperProductivity para listar tareas de CalDav no completadas para un proyecto específico en el panel de creación de tareas en la vista de planificación diaria. Se listarán como sugerencias y proporcionarán un enlace a la tarea así como más información sobre ella.</p> <p>Además puedes añadir y sincronizar automáticamente todas las tareas no completadas a tu backlog de tareas.</p><p>Para que funcione con nextcloud en la aplicación web, es posible que necesites poner en la lista blanca \"https://app.super-productivity.com\" a través de la aplicación de nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
+        "HELP": "<p>Aquí puedes configurar SuperProductivity para listar tareas de CalDav no completadas para un proyecto específico en el panel de creación de tareas en la vista de planificación diaria. Se listarán como sugerencias y proporcionarán un enlace a la tarea así como más información sobre ella.</p> <p>Además puedes añadir y sincronizar automáticamente todas las tareas no completadas a tu backlog de tareas.</p><p>Para que funcione con nextcloud en la aplicación web, es posible que necesites poner en la lista blanca \"https://app.super-productivity.com\" a través de la aplicación de nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Descripción",
@@ -1561,7 +1561,7 @@
         "WEB_DAV": {
           "CONDITIONAL_HEADER_WARNING_MSG": "Tu servidor WebDAV no soporta cabeceras condicionales. Super Productivity no puede detectar cambios concurrentes durante la subida.<br><br>La sincronización funcionará, pero hay un pequeño riesgo de conflictos si cambias datos en varios dispositivos a la vez.",
           "CONDITIONAL_HEADER_WARNING_TITLE": "Seguridad de sincronización reducida",
-          "CORS_INFO": "<strong>Hacerlo funcionar en el navegador:</strong> Para hacer que esto funcione en el navegador necesitas poner en la lista blanca a Super Productivity para solicitudes CORS en tu servidor webdav. ¡Esto puede tener implicaciones negativas de seguridad! Para nextcloud por favor <a href='https://github.com/nextcloud/server/issues/3131'>consulta este hilo para más información</a>. Un enfoque para hacer que esto funcione en el móvil es poner en la lista blanca \"https://app.super-productivity.com\" a través de la app nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. ¡Úsalo bajo tu propio riesgo!</p>",
+          "CORS_INFO": "<strong>Hacerlo funcionar en el navegador:</strong> Para hacer que esto funcione en el navegador necesitas poner en la lista blanca a Super Productivity para solicitudes CORS en tu servidor webdav. ¡Esto puede tener implicaciones negativas de seguridad! Para nextcloud por favor <a href='https://github.com/nextcloud/server/issues/3131'>consulta este hilo para más información</a>. Un enfoque para hacer que esto funcione en el móvil es poner en la lista blanca \"https://app.super-productivity.com\" a través de la app nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>. ¡Úsalo bajo tu propio riesgo!</p>",
           "D_SYNC_FOLDER_PATH": "Ruta relativa a la raíz del servidor WebDAV donde se almacenarán los archivos de sincronización (por ejemplo, '/super-productivity' o '/'). Esta NO es la ruta interna de su servidor.",
           "INFO": "Las implementaciones de WebDAV difieren mucho desafortunadamente. Se sabe que Super Productivity funciona bien con Nextcloud, <strong>pero podría no funcionar con tu proveedor</strong>.",
           "L_BASE_URL": "URL Base",
@@ -1615,8 +1615,8 @@
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Los datos remotos se están escribiendo actualmente",
         "ERROR_PAYLOAD_TOO_LARGE": "Error de sincronización: Tus datos son demasiado grandes para subir.\n\nEsto pasa cuando tienes muchas tareas archivadas. ¡Tus datos NO se sincronizaron!\n\nContacta soporte para ayuda.",
         "ERROR_PERMISSION": "Acceso al archivo denegado. Por favor, verifique los permisos del sistema de archivos.",
-        "ERROR_PERMISSION_FLATPAK": "Acceso al archivo denegado. Conceda permiso al sistema de archivos mediante Flatseal o use una ruta dentro de ~\\/var\\/app\\/",
-        "ERROR_PERMISSION_SNAP": "Acceso al archivo denegado. Ejecute 'snap connect super-productivity:home' o use una ruta dentro de ~\\/snap\\/super-productivity\\/common\\/",
+        "ERROR_PERMISSION_FLATPAK": "Acceso al archivo denegado. Conceda permiso al sistema de archivos mediante Flatseal o use una ruta dentro de ~/var/app/",
+        "ERROR_PERMISSION_SNAP": "Acceso al archivo denegado. Ejecute 'snap connect super-productivity:home' o use una ruta dentro de ~/snap/super-productivity/common/",
         "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "El servidor de sincronización respondió con una página web en lugar de tus datos de sincronización (p. ej. una página de inicio de sesión, de proxy o de error). Es probable que tus datos remotos estén intactos: comprueba la URL del servidor, las credenciales y la red, y vuelve a intentarlo. Si el problema continúa, puedes sobrescribir los datos remotos en Ajustes de sincronización → Forzar sobrescritura.",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Error al sincronizar. No se pueden leer datos remotos. ¿Quizás habilitaste el cifrado y tu contraseña local no coincide con la remota?",
         "FINISH_DAY_SYNC_ERROR": "Error de sincronización al finalizar el día. Inténtalo de nuevo.",

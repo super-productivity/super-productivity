@@ -208,7 +208,7 @@
         "POLL_INTERVAL_MINUTES": "Interval zisťovania zmien (v minútach)"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list uncompleted CalDav todos for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the todo as well as more information about it.</p> <p>In addition you can automatically add and sync all uncompleted todos to your task backlog.</p><p>To make it work for nextcloud on mobile and web, you might need to whitelist \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
+        "HELP": "<p>Here you can configure SuperProductivity to list uncompleted CalDav todos for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the todo as well as more information about it.</p> <p>In addition you can automatically add and sync all uncompleted todos to your task backlog.</p><p>To make it work for nextcloud on mobile and web, you might need to whitelist \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Popis",
@@ -1399,7 +1399,7 @@
         },
         "TITLE": "Synchronizácia",
         "WEB_DAV": {
-          "CORS_INFO": "<strong>Making it work on MOBILE and in the browser:</strong> To make this work for mobile or the browser you need to whitelist Super Productivity for CORS requests for your Nextcloud instance. This can have negative security implications! Please <a href='https://github.com/nextcloud/server/issues/3131'>refer to this thread for more information</a>. One approach to make this work on mobile is whitelisting \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Use at your own risk!</p>",
+          "CORS_INFO": "<strong>Making it work on MOBILE and in the browser:</strong> To make this work for mobile or the browser you need to whitelist Super Productivity for CORS requests for your Nextcloud instance. This can have negative security implications! Please <a href='https://github.com/nextcloud/server/issues/3131'>refer to this thread for more information</a>. One approach to make this work on mobile is whitelisting \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>. Use at your own risk!</p>",
           "D_SYNC_FOLDER_PATH": "Cesta relatívna k koreňu WebDAV servera, kde budú uložené synchronizačné súbory (napr. ' /super-productivity' alebo ' /'). Toto NIE je interná cesta vášho servera.",
           "INFO": "Implementácie WebDAV sa bohužiaľ veľmi líšia. Super Productivity je známy tým, že dobre funguje s Nextcloud, <strong>ale nemusí fungovať s vaším poskytovateľom</strong>.",
           "L_BASE_URL": "Základná URL adresa",
@@ -1484,8 +1484,8 @@
         "ERROR_CORS": "Chyba synchronizácie WebDAV: Sieťová požiadavka zlyhala.\n\nMôže to byť problém s CORS. Prosím, uistite sa:\n Vaše WebDAV server umožňuje požiadavky z rôznych zdrojov\n URL servera je správna a prístupná\n Máte funkčné internetové pripojenie",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Vzdialené dáta sa momentálne zapisujú",
         "ERROR_PERMISSION": "Prístup k súboru zamietnutý. Skontrolujte, prosím, oprávnenia súborového systému.",
-        "ERROR_PERMISSION_FLATPAK": "Prístup k súboru zamietnutý. Udeľte oprávnenie k súborovému systému cez Flatseal alebo použite cestu v rámci ~\\/var\\/app\\/",
-        "ERROR_PERMISSION_SNAP": "Prístup k súboru zamietnutý. Spustite 'snap connect super-productivity:home' alebo použite cestu v rámci ~\\/snap\\/super-productivity\\/common\\/",
+        "ERROR_PERMISSION_FLATPAK": "Prístup k súboru zamietnutý. Udeľte oprávnenie k súborovému systému cez Flatseal alebo použite cestu v rámci ~/var/app/",
+        "ERROR_PERMISSION_SNAP": "Prístup k súboru zamietnutý. Spustite 'snap connect super-productivity:home' alebo použite cestu v rámci ~/snap/super-productivity/common/",
         "ERROR_REMOTE_RESPONSE_NOT_SYNC_DATA": "Synchronizačný server odpovedal webovou stránkou namiesto tvojich synchronizačných údajov (napr. prihlasovacou, proxy alebo chybovou stránkou). Vzdialené údaje sú pravdepodobne v poriadku — skontroluj URL servera, prihlasovacie údaje a sieť a skús to znova. Ak problém pretrváva, môžeš vzdialené údaje prepísať cez Nastavenia synchronizácie → Vynútiť prepísanie.",
         "INCOMPLETE_CFG": "Overenie pre synchronizáciu zlyhalo. Prosím, skontrolujte svoju konfiguráciu!",
         "REMOTE_NOT_ENCRYPTED": "Synchronizované údaje nie sú šifrované, ale na tomto zariadení je šifrovanie zapnuté, takže boli odmietnuté. Ak si šifrovanie vypol na inom zariadení, vypni ho pre pokračovanie aj tu v nastaveniach synchronizácie.",

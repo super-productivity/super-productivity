@@ -105,6 +105,24 @@ mat-dialog-actions {
   width: 100%;
 }
 
+.next-occurrence {
+  display: flex;
+  align-items: center;
+  gap: var(--s);
+  margin-bottom: var(--s2);
+  color: var(--text-color-muted);
+}
+
+.inherited-subtasks {
+  margin-bottom: var(--s2);
+  color: var(--text-color-muted);
+
+  ul {
+    margin: var(--s-half) 0 0;
+    padding-inline-start: var(--s3);
+  }
+}
+
 .planned-start-date-btn {
   width: 100%;
   text-align: start !important;

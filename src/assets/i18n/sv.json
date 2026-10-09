@@ -220,7 +220,7 @@
         "TWO_WAY_SYNC_TITLE": "Synkroniseringsriktning för titel"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Här kan du konfigurera SuperProductivity till att lista icke slutförda CalDav-uppgifter för ett specifikt projekt på panelen för uppgiftsskapande i den dagliga planeringsvyn. De kommer att listas som förslag och kommer att länka till uppgiften samt mer information om den.</p> <p>Dessutom kan du automatiskt lägga till och synkronisera alla icke slutförda uppgifter med din lista med eftersläpande uppgifter.</p><p>För att det ska fungera med Nextcloud i webbappen kan du behöva vitlista \"https://app.super-productivity.com\" via Nextcloud-appen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
+        "HELP": "<p>Här kan du konfigurera SuperProductivity till att lista icke slutförda CalDav-uppgifter för ett specifikt projekt på panelen för uppgiftsskapande i den dagliga planeringsvyn. De kommer att listas som förslag och kommer att länka till uppgiften samt mer information om den.</p> <p>Dessutom kan du automatiskt lägga till och synkronisera alla icke slutförda uppgifter med din lista med eftersläpande uppgifter.</p><p>För att det ska fungera med Nextcloud i webbappen kan du behöva vitlista \"https://app.super-productivity.com\" via Nextcloud-appen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Beskrivning",
@@ -1571,7 +1571,7 @@
         },
         "TITLE": "Synkronisera",
         "WEB_DAV": {
-          "CORS_INFO": "<strong>Få det att fungera i webbläsaren:</strong> För att detta ska fungera i webbläsaren måste du vitlista Super Productivity för CORS-förfrågningar för din webdav-server. Detta kan ha negativa säkerhetskonsekvenser! För nextcloud, <a href=’https://github.com/nextcloud/server/issues/3131’>se denna tråd för mer information</a>. Ett sätt att få detta att fungera på mobilen är att vitlista \"https://app.super-productivity.com\" via Nextcloud-appen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Använd på egen risk!</p>",
+          "CORS_INFO": "<strong>Få det att fungera i webbläsaren:</strong> För att detta ska fungera i webbläsaren måste du vitlista Super Productivity för CORS-förfrågningar för din webdav-server. Detta kan ha negativa säkerhetskonsekvenser! För nextcloud, <a href=’https://github.com/nextcloud/server/issues/3131’>se denna tråd för mer information</a>. Ett sätt att få detta att fungera på mobilen är att vitlista \"https://app.super-productivity.com\" via Nextcloud-appen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>. Använd på egen risk!</p>",
           "D_SYNC_FOLDER_PATH": "Sökväg relativt till WebDAV-serverns rot där synkfiler lagras (t.ex. '/super-productivity' eller '/'). Detta är INTE din servers interna katalogsökväg.",
           "INFO": "WebDAV-implementeringar skiljer sig tyvärr mycket åt. Super Productivity fungerar bra med Nextcloud, <strong>men kanske inte med din leverantör</strong>.",
           "L_BASE_URL": "Bas-URL",

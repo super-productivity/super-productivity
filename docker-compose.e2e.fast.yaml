@@ -21,16 +21,13 @@ services:
       retries: 30
       start_period: 120s
 
-  # WebDAV sync server (for sync tests)
-  webdav:
-    image: hacdias/webdav:v5
+  # E2E-only WebDAV server. Unlike `webdav` (hacdias), it enforces If-Match and
+  # If-None-Match on PUT, so concurrent-upload tests exercise real CAS (#10590).
+  webdav-e2e:
+    build: ./e2e/webdav-server
+    image: sp-webdav-e2e
     ports:
-      - '${WEBDAV_PORT:-2345}:${WEBDAV_PORT:-2345}'
-    environment:
-      - PORT=${WEBDAV_PORT:-2345}
-    volumes:
-      - ./webdav.yaml:/etc/webdav/config.yaml:ro
-      - webdav_data:/data
+      - '2345:2345'
     healthcheck:
       test:
         [
@@ -39,12 +36,9 @@ services:
           '--quiet',
           '--tries=1',
           '--spider',
-          'http://localhost:${WEBDAV_PORT:-2345}/',
+          'http://admin:admin@localhost:2345/',
         ]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 10s
-
-volumes:
-  webdav_data:

@@ -17,7 +17,7 @@ const MAX_WORK_ITEM_LIMIT = 200;
 
 // Azure DevOps "done" state categories. The backlog query excludes
 // Closed/Done/Removed; Resolved is the Agile resolved-but-not-closed state.
-const DONE_STATES = ['closed', 'done', 'removed', 'resolved'];
+const DONE_STATES = ['closed', 'done', 'removed'];
 
 type AzureScope = 'all' | 'created-by-me' | 'assigned-to-me';
 
@@ -330,6 +330,8 @@ PluginAPI.registerIssueProvider({
     { field: 'priority', label: t('DISPLAY.PRIORITY'), type: 'text', hideEmpty: true },
     { field: 'body', label: t('DISPLAY.DESCRIPTION'), type: 'markdown' },
   ],
+
+  doneStates: DONE_STATES,
 
   // Read-only provider: pull-only mapping drives remote-update detection only.
   fieldMappings: [

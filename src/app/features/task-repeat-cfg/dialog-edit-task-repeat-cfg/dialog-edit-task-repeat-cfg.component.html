@@ -45,6 +45,24 @@
         </button>
       </div>
 
+      @if (nextOccurrenceText(); as nextOccurrenceText) {
+        <div class="next-occurrence">
+          <mat-icon>event_repeat</mat-icon>
+          <span>{{ nextOccurrenceText }}</span>
+        </div>
+      }
+
+      @if (inheritedSubtaskTitles().length) {
+        <div class="inherited-subtasks">
+          {{ T.F.TASK_REPEAT.D_EDIT.INHERITED_SUBTASKS | translate }}
+          <ul>
+            @for (title of inheritedSubtaskTitles(); track $index) {
+              <li>{{ title }}</li>
+            }
+          </ul>
+        </div>
+      }
+
       <formly-form
         (modelChange)="repeatCfg.set($event)"
         [form]="formGroup1()"

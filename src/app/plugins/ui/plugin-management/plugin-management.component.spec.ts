@@ -280,4 +280,36 @@ describe('PluginManagementComponent', () => {
     expect(routerNavigateSpy).toHaveBeenCalledWith(['/active/tasks']);
     expect(layoutToggleSpy).not.toHaveBeenCalled();
   });
+
+  describe('openConfigDialog', () => {
+    const plugin = { manifest: baseManifest, loaded: true, isEnabled: true };
+    let loadSchemaSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      loadSchemaSpy = jasmine.createSpy('loadPluginConfigSchema');
+      Object.assign(TestBed.inject(PluginService), {
+        getPluginPath: () => 'uploaded://github-issue-provider',
+      });
+      Object.assign(TestBed.inject(PluginConfigService), {
+        loadPluginConfigSchema: loadSchemaSpy,
+      });
+    });
+
+    [
+      { label: 'an Error', thrown: new Error('No config schema found') },
+      { label: 'a non-Error value', thrown: 'boom' },
+    ].forEach(({ label, thrown }) => {
+      it(`shows a translated error snack, not the Install Plugin card, for ${label}`, async () => {
+        loadSchemaSpy.and.rejectWith(thrown);
+
+        await component.openConfigDialog(plugin);
+
+        expect(snackOpenSpy).toHaveBeenCalledWith({
+          type: 'ERROR',
+          msg: T.PLUGINS.FAILED_TO_LOAD_CONFIG,
+        });
+        expect(component.uploadError()).toBeNull();
+      });
+    });
+  });
 });
