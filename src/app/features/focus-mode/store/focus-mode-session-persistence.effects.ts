@@ -128,8 +128,15 @@ export class FocusModeSessionPersistenceEffects {
     // was most likely abandoned on purpose.
     if (!snapshot || now - snapshot.savedAt > MOBILE_BACKGROUND_IDLE_CAP_MS) return;
     const { timer, mode, currentCycle, pausedTaskId, trackedTaskId } = snapshot;
+    // A session that ended while away completes on the next tick with
+    // `elapsed = now - startedAt`; pin the start so it logs its real length,
+    // not the time the app was gone.
+    const restoredTimer =
+      timer.isRunning && isSessionOver(timer, now)
+        ? { ...timer, startedAt: now - timer.duration }
+        : timer;
     this._store.dispatch(
-      restoreFocusSession({ timer, mode, currentCycle, pausedTaskId }),
+      restoreFocusSession({ timer: restoredTimer, mode, currentCycle, pausedTaskId }),
     );
 
     // A session that ended while the app was gone completes via the tick

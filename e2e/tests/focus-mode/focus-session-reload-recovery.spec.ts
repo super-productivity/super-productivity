@@ -157,7 +157,11 @@ test.describe('Focus session recovery after the WebView is recreated', () => {
 
     await expect
       .poll(async () => (await readState(page)).focusMode.lastCompletedDuration)
-      .toBeGreaterThanOrEqual(POMODORO);
+      .toBeGreaterThanOrEqual(POMODORO - TOLERANCE);
+    // The session lasted 25 minutes, not the 35 minutes since it started.
+    expect((await readState(page)).focusMode.lastCompletedDuration).toBeLessThan(
+      POMODORO + TOLERANCE,
+    );
     expect((await readState(page)).focusMode.timer.purpose).not.toBe('work');
   });
 
