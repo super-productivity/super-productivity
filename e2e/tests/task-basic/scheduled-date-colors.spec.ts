@@ -1,6 +1,6 @@
 import { expect, test } from '../../fixtures/test.fixture';
 
-test('scheduled badges color date ranges in light and dark mode without changing text', async ({
+test('scheduled badges color only overdue dates in light and dark mode without changing text', async ({
   page,
   workViewPage,
   testPrefix,
@@ -13,13 +13,11 @@ test('scheduled badges color date ranges in light and dark mode without changing
 
   const ranges = [
     { days: -1, color: 'overdue' },
-    { days: 0, color: 'today' },
-    { days: 1, color: 'tomorrow' },
-    { days: 2, color: 'upcoming' },
-    { days: 8, color: 'upcoming' },
-    { days: 9, color: '' },
-    { days: 1, color: 'tomorrow', timed: true },
-    { days: 1, color: 'tomorrow', timed: true, reminder: true },
+    { days: 0, color: '' },
+    { days: 1, color: '' },
+    { days: 8, color: '' },
+    { days: 1, color: '', timed: true },
+    { days: 1, color: '', timed: true, reminder: true },
     { days: 0, color: 'overdue', timed: true, elapsed: true },
   ];
   for (const range of ranges) {
@@ -82,36 +80,6 @@ test('scheduled badges color date ranges in light and dark mode without changing
       (isDark) => document.body.classList.toggle('isDarkTheme', isDark),
       dark,
     );
-    for (const color of ['today', 'tomorrow', 'upcoming']) {
-      const badge = page
-        .locator('.schedule-btn[data-scheduled-date-color="' + color + '"] .time-badge')
-        .first();
-      const contrast = await badge.evaluate((element) => {
-        const canvas = document.createElement('canvas');
-        canvas.width = canvas.height = 1;
-        const context = canvas.getContext('2d')!;
-        const luminance = (css: string): number => {
-          context.fillStyle = css;
-          context.fillRect(0, 0, 1, 1);
-          const rgb = [...context.getImageData(0, 0, 1, 1).data].slice(0, 3).map((v) => {
-            const c = v / 255;
-            return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-          });
-          const red = rgb[0] * 0.2126;
-          const green = rgb[1] * 0.7152;
-          const blue = rgb[2] * 0.0722;
-          return red + green + blue;
-        };
-        const style = getComputedStyle(element);
-        const a = luminance(style.color);
-        const b = luminance(style.backgroundColor);
-        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-      });
-      expect(
-        contrast,
-        color + ' contrast in ' + (dark ? 'dark' : 'light'),
-      ).toBeGreaterThanOrEqual(4.5);
-    }
     // Overdue retains the existing warning palette in either mode.
     const overdue = page
       .locator('.schedule-btn[data-scheduled-date-color="overdue"]')
@@ -150,7 +118,7 @@ test('scheduled badges color date ranges in light and dark mode without changing
   }
 });
 
-test('updates elapsed dates, suppresses tracking colors and follows the Today tag color', async ({
+test('updates elapsed dates and suppresses color while tracking', async ({
   page,
   workViewPage,
   testPrefix,
@@ -186,36 +154,8 @@ test('updates elapsed dates, suppresses tracking colors and follows the Today ta
       { id: taskId, delay: delayMs },
     );
   };
-  const changeTodayColor = async (color: string | null): Promise<void> => {
-    await page.evaluate((value) => {
-      const store = (
-        window as unknown as {
-          __e2eTestHelpers: { store: { dispatch: (action: unknown) => void } };
-        }
-      ).__e2eTestHelpers.store;
-      store.dispatch({
-        type: '[Tag] Update Tag',
-        tag: { id: 'TODAY', changes: { color: value } },
-        meta: { isPersistent: true, entityType: 'TAG', entityId: 'TODAY', opType: 'UPD' },
-      });
-    }, color);
-  };
-  await schedule(120_000);
-  await expect(button).toHaveAttribute('data-scheduled-date-color', 'today');
-  await changeTodayColor('#008080');
-  for (const dark of [false, true]) {
-    await page.evaluate(
-      (value) => document.body.classList.toggle('isDarkTheme', value),
-      dark,
-    );
-    await expect(icon).toHaveCSS('color', 'rgb(0, 128, 128)');
-    await expect(badge).toHaveCSS('color', 'rgb(0, 128, 128)');
-  }
-  await changeTodayColor(null);
-  await expect(icon).not.toHaveCSS('color', 'rgb(0, 128, 128)');
-
   await schedule(3_000);
-  await expect(button).toHaveAttribute('data-scheduled-date-color', 'today');
+  await expect(button).toHaveAttribute('data-scheduled-date-color', '');
   const textBefore = await badge.textContent();
   await expect(button).toHaveAttribute('data-scheduled-date-color', 'overdue');
   expect(await badge.textContent()).toBe(textBefore);
@@ -246,7 +186,7 @@ test('updates elapsed dates, suppresses tracking colors and follows the Today ta
   }
 });
 
-test('applies Today colors to Board cards and follows Today customization/reset', async ({
+test('colors overdue Board cards like task rows', async ({
   page,
   workViewPage,
   testPrefix,
@@ -257,18 +197,19 @@ test('applies Today colors to Board cards and follows Today customization/reset'
     () => !!(window as unknown as { __e2eTestHelpers?: unknown }).__e2eTestHelpers,
   );
 
-  const title = testPrefix + ' Board Today color';
+  const title = testPrefix + ' Board overdue color';
   await workViewPage.addTask(title);
   const inboxRow = page
     .locator('task')
     .filter({ has: page.locator('task-title', { hasText: title }) });
   const taskId = await inboxRow.getAttribute('data-task-id');
   await page.evaluate((id) => {
-    const now = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
     const dueDay = [
-      now.getFullYear(),
-      String(now.getMonth() + 1).padStart(2, '0'),
-      String(now.getDate()).padStart(2, '0'),
+      yesterday.getFullYear(),
+      String(yesterday.getMonth() + 1).padStart(2, '0'),
+      String(yesterday.getDate()).padStart(2, '0'),
     ].join('-');
     const store = (
       window as unknown as {
@@ -283,20 +224,8 @@ test('applies Today colors to Board cards and follows Today customization/reset'
   }, taskId);
   await expect(inboxRow.locator('.schedule-btn')).toHaveAttribute(
     'data-scheduled-date-color',
-    'today',
+    'overdue',
   );
-  const inboxColors: { dark: boolean; color: string }[] = [];
-  for (const dark of [false, true]) {
-    await page.evaluate(
-      (value) => document.body.classList.toggle('isDarkTheme', value),
-      dark,
-    );
-    const color = await inboxRow
-      .locator('.schedule-btn mat-icon')
-      .evaluate((element) => getComputedStyle(element).color);
-    await expect(inboxRow.locator('.schedule-btn .time-badge')).toHaveCSS('color', color);
-    inboxColors.push({ dark, color });
-  }
 
   await page.goto('/#/boards');
   await page
@@ -314,38 +243,26 @@ test('applies Today colors to Board cards and follows Today customization/reset'
     .filter({ hasText: title });
   await expect(card).toBeVisible();
   const button = card.locator('.schedule-btn');
-  const icon = button.locator('mat-icon');
-  const badge = button.locator('.time-badge');
-  await expect(button).toHaveAttribute('data-scheduled-date-color', 'today');
+  await expect(button).toHaveAttribute('data-scheduled-date-color', 'overdue');
 
-  const changeTodayColor = async (color: string | null): Promise<void> => {
-    await page.evaluate((value) => {
-      const store = (
-        window as unknown as {
-          __e2eTestHelpers: { store: { dispatch: (action: unknown) => void } };
-        }
-      ).__e2eTestHelpers.store;
-      store.dispatch({
-        type: '[Tag] Update Tag',
-        tag: { id: 'TODAY', changes: { color: value } },
-        meta: { isPersistent: true, entityType: 'TAG', entityId: 'TODAY', opType: 'UPD' },
-      });
-    }, color);
-  };
-
-  for (const { dark, color } of inboxColors) {
+  for (const dark of [false, true]) {
     await page.evaluate(
       (value) => document.body.classList.toggle('isDarkTheme', value),
       dark,
     );
-    await expect(icon).toHaveCSS('color', color);
-    await expect(badge).toHaveCSS('color', color);
-    await changeTodayColor('#008080');
-    await expect(icon).toHaveCSS('color', 'rgb(0, 128, 128)');
-    await expect(badge).toHaveCSS('color', 'rgb(0, 128, 128)');
-
-    await changeTodayColor(null);
-    await expect(icon).toHaveCSS('color', color);
-    await expect(badge).toHaveCSS('color', color);
+    const colors = await button.evaluate((element) => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--c-warn)';
+      element.appendChild(probe);
+      const expected = getComputedStyle(probe).color;
+      probe.remove();
+      return {
+        expected,
+        icon: getComputedStyle(element.querySelector('mat-icon')!).color,
+        badge: getComputedStyle(element.querySelector('.time-badge')!).color,
+      };
+    });
+    expect(colors.icon).toBe(colors.expected);
+    expect(colors.badge).toBe(colors.expected);
   }
 });

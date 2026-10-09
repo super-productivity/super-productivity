@@ -184,6 +184,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
       '.schedule-btn',
     ) as HTMLElement | null;
     expect(button).not.toBeNull();
+    expect(button!.getAttribute('data-scheduled-date-color')).toBe('');
     const icon = button!.querySelector('mat-icon') as HTMLElement;
     const badge = button!.querySelector('.time-badge') as HTMLElement;
     expect(getComputedStyle(badge).color).toBe(getComputedStyle(icon).color);
