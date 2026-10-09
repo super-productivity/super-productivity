@@ -90,8 +90,8 @@ test.describe('@supersync time delta reload mid remote apply', () => {
   for (const [crashPoint, crashStatuses] of [
     ['reducer checkpoint', ['archive_pending', 'applied']],
     ['markApplied', ['applied']],
-    // Conflict resolution writes the pending remote row and merge op in one
-    // batch, then re-clocks the kept local delta in a separate write.
+    // Conflict resolution re-clocks the kept local delta in the same commit
+    // as the pending remote row and merge op; a crash there must roll back both.
     ['kept-delta re-clock', ['delta-rebase']],
   ] as const) {
     for (const accepted of [true, false]) {

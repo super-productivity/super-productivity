@@ -1667,6 +1667,42 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
     });
 
+    it('re-clocks a kept delta separately when only remote winners are written', async () => {
+      mockStore.select.and.returnValue(of({ id: 'task-1', title: 'A title' }));
+      const rename = title({ id: 'l-rename', clientId: 'A', vectorClock: { A: 1 } }, 'A');
+      const delta = op({
+        id: 'l-delta',
+        clientId: 'A',
+        actionType: ActionType.TIME_TRACKING_SYNC_TIME_SPENT,
+        vectorClock: { A: 2 },
+        timestamp: 1100,
+        payload: {
+          actionPayload: { taskId: 'task-1', date: '2026-01-01', duration: 3000 },
+          entityChanges: [],
+        },
+      });
+      const remote = title(
+        { id: 'r', clientId: 'B', vectorClock: { B: 1 }, timestamp: 2000 },
+        'B title',
+      );
+      mockOpLogStore.getOpById.and.callFake(async (id: string) =>
+        id === 'l-delta' ? ({ source: 'local', op: delta, seq: 2 } as never) : undefined,
+      );
+      const assertFence = jasmine.createSpy('assertFence');
+
+      await service.autoResolveConflictsLWW([conflictOf([rename, delta], [remote])], [], {
+        rebaseKeptTimeDeltas: true,
+        assertFence,
+      });
+
+      // No resolution batch carries the re-clock, so the fallback must run.
+      expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
+      expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledOnceWith(['l-delta'], {
+        B: 1,
+      });
+      expect(assertFence).toHaveBeenCalledOnceWith('kept time delta rebase');
+    });
+
     for (const { rebaseKeptTimeDeltas, disableDisjointMerge } of [
       { rebaseKeptTimeDeltas: false, disableDisjointMerge: false },
       { rebaseKeptTimeDeltas: true, disableDisjointMerge: false },
