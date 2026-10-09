@@ -148,20 +148,6 @@ export const createTestUser = async (
 };
 
 /**
- * Clean up all test data on the server.
- * Call this in test teardown if needed.
- */
-export const cleanupTestData = async (): Promise<void> => {
-  const response = await fetch(`${SUPERSYNC_BASE_URL}/api/test/cleanup`, {
-    method: 'POST',
-  });
-
-  if (!response.ok) {
-    console.warn(`Cleanup failed: ${response.status}`);
-  }
-};
-
-/**
  * Delete a specific test user account on the SuperSync server.
  * Used to test account deletion and re-registration scenarios.
  *
@@ -651,19 +637,6 @@ export const getTaskElement = (client: SimulatedE2EClient, taskName: string): Lo
 };
 
 /**
- * Get a task element locator from a page by task name.
- * Use this when you have a page but not a client.
- *
- * @param page - The Playwright page
- * @param taskName - The task name to search for
- * @returns Locator for the task element
- */
-export const getTaskElementFromPage = (page: Page, taskName: string): Locator => {
-  const escapedName = escapeForSelector(taskName);
-  return page.locator(`task:has-text("${escapedName}")`);
-};
-
-/**
  * Get a subtask element (task without subtasks) by name.
  * Useful for targeting subtasks without matching their parent.
  *
@@ -1010,58 +983,6 @@ export const getTaskCount = async (client: SimulatedE2EClient): Promise<number> 
 export const getTaskTitles = async (client: SimulatedE2EClient): Promise<string[]> => {
   const titles = await client.page.locator('task .task-title').allInnerTexts();
   return titles.map((title) => title.trim());
-};
-
-/**
- * Get the tracked time display text for a task.
- *
- * @param client - The simulated E2E client
- * @param taskName - The task name
- * @returns The time display text or null if not present
- */
-export const getTaskTimeDisplay = async (
-  client: SimulatedE2EClient,
-  taskName: string,
-): Promise<string | null> => {
-  const task = getTaskElement(client, taskName);
-  const timeVal = task.locator('.time-wrapper .time-val').first();
-  if ((await timeVal.count()) > 0) {
-    return timeVal.textContent();
-  }
-  return null;
-};
-
-/**
- * Wait for a task's tracked time text to be present.
- *
- * The task row intentionally hides `.time-wrapper` while hover controls are mounted,
- * so time-tracking assertions should read the rendered text instead of requiring
- * visual visibility.
- *
- * @param client - The simulated E2E client
- * @param taskName - The task name
- * @param timeout - Maximum time to wait for non-empty time text
- * @returns The trimmed time display text
- */
-export const waitForTaskTimeDisplay = async (
-  client: SimulatedE2EClient,
-  taskName: string,
-  timeout = UI_VISIBLE_TIMEOUT,
-): Promise<string> => {
-  await expect
-    .poll(
-      async () => {
-        const text = await getTaskTimeDisplay(client, taskName);
-        return text?.trim() ?? '';
-      },
-      {
-        timeout,
-        intervals: [250, 500, 1000],
-      },
-    )
-    .not.toBe('');
-
-  return (await getTaskTimeDisplay(client, taskName))!.trim();
 };
 
 /**
@@ -1627,56 +1548,6 @@ export const expectTaskInWorklog = async (
   if (!found) {
     throw new Error(`Expected task "${taskName}" to be in worklog, but it was not found`);
   }
-};
-
-/**
- * Assert that a task does NOT appear in the worklog.
- *
- * @param client - The simulated E2E client
- * @param taskName - The task name that should NOT be in worklog
- */
-export const expectTaskNotInWorklog = async (
-  client: SimulatedE2EClient,
-  taskName: string,
-): Promise<void> => {
-  const found = await hasTaskInWorklog(client, taskName);
-  if (found) {
-    throw new Error(`Expected task "${taskName}" NOT to be in worklog, but it was found`);
-  }
-};
-
-/**
- * Get the count of worklog entries (archived tasks).
- *
- * @param client - The simulated E2E client
- * @returns The number of task entries in worklog
- */
-export const getWorklogTaskCount = async (
-  client: SimulatedE2EClient,
-): Promise<number> => {
-  // Navigate to worklog
-  await client.page.goto('/#/tag/TODAY/history');
-  await client.page.waitForLoadState('networkidle');
-  await client.page.waitForTimeout(UI_SETTLE_STANDARD);
-
-  // Expand week rows
-  const weekRows = client.page.locator('.week-row');
-  const weekCount = await weekRows.count();
-  for (let i = 0; i < Math.min(weekCount, 3); i++) {
-    const row = weekRows.nth(i);
-    if (await row.isVisible()) {
-      await row.click().catch(() => {});
-      await client.page.waitForTimeout(UI_SETTLE_SMALL);
-    }
-  }
-
-  // Count task entries
-  const taskEntries = await client.page
-    .locator('.task-summary-table .task-title, .worklog-task, worklog-task')
-    .count()
-    .catch(() => 0);
-
-  return taskEntries;
 };
 
 /**
