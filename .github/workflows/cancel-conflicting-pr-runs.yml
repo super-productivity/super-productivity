@@ -1,0 +1,60 @@
+name: Cancel CI of conflicting PRs
+
+# A PR only gains a conflict when master moves. Its in-flight runs test a merge
+# commit that can no longer be produced, and resolving the conflict pushes a
+# new commit that re-runs everything, so the old runs are wasted minutes.
+on:
+  push:
+    branches: [master]
+
+# A newer master push re-evaluates every open PR, so older sweeps can stop.
+concurrency:
+  group: cancel-conflicting-pr-runs
+  cancel-in-progress: true
+
+permissions:
+  actions: write
+  pull-requests: read
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Cancel runs of PRs that now conflict with master
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Only PRs with active runs matter; most stale PRs stay UNKNOWN.
+          active=$(for s in queued in_progress; do
+            gh run list --event pull_request --status "$s" --limit 200 --json headSha
+          done | jq -s 'add | map(.headSha) | unique')
+          if [[ "$active" == "[]" ]]; then
+            echo "No active PR runs"
+            exit 0
+          fi
+          declare -A done_shas=()
+          # GitHub computes mergeability lazily after master moves; the first
+          # query mostly returns UNKNOWN, so poll until it settles.
+          for attempt in 1 2 3 4 5 6; do
+            sleep 20
+            prs=$(gh pr list --state open --limit 200 --json number,headRefOid,mergeable |
+              jq --argjson active "$active" 'map(select(.headRefOid as $s | $active | index($s)))')
+            for row in $(jq -r '.[] | select(.mergeable == "CONFLICTING") | "\(.number):\(.headRefOid)"' <<<"$prs"); do
+              pr=${row%%:*}
+              sha=${row#*:}
+              [[ -n "${done_shas[$sha]:-}" ]] && continue
+              done_shas[$sha]=1
+              for id in $(gh run list --commit "$sha" --event pull_request --limit 100 \
+                --json databaseId,status --jq '.[] | select(.status != "completed") | .databaseId'); do
+                echo "PR #$pr conflicts with master: cancelling run $id"
+                # A run can finish between listing and cancelling; not fatal.
+                gh run cancel "$id" || echo "::warning::Could not cancel run $id of PR #$pr"
+              done
+            done
+            unknown=$(jq '[.[] | select(.mergeable == "UNKNOWN")] | length' <<<"$prs")
+            echo "Attempt $attempt: $unknown PR(s) with unknown mergeability"
+            [[ "$unknown" == 0 ]] && break
+          done
