@@ -121,7 +121,6 @@ import {
   fieldPatchGroups,
   keptLocalTimeDeltas,
   keptTimeDeltasToRebase,
-  rebaseKeptTimeDeltas,
   timeDeltasSurvivingLww,
   buildSurvivingFieldPatches,
 } from './conflict-field-patch.util';
@@ -1032,7 +1031,7 @@ export class ConflictResolutionService {
     const keptReorders = keptCommutingReorders(conflicts, pending, nonConflictingOps);
     let writtenLocalWinOps: Operation[] = [];
     const writtenMergedOpIds = new Set<string>();
-    let keptToRebase = options.rebaseKeptTimeDeltas
+    const keptToRebase = options.rebaseKeptTimeDeltas
       ? keptTimeDeltasToRebase(mergedResolutions, resolutions)
       : undefined;
 
@@ -1442,7 +1441,6 @@ export class ConflictResolutionService {
         batches,
         keptToRebase && { rebaseKept: { ...keptToRebase, successorOpIds: resendIds } },
       );
-      keptToRebase = undefined;
       nonConflictingOps = nonConflictingOps.filter((op) => !precedingOps.includes(op));
       const writtenResends = result.written.filter(
         (entry) => entry.source === 'local' && resendIds.has(entry.op.id),
@@ -1519,12 +1517,8 @@ export class ConflictResolutionService {
       const hoisted = new Set(ops);
       nonConflictingOps = nonConflictingOps.filter((op) => !hoisted.has(op));
       if (keptToRebase) options.assertFence?.('kept time delta rebase');
-      const written = await appendRemoteWinners(
-        this.opLogStore,
-        ops,
-        keptToRebase && { ...keptToRebase, successorOpIds: resendIds },
-      );
-      keptToRebase = undefined;
+      // No local resolution ops here, so no successors to re-clock.
+      const written = await appendRemoteWinners(this.opLogStore, ops, keptToRebase);
       const result = await this._resolveReplayableOperations(ops, 'remote', written);
       const skippedCount = ops.length - result.length;
       if (skippedCount > 0) {
@@ -1589,10 +1583,6 @@ export class ConflictResolutionService {
       }
     }
 
-    // Only when no resolution or remote-winner rows were written: no successors.
-    if (keptToRebase) {
-      await rebaseKeptTimeDeltas(this.opLogStore, keptToRebase, [], options.assertFence);
-    }
     await rebaseKeptReorders(this.opLogStore, keptReorders, new Set(remoteOpsToReject));
 
     // Match status-blind hydration order, including reused pending remote rows.

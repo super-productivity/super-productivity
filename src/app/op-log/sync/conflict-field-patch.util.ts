@@ -337,53 +337,6 @@ export const keptLocalTimeDeltas = (
 };
 
 /**
- * SuperSync only: move kept pending deltas and newly written field patches past
- * durable remote rows. Caller holds OPERATION_LOG, preventing upload selection
- * of the fresh patches until their clocks are final. Never include local-win
- * snapshots: their stale fields could then dominate newer remote edits. Older
- * pending patches are also excluded: only deltas have receipt recovery.
- */
-export const rebaseKeptTimeDeltas = async (
-  store: {
-    getOpById: (opId: string) => Promise<
-      | {
-          source: string;
-          syncedAt?: number;
-          rejectedAt?: number;
-          reducerRejectedAt?: number;
-        }
-      | undefined
-    >;
-    rebasePendingLocalOps: (
-      opIds: readonly string[],
-      clockToDominate: VectorClock,
-    ) => Promise<Operation[]>;
-  },
-  kept: { opIds: Set<string>; clockToDominate: VectorClock },
-  successorIds: string[],
-  assertFence?: (context: string) => void,
-): Promise<Operation[]> => {
-  const pendingDeltaIds: string[] = [];
-  for (const opId of kept.opIds) {
-    const entry = await store.getOpById(opId);
-    if (
-      entry?.source === 'local' &&
-      entry.syncedAt === undefined &&
-      entry.rejectedAt === undefined &&
-      entry.reducerRejectedAt === undefined
-    ) {
-      pendingDeltaIds.push(opId);
-    }
-  }
-  if (pendingDeltaIds.length === 0) return [];
-  assertFence?.('kept time delta rebase');
-  return store.rebasePendingLocalOps(
-    [...pendingDeltaIds, ...successorIds],
-    kept.clockToDominate,
-  );
-};
-
-/**
  * Kept deltas SuperSync re-clocks eagerly: beside merged patches and readable
  * remote wins. Undefined when there is none.
  */
