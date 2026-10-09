@@ -29,8 +29,10 @@ import com.superproductivity.superproductivity.widget.ReminderSnoozeQueue
 import com.superproductivity.superproductivity.widget.ReminderTapQueue
 import com.superproductivity.superproductivity.widget.ShareIntentQueue
 import com.superproductivity.superproductivity.widget.TaskListWidgetProvider
+import com.superproductivity.superproductivity.widget.TrackingWidgetProvider
 import com.superproductivity.superproductivity.widget.WidgetDoneQueue
 import com.superproductivity.superproductivity.widget.WidgetTaskQueue
+import com.superproductivity.superproductivity.widget.WidgetTrackingStopQueue
 import org.json.JSONObject
 
 
@@ -187,30 +189,7 @@ class JavaScriptInterface(
     @JavascriptInterface
     fun stopTrackingService() {
         safeCall("Failed to stop tracking service") {
-            val intent = Intent(activity, TrackingForegroundService::class.java)
-            if (TrackingForegroundService.isStartPending || TrackingForegroundService.isTracking) {
-                // A startForegroundService() may still be promoting: stopping via
-                // stopService() now could tear it down before startForeground()
-                // runs and crash with ForegroundServiceDidNotStartInTimeException.
-                // Routing as ACTION_STOP through onStartCommand lets it promote
-                // first, then stop cleanly.
-                intent.action = TrackingForegroundService.ACTION_STOP
-                try {
-                    activity.startService(intent)
-                } catch (e: IllegalStateException) {
-                    // App is in the background: startService() is disallowed here.
-                    // Only fall back to stopService() if no start is still pending
-                    // — stopping a not-yet-promoted service would re-trigger the
-                    // same crash. If a start IS pending, leave it: the pending
-                    // start promotes and a later foreground sync stops it cleanly.
-                    Log.d(TAG, "stopTrackingService: app backgrounded, falling back to stopService()", e)
-                    if (!TrackingForegroundService.isStartPending) {
-                        activity.stopService(Intent(activity, TrackingForegroundService::class.java))
-                    }
-                }
-            } else {
-                activity.stopService(intent)
-            }
+            TrackingForegroundService.requestStop(activity)
         }
     }
 
@@ -483,13 +462,25 @@ class JavaScriptInterface(
     }
 
     /**
-     * Re-render the home screen widget from the current `widget_data` KeyValStore
-     * snapshot. Called by Angular after each snapshot push.
+     * Pending stop-tracking tap from the live-tracking widget (task id), or null.
+     * Get-and-clear so a stale queue entry can't be drained twice.
+     */
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getWidgetTrackingStopQueue(): String? {
+        return WidgetTrackingStopQueue.getAndClear(activity)
+    }
+
+    /**
+     * Re-render the home screen widgets from the current `widget_data` KeyValStore
+     * snapshot. Called by Angular after each snapshot push. Both widgets read the
+     * same blob, so one push refreshes both.
      */
     @Suppress("unused")
     @JavascriptInterface
     fun updateWidget() {
         TaskListWidgetProvider.refreshAll(activity)
+        TrackingWidgetProvider.refreshAll(activity)
     }
 
     /**

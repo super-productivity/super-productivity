@@ -1,5 +1,6 @@
 package com.superproductivity.superproductivity.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -11,19 +12,26 @@ import com.superproductivity.superproductivity.R
 
 class TaskListWidgetService : RemoteViewsService() {
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
-        return TaskListRemoteViewsFactory(applicationContext)
+        return TaskListRemoteViewsFactory(
+            applicationContext,
+            intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+        )
     }
 }
 
 private class TaskListRemoteViewsFactory(
-    private val context: Context
+    private val context: Context,
+    private val appWidgetId: Int
 ) : RemoteViewsService.RemoteViewsFactory {
 
     private var tasks: List<WidgetTask> = emptyList()
+    private var style = WidgetStyle(null)
 
     override fun onCreate() {}
 
     override fun onDataSetChanged() {
+        // Re-read here: a background change refreshes via notifyAppWidgetViewDataChanged.
+        style = WidgetBackground.styleFor(context, appWidgetId)
         tasks = try {
             val json = (context.applicationContext as App).keyValStore
                 .get(WidgetData.KEYVAL_KEY, "{}")
@@ -49,14 +57,14 @@ private class TaskListRemoteViewsFactory(
 
         val task = tasks[position]
         rv.setTextViewText(R.id.widget_task_title, task.title)
-        rv.setTextColor(
-            R.id.widget_task_title,
-            context.getColor(if (task.isDone) R.color.widget_ink_muted else R.color.widget_ink)
+        style.stateText(
+            context, rv, R.id.widget_task_title, if (task.isDone) WidgetInk.MUTED else WidgetInk.INK
         )
         rv.setImageViewResource(
             R.id.widget_done_checkbox,
             if (task.isDone) R.drawable.ic_widget_check_done else R.drawable.ic_widget_check_outline
         )
+        style.icon(rv, R.id.widget_done_checkbox, if (task.isDone) WidgetInk.BRAND else WidgetInk.MUTED)
 
         // Project dot: tint with the project color, hide entirely for
         // project-less tasks instead of showing a meaningless default color

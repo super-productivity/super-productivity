@@ -122,6 +122,11 @@ export interface AndroidInterface {
   // widget as a JSON object string `{taskId: targetIsDone}` and clear the queue
   getWidgetDoneQueue?(): string | null;
 
+  // Widget tracking-stop queue - get the pending stop-tracking tap from the
+  // live-tracking widget as a JSON object string `{taskId, elapsedMs}` (native
+  // counter frozen at the tap, null if native wasn't tracking it) and clear it
+  getWidgetTrackingStopQueue?(): string | null;
+
   // Re-render the home screen widget from the current widget_data snapshot
   updateWidget?(): void;
 

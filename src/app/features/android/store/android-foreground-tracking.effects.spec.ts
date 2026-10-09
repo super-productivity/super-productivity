@@ -7,6 +7,7 @@ import { Task } from '../../tasks/task.model';
 import {
   creditBackgroundTickGap,
   handleAndroidResume,
+  parseWidgetTrackingStop,
   isTimeSpentJumpForNotification,
   parseNativeTrackingData,
   TIME_SPENT_JUMP_THRESHOLD_MS,
@@ -1879,6 +1880,7 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
       {
         globalTracking,
         taskService,
+        applyWidgetTrackingStop: () => false,
         syncElapsedTimeForTask: (taskId) => {
           order.push('reconcile:' + taskId);
           return Promise.resolve(true);
@@ -1914,6 +1916,7 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
       {
         globalTracking,
         taskService,
+        applyWidgetTrackingStop: () => false,
         // mirrors _syncElapsedTimeForTask's delta logic against live state
         syncElapsedTimeForTask: () => {
           const duration = NATIVE_ELAPSED - timeSpent;
@@ -1940,6 +1943,7 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
       {
         globalTracking,
         taskService,
+        applyWidgetTrackingStop: () => false,
         syncElapsedTimeForTask: reconcileSpy,
         getNativeTrackingData: () => nativeData,
         requestRecovery: (data) => recovered.push(data),
@@ -1950,5 +1954,62 @@ describe('handleAndroidResume - credit-before-reconcile ordering (#8243)', () =>
     expect(globalTracking.triggerWakeUpTick).toHaveBeenCalledTimes(1);
     expect(reconcileSpy).not.toHaveBeenCalled();
     expect(recovered).toEqual([nativeData]);
+  });
+
+  it('should apply a widget stop BEFORE the gap credit and skip reconcile and recovery', async () => {
+    const order: string[] = [];
+    globalTracking.triggerWakeUpTick.and.callFake(() => {
+      order.push('credit');
+      return { duration: GAP_MS, date: '2026-06-11', timestamp: 0 };
+    });
+
+    await handleAndroidResume(
+      {
+        globalTracking,
+        taskService,
+        applyWidgetTrackingStop: (task) => {
+          order.push('widgetStop:' + task?.id);
+          return true;
+        },
+        syncElapsedTimeForTask: () => {
+          order.push('reconcile');
+          return Promise.resolve(true);
+        },
+        // native may still report tracking until its async stop lands
+        getNativeTrackingData: () => ({ taskId: 'task-1', elapsedMs: NATIVE_ELAPSED }),
+        requestRecovery: () => order.push('recovery'),
+      },
+      { id: 'task-1' } as Task,
+    );
+
+    expect(order).toEqual(['widgetStop:task-1', 'credit']);
+  });
+});
+
+describe('parseWidgetTrackingStop', () => {
+  it('should parse a stop with a frozen native total', () => {
+    expect(parseWidgetTrackingStop('{"taskId":"t1","elapsedMs":1234}')).toEqual({
+      taskId: 't1',
+      elapsedMs: 1234,
+    });
+  });
+
+  it('should keep the stop but drop a missing or invalid total', () => {
+    expect(parseWidgetTrackingStop('{"taskId":"t1","elapsedMs":null}')).toEqual({
+      taskId: 't1',
+      elapsedMs: null,
+    });
+    expect(parseWidgetTrackingStop('{"taskId":"t1","elapsedMs":"5"}')).toEqual({
+      taskId: 't1',
+      elapsedMs: null,
+    });
+  });
+
+  it('should return null for an empty queue or malformed payload', () => {
+    expect(parseWidgetTrackingStop(null)).toBeNull();
+    expect(parseWidgetTrackingStop('')).toBeNull();
+    expect(parseWidgetTrackingStop('not json')).toBeNull();
+    expect(parseWidgetTrackingStop('{"elapsedMs":5}')).toBeNull();
+    expect(parseWidgetTrackingStop('"t1"')).toBeNull();
   });
 });

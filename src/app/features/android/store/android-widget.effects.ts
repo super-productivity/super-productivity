@@ -1,4 +1,5 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, Injector } from '@angular/core';
+import { toObservable } from '@angular/core/rxjs-interop';
 import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
 import { merge } from 'rxjs';
@@ -14,6 +15,7 @@ import {
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { androidInterface } from '../android-interface';
 import { WidgetDataService } from '../widget-data.service';
+import { TrackingPresenceService } from '../../tracking-presence/tracking-presence.service';
 import { TaskService } from '../../tasks/task.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { DroidLog } from '../../../core/log';
@@ -57,7 +59,9 @@ export const getTaskDoneChangesToApply = (
 @Injectable()
 export class AndroidWidgetEffects {
   private _store = inject(Store);
+  private _injector = inject(Injector);
   private _widgetDataService = inject(WidgetDataService);
+  private _trackingPresence = inject(TrackingPresenceService);
   private _taskService = inject(TaskService);
   private _snackService = inject(SnackService);
   private _hydrationState = inject(HydrationStateService);
@@ -77,6 +81,23 @@ export class AndroidWidgetEffects {
       { dispatch: false },
     );
 
+  // Remote tracking-presence (SuperSync only) lives in a service signal, not the
+  // store, so store-selector emissions never fire for it — this is its own
+  // trigger for the widget's currentTask fallback.
+  pushOnRemoteSessionChange$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        toObservable(this._trackingPresence.remoteSessionView, {
+          injector: this._injector,
+        }).pipe(
+          filter(() => !this._hydrationState.isApplyingRemoteOps()),
+          debounceTime(500),
+          tap(() => this._widgetDataService.pushCurrent()),
+        ),
+      { dispatch: false },
+    );
+
   // The guard above drops ALL emissions while remote ops are applied and nothing
   // re-emits afterwards, so without this the widget would miss synced changes
   // until the next local edit. Push once whenever the sync window closes.
@@ -87,6 +108,25 @@ export class AndroidWidgetEffects {
         this._hydrationState.isInSyncWindow$.pipe(
           pairwise(),
           filter(([wasInWindow, isInWindow]) => wasInWindow && !isInWindow),
+          tap(() => this._widgetDataService.pushCurrent()),
+        ),
+      { dispatch: false },
+    );
+
+  // currentTask is no longer part of selectAndroidWidgetData (it needs
+  // TrackingPresenceService signals) — this is the trigger for the LOCAL side:
+  // task switch, tracking start/stop, and focus-cycle changes all flow through
+  // TrackingPresenceService's own local-change subscription, so its signal is a
+  // superset of what selectCurrentTaskId alone would catch.
+  pushOnLocalTrackingChange$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        toObservable(this._trackingPresence.localTrackingInfo, {
+          injector: this._injector,
+        }).pipe(
+          filter(() => !this._hydrationState.isApplyingRemoteOps()),
+          debounceTime(500),
           tap(() => this._widgetDataService.pushCurrent()),
         ),
       { dispatch: false },

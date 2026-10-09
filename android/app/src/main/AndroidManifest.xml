@@ -211,5 +211,29 @@
       android:exported="false"
       android:permission="android.permission.BIND_REMOTEVIEWS" />
 
+    <receiver
+      android:name=".widget.TrackingWidgetProvider"
+      android:exported="true"
+      android:label="@string/widget_tracking_widget_title">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/appwidget_tracking_info" />
+    </receiver>
+
+    <!-- Background color/transparency picker, shared by both widgets (see
+         WidgetBackground). exported="true" is required: the launcher, not this
+         app, starts it via APPWIDGET_CONFIGURE on add and on long-press "Edit". -->
+    <activity
+      android:name=".widget.WidgetBackgroundConfigActivity"
+      android:exported="true"
+      android:theme="@style/AppTheme.NoActionBar">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+      </intent-filter>
+    </activity>
+
   </application>
 </manifest>

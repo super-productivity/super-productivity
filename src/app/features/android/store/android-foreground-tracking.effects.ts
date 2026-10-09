@@ -2,12 +2,15 @@ import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
 import {
+  concatMap,
   distinctUntilChanged,
   exhaustMap,
   filter,
+  first,
   map,
   pairwise,
   startWith,
+  switchMap,
   tap,
   withLatestFrom,
 } from 'rxjs/operators';
@@ -21,7 +24,7 @@ import {
 import { DroidLog } from '../../../core/log';
 import { Task } from '../../tasks/task.model';
 import { selectTimer } from '../../focus-mode/store/focus-mode.selectors';
-import { combineLatest, firstValueFrom, Subject } from 'rxjs';
+import { combineLatest, firstValueFrom, merge, of, Subject } from 'rxjs';
 import { ANDROID_BACKGROUND_TICK_CAP_MS } from '../../../app.constants';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -89,6 +92,46 @@ export const parseNativeTrackingData = (
   return { taskId, elapsedMs };
 };
 
+export type WidgetTrackingStop = {
+  taskId: string;
+  /** Native counter frozen at the tap; null if native wasn't tracking the task. */
+  elapsedMs: number | null;
+};
+
+/**
+ * Parse the JSON string returned by `androidInterface.getWidgetTrackingStopQueue()`.
+ * Returns null for an empty queue or any shape mismatch.
+ *
+ * Exported so unit tests can exercise it without instantiating the effect
+ * (which is gated behind IS_ANDROID_WEB_VIEW).
+ */
+export const parseWidgetTrackingStop = (
+  json: string | null | undefined,
+): WidgetTrackingStop | null => {
+  if (!json) {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch (e) {
+    DroidLog.err('Failed to parse widget tracking stop', e);
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    return null;
+  }
+  const { taskId, elapsedMs } = parsed as Partial<WidgetTrackingStop>;
+  if (typeof taskId !== 'string' || !taskId) {
+    return null;
+  }
+  return {
+    taskId,
+    elapsedMs:
+      typeof elapsedMs === 'number' && Number.isFinite(elapsedMs) ? elapsedMs : null,
+  };
+};
+
 /**
  * Whether a timeSpent change must be pushed to the native tracking notification.
  * While tracking, timeSpent grows by ~one tick (1s) at a time and the
@@ -142,6 +185,8 @@ export const creditBackgroundTickGap = (
 export type AndroidResumeDeps = {
   globalTracking: GlobalTrackingIntervalService;
   taskService: TaskService;
+  /** Returns true if it paused `currentTask` (see _applyWidgetTrackingStop). */
+  applyWidgetTrackingStop: (currentTask: Task | null) => boolean;
   syncElapsedTimeForTask: (taskId: string) => Promise<boolean>;
   getNativeTrackingData: () => NativeTrackingData | null;
   requestRecovery: (data: NativeTrackingData) => void;
@@ -153,12 +198,20 @@ export type AndroidResumeDeps = {
  * synchronously BEFORE syncElapsedTimeForTask samples the task, else the
  * native reconcile re-emits the same gap as a second syncTimeSpent op and
  * remote devices double-count it on op-log replay.
+ *
+ * A widget stop tapped while backgrounded is applied FIRST: it pauses the task
+ * synchronously, so the gap credit can't book the time after the tap to it.
+ * Nothing to reconcile or recover afterwards — native was stopped by the tap.
  */
 export const handleAndroidResume = async (
   deps: AndroidResumeDeps,
   currentTask: Task | null,
 ): Promise<void> => {
+  const isStoppedFromWidget = deps.applyWidgetTrackingStop(currentTask);
   creditBackgroundTickGap(deps.globalTracking, deps.taskService);
+  if (isStoppedFromWidget) {
+    return;
+  }
   if (currentTask) {
     await deps.syncElapsedTimeForTask(currentTask.id);
   } else {
@@ -366,6 +419,7 @@ export class AndroidForegroundTrackingEffects {
               {
                 globalTracking: this._globalTrackingIntervalService,
                 taskService: this._taskService,
+                applyWidgetTrackingStop: (task) => this._applyWidgetTrackingStop(task),
                 syncElapsedTimeForTask: (taskId) => this._syncElapsedTimeForTask(taskId),
                 getNativeTrackingData: () => this._getNativeTrackingData(),
                 requestRecovery: (data) =>
@@ -374,6 +428,30 @@ export class AndroidForegroundTrackingEffects {
               currentTask,
             ),
           ),
+        ),
+      { dispatch: false },
+    );
+
+  /**
+   * Widget stop taps outside a resume: while the app is alive (native drain
+   * broadcast) and on cold start, where the replayed onResume$ fires before
+   * task data loads and is filtered out of syncOnResume$. Resume itself goes
+   * through handleAndroidResume, ordered before the background gap credit.
+   * The queue read is get-and-clear, so overlapping triggers apply it once.
+   */
+  drainWidgetTrackingStop$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        merge(of(undefined), androidInterface.onWidgetDoneDrainRequest$).pipe(
+          concatMap(() =>
+            this._store.select(selectIsTaskDataLoaded).pipe(
+              filter(Boolean),
+              first(),
+              switchMap(() => this._store.select(selectCurrentTask).pipe(first())),
+            ),
+          ),
+          tap((currentTask) => this._applyWidgetTrackingStop(currentTask)),
         ),
       { dispatch: false },
     );
@@ -552,6 +630,45 @@ export class AndroidForegroundTrackingEffects {
     }
   }
 
+  /**
+   * Applies a stop tapped on the live-tracking widget. The widget already froze
+   * and stopped the native counter at the tap (TrackingWidgetProvider), so its
+   * `elapsedMs` is the session total up to the tap — booked like recovery
+   * books native time, which also works on cold start with no current task.
+   * A stale stop (another task tracked since the tap) is dropped — same
+   * reasoning as TrackingPresenceCmd's sessionId guard for a remote stop.
+   *
+   * Pauses synchronously, before any await. Returns whether it paused.
+   */
+  private _applyWidgetTrackingStop(currentTask: Task | null): boolean {
+    const stop = parseWidgetTrackingStop(androidInterface.getWidgetTrackingStopQueue?.());
+    if (!stop) {
+      return false;
+    }
+    if (currentTask && currentTask.id !== stop.taskId) {
+      DroidLog.log('Dropping stale widget tracking stop', { taskId: stop.taskId });
+      return false;
+    }
+    DroidLog.log('Stopping tracking from widget', { ...stop });
+    // Without a frozen total (native wasn't tracking this task, e.g. during
+    // focus mode) the pause alone settles time via syncTrackingToService$.
+    if (currentTask) {
+      this._taskService.pauseCurrent();
+    }
+    const frozen = stop.elapsedMs;
+    const synced =
+      frozen === null
+        ? Promise.resolve(false)
+        : this._syncElapsedTimeForTask(stop.taskId, {
+            taskId: stop.taskId,
+            elapsedMs: frozen,
+          });
+    synced
+      .then(() => this._flushPendingOperations())
+      .catch((e) => DroidLog.err('Failed to apply widget tracking stop', e));
+    return !!currentTask;
+  }
+
   private _getNativeTrackingData(): NativeTrackingData | null {
     return parseNativeTrackingData(androidInterface.getTrackingElapsed?.());
   }
@@ -681,11 +798,16 @@ export class AndroidForegroundTrackingEffects {
           },
         );
         // Don't update time - app has more accurate/higher value
-        // Update native service to show correct time in notification
-        this._safeNativeCall(
-          () => androidInterface.updateTrackingService?.(currentTimeSpent),
-          'Failed to update tracking service after negative duration',
-        );
+        // Update native service to show correct time in notification — only
+        // while it still tracks this task: after a widget stop it is already
+        // stopped, and an update would restart it just to post and drop a
+        // placeholder notification.
+        if (this._getNativeTrackingData()?.taskId === taskId) {
+          this._safeNativeCall(
+            () => androidInterface.updateTrackingService?.(currentTimeSpent),
+            'Failed to update tracking service after negative duration',
+          );
+        }
         // Reset tracking interval to prevent double-counting
         this._globalTrackingIntervalService.resetTrackingStart();
         return true;

@@ -1,6 +1,7 @@
 package com.superproductivity.superproductivity.service
 
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import android.util.Log
@@ -63,6 +64,37 @@ class TrackingForegroundService : Service() {
                 (System.currentTimeMillis() - startTimestamp) + accumulatedMs
             } else {
                 accumulatedMs
+            }
+        }
+
+        /**
+         * Stop the service from any context — the JS bridge, or the tracking
+         * widget's receiver when no activity exists.
+         */
+        fun requestStop(context: Context) {
+            val intent = Intent(context, TrackingForegroundService::class.java)
+            if (isStartPending || isTracking) {
+                // A startForegroundService() may still be promoting: stopping via
+                // stopService() now could tear it down before startForeground()
+                // runs and crash with ForegroundServiceDidNotStartInTimeException.
+                // Routing as ACTION_STOP through onStartCommand lets it promote
+                // first, then stop cleanly.
+                intent.action = ACTION_STOP
+                try {
+                    context.startService(intent)
+                } catch (e: IllegalStateException) {
+                    // App is in the background: startService() is disallowed here.
+                    // Only fall back to stopService() if no start is still pending
+                    // — stopping a not-yet-promoted service would re-trigger the
+                    // same crash. If a start IS pending, leave it: the pending
+                    // start promotes and a later foreground sync stops it cleanly.
+                    Log.d(TAG, "requestStop: app backgrounded, falling back to stopService()", e)
+                    if (!isStartPending) {
+                        context.stopService(Intent(context, TrackingForegroundService::class.java))
+                    }
+                }
+            } else {
+                context.stopService(intent)
             }
         }
     }

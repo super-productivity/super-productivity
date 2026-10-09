@@ -101,6 +101,17 @@ export class TrackingPresenceService implements OnDestroy {
   /** Last known remote tracking session, or null when there is none to show. */
   readonly remoteSession = signal<RemoteTrackingSession | null>(null);
 
+  /**
+   * This device's own current tracking session — since-timestamp and focus
+   * cycle, mirroring what `_broadcastState` would send — or null while not
+   * actively tracking locally. Exposed for local consumers (the Android
+   * widget) that want the same display-only fields without waiting on a
+   * round trip through the presence broadcast/decode path.
+   */
+  readonly localTrackingInfo = signal<{ sinceTs: number; focusCycle?: number } | null>(
+    null,
+  );
+
   /** Feeds view suppression while WE track. */
   private _localTaskIdView = this._store.selectSignal(selectCurrentTaskId);
   /** Ticks (only while a session is shown) so staleness re-evaluates. */
@@ -261,6 +272,7 @@ export class TrackingPresenceService implements OnDestroy {
       this._current = { state: 'stopped', taskId: null };
       this._lastTrackedTaskId = null;
       this._focusCycle = undefined;
+      this.localTrackingInfo.set(null);
       this._broadcastState();
     }
     // The tail of the serialized send chain, i.e. the frame just enqueued.
@@ -319,6 +331,10 @@ export class TrackingPresenceService implements OnDestroy {
       }
       this._lastTrackedTaskId = derived.taskId;
       this._current = { state: 'tracking', taskId: derived.taskId };
+      this.localTrackingInfo.set({
+        sinceTs: this._sinceTs,
+        focusCycle: this._focusCycle,
+      });
       this._startHeartbeat();
       this._broadcastState();
       return;
@@ -338,6 +354,7 @@ export class TrackingPresenceService implements OnDestroy {
     };
     const reasonChanged = this._current.reason !== next.reason;
     this._current = next;
+    this.localTrackingInfo.set(null);
     if (reason) {
       // Keep announcing during an idle pause: real pauses run for minutes,
       // and without a heartbeat viewers' 90s staleness window would decay

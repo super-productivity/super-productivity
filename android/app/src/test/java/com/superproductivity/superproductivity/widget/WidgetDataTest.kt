@@ -83,6 +83,69 @@ class WidgetDataTest {
         assertNull(WidgetData.parse(json)[0].projectColor)
     }
 
+    // --- parseCurrentTask: the "which task, which device" contract ---
+
+    @Test
+    fun parsesCurrentTask() {
+        val json =
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"Write report","deviceLabel":"Desktop","isLocal":false,"sinceTs":1700000000000,"focusCycle":2}}"""
+        assertEquals(
+            WidgetCurrentTask("t1", "Write report", "Desktop", false, 1700000000000L, 2),
+            WidgetData.parseCurrentTask(json)
+        )
+    }
+
+    @Test
+    fun currentTaskSinceTsAndFocusCycleAreOptional() {
+        // AndroidWidgetCurrentTask omits both keys entirely when unavailable — never a
+        // fabricated value (see WidgetDataService / android-widget.selectors.ts).
+        val json =
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":true}}"""
+        val task = WidgetData.parseCurrentTask(json)
+        assertNull(task?.sinceTs)
+        assertNull(task?.focusCycle)
+    }
+
+    @Test
+    fun currentTaskNonPositiveSinceTsIsRejected() {
+        // 0L is both optLong's default and a real instant; treat it as absent — same
+        // reasoning as AndroidWidgetData.validUntil.
+        val json =
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":true,"sinceTs":0}}"""
+        assertNull(WidgetData.parseCurrentTask(json)?.sinceTs)
+    }
+
+    @Test
+    fun currentTaskJsonNullFocusCycleParsesToNull() {
+        // isNull guard: optString/optInt-style defaults would otherwise be indistinguishable
+        // from a real value.
+        val json =
+            """{"v":1,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":true,"focusCycle":null}}"""
+        assertNull(WidgetData.parseCurrentTask(json)?.focusCycle)
+    }
+
+    @Test
+    fun nullCurrentTaskParsesToNull() {
+        assertNull(WidgetData.parseCurrentTask("""{"v":1,"tasks":[],"currentTask":null}"""))
+    }
+
+    @Test
+    fun missingCurrentTaskParsesToNull() {
+        assertNull(WidgetData.parseCurrentTask("""{"v":1,"tasks":[]}"""))
+    }
+
+    @Test
+    fun currentTaskUnknownVersionParsesToNull() {
+        val json =
+            """{"v":2,"tasks":[],"currentTask":{"id":"t1","title":"X","deviceLabel":"Desktop","isLocal":false}}"""
+        assertNull(WidgetData.parseCurrentTask(json))
+    }
+
+    @Test
+    fun currentTaskUnparseableBlobDegradesInsteadOfThrowing() {
+        assertNull(WidgetData.parseCurrentTask("not json"))
+    }
+
     @Test
     fun parsesStalenessStamp() {
         val meta = WidgetData.parseMeta(blob)

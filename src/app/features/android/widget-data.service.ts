@@ -2,8 +2,14 @@ import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import { androidInterface } from './android-interface';
-import { ANDROID_WIDGET_DATA_KEY } from './android-widget.model';
-import { selectAndroidWidgetData } from './store/android-widget.selectors';
+import { ANDROID_WIDGET_DATA_KEY, AndroidWidgetData } from './android-widget.model';
+import {
+  buildLocalCurrentTask,
+  resolveRemoteCurrentTask,
+  selectAndroidWidgetData,
+} from './store/android-widget.selectors';
+import { selectCurrentTaskId, selectTaskEntities } from '../tasks/store/task.selectors';
+import { TrackingPresenceService } from '../tracking-presence/tracking-presence.service';
 import { DroidLog } from '../../core/log';
 
 /**
@@ -14,11 +20,29 @@ import { DroidLog } from '../../core/log';
 @Injectable({ providedIn: 'root' })
 export class WidgetDataService {
   private _store = inject(Store);
+  private _trackingPresence = inject(TrackingPresenceService);
   private _lastPushedJson: string | null = null;
 
   async pushCurrent(): Promise<void> {
-    const data = await firstValueFrom(this._store.select(selectAndroidWidgetData));
-    const json = JSON.stringify(data);
+    const [data, currentTaskId, taskEntities] = await Promise.all([
+      firstValueFrom(this._store.select(selectAndroidWidgetData)),
+      firstValueFrom(this._store.select(selectCurrentTaskId)),
+      firstValueFrom(this._store.select(selectTaskEntities)),
+    ]);
+    // currentTask needs TrackingPresenceService signals (since-timestamp, focus
+    // cycle, remote session), which live outside the store — so it's always
+    // built here, never by the selector. Local wins; fall back to the
+    // last-known remote tracking-presence session (SuperSync only) so the
+    // widget can still say "tracking on <device>".
+    const currentTask =
+      buildLocalCurrentTask(
+        currentTaskId,
+        taskEntities,
+        this._trackingPresence.localTrackingInfo(),
+      ) ??
+      resolveRemoteCurrentTask(this._trackingPresence.remoteSessionView(), taskEntities);
+    const payload: AndroidWidgetData = { ...data, currentTask };
+    const json = JSON.stringify(payload);
     // Compare the WHOLE blob, not just the tasks: at day rollover the list is often
     // byte-identical and only the staleness stamp moves, and that push is the single
     // thing that un-outdates the widget. Narrowing this key would silently restore

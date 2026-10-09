@@ -38,6 +38,41 @@
   <string name="widget_description">Shows today\'s tasks with quick done action</string>
   <string name="widget_empty">No tasks for today</string>
   <string name="widget_task_done">Toggle task done</string>
+  <!-- Currently tracked task row; %1$s is the task title -->
+  <string name="widget_tracking_title">Tracking: %1$s</string>
+  <!-- Device currently tracking it, e.g. "on Desktop"; %1$s is the device label -->
+  <string name="widget_tracking_device">on %1$s</string>
+
+  <!-- Live tracking widget: shows the currently-tracked task and device -->
+  <string name="widget_tracking_widget_title">Live Tracking</string>
+  <string name="widget_tracking_widget_description">Shows the task currently being tracked and which device is tracking it</string>
+  <string name="widget_not_tracking">Not tracking</string>
+  <!-- Task title being tracked; %1$s task title -->
+  <string name="widget_tracking_task_title">%1$s</string>
+  <!-- Device only, no start time, e.g. "on Desktop"; %1$s device -->
+  <string name="widget_tracking_task_device">on %1$s</string>
+  <!-- Device + start time, e.g. "on Desktop, since 2:15 PM"; %1$s device, %2$s time -->
+  <string name="widget_tracking_device_since">on %1$s, since %2$s</string>
+  <!-- Own line, right column, while a focus session is running; %1$d is the cycle number -->
+  <string name="widget_tracking_focus">Focus Session #%1$d</string>
+  <string name="widget_tracking_stop">Stop tracking</string>
+
+  <!-- Background color/transparency config screen, shared by both widgets -->
+  <string name="widget_config_title">Widget background</string>
+  <string name="widget_config_color_label">Color</string>
+  <string name="widget_config_alpha_label">Transparency</string>
+  <string name="widget_config_save">Save</string>
+  <string name="widget_config_reset">Use theme default</string>
+  <string-array name="widget_config_swatch_names">
+    <item>Light</item>
+    <item>Dark</item>
+    <item>Purple</item>
+    <item>Blue</item>
+    <item>Green</item>
+    <item>Orange</item>
+    <item>Red</item>
+    <item>Slate</item>
+  </string-array>
 
   <!-- Startup overlay -->
   <string name="startup_overlay_add_task">Add task</string>

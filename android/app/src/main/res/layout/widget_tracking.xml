@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Both rows are independent RelativeLayouts, not a weighted LinearLayout: on-device
+     testing showed a weighted TextView next to a conditionally GONE ImageView in the
+     same LinearLayout row rendered the title invisible. Each row's left text is
+     bounded via layout_toStartOf against that row's own right-aligned element
+     (stop button on the title row, focus cycle on the device row) instead — so the
+     stop button stays confined to the title row's height, not a whole-card overlay. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_tracking_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:gravity="center_vertical"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <ImageView
+            android:id="@+id/widget_tracking_icon"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_centerVertical="true"
+            android:layout_alignParentStart="true"
+            android:src="@drawable/ic_stat_sp"
+            android:tint="@color/widget_brand"
+            android:contentDescription="" />
+
+        <!-- Local tracking only; gone for remote tracking or when nothing is tracked. -->
+        <ImageView
+            android:id="@+id/widget_tracking_stop"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_centerVertical="true"
+            android:layout_alignParentEnd="true"
+            android:src="@drawable/ic_widget_stop"
+            android:contentDescription="@string/widget_tracking_stop"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/widget_tracking_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_toEndOf="@id/widget_tracking_icon"
+            android:layout_toStartOf="@id/widget_tracking_stop"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="6dp"
+            android:textColor="@color/widget_ink"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </RelativeLayout>
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp">
+
+        <!-- Present only while a focus session is running (local or remote). -->
+        <TextView
+            android:id="@+id/widget_tracking_focus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_alignParentEnd="true"
+            android:textColor="@color/widget_ink_muted"
+            android:textSize="12sp"
+            android:maxLines="1"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/widget_tracking_device"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_alignParentStart="true"
+            android:layout_toStartOf="@id/widget_tracking_focus"
+            android:layout_marginEnd="6dp"
+            android:textColor="@color/widget_ink_muted"
+            android:textSize="12sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </RelativeLayout>
+
+</LinearLayout>
