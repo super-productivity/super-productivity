@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "Базовый URL Nextcloud",
+    "USERNAME": "Имя пользователя Nextcloud",
+    "PASSWORD": "Пароль приложения Nextcloud",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "Импортировать только карточки, назначенные мне",
+    "TITLE_TEMPLATE": "Шаблон заголовка задачи",
+    "TITLE_TEMPLATE_DESC": "Переменные: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Пример: [{BOARD}: {COLUMN}] {CARD_TITLE}. Оставьте пустым для использования только названия карточки."
+  },
+  "DISPLAY": {
+    "SUMMARY": "Резюме",
+    "DESCRIPTION": "Описание Deck",
+    "STACK": "Колонка",
+    "DUE_DATE": "Срок оплаты",
+    "ASSIGNED_USERS": "Назначенные пользователи",
+    "LABELS": "Метки"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "Настройте интеграцию с Nextcloud Deck для импорта карточек как задач. Используйте пароль приложения для аутентификации."
+}

@@ -1,11 +1,6 @@
 name: Manual Build Windows Release & Mac
 on:
   workflow_dispatch:
-    inputs:
-      branch:
-        description: 'Define branch name'
-        required: true
-        default: 'master'
 
 permissions:
   contents: write
@@ -107,7 +102,7 @@ jobs:
         run: npm run lint
 
       # Unit tests are the platform-independent Angular/Karma suite; they already
-      # gate every PR on Linux (ci.yml → test-on-linux) and run in headless Chrome,
+      # gate every PR on Linux (ci.yml → unit-tests) and run in headless Chrome,
       # whose JS behavior is identical across OSes. Re-running them on the slow,
       # expensive macOS runner adds no coverage and only surfaces timing-sensitive
       # flakes. This Mac job's value is the signed DMG build, not the unit suite.
