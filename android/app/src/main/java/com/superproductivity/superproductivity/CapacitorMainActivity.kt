@@ -394,11 +394,26 @@ class CapacitorMainActivity : BridgeActivity() {
             // Sanitize to prevent JS injection (only allow alphanumeric, dash, underscore)
             val sanitizedId = reminderTaskId.replace(Regex("[^a-zA-Z0-9_-]"), "")
             Log.d("SP_REMINDER", "Reminder tap: taskId=$sanitizedId")
+            // Deadline taps carry their type so the frontend clears the deadline
+            // reminder, not the task reminder. Other taps stay a plain id, which
+            // keeps them working for a JS bundle that predates the typed form.
+            val isDeadline = intent.getStringExtra("REMINDER_TYPE") == "DEADLINE"
+            val tapPayload = if (isDeadline) {
+                org.json.JSONObject()
+                    .put("taskId", sanitizedId)
+                    .put("reminderType", "DEADLINE")
+                    .toString()
+            } else {
+                sanitizedId
+            }
             // Persist for pull-based retrieval (WebView may not be ready on cold start)
-            com.superproductivity.superproductivity.widget.ReminderTapQueue.setTaskId(this, sanitizedId)
-            // Also try push-based delivery (works on warm start)
-            callJSInterfaceFunctionIfExists("next", "onReminderTap$", "'$sanitizedId'")
+            com.superproductivity.superproductivity.widget.ReminderTapQueue.setTaskId(this, tapPayload)
+            // Also try push-based delivery (works on warm start). Both forms only
+            // contain the sanitized id and a constant, so they are safe to inline.
+            val jsArg = if (isDeadline) tapPayload else "'$sanitizedId'"
+            callJSInterfaceFunctionIfExists("next", "onReminderTap$", jsArg)
             intent.removeExtra("REMINDER_TASK_ID")
+            intent.removeExtra("REMINDER_TYPE")
             return
         }
 

@@ -374,17 +374,22 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       // is no direction to violate, so base stays the fallback and the task
       // keeps following the issue as it always has.
       //
-      // Due dates and completion are dropped either way: they are set on task
-      // creation and never re-pulled, so a refresh cannot reschedule what the
-      // user has planned or un-complete what they finished (#9905). Same rule
-      // as BaseIssueProviderService.getFreshDataForIssueTask (#9909).
+      // Due dates are dropped either way: they are set on task creation and
+      // never re-pulled, so a refresh cannot reschedule what the user has
+      // planned. Same rule as BaseIssueProviderService.getFreshDataForIssueTask.
       const baseTaskData: MutableTaskChanges = this._buildBaseIssueTask(
         issue,
         resolved.provider.definition.doneStates,
       );
       delete baseTaskData.dueDay;
       delete baseTaskData.dueWithTime;
-      delete baseTaskData.isDone;
+      // Completion is only re-pulled from a provider that declares what done
+      // means. Without doneStates the default word list is a guess, and a
+      // calendar's 'confirmed' would reopen a task the user completed (#9905);
+      // no state means the issue says nothing about done-ness (e.g. Redmine).
+      if (!issue.state || !resolved.provider.definition.doneStates?.length) {
+        delete baseTaskData.isDone;
+      }
       for (const mapping of resolved.provider.definition.fieldMappings ?? []) {
         delete baseTaskData[mapping.taskField];
       }

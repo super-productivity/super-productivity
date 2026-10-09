@@ -3,6 +3,10 @@ import path from 'path';
 import os from 'os';
 
 const IS_WEBKIT_SMOKE_ENABLED = process.env.E2E_WEBKIT_SMOKE === 'true';
+// Playwright rejects non-integer or negative worker counts; fall back instead.
+const parsedWorkers = Number(process.env.E2E_WORKERS);
+const envWorkers =
+  Number.isInteger(parsedWorkers) && parsedWorkers > 0 ? parsedWorkers : undefined;
 // Playwright's runtime descriptor includes `screen`, but its type omits it.
 const IPHONE_13 = devices['iPhone 13'] as (typeof devices)['iPhone 13'] & {
   screen: { width: number; height: number };
@@ -33,10 +37,13 @@ export default defineConfig({
   retries: 0,
   // Reduce worker count to avoid resource contention causing flakiness
   // Lower worker count improves stability by reducing parallel execution stress
+  // E2E_WORKERS lets parallel agent sessions cap their share of the machine.
   workers:
+    envWorkers ||
     (process.env.CI
       ? Math.min(3, os.cpus().length)
-      : Math.min(12, os.cpus().length - 1)) || 1,
+      : Math.min(12, os.cpus().length - 1)) ||
+    1,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: process.env.CI
     ? [

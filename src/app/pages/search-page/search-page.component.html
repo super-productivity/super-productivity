@@ -54,7 +54,15 @@
                   {{ item?.title }}
                 </div>
                 <div class="task-icons">
-                  @if (item.ctx) {
+                  @if (item.isProject) {
+                    <mat-icon class="issue-icon">list</mat-icon>
+                  } @else if (item.isTag) {
+                    <tag
+                      [tag]="item.ctx"
+                      [isHideTitle]="true"
+                      class="context-tag"
+                    ></tag>
+                  } @else if (item.ctx) {
                     <tag
                       [tag]="item.ctx"
                       class="context-tag"

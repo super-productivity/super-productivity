@@ -564,6 +564,35 @@ describe('PluginIssueProviderAdapterService', () => {
       });
     }
 
+    // calendar providers report 'confirmed' and declare neither doneStates nor
+    // an isDone mapping, so an edited event must not reopen a done task (#9905)
+    for (const doneStates of [undefined, []]) {
+      it(`should not touch isDone without a done concept (doneStates ${JSON.stringify(doneStates)})`, async () => {
+        const provider = createMockProvider({
+          doneStates,
+          getById: jasmine.createSpy('getById').and.resolveTo({
+            id: 'ISS-5',
+            title: 'T',
+            state: 'confirmed',
+            lastUpdated: 2000,
+          }),
+        });
+        registrySpy.getProvider.and.returnValue(provider);
+        const task = {
+          id: 'task-1',
+          issueId: 'ISS-5',
+          issueProviderId: PROVIDER_ID,
+          issueLastUpdated: 1000,
+          isDone: true,
+        } as Task;
+
+        const result = await service.getFreshDataForIssueTask(task);
+
+        expect(result!.taskChanges.title).toBe('T');
+        expect(result!.taskChanges.isDone).toBeUndefined();
+      });
+    }
+
     it('should return null when issue is not updated', async () => {
       const freshIssue: PluginIssue = {
         id: 'ISS-5',
@@ -1032,15 +1061,13 @@ describe('PluginIssueProviderAdapterService', () => {
         expect(result!.taskChanges['isDone' as keyof Task]).toBeUndefined();
       });
 
-      // _buildBaseIssueTask turns a numeric `start` into a dueDay and a
-      // calendar's 'confirmed' state into isDone: false, with no mapping and no
-      // direction behind either, so a refresh must not reschedule a task the
-      // user has already planned or un-complete one they finished (#9905).
-      it('should not set a due date or completion from the raw issue on refresh', async () => {
+      // _buildBaseIssueTask turns a numeric `start` into a dueDay with no
+      // mapping and no direction behind it, so a refresh must not reschedule
+      // a task the user has already planned.
+      it('should not set a due date from the raw issue on refresh', async () => {
         const freshIssue = {
           id: 'ISS-1',
           title: 'Unchanged',
-          state: 'confirmed',
           start: new Date('2026-03-20T10:00:00.000Z').getTime(),
           lastUpdated: 2000,
         } as unknown as PluginIssue;
@@ -1057,7 +1084,6 @@ describe('PluginIssueProviderAdapterService', () => {
           issueId: 'ISS-1',
           issueProviderId: PROVIDER_ID,
           issueLastUpdated: 1000,
-          isDone: true,
           issueLastSyncedValues: {},
         } as unknown as Task;
 
@@ -1066,7 +1092,6 @@ describe('PluginIssueProviderAdapterService', () => {
         expect(result).not.toBeNull();
         expect(result!.taskChanges['dueDay' as keyof Task]).toBeUndefined();
         expect(result!.taskChanges['dueWithTime' as keyof Task]).toBeUndefined();
-        expect(result!.taskChanges['isDone' as keyof Task]).toBeUndefined();
       });
 
       // The direction is `both` here, so this is the local-edit guard rather
@@ -1718,7 +1743,7 @@ describe('PluginIssueProviderAdapterService', () => {
       expect(result[1].taskChanges.title).toBe('Two');
     });
 
-    it('should not set completion from raw batch-fetched issues', async () => {
+    it('should apply the provider doneStates to batch-fetched issues', async () => {
       const getByIds = jasmine.createSpy('getByIds').and.resolveTo([
         { id: 'ISS-1', title: 'One', state: 'Shipped', lastUpdated: 5000 },
         { id: 'ISS-2', title: 'Two', state: 'closed', lastUpdated: 5000 },
@@ -1732,6 +1757,22 @@ describe('PluginIssueProviderAdapterService', () => {
         { id: 'task-2', issueId: 'ISS-2', issueProviderId: PROVIDER_ID } as Task,
       ]);
 
+      expect(result.map((r) => r.taskChanges.isDone)).toEqual([true, false]);
+    });
+
+    it('should not set isDone on batch-fetched issues without a done concept', async () => {
+      const getByIds = jasmine.createSpy('getByIds').and.resolveTo([
+        { id: 'ISS-1', title: 'One', state: 'confirmed', lastUpdated: 5000 },
+        { id: 'ISS-2', title: 'Two', state: 'closed', lastUpdated: 5000 },
+      ] as PluginIssue[]);
+      registrySpy.getProvider.and.returnValue(createMockProvider({ getByIds }));
+
+      const result = await service.getFreshDataForIssueTasks([
+        { id: 'task-1', issueId: 'ISS-1', issueProviderId: PROVIDER_ID } as Task,
+        { id: 'task-2', issueId: 'ISS-2', issueProviderId: PROVIDER_ID } as Task,
+      ]);
+
+      expect(result.map((r) => r.taskChanges.title)).toEqual(['One', 'Two']);
       expect(result.map((r) => r.taskChanges.isDone)).toEqual([undefined, undefined]);
     });
 

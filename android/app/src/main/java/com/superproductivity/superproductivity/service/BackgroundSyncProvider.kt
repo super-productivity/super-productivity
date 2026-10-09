@@ -5,6 +5,9 @@ import android.util.Log
 
 private const val TAG = "ReminderSyncHelper"
 private const val DUE_DAY_SUFFIX = "_dueday"
+// Must match the frontend deadline effect (mobile-notification.effects.ts) so both
+// paths replace one alarm instead of scheduling two.
+private const val DEADLINE_SUFFIX = "_deadline"
 
 /**
  * A reminder detected from sync operations that should be scheduled as an AlarmManager alarm.
@@ -13,11 +16,11 @@ data class ReminderToSchedule(
     val taskId: String,
     val title: String,
     val remindAt: Long,
-    val isDueDate: Boolean
+    val isDeadline: Boolean
 )
 
 /**
- * Cancel both reminder variants (standard + due-day) for a task.
+ * Cancel all reminder variants (standard, due-day, deadline) for a task.
  * Each cancellation is independent — one failure won't block the other.
  */
 fun cancelRemindersForTask(context: Context, taskId: String) {
@@ -35,6 +38,13 @@ fun cancelRemindersForTask(context: Context, taskId: String) {
     } catch (e: Exception) {
         Log.w(TAG, "Failed to cancel dueday reminder for $taskId", e)
     }
+    try {
+        val deadlineNotificationId = SuperSyncBackgroundProvider.generateNotificationId(taskId + DEADLINE_SUFFIX)
+        ReminderNotificationHelper.cancelReminder(context, deadlineNotificationId)
+        Log.d(TAG, "Cancelled deadline reminder for $taskId (id=$deadlineNotificationId)")
+    } catch (e: Exception) {
+        Log.w(TAG, "Failed to cancel deadline reminder for $taskId", e)
+    }
 }
 
 /**
@@ -45,9 +55,9 @@ fun cancelRemindersForTask(context: Context, taskId: String) {
  */
 fun scheduleReminderFromSync(context: Context, reminder: ReminderToSchedule) {
     try {
-        val reminderId = if (reminder.isDueDate) reminder.taskId + DUE_DAY_SUFFIX else reminder.taskId
+        val reminderId = if (reminder.isDeadline) reminder.taskId + DEADLINE_SUFFIX else reminder.taskId
         val notificationId = SuperSyncBackgroundProvider.generateNotificationId(reminderId)
-        val reminderType = if (reminder.isDueDate) "DUE_DATE" else "TASK"
+        val reminderType = if (reminder.isDeadline) "DEADLINE" else "TASK"
         ReminderNotificationHelper.scheduleReminder(
             context, notificationId, reminderId, reminder.taskId, reminder.title,
             reminderType, reminder.remindAt, useAlarmStyle = false, isOngoing = false

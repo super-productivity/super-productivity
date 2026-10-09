@@ -18,6 +18,7 @@ import { resolveSyncPath, type ResolvedSyncPath } from './sync-path-resolver';
 import { loadSimpleStoreAll, saveSimpleStore } from './simple-store';
 import { assertPathOutside } from './file-path-guard';
 import { getImageDataUrl, importImage } from './image-cache';
+import { createSafeIpcError, getSafeErrorMeta } from './safe-ipc-error';
 
 // SECURITY: file-sync must never read/write/list inside the app's private dir,
 // which holds settings/grants/db — touching it is a privilege-escalation
@@ -462,42 +463,4 @@ export const initLocalFileSyncAdapter = (): void => {
 const getRev = (filePath: string): string => {
   const fileStat = statSync(filePath);
   return fileStat.mtime.getTime().toString();
-};
-
-const getSafeErrorMeta = (
-  e: unknown,
-): {
-  errorName: string;
-  errorCode?: string | number;
-} => {
-  const errorName =
-    e instanceof Error
-      ? e.name
-      : typeof e === 'object' && e !== null && 'name' in e && typeof e.name === 'string'
-        ? e.name
-        : 'UnknownError';
-  const errorCode =
-    typeof e === 'object' &&
-    e !== null &&
-    'code' in e &&
-    (typeof e.code === 'string' || typeof e.code === 'number')
-      ? e.code
-      : undefined;
-
-  return errorCode === undefined ? { errorName } : { errorName, errorCode };
-};
-
-const createSafeIpcError = (operation: IPC, e: unknown): Error => {
-  const { errorName, errorCode } = getSafeErrorMeta(e);
-  const codeMessagePart = errorCode === undefined ? '' : ` (code: ${errorCode})`;
-  const safeError = new Error(`${operation} failed: ${errorName}${codeMessagePart}`, {
-    cause: { name: errorName, code: errorCode },
-  }) as Error & { code?: string | number };
-  safeError.name = errorName;
-  if (errorCode !== undefined) {
-    safeError.code = errorCode;
-  }
-  delete safeError.stack;
-
-  return safeError;
 };

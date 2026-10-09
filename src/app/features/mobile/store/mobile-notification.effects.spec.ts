@@ -588,6 +588,38 @@ describe('MobileNotificationEffects', () => {
       );
     }));
 
+    it('schedules deadline reminders on Android too', fakeAsync(() => {
+      // Without a native alarm, Android deadline reminders only fired while the
+      // app was running — useless for the day/week lead-time options.
+      platformService.isIOS.and.returnValue(false);
+      platformService.isAndroid.and.returnValue(true);
+      const win = window as { SUPAndroid?: unknown };
+      const prevAndroid = win.SUPAndroid;
+      win.SUPAndroid = { supportsTypedReminderActions: () => true };
+      subscribeDeadlineNotifications();
+
+      tick(EFFECT_DELAY_MS + 1);
+      win.SUPAndroid = prevAndroid;
+
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledOnceWith(
+        jasmine.objectContaining({
+          notificationId: generateNotificationId('d1_deadline'),
+          relatedId: 'd1',
+          reminderType: 'DEADLINE',
+        }),
+      );
+    }));
+
+    it('skips Android deadline alarms when the APK lacks typed reminder actions', fakeAsync(() => {
+      platformService.isIOS.and.returnValue(false);
+      platformService.isAndroid.and.returnValue(true);
+      subscribeDeadlineNotifications();
+
+      tick(EFFECT_DELAY_MS + 1);
+
+      expect(reminderServiceSpy.scheduleReminder).not.toHaveBeenCalled();
+    }));
+
     it('cancels previously scheduled deadline reminders when disabled', fakeAsync(() => {
       subscribeDeadlineNotifications();
 
@@ -615,6 +647,23 @@ describe('MobileNotificationEffects', () => {
       expect(reminderServiceSpy.cancelReminder).toHaveBeenCalledOnceWith(
         generateNotificationId('d1_deadline'),
       );
+    }));
+
+    it('does not cancel a deadline reminder that already fired', fakeAsync(() => {
+      // On Android cancel also removes the shown notification, so a later store
+      // emission must not dismiss it once its alarm time has simply passed.
+      const firedTask = futureDeadlineTask('d1');
+      store.overrideSelector(selectAllTasksWithDeadlineReminder, [firedTask]);
+      subscribeDeadlineNotifications();
+      tick(EFFECT_DELAY_MS + 1);
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(1);
+
+      tick(600_001);
+      store.overrideSelector(selectAllTasksWithDeadlineReminder, [{ ...firedTask }]);
+      store.refreshState();
+      tick(1);
+
+      expect(reminderServiceSpy.cancelReminder).not.toHaveBeenCalled();
     }));
 
     it('cancels a tracked deadline reminder when its new timestamp is in the past', fakeAsync(() => {

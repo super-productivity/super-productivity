@@ -1752,7 +1752,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
               // The store re-clocks the delta and successor in this same commit.
               const successor = mergedOpArgs()!;
               expect([...kept.opIds]).toEqual([delta.id]);
-              expect(kept.successorOpIds.has(successor.id)).toBeTrue();
+              expect(kept.successorOpIds?.has(successor.id)).toBeTrue();
               expect(kept.clockToDominate).toEqual({ B: 1 });
               rebasedSuccessor = { ...successor, vectorClock: { A: 4, B: 1 } };
               written.find((w) => w.op.id === successor.id)!.op = rebasedSuccessor;

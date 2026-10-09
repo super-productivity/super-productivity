@@ -20,6 +20,9 @@ name: 'E2E Sync (PR Gate)'
 on:
   pull_request:
     branches: [master, main]
+    # ready_for_review: drafts skip the suites (see detect), so they must run
+    # once the PR leaves draft.
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
@@ -53,8 +56,19 @@ jobs:
           # For workflow_dispatch there is no PR base — force both suites to run.
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
         run: |
           set -euo pipefail
+
+          # Drafts skip the ~180 runner-minute suites to free shared runners;
+          # drafts can't merge, and ready_for_review re-triggers this workflow.
+          if [ "${IS_DRAFT:-}" = "true" ]; then
+            echo "Draft PR — skipping sync suites until ready for review."
+            echo "supersync=false" >> "$GITHUB_OUTPUT"
+            echo "webdav=false" >> "$GITHUB_OUTPUT"
+            echo "fuzz=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           if [ -z "${BASE_SHA:-}" ]; then
             echo "No PR base (manual run) — running both suites."
@@ -83,7 +97,7 @@ jobs:
           SYNC_UTILITY_PATHS='src/app/core/date/date\.service\.ts$|src/app/core/util/|src/app/util/(get-db-date-str|is-today\.util|start-of-next-day\.util|local-actions\.token|skip-during-sync(-window)?\.operator|wait-for-sync-window\.operator)\.ts$'
           COMMON="src/app/imex/sync/|src/app/op-log/|src/app/pfapi/|src/app/root-store/|src/app/features/[^/]+/store/|${PERSISTENT_ACTION_PATHS}|${SYNC_UTILITY_PATHS}|packages/sync-providers/|packages/sync-core/|packages/shared-schema/|docker-compose\.yaml$|e2e/tests/sync/|e2e/helpers/|e2e/pages/|e2e/fixtures/|e2e/constants/|e2e/utils/|e2e/playwright\.config\.ts$|e2e/global-setup\.ts$|\.github/workflows/e2e-sync-pr\.yml$"
           # SuperSync also depends on the server package and its compose override.
-          SUPERSYNC_PATTERN="^(${COMMON}|packages/super-sync-server/|docker-compose\.supersync\.yaml\$)"
+          SUPERSYNC_PATTERN="^(${COMMON}|packages/super-sync-server/|docker-compose\.supersync\.yaml\$|e2e/webdav-server/|scripts/wait-for-webdav\.sh\$)"
           # WebDAV also depends on its E2E server image and precondition probe.
           WEBDAV_PATTERN="^(${COMMON}|e2e/webdav-server/|scripts/wait-for-webdav\.sh\$)"
           # The sync fuzz harness runs client sync code only, not the E2E helpers.

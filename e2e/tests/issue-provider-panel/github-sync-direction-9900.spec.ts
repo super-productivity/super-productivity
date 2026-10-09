@@ -1,5 +1,4 @@
 import { expect, test } from '../../fixtures/test.fixture';
-import { waitForPluginManagementInit } from '../../helpers/plugin-test.helpers';
 
 // #9900: refreshing a plugin issue used the import mapping and then raw issue
 // fields, overwriting task fields even when their sync direction was off.
@@ -8,16 +7,6 @@ test('GitHub refresh respects disabled title sync while still pulling status', a
   workViewPage,
   taskPage,
 }) => {
-  await workViewPage.waitForTaskList();
-  // App readiness can precede plugin discovery. The provider setup panel snapshots
-  // its plugin list on creation, so wait for GitHub before opening it.
-  expect(await waitForPluginManagementInit(page)).toBe(true);
-  await expect(
-    page.locator('plugin-management mat-card-title').getByText('GitHub Issues', {
-      exact: true,
-    }),
-  ).toBeVisible();
-  await page.goto('/#/tag/TODAY/tasks');
   await workViewPage.waitForTaskList();
   let refreshed = false;
   let refreshRequests = 0;

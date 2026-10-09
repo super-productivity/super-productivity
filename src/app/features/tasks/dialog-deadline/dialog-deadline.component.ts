@@ -19,7 +19,7 @@ import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { DEADLINE_REMINDER_OPTIONS } from './deadline-reminder-options.const';
 import { FormsModule } from '@angular/forms';
-import { millisecondsDiffToRemindOption } from '../util/remind-option-to-milliseconds';
+import { millisecondsDiffToDeadlineRemindOption } from '../util/remind-option-to-milliseconds';
 import { remindOptionToMilliseconds } from '../util/remind-option-to-milliseconds';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
@@ -105,7 +105,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
           },
         );
         if (this.task.deadlineRemindAt) {
-          this.selectedReminderCfgId = millisecondsDiffToRemindOption(
+          this.selectedReminderCfgId = millisecondsDiffToDeadlineRemindOption(
             this.task.deadlineWithTime,
             this.task.deadlineRemindAt,
           );

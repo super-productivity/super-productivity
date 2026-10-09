@@ -154,6 +154,19 @@ export class LiveMarkdownEditorComponent {
     runTextTransform(view, transform);
   }
 
+  /**
+   * Record `value` as already committed to the consumer, so the next blur does
+   * not re-emit it. A caller that commits straight into the view via
+   * `applyTransform` and then emits the result through its OWN `changed` output
+   * (e.g. the toolbar checklist action) leaves `_lastEmitted` stale — the
+   * `model` write it makes afterwards matches the doc, so the model effect never
+   * refreshes the guard. Without this, blur would fire the same value a second
+   * time and produce a redundant note-update op.
+   */
+  markEmitted(value: string): void {
+    this._lastEmitted = value;
+  }
+
   private _createView(parent: HTMLElement, doc: string): EditorView {
     return new EditorView({
       parent,
@@ -190,7 +203,7 @@ export class LiveMarkdownEditorComponent {
               if (update.view.hasFocus) {
                 this.focused.emit();
               } else {
-                this._emitIfChanged();
+                this.commitOnBlur();
                 this.blurred.emit();
               }
             }
@@ -217,7 +230,14 @@ export class LiveMarkdownEditorComponent {
     };
   }
 
-  private _emitIfChanged(): void {
+  /**
+   * Commit the current document as the textarea does on blur: emit it only when
+   * it differs from the last value the consumer already has. Public so the blur
+   * path can be exercised in tests — the real focus change is detected on an
+   * async CodeMirror measure that the headless test browser does not run
+   * deterministically.
+   */
+  commitOnBlur(): void {
     const value = this._view?.state.doc.toString() ?? '';
     if (value !== this._lastEmitted) {
       this._lastEmitted = value;
