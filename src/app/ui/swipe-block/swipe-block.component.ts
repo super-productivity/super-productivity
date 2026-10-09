@@ -97,7 +97,11 @@ export class SwipeBlockComponent implements OnDestroy {
   }
 
   onPanEnd(): void {
-    if (!isTouchActive() || (!this._isLockPanLeft && !this._isLockPanRight)) {
+    if (
+      !isTouchActive() ||
+      !this.canSwipe() ||
+      (!this._isLockPanLeft && !this._isLockPanRight)
+    ) {
       return;
     }
     this.isPreventPointerEventsWhilePanning.set(false);
@@ -121,7 +125,7 @@ export class SwipeBlockComponent implements OnDestroy {
   }
 
   handlePan(ev: PanEvent): void {
-    if (!isTouchActive()) {
+    if (!isTouchActive() || !this.canSwipe()) {
       return;
     }
     if (!this.innerWrapperEl()) {

@@ -7,6 +7,7 @@ import {
   Input,
 } from '@angular/core';
 import { T } from '../../../t.const';
+import { TaskMultiSelectService } from '../../tasks/task-multi-select.service';
 import { PlannerDay, ScheduleItem, ScheduleItemType } from '../planner.model';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { TaskCopy } from '../../tasks/task.model';
@@ -62,6 +63,7 @@ import { safeFormatDate } from '../../../util/safe-format-date';
   ],
 })
 export class PlannerDayComponent {
+  protected readonly multiSelect = inject(TaskMultiSelectService);
   private _store = inject(Store);
   private _matDialog = inject(MatDialog);
   private _taskService = inject(TaskService);

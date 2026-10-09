@@ -27,6 +27,7 @@
         cdkDrag
         [cdkDragData]="task"
         [cdkDragStartDelay]="dragDelayForTouch()"
+        [cdkDragDisabled]="multiSelect.isTouchSelectionMode()"
         [cdkDragLockAxis]="isXs() ? 'y' : ''"
         [task]="task"
         [day]=""
