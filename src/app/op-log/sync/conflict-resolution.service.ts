@@ -117,11 +117,11 @@ import {
 } from './conflict-disjoint-merge.util';
 import {
   aggregateEntityConflict,
+  appendRemoteWinners,
   fieldPatchGroups,
   keptLocalTimeDeltas,
   keptTimeDeltasToRebase,
   rebaseKeptTimeDeltas,
-  replaceRebasedOps,
   timeDeltasSurvivingLww,
   buildSurvivingFieldPatches,
 } from './conflict-field-patch.util';
@@ -1518,19 +1518,24 @@ export class ConflictResolutionService {
       const ops = remoteWinsInServerOrder(nonConflictingOps, remoteWinsOps);
       const hoisted = new Set(ops);
       nonConflictingOps = nonConflictingOps.filter((op) => !hoisted.has(op));
-      const result = await this._filterAndAppendOpsWithRetry(ops, 'remote', {
-        pendingApply: true,
-      });
-      const skippedCount = ops.length - result.ops.length;
+      if (keptToRebase) options.assertFence?.('kept time delta rebase');
+      const written = await appendRemoteWinners(
+        this.opLogStore,
+        ops,
+        keptToRebase && { ...keptToRebase, successorOpIds: resendIds },
+      );
+      keptToRebase = undefined;
+      const result = await this._resolveReplayableOperations(ops, 'remote', written);
+      const skippedCount = ops.length - result.length;
       if (skippedCount > 0) {
         OpLog.verbose(
           `ConflictResolutionService: Skipping ${skippedCount} duplicate ops (LWW remote)`,
         );
       }
-      for (let i = 0; i < result.ops.length; i++) {
-        allStoredOps.push({ id: result.ops[i].id, seq: result.seqs[i] });
-        allOpsToApply.push(result.ops[i]);
-        applySeqByOpId.set(result.ops[i].id, result.seqs[i]);
+      for (const { op, seq } of result) {
+        allStoredOps.push({ id: op.id, seq });
+        allOpsToApply.push(op);
+        applySeqByOpId.set(op.id, seq);
       }
     }
 
@@ -1584,14 +1589,9 @@ export class ConflictResolutionService {
       }
     }
 
+    // Only when no resolution or remote-winner rows were written: no successors.
     if (keptToRebase) {
-      const rebased = await rebaseKeptTimeDeltas(
-        this.opLogStore,
-        keptToRebase,
-        [...writtenMergedOpIds],
-        options.assertFence,
-      );
-      replaceRebasedOps(allOpsToApply, rebased);
+      await rebaseKeptTimeDeltas(this.opLogStore, keptToRebase, [], options.assertFence);
     }
     await rebaseKeptReorders(this.opLogStore, keptReorders, new Set(remoteOpsToReject));
 

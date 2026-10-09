@@ -18,6 +18,10 @@ import { ActionType, isLwwUpdatePayload, OpType } from '../core/operation.types'
 import type { EntityConflict, Operation } from '../core/operation.types';
 import type { EntityType } from '../core/operation.types';
 import { RECREATE_FALLBACK } from '../core/recreate-fallback.const';
+import type {
+  MixedSourceWrittenOperation,
+  OperationLogStoreService,
+} from '../persistence/operation-log-store.service';
 import {
   compareVectorClocks,
   mergeVectorClocks,
@@ -394,10 +398,36 @@ export const keptTimeDeltasToRebase = (
   return kept.opIds.size > 0 ? kept : undefined;
 };
 
-/** Swaps re-clocked ops into `ops` in place, keeping apply order. */
-export const replaceRebasedOps = (ops: Operation[], rebased: Operation[]): void => {
-  const byId = new Map(rebased.map((op) => [op.id, op]));
-  for (let i = 0; i < ops.length; i++) ops[i] = byId.get(ops[i].id) ?? ops[i];
+type OpLogAppender = Pick<
+  OperationLogStoreService,
+  'appendBatchSkipDuplicates' | 'appendMixedSourceBatchSkipDuplicates'
+>;
+type RebaseKept = NonNullable<
+  Parameters<OperationLogStoreService['appendMixedSourceBatchSkipDuplicates']>[1]
+>['rebaseKept'];
+
+/**
+ * Writes LWW remote winners as pending rows. With `rebaseKept`, the kept deltas
+ * re-clock in the same commit: a crash between two commits would leave a stale
+ * delta that the server rejects and folds into an absolute update (#10614).
+ */
+export const appendRemoteWinners = async (
+  store: OpLogAppender,
+  ops: Operation[],
+  rebaseKept: RebaseKept,
+): Promise<MixedSourceWrittenOperation[]> => {
+  const options = { pendingApply: true };
+  if (rebaseKept) {
+    const batch = { ops, source: 'remote' as const, options };
+    return (await store.appendMixedSourceBatchSkipDuplicates([batch], { rebaseKept }))
+      .written;
+  }
+  const { writtenOps, seqs } = await store.appendBatchSkipDuplicates(
+    ops,
+    'remote',
+    options,
+  );
+  return writtenOps.map((op, i) => ({ op, seq: seqs[i], source: 'remote' }));
 };
 
 /**

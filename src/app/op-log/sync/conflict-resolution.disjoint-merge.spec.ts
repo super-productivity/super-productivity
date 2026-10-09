@@ -1667,7 +1667,7 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
       expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
     });
 
-    it('re-clocks a kept delta separately when only remote winners are written', async () => {
+    it('re-clocks a kept delta in the remote-winner commit', async () => {
       mockStore.select.and.returnValue(of({ id: 'task-1', title: 'A title' }));
       const rename = title({ id: 'l-rename', clientId: 'A', vectorClock: { A: 1 } }, 'A');
       const delta = op({
@@ -1695,11 +1695,18 @@ describe('ConflictResolutionService — disjoint-field merge', () => {
         assertFence,
       });
 
-      // No resolution batch carries the re-clock, so the fallback must run.
-      expect(mockOpLogStore.appendMixedSourceBatchSkipDuplicates).not.toHaveBeenCalled();
-      expect(mockOpLogStore.rebasePendingLocalOps).toHaveBeenCalledOnceWith(['l-delta'], {
-        B: 1,
-      });
+      expect(
+        mockOpLogStore.appendMixedSourceBatchSkipDuplicates,
+      ).toHaveBeenCalledOnceWith(
+        [{ ops: [remote], source: 'remote', options: { pendingApply: true } }],
+        {
+          rebaseKept: jasmine.objectContaining({
+            opIds: new Set(['l-delta']),
+            clockToDominate: { B: 1 },
+          }),
+        },
+      );
+      expect(mockOpLogStore.rebasePendingLocalOps).not.toHaveBeenCalled();
       expect(assertFence).toHaveBeenCalledOnceWith('kept time delta rebase');
     });
 
