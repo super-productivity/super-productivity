@@ -40,7 +40,8 @@ but is experimental (the app lists it as "not recommended / no support").
 
 ### Prerequisites
 
-The supported self-hosted setup is the bundled Docker Compose stack
+Self-hosting is possible, but support for it is limited. The tested
+self-hosted setup is the bundled Docker Compose stack
 (SuperSync + PostgreSQL + Caddy), with the desktop (Electron), Android or iOS
 app as clients. It needs:
 
