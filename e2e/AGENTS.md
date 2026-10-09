@@ -22,10 +22,10 @@ For the full SuperSync and WebDAV suites, manually dispatch [E2E Tests (Schedule
 
 Several agent sessions share one machine, so keep local runs small:
 
-- Prefix local runs with `E2E_WORKERS=2`; the local default starts up to 12 browsers per run.
+- Prefix local runs with `E2E_WORKERS=2` (an integer); the local default starts up to 12 browsers per run. A `--workers` flag overrides it, and the provider scripts already pin their own.
 - Run only focused files. Never run `npm run e2e` or `e2e:all` locally; dispatch the scheduled workflow instead.
-- The first run in a fresh worktree builds the bundled plugins and cold-compiles Angular. Give it a long command timeout (15 min) or run it in the background.
-- A sandboxed Linux session cannot run the provider `:file` scripts: its sandbox has its own network namespace, so the Docker servers they start are unreachable, and `docker compose --build` fails on a read-only `~/.docker` (measured 2026-10). Push the branch and dispatch the scheduled workflow with a narrow filter, e.g. `gh workflow run e2e-scheduled.yml --ref <branch> -f grep="<test name>" -f run_webdav=false -f run_released_clients=false`, then confirm in the job log that the intended tests ran rather than skipped.
+- The first run in a fresh worktree builds the bundled plugins and cold-compiles Angular, which can take several minutes. Give it a long command timeout or run it in the background.
+- A sandboxed Linux session cannot run the provider `:file` scripts: the sandbox has its own network namespace, so their Docker servers are unreachable (measured 2026-10). Push the branch, then dispatch the scheduled workflow with a narrow filter, e.g. `gh workflow run e2e-scheduled.yml --ref <branch> -f grep="<test name>" -f run_webdav=false -f run_released_clients=false`, then confirm in the job log that the intended tests ran rather than skipped.
 - `http://localhost:4242 is already used` means another session on a shared network (macOS or unsandboxed) is running E2E. Wait and retry; never kill a process you did not start.
 
 ## Author tests
