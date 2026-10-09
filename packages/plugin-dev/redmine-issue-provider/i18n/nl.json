@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Host (e.g.: https://redmine.org)",
+    "API_KEY": "API-toegangssleutel",
+    "PROJECT_ID": "Project identificatie",
+    "PROJECT_ID_DESC": "Kan gevonden worden in deel van de URL, wanneer je het project open hebt in de Browser",
+    "SCOPE": "Omvang",
+    "SCOPE_ALL": "Allemaal",
+    "SCOPE_CREATED": "Aangemaakt door mij",
+    "SCOPE_ASSIGNED": "Aan mij toegewezen",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Tijdregistratiedialoog tonen om te rapporteren aan Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Vereist dat de tijdregistratiemodule is ingeschakeld voor het Redmine-project",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Tijdregistratiedialoog tonen wanneer subtaken zijn voltooid",
+    "DEFAULT_TIME": "Standaard tijdwaarde voor dialoog",
+    "DEFAULT_TIME_ALL_TIME": "Vul alle tijd in die aan een taak is besteed",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Vul alle bestede tijd min de geregistreerde tijd in",
+    "DEFAULT_TIME_TODAY": "Vul alleen de tijd in die vandaag is doorgebracht",
+    "DEFAULT_TIME_YESTERDAY": "Vul alleen de tijd in die gisteren is doorgebracht"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Samenvatting",
+    "STATUS": "Status",
+    "PRIORITY": "Prioriteit",
+    "AUTHOR": "Auteur",
+    "ASSIGNEE": "Toegewezen persoon",
+    "CATEGORY": "Categorie",
+    "VERSION": "Versie",
+    "DUE_DATE": "Vervaldatum",
+    "TIME_SPENT": "Tijd besteed",
+    "DESCRIPTION": "Beschrijving"
+  },
+  "FORM_HELP": "<p>Hier kunt u SuperProductivity configureren om open Redmine (hetzij de online versie of een zelf gehoste instantie) problemen voor een specifiek project te tonen in het taakcreatiepaneel in de dagelijkse planningsweergave. Ze worden weergegeven als suggesties en geven een link naar het probleem en meer informatie erover.</p><p>Daarnaast kun je automatisch alle openstaande kwesties importeren.</p>"
+}

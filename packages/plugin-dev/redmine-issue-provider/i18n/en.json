@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Host (e.g. https://redmine.org)",
+    "API_KEY": "API access key",
+    "PROJECT_ID": "Project Identifier (optional)",
+    "PROJECT_ID_DESC": "Can be found as part of the URL when viewing the project in a web browser. Leave empty to search across the whole Redmine instance.",
+    "SCOPE": "Scope",
+    "SCOPE_ALL": "All",
+    "SCOPE_CREATED": "Created by me",
+    "SCOPE_ASSIGNED": "Assigned to me",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Show time tracking dialog to report to Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Requires time tracking module to be enabled for Redmine project",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Show time tracking dialog when subtasks are completed",
+    "DEFAULT_TIME": "Default time value for dialog",
+    "DEFAULT_TIME_ALL_TIME": "Fill in all time spent on task",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Fill in all time spent minus time logged",
+    "DEFAULT_TIME_TODAY": "Fill only time spent today",
+    "DEFAULT_TIME_YESTERDAY": "Fill only time spent yesterday"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Summary",
+    "STATUS": "Status",
+    "PRIORITY": "Priority",
+    "AUTHOR": "Author",
+    "ASSIGNEE": "Assignee",
+    "CATEGORY": "Category",
+    "VERSION": "Version",
+    "DUE_DATE": "Due Date",
+    "TIME_SPENT": "Time Spent",
+    "DESCRIPTION": "Description"
+  },
+  "FORM_HELP": "<p>Here you can configure Super Productivity to list open Redmine (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition you can automatically import all open issues.</p>"
+}
