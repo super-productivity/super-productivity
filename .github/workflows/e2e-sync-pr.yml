@@ -187,6 +187,20 @@ jobs:
       - name: Create .env file for Docker Compose
         run: cp .env.example .env
 
+      - name: Configure Docker Hub mirror
+        # Cached pulls avoid Docker Hub's shared-runner rate limit (#10633).
+        # Preserve the runner's other daemon settings; cache misses use Docker Hub.
+        shell: bash
+        run: |
+          if [ -f /etc/docker/daemon.json ]; then
+            sudo cat /etc/docker/daemon.json
+          else
+            echo '{}'
+          fi | jq '.["registry-mirrors"] = ["https://mirror.gcr.io"]' > "$RUNNER_TEMP/docker-daemon.json"
+          sudo mkdir -p /etc/docker
+          sudo cp "$RUNNER_TEMP/docker-daemon.json" /etc/docker/daemon.json
+          sudo systemctl restart docker
+
       - name: Start Sync Docker Services
         # Retry to survive transient Docker Hub pull / Alpine mirror failures.
         # set -eu fails an attempt as soon as the build fails; without it the
@@ -260,6 +274,20 @@ jobs:
 
       - name: Create .env file for Docker Compose
         run: cp .env.example .env
+
+      - name: Configure Docker Hub mirror
+        # Cached pulls avoid Docker Hub's shared-runner rate limit (#10633).
+        # Preserve the runner's other daemon settings; cache misses use Docker Hub.
+        shell: bash
+        run: |
+          if [ -f /etc/docker/daemon.json ]; then
+            sudo cat /etc/docker/daemon.json
+          else
+            echo '{}'
+          fi | jq '.["registry-mirrors"] = ["https://mirror.gcr.io"]' > "$RUNNER_TEMP/docker-daemon.json"
+          sudo mkdir -p /etc/docker
+          sudo cp "$RUNNER_TEMP/docker-daemon.json" /etc/docker/daemon.json
+          sudo systemctl restart docker
 
       - name: Start WebDAV Docker Service
         # Retry to survive transient Docker Hub pull timeouts / rate limits.
