@@ -15,6 +15,47 @@ test.describe('Task multi-select (touch)', () => {
   // The viewport stays desktop-sized so the shared add-task flow works.
   test.use({ viewport: { width: 1024, height: 900 }, hasTouch: true, isMobile: true });
 
+  test('planner cards support touch selection and suspend dragging', async ({
+    page,
+    workViewPage,
+    plannerPage,
+    testPrefix,
+  }) => {
+    await workViewPage.waitForTaskList();
+    const first = `${testPrefix}-Planner One`;
+    const second = `${testPrefix}-Planner Two`;
+    await workViewPage.addTask(first);
+    await workViewPage.addTask(second);
+    await plannerPage.navigateToPlanner();
+    const cards = page.locator('planner-task[data-task-selectable="true"]');
+    const a = cards.filter({ hasText: first });
+    const b = cards.filter({ hasText: second });
+    await expect(a).toBeVisible();
+    await page.evaluate(() =>
+      window.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch' })),
+    );
+    await a.focus();
+    await page.keyboard.press('q');
+    await waitForMenuSettled(page);
+    await page
+      .locator('.mat-mdc-menu-content button', { hasText: 'Select several tasks' })
+      .tap();
+
+    const bar = page.locator(BAR);
+    await expect(bar).toContainText('1 selected');
+    await expect(a).toHaveClass(/cdk-drag-disabled/);
+    await expect(b.locator('done-toggle')).toHaveCount(0);
+    await b.locator('.title').tap();
+    await expect(bar).toContainText('2 selected');
+    await expect(b).toHaveClass(/isMultiSelected/);
+
+    await a.locator('.title').tap();
+    await b.locator('.title').tap();
+    await expect(bar).toBeHidden();
+    await expect(a).not.toHaveClass(/cdk-drag-disabled/);
+    await expect(a.locator('done-toggle')).toHaveCount(1);
+  });
+
   test('the context menu enters selection mode, taps toggle, ✕ leaves', async ({
     page,
     workViewPage,

@@ -46,6 +46,7 @@ describe('PlannerTaskComponent', () => {
   let multiSelectMock: {
     selectedIds: WritableSignal<Set<string>>;
     isActive: WritableSignal<boolean>;
+    isTouchSelectionMode: WritableSignal<boolean>;
     toggle: jasmine.Spy;
     selectRange: jasmine.Spy;
     clear: jasmine.Spy;
@@ -95,6 +96,7 @@ describe('PlannerTaskComponent', () => {
     multiSelectMock = {
       selectedIds: signal(new Set<string>()),
       isActive: signal(false),
+      isTouchSelectionMode: signal(false),
       toggle: jasmine.createSpy('toggle'),
       selectRange: jasmine.createSpy('selectRange'),
       clear: jasmine.createSpy('clear'),
@@ -149,6 +151,31 @@ describe('PlannerTaskComponent', () => {
         schemas: [NO_ERRORS_SCHEMA],
       },
     });
+  });
+
+  it('toggles planner cards instead of opening details or completing them in touch selection mode', () => {
+    const { fixture, component } = create(makeTask(), true);
+    multiSelectMock.isTouchSelectionMode.set(true);
+    fixture.detectChanges();
+    expect(component.isTouchSelecting()).toBeTrue();
+    expect(fixture.nativeElement.querySelector('done-toggle')).toBeNull();
+
+    fixture.nativeElement.querySelector('.title').click();
+
+    expect(multiSelectMock.toggle).toHaveBeenCalledWith('t1');
+    expect(TestBed.inject(TaskService).setSelectedId).not.toHaveBeenCalled();
+    expect(taskServiceMock.toggleDoneWithAnimation).not.toHaveBeenCalled();
+
+    multiSelectMock.isTouchSelectionMode.set(false);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('done-toggle')).not.toBeNull();
+  });
+
+  it('keeps opt-out cards outside touch selection mode', () => {
+    multiSelectMock.isTouchSelectionMode.set(true);
+    const { fixture, component } = create(makeTask());
+    expect(component.isTouchSelecting()).toBeFalse();
+    expect(fixture.nativeElement.querySelector('done-toggle')).not.toBeNull();
   });
 
   describe('Planner keyboard shortcuts', () => {

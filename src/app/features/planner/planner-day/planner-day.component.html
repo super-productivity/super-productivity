@@ -56,6 +56,8 @@
   >
     @for (task of day.tasks; track task.id) {
       <planner-task
+        #plannerTask
+        [cdkDragDisabled]="plannerTask.isTouchSelecting()"
         cdkDrag
         [cdkDragData]="task"
         [cdkDragStartDelay]="dragDelayForTouch()"
@@ -143,6 +145,8 @@
         @switch (scheduledItem.type) {
           @case (SCHEDULE_ITEM_TYPE.Task) {
             <planner-task
+              #plannerTask
+              [cdkDragDisabled]="plannerTask.isTouchSelecting()"
               cdkDrag
               [task]="scheduledItem.task"
               [day]="day.dayDate"
