@@ -8,6 +8,11 @@ const http = require('node:http');
 
 require('ts-node/register/transpile-only');
 
+const {
+  LOCAL_REST_API_MAX_BODY_BYTES,
+  LOCAL_REST_API_MAX_CONCURRENT_REQUESTS,
+} = require('./shared-with-frontend/local-rest-api.model.ts');
+
 const originalModuleLoad = Module._load;
 const localRestApiModulePath = path.resolve(__dirname, 'local-rest-api.ts');
 
@@ -408,6 +413,144 @@ test('a long run of spaces separates the scheme from the credential', async () =
     headers: { Authorization: `Bearer${padding}` },
   });
   assert.equal(empty.status, 401);
+});
+
+// DNS rebinding: a page re-resolves its own name to 127.0.0.1, so the browser
+// reaches this server while still sending the page's name as Host.
+test('a Host outside the loopback allowlist is refused before the renderer', async () => {
+  enableApi();
+  const token = getToken();
+  const sendsBefore = sharedCtx.rendererSendCount;
+
+  for (const host of [
+    'attacker.example',
+    `attacker.example:${SHARED_PORT}`,
+    `127.0.0.1:${SHARED_PORT + 1}`,
+  ]) {
+    const res = await makeRequest({
+      method: 'GET',
+      path: '/tasks',
+      headers: { Host: host, Authorization: `Bearer ${token}` },
+    });
+    assert.equal(res.status, 403, host);
+    assert.equal(res.body.error.message, 'Invalid Host header');
+  }
+  assert.equal(sharedCtx.rendererSendCount, sendsBefore);
+
+  for (const host of [
+    `127.0.0.1:${SHARED_PORT}`,
+    `localhost:${SHARED_PORT}`,
+    '127.0.0.1',
+    'localhost',
+  ]) {
+    const res = await makeRequest({
+      method: 'GET',
+      path: '/health',
+      headers: { Host: host },
+    });
+    assert.equal(res.status, 200, host);
+  }
+});
+
+// A web page can make the browser send a simple POST here without a CORS
+// preflight, but it cannot leave the Origin header off.
+test('a request with a web Origin is refused before the renderer', async () => {
+  enableApi();
+  const token = getToken();
+  const sendsBefore = sharedCtx.rendererSendCount;
+
+  const res = await makeRequest(
+    {
+      method: 'POST',
+      path: '/tasks',
+      headers: {
+        Origin: 'https://attacker.example',
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'text/plain',
+      },
+    },
+    { title: 'from a web page' },
+  );
+
+  assert.equal(res.status, 403);
+  assert.equal(res.body.error.message, 'Requests from web origins are not allowed');
+  assert.equal(sharedCtx.rendererSendCount, sendsBefore);
+});
+
+test('a body over the size cap is refused before the renderer', async () => {
+  enableApi();
+  const headers = { Authorization: `Bearer ${getToken()}` };
+  // JSON-encoded, the string gains its two quotes and is exactly `bytes` long.
+  const bodyOfSize = (bytes) => 'x'.repeat(bytes - 2);
+  const sendsBefore = sharedCtx.rendererSendCount;
+
+  const atCap = await makeRequest(
+    { method: 'POST', path: '/tasks', headers },
+    bodyOfSize(LOCAL_REST_API_MAX_BODY_BYTES),
+  );
+  assert.equal(atCap.status, 200);
+
+  const overCap = await makeRequest(
+    { method: 'POST', path: '/tasks', headers },
+    bodyOfSize(LOCAL_REST_API_MAX_BODY_BYTES + 1),
+  );
+  assert.equal(overCap.status, 400);
+  assert.equal(overCap.body.error.code, 'INVALID_REQUEST_BODY');
+  assert.equal(overCap.body.error.message, 'Request body too large');
+  assert.equal(sharedCtx.rendererSendCount, sendsBefore + 1);
+});
+
+// Forwarded requests wait in memory until the renderer answers, so a renderer
+// that stops answering must not let them pile up without bound.
+test('requests over the concurrency limit get 429 until a slot frees up', async () => {
+  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-lra-busy-'));
+  const port = takeIsolatedPort();
+  const ctx = createContext({ port, userDataDir: profileDir });
+  const autoAnswer = ctx.win.webContents.send;
+  let heldCount = 0;
+  const heldAnswers = [];
+  ctx.win.webContents.send = (channel, payload) => {
+    if (heldCount < LOCAL_REST_API_MAX_CONCURRENT_REQUESTS) {
+      heldCount++;
+      heldAnswers.push(() => autoAnswer(channel, payload));
+    } else {
+      autoAnswer(channel, payload);
+    }
+  };
+  const answerHeld = () => heldAnswers.splice(0).forEach((release) => release());
+  const isolated = loadModule(ctx);
+
+  try {
+    isolated.initLocalRestApi();
+    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: true } });
+    const token = ctx.handleHandlers.get('LOCAL_REST_API_GET_TOKEN')();
+    const request = () =>
+      makeRequest(
+        { method: 'GET', path: '/tasks', headers: { Authorization: `Bearer ${token}` } },
+        undefined,
+        port,
+      );
+
+    const held = Array.from({ length: LOCAL_REST_API_MAX_CONCURRENT_REQUESTS }, request);
+    for (let i = 0; heldCount < LOCAL_REST_API_MAX_CONCURRENT_REQUESTS && i < 500; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(heldCount, LOCAL_REST_API_MAX_CONCURRENT_REQUESTS);
+
+    const overLimit = await request();
+    assert.equal(overLimit.status, 429);
+    assert.equal(overLimit.body.error.code, 'TOO_MANY_REQUESTS');
+
+    answerHeld();
+    for (const res of await Promise.all(held)) {
+      assert.equal(res.status, 200);
+    }
+    assert.equal((await request()).status, 200, 'answered requests kept their slots');
+  } finally {
+    answerHeld();
+    isolated.updateLocalRestApiConfig({ misc: { isLocalRestApiEnabled: false } });
+    fs.rmSync(profileDir, { recursive: true, force: true });
+  }
 });
 
 test('regenerating invalidates the previous token immediately', async () => {
