@@ -86,6 +86,23 @@ export const hasFocusNotificationStateChanged = (
 };
 
 /**
+ * Whether the native focus service must be (re)started rather than updated.
+ * The service stops itself when its countdown completes, and Android 12+
+ * refuses a foreground-service start from the background. So a phase that
+ * Pomodoro auto-starts while the app is away (break, next session) can be active
+ * in app state with no service, and ACTION_UPDATE cannot revive it (#9531).
+ * Only a running timer restarts it: a stopped one is either paused (the service
+ * survives pauses) or about to complete, where a restart would replace the
+ * completion notification. `isNativeServiceRunning` is lazy because it crosses
+ * the JS bridge.
+ */
+export const shouldStartFocusModeService = (
+  wasFocusModeActive: boolean,
+  timer: TimerState,
+  isNativeServiceRunning: () => boolean,
+): boolean => !wasFocusModeActive || (timer.isRunning && !isNativeServiceRunning());
+
+/**
  * Wall-clock slack (ms) for the "session has reached its scheduled end" check
  * below. The native completion arrives at (or, after bridge/broadcast latency,
  * just past) `startedAt + duration`, so a small positive slack absorbs latency
@@ -352,8 +369,24 @@ export class AndroidFocusModeEffects {
                 );
                 const remainingMs = timer.duration > 0 ? timeRemaining : timer.elapsed; // Flowtime shows elapsed
 
-                // Start service if just became active, otherwise update
-                if (!wasFocusModeActive) {
+                const isStateChanged =
+                  !wasFocusModeActive ||
+                  hasFocusNotificationStateChanged(
+                    prev?.timer,
+                    timer,
+                    prev?.currentTask,
+                    currentTask,
+                  );
+                // Start service if just became active or lost, otherwise update
+                if (
+                  isStateChanged &&
+                  shouldStartFocusModeService(
+                    wasFocusModeActive,
+                    timer,
+                    // The native bridge reports a stopped service as 'null'.
+                    () => androidInterface.getFocusModeElapsed?.() !== 'null',
+                  )
+                ) {
                   DroidLog.log('AndroidFocusModeEffects: Starting focus mode service', {
                     // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged
                     title,
@@ -375,14 +408,7 @@ export class AndroidFocusModeEffects {
                     'Failed to start focus mode notification',
                     true,
                   );
-                } else if (
-                  hasFocusNotificationStateChanged(
-                    prev?.timer,
-                    timer,
-                    prev?.currentTask,
-                    currentTask,
-                  )
-                ) {
+                } else if (isStateChanged) {
                   // Only update if something significant changed
                   DroidLog.log('AndroidFocusModeEffects: Updating focus mode service', {
                     // eslint-disable-next-line local-rules/no-user-content-in-logs -- grandfathered log baseline (2026-09), not yet triaged

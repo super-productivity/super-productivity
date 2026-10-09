@@ -26,6 +26,7 @@ import {
   hasFocusNotificationStateChanged,
   parseNativeFocusModeData,
   shouldHandleNativeTimerComplete,
+  shouldStartFocusModeService,
 } from './android-focus-mode.effects';
 import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
 import { TimerState } from '../../focus-mode/focus-mode.model';
@@ -247,6 +248,53 @@ describe('shouldHandleNativeTimerComplete (stale/duplicate completion guard, #88
     expect(shouldHandleNativeTimerComplete(false, flowtime, START + WORK_DURATION)).toBe(
       false,
     );
+  });
+});
+
+describe('shouldStartFocusModeService (native service lost, #9531)', () => {
+  const breakTimer = (over: Partial<TimerState> = {}): TimerState =>
+    workTimer(0, { purpose: 'break', duration: 5 * MIN, ...over });
+
+  it('starts the service when a session begins', () => {
+    expect(shouldStartFocusModeService(false, workTimer(0), () => false)).toBe(true);
+  });
+
+  it('updates the service while it is still running', () => {
+    expect(shouldStartFocusModeService(true, workTimer(10 * MIN), () => true)).toBe(
+      false,
+    );
+  });
+
+  it('restarts the next Pomodoro after the background start was refused', () => {
+    // Work -> break -> work runs while the app is in the background: the native
+    // service stops itself at each completion and Android 12+ refuses the new
+    // foreground-service start, so app state stays active with no service.
+    const nativeRunning = { value: true };
+    const isNativeRunning = (): boolean => nativeRunning.value;
+    expect(shouldStartFocusModeService(true, workTimer(20 * MIN), isNativeRunning)).toBe(
+      false,
+    );
+    nativeRunning.value = false; // completed natively, break start refused
+    expect(shouldStartFocusModeService(false, breakTimer(), isNativeRunning)).toBe(true);
+    // Break completed natively; skipBreak auto-starts work, start refused again.
+    expect(shouldStartFocusModeService(false, workTimer(0), isNativeRunning)).toBe(true);
+
+    // The resume tick on return must start, not update, the dead service.
+    expect(shouldStartFocusModeService(true, workTimer(3 * MIN), isNativeRunning)).toBe(
+      true,
+    );
+  });
+
+  it('leaves a stopped session to the completion path instead of restarting', () => {
+    // A resume tick that ends a session natively completed while away stops the
+    // timer; restarting would only replace the completion notification.
+    expect(
+      shouldStartFocusModeService(
+        true,
+        workTimer(25 * MIN, { isRunning: false }),
+        () => false,
+      ),
+    ).toBe(false);
   });
 });
 
