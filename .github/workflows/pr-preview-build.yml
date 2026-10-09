@@ -9,9 +9,15 @@ on:
 permissions:
   contents: read
 
+# Superseded PR pushes cancel the old run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   build-preview:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Check out Git repository
@@ -19,20 +25,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      # work around for npm installs from git+https://github.com/johannesjo/J2M.git
-      - name: Reconfigure git to use HTTP authentication
-        run: >
-          git config --global url."https://github.com/".insteadOf
-          ssh://git@github.com/
-
-      - name: Install npm Packages
-        run: npm i
+      - name: Setup Node Dependencies
+        uses: ./.github/actions/setup-deps
 
       - name: Generate environment file
         run: npm run env

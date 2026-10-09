@@ -21,10 +21,16 @@ permissions:
   security-events: write
   contents: read
 
+# Superseded PR pushes cancel the old run; push and scheduled runs always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
