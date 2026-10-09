@@ -649,6 +649,23 @@ describe('MobileNotificationEffects', () => {
       );
     }));
 
+    it('does not cancel a deadline reminder that already fired', fakeAsync(() => {
+      // On Android cancel also removes the shown notification, so a later store
+      // emission must not dismiss it once its alarm time has simply passed.
+      const firedTask = futureDeadlineTask('d1');
+      store.overrideSelector(selectAllTasksWithDeadlineReminder, [firedTask]);
+      subscribeDeadlineNotifications();
+      tick(EFFECT_DELAY_MS + 1);
+      expect(reminderServiceSpy.scheduleReminder).toHaveBeenCalledTimes(1);
+
+      tick(600_001);
+      store.overrideSelector(selectAllTasksWithDeadlineReminder, [{ ...firedTask }]);
+      store.refreshState();
+      tick(1);
+
+      expect(reminderServiceSpy.cancelReminder).not.toHaveBeenCalled();
+    }));
+
     it('cancels a tracked deadline reminder when its new timestamp is in the past', fakeAsync(() => {
       subscribeDeadlineNotifications();
 

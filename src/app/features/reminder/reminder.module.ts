@@ -507,6 +507,11 @@ export class ReminderModule {
    */
   private _dispatchSnooze(task: Task, newRemindAt: number, reminderType?: string): void {
     if (reminderType === 'DEADLINE') {
+      // Deadline removed meanwhile (e.g. via sync): setDeadline would store an
+      // orphan deadlineRemindAt without a deadline.
+      if (typeof task.deadlineWithTime !== 'number' && !task.deadlineDay) {
+        return;
+      }
       // setDeadline enforces mutual exclusivity between deadlineDay and
       // deadlineWithTime — passing both would null the day. Forward only the
       // more specific field (deadlineWithTime) when present.

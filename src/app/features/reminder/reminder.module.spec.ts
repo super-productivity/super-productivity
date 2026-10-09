@@ -325,6 +325,21 @@ describe('ReminderModule iOS notification actions', () => {
     );
   });
 
+  it('ignores a deadline snooze when the deadline was removed meanwhile', async () => {
+    // Without a deadline, setDeadline would store an orphan deadlineRemindAt.
+    taskServiceSpy.getByIdOnce$.and.returnValue(
+      of({ id: 'task-1', title: 'Task 1', isDone: false } as Task),
+    );
+
+    await (module as unknown as AndroidHandlers)._handleSnoozeAction(
+      'task-1',
+      9_000,
+      'DEADLINE',
+    );
+
+    expect(storeSpy.dispatch).not.toHaveBeenCalled();
+  });
+
   it('keeps rescheduling the task reminder for an untyped Android snooze', async () => {
     await (module as unknown as AndroidHandlers)._handleSnoozeAction('task-1', 9_000);
 
