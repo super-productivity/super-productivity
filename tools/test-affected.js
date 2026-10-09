@@ -233,9 +233,10 @@ const main = () => {
       ),
       preProcess: listImports,
     });
-    const globalEntry =
-      findGlobalEntry(entries, rev) || deleted.find((f) => isSetupImport(f, rev));
-    specs = findAffectedSpecs([...entries, ...deleted], rev);
+    const globalEntry = findGlobalEntry([...entries, ...deleted], rev);
+    specs = findAffectedSpecs([...entries, ...deleted], rev).filter((f) =>
+      fileSet.has(f),
+    );
     if (globalEntry) reason = `${globalEntry} changed (global effect)`;
     else if (specs.length > MAX_SPECS) reason = `${specs.length} affected spec files`;
   }

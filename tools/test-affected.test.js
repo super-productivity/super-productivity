@@ -1,5 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { execFileSync, spawnSync } = require('node:child_process');
 const {
   buildReverseGraph,
   classifyChanges,
@@ -148,5 +152,89 @@ test('parses --base in both forms and rejects unknown arguments', () => {
   assert.deepEqual(parseArgs(['--base=dev']), { base: 'dev', list: false });
   for (const argv of [['--base'], ['--base='], ['--base', '--list'], ['--lst']]) {
     assert.throws(() => parseArgs(argv));
+  }
+});
+
+test('CLI handles deleted global resources and specs', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-test-affected-'));
+  const write = (file, content) => {
+    const target = path.join(directory, file);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, content);
+  };
+  const git = (...args) => execFileSync('git', args, { cwd: directory });
+  try {
+    write(
+      'tools/test-affected.js',
+      fs.readFileSync(require.resolve('./test-affected.js')),
+    );
+    write('tsconfig.base.json', JSON.stringify({ compilerOptions: { paths: {} } }));
+    write(
+      'package.json',
+      JSON.stringify({
+        scripts: {
+          'test:tz:la:subset': "ng test --include='**/*.tz.spec.ts'",
+        },
+      }),
+    );
+    write('src/styles.scss', '@use "common";');
+    write('src/_common.scss', 'body { color: red; }');
+    write('src/ambient.d.ts', 'declare const globalValue: number;');
+    write('src/deleted.spec.ts', 'export {};');
+    write('src/helper.ts', 'export {};');
+    write('src/remaining.spec.ts', "import './helper';");
+    git('init');
+    git('add', '.');
+    git(
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.com',
+      '-c',
+      `core.hooksPath=${path.join(directory, '.git', 'disabled-hooks')}`,
+      '-c',
+      'commit.gpgsign=false',
+      'commit',
+      '-m',
+      'fixture',
+    );
+
+    for (const file of [
+      'src/styles.scss',
+      'src/_common.scss',
+      'src/ambient.d.ts',
+      'src/deleted.spec.ts',
+      'src/helper.ts',
+    ]) {
+      const target = path.join(directory, file);
+      const original = fs.readFileSync(target);
+      fs.unlinkSync(target);
+      const result = spawnSync(
+        process.execPath,
+        ['tools/test-affected.js', '--base', 'HEAD', '--list'],
+        {
+          cwd: directory,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            NODE_PATH: path.dirname(
+              path.dirname(require.resolve('typescript/package.json')),
+            ),
+          },
+        },
+      );
+      assert.equal(result.status, 0, result.stderr);
+      if (file.endsWith('.spec.ts')) {
+        assert.match(result.stdout, /0 affected spec files/, result.stdout);
+      } else if (file === 'src/helper.ts') {
+        assert.match(result.stdout, /1 affected spec files/, result.stdout);
+        assert.match(result.stdout, /src\/remaining\.spec\.ts/, result.stdout);
+      } else {
+        assert.match(result.stdout, /Full run:/, result.stdout);
+      }
+      fs.writeFileSync(target, original);
+    }
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
   }
 });
