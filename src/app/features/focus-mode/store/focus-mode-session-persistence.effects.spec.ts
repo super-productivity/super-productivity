@@ -1,9 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { of, Subscription } from 'rxjs';
+import { BehaviorSubject, Subject, Subscription } from 'rxjs';
 import { MOBILE_BACKGROUND_IDLE_CAP_MS } from '../../../app.constants';
-import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
+import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import {
   selectCurrentTaskId,
   selectTaskEntities,
@@ -55,21 +56,34 @@ describe('FocusModeSessionPersistenceEffects', () => {
   let tracking: jasmine.SpyObj<GlobalTrackingIntervalService>;
   let dispatchSpy: jasmine.Spy;
   let sub: Subscription | undefined;
+  let initialSyncDone$: Subject<boolean>;
+  let isInSyncWindow$: BehaviorSubject<boolean>;
 
   const run = (
     snapshot: FocusSessionSnapshot | null,
-    opts: { state?: FocusModeState; isTaskDone?: boolean } = {},
+    opts: {
+      state?: FocusModeState;
+      isTaskDone?: boolean;
+      isTaskDeleted?: boolean;
+      currentTaskId?: string | null;
+      isSyncPending?: boolean;
+    } = {},
   ): void => {
     storage.getSessionSnapshot.and.returnValue(snapshot);
     store.overrideSelector(selectFocusModeState, opts.state ?? initialState);
-    store.overrideSelector(selectTaskEntities, {
-      task1: { id: 'task1', isDone: !!opts.isTaskDone },
-    } as unknown as ReturnType<typeof selectTaskEntities.projector>);
-    store.overrideSelector(selectCurrentTaskId, null);
+    const entities = opts.isTaskDeleted
+      ? {}
+      : { task1: { id: 'task1', isDone: !!opts.isTaskDone } };
+    store.overrideSelector(
+      selectTaskEntities,
+      entities as unknown as ReturnType<typeof selectTaskEntities.projector>,
+    );
+    store.overrideSelector(selectCurrentTaskId, opts.currentTaskId ?? null);
     store.refreshState();
     sub = TestBed.inject(
       FocusModeSessionPersistenceEffects,
     ).restoreThenPersist$.subscribe();
+    if (!opts.isSyncPending) initialSyncDone$.next(true);
   };
 
   beforeEach(() => {
@@ -80,6 +94,8 @@ describe('FocusModeSessionPersistenceEffects', () => {
       'setSessionSnapshot',
       'clearSessionSnapshot',
     ]);
+    initialSyncDone$ = new Subject<boolean>();
+    isInSyncWindow$ = new BehaviorSubject<boolean>(false);
     taskService = jasmine.createSpyObj('TaskService', ['setCurrentId']);
     tracking = jasmine.createSpyObj('GlobalTrackingIntervalService', [
       'resetTrackingStart',
@@ -92,8 +108,15 @@ describe('FocusModeSessionPersistenceEffects', () => {
         { provide: TaskService, useValue: taskService },
         { provide: GlobalTrackingIntervalService, useValue: tracking },
         {
-          provide: DataInitStateService,
-          useValue: { isAllDataLoadedInitially$: of(true) },
+          provide: SyncTriggerService,
+          useValue: { afterInitialSyncDoneStrict$: initialSyncDone$ },
+        },
+        {
+          provide: HydrationStateService,
+          useValue: {
+            isInSyncWindow: () => isInSyncWindow$.value,
+            isInSyncWindow$,
+          },
         },
       ],
     });
@@ -157,6 +180,34 @@ describe('FocusModeSessionPersistenceEffects', () => {
 
     expect(dispatchSpy).toHaveBeenCalled();
     expect(taskService.setCurrentId).not.toHaveBeenCalled();
+  });
+
+  it('does not track a task that was deleted meanwhile', () => {
+    run(snapshotOf(), { isTaskDeleted: true });
+
+    expect(dispatchSpy).toHaveBeenCalled();
+    expect(taskService.setCurrentId).not.toHaveBeenCalled();
+  });
+
+  it('keeps a task the user started tracking before the restore', () => {
+    run(snapshotOf(), { currentTaskId: 'other' });
+
+    expect(dispatchSpy).toHaveBeenCalled();
+    expect(taskService.setCurrentId).not.toHaveBeenCalled();
+  });
+
+  // A session that ended while away completes on its first tick, and
+  // completion detection skips emissions while remote ops are applied.
+  it('waits for the initial sync and its sync window before restoring', () => {
+    isInSyncWindow$.next(true);
+    run(snapshotOf(), { isSyncPending: true });
+    expect(dispatchSpy).not.toHaveBeenCalled();
+
+    initialSyncDone$.next(true);
+    expect(dispatchSpy).not.toHaveBeenCalled();
+
+    isInSyncWindow$.next(false);
+    expect(dispatchSpy).toHaveBeenCalled();
   });
 
   it('drops a session saved longer ago than the idle cap', () => {

@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
+import { Dictionary } from '@ngrx/entity';
 import { combineLatest, fromEvent, merge, Observable } from 'rxjs';
 import {
   distinctUntilChanged,
@@ -13,8 +14,11 @@ import {
   withLatestFrom,
 } from 'rxjs/operators';
 import { MOBILE_BACKGROUND_IDLE_CAP_MS } from '../../../app.constants';
-import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
+import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { waitForSyncWindow } from '../../../util/wait-for-sync-window.operator';
+import { Task } from '../../tasks/task.model';
 import {
   selectCurrentTaskId,
   selectTaskEntities,
@@ -67,27 +71,28 @@ const isSessionOver = (timer: FocusSessionSnapshot['timer'], now: number): boole
 export class FocusModeSessionPersistenceEffects {
   private _store = inject(Store);
   private _storage = inject(FocusModeStorageService);
-  private _dataInitState = inject(DataInitStateService);
+  private _syncTrigger = inject(SyncTriggerService);
+  private _hydrationState = inject(HydrationStateService);
   private _taskService = inject(TaskService);
   private _globalTrackingInterval = inject(GlobalTrackingIntervalService);
 
   // Restore must read the snapshot before the first (idle) state is persisted,
-  // which would otherwise clear it.
+  // which would otherwise clear it. It waits for startup sync: a session that
+  // ended while away completes on its first tick, and completion detection
+  // skips emissions while remote ops are applied, so it would never complete.
   restoreThenPersist$ = createEffect(
     () =>
-      this._dataInitState.isAllDataLoadedInitially$.pipe(
-        filter(Boolean),
+      this._syncTrigger.afterInitialSyncDoneStrict$.pipe(
         take(1),
+        waitForSyncWindow(this._hydrationState, 'FocusModeSessionPersistence:restore'),
         withLatestFrom(
           this._store.select(selectFocusModeState),
           this._store.select(selectTaskEntities),
+          this._store.select(selectCurrentTaskId),
         ),
-        tap(([, state, entities]) => {
+        tap(([, state, entities, currentTaskId]) => {
           if (state.timer.purpose === null) {
-            this._restore((id) => {
-              const task = entities[id];
-              return !!task && !task.isDone;
-            });
+            this._restore(entities, currentTaskId);
           }
         }),
         switchMap(() => this._persist$()),
@@ -122,7 +127,7 @@ export class FocusModeSessionPersistenceEffects {
     );
   }
 
-  private _restore(isTrackable: (taskId: string) => boolean): void {
+  private _restore(entities: Dictionary<Task>, currentTaskId: string | null): void {
     const snapshot = this._storage.getSessionSnapshot();
     const now = Date.now();
     // shortcut: same cap as the iOS resume gap — a session left for longer
@@ -141,13 +146,17 @@ export class FocusModeSessionPersistenceEffects {
     );
 
     // A session that ended while the app was gone completes via the tick
-    // reducer; tracking it again would count time after its end.
+    // reducer; tracking it again would count time after its end. A task the
+    // user started while sync was pending wins over the snapshot's.
+    const trackedTask = trackedTaskId ? entities[trackedTaskId] : undefined;
     if (
       trackedTaskId &&
+      !currentTaskId &&
       timer.purpose === 'work' &&
       timer.isRunning &&
       !isSessionOver(timer, now) &&
-      isTrackable(trackedTaskId)
+      trackedTask &&
+      !trackedTask.isDone
     ) {
       this._globalTrackingInterval.resetTrackingStart();
       this._taskService.setCurrentId(trackedTaskId);

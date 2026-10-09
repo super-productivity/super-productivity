@@ -443,11 +443,12 @@ bootstrapApplication(AppComponent, {
   // focus button), which cannot happen before idle callback fires. Restoring a
   // session killed in the background waits for data load, so it is not raced either.
   const registerLazyEffects = async (): Promise<void> => {
-    const [{ FocusModeEffects }, { FocusModeSessionPersistenceEffects }] =
-      await Promise.all([
-        import('./app/features/focus-mode/store/focus-mode.effects'),
-        import('./app/features/focus-mode/store/focus-mode-session-persistence.effects'),
-      ]);
+    const [{ FocusModeEffects }, sessionPersistence] = await Promise.all([
+      import('./app/features/focus-mode/store/focus-mode.effects'),
+      IS_IOS_NATIVE
+        ? import('./app/features/focus-mode/store/focus-mode-session-persistence.effects')
+        : null,
+    ]);
     const envInjector = appRef.injector.get(EnvironmentInjector);
     createEnvironmentInjector(
       [
@@ -458,7 +459,9 @@ bootstrapApplication(AppComponent, {
           // on desktop a closed app means the user ended the session.
           EffectsModule.forFeature([
             FocusModeEffects,
-            ...(IS_IOS_NATIVE ? [FocusModeSessionPersistenceEffects] : []),
+            ...(sessionPersistence
+              ? [sessionPersistence.FocusModeSessionPersistenceEffects]
+              : []),
           ]),
         ),
       ],
