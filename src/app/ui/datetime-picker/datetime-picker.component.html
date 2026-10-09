@@ -15,16 +15,14 @@
 
 @if (isConfigReady()) {
   <div class="calendar-week-number-wrapper">
-    <div class="week-number-col">
-      <div class="week-number-header">{{ T.G.WEEK | translate }}</div>
-      @for (weekNum of weekNumbers; track $index) {
-        @if (weekNum !== -1) {
+    @if (calendarView === 'month') {
+      <div class="week-number-col">
+        <div class="week-number-header">{{ T.G.WEEK | translate }}</div>
+        @for (weekNum of weekNumbers; track $index) {
           <div class="week-number-cell">{{ weekNum }}</div>
-        } @else {
-          <div class="week-number-cell blank-week"></div>
         }
-      }
-    </div>
+      </div>
+    }
     <div class="calendar-wrapper">
       <mat-calendar
         (keydown)="onKeyDownOnCalendar($event)"
