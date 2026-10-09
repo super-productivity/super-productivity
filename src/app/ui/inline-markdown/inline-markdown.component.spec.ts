@@ -264,6 +264,28 @@ describe('InlineMarkdownComponent', () => {
         expect(editorView().state.doc.toString()).toBe('task B notes');
       });
 
+      // Two fresh tasks both show the template: the model binding doesn't
+      // change, so the switch itself has to take task A's text out of the
+      // editor — else the panel shows it under task B and a destroy commits it.
+      it('reloads the editor when the next task shows the same note', async () => {
+        const view = editorView();
+        view.dispatch({ changes: { from: view.state.doc.length, insert: ', edited' } });
+        component.onLiveEditorDocChanged(view.state.doc.toString());
+
+        fixture.componentRef.setInput('taskId', 'task-b');
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        expect(store.dispatch).toHaveBeenCalledOnceWith(
+          TaskSharedActions.updateTask({
+            task: { id: 'task-a', changes: { notes: 'task A notes, edited' } },
+          }),
+        );
+        expect(editorView().state.doc.toString()).toBe('task A notes');
+        component.ngOnDestroy();
+        expect(component.changed.emit).not.toHaveBeenCalled();
+      });
+
       it('saves nothing when the note was not edited', async () => {
         await switchToTaskB();
 

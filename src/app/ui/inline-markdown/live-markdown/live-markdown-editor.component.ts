@@ -89,19 +89,8 @@ export class LiveMarkdownEditorComponent {
         }
         return;
       }
-      // External model change (e.g. a remote sync update) — replace the doc, but
-      // never when it already matches, or we would reset the caret on every
-      // keystroke.
-      const current = this._view.state.doc.toString();
-      if (model !== current) {
-        // Before dispatching: a blur still pending in CodeMirror's 10ms delay
-        // is reported inside this dispatch, and must not commit the incoming
-        // doc straight back as an edit (#10405).
-        this._lastEmitted = model;
-        this._view.dispatch({
-          changes: { from: 0, to: current.length, insert: model },
-        });
-      }
+      // External model change (e.g. a remote sync update).
+      this.replaceDoc(model);
     });
 
     // Deliberately no commit here. Angular destroys child views before the
@@ -145,6 +134,27 @@ export class LiveMarkdownEditorComponent {
 
   focus(): void {
     this._view?.focus();
+  }
+
+  /**
+   * Replace the document from outside, without it counting as an edit to
+   * commit. Never when it already matches, or the caret would reset on every
+   * keystroke.
+   */
+  replaceDoc(doc: string): void {
+    const view = this._view;
+    if (!view) {
+      return;
+    }
+    const current = view.state.doc.toString();
+    if (doc === current) {
+      return;
+    }
+    // Before dispatching: a blur still pending in CodeMirror's 10ms delay is
+    // reported inside this dispatch, and must not commit the incoming doc
+    // straight back as an edit (#10405).
+    this._lastEmitted = doc;
+    view.dispatch({ changes: { from: 0, to: current.length, insert: doc } });
   }
 
   /** Apply one of the shared pure markdown transforms at the current selection. */

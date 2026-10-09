@@ -284,10 +284,18 @@ export class InlineMarkdownComponent implements OnChanges, OnInit, OnDestroy {
     if (!prevTaskId || this._isFullscreenDialogOpen || !this.isLiveMarkdownEditor()) {
       return;
     }
-    const editedDoc = this.liveEditorEl()?.value;
-    if (editedDoc !== undefined && editedDoc !== (prevModel ?? '')) {
-      this._persistNotes(prevTaskId, editedDoc);
+    const liveEditorEl = this.liveEditorEl();
+    const editedDoc = liveEditorEl?.value;
+    if (!liveEditorEl || editedDoc === undefined || editedDoc === (prevModel ?? '')) {
+      return;
     }
+    this._persistNotes(prevTaskId, editedDoc);
+    // Load the new task's note now: when both tasks show the same note (two
+    // fresh tasks both show the template) the model binding does not change,
+    // so nothing else would take the previous task's text out of the editor —
+    // or out of `_liveDoc`, which ngOnDestroy would commit onto the new task.
+    this._liveDoc.set(null);
+    liveEditorEl.replaceDoc(this._model ?? '');
   }
 
   private _persistNotes(taskId: string, notes: string): void {
