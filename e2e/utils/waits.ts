@@ -48,7 +48,12 @@ const dismissBlockingDialogs = async (page: Page, maxAttempts = 3): Promise<void
   );
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      await dialogConfirmBtn.filter({ visible: true }).or(readyRoute).first().waitFor({
+      // After dismissing a dialog, preserve the grace period for chained dialogs.
+      const nextReadyElement =
+        i === 0
+          ? dialogConfirmBtn.filter({ visible: true }).or(readyRoute)
+          : dialogConfirmBtn;
+      await nextReadyElement.first().waitFor({
         state: 'visible',
         timeout: 2000,
       });

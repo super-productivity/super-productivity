@@ -32,7 +32,9 @@ test('empty shell waits for a delayed startup dialog', async ({ page }) => {
   await expect(page.locator('dialog-confirm')).toHaveCount(0);
 });
 
-test('dismisses chained dialogs even with a rendered route', async ({ page }) => {
+test('dismisses chained dialogs after the click buffer even with a rendered route', async ({
+  page,
+}) => {
   await page.setContent(`
     <div class="route-wrapper"><main>Loading</main></div>
     <dialog-confirm><button e2e="confirmBtn">Continue</button></dialog-confirm>
@@ -47,7 +49,7 @@ test('dismisses chained dialogs even with a rendered route', async ({ page }) =>
             document.querySelector('main').textContent = 'Ready';
           };
           document.body.append(nextDialog);
-        }, 100);
+        }, 800);
       };
     </script>
   `);
