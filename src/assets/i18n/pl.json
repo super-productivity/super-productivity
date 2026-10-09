@@ -555,7 +555,8 @@
         "OAUTH_FAILED_WITH_DETAIL": "Uwierzytelnianie nie powiodło się: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Zdalne zgłoszenie zostało usunięte. Usunąć powiązane zadanie \"{{taskTitle}}\"?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Zdalne zgłoszenie zostało usunięte, ale zadanie \"{{taskTitle}}\" ma zarejestrowany czas. Usunąć mimo to?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Wysyłanie synchronizacji dwukierunkowej nie powiodło się: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Wysyłanie synchronizacji dwukierunkowej nie powiodło się: {{errorMsg}}",
+        "POST_TIME_SUCCESS": "{{providerName}}: Pomyślnie utworzono wpis czasu dla {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Automatycznie twórz zgłoszenia dla nowych zadań",
@@ -591,6 +592,15 @@
         "RELOAD_OPTIONS": "Przeładuj opcje",
         "SETUP_TITLE": "Ustaw konfigurację {{title}}",
         "TEST_CONNECTION": "Przetestuj połączenie"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Aktywność",
+        "INVALID_DATE": "Wprowadzona wartość nie jest datą!",
+        "POST_TIME": "Wyślij czas",
+        "STARTED": "Rozpoczęto",
+        "SUBMIT_TIME_FOR": "Wyślij czas do {{providerName}} dla",
+        "TIME_SPENT": "Czas spędzony",
+        "TITLE": "{{providerName}}: Wyślij dziennik pracy"
       }
     },
     "ISSUE_PANEL": {
@@ -814,33 +824,6 @@
         "REMINDER_NEEDS_TEXT": "Napisz refleksję przed ustawieniem przypomnienia",
         "REMINDER_TASK_TITLE": "Powróć do notatki refleksji",
         "TITLE": "Notatka refleksyjna"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Bazowy URL Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Importuj tylko karty przypisane do mnie",
-        "IS_TRANSITION_ISSUES_ENABLED": "Synchronizuj status ukończenia i tytuł z powrotem do Nextcloud Deck",
-        "PASSWORD": "Hasło aplikacji Nextcloud",
-        "POLL_INTERVAL_MINUTES": "Interwał odpytywania (minuty)",
-        "TITLE_TEMPLATE": "Szablon tytułu zadania",
-        "TITLE_TEMPLATE_DESCRIPTION": "Zmienne: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Przykład: [{BOARD}: {COLUMN}] {CARD_TITLE}. Pozostaw puste, aby użyć tylko tytułu karty.",
-        "USERNAME": "Nazwa użytkownika Nextcloud"
-      },
-      "FORM_SECTION": {
-        "HELP": "Skonfiguruj integrację z Nextcloud Deck, aby importować karty jako zadania. Użyj hasła aplikacji do uwierzytelnienia."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Przypisani użytkownicy",
-        "DECK_DESCRIPTION": "Opis Deck",
-        "LABELS": "Etykiety",
-        "STACK": "Stos"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Nie znaleziono tablicy",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Karta \"{{issueId}}\" wygląda na usuniętą z serwera.",
-        "ERR_CREDENTIALS_MISSING": "Najpierw wprowadź URL Nextcloud, nazwę użytkownika i hasło.",
-        "ERR_LOAD_BOARDS": "Nie udało się załadować tablic Deck. Sprawdź dane logowania."
       }
     },
     "NOTE": {
@@ -1100,44 +1083,6 @@
       "TOOLTIP_VISIBILITY": "Pokaż/ukryj projekty",
       "ADD_SUBFOLDER": "Dodaj podfolder",
       "ADD_PROJECT": "Dodaj projekt"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Aktywność",
-        "INVALID_DATE": "Wprowadzona wartość nie jest datą!",
-        "POST_TIME": "Wyślij czas",
-        "STARTED": "Rozpoczęto",
-        "SUBMIT_TIME_FOR": "Wyślij czas do Redmine dla",
-        "TIME_SPENT": "Czas spędzony",
-        "TITLE": "Redmine: Wyślij dziennik pracy"
-      },
-      "FORM": {
-        "API_KEY": "Klucz dostępu API",
-        "HOST": "Host (np.: https://redmine.org)",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Pokaż okno śledzenia czasu do raportowania do Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Wymaga włączenia modułu śledzenia czasu w projekcie Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Pokaż okno śledzenia czasu po ukończeniu podzadań",
-        "PROJECT_ID": "Identyfikator projektu",
-        "PROJECT_ID_DESCRIPTION": "Można znaleźć jako część adresu URL podczas przeglądania projektu w przeglądarce.",
-        "SCOPE": "Zakres",
-        "SCOPE_ALL": "Wszystkie",
-        "SCOPE_ASSIGNED": "Przypisane do mnie",
-        "SCOPE_CREATED": "Utworzone przeze mnie"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>W tym miejscu można skonfigurować Super Productivity do wyświetlania listy otwartych zgłoszeń Redmine (w wersji online lub w instancji hostowanej samodzielnie) dla określonego projektu w panelu tworzenia zadań w widoku planowania dziennego. Będą one wymienione jako sugestie i będą zawierać link do zgłoszenia, a także więcej informacji na jego temat.</p><p>Ponadto można automatycznie importować wszystkie otwarte zgłoszenia.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Autor",
-        "DESCRIPTION": "Opis",
-        "MARK_AS_CHECKED": "Oznacz aktualizacje jako sprawdzone",
-        "PRIORITY": "Priorytet",
-        "STATUS": "Status"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Pomyślnie utworzono wpis czasu dla {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Odrzuć",

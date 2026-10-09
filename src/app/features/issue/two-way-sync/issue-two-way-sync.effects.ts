@@ -1,9 +1,10 @@
 import { Injectable, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { createEffect, ofType } from '@ngrx/effects';
-import { EMPTY, Observable, first, firstValueFrom, from } from 'rxjs';
-import { catchError, concatMap, filter, map } from 'rxjs/operators';
+import { EMPTY, Observable, first, firstValueFrom, from, timer } from 'rxjs';
+import { catchError, concatMap, filter, map, mergeMap, takeUntil } from 'rxjs/operators';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { REMOTE_ISSUE_DELETE_DEFER_MS } from '../../../app.constants';
 import { TaskService } from '../../tasks/task.service';
 import { Task } from '../../tasks/task.model';
 import { selectAllTasks } from '../../tasks/store/task.selectors';
@@ -257,7 +258,20 @@ export class IssueTwoWaySyncEffects {
           ({ task }) => !!task.issueId && !!task.issueType && !!task.issueProviderId,
         ),
         filter(({ task }) => !!this._getAdapter(task.issueType!)),
-        concatMap(({ task }) => this._deleteRemoteIssue$(task)),
+        // restoreDeletedTask can undo the local delete; nothing can undo the
+        // remote one, so it waits out the undo window. mergeMap rather than
+        // concatMap, or N deletes would queue up N windows.
+        mergeMap(({ task }) =>
+          timer(REMOTE_ISSUE_DELETE_DEFER_MS).pipe(
+            takeUntil(
+              this._actions$.pipe(
+                ofType(TaskSharedActions.restoreDeletedTask),
+                filter(({ task: restored }) => restored.id === task.id),
+              ),
+            ),
+            concatMap(() => this._deleteRemoteIssue$(task)),
+          ),
+        ),
       ),
     { dispatch: false },
   );
@@ -549,10 +563,11 @@ export class IssueTwoWaySyncEffects {
 
         const freshIssue = await adapter.fetchIssue(issueId, cfg);
         const freshValues = adapter.extractSyncValues(freshIssue);
-        const lastSyncedValues = task.issueLastSyncedValues ?? {};
-
         // Re-fetch task to get post-meta-reducer values (e.g. short syntax parsed title)
         const currentTask = await firstValueFrom(this._taskService.getByIdOnce$(task.id));
+        // the snapshot predates pushes queued before it; their baseline is newer
+        const syncState = currentTask ?? task;
+        const lastSyncedValues = syncState.issueLastSyncedValues ?? {};
         const taskFieldChanges: Record<string, unknown> = {};
         for (const mapping of fieldMappings) {
           if (mapping.taskField in changes) {
@@ -572,7 +587,15 @@ export class IssueTwoWaySyncEffects {
           fieldMappings,
           syncConfig,
           freshValues,
-          lastSyncedValues,
+          // A task with no baseline at all was linked before two-way sync (e.g.
+          // a migrated built-in provider, whose effects always pushed). If the
+          // issue is unchanged since the task last saw it, its current values
+          // are what the task last pulled, so the user's change can win; a
+          // single missing field still means "first sync" and is skipped.
+          syncState.issueLastSyncedValues ??
+            (adapter.getIssueLastUpdated?.(freshIssue) === syncState.issueLastUpdated
+              ? freshValues
+              : {}),
           ctx,
         );
 
@@ -618,7 +641,17 @@ export class IssueTwoWaySyncEffects {
             lastSyncedValues[m.issueField],
           );
         });
-        const keepIssueLastUpdatedStale = hasProviderOwnedSkip || hasUnpulledRemoteChange;
+        // A field the issue reports but the baseline lacks was never compared;
+        // a stale marker lets the next poll seed the full baseline and pull it.
+        // An undefined value (e.g. CalDAV `note`) has nothing to pull, and JSON
+        // sync drops such keys from the baseline anyway.
+        const hasUnseededField = fieldMappings.some(
+          (m) =>
+            freshValues[m.issueField] !== undefined &&
+            !(m.issueField in lastSyncedValues),
+        );
+        const keepIssueLastUpdatedStale =
+          hasProviderOwnedSkip || hasUnpulledRemoteChange || hasUnseededField;
 
         // Only advance baselines for fields we actually wrote. Fresh provider
         // values for skipped or unrelated fields still need the polling path to

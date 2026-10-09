@@ -10,6 +10,8 @@ export interface StoredOperation {
     v: Record<string, number>;
     p: unknown;
   };
+  source?: 'local' | 'remote';
+  applicationStatus?: string;
   syncedAt?: number;
   rejectedAt?: number;
 }

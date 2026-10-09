@@ -65,16 +65,8 @@
     <mat-icon svgIcon="jira"></mat-icon>
     <span>Jira</span>
   </button>
-  <!-- Trello is a bundled plugin now — rendered via the
+  <!-- Trello and Redmine are bundled plugins now — rendered via the
        pluginProviders / disabledPluginProviders loops below (like GitHub). -->
-  <button
-    class="provider-tile focus-ring"
-    type="button"
-    (click)="openSetupDialog('REDMINE')"
-  >
-    <mat-icon svgIcon="redmine"></mat-icon>
-    <span>Redmine</span>
-  </button>
   <button
     class="provider-tile focus-ring"
     type="button"
@@ -99,16 +91,8 @@
     <mat-icon svgIcon="open_project"></mat-icon>
     <span>Open Project</span>
   </button>
-  <!-- Gitea, Linear and Azure DevOps are bundled plugins now — rendered via the
-       pluginProviders / disabledPluginProviders loops below (like GitHub). -->
-  <button
-    class="provider-tile focus-ring"
-    type="button"
-    (click)="openSetupDialog('NEXTCLOUD_DECK')"
-  >
-    <mat-icon svgIcon="nextcloud_deck"></mat-icon>
-    <span>Nextcloud Deck</span>
-  </button>
+  <!-- Gitea, Linear, Azure DevOps and Nextcloud Deck are bundled plugins now —
+       rendered via the pluginProviders / disabledPluginProviders loops below. -->
   <button
     class="provider-tile focus-ring"
     type="button"

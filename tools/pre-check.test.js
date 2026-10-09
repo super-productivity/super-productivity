@@ -6,7 +6,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const preCheck = require('../package.json').scripts.preCheck;
-const steps = ['lint', 'test', 'int:test', 'e2e'];
+const steps = ['lint', 'test:ci', 'int:test', 'e2e'];
 
 test('preCheck runs every gate in order and stops at the first failure', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-pre-check-'));

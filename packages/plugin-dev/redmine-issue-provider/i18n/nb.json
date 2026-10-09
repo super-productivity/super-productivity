@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Vert (f.eks.: https://redmine.org)",
+    "API_KEY": "API-tilgangsnøkkel",
+    "PROJECT_ID": "Prosjektidentifikator",
+    "PROJECT_ID_DESC": "Kan finnes som en del av URL-en når du ser på prosjektet i nettleseren.",
+    "SCOPE": "Omfang",
+    "SCOPE_ALL": "Alle",
+    "SCOPE_CREATED": "Opprettet av meg",
+    "SCOPE_ASSIGNED": "Tildelt meg",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Vis tidsregistreringsdialog for rapportering til Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Krever at tidsregistreringsmodulen er aktivert for Redmine-prosjektet",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Vis tidsregistreringsdialog når deloppgaver fullføres",
+    "DEFAULT_TIME": "Standard tidsverdi for dialogboksen",
+    "DEFAULT_TIME_ALL_TIME": "Fyll inn all tid brukt på oppgaven",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Fyll inn all tid brukt minus loggført tid",
+    "DEFAULT_TIME_TODAY": "Fyll bare tiden i dag",
+    "DEFAULT_TIME_YESTERDAY": "Fyll bare tiden du brukte i går"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sammendrag",
+    "STATUS": "Status",
+    "PRIORITY": "Prioritet",
+    "AUTHOR": "Forfatter",
+    "ASSIGNEE": "Tildelt",
+    "CATEGORY": "Kategori",
+    "VERSION": "Versjon",
+    "DUE_DATE": "Forfallsdato",
+    "TIME_SPENT": "Brukt tid",
+    "DESCRIPTION": "Beskrivelse"
+  },
+  "FORM_HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne Redmine (enten det er den nettbaserte versjonen eller en selvhostet instans) problemer for et spesifikt prosjekt i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til problemet samt mer informasjon om det.</p><p>I tillegg kan du automatisk importere alle åpne problemer.</p>"
+}
