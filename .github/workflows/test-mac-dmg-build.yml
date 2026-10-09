@@ -3,9 +3,13 @@ name: Test macOS DMG Build
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-and-verify-dmg:
     runs-on: macos-15
+    timeout-minutes: 60
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}

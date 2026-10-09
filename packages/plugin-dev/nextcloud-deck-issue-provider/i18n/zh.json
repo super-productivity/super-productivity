@@ -1,0 +1,28 @@
+{
+  "CFG": {
+    "BASE_URL": "Nextcloud 基础 URL",
+    "USERNAME": "您的 Nextcloud 用户名",
+    "PASSWORD": "您的 Nextcloud 应用密码",
+    "BOARD": "Board",
+    "IMPORT_STACKS": "Import from stacks (leave empty for all)",
+    "DONE_STACK": "Done stack (cards are moved here on completion)",
+    "STACKS_DESC": "Select a board first, then use the load button to list its stacks.",
+    "NONE": "None",
+    "FILTER_BY_ASSIGNEE": "仅导入分配给我的卡片",
+    "TITLE_TEMPLATE": "任务标题模板",
+    "TITLE_TEMPLATE_DESC": "变量：{CARD_TITLE}、{BOARD}、{COLUMN}、{ID}、{LABELS}。示例：[{BOARD}: {COLUMN}] {CARD_TITLE}。留空则仅使用卡片标题。"
+  },
+  "DISPLAY": {
+    "SUMMARY": "摘要",
+    "DESCRIPTION": "Deck 描述",
+    "STACK": "堆栈",
+    "DUE_DATE": "到期日期",
+    "ASSIGNED_USERS": "已分配用户",
+    "LABELS": "标签"
+  },
+  "ERRORS": {
+    "NO_BOARD": "Nextcloud Deck: No board selected",
+    "CARD_NOT_FOUND": "Nextcloud Deck: Card not found on the selected board"
+  },
+  "FORM_HELP": "配置您的 Nextcloud Deck 集成以将卡片导入为任务。使用应用密码进行身份验证。"
+}

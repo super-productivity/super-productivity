@@ -1,0 +1,33 @@
+{
+  "CFG": {
+    "HOST": "Host (ex: https://redmine.org)",
+    "API_KEY": "Cheie de acces API",
+    "PROJECT_ID": "Identificator proiect",
+    "PROJECT_ID_DESC": "Poate fi găsit ca parte a URL-ului atunci cînd vizualizezi proiectul în browser web.",
+    "SCOPE": "Interval",
+    "SCOPE_ALL": "Toate",
+    "SCOPE_CREATED": "Create de mine",
+    "SCOPE_ASSIGNED": "Atribuite mie",
+    "IS_SHOW_TIME_TRACKING_DIALOG": "Afișează dialogul de urmărire a timpului pentru raportare către Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_DESC": "Necesită modul de urmărire a timpului activat pentru proiectul Redmine",
+    "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Afișează dialogul de urmărire a timpului cînd subtasks sînt finalizate",
+    "DEFAULT_TIME": "Valoare de timp implicită pentru dialog",
+    "DEFAULT_TIME_ALL_TIME": "Completează tot timpul petrecut pe sarcină",
+    "DEFAULT_TIME_ALL_TIME_MINUS_LOGGED": "Completează tot timpul petrecut minus timpul deja înregistrat",
+    "DEFAULT_TIME_TODAY": "Completează doar timpul petrecut astăzi",
+    "DEFAULT_TIME_YESTERDAY": "Completează doar timpul petrecut ieri"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sumar",
+    "STATUS": "Stare",
+    "PRIORITY": "Prioritate",
+    "AUTHOR": "Autor",
+    "ASSIGNEE": "Asignat lui",
+    "CATEGORY": "Categorie",
+    "VERSION": "Versiune",
+    "DUE_DATE": "Data scadentă",
+    "TIME_SPENT": "Timp petrecut",
+    "DESCRIPTION": "Descriere"
+  },
+  "FORM_HELP": "<p>Aici poți configura Super Productivity să listeze probleme Redmine deschise (fie versiunea online, fie o instanță self-hosted) pentru un proiect specific în panoul de creare a sarcinilor din vizualizarea de planificare zilnică. Vor fi listate ca sugestii și vor oferi un link către problemă, precum și informații suplimentare despre aceasta.</p><p>În plus, poți importa automat toate problemele deschise.</p>"
+}

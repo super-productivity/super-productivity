@@ -544,7 +544,8 @@
         "OAUTH_FAILED_WITH_DETAIL": "Autentiseringen misslyckades: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Fjärrärendet togs bort. Vill du ta bort den länkade uppgiften ”{{taskTitle}}”?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Fjärrärendet togs bort men uppgiften ”{{taskTitle}}” har spårad tid. Vill du ta bort den ändå?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Tvåvägssynkronisering (sändning) misslyckades: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Tvåvägssynkronisering (sändning) misslyckades: {{errorMsg}}",
+        "POST_TIME_SUCCESS": "{{providerName}}: Tidsinmatning skapad för {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Skapa ärenden automatiskt för nya uppgifter",
@@ -580,6 +581,15 @@
         "RELOAD_OPTIONS": "Läs in alternativ igen",
         "SETUP_TITLE": "Konfigurera {{title}}",
         "TEST_CONNECTION": "Testa anslutning"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Aktivitet",
+        "INVALID_DATE": "Det angivna värdet är inte ett datum!",
+        "POST_TIME": "Registrera tid",
+        "STARTED": "Startad",
+        "SUBMIT_TIME_FOR": "Skicka tid till {{providerName}} för",
+        "TIME_SPENT": "Tid spenderad",
+        "TITLE": "{{providerName}}: Skicka tidslogg"
       }
     },
     "ISSUE_PANEL": {
@@ -803,33 +813,6 @@
         "REMINDER_NEEDS_TEXT": "Skriv en reflektion innan du ber om en påminnelse",
         "REMINDER_TASK_TITLE": "Återbesök reflektionsanteckning",
         "TITLE": "Reflektionsanteckning"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Nextcloud bas-URL",
-        "FILTER_BY_ASSIGNEE": "Importera endast kort tilldelade till mig",
-        "IS_TRANSITION_ISSUES_ENABLED": "Synkronisera slutförandestatus och titel tillbaka till Nextcloud Deck",
-        "PASSWORD": "Ditt Nextcloud-applösenord",
-        "POLL_INTERVAL_MINUTES": "Pollningsintervall (minuter)",
-        "TITLE_TEMPLATE": "Mall för uppgiftstitel",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variabler: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Exempel: [{BOARD}: {COLUMN}] {CARD_TITLE}. Lämna tomt för enbart korttitel.",
-        "USERNAME": "Ditt Nextcloud-användarnamn"
-      },
-      "FORM_SECTION": {
-        "HELP": "Konfigurera din Nextcloud Deck-integration för att importera kort som uppgifter. Använd ett applösenord för autentisering."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Tilldelade användare",
-        "DECK_DESCRIPTION": "Deck-beskrivning",
-        "LABELS": "Etiketter",
-        "STACK": "Stapel"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Tavla hittades inte",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Kortet \"{{issueId}}\" verkar vara borttaget från servern.",
-        "ERR_CREDENTIALS_MISSING": "Ange Nextcloud-URL, användarnamn och lösenord först.",
-        "ERR_LOAD_BOARDS": "Kunde inte ladda Deck-tavlor. Kontrollera dina autentiseringsuppgifter."
       }
     },
     "NOTE": {
@@ -1085,44 +1068,6 @@
       "TOOLTIP_VISIBILITY": "Visa/dölj projekt",
       "ADD_SUBFOLDER": "Lägg till undermapp",
       "ADD_PROJECT": "Lägg till projekt"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Aktivitet",
-        "INVALID_DATE": "Det angivna värdet är inte ett datum!",
-        "POST_TIME": "Registrera tid",
-        "STARTED": "Startad",
-        "SUBMIT_TIME_FOR": "Skicka tid till Redmine för",
-        "TIME_SPENT": "Tid spenderad",
-        "TITLE": "Redmine: Skicka tidslogg"
-      },
-      "FORM": {
-        "API_KEY": "API-åtkomstnyckel",
-        "HOST": "Värd (t.ex.: https://redmine.org)",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Visa tidsregistreringsdialog för rapportering till Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Kräver att tidsregistreringsmodulen är aktiverad för Redmine-projektet",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Visa tidsregistreringsdialog när deluppgifter slutförs",
-        "PROJECT_ID": "Projektidentifierare",
-        "PROJECT_ID_DESCRIPTION": "Finns som en del av webbadressen när du visar projektet i webbläsaren.",
-        "SCOPE": "Omfattning",
-        "SCOPE_ALL": "Alla",
-        "SCOPE_ASSIGNED": "Tilldelad mig",
-        "SCOPE_CREATED": "Skapad av mig"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Här kan du konfigurera SuperProductivity så att öppna Redmine-ärenden (antingen onlineversionen eller en egenhostad instans) för ett specifikt projekt listas i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det.</p><p>Dessutom kan du automatiskt importera alla öppna ärenden.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Författare",
-        "DESCRIPTION": "Beskrivning",
-        "MARK_AS_CHECKED": "Markera uppdateringar som kontrollerade",
-        "PRIORITY": "Prioritet",
-        "STATUS": "Status"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Tidsinmatning skapad för {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Avvisa",
