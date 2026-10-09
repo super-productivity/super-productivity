@@ -262,6 +262,9 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     if (isTouchActive() || IS_HYBRID_DEVICE) {
       const el = this._elementRef.nativeElement;
       const onStart = (): void => {
+        if (this.isTouchSelecting()) {
+          return;
+        }
         this._dragReadyTimeout = window.setTimeout(() => {
           this.isDragReady.set(true);
         }, DRAG_DELAY_FOR_TOUCH);
