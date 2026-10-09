@@ -17,6 +17,12 @@ on:
       - '.github/workflows/supersync-server-tests.yml'
   workflow_dispatch:
 
+# A new push to a PR supersedes its in-flight run; other events (push to
+# master, tags, releases, schedules) get a unique group so none are dropped.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
