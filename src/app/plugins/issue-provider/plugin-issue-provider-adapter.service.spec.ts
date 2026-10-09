@@ -1714,6 +1714,23 @@ describe('PluginIssueProviderAdapterService', () => {
       expect(result[1].taskChanges.title).toBe('Two');
     });
 
+    it('should apply the provider doneStates to batch-fetched issues', async () => {
+      const getByIds = jasmine.createSpy('getByIds').and.resolveTo([
+        { id: 'ISS-1', title: 'One', state: 'Shipped', lastUpdated: 5000 },
+        { id: 'ISS-2', title: 'Two', state: 'closed', lastUpdated: 5000 },
+      ] as PluginIssue[]);
+      registrySpy.getProvider.and.returnValue(
+        createMockProvider({ getByIds, doneStates: ['shipped'] }),
+      );
+
+      const result = await service.getFreshDataForIssueTasks([
+        { id: 'task-1', issueId: 'ISS-1', issueProviderId: PROVIDER_ID } as Task,
+        { id: 'task-2', issueId: 'ISS-2', issueProviderId: PROVIDER_ID } as Task,
+      ]);
+
+      expect(result.map((r) => r.taskChanges.isDone)).toEqual([true, false]);
+    });
+
     it('should batch per provider and fall back to getById without getByIds', async () => {
       const issue = { id: 'ISS-1', title: 'One', lastUpdated: 5000 } as PluginIssue;
       const getByIds = jasmine.createSpy('getByIds').and.resolveTo([issue]);
