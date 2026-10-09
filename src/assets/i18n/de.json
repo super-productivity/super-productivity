@@ -547,7 +547,8 @@
         "OAUTH_FAILED_WITH_DETAIL": "Authentifizierung fehlgeschlagen: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Remote-Issue wurde gelöscht. Verknüpfte Aufgabe \"{{taskTitle}}\" löschen?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Remote-Issue wurde gelöscht, aber Aufgabe \"{{taskTitle}}\" hat erfasste Zeit. Trotzdem löschen?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Zwei-Wege-Synchronisation Senden fehlgeschlagen: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Zwei-Wege-Synchronisation Senden fehlgeschlagen: {{errorMsg}}",
+        "POST_TIME_SUCCESS": "{{providerName}}: Zeiteintrag für {{issueTitle}} erfolgreich erstellt"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Issues automatisch für neue Aufgaben erstellen",
@@ -583,6 +584,15 @@
         "RELOAD_OPTIONS": "Optionen neu laden",
         "SETUP_TITLE": "{{title}}-Konfiguration einrichten",
         "TEST_CONNECTION": "Verbindung testen"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Aktivität",
+        "INVALID_DATE": "Der eingegebene Wert ist kein Datum!",
+        "POST_TIME": "Zeit erfassen",
+        "STARTED": "Gestartet",
+        "SUBMIT_TIME_FOR": "Zeit an {{providerName}} übermitteln für",
+        "TIME_SPENT": "Aufgewendete Zeit",
+        "TITLE": "{{providerName}}: Arbeitsprotokoll übermitteln"
       }
     },
     "ISSUE_PANEL": {
@@ -806,33 +816,6 @@
         "REMINDER_NEEDS_TEXT": "Schreibe eine Reflexion, bevor du um eine Erinnerung bittest",
         "REMINDER_TASK_TITLE": "Reflexionsnotiz erneut ansehen",
         "TITLE": "Reflexionsnotiz"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Nextcloud Basis-URL",
-        "FILTER_BY_ASSIGNEE": "Nur mir zugewiesene Karten importieren",
-        "IS_TRANSITION_ISSUES_ENABLED": "Abschlussstatus und Titel zurück zu Nextcloud Deck synchronisieren",
-        "PASSWORD": "Dein Nextcloud App-Passwort",
-        "POLL_INTERVAL_MINUTES": "Abfrageintervall (Minuten)",
-        "TITLE_TEMPLATE": "Aufgabentitel-Vorlage",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variablen: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Beispiel: [{BOARD}: {COLUMN}] {CARD_TITLE}. Leer lassen für nur den Kartentitel.",
-        "USERNAME": "Dein Nextcloud Benutzername"
-      },
-      "FORM_SECTION": {
-        "HELP": "Konfiguriere deine Nextcloud Deck Integration, um Karten als Aufgaben zu importieren. Verwende ein App-Passwort zur Authentifizierung."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Zugewiesene Benutzer",
-        "DECK_DESCRIPTION": "Deck-Beschreibung",
-        "LABELS": "Labels",
-        "STACK": "Stapel"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Board nicht gefunden",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Karte \"{{issueId}}\" scheint vom Server gelöscht worden zu sein.",
-        "ERR_CREDENTIALS_MISSING": "Gib zuerst Nextcloud-URL, Benutzername und Passwort ein.",
-        "ERR_LOAD_BOARDS": "Deck-Boards konnten nicht geladen werden. Überprüfe deine Anmeldedaten."
       }
     },
     "NOTE": {
@@ -1088,44 +1071,6 @@
       "TOOLTIP_VISIBILITY": "Projekte anzeigen/ausblenden",
       "ADD_SUBFOLDER": "Unterordner hinzufügen",
       "ADD_PROJECT": "Projekt hinzufügen"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Aktivität",
-        "INVALID_DATE": "Der eingegebene Wert ist kein Datum!",
-        "POST_TIME": "Zeit erfassen",
-        "STARTED": "Gestartet",
-        "SUBMIT_TIME_FOR": "Zeit an Redmine übermitteln für",
-        "TIME_SPENT": "Aufgewendete Zeit",
-        "TITLE": "Redmine: Arbeitsprotokoll übermitteln"
-      },
-      "FORM": {
-        "API_KEY": "API-Zugriffsschlüssel",
-        "HOST": "Host (z. B.: https://redmine.org)",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Zeiterfassungsdialog für Redmine anzeigen",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Erfordert, dass das Zeiterfassungsmodul für das Redmine-Projekt aktiviert ist",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Zeiterfassungsdialog beim Abschließen von Unteraufgaben anzeigen",
-        "PROJECT_ID": "Projekt-Identifier",
-        "PROJECT_ID_DESCRIPTION": "Kann als Teil der URL gefunden werden, wenn das Projekt im Browser angezeigt wird.",
-        "SCOPE": "Umfang",
-        "SCOPE_ALL": "Alle",
-        "SCOPE_ASSIGNED": "Mir zugewiesen",
-        "SCOPE_CREATED": "Von mir erstellt"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Hier kannst du SuperProductivity so konfigurieren, dass offene Redmine-Issues (entweder die Online-Version oder eine selbst gehostete Instanz) für ein bestimmtes Projekt im Aufgabenerstellungsfenster in der Tagesplanungsansicht aufgelistet werden. Sie werden als Vorschläge angezeigt und enthalten einen Link zum Issue sowie weitere Informationen dazu.</p><p> Darüber hinaus kannst du alle offenen Issues automatisch importieren.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Autor",
-        "DESCRIPTION": "Beschreibung",
-        "MARK_AS_CHECKED": "Markiere Updates als überprüft",
-        "PRIORITY": "Priorität",
-        "STATUS": "Status"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Zeiteintrag für {{issueTitle}} erfolgreich erstellt"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Verwerfen",

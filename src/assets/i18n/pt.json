@@ -537,7 +537,8 @@
         "OAUTH_DISCONNECTED": "Conta OAuth desligada.",
         "OAUTH_FAILED": "Falha na autenticação.",
         "REMOTE_ISSUE_DELETED": "O problema remoto foi eliminado. Eliminar a tarefa associada \"{{taskTitle}}\"?",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "O problema remoto foi eliminado, mas a tarefa \"{{taskTitle}}\" tem tempo registado. Eliminar mesmo assim?"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "O problema remoto foi eliminado, mas a tarefa \"{{taskTitle}}\" tem tempo registado. Eliminar mesmo assim?",
+        "POST_TIME_SUCCESS": "{{providerName}}: registo de tempo criado com sucesso para {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "OFF": "Desligado",
@@ -566,6 +567,15 @@
         "POLLING_MODE_DESCRIPTION": "Quando verificar: apenas enquanto o projeto ou etiqueta relevante estiver aberto, ou sempre em segundo plano",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "Quando o contexto está aberto",
         "POLLING_MODE_ALWAYS": "Sempre (em segundo plano)"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Atividade",
+        "TIME_SPENT": "Tempo gasto",
+        "INVALID_DATE": "O valor introduzido não é uma data!",
+        "POST_TIME": "Registar tempo",
+        "STARTED": "Iniciado",
+        "SUBMIT_TIME_FOR": "Submeter tempo ao {{providerName}} para",
+        "TITLE": "{{providerName}}: submeter registo de trabalho"
       }
     },
     "ISSUE_PANEL": {
@@ -789,33 +799,6 @@
         "REMINDER_NEEDS_TEXT": "Escreva uma reflexão antes de pedir um lembrete",
         "REMINDER_TASK_TITLE": "Rever nota de reflexão",
         "TITLE": "Nota de reflexão"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "ISSUE_CONTENT": {
-        "LABELS": "Etiquetas",
-        "ASSIGNED_USERS": "Utilizadores atribuídos",
-        "DECK_DESCRIPTION": "Descrição do Deck",
-        "STACK": "Pilha"
-      },
-      "FORM": {
-        "BASE_URL": "URL base do Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Importar apenas cartões atribuídos a mim",
-        "IS_TRANSITION_ISSUES_ENABLED": "Sincronizar estado de conclusão e título para o Nextcloud Deck",
-        "PASSWORD": "A sua palavra-passe de aplicação do Nextcloud",
-        "POLL_INTERVAL_MINUTES": "Intervalo de consulta (minutos)",
-        "TITLE_TEMPLATE": "Modelo de título da tarefa",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variáveis: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Exemplo: [{BOARD}: {COLUMN}] {CARD_TITLE}. Deixe vazio para usar apenas o título do cartão.",
-        "USERNAME": "O seu nome de utilizador do Nextcloud"
-      },
-      "FORM_SECTION": {
-        "HELP": "Configure a integração com o Nextcloud Deck para importar cartões como tarefas. Use uma palavra-passe de aplicação para autenticação."
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: quadro não encontrado",
-        "CARD_NOT_FOUND": "Nextcloud Deck: o cartão \"{{issueId}}\" parece ter sido eliminado no servidor.",
-        "ERR_CREDENTIALS_MISSING": "Introduza primeiro o URL, nome de utilizador e palavra-passe do Nextcloud.",
-        "ERR_LOAD_BOARDS": "Falha ao carregar os quadros do Deck. Verifique as suas credenciais."
       }
     },
     "NOTE": {
@@ -1076,44 +1059,6 @@
       "NO_DATA": "Sem dados para o ano atual",
       "PAGE_TITLE": "História Rápida",
       "WEEK_TITLE": "Semana {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Atividade",
-        "TIME_SPENT": "Tempo gasto",
-        "INVALID_DATE": "O valor introduzido não é uma data!",
-        "POST_TIME": "Registar tempo",
-        "STARTED": "Iniciado",
-        "SUBMIT_TIME_FOR": "Submeter tempo ao Redmine para",
-        "TITLE": "Redmine: submeter registo de trabalho"
-      },
-      "FORM": {
-        "API_KEY": "Chave de acesso API",
-        "HOST": "Hospedar (e.g.: https://redmine.org)",
-        "PROJECT_ID": "Identificador do projeto",
-        "PROJECT_ID_DESCRIPTION": "Pode ser encontrado como parte da URL, ao visualizar o projeto no Navegador.",
-        "SCOPE": "Escopo",
-        "SCOPE_ALL": "Todos",
-        "SCOPE_ASSIGNED": "Definido para mim",
-        "SCOPE_CREATED": "Criado por mim",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Mostrar diálogo de registo de tempo para reportar ao Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Requer que o módulo de registo de tempo esteja ativado para o projeto Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Mostrar diálogo de registo de tempo quando as subtarefas são concluídas"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Aqui você pode configurar o SuperProductivity para listar problemas abertos do Redmine (seja a versão online ou uma instância auto-hospedada) para um projeto específico no painel de criação de tarefas na visualização de planejamento diário. Eles serão listados como sugestões e fornecerão um link para o problema, bem como mais informações sobre ele.</p><p>Além disso, você pode importar automaticamente todos os problemas em aberto.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Autor",
-        "DESCRIPTION": "Descrição",
-        "MARK_AS_CHECKED": "Marcar atualizações como checadas",
-        "PRIORITY": "Prioridade",
-        "STATUS": "Status"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: registo de tempo criado com sucesso para {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Dispensar",

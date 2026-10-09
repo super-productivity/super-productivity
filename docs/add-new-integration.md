@@ -137,8 +137,9 @@ PluginAPI.registerIssueProvider({
 
 The required contract is `configFields`, `getHeaders`, `searchIssues`, `getById`,
 `getIssueLink`, and `issueDisplay`. Optional capabilities include connection
-testing, comments, backlog import, field mappings, create/update/delete, and
-calendar time-block operations. Add only capabilities the provider actually
+testing, comments, backlog import, batch refresh (`getByIds`), field mappings,
+create/update/delete, time logging (`timeTracking`), and calendar time-block
+operations. Add only capabilities the provider actually
 supports.
 
 Use the `PluginHttp` argument for provider requests. It returns Promises, applies

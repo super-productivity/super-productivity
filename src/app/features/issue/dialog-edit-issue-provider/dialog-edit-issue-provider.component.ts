@@ -66,7 +66,6 @@ import { applyPluginOAuthOverrides } from './plugin-oauth-config-overrides.util'
 import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 // Trello is now a plugin — board selection is a dynamic `loadOptions` select field
 // ClickUp is now a plugin — no built-in config component needed
-import { NextcloudDeckAdditionalCfgComponent } from '../providers/nextcloud-deck/nextcloud-deck-additional-cfg.component';
 import { TaskService } from '../../tasks/task.service';
 import { firstValueFrom } from 'rxjs';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -102,7 +101,6 @@ type OptionsLoadState = 'idle' | 'loading' | 'loaded' | 'empty' | 'failed';
     MatButton,
     MatIcon,
     MatDialogTitle,
-    NextcloudDeckAdditionalCfgComponent,
     ChipListInputComponent,
   ],
   templateUrl: './dialog-edit-issue-provider.component.html',

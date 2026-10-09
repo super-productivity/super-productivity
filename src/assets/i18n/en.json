@@ -555,7 +555,8 @@
         "OAUTH_FAILED_WITH_DETAIL": "Authentication failed: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Remote issue was deleted. Delete linked task \"{{taskTitle}}\"?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Remote issue was deleted but task \"{{taskTitle}}\" has tracked time. Delete anyway?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Two-way sync push failed: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Two-way sync push failed: {{errorMsg}}",
+        "POST_TIME_SUCCESS": "{{providerName}}: Successfully created time entry for {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Auto-create issues for new tasks",
@@ -591,6 +592,15 @@
         "RELOAD_OPTIONS": "Reload Options",
         "SETUP_TITLE": "Setup {{title}} Config",
         "TEST_CONNECTION": "Test Connection"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Activity",
+        "INVALID_DATE": "The entered value is not a date!",
+        "POST_TIME": "Post Time",
+        "STARTED": "Started",
+        "SUBMIT_TIME_FOR": "Submit time to {{providerName}} for",
+        "TIME_SPENT": "Time Spent",
+        "TITLE": "{{providerName}}: Submit Worklog"
       }
     },
     "ISSUE_PANEL": {
@@ -820,33 +830,6 @@
         "REMINDER_NEEDS_TEXT": "Write a reflection before asking for a reminder",
         "REMINDER_TASK_TITLE": "Revisit reflection note",
         "TITLE": "Reflection Note"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Nextcloud Base URL",
-        "FILTER_BY_ASSIGNEE": "Only import cards assigned to me",
-        "IS_TRANSITION_ISSUES_ENABLED": "Sync completion status and title back to Nextcloud Deck",
-        "PASSWORD": "Your Nextcloud app password",
-        "POLL_INTERVAL_MINUTES": "Poll interval (minutes)",
-        "TITLE_TEMPLATE": "Task title template",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variables: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Example: [{BOARD}: {COLUMN}] {CARD_TITLE}. Leave empty for card title only.",
-        "USERNAME": "Your Nextcloud username"
-      },
-      "FORM_SECTION": {
-        "HELP": "Configure your Nextcloud Deck integration to import cards as tasks. Use an app password for authentication."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Assigned Users",
-        "DECK_DESCRIPTION": "Deck Description",
-        "LABELS": "Labels",
-        "STACK": "Stack"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Board not found",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Card \"{{issueId}}\" seems to be deleted on server.",
-        "ERR_CREDENTIALS_MISSING": "Enter Nextcloud URL, username, and password first.",
-        "ERR_LOAD_BOARDS": "Failed to load Deck boards! Check your credentials."
       }
     },
     "NOTE": {
@@ -1107,44 +1090,6 @@
       "TOOLTIP_VISIBILITY": "Show/hide projects",
       "ADD_SUBFOLDER": "Add subfolder",
       "ADD_PROJECT": "Add project"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Activity",
-        "INVALID_DATE": "The entered value is not a date!",
-        "POST_TIME": "Post Time",
-        "STARTED": "Started",
-        "SUBMIT_TIME_FOR": "Submit time to Redmine for",
-        "TIME_SPENT": "Time Spent",
-        "TITLE": "Redmine: Submit Worklog"
-      },
-      "FORM": {
-        "API_KEY": "API access key",
-        "HOST": "Host (e.g. https://redmine.org)",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Show time tracking dialog to report to Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Requires time tracking module to be enabled for Redmine project",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Show time tracking dialog when subtasks are completed",
-        "PROJECT_ID": "Project Identifier (optional)",
-        "PROJECT_ID_DESCRIPTION": "Can be found as part of the URL when viewing the project in a web browser. Leave empty to search across the whole Redmine instance.",
-        "SCOPE": "Scope",
-        "SCOPE_ALL": "All",
-        "SCOPE_ASSIGNED": "Assigned to me",
-        "SCOPE_CREATED": "Created by me"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Here you can configure Super Productivity to list open Redmine (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition you can automatically import all open issues.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Author",
-        "DESCRIPTION": "Description",
-        "MARK_AS_CHECKED": "Mark updates as checked",
-        "PRIORITY": "Priority",
-        "STATUS": "Status"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine: Successfully created time entry for {{issueTitle}}"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Dismiss",
