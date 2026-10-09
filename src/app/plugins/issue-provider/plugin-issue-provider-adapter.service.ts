@@ -383,9 +383,11 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       );
       delete baseTaskData.dueDay;
       delete baseTaskData.dueWithTime;
-      // no state means the issue says nothing about done-ness (e.g. Redmine);
-      // the base `false` would reopen a task the user completed
-      if (!issue.state) {
+      // Completion is only re-pulled from a provider that declares what done
+      // means. Without doneStates the default word list is a guess, and a
+      // calendar's 'confirmed' would reopen a task the user completed (#9905);
+      // no state means the issue says nothing about done-ness (e.g. Redmine).
+      if (!issue.state || !resolved.provider.definition.doneStates?.length) {
         delete baseTaskData.isDone;
       }
       for (const mapping of resolved.provider.definition.fieldMappings ?? []) {

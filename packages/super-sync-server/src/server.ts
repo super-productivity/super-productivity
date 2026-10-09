@@ -520,7 +520,10 @@ export const createServer = (
 
       try {
         const address = await fastifyServer.listen(createListenOptions(fullConfig));
-        Logger.info(`Server started on ${address}`);
+        // Self-hosters on :latest otherwise cannot tell which build they run (#9181).
+        Logger.info(
+          `Server started on ${address} (revision ${process.env.SUPERSYNC_REVISION || 'unknown'})`,
+        );
         return address;
       } catch (err) {
         Logger.error('Failed to start server:', err);

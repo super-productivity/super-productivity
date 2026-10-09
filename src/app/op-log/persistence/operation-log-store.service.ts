@@ -1174,14 +1174,14 @@ export class OperationLogStoreService implements RemoteOperationApplyStorePort<O
       archiveOld?: ArchiveStoreEntry['data'];
       rebaseKept?: {
         opIds: Iterable<string>;
-        successorOpIds: ReadonlySet<string>;
+        successorOpIds?: ReadonlySet<string>;
         clockToDominate: VectorClock;
       };
     },
   ): Promise<{ written: MixedSourceWrittenOperation[]; skippedCount: number }> {
     const nonEmptyBatches = batches.filter((batch) => batch.ops.length > 0);
     const rejectOpIds = [...new Set(options?.rejectOpIds ?? [])];
-    // rebaseKept runs even for empty batches; the caller drops its fallback rebase.
+    // rebaseKept runs even for empty batches: callers have no separate re-clock.
     if (!nonEmptyBatches.length && !rejectOpIds.length && !options?.rebaseKept) {
       return { written: [], skippedCount: 0 };
     }

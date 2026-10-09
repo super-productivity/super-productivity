@@ -470,7 +470,7 @@ describe('performance migrations', () => {
     expect(
       dockerWorkflow.match(/VCS_REF=\$\{\{ steps\.source-ref\.outputs\.revision \}\}/g),
     ).toHaveLength(2);
-    expect(dockerWorkflow).not.toContain('delete-package-versions');
+    expect(dockerWorkflow).toContain('exclude-tags: v*');
     expect(helmDeployment).toContain('sh scripts/migrate-deploy.sh');
     expect(
       helmDeployment.match(/include "supersync\.postgresqlConnectionLimit" \./g),

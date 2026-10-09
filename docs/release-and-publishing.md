@@ -152,8 +152,8 @@ Center.
 - A plain `master` push builds desktop artifacts, uploads a development Android
   build to the Play `internal` track, and publishes the branch Snap to `edge`.
 - A `master` push that changes SuperSync server inputs publishes
-  `ghcr.io/super-productivity/supersync:latest` and `master-<sha>`. Image versions
-  are not pruned, so release tags stay available.
+  `ghcr.io/super-productivity/supersync:latest` and `master-<sha>`. The prune keeps
+  the 15 newest master images and excludes `v*`, so release tags stay available.
 - Pre-release and manual Apple workflows upload builds without submitting them for
   App Review. See [the TestFlight plan](plans/2026-07-14-ios-testflight-master-builds.md)
   for proposed additional branch behavior; it is not current behavior.

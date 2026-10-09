@@ -114,10 +114,12 @@ jobs:
           build-args: |
             VCS_REF=${{ steps.source-ref.outputs.revision }}
           no-cache: ${{ github.event_name == 'workflow_dispatch' && inputs.no_cache || false }}
-          platforms: linux/amd64
-          # Buildx would otherwise attach a provenance attestation, turning every push
-          # into an OCI index with an untagged child version. Nobody consumes the
-          # attestation (deploys verify the VCS_REF revision label instead).
+          # arm64 runs under BuildKit's bundled QEMU; only the runtime stage is
+          # emulated because the builder stage pins $BUILDPLATFORM.
+          platforms: linux/amd64,linux/arm64
+          # Nobody consumes provenance attestations (deploys verify the VCS_REF
+          # revision label instead), so skip them rather than add a third untagged
+          # child per build to the index.
           provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -125,10 +127,33 @@ jobs:
       - name: Image digest
         run: echo "Image pushed with digest ${{ steps.meta.outputs.tags }}"
 
+      # Keep the registry from accumulating an image per master push forever. 15
+      # newest tagged images ≈ weeks of rollback targets at the current push cadence.
+      # Each build is a multi-arch index with untagged per-arch children, so a
+      # version-counting prune could delete children of a kept index. This action
+      # counts tagged images and deletes children only with their parent.
+      # delete-untagged collects children orphaned when cancel-in-progress kills a
+      # push between the per-arch manifests and the index; validate warns if any
+      # kept index is missing a platform child.
+      # exclude-tags keeps every release image; only master builds count toward 15.
+      # Requires the package to grant this repo write access (it does — this same
+      # workflow publishes it with GITHUB_TOKEN).
+      - name: Prune old package versions
+        if: github.event_name == 'push'
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
+        with:
+          packages: supersync
+          exclude-tags: v*
+          keep-n-tagged: 15
+          delete-untagged: true
+          delete-ghost-images: true
+          delete-partial-images: true
+          validate: true
+
   # Publishes the image a released checkout expects: deploy.sh compares the image's
-  # revision label with the image-input revision of the checked-out tag. Versions are
-  # not pruned: count-based pruning would delete release tags, and public GHCR
-  # storage is free. Re-running for a tag rebuilds and overwrites that tag.
+  # revision label with the image-input revision of the checked-out tag. The master
+  # job's prune excludes `v*` tags, so release images are kept. Re-running for a tag
+  # rebuilds and overwrites that tag.
   release-image:
     name: Build and Push release image to GHCR
     if: (github.event_name == 'release' && !github.event.release.prerelease) || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && github.ref == 'refs/heads/master')
@@ -213,5 +238,5 @@ jobs:
           build-args: |
             VCS_REF=${{ steps.source-ref.outputs.revision }}
           no-cache: true
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           provenance: false

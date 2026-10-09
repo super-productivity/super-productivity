@@ -144,7 +144,9 @@ connection uses `postgres:5432`; existing installs that already set
 > **Upgrade note:** because `RUN_MIGRATIONS_ON_STARTUP` defaults to `false`,
 > `docker compose pull && docker compose up -d` can leave the app running
 > against unapplied migrations. Use `./scripts/deploy.sh` for production
-> updates, or `./scripts/deploy.sh --build` for local image builds.
+> updates, or `./scripts/deploy.sh --build` for local image builds. The server
+> logs an error naming any missing migrations at startup, and logs the image
+> revision in its `Server started on …` line.
 
 `deploy.sh` verifies that the pulled/built `supersync` image has an
 `org.opencontainers.image.revision` label matching the latest commit that
@@ -306,8 +308,9 @@ npx prisma generate
 
 # Set up .env
 cp env.example .env
-# Edit .env: point DATABASE_URL at your PostgreSQL instance, and set JWT_SECRET
-# and POSTGRES_PASSWORD — both ship empty and the server refuses to start without them
+# Edit .env: point DATABASE_URL at your PostgreSQL instance and set JWT_SECRET —
+# it ships empty and the server refuses to start without it (POSTGRES_PASSWORD
+# is only read by the Docker Compose stack)
 
 # Push schema to DB
 npx prisma db push

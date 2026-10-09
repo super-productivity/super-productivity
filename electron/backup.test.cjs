@@ -27,6 +27,8 @@ let backupFiles;
 // resolved path -> contents served by the mocked writeFileSync/readFileSync
 let storedFiles;
 let readPaths;
+// overridable per test; defaults to storing into storedFiles
+let writeFileSyncImpl;
 
 const resetModule = () => {
   delete require.cache[backupModulePath];
@@ -62,10 +64,7 @@ const installMocks = () => {
         readdirSync: () => Array.from(backupFiles.keys()),
         statSync: (p) => ({ mtime: new Date(backupFiles.get(path.basename(p))) }),
         mkdirSync: (p) => existingPaths.add(p),
-        writeFileSync: (p, data) => {
-          storedFiles.set(path.resolve(p), data);
-          backupFiles.set(path.basename(p), Date.now());
-        },
+        writeFileSync: (...args) => writeFileSyncImpl(...args),
         readFileSync: (p) => {
           readPaths.push(p);
           return storedFiles.get(path.resolve(p));
@@ -90,6 +89,10 @@ test.beforeEach(() => {
   backupFiles = new Map();
   storedFiles = new Map();
   readPaths = [];
+  writeFileSyncImpl = (p, data) => {
+    storedFiles.set(path.resolve(p), data);
+    backupFiles.set(path.basename(p), Date.now());
+  };
   installMocks();
 });
 
@@ -225,5 +228,27 @@ test('a backup written by BACKUP restores through BACKUP_LOAD_DATA', () => {
   assert.deepEqual(
     JSON.parse(handleHandlers.get('BACKUP_LOAD_DATA')({}, newest.path)),
     data,
+  );
+});
+
+test('BACKUP rejects with a path-free error when the write fails (#10022)', async () => {
+  existingPaths.add(BACKUP_DIR);
+  writeFileSyncImpl = (p) => {
+    const e = new Error(`ENOSPC: no space left on device, open '${p}'`);
+    e.code = 'ENOSPC';
+    throw e;
+  };
+  const { initBackupAdapter } = loadBackupModule();
+  initBackupAdapter();
+
+  // async wrapper: ipcMain.handle rejects the invoke for a sync throw and an
+  // async rejection alike, so the test holds either way.
+  await assert.rejects(
+    async () => handleHandlers.get('BACKUP')({}, { data: {}, maxBackupFiles: 3 }),
+    (e) => {
+      assert.match(e.message, /^BACKUP failed: Error \(code: ENOSPC\)$/);
+      assert.equal(e.code, 'ENOSPC');
+      return true;
+    },
   );
 });

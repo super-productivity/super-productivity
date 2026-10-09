@@ -165,6 +165,12 @@ const FAKE_DF = `#!/bin/sh
 printf 'Use%%\n%s%%\n' "\${FAKE_DISK_PCT:-10}"
 `;
 
+// Only the pg_dump lookup calls ps; like procps, no match prints nothing and exits 1.
+const FAKE_PS = `#!/bin/sh
+[ -n "\${FAKE_PG_DUMP_AGE:-}" ] || exit 1
+printf '%s\\n' "\${FAKE_PG_DUMP_AGE}"
+`;
+
 const FAKE_MAIL = `#!/bin/sh
 printf '%s\n' "$*" >> "$FAKE_STATE/mail.args"
 printf '%s\n' '---MAIL---' >> "$FAKE_STATE/mail.log"
@@ -304,6 +310,7 @@ beforeEach(() => {
   writeExecutable('docker', FAKE_DOCKER);
   writeExecutable('curl', FAKE_CURL);
   writeExecutable('df', FAKE_DF);
+  writeExecutable('ps', FAKE_PS);
   writeExecutable('mail', FAKE_MAIL);
   writeExecutable('journalctl', FAKE_JOURNALCTL);
   writeExecutable('id', FAKE_ID);
@@ -557,6 +564,32 @@ describe('health-alert.sh service and database monitoring', () => {
     const result = run({ FAKE_DB_MALFORMED: '1' });
 
     expect(result.mailLog).toContain('Database monitoring checks failed');
+  });
+
+  it('does not page a probe timeout while the backup dump runs', () => {
+    // 2026-10-05..08: 13 "checks failed (exit 124)" mails, every one inside the ~3h20
+    // nightly pg_dump window, while /health (SELECT 1 through the app) stayed 200.
+    const result = run({ FAKE_DB_EXIT: '124', FAKE_PG_DUMP_AGE: '3600' });
+
+    expect(result.mailLog).toBe('');
+  });
+
+  it('still pages other problems while the backup dump runs', () => {
+    const result = run({
+      FAKE_DB_EXIT: '124',
+      FAKE_PG_DUMP_AGE: '3600',
+      FAKE_HTTP_CODE: '503',
+    });
+
+    expect(result.mailLog).toContain('Health endpoint returned HTTP 503');
+    expect(result.mailLog).not.toContain('Database monitoring checks failed');
+  });
+
+  it('pages a probe timeout again once the dump has run past 6 hours', () => {
+    // Same expiry as the long-query exemption: a wedged dump must not mute the probe.
+    const result = run({ FAKE_DB_EXIT: '124', FAKE_PG_DUMP_AGE: '21600' });
+
+    expect(result.mailLog).toContain('Database monitoring checks failed (exit 124)');
   });
 
   it('carries the probe stderr into the alert body', () => {
@@ -1121,6 +1154,30 @@ describe('health-alert.sh alert damping', () => {
 
     const secondClean = run();
     expect(secondClean.mailLog).toContain('All checks passing.');
+  });
+
+  it('does not declare recovery from runs whose probe failed during a dump', () => {
+    // An excused probe verified nothing, so it must not close an open incident.
+    const dumpTimeout = { FAKE_DB_EXIT: '124', FAKE_PG_DUMP_AGE: '3600' };
+    run({ FAKE_BAD_INDEX: 'operations_idx' });
+    run(dumpTimeout);
+    const second = run(dumpTimeout);
+
+    expect(second.mailLog).not.toContain('All checks passing.');
+
+    run();
+    const afterDump = run();
+    expect(afterDump.mailLog).toContain('All checks passing.');
+  });
+
+  it('still uses a probe that answers during a dump', () => {
+    const result = run({
+      FAKE_PG_DUMP_AGE: '3600',
+      FAKE_LONG_Q: '1',
+      FAKE_LONGEST: '233',
+    });
+
+    expect(result.mailLog).toContain('1 query(s) active longer than 120s');
   });
 
   it('restarts the healthy-run count when the problem comes back', () => {

@@ -180,25 +180,6 @@ export const waitForAppReady = async (
 };
 
 /**
- * Wait for UI to settle after an action (e.g., adding a task).
- * Uses Angular stability as the primary signal rather than fixed timeouts.
- * Falls back to a minimal timeout if Angular stability check fails.
- */
-export const waitForUISettle = async (page: Page): Promise<void> => {
-  if (page.isClosed()) {
-    return;
-  }
-  try {
-    await waitForAngularStability(page, 2000);
-  } catch {
-    // Fall back to minimal fixed timeout if stability check fails
-    if (!page.isClosed()) {
-      await page.waitForTimeout(200);
-    }
-  }
-};
-
-/**
  * Wait for local state changes to persist before triggering sync.
  * This ensures IndexedDB writes have completed after UI state changes.
  * Uses Angular stability + networkidle as indicators that async operations have settled.
