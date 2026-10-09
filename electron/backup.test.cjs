@@ -174,7 +174,7 @@ test('Store builds fall back to the real backup dir when LocalCache is absent', 
   assert.equal(getBackupDirForDisplay(), BACKUP_DIR);
 });
 
-test('BACKUP rejects with a path-free error when the write fails (#10022)', () => {
+test('BACKUP rejects with a path-free error when the write fails (#10022)', async () => {
   existingPaths.add(BACKUP_DIR);
   writeFileSyncImpl = (p) => {
     const e = new Error(`ENOSPC: no space left on device, open '${p}'`);
@@ -184,8 +184,10 @@ test('BACKUP rejects with a path-free error when the write fails (#10022)', () =
   const { initBackupAdapter } = loadBackupModule();
   initBackupAdapter();
 
-  assert.throws(
-    () => handleHandlers.get('BACKUP')({}, { data: {}, maxBackupFiles: 3 }),
+  // async wrapper: ipcMain.handle rejects the invoke for a sync throw and an
+  // async rejection alike, so the test holds either way.
+  await assert.rejects(
+    async () => handleHandlers.get('BACKUP')({}, { data: {}, maxBackupFiles: 3 }),
     (e) => {
       assert.match(e.message, /^BACKUP failed: Error \(code: ENOSPC\)$/);
       assert.equal(e.code, 'ENOSPC');
