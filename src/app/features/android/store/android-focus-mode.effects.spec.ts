@@ -14,14 +14,18 @@
  * The reducer no-ops `tick` for idle/paused timers, so the effect dispatches
  * unconditionally (see focus-mode.bug-7856.spec for that guarantee).
  *
- * The gated effect wiring (`IS_ANDROID_WEB_VIEW && createEffect(...)`) cannot be
- * instantiated under Karma, so the stream logic lives in the exported
+ * The resume-tick effect uses the static IS_ANDROID_WEB_VIEW gate, so its
+ * stream logic lives in the exported
  * `createFocusResumeTick$` factory and is exercised directly here.
  */
 
-import { Subject } from 'rxjs';
+import { BehaviorSubject, Subject, Subscription } from 'rxjs';
+import { TestBed } from '@angular/core/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { Action } from '@ngrx/store';
 import {
+  AndroidFocusModeEffects,
+  FOCUS_ANDROID_INTERFACE,
   createFocusResumeTick$,
   hasFocusNotificationStateChanged,
   parseNativeFocusModeData,
@@ -29,7 +33,25 @@ import {
   getFocusServiceCall,
 } from './android-focus-mode.effects';
 import * as focusModeActions from '../../focus-mode/store/focus-mode.actions';
-import { TimerState } from '../../focus-mode/focus-mode.model';
+import { TimerState, FocusModeMode } from '../../focus-mode/focus-mode.model';
+import { IS_ANDROID_WEB_VIEW_TOKEN } from '../../../util/is-android-web-view';
+import { AndroidInterface } from '../android-interface';
+import {
+  selectTimer,
+  selectMode,
+  selectPausedTaskId,
+} from '../../focus-mode/store/focus-mode.selectors';
+import { selectCurrentTask, selectTaskEntities } from '../../tasks/store/task.selectors';
+import { createTask } from '../../tasks/task.test-helper';
+import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { SnackService } from '../../../core/snack/snack.service';
+import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { TaskService } from '../../tasks/task.service';
+import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
+import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
+import { OperationWriteFlushService } from '../../../op-log/sync/operation-write-flush.service';
 
 const MIN = 60_000;
 const workTimer = (elapsed: number, over: Partial<TimerState> = {}): TimerState => ({
@@ -363,6 +385,103 @@ describe('getFocusServiceCall (native service lost, #9531)', () => {
         isNativeServiceRunning: () => false,
       }),
     ).toBe('start');
+  });
+});
+
+describe('AndroidFocusModeEffects: native break restart recovery', () => {
+  const task = createTask({ id: 'paused-task', timeSpent: 900_000 });
+  const timer = workTimer(0, { purpose: 'break', duration: 5 * MIN });
+  let store: MockStore;
+  let subscriptions: Subscription;
+  let background$: BehaviorSubject<boolean>;
+  let native: jasmine.SpyObj<Required<AndroidInterface>>;
+
+  beforeEach(() => {
+    background$ = new BehaviorSubject(true);
+    native = jasmine.createSpyObj<Required<AndroidInterface>>(
+      'androidInterface',
+      ['getFocusModeElapsed', 'updateFocusTask', 'startFocusModeService'],
+      { isInBackground$: background$ },
+    );
+    native.getFocusModeElapsed.and.returnValue('null');
+    TestBed.configureTestingModule({
+      providers: [
+        AndroidFocusModeEffects,
+        provideMockStore({
+          selectors: [
+            { selector: selectTimer, value: timer },
+            { selector: selectMode, value: FocusModeMode.Pomodoro },
+            { selector: selectCurrentTask, value: null },
+            { selector: selectPausedTaskId, value: task.id },
+            { selector: selectTaskEntities, value: { [task.id]: task } },
+          ],
+        }),
+        { provide: IS_ANDROID_WEB_VIEW_TOKEN, useValue: true },
+        { provide: FOCUS_ANDROID_INTERFACE, useValue: native },
+        {
+          provide: HydrationStateService,
+          useValue: { isApplyingRemoteOps: () => false },
+        },
+        ...[
+          SnackService,
+          GlobalTrackingIntervalService,
+          CapacitorReminderService,
+          LOCAL_ACTIONS,
+          TaskService,
+          SyncTriggerService,
+          DataInitStateService,
+          OperationWriteFlushService,
+        ].map((provide) => ({ provide, useValue: {} })),
+      ],
+    });
+    store = TestBed.inject(MockStore);
+    const effects = TestBed.inject(AndroidFocusModeEffects);
+    subscriptions = new Subscription();
+    if (!effects.trackAppBackgroundState$ || !effects.syncFocusModeToNotification$) {
+      throw new Error('Android notification effects must be enabled');
+    }
+    subscriptions.add(effects.trackAppBackgroundState$.subscribe());
+    subscriptions.add(effects.syncFocusModeToNotification$.subscribe());
+    native.updateFocusTask.calls.reset();
+    native.startFocusModeService.calls.reset();
+  });
+
+  afterEach(() => {
+    subscriptions.unsubscribe();
+    store.resetSelectors();
+  });
+
+  it('restages the unchanged paused task before restarting a lost break service on resume', () => {
+    // The background start failed and consumed the pending native task data.
+    // A quick return changes neither the paused task nor the notification state.
+    background$.next(false);
+    store.overrideSelector(selectTimer, { ...timer, elapsed: 1_000 });
+    store.refreshState();
+
+    expect(native.updateFocusTask).toHaveBeenCalledOnceWith(
+      task.id,
+      task.timeSpent,
+      false,
+    );
+    expect(native.updateFocusTask).toHaveBeenCalledBefore(native.startFocusModeService);
+    expect(native.startFocusModeService).toHaveBeenCalledOnceWith(
+      'Break',
+      5 * MIN,
+      299_000,
+      true,
+      false,
+      null,
+    );
+  });
+
+  it('keeps the task clock untouched on a quick resume while the native service survives', () => {
+    native.getFocusModeElapsed.and.returnValue('{}');
+    background$.next(false);
+    store.overrideSelector(selectTimer, { ...timer, elapsed: 1_000 });
+    store.refreshState();
+
+    expect(native.updateFocusTask).not.toHaveBeenCalled();
+    expect(native.startFocusModeService).not.toHaveBeenCalled();
   });
 });
 
