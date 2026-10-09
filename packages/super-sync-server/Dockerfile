@@ -85,6 +85,9 @@ ENV RUN_MIGRATIONS_ON_STARTUP=false
 # GC starts before cgroup OOM-kill. RSS = old-space + new-space + code cache +
 # native heap + ArrayBuffers, so headroom matters. 576 ≈ 75% of 768m.
 ENV NODE_OPTIONS=--max-old-space-size=576
+# Logged at startup so operators can tell which build runs. Kept after the
+# install layers because it changes on every build and would bust their cache.
+ENV SUPERSYNC_REVISION=$VCS_REF
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/health || exit 1
