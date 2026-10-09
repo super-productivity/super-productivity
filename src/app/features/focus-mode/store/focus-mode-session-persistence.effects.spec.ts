@@ -22,10 +22,14 @@ import { selectFocusModeState } from './focus-mode.selectors';
 const NOW = 1_700_000_000_000;
 const MINUTE = 60_000;
 const POMODORO = 25 * MINUTE;
+const FIVE_MINUTES = 5 * MINUTE;
+const TEN_MINUTES = 10 * MINUTE;
+const FORTY_MINUTES = 40 * MINUTE;
+const THREE_HOURS = 3 * 60 * MINUTE;
 
 const workTimer = (overrides: Partial<TimerState> = {}): TimerState => ({
   isRunning: true,
-  startedAt: NOW - 5 * MINUTE,
+  startedAt: NOW - FIVE_MINUTES,
   elapsed: 5 * MINUTE,
   duration: POMODORO,
   purpose: 'work',
@@ -118,7 +122,7 @@ describe('FocusModeSessionPersistenceEffects', () => {
   });
 
   it('pins the start of a session that ended while away to its real length', () => {
-    run(snapshotOf({ timer: workTimer({ startedAt: NOW - 40 * MINUTE }) }));
+    run(snapshotOf({ timer: workTimer({ startedAt: NOW - FORTY_MINUTES }) }));
 
     const { timer } = dispatchSpy.calls.mostRecent().args[0];
     expect(timer.startedAt).toBe(NOW - POMODORO);
@@ -126,7 +130,7 @@ describe('FocusModeSessionPersistenceEffects', () => {
   });
 
   it('restores a paused session as is and does not resume tracking', () => {
-    const paused = workTimer({ isRunning: false, startedAt: NOW - 40 * MINUTE });
+    const paused = workTimer({ isRunning: false, startedAt: NOW - FORTY_MINUTES });
     run(snapshotOf({ timer: paused, pausedTaskId: 'task1' }));
 
     expect(dispatchSpy.calls.mostRecent().args[0].timer).toEqual(paused);
@@ -141,7 +145,7 @@ describe('FocusModeSessionPersistenceEffects', () => {
   });
 
   it('never pins a Flowtime session, which has no duration', () => {
-    const flow = workTimer({ duration: 0, startedAt: NOW - 3 * 60 * MINUTE });
+    const flow = workTimer({ duration: 0, startedAt: NOW - THREE_HOURS });
     run(snapshotOf({ timer: flow, mode: FocusModeMode.Flowtime }));
 
     expect(dispatchSpy.calls.mostRecent().args[0].timer).toEqual(flow);
@@ -165,5 +169,55 @@ describe('FocusModeSessionPersistenceEffects', () => {
     run(snapshotOf(), { state: { ...initialState, timer: workTimer() } });
 
     expect(dispatchSpy).not.toHaveBeenCalled();
+  });
+
+  describe('persisting', () => {
+    const setState = (state: FocusModeState, currentTaskId: string | null): void => {
+      store.overrideSelector(selectFocusModeState, state);
+      store.overrideSelector(selectCurrentTaskId, currentTaskId);
+      store.refreshState();
+    };
+
+    it('saves an active session with its tracked task', () => {
+      run(null);
+      setState({ ...initialState, timer: workTimer() }, 'task1');
+
+      expect(storage.setSessionSnapshot).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          timer: workTimer(),
+          trackedTaskId: 'task1',
+          savedAt: NOW,
+        }),
+      );
+    });
+
+    it('does not rewrite the snapshot on every tick of a running timer', () => {
+      run(null);
+      setState({ ...initialState, timer: workTimer() }, 'task1');
+      storage.setSessionSnapshot.calls.reset();
+      setState({ ...initialState, timer: workTimer({ elapsed: 6 * MINUTE }) }, 'task1');
+
+      expect(storage.setSessionSnapshot).not.toHaveBeenCalled();
+    });
+
+    it('clears the snapshot once the session ends', () => {
+      run(null);
+      setState({ ...initialState, timer: workTimer() }, 'task1');
+      storage.clearSessionSnapshot.calls.reset();
+      setState(initialState, null);
+
+      expect(storage.clearSessionSnapshot).toHaveBeenCalled();
+    });
+
+    it('refreshes savedAt when the app is hidden, so the idle cap counts time away', () => {
+      run(null);
+      setState({ ...initialState, timer: workTimer() }, 'task1');
+      jasmine.clock().mockDate(new Date(NOW + TEN_MINUTES));
+      window.dispatchEvent(new Event('pagehide'));
+
+      expect(storage.setSessionSnapshot.calls.mostRecent().args[0].savedAt).toBe(
+        NOW + TEN_MINUTES,
+      );
+    });
   });
 });
