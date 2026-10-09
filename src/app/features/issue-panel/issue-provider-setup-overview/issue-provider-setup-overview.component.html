@@ -24,7 +24,7 @@
     <mat-icon>calendar_month</mat-icon>
     <span>Other (iCal)</span>
   </button>
-  @for (provider of pluginCalendarProviders; track provider.pluginId) {
+  @for (provider of pluginCalendarProviders(); track provider.pluginId) {
     <button
       class="provider-tile focus-ring"
       type="button"
@@ -38,7 +38,7 @@
       <span>{{ provider.name }}</span>
     </button>
   }
-  @for (provider of disabledPluginCalendarProviders; track provider.pluginId) {
+  @for (provider of disabledPluginCalendarProviders(); track provider.pluginId) {
     <button
       class="provider-tile focus-ring"
       type="button"
@@ -101,7 +101,7 @@
     <mat-icon svgIcon="plainspace"></mat-icon>
     <span>Plainspace</span>
   </button>
-  @for (provider of pluginProviders; track provider.pluginId) {
+  @for (provider of pluginProviders(); track provider.pluginId) {
     <button
       class="provider-tile focus-ring"
       type="button"
@@ -115,7 +115,7 @@
       <span>{{ provider.name }}</span>
     </button>
   }
-  @for (provider of disabledPluginProviders; track provider.pluginId) {
+  @for (provider of disabledPluginProviders(); track provider.pluginId) {
     <button
       class="provider-tile focus-ring"
       type="button"

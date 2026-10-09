@@ -1,6 +1,5 @@
 import type { Locator, Page, Route } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
-import { waitForPluginManagementInit } from '../../helpers/plugin-test.helpers';
 
 /**
  * Regression for https://github.com/super-productivity/super-productivity/issues/10155
@@ -170,16 +169,6 @@ test.describe('Calendar #10155', () => {
       [CONTROL_HREF]: buildEvent('e2e-10155-control', CONTROL_TITLE),
     });
 
-    await workViewPage.waitForTaskList();
-    // App readiness can precede plugin discovery. The provider setup panel snapshots
-    // its plugin list on creation, so wait for the CalDAV plugin before opening it.
-    expect(await waitForPluginManagementInit(page)).toBe(true);
-    await expect(
-      page.locator('plugin-management mat-card-title').getByText('CalDAV Events', {
-        exact: true,
-      }),
-    ).toBeVisible();
-    await page.goto('/#/tag/TODAY/tasks');
     await workViewPage.waitForTaskList();
     await setUpCaldavProvider(page);
 
