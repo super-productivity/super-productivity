@@ -524,6 +524,8 @@ export class ReminderModule {
               ? { deadlineDay: task.deadlineDay }
               : {}),
           deadlineRemindAt: newRemindAt,
+          // The deadline itself is unchanged, so "Deadline set" would mislead.
+          isSkipSnack: true,
         }),
       );
     } else {

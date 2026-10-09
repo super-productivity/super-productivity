@@ -321,6 +321,8 @@ describe('ReminderModule iOS notification actions', () => {
         taskId: 'task-1',
         deadlineWithTime: 456,
         deadlineRemindAt: 9_000,
+        // A snooze leaves the deadline as is, so no "Deadline set" snack.
+        isSkipSnack: true,
       }),
     );
   });
