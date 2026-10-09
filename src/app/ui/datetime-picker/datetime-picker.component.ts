@@ -332,6 +332,20 @@ export class DateTimePickerComponent implements AfterViewInit {
       return;
     }
 
+    const localization = this._globalConfigService.localization();
+    const weekNumberSystem = localization?.weekNumberSystem;
+
+    // Check if week numbers should be shown
+    // null / undefined = "System default" = hide week numbers
+    // 'iso' or 'us' = show week numbers with the specified system
+    const shouldShowWeekNumbers = weekNumberSystem === 'iso' || weekNumberSystem === 'us';
+
+    if (!shouldShowWeekNumbers) {
+      this.weekNumbers = [];
+      this._cdr.markForCheck();
+      return;
+    }
+
     const calendarEl = this._el.nativeElement.querySelector(
       '.mat-calendar',
     ) as HTMLElement | null;
@@ -355,8 +369,14 @@ export class DateTimePickerComponent implements AfterViewInit {
       const weekStart = new Date(firstVisibleDate);
       const dayOffset = index * 7;
       weekStart.setDate(firstVisibleDate.getDate() + dayOffset);
+      // Only show week numbers for dates in the current month
+      // Skip if the week starts in a different month
+      if (weekStart.getMonth() !== monthStart.getMonth()) {
+        return null;
+      }
       return getWeekNumber(weekStart, firstDayOfWeek);
-    });
+    }).filter((wn): wn is number => wn !== null);
+
     this._cdr.markForCheck();
   }
 
