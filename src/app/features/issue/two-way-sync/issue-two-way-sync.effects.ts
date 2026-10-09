@@ -270,6 +270,13 @@ export class IssueTwoWaySyncEffects {
               ),
             ),
             concatMap(() => this._deleteRemoteIssue$(task)),
+            // The provider can be removed inside the window; getCfgOnce$ then
+            // throws, and an escaped error would tear down every other pending
+            // deferred delete.
+            catchError((err) => {
+              IssueLog.err('Deferred remote issue delete failed', err);
+              return EMPTY;
+            }),
           ),
         ),
       ),

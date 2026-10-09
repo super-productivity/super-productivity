@@ -270,6 +270,7 @@ const SHARED_FIELDS: Readonly<Record<string, Readonly<Record<string, string>>>> 
     _deferredProcessingChain: 'settled at every step boundary: _settle drains it',
   },
   OperationCaptureService: { PENDING_WARNING_THRESHOLD: CONSTANT },
+  OperationLogMigrationService: { completionDisplayMs: CONSTANT },
   OperationWriteFlushService: {
     MAX_WAIT_TIME: CONSTANT,
     MAX_CUTOFF_ATTEMPTS: CONSTANT,

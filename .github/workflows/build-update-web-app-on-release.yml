@@ -67,7 +67,7 @@ jobs:
         run: npm run lint
 
       - name: Test Unit
-        run: npm run test
+        run: npm run test:ci
 
       - name: Build Frontend & Electron
         run: npm run buildFrontend:prodWeb

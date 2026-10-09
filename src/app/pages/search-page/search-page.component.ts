@@ -134,6 +134,11 @@ export class SearchPageComponent implements OnInit {
           );
         }
         return [
+          // Projects and tags themselves are results too, so a user with many
+          // of them can jump straight to one (#10223). Listed first so a name
+          // match is not buried under task matches for the same term.
+          ...this._mapProjectsToSearchItems(projects),
+          ...this._mapTagsToSearchItems(tags),
           ...this._mapTasksToSearchItems(
             false,
             allTasks,
@@ -241,6 +246,46 @@ export class SearchPageComponent implements OnInit {
     });
   }
 
+  private _mapProjectsToSearchItems(projects: Project[]): SearchItem[] {
+    return projects.map((project) => ({
+      id: project.id,
+      title: project.title,
+      taskNotes: '',
+      searchText: project.title.toLowerCase(),
+      projectId: project.id,
+      parentId: null,
+      parentTitle: null,
+      tagId: '',
+      timeSpentOnDay: {},
+      created: 0,
+      issueType: null,
+      ctx: project,
+      isArchiveTask: false,
+      isDone: false,
+      isProject: true,
+    }));
+  }
+
+  private _mapTagsToSearchItems(tags: Tag[]): SearchItem[] {
+    return tags.map((tag) => ({
+      id: tag.id,
+      title: tag.title,
+      taskNotes: '',
+      searchText: tag.title.toLowerCase(),
+      projectId: null,
+      parentId: null,
+      parentTitle: null,
+      tagId: tag.id,
+      timeSpentOnDay: {},
+      created: 0,
+      issueType: null,
+      ctx: tag,
+      isArchiveTask: false,
+      isDone: false,
+      isTag: true,
+    }));
+  }
+
   private _getContextIcon(
     task: Task,
     projectMap: Map<string, Project>,
@@ -318,6 +363,14 @@ export class SearchPageComponent implements OnInit {
 
   navigateToItem(item: SearchItem): void {
     if (!item) return;
+    if (item.isProject) {
+      this._router.navigate([`/project/${item.id}/tasks`]);
+      return;
+    }
+    if (item.isTag) {
+      this._router.navigate([`/tag/${item.id}/tasks`]);
+      return;
+    }
     if (item.isNote) {
       const path = item.projectId
         ? `/project/${item.projectId}/tasks`

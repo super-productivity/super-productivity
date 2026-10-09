@@ -30,7 +30,7 @@ import {
   selectAllUndoneTasksWithDeadlineSorted,
 } from '../../features/tasks/store/task.selectors';
 import { selectTaskRepeatCfgsSortedByTitleAndProject } from '../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
-import { getNextRepeatOccurrence } from '../../features/task-repeat-cfg/store/get-next-repeat-occurrence.util';
+import { getNextCreatedOccurrence } from '../../features/task-repeat-cfg/store/get-next-created-occurrence.util';
 import { getEffectiveLastTaskCreationDay } from '../../features/task-repeat-cfg/store/get-effective-last-task-creation-day.util';
 import { ShortTimePipe } from '../../ui/pipes/short-time.pipe';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -134,7 +134,7 @@ export class ScheduledListPageComponent {
   }
 
   getNextOccurrence(repeatCfg: TaskRepeatCfg): number | null {
-    return getNextRepeatOccurrence(repeatCfg, new Date())?.getTime() || null;
+    return getNextCreatedOccurrence(repeatCfg, new Date())?.getTime() || null;
   }
 
   getTooltipText(repeatCfg: TaskRepeatCfg): string {

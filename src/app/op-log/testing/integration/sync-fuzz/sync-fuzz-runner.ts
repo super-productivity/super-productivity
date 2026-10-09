@@ -157,7 +157,7 @@ interface LedgerWrite {
  *   docs/sync-and-op-log/lww-field-level-resolution.md): `sideNonNoiseKeys`
  *   returns undefined for it, so `isFieldPatchEligible` refuses;
  * - `deleteTask`: a DELETE refuses in `isFieldPatchEligible`, and its plan is
- *   a whole-entity win (`ConflictResolutionService._isWholeEntityWinPlan`);
+ *   a whole-entity win (`ConflictLocalWinOpsService._isWholeEntityWinPlan`);
  * - `archiveTask`: no `{ id, changes }` to read (`isOpaqueChangeOp`), and a
  *   multi-entity op with subtasks; an archive also wins over a concurrent
  *   edit by sync-core's planner (`_isWholeEntityWinPlan`);
@@ -170,7 +170,7 @@ interface LedgerWrite {
  * decision 6). A plain delta is not: detection drops a remote one that is
  * disjoint from the local side before it reaches a conflict
  * (`isCommutingTimeDeltaCrossing` in
- * `ConflictResolutionService._checkEntityForConflict`'s CONCURRENT branch),
+ * `ConflictDetectionService._checkEntityForConflict`'s CONCURRENT branch),
  * and a local one stays pending beside the patch (`keptLocalTimeDeltas`).
  */
 const WHOLE_ENTITY_INTENTS: ReadonlySet<Intent[0]> = new Set([
