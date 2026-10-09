@@ -185,7 +185,9 @@ jobs:
         env:
           E2E_REQUIRE_WEBDAV: 'true'
           E2E_WEBDAV_FORMAT: ${{ inputs.webdav_format || 'v2' }}
-        run: npm run e2e:all -- --grep "${{ inputs.webdav_grep || '@webdav' }}"
+          # via env, not interpolated into the script, so a quote in the filter can't break the shell
+          E2E_GREP: ${{ inputs.webdav_grep || '@webdav' }}
+        run: npm run e2e:all -- --grep "$E2E_GREP"
 
       - name: Print Docker Logs on Failure
         if: ${{ failure() }}
@@ -262,7 +264,9 @@ jobs:
         env:
           E2E_REQUIRE_SUPERSYNC: 'true'
           E2E_REQUIRE_WEBDAV: 'true'
-        run: npm run e2e:all -- --grep "${{ inputs.grep || '@supersync' }}" --shard=${{ matrix.shard }}/6
+          # via env, not interpolated into the script, so a quote in the filter can't break the shell
+          E2E_GREP: ${{ inputs.grep || '@supersync' }}
+        run: npm run e2e:all -- --grep "$E2E_GREP" --shard=${{ matrix.shard }}/6
 
       - name: Print Docker Logs on Failure
         if: ${{ failure() }}

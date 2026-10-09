@@ -542,7 +542,8 @@
         "OAUTH_DISCONNECTED": "OAuth 帳戶已中斷連線。",
         "OAUTH_FAILED": "驗證失敗。",
         "REMOTE_ISSUE_DELETED": "遠端議題已被刪除。要刪除連結的任務「{{taskTitle}}」嗎？",
-        "REMOTE_ISSUE_DELETED_WITH_TIME": "遠端議題已被刪除，但任務「{{taskTitle}}」已有追蹤時間。仍要刪除嗎？"
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "遠端議題已被刪除，但任務「{{taskTitle}}」已有追蹤時間。仍要刪除嗎？",
+        "POST_TIME_SUCCESS": "{{providerName}}：已成功為 {{issueTitle}} 建立時間紀錄"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "自動為新任務建立議題",
@@ -571,6 +572,15 @@
         "POLLING_MODE_DESCRIPTION": "何時輪詢：僅在相關專案或標籤開啟時，或一律在背景中",
         "POLLING_MODE_WHEN_PROJECT_OPEN": "當內容開啟時",
         "POLLING_MODE_ALWAYS": "一律（背景）"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "活動",
+        "INVALID_DATE": "輸入的值不是日期！",
+        "POST_TIME": "提交時間",
+        "STARTED": "開始時間",
+        "SUBMIT_TIME_FOR": "向 {{providerName}} 提交時間：",
+        "TIME_SPENT": "花費時間",
+        "TITLE": "{{providerName}}：提交工作日誌"
       }
     },
     "ISSUE_PANEL": {
@@ -794,33 +804,6 @@
         "REMINDER_NEEDS_TEXT": "請先寫下反思再要求提醒",
         "REMINDER_TASK_TITLE": "重新檢視反思筆記",
         "TITLE": "反思筆記"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Nextcloud 基礎 URL",
-        "FILTER_BY_ASSIGNEE": "只匯入指派給我的卡片",
-        "IS_TRANSITION_ISSUES_ENABLED": "將完成狀態和標題同步回 Nextcloud Deck",
-        "PASSWORD": "您的 Nextcloud 應用程式密碼",
-        "POLL_INTERVAL_MINUTES": "輪詢間隔（分鐘）",
-        "TITLE_TEMPLATE": "任務標題範本",
-        "TITLE_TEMPLATE_DESCRIPTION": "變數：{CARD_TITLE}、{BOARD}、{COLUMN}、{ID}、{LABELS}。範例：[{BOARD}: {COLUMN}] {CARD_TITLE}。留空則僅使用卡片標題。",
-        "USERNAME": "您的 Nextcloud 使用者名稱"
-      },
-      "FORM_SECTION": {
-        "HELP": "設定您的 Nextcloud Deck 整合以將卡片匯入為任務。請使用應用程式密碼進行驗證。"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "已指派使用者",
-        "DECK_DESCRIPTION": "Deck 描述",
-        "LABELS": "標籤",
-        "STACK": "堆疊"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck：找不到看板",
-        "CARD_NOT_FOUND": "Nextcloud Deck：卡片「{{issueId}}」似乎已從伺服器上刪除。",
-        "ERR_CREDENTIALS_MISSING": "請先輸入 Nextcloud URL、使用者名稱和密碼。",
-        "ERR_LOAD_BOARDS": "無法載入 Deck 看板。請檢查您的認證資訊。"
       }
     },
     "NOTE": {
@@ -1081,44 +1064,6 @@
       "NO_DATA": "本年度無資料",
       "PAGE_TITLE": "快速歷史記錄",
       "WEEK_TITLE": "第 {{nr}} 週（{{timeSpent}}）"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "活動",
-        "INVALID_DATE": "輸入的值不是日期！",
-        "POST_TIME": "提交時間",
-        "STARTED": "開始時間",
-        "SUBMIT_TIME_FOR": "向 Redmine 提交時間：",
-        "TIME_SPENT": "花費時間",
-        "TITLE": "Redmine：提交工作日誌"
-      },
-      "FORM": {
-        "API_KEY": "API 存取金鑰",
-        "HOST": "主機位址（例如：https://redmine.org）",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "顯示向 Redmine 報告的時間追蹤對話方塊",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "需要在 Redmine 專案中啟用時間追蹤模組",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "完成子任務時顯示時間追蹤對話方塊",
-        "PROJECT_ID": "專案識別碼",
-        "PROJECT_ID_DESCRIPTION": "可在瀏覽器中檢視專案時，從網址中找到。",
-        "SCOPE": "範圍",
-        "SCOPE_ALL": "全部",
-        "SCOPE_ASSIGNED": "指派給我",
-        "SCOPE_CREATED": "由我建立"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>在此您可以設定 Super Productivity 在每日規劃檢視的工作建立面板中列出特定專案的開放 Redmine（線上版本或自架實例）議題。它們將作為建議列出，並提供議題的連結以及更多相關資訊。</p><p>此外，您可以自動匯入所有開放議題。</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "作者",
-        "DESCRIPTION": "描述",
-        "MARK_AS_CHECKED": "標記更新為已檢查",
-        "PRIORITY": "優先順序",
-        "STATUS": "狀態"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine：已成功為 {{issueTitle}} 建立時間紀錄"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "關閉",

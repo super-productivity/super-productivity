@@ -544,7 +544,8 @@
         "OAUTH_FAILED_WITH_DETAIL": "身份验证失败：{{detail}}",
         "REMOTE_ISSUE_DELETED": "远程议题已被删除。要删除关联的任务“{{taskTitle}}”吗？",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "远程议题已被删除，但任务“{{taskTitle}}”有已跟踪时间。仍要删除吗？",
-        "TWO_WAY_SYNC_PUSH_FAILED": "双向同步推送失败：{{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "双向同步推送失败：{{errorMsg}}",
+        "POST_TIME_SUCCESS": "{{providerName}}：已成功为 {{issueTitle}} 创建时间记录"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "自动为新任务创建问题",
@@ -580,6 +581,15 @@
         "RELOAD_OPTIONS": "重新加载选项",
         "SETUP_TITLE": "设置 {{title}} 配置",
         "TEST_CONNECTION": "测试连接"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "活动",
+        "INVALID_DATE": "输入的值不是有效日期！",
+        "POST_TIME": "提交时间",
+        "STARTED": "开始时间",
+        "SUBMIT_TIME_FOR": "为以下项提交时间至 {{providerName}}",
+        "TIME_SPENT": "花费时间",
+        "TITLE": "{{providerName}}：提交工作日志"
       }
     },
     "ISSUE_PANEL": {
@@ -803,33 +813,6 @@
         "REMINDER_NEEDS_TEXT": "请先写下反思内容，再设置提醒",
         "REMINDER_TASK_TITLE": "回顾反思笔记",
         "TITLE": "反思笔记"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "Nextcloud 基础 URL",
-        "FILTER_BY_ASSIGNEE": "仅导入分配给我的卡片",
-        "IS_TRANSITION_ISSUES_ENABLED": "将完成状态和标题同步回 Nextcloud Deck",
-        "PASSWORD": "您的 Nextcloud 应用密码",
-        "POLL_INTERVAL_MINUTES": "轮询间隔（分钟）",
-        "TITLE_TEMPLATE": "任务标题模板",
-        "TITLE_TEMPLATE_DESCRIPTION": "变量：{CARD_TITLE}、{BOARD}、{COLUMN}、{ID}、{LABELS}。示例：[{BOARD}: {COLUMN}] {CARD_TITLE}。留空则仅使用卡片标题。",
-        "USERNAME": "您的 Nextcloud 用户名"
-      },
-      "FORM_SECTION": {
-        "HELP": "配置您的 Nextcloud Deck 集成以将卡片导入为任务。使用应用密码进行身份验证。"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "已分配用户",
-        "DECK_DESCRIPTION": "Deck 描述",
-        "LABELS": "标签",
-        "STACK": "堆栈"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck：未找到看板",
-        "CARD_NOT_FOUND": "Nextcloud Deck：卡片\"{{issueId}}\"似乎已从服务器上删除。",
-        "ERR_CREDENTIALS_MISSING": "请先输入 Nextcloud URL、用户名和密码。",
-        "ERR_LOAD_BOARDS": "加载 Deck 看板失败。请检查您的凭据。"
       }
     },
     "NOTE": {
@@ -1085,44 +1068,6 @@
       "TOOLTIP_VISIBILITY": "显示/隐藏项目",
       "ADD_SUBFOLDER": "添加子文件夹",
       "ADD_PROJECT": "添加项目"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "活动",
-        "INVALID_DATE": "输入的值不是有效日期！",
-        "POST_TIME": "提交时间",
-        "STARTED": "开始时间",
-        "SUBMIT_TIME_FOR": "为以下项提交时间至 Redmine",
-        "TIME_SPENT": "花费时间",
-        "TITLE": "Redmine：提交工作日志"
-      },
-      "FORM": {
-        "API_KEY": "API 访问密钥",
-        "HOST": "主机（例如：https://redmine.org）",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "显示时间跟踪对话框以报告给 Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "需在 Redmine 项目中启用时间跟踪模块",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "子任务完成时显示时间跟踪对话框",
-        "PROJECT_ID": "项目标识符",
-        "PROJECT_ID_DESCRIPTION": "在浏览器中查看项目时，可以找到作为 URL 的一部分。",
-        "SCOPE": "范围",
-        "SCOPE_ALL": "全部",
-        "SCOPE_ASSIGNED": "分配给我",
-        "SCOPE_CREATED": "由我创建"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建看板中列出特定项目的未结 Redmine（无论是在线版本还是自托管实例）问题。它们将列为建议，并提供指向问题的链接以及有关它的更多信息。</p><p>此外，您还可以自动导入所有未结问题。</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "作者",
-        "DESCRIPTION": "描述",
-        "MARK_AS_CHECKED": "将更新标记为已检查",
-        "PRIORITY": "优先级",
-        "STATUS": "状态"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Redmine：已成功为 {{issueTitle}} 创建时间记录"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "撤销",

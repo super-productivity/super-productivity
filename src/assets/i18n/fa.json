@@ -539,7 +539,8 @@
         "PLUGIN_NOT_INSTALLED": "افزونه نصب نشده است",
         "REMOTE_ISSUE_DELETED": "مسئله از راه دور حذف شده است. وظیفه پیوندخورده «{{taskTitle}}» حذف شود؟",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "مسئله از راه دور حذف شده، اما برای وظیفه «{{taskTitle}}» زمان ثبت شده است. با این حال حذف شود؟",
-        "TWO_WAY_SYNC_PUSH_FAILED": "ارسال همگام‌سازی دوطرفه ناموفق بود"
+        "TWO_WAY_SYNC_PUSH_FAILED": "ارسال همگام‌سازی دوطرفه ناموفق بود",
+        "POST_TIME_SUCCESS": "{{providerName}}: ورودی زمان برای {{issueTitle}} با موفقیت ایجاد شد"
       },
       "DIALOG": {
         "ADVANCED_CONFIG": "پیکربندی پیشرفته",
@@ -575,6 +576,15 @@
         "TAGS": "جهت همگام‌سازی برچسب‌ها / دسته‌ها",
         "TIME_ESTIMATE": "برآورد زمان",
         "TITLE": "عنوان"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "فعالیت",
+        "INVALID_DATE": "تاریخ نامعتبر",
+        "POST_TIME": "ارسال زمان",
+        "STARTED": "شروع شده",
+        "TIME_SPENT": "زمان صرف شده",
+        "TITLE": "ثبت زمان در {{providerName}}",
+        "SUBMIT_TIME_FOR": "ارسال زمان به {{providerName}} برای"
       }
     },
     "ISSUE_PANEL": {
@@ -1058,44 +1068,6 @@
       "NO_DATA": "هیچ اطلاعاتی برای سال جاری وجود ندارد",
       "PAGE_TITLE": "تاریخچه سریع",
       "WEEK_TITLE": "هفته {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "FORM": {
-        "API_KEY": "کلید دسترسی به API",
-        "HOST": "(مثال: https://redmine.org) هاست",
-        "PROJECT_ID": "شناساگر پروژه",
-        "PROJECT_ID_DESCRIPTION": "را می توان به عنوان بخشی از آدرس اینترنتی، هنگام مشاهده پروژه در مرورگر یافت.",
-        "SCOPE": "دامنه",
-        "SCOPE_ALL": "همه",
-        "SCOPE_ASSIGNED": "به من اختصاص داده است",
-        "SCOPE_CREATED": "ایجاد شده توسط من",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "نمایش گفتگوی ثبت زمان",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "نمایش گفتگوی ثبت زمان هنگام اتمام وظیفه",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "نمایش برای هر زیروظیفه"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>در اینجا می‌توانید SuperProductivity را برای فهرست کردن مشکلات Redmine باز (چه نسخه آنلاین یا یک نمونه خود میزبان) برای یک پروژه خاص در پانل ایجاد کار در نمای برنامه‌ریزی روزانه پیکربندی کنید. آنها به عنوان پیشنهاد فهرست می شوند و پیوندی به موضوع و همچنین اطلاعات بیشتری در مورد آن ارائه می دهند.</p><p>علاوه بر این، می‌توانید به‌طور خودکار همه مسائل باز را وارد کنید.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "نویسنده",
-        "DESCRIPTION": "توضیحات",
-        "MARK_AS_CHECKED": "به‌روزرسانی‌ها را علامت‌گذاری کنید",
-        "PRIORITY": "اولویت",
-        "STATUS": "وضعیت"
-      },
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "فعالیت",
-        "INVALID_DATE": "تاریخ نامعتبر",
-        "POST_TIME": "ارسال زمان",
-        "STARTED": "شروع شده",
-        "SUBMIT_TIME_FOR": "ثبت زمان برای",
-        "TIME_SPENT": "زمان صرف شده",
-        "TITLE": "ثبت زمان در Redmine"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "زمان با موفقیت ارسال شد"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "اخراج",
@@ -2451,33 +2423,6 @@
       "PASTE_SUCCESS": "تصویر با موفقیت جایگذاری شد",
       "SIZE_EXCEEDED": "حجم تصویر ({{actualSize}}) از حداکثر حجم مجاز ({{maxSize}}) بیشتر است",
       "STORAGE_QUOTA_EXCEEDED": "سهمیه ذخیره‌سازی تمام شده است. لطفاً فضا را آزاد کنید یا حجم تصاویر را کاهش دهید."
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "آدرس پایه",
-        "FILTER_BY_ASSIGNEE": "فیلتر بر اساس مسئول",
-        "IS_TRANSITION_ISSUES_ENABLED": "فعال‌سازی انتقال مسائل",
-        "PASSWORD": "رمز عبور",
-        "POLL_INTERVAL_MINUTES": "فاصله نظرسنجی (دقیقه)",
-        "TITLE_TEMPLATE": "الگوی عنوان",
-        "TITLE_TEMPLATE_DESCRIPTION": "متغیرها: {CARD_TITLE}، {BOARD}، {COLUMN}، {ID}، {LABELS}. مثال: [{BOARD}: {COLUMN}] {CARD_TITLE}. برای استفاده از عنوان کارت به‌تنهایی خالی بگذار.",
-        "USERNAME": "نام کاربری"
-      },
-      "FORM_SECTION": {
-        "HELP": "راهنما"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "کاربران اختصاص داده شده",
-        "DECK_DESCRIPTION": "توضیحات Deck",
-        "LABELS": "برچسب‌ها",
-        "STACK": "ستون"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "تخته پیدا نشد",
-        "CARD_NOT_FOUND": "کارت پیدا نشد",
-        "ERR_CREDENTIALS_MISSING": "اعتبارنامه‌ها وارد نشده‌اند",
-        "ERR_LOAD_BOARDS": "خطا در بارگذاری تخته‌ها"
-      }
     }
   },
   "FILE_IMEX": {

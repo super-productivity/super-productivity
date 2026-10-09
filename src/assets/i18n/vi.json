@@ -548,7 +548,8 @@
         "OAUTH_FAILED_WITH_DETAIL": "Xác thực thất bại: {{detail}}",
         "REMOTE_ISSUE_DELETED": "Sự cố từ xa đã bị xóa. Xóa công việc liên kết \"{{taskTitle}}\"?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Sự cố từ xa đã bị xóa nhưng công việc \"{{taskTitle}}\" có thời gian đã theo dõi. Xóa dù sao?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Đẩy đồng bộ hai chiều thất bại: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Đẩy đồng bộ hai chiều thất bại: {{errorMsg}}",
+        "POST_TIME_SUCCESS": "{{providerName}}: Đã tạo mục cho {{issueTitle}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Tự động tạo sự cố cho công việc mới",
@@ -584,6 +585,15 @@
         "RELOAD_OPTIONS": "Tải lại tùy chọn",
         "SETUP_TITLE": "Thiết lập cấu hình {{title}}",
         "TEST_CONNECTION": "Kiểm tra kết nối"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Hoạt động",
+        "INVALID_DATE": "Không phải ngày!",
+        "POST_TIME": "Đăng thời gian",
+        "STARTED": "Đã bắt đầu",
+        "SUBMIT_TIME_FOR": "Gửi lên {{providerName}} cho",
+        "TIME_SPENT": "Đã dùng",
+        "TITLE": "{{providerName}}: Gửi nhật ký"
       }
     },
     "ISSUE_PANEL": {
@@ -807,33 +817,6 @@
         "REMINDER_NEEDS_TEXT": "Viết suy ngẫm trước",
         "REMINDER_TASK_TITLE": "Xem lại suy ngẫm",
         "TITLE": "Ghi chú suy ngẫm"
-      }
-    },
-    "NEXTCLOUD_DECK": {
-      "FORM": {
-        "BASE_URL": "URL cơ sở Nextcloud",
-        "FILTER_BY_ASSIGNEE": "Chỉ nhập thẻ được giao cho tôi",
-        "IS_TRANSITION_ISSUES_ENABLED": "Đồng bộ trạng thái về Nextcloud Deck",
-        "PASSWORD": "Mật khẩu ứng dụng Nextcloud",
-        "POLL_INTERVAL_MINUTES": "Khoảng kiểm tra (phút)",
-        "TITLE_TEMPLATE": "Mẫu tiêu đề công việc",
-        "TITLE_TEMPLATE_DESCRIPTION": "Biến: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}.",
-        "USERNAME": "Tên người dùng Nextcloud"
-      },
-      "FORM_SECTION": {
-        "HELP": "Cấu hình tích hợp Nextcloud Deck để nhập thẻ làm công việc."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Người được giao",
-        "DECK_DESCRIPTION": "Mô tả Deck",
-        "LABELS": "Nhãn",
-        "STACK": "Ngăn xếp"
-      },
-      "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Không tìm thấy bảng",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Thẻ đã bị xóa trên máy chủ.",
-        "ERR_CREDENTIALS_MISSING": "Nhập URL, tên và mật khẩu Nextcloud trước.",
-        "ERR_LOAD_BOARDS": "Không thể tải bảng Deck! Kiểm tra thông tin của bạn."
       }
     },
     "NOTE": {
@@ -1094,44 +1077,6 @@
       "NO_DATA": "Chưa có công việc nào trong năm nay.",
       "PAGE_TITLE": "Lịch sử nhanh",
       "WEEK_TITLE": "Tuần {{nr}} ({{timeSpent}})"
-    },
-    "REDMINE": {
-      "DIALOG_TRACK_TIME": {
-        "ACTIVITY": "Hoạt động",
-        "INVALID_DATE": "Không phải ngày!",
-        "POST_TIME": "Đăng thời gian",
-        "STARTED": "Đã bắt đầu",
-        "SUBMIT_TIME_FOR": "Gửi lên Redmine cho",
-        "TIME_SPENT": "Đã dùng",
-        "TITLE": "Redmine: Gửi nhật ký"
-      },
-      "FORM": {
-        "API_KEY": "Khóa API",
-        "HOST": "Máy chủ (ví dụ: https://redmine.org)",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Hiện hộp thoại báo cáo Redmine",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Mô tả",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Hiện hộp thoại khi việc con hoàn thành",
-        "PROJECT_ID": "ID dự án",
-        "PROJECT_ID_DESCRIPTION": "Mô tả",
-        "SCOPE": "Phạm vi",
-        "SCOPE_ALL": "Tất cả",
-        "SCOPE_ASSIGNED": "Giao cho tôi",
-        "SCOPE_CREATED": "Tôi tạo"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Cấu hình Super Productivity liệt kê sự cố Redmine.</p><p>Tự động nhập tất cả sự cố mở.</p>",
-        "TITLE": "Redmine"
-      },
-      "ISSUE_CONTENT": {
-        "AUTHOR": "Tác giả",
-        "DESCRIPTION": "Mô tả",
-        "MARK_AS_CHECKED": "Đánh dấu đã kiểm tra",
-        "PRIORITY": "Ưu tiên",
-        "STATUS": "Trạng thái"
-      },
-      "S": {
-        "POST_TIME_SUCCESS": "Đăng thời gian"
-      }
     },
     "REFLECTION_NOTE": {
       "ACTION_DISMISS": "Bỏ qua",
