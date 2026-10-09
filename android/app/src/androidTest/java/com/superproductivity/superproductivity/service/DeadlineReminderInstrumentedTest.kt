@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.SystemClock
+import androidx.core.app.NotificationManagerCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.AndroidJUnit4
@@ -45,6 +46,8 @@ class DeadlineReminderInstrumentedTest {
     private val taskNotificationId = SuperSyncBackgroundProvider.generateNotificationId(taskId)
     private val deadlineNotificationId =
         SuperSyncBackgroundProvider.generateNotificationId(taskId + "_deadline")
+    private val dueDayNotificationId =
+        SuperSyncBackgroundProvider.generateNotificationId(taskId + "_dueday")
 
     @Before
     fun setUp() {
@@ -61,16 +64,28 @@ class DeadlineReminderInstrumentedTest {
     fun cleanUp() {
         ReminderNotificationHelper.cancelReminder(context, taskNotificationId)
         ReminderNotificationHelper.cancelReminder(context, deadlineNotificationId)
+        ReminderNotificationHelper.cancelReminder(context, dueDayNotificationId)
+        // A shown reminder also posts the group summary; don't leave it behind.
+        NotificationManagerCompat.from(context)
+            .cancel(ReminderNotificationHelper.SUMMARY_NOTIFICATION_ID)
         ReminderSnoozeQueue.getAndClear(context)
         ReminderTapQueue.getAndClear(context)
     }
 
     @Test
-    fun notificationIdsMatchTheFrontend() {
-        // Values from the TS generateNotificationId() for the same strings. A
-        // mismatch would leave two alarms per deadline (one per side).
-        assertEquals(1720157511, taskNotificationId)
-        assertEquals(971870494, deadlineNotificationId)
+    fun syncCancelClearsEveryAlarmSlotOfTheTask() {
+        val at = System.currentTimeMillis() + HOUR_MS
+        scheduleReminderFromSync(context, ReminderToSchedule(taskId, "Task", at, false))
+        scheduleReminderFromSync(context, ReminderToSchedule(taskId, "Task", at, true))
+        ReminderNotificationHelper.scheduleReminder(
+            context, dueDayNotificationId, taskId + "_dueday", taskId, "Task", "DUE_DATE", at,
+        )
+
+        cancelRemindersForTask(context, taskId)
+
+        assertNull(storedAlarm(taskNotificationId))
+        assertNull(storedAlarm(dueDayNotificationId))
+        assertNull(storedAlarm(deadlineNotificationId))
     }
 
     @Test
