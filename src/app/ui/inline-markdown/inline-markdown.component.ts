@@ -271,9 +271,10 @@ export class InlineMarkdownComponent implements OnChanges, OnInit, OnDestroy {
   /**
    * A task switch re-points this component at another task before the live
    * editor commits: CodeMirror reports blur 10ms late, so a quick click on
-   * another task lands first and the editor's doc gets replaced (#10405). The
-   * editor still holds the previous task's text here — its view refreshes only
-   * after this hook — so save it to that task directly; our `changed` listener
+   * another task lands first and the editor is re-created for the new task
+   * (`@for … track id`) before that blur can emit (#10405). The old editor
+   * still holds the previous task's text here — the view refreshes only after
+   * this hook — so save it to that task directly; our `changed` listener
    * would already write to the new one. The textarea path needs none of this:
    * its native blur commits synchronously, before the click.
    */
@@ -295,12 +296,11 @@ export class InlineMarkdownComponent implements OnChanges, OnInit, OnDestroy {
     if (normalize(editedDoc) !== normalize(prevModel ?? '')) {
       this._persistNotes(prevTaskId, editedDoc);
     }
-    // Load the new task's note now: when both tasks show the same note (two
-    // fresh tasks both show the template) the model binding does not change,
-    // so nothing else would take the previous task's text out of the editor —
-    // or out of `_liveDoc`, which ngOnDestroy would commit onto the new task.
+    // When both tasks show the same note (two fresh tasks both show the
+    // template) the model setter does not run, so nothing else would drop the
+    // previous task's text from `_liveDoc`, which ngOnDestroy commits onto the
+    // new task.
     this._liveDoc.set(null);
-    liveEditorEl.replaceDoc(this._model ?? '');
   }
 
   private _persistNotes(taskId: string, notes: string): void {
