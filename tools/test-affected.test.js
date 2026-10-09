@@ -104,7 +104,7 @@ test('selects specs still importing a deleted file', () => {
 
 test('ignores deleted sources, docs and theme css', () => {
   const result = classifyChanges(
-    ['src/app/gone.ts', 'src/app/gone.html', 'docs/x.md', 'src/assets/themes/x.css'],
+    ['src/app/gone.ts', 'src/app/gone.html', 'notes/x.md', 'src/assets/themes/x.css'],
     fileSet,
   );
   assert.deepEqual(result, { runAll: null, entries: [] });
