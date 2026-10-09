@@ -65,6 +65,16 @@ export class PlannerCalendarNavComponent {
     return cfg !== null && cfg !== undefined ? cfg : DEFAULT_FIRST_DAY_OF_WEEK;
   });
 
+  private _weekNumberSystem = computed(() => {
+    const localization = this._globalConfigService.localization();
+    return localization?.weekNumberSystem;
+  });
+
+  showWeekNumbers = computed(() => {
+    const system = this._weekNumberSystem();
+    return system === 'iso' || system === 'us';
+  });
+
   visibleDayDate = input<string | null>(null);
   daysWithTasks = input<ReadonlySet<string>>(new Set());
   dayTapped = output<string>();
@@ -122,9 +132,10 @@ export class PlannerCalendarNavComponent {
   });
   weekNumbers = computed<number[]>(() => {
     const firstDayOfWeek = this._firstDayOfWeek();
+    const weekNumberSystem = this._weekNumberSystem();
     return this.weeks().map((week) => {
       const firstDay = parseDbDateStr(week[0].dateStr);
-      return getWeekNumber(firstDay, firstDayOfWeek);
+      return getWeekNumber(firstDay, firstDayOfWeek, weekNumberSystem as 'iso' | 'us');
     });
   });
 

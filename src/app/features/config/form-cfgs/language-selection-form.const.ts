@@ -14,7 +14,7 @@ export const LANGUAGE_SELECTION_FORM_FORM: ConfigFormSection<LocalizationConfig>
         options: [
           // TODO sort by popular
           // TODO add translation
-          { label: 'System default', value: null },
+          { label: 'None', value: null },
           { label: T.GCF.LANG.AR, value: LanguageCode.ar },
           { label: T.GCF.LANG.CS, value: LanguageCode.cs },
           { label: T.GCF.LANG.DE, value: LanguageCode.de },
@@ -53,7 +53,7 @@ export const LANGUAGE_SELECTION_FORM_FORM: ConfigFormSection<LocalizationConfig>
         label: T.GCF.MISC.FIRST_DAY_OF_WEEK,
         options: [
           // TODO add translation
-          { label: 'System default', value: null },
+          { label: 'None', value: null },
           { label: T.F.TASK_REPEAT.F.SUNDAY, value: 0 },
           { label: T.F.TASK_REPEAT.F.MONDAY, value: 1 },
           { label: T.F.TASK_REPEAT.F.TUESDAY, value: 2 },
