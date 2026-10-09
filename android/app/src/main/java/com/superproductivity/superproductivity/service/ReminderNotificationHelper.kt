@@ -159,6 +159,7 @@ object ReminderNotificationHelper {
         val contentIntent = Intent(context, CapacitorMainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("REMINDER_TASK_ID", relatedId)
+            putExtra("REMINDER_TYPE", reminderType)
         }
         val contentPendingIntent = PendingIntent.getActivity(
             context, notificationId, contentIntent,
@@ -225,6 +226,7 @@ object ReminderNotificationHelper {
             .setContentText(when (reminderType) {
                 "TASK" -> "Task reminder"
                 "DUE_DATE" -> "Due date reminder"
+                "DEADLINE" -> "Deadline reminder"
                 else -> "Task reminder"
             })
             .setContentIntent(contentPendingIntent)
