@@ -593,17 +593,6 @@ export const waitForTask = async (
 };
 
 /**
- * Count tasks matching a pattern on the page.
- */
-export const countTasks = async (page: Page, pattern?: string): Promise<number> => {
-  if (pattern) {
-    const escapedPattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return page.locator(`task:has-text("${escapedPattern}")`).count();
-  }
-  return page.locator('task').count();
-};
-
-/**
  * Check if a task exists on the page.
  */
 export const hasTask = async (page: Page, taskName: string): Promise<boolean> => {
