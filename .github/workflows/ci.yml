@@ -154,7 +154,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     # Owner PRs run E2E on sponsored Blacksmith runners for faster feedback; everything else
-    # stays on GitHub. Repo variable USE_BLACKSMITH is the kill switch (unset = GitHub only).
+    # stays on GitHub. Repo variable USE_BLACKSMITH is the kill switch (unset = GitHub only);
+    # unset it if these jobs sit queued (app uninstalled or sponsorship ended).
     runs-on: ${{ vars.USE_BLACKSMITH == 'true' && github.event.pull_request.user.login == 'johannesjo' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
@@ -249,7 +250,7 @@ jobs:
     name: PWA & Lighthouse
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.USE_BLACKSMITH == 'true' && github.event.pull_request.user.login == 'johannesjo' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 30
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
