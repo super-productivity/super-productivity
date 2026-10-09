@@ -17,7 +17,7 @@ import * as path from 'path';
  * ELOOP / ENOTDIR) and keeps walking up, so an unresolvable component is treated
  * lexically — keeping the deny direction (`assertPathOutside`) fail-closed.
  */
-const canonicalize = (p: string): string => {
+export const canonicalize = (p: string): string => {
   const resolved = path.resolve(p);
   let current = resolved;
   const tail: string[] = [];
