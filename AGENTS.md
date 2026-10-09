@@ -32,6 +32,7 @@ npm run checkFile <files...>   # prettier + lint
 npm run prettier               # multi-file format
 npm run lint                   # multi-file lint
 npm test                       # shared packages + release tooling + Angular specs (Berlin/LA)
+npm run test:affected          # Angular specs importing files changed vs master (Berlin + LA subset); `-- --list` to preview
 npm run test:file <filepath>   # single Angular spec; package tests use package scripts
 npm run test:electron          # main-process tests are electron/*.test.cjs; a .spec.ts there never runs
 npm run e2e                    # browser E2E, excludes SuperSync/WebDAV
@@ -42,6 +43,8 @@ npm start                      # Electron dev
 npm run startFrontend          # web dev, generates environment constants first
 npm run dist                   # validated Electron distribution for the host platform
 ```
+
+After changing app code, run `npm run test:affected` instead of a full `npm test`. It follows static imports only; anything else (test setup, configs, runtime assets) triggers a full run. CI still runs the full suite.
 
 For full provider suites prefer the [scheduled E2E workflow](.github/workflows/e2e-scheduled.yml) (`grep` filters SuperSync; `webdav_grep` + `run_webdav` for WebDAV); focused local runs and provider-switch prerequisites are in [e2e/AGENTS.md](e2e/AGENTS.md) (they need both servers and both flags, else they silently skip). Skipped tests do not validate a fix.
 
